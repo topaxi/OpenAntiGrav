@@ -4,9 +4,9 @@
 [`oag-formats::wad`](../../crates/formats/src/wad.rs), and validated against all
 nine archives across three releases.
 
-Entry *names* are still unknown: the directory stores a 32-bit value where a
-name would be, and the hash function has not yet been recovered from the game
-binary.
+Entry *names* are not stored. The directory holds only a CRC-32 of each name,
+so an entry can be **found** by name but an archive cannot be **listed** with
+names. See [the hash](#the-name-hash) below.
 
 ## Layout
 
@@ -24,9 +24,9 @@ All values little-endian, on both platforms.
 
 | Offset | Type | Field | Notes |
 | ---: | --- | --- | --- |
-| +0x00 | `u32` | `name_hash` | Presumed a hash of the name. **Algorithm unknown.** |
+| +0x00 | `u32` | `name_hash` | CRC-32 of the name; see [below](#the-name-hash) |
 | +0x04 | `u32` | `offset` | Byte offset of the blob from the start of the file |
-| +0x08 | `u32` | `size_uncompressed` | Size after decompression |
+| +0x08 | `u32` | `size_uncompressed` | Size after decompression; **bit 31 selects zlib over LZSS** |
 | +0x0c | `u32` | `size` | Bytes actually stored |
 
 ## Evidence
@@ -105,6 +105,55 @@ place, while the PS2 reads from a faster DVD with more RAM to spare.
 The same container serves Pure PSP, Pulse PSP and Pulse PS2 unchanged, which is
 the first hard evidence that one asset pipeline can cover the lineage.
 
+## The name hash
+
+CRC-32 with the standard reflected polynomial `0xEDB88320`, but **initialised to
+0 rather than `0xFFFFFFFF`**, so it is *not* zlib's `crc32`. The name is
+normalised first: `\` becomes `/`, and ASCII `A`-`Z` fold to lowercase. Bytes at
+or above `0x80` pass through untouched, because the fold is driven by newlib's
+`_ctype_` table.
+
+```rust
+let mut crc: u32 = 0;                  // not 0xFFFFFFFF
+for byte in name.bytes() {
+    let c = match byte {
+        b'\\' => b'/',
+        b'A'..=b'Z' => byte + 0x20,
+        other => other,
+    };
+    crc = crc32_step(crc, c);          // reflected, poly 0xEDB88320
+}
+!crc
+```
+
+Recovered from `Wad_HashName` at `0x08940d0c`; see
+[the WAD subsystem page](../ghidra/functions/psp-pulse/wad-subsystem.md).
+Implemented as [`oag_formats::wad::hash_name`](../../crates/formats/src/wad.rs).
+
+Verified against 176 real entries across four archives. Worked examples:
+
+| Name | Hash |
+| --- | --- |
+| `Data\FE\Images\hex_bg.mip` | `0x1aa87b99` |
+| `Data\Sound\frontend.bnk` | `0x75a91641` |
+| `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB` | `0xeff1f331` |
+
+Normalisation means `Data\FE\Images\hex_bg.mip`, `data/fe/images/hex_bg.mip`
+and `DATA\FE\IMAGES\HEX_BG.MIP` are the same entry. One archive entry matched
+a string already written in lowercase with forward slashes while its siblings
+matched backslashed mixed-case paths, which confirms both rules at once.
+
+There is also an escape hatch: a name of exactly `#` plus eight **uppercase** hex
+digits is taken as a literal hash. No such string exists in the binary, so it is
+probably tools-only.
+
+Confidence: **97**.
+
+```sh
+oag-wad hash 'Data\FE\Images\hex_bg.mip'
+oag-wad list <archive> --names <candidates.txt>
+```
+
 ## Blob contents
 
 Blobs are heterogeneous and are **not** uniformly tagged. An earlier reading of
@@ -112,9 +161,9 @@ Blobs are heterogeneous and are **not** uniformly tagged. An earlier reading of
 hasty: that pattern holds for fonts and little else.
 
 For `FE.wad` (Pulse PSP), 13 of 27 blobs are
-[textures](psp-texture.md), identified by the leading `u16 width, u16 height`.
-Five are `\x01FNT` fonts. The rest begin with small integers such as
-`03000000` and `06000000`, and are undecoded.
+[textures](psp-texture.md) (`.mip`), identified by the leading
+`u16 width, u16 height`. Five are `\x01FNT` fonts. `06000000` is a
+[`.vex` model](vex.md) version word, and `03000000` a `.bnk` sound bank.
 
 **PS2 blob leading bytes are meaningless** until decompressed, since what you
 see is the head of a compressed stream. `oag-wad tags` on a PS2 archive
@@ -122,29 +171,25 @@ correctly reports near-random tags; that is the compression, not a format.
 
 ## Open questions
 
-### How are entries named?
+### ~~How are entries named?~~ Answered
 
-The 32-bit first field is presumed a hash. Nothing in the archive points at a
-string table, and blobs begin immediately after the directory, so names are not
-stored.
+See [the name hash](#the-name-hash). Names remain unrecoverable *in bulk*,
+because the archive stores no strings: a listing with names requires hashing
+candidate names and matching. Most names are assembled at runtime from format
+strings such as `%s\\%strack%s.vex`, so the templates matter more than the
+literals.
 
-The lookup function in `BOOT.BIN` contains the algorithm. Finding it is the
-highest-value single task in M1: without it, nothing can be identified by name.
+### ~~What compression do the PS2 archives use?~~ Answered
 
-Candidates to test once any names are known: CRC-32, FNV-1a, a `h*31+c`
-polynomial, or a Sony-internal hash.
+[LZSS](lzss.md), selected when bit 31 of the uncompressed-size field is clear.
+Implemented and verified against all 6,053 compressed entries across both PS2
+archives. The game also supports zlib behind that bit, but no shipped archive
+sets it.
 
-### What compression do the PS2 archives use?
+### What are the remaining blob types?
 
-5,861 of 7,200 entries in `WADS2.WAD` are compressed, at roughly 2.7x on the
-entries sampled. The algorithm is unidentified. Likely candidates for the era
-are LZSS, a Sony-internal LZ variant, or zlib. The decompressor lives in
-`SCES_547.48`.
-
-### What are the undecoded blob types?
-
-`03000000` and `06000000` in `FE.wad` are probably small structured records,
-given their leading values look like counts. Not investigated.
+`.bnk` sound banks (`03000000`), `\x01FNT` fonts, `SYSP` particle systems
+(`.pob`) and `.dat` files paired with ships are all undecoded.
 
 ## Usage
 

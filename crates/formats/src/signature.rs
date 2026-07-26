@@ -1,10 +1,11 @@
 //! Magic-number identification for files pulled off a disc.
 //!
-//! The table covers formats that are standard or already known. Wipeout's own
-//! containers are not in it, because none have been decoded yet. When a file
-//! comes back [`Signature::Unknown`], that is the interesting case: it is a
-//! candidate for reverse engineering, and the point of this module is to make
-//! the unknowns easy to spot among the noise.
+//! The table covers standard formats only. Wipeout's own containers are not in
+//! it: the [WAD archive](crate::wad) has no magic at all, and blobs inside it
+//! are identified by structure rather than by a leading tag. When a file comes
+//! back [`Signature::Unknown`], that is the interesting case: it is a candidate
+//! for reverse engineering, and the point of this module is to make the
+//! unknowns easy to spot among the noise.
 
 /// What a file appears to be, judged from its leading bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]

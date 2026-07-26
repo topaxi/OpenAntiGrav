@@ -39,7 +39,8 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
 use oag_disc::DiscImage;
-use oag_formats::wad::{self, Blob, Directory};
+use oag_formats::lzss;
+use oag_formats::wad::{self, Blob, Compression, Directory};
 use oag_tools::humanise;
 
 /// How much of a blob to read when only its type tag is wanted.
@@ -85,6 +86,14 @@ enum Command {
         archive: String,
     },
 
+    /// Decompress every blob and check it against its declared size.
+    ///
+    /// Writes nothing. This is the round-trip test for the LZSS decoder.
+    Verify {
+        /// A `.wad` path, or `<image>:<path-on-disc>`.
+        archive: String,
+    },
+
     /// Extract every blob.
     Extract {
         /// A `.wad` path, or `<image>:<path-on-disc>`.
@@ -108,6 +117,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Tags { archive } => tags(&archive),
+        Command::Verify { archive } => verify(&archive),
         Command::Extract { archive, out } => extract(&archive, &out),
     }
 }
@@ -375,6 +385,78 @@ fn tags(spec: &str) -> Result<()> {
     Ok(())
 }
 
+/// Decompresses a blob if it is stored compressed.
+fn decode_blob(raw: &[u8], entry: &wad::Entry) -> Result<Vec<u8>> {
+    match entry.compression {
+        Compression::None => Ok(raw.to_vec()),
+        Compression::Lzss => Ok(lzss::decompress(raw, entry.size_uncompressed as usize)?),
+        // Present in the game but absent from every shipped archive, so there
+        // is nothing to test an implementation against. Refuse rather than
+        // ship an unverified decoder.
+        Compression::Zlib => {
+            anyhow::bail!("zlib-compressed entries are not supported yet (none were expected)")
+        }
+    }
+}
+
+fn verify(spec: &str) -> Result<()> {
+    let mut source = Source::open(spec)?;
+    let dir = source.directory()?;
+
+    summarise(&dir, &source);
+    println!();
+
+    let mut by_compression: BTreeMap<String, (usize, u64)> = BTreeMap::new();
+    let mut failures = Vec::new();
+
+    for (i, entry) in dir.entries.iter().enumerate() {
+        let raw = source
+            .read(u64::from(entry.offset), u64::from(entry.size))
+            .with_context(|| format!("reading entry {i}"))?;
+
+        match decode_blob(&raw, entry) {
+            Ok(data) if data.len() as u32 == entry.size_uncompressed => {
+                let slot = by_compression
+                    .entry(entry.compression.to_string())
+                    .or_insert((0, 0));
+                slot.0 += 1;
+                slot.1 += data.len() as u64;
+            }
+            // A length mismatch means the decoder is wrong even though it did
+            // not error, which is the failure mode worth catching.
+            Ok(data) => failures.push(format!(
+                "entry {i} ({:08x}): produced {} bytes, declared {}",
+                entry.name_hash,
+                data.len(),
+                entry.size_uncompressed
+            )),
+            Err(e) => failures.push(format!("entry {i} ({:08x}): {e:#}", entry.name_hash)),
+        }
+    }
+
+    println!("{:<8}  {:>7}  {:>12}", "STORED", "COUNT", "BYTES OUT");
+    for (kind, (count, bytes)) in &by_compression {
+        println!("{kind:<8}  {count:>7}  {:>12}", humanise::bytes(*bytes));
+    }
+
+    println!();
+    if failures.is_empty() {
+        println!(
+            "OK: all {} entries decoded to their declared size",
+            dir.entries.len()
+        );
+        Ok(())
+    } else {
+        for f in failures.iter().take(20) {
+            println!("  {f}");
+        }
+        if failures.len() > 20 {
+            println!("  ... and {} more", failures.len() - 20);
+        }
+        bail!("{} of {} entries failed", failures.len(), dir.entries.len())
+    }
+}
+
 fn extract(spec: &str, out: &Path) -> Result<()> {
     let mut source = Source::open(spec)?;
     let dir = source.directory()?;
@@ -387,9 +469,11 @@ fn extract(spec: &str, out: &Path) -> Result<()> {
 
     let mut written = 0u64;
     for (i, entry) in dir.entries.iter().enumerate() {
-        let data = source
+        let raw = source
             .read(u64::from(entry.offset), u64::from(entry.size))
             .with_context(|| format!("reading entry {i}"))?;
+
+        let data = decode_blob(&raw, entry).with_context(|| format!("decoding entry {i}"))?;
 
         // Named by index and hash, because the real names are not in the
         // archive. The index keeps directory order visible; the hash is what
