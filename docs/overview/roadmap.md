@@ -35,8 +35,10 @@ contents; every distinct format on them has a row in the status table.
 
 Decode the containers, then the assets inside them.
 
-- [ ] WAD container: names or hash mapping, compression, alignment
-- [ ] Textures: PSP swizzled formats, PS2 equivalents
+- [x] [WAD container](../formats/wad.md): layout, name hash, compression flags
+- [ ] LZSS decoder, needed for every PS2 asset
+- [~] [PSP textures](../formats/psp-texture.md): header, palette and pixels
+      decoded; swizzling unresolved
 - [ ] Models: ship and scenery geometry, materials
 - [ ] Tracks: geometry, spline, collision, sections
 - [ ] Audio: the music and effect banks
@@ -45,8 +47,9 @@ Decode the containers, then the assets inside them.
 **Exit criterion:** a Pulse track and a ship model render in `oag-view` from an
 unmodified disc image, on both the PSP and PS2 asset paths.
 
-**Where to start:** the [WAD directory format](../formats/wad.md) is already
-mostly readable and is the gate for everything else.
+**Where to start:** the [WAD container](../formats/wad.md) is decoded and
+`oag-wad` reads every archive straight from a disc image, so the gate is open.
+Next is the LZSS decoder, without which no PS2 asset can be read at all.
 
 ---
 
@@ -59,9 +62,10 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] `BOOT.BIN` (PSP) loaded at base `0x08804000`, analysed: 10,683 functions
 - [ ] Confirm the image base against PPSSPP's module load address
 - [ ] Load `SCES_547.48` (PS2) into Ghidra
-- [ ] Main loop and frame structure
-- [ ] **Confirm the simulation tick rate.** Defaulted to 60 Hz; see
-      [`TickRate`](../architecture/determinism.md#the-tick-rate-is-a-decision-not-a-measurement)
+- [x] [Main loop and frame pacing](../psp/frame-pacing.md); state machine outline
+- [x] Simulation timestep resolved: the original uses **variable** delta, not a
+      fixed step. See [ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)
+- [x] WAD subsystem: hash, lookup, mount, read, decompressors
 - [ ] Memory management and the heap layout
 - [ ] Resource loading: how a WAD entry becomes a live object
 - [ ] Game state machine
@@ -149,8 +153,9 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 
 | Question | Blocks | Tracked in |
 | --- | --- | --- |
-| Is the tick rate really 60 Hz? Defaulted, not measured. | M4 tuning | [determinism](../architecture/determinism.md) |
-| How are WAD entries named? Is the first field a hash? | M1 | [WAD format](../formats/wad.md) |
+| Does the craft physics integrator sub-step at 1/60, or integrate raw delta? | M4 | [frame pacing](../psp/frame-pacing.md) |
+| What LZSS variant do the PS2 archives use? | M1 (PS2 assets) | [WAD format](../formats/wad.md) |
+| Are PSP textures stored swizzled? | M1 (rendering) | [PSP texture](../formats/psp-texture.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
 | Is the physics fixed-point or float? | M4 | [ADR-0002](../architecture/adr/0002-determinism-model.md) |
 | Why does the US PSP disc carry a directory named for the *European* serial? | nothing yet | [PSP disc layout](../psp/pulse-disc-layout.md) |

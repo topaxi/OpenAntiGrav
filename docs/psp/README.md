@@ -5,6 +5,7 @@ Findings specific to the PlayStation Portable releases.
 | Document | Covers |
 | --- | --- |
 | [Allegrex and the VFPU](allegrex-vfpu.md) | **Read first.** Stock Ghidra mis-decodes PSP vector code |
+| [Frame pacing](frame-pacing.md) | The original's timestep. It is **not** fixed. |
 | [Pulse disc layout](pulse-disc-layout.md) | Contents of the Pulse UMD, with findings |
 
 ## Key facts

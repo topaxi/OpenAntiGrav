@@ -17,6 +17,7 @@ out to be wrong.
 | [0004](0004-asset-pipeline.md) | Load from originals, normalise per platform | Accepted |
 | [0005](0005-ghidra-conventions.md) | Ghidra naming and documentation conventions | Accepted |
 | [0006](0006-no-copyrighted-content.md) | No copyrighted content in the repository | Accepted |
+| [0007](0007-fixed-timestep-vs-original.md) | Keep a fixed timestep, and diverge from the original | Accepted |
 
 ## Format
 

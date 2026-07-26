@@ -20,7 +20,7 @@
 | Question | Why it matters |
 | --- | --- |
 | Fixed-point or float? | Decides whether bit-exactness is available for free. See [ADR-0002](../architecture/adr/0002-determinism-model.md). |
-| Is the tick rate really 60 Hz? Defaulted, not measured. | Every constant here is scaled by it. |
+| Does the integrator sub-step at 1/60 or integrate raw delta? | Decides whether the original's handling is frame-rate dependent. See [frame pacing](../psp/frame-pacing.md). |
 | What are the coordinate conventions? | Handedness, units, angle representation. Get this wrong and nothing else parses. |
 
 ## Approach

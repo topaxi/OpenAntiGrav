@@ -89,17 +89,35 @@ weaken the test.
   no work stealing, no completion-order dependence.
 - Asset loading, audio and rendering may thread freely. They are not simulation.
 
-## The tick rate is a decision, not a measurement
+## The tick rate, and how the original differs
 
-`TickRate::DEFAULT` is **60 Hz**. That is a project decision taken so work can
-proceed. **Pulse's actual simulation rate has not been read from the binary.**
+`TickRate::DEFAULT` is **60 Hz**, and this is now evidence-backed: fourteen
+sites in the original sub-step at exactly `1/60`, and every exponential
+smoothing coefficient in the engine is tuned for a 1/60 s step. See
+[frame pacing](../psp/frame-pacing.md).
 
-`TickRate` remains a parameter rather than a constant so that confirming a
-different rate in M2 is a one-line change at the call site rather than a
-re-tuning of every subsystem above it. Nothing downstream should assume 60.
+**But the original does not use a fixed timestep at all.** It measures real
+elapsed time each frame and passes it straight into the update, presenting at
+one vblank while racing (~59.94 Hz) and two in menus (~29.97 Hz), with no
+catch-up when a frame overruns.
 
-Until it is confirmed, treat any tuning constant derived from the tick rate as
-provisional, and do not cite 60 Hz as a fact about the original.
+So 60 Hz is the rate the original was *authored against*, not the rate it
+*steps at*. We fix the step anyway, deliberately, because determinism is worth
+more to this project than frame-for-frame agreement under load. That decision
+and its costs are [ADR-0007](adr/0007-fixed-timestep-vs-original.md).
+
+Two rules follow, and they are easy to get wrong:
+
+- **Where the original sub-steps at 1/60 and discards the remainder, do the
+  same.** Carrying the remainder would be a real behavioural difference in the
+  smoothing, even though carrying it is the textbook approach and is what
+  `TickClock` correctly does at the outer level.
+- **Trace comparison is only valid while the original held its frame rate.**
+  Captured traces must record the original's per-frame delta so that drifted
+  intervals can be told apart from genuine bugs.
+
+`TickRate` stays a parameter rather than a constant, since the craft physics
+integrator has not been read yet and may turn out to want different treatment.
 
 ## How this is enforced
 

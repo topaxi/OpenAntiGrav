@@ -81,10 +81,11 @@ Live questions, with what would resolve each.
 
 | Question | Why it matters | How to resolve |
 | --- | --- | --- |
-| **Confirm the simulation tick rate.** Defaulted to 60 Hz; unverified. | Every physics constant is scaled by it. | Find the main loop's frame pacing, or count ticks between two known events in a trace. |
+| **Does the physics integrator sub-step at 1/60?** | Decides how far our fixed timestep diverges. See [frame pacing](../psp/frame-pacing.md). | Start from `"antigrav_height_adjust"` at `0x08a7b1ac`, referenced from `0x08839880`. |
 | **Is the physics fixed-point or float?** | Decides whether we can be bit-exact for free. See [ADR-0002](../architecture/adr/0002-determinism-model.md). | Look at the ship update's arithmetic instructions: VFPU ops mean float, shifts and integer multiplies mean fixed-point. |
 | **What is the PRNG?** | AI and pickups will not match without it. | Find the seed's storage, trace back to the update function. Compare against known small PRNGs. |
-| **How are WAD entries named?** | Blocks all asset work. See [WAD format](../formats/wad.md). | Find the lookup function in `BOOT.BIN`; the hash algorithm will be right there. |
+| **Are PSP textures swizzled?** | Decides whether decoded pixels display correctly. | Needs a renderer; see [PSP texture](../formats/psp-texture.md). |
+| **What LZSS variant do the PS2 archives use?** | Blocks PS2 asset work. See [WAD format](../formats/wad.md). | `Lzss_Decode` at `0x089419d8`; the bit layout is read but never round-tripped. |
 | **Why does the US PSP disc carry a `UCES00465` directory?** | Unknown. Possibly nothing, possibly a build-provenance clue. | Compare the two `BOOT.BIN` files. See [PSP disc layout](../psp/pulse-disc-layout.md). |
 | **Do PSP and PS2 share gameplay constants?** | Decides whether "gameplay is identical across asset sets" holds. See [ADR-0004](../architecture/adr/0004-asset-pipeline.md). | Locate the handling table in both, compare values. |
 
