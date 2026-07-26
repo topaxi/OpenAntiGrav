@@ -1,6 +1,6 @@
 //! Random access to the logical sectors of a disc image.
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 /// Logical sector size for UMD and DVD images.
 ///
@@ -31,6 +31,20 @@ pub trait SectorSource: std::fmt::Debug {
     /// decompressed hunk, so a run of sectors within one hunk decompresses
     /// once.
     fn read_sectors(&mut self, lba: u32, count: u32) -> Result<Vec<u8>> {
+        // Refuse the range before allocating for it. `count` derives from a
+        // directory record's size field, so a hostile image can ask for 4 GiB
+        // and get it committed before the first out-of-range read fails.
+        let end = lba.checked_add(count).ok_or(Error::SectorOutOfRange {
+            sector: lba,
+            total: self.sector_count(),
+        })?;
+        if end > self.sector_count() {
+            return Err(Error::SectorOutOfRange {
+                sector: end.saturating_sub(1),
+                total: self.sector_count(),
+            });
+        }
+
         let mut out = vec![0u8; count as usize * SECTOR_SIZE];
         for i in 0..count {
             let start = i as usize * SECTOR_SIZE;

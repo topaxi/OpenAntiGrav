@@ -161,6 +161,23 @@ impl UnitLayout {
             user_offset,
         })
     }
+
+    /// How many sectors a hunk holds, or `None` if the geometry is unusable.
+    ///
+    /// `read_sector` divides the logical block address by this, and slices the
+    /// decompressed hunk at `unit * unit_bytes + user_offset`. Both sizes come
+    /// from the CHD header, so both are attacker-controlled: a hunk smaller than
+    /// one unit makes the division zero, and a hunk that is not a whole number of
+    /// units puts the last unit's user area past the end of the buffer. Neither
+    /// is producible by `chdman`, and both are one edited header away.
+    fn sectors_per_hunk(&self, hunk_bytes: u32) -> Option<u32> {
+        let sectors = hunk_bytes.checked_div(self.unit_bytes)?;
+        let last_unit_end = sectors
+            .checked_sub(1)?
+            .checked_mul(self.unit_bytes)?
+            .checked_add(u32::try_from(self.user_offset + SECTOR_SIZE).ok()?)?;
+        (sectors > 0 && last_unit_end <= hunk_bytes).then_some(sectors)
+    }
 }
 
 /// One track from a CHD's `CHTR`/`CHT2` metadata.
@@ -238,7 +255,14 @@ impl ChdSource {
             }
         })?;
 
-        let sectors_per_hunk = header.hunk_size() / layout.unit_bytes;
+        let hunk_bytes = header.hunk_size();
+        let Some(sectors_per_hunk) = layout.sectors_per_hunk(hunk_bytes) else {
+            return Err(Error::HunkGeometryUnsupported {
+                path,
+                hunk_bytes,
+                unit_bytes: layout.unit_bytes,
+            });
+        };
         let sector_count = tracks
             .first()
             .map(|t| t.frames)
@@ -362,6 +386,37 @@ mod tests {
     fn cooked_dvd_units_need_no_offset() {
         let l = UnitLayout::detect(2048, None).unwrap();
         assert_eq!(l, UnitLayout::COOKED);
+    }
+
+    /// A hunk that cannot hold whole sectors has to be refused at open, because
+    /// every later read divides by the count and slices by it.
+    #[test]
+    fn hunk_geometry_that_cannot_divide_into_sectors_is_refused() {
+        let cooked = UnitLayout::COOKED;
+        // What chdman actually writes: 8 sectors of 2048.
+        assert_eq!(cooked.sectors_per_hunk(16_384), Some(8));
+        assert_eq!(cooked.sectors_per_hunk(2_048), Some(1));
+
+        // A hunk smaller than one unit divides to zero, which was a panic in
+        // `read_sector` rather than an error at open.
+        assert_eq!(cooked.sectors_per_hunk(0), None);
+        assert_eq!(cooked.sectors_per_hunk(1), None);
+        assert_eq!(cooked.sectors_per_hunk(2_047), None);
+
+        // Trailing bytes are fine: the extra is simply never addressed.
+        assert_eq!(cooked.sectors_per_hunk(2_049), Some(1));
+
+        // With a user offset, the last unit's user area must still fit. A raw
+        // MODE1 frame is 2352 bytes with 2048 of user data 16 bytes in, so a
+        // hunk holding one frame is fine, but one truncated mid-frame is not.
+        let raw = UnitLayout {
+            unit_bytes: 2352,
+            user_offset: 16,
+        };
+        assert_eq!(raw.sectors_per_hunk(2_352), Some(1));
+        assert_eq!(raw.sectors_per_hunk(2_352 * 4), Some(4));
+        assert_eq!(raw.sectors_per_hunk(2_064), None, "user area would be cut");
+        assert_eq!(raw.sectors_per_hunk(u32::MAX), Some(u32::MAX / 2_352));
     }
 
     fn track(mode: &str) -> TrackInfo {

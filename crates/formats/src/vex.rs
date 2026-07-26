@@ -409,6 +409,14 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
     let end = (FILE_HEADER_LEN + tree_len(data)?).min(data.len());
 
     while at + 16 <= end {
+        // Retire finished subtrees *before* reading the depth, not after. A
+        // parent whose children are all consumed is no longer an ancestor, and
+        // deferring the pop reports the first node after a completed subtree at
+        // the depth of that subtree rather than its own.
+        while remaining.last() == Some(&0) {
+            remaining.pop();
+        }
+
         let header_size = u16_at(data, at + 4) as usize;
         let node = Node {
             class_id: u32_at(data, at),
@@ -430,13 +438,8 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
         let next = node.payload().end;
         out.push(node);
 
-        while let Some(last) = remaining.last_mut() {
-            if *last == 0 {
-                remaining.pop();
-            } else {
-                *last -= 1;
-                break;
-            }
+        if let Some(last) = remaining.last_mut() {
+            *last -= 1;
         }
         if children > 0 {
             remaining.push(children);
@@ -705,6 +708,109 @@ fn decode_vertex(data: &[u8], at: usize, layout: &VertexLayout, scale: f32) -> V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Builds a `.vex` file from `(class_id, child_count, payload_len)` nodes,
+    /// in the depth-first pre-order the format stores them in.
+    fn build_tree(nodes: &[(u32, usize, usize)]) -> Vec<u8> {
+        let mut tree = Vec::new();
+        for &(class_id, children, payload_len) in nodes {
+            tree.extend(class_id.to_le_bytes());
+            tree.extend(0x20u16.to_le_bytes()); // header_size
+            tree.extend(0u16.to_le_bytes()); // padding to +0x08
+            tree.extend((payload_len as u32).to_le_bytes());
+            tree.extend((children as u32).to_le_bytes());
+            tree.extend([0u8; 0x10]); // the name area, left empty
+            tree.extend(std::iter::repeat_n(0u8, payload_len));
+        }
+
+        let mut out = Vec::new();
+        out.extend(6u32.to_le_bytes());
+        out.extend((tree.len() as u32).to_le_bytes());
+        out.extend(0u32.to_le_bytes());
+        out.extend(MAGIC);
+        out.extend(tree);
+        out
+    }
+
+    #[test]
+    fn walks_a_flat_tree() {
+        let data = build_tree(&[(1, 0, 0), (2, 0, 16), (3, 0, 0)]);
+        let nodes = nodes(&data).expect("walk");
+        assert_eq!(nodes.len(), 3);
+        assert_eq!(
+            nodes.iter().map(|n| n.class_id).collect::<Vec<_>>(),
+            [1, 2, 3]
+        );
+        assert!(nodes.iter().all(|n| n.depth == 0));
+        assert_eq!(nodes[1].data_size, 16);
+        assert_eq!(nodes[1].payload().len(), 16);
+    }
+
+    /// A parent whose subtree is finished must stop counting as an ancestor.
+    ///
+    /// `root -> a -> b`, then a sibling of `root`. The sibling is at depth 0, and
+    /// reporting it at depth 2 is what an implementation does if it retires
+    /// finished subtrees after reading the depth instead of before. Nothing reads
+    /// `depth` yet, which is the only reason this was survivable.
+    #[test]
+    fn depth_returns_to_zero_after_a_completed_subtree() {
+        let data = build_tree(&[(1, 1, 0), (2, 1, 0), (3, 0, 0), (4, 0, 0)]);
+        let depths: Vec<usize> = nodes(&data)
+            .expect("walk")
+            .iter()
+            .map(|n| n.depth)
+            .collect();
+        assert_eq!(depths, [0, 1, 2, 0]);
+    }
+
+    #[test]
+    fn depth_tracks_siblings_at_every_level() {
+        // root
+        //   a
+        //     a1
+        //     a2
+        //   b
+        let data = build_tree(&[(1, 2, 0), (2, 2, 0), (3, 0, 0), (4, 0, 0), (5, 0, 0)]);
+        let depths: Vec<usize> = nodes(&data)
+            .expect("walk")
+            .iter()
+            .map(|n| n.depth)
+            .collect();
+        assert_eq!(depths, [0, 1, 2, 2, 1]);
+    }
+
+    #[test]
+    fn stops_at_a_node_that_runs_past_the_tree() {
+        let mut data = build_tree(&[(1, 0, 0), (2, 0, 0)]);
+        // Claim a payload far larger than the file for the second node.
+        let second = FILE_HEADER_LEN + 0x20;
+        data[second + 8..second + 12].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
+        let nodes = nodes(&data).expect("walk");
+        assert_eq!(nodes.len(), 1, "the impossible node must not be reported");
+    }
+
+    #[test]
+    fn stops_at_a_header_too_small_to_be_one() {
+        let mut data = build_tree(&[(1, 0, 0), (2, 0, 0)]);
+        let second = FILE_HEADER_LEN + 0x20;
+        data[second + 4..second + 6].copy_from_slice(&8u16.to_le_bytes());
+        assert_eq!(nodes(&data).expect("walk").len(), 1);
+    }
+
+    #[test]
+    fn a_truncated_file_is_refused_rather_than_walked() {
+        assert!(matches!(nodes(&[]), Err(Error::TooShort { .. })));
+        assert!(matches!(nodes(&[0u8; 8]), Err(Error::TooShort { .. })));
+    }
+
+    /// A tree length larger than the file must not read past the end.
+    #[test]
+    fn a_lying_tree_length_is_clamped_to_the_file() {
+        let mut data = build_tree(&[(1, 0, 0)]);
+        data[4..8].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
+        let nodes = nodes(&data).expect("walk");
+        assert_eq!(nodes.len(), 1);
+    }
 
     /// Every combination the game's stride calculator can reach.
     /// Values from the recovered layout table; see `docs/formats/vex.md`.

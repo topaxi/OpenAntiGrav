@@ -15,12 +15,23 @@
 //!
 //! See `docs/formats/psp-texture.md` for the evidence.
 //!
-//! # Swizzling is unresolved
+//! # These are not swizzled
 //!
-//! The PSP GPU reads textures in a swizzled layout and games commonly store
-//! them pre-swizzled. If these are, decoding literally gives a recognisable but
-//! scrambled image in 16-byte-wide blocks. [`Texture::looks_swizzled`] is a
-//! heuristic, not an answer; `unk_0x07` and `unk_0x08` are the candidate flags.
+//! The PSP GPU reads textures in a swizzled layout and games commonly store them
+//! pre-swizzled, which would make a literal decode come out recognisable but
+//! scrambled in 16-byte-wide blocks. Pulse's `.mip` blobs are **not**: every one
+//! decodes to a clean image, and `unk_0x07` and `unk_0x08` were ruled out as
+//! swizzle flags because they do not vary with anything that would matter.
+//! [`Texture::looks_swizzled`] stays as a triage heuristic for other archives,
+//! not because this question is open. See `docs/formats/psp-texture.md`.
+//!
+//! # 4bpp needs an even pixel count
+//!
+//! Two pixels share a byte with no row padding, so `width * height` must be
+//! even for the packed data to describe whole pixels. Every real texture is
+//! power-of-two in both dimensions, so this never comes up in practice, and it
+//! is refused rather than guessed at: inventing a padding rule for a case the
+//! game cannot produce would be a decoder that lies about untrusted input.
 
 /// Bytes of header before the palette.
 pub const HEADER_LEN: usize = 16;
@@ -40,6 +51,13 @@ pub enum Error {
     },
     /// Width or height was zero.
     ZeroSized {
+        /// Width found.
+        width: u16,
+        /// Height found.
+        height: u16,
+    },
+    /// 4bpp with an odd pixel count, which cannot be packed into whole bytes.
+    OddPixelCountAt4Bpp {
         /// Width found.
         width: u16,
         /// Height found.
@@ -68,6 +86,10 @@ impl std::fmt::Display for Error {
                 )
             }
             Self::ZeroSized { width, height } => write!(f, "zero-sized texture {width}x{height}"),
+            Self::OddPixelCountAt4Bpp { width, height } => write!(
+                f,
+                "{width}x{height} is an odd number of pixels, which 4bpp cannot pack"
+            ),
             Self::SizeMismatch { expected, got } => {
                 write!(f, "header implies {expected} bytes, blob is {got}")
             }
@@ -92,17 +114,23 @@ pub struct Texture {
     /// Palette, `1 << bits_per_pixel` entries of RGBA8888.
     pub palette: Vec<[u8; 4]>,
     /// One palette index per pixel, unpacked from 4-bit pairs where needed.
+    ///
+    /// Always exactly `width * height` long. Consumers rely on that: `to_rgba`
+    /// feeds [`crate::png::encode_rgba`], which asserts the buffer matches the
+    /// dimensions it is given.
     pub indices: Vec<u8>,
     /// The header bytes whose meaning is not established, `+0x05` to `+0x08`.
     pub unknown: [u8; 4],
 }
 
 impl Texture {
-    /// Whether `data` could plausibly be a texture.
+    /// Whether `data` is a texture.
     ///
-    /// Cheap enough to run over every blob in an archive. It only reads the
-    /// header, so a false positive is possible; [`parse`](Self::parse) is the
-    /// real test because the size must match exactly.
+    /// This is a full parse, not a header sniff, so it needs the whole blob and
+    /// it allocates. That makes it strong (the declared size must match the
+    /// blob exactly, so a false positive is very unlikely) and it makes it
+    /// expensive: running it over every entry of a 315 MiB archive reads and
+    /// decompresses all of it. Worth knowing before using it as a filter.
     #[must_use]
     pub fn looks_like_texture(data: &[u8]) -> bool {
         Self::parse(data).is_ok()
@@ -125,9 +153,15 @@ impl Texture {
             return Err(Error::UnsupportedDepth { bits_per_pixel });
         }
 
+        let pixels = width as usize * height as usize;
+        if bits_per_pixel == 4 && pixels % 2 != 0 {
+            return Err(Error::OddPixelCountAt4Bpp { width, height });
+        }
+
         let colours = 1usize << bits_per_pixel;
         let palette_len = colours * 4;
-        let pixel_len = width as usize * height as usize * bits_per_pixel as usize / 8;
+        // Exact, not truncating: the odd 4bpp case is refused above.
+        let pixel_len = pixels * bits_per_pixel as usize / 8;
         let expected = HEADER_LEN + palette_len + pixel_len;
 
         // The size is fully determined by the header, so a mismatch means this
@@ -245,6 +279,42 @@ mod tests {
             width as usize * height as usize * bpp as usize / 8,
         ));
         out
+    }
+
+    /// The case that reached [`crate::png::encode_rgba`]'s assertion.
+    ///
+    /// A 3x1 4bpp blob truncates to one packed byte, which unpacks to two
+    /// indices for three pixels, and `to_rgba` then produces 8 bytes where the
+    /// dimensions call for 12. Refusing at parse keeps that gap from existing.
+    #[test]
+    fn rejects_4bpp_with_an_odd_pixel_count() {
+        let mut blob = Vec::new();
+        blob.extend(3u16.to_le_bytes());
+        blob.extend(1u16.to_le_bytes());
+        blob.push(4);
+        blob.extend([0u8, 1, 2, 0]);
+        blob.extend([0u8; 7]);
+        blob.extend(std::iter::repeat_n(0u8, 16 * 4));
+        blob.push(0x12);
+
+        assert_eq!(
+            Texture::parse(&blob),
+            Err(Error::OddPixelCountAt4Bpp {
+                width: 3,
+                height: 1
+            })
+        );
+    }
+
+    /// The invariant `to_rgba` and the PNG encoder both depend on.
+    #[test]
+    fn indices_always_hold_one_entry_per_pixel() {
+        for (w, h, bpp) in [(32u16, 16u16, 8u8), (32, 32, 4), (1, 1, 8), (2, 1, 4)] {
+            let t = Texture::parse(&build(w, h, bpp, 0x11)).expect("parse");
+            let pixels = usize::from(w) * usize::from(h);
+            assert_eq!(t.indices.len(), pixels, "{w}x{h} at {bpp}bpp");
+            assert_eq!(t.to_rgba().len(), pixels * 4);
+        }
     }
 
     #[test]

@@ -94,7 +94,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// assert_eq!(out, b"A");
 /// ```
 pub fn decompress(input: &[u8], expected_len: usize) -> Result<Vec<u8>> {
-    let mut out = Vec::with_capacity(expected_len);
+    // Reserve for what the input could plausibly produce, not for what it
+    // claims. `expected_len` comes from a WAD entry's size field, so a hostile
+    // archive can declare 2 GiB and have it committed before a single bit is
+    // read. The densest possible encoding is a 17-bit match producing 18 bytes,
+    // so 9 output bytes per input byte is a generous ceiling; anything beyond it
+    // will fail on input exhaustion anyway, and the Vec grows if it is wrong.
+    let ceiling = input.len().saturating_mul(9).max(RING_SIZE);
+    let mut out = Vec::with_capacity(expected_len.min(ceiling));
     let mut ring = [0u8; RING_SIZE];
     let mut cursor = RING_START;
     let mut bits = BitReader::new(input);

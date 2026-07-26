@@ -339,6 +339,15 @@ fn extract(path: &Path, out: &Path, pattern: Option<&str>, force: bool) -> Resul
 ///
 /// Disc paths come from a file we did not author. A record naming `../../etc`
 /// must not be able to write outside the destination.
+///
+/// # The colon matters on Windows
+///
+/// `PathBuf::push` is platform-aware, and on Windows a component that looks like
+/// a drive-relative path (`C:evil`) or a stream name (`file:stream`) is not
+/// treated as an ordinary name: pushing `C:evil` **replaces** everything
+/// accumulated so far. `decode_identifier` passes any ASCII byte through, so a
+/// crafted ISO can produce exactly that. Rejecting the colon outright is cheap
+/// and no legitimate ISO 9660 identifier contains one.
 fn safe_join(root: &Path, disc_path: &str) -> Result<PathBuf> {
     let mut dest = root.to_path_buf();
 
@@ -348,8 +357,8 @@ fn safe_join(root: &Path, disc_path: &str) -> Result<PathBuf> {
             "refusing to extract {disc_path}: path component {component:?} escapes the output directory",
         );
         anyhow::ensure!(
-            !component.contains('\\') && !component.contains('\0'),
-            "refusing to extract {disc_path}: illegal character in path component",
+            !component.contains('\\') && !component.contains('\0') && !component.contains(':'),
+            "refusing to extract {disc_path}: illegal character in path component {component:?}",
         );
         dest.push(component);
     }
@@ -516,5 +525,65 @@ fn print_sniff_summary(results: &[(&Entry, f64, bool)]) {
             g.entropy_sum / g.count as f64,
             g.unknown
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The only thing between a hostile ISO and arbitrary filesystem writes.
+    #[test]
+    fn safe_join_accepts_ordinary_disc_paths() {
+        let root = Path::new("/out");
+        assert_eq!(
+            safe_join(root, "PSP_GAME/SYSDIR/BOOT.BIN").unwrap(),
+            Path::new("/out/PSP_GAME/SYSDIR/BOOT.BIN")
+        );
+        assert_eq!(
+            safe_join(root, "FILE.EXT").unwrap(),
+            Path::new("/out/FILE.EXT")
+        );
+    }
+
+    #[test]
+    fn safe_join_refuses_traversal() {
+        let root = Path::new("/out");
+        for path in [
+            "../etc/passwd",
+            "a/../../etc/passwd",
+            "a/./b",
+            "/absolute",
+            "a//b",
+            "",
+            "..",
+        ] {
+            assert!(
+                safe_join(root, path).is_err(),
+                "{path:?} should not be joinable"
+            );
+        }
+    }
+
+    /// `PathBuf::push` treats these as drive-relative or stream names on
+    /// Windows, where pushing one discards the accumulated path entirely. The
+    /// test asserts the rejection on every platform, because the ISO does not
+    /// know which one it will be read on.
+    #[test]
+    fn safe_join_refuses_windows_path_prefixes() {
+        let root = Path::new("/out");
+        for path in ["C:evil", "C:/evil", "dir/C:evil", "file:stream"] {
+            assert!(
+                safe_join(root, path).is_err(),
+                "{path:?} escapes on Windows and must be refused everywhere"
+            );
+        }
+    }
+
+    #[test]
+    fn safe_join_refuses_separators_and_nul_inside_a_component() {
+        let root = Path::new("/out");
+        assert!(safe_join(root, "a\\b").is_err());
+        assert!(safe_join(root, "a\0b").is_err());
     }
 }
