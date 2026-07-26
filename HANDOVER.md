@@ -11,9 +11,9 @@ confirmation; this pass adds the interactive orbit camera below, still on
 
 ## In flight
 
-Nothing blocked. `just check` passes 305 tests (299 before this pass, plus six
-new `orbit::advance` unit tests); `just test-data` adds 14 ground-truth ones and
-passes 319.
+Nothing blocked. `just check` passes 306 tests (299 at the start of this
+session, plus six new `orbit::advance` unit tests and one new `vex::textures`
+fixture test); `just test-data` adds 14 ground-truth ones and passes 320.
 
 **Models and tracks now render in the `oag-view` window, not just to a
 screenshot.** This was M1's last unchecked item
@@ -62,6 +62,37 @@ session needed, and the capture files have been deleted rather than kept
 around. Worth knowing if a future session does the same kind of live-window
 check on a shared desktop: `grim` (or any full-output capture) grabs whatever
 else is on screen, not just the target window.
+
+**Tried the PS2 disc against the orbit window above, since M1's exit criterion
+names both asset paths and nobody had actually pointed `oag-view` at PS2 data
+before.** Two findings, both now in [vex.md](docs/formats/vex.md):
+
+1. **PS2 `.vex` scenes have a zero-length embedded texture block.**
+   `Data\Ships\Feisar\Ship.vex` from the PS2 disc's `WADS2.WAD` declares
+   `texture_len = 0`, but its `Texture` nodes still carry plausible non-zero
+   `clut_size`/`texel_size` fields — `oag_formats::vex::textures` read those as
+   if PSP's packing applied and walked off the end of the file. Fixed: the
+   header's declared length is now checked before any node's fields are
+   trusted, with a synthetic-fixture regression test
+   (`vex::tests::a_zero_length_texture_block_returns_none_for_every_slot`) so
+   this doesn't need a real PS2 image to catch a regression. Where PS2 textures
+   actually live is not known; `WADSP.WAD` (a separate, uncompressed-mostly
+   archive) is an untested guess, not a finding.
+2. **PS2 mesh batches use a vertex type (`0x1b9`) outside the twelve GU
+   combinations this decoder recognises**, and this is not fixed. It surfaced
+   as a clean, named error rather than a misdecode — exactly what
+   `UnsupportedVertexType` exists for — once the texture bug above stopped
+   masking it.
+
+Net effect: `--track` now renders correctly on **both** PSP and PS2 discs with
+no changes at all (it never touches texture or mesh-vertex decoding, only the
+spline), which is real cross-platform validation of the `WO Track` format
+nobody had checked before. `--mesh` renders on PSP; on PS2 it gets past
+textures now but still fails on the vertex type. M1's exit criterion ("a track
+**and** a ship model render... on both the PSP and PS2 asset paths") is
+therefore still open — closer, not closed. Decoding `0x1b9` is the next
+concrete step and is scoped narrowly enough to pick up directly; see "where I
+would go next".
 
 Previous session's items, for continuity: it closed confidence rescoring and
 the ADR-0006 draft, migrated the disc-to-blob pipeline onto `oag-assets`,
@@ -432,6 +463,17 @@ once, for one fact.
    from the HLE layer, and it also has a `--debugger=PORT` flag for a
    websocket debugger that breaks at start, neither of which had been checked
    against before PPSSPP was installed here.
+5. **Decode PS2 vertex type `0x1b9`**, the concrete blocker on M1's exit
+   criterion now that the texture-block issue is fixed. `oag-view --mesh` on
+   the PS2 disc is the fastest feedback loop: it fails loudly and immediately
+   with the exact value, no emulator needed. Comparing the PSP and PS2 builds
+   of the same ship (`Data\Ships\Feisar\Ship.vex`, both already on hand) is the
+   obvious first move, per [methodology.md](docs/reverse-engineering/methodology.md)'s
+   "two binaries are better than one" — whatever in the PS2 batch header
+   replaces the GU vertex type is likely readable by diffing the two batch
+   headers directly, without touching Ghidra at all. Once one PS2 ship
+   decodes, `--track`'s existing cross-platform pass means a track *and* a
+   ship on both platforms is in reach, which is the actual M1 exit criterion.
 
 ## Traps that cost time here
 

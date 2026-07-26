@@ -300,6 +300,31 @@ This also answers an open question from the
 **mip count**, so the `.mip` size arithmetic holds only when it is 1, which is
 true of every standalone texture examined but not of these.
 
+### PS2: the texture block is empty
+
+**Confidence: 90.** On the PS2 disc, `Data\Ships\Feisar\Ship.vex` (from
+`WADS2.WAD`) declares a texture block length of **0** at header `+0x08`, and
+`16 + tree_len + 0` equals the file's actual decompressed size (250,416 bytes)
+exactly — the same invariant that confirms the PSP packing above, just with a
+zero on the other side of it. Its `Texture` nodes are still present, with
+plausible non-zero `clut_size`/`texel_size` fields, so reading them as if PSP's
+packing applied walks off the end of the file. `01_Track\track.vex` shows the
+same pattern.
+
+An exact arithmetic invariant (`16 + tree_len + texture_len == file size`, with
+`texture_len` zero) checked against two real PS2 files, not runtime-verified —
+capped at 94 by the rubric regardless, and short of that here on file count.
+`oag_formats::vex::textures`
+now checks the header's declared length before touching a node's fields for
+exactly this reason, with a synthetic-fixture test
+(`a_zero_length_texture_block_returns_none_for_every_slot`) rather than a
+second real disc image, per [the legal policy](../overview/legal.md) on test
+fixtures.
+
+**Not determined:** where PS2 textures actually live. `WADSP.WAD` (193
+entries, separate from the compressed `WADS2.WAD`) is a plausible candidate —
+untested guess, not a finding, hence no confidence score.
+
 ## Materials
 
 At mesh payload `+0x30`, stride `0x14`, count at `+0x02`:
@@ -383,6 +408,16 @@ Applied, from
   display list, `0xc0` relates to alpha, `0x2000` to an extra pass.
 - Whether the 16-byte file header carries anything beyond the version.
 - The `.dat` format paired with ships.
+- **PS2 mesh batches use a vertex type this decoder does not recognise.**
+  `Data\Ships\Feisar\Ship.vex` from the PS2 disc (`WADS2.WAD`) has a batch
+  declaring vertex type `0x1b9`, outside the twelve GU combinations in the
+  [vertex format table](#vertex-format) above. PS2 has no GU: the value is
+  presumably a Graphics Synthesizer-native encoding, not a corrupt read of the
+  same scheme, but that is a guess, not a finding. The [orbit camera
+  window](../tools/oag-view.md#models) surfaces this cleanly as an error
+  (`unsupported GU vertex type 0x01b9`) rather than misdecoding, which is why it
+  was noticed at all: `--track`, which does not read vertex colour/normal
+  layout at all, renders the PS2 track spline correctly with no changes.
 
 ## Other extensions found
 

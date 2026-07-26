@@ -728,10 +728,23 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     let mut at = block;
     let mut out = Vec::new();
 
+    // A zero-length texture block is not a malformed file: PS2 `.vex` scenes
+    // carry `Texture` nodes with real dimensions but no palette/texel bytes
+    // after the tree at all, unlike PSP's. Every node's declared clut/texel
+    // size would otherwise be read as if the bytes were there and walk past
+    // the end of the file. Where the actual pixels live on PS2 is not yet
+    // known; every texture in the model comes back `None` until it is.
+    let embedded = texture_len(data)? > 0;
+
     for node in nodes(data)?
         .into_iter()
         .filter(|n| n.class_id == CLASS_TEXTURE)
     {
+        if !embedded {
+            out.push(None);
+            continue;
+        }
+
         let p = &data[node.payload()];
         if p.len() < 0x10 {
             out.push(None);
@@ -1194,6 +1207,48 @@ mod tests {
         assert_eq!(third.palette[0], [0x33, 0, 0, 255]);
         let first = slots[0].as_ref().expect("first texture");
         assert_eq!(first.palette[0], [0x11, 0, 0, 255]);
+    }
+
+    /// PS2's `.vex` scenes declare a zero-length texture block: `Texture`
+    /// nodes carry real dimensions and non-zero `clut_size`/`texel_size`
+    /// fields, but no palette or texel bytes follow the tree at all. Reading
+    /// them as if the bytes were there walks past the end of the file, which
+    /// is what broke on a real PS2 disc image (`Data\Ships\Feisar\Ship.vex`,
+    /// see HANDOVER.md). The header's own declared texture length is the
+    /// signal to trust instead of the node's.
+    #[test]
+    fn a_zero_length_texture_block_returns_none_for_every_slot() {
+        let mut tree: Vec<u8> = Vec::new();
+        tree.extend(CLASS_TEXTURE.to_le_bytes());
+        tree.extend(0x20u16.to_le_bytes());
+        tree.extend(0u16.to_le_bytes());
+        tree.extend(0x10u32.to_le_bytes()); // payload length
+        tree.extend(0u32.to_le_bytes()); // no children
+        tree.extend([0u8; 0x10]); // name area
+        // A payload that looks exactly like a real, decodable 8bpp texture:
+        // this is the point. Only the header's texture_len says otherwise.
+        tree.extend(64u16.to_le_bytes());
+        tree.extend(64u16.to_le_bytes());
+        tree.push(8);
+        tree.push(1);
+        tree.extend([0u8, 0]);
+        tree.extend(1024u32.to_le_bytes()); // clut_size
+        tree.extend(4096u32.to_le_bytes()); // texel_size
+
+        let mut data = Vec::new();
+        data.extend(6u32.to_le_bytes());
+        data.extend((tree.len() as u32).to_le_bytes());
+        data.extend(0u32.to_le_bytes()); // texture block length: none
+        data.extend(MAGIC);
+        data.extend(tree);
+        // No palette or texel bytes follow, matching the zero-length header.
+
+        let slots = textures(&data).expect("a zero-length block is not an error");
+        assert_eq!(slots.len(), 1, "one slot per Texture node");
+        assert!(
+            slots[0].is_none(),
+            "no bytes to read, whatever the node claims"
+        );
     }
 
     #[test]
