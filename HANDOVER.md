@@ -4,12 +4,12 @@ State that is **not** inferrable from the repository itself. Everything about
 formats, decisions and the plan lives in [`docs/`](docs/README.md); this file
 covers what a fresh reader would otherwise have to rediscover.
 
-Written 2026-07-26, at commit `cd1eb21`.
+Written 2026-07-26, at commit `17cc488`.
 
 ## In flight
 
-Nothing. `just check` and `just test-data` both pass, 305 tests including the
-ground-truth ones.
+Nothing. `just check` passes 297 tests; `just test-data` adds the 14 ground-truth
+ones that need `data/images/` and passes 311.
 
 ## The code review has landed, and most of it is done
 
@@ -66,13 +66,22 @@ Still open, and each needs a decision rather than a patch:
 4. ~~`vex::textures` skipping an unsupported depth shifts every later texture
    index.~~ Fixed: both it and `mesh_materials` return one slot per node now.
 
-A lesson from this session worth keeping, since it happened twice. **A recorded
-"correction" can be the wrong direction.** `child_count` was documented as a `u32`
-on the strength of running the decoder against a real file, and it is a `u16`; the
-32-bit read is right on 97% of nodes, which is exactly why it survived. The
-`.vex` frame axis was documented as `up` and points down. In both cases the
-original reading was closer than the correction, and in both cases what settled it
-was an invariant that has to hold arithmetically rather than a more careful look.
+A lesson from this session worth keeping, because it turned up three times in
+three different forms. **Writing something down does not make it right, and the
+more confidently it is written the longer it survives.**
+
+- `child_count` was documented as a `u32`, on the strength of running the decoder
+  against a real file. It is a `u16`, and the 32-bit read is correct on 97% of
+  nodes, which is exactly why it lasted.
+- The `.vex` frame axis was documented as `up`. It points down.
+- The font's `cell()` had a test asserting that `Français` measured one glyph
+  *shorter* than `Francais`. That is the bug written down as an invariant, and a
+  test in that shape actively defends the behaviour it should be catching.
+
+In the first two the *original* reading was closer than the correction. In all
+three, what settled it was an invariant that has to hold arithmetically, not a
+more careful read of the same code. Prefer those, and when you find one, put it in
+a test.
 
 ## What is deliberately not done
 
@@ -81,7 +90,8 @@ These are choices, not oversights.
 | Not done | Why |
 | --- | --- |
 | Models in the window | `oag-view` shows models and tracks via `--screenshot` only. Putting them in the window needs an orbit camera; `--yaw` and `--pitch` stand in for one. |
-| The game's own font | `oag-game`'s language picker uses a 5x7 font of ours. The `.fnt` metrics decode and validate; the atlas's pixel layout does not, so accented characters are dropped rather than substituted. See [fnt.md](docs/formats/fnt.md). |
+| The game's own font | `oag-game`'s language picker uses a 5x7 font of ours. The `.fnt` metrics decode and validate; the atlas's pixel layout does not. The five language names render correctly, accents included, but the type is not Pulse's. See [fnt.md](docs/formats/fnt.md). |
+| Front-end widget offsets | Screen XML coordinates are absolute within the real widget tree, and we do not apply parent offsets, so anything authored near an edge lands slightly outside it. Text is nudged back into the viewport as a stopgap, and it is commented as one. |
 | Audio | ATRAC3+ frames are demuxed and handed over intact. Nothing decodes them. |
 | Batch list B | `oag-view` renders only list A of each mesh, to avoid drawing surfaces twice. That may be dropping a legitimate second pass (reflections, decals). |
 | Transparency sorting | `Glass_ADD.tga` implies additive surfaces that currently draw opaque. The `pass_mask` bits needed are documented in [vex.md](docs/formats/vex.md). |
@@ -142,26 +152,40 @@ rather than looking for it.
 
 ### Validating a decoder
 
-Every format decoded here had a self-check available, and using it has caught
-real errors five times:
+Every format decoded here had a self-check available, and using it has caught real
+errors seven times, and confirmed a format outright twice more. That is the
+single most useful habit in this repository:
 
 - **WAD**: the offset chain. Testing both orderings of the size fields gave
   193/193 against 2/193, which resolved a transposition.
-- **`.vex` geometry**: the mesh's own declared bounding box, to 0.15% of extent.
-  This caught `child_count` being a `u32` and the node stride being variable.
+- **`.vex` geometry**: each batch's own declared bounding box. Vertices must fall
+  inside it, so a wrong stride or scale shows immediately, and with a misread
+  colour format the position bytes come out of the middle of a colour. This is
+  what validated the 16-bit colour formats the tracks use, over 3,181 batches.
+- **`.vex` node tree**: immediate child counts must sum to one less than the node
+  count. Exact on every file as a `u16`; 111 million for 2,071 nodes as a `u32`,
+  which is how the field's width was settled.
 - **Embedded textures**: the sizes sum exactly to the declared block length.
 - **Track**: exactly 64 `section` nodes, matching the 64-bit PVS mask.
 - **`WO Track`**: the payload has to close. `0x20 + 0x20 + 0x20*paths +
   0x10*junctions + 0x70*points` equals the payload length on **40 of 40** track
   files, which is what found the reserved block the previous pass had missed.
+- **LZSS**: where the *reader* stops. The decoder halts on output length, so a
+  size match proves nothing, but every one of the 6,053 streams is consumed to
+  within one or two bytes of its end. It cannot arrange that for itself.
+- **PMF**: three at once, from the front-end agent. Header arithmetic exact, zero
+  stray bytes when demuxing, and access-unit counts matching the presentation
+  duration at 30000/1001 Hz.
 
 **Look for the arithmetic that must hold before writing the parser.** It is
-usually there, and it converts a plausible reading into a determination. When you
-find one, put it in a test rather than in prose: the `.vex` bounding-box check
-above was a one-off measurement written up as if it were a standing guarantee,
-and the review caught that. `crates/formats/tests/track_ground_truth.rs` is the
-shape to copy, including `OAG_REQUIRE_GAME_DATA=1` so an absent disc image fails
-instead of skipping green.
+usually there, and it converts a plausible reading into a determination.
+
+**Then put it in a test, not in prose.** The `.vex` bounding-box check spent
+months as a measurement someone took by hand and wrote up as though it were a
+standing guarantee; the review caught that, and it is now an assertion over
+342,115 vertices. `crates/formats/tests/track_ground_truth.rs` is the shape to
+copy, including `OAG_REQUIRE_GAME_DATA=1` so an absent disc image fails instead of
+skipping green.
 
 ### Ghidra
 
@@ -198,9 +222,10 @@ which is why nothing should be scored above 94.
 
 ## Where I would go next
 
-1. **The `.fnt` atlas layout**, which is the last thing between the front end and
-   the game's own type. It is the same unresolved question as `.mip` swizzling,
-   and solving one probably solves both.
+1. **The `.fnt` atlas layout.** No longer urgent for correctness, since the
+   picker reads properly with our own glyphs, but it is the last thing between the
+   front end and Pulse's own type. It is the same unresolved question as `.mip`
+   swizzling, and solving one probably solves both.
 2. **Confirm the image base** against PPSSPP before more addresses are written
    down.
 3. **Migrate the three older copies** of the disc-to-blob pipeline onto
