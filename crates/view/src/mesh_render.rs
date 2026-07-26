@@ -23,8 +23,10 @@ struct Uniforms {
 /// view regardless of the scale baked into the file. That also means a wrong
 /// scale looks *right* here, so this is not a check on the scale factor; the
 /// bounding-box assertion in `oag-formats` is.
-fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32) -> Uniforms {
-    let distance = model.radius * 3.0;
+///
+/// `zoom` scales the orbit distance; 1.0 is the default framing described above.
+fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32, zoom: f32) -> Uniforms {
+    let distance = model.radius * 3.0 * zoom;
     let eye = Vec3::new(
         distance * yaw.cos() * pitch.cos(),
         distance * pitch.sin(),
@@ -40,6 +42,27 @@ fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32) -> Uniforms {
         model: Mat4::from_translation(-centre).to_cols_array_2d(),
     }
 }
+
+/// The depth format `build`'s pipeline is fixed to; a caller's own depth
+/// texture must match it.
+pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+/// Recomputes the camera and model matrices and uploads them to `buffer`.
+pub(crate) fn write_uniforms(
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    model: &Model,
+    aspect: f32,
+    yaw: f32,
+    pitch: f32,
+    zoom: f32,
+) {
+    let uniforms = matrices(model, aspect, yaw, pitch, zoom);
+    queue.write_buffer(buffer, 0, bytemuck::bytes_of(&uniforms));
+}
+
+/// Size, in bytes, of the uniform buffer `write_uniforms` expects.
+pub(crate) const UNIFORMS_SIZE: u64 = std::mem::size_of::<Uniforms>() as u64;
 
 /// Renders one frame of `model` to a PNG from a given orbit angle.
 ///
@@ -88,7 +111,7 @@ pub fn capture_from(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Depth32Float,
+        format: DEPTH_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
     });
@@ -96,14 +119,21 @@ pub fn capture_from(
     let (pipeline, bind_group, vertex_buffer, index_buffer, texture_binds) =
         build(&device, &queue, model, format)?;
 
-    let uniforms = matrices(model, width as f32 / height as f32, yaw, pitch);
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniforms"),
-        size: std::mem::size_of::<Uniforms>() as u64,
+        size: UNIFORMS_SIZE,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
+    write_uniforms(
+        &queue,
+        &uniform_buffer,
+        model,
+        width as f32 / height as f32,
+        yaw,
+        pitch,
+        1.0,
+    );
 
     // The bind group must reference the buffer we just filled.
     let bind_group_layout = pipeline.get_bind_group_layout(0);
@@ -209,7 +239,7 @@ pub fn capture_from(
     Ok(())
 }
 
-type Built = (
+pub(crate) type Built = (
     wgpu::RenderPipeline,
     wgpu::BindGroup,
     wgpu::Buffer,
@@ -217,7 +247,13 @@ type Built = (
     Vec<wgpu::BindGroup>,
 );
 
-fn build(
+/// Builds the pipeline, geometry and texture bindings for `model`.
+///
+/// Shared by the offscreen capture path and the interactive orbit window, so
+/// both draw through the one pipeline. The returned `BindGroup` is a
+/// placeholder bound to an empty buffer; a real uniform buffer and bind group
+/// must be created against `pipeline.get_bind_group_layout(0)` by the caller.
+pub(crate) fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model: &Model,
@@ -300,7 +336,7 @@ fn build(
             ..Default::default()
         },
         depth_stencil: Some(wgpu::DepthStencilState {
-            format: wgpu::TextureFormat::Depth32Float,
+            format: DEPTH_FORMAT,
             depth_write_enabled: Some(true),
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: Default::default(),

@@ -49,7 +49,8 @@ Decode the containers, then the assets inside them.
       ribbon, `--mesh` draws all 482 art meshes in place, and the two outlines
       agree
 - [ ] Audio: the music and effect banks
-- [ ] `oag-view`, a standalone asset viewer
+- [x] `oag-view`, a standalone asset viewer: textures, and models/tracks with
+      an interactive orbit camera
 
 **Exit criterion:** a Pulse track and a ship model render in `oag-view` from an
 unmodified disc image, on both the PSP and PS2 asset paths.

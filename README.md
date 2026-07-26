@@ -120,8 +120,10 @@ just view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
     --mesh 'Data\Ships\Feisar\Ship.vex' --screenshot /tmp/ship.png
 ```
 
-`oag-view` opens a window; left and right browse, escape quits. Add
-`--screenshot out.png` to render one asset headlessly instead.
+`oag-view` opens a window; left and right browse, escape quits. Drop
+`--screenshot` from a `--mesh` or `--track` invocation and arrow keys orbit the
+model instead. Add `--screenshot out.png` to render headlessly, with no window
+at all.
 
 `just` on its own runs the full check: format, lint and test.
 

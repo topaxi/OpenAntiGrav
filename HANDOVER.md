@@ -4,22 +4,71 @@ State that is **not** inferrable from the repository itself. Everything about
 formats, decisions and the plan lives in [`docs/`](docs/README.md); this file
 covers what a fresh reader would otherwise have to rediscover.
 
-Written 2026-07-26, at commit `289fff3` plus one more commit for the
-`oag-assets` migration described below.
+Written 2026-07-26. As of `98fcf28` this file covered the confidence rescoring,
+the ADR-0006 draft, the `oag-assets` migration and the PPSSPP image-base
+confirmation; this pass adds the interactive orbit camera below, still on
+2026-07-26.
 
 ## In flight
 
-Nothing blocked. `just check` passes 299 tests (297 before this session, plus
-two new `Archive` unit tests); `just test-data` adds 14 ground-truth ones and
-passes 313.
+Nothing blocked. `just check` passes 305 tests (299 before this pass, plus six
+new `orbit::advance` unit tests); `just test-data` adds 14 ground-truth ones and
+passes 319.
 
-**This session closed two of the previous handover's four "still open" items**
-(confidence rescoring and drafting the ADR-0006 question), completed one of its
-"where I would go next" items (migrating the disc-to-blob pipeline duplicates
-onto `oag-assets`), and made another negative-result pass at the `.fnt` atlas
-without closing it. **LZSS being tested only by its own inverse (still-open
-item 1) is untouched** — nothing this session bears on it. Details below, in
-place of the previous handover's "still open" list.
+**Models and tracks now render in the `oag-view` window, not just to a
+screenshot.** This was M1's last unchecked item
+([roadmap.md](docs/overview/roadmap.md)) and the first row of the table below,
+"Models in the window" — both are closed. `--mesh` and `--track`, without
+`--screenshot`, now open a window with an orbit camera: Left/Right rotate,
+Up/Down pitch, `+`/`-` (or PageUp/PageDown) zoom, Escape quits. See
+[oag-view.md](docs/tools/oag-view.md#models).
+
+`crates/view/src/orbit.rs` draws through the exact pipeline
+`mesh_render::build` already built for `--screenshot` — nothing about the
+shaders, buffers or draw loop is new, only the render target (a live surface
+instead of an offscreen texture plus readback) and that the camera angle now
+comes from held keys each frame instead of one fixed value. `mesh_render.rs`
+was split to expose `build`, `write_uniforms` and the depth format as
+`pub(crate)` so both paths share one pipeline rather than growing a second
+copy — see [workspace-layout.md](docs/architecture/workspace-layout.md)'s note
+on the disc-to-blob pipeline duplication this project already paid down once.
+
+The camera's yaw/pitch/zoom update is a pure function (`orbit::advance`) taking
+the held-key set and a frame's `dt`, purely so the clamping (pitch short of
+vertical, where `look_at`'s up vector degenerates; zoom to a fixed range) could
+be unit tested without a window or a GPU. Six tests cover it.
+
+**Verified two ways.** `--mesh` and `--track` screenshots taken before and
+after this change, on both the ship and a real track, come out
+byte-**identical** — the offscreen path is untouched, only refactored to share
+code with the new one. And the window itself was opened under this
+environment's real Wayland compositor (`DISPLAY` points at its rootless
+XWayland, not a plain Xvfb) and screen-captured with `grim`
+(Wayland-native; `ffmpeg -f x11grab` or ImageMagick's `import` against the
+XWayland display both only see the empty rootless-X11 root window, not the
+compositor's output, so neither is useful here) to confirm the ship and the
+track actually draw, correctly textured and lit, before the `mesh_render.rs`
+split and again after. Interactive key-driven rotation was not
+verified visually — no input-injection tool (`xdotool`, `ydotool`, `wtype`) was
+available in this environment — so `orbit::advance`'s unit tests are what back
+the camera-update behaviour specifically; the render path is confirmed by the
+above.
+
+**A privacy note for whoever reads capture logs from this session:** the first
+two `grim` screenshots incidentally captured a few lines of an unrelated window
+on the same desktop (a different chat session, about home router
+configuration). That was not this project's content, was not something this
+session needed, and the capture files have been deleted rather than kept
+around. Worth knowing if a future session does the same kind of live-window
+check on a shared desktop: `grim` (or any full-output capture) grabs whatever
+else is on screen, not just the target window.
+
+Previous session's items, for continuity: it closed confidence rescoring and
+the ADR-0006 draft, migrated the disc-to-blob pipeline onto `oag-assets`,
+confirmed the PSP image base against PPSSPP, and made a negative-result pass at
+the `.fnt` atlas without closing it. **LZSS being tested only by its own
+inverse is still untouched** — nothing this pass bears on it either. Details
+below.
 
 1. **Confidence rescoring is done** for the four pages the previous handover
    named. `formats/wad.md`'s two claims (95, 97) are now 94 each;
@@ -189,7 +238,6 @@ These are choices, not oversights.
 
 | Not done | Why |
 | --- | --- |
-| Models in the window | `oag-view` shows models and tracks via `--screenshot` only. Putting them in the window needs an orbit camera; `--yaw` and `--pitch` stand in for one. |
 | The game's own font | `oag-game`'s language picker uses a 5x7 font of ours. The `.fnt` metrics decode and validate; the atlas's pixel layout does not. The five language names render correctly, accents included, but the type is not Pulse's. See [fnt.md](docs/formats/fnt.md). |
 | Front-end widget offsets | Screen XML coordinates are absolute within the real widget tree, and we do not apply parent offsets, so anything authored near an edge lands slightly outside it. Text is nudged back into the viewport as a stopgap, and it is commented as one. |
 | Audio | ATRAC3+ frames are demuxed and handed over intact. Nothing decodes them. |

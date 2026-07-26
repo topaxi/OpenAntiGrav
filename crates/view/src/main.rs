@@ -4,8 +4,10 @@
 //! oag-view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
 //! ```
 //!
-//! Left and right arrows change asset, Escape quits. Nothing is written to
-//! disk, and the disc image is opened read-only.
+//! Left and right arrows change asset, Escape quits. With `--mesh` or
+//! `--track`, arrow keys orbit the camera instead and `+`/`-` (or
+//! PageUp/PageDown) zoom. Nothing is written to disk, and the disc image is
+//! opened read-only.
 //!
 //! This is the first thing in the project with a window, and it exists to prove
 //! the whole pipeline end to end: CHD, ISO 9660, WAD, LZSS, texture decode,
@@ -15,6 +17,7 @@ mod assets;
 mod mesh;
 mod mesh_render;
 mod offscreen;
+mod orbit;
 mod track;
 
 use anyhow::{Context, Result};
@@ -99,13 +102,15 @@ fn main() -> Result<()> {
             );
         }
         let model = track::build_model(&label, &ai);
-        let path = cli
-            .screenshot
-            .clone()
-            .context("--track currently requires --screenshot")?;
         // Tracks are flat and wide, so look down at them rather than along.
-        mesh_render::capture_from(&model, &path, 1280, 960, cli.yaw, cli.pitch.unwrap_or(1.15))?;
-        println!("wrote {}", path.display());
+        let pitch = cli.pitch.unwrap_or(1.15);
+        if let Some(path) = &cli.screenshot {
+            mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch)?;
+            println!("wrote {}", path.display());
+            return Ok(());
+        }
+        println!("arrows orbit, +/- (or PageUp/PageDown) zoom, escape quits");
+        orbit::run(model, cli.yaw, pitch)?;
         return Ok(());
     }
 
@@ -119,12 +124,14 @@ fn main() -> Result<()> {
             model.indices.len() / 3,
             model.radius
         );
-        let path = cli
-            .screenshot
-            .clone()
-            .context("--mesh currently requires --screenshot")?;
-        mesh_render::capture_from(&model, &path, 960, 720, cli.yaw, cli.pitch.unwrap_or(0.35))?;
-        println!("wrote {}", path.display());
+        let pitch = cli.pitch.unwrap_or(0.35);
+        if let Some(path) = &cli.screenshot {
+            mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch)?;
+            println!("wrote {}", path.display());
+            return Ok(());
+        }
+        println!("arrows orbit, +/- (or PageUp/PageDown) zoom, escape quits");
+        orbit::run(model, cli.yaw, pitch)?;
         return Ok(());
     }
 

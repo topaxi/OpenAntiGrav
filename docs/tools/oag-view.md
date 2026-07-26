@@ -12,8 +12,9 @@ oag-view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
 oag-view <archive> --names data/extracted/psp/all.names
 ```
 
-Left and right arrows change asset, Escape quits. The disc image is opened
-read-only and nothing is written.
+Left and right arrows change asset, Escape quits. With `--mesh` or `--track`
+the window shows one model instead, and arrow keys orbit the camera; see
+[Models](#models). The disc image is opened read-only and nothing is written.
 
 ## Headless screenshots
 
@@ -53,6 +54,12 @@ Decodes a [`.vex` model](../formats/vex.md), flattens every mesh into one
 vertex and index buffer, and renders it with a depth buffer and a fixed
 two-light rig.
 
+Without `--screenshot`, this opens a window with an **orbit camera**: Left and
+Right rotate, Up and Down pitch, `+`/`-` (or PageUp/PageDown) zoom, Escape
+quits. `--yaw` and `--pitch` set the starting angle. The window draws through
+the same pipeline `--screenshot` does, so what you see interactively is what
+the screenshot would have captured at that angle.
+
 The lighting is not Pulse's. A single light leaves faces pointing away from it
 unreadably black, and the point here is to see the geometry and catch decoding
 errors, not to reproduce the game's look.
@@ -86,16 +93,14 @@ the scene hierarchy, which is still undecoded, so it works now. And a wrong
 spline decode does not look subtly off, it looks like scribble, which makes this
 a real check on [the track format](../formats/track.md) rather than a picture.
 
-The camera looks down rather than along, because a track is flat and wide.
+The camera looks down rather than along, because a track is flat and wide. The
+same orbit window and controls described under [Models](#models) apply here.
 
 Junctions show as small gaps in the ribbon: each path owns its own control
 points, so consecutive paths are one step apart rather than sharing a vertex.
 
 ## Limitations
 
-- **Models and tracks are screenshot-only** for now; the window shows textures.
-  Geometry needs an orbit camera to be worth putting in a window. `--yaw` and
-  `--pitch` stand in for one.
 - **Track lighting is the viewer's, not the game's.** Track batches carry vertex
   colours and normals both, and the viewer treats the colours as prelit rather
   than lighting them twice. Which one the GE actually uses is unrecovered state.
