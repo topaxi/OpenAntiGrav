@@ -1,7 +1,11 @@
 default: check
 
-# fmt + lint + test, the gate every commit must pass
-check: fmt-check lint test
+# fmt + lint + test + docs, the gate every commit must pass
+check: fmt-check lint test check-docs
+
+# Documentation is a deliverable, so its links are checked like any other build output
+check-docs:
+    python3 scripts/check-doc-links.py
 
 fmt:
     cargo fmt --all

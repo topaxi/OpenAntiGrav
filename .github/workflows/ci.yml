@@ -24,6 +24,13 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - run: cargo nextest run --workspace
 
+  docs:
+    name: documentation links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check-doc-links.py
+
   # The simulation must produce bit-identical results on every target we ship.
   # This job exists from day one on purpose: a determinism gate added later can
   # only ratify whatever drift already happened.
