@@ -49,12 +49,19 @@ accommodates it.
 
 ## Loading from originals only
 
-No converted assets are cached to disk by default and none are ever
-redistributed. See [legal](../overview/legal.md).
-
 A user points the engine at their own disc image, or at a directory previously
 extracted with `oag-unpack`. Both work; the image is authoritative and the
 directory is faster.
+
+Most assets are decoded in process, every run, and nothing is cached. The
+exception is an asset whose *decoder* is more expensive to reproduce than the
+asset is to convert, which in practice means video: see
+[ADR-0004's amendment](adr/0004-asset-pipeline.md#amendment-2026-07-26-convert-where-reproducing-the-decoder-is-the-wrong-trade).
+Those go to `data/cache/`, keyed on the source entry and safe to delete.
+
+**Converted assets are never redistributed**, cached or not. Converting is a
+local operation on content the user already owns. See
+[legal](../overview/legal.md).
 
 ## Tools
 

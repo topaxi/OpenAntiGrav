@@ -14,6 +14,7 @@ data/
   extracted/
     psp/        Files extracted from a PSP UMD image
     ps2/        Files extracted from a PS2 DVD image
+  cache/        Assets converted from your originals, rebuilt on demand
   ghidra/       Ghidra project directory (shared analysis, not versioned)
   tools/        Built third-party tooling, e.g. the Allegrex Ghidra extension
   traces/       Runtime traces captured from PPSSPP / PCSX2
@@ -22,6 +23,12 @@ data/
 
 `tools/` is populated by `just build-allegrex`. It holds a git checkout and a
 build output, neither of which belongs in this repository.
+
+`cache/` holds assets converted from your own originals, where converting once is
+better than reproducing the original decoder: see
+[ADR-0004](../docs/architecture/adr/0004-asset-pipeline.md). It is derived
+content, so the same rule applies as to everything else here, and **deleting it
+is always safe**. It is rebuilt from your disc image on demand.
 
 ## Image naming
 
