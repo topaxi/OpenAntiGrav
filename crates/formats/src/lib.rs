@@ -19,6 +19,7 @@ pub mod lzss;
 pub mod png;
 pub mod signature;
 pub mod texture;
+pub mod vex;
 pub mod wad;
 
 pub use signature::{Signature, identify};

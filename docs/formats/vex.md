@@ -1,8 +1,9 @@
 # `.vex` scene format
 
-**Status: partial.** The node-tree structure, class-ID table and mesh batch
-layout are read from the loader. Nothing is parsed in code yet, and the
-track-specific node payloads are undecoded.
+**Status: understood for geometry.** Implemented in
+[`oag-formats::vex`](../../crates/formats/src/vex.rs) and validated against real
+ship models. Track-specific node payloads (`section`, `gate`) are still
+undecoded.
 
 `.vex` is **the** 3D format in Pulse. Ships, tracks, weapons, the skycube and
 front-end props are all `.vex`. It is a **Maya scene export**: the class-ID
@@ -15,24 +16,43 @@ version is below 6.
 ## Structure
 
 ```text
-+0x00  16-byte file header, first word = version
-+0x10  node tree, depth-first pre-order, each node 16-byte aligned
-       embedded textures, appended after the tree
+file header, 16 bytes:
+  +0x00  u32   version, 6 in Pulse
+  +0x04  u32   size of the node tree
+  +0x08  u32   size of the embedded texture block
+  +0x0c  char  "VEXX"
+
+node:
+  +0x00  u32   class_id
+  +0x04  u16   header_size
+  +0x08  u32   data_size
+  +0x0c  u32   child_count
+  +0x10  char  name, NUL-terminated, when header_size >= 0x20
+
+next node = offset + header_size + data_size
 ```
 
-Node chunk header:
+Two corrections to the reading taken from the loader alone, both found by
+running the decoder against a real file:
 
-```text
-+0x00  u32  class_id      patched by Vex_ResolveClassId (0x089372b0)
-+0x04  u16  header_size
-+0x08  u32  data_size
-+0x0c  u16  child_count
-```
+- **`child_count` is a `u32`**, not a `u16`.
+- **Nodes are not on a fixed 16-byte stride.** Each is followed immediately by
+  the next, at `header_size + data_size`. A fixed stride walks two nodes and
+  then lands inside a name string.
+
+Nodes also carry their **Maya names** in the header, which the loader ignores
+but which make a dump immediately readable: `world`, `ship_collision_fx`,
+`ship_engine_glow`. The `world` node's payload is the original scene path, for
+example `Z:/WipeoutPSP/X2/Data/Ships/Feisar/Ship.mb`.
+
+The `VEXX` magic is at `+0x0c`, not at the start, so a naive signature check
+misses it. The header's two sizes are exact:
+`16 + tree_len + texture_len == file size`.
 
 The class-ID to name table is at `0x08ab2370`, stride 12
 (`{u32 id, char *name, ptr}`), with names at `0x08a84d40`.
 
-Confidence: **85**, read from the loader, nothing parsed yet.
+Confidence: **95**, validated against real models.
 
 ## Node types
 
@@ -57,6 +77,54 @@ find so far for M1 and M4.
 `Mag Floor Collision` is the magstrip surface that holds ships through
 inversions.
 
+## Vertex format
+
+The GU vertex type at batch `+0x0a` selects the layout. **Position is always
+three `s16`**, because the game's own stride calculator hard-codes a `+ 6`, so
+only twelve combinations are reachable:
+
+| vtype | texcoord | colour | normal | stride | position at |
+| --- | --- | --- | --- | ---: | ---: |
+| `0x100` | - | - | - | 6 | 0 |
+| `0x101` | u8 | - | - | 8 | 2 |
+| `0x103` | f32 | - | - | 16 | 8 |
+| `0x11c` | - | ABGR8888 | - | 12 | 4 |
+| `0x11d` | u8 | ABGR8888 | - | 16 | 8 |
+| `0x11f` | f32 | ABGR8888 | - | 20 | 12 |
+| `0x120` | - | - | s8 | 10 | 4 |
+| `0x121` | u8 | - | s8 | 12 | 6 |
+| `0x123` | f32 | - | s8 | 20 | 12 |
+| `0x13c` | - | ABGR8888 | s8 | 16 | 8 |
+| `0x13d` | u8 | ABGR8888 | s8 | 20 | 12 |
+| `0x13f` | f32 | ABGR8888 | s8 | 24 | 16 |
+
+Fields are in GE order: texture, colour, normal, position. Normals and vertex
+colour are mutually exclusive in practice, since a mesh with normals is lit and
+one with colour is prelit.
+
+`u16` texture coordinates fall through the game's own branch **without
+advancing the offset**, which is either a pruned case or a latent bug. The
+implementation refuses them rather than guessing, because a wrong offset there
+shifts every following field.
+
+### The scale, which decides whether models come out the right size
+
+```text
+position = s16 / 32768.0 * scale        scale = f32 at batch +0x10
+```
+
+The mesh's world matrix is `parent x uniform_scale(scale)`, applied with
+`vmscl.q`, with the translation restored unscaled. There is no additional
+offset.
+
+Missing this is the classic failure: every model comes out a uniform wrong
+size, which reads as a units problem rather than a decoding bug.
+
+**Self-check:** the mesh header carries an `f32` bounding box in model units at
+`+0x10` and `+0x20`. Decoded vertices must fall inside it. Across the nine
+meshes of a real ship model the agreement is within **0.15% of extent**, which
+is `s16` quantisation and nothing more.
+
 ## Geometry is pre-batched GE display lists
 
 Meshes are **not** stored as portable vertex and index buffers. They are
@@ -67,17 +135,48 @@ with `sceGuCallList`.
 Batch record:
 
 ```text
-+0x00  u16  pass_mask
-+0x02  u8   material_index
-+0x03  u8   flags            bit 6 selects an 0x80 header instead of 0x40
-+0x04  u16  vertex_count
-+0x08  u8   primitive_type
-+0x0a  u16  GU vertex type
-+0x0c  u16  payload_size
-+0x0e  u16  alternate vertex offset
-+0x2c  ptr  chunk whose +0x10 is a pre-compiled GE display list
-+0x40       vertices
++0x00  u16    pass_mask
++0x02  u8     material_index
++0x03  u8     flags          bit6: 0x80 header instead of 0x40; bit2: env pass
++0x04  u16    vertex_count            primary
++0x06  u16    vertex_count            alternate; 0 means absent
++0x08  u8     primitive_type          primary
++0x09  u8     primitive_type          alternate
++0x0a  u16    GU vertex type          shared by both
++0x0c  u16    payload_size            bytes of vertex data
++0x0e  u16    alternate vertex offset
++0x10  f32    position scale
++0x18  s16[3] bounding box min, in s16 vertex space
++0x20  s16[3] bounding box max, in s16 vertex space
++0x40 or +0x80  vertices, inline
 ```
+
+Vertices are **inline**, never pointed to:
+
+```text
+header_size = (flags & 0x40) ? 0x80 : 0x40
+vertices    = batch + header_size [+ alternate_offset]
+next batch  = batch + header_size + payload_size
+```
+
+`+0x28`, `+0x29` and `+0x2c` are written at load and are **not file data**. An
+earlier note describing `+0x2c` as a pre-compiled display list was describing a
+runtime allocation.
+
+Mesh header:
+
+```text
++0x00  u16      mesh flags
++0x02  u16      material_count
++0x04  u32      offset to batch list A, relative to the mesh payload
++0x08  u32      offset to batch list B, relative to the mesh payload
++0x10  f32[3]   bounding box min, model units
++0x20  f32[3]   bounding box max, model units
++0x30  material[material_count], stride 0x14
+```
+
+A batch belongs to list A while `pass_mask & 1` is set, and to list B while
+`pass_mask & 2` is set.
 
 **Geometry is never indexed** — the index argument to `sceGuDrawArray` is always
 zero. Materials live at `mesh+0x5c`, stride 0x14, with a texture index at `+0x04`
@@ -171,9 +270,13 @@ Names proposed, not applied. See
 - **The `section` and `WO Track` node payloads**, which hold the spline control
   points, lap and checkpoint ordering, and the AI racing line. This is the
   highest-value remaining item for both M1 and M5.
-- **Collision mesh representation** for the `Floor`/`Wall`/`Mag Floor`/`Cage`
-  collision nodes.
-- The GU vertex-type values actually used, needed to decode geometry.
+- **Primitive type values.** No code inspects them; the byte goes straight to
+  `sceGuDrawArray`. Observed 3 (triangles) and 4 (strip) in real models. A strip
+  needs degenerate triangles to join, since the GE has no primitive restart.
+- Whether the alternate vertex block overlaps or follows the primary one.
+- Batch `+0x14`, and the `.x`/`.z` components of the s16 bounding box.
+- **Collision mesh representation**: see
+  [collision](../ghidra/functions/psp-pulse/collision.md), now decoded.
 - Exact `pass_mask` bit meanings. Partial: `0x800` means the batch has its own
   display list, `0xc0` relates to alpha, `0x2000` to an extra pass.
 - Whether the 16-byte file header carries anything beyond the version.
