@@ -1,11 +1,11 @@
 # `.vex` scene format
 
-**Status: understood for geometry.** Implemented in
-[`oag-formats::vex`](../../crates/formats/src/vex.rs) and validated against real
-ship models. `WO Track` node payloads are decoded too, in
-[`oag-formats::track`](../../crates/formats/src/track.rs). What is **not** done
-is the scene hierarchy: `Transform` payloads are unread, so the nodes of a track
-cannot yet be placed relative to each other.
+**Status: understood.** Implemented in
+[`oag-formats::vex`](../../crates/formats/src/vex.rs), with `WO Track` payloads in
+[`oag-formats::track`](../../crates/formats/src/track.rs). A whole track now
+assembles: `oag-view --mesh` places all 482 drawable meshes of `01_Track` from
+composed `Transform` matrices, and the outline it draws matches the one the
+[spline](track.md) draws independently.
 
 `.vex` is **the** 3D format in Pulse. Ships, tracks, weapons, the skycube and
 front-end props are all `.vex`. It is a **Maya scene export**: the class-ID
@@ -28,19 +28,30 @@ node:
   +0x00  u32   class_id
   +0x04  u16   header_size
   +0x08  u32   data_size
-  +0x0c  u32   child_count
+  +0x0c  u16   child_count      immediate children, not descendants
+  +0x0e  u16   unknown          zero on all but a few dozen nodes
   +0x10  char  name, NUL-terminated, when header_size >= 0x20
 
 next node = offset + header_size + data_size
 ```
 
-Two corrections to the reading taken from the loader alone, both found by
-running the decoder against a real file:
+Corrections to the reading taken from the loader alone, all found by running the
+decoder against real files:
 
-- **`child_count` is a `u32`**, not a `u16`.
 - **Nodes are not on a fixed 16-byte stride.** Each is followed immediately by
   the next, at `header_size + data_size`. A fixed stride walks two nodes and
   then lands inside a name string.
+- **`child_count` is a `u16`**, and it counts *immediate* children. An earlier
+  pass recorded it as a `u32`, which is wrong in a way that hides: the `u16` at
+  `+0x0e` is zero on 2,009 of `01_Track`'s 2,071 nodes, so a 32-bit read is
+  usually right and occasionally returns 1,572,865.
+
+  The check that settles it: in a pre-order tree with immediate child counts, the
+  counts sum to **one less than the node count**. As a `u16` that holds exactly on
+  every file tried, ships and tracks alike; as a `u32` the sum comes out at 111
+  million for 2,071 nodes. It is asserted in the ground-truth tests.
+- **`+0x0e` is not decoded.** Values are small and round (24, 36, 48, 56, 68,
+  368) and look like byte counts. Nothing has been traced to them.
 
 Nodes also carry their **Maya names** in the header, which the loader ignores
 but which make a dump immediately readable: `world`, `ship_collision_fx`,
@@ -81,6 +92,27 @@ readings are the obvious ones and they are wrong, so see
 [track data](track.md). `Mag Floor Collision` is the magstrip surface that holds
 ships through inversions.
 
+## `Transform`: the scene hierarchy
+
+Class `0x6e`, 715 of `01_Track`'s nodes, payload **64 bytes**: a row-major 4x4
+matrix with the translation in row 3 and rows 0 to 2 an orthonormal basis. A
+`Transform` with an **empty** payload is the identity, which is how 57 of those
+715 are stored.
+
+Row-major with row-vector multiplication (`v' = v * M`) is corroborated outside
+this file: the `Start Position` bind forces **row 1** to `(0, 1, 0)` when it
+re-orthonormalises a grid slot, so row 1 is the up axis and `+y` is world up.
+
+A mesh's vertices are in the local space of the transforms above it, and on a
+track that can be **25 deep**. `vex::world_transforms` composes the chain so a
+mesh can be placed with one lookup. Ships have a single transform, which is why
+none of this was needed to render one.
+
+Confidence **92**: the matrices are unambiguous in the data, every basis is
+orthonormal, and composing them puts 482 meshes into a recognisable track whose
+outline matches the independently decoded spline. Not higher because nothing has
+been run under an emulator.
+
 ## Vertex format
 
 The GU vertex type at batch `+0x0a` selects the layout. **Position is always
@@ -102,9 +134,25 @@ only twelve combinations are reachable:
 | `0x13d` | u8 | ABGR8888 | s8 | 20 | 12 |
 | `0x13f` | f32 | ABGR8888 | s8 | 24 | 16 |
 
-Fields are in GE order: texture, colour, normal, position. Normals and vertex
-colour are mutually exclusive in practice, since a mesh with normals is lit and
-one with colour is prelit.
+Fields are in GE order: texture, colour, normal, position.
+
+**Tracks carry both normals and vertex colour.** An earlier note here claimed the
+two were mutually exclusive, one meaning lit and the other prelit. Real track
+batches use `0x139` and `0x13b`, which have both, so whatever selects lighting is
+GE state we have not recovered. `oag-view` treats vertex colour as prelit and
+skips its own light rig for those batches, which is the viewer's choice and not a
+claim about the game.
+
+### 16-bit colour, which only the tracks use
+
+Bits 2 to 4 are the GU colour format, and all four hardware formats appear or are
+supported: `4` BGR5650, `5` ABGR5551, `6` ABGR4444, `7` ABGR8888. The 16-bit ones
+are two bytes and two-byte aligned, so they change the stride and every offset
+after them.
+
+Ship models use only ABGR8888, so a decoder written against ships refuses a
+track outright — which is exactly what happened. Widening 4-bit and 5-bit
+channels must **replicate** rather than shift, or white comes out as `0xf8`.
 
 `u16` texture coordinates fall through the game's own branch **without
 advancing the offset**, which is either a pruned case or a latent bug. The
@@ -124,10 +172,16 @@ offset.
 Missing this is the classic failure: every model comes out a uniform wrong
 size, which reads as a units problem rather than a decoding bug.
 
-**Self-check:** the mesh header carries an `f32` bounding box in model units at
-`+0x10` and `+0x20`. Decoded vertices must fall inside it. Across the nine
-meshes of a real ship model the agreement is within **0.15% of extent**, which
-is `s16` quantisation and nothing more.
+**Self-check, and it is a test rather than an anecdote now.** Each *batch*
+carries its own bounding box as `s16` at `+0x18` and `+0x20`, in the same space
+as its positions. Decoded vertices must fall inside it, so a wrong stride or a
+wrong scale shows up immediately: with a 16-bit colour format misread, position
+bytes come out of the middle of a colour.
+
+`decoded_vertices_stay_inside_their_declared_bounds` checks **3,181 batches and
+342,115 vertices** across two tracks and two ships, covering five vertex types.
+It was previously a measurement someone took by hand and wrote up as though it
+were a standing guarantee.
 
 ## Geometry is pre-batched GE display lists
 

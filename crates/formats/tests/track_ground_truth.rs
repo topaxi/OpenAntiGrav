@@ -251,3 +251,117 @@ fn every_shipped_track_decodes_with_nothing_left_over() {
 
 /// Class ID of a `WO Track` node, from `docs/formats/track.md`.
 const CLASS_WO_TRACK: u32 = 0x3bb;
+
+/// Every decoded vertex must fall inside its batch's declared bounding box.
+///
+/// This is the check `docs/formats/vex.md` describes and, until now, only ever
+/// ran by hand: the mesh carries its own extent, so a wrong vertex stride or a
+/// wrong scale factor puts positions outside it immediately. Track models are the
+/// interesting case, because they use a 16-bit colour format the ship models
+/// never do, and getting the stride wrong there decodes position bytes out of the
+/// middle of a colour.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn decoded_vertices_stay_inside_their_declared_bounds() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == "PSP_GAME/USRDIR/Data.wad")
+        .expect("Data.wad present")
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, Directory::directory_len(count))
+        .expect("directory");
+    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    // A track and a ship: different vertex types, different scales.
+    let models = [
+        "Data\\Environments\\01_Track\\track.vex",
+        "Data\\Environments\\03_Track\\track.vex",
+        "Data\\Ships\\Feisar\\Ship.vex",
+        "Data\\Ships\\Qirex\\Ship.vex",
+    ];
+
+    let mut checked_batches = 0usize;
+    let mut checked_vertices = 0usize;
+    let mut types = std::collections::BTreeSet::new();
+
+    for name in models {
+        let hash = wad::hash_name(name);
+        let Some(entry) = dir.entries.iter().find(|e| e.name_hash == hash) else {
+            continue;
+        };
+        let raw = disc
+            .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
+            .expect("blob");
+        let model = match entry.compression {
+            Compression::None => raw,
+            Compression::Lzss => {
+                oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize).expect("lzss")
+            }
+            Compression::Zlib => panic!("{name}: unexpected zlib entry"),
+        };
+
+        let nodes = vex::nodes(&model).expect("nodes");
+
+        // The tree has exactly one root, which is what pins `child_count` to 16
+        // bits: as a `u32` the counts sum to millions.
+        let children: usize = nodes.iter().map(|n| n.child_count).sum();
+        assert_eq!(
+            nodes.len() - children,
+            1,
+            "{name}: {} nodes with {children} children is not one tree",
+            nodes.len()
+        );
+
+        for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+            let payload = &model[node.payload()];
+            for list in 0..2 {
+                let batches = vex::mesh_batches(payload, list)
+                    .unwrap_or_else(|e| panic!("{name}: decoding batch list {list}: {e}"));
+                for batch in batches {
+                    types.insert(batch.vertex_type);
+                    let (lo, hi) = batch.bounds;
+                    // The box is stored as s16 in the same space as the
+                    // positions, so allow one quantisation step of slack.
+                    let slack =
+                        (0..3).map(|i| (hi[i] - lo[i]).abs()).fold(0.0f32, f32::max) * 1e-3 + 1e-3;
+                    for v in &batch.vertices {
+                        for i in 0..3 {
+                            assert!(
+                                v.position[i] >= lo[i] - slack && v.position[i] <= hi[i] + slack,
+                                "{name}: vertex type {:#06x} axis {i}: {} outside [{}, {}]",
+                                batch.vertex_type,
+                                v.position[i],
+                                lo[i],
+                                hi[i]
+                            );
+                        }
+                        checked_vertices += 1;
+                    }
+                    checked_batches += 1;
+                }
+            }
+        }
+    }
+
+    println!(
+        "{checked_batches} batches, {checked_vertices} vertices, vertex types {:#06x?}",
+        types
+    );
+    assert!(checked_batches > 1000, "only {checked_batches} batches");
+    assert!(
+        types.len() > 1,
+        "one vertex type is not enough to exercise the layout table"
+    );
+}

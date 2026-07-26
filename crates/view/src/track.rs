@@ -197,12 +197,14 @@ fn strip(
             normal,
             colour,
             texcoord: [0.0, 0.0],
+            lit: 1.0,
         });
         vertices.push(GpuVertex {
             position: edges_of(s, right, lift),
             normal,
             colour,
             texcoord: [1.0, 0.0],
+            lit: 1.0,
         });
     }
     for i in 0..samples.len() as u32 - 1 {

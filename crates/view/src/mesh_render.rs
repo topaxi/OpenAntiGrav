@@ -41,11 +41,6 @@ fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32) -> Uniforms {
     }
 }
 
-/// Renders one frame of `model` to a PNG, from the default three-quarter view.
-pub fn capture(model: &Model, path: &Path, width: u32, height: u32) -> Result<()> {
-    capture_from(model, path, width, height, 0.9, 0.35)
-}
-
 /// Renders one frame of `model` to a PNG from a given orbit angle.
 ///
 /// `pitch` near zero looks along the ground; near `PI / 2` looks straight down,
@@ -285,7 +280,8 @@ fn build(
                 array_stride: std::mem::size_of::<GpuVertex>() as u64,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
-                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2
+                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                    4 => Float32
                 ],
             })],
             compilation_options: Default::default(),

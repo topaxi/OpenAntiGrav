@@ -14,11 +14,24 @@
 //!   +0x00  u32   class_id
 //!   +0x04  u16   header_size
 //!   +0x08  u32   data_size
-//!   +0x0c  u32   child_count
+//!   +0x0c  u16   child_count      immediate children, not descendants
+//!   +0x0e  u16   unknown          zero on all but a few dozen nodes
 //!   +0x10  char  name, NUL-terminated, when header_size >= 0x20
 //!
 //! the next node begins at offset + header_size + data_size
 //! ```
+//!
+//! # `child_count` is 16 bits, and the arithmetic says so
+//!
+//! Reading it as a `u32` works on most nodes and fails on a few dozen, because
+//! `+0x0e` is usually zero. On `01_Track` 54 of 2,071 nodes have something there,
+//! and for those a `u32` read gives a child count of 1,572,865, which corrupts
+//! every depth after it.
+//!
+//! The check that settles it: in a pre-order tree with immediate child counts,
+//! the counts sum to one less than the node count. As a `u16` that holds exactly
+//! on every file tried, ship models and tracks alike. As a `u32` the sum comes
+//! out at 111 million for 2,071 nodes.
 //!
 //! See `docs/formats/vex.md` for the class-ID table and the evidence.
 //!
@@ -52,6 +65,12 @@ pub const CLASS_MESH: u32 = 0x125;
 
 /// Class ID of a `Texture` node.
 pub const CLASS_TEXTURE: u32 = 0x3c1;
+
+/// Class ID of a `Transform` node.
+///
+/// 715 of `01_Track`'s 2,071 nodes. Its payload is a 4x4 matrix, or nothing at
+/// all when the transform is the identity.
+pub const CLASS_TRANSFORM: u32 = 0x6e;
 
 /// Divisor for `s16` positions and the `f32` scale.
 ///
@@ -119,8 +138,80 @@ pub struct VertexLayout {
     pub texcoord: Option<(usize, TexcoordFormat)>,
     /// Offset of the three `s8` normal components.
     pub normal: Option<usize>,
-    /// Offset of the ABGR8888 colour.
-    pub colour: Option<usize>,
+    /// Offset of the colour, and how it is packed.
+    pub colour: Option<(usize, ColourFormat)>,
+}
+
+/// How a vertex colour is packed.
+///
+/// The GU's four colour formats. Pulse's ship models use only
+/// [`Abgr8888`](ColourFormat::Abgr8888); its **tracks** use
+/// [`Abgr4444`](ColourFormat::Abgr4444), which is why a track model refused to
+/// decode until this existed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColourFormat {
+    /// 16-bit `BGR5650`, no alpha.
+    Bgr5650,
+    /// 16-bit `ABGR5551`, one alpha bit.
+    Abgr5551,
+    /// 16-bit `ABGR4444`.
+    Abgr4444,
+    /// 32-bit `ABGR8888`.
+    Abgr8888,
+}
+
+impl ColourFormat {
+    /// Bytes occupied, which is also this component's alignment.
+    #[must_use]
+    pub fn size(self) -> usize {
+        match self {
+            Self::Bgr5650 | Self::Abgr5551 | Self::Abgr4444 => 2,
+            Self::Abgr8888 => 4,
+        }
+    }
+
+    /// Expands to RGBA8888.
+    ///
+    /// The 16-bit formats are widened by **bit replication**, not by shifting:
+    /// 5 bits of `0x1f` has to become `0xff`, and `0x1f << 3` gives `0xf8`. Get
+    /// that wrong and every bright surface comes out slightly dark, which is
+    /// hard to see and easy to leave in.
+    #[must_use]
+    pub fn to_rgba(self, raw: u32) -> [u8; 4] {
+        let expand = |value: u32, bits: u32| -> u8 {
+            let max = (1u32 << bits) - 1;
+            if max == 0 {
+                return 255;
+            }
+            ((value * 255 + max / 2) / max) as u8
+        };
+        match self {
+            Self::Bgr5650 => [
+                expand(raw & 0x1f, 5),
+                expand((raw >> 5) & 0x3f, 6),
+                expand((raw >> 11) & 0x1f, 5),
+                255,
+            ],
+            Self::Abgr5551 => [
+                expand(raw & 0x1f, 5),
+                expand((raw >> 5) & 0x1f, 5),
+                expand((raw >> 10) & 0x1f, 5),
+                expand((raw >> 15) & 1, 1),
+            ],
+            Self::Abgr4444 => [
+                expand(raw & 0xf, 4),
+                expand((raw >> 4) & 0xf, 4),
+                expand((raw >> 8) & 0xf, 4),
+                expand((raw >> 12) & 0xf, 4),
+            ],
+            Self::Abgr8888 => [
+                (raw & 0xff) as u8,
+                ((raw >> 8) & 0xff) as u8,
+                ((raw >> 16) & 0xff) as u8,
+                ((raw >> 24) & 0xff) as u8,
+            ],
+        }
+    }
 }
 
 /// How texture coordinates are stored.
@@ -172,17 +263,24 @@ impl VertexLayout {
             _ => return Err(Error::UnsupportedVertexType { vertex_type }),
         };
 
-        let colour = if vertex_type & 0x1c == 0x1c {
-            offset = offset.next_multiple_of(4);
-            align = 4;
+        // Bits 2-4 are the GU colour format. 1 to 3 are not defined by the
+        // hardware, so they are refused rather than guessed at.
+        let colour = match (vertex_type >> 2) & 7 {
+            0 => None,
+            4 => Some(ColourFormat::Bgr5650),
+            5 => Some(ColourFormat::Abgr5551),
+            6 => Some(ColourFormat::Abgr4444),
+            7 => Some(ColourFormat::Abgr8888),
+            _ => return Err(Error::UnsupportedVertexType { vertex_type }),
+        }
+        .map(|format| {
+            let size = format.size();
+            offset = offset.next_multiple_of(size);
+            align = align.max(size);
             let at = offset;
-            offset += 4;
-            Some(at)
-        } else if vertex_type & 0x1c != 0 {
-            return Err(Error::UnsupportedVertexType { vertex_type });
-        } else {
-            None
-        };
+            offset += size;
+            (at, format)
+        });
 
         let normal = if vertex_type & 0x60 == 0x20 {
             offset = offset.next_multiple_of(2);
@@ -237,6 +335,13 @@ pub struct Batch {
     pub scale: f32,
     /// Decoded vertices.
     pub vertices: Vec<Vertex>,
+    /// The batch's own bounding box in model units, from `+0x18` and `+0x20`.
+    ///
+    /// Stored as `s16` in vertex space and scaled here the same way positions
+    /// are, so every decoded vertex must fall inside it. That is the standing
+    /// check on the vertex layout and the scale factor: get either wrong and the
+    /// positions leave the box at once.
+    pub bounds: ([f32; 3], [f32; 3]),
 }
 
 /// GU primitive type for a triangle list.
@@ -314,10 +419,22 @@ pub struct Node {
     pub data_size: usize,
     /// Number of immediate children.
     pub child_count: usize,
+    /// The `u16` at `+0x0e`, whose meaning is not established.
+    ///
+    /// Zero on all but a few dozen nodes per file. Where it is set the values
+    /// are small and round (24, 36, 48, 56, 68, 368) and look like byte counts,
+    /// but nothing has been traced to them. Kept because it is the field that
+    /// made `child_count` look 32 bits wide.
+    pub unk_0x0e: u16,
     /// Node name from the header, when it carries one.
     pub name: Option<String>,
     /// Depth in the tree, zero for the root.
     pub depth: usize,
+    /// Index of this node's parent in the vector [`nodes`] returned.
+    ///
+    /// `None` for the root. Composing a mesh's world matrix means walking this
+    /// chain and multiplying the [`Transform`](CLASS_TRANSFORM) matrices on it.
+    pub parent: Option<usize>,
 }
 
 impl Node {
@@ -399,9 +516,11 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
         return Err(Error::TooShort { got: data.len() });
     }
 
-    let mut out = Vec::new();
-    // Children follow their parent, so a stack of remaining counts tracks depth.
+    let mut out: Vec<Node> = Vec::new();
+    // Children follow their parent, so a stack of remaining counts tracks depth,
+    // and a parallel stack of their indices gives each node its parent.
     let mut remaining: Vec<usize> = Vec::new();
+    let mut remaining_parent: Vec<usize> = Vec::new();
     let mut at = FILE_HEADER_LEN;
 
     // The tree is followed by embedded textures, so stop at its declared end
@@ -415,6 +534,7 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
         // the depth of that subtree rather than its own.
         while remaining.last() == Some(&0) {
             remaining.pop();
+            remaining_parent.pop();
         }
 
         let header_size = u16_at(data, at + 4) as usize;
@@ -423,9 +543,11 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
             offset: at,
             header_size,
             data_size: u32_at(data, at + 8) as usize,
-            child_count: u32_at(data, at + 12) as usize,
+            child_count: usize::from(u16_at(data, at + 12)),
+            unk_0x0e: u16_at(data, at + 14),
             name: name_at(data, at, header_size),
             depth: remaining.len(),
+            parent: remaining_parent.last().copied(),
         };
 
         // A header smaller than the fields already read, or a node running past
@@ -443,6 +565,7 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
         }
         if children > 0 {
             remaining.push(children);
+            remaining_parent.push(out.len() - 1);
         }
 
         // Guard against a zero-length node, which would loop forever.
@@ -489,6 +612,97 @@ impl EmbeddedTexture {
         }
         out
     }
+}
+
+/// A `Transform` node's matrix, or `None` if the payload is not one.
+///
+/// **Row-major, translation in row 3**, which is the row-vector convention:
+/// `v' = v * M`. Rows 0 to 2 are an orthonormal basis in every node checked, and
+/// row 3 ends in `1.0`.
+///
+/// A `Transform` with an empty payload is the identity, which is how 57 of
+/// `01_Track`'s 715 transforms are stored.
+///
+/// The convention is corroborated outside this format: the `Start Position` bind
+/// forces **row 1** to `(0, 1, 0)` when it re-orthonormalises a grid slot, so row
+/// 1 is the up axis and `+y` is world up. See `docs/formats/track.md`.
+#[must_use]
+pub fn transform(payload: &[u8]) -> Option<[f32; 16]> {
+    if payload.is_empty() {
+        return Some(IDENTITY);
+    }
+    if payload.len() < 64 {
+        return None;
+    }
+    let mut m = [0.0f32; 16];
+    for (i, cell) in m.iter_mut().enumerate() {
+        *cell = f32_at(payload, i * 4);
+    }
+    Some(m)
+}
+
+/// The identity, in the same row-major layout as [`transform`].
+pub const IDENTITY: [f32; 16] = [
+    1.0, 0.0, 0.0, 0.0, //
+    0.0, 1.0, 0.0, 0.0, //
+    0.0, 0.0, 1.0, 0.0, //
+    0.0, 0.0, 0.0, 1.0, //
+];
+
+/// Multiplies two row-major matrices: the result applies `a` then `b`.
+#[must_use]
+pub fn multiply(a: &[f32; 16], b: &[f32; 16]) -> [f32; 16] {
+    let mut out = [0.0f32; 16];
+    for row in 0..4 {
+        for col in 0..4 {
+            let mut sum = 0.0;
+            for k in 0..4 {
+                sum += a[row * 4 + k] * b[k * 4 + col];
+            }
+            out[row * 4 + col] = sum;
+        }
+    }
+    out
+}
+
+/// Applies a row-major matrix to a point, with an implicit `w` of 1.
+#[must_use]
+pub fn transform_point(m: &[f32; 16], p: [f32; 3]) -> [f32; 3] {
+    [
+        p[0] * m[0] + p[1] * m[4] + p[2] * m[8] + m[12],
+        p[0] * m[1] + p[1] * m[5] + p[2] * m[9] + m[13],
+        p[0] * m[2] + p[1] * m[6] + p[2] * m[10] + m[14],
+    ]
+}
+
+/// World matrix of every node, composed down the tree.
+///
+/// One entry per node of [`nodes`], in the same order. A node's matrix is the
+/// product of every `Transform` matrix on its ancestor chain, itself included, so
+/// a `Mesh` can be placed with a single lookup.
+///
+/// This is what makes a whole track assemblable: mesh vertices are in the local
+/// space of whichever transform encloses them, and on `01_Track` a mesh sits
+/// under up to 25 nested transforms.
+pub fn world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
+    let mut out: Vec<[f32; 16]> = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        let parent = node
+            .parent
+            .and_then(|p| out.get(p).copied())
+            .unwrap_or(IDENTITY);
+
+        let local = if node.class_id == CLASS_TRANSFORM {
+            data.get(node.payload())
+                .and_then(transform)
+                .unwrap_or(IDENTITY)
+        } else {
+            IDENTITY
+        };
+
+        out.push(multiply(&local, &parent));
+    }
+    out
 }
 
 /// Extracts the textures appended after the node tree.
@@ -663,6 +877,16 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             ));
         }
 
+        let corner = |off: usize| {
+            let mut v = [0.0f32; 3];
+            for (i, c) in v.iter_mut().enumerate() {
+                let raw =
+                    i16::from_le_bytes([payload[at + off + i * 2], payload[at + off + i * 2 + 1]]);
+                *c = f32::from(raw) / POSITION_DIVISOR * scale;
+            }
+            v
+        };
+
         out.push(Batch {
             pass_mask,
             material_index: payload[at + 2],
@@ -670,6 +894,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             vertex_type,
             scale,
             vertices,
+            bounds: (corner(0x18), corner(0x20)),
         });
 
         // `payload_size` covers the vertex data only, so a batch is its header
@@ -707,13 +932,12 @@ fn decode_vertex(data: &[u8], at: usize, layout: &VertexLayout, scale: f32) -> V
         TexcoordFormat::F32 => [f32_at(data, at + o), f32_at(data, at + o + 4)],
     });
 
-    let colour = layout.colour.map(|o| {
-        [
-            data[at + o],
-            data[at + o + 1],
-            data[at + o + 2],
-            data[at + o + 3],
-        ]
+    let colour = layout.colour.map(|(o, format)| {
+        let raw = match format.size() {
+            2 => u32::from(u16_at(data, at + o)),
+            _ => u32_at(data, at + o),
+        };
+        format.to_rgba(raw)
     });
 
     Vertex {
@@ -831,6 +1055,98 @@ mod tests {
         assert_eq!(nodes.len(), 1);
     }
 
+    /// The check that pins `child_count` to 16 bits: in a pre-order tree with
+    /// immediate child counts, the counts sum to one less than the node count.
+    /// The ground-truth test runs the same assertion against real files.
+    #[test]
+    fn the_child_counts_sum_to_one_root() {
+        let data = build_tree(&[(1, 2, 0), (2, 2, 0), (3, 0, 0), (4, 0, 0), (5, 0, 0)]);
+        let nodes = nodes(&data).expect("walk");
+        let children: usize = nodes.iter().map(|n| n.child_count).sum();
+        assert_eq!(nodes.len() - children, 1);
+    }
+
+    /// Reading `child_count` as a `u32` swallows the `u16` at `+0x0e`, which is
+    /// non-zero on a few dozen nodes per real file. This is what that looks like.
+    #[test]
+    fn the_word_after_child_count_is_not_part_of_it() {
+        let mut data = build_tree(&[(1, 1, 0), (2, 0, 0)]);
+        let root = FILE_HEADER_LEN;
+        data[root + 14..root + 16].copy_from_slice(&24u16.to_le_bytes());
+
+        let nodes = nodes(&data).expect("walk");
+        assert_eq!(nodes[0].child_count, 1, "a u32 read would give 1_572_865");
+        assert_eq!(nodes[0].unk_0x0e, 24);
+        assert_eq!(nodes[1].depth, 1, "and the depth stack would be corrupt");
+        assert_eq!(nodes[1].parent, Some(0));
+    }
+
+    #[test]
+    fn parents_follow_the_tree() {
+        // root -> a -> a1, a2; root -> b
+        let data = build_tree(&[(1, 2, 0), (2, 2, 0), (3, 0, 0), (4, 0, 0), (5, 0, 0)]);
+        let nodes = nodes(&data).expect("walk");
+        let parents: Vec<Option<usize>> = nodes.iter().map(|n| n.parent).collect();
+        assert_eq!(parents, [None, Some(0), Some(1), Some(1), Some(0)]);
+    }
+
+    #[test]
+    fn an_empty_transform_payload_is_the_identity() {
+        assert_eq!(transform(&[]), Some(IDENTITY));
+        assert_eq!(transform(&[0u8; 32]), None, "too short to be a matrix");
+    }
+
+    #[test]
+    fn multiply_composes_in_row_vector_order() {
+        let mut translate = IDENTITY;
+        translate[12] = 10.0;
+        let mut scale = IDENTITY;
+        scale[0] = 2.0;
+        scale[5] = 2.0;
+        scale[10] = 2.0;
+
+        // Scale first, then translate: the translation is not scaled.
+        let m = multiply(&scale, &translate);
+        assert_eq!(transform_point(&m, [1.0, 0.0, 0.0]), [12.0, 0.0, 0.0]);
+        // Translate first, then scale: it is.
+        let m = multiply(&translate, &scale);
+        assert_eq!(transform_point(&m, [1.0, 0.0, 0.0]), [22.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn world_transforms_compose_down_the_chain() {
+        // A transform tree three deep, each translating by 1 on x, with a mesh
+        // at the bottom.
+        let data = {
+            let mut nodes = Vec::new();
+            for _ in 0..3 {
+                nodes.push((CLASS_TRANSFORM, 1usize, 64usize));
+            }
+            nodes.push((CLASS_MESH, 0, 0));
+            let mut data = build_tree(&nodes);
+            // Fill each transform payload with a translate-by-one matrix.
+            let mut at = FILE_HEADER_LEN;
+            for _ in 0..3 {
+                let payload = at + 0x20;
+                for (i, v) in IDENTITY.iter().enumerate() {
+                    data[payload + i * 4..payload + i * 4 + 4].copy_from_slice(&v.to_le_bytes());
+                }
+                data[payload + 12 * 4..payload + 12 * 4 + 4].copy_from_slice(&1.0f32.to_le_bytes());
+                at = payload + 64;
+            }
+            data
+        };
+
+        let nodes = nodes(&data).expect("walk");
+        assert_eq!(nodes.len(), 4);
+        let world = world_transforms(&data, &nodes);
+        assert_eq!(transform_point(&world[0], [0.0; 3]), [1.0, 0.0, 0.0]);
+        assert_eq!(transform_point(&world[1], [0.0; 3]), [2.0, 0.0, 0.0]);
+        assert_eq!(transform_point(&world[2], [0.0; 3]), [3.0, 0.0, 0.0]);
+        // The mesh inherits its parent chain without contributing.
+        assert_eq!(transform_point(&world[3], [0.0; 3]), [3.0, 0.0, 0.0]);
+    }
+
     /// A texture this build cannot decode must hold its place, because materials
     /// name a texture by its ordinal. Dropping it renumbers every later one, and
     /// the symptom is a model wearing the wrong skins rather than an error.
@@ -908,6 +1224,14 @@ mod tests {
             (0x13c, 16, 8),
             (0x13d, 20, 12),
             (0x13f, 24, 16),
+            // 16-bit colour. `0x139` and `0x13b` are both observed in the
+            // shipped tracks and both validated by the bounding-box check; the
+            // three colour-only rows are the same rule applied, not sightings.
+            (0x110, 8, 2),   // BGR5650
+            (0x114, 8, 2),   // ABGR5551
+            (0x118, 8, 2),   // ABGR4444
+            (0x139, 14, 8),  // u8 texcoord, ABGR4444, s8 normal
+            (0x13b, 20, 14), // f32 texcoord, ABGR4444, s8 normal
         ];
 
         for &(vertex_type, stride, position) in cases {
@@ -922,7 +1246,7 @@ mod tests {
     fn identifies_present_components() {
         let full = VertexLayout::from_vertex_type(0x13f).unwrap();
         assert_eq!(full.texcoord, Some((0, TexcoordFormat::F32)));
-        assert_eq!(full.colour, Some(8));
+        assert_eq!(full.colour, Some((8, ColourFormat::Abgr8888)));
         assert_eq!(full.normal, Some(12));
         assert_eq!(full.position, 16);
 
@@ -930,6 +1254,46 @@ mod tests {
         assert_eq!(bare.texcoord, None);
         assert_eq!(bare.colour, None);
         assert_eq!(bare.normal, None);
+    }
+
+    /// 0x13b is the type that made a whole track refuse to decode: f32
+    /// texcoords, ABGR4444 colour, s8 normals, s16 position.
+    #[test]
+    fn decodes_the_track_vertex_type() {
+        let layout = VertexLayout::from_vertex_type(0x13b).expect("0x13b");
+        assert_eq!(layout.texcoord, Some((0, TexcoordFormat::F32)));
+        assert_eq!(layout.colour, Some((8, ColourFormat::Abgr4444)));
+        assert_eq!(layout.normal, Some(10));
+        assert_eq!(layout.position, 14);
+        assert_eq!(layout.stride, 20);
+    }
+
+    /// Widening a 4-bit or 5-bit channel by shifting leaves white looking grey.
+    #[test]
+    fn sixteen_bit_colour_widens_to_full_range() {
+        assert_eq!(ColourFormat::Abgr4444.to_rgba(0xffff), [255, 255, 255, 255]);
+        assert_eq!(ColourFormat::Abgr4444.to_rgba(0x0000), [0, 0, 0, 0]);
+        assert_eq!(ColourFormat::Abgr5551.to_rgba(0xffff), [255, 255, 255, 255]);
+        assert_eq!(ColourFormat::Bgr5650.to_rgba(0xffff), [255, 255, 255, 255]);
+        // Alpha is one bit in 5551, so it is either off or fully on.
+        assert_eq!(ColourFormat::Abgr5551.to_rgba(0x7fff)[3], 0);
+        // Channel order: red is the low bits in every ABGR format.
+        assert_eq!(ColourFormat::Abgr4444.to_rgba(0x000f), [255, 0, 0, 0]);
+        assert_eq!(ColourFormat::Abgr8888.to_rgba(0x0000_00ff), [255, 0, 0, 0]);
+    }
+
+    #[test]
+    fn rejects_undefined_colour_formats() {
+        // Bits 2-4 of 1, 2 and 3 are not GU colour formats.
+        for vertex_type in [0x104u16, 0x108, 0x10c] {
+            assert!(
+                matches!(
+                    VertexLayout::from_vertex_type(vertex_type),
+                    Err(Error::UnsupportedVertexType { .. })
+                ),
+                "{vertex_type:#06x} should be refused"
+            );
+        }
     }
 
     #[test]
@@ -1010,6 +1374,7 @@ mod tests {
                 };
                 vertex_count
             ],
+            bounds: ([0.0; 3], [0.0; 3]),
         }
     }
 
@@ -1054,6 +1419,7 @@ mod tests {
             vertex_type: 0x100,
             scale: 1.0,
             vertices: Vec::new(),
+            bounds: ([0.0; 3], [0.0; 3]),
         };
         assert!(batch(0x0101).is_transparent());
         assert!(!batch(0x0021).is_transparent());

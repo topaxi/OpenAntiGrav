@@ -19,6 +19,7 @@ struct VertexInput {
     @location(1) normal: vec3<f32>,
     @location(2) colour: vec4<f32>,
     @location(3) texcoord: vec2<f32>,
+    @location(4) lit: f32,
 };
 
 struct VertexOutput {
@@ -26,6 +27,7 @@ struct VertexOutput {
     @location(0) normal: vec3<f32>,
     @location(1) colour: vec4<f32>,
     @location(2) texcoord: vec2<f32>,
+    @location(3) lit: f32,
 };
 
 @vertex
@@ -38,6 +40,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.normal = (uniforms.model * vec4<f32>(in.normal, 0.0)).xyz;
     out.colour = in.colour;
     out.texcoord = in.texcoord;
+    out.lit = in.lit;
     return out;
 }
 
@@ -47,7 +50,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let key = max(dot(n, normalize(vec3<f32>(0.4, 0.8, 0.5))), 0.0);
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
-    let light = 0.15 + 0.75 * key + 0.25 * fill;
+    let rig = 0.15 + 0.75 * key + 0.25 * fill;
+    // Prelit geometry already carries its lighting in the vertex colour.
+    let light = mix(1.0, rig, in.lit);
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
     // Vertex colour modulates the texture, as the GE's texture-env does.

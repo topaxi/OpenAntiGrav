@@ -14,6 +14,14 @@ pub struct GpuVertex {
     pub normal: [f32; 3],
     pub colour: [f32; 4],
     pub texcoord: [f32; 2],
+    /// 1.0 to apply the viewer's light rig, 0.0 for geometry that is prelit.
+    ///
+    /// Track batches carry vertex colours *and* normals, and their colours are
+    /// baked lighting. Lighting them again multiplies two lighting terms and the
+    /// track comes out nearly black. Ship batches have no vertex colour, so they
+    /// need the rig. This is the viewer's own choice, not the game's: the GE
+    /// decides per draw from state we have not recovered.
+    pub lit: f32,
 }
 
 /// A run of indices sharing one texture.
@@ -133,13 +141,24 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
         })
         .collect();
 
+    // Mesh vertices are in the local space of whichever transform encloses them,
+    // nested up to 25 deep on a track, so a model is only assembled once these
+    // are composed. A ship has one transform and looks the same either way,
+    // which is why this was not missed sooner.
+    let world = vex::world_transforms(data, &nodes);
+
     let mut vertices: Vec<GpuVertex> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
     let mut draws: Vec<DrawCall> = Vec::new();
     let mut mesh_count = 0;
 
-    for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+    for (index, node) in nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.class_id == vex::CLASS_MESH)
+    {
         let payload = &data[node.payload()];
+        let to_world = world[index];
         let mut contributed = false;
 
         // List A is the ordinary render list; B is a second pass. Taking only A
@@ -151,7 +170,7 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
             let first_index = indices.len() as u32;
             for v in &batch.vertices {
                 vertices.push(GpuVertex {
-                    position: v.position,
+                    position: vex::transform_point(&to_world, v.position),
                     // A batch without normals is prelit, so face it at the
                     // camera rather than leaving it black.
                     normal: v.normal.unwrap_or([0.0, 0.0, 1.0]),
@@ -164,6 +183,7 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
                         ]
                     }),
                     texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
+                    lit: if v.colour.is_some() { 0.0 } else { 1.0 },
                 });
             }
             for tri in batch.triangles() {

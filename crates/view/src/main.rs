@@ -58,6 +58,15 @@ struct Cli {
     #[arg(long)]
     mesh: Option<String>,
 
+    /// Camera yaw in radians, for `--mesh` and `--track`.
+    #[arg(long, default_value_t = 0.9)]
+    yaw: f32,
+
+    /// Camera pitch in radians. Near zero looks along the ground, near 1.5
+    /// straight down, which is what a track wants and a model does not.
+    #[arg(long)]
+    pitch: Option<f32>,
+
     /// Render a track's driveable spline instead of its art meshes, by the
     /// `.vex` name in the archive.
     ///
@@ -95,7 +104,7 @@ fn main() -> Result<()> {
             .clone()
             .context("--track currently requires --screenshot")?;
         // Tracks are flat and wide, so look down at them rather than along.
-        mesh_render::capture_from(&model, &path, 1280, 960, 0.9, 1.15)?;
+        mesh_render::capture_from(&model, &path, 1280, 960, cli.yaw, cli.pitch.unwrap_or(1.15))?;
         println!("wrote {}", path.display());
         return Ok(());
     }
@@ -114,7 +123,7 @@ fn main() -> Result<()> {
             .screenshot
             .clone()
             .context("--mesh currently requires --screenshot")?;
-        mesh_render::capture(&model, &path, 960, 720)?;
+        mesh_render::capture_from(&model, &path, 960, 720, cli.yaw, cli.pitch.unwrap_or(0.35))?;
         println!("wrote {}", path.display());
         return Ok(());
     }

@@ -94,11 +94,13 @@ points, so consecutive paths are one step apart rather than sharing a vertex.
 ## Limitations
 
 - **Models and tracks are screenshot-only** for now; the window shows textures.
-  Geometry needs an orbit camera to be worth putting in a window.
-- **Track art meshes are not drawn.** `--track` renders the spline only. Placing
-  the 594 `Mesh` nodes of a track needs `Transform` payloads and the scene
-  hierarchy, which are not decoded yet.
-- **A model's textures are wired up; a track's are not**, for the same reason.
+  Geometry needs an orbit camera to be worth putting in a window. `--yaw` and
+  `--pitch` stand in for one.
+- **Track lighting is the viewer's, not the game's.** Track batches carry vertex
+  colours and normals both, and the viewer treats the colours as prelit rather
+  than lighting them twice. Which one the GE actually uses is unrecovered state.
+- **Batch list B is not drawn**, so a second pass (reflections, decals) may be
+  missing.
 - Zlib-compressed WAD entries are skipped; no shipped archive uses them.
 - One texture at a time; there is no atlas or contact-sheet view.
 
