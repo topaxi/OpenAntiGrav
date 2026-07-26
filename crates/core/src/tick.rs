@@ -165,16 +165,69 @@ mod tests {
     }
 
     #[test]
-    fn tick_count_is_exact_over_a_long_run() {
+    fn feeding_back_the_tick_length_produces_exactly_one_tick_each_time() {
         let mut clock = TickClock::new(RATE);
         let dt = RATE.dt_nanos();
 
         for _ in 0..100_000 {
             clock.advance(dt);
         }
-        // Integer nanoseconds mean no drift. A float accumulator would be off
-        // by a handful of ticks after this many steps.
+        // This says the accumulator is exact in integer nanoseconds, and no
+        // more: it feeds the clock its own rounded tick length, so it cannot
+        // see the rounding. That is what the next test is for.
         assert_eq!(clock.tick(), 100_000);
+    }
+
+    /// Feeds real seconds rather than the clock's own tick length.
+    ///
+    /// `1_000_000_000 / 60` truncates to 16,666,666 ns, so a tick is 2/3 of a
+    /// nanosecond short and the clock runs *fast* against a real second. The
+    /// drift is bounded and known: one extra tick every 416,667 seconds, which
+    /// is 4.8 days of continuous simulation. It is a deliberate trade (integer
+    /// nanoseconds are worth more than an exact 60 Hz), and the point of pinning
+    /// it is that a change in the accumulator would move this number.
+    ///
+    /// The previous version of this test claimed to prove no drift while feeding
+    /// the clock its own rounded tick length, so it could not have detected any.
+    #[test]
+    fn the_truncated_tick_length_makes_the_clock_run_slightly_fast() {
+        // 60 ticks of 16,666,666 ns are 40 ns short of a second, and that
+        // shortfall is the entire drift.
+        let dt = RATE.dt_nanos();
+        assert_eq!(1_000_000_000 - dt * u64::from(RATE.hz()), 40);
+
+        // So one whole tick is gained after dt / 40 seconds, a little under
+        // 416,667, which is 4.8 days of continuous simulation.
+        assert_eq!(dt / 40, 416_666);
+
+        // Confirm it by running, in steps small enough that the catch-up cap
+        // never truncates. A cap hit would *lose* time, which is the opposite
+        // error and would hide this one.
+        const STEP_NANOS: u64 = 100_000_000;
+        let mut clock = TickClock::new(RATE);
+        let mut fed = 0u64;
+        let mut first_ahead = None;
+
+        while first_ahead.is_none() {
+            let produced = clock.advance(STEP_NANOS);
+            assert!(produced <= 8, "the catch-up cap was hit");
+            fed += STEP_NANOS;
+
+            let ideal = fed * u64::from(RATE.hz()) / 1_000_000_000;
+            assert!(
+                clock.tick() >= ideal,
+                "the clock is behind after {fed} ns, which the truncation cannot cause"
+            );
+            if clock.tick() > ideal {
+                first_ahead = Some(fed / 1_000_000_000);
+            }
+        }
+
+        assert_eq!(
+            first_ahead,
+            Some(416_666),
+            "the drift rate moved; work out why before touching this number"
+        );
     }
 
     #[test]

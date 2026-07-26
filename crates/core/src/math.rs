@@ -39,9 +39,15 @@ pub mod camera {
 pub mod fixed {
     /// Converts a 16.16 fixed-point value to `f32`.
     ///
-    /// Exact for all inputs: an `i32` has at most 32 significant bits and the
-    /// division is by a power of two, so this is a single correctly-rounded
-    /// operation.
+    /// **Exact only while `|v| < 2^24`.** An `f32` carries 24 significant bits
+    /// and an `i32` up to 32, so the `as f32` cast rounds first; dividing by a
+    /// power of two afterwards is exact and cannot recover what the cast lost.
+    /// In 16.16 terms that means values above 256.0 lose low fractional bits,
+    /// gradually: at 4096.0 the resolution is 2^-12 rather than 2^-16.
+    ///
+    /// This matters if a recovered format turns out to carry large coordinates
+    /// in 16.16, because the loss is silent. Convert through `f64`, or keep the
+    /// value in fixed point, if that day comes.
     #[must_use]
     pub fn from_16_16(v: i32) -> f32 {
         v as f32 / 65536.0
@@ -88,6 +94,21 @@ mod tests {
                 assert_eq!(fixed::to_16_16(f), raw, "raw = {raw}");
             }
         }
+    }
+
+    /// Pins the limit the conversion's own documentation claims, since it is a
+    /// silent loss rather than an error.
+    #[test]
+    fn fixed_16_16_loses_low_bits_above_the_mantissa() {
+        // The largest exactly representable raw value, and the first that is
+        // not: 2^24 + 1 rounds down to 2^24.
+        let exact = 1i32 << 24;
+        assert_eq!(fixed::to_16_16(fixed::from_16_16(exact)), exact);
+        assert_eq!(fixed::to_16_16(fixed::from_16_16(exact + 1)), exact);
+
+        // Which in 16.16 means the resolution at 256.0 is already 2^-16 * 2.
+        assert_eq!(fixed::from_16_16(exact), 256.0);
+        assert_eq!(fixed::from_16_16(exact + 1), 256.0);
     }
 
     #[test]

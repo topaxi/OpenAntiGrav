@@ -35,14 +35,25 @@ use oag_core::probe;
 /// `(ticks, seed, final_hash, trajectory_hash)`.
 ///
 /// Recorded on x86_64 Linux, and verified identical between debug and release.
+///
+/// # History
+///
+/// - Regenerated 2026-07-26 because [`oag_core::rng`] was not the generator it
+///   claimed to be: its state update read four stale words where
+///   `xoshiro128**` reads two updated ones, which cost the map its bijectivity.
+///   The old constants encoded that generator, so they had to move. This is the
+///   deliberate regeneration the module docs above allow, not the reflex one
+///   they warn against: the *cause* was found and fixed first, and the fix is
+///   pinned by a published reference vector in `rng.rs` so the same class of
+///   change cannot happen quietly again.
 const REFERENCE: &[(u32, u64, u64, u64)] = &[
-    (1_000, 1, 0x8fae_bc50_d5b8_5a51, 0xbb79_231b_9491_a914),
-    (10_000, 42, 0x12f4_44d7_2e72_7d29, 0x75d8_415d_d6e5_f4c8),
+    (1_000, 1, 0xc45d_a2ce_49d2_b04b, 0xc710_a4bc_5479_abee),
+    (10_000, 42, 0x422a_d61d_f161_2c01, 0x9a58_e5fc_acff_9476),
     (
         100_000,
         0xDEAD_BEEF,
-        0xf74b_01b2_3bf5_6ea5,
-        0x7ee2_d19b_a2b6_8815,
+        0xeabc_0eab_577c_b538,
+        0xbed1_05ca_ac9b_be5c,
     ),
 ];
 

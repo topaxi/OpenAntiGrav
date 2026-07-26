@@ -70,17 +70,27 @@ weaken the test.
   of verification.
 - Rendering interpolates between the last two states using
   `TickClock::interpolation_alpha`.
-- The accumulator carries integer nanoseconds, not a float, so it cannot drift
-  over a long session.
+- The accumulator carries integer nanoseconds, not a float. That bounds the
+  drift rather than removing it: `1_000_000_000 / 60` truncates, so the clock
+  gains one tick every 4.8 days of continuous simulation. The figure is pinned
+  by a test, because the previous test claimed no drift while feeding the clock
+  its own rounded tick length and so could not have seen any.
 
 ### Randomness
 
 - **No OS entropy.** Every draw comes from a seeded
   [`Rng`](../../crates/core/src/rng.rs) whose state is part of the world
   snapshot.
-- The current generator is a placeholder. Wipeout Pulse has its own, and AI
-  decisions and pickup rolls will only match once it is recovered. Routing every
-  draw through `oag-core` from the start makes that a one-file change.
+- The current generator is a placeholder: `xoshiro128**`, pinned to the
+  published reference vector. Wipeout Pulse has its own, and AI decisions and
+  pickup rolls will only match once it is recovered. Routing every draw through
+  `oag-core` from the start makes that a one-file change.
+- **A placeholder still needs an external anchor.** This one shipped with its
+  state update written as one parallel assignment instead of four sequential
+  ones, which cost it two terms and its bijectivity, and every test passed
+  because they all compared the generator against itself. The determinism gate
+  could not see it either: it catches a generator that *drifts*, not one that
+  was wrong from the first commit.
 
 ### Threads
 

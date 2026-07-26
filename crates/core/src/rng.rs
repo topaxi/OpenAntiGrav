@@ -56,14 +56,27 @@ impl Rng {
     }
 
     /// Returns the next `u32`.
+    ///
+    /// The four state updates are **sequential**, and that matters: `s[1]` and
+    /// `s[0]` read the *already updated* `s[2]` and `s[3]`. Writing them as one
+    /// parallel assignment from the old words costs the generator two of its
+    /// four terms, and because every operation here is linear over GF(2) the
+    /// damage is measurable rather than aesthetic: the transition matrix drops
+    /// from rank 128 to 119, so the map stops being a bijection, state is lost
+    /// on every step, and the 2^128 - 1 period is gone. It still passes any test
+    /// that only checks the generator against itself, which is why
+    /// [`tests::the_step_is_a_bijection`] and the reference vector below exist.
     pub fn next_u32(&mut self) -> u32 {
-        let [s0, s1, s2, s3] = self.state;
-        let result = s1.wrapping_mul(5).rotate_left(7).wrapping_mul(9);
-        let t = s1 << 9;
+        let s = &mut self.state;
+        let result = s[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
+        let t = s[1] << 9;
 
-        self.state = [s0 ^ s3, s1 ^ s2, s2 ^ s0, s3 ^ s1];
-        self.state[2] ^= t;
-        self.state[3] = self.state[3].rotate_left(11);
+        s[2] ^= s[0];
+        s[3] ^= s[1];
+        s[1] ^= s[2];
+        s[0] ^= s[3];
+        s[2] ^= t;
+        s[3] = s[3].rotate_left(11);
 
         result
     }
@@ -105,6 +118,96 @@ impl Rng {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The first eight outputs from state `[1, 2, 3, 4]`.
+    ///
+    /// Produced from the published `xoshiro128starstar.c` at
+    /// <https://prng.di.unimi.it/xoshiro128starstar.c>, by an independent
+    /// implementation of that source rather than by running this one. Two of
+    /// them being zero or near-zero is expected: the output depends on `s[1]`
+    /// alone, and a tiny seed state takes a few steps to fill out.
+    ///
+    /// **Do not regenerate these from the implementation.** They are the only
+    /// thing here that would notice the generator quietly becoming a different
+    /// generator, which is exactly what happened before.
+    const REFERENCE_1_2_3_4: [u32; 8] = [
+        0x0000_2d00,
+        0x0000_0000,
+        0x005a_7080,
+        0x0438_9d80,
+        0x7919_9d9b,
+        0x6196_3b24,
+        0x4cb9_b57a,
+        0xde9d_7431,
+    ];
+
+    #[test]
+    fn matches_the_published_reference_vector() {
+        let mut r = Rng {
+            state: [1, 2, 3, 4],
+        };
+        for (i, &expected) in REFERENCE_1_2_3_4.iter().enumerate() {
+            assert_eq!(r.next_u32(), expected, "output {i}");
+        }
+    }
+
+    /// Undoes one step, then checks the round trip.
+    ///
+    /// The reference generator's step is a bijection on the 2^128 states, which
+    /// is what its full period rests on. An inverse that reconstructs the input
+    /// exactly is a direct proof of that for the states tried, and it fails
+    /// loudly for a step that has lost a term.
+    fn unstep(next: [u32; 4]) -> [u32; 4] {
+        let [s0_new, s1_new, s2_new, s3_new] = next;
+        let s3_mid = s3_new.rotate_right(11);
+        let s0 = s0_new ^ s3_mid;
+
+        // `s2_mid ^ (s1 << 9) == s2_new` with `s1 == s1_new ^ s2_mid`, so
+        // `u ^ (u << 9) == s2_new ^ (s1_new << 9)` for `u == s2_mid`. Shifting
+        // left only ever moves bits up, so substituting the equation into
+        // itself converges once the shift has walked off the top: 32 / 9 gives
+        // four rounds.
+        let v = s2_new ^ (s1_new << 9);
+        let mut u = v;
+        for _ in 0..4 {
+            u = v ^ (u << 9);
+        }
+
+        let s1 = s1_new ^ u;
+        [s0, s1, u ^ s0, s3_mid ^ s1]
+    }
+
+    #[test]
+    fn the_step_is_a_bijection() {
+        let mut r = Rng::new(2024);
+        for step in 0..4096 {
+            let before = r.state;
+            r.next_u32();
+            assert_eq!(
+                unstep(r.state),
+                before,
+                "step {step} is not invertible, so the map is not a bijection"
+            );
+        }
+        // Including the awkward states: all-ones, and one bit set anywhere.
+        let mut states = vec![[u32::MAX; 4]];
+        for word in 0..4 {
+            for bit in [0, 1, 8, 9, 22, 23, 31] {
+                let mut s = [0u32; 4];
+                s[word] = 1 << bit;
+                states.push(s);
+            }
+        }
+        for state in states {
+            let mut r = Rng { state };
+            r.next_u32();
+            assert_eq!(
+                unstep(r.state),
+                state,
+                "state {state:08x?} is not recovered"
+            );
+        }
+    }
 
     #[test]
     fn same_seed_gives_same_sequence() {
