@@ -1,0 +1,21 @@
+[package]
+name = "oag-tools"
+description = "Command line tools for inspecting and extracting Wipeout game data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "oag-unpack"
+path = "src/bin/oag-unpack.rs"
+
+[dependencies]
+oag-disc.workspace = true
+oag-formats.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

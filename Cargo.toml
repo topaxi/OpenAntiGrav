@@ -1,0 +1,46 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/disc", "crates/formats", "crates/tools"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/topaxi/OpenAntiGrav"
+rust-version = "1.85"
+
+[workspace.dependencies]
+oag-core = { path = "crates/core" }
+oag-disc = { path = "crates/disc" }
+oag-formats = { path = "crates/formats" }
+
+anyhow = "1"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+chd = "0.3"
+
+# `scalar-math` disables SIMD. Vectorised paths are free to reassociate and to
+# differ between targets; the simulation must not. See docs/architecture/adr/0002.
+glam = { version = "0.33", default-features = false, features = [
+  "std",
+  "scalar-math",
+] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+# Determinism hazards. Every one of these can silently change results between
+# targets or between runs; see docs/architecture/determinism.md.
+float_arithmetic = "allow"     # enabled per-module in sim crates, not globally
+suboptimal_flops = "allow"     # would suggest mul_add, which is contraction
+imprecise_flops = "allow"
+
+[profile.release]
+debug = 1
+
+# Behavioural verification runs the simulation for many thousands of ticks.
+# An unoptimised sim makes the verification loop unusable.
+[profile.dev.package."*"]
+opt-level = 2

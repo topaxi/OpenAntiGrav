@@ -1,0 +1,66 @@
+//! Reads logical sectors out of a raw `.iso` file.
+
+use std::fs::File;
+use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
+
+use crate::error::{Error, Result};
+use crate::source::{SECTOR_SIZE, SectorSource};
+
+/// A flat ISO file exposed as a sector source.
+#[derive(Debug)]
+pub struct RawSource {
+    file: BufReader<File>,
+    path: PathBuf,
+    sector_count: u32,
+}
+
+impl RawSource {
+    /// Opens a raw ISO file.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        let file = File::open(&path).map_err(|e| Error::io(&path, e))?;
+        let len = file.metadata().map_err(|e| Error::io(&path, e))?.len();
+
+        // Truncated final sectors are ignored rather than rejected. A partially
+        // downloaded image should still list what it does contain.
+        let sector_count = u32::try_from(len / SECTOR_SIZE as u64).unwrap_or(u32::MAX);
+
+        Ok(Self {
+            file: BufReader::new(file),
+            path,
+            sector_count,
+        })
+    }
+
+    /// The path this source was opened from.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl SectorSource for RawSource {
+    fn sector_count(&self) -> u32 {
+        self.sector_count
+    }
+
+    fn read_sector(&mut self, lba: u32, buf: &mut [u8]) -> Result<()> {
+        debug_assert_eq!(buf.len(), SECTOR_SIZE);
+        if lba >= self.sector_count {
+            return Err(Error::SectorOutOfRange {
+                sector: lba,
+                total: self.sector_count,
+            });
+        }
+
+        let offset = u64::from(lba) * SECTOR_SIZE as u64;
+        self.file
+            .seek(SeekFrom::Start(offset))
+            .map_err(|e| Error::io(&self.path, e))?;
+        self.file
+            .read_exact(buf)
+            .map_err(|e| Error::io(&self.path, e))?;
+        Ok(())
+    }
+}

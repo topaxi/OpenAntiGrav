@@ -1,0 +1,11 @@
+[package]
+name = "oag-formats"
+description = "Identification and parsing of Wipeout asset container formats"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

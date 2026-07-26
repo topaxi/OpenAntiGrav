@@ -1,0 +1,15 @@
+[package]
+name = "oag-disc"
+description = "Reads PSP UMD and PS2 DVD disc images (CHD and raw ISO) and walks their ISO 9660 filesystems"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+chd.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

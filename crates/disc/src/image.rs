@@ -1,0 +1,227 @@
+//! The front door: open an image, list it, read files out of it.
+
+use std::fs::File;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+
+use crate::chd_source::ChdSource;
+use crate::error::{Error, Result};
+use crate::iso9660::{self, Entry, VolumeDescriptor};
+use crate::platform::{self, TitleInfo};
+use crate::raw_source::RawSource;
+use crate::source::{SECTOR_SIZE, SectorSource};
+
+/// CHD files begin with this tag.
+const CHD_MAGIC: &[u8; 8] = b"MComprHD";
+
+/// Which container an image turned out to be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Container {
+    /// MAME Compressed Hunks of Data.
+    Chd,
+    /// A flat sequence of 2048-byte sectors.
+    RawIso,
+}
+
+impl std::fmt::Display for Container {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Chd => "CHD",
+            Self::RawIso => "raw ISO",
+        })
+    }
+}
+
+/// An opened disc image.
+#[derive(Debug)]
+pub struct DiscImage {
+    source: Box<dyn SectorSource>,
+    path: PathBuf,
+    container: Container,
+    entries: Option<Vec<Entry>>,
+}
+
+impl DiscImage {
+    /// Opens an image, detecting the container by magic rather than extension.
+    ///
+    /// Extension-based detection would mislabel a `.iso` that is really a CHD,
+    /// which is a common result of renaming a download.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        let container = sniff_container(&path)?;
+
+        let source: Box<dyn SectorSource> = match container {
+            Container::Chd => Box::new(ChdSource::open(&path)?),
+            Container::RawIso => Box::new(RawSource::open(&path)?),
+        };
+
+        Ok(Self {
+            source,
+            path,
+            container,
+            entries: None,
+        })
+    }
+
+    /// The path the image was opened from.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Which container the image uses.
+    #[must_use]
+    pub fn container(&self) -> Container {
+        self.container
+    }
+
+    /// Total logical sectors.
+    #[must_use]
+    pub fn sector_count(&self) -> u32 {
+        self.source.sector_count()
+    }
+
+    /// Reads the primary volume descriptor.
+    pub fn volume_descriptor(&mut self) -> Result<VolumeDescriptor> {
+        iso9660::read_volume_descriptor(self.source.as_mut())
+    }
+
+    /// Every file and directory on the disc, depth-first.
+    ///
+    /// Walking the tree costs a lot of decompression on a CHD, so the result is
+    /// cached for the lifetime of the image.
+    pub fn entries(&mut self) -> Result<&[Entry]> {
+        if self.entries.is_none() {
+            self.entries = Some(iso9660::walk(self.source.as_mut())?);
+        }
+        Ok(self.entries.as_ref().expect("just populated"))
+    }
+
+    /// Identifies the console and title.
+    pub fn identify(&mut self) -> Result<TitleInfo> {
+        // Cloned so the borrow of `self.entries` ends before `identify` needs
+        // `self.source` mutably. The listing is small next to the image.
+        let entries = self.entries()?.to_vec();
+        platform::identify(self.source.as_mut(), &entries)
+    }
+
+    /// Reads one file by path, case-insensitively.
+    pub fn read_file(&mut self, path: &str) -> Result<Vec<u8>> {
+        let entry = self
+            .entries()?
+            .iter()
+            .find(|e| !e.is_directory && e.path.eq_ignore_ascii_case(path))
+            .cloned()
+            .ok_or_else(|| Error::NotFound {
+                path: path.to_string(),
+            })?;
+
+        self.read_entry(&entry)
+    }
+
+    /// Reads the contents of an entry returned by [`Self::entries`].
+    pub fn read_entry(&mut self, entry: &Entry) -> Result<Vec<u8>> {
+        self.source.read_range(entry.lba, entry.size)
+    }
+
+    /// Reads at most `max_len` bytes from the start of an entry.
+    ///
+    /// Triage only needs a header and an entropy sample, and reading a whole
+    /// multi-hundred-megabyte archive to look at its first four bytes would
+    /// make sniffing a disc take minutes instead of seconds.
+    pub fn read_entry_head(&mut self, entry: &Entry, max_len: u64) -> Result<Vec<u8>> {
+        self.source.read_range(entry.lba, entry.size.min(max_len))
+    }
+
+    /// Reads `len` bytes from `offset` within an entry.
+    ///
+    /// Seeks to the containing sector rather than reading from the start of the
+    /// file, so poking at a structure 300 MB into an archive costs one sector
+    /// read instead of 300 MB of decompression.
+    ///
+    /// Returns fewer bytes than asked for if the range runs past the end of the
+    /// entry, and an empty vector if `offset` is past the end.
+    pub fn read_entry_range(&mut self, entry: &Entry, offset: u64, len: u64) -> Result<Vec<u8>> {
+        if offset >= entry.size {
+            return Ok(Vec::new());
+        }
+        let len = len.min(entry.size - offset);
+
+        // Reads are sector-granular, so start at the sector containing `offset`
+        // and trim the bytes before it.
+        let sector_size = SECTOR_SIZE as u64;
+        let skip = offset % sector_size;
+        let start_lba = entry.lba + u32::try_from(offset / sector_size).unwrap_or(u32::MAX);
+
+        let mut data = self.source.read_range(start_lba, skip + len)?;
+        data.drain(..(skip as usize).min(data.len()));
+        Ok(data)
+    }
+}
+
+/// Peeks at the first bytes of a file to decide what container it is.
+fn sniff_container(path: &Path) -> Result<Container> {
+    let mut file = File::open(path).map_err(|e| Error::io(path, e))?;
+    let mut magic = [0u8; 8];
+
+    // A file shorter than 8 bytes is not any container we support.
+    let read = file.read(&mut magic).map_err(|e| Error::io(path, e))?;
+    if read < 8 {
+        return Err(Error::UnknownContainer {
+            path: path.to_path_buf(),
+        });
+    }
+
+    if &magic == CHD_MAGIC {
+        return Ok(Container::Chd);
+    }
+
+    // Anything else is assumed to be a raw ISO. The assumption is verified
+    // immediately: RawSource::open plus the PVD search will fail clearly if
+    // there is no ISO 9660 volume here.
+    Ok(Container::RawIso)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("oag-disc-test-{name}"));
+        let mut f = File::create(&path).unwrap();
+        f.write_all(contents).unwrap();
+        path
+    }
+
+    #[test]
+    fn recognises_a_chd_by_magic() {
+        let path = temp_file("magic.iso", b"MComprHD\x00\x00\x00\x7c");
+        // Named `.iso` but actually a CHD: the extension must not win.
+        assert_eq!(sniff_container(&path).unwrap(), Container::Chd);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn falls_back_to_raw_iso() {
+        let path = temp_file("plain.chd", &vec![0u8; 4096]);
+        assert_eq!(sniff_container(&path).unwrap(), Container::RawIso);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn rejects_a_file_too_short_to_identify() {
+        let path = temp_file("tiny.bin", b"abc");
+        assert!(matches!(
+            sniff_container(&path),
+            Err(Error::UnknownContainer { .. })
+        ));
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn container_displays_readably() {
+        assert_eq!(Container::Chd.to_string(), "CHD");
+        assert_eq!(Container::RawIso.to_string(), "raw ISO");
+    }
+}
