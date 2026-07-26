@@ -49,9 +49,10 @@ Decode the containers, then the assets inside them.
 **Exit criterion:** a Pulse track and a ship model render in `oag-view` from an
 unmodified disc image, on both the PSP and PS2 asset paths.
 
-**Where to start:** the [WAD container](../formats/wad.md) is decoded and
-`oag-wad` reads every archive straight from a disc image, so the gate is open.
-Next is the LZSS decoder, without which no PS2 asset can be read at all.
+**Where to start:** containers are done. `oag-wad` reads every archive on every
+disc, decompresses, resolves names by hash and renders textures to PNG. What
+remains is geometry: decoding `.vex` mesh batches into portable vertex buffers,
+and the `section`/`gate` payloads that carry the track spline.
 
 ---
 
@@ -159,8 +160,8 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 | Question | Blocks | Tracked in |
 | --- | --- | --- |
 | What do `section` and `gate` nodes contain? Spline, checkpoints, AI line. | M1, M5 | [`.vex`](../formats/vex.md) |
-| What LZSS variant do the PS2 archives use? | M1 (PS2 assets) | [WAD format](../formats/wad.md) |
-| Are PSP textures stored swizzled? | M1 (rendering) | [PSP texture](../formats/psp-texture.md) |
+| How do `.vex` mesh batches encode vertices? | M1, M4 | [`.vex`](../formats/vex.md) |
+| What does the per-vertex collision scalar mean? | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
 | What are the coordinate conventions? Handedness, units, angles. | M4 | [physics](../physics/README.md) |
 | Why does the US PSP disc carry a directory named for the *European* serial? | nothing yet | [PSP disc layout](../psp/pulse-disc-layout.md) |
