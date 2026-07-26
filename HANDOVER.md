@@ -39,39 +39,35 @@ recorded baseline, not one that was wrong before the baseline was taken. The
 lesson generalises past the RNG, and it is why the reference vector in `rng.rs`
 says not to regenerate it from the implementation.
 
+The WAD compression rule and the LZSS verification claim are also resolved, and
+both turned out to be worth the trip. The rule is **two** tests, not one: equal
+size fields mean stored, whatever bit 31 says, and only a compressed entry
+consults the flag. And `verify` was tautological, but a real oracle was available
+next to it: every one of the 6,053 LZSS streams is consumed to within one or two
+bytes of its end, never zero and never three, which the decoder cannot arrange
+for itself. Details in [lzss.md](docs/formats/lzss.md).
+
 Still open, and each needs a decision rather than a patch:
 
-1. **The WAD compression rule does not hold as documented.** Bit 31 alone cannot
-   select the decoder, or every entry in `Data.wad` would be LZSS. The code
-   comment invents a second clause about the sizes agreeing; the doc mentions
-   none. Something is missing from the recovered rule, a per-mount flag or a size
-   test, and neither the code nor the page admits the gap. Resolving it means
-   re-reading `Wad_Read`.
-2. **`oag-wad verify` cannot fail.** `lzss::decompress` loops until the expected
-   length is reached, so `out.len() == expected_len` is a tautology on success and
-   the mismatch arm is dead. "6,053 entries verified" means only that no
-   bitstream ran out of input early. Real content validation needs a different
-   oracle, and the honest fix may be to soften the claim in `formats/lzss.md`
-   rather than to write one.
-3. **LZSS is tested only by its own inverse.** The encoder in its test module was
-   written to match the decoder, so a wrong field order would pass both. The
-   doc's stated reason for capping confidence at 97 is that no compressor exists
-   to check the inverse; one does, and it is the suite's only oracle.
-4. **The confidence scores systematically claim 95+ for work nobody has run.** I
+1. **LZSS is still tested only by its own inverse.** The encoder in its test
+   module was written to match the decoder, so a wrong field order would pass
+   both. The consumption check above is now the suite's only independent oracle,
+   and it constrains the layout without pinning it.
+2. **The confidence scores systematically claim 95+ for work nobody has run.** I
    amended the [rubric](docs/reverse-engineering/confidence-rubric.md) to say
    what data validation actually buys (ceiling 94) instead of leaving the top band
    decorative, and scored the track work by it. I did **not** rescore other
-   people's pages: `formats/lzss.md` (97, on a page that says nothing was
-   executed), `formats/wad.md` (95 and 97), `formats/psp-texture.md` (95),
-   `formats/vex.md` (95) and `physics/README.md` (97 on a negative claim from
-   static reading).
-5. **ADR-0006's "no game content" rule is applied inconsistently.** Several
+   people's pages: `formats/wad.md` (95 and 97),
+   `formats/psp-texture.md` (95), `formats/vex.md` (95) and `physics/README.md`
+   (97 on a negative claim from static reading). `formats/lzss.md` is done: it is
+   94 now, for the reason the rubric gives.
+3. **ADR-0006's "no game content" rule is applied inconsistently.** Several
    format pages quote real bytes, palettes and string tables, which the ADR as
    written forbids since it explicitly rejected the de-minimis argument. Most of
    it is defensible as format documentation, so the ADR probably needs a stated
    carve-out for structural excerpts rather than the pages needing trimming. That
    is a call for the developer.
-6. **`vex::textures` skipping an unsupported depth shifts every later texture
+4. **`vex::textures` skipping an unsupported depth shifts every later texture
    index**, because `mesh.rs` resolves materials positionally into that vector.
    One skipped texture mis-assigns the rest, and the `filter` in `mesh.rs` turns
    the overflow into a silent untextured draw.
@@ -204,9 +200,7 @@ which is why nothing should be scored above 94.
    proves the spline half of it.
 2. **Confirm the image base** against PPSSPP before more addresses are written
    down.
-3. **Resolve the WAD compression rule** (item 1 above). It sits inside a format
-   the docs call understood at 95, which makes it the most misleading gap left.
-4. **Runtime verification** of anything in the physics documentation, which is
+3. **Runtime verification** of anything in the physics documentation, which is
    the M3 harness in miniature and would let the top confidence band mean
    something.
 
