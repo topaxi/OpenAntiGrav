@@ -12,6 +12,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [WAD subsystem](wad-subsystem.md) | Name hash, lookup, mount, read, LZSS and zlib decoders |
 | [Main loop](main-loop.md) | Frame pacing, timestep, state machine |
 | [Input](input.md) | Pad polling, the abstract button layer, deadzone and gain |
+| [Collision](collision.md) | Triangle soup, sweep and prune, surface types |
 | [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |
 
 ## Renames

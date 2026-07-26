@@ -177,6 +177,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "does not match")]
     fn rejects_a_mismatched_pixel_buffer() {
-        encode_rgba(4, 4, &[0u8; 16]);
+        let _ = encode_rgba(4, 4, &[0u8; 16]);
     }
 }

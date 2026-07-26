@@ -36,11 +36,13 @@ contents; every distinct format on them has a row in the status table.
 Decode the containers, then the assets inside them.
 
 - [x] [WAD container](../formats/wad.md): layout, name hash, compression flags
-- [ ] LZSS decoder, needed for every PS2 asset
-- [~] [PSP textures](../formats/psp-texture.md): header, palette and pixels
-      decoded; swizzling unresolved
-- [ ] Models: ship and scenery geometry, materials
-- [ ] Tracks: geometry, spline, collision, sections
+- [x] [LZSS decoder](../formats/lzss.md), verified on all 6,053 compressed entries
+- [x] [PSP textures](../formats/psp-texture.md): decoded and rendering
+- [x] [Front-end XML](../formats/fexml.md) and [handling stats](../formats/handling-stats.md)
+- [~] [`.vex` scene format](../formats/vex.md): node tree read; track nodes and
+      geometry decoding outstanding
+- [ ] Decode `.vex` mesh batches into portable vertex buffers
+- [ ] Track `section`/`gate` payloads: spline, checkpoints, AI line
 - [ ] Audio: the music and effect banks
 - [ ] `oag-view`, a standalone asset viewer
 
@@ -66,6 +68,9 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] Simulation timestep resolved: the original uses **variable** delta, not a
       fixed step. See [ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)
 - [x] WAD subsystem: hash, lookup, mount, read, decompressors
+- [x] [Input](../ghidra/functions/psp-pulse/input.md), [collision](../ghidra/functions/psp-pulse/collision.md),
+      [video](../ghidra/functions/psp-pulse/frontend-video.md), [physics model](../physics/README.md)
+- [x] Physics is float, not fixed-point; integrator is 3 sub-steps of dt/3
 - [ ] Memory management and the heap layout
 - [ ] Resource loading: how a WAD entry becomes a live object
 - [ ] Game state machine
@@ -153,9 +158,9 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 
 | Question | Blocks | Tracked in |
 | --- | --- | --- |
-| Does the craft physics integrator sub-step at 1/60, or integrate raw delta? | M4 | [frame pacing](../psp/frame-pacing.md) |
+| What do `section` and `gate` nodes contain? Spline, checkpoints, AI line. | M1, M5 | [`.vex`](../formats/vex.md) |
 | What LZSS variant do the PS2 archives use? | M1 (PS2 assets) | [WAD format](../formats/wad.md) |
 | Are PSP textures stored swizzled? | M1 (rendering) | [PSP texture](../formats/psp-texture.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
-| Is the physics fixed-point or float? | M4 | [ADR-0002](../architecture/adr/0002-determinism-model.md) |
+| What are the coordinate conventions? Handedness, units, angles. | M4 | [physics](../physics/README.md) |
 | Why does the US PSP disc carry a directory named for the *European* serial? | nothing yet | [PSP disc layout](../psp/pulse-disc-layout.md) |

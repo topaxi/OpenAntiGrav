@@ -14,6 +14,7 @@
 //! and the implementation stay in step.
 
 pub mod entropy;
+pub mod fexml;
 pub mod lzss;
 pub mod png;
 pub mod signature;

@@ -41,7 +41,7 @@ use clap::{Parser, Subcommand};
 use oag_disc::DiscImage;
 use oag_formats::texture::Texture;
 use oag_formats::wad::{self, Blob, Compression, Directory};
-use oag_formats::{lzss, png};
+use oag_formats::{fexml, lzss, png};
 use oag_tools::humanise;
 
 /// How much of a blob to read when only its type tag is wanted.
@@ -87,6 +87,17 @@ enum Command {
         archive: String,
     },
 
+    /// Print one entry to stdout.
+    Cat {
+        /// A `.wad` path, or `<image>:<path-on-disc>`.
+        archive: String,
+        /// Entry index, or `0x`-prefixed name hash, or a name to hash.
+        entry: String,
+        /// Expand shortened front-end XML through its own dictionary.
+        #[arg(long)]
+        expand: bool,
+    },
+
     /// Decompress every blob and check it against its declared size.
     ///
     /// Writes nothing. This is the round-trip test for the LZSS decoder.
@@ -122,6 +133,11 @@ fn main() -> Result<()> {
         }
         Command::Tags { archive } => tags(&archive),
         Command::Verify { archive } => verify(&archive),
+        Command::Cat {
+            archive,
+            entry,
+            expand,
+        } => cat(&archive, &entry, expand),
         Command::Extract { archive, out, png } => extract(&archive, &out, png),
     }
 }
@@ -410,6 +426,55 @@ fn decode_blob(raw: &[u8], entry: &wad::Entry) -> Result<Vec<u8>> {
             anyhow::bail!("zlib-compressed entries are not supported yet (none were expected)")
         }
     }
+}
+
+/// Resolves an entry selector: an index, a `0x` hash, or a name to hash.
+fn find_entry(dir: &Directory, selector: &str) -> Result<usize> {
+    if let Some(hex) = selector.strip_prefix("0x") {
+        let hash = u32::from_str_radix(hex, 16).context("parsing the hash")?;
+        return dir
+            .entries
+            .iter()
+            .position(|e| e.name_hash == hash)
+            .with_context(|| format!("no entry with hash {hex}"));
+    }
+
+    // A bare integer is an index. Anything else is a name, which is the most
+    // useful form now that the hash is known.
+    if let Ok(index) = selector.parse::<usize>()
+        && index < dir.entries.len()
+    {
+        return Ok(index);
+    }
+
+    let hash = wad::hash_name(selector);
+    dir.entries
+        .iter()
+        .position(|e| e.name_hash == hash)
+        .with_context(|| format!("no entry named {selector} (hash {hash:08x})"))
+}
+
+fn cat(spec: &str, selector: &str, want_expand: bool) -> Result<()> {
+    use std::io::Write;
+
+    let mut source = Source::open(spec)?;
+    let dir = source.directory()?;
+    let index = find_entry(&dir, selector)?;
+    let entry = dir.entries[index];
+
+    let raw = source.read(u64::from(entry.offset), u64::from(entry.size))?;
+    let data = decode_blob(&raw, &entry)?;
+
+    if want_expand && fexml::is_fexml(&data) {
+        print!(
+            "{}",
+            fexml::expand(&data).context("expanding front-end XML")?
+        );
+        return Ok(());
+    }
+
+    std::io::stdout().write_all(&data)?;
+    Ok(())
 }
 
 fn verify(spec: &str) -> Result<()> {
