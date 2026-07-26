@@ -149,4 +149,4 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 | How are WAD entries named? Is the first field a hash? | M1 | [WAD format](../formats/wad.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
 | Is the physics fixed-point or float? | M4 | [ADR-0002](../architecture/adr/0002-determinism-model.md) |
-| Why does the US PSP disc contain a `UCES00465` directory? | nothing yet | [PSP disc layout](../psp/pulse-disc-layout.md) |
+| Why does the US PSP disc carry a directory named for the *European* serial? | nothing yet | [PSP disc layout](../psp/pulse-disc-layout.md) |

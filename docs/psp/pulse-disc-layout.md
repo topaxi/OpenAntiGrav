@@ -57,8 +57,11 @@ just unpack extract data/images/pulse-psp-usa.chd \
     -o data/extracted/psp 'PSP_GAME/SYSDIR/BOOT.BIN'
 ```
 
-Confidence: **98**. ELF magic plus an entropy profile that could not be
-encrypted data.
+Confirmed with `readelf`: `ELF32`, `MIPS R3000`, type `0xffa0` (PSP), flags
+`0x10a23001` (`noreorder`, `eabi32`, `mips2`), 96 sections, 2.45 MiB of `.text`.
+Stripped, so there are no symbols to help.
+
+Confidence: **99**.
 
 ### Four WAD archives
 
@@ -96,25 +99,44 @@ It contains:
   identical in size.
 - `SYSDIR/BOOT.BIN`, **8.4 MiB** and an unencrypted ELF.
 
-That last one is the puzzle. It is more than twice the size of the main
-`BOOT.BIN` (3.85 MiB). A game-sharing payload should be a *subset*, not a
-superset.
+That last one looked like a puzzle: it is more than twice the size of the main
+`BOOT.BIN` (3.85 MiB), where a game-sharing payload should be a *subset*.
 
-Hypotheses, none verified:
+Comparing the two ELFs resolves it. Both are `ELF32`, `MIPS R3000`, type
+`0xffa0` (PSP), flags `mips2 eabi32`, and **both are stripped** (`.symtab`
+contains only the null entry). The section sizes are the interesting part:
 
-1. It is the game-share host executable, statically linked with content the main
-   executable streams from `Data.wad`, which would explain the size.
-2. It is a leftover from the European master the US build was derived from.
-3. It is a different build entirely, perhaps unstripped.
+| Section | `SYSDIR/BOOT.BIN` | `UCES00465/SYSDIR/BOOT.BIN` |
+| --- | ---: | ---: |
+| `.text` | 0x272a3c (2.45 MiB) | 0x15a2b4 (1.35 MiB) |
+| `.data` | 0x29118 (164 KiB) | **0x6176c9 (6.09 MiB)** |
+| `.rodata` | 0x385e4 (222 KiB) | 0x18220 (97 KiB) |
+| `.bss` | 0xba7c0 (745 KiB) | 0x920b0 (585 KiB) |
 
-Comparing the two ELFs' symbol tables and section layouts would distinguish
-these quickly, and hypothesis 3 would be a gift: an unstripped build would
-accelerate M2 enormously.
+The game-share build has **45% less code and 38 times more data**. That is
+exactly the shape of a self-contained executable: the receiving PSP has no UMD,
+so content the main build streams from `Data.wad` has to be linked in, while the
+code for everything the shared subset cannot do is dropped.
 
-Confidence that `GSHARE` means game sharing: **80**. Confidence in any
-explanation of the size: **below 40**, hence no conclusion drawn.
+So it is the game-share host executable, and not a leftover European master or
+an unstripped build. The unstripped possibility would have been a gift for M2;
+it is ruled out.
 
-Tracked in the [roadmap's open questions](../overview/roadmap.md#open-questions-blocking-later-milestones).
+Confidence: **88**. The section profile is decisive about what kind of binary it
+is; it has not been run or disassembled to confirm behaviour.
+
+Reproduce with:
+
+```sh
+just unpack extract data/images/pulse-psp-usa.chd -o data/extracted/psp '*BOOT.BIN'
+readelf -S -W data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN
+readelf -S -W data/extracted/psp/PSP_GAME/USRDIR/UCES00465/SYSDIR/BOOT.BIN
+```
+
+**Still unexplained:** why the directory carries the *European* serial on a US
+disc, and why the disc's ISO 9660 publisher field reads SCEE. The
+build-derived-from-a-European-master reading remains the best guess, at
+confidence **50**, and nothing currently depends on it.
 
 ### Firmware update payload
 
