@@ -9,7 +9,7 @@ base and a pile of guesses.
 | Score | Meaning | What it took |
 | --- | --- | --- |
 | **95-100** | Established | Verified against a runtime trace **and** corroborated in a second binary (PSP and PS2, or Pulse and Pure). |
-| **85-94** | Confident | Decompilation is unambiguous and every call site is consistent with the reading. Not runtime-verified. |
+| **85-94** | Confident | Decompilation is unambiguous and every call site is consistent, **or** the reading makes an arithmetic invariant come out exactly across many real files. Short of the band above by one of its two legs. |
 | **70-84** | Probable | Strong structural evidence: signature, control flow and data access all fit. Not verified in either sense. |
 | **50-69** | Plausible | A reasonable inference from surrounding code. Could be wrong. |
 | **0-49** | Guess | A hypothesis. **Do not rename the function.** Write the hypothesis down instead. |
@@ -26,6 +26,27 @@ call site, not only on the documentation page. See
 **Runtime verification is worth more than any amount of reading.** A single
 breakpoint that shows the function doing what you claim moves a 70 to a 90 in
 minutes. Reading the decompilation harder does not.
+
+**Agreement with shipped data is the strongest evidence short of a runtime
+trace, and it still caps at 94.** A structural reading that makes an arithmetic
+invariant come out exactly, across many files, is worth more than any amount of
+re-reading: 40 track files whose payload length matches the decoded structure to
+the byte cannot all be a coincidence. Score that at the top of the **85-94**
+band and say what the invariant was. It does not reach 95, because data
+agreement shows the layout is self-consistent, not that the engine uses it the
+way you think. That distinction is exactly what the top band is for, and this
+project has not yet earned it anywhere.
+
+Formats decoded this way should name their check, because a reader needs to know
+which kind of evidence they are being offered:
+
+| Evidence | Ceiling |
+| --- | --- |
+| Runtime trace, corroborated in a second binary | 100 |
+| Runtime trace | 94, until a second binary agrees |
+| An exact arithmetic invariant across many real files | 94 |
+| One real file parses plausibly | 84 |
+| Decompilation only, consistent call sites | 84 |
 
 **A second binary is worth more than a second reading of the first.** If PSP and
 PS2 both do the thing, the reading is probably right. If they disagree, that is

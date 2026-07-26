@@ -1095,6 +1095,9 @@ dependencies = [
 [[package]]
 name = "oag-formats"
 version = "0.1.0"
+dependencies = [
+ "oag-disc",
+]
 
 [[package]]
 name = "oag-tools"

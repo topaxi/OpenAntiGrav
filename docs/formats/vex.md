@@ -2,8 +2,10 @@
 
 **Status: understood for geometry.** Implemented in
 [`oag-formats::vex`](../../crates/formats/src/vex.rs) and validated against real
-ship models. Track-specific node payloads (`section`, `gate`) are still
-undecoded.
+ship models. `WO Track` node payloads are decoded too, in
+[`oag-formats::track`](../../crates/formats/src/track.rs). What is **not** done
+is the scene hierarchy: `Transform` payloads are unread, so the nodes of a track
+cannot yet be placed relative to each other.
 
 `.vex` is **the** 3D format in Pulse. Ships, tracks, weapons, the skycube and
 front-end props are all `.vex`. It is a **Maya scene export**: the class-ID
@@ -73,9 +75,11 @@ find so far for M1 and M4.
 | Audio | `sound`, `soundcone`, `speaker` |
 | Misc | `wospot`, `wopoint`, `animationTrigger` |
 
-`section` and `gate` are almost certainly the lap/AI spline and checkpoints.
-`Mag Floor Collision` is the magstrip surface that holds ships through
-inversions.
+`section` is a **visibility partition**, not the lap structure, and the spline
+lives in `WO Track`; `gate` is never registered as a runtime class at all. Those
+readings are the obvious ones and they are wrong, so see
+[track data](track.md). `Mag Floor Collision` is the magstrip surface that holds
+ships through inversions.
 
 ## Vertex format
 
@@ -179,8 +183,12 @@ A batch belongs to list A while `pass_mask & 1` is set, and to list B while
 `pass_mask & 2` is set.
 
 **Geometry is never indexed** — the index argument to `sceGuDrawArray` is always
-zero. Materials live at `mesh+0x5c`, stride 0x14, with a texture index at `+0x04`
-into the model's texture array (`model+0x1a4`, count at `+0x1a0`).
+zero. The material array is reached through `mesh+0x5c` at runtime, stride 0x14,
+with a texture index at `+0x04` into the model's texture array (`model+0x1a4`,
+count at `+0x1a0`). In the **file** that array sits at payload `+0x30`; `+0x5c`
+is the runtime pointer to it, not a file offset. See
+[materials](#materials) for the on-disc form, which is what the
+decoder reads.
 
 This matters for the renderer. We cannot replay PSP display lists on a modern
 GPU, so the loader has to *decode* them into portable vertex buffers, which
@@ -282,7 +290,7 @@ That is good news for M4.
 
 ## Loaders
 
-| Address | Proposed name | Conf |
+| Address | Name | Conf |
 | --- | --- | ---: |
 | `0x08912b80` | `Vex_LoadModel` | 90 |
 | `0x08911670` | `Vex_RelocateNodeTree` | 85 |
@@ -297,7 +305,8 @@ That is good news for M4.
 | `0x08883794` | `World_LoadTrack` | 85 |
 | `0x08843258` | `Ship_LoadModel` | 87 |
 
-Names proposed, not applied. See
+Applied, from
+[names.tsv](../ghidra/functions/psp-pulse/names.tsv). See
 [ADR-0005](../architecture/adr/0005-ghidra-conventions.md).
 
 ## Not determined

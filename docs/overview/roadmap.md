@@ -39,12 +39,13 @@ Decode the containers, then the assets inside them.
 - [x] [LZSS decoder](../formats/lzss.md), verified on all 6,053 compressed entries
 - [x] [PSP textures](../formats/psp-texture.md): decoded and rendering
 - [x] [Front-end XML](../formats/fexml.md) and [handling stats](../formats/handling-stats.md)
-- [~] [`.vex` scene format](../formats/vex.md): node tree read; track nodes and
-      geometry decoding outstanding
+- [~] [`.vex` scene format](../formats/vex.md): node tree, geometry and textures
+      read; `Transform` nodes and the scene hierarchy outstanding
 - [x] `.vex` mesh batches decoded into portable vertex buffers, with textures
-- [x] [Track data](../formats/track.md): spline graph, racing line, PVS sections
-      recovered from the binary; **not yet validated against a real track file**
-- [ ] Parse a real track and render it
+- [x] [Track data](../formats/track.md): spline graph, racing line, PVS sections,
+      validated against all 40 track files on the disc with nothing left over
+- [x] Parse a real track and render it: `oag-view --track` draws the driveable
+      ribbon, coloured per visibility section
 - [ ] Audio: the music and effect banks
 - [ ] `oag-view`, a standalone asset viewer
 

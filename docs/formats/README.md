@@ -17,11 +17,11 @@ These are the project's actual work.
 
 | Format | Extension | Platforms | Status | Notes |
 | --- | --- | --- | --- | --- |
-| [WAD container](wad.md) | `.wad` | PSP, PS2 | **understood** | Implemented and validated against all nine archives. Entry names are hashes; the hash function is unknown. |
+| [WAD container](wad.md) | `.wad` | PSP, PS2 | **understood** | Implemented and validated against all nine archives. Entry names are stored as a CRC-32 variant, [recovered and reimplemented](wad.md#the-name-hash); most names still have to be mined rather than read. |
 | [PSP indexed texture](psp-texture.md) | `.mip` | PSP | **understood** | Implemented; renders correctly. Not swizzled. |
 | [LZSS](lzss.md) | - | PS2 | **understood** | Implemented and verified against all 6,053 compressed entries. |
-| [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | **understood** | **The** 3D format. Node tree, geometry and embedded textures implemented. |
-| [Track data](track.md) | - | PSP | **partial** | Spline graph, racing line, PVS sections. Structure recovered, not implemented or validated. |
+| [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | **partial** | **The** 3D format. Node tree, geometry and embedded textures implemented; `Transform` nodes and the scene hierarchy are not, so a whole track cannot be assembled yet. |
+| [Track data](track.md) | - | PSP | **understood** | The `WO Track` spline graph, racing line and AI corridor. Implemented, and validated against all 40 track files with nothing left over. The `section` PVS payload is documented but not implemented. |
 | [Front-end XML](fexml.md) | `.xml` | PSP, PS2 | **understood** | Name-shortened XML. Screens, widgets, handling stats. |
 | [Handling stats](handling-stats.md) | `.xml` | PSP | **understood** | Ship tuning is data, not code. |
 | Font | - | PSP | unknown | `\x01FNT` blobs inside WADs. |

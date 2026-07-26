@@ -41,8 +41,23 @@ fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32) -> Uniforms {
     }
 }
 
-/// Renders one frame of `model` to a PNG.
+/// Renders one frame of `model` to a PNG, from the default three-quarter view.
 pub fn capture(model: &Model, path: &Path, width: u32, height: u32) -> Result<()> {
+    capture_from(model, path, width, height, 0.9, 0.35)
+}
+
+/// Renders one frame of `model` to a PNG from a given orbit angle.
+///
+/// `pitch` near zero looks along the ground; near `PI / 2` looks straight down,
+/// which is what a track wants and a model does not.
+pub fn capture_from(
+    model: &Model,
+    path: &Path,
+    width: u32,
+    height: u32,
+    yaw: f32,
+    pitch: f32,
+) -> Result<()> {
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         compatible_surface: None,
@@ -86,7 +101,7 @@ pub fn capture(model: &Model, path: &Path, width: u32, height: u32) -> Result<()
     let (pipeline, bind_group, vertex_buffer, index_buffer, texture_binds) =
         build(&device, &queue, model, format)?;
 
-    let uniforms = matrices(model, width as f32 / height as f32, 0.9, 0.35);
+    let uniforms = matrices(model, width as f32 / height as f32, yaw, pitch);
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniforms"),
         size: std::mem::size_of::<Uniforms>() as u64,

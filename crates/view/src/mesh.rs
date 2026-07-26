@@ -49,8 +49,10 @@ pub struct Model {
     pub mesh_count: usize,
 }
 
-/// Reads one `.vex` entry out of an archive inside a disc image.
-pub fn load(spec: &str, name: &str) -> Result<Model> {
+/// Reads one named blob out of an archive inside a disc image.
+///
+/// `spec` is `<image>:<path-on-disc>`, matching `oag-wad`.
+pub fn read_blob(spec: &str, name: &str) -> Result<Vec<u8>> {
     let (image, inner) = spec
         .rsplit_once(':')
         .filter(|(image, inner)| image.len() >= 2 && !inner.is_empty())
@@ -83,14 +85,18 @@ pub fn load(spec: &str, name: &str) -> Result<Model> {
         u64::from(wad_entry.offset),
         u64::from(wad_entry.size),
     )?;
-    let data = match wad_entry.compression {
-        Compression::None => raw,
+    match wad_entry.compression {
+        Compression::None => Ok(raw),
         Compression::Lzss => {
-            lzss::decompress(&raw, wad_entry.size_uncompressed as usize).context("decompressing")?
+            lzss::decompress(&raw, wad_entry.size_uncompressed as usize).context("decompressing")
         }
         Compression::Zlib => bail!("zlib entries are not supported"),
-    };
+    }
+}
 
+/// Reads one `.vex` entry out of an archive inside a disc image.
+pub fn load(spec: &str, name: &str) -> Result<Model> {
+    let data = read_blob(spec, name)?;
     build(name, &data)
 }
 

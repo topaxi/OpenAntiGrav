@@ -63,15 +63,42 @@ mistake into invisible geometry instead of a visible artefact.
 
 The camera frames the model from its own bounding sphere, so any model fills the
 view whatever scale is baked into the file. That means **a wrong scale would
-still look right here** — this is not a check on the scale factor. The
-bounding-box assertion in `oag-formats` is.
+still look right here**: this is not a check on the scale factor. The mesh
+header's own `f32` bounding box is what checks that, and note that the agreement
+recorded in [vex.md](../formats/vex.md) was measured **by hand, once**. There is
+no standing assertion, so a regression in the scale factor would not be caught
+today.
+
+## Tracks
+
+```sh
+oag-view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
+    --track 'Data\Environments\01_Track\track.vex' --screenshot /tmp/track.png
+```
+
+Draws the **driveable spline**, not the track's art meshes: the surface ribbon
+built from each control point's own half-widths, coloured per visibility
+`section`, with the authored racing line and the AI corridor edges drawn at hover
+height above it. It also prints the path and junction graph.
+
+Two reasons it draws the spline rather than the geometry. It needs nothing from
+the scene hierarchy, which is still undecoded, so it works now. And a wrong
+spline decode does not look subtly off, it looks like scribble, which makes this
+a real check on [the track format](../formats/track.md) rather than a picture.
+
+The camera looks down rather than along, because a track is flat and wide.
+
+Junctions show as small gaps in the ribbon: each path owns its own control
+points, so consecutive paths are one step apart rather than sharing a vertex.
 
 ## Limitations
 
-- **Models are screenshot-only** for now; the window shows textures. A model
-  needs an orbit camera to be worth putting in a window.
-- **Untextured.** Materials carry a texture index into the model's embedded
-  texture array; wiring that up is the next step.
+- **Models and tracks are screenshot-only** for now; the window shows textures.
+  Geometry needs an orbit camera to be worth putting in a window.
+- **Track art meshes are not drawn.** `--track` renders the spline only. Placing
+  the 594 `Mesh` nodes of a track needs `Transform` payloads and the scene
+  hierarchy, which are not decoded yet.
+- **A model's textures are wired up; a track's are not**, for the same reason.
 - Zlib-compressed WAD entries are skipped; no shipped archive uses them.
 - One texture at a time; there is no atlas or contact-sheet view.
 

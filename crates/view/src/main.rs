@@ -15,6 +15,7 @@ mod assets;
 mod mesh;
 mod mesh_render;
 mod offscreen;
+mod track;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -56,10 +57,48 @@ struct Cli {
     /// Render a `.vex` model instead of textures, by its name in the archive.
     #[arg(long)]
     mesh: Option<String>,
+
+    /// Render a track's driveable spline instead of its art meshes, by the
+    /// `.vex` name in the archive.
+    ///
+    /// Draws the track surface from the spline's own half-widths, coloured per
+    /// visibility section, with the racing line and AI corridor at hover height
+    /// above it.
+    #[arg(long)]
+    track: Option<String>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Some(name) = &cli.track {
+        let (ai, label) = track::load(&cli.archive, name)?;
+        println!(
+            "{label}: version {:#x}, {} paths, {} junctions, {} control points",
+            ai.version,
+            ai.paths.len(),
+            ai.junctions.len(),
+            ai.point_count()
+        );
+        for (i, path) in ai.paths.iter().enumerate() {
+            println!(
+                "  path {i}: {} points, longest gap {:.2}, junctions {:?} -> {:?}",
+                path.points.len(),
+                path.max_spacing,
+                path.entry,
+                path.exit
+            );
+        }
+        let model = track::build_model(&label, &ai);
+        let path = cli
+            .screenshot
+            .clone()
+            .context("--track currently requires --screenshot")?;
+        // Tracks are flat and wide, so look down at them rather than along.
+        mesh_render::capture_from(&model, &path, 1280, 960, 0.9, 1.15)?;
+        println!("wrote {}", path.display());
+        return Ok(());
+    }
 
     if let Some(name) = &cli.mesh {
         let model = mesh::load(&cli.archive, name)?;
