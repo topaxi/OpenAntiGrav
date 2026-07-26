@@ -62,6 +62,11 @@ hash-images:
         printf '%s  %s\n' "$(sha256sum "$img" | cut -d' ' -f1)" "$(basename "$img")"
     done
 
+# Build the Allegrex processor module against the installed Ghidra.
+# Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
+build-allegrex *ARGS:
+    ./scripts/build-ghidra-allegrex.sh {{ARGS}}
+
 # Assert no game content has ever been committed
 audit-leakage:
     #!/usr/bin/env bash

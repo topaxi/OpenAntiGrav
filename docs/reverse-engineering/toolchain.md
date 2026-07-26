@@ -10,8 +10,15 @@ sudo pacman -S ghidra
 
 **Stock Ghidra is not sufficient for PSP binaries.** Its MIPS support has no
 Allegrex VFPU, and it mis-decodes vector instructions rather than rejecting
-them. Install [kotcrab/ghidra-allegrex](https://github.com/kotcrab/ghidra-allegrex)
-before importing anything; the details and the version-mismatch workaround are
+them. Build and install the Allegrex processor module before importing
+anything:
+
+```sh
+sudo pacman -S jdk21-openjdk    # the build needs JDK 21 specifically
+just build-allegrex             # leaves an installable zip in data/tools/
+```
+
+Then `File > Install Extensions > +` in Ghidra, restart, and re-import. Details
 in [Allegrex and the VFPU](../psp/allegrex-vfpu.md).
 
 The PS2's Emotion Engine is a plain MIPS variant and works out of the box.

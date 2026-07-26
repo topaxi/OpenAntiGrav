@@ -15,9 +15,13 @@ data/
     psp/        Files extracted from a PSP UMD image
     ps2/        Files extracted from a PS2 DVD image
   ghidra/       Ghidra project directory (shared analysis, not versioned)
+  tools/        Built third-party tooling, e.g. the Allegrex Ghidra extension
   traces/       Runtime traces captured from PPSSPP / PCSX2
   saves/        Emulator save states used by the behavioural verification suite
 ```
+
+`tools/` is populated by `just build-allegrex`. It holds a git checkout and a
+build output, neither of which belongs in this repository.
 
 ## Image naming
 

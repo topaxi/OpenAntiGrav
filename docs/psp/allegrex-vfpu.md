@@ -84,36 +84,70 @@ treated as confidence 0 and redone.**
 
 ## The fix
 
-Install [kotcrab/ghidra-allegrex](https://github.com/kotcrab/ghidra-allegrex),
-which adds the Allegrex processor definition (VFPU included), a PSP ELF/PRX
-loader, and relocation handling.
+[kotcrab/ghidra-allegrex](https://github.com/kotcrab/ghidra-allegrex) adds the
+Allegrex processor definition (VFPU included), a PSP ELF/PRX loader, and
+relocation handling.
 
-### Version mismatch
+```sh
+just build-allegrex
+```
 
-Ghidra matches the `version` field in an extension's `extension.properties`
-against `application.version` exactly. As of release v21.3 (March 2026) the
-newest asset is `ghidra_12.1_PUBLIC_20260520_ghidra-allegrex.zip`; **there is no
-12.1.2 build**, so it will be rejected as incompatible out of the box.
+That clones, builds and verifies it, leaving an installable zip in
+`data/tools/`.
 
-Options, in order of preference:
+### Why build rather than download
 
-1. **Patch the version string.** Unzip, set `version=12.1.2` in
-   `extension.properties`, rezip, install. Usually fine across a point release:
-   the processor definition is data-driven SLEIGH, and the Java parts touch APIs
-   that rarely change within a minor version. If the loader throws on startup,
-   fall back to option 2.
-2. **Build from source** against the installed Ghidra.
-3. **Use Ghidra 12.1** alongside, matching the published build.
+Ghidra matches the `version` in an extension's `extension.properties` against
+its own `application.version` **exactly**, and upstream does not publish a build
+for every point release. As of v21.3 the newest asset is
+`ghidra_12.1_PUBLIC_20260520_ghidra-allegrex.zip`, which Ghidra 12.1.2 refuses.
+
+Building from source sidesteps this entirely: Ghidra's own
+`support/buildExtension.gradle` stamps the version from the installation being
+built against, so the result always declares the right one. The script asserts
+this rather than assuming it, because a mismatch makes Ghidra ignore the
+extension without any obvious complaint.
+
+### Build requirements
+
+| Requirement | Why |
+| --- | --- |
+| **JDK 21** | The upstream Gradle wrapper is 8.10.2, which does not support JDK 23+, and the build declares `jvmToolchain(21)`. A newer default JDK fails with an unhelpful Gradle error. |
+| Ghidra install | Read via `GHIDRA_INSTALL_DIR`, default `/opt/ghidra`. Ghidra's `application.gradle.min` is 8.5 with no maximum, so the bundled wrapper is in range. |
+| Network | Gradle wrapper and Maven dependencies are downloaded on first build. |
+
+The script finds JDK 21 itself on common paths; override with `JAVA_21_HOME`.
+On Arch: `sudo pacman -S jdk21-openjdk`, which coexists with a newer default.
+
+```sh
+just build-allegrex --ref v21.3     # build a specific tag instead of master
+just build-allegrex --clean         # discard the checkout and start over
+```
+
+### Verified build
+
+| | |
+| --- | --- |
+| Output | `data/tools/ghidra_12.1.2_DEV_20260726_ghidra-allegrex.zip`, 1.9 MiB |
+| Declares | `version=12.1.2` |
+| Registers | language ID `Allegrex:LE:32:default` |
+| Source | `aec4265`, master |
+
+The build emits `WARN 16 NOP constructors found` while compiling
+`allegrex.slaspec`. That is normal SLEIGH output, not a problem.
 
 ### After installing
 
-Re-import `BOOT.BIN` rather than re-analysing the existing program. The
-processor language is fixed at import time, and changing it means starting the
-analysis over regardless.
+1. Ghidra: `File > Install Extensions > +`, select the zip, restart.
+2. **Re-import** `BOOT.BIN` rather than re-analysing the existing program. The
+   processor language is fixed at import time, so changing it means starting the
+   analysis over regardless.
+3. Choose language **`Allegrex:LE:32:default`**, and prefer the extension's PSP
+   loader over the generic ELF loader if it offers one: it understands PSP
+   relocations and module metadata the generic loader ignores.
 
-Choose the **Allegrex** language, and prefer the extension's PSP loader over the
-generic ELF loader if it offers one: it understands PSP relocations and module
-metadata that the generic loader ignores.
+Confirm it took effect by disassembling `0x0004bdc0` again (adjusted for the new
+image base). It should read `lv.q` and `sv.q`, not `ldc2` and `sdc2`.
 
 ## Also worth fixing: the image base
 
@@ -138,9 +172,10 @@ once.
 
 | Item | State |
 | --- | --- |
-| `BOOT.BIN` imported | Yes, 10,646 functions, analysis complete |
-| Processor language | `MIPS:LE:32:default` - **wrong, needs Allegrex** |
-| Image base | `0x00000000` - **needs rebasing** |
+| Allegrex extension | Built and verified, in `data/tools/` |
+| `BOOT.BIN` imported | Yes, 10,646 functions, but with the **wrong** processor |
+| Processor language | `MIPS:LE:32:default` - needs re-import as Allegrex |
+| Image base | `0x00000000` - needs rebasing |
 | GhidraMCP bridge | Working, listening on 127.0.0.1:8089 |
 
 No function has been documented yet, so nothing needs retracting. Fixing both

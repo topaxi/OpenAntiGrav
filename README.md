@@ -62,6 +62,14 @@ sudo pacman -S mame-tools
 - **[Ghidra](https://ghidra-sre.org)** 11 or newer, with a JDK 21+.
 - **[GhidraMCP](https://github.com/LaurieWired/GhidraMCP)**, which lets an agent
   drive Ghidra directly.
+- **JDK 21 specifically**, to build the Allegrex processor module. Stock Ghidra
+  silently mis-decodes PSP vector instructions, so this is required rather than
+  optional for PSP work:
+  ```sh
+  sudo pacman -S jdk21-openjdk
+  just build-allegrex     # produces an installable zip in data/tools/
+  ```
+  See [Allegrex and the VFPU](docs/psp/allegrex-vfpu.md).
 - **[PPSSPP](https://ppsspp.org)** for PSP runtime tracing, memory inspection
   and save states. This is what behavioural verification is measured against.
   The Arch package installs the binary as `PPSSPPSDL`, not `ppsspp`.
