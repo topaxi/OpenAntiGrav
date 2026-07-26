@@ -20,6 +20,8 @@ rule here follows from it.
 | `oag-formats` | `crates/formats` | Asset container identification and parsing. Currently triage only; parsers land as formats are decoded. |
 | `oag-tools` | `crates/tools` | Command line tools: `oag-unpack`, `oag-wad`. |
 | `oag-view` | `crates/view` | wgpu asset viewer. The first crate with a window. |
+| `oag-assets` | `crates/assets` | Runtime asset access: a WAD read from a path or straight out of a disc image, by index, name or name hash. |
+| `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. |
 
 ## Crates that do not exist yet
 
@@ -28,7 +30,6 @@ crate created before its shape is understood tends to get the wrong shape.
 
 | Crate | Milestone | Purpose |
 | --- | --- | --- |
-| `oag-assets` | M1 | Runtime asset registry. Normalises PSP and PS2 assets into shared runtime types. |
 | `oag-trace` | M3 | Trace capture and comparison against the original. |
 | `oag-render` | M4 | wgpu renderer. |
 | `oag-input` | M4 | Input mapping and the per-tick input snapshot. |
@@ -40,7 +41,6 @@ crate created before its shape is understood tends to get the wrong shape.
 | `oag-audio` | M5 | Mixing and playback. |
 | `oag-ui` | M5 | HUD and menus. |
 | `oag-replay` | M6 | Input recording and playback. |
-| `oag-game` | M6 | The binary that wires it all together. |
 | `oag-net` | M7 | Multiplayer. |
 
 ## Dependency rules
@@ -67,7 +67,20 @@ Two rules, both enforceable:
    `winit` or `wgpu`.** The arrow from `oag-input` goes to `oag-gameplay`, which
    owns the input *snapshot type*; the simulation consumes the snapshot, not the
    input system.
-2. **No crate may depend on `oag-game`.** It is the composition root.
+2. **No crate may depend on `oag-game`.** It is the composition root. Its own
+   `[[bin]]` depends on its own `[lib]`, which is inside the crate and so does
+   not breach this; the library exists purely so the boot sequence is reachable
+   from tests.
+
+`oag-assets` and `oag-game` both arrived earlier than the table above expected:
+the front end needed asset access and a binary before any of M4 existed.
+`oag-assets` is currently only asset *access*, not the platform-normalising
+registry it is meant to become, and it does not yet know about PS2 assets.
+
+Three older copies of "open a disc image, find a `.wad`, read its directory,
+decompress a blob" still live in `oag-tools`'s `oag-wad`, `oag-view`'s asset
+loader and its mesh loader. They should migrate to `oag-assets`; nothing depends
+on them not having.
 
 Rule 1 is the one that will be under pressure. It is easier to reach for a
 texture handle inside physics than to plumb it out. Resisting that is what keeps

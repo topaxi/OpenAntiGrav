@@ -1,0 +1,200 @@
+//! Runs the boot sequence headless and writes one frame to a PNG.
+//!
+//! Three reasons this exists rather than being a debug convenience: it works over
+//! SSH and in CI, it is how the boot sequence and the menu can be shown to
+//! somebody without a display, and it goes through **the same** renderer the
+//! window does, so what it captures is what the window draws. A separate capture
+//! path would prove nothing.
+
+use anyhow::{Context, Result};
+
+use crate::boot::Boot;
+use crate::frontend::{Draw, SCREEN};
+use crate::input::Input;
+use crate::render::{Renderer, VideoFormat};
+
+/// What to capture.
+#[derive(Debug, Clone)]
+pub struct Options {
+    /// Where to write the PNG.
+    pub path: std::path::PathBuf,
+    /// Run until this state is current, then capture.
+    pub until: Option<String>,
+    /// Run at least this many ticks first.
+    pub ticks: u32,
+    /// Buttons held on every tick.
+    pub held: u32,
+    /// Buttons pressed and released on alternating ticks.
+    ///
+    /// A held button only produces one rising edge, so reaching a state that
+    /// needs two presses - skip the intro, then pick a language - needs the
+    /// button to be let go of in between.
+    pub pressed: u32,
+    /// Print exits as well as entries.
+    pub trace: bool,
+}
+
+/// How many ticks the runner will take before giving up on `until`.
+///
+/// The intro is eight seconds plus three two-second holds, so a minute of
+/// simulated time is generous and still bounded.
+const MAX_TICKS: u32 = 60 * 60;
+
+/// Width of the captured image. Three times the PSP's, so 5x7 glyphs are legible.
+const SCALE: u32 = 3;
+
+/// Runs the sequence and writes one frame.
+pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -> Result<()> {
+    let Boot {
+        mut frontend,
+        mut movie,
+        ..
+    } = loaded;
+
+    let dt = 1.0 / 60.0;
+    let mut input = Input::new();
+    let mut ticks = 0u32;
+
+    loop {
+        let reached = options
+            .until
+            .as_deref()
+            .is_some_and(|name| frontend.machine().is(name));
+        if reached && ticks >= options.ticks {
+            break;
+        }
+        if options.until.is_none() && ticks >= options.ticks {
+            break;
+        }
+        if ticks >= MAX_TICKS {
+            if let Some(name) = &options.until {
+                anyhow::bail!(
+                    "never reached {name:?} in {MAX_TICKS} ticks; got as far as {:?}",
+                    frontend.machine().current().unwrap_or("nothing")
+                );
+            }
+            break;
+        }
+
+        let pulse = if ticks % 2 == 0 { options.pressed } else { 0 };
+        input.begin_frame(options.held | pulse);
+        let events = frontend.update(dt, &mut input);
+        crate::report(&events, options.trace);
+        for note in frontend.take_notes() {
+            println!("{note}");
+        }
+        ticks += 1;
+    }
+
+    println!(
+        "captured after {ticks} tick(s) in state {:?}",
+        frontend.machine().current().unwrap_or("nothing")
+    );
+
+    let list = frontend.draw_list();
+    let width = (SCREEN.0 as u32) * SCALE;
+    let height = (SCREEN.1 as u32) * SCALE;
+
+    let instance = wgpu::Instance::default();
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        compatible_surface: None,
+        ..Default::default()
+    }))
+    .context("no GPU adapter available")?;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("oag-game offscreen"),
+        ..Default::default()
+    }))
+    .context("requesting the device")?;
+
+    // Rgba8Unorm rather than the surface's sRGB format: the readback is written
+    // straight into a PNG, so a second gamma encode would double-correct.
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let mut renderer = Renderer::new(&device, &queue, format, video_format)?;
+
+    if let (Some(frames), Some(wanted)) = (movie.frames.as_mut(), video_frame(&list)) {
+        let mut bytes = Vec::new();
+        frames.read_frame(wanted.min(frames.len - 1), &mut bytes)?;
+        renderer.upload_frame(&queue, &bytes)?;
+    }
+
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("capture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+
+    // Copies out of a texture must have rows aligned to 256 bytes, so the
+    // readback buffer is usually wider than the image and needs unpadding.
+    let unpadded = width as usize * 4;
+    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+    let padded = unpadded.div_ceil(align) * align;
+
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback"),
+        size: (padded * height as usize) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("capture"),
+    });
+    renderer.render(&device, &queue, &mut encoder, &view, &list, (width, height));
+    encoder.copy_texture_to_buffer(
+        target.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(padded as u32),
+                rows_per_image: Some(height),
+            },
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .context("waiting for the GPU")?;
+
+    let mapped = slice
+        .get_mapped_range()
+        .context("mapping the readback buffer")?;
+    let mut pixels = Vec::with_capacity(unpadded * height as usize);
+    for row in mapped.chunks(padded).take(height as usize) {
+        pixels.extend_from_slice(&row[..unpadded]);
+    }
+    drop(mapped);
+    readback.unmap();
+
+    let png = oag_formats::png::encode_rgba(width, height, &pixels);
+    std::fs::write(&options.path, png)
+        .with_context(|| format!("writing {}", options.path.display()))?;
+    println!("wrote {} ({width}x{height})", options.path.display());
+    Ok(())
+}
+
+fn video_frame(list: &[Draw]) -> Option<usize> {
+    list.iter().find_map(|draw| match draw {
+        Draw::Video { frame, .. } => Some(*frame),
+        _ => None,
+    })
+}

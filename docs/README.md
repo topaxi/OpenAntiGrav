@@ -32,6 +32,7 @@ Then, depending on what you are here to do:
 | Decode an asset format | [Format index](formats/README.md) |
 | Know what is on the discs | [PSP](psp/pulse-disc-layout.md) / [PS2](ps2/pulse-disc-layout.md) |
 | Use the tools | [Tool docs](tools/README.md) |
+| Run the game | [Front-end boot](architecture/frontend-boot.md) |
 | Verify against the original | [Verification protocol](reverse-engineering/verification-protocol.md) |
 
 ## Tree

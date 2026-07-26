@@ -1,0 +1,16 @@
+[package]
+name = "oag-assets"
+description = "Runtime asset access: WAD archives read straight out of a disc image"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+oag-disc.workspace = true
+oag-formats.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

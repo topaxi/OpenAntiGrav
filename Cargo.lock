@@ -1078,6 +1078,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-assets"
+version = "0.1.0"
+dependencies = [
+ "oag-disc",
+ "oag-formats",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "oag-core"
 version = "0.1.0"
 dependencies = [
@@ -1097,6 +1106,21 @@ name = "oag-formats"
 version = "0.1.0"
 dependencies = [
  "oag-disc",
+]
+
+[[package]]
+name = "oag-game"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "clap",
+ "oag-assets",
+ "oag-core",
+ "oag-formats",
+ "pollster",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]

@@ -16,6 +16,7 @@
 pub mod entropy;
 pub mod fexml;
 pub mod lzss;
+pub mod pmf;
 pub mod png;
 pub mod signature;
 pub mod texture;

@@ -62,6 +62,25 @@ hash-images:
         printf '%s  %s\n' "$(sha256sum "$img" | cut -d' ' -f1)" "$(basename "$img")"
     done
 
+# Reads data/images/pulse-psp-usa.chd unless a source is given. The first run
+# transcodes the intro through ffmpeg into data/cache/, which is gitignored and
+# always safe to delete. Without ffmpeg the sequence still plays, without a
+# picture. See docs/architecture/frontend-boot.md.
+
+# Run the game: intro video, then the Language Selection menu
+play *ARGS:
+    cargo run -q --release -p oag-game -- {{ARGS}}
+
+# Capture the boot sequence and the menu without a display
+play-screenshots out="/tmp":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-intro.png" --ticks 400
+    cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-language.png" \
+        --until "Language Selection" --hold start
+    cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-launch.png" \
+        --until "Launch Game" --press start,cross
+
 # View assets straight from a disc image
 view *ARGS:
     cargo run -q -p oag-view -- {{ARGS}}

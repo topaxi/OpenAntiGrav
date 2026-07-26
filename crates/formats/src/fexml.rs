@@ -59,7 +59,7 @@ pub fn is_fexml(data: &[u8]) -> bool {
 /// Reads the `<code>` dictionary, mapping short names to full ones.
 pub fn dictionary(xml: &str) -> Result<HashMap<String, String>> {
     let start = xml.find("<code").ok_or(Error::NoDictionary)?;
-    let end = xml[start..].find('>').ok_or(Error::NoDictionary)? + start;
+    let end = tag_end(&xml[start..]).ok_or(Error::NoDictionary)? + start;
     let body = &xml[start + 5..end];
 
     let mut map = HashMap::new();
@@ -101,7 +101,7 @@ pub fn expand(data: &[u8]) -> Result<String> {
         out.push_str(&rest[..open]);
         rest = &rest[open..];
 
-        let Some(close) = rest.find('>') else {
+        let Some(close) = tag_end(rest) else {
             // Unterminated tag: emit the remainder verbatim rather than
             // dropping it, so nothing is silently lost.
             out.push_str(rest);
@@ -114,6 +114,24 @@ pub fn expand(data: &[u8]) -> Result<String> {
     out.push_str(rest);
 
     Ok(out)
+}
+
+/// Index of the `>` that closes the tag at the front of `rest`.
+///
+/// A quoted attribute value may contain `>`. The front end's own XML is full of
+/// values like `x="FEGlobals->MenuXOffset"`, and stopping at the first `>`
+/// truncates the tag, dropping every attribute after it and emitting the
+/// remainder as text.
+fn tag_end(rest: &str) -> Option<usize> {
+    let mut quoted = false;
+    for (index, byte) in rest.bytes().enumerate() {
+        match byte {
+            b'"' => quoted = !quoted,
+            b'>' if !quoted => return Some(index),
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Rewrites one `<...>` tag through the dictionary.
@@ -208,7 +226,7 @@ pub fn asset_paths(expanded: &str) -> Vec<String> {
 
     while let Some(open) = rest.find('<') {
         rest = &rest[open..];
-        let Some(close) = rest.find('>') else { break };
+        let Some(close) = tag_end(rest) else { break };
 
         // Skip the element name: the attribute scanner stops at the first
         // token that is not `name="value"`, so starting on the element name
@@ -312,6 +330,30 @@ mod tests {
         let src = r#"<code as="Values"></code><a x="1"/>"#;
         let out = expand(src.as_bytes()).unwrap();
         assert!(out.contains(r#"<Values x="1"/>"#), "{out}");
+    }
+
+    #[test]
+    fn keeps_attributes_after_an_angle_bracket_in_a_value() {
+        // `FEGlobals->TitleColor` is how the real front-end XML references a
+        // global. Treating its `>` as the end of the tag drops `color` and
+        // spills the rest into the text content.
+        let src = concat!(
+            r#"<code as="Values" bs="Text" xs="x" cs="color"></code>"#,
+            r#"<b><a x="FEGlobals->TitleXOffset" c="FEGlobals->TitleColor"></a></b>"#
+        );
+        let out = expand(src.as_bytes()).unwrap();
+        assert!(out.contains(r#"x="FEGlobals->TitleXOffset""#), "{out}");
+        assert!(out.contains(r#"color="FEGlobals->TitleColor""#), "{out}");
+        assert!(!out.contains("TitleXOffset\">"), "no truncated tag: {out}");
+    }
+
+    #[test]
+    fn finds_asset_paths_after_an_angle_bracket_in_a_value() {
+        let expanded = r#"<Image y="FEGlobals->Top" src="Data\FE\Images\pulse_logo.mip"></Image>"#;
+        assert_eq!(
+            asset_paths(expanded),
+            vec![r"Data\FE\Images\pulse_logo.mip"]
+        );
     }
 
     #[test]

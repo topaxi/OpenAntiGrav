@@ -24,7 +24,8 @@ These are the project's actual work.
 | [Track data](track.md) | - | PSP | **understood** | The `WO Track` spline graph, racing line and AI corridor. Implemented, and validated against all 40 track files with nothing left over. The `section` PVS payload is documented but not implemented. |
 | [Front-end XML](fexml.md) | `.xml` | PSP, PS2 | **understood** | Name-shortened XML. Screens, widgets, handling stats. |
 | [Handling stats](handling-stats.md) | `.xml` | PSP | **understood** | Ship tuning is data, not code. |
-| Font | - | PSP | unknown | `\x01FNT` blobs inside WADs. |
+| [PSP movie](pmf.md) | `.PMF` | PSP | **understood** | PSMF header and MPEG program stream. Header and demuxer implemented and validated against all 17 movies; the H.264 inside is [transcoded out of process](../architecture/adr/0004-asset-pipeline.md), not decoded here. |
+| [Bitmap font](fnt.md) | `.fnt` | PSP | **partial** | Metrics resolved and validated across all five fonts; the glyph atlas's pixel layout is the same unresolved swizzle as [`.mip`](psp-texture.md). |
 | Sound bank | `.bnk` | PSP | unknown | `03000000` blobs. |
 | Particle system | `.pob` | PSP | unknown | Magic `SYSP`. |
 | Ship data | `.dat` | PSP | unknown | Paired with ships; likely handling or collision. |
@@ -46,7 +47,6 @@ Documented elsewhere; we only need to read them.
 | PBP | `.BIN` | PSP | identified | `GSHARE/SHARE.BIN` |
 | SFO | `.SFO` | PSP | identified | Magic `\0PSF`. Key/value metadata. |
 | PSAR | `.BIN` | PSP | identified | Firmware update archive. Not relevant. |
-| PSMF | `.PMF` | PSP | identified | MPEG-4 container |
 | ATRAC3 | `.AT3` | PSP | identified | RIFF wrapped. `ffmpeg` decodes it. |
 | MPEG-2 PS | `.PSS` | PS2 | identified | `ffmpeg` decodes it. |
 | IOP module archive | `.IMG` | PS2 | unknown | `IOPRP310.IMG`, magic `RESET`. Not relevant to gameplay. |
