@@ -26,7 +26,7 @@ All values little-endian, on both platforms.
 | ---: | --- | --- | --- |
 | +0x00 | `u32` | `name_hash` | CRC-32 of the name; see [below](#the-name-hash) |
 | +0x04 | `u32` | `offset` | Byte offset of the blob from the start of the file |
-| +0x08 | `u32` | `size_uncompressed` | Size after decompression; **bit 31 selects zlib over LZSS** |
+| +0x08 | `u32` | `size_uncompressed` | Size after decompression; **bit 31 selects zlib over LZSS**, but only for an entry that is compressed at all |
 | +0x0c | `u32` | `size` | Bytes actually stored |
 
 ## Evidence
@@ -181,7 +181,10 @@ literals.
 
 ### ~~What compression do the PS2 archives use?~~ Answered
 
-[LZSS](lzss.md), selected when bit 31 of the uncompressed-size field is clear.
+[LZSS](lzss.md), selected when bit 31 of the uncompressed-size field is clear
+**and** the two size fields differ. Equal sizes mean the blob is stored, whatever
+bit 31 says: see
+[the compression rule](../ghidra/functions/psp-pulse/wad-subsystem.md#compression).
 Implemented and verified against all 6,053 compressed entries across both PS2
 archives. The game also supports zlib behind that bit, but no shipped archive
 sets it.

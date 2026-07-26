@@ -486,11 +486,36 @@ fn verify(spec: &str) -> Result<()> {
 
     let mut by_compression: BTreeMap<String, (usize, u64)> = BTreeMap::new();
     let mut failures = Vec::new();
+    let mut leftovers: BTreeMap<usize, usize> = BTreeMap::new();
 
     for (i, entry) in dir.entries.iter().enumerate() {
         let raw = source
             .read(u64::from(entry.offset), u64::from(entry.size))
             .with_context(|| format!("reading entry {i}"))?;
+
+        // For a compressed entry, check where the *reader* stopped as well as how
+        // much came out. The decoder stops once it has produced the declared
+        // length, so a size match is a tautology; unread input at the end is not.
+        // A wrong bit or field order usually still terminates, just not on the
+        // last byte of the stream.
+        // Where the *reader* stopped, as well as how much came out. The decoder
+        // stops once it has produced the declared length, so a size match is a
+        // tautology; how much input it needed to get there is not. Every shipped
+        // stream ends with one or two bytes left, which is the encoder's final
+        // bit-buffer flush: see `lzss::MAX_TRAILING_BYTES`.
+        if entry.compression == Compression::Lzss
+            && let Ok(decoded) = lzss::decompress_reporting(&raw, entry.size_uncompressed as usize)
+        {
+            *leftovers.entry(decoded.leftover).or_insert(0) += 1;
+            if decoded.leftover > lzss::MAX_TRAILING_BYTES {
+                failures.push(format!(
+                    "entry {i} ({:08x}): stopped {} bytes before the end of a {}-byte stream",
+                    entry.name_hash,
+                    decoded.leftover,
+                    raw.len()
+                ));
+            }
+        }
 
         match decode_blob(&raw, entry) {
             Ok(data) if data.len() as u32 == entry.size_uncompressed => {
@@ -512,6 +537,17 @@ fn verify(spec: &str) -> Result<()> {
         }
     }
 
+    if !leftovers.is_empty() {
+        println!(
+            "{:>8}  {:>7}   trailing bytes never read",
+            "LEFTOVER", "COUNT"
+        );
+        for (leftover, count) in &leftovers {
+            println!("{leftover:>8}  {count:>7}");
+        }
+        println!();
+    }
+
     println!("{:<8}  {:>7}  {:>12}", "STORED", "COUNT", "BYTES OUT");
     for (kind, (count, bytes)) in &by_compression {
         println!("{kind:<8}  {count:>7}  {:>12}", humanise::bytes(*bytes));
@@ -519,9 +555,12 @@ fn verify(spec: &str) -> Result<()> {
 
     println!();
     if failures.is_empty() {
+        let compressed = dir.entries.iter().filter(|e| e.is_compressed()).count();
         println!(
-            "OK: all {} entries decoded to their declared size",
-            dir.entries.len()
+            "OK: all {} entries decoded to their declared size, and all {compressed} \n\
+             compressed streams were read to within {} bytes of their end",
+            dir.entries.len(),
+            lzss::MAX_TRAILING_BYTES
         );
         Ok(())
     } else {

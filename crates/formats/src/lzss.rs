@@ -100,11 +100,14 @@ pub fn decompress(input: &[u8], expected_len: usize) -> Result<Vec<u8>> {
     // read. The densest possible encoding is a 17-bit match producing 18 bytes,
     // so 9 output bytes per input byte is a generous ceiling; anything beyond it
     // will fail on input exhaustion anyway, and the Vec grows if it is wrong.
-    let ceiling = input.len().saturating_mul(9).max(RING_SIZE);
+    decompress_with(&mut BitReader::new(input), expected_len)
+}
+
+fn decompress_with(bits: &mut BitReader<'_>, expected_len: usize) -> Result<Vec<u8>> {
+    let ceiling = bits.data.len().saturating_mul(9).max(RING_SIZE);
     let mut out = Vec::with_capacity(expected_len.min(ceiling));
     let mut ring = [0u8; RING_SIZE];
     let mut cursor = RING_START;
-    let mut bits = BitReader::new(input);
 
     while out.len() < expected_len {
         let end = || Error::UnexpectedEnd {
@@ -140,6 +143,56 @@ pub fn decompress(input: &[u8], expected_len: usize) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Bytes a well-formed stream may leave unread at the end.
+///
+/// Every one of the 6,053 LZSS streams in the PS2 archives leaves **one or two**
+/// bytes untouched, never zero and never three, which is what an encoder with a
+/// 16-bit output bit buffer looks like when it flushes at the end.
+///
+/// That regularity is the useful part. A stream is read to within two bytes of
+/// its end or the layout is wrong, and unlike the output length that is not a
+/// property the decoder can satisfy by construction.
+pub const MAX_TRAILING_BYTES: usize = 2;
+
+/// Decompresses, and reports how much of the input was consumed.
+///
+/// # Why this exists
+///
+/// [`decompress`] stops as soon as it has produced `expected_len` bytes, so
+/// `out.len() == expected_len` is a tautology on success and says nothing about
+/// whether the bit layout is right. What *is* informative is where the reader
+/// stopped: a correct decode consumes every input byte, since the encoder had no
+/// reason to emit bytes nobody reads. A wrong field order or bit order generally
+/// still terminates, but it terminates somewhere else in the stream.
+///
+/// So this returns how much input was touched, and
+/// `leftover <= MAX_TRAILING_BYTES` is a real check where a size match is not.
+///
+/// # Errors
+///
+/// As [`decompress`].
+pub fn decompress_reporting(input: &[u8], expected_len: usize) -> Result<Decoded> {
+    let mut reader = BitReader::new(input);
+    let bytes = decompress_with(&mut reader, expected_len)?;
+    let consumed = reader.bytes_touched();
+    Ok(Decoded {
+        bytes,
+        consumed,
+        leftover: input.len() - consumed,
+    })
+}
+
+/// A decompressed blob, with what it cost to read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Decoded {
+    /// The decompressed bytes.
+    pub bytes: Vec<u8>,
+    /// Input bytes the reader touched, including a partially used final byte.
+    pub consumed: usize,
+    /// Input bytes never read. Should be zero for a well-formed stream.
+    pub leftover: usize,
+}
+
 /// MSB-first bit reader.
 struct BitReader<'a> {
     data: &'a [u8],
@@ -166,6 +219,11 @@ impl<'a> BitReader<'a> {
             self.byte += 1;
         }
         Some(value)
+    }
+
+    /// Input bytes the reader has touched, counting a partly used byte.
+    fn bytes_touched(&self) -> usize {
+        self.byte + usize::from(self.bit > 0)
     }
 
     fn take(&mut self, count: u32) -> Option<u32> {

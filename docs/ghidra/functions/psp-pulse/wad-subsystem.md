@@ -106,7 +106,27 @@ So a lookup of `wad:Data\FE\Images\hex_bg.mip` splits at the colon
 
 ## Compression
 
-Selected by **bit 31 of the uncompressed-size field**, in `Wad_Read`:
+`Wad_Read` asks **two** questions, in this order:
+
+1. Is `size_in` equal to `size_out & 0x7fffffff`? Then the blob is **stored**,
+   whatever bit 31 says, and it is read straight through
+   (`Wad_ApplyStreamCrypt` runs over it either way).
+2. Only for an entry whose sizes differ does **bit 31 of the uncompressed-size
+   field** choose zlib over LZSS.
+
+That order matters and it is the natural thing to get wrong. "Bit 31 clear means
+LZSS" on its own makes nonsense of the shipped data: every one of `Data.wad`'s
+1,142 entries has bit 31 clear and equal sizes, so that rule would have the game
+LZSS-decode the entire 315 MiB archive. Confidence **90**, from the branch
+structure at `0x08942450`: the size comparison is the outer test and the flag
+test sits inside its else arm.
+
+The consequence is not academic. `size_in == size_out` is **not** evidence that a
+blob was stored rather than compressed, since an incompressible blob can encode to
+exactly its own length, so neither the game nor
+[`oag-wad verify`](../../../tools/README.md) can tell those two cases apart.
+
+The decoders themselves:
 
 | Address | Name | Conf |
 | --- | --- | ---: |

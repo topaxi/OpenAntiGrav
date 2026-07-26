@@ -90,12 +90,42 @@ oag-wad verify data/images/pulse-ps2-eu.chd:54748/WADS2.WAD
 | `WADSP.WAD` | 193 | 192 | 1.4 MiB | 4.3 MiB | all correct |
 | `WADS2.WAD` | 7,200 | 5,861 | 221 MiB | 516 MiB | all correct |
 
-Every entry produced **exactly** its declared uncompressed size. A wrong bit
-layout diverges within a few hundred bytes and cannot then land on the right
-length 7,393 times.
+Every entry produced **exactly** its declared uncompressed size.
 
-Confidence: **97**. Not higher only because nothing was executed under an
-emulator, and because a compressor was not written to check the inverse.
+That sentence needs a caveat, and the caveat is the interesting part. The
+decoder loops `while out.len() < expected_len`, so on success the output length
+is a **tautology**: it cannot come out any other way. "All 7,393 entries produced
+the right size" therefore only means that no stream ran out of input early, which
+is a real signal but a much weaker one than it reads as.
+
+The check with teeth is where the *reader* stopped:
+
+| Archive | LZSS streams | 1 byte left | 2 bytes left | 0 or 3+ |
+| --- | ---: | ---: | ---: | ---: |
+| `WADSP.WAD` | 192 | 49 | 143 | 0 |
+| `WADS2.WAD` | 5,861 | 1,391 | 4,470 | 0 |
+
+**Every stream ends one or two bytes short of its stored length**, never exactly
+at the end and never further back. That is not something the decoder can arrange
+for itself: it stops on output length and never looks at the trailer, so landing
+within two bytes of the end 6,053 times is an independent constraint on the bit
+layout being right. A wrong field order or bit order terminates too, just not
+there.
+
+One or two bytes of slack is what an encoder with a **16-bit output bit buffer**
+leaves when it flushes at the end, which is the obvious reading and is not
+verified. What the trailing bytes contain has not been checked.
+
+`oag-wad verify` asserts the bound (`lzss::MAX_TRAILING_BYTES`) and prints the
+histogram, so this stays a test rather than a paragraph.
+
+Confidence: **94**. The bit layout is constrained from two directions now, output
+length and input consumption, on 6,053 real streams. Not higher because nothing
+was executed under an emulator: per the
+[rubric](../reverse-engineering/confidence-rubric.md) that is what caps data
+validation at 94, and the earlier 97 predated the rubric saying so. A compressor
+was not written to check the inverse either, and the encoder that exists in the
+tests was written to match the decoder, so it is not an independent oracle.
 
 ## Not implemented
 

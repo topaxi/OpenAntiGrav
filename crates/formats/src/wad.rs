@@ -51,9 +51,33 @@ pub const BLOB_ALIGNMENT: u32 = 64;
 pub const KNOWN_VERSION: u32 = 1;
 
 /// Bit 31 of the uncompressed-size field selects zlib over LZSS.
+///
+/// It is only consulted for an entry that is compressed at all: see
+/// [`Compression`] and `Wad_Read`.
 const ZLIB_FLAG: u32 = 0x8000_0000;
 
 /// How a blob is stored.
+///
+/// # The flag alone does not decide this
+///
+/// `Wad_Read` asks two questions in order, and the order is the part that is
+/// easy to get wrong:
+///
+/// 1. Does `size_in` equal `size_out & 0x7fffffff`? Then the blob is **stored**,
+///    whatever bit 31 says.
+/// 2. Only then does bit 31 choose zlib over LZSS.
+///
+/// Reading it as "bit 31 clear means LZSS" is the natural mistake, and it makes
+/// nonsense of the shipped data: every one of the 1,142 entries in `Data.wad`
+/// has bit 31 clear and equal sizes, so that rule would have the game LZSS-decode
+/// the entire archive.
+///
+/// The consequence for us is a real one rather than a technicality. An
+/// incompressible blob whose LZSS encoding came out exactly its own size is
+/// classified `None` here and returned verbatim, which is what the game does too,
+/// so we match. But it means `size_in == size_out` is **not** evidence that a
+/// blob was stored rather than compressed, and `oag-wad verify` cannot tell those
+/// apart either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compression {
     /// Stored verbatim. Every entry in every PSP archive.
@@ -288,14 +312,17 @@ impl Directory {
             let size = word(3);
             let size_uncompressed = size_out_raw & !ZLIB_FLAG;
 
-            // The game picks the decoder from bit 31, then from whether the
-            // sizes agree. Deriving it once here keeps that logic in one place.
-            let compression = if size_out_raw & ZLIB_FLAG != 0 {
-                Compression::Zlib
-            } else if size_uncompressed != size {
-                Compression::Lzss
-            } else {
+            // Two tests, in this order, mirroring `Wad_Read`: the sizes
+            // agreeing means stored, and only when they differ does bit 31
+            // choose between zlib and LZSS. Reversing them matters, because an
+            // entry with bit 31 set and equal sizes is read verbatim by the game
+            // and would be handed to inflate here.
+            let compression = if size_uncompressed == size {
                 Compression::None
+            } else if size_out_raw & ZLIB_FLAG != 0 {
+                Compression::Zlib
+            } else {
+                Compression::Lzss
             };
 
             entries.push(Entry {
@@ -796,6 +823,20 @@ mod tests {
             dir.entries[0].size_uncompressed, 350,
             "the flag must not leak into the size"
         );
+    }
+
+    /// `Wad_Read` tests the sizes *before* it looks at bit 31, so an entry whose
+    /// sizes agree is read verbatim no matter what the flag says. Classifying
+    /// that as zlib would hand a stored blob to inflate.
+    #[test]
+    fn equal_sizes_mean_stored_even_with_the_zlib_flag_set() {
+        let mut data = build_with_compression(&[(1, 128, 128)]);
+        let at = HEADER_LEN + 8;
+        data[at..at + 4].copy_from_slice(&(128u32 | 0x8000_0000).to_le_bytes());
+
+        let dir = Directory::parse(&data, Some(data.len() as u64)).unwrap();
+        assert_eq!(dir.entries[0].compression, Compression::None);
+        assert_eq!(dir.entries[0].size_uncompressed, 128);
     }
 
     #[test]
