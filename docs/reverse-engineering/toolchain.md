@@ -39,10 +39,36 @@ HTTP API so an agent can drive it directly.
    ```sh
    ss -tlnp | grep 8089
    ```
-4. The repository's `.mcp.json` already points at `http://127.0.0.1:8089/`. Run
+4. The repository's `.mcp.json` starts the bridge with **no arguments**. Run
    `/mcp` in Claude Code and approve the `ghidra-mcp` server.
 
 The server only responds while a program is open in CodeBrowser.
+
+### Do not pass `--ghidra-server`
+
+Older GhidraMCP bridges took a `--ghidra-server http://127.0.0.1:8089/`
+argument. Bridge 1.28.1 does not, and argparse rejects it and exits, which
+Claude Code reports only as:
+
+```
+Connection failed (-32000): MCP error -32000: Connection closed
+```
+
+That message says nothing about the cause. If you see it, run the bridge by
+hand to get the real error:
+
+```sh
+/usr/bin/python /opt/ghidra-mcp/bridge_mcp_ghidra.py --help
+```
+
+The current bridge discovers running instances itself, preferring the Unix
+socket in `/run/user/$UID/ghidra-mcp/` over TCP, and auto-connects to the open
+project:
+
+```
+INFO - Auto-connecting via UDS to OpenAntiGrav
+INFO - Auto-registered 184 tools from OpenAntiGrav
+```
 
 **The rules in [ADR-0005](../architecture/adr/0005-ghidra-conventions.md) apply
 to agent-driven analysis exactly as they do to manual analysis, and matter more.
