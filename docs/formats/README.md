@@ -18,7 +18,7 @@ These are the project's actual work.
 | Format | Extension | Platforms | Status | Notes |
 | --- | --- | --- | --- | --- |
 | [WAD container](wad.md) | `.wad` | PSP, PS2 | **understood** | Implemented and validated against all nine archives. Entry names are hashes; the hash function is unknown. |
-| [PSP indexed texture](psp-texture.md) | - | PSP | **partial** | Inside WADs. Header, palette and pixels decoded; swizzling unresolved. |
+| [PSP indexed texture](psp-texture.md) | `.mip` | PSP | **understood** | Implemented; renders correctly. Not swizzled. |
 | [LZSS](lzss.md) | - | PS2 | **understood** | Implemented and verified against all 6,053 compressed entries. |
 | [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | **partial** | **The** 3D format: ships, tracks, everything. Maya export. Node tree read; track nodes undecoded. |
 | Font | - | PSP | unknown | `\x01FNT` blobs inside WADs. |

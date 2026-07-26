@@ -39,8 +39,9 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
 use oag_disc::DiscImage;
-use oag_formats::lzss;
+use oag_formats::texture::Texture;
 use oag_formats::wad::{self, Blob, Compression, Directory};
+use oag_formats::{lzss, png};
 use oag_tools::humanise;
 
 /// How much of a blob to read when only its type tag is wanted.
@@ -101,6 +102,9 @@ enum Command {
         /// Destination directory.
         #[arg(short, long)]
         out: PathBuf,
+        /// Also write a .png beside every blob that decodes as a texture.
+        #[arg(long)]
+        png: bool,
     },
 }
 
@@ -118,7 +122,7 @@ fn main() -> Result<()> {
         }
         Command::Tags { archive } => tags(&archive),
         Command::Verify { archive } => verify(&archive),
-        Command::Extract { archive, out } => extract(&archive, &out),
+        Command::Extract { archive, out, png } => extract(&archive, &out, png),
     }
 }
 
@@ -361,9 +365,18 @@ fn tags(spec: &str) -> Result<()> {
             continue;
         }
         let head = source.read(u64::from(entry.offset), TAG_PEEK_BYTES)?;
-        let label = match Blob::peek(&head) {
-            Some(blob) => blob.label(),
-            None => "(too short)".to_string(),
+        // A texture is identified by its size arithmetic, not by a magic, so
+        // it needs the whole blob rather than a peek.
+        let label = if entry.compression == Compression::None
+            && Texture::looks_like_texture(
+                &source.read(u64::from(entry.offset), u64::from(entry.size))?,
+            ) {
+            "texture (.mip)".to_string()
+        } else {
+            match Blob::peek(&head) {
+                Some(blob) => blob.label(),
+                None => "(too short)".to_string(),
+            }
         };
         let slot = counts.entry(label).or_insert((0, 0));
         slot.0 += 1;
@@ -457,7 +470,7 @@ fn verify(spec: &str) -> Result<()> {
     }
 }
 
-fn extract(spec: &str, out: &Path) -> Result<()> {
+fn extract(spec: &str, out: &Path, want_png: bool) -> Result<()> {
     let mut source = Source::open(spec)?;
     let dir = source.directory()?;
 
@@ -468,6 +481,9 @@ fn extract(spec: &str, out: &Path) -> Result<()> {
     std::fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
 
     let mut written = 0u64;
+    let mut textures = 0usize;
+    let mut swizzled_looking = 0usize;
+
     for (i, entry) in dir.entries.iter().enumerate() {
         let raw = source
             .read(u64::from(entry.offset), u64::from(entry.size))
@@ -478,15 +494,32 @@ fn extract(spec: &str, out: &Path) -> Result<()> {
         // Named by index and hash, because the real names are not in the
         // archive. The index keeps directory order visible; the hash is what
         // the game actually looks entries up by, so it is the stable
-        // identifier once the hash function is known.
-        let tag = Blob::peek(&data)
-            .and_then(|b| b.tag)
-            .unwrap_or_else(|| "bin".into())
-            .to_ascii_lowercase();
+        // identifier.
+        let texture = Texture::parse(&data).ok();
+        let tag = match (&texture, Blob::peek(&data).and_then(|b| b.tag)) {
+            // A texture has no magic, so it is only recognisable by its size
+            // arithmetic. Checking it first stops the first two bytes of a
+            // width being mistaken for a type tag.
+            (Some(_), _) => "mip".to_string(),
+            (None, Some(tag)) => tag.to_ascii_lowercase(),
+            (None, None) => "bin".to_string(),
+        };
         let name = format!("{i:05}_{:08x}.{tag}", entry.name_hash);
 
         std::fs::write(out.join(&name), &data).with_context(|| format!("writing {name}"))?;
         written += data.len() as u64;
+
+        if let (true, Some(tex)) = (want_png, texture) {
+            textures += 1;
+            if tex.looks_swizzled() {
+                swizzled_looking += 1;
+            }
+            let image =
+                png::encode_rgba(u32::from(tex.width), u32::from(tex.height), &tex.to_rgba());
+            let png_name = format!("{i:05}_{:08x}.png", entry.name_hash);
+            std::fs::write(out.join(&png_name), &image)
+                .with_context(|| format!("writing {png_name}"))?;
+        }
     }
 
     println!(
@@ -495,5 +528,12 @@ fn extract(spec: &str, out: &Path) -> Result<()> {
         humanise::bytes(written),
         out.display()
     );
+    if want_png {
+        println!("{textures} decoded as textures and were written as PNG");
+        if swizzled_looking > 0 {
+            // A hint that pixel data needs unswizzling, not a determination.
+            println!("{swizzled_looking} of those look swizzled (see docs/formats/psp-texture.md)");
+        }
+    }
     Ok(())
 }

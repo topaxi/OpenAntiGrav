@@ -1,9 +1,10 @@
 # PSP indexed texture
 
-**Status: partial.** Header, palette and pixel layout are decoded and confirmed
-by exact size arithmetic across 13 textures. Three header bytes remain unknown,
-and whether the pixel data is swizzled is **not yet established** and matters
-for display.
+**Status: understood.** Header, palette and pixel layout are decoded,
+implemented in [`oag-formats::texture`](../../crates/formats/src/texture.rs),
+and confirmed visually: decoded textures render as the Wipeout Pulse logo and
+front-end icon sheets. Three header bytes remain unidentified but do not affect
+decoding.
 
 Found inside [WAD](wad.md) archives. Confirmed on Wipeout Pulse PSP; not yet
 checked against PS2, whose blobs are compressed.
@@ -77,37 +78,47 @@ A 4-bit greyscale ramp with matching alpha:
 (0,0,0,0) (32,32,32,38) (70,70,70,80) (104,104,104,128) (130,130,130,159) ...
 ```
 
-Both are exactly what alpha-masked UI artwork looks like. Channel order is taken
-as RGBA on the strength of the alpha column ramping smoothly while the other
-three stay constant; a different order would make the constant channel the
-alpha, which these images' appearance contradicts.
+Both are exactly what alpha-masked UI artwork looks like, and rendering confirms
+it: the 256x256 icon sheet is white artwork whose shape lives entirely in the
+alpha channel.
 
-Confidence: **90** for the header, palette and pixel layout. Not higher because
-nothing has been rendered yet.
+Channel order is RGBA, confirmed by the logo rendering in the correct cyan
+rather than a channel-swapped orange.
+
+Confidence: **95** for header, palette, pixel layout and channel order. The 4-bit
+nibble order (low nibble first) is **85**: the only 4bpp sample is a symmetric
+hexagon, which a mirrored decode would not visibly disturb, though its gradient
+bands are smooth where a swapped decode would comb them.
 
 ## Open questions
 
-### Is the pixel data swizzled?
+### ~~Is the pixel data swizzled?~~ No
 
-**This is the important one.** The PSP GPU reads textures in a swizzled layout,
-and games commonly store them pre-swizzled to avoid converting at load time. If
-these are swizzled, decoding them literally produces a recognisable but scrambled
-image, in 16-byte-wide blocks.
+Answered by looking. Decoding linearly and writing PNG produces the **Wipeout
+Pulse logo** at 512x128 8bpp, and a coherent icon sheet at 256x256. Swizzled
+data decoded linearly would be scrambled into 16-byte-wide blocks; these are
+pixel-perfect.
 
-`unk_0x07` (2 or 3) and `unk_0x08` (0 or 1) are the candidates for a swizzle
-flag. They are inversely correlated in the sample, and split by size: the 32x32
-and 32x16 textures carry `03`/`00` while the 512x128, 256x256 and 64x64 carry
-`02`/`01`. A size-dependent split is consistent with swizzling, which is only
-worth doing above some dimension.
+So the textures are stored linearly and the PSP swizzles at upload time, if at
+all. `unk_0x07` and `unk_0x08` are therefore *not* swizzle flags.
 
-Resolving this needs a renderer, so it is deferred until there is one. Until
-then, treat decoded pixels as provisional.
+```sh
+oag-wad extract data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad -o /tmp/fe --png
+```
 
-### `unk_0x06`
+`Texture::looks_swizzled` remains as a triage heuristic for other archives, but
+it reports nothing in `FE.wad`.
 
-Always 1 in this sample. Plausibly a mipmap count, in which case a texture with
-mipmaps would carry a larger value and additional pixel data, and the size
-arithmetic above would need revisiting.
+### `unk_0x05` to `unk_0x08`
+
+`+0x05` is 0 and `+0x06` is 1 throughout; `+0x07` is 2 or 3 and `+0x08` is 0 or
+1, inversely correlated and split by texture size.
+
+The [embedded texture node in `.vex`](vex.md#embedded-textures) has a
+**`mip_count`** byte at the corresponding offset, which suggests `+0x05` or
+`+0x06` is a mip count here. Every standalone `.mip` has exactly one level, so
+the size arithmetic above holds for this corpus but **would not** for a
+mipmapped texture. Worth re-checking against `Data.wad`.
 
 ### Non-indexed formats
 
