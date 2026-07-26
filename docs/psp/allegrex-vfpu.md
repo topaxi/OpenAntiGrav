@@ -149,34 +149,70 @@ The build emits `WARN 16 NOP constructors found` while compiling
 Confirm it took effect by disassembling `0x0004bdc0` again (adjusted for the new
 image base). It should read `lv.q` and `sv.q`, not `ldc2` and `sdc2`.
 
-## Also worth fixing: the image base
+## Setting the image base
 
-The program is currently loaded at image base `0x00000000`, because the ELF is a
-relocatable PSP module whose `LOAD` segment has `VirtAddr 0x0`.
+The PSP loader leaves the program at image base `0x00000000`, because the ELF is
+a relocatable module whose `LOAD` segment has `VirtAddr 0x0`. It hardcodes no
+default.
 
 PSP user modules run at `0x08800000` and above, and that is what PPSSPP's
-debugger will show. With base 0, **no address in our documentation matches
-anything seen at runtime**, and the
+debugger shows. Left at 0, **no address in our documentation matches anything
+seen at runtime**, and the
 [verification loop](../reverse-engineering/verification-protocol.md) depends on
-being able to move between the two.
+moving between the two.
 
-Rebase in Ghidra (`Window > Memory Map`, then the "Set Image Base" button), or
-set the base at import. Confirm the correct value by loading the game in PPSSPP
-and reading the module's load address rather than assuming it: `0x08804000` is
-the usual value for a game's main module, but it is not guaranteed.
+### Rebasing is safe here, which is not generally true
 
-Do this at the same time as the re-import, so addresses are only invalidated
-once.
+Ghidra's "Set Image Base" normally just slides the memory blocks. Any pointer
+already written into `.data` by a relocation keeps its old value, so afterwards
+the data points at addresses where nothing lives. On most targets, rebasing a
+relocated binary after load quietly corrupts it.
+
+The Allegrex extension ships an `AllegrexRelocationFixupHandler`, a Ghidra
+`RelocationFixupHandler` that Ghidra invokes on an image base change and which
+**re-applies every Allegrex relocation against the new base**. Rebasing is a
+supported operation, not a workaround.
+
+It declines to handle `ET_REL` object files, but `BOOT.BIN` is type `0xffa0`
+(PSP PRX), so it is covered. The handler stashes and restores instructions, so
+it also works after analysis, though rebasing first is cheaper.
+
+### How
+
+1. `Window > Memory Map`
+2. Click **Set Image Base** in that window's toolbar (the small house icon)
+3. Enter `08804000`
+4. Then `Analysis > Auto Analyze`
+
+**Rebase before analysing.** Both orders work, but analysing first means paying
+for it twice.
+
+### On the value
+
+`0x08804000` is the conventional load address for a game's main module and is
+the right default. It is a convention, not a guarantee: the allocator decides,
+and a module that reserves memory differently can land elsewhere.
+
+Confirm it against PPSSPP when convenient. Load the game, open
+`Tools > Developer tools`, and read the module's load address. If it differs,
+rebase again; the fixup handler makes that repeatable rather than destructive.
+
+Verify what Ghidra currently thinks:
+
+```sh
+curl -s http://127.0.0.1:8089/get_current_program_info | jq -r '.image_base, .language'
+```
 
 ## Status
 
 | Item | State |
 | --- | --- |
-| Allegrex extension | Built and verified, in `data/tools/` |
-| `BOOT.BIN` imported | Yes, 10,646 functions, but with the **wrong** processor |
-| Processor language | `MIPS:LE:32:default` - needs re-import as Allegrex |
-| Image base | `0x00000000` - needs rebasing |
-| GhidraMCP bridge | Working, listening on 127.0.0.1:8089 |
+| Allegrex extension | Built, installed, verified |
+| `BOOT.BIN` imported | Yes, via the `PSP Executable (ELF)` loader |
+| Processor language | `Allegrex:LE:32:default` |
+| Image base | `0x00000000` - **needs rebasing to `0x08804000`** |
+| Auto-analysis | Not yet run. Rebase first. |
+| GhidraMCP bridge | Working. Auto-discovers over UDS; pass it no arguments. |
 
 No function has been documented yet, so nothing needs retracting. Fixing both
 issues before the first analysis is the reason to do it now.
