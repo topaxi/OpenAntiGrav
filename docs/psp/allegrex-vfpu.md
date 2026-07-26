@@ -223,9 +223,36 @@ for it twice.
 the right default. It is a convention, not a guarantee: the allocator decides,
 and a module that reserves memory differently can land elsewhere.
 
-Confirm it against PPSSPP when convenient. Load the game, open
-`Tools > Developer tools`, and read the module's load address. If it differs,
-rebase again; the fixup handler makes that repeatable rather than destructive.
+**Confirmed against PPSSPP 1.20.4.** `chdman extractdvd` turned
+`pulse-psp-usa.chd` into a raw ISO, then `PPSSPPHeadless pulse-psp-usa.iso -l`
+booted it and logged the loader's own placement:
+
+```
+I UCUS98712 : WipEout® Pulse
+D Loadable Segment Copied to 08804000, size 002d5794
+D Block: 08804000 - 08b95b00 size 00391b00 taken=1 tag=ELF/WO_Game
+D Data Section found: .text     Sitting at 08804000, size 00272a3c
+```
+
+`UCUS98712` matches [the disc's own serial](pulse-disc-layout.md), so this is
+the right build. The emulator's own allocator — not a guess, not the
+convention repeated back — puts the module's first segment and its `.text`
+section at exactly `08804000`, with the second segment landing at
+`0x08ad9798 = 0x08804000 + 0x2d5798`: one contiguous relocation, one base, no
+split.
+
+That log is for `EBOOT.BIN`, decrypted at load time, not the `BOOT.BIN` Ghidra
+actually analyses — a different file on the disc. The two turn out to be the
+same image: `BOOT.BIN`'s own ELF program headers, read directly off the disc,
+are
+
+```
+seg 0: vaddr=0x0       filesz=0x2d5794  memsz=0x2d5794
+seg 1: vaddr=0x2d5798  filesz=0x1b0c    memsz=0xbc328
+```
+
+identical in every field to what PPSSPP loaded. The rebase Ghidra was already
+using was right.
 
 Verify what Ghidra currently thinks:
 
@@ -242,7 +269,7 @@ curl -s http://127.0.0.1:8089/get_current_program_info | jq -r '.image_base, .la
 | Allegrex extension | Built, installed, verified |
 | `BOOT.BIN` imported | Via the `PSP Executable (ELF)` loader |
 | Processor language | `Allegrex:LE:32:default` |
-| Image base | `0x08804000` (conventional; confirm against PPSSPP) |
+| Image base | `0x08804000`, confirmed against PPSSPP's own loader log |
 | Auto-analysis | Complete. **10,683 functions**, 51,549 symbols |
 | VFPU decoding | Verified: `lv.q`, `sv.q`, `vscl.q`, `vdot.t` |
 | GhidraMCP bridge | Connected. Auto-discovers over UDS; pass it no arguments. |

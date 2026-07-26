@@ -68,7 +68,8 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] Allegrex processor module built and installed; VFPU decoding verified.
       See [Allegrex and the VFPU](../psp/allegrex-vfpu.md)
 - [x] `BOOT.BIN` (PSP) loaded at base `0x08804000`, analysed: 10,683 functions
-- [ ] Confirm the image base against PPSSPP's module load address
+- [x] Confirm the image base against PPSSPP's module load address. See
+      [Allegrex and the VFPU](../psp/allegrex-vfpu.md#on-the-value)
 - [ ] Load `SCES_547.48` (PS2) into Ghidra
 - [x] [Main loop and frame pacing](../psp/frame-pacing.md); state machine outline
 - [x] Simulation timestep resolved: the original uses **variable** delta, not a

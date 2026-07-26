@@ -287,6 +287,25 @@ standing guarantee; the review caught that, and it is now an assertion over
 copy, including `OAG_REQUIRE_GAME_DATA=1` so an absent disc image fails instead of
 skipping green.
 
+### Running the game headlessly, for the first time this project has
+
+`PPSSPPHeadless` (package `ppsspp`, alongside the GUI `PPSSPPSDL`) boots
+straight from a raw ISO with no display needed — useful over SSH or in this
+session, and presumably in CI eventually. It does not read a CHD directly:
+
+```sh
+chdman extractdvd -i data/images/pulse-psp-usa.chd -o /tmp/pulse-psp-usa.iso
+PPSSPPHeadless /tmp/pulse-psp-usa.iso -l --timeout=8 > log.txt
+```
+
+`extractdvd` takes a few minutes and produces a ~450 MB ISO; regenerate it
+rather than committing it, same as everything else `data/`-derived. `-l` logs
+the full HLE trace, not just emulated printfs, which is where the image-base
+confirmation below came from. `--debugger=PORT` opens a websocket debugger
+that breaks at start — not used this session, but it's the way in for
+anything beyond reading the boot log, and it's what M3's scripted-input
+harness would presumably drive.
+
 ### Ghidra
 
 `BOOT.BIN` must be loaded with the **Allegrex** processor module, not stock
@@ -296,8 +315,17 @@ them. `just build-allegrex` produces the extension; see
 [allegrex-vfpu.md](docs/psp/allegrex-vfpu.md).
 
 The image base is `0x08804000`. That is the conventional PSP module load
-address and **has not been confirmed against PPSSPP** - the one outstanding
-item that needs the developer.
+address, and it is now **confirmed against PPSSPP 1.20.4**: `chdman extractdvd`
+turned the CHD into a raw ISO, `PPSSPPHeadless <iso> -l` booted it, and the
+loader's own log placed the module's first segment and its `.text` section at
+exactly `08804000`, tagged to the right game (`UCUS98712`, matching the disc's
+own serial). That log is for the decrypted `EBOOT.BIN`, not the `BOOT.BIN`
+Ghidra analyses, so the chain isn't complete on its own — closed by pulling
+`BOOT.BIN`'s own ELF program headers off the disc and checking them against
+what PPSSPP loaded: identical, segment for segment. See
+[allegrex-vfpu.md](docs/psp/allegrex-vfpu.md#on-the-value) for both. This was
+the only outstanding Ghidra item that needed the developer, and it's confirmed
+now.
 
 The Ghidra project currently lives in the repository root (`OpenAntiGrav.gpr`),
 not in `data/ghidra/` where [workflow.md](docs/ghidra/workflow.md) says it
@@ -317,8 +345,14 @@ names. These are the claims to lean on.
 
 **Single-source static reading, never executed:** the physics force law, the
 collision query path, the frontend state machine, the video path. All plausible,
-none runtime-verified. Nothing in this project has been run under an emulator,
-which is why nothing should be scored above 94.
+none runtime-verified. **The one exception is the image base** (above): that
+one fact has been checked against PPSSPP's own loader log. Nothing else has —
+booting the game to read a log line is not the same as tracing a specific
+function's behaviour, so this does not license raising any function's
+confidence score. The rubric's `Runtime trace | 94` tier was never written
+assuming an emulator was out of reach; what changed is narrower: this project
+had never actually run anything under one until this session, and now it has,
+once, for one fact.
 
 ## Where I would go next
 
@@ -334,8 +368,8 @@ which is why nothing should be scored above 94.
    transform families for `.fnt` itself (column-major, bitplanes, Morton order,
    and an alpha-weighted oracle) without finding it; see `fnt.md` for the full
    list of what has been tried.
-2. **Confirm the image base** against PPSSPP before more addresses are written
-   down.
+2. ~~Confirm the image base against PPSSPP before more addresses are written
+   down.~~ Done this session; see the Ghidra section above.
 3. ~~Migrate the three older copies of the disc-to-blob pipeline onto
    `oag-assets`.~~ Done this session; see "In flight" below. `oag-assets` is
    still asset access only, not yet the platform-normalising registry
@@ -343,7 +377,13 @@ which is why nothing should be scored above 94.
    that part is still open.
 4. **Runtime verification** of anything in the physics documentation, which is
    the M3 harness in miniature and would let the top confidence band mean
-   something.
+   something. Not attempted this session — it is M3's actual scope (scripted
+   input, save-state scenarios, trace capture, `oag-trace`), not a quick
+   add-on — but it just got more tractable: this session confirmed
+   `PPSSPPHeadless` runs headlessly in this environment and its `-l` flag logs
+   from the HLE layer, and it also has a `--debugger=PORT` flag for a
+   websocket debugger that breaks at start, neither of which had been checked
+   against before PPSSPP was installed here.
 
 ## Traps that cost time here
 
