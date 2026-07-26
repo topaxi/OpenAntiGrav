@@ -43,7 +43,7 @@ score.
 The primary verification target.
 
 ```sh
-sudo pacman -S ppsspp
+sudo pacman -S ppsspp     # installs the binary as PPSSPPSDL, not ppsspp
 ```
 
 What it provides: a disassembler, memory viewer and watchpoints; breakpoints

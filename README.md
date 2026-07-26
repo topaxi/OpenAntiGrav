@@ -64,12 +64,12 @@ sudo pacman -S mame-tools
   drive Ghidra directly.
 - **[PPSSPP](https://ppsspp.org)** for PSP runtime tracing, memory inspection
   and save states. This is what behavioural verification is measured against.
+  The Arch package installs the binary as `PPSSPPSDL`, not `ppsspp`.
 - **[PCSX2](https://pcsx2.net)** for the PS2 side.
 - **`binwalk`** (optional) for faster triage of unknown containers.
 
 ```sh
-sudo pacman -S ghidra ppsspp pcsx2
-paru -S binwalk
+sudo pacman -S ghidra ppsspp pcsx2 binwalk
 ```
 
 Setting up the Ghidra bridge is described in
