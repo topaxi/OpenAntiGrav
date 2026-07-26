@@ -12,9 +12,16 @@ just unpack extract data/images/pulse-psp-usa.chd \
     -o data/extracted/psp 'PSP_GAME/SYSDIR/BOOT.BIN'
 ```
 
-`BOOT.BIN` is an **unencrypted ELF**. Import it directly; Ghidra detects the
-Allegrex MIPS variant. There is no decryption step, which is the single largest
-piece of luck this project has had.
+`BOOT.BIN` is an **unencrypted ELF**, so there is no decryption step. That is
+the single largest piece of luck this project has had.
+
+> **Do not import it with stock Ghidra.** The ELF loader picks
+> `MIPS:LE:32:default`, which silently mis-decodes all 26,032 VFPU instructions
+> in the binary as nonexistent 64-bit MIPS III instructions. The decompiler then
+> produces confident, fictional C for exactly the math-heavy code this project
+> cares about. Install the Allegrex processor module first, and rebase the image
+> while you are at it: see
+> [Allegrex and the VFPU](../psp/allegrex-vfpu.md).
 
 Do not bother with `EBOOT.BIN`. It is the same program with an encryption and
 signing wrapper.

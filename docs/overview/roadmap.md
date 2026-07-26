@@ -54,10 +54,13 @@ mostly readable and is the gate for everything else.
 
 The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 
-- [ ] Load `BOOT.BIN` (PSP) and `SCES_547.48` (PS2) into Ghidra
+- [x] Load `BOOT.BIN` (PSP) into Ghidra. Auto-analysis finds 10,646 functions.
+- [ ] **Install the Allegrex processor module.** Stock Ghidra mis-decodes all
+      26,032 VFPU instructions; see [Allegrex and the VFPU](../psp/allegrex-vfpu.md)
+- [ ] Load `SCES_547.48` (PS2) into Ghidra
 - [ ] Main loop and frame structure
-- [ ] **Simulation tick rate** - currently unknown and blocking; see
-      [`TickRate`](../architecture/determinism.md#the-tick-rate-is-unknown)
+- [ ] **Confirm the simulation tick rate.** Defaulted to 60 Hz; see
+      [`TickRate`](../architecture/determinism.md#the-tick-rate-is-a-decision-not-a-measurement)
 - [ ] Memory management and the heap layout
 - [ ] Resource loading: how a WAD entry becomes a live object
 - [ ] Game state machine
@@ -145,7 +148,7 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 
 | Question | Blocks | Tracked in |
 | --- | --- | --- |
-| What is the simulation tick rate? | M4 | [determinism](../architecture/determinism.md) |
+| Is the tick rate really 60 Hz? Defaulted, not measured. | M4 tuning | [determinism](../architecture/determinism.md) |
 | How are WAD entries named? Is the first field a hash? | M1 | [WAD format](../formats/wad.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
 | Is the physics fixed-point or float? | M4 | [ADR-0002](../architecture/adr/0002-determinism-model.md) |

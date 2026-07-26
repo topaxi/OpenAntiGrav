@@ -2,12 +2,19 @@
 
 ## Ghidra
 
-Ghidra 11+ with a JDK 21+. Both MIPS variants we need (PSP's MIPS-II-like
-Allegrex and the PS2's Emotion Engine) are supported out of the box.
+Ghidra 11+ with a JDK 21+.
 
 ```sh
 sudo pacman -S ghidra
 ```
+
+**Stock Ghidra is not sufficient for PSP binaries.** Its MIPS support has no
+Allegrex VFPU, and it mis-decodes vector instructions rather than rejecting
+them. Install [kotcrab/ghidra-allegrex](https://github.com/kotcrab/ghidra-allegrex)
+before importing anything; the details and the version-mismatch workaround are
+in [Allegrex and the VFPU](../psp/allegrex-vfpu.md).
+
+The PS2's Emotion Engine is a plain MIPS variant and works out of the box.
 
 The Ghidra project lives in `data/ghidra/`, which is gitignored. The project
 database is a working copy; the record of truth is `docs/ghidra/`. See

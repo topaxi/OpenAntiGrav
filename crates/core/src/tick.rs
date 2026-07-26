@@ -5,13 +5,17 @@
 //! never sees a variable delta. A variable timestep would make replays
 //! frame-rate dependent, which defeats every form of verification we rely on.
 //!
-//! # The tick rate is not yet known
+//! # The tick rate is a decision, not yet a measurement
 //!
-//! [`TickRate`] is deliberately a parameter rather than a constant. Wipeout
-//! Pulse's actual simulation rate has not been confirmed from the binary, and
-//! guessing 60 Hz and hard-coding it would bake an unverified assumption into
-//! every subsystem built on top. Resolving this is an M2 task; see
-//! `docs/reverse-engineering/methodology.md`.
+//! [`TickRate::DEFAULT`] is 60 Hz. That is a project decision, taken so work
+//! can proceed, and **not** something confirmed from the original binary.
+//!
+//! [`TickRate`] stays a parameter rather than becoming a constant so that
+//! confirming a different rate in M2 is a one-line change at the call site
+//! instead of a re-tuning of every subsystem built on top. Nothing downstream
+//! should assume 60.
+//!
+//! See `docs/reverse-engineering/methodology.md`.
 
 /// How many simulation ticks elapse per second.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,10 +24,12 @@ pub struct TickRate {
 }
 
 impl TickRate {
-    /// Provisional default, pending confirmation from the original binary.
+    /// The project's default simulation rate, 60 Hz.
     ///
-    /// Do not treat this as a discovered fact.
-    pub const PROVISIONAL: Self = Self { hz: 60 };
+    /// A decision taken so work can proceed, not a measurement. Wipeout
+    /// Pulse's actual rate has not been read from the binary yet. Do not cite
+    /// this as a discovered fact about the original.
+    pub const DEFAULT: Self = Self { hz: 60 };
 
     /// Creates a tick rate.
     ///

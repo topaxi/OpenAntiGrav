@@ -89,18 +89,17 @@ weaken the test.
   no work stealing, no completion-order dependence.
 - Asset loading, audio and rendering may thread freely. They are not simulation.
 
-## The tick rate is unknown
+## The tick rate is a decision, not a measurement
 
-`TickRate` is a parameter, not a constant, because **Pulse's actual simulation
-rate has not been confirmed from the binary**.
+`TickRate::DEFAULT` is **60 Hz**. That is a project decision taken so work can
+proceed. **Pulse's actual simulation rate has not been read from the binary.**
 
-The obvious guess is 60 Hz. Guessing and hard-coding it would bake an unverified
-assumption into every subsystem built on top, and unpicking it later would mean
-re-tuning all of them. `TickRate::PROVISIONAL` exists so code can be written
-now, and its name is a warning.
+`TickRate` remains a parameter rather than a constant so that confirming a
+different rate in M2 is a one-line change at the call site rather than a
+re-tuning of every subsystem above it. Nothing downstream should assume 60.
 
-Resolving this is an M2 task. Until then, treat any tuning constant derived from
-the tick rate as provisional too.
+Until it is confirmed, treat any tuning constant derived from the tick rate as
+provisional, and do not cite 60 Hz as a fact about the original.
 
 ## How this is enforced
 

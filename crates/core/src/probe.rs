@@ -30,7 +30,7 @@ pub struct ProbeResult {
 /// Runs the probe for `ticks` steps from `seed`.
 #[must_use]
 pub fn run(ticks: u32, seed: u64) -> ProbeResult {
-    let dt = TickRate::from_hz(60).dt();
+    let dt = TickRate::DEFAULT.dt();
     let mut rng = Rng::new(seed);
 
     let mut position = Vec3::new(0.0, 1.0, 0.0);

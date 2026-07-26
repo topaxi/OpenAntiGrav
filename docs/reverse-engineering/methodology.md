@@ -81,7 +81,7 @@ Live questions, with what would resolve each.
 
 | Question | Why it matters | How to resolve |
 | --- | --- | --- |
-| **What is the simulation tick rate?** | Every physics constant is scaled by it. Blocks M4. | Find the main loop's frame pacing, or count ticks between two known events in a trace. |
+| **Confirm the simulation tick rate.** Defaulted to 60 Hz; unverified. | Every physics constant is scaled by it. | Find the main loop's frame pacing, or count ticks between two known events in a trace. |
 | **Is the physics fixed-point or float?** | Decides whether we can be bit-exact for free. See [ADR-0002](../architecture/adr/0002-determinism-model.md). | Look at the ship update's arithmetic instructions: VFPU ops mean float, shifts and integer multiplies mean fixed-point. |
 | **What is the PRNG?** | AI and pickups will not match without it. | Find the seed's storage, trace back to the update function. Compare against known small PRNGs. |
 | **How are WAD entries named?** | Blocks all asset work. See [WAD format](../formats/wad.md). | Find the lookup function in `BOOT.BIN`; the hash algorithm will be right there. |

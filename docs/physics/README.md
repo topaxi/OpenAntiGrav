@@ -20,7 +20,7 @@
 | Question | Why it matters |
 | --- | --- |
 | Fixed-point or float? | Decides whether bit-exactness is available for free. See [ADR-0002](../architecture/adr/0002-determinism-model.md). |
-| What is the simulation tick rate? | Every constant here is scaled by it. Blocks all of M4. |
+| Is the tick rate really 60 Hz? Defaulted, not measured. | Every constant here is scaled by it. |
 | What are the coordinate conventions? | Handedness, units, angle representation. Get this wrong and nothing else parses. |
 
 ## Approach
