@@ -1,9 +1,9 @@
 //! Runtime asset access: WAD archives read straight out of a disc image.
 //!
 //! This crate exists to stop the same twenty lines being written a fourth time.
-//! [`oag-tools`'s `oag-wad`][wad], [`oag-view`'s asset loader][view] and its
-//! mesh loader each grew their own copy of "open a disc image, find a `.wad`,
-//! read its directory, decompress a blob". That is this crate's whole job.
+//! [`oag-tools`'s `oag-wad`][wad] and [`oag-view`'s asset and mesh loaders][view]
+//! used to each carry their own copy of "open a disc image, find a `.wad`, read
+//! its directory, decompress a blob"; all three now go through [`Archive`].
 //!
 //! [wad]: ../../oag_tools/index.html
 //! [view]: ../../oag_view/index.html

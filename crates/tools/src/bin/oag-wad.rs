@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
-use oag_disc::DiscImage;
+use oag_assets::Archive;
 use oag_formats::texture::Texture;
 use oag_formats::wad::{self, Blob, Compression, Directory};
 use oag_formats::{fexml, lzss, png};
@@ -142,113 +142,15 @@ fn main() -> Result<()> {
     }
 }
 
-/// A WAD, either on the filesystem or inside a disc image.
-///
-/// Both are read lazily. The directory is small; the blobs are not, and on a
-/// CHD every read costs decompression.
-enum Source {
-    File {
-        path: PathBuf,
-        file: std::fs::File,
-        len: u64,
-    },
-    Disc {
-        disc: Box<DiscImage>,
-        entry: oag_disc::Entry,
-        label: String,
-    },
-}
-
-impl Source {
-    /// Opens `spec`, which is either a path or `<image>:<path-on-disc>`.
-    ///
-    /// Splitting on the last colon rather than the first keeps Windows drive
-    /// letters working.
-    fn open(spec: &str) -> Result<Self> {
-        if let Some((image, inner)) = split_disc_spec(spec) {
-            let mut disc =
-                DiscImage::open(image).with_context(|| format!("opening disc image {image}"))?;
-
-            let entry = disc
-                .entries()?
-                .iter()
-                .find(|e| !e.is_directory && e.path.eq_ignore_ascii_case(inner))
-                .cloned()
-                .with_context(|| format!("{inner} is not on {image}"))?;
-
-            return Ok(Self::Disc {
-                label: format!("{image}:{}", entry.path),
-                entry,
-                disc: Box::new(disc),
-            });
-        }
-
-        let path = PathBuf::from(spec);
-        let file =
-            std::fs::File::open(&path).with_context(|| format!("opening {}", path.display()))?;
-        let len = file.metadata()?.len();
-        Ok(Self::File { path, file, len })
-    }
-
-    fn label(&self) -> String {
-        match self {
-            Self::File { path, .. } => path.display().to_string(),
-            Self::Disc { label, .. } => label.clone(),
-        }
-    }
-
-    fn len(&self) -> u64 {
-        match self {
-            Self::File { len, .. } => *len,
-            Self::Disc { entry, .. } => entry.size,
-        }
-    }
-
-    fn read(&mut self, offset: u64, len: u64) -> Result<Vec<u8>> {
-        let len = len.min(self.len().saturating_sub(offset));
-        match self {
-            Self::File { file, .. } => {
-                use std::io::{Read, Seek, SeekFrom};
-                file.seek(SeekFrom::Start(offset))?;
-                let mut buf = vec![0u8; len as usize];
-                file.read_exact(&mut buf)?;
-                Ok(buf)
-            }
-            Self::Disc { disc, entry, .. } => Ok(disc.read_entry_range(entry, offset, len)?),
-        }
-    }
-
-    /// Reads the header, then exactly the directory. Two reads rather than
-    /// slurping the archive.
-    fn directory(&mut self) -> Result<Directory> {
-        let header = self.read(0, wad::HEADER_LEN as u64)?;
-        let count = Directory::peek_entry_count(&header)
-            .map_err(|e| anyhow::anyhow!("{}: {e}", self.label()))?;
-
-        let bytes = self.read(0, Directory::directory_len(count))?;
-        Directory::parse(&bytes, Some(self.len()))
-            .map_err(|e| anyhow::anyhow!("{}: {e}", self.label()))
-    }
-}
-
-/// Splits `<image>:<path>`, or returns `None` for a plain path.
-fn split_disc_spec(spec: &str) -> Option<(&str, &str)> {
-    let (image, inner) = spec.rsplit_once(':')?;
-    // A bare Windows drive letter is not a disc spec.
-    if image.len() < 2 || inner.is_empty() {
-        return None;
-    }
-    Some((image, inner))
-}
-
-fn summarise(dir: &Directory, source: &Source) {
-    println!("archive        {}", source.label());
+fn summarise(archive: &Archive) {
+    let dir = archive.directory();
+    println!("archive        {}", archive.label());
     println!("version        {}", dir.version);
     println!("entries        {}", dir.entries.len());
     println!(
         "payload        {} of {}",
         humanise::bytes(dir.payload_len()),
-        humanise::bytes(source.len())
+        humanise::bytes(archive.len())
     );
 
     let compressed = dir.compressed_entries();
@@ -311,12 +213,12 @@ fn load_names(path: &Path) -> Result<BTreeMap<u32, String>> {
 }
 
 fn list(spec: &str, by_size: bool, limit: usize, names: Option<&Path>) -> Result<()> {
-    let mut source = Source::open(spec)?;
-    let dir = source.directory()?;
+    let archive = Archive::open(spec)?;
+    let dir = archive.directory();
 
     let names = names.map(load_names).transpose()?.unwrap_or_default();
 
-    summarise(&dir, &source);
+    summarise(&archive);
     if !names.is_empty() {
         let known = dir
             .entries
@@ -366,27 +268,29 @@ fn list(spec: &str, by_size: bool, limit: usize, names: Option<&Path>) -> Result
 }
 
 fn tags(spec: &str) -> Result<()> {
-    let mut source = Source::open(spec)?;
-    let dir = source.directory()?;
+    let mut archive = Archive::open(spec)?;
+    let entries = archive.directory().entries.clone();
 
-    summarise(&dir, &source);
+    summarise(&archive);
     println!();
 
     let mut counts: BTreeMap<String, (usize, u64)> = BTreeMap::new();
     let mut empty = 0usize;
 
-    for entry in &dir.entries {
+    for (index, entry) in entries.iter().enumerate() {
         if entry.size == 0 {
             empty += 1;
             continue;
         }
-        let head = source.read(u64::from(entry.offset), TAG_PEEK_BYTES)?;
-        // A texture is identified by its size arithmetic, not by a magic, so
-        // it needs the whole blob rather than a peek.
+        // Raw, not decoded: the tag lives at the start of the stored bytes.
+        // A texture is identified by its size arithmetic against the stored
+        // (uncompressed, for every archive seen) length, which needs the
+        // whole blob; a compressed entry never gets that read, so `tags`
+        // stays a directory-speed scan even on `WADS2.WAD`'s 360 MB.
+        let head = archive.peek_raw(index, TAG_PEEK_BYTES)?;
         let label = if entry.compression == Compression::None
-            && Texture::looks_like_texture(
-                &source.read(u64::from(entry.offset), u64::from(entry.size))?,
-            ) {
+            && Texture::looks_like_texture(&archive.read_raw(index)?)
+        {
             "texture (.mip)".to_string()
         } else {
             match Blob::peek(&head) {
@@ -457,13 +361,11 @@ fn find_entry(dir: &Directory, selector: &str) -> Result<usize> {
 fn cat(spec: &str, selector: &str, want_expand: bool) -> Result<()> {
     use std::io::Write;
 
-    let mut source = Source::open(spec)?;
-    let dir = source.directory()?;
-    let index = find_entry(&dir, selector)?;
-    let entry = dir.entries[index];
-
-    let raw = source.read(u64::from(entry.offset), u64::from(entry.size))?;
-    let data = decode_blob(&raw, &entry)?;
+    let mut archive = Archive::open(spec)?;
+    let index = find_entry(archive.directory(), selector)?;
+    let data = archive
+        .read(index)
+        .with_context(|| format!("reading entry {index}"))?;
 
     if want_expand && fexml::is_fexml(&data) {
         print!(
@@ -478,19 +380,19 @@ fn cat(spec: &str, selector: &str, want_expand: bool) -> Result<()> {
 }
 
 fn verify(spec: &str) -> Result<()> {
-    let mut source = Source::open(spec)?;
-    let dir = source.directory()?;
+    let mut archive = Archive::open(spec)?;
+    let entries = archive.directory().entries.clone();
 
-    summarise(&dir, &source);
+    summarise(&archive);
     println!();
 
     let mut by_compression: BTreeMap<String, (usize, u64)> = BTreeMap::new();
     let mut failures = Vec::new();
     let mut leftovers: BTreeMap<usize, usize> = BTreeMap::new();
 
-    for (i, entry) in dir.entries.iter().enumerate() {
-        let raw = source
-            .read(u64::from(entry.offset), u64::from(entry.size))
+    for (i, entry) in entries.iter().enumerate() {
+        let raw = archive
+            .read_raw(i)
             .with_context(|| format!("reading entry {i}"))?;
 
         // For a compressed entry, check where the *reader* stopped as well as how
@@ -555,11 +457,11 @@ fn verify(spec: &str) -> Result<()> {
 
     println!();
     if failures.is_empty() {
-        let compressed = dir.entries.iter().filter(|e| e.is_compressed()).count();
+        let compressed = entries.iter().filter(|e| e.is_compressed()).count();
         println!(
             "OK: all {} entries decoded to their declared size, and all {compressed} \n\
              compressed streams were read to within {} bytes of their end",
-            dir.entries.len(),
+            entries.len(),
             lzss::MAX_TRAILING_BYTES
         );
         Ok(())
@@ -570,15 +472,15 @@ fn verify(spec: &str) -> Result<()> {
         if failures.len() > 20 {
             println!("  ... and {} more", failures.len() - 20);
         }
-        bail!("{} of {} entries failed", failures.len(), dir.entries.len())
+        bail!("{} of {} entries failed", failures.len(), entries.len())
     }
 }
 
 fn extract(spec: &str, out: &Path, want_png: bool) -> Result<()> {
-    let mut source = Source::open(spec)?;
-    let dir = source.directory()?;
+    let mut archive = Archive::open(spec)?;
+    let entries = archive.directory().entries.clone();
 
-    if dir.entries.is_empty() {
+    if entries.is_empty() {
         bail!("archive has no entries");
     }
 
@@ -588,12 +490,10 @@ fn extract(spec: &str, out: &Path, want_png: bool) -> Result<()> {
     let mut textures = 0usize;
     let mut swizzled_looking = 0usize;
 
-    for (i, entry) in dir.entries.iter().enumerate() {
-        let raw = source
-            .read(u64::from(entry.offset), u64::from(entry.size))
+    for (i, entry) in entries.iter().enumerate() {
+        let data = archive
+            .read(i)
             .with_context(|| format!("reading entry {i}"))?;
-
-        let data = decode_blob(&raw, entry).with_context(|| format!("decoding entry {i}"))?;
 
         // Named by index and hash, because the real names are not in the
         // archive. The index keeps directory order visible; the hash is what
@@ -628,7 +528,7 @@ fn extract(spec: &str, out: &Path, want_png: bool) -> Result<()> {
 
     println!(
         "extracted {} entries ({}) to {}",
-        dir.entries.len(),
+        entries.len(),
         humanise::bytes(written),
         out.display()
     );

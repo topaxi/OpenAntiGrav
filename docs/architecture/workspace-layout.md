@@ -77,10 +77,13 @@ the front end needed asset access and a binary before any of M4 existed.
 `oag-assets` is currently only asset *access*, not the platform-normalising
 registry it is meant to become, and it does not yet know about PS2 assets.
 
-Three older copies of "open a disc image, find a `.wad`, read its directory,
-decompress a blob" still live in `oag-tools`'s `oag-wad`, `oag-view`'s asset
-loader and its mesh loader. They should migrate to `oag-assets`; nothing depends
-on them not having.
+The three older copies of "open a disc image, find a `.wad`, read its
+directory, decompress a blob" that used to live in `oag-tools`'s `oag-wad`,
+`oag-view`'s asset loader and its mesh loader are gone: all three now go
+through `oag_assets::Archive`, which grew a `len()` and a `read_raw()` to cover
+what they still needed beyond decoded reads (`oag-wad`'s size summary and its
+LZSS-leftover diagnostic). Before/after snapshots of `oag-wad list`, `tags` and
+`verify` against both the PSP and PS2 discs came out byte-identical.
 
 Rule 1 is the one that will be under pressure. It is easier to reach for a
 texture handle inside physics than to plumb it out. Resisting that is what keeps

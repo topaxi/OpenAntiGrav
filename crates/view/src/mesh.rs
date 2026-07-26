@@ -1,10 +1,8 @@
 //! Loads a `.vex` model out of an archive and flattens it for the GPU.
 
 use anyhow::{Context, Result, bail};
-use oag_disc::DiscImage;
-use oag_formats::lzss;
+use oag_assets::Archive;
 use oag_formats::vex;
-use oag_formats::wad::{self, Compression, Directory};
 
 /// A vertex as the mesh shader expects it.
 #[repr(C)]
@@ -65,45 +63,10 @@ pub struct Model {
 ///
 /// `spec` is `<image>:<path-on-disc>`, matching `oag-wad`.
 pub fn read_blob(spec: &str, name: &str) -> Result<Vec<u8>> {
-    let (image, inner) = spec
-        .rsplit_once(':')
-        .filter(|(image, inner)| image.len() >= 2 && !inner.is_empty())
-        .context("expected <image>:<path-on-disc>")?;
-
-    let mut disc = DiscImage::open(image).with_context(|| format!("opening {image}"))?;
-    let entry = disc
-        .entries()?
-        .iter()
-        .find(|e| !e.is_directory && e.path.eq_ignore_ascii_case(inner))
-        .cloned()
-        .with_context(|| format!("{inner} is not on {image}"))?;
-
-    let header = disc.read_entry_range(&entry, 0, wad::HEADER_LEN as u64)?;
-    let count =
-        Directory::peek_entry_count(&header).map_err(|e| anyhow::anyhow!("{inner}: {e}"))?;
-    let dir_bytes = disc.read_entry_range(&entry, 0, Directory::directory_len(count))?;
-    let dir = Directory::parse(&dir_bytes, Some(entry.size))
-        .map_err(|e| anyhow::anyhow!("{inner}: {e}"))?;
-
-    let hash = wad::hash_name(name);
-    let wad_entry = dir
-        .entries
-        .iter()
-        .find(|e| e.name_hash == hash)
-        .with_context(|| format!("{name} (hash {hash:08x}) is not in {inner}"))?;
-
-    let raw = disc.read_entry_range(
-        &entry,
-        u64::from(wad_entry.offset),
-        u64::from(wad_entry.size),
-    )?;
-    match wad_entry.compression {
-        Compression::None => Ok(raw),
-        Compression::Lzss => {
-            lzss::decompress(&raw, wad_entry.size_uncompressed as usize).context("decompressing")
-        }
-        Compression::Zlib => bail!("zlib entries are not supported"),
-    }
+    let mut archive = Archive::open(spec)?;
+    archive
+        .read_name(name)
+        .with_context(|| format!("reading {name} from {}", archive.label()))
 }
 
 /// Reads one `.vex` entry out of an archive inside a disc image.

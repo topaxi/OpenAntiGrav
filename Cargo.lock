@@ -1129,6 +1129,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "oag-assets",
  "oag-disc",
  "oag-formats",
 ]
@@ -1140,8 +1141,8 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "clap",
+ "oag-assets",
  "oag-core",
- "oag-disc",
  "oag-formats",
  "pollster",
  "wgpu",

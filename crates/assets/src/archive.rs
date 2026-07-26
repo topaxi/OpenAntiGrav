@@ -103,6 +103,20 @@ impl Archive {
         &self.label
     }
 
+    /// Total size of the archive itself: the file's length, or the disc
+    /// entry's.
+    #[must_use]
+    pub fn len(&self) -> u64 {
+        self.source.len()
+    }
+
+    /// Whether the archive is empty. Always `false`: a zero-length file
+    /// would have failed to parse a directory in [`Archive::open`].
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// The parsed directory.
     #[must_use]
     pub fn directory(&self) -> &Directory {
@@ -137,6 +151,30 @@ impl Archive {
             .source
             .read(u64::from(entry.offset), u64::from(entry.size))?;
         self.decode(index, &entry, raw)
+    }
+
+    /// Reads entry `index` exactly as stored, without decompressing.
+    ///
+    /// For diagnostics that need the compressed bytes themselves, such as
+    /// checking where an LZSS stream's reader actually stopped.
+    pub fn read_raw(&mut self, index: usize) -> Result<Vec<u8>> {
+        let entry = *self.entry(index)?;
+        self.source
+            .read(u64::from(entry.offset), u64::from(entry.size))
+    }
+
+    /// Reads the first `len` bytes of entry `index` exactly as stored, never
+    /// decompressing and never clamping to the entry's own size.
+    ///
+    /// Unlike [`Archive::peek`], this never falls back to a full decompressed
+    /// read for a compressed entry: it is for callers that specifically want
+    /// the stored bytes, such as inspecting a type tag that lives at the
+    /// start of the compressed stream. Reading past a short entry into the
+    /// next blob's padding is deliberate, not a bug: it matches what a naive
+    /// fixed-size peek at a raw offset actually sees.
+    pub fn peek_raw(&mut self, index: usize, len: u64) -> Result<Vec<u8>> {
+        let entry = *self.entry(index)?;
+        self.source.read(u64::from(entry.offset), len)
     }
 
     /// Reads and decompresses the entry with this name hash.
@@ -284,5 +322,52 @@ mod tests {
     #[test]
     fn a_bare_word_is_rejected_rather_than_opened() {
         assert!(matches!(Archive::open("nonsense"), Err(Error::BadSpec(_))));
+    }
+
+    /// One stored (uncompressed) entry, 64-byte aligned, the way every PSP
+    /// archive is laid out.
+    fn tiny_wad(name_hash: u32, blob: &[u8]) -> Vec<u8> {
+        let offset = 64u32;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // version
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // entry_count
+        bytes.extend_from_slice(&name_hash.to_le_bytes());
+        bytes.extend_from_slice(&offset.to_le_bytes());
+        bytes.extend_from_slice(&(blob.len() as u32).to_le_bytes()); // size_uncompressed
+        bytes.extend_from_slice(&(blob.len() as u32).to_le_bytes()); // size
+        bytes.resize(offset as usize, 0);
+        bytes.extend_from_slice(blob);
+        bytes
+    }
+
+    fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("oag-assets-test-{name}"));
+        std::fs::write(&path, contents).unwrap();
+        path
+    }
+
+    #[test]
+    fn len_reports_the_files_own_size() {
+        let bytes = tiny_wad(0x1234_5678, b"hello world");
+        let path = temp_file("len.wad", &bytes);
+
+        let archive = Archive::open(path.to_str().unwrap()).unwrap();
+        assert_eq!(archive.len(), bytes.len() as u64);
+        assert!(!archive.is_empty());
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn read_raw_matches_read_for_a_stored_entry() {
+        let blob = b"a stored entry is never decompressed";
+        let bytes = tiny_wad(0xdead_beef, blob);
+        let path = temp_file("raw.wad", &bytes);
+
+        let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
+        assert_eq!(archive.read_raw(0).unwrap(), blob);
+        assert_eq!(archive.read(0).unwrap(), blob);
+
+        std::fs::remove_file(path).ok();
     }
 }

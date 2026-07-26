@@ -4,19 +4,22 @@ State that is **not** inferrable from the repository itself. Everything about
 formats, decisions and the plan lives in [`docs/`](docs/README.md); this file
 covers what a fresh reader would otherwise have to rediscover.
 
-Written 2026-07-26, at commit `eb9a30d` plus uncommitted doc changes from this
-session (not yet committed; see below for what they are).
+Written 2026-07-26, at commit `289fff3` plus one more commit for the
+`oag-assets` migration described below.
 
 ## In flight
 
-Nothing code-side. `just check` passes 297 tests; `just test-data` adds the 14
-ground-truth ones that need `data/images/` and passes 311. This session touched
-only `docs/`, so those numbers are unchanged.
+Nothing blocked. `just check` passes 299 tests (297 before this session, plus
+two new `Archive` unit tests); `just test-data` adds 14 ground-truth ones and
+passes 313.
 
-**This session closed two of the three open items from the previous handover**
-(confidence rescoring, and drafting the ADR-0006 question) and made another
-negative-result pass at the `.fnt` atlas. Details below, in place of the
-previous handover's "still open" list.
+**This session closed two of the previous handover's four "still open" items**
+(confidence rescoring and drafting the ADR-0006 question), completed one of its
+"where I would go next" items (migrating the disc-to-blob pipeline duplicates
+onto `oag-assets`), and made another negative-result pass at the `.fnt` atlas
+without closing it. **LZSS being tested only by its own inverse (still-open
+item 1) is untouched** — nothing this session bears on it. Details below, in
+place of the previous handover's "still open" list.
 
 1. **Confidence rescoring is done** for the four pages the previous handover
    named. `formats/wad.md`'s two claims (95, 97) are now 94 each;
@@ -85,6 +88,36 @@ previous handover's "still open" list.
    - `ghidra/functions/psp-pulse/wad-subsystem.md`,
      `frontend-video.md`: real paths quoted as hash-verification examples.
      Minimal.
+4. **The disc-to-blob pipeline is now one copy, not three.** `oag-tools`'s
+   `oag-wad`, `oag-view`'s asset loader (`assets.rs`) and its mesh loader
+   (`mesh.rs`) all used to hand-roll "open a disc image, find a `.wad`, read
+   its directory, decompress a blob"; all three now go through
+   `oag_assets::Archive`, which is what [workspace-layout.md](docs/architecture/workspace-layout.md)
+   said should happen. `Archive` grew three methods to cover what the old code
+   needed beyond a decoded read: `len()` (the archive's own size, for
+   `oag-wad`'s summary line), `read_raw()` (undecompressed bytes, for
+   `oag-wad verify`'s LZSS-leftover diagnostic — the project's only
+   independent LZSS oracle, so this one had to come out byte-identical, not
+   just "equivalent"), and `peek_raw()` (an unclamped raw peek, so `tags`
+   keeps its short-circuit and stays a directory-speed scan on `WADS2.WAD`'s
+   360 MB instead of decompressing every one of its 5,861 streams just to look
+   at 16 bytes of each — the first version of this migration got that wrong).
+
+   Verified two ways. `oag-wad list`, `tags` and `verify` against both the PSP
+   disc and **both** PS2 archives (`WADSP.WAD`, 192 compressed streams;
+   `WADS2.WAD`, 5,861) were snapshotted before and after and diffed
+   byte-identical — PSP alone wouldn't have exercised the LZSS path at all,
+   since every PSP archive stores everything uncompressed. And `oag-view
+   --screenshot` was run through all three of its loading paths (a texture
+   archive, `--mesh` on the Feisar ship, `--track` on `01_Track`) and each
+   still renders correctly.
+
+   One behaviour was deliberately preserved rather than "fixed": `oag-view`'s
+   asset loader skips an entry it can't decode instead of failing the whole
+   load (`let Ok(data) = archive.read(index) else { continue }`), where
+   `Archive::read` on its own would error out. That tolerance is the old
+   code's, kept on purpose — a viewer that refuses to open over one bad
+   texture would be worse than the current code, not better.
 
 ## The code review has landed, and most of it is done
 
@@ -303,10 +336,11 @@ which is why nothing should be scored above 94.
    list of what has been tried.
 2. **Confirm the image base** against PPSSPP before more addresses are written
    down.
-3. **Migrate the three older copies** of the disc-to-blob pipeline onto
-   `oag-assets`, which now exists but is asset access only, not yet the
-   platform-normalising registry [workspace-layout.md](docs/architecture/workspace-layout.md)
-   describes.
+3. ~~Migrate the three older copies of the disc-to-blob pipeline onto
+   `oag-assets`.~~ Done this session; see "In flight" below. `oag-assets` is
+   still asset access only, not yet the platform-normalising registry
+   [workspace-layout.md](docs/architecture/workspace-layout.md) describes —
+   that part is still open.
 4. **Runtime verification** of anything in the physics documentation, which is
    the M3 harness in miniature and would let the top confidence band mean
    something.
