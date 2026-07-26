@@ -384,9 +384,15 @@ fn build(
     };
 
     // A white 1x1 stands in for untextured draws, so the shader needs no branch.
-    let mut texture_binds = vec![make(1, 1, &[255, 255, 255, 255], "white")];
-    for t in &model.textures {
-        texture_binds.push(make(t.width, t.height, &t.rgba, &t.label));
+    // It also fills the slot of a `Texture` node we could not decode, keeping
+    // every later texture at the index its materials expect.
+    let white = make(1, 1, &[255, 255, 255, 255], "white");
+    let mut texture_binds = vec![white];
+    for slot in &model.textures {
+        texture_binds.push(match slot {
+            Some(t) => make(t.width, t.height, &t.rgba, &t.label),
+            None => make(1, 1, &[255, 255, 255, 255], "undecoded"),
+        });
     }
 
     let placeholder = device.create_buffer(&wgpu::BufferDescriptor {

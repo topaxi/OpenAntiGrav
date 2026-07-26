@@ -39,8 +39,12 @@ pub struct Model {
     pub indices: Vec<u32>,
     /// One per material run, in draw order.
     pub draws: Vec<DrawCall>,
-    /// Textures embedded in the model.
-    pub textures: Vec<ModelTexture>,
+    /// Textures embedded in the model, one slot per `Texture` node.
+    ///
+    /// `None` where the node exists but this build cannot decode it. The slots
+    /// are positional because materials name a texture by its ordinal, so
+    /// compacting them would re-skin the model.
+    pub textures: Vec<Option<ModelTexture>>,
     /// Centre of the bounding box, so the camera can frame the model.
     pub centre: [f32; 3],
     /// Radius of the bounding sphere.
@@ -108,19 +112,24 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
 
     let nodes = vex::nodes(data).context("walking the node tree")?;
 
-    let textures: Vec<ModelTexture> = vex::textures(data)
+    // Positional: materials name a texture by its ordinal among the `Texture`
+    // nodes, so an entry this build cannot decode has to stay in place as `None`
+    // rather than shift every later index.
+    let textures: Vec<Option<ModelTexture>> = vex::textures(data)
         .context("extracting textures")?
         .into_iter()
-        .map(|t| ModelTexture {
-            label: t
-                .name
-                .as_deref()
-                .and_then(|n| n.rsplit(['/', '\\']).next())
-                .unwrap_or("?")
-                .to_string(),
-            width: u32::from(t.width),
-            height: u32::from(t.height),
-            rgba: t.to_rgba(),
+        .map(|slot| {
+            slot.map(|t| ModelTexture {
+                label: t
+                    .name
+                    .as_deref()
+                    .and_then(|n| n.rsplit(['/', '\\']).next())
+                    .unwrap_or("?")
+                    .to_string(),
+                width: u32::from(t.width),
+                height: u32::from(t.height),
+                rgba: t.to_rgba(),
+            })
         })
         .collect();
 
@@ -164,12 +173,15 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
 
             let last_index = indices.len() as u32;
             if last_index > first_index {
-                // The material index selects an entry in this mesh's material
-                // list, which in turn indexes the model's texture array.
+                // material index -> texture ordinal -> a texture we decoded.
+                // Any link in that chain can be missing, and a missing one draws
+                // untextured rather than borrowing a neighbour's skin.
                 let texture = materials
                     .get(usize::from(batch.material_index))
-                    .map(|&t| t as usize)
-                    .filter(|&t| t < textures.len());
+                    .copied()
+                    .flatten()
+                    .map(|t| t as usize)
+                    .filter(|&t| textures.get(t).is_some_and(Option::is_some));
                 draws.push(DrawCall {
                     range: first_index..last_index,
                     texture,

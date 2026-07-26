@@ -499,7 +499,17 @@ impl EmbeddedTexture {
 ///
 /// That the sizes add up exactly to the header's declared texture length is
 /// what confirms the packing, and this function checks it.
-pub fn textures(data: &[u8]) -> Result<Vec<EmbeddedTexture>> {
+///
+/// # Position is the identity
+///
+/// Materials name a texture by its **ordinal among the `Texture` nodes**, so the
+/// returned vector is positional and one entry per node, including nodes this
+/// build cannot decode. Those come back as `None`.
+///
+/// Dropping them instead would silently renumber every later texture, which is
+/// not a decoding error that shows up as an error: it shows up as a model wearing
+/// the wrong skins. Use `.iter().flatten()` for a plain list.
+pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     let block = FILE_HEADER_LEN + tree_len(data)?;
     let mut at = block;
     let mut out = Vec::new();
@@ -510,6 +520,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<EmbeddedTexture>> {
     {
         let p = &data[node.payload()];
         if p.len() < 0x10 {
+            out.push(None);
             continue;
         }
 
@@ -529,7 +540,11 @@ pub fn textures(data: &[u8]) -> Result<Vec<EmbeddedTexture>> {
             });
         }
         if !matches!(bits_per_pixel, 4 | 8) {
+            // The data is still there and still has to be stepped over, so the
+            // *next* texture stays correctly positioned in the block. Only this
+            // one is unavailable.
             at = end;
+            out.push(None);
             continue;
         }
 
@@ -554,7 +569,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<EmbeddedTexture>> {
             v
         };
 
-        out.push(EmbeddedTexture {
+        out.push(Some(EmbeddedTexture {
             name: node.name,
             width,
             height,
@@ -562,7 +577,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<EmbeddedTexture>> {
             mip_count,
             palette,
             indices,
-        });
+        }));
         at = end;
     }
 
@@ -572,15 +587,19 @@ pub fn textures(data: &[u8]) -> Result<Vec<EmbeddedTexture>> {
 /// Materials of one mesh payload.
 ///
 /// Stride 0x14, starting at `+0x30`. The `u32` at `+0x04` indexes the model's
-/// texture array.
+/// texture array, from [`textures`].
+///
+/// Positional for the same reason as [`textures`]: a batch selects a material by
+/// index, so a material that runs past the payload has to come back as `None`
+/// rather than shorten the list and renumber the ones after it.
 #[must_use]
-pub fn mesh_materials(payload: &[u8]) -> Vec<u32> {
+pub fn mesh_materials(payload: &[u8]) -> Vec<Option<u32>> {
     if payload.len() < 0x30 {
         return Vec::new();
     }
     let count = usize::from(u16_at(payload, 2));
     (0..count)
-        .filter_map(|i| {
+        .map(|i| {
             let at = 0x30 + i * 0x14;
             (at + 8 <= payload.len()).then(|| u32_at(payload, at + 4))
         })
@@ -810,6 +829,66 @@ mod tests {
         data[4..8].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
         let nodes = nodes(&data).expect("walk");
         assert_eq!(nodes.len(), 1);
+    }
+
+    /// A texture this build cannot decode must hold its place, because materials
+    /// name a texture by its ordinal. Dropping it renumbers every later one, and
+    /// the symptom is a model wearing the wrong skins rather than an error.
+    #[test]
+    fn an_undecodable_texture_keeps_its_slot() {
+        // Three Texture nodes, the middle one at an unsupported 16bpp. Each
+        // carries a 16-byte payload declaring a 4-byte palette and 4 texels.
+        let mut tree: Vec<u8> = Vec::new();
+        for bpp in [8u8, 16, 8] {
+            tree.extend(CLASS_TEXTURE.to_le_bytes());
+            tree.extend(0x20u16.to_le_bytes());
+            tree.extend(0u16.to_le_bytes());
+            tree.extend(0x10u32.to_le_bytes()); // payload length
+            tree.extend(0u32.to_le_bytes()); // no children
+            tree.extend([0u8; 0x10]); // name area
+            // payload: 1x4 pixels, the given depth, 4-byte clut, 4 texels
+            tree.extend(1u16.to_le_bytes());
+            tree.extend(4u16.to_le_bytes());
+            tree.push(bpp);
+            tree.push(1); // mip count
+            tree.extend([0u8, 0]);
+            tree.extend(4u32.to_le_bytes());
+            tree.extend(4u32.to_le_bytes());
+        }
+
+        let mut data = Vec::new();
+        data.extend(6u32.to_le_bytes());
+        data.extend((tree.len() as u32).to_le_bytes());
+        data.extend((3u32 * 8).to_le_bytes());
+        data.extend(MAGIC);
+        data.extend(tree);
+        // Three palette-and-texel blocks, distinguishable by their first byte.
+        for tag in [0x11u8, 0x22, 0x33] {
+            data.extend([tag, 0, 0, 255]); // one palette entry
+            data.extend([0u8; 4]); // texels
+        }
+
+        let slots = textures(&data).expect("textures");
+        assert_eq!(slots.len(), 3, "one slot per Texture node");
+        assert!(slots[1].is_none(), "16bpp is not decodable here");
+
+        // The third texture must have read *its own* block, which only happens
+        // if the undecodable one still advanced the cursor.
+        let third = slots[2].as_ref().expect("third texture");
+        assert_eq!(third.palette[0], [0x33, 0, 0, 255]);
+        let first = slots[0].as_ref().expect("first texture");
+        assert_eq!(first.palette[0], [0x11, 0, 0, 255]);
+    }
+
+    #[test]
+    fn a_truncated_material_keeps_its_slot() {
+        // material_count says two, but the payload only holds one.
+        let mut payload = vec![0u8; 0x30 + 0x14];
+        payload[2..4].copy_from_slice(&2u16.to_le_bytes());
+        payload[0x30 + 4..0x30 + 8].copy_from_slice(&7u32.to_le_bytes());
+
+        let materials = mesh_materials(&payload);
+        assert_eq!(materials, vec![Some(7), None]);
     }
 
     /// Every combination the game's stride calculator can reach.
