@@ -70,6 +70,10 @@ view *ARGS:
 wad *ARGS:
     cargo run -q -p oag-tools --bin oag-wad -- {{ARGS}}
 
+# Rebuild the WAD entry-name candidate list from a disc image
+mine-names image:
+    python3 scripts/mine-names.py {{image}}
+
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
 build-allegrex *ARGS:

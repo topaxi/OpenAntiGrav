@@ -108,7 +108,16 @@ just wad list data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
 just wad tags data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
 
 # Actually look at the assets
-just view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
+just view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FEData.wad
+
+# Recover entry names, then list an archive with them
+just mine-names data/images/pulse-psp-usa.chd
+just wad list data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
+    --names data/extracted/psp/names.txt
+
+# Render a ship
+just view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
+    --mesh 'Data\Ships\Feisar\Ship.vex' --screenshot /tmp/ship.png
 ```
 
 `oag-view` opens a window; left and right browse, escape quits. Add
@@ -131,6 +140,12 @@ data/        your disc images and extracted data (gitignored)
 
 More crates arrive as their milestone opens; the full intended shape is in
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md).
+
+## Handover
+
+[`HANDOVER.md`](HANDOVER.md) records what the repository does not: work in
+flight, what was deliberately deferred and why, which findings are
+independently verified versus single-source, and the traps that cost time.
 
 ## Documentation
 
