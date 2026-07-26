@@ -12,6 +12,8 @@
 //! GPU. If it draws the right picture, every layer beneath it is right.
 
 mod assets;
+mod mesh;
+mod mesh_render;
 mod offscreen;
 
 use anyhow::{Context, Result};
@@ -50,10 +52,33 @@ struct Cli {
     /// Which asset the screenshot uses.
     #[arg(long, default_value_t = 0)]
     index: usize,
+
+    /// Render a `.vex` model instead of textures, by its name in the archive.
+    #[arg(long)]
+    mesh: Option<String>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Some(name) = &cli.mesh {
+        let model = mesh::load(&cli.archive, name)?;
+        println!(
+            "{}: {} meshes, {} vertices, {} triangles, radius {:.2}",
+            model.label,
+            model.mesh_count,
+            model.vertices.len(),
+            model.indices.len() / 3,
+            model.radius
+        );
+        let path = cli
+            .screenshot
+            .clone()
+            .context("--mesh currently requires --screenshot")?;
+        mesh_render::capture(&model, &path, 960, 720)?;
+        println!("wrote {}", path.display());
+        return Ok(());
+    }
 
     let assets = assets::load(&cli.archive, cli.names.as_deref())?;
     println!("{} texture(s) loaded from {}", assets.len(), cli.archive);

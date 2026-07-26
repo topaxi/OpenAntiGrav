@@ -236,7 +236,49 @@ pub struct Batch {
     pub vertices: Vec<Vertex>,
 }
 
+/// GU primitive type for a triangle list.
+pub const PRIM_TRIANGLES: u8 = 3;
+
+/// GU primitive type for a triangle strip.
+pub const PRIM_TRIANGLE_STRIP: u8 = 4;
+
 impl Batch {
+    /// Expands the batch into triangles, as index triples into
+    /// [`vertices`](Self::vertices).
+    ///
+    /// Most batches are strips, so a renderer that only understands triangle
+    /// lists needs this. Strips alternate winding every triangle, and getting
+    /// that wrong makes every other face point inwards, which with back-face
+    /// culling on produces a model full of holes.
+    ///
+    /// Returns an empty list for primitive types other than triangles and
+    /// strips; points, lines and sprites are not geometry a mesh viewer can
+    /// use, and none appear in the models examined.
+    #[must_use]
+    pub fn triangles(&self) -> Vec<[u32; 3]> {
+        let count = self.vertices.len();
+        match self.primitive_type {
+            PRIM_TRIANGLES => (0..count / 3)
+                .map(|t| {
+                    let i = (t * 3) as u32;
+                    [i, i + 1, i + 2]
+                })
+                .collect(),
+            PRIM_TRIANGLE_STRIP => (0..count.saturating_sub(2))
+                .map(|i| {
+                    let i = i as u32;
+                    // Flip winding on odd triangles so all faces agree.
+                    if i % 2 == 0 {
+                        [i, i + 1, i + 2]
+                    } else {
+                        [i + 1, i, i + 2]
+                    }
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
     /// Whether this batch is transparent and must be drawn after opaque ones.
     #[must_use]
     pub fn is_transparent(&self) -> bool {
@@ -630,6 +672,57 @@ mod tests {
     fn rejects_a_short_file() {
         assert_eq!(version(&[0u8; 4]), Err(Error::TooShort { got: 4 }));
         assert_eq!(nodes(&[0u8; 4]), Err(Error::TooShort { got: 4 }));
+    }
+
+    fn batch_with(primitive_type: u8, vertex_count: usize) -> Batch {
+        Batch {
+            pass_mask: 1,
+            material_index: 0,
+            primitive_type,
+            vertex_type: 0x100,
+            scale: 1.0,
+            vertices: vec![
+                Vertex {
+                    position: [0.0; 3],
+                    normal: None,
+                    texcoord: None,
+                    colour: None,
+                };
+                vertex_count
+            ],
+        }
+    }
+
+    #[test]
+    fn expands_a_triangle_list() {
+        let t = batch_with(PRIM_TRIANGLES, 9).triangles();
+        assert_eq!(t, vec![[0, 1, 2], [3, 4, 5], [6, 7, 8]]);
+    }
+
+    #[test]
+    fn a_triangle_list_ignores_a_trailing_partial_triangle() {
+        assert_eq!(batch_with(PRIM_TRIANGLES, 8).triangles().len(), 2);
+    }
+
+    #[test]
+    fn expands_a_strip_with_alternating_winding() {
+        // Getting the flip wrong makes every other face point inwards, which
+        // with culling on riddles the model with holes.
+        let t = batch_with(PRIM_TRIANGLE_STRIP, 5).triangles();
+        assert_eq!(t, vec![[0, 1, 2], [2, 1, 3], [2, 3, 4]]);
+    }
+
+    #[test]
+    fn a_strip_shorter_than_a_triangle_yields_nothing() {
+        assert!(batch_with(PRIM_TRIANGLE_STRIP, 2).triangles().is_empty());
+        assert!(batch_with(PRIM_TRIANGLE_STRIP, 0).triangles().is_empty());
+    }
+
+    #[test]
+    fn unsupported_primitives_yield_nothing_rather_than_garbage() {
+        for prim in [0u8, 1, 2, 5, 6] {
+            assert!(batch_with(prim, 12).triangles().is_empty(), "prim {prim}");
+        }
     }
 
     #[test]

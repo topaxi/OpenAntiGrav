@@ -20,6 +20,16 @@
 
 pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4, mat3, mat4, quat, vec2, vec3, vec4};
 
+/// Right-handed camera matrices with a 0..1 depth range.
+///
+/// That range is what wgpu, Metal and DX12 expect; the OpenGL -1..1 convention
+/// would put everything at the wrong depth. Re-exported here so the renderer
+/// takes its math from one place, like everything else.
+pub mod camera {
+    pub use glam::camera::rh::proj::directx::{perspective, perspective_infinite_reverse};
+    pub use glam::camera::rh::view::look_at_mat4 as look_at;
+}
+
 /// Fixed-point helpers.
 ///
 /// The original PSP and PS2 builds are expected to use fixed-point in at least

@@ -1113,6 +1113,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "clap",
+ "oag-core",
  "oag-disc",
  "oag-formats",
  "pollster",

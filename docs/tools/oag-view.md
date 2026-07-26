@@ -42,11 +42,36 @@ from a solid rectangle, so the window composites them over a checkerboard.
 Sampling is **nearest** for magnification. These are small textures, and
 smoothing them would hide exactly the decoding errors this tool exists to find.
 
+## Models
+
+```sh
+oag-view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
+    --mesh 'Data\Ships\Feisar\Ship.vex' --screenshot /tmp/ship.png
+```
+
+Decodes a [`.vex` model](../formats/vex.md), flattens every mesh into one
+vertex and index buffer, and renders it with a depth buffer and a fixed
+two-light rig.
+
+The lighting is not Pulse's. A single light leaves faces pointing away from it
+unreadably black, and the point here is to see the geometry and catch decoding
+errors, not to reproduce the game's look.
+
+**Back-face culling is deliberately off.** Triangle-strip winding is
+reconstructed rather than read from the file, so culling would turn a winding
+mistake into invisible geometry instead of a visible artefact.
+
+The camera frames the model from its own bounding sphere, so any model fills the
+view whatever scale is baked into the file. That means **a wrong scale would
+still look right here** — this is not a check on the scale factor. The
+bounding-box assertion in `oag-formats` is.
+
 ## Limitations
 
-- **Textures only.** [`.vex` geometry](../formats/vex.md) is stored as
-  pre-batched PSP display lists and has to be decoded into portable vertex
-  buffers first. That is the next piece of work.
+- **Models are screenshot-only** for now; the window shows textures. A model
+  needs an orbit camera to be worth putting in a window.
+- **Untextured.** Materials carry a texture index into the model's embedded
+  texture array; wiring that up is the next step.
 - Zlib-compressed WAD entries are skipped; no shipped archive uses them.
 - One texture at a time; there is no atlas or contact-sheet view.
 

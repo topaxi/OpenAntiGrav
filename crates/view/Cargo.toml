@@ -12,6 +12,7 @@ name = "oag-view"
 path = "src/main.rs"
 
 [dependencies]
+oag-core.workspace = true
 oag-disc.workspace = true
 oag-formats.workspace = true
 anyhow.workspace = true
