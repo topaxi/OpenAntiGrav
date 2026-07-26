@@ -4,16 +4,12 @@ State that is **not** inferrable from the repository itself. Everything about
 formats, decisions and the plan lives in [`docs/`](docs/README.md); this file
 covers what a fresh reader would otherwise have to rediscover.
 
-Written 2026-07-26, at commit `8abef86`.
+Written 2026-07-26, at commit `cd1eb21`.
 
 ## In flight
 
-**A front-end agent is building `crates/game/`** (`oag-game`): the boot sequence,
-the intro movie, and the Language Selection screen, driven by the original's
-string-keyed state machine. It was told to own `crates/game/` and the workspace
-`members` list and to leave everything else alone, so if that crate is present
-but unfinished, that is where it stopped. PSP `.PMF` is H.264 plus ATRAC3+, so
-expect the demuxer to land before anything decodes.
+Nothing. `just check` and `just test-data` both pass, 305 tests including the
+ground-truth ones.
 
 ## The code review has landed, and most of it is done
 
@@ -67,10 +63,16 @@ Still open, and each needs a decision rather than a patch:
    it is defensible as format documentation, so the ADR probably needs a stated
    carve-out for structural excerpts rather than the pages needing trimming. That
    is a call for the developer.
-4. **`vex::textures` skipping an unsupported depth shifts every later texture
-   index**, because `mesh.rs` resolves materials positionally into that vector.
-   One skipped texture mis-assigns the rest, and the `filter` in `mesh.rs` turns
-   the overflow into a silent untextured draw.
+4. ~~`vex::textures` skipping an unsupported depth shifts every later texture
+   index.~~ Fixed: both it and `mesh_materials` return one slot per node now.
+
+A lesson from this session worth keeping, since it happened twice. **A recorded
+"correction" can be the wrong direction.** `child_count` was documented as a `u32`
+on the strength of running the decoder against a real file, and it is a `u16`; the
+32-bit read is right on 97% of nodes, which is exactly why it survived. The
+`.vex` frame axis was documented as `up` and points down. In both cases the
+original reading was closer than the correction, and in both cases what settled it
+was an invariant that has to hold arithmetically rather than a more careful look.
 
 ## What is deliberately not done
 
@@ -78,8 +80,9 @@ These are choices, not oversights.
 
 | Not done | Why |
 | --- | --- |
-| Models in the window | `oag-view` shows models and tracks via `--screenshot` only. Putting them in the window needs an orbit camera; the refactor was started and abandoned, so `mesh_render.rs` is offscreen-only. |
-| Track art meshes | `--track` draws the spline ribbon, not the 594 `Mesh` nodes. Assembling those needs `Transform` payloads and the scene hierarchy, which are undecoded. That is the next piece of M1. |
+| Models in the window | `oag-view` shows models and tracks via `--screenshot` only. Putting them in the window needs an orbit camera; `--yaw` and `--pitch` stand in for one. |
+| The game's own font | `oag-game`'s language picker uses a 5x7 font of ours. The `.fnt` metrics decode and validate; the atlas's pixel layout does not, so accented characters are dropped rather than substituted. See [fnt.md](docs/formats/fnt.md). |
+| Audio | ATRAC3+ frames are demuxed and handed over intact. Nothing decodes them. |
 | Batch list B | `oag-view` renders only list A of each mesh, to avoid drawing surfaces twice. That may be dropping a legitimate second pass (reflections, decals). |
 | Transparency sorting | `Glass_ADD.tga` implies additive surfaces that currently draw opaque. The `pass_mask` bits needed are documented in [vex.md](docs/formats/vex.md). |
 | Mip levels | Decoded but unused. |
@@ -195,12 +198,16 @@ which is why nothing should be scored above 94.
 
 ## Where I would go next
 
-1. **Decode `Transform` payloads and the scene hierarchy**, then render a
-   track's art meshes. That finishes M1's exit criterion, and `--track` already
-   proves the spline half of it.
+1. **The `.fnt` atlas layout**, which is the last thing between the front end and
+   the game's own type. It is the same unresolved question as `.mip` swizzling,
+   and solving one probably solves both.
 2. **Confirm the image base** against PPSSPP before more addresses are written
    down.
-3. **Runtime verification** of anything in the physics documentation, which is
+3. **Migrate the three older copies** of the disc-to-blob pipeline onto
+   `oag-assets`, which now exists but is asset access only, not yet the
+   platform-normalising registry [workspace-layout.md](docs/architecture/workspace-layout.md)
+   describes.
+4. **Runtime verification** of anything in the physics documentation, which is
    the M3 harness in miniature and would let the top confidence band mean
    something.
 
