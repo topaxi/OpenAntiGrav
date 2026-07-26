@@ -1,6 +1,8 @@
 # Track data
 
-**Status: structure recovered from static analysis, not implemented.**
+**Status: partially validated.** Class IDs and the `WO Track` header are
+confirmed against a real track file. The in-file layout of the spline arrays is
+**not** yet resolved, so nothing is implemented.
 
 Two things that sound like they should be the same are not:
 
@@ -13,6 +15,46 @@ Two things that sound like they should be the same are not:
 That correction matters. The `.vex` class-ID table lists `section` and `gate`
 alongside `Start Position` and the pads, which invites reading them as the lap
 structure. They are not.
+
+## What a real track contains
+
+`Data\Environments\01_Track\track.vex`, 5.0 MB, 2,071 nodes:
+
+| Node | Count | Payload |
+| --- | ---: | ---: |
+| `Mesh` | 594 | 3.4 MB |
+| `Transform` | 715 | 42 KB |
+| `Texture` | 130 | 16 KB |
+| **`section`** | **64** | 5 KB |
+| `WO Track` | 1 | 79.6 KB |
+| `Speedup Pad` | 9 | 10 KB |
+| `Weapon Pad` | 7 | 12 KB |
+| `Floor Collision` | 1 | 62 KB |
+| `Wall Collision` | 1 | 39 KB |
+| `Mag Floor Collision` | 1 | 9 KB |
+| `Reset Collision` | 1 | 160 B |
+| `Start Position` | 1 | 64 B |
+
+**Exactly 64 sections** — the cap predicted from the 64-bit PVS mask, hit on the
+nose. That is a strong independent confirmation of the mask reading.
+
+Every class ID resolved from the binary matches a node type present here, and
+the counts are sensible: one of each collision surface, a handful of pads.
+
+Tracks are found via the front end, not by guessing names. The plugin
+`Data\Plugins\PI001\Definition.xml` lists every track as
+
+```xml
+<PI_Track name="01_Track">
+  <Values type="Race" soundregister="18" location="Data\Environments\01_Track"
+          availableInZone="true" collisionCageEnabled="true"/>
+</PI_Track>
+```
+
+so the `location` attribute plus the binary's `%s\%strack%s.vex` template gives
+`track.vex`, `track_reversed.vex`, `zone_track.vex` and
+`zone_track_reversed.vex`. Mining those raised name resolution in `Data.wad`
+from 177 to 269 of 1,142 entries.
 
 ## Class IDs
 
@@ -55,6 +97,38 @@ gather buffer. Worth knowing before designing anything that assumes more.
 Confidence **90** for the mask, **85** for the bounding box.
 
 ## `WO Track`: the spline graph
+
+### Confirmed against real data
+
+```
+magic   = 0x574f7464   ("WOtd")
+version = 0x105        one of the versions the loader gates on
+path_count = 2, junction_count = 2
+paths_offset = 0, junctions_offset = 0
+```
+
+The magic and version check out, and two paths with two junctions is exactly
+what a lap with one shortcut looks like.
+
+### The offsets are zero, and the layout is not yet resolved
+
+Both array offsets are **0** in the file, the same pattern as
+[embedded textures](vex.md#embedded-textures): runtime pointers, patched at
+load. So the arrays must be positioned by a rule rather than read.
+
+The obvious rule — header, then paths, then junctions, then points, packed
+sequentially — **does not hold**. Reading that way puts plausible world
+coordinates at the `up` field rather than `pos`, yields a `section_id` of 185 on
+a track with 64 sections, and leaves 30 KB of the payload unaccounted for.
+
+So the structures below are the *runtime* layout, recovered from the loader, and
+the file layout differs by at least an offset and possibly more. Resolving it
+needs either the parser read properly or a scan for where the data actually
+begins.
+
+**This is exactly the check that corrected two errors in the mesh format**, and
+it has done its job again: it caught an unvalidated assumption before anything
+was built on it.
 
 ```c
 struct AiTrackHeader {      // 0x20 bytes
