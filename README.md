@@ -8,8 +8,8 @@ specification: behaviour is studied, documented and then reimplemented with a
 modern architecture. The goal is that gameplay is indistinguishable from the
 original while the code underneath is something a contributor can read.
 
-> **Status: early.** The disc tooling works and the documentation tree is
-> established. There is no playable game yet. See
+> **Status: early.** Disc and archive tooling works, assets decode, and
+> `oag-view` displays them. There is no playable game yet. See
 > [`docs/overview/roadmap.md`](docs/overview/roadmap.md) for where this is going
 > and [`docs/psp/pulse-disc-layout.md`](docs/psp/pulse-disc-layout.md) for what
 > has actually been found so far.
@@ -102,7 +102,17 @@ just unpack sniff data/images/pulse-psp-usa.chd
 
 # Pull the executable out for Ghidra
 just unpack extract data/images/pulse-psp-usa.chd -o data/extracted/psp '*BOOT.BIN'
+
+# Look inside an asset archive, straight from the image
+just wad list data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
+just wad tags data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
+
+# Actually look at the assets
+just view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
 ```
+
+`oag-view` opens a window; left and right browse, escape quits. Add
+`--screenshot out.png` to render one asset headlessly instead.
 
 `just` on its own runs the full check: format, lint and test.
 
@@ -112,8 +122,9 @@ just unpack extract data/images/pulse-psp-usa.chd -o data/extracted/psp '*BOOT.B
 crates/
   core/      deterministic math, fixed-timestep clock, seeded PRNG, state hashing
   disc/      CHD and raw ISO readers, ISO 9660 filesystem walker
-  formats/   asset container identification and parsing
-  tools/     command line tools (oag-unpack)
+  formats/   WAD archives, LZSS, textures, front-end XML, PNG output
+  tools/     command line tools (oag-unpack, oag-wad)
+  view/      wgpu asset viewer
 docs/        the primary deliverable, see docs/README.md
 data/        your disc images and extracted data (gitignored)
 ```

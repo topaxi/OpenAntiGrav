@@ -62,6 +62,14 @@ hash-images:
         printf '%s  %s\n' "$(sha256sum "$img" | cut -d' ' -f1)" "$(basename "$img")"
     done
 
+# View assets straight from a disc image
+view *ARGS:
+    cargo run -q -p oag-view -- {{ARGS}}
+
+# Read a WAD archive
+wad *ARGS:
+    cargo run -q -p oag-tools --bin oag-wad -- {{ARGS}}
+
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
 build-allegrex *ARGS:

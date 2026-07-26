@@ -1,0 +1,25 @@
+[package]
+name = "oag-view"
+description = "Views assets decoded straight from a Wipeout disc image"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "oag-view"
+path = "src/main.rs"
+
+[dependencies]
+oag-disc.workspace = true
+oag-formats.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+wgpu = "30"
+winit = "0.30"
+pollster = "0.4"
+bytemuck = { workspace = true, features = ["derive"] }
+
+[lints]
+workspace = true

@@ -18,7 +18,8 @@ rule here follows from it.
 | `oag-core` | `crates/core` | Deterministic math, fixed-timestep clock, seeded PRNG, state hashing. Depended on by everything. |
 | `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, platform identification. |
 | `oag-formats` | `crates/formats` | Asset container identification and parsing. Currently triage only; parsers land as formats are decoded. |
-| `oag-tools` | `crates/tools` | Command line tools. Currently `oag-unpack`. |
+| `oag-tools` | `crates/tools` | Command line tools: `oag-unpack`, `oag-wad`. |
+| `oag-view` | `crates/view` | wgpu asset viewer. The first crate with a window. |
 
 ## Crates that do not exist yet
 
@@ -28,7 +29,6 @@ crate created before its shape is understood tends to get the wrong shape.
 | Crate | Milestone | Purpose |
 | --- | --- | --- |
 | `oag-assets` | M1 | Runtime asset registry. Normalises PSP and PS2 assets into shared runtime types. |
-| `oag-view` | M1 | Standalone asset viewer. |
 | `oag-trace` | M3 | Trace capture and comparison against the original. |
 | `oag-render` | M4 | wgpu renderer. |
 | `oag-input` | M4 | Input mapping and the per-tick input snapshot. |
