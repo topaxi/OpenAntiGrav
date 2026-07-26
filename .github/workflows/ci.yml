@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: fmt / clippy / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - uses: taiki-e/install-action@nextest
+      - run: cargo nextest run --workspace
+
+  # The simulation must produce bit-identical results on every target we ship.
+  # This job exists from day one on purpose: a determinism gate added later can
+  # only ratify whatever drift already happened.
+  determinism:
+    name: determinism (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Print determinism hashes
+        run: cargo run -q -p oag-core --example determinism_report
+      - name: Assert hashes match the committed reference
+        run: cargo test -p oag-core --release determinism -- --nocapture
+
+  leakage:
+    name: no game content committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert no game content is tracked
+        run: |
+          if git ls-files | grep -Ei '\.(chd|iso|cso|pkg|pbp|wad|elf|prx|self|bin|img)$'; then
+            echo "::error::game content is tracked by git"
+            exit 1
+          fi
+          echo "OK: no game content tracked"

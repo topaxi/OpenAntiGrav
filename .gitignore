@@ -1,0 +1,45 @@
+# Build output
+/target/
+**/*.rs.bk
+
+# All user-supplied game data lives here and is NEVER committed.
+# `/data/*` rather than `/data/`: git cannot re-include a file from inside an
+# excluded directory, so the directory itself must stay traversable.
+/data/*
+!/data/README.md
+
+# Belt-and-braces: even outside /data/, no game content may ever be committed.
+# These patterns exist so a stray copy in the wrong directory still gets caught.
+*.chd
+*.iso
+*.cso
+*.pkg
+*.pbp
+*.umd
+*.wad
+*.elf
+*.prx
+*.self
+*.BIN
+*.bin
+*.img
+*.gcm
+
+# Ghidra. Note: deliberately NOT `*.lock`, which would swallow Cargo.lock.
+# This workspace commits Cargo.lock. Ghidra lock files live inside `*.rep/`.
+*.gpr
+*.rep/
+
+# Emulator state
+*.ppst
+*.p2s
+*.sav
+*.state
+*.state[0-9]
+
+# Editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+!.vscode/extensions.json

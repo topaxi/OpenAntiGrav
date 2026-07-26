@@ -1,0 +1,69 @@
+default: check
+
+# fmt + lint + test, the gate every commit must pass
+check: fmt-check lint test
+
+fmt:
+    cargo fmt --all
+
+fmt-check:
+    cargo fmt --all -- --check
+
+lint:
+    cargo clippy --workspace --all-targets -- -D warnings
+
+test:
+    cargo nextest run --workspace
+
+# Behavioural / ground-truth tests that need data/images populated
+test-data:
+    cargo nextest run --workspace --run-ignored all
+
+build:
+    cargo build --workspace
+
+docs:
+    cargo doc --workspace --no-deps --document-private-items
+
+unpack *ARGS:
+    cargo run -q -p oag-tools --bin oag-unpack -- {{ARGS}}
+
+# Report platform + serial for every image present in data/images/
+unpack-info:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    for img in data/images/*.chd data/images/*.iso; do
+        echo "=== $img ==="
+        cargo run -q -p oag-tools --bin oag-unpack -- info "$img"
+    done
+
+# Full file listing for every image present in data/images/
+unpack-list:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    for img in data/images/*.chd data/images/*.iso; do
+        echo "=== $img ==="
+        cargo run -q -p oag-tools --bin oag-unpack -- list "$img"
+    done
+
+# Record SHA-256 of every source image (paste into docs/reverse-engineering/source-images.md)
+hash-images:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    for img in data/images/*; do
+        [ -f "$img" ] || continue
+        printf '%s  %s\n' "$(sha256sum "$img" | cut -d' ' -f1)" "$(basename "$img")"
+    done
+
+# Assert no game content has ever been committed
+audit-leakage:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if git ls-files | grep -Ei '\.(chd|iso|cso|pkg|pbp|wad|elf|prx|self|bin|img)$'; then
+        echo "FAIL: game content is tracked by git" >&2
+        exit 1
+    fi
+    echo "OK: no game content tracked"
