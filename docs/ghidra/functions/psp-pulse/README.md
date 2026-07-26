@@ -10,7 +10,9 @@ An unencrypted ELF, so no decryption step is needed. See
 | Page | Covers |
 | --- | --- |
 | [WAD subsystem](wad-subsystem.md) | Name hash, lookup, mount, read, LZSS and zlib decoders |
-| [Main loop](main-loop.md) | Frame pacing, timestep, state machine, input |
+| [Main loop](main-loop.md) | Frame pacing, timestep, state machine |
+| [Input](input.md) | Pad polling, the abstract button layer, deadzone and gain |
+| [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |
 
 ## Renames
 
@@ -27,3 +29,5 @@ address name per
 | `0x08807244` | `Game_MainLoop` | 95 | Names itself via a profiler string |
 | `0x08804978` | `Game_UpdateFrame` | 92 | Showed the timestep is variable, not fixed |
 | `0x089411e8` | `Wad_Open` | 93 | Hash plus rotating linear scan |
+| `0x0894f1cc` | `Input_IsPressed` | 92 | Abstract button layer, fully mapped |
+| `0x088ba284` | `Movie_ParseAttributes` | 95 | The front end is XML-driven |

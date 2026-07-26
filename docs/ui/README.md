@@ -10,6 +10,31 @@
 - Progression and unlock screens
 - Text rendering and localisation
 
+## The front end is data-driven
+
+Screens are defined in **XML**, not code. A decompressed PS2 archive entry gave
+the first look at one:
+
+```xml
+<Screen name="Top">
+  <LoadXML>
+    <Values Src="Data\Plugins\grids\grid_00.xml"></Values>
+  </LoadXML>
+</Screen>
+```
+
+Widgets are registered by name with a vtable, and their XML attributes are
+parsed into fields. The `Movie` widget is fully mapped in
+[frontend-video.md](../ghidra/functions/psp-pulse/frontend-video.md), and is the
+worked example of how any widget is wired.
+
+Many front-end XML blobs are stored with element names replaced by two-letter
+codes and a `<code as="Values" bs="Screen" cs="Mode3D">` dictionary element
+mapping them back. That is a size optimisation, not encryption.
+
+Input is bound by **name** (`activate`, `cancel`, `start`), not by button. See
+[input](../ghidra/functions/psp-pulse/input.md).
+
 ## Assets
 
 The front end has its own archives: `FE.wad` and `FEData.wad` on PSP. The first
