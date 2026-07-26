@@ -14,10 +14,21 @@
 //! and it is one problem, not two: resolving it fixes both.
 //!
 //! So the menu draws with the glyphs below until then. They are 5x7, uppercase
-//! only, and mine. Lowercase is folded to uppercase and characters outside the
-//! set are skipped, which means accented names render unaccented: the disc's
-//! `Français` draws as `FRANCAIS`. That is a visible approximation and it is
-//! meant to look like one.
+//! only, and mine. That is a visible approximation and it is meant to look like
+//! one.
+//!
+//! # Folding, and the letter that disappeared
+//!
+//! Lowercase folds to uppercase, and an accented letter with no glyph of its own
+//! folds again to its base letter. The order matters and the second step is the
+//! one that was missing: `to_ascii_uppercase` leaves `ç` untouched, the lookup
+//! then missed, and the character was **skipped entirely**, so the disc's
+//! `Français` came out as `FRANAIS`. Losing a letter changes a word; losing an
+//! accent only misspells it.
+//!
+//! The set now carries the Latin-1 accented capitals these five languages need,
+//! with the base letter compressed into six rows so the diacritic has one. They
+//! read slightly squat next to their neighbours, which is what a 5x7 cell costs.
 
 /// Glyph width in pixels.
 pub const GLYPH_WIDTH: u32 = 5;
@@ -350,6 +361,149 @@ const GLYPHS: &[(char, [&str; 7])] = &[
             "#   #", "   # ", "  #  ", "  #  ", " #   ", "#    ", "#   #",
         ],
     ),
+    // Accented letters, for the language names the disc offers. A 5x7 cell has
+    // no room above a full-height capital, so the base letter is compressed into
+    // six rows and the diacritic takes the row it frees. That is how bitmap
+    // fonts of this size have always done it, and it is why these read as
+    // slightly squat next to their unaccented neighbours.
+    (
+        '\u{c7}', // C-cedilla
+        [
+            " ### ", "#   #", "#    ", "#    ", "#   #", " ### ", "  #  ",
+        ],
+    ),
+    (
+        '\u{d1}', // N-tilde
+        [
+            " # # ", "#   #", "##  #", "# # #", "#  ##", "#   #", "#   #",
+        ],
+    ),
+    (
+        '\u{c1}', // A-acute
+        [
+            "   # ", "  #  ", " # # ", "#####", "#   #", "#   #", "#   #",
+        ],
+    ),
+    (
+        '\u{c0}', // A-grave
+        [
+            " #   ", "  #  ", " # # ", "#####", "#   #", "#   #", "#   #",
+        ],
+    ),
+    (
+        '\u{c2}', // A-circumflex
+        [
+            "  #  ", " # # ", " # # ", "#####", "#   #", "#   #", "#   #",
+        ],
+    ),
+    (
+        '\u{c4}', // A-diaeresis
+        [
+            " # # ", "     ", " # # ", "#####", "#   #", "#   #", "#   #",
+        ],
+    ),
+    (
+        '\u{c9}', // E-acute
+        [
+            "   # ", "#####", "#    ", "#### ", "#    ", "#    ", "#####",
+        ],
+    ),
+    (
+        '\u{c8}', // E-grave
+        [
+            " #   ", "#####", "#    ", "#### ", "#    ", "#    ", "#####",
+        ],
+    ),
+    (
+        '\u{ca}', // E-circumflex
+        [
+            "  #  ", " # # ", "#####", "#### ", "#    ", "#    ", "#####",
+        ],
+    ),
+    (
+        '\u{cb}', // E-diaeresis
+        [
+            " # # ", "#####", "#    ", "#### ", "#    ", "#    ", "#####",
+        ],
+    ),
+    (
+        '\u{cd}', // I-acute
+        [
+            "   # ", " ### ", "  #  ", "  #  ", "  #  ", "  #  ", " ### ",
+        ],
+    ),
+    (
+        '\u{cc}', // I-grave
+        [
+            " #   ", " ### ", "  #  ", "  #  ", "  #  ", "  #  ", " ### ",
+        ],
+    ),
+    (
+        '\u{ce}', // I-circumflex
+        [
+            "  #  ", " # # ", " ### ", "  #  ", "  #  ", "  #  ", " ### ",
+        ],
+    ),
+    (
+        '\u{cf}', // I-diaeresis
+        [
+            " # # ", " ### ", "  #  ", "  #  ", "  #  ", "  #  ", " ### ",
+        ],
+    ),
+    (
+        '\u{d3}', // O-acute
+        [
+            "   # ", " ### ", "#   #", "#   #", "#   #", "#   #", " ### ",
+        ],
+    ),
+    (
+        '\u{d2}', // O-grave
+        [
+            " #   ", " ### ", "#   #", "#   #", "#   #", "#   #", " ### ",
+        ],
+    ),
+    (
+        '\u{d4}', // O-circumflex
+        [
+            "  #  ", " # # ", " ### ", "#   #", "#   #", "#   #", " ### ",
+        ],
+    ),
+    (
+        '\u{d6}', // O-diaeresis
+        [
+            " # # ", " ### ", "#   #", "#   #", "#   #", "#   #", " ### ",
+        ],
+    ),
+    (
+        '\u{da}', // U-acute
+        [
+            "   # ", "#   #", "#   #", "#   #", "#   #", "#   #", " ### ",
+        ],
+    ),
+    (
+        '\u{d9}', // U-grave
+        [
+            " #   ", "#   #", "#   #", "#   #", "#   #", "#   #", " ### ",
+        ],
+    ),
+    (
+        '\u{db}', // U-circumflex
+        [
+            "  #  ", " # # ", "#   #", "#   #", "#   #", "#   #", " ### ",
+        ],
+    ),
+    (
+        '\u{dc}', // U-diaeresis
+        [
+            " # # ", "     ", "#   #", "#   #", "#   #", "#   #", " ### ",
+        ],
+    ),
+    (
+        '\u{df}', // sharp s, which German uppercases to SS but the disc writes as one
+        [
+            " ##  ", "#  # ", "#  # ", " ##  ", "#   #", "#   #", "###  ",
+        ],
+    ),
 ];
 
 /// Where a glyph sits in the atlas.
@@ -413,15 +567,53 @@ impl Atlas {
         }
     }
 
-    /// The cell for `ch`, folding case and skipping anything unknown.
+    /// The cell for `ch`, folding case and then accents.
+    ///
+    /// Two folds, in order. Case first, for the whole of Latin-1 rather than
+    /// just ASCII: `to_ascii_uppercase` leaves `ç` alone, and the lookup then
+    /// misses and the character vanishes. That is how `Français` came out as
+    /// `FRANAIS`.
+    ///
+    /// Then, if the accented glyph is missing, the **base letter** stands in, so
+    /// an unknown accent costs its diacritic rather than the whole letter.
+    /// Dropping a letter changes a word; dropping an accent only spells it
+    /// badly.
     #[must_use]
     pub fn cell(&self, ch: char) -> Option<Cell> {
-        let upper = ch.to_ascii_uppercase();
-        let index = GLYPHS.iter().position(|(c, _)| *c == upper)?;
+        // `to_uppercase` can yield more than one char (ß becomes SS); take the
+        // single-char case and leave the rest to the accent fold.
+        let mut upper = ch.to_uppercase();
+        let folded = match (upper.next(), upper.next()) {
+            (Some(c), None) => c,
+            _ => ch,
+        };
+
+        let find = |c: char| GLYPHS.iter().position(|(g, _)| *g == c);
+        let index = find(folded).or_else(|| find(base_letter(folded)))?;
         Some(Cell {
             x: index as u32 * CELL,
             y: 0,
         })
+    }
+}
+
+/// The unaccented letter a Latin-1 character reduces to.
+///
+/// A last resort for a character the glyph set does not carry, so that a missing
+/// accent does not take its letter with it.
+#[must_use]
+pub fn base_letter(ch: char) -> char {
+    match ch {
+        '\u{c0}'..='\u{c5}' => 'A',
+        '\u{c7}' => 'C',
+        '\u{c8}'..='\u{cb}' => 'E',
+        '\u{cc}'..='\u{cf}' => 'I',
+        '\u{d1}' => 'N',
+        '\u{d2}'..='\u{d6}' | '\u{d8}' => 'O',
+        '\u{d9}'..='\u{dc}' => 'U',
+        '\u{dd}' => 'Y',
+        '\u{df}' => 'S',
+        other => other,
     }
 }
 
@@ -480,15 +672,29 @@ mod tests {
         assert_eq!(atlas.cell('a'), atlas.cell('A'));
     }
 
+    /// This test used to assert the opposite, and the opposite was the bug: a
+    /// cedilla with no glyph took its `c` with it, so `Français` measured one
+    /// glyph short and drew as `FRANAIS`.
     #[test]
-    fn unknown_characters_are_skipped_not_substituted() {
+    fn a_missing_glyph_never_costs_a_whole_letter() {
         let atlas = Atlas::build();
-        assert_eq!(atlas.cell('\u{e7}'), None, "no cedilla in this font");
-        // "Français" loses one glyph rather than gaining a placeholder.
+        assert!(atlas.cell('\u{e7}').is_some(), "c-cedilla must resolve");
         assert_eq!(
-            measure(&atlas, "Francais") - measure(&atlas, "Français"),
-            6.0
+            measure(&atlas, "Francais"),
+            measure(&atlas, "Français"),
+            "the accented and unaccented spellings occupy the same width"
         );
+    }
+
+    /// Characters genuinely outside a Latin alphabet are still skipped. There is
+    /// no sensible base letter for them and inventing a placeholder box would be
+    /// worse than a gap.
+    #[test]
+    fn characters_outside_latin_are_still_skipped() {
+        let atlas = Atlas::build();
+        for ch in ['\u{3042}', '\u{4e2d}', '\u{444}'] {
+            assert_eq!(atlas.cell(ch), None, "{ch:?} has no base letter");
+        }
     }
 
     #[test]
@@ -503,5 +709,76 @@ mod tests {
         let atlas = Atlas::build();
         assert!(atlas.cell(' ').is_some());
         assert_eq!(measure(&atlas, "A B"), 18.0);
+    }
+}
+
+#[cfg(test)]
+mod fold_tests {
+    use super::*;
+
+    /// The bug the user saw: a letter, not just its accent, went missing.
+    #[test]
+    fn accented_letters_are_never_dropped() {
+        let atlas = Atlas::build();
+        for name in ["Français", "Español", "Português", "Türkçe", "Íslenska"] {
+            for ch in name.chars() {
+                assert!(
+                    atlas.cell(ch).is_some(),
+                    "{name:?}: {ch:?} has no cell, so it would vanish from the screen"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_language_names_measure_their_full_length() {
+        let atlas = Atlas::build();
+        for name in ["Français", "Español", "Italiano", "Deutsch", "English"] {
+            let expected = name.chars().count() as u32 * (GLYPH_WIDTH + 1);
+            assert_eq!(
+                measure(&atlas, name),
+                expected as f32,
+                "{name:?} must measure every character, or it draws off-centre"
+            );
+        }
+    }
+
+    #[test]
+    fn case_folds_beyond_ascii() {
+        let atlas = Atlas::build();
+        // The accented pair share one glyph, and both resolve.
+        assert_eq!(atlas.cell('ç'), atlas.cell('Ç'));
+        assert_eq!(atlas.cell('ñ'), atlas.cell('Ñ'));
+        assert_eq!(atlas.cell('é'), atlas.cell('É'));
+    }
+
+    /// An accent we do not draw must cost the accent, not the letter.
+    #[test]
+    fn an_unknown_accent_falls_back_to_its_base_letter() {
+        let atlas = Atlas::build();
+        // A-ring is not in the set; it must land on 'A' rather than vanish.
+        assert_eq!(atlas.cell('Å'), atlas.cell('A'));
+        assert_eq!(atlas.cell('å'), atlas.cell('A'));
+        assert_eq!(atlas.cell('Ø'), atlas.cell('O'));
+        assert_eq!(base_letter('Ç'), 'C');
+        assert_eq!(base_letter('Z'), 'Z');
+    }
+
+    /// Every accented glyph must still leave its base letter recognisable.
+    #[test]
+    fn accented_glyphs_keep_ink_below_their_diacritic() {
+        for (ch, rows) in GLYPHS {
+            if (*ch as u32) < 0xc0 {
+                continue;
+            }
+            let ink: usize = rows[2..]
+                .iter()
+                .map(|r| r.bytes().filter(|&b| b == b'#').count())
+                .sum();
+            assert!(
+                ink >= 6,
+                "glyph {ch:?} has only {ink} ink below its diacritic, which will not read as a letter"
+            );
+        }
     }
 }

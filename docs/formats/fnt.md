@@ -123,3 +123,19 @@ terminator, so it may be a version marker instead.
   are white with varying alpha, which reads like an antialiasing ramp, but three
   mid entries are opaque colours that a font should not need.
 - `+0x14`.
+
+## Until the atlas is readable
+
+`oag-game` draws with a 5x7 font of its own, and how it *fails* matters as much
+as how it draws. An accented letter with no glyph used to be skipped, which cost
+the letter and not just the accent: the disc's `Français` came out as `FRANAIS`.
+
+The fold is now two steps, in order. Case first, over the whole of Latin-1 rather
+than ASCII, because `to_ascii_uppercase` leaves `ç` untouched and the lookup then
+misses. Then, for an accented letter with no glyph, the **base letter** stands in.
+Losing a letter changes a word; losing an accent only misspells it.
+
+The set carries the accented capitals these five languages need, with the base
+letter compressed into six of the seven rows so the diacritic has one. They read
+slightly squat, which is what a 5x7 cell costs, and it is one more reason to
+finish decoding the real atlas.

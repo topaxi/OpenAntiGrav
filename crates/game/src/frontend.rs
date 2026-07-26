@@ -479,10 +479,17 @@ impl Frontend {
             if body.is_empty() {
                 continue;
             }
+            let scale = text.scale.max(0.5);
             out.push(Draw::Text {
                 x: text.x,
-                y: text.y,
-                scale: text.scale.max(0.5),
+                // Nudged into the viewport. The XML's coordinates are absolute
+                // within the real screen's widget tree, and we do not apply
+                // parent offsets, so a title authored near the top edge lands
+                // slightly above it and draws with its top row cut off. Clamping
+                // is a viewer's correction, in the same spirit as `lighten`
+                // below, not a claim about the game's layout.
+                y: text.y.max(1.0 * scale),
+                scale,
                 // The XML's title colour is black on a black backdrop, because
                 // the real screen sits on the menu's own lit background. Nothing
                 // draws that yet, so the colour is lifted rather than silently
