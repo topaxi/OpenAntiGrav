@@ -4,7 +4,7 @@ Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse PSP, UCUS-98712), image base
 `0x08804000`.
 
 Covers the boot intro sequence, which is the first vertical slice worth
-building. **Names are proposals, not applied.**
+building. **The names here are applied**, from [names.tsv](names.tsv).
 
 ## Pulse drives `sceMpeg` directly
 
@@ -17,7 +17,8 @@ mirror. The playback loop is the game's own, and it is fully visible.
 
 The `.lib.stub` table is at `0x08a774d0` (38 entries of 20 bytes). No symbols
 exist, so every thunk was resolved from NIDs and cross-checked against call-site
-arity.
+arity. Those NIDs are now checked against `SHA-1(name)` directly, which
+[import stubs](imports.md) does for the whole table.
 
 `sceMpeg` thunk base `0x08a76eec`, with the two easily-transposed entries:
 
@@ -40,7 +41,7 @@ plus `USB_MIC` and `NP_DRM`. Note `sceUtilityLoadAvModule` is **not** imported.
 A raw `sceMpeg` wrapper, **embedded at `+0x94` inside the Movie widget** rather
 than allocated separately.
 
-| Address | Proposed name | Conf |
+| Address | Name | Conf |
 | --- | --- | ---: |
 | `0x08914858` | `MoviePlayer_Create` | 90 |
 | `0x089138bc` | `MoviePlayer_Open` | 88 |
@@ -76,7 +77,7 @@ and `+0xb4` stream ids, `+0xbc` and `+0xfc` video and audio access units,
 ## The Movie widget is XML-driven
 
 Registered as `"Movie"` by `0x088ba8c8` with vtable `0x08acdacc`. The attribute
-parser is `0x088ba284`, confidence **95**:
+parser is `Movie_ParseAttributes` at `0x088ba284`, confidence **95**:
 
 | XML attribute | Field | Meaning |
 | --- | --- | --- |
@@ -121,10 +122,10 @@ The player never reads the pad. The skip lives in the intro **state's** update,
 `0x088d7e1c`:
 
 ```c
-if (Input_IsPressed(g_Input, 0xe, 0)) {   // 0xe = START, a bit index
+if (Input_IsPressed(g_input, 0xe, 0)) {   // 0xe = START, a bit index
     StateMachine_Fire(state->devPubRedirect);
     state->devPubRedirect = 0;
-    Input_ConsumePress(g_Input, 0xe);
+    Input_ConsumePress(g_input, 0xe);
 }
 ```
 
@@ -164,8 +165,8 @@ state (`0x088e3938`), which starts playback immediately on entry.
   update was decompiled.
 - Where `libmp3.prx` is loaded. The string at `0x08a8b200` is referenced only
   from a data table at `0x08ac2318`, which was not decoded.
-- The `sceKernelLoadModule` thunk. `ModuleMgrForUser` stubs occupy
-  `0x08a7735c`-`0x08a77393` but were not individually mapped.
+- ~~The `sceKernelLoadModule` thunk~~: `0x08a7738c`, one of the six
+  `ModuleMgrForUser` stubs resolved by NID in [import stubs](imports.md).
 - The exact GU texture state in the render path.
 - Whether the parser requires a `Values` child element or accepts attributes
   directly on `<Movie>`.

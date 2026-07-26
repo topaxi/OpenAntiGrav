@@ -26,9 +26,12 @@
 *.gcm
 
 # Ghidra. Note: deliberately NOT `*.lock`, which would swallow Cargo.lock.
-# This workspace commits Cargo.lock. Ghidra lock files live inside `*.rep/`.
+# This workspace commits Cargo.lock. A project opened in the repository root
+# leaves its lock beside the `.gpr`, not inside `*.rep/`, and that lock records
+# the developer's hostname and username, hence the explicit pattern.
 *.gpr
 *.rep/
+/OpenAntiGrav.lock*
 
 # Emulator state
 *.ppst

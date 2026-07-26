@@ -8,18 +8,18 @@ The timing conclusions and their consequences are in
 [ADR-0007](../../../architecture/adr/0007-fixed-timestep-vs-original.md). This
 page records where things live.
 
-**Names are proposals, not applied.** See
+**The names here are applied**, from [names.tsv](names.tsv). See
 [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md).
 
 ## The loop
 
-`0x08807244`, identified by the literal `"Main Game Loop"` at `0x08a785d0`
-handed to the profiler immediately before the loop. Confidence **95**: a
-function that names itself is about as good as static evidence gets.
+`Game_MainLoop` at `0x08807244`, identified by the literal `"Main Game Loop"` at
+`0x08a785d0` handed to the profiler immediately before the loop. Confidence
+**95**: a function that names itself is about as good as static evidence gets.
 
 Per iteration, in order:
 
-| Address | Proposed name | Role | Conf |
+| Address | Name | Role | Conf |
 | --- | --- | --- | ---: |
 | stub `0x08a77114` | `sceKernelDelayThread(100)` | 100 us yield | 95 |
 | `0x08804978` | `Game_UpdateFrame` | measure delta, step the scene graph | 92 |
@@ -38,9 +38,15 @@ VTimer named `"main_timer"` whose handler calls
 `sceKernelRotateThreadReadyQueue(0)`. That is a scheduler-fairness watchdog and
 **not** a simulation tick; mistaking it for one would be an easy error.
 
+`Game_Bootstrap` is five calls long and every one of them is an import stub, so
+there is nothing to misread: `sceKernelUSec2SysClock(10000)`,
+`sceKernelCreateVTimer("main_timer")`, `sceKernelSetVTimerHandler`,
+`sceKernelStartVTimer`, then `Game_MainLoop`. Confidence **90**, since the name
+is an interpretation of a function that only sets up a timer and enters the loop.
+
 ## Other loops
 
-| Address | Proposed name | Pacing | Conf |
+| Address | Name | Pacing | Conf |
 | --- | --- | --- | ---: |
 | `0x0890b52c` | `Loading_ThreadMain` | own thread, `vcount + 2` = 30 Hz | 88 |
 | `0x0893fb3c` | `Utility_DialogLoop` | 1 vblank plus swap | 82 |
@@ -52,7 +58,7 @@ The loading screen runs on its own thread and drives its animation from
 
 **Not a switch on an integer.** It is a string-keyed hierarchical state machine.
 
-| Address | Proposed name | Conf |
+| Address | Name | Conf |
 | --- | --- | ---: |
 | `0x0889123c` | `StateMachine_TransitionTo` | 88 |
 | `0x08890ce4` | `StateMachine_FindState` | 75 |
@@ -83,30 +89,34 @@ enumerated by string search rather than by walking the registration table.
 
 ## Globals
 
-| Address | Proposed name |
-| --- | --- |
-| `0x08b30f00` | `g_Game` |
-| `0x08abf5d4` | `g_Display` |
-| `0x08b31784` | `g_StateMachine` |
-| `0x08abfe88` | `g_LastVcount` |
-| `0x08abf5d8` | `g_ForceFixed30_HideHud` (never written) |
-| `0x08abf5d9` | `g_ForceFixed60` (never written) |
-| `0x08abf5cc` | `g_ForceFixed30` (never written) |
-| `g_Display + 0x116c` | `vblanksPerFrame_is1` |
+| Address | Name | Conf |
+| --- | --- | ---: |
+| `0x08b30f00` | `g_game` | 85 |
+| `0x08abf5d4` | `g_display` | 87 |
+| `0x08b31784` | `g_state_machine` | 85 |
+| `0x08abfe88` | `g_last_vcount` | 87 |
+| `0x08abf5d8` | `g_force_fixed_30_hide_hud` (never written) | 88 |
+| `0x08abf5d9` | `g_force_fixed_60` (never written) | 88 |
+| `0x08abf5cc` | `g_force_fixed_30` (never written) | 88 |
+| `g_display + 0x116c` | `vblanks_per_frame_is_1` | 87 |
+
+The scores are those of the mechanism each global belongs to: 85 for the state
+machine and the game object, whose roles come from this page's decompilation, and
+87 to 88 for the presentation and fixed-step globals, which
+[frame pacing](../../../psp/frame-pacing.md) pins to specific constants and
+call sites.
 
 ## Import stubs
 
-Resolved from the `.lib.stub` NID tables at `0x08a774d0`. Worth labelling
-because they anchor everything else:
-
-`0x08a77494` `sceDisplaySetMode`, `0x08a7749c` `sceDisplaySetFrameBuf`,
-`0x08a774a4` `sceDisplayWaitVblankStartCB`, `0x08a774ac` `sceDisplayGetVcount`,
-`0x08a77114` `sceKernelDelayThread`, `0x08a7715c` `sceKernelGetSystemTimeLow`,
-`0x08a7718c` `sceKernelUSec2SysClock`, `0x08a7719c` `sceKernelGetSystemTimeWide`,
-`0x08a771ac` `sceKernelRotateThreadReadyQueue`.
+Every stub this page names is confirmed by NID: `sceKernelDelayThread` at
+`0x08a77114`, `sceKernelGetSystemTimeWide` at `0x08a7719c`,
+`sceKernelRotateThreadReadyQueue` at `0x08a771ac`, and the four `sceDisplay`
+entries at `0x08a77494`-`0x08a774ac`. See
+[import stubs](imports.md), which resolves 306 of the binary's 335.
 
 Only four `sceDisplay` functions are imported, and **`sceDisplayWaitVblankStart`
-(non-callback) is not among them** — only the `CB` variant is used.
+(non-callback) is not among them** — only the `CB` variant is used. That was a
+reading of the stub table; it is now a checked fact.
 
 ## Not determined
 

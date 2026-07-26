@@ -79,6 +79,14 @@ mine-names image:
 build-allegrex *ARGS:
     ./scripts/build-ghidra-allegrex.sh {{ARGS}}
 
+# Resolve the PSP import stubs from the binary's own NID tables
+resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
+    python3 scripts/resolve-psp-imports.py {{boot}} --modules -o data/ghidra/psp-imports.tsv
+
+# Apply every documented symbol name to the open Ghidra program
+apply-names *ARGS: resolve-imports
+    python3 scripts/apply-ghidra-names.py {{ARGS}}
+
 # Assert no game content has ever been committed
 audit-leakage:
     #!/usr/bin/env bash

@@ -29,20 +29,32 @@ documentation page.
 
 ## Subsystem prefixes
 
-Established as analysis proceeds. Current set:
+Established as analysis proceeds. Everything below `Race_` is **in use**; the
+rest are reserved for areas not yet analysed.
 
 | Prefix | Area |
 | --- | --- |
-| `Game_` | Main loop, state machine, global lifecycle |
-| `Ship_` | Craft state and dynamics |
-| `Race_` | Race rules, timing, positions |
-| `Track_` | Track geometry, sections, splines |
-| `Weapon_` | Pickups, projectiles, damage |
-| `Ai_` | Opponent behaviour |
+| `Game_` | Main loop, bootstrap, global lifecycle |
+| `StateMachine_` | The string-keyed state machine itself |
+| `InGame_`, `Demo_`, `Loading_`, `Utility_` | Individual states and their loops |
 | `Input_` | Controller reading and mapping |
 | `Wad_` | Archive access |
-| `Res_` | Resource loading and lifetime |
-| `Render_` | Drawing |
+| `Vfs_` | Device and path resolution beneath the archives |
+| `Lzss_` | The LZSS bitstream decoder |
+| `Resource_` | Resource loading and lifetime |
+| `Vex_` | `.vex` model loading and node trees |
+| `Mesh_`, `Texture_` | Geometry and texture nodes within a model |
+| `Gfx_` | The render manager |
+| `Gu_` | The PSP graphics-unit wrappers, mirroring `sceGu*` |
+| `Collision_`, `CollisionMesh_`, `CollisionNode_` | Queries, per-mesh data, node parsing |
+| `Sap_` | The sweep-and-prune broadphase |
+| `AiTrack_` | The track spline graph, named for its `"AI track data"` resource |
+| `World_` | Track and scene assembly |
+| `Ship_` | Craft state and dynamics |
+| `Movie_`, `MoviePlayer_` | The XML movie widget and its `sceMpeg` wrapper |
+| `Race_` | Race rules, timing, positions |
+| `Weapon_` | Pickups, projectiles, damage |
+| `Ai_` | Opponent behaviour |
 | `Audio_` | Sound and music |
 | `Ui_` | HUD and menus |
 | `Mem_` | Allocation |
@@ -51,6 +63,18 @@ Established as analysis proceeds. Current set:
 
 Add a prefix when a genuinely new area appears, and add it to this table in the
 same change.
+
+`Track_` is deliberately absent: the engine's own name for the spline graph is
+`"AI track data"`, so `AiTrack_` matches the binary rather than inventing a
+tidier word. `Resource_` is spelled out rather than abbreviated to `Res_`.
+
+## Library and import symbols
+
+Recovered standard-library and PSP system functions keep their **real** names:
+`strlen`, `_ctype_`, `zlib_uncompress`, `sceCtrlPeekBufferPositive`. The scheme
+above is for the game's own code. A name that can be checked against an external
+definition is worth more than a consistent one, and pretending `strlen` is
+`Sys_StringLength` would hide that it is checkable at all.
 
 ## Structures
 

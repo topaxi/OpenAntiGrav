@@ -6,7 +6,7 @@ Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse PSP, UCUS-98712), image base
 Small, self-contained, and fully mapped. This is the first subsystem that can be
 reimplemented outright.
 
-**Names are proposals, not applied.** See
+**The names here are applied**, from [names.tsv](names.tsv). See
 [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md).
 
 ## Polling
@@ -67,7 +67,7 @@ Confidence: **92** for the mapping, verified in three independent places (the
 translation, the test, and the XML name parser). `Input_ConsumePress` is **70**,
 inferred from call position rather than decompiled.
 
-## Proposed renames
+## Applied renames
 
 | Address | Name | Conf |
 | --- | --- | ---: |
@@ -76,8 +76,8 @@ inferred from call position rather than decompiled.
 | `0x0894f1cc` | `Input_IsPressed` | 92 |
 | `0x0894f22c` | `Input_ConsumePress` | 70 |
 | `0x0894f2a0` | `Input_ParseButtonName` | 88 |
-| `0x08b059f0` | `g_PadBuffer` | 90 |
-| `0x08b31780` | `g_Input` | 85 |
+| `0x08b059f0` | `g_pad_buffer` | 90 |
+| `0x08b31780` | `g_input` | 85 |
 
 ## For reimplementation
 

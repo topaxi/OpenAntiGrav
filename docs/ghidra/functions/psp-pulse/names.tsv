@@ -1,0 +1,118 @@
+# Applied symbol names for pulse-psp BOOT.BIN (image base 0x08804000).
+#
+# The evidence lives in the page named in the last column; this file exists so
+# the names can be re-applied to a fresh Ghidra database without hand-editing.
+# Run `just apply-names` after importing BOOT.BIN. See ADR-0005: the pages are
+# the record of truth, and scripts/apply-ghidra-names.py checks that every row
+# here still appears in its evidence page before it renames anything.
+#
+# kind is `function` or `data`. Confidence below 70 gets a `_q` suffix applied,
+# below 50 is skipped. Recovered library and import symbols keep their real
+# names rather than the project's Subsystem_VerbNoun scheme.
+#
+# address	kind	name	confidence	evidence
+
+0x08940d0c	function	Wad_HashName	97	wad-subsystem.md
+0x08940cb0	function	Wad_BuildCrcTable	95	wad-subsystem.md
+0x08afbffc	data	g_wad_crc_table	95	wad-subsystem.md
+0x08a90d20	data	_ctype_	93	wad-subsystem.md
+0x0897349c	function	strlen	95	wad-subsystem.md
+0x089411e8	function	Wad_Open	93	wad-subsystem.md
+0x08941e70	function	Wad_MountArchive	90	wad-subsystem.md
+0x08942450	function	Wad_Read	90	wad-subsystem.md
+0x08941874	function	Wad_ParseResidentDirectory	88	wad-subsystem.md
+0x08941484	function	Wad_Close	85	wad-subsystem.md
+0x089410d4	function	Wad_Unmount	85	wad-subsystem.md
+0x08941648	function	Wad_ReadAsyncBegin	78	wad-subsystem.md
+0x0894178c	function	Wad_ReadAsyncWait	75	wad-subsystem.md
+0x08ad3314	data	g_wad_device_vtable	90	wad-subsystem.md
+0x0893e308	function	Vfs_SplitDevicePath	88	wad-subsystem.md
+0x089419d8	function	Lzss_Decode	85	wad-subsystem.md
+0x08941c84	function	Lzss_ReadBits	88	wad-subsystem.md
+0x0894199c	function	Lzss_InitFromMemory	85	wad-subsystem.md
+0x08941960	function	Lzss_InitFromFile	80	wad-subsystem.md
+0x08940efc	function	Wad_DecompressLzssMem	85	wad-subsystem.md
+0x08940eb0	function	Wad_DecompressLzssStream	85	wad-subsystem.md
+0x08940f48	function	Wad_DecompressZlibMem	85	wad-subsystem.md
+0x08940f70	function	Wad_DecompressZlibStream	85	wad-subsystem.md
+0x08956940	function	zlib_uncompress	90	wad-subsystem.md
+0x089545dc	function	zlib_inflateInit_	90	wad-subsystem.md
+0x08b66450	data	g_decompress_staging_buffer	88	wad-subsystem.md
+
+0x08807244	function	Game_MainLoop	95	main-loop.md
+0x088071d8	function	Game_Bootstrap	90	main-loop.md
+0x08804978	function	Game_UpdateFrame	92	main-loop.md
+0x08804ad4	function	Game_RenderFrame	88	main-loop.md
+0x0891e1b8	function	Gfx_PresentFrame	90	main-loop.md
+0x0891e3c0	function	Gfx_FlushRenderManager	78	main-loop.md
+0x0890b52c	function	Loading_ThreadMain	88	main-loop.md
+0x0893fb3c	function	Utility_DialogLoop	82	main-loop.md
+0x0889123c	function	StateMachine_TransitionTo	88	main-loop.md
+0x08890ce4	function	StateMachine_FindState	75	main-loop.md
+0x08812d58	function	InGame_Construct	85	main-loop.md
+0x088130e4	function	InGame_Destruct	85	main-loop.md
+0x08813244	function	InGame_UpdatePauseInput	85	main-loop.md
+0x08818fd8	function	Demo_UpdateAttractMode	80	main-loop.md
+0x08b30f00	data	g_game	85	main-loop.md
+0x08abf5d4	data	g_display	87	main-loop.md
+0x08b31784	data	g_state_machine	85	main-loop.md
+0x08abfe88	data	g_last_vcount	87	main-loop.md
+0x08abf5d8	data	g_force_fixed_30_hide_hud	88	main-loop.md
+0x08abf5d9	data	g_force_fixed_60	88	main-loop.md
+0x08abf5cc	data	g_force_fixed_30	88	main-loop.md
+
+0x0894ebd0	function	Input_ReadAnalog	88	input.md
+0x0894eec4	function	Input_BuildState	90	input.md
+0x0894f1cc	function	Input_IsPressed	92	input.md
+0x0894f22c	function	Input_ConsumePress	70	input.md
+0x0894f2a0	function	Input_ParseButtonName	88	input.md
+0x08b059f0	data	g_pad_buffer	90	input.md
+0x08b31780	data	g_input	85	input.md
+
+0x08934d44	function	Collision_RegisterNodeClasses	90	collision.md
+0x08934a48	function	CollisionNode_ParseChunks	88	collision.md
+0x08818bdc	function	Collision_SegmentTriangle	90	collision.md
+0x08816ac0	function	Collision_RaycastWorld	88	collision.md
+0x0881646c	function	Collision_RaycastMesh	88	collision.md
+0x088304d4	function	Sap_QueryAabb	88	collision.md
+0x08816864	function	Collision_AddContact	86	collision.md
+0x08818540	function	CollisionMesh_BuildSap	85	collision.md
+0x088183e8	function	CollisionMesh_Init	85	collision.md
+0x0881835c	function	CollisionMesh_AvgVertexScalar	84	collision.md
+0x0882f8f4	function	Sap_Init	82	collision.md
+0x0884ae90	function	Ship_HoverFourCorner	80	collision.md
+0x0884a658	function	Ship_HoverTwoPoint	80	collision.md
+0x0884ba0c	function	Ship_UpdateMagLock	78	collision.md
+
+0x08914858	function	MoviePlayer_Create	90	frontend-video.md
+0x089138bc	function	MoviePlayer_Open	88	frontend-video.md
+0x08913fa0	function	MoviePlayer_ParseHeader	88	frontend-video.md
+0x08913a98	function	MoviePlayer_Update	88	frontend-video.md
+0x0891448c	function	MoviePlayer_DecodeVideoStep	88	frontend-video.md
+0x08914364	function	MoviePlayer_DecodeAudioStep	85	frontend-video.md
+0x089145bc	function	MoviePlayer_Shutdown	88	frontend-video.md
+0x08913d34	function	MoviePlayer_IsFinished	85	frontend-video.md
+0x08913e88	function	MoviePlayer_GetCurrentTexture	82	frontend-video.md
+0x08914c78	function	MoviePlayer_ReadThreadMain	85	frontend-video.md
+0x08914fd8	function	MoviePlayer_SoundThreadMain	82	frontend-video.md
+0x088ba284	function	Movie_ParseAttributes	95	frontend-video.md
+
+0x08912b80	function	Vex_LoadModel	90	../../../formats/vex.md
+0x08911670	function	Vex_RelocateNodeTree	85	../../../formats/vex.md
+0x08908b68	function	Vex_FindClassDescriptor	82	../../../formats/vex.md
+0x089372b0	function	Vex_ResolveClassId	75	../../../formats/vex.md
+0x08943330	function	Resource_LoadFile	88	../../../formats/vex.md
+0x08927f28	function	Texture_BindEmbeddedData	86	../../../formats/vex.md
+0x0890fad8	function	Mesh_CompileDisplayLists	84	../../../formats/vex.md
+0x0890c1e4	function	Mesh_EmitDrawArray	90	../../../formats/vex.md
+0x08810e98	function	Gu_DrawArray	92	../../../formats/vex.md
+0x08810598	function	Gu_CallList	90	../../../formats/vex.md
+0x08883794	function	World_LoadTrack	85	../../../formats/vex.md
+0x08843258	function	Ship_LoadModel	87	../../../formats/vex.md
+
+0x0887ce78	function	AiTrack_LocatePosition	90	../../../formats/track.md
+0x0887e464	function	AiTrack_UpdateCursor	90	../../../formats/track.md
+
+# Import stubs are not listed here. They are derived from the binary's own NID
+# tables by scripts/resolve-psp-imports.py, which verifies every name against
+# the NID it must hash to; see imports.md.

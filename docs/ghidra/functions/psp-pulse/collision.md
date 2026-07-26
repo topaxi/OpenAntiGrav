@@ -1,7 +1,7 @@
 # Collision
 
 Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse PSP, UCUS-98712), image base
-`0x08804000`. **Names are proposals, not applied.**
+`0x08804000`. **The names here are applied**, from [names.tsv](names.tsv).
 
 ## All five collision node types are one class
 
@@ -97,7 +97,7 @@ suspension while a magnetic hold takes over. See [physics](../../../physics/READ
 **Reset** is excluded from ordinary raycasts, and a contact with it triggers a
 respawn. Confidence **86**.
 
-## Proposed renames
+## Applied renames
 
 | Address | Name | Conf |
 | --- | --- | ---: |

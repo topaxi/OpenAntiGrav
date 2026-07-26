@@ -11,6 +11,19 @@ Conventions and per-function documentation for the binary analysis work.
 | [Memory maps](memory-maps/README.md) | Address space layouts |
 | [Structures](structures/README.md) | Recovered structure layouts |
 
+## Getting the names back
+
+The database is not committed, so a fresh import has no names in it. One command
+restores them:
+
+```sh
+just apply-names
+```
+
+It reads [names.tsv](functions/psp-pulse/names.tsv) and re-derives the import
+stubs from the binary, then applies both through the MCP bridge. See
+[the rename summary](functions/psp-pulse/README.md#renames).
+
 ## The rule
 
 **Never rename without writing the documentation page.**
@@ -25,8 +38,9 @@ scheme is the [confidence rubric](../reverse-engineering/confidence-rubric.md).
 
 ## Status
 
-Milestone **M2**, not yet started. The conventions exist now so that the first
-function analysed is documented properly rather than retrofitted.
+Milestone **M2**, in progress on the PSP binary. `BOOT.BIN` is analysed with the
+Allegrex module, five subsystems have evidence pages, and **400 symbols are
+applied**. The PS2 executable has not been imported yet.
 
 Both main executables are unencrypted ELF files, so there is no decryption
 barrier to starting:

@@ -14,13 +14,26 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Input](input.md) | Pad polling, the abstract button layer, deadzone and gain |
 | [Collision](collision.md) | Triangle soup, sweep and prune, surface types |
 | [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |
+| [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
 
 ## Renames
 
-**None applied yet.** The pages above carry the evidence and proposed names;
-applying them is a separate step, and anything below 70 confidence keeps its
-address name per
-[ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md).
+**Applied.** 400 symbols: 94 from the pages above, collected in
+[names.tsv](names.tsv), plus 306 import stubs derived from the binary itself.
+
+```sh
+just apply-names        # into whichever program the Ghidra bridge has open
+```
+
+The Ghidra database is not committed, so that command is how a fresh import
+gets the names back.
+[`scripts/apply-ghidra-names.py`](../../../../scripts/apply-ghidra-names.py)
+enforces the two rules of
+[ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md) rather than
+trusting them: it refuses any row whose address and name are not both still on
+its evidence page, and it applies the `_q` suffix below 70 confidence itself.
+
+Nothing in this set scored below 70, so no `_q` names exist yet.
 
 ## Highest-confidence findings
 

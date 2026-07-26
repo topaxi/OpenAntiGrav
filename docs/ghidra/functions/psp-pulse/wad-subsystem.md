@@ -6,19 +6,20 @@ Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse PSP, UCUS-98712), image base
 The format itself is documented in [formats/wad.md](../../../formats/wad.md);
 this page records where it lives in the binary.
 
-**Names below are proposals, not applied.** Per
+**The names below are applied**, from [names.tsv](names.tsv) via
+`just apply-names`. Per
 [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md), applying a
 rename needs a page carrying its evidence; this page is that evidence for the
-subsystem as a whole. Anything under 70 keeps its address name and gains a `_q`
-suffix if renamed at all.
+subsystem as a whole. Anything under 70 would gain a `_q` suffix; nothing here
+does.
 
 ## Hashing
 
-| Address | Proposed name | Conf |
+| Address | Name | Conf |
 | --- | --- | ---: |
 | `0x08940d0c` | `Wad_HashName` | 97 |
 | `0x08940cb0` | `Wad_BuildCrcTable` | 95 |
-| `0x08afbffc` | `g_WadCrcTable` (256 x u32) | 95 |
+| `0x08afbffc` | `g_wad_crc_table` (256 x u32) | 95 |
 | `0x08a90d20` | `_ctype_` (newlib) | 93 |
 | `0x0897349c` | `strlen` | 95 |
 
@@ -53,7 +54,7 @@ exists: 90. That it is ever used: unknown.
 
 ## Lookup and I/O
 
-| Address | Proposed name | Conf |
+| Address | Name | Conf |
 | --- | --- | ---: |
 | `0x089411e8` | `Wad_Open` | 93 |
 | `0x08941e70` | `Wad_MountArchive` | 90 |
@@ -63,7 +64,8 @@ exists: 90. That it is ever used: unknown.
 | `0x089410d4` | `Wad_Unmount` | 85 |
 | `0x08941648` | `Wad_ReadAsyncBegin` | 78 |
 | `0x0894178c` | `Wad_ReadAsyncWait` | 75 |
-| `0x08ad3314` | `g_WadDeviceVtable` | 90 |
+| `0x08ad3314` | `g_wad_device_vtable` | 90 |
+| `0x0893e308` | `Vfs_SplitDevicePath` | 88 |
 
 `Wad_Open` strips a leading separator before hashing, then does a **linear scan
 with a rotating start point**: from `last_hit + 1` to the end, then from 0 to
@@ -106,16 +108,16 @@ So a lookup of `wad:Data\FE\Images\hex_bg.mip` splits at the colon
 
 Selected by **bit 31 of the uncompressed-size field**, in `Wad_Read`:
 
-| Address | Proposed name | Conf |
+| Address | Name | Conf |
 | --- | --- | ---: |
 | `0x089419d8` | `Lzss_Decode` | 85 |
 | `0x08941c84` | `Lzss_ReadBits` | 88 |
-| `0x0894199c` / `0x08941960` | `Lzss_InitFromMemory` / `…FromFile` | 85 / 80 |
-| `0x08940efc` / `0x08940eb0` | `Wad_DecompressLzssMem` / `…Stream` | 85 |
-| `0x08940f48` / `0x08940f70` | `Wad_DecompressZlibMem` / `…Stream` | 85 |
+| `0x0894199c` / `0x08941960` | `Lzss_InitFromMemory` / `Lzss_InitFromFile` | 85 / 80 |
+| `0x08940efc` / `0x08940eb0` | `Wad_DecompressLzssMem` / `Wad_DecompressLzssStream` | 85 |
+| `0x08940f48` / `0x08940f70` | `Wad_DecompressZlibMem` / `Wad_DecompressZlibStream` | 85 |
 | `0x08956940` | `zlib_uncompress` | 90 |
 | `0x089545dc` | `zlib_inflateInit_` | 90 |
-| `0x08b66450` | `g_DecompressStagingBuffer` (4096 B) | 88 |
+| `0x08b66450` | `g_decompress_staging_buffer` (4096 B) | 88 |
 
 **Bit clear: LZSS.** 8192-byte ring buffer, write cursor starting at 1, ring not
 pre-filled. MSB-first flag bits: set means an 8-bit literal, clear means a
