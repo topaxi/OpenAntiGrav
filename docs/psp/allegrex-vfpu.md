@@ -146,8 +146,38 @@ The build emits `WARN 16 NOP constructors found` while compiling
    loader over the generic ELF loader if it offers one: it understands PSP
    relocations and module metadata the generic loader ignores.
 
-Confirm it took effect by disassembling `0x0004bdc0` again (adjusted for the new
-image base). It should read `lv.q` and `sv.q`, not `ldc2` and `sdc2`.
+## Verified before and after
+
+Same bytes, same file, both readings from Ghidra. Addresses differ only by the
+image base (`+0x08804000`).
+
+The dense vector run:
+
+| Bytes | Stock `MIPS:LE:32` | With Allegrex |
+| --- | --- | --- |
+| `9007b0db` | `ldc2 s0, 0x790(sp)` | `lv.q C400, 0x790(sp)` |
+| `8007b1db` | `ldc2 s1, 0x780(sp)` | `lv.q C410, 0x780(sp)` |
+| `4000b0fb` | `sdc2 s0, 0x40(sp)` | `sv.q C400, 0x40(sp)` |
+
+64-bit generic coprocessor transfers, versus 128-bit vector loads and stores
+naming actual VFPU registers.
+
+The arithmetic case is starker. At `0x08814e7c`, bytes `0a888964`:
+
+```
+stock:     daddiu t1, a0, -0x77f6      # a 64-bit integer add the PSP cannot execute
+allegrex:  vdot.t S220, C200, C210     # a 3-component dot product
+```
+
+A 3D dot product was being read as a nonexistent integer instruction. Nothing
+about the stock output looked wrong, which is the entire problem.
+
+Reproduce:
+
+```
+disassemble_bytes start_address=0x0884fdc0 length=48 dry_run=true
+disassemble_bytes start_address=0x08814e7c length=16 dry_run=true
+```
 
 ## Setting the image base
 
@@ -205,14 +235,18 @@ curl -s http://127.0.0.1:8089/get_current_program_info | jq -r '.image_base, .la
 
 ## Status
 
+**Resolved.** The environment is ready for M2.
+
 | Item | State |
 | --- | --- |
 | Allegrex extension | Built, installed, verified |
-| `BOOT.BIN` imported | Yes, via the `PSP Executable (ELF)` loader |
+| `BOOT.BIN` imported | Via the `PSP Executable (ELF)` loader |
 | Processor language | `Allegrex:LE:32:default` |
-| Image base | `0x00000000` - **needs rebasing to `0x08804000`** |
-| Auto-analysis | Not yet run. Rebase first. |
-| GhidraMCP bridge | Working. Auto-discovers over UDS; pass it no arguments. |
+| Image base | `0x08804000` (conventional; confirm against PPSSPP) |
+| Auto-analysis | Complete. **10,683 functions**, 51,549 symbols |
+| VFPU decoding | Verified: `lv.q`, `sv.q`, `vscl.q`, `vdot.t` |
+| GhidraMCP bridge | Connected. Auto-discovers over UDS; pass it no arguments. |
 
-No function has been documented yet, so nothing needs retracting. Fixing both
-issues before the first analysis is the reason to do it now.
+No function had been documented before the fix, so nothing needed retracting.
+That is the only reason this was cheap, and the reason to check a processor
+module is correct before rather than after doing the analysis.

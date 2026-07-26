@@ -54,9 +54,10 @@ mostly readable and is the gate for everything else.
 
 The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 
-- [x] Load `BOOT.BIN` (PSP) into Ghidra. Auto-analysis finds 10,646 functions.
-- [ ] **Install the Allegrex processor module.** Stock Ghidra mis-decodes all
-      26,032 VFPU instructions; see [Allegrex and the VFPU](../psp/allegrex-vfpu.md)
+- [x] Allegrex processor module built and installed; VFPU decoding verified.
+      See [Allegrex and the VFPU](../psp/allegrex-vfpu.md)
+- [x] `BOOT.BIN` (PSP) loaded at base `0x08804000`, analysed: 10,683 functions
+- [ ] Confirm the image base against PPSSPP's module load address
 - [ ] Load `SCES_547.48` (PS2) into Ghidra
 - [ ] Main loop and frame structure
 - [ ] **Confirm the simulation tick rate.** Defaulted to 60 Hz; see
