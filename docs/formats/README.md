@@ -17,9 +17,12 @@ These are the project's actual work.
 
 | Format | Extension | Platforms | Status | Notes |
 | --- | --- | --- | --- | --- |
-| [WAD container](wad.md) | `.wad` | PSP, PS2 | **partial** | Directory structure decoded. Names are hashes; the hash function is unknown. |
-| WAD payloads | - | PSP, PS2 | unknown | Sub-format tags seen inside: `\x01FNT`. Not enumerated. |
-| PS2 music archive | `.wad` | PS2 | unknown | `PS2MUSIC.WAD`. Header `10 00 00 00`, different from the WAD container. |
+| [WAD container](wad.md) | `.wad` | PSP, PS2 | **understood** | Implemented and validated against all nine archives. Entry names are hashes; the hash function is unknown. |
+| [PSP indexed texture](psp-texture.md) | - | PSP | **partial** | Inside WADs. Header, palette and pixels decoded; swizzling unresolved. |
+| PS2 WAD compression | - | PS2 | unknown | 5,861 of 7,200 `WADS2.WAD` entries are compressed, ~2.7x. Algorithm unidentified. |
+| Font | - | PSP | unknown | `\x01FNT` blobs inside WADs. |
+| WAD payloads, other | - | PSP, PS2 | unknown | `03000000`, `06000000` and others in `FE.wad`. Not investigated. |
+| PS2 music archive | `.wad` | PS2 | unknown | `PS2MUSIC.WAD`. Header `10 00 00 00`, **not** the WAD container. |
 | PS2 prerace archive | `.wad` | PS2 | unknown | `PRERACE.WAD`. Header `20 00 00 00`, entropy 0.08. Mostly empty. |
 | IPU video | `.IPF` | PS2 | unknown | Magic `IPUF`. Targets the PS2 Image Processing Unit. |
 

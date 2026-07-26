@@ -11,6 +11,10 @@ rust-version.workspace = true
 name = "oag-unpack"
 path = "src/bin/oag-unpack.rs"
 
+[[bin]]
+name = "oag-wad"
+path = "src/bin/oag-wad.rs"
+
 [dependencies]
 oag-disc.workspace = true
 oag-formats.workspace = true
