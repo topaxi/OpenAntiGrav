@@ -12,7 +12,12 @@ runtime; treat it as a specification to test against, not as truth.
 
 Pure IEEE single precision throughout, scalar FPU plus VFPU. The only integer
 operations in the craft path are pointer arithmetic, loop counters and flag
-masks. Confidence **97**.
+masks. Confidence **92**: an exhaustive negative over the whole craft path,
+every call site consistent, which is exactly the shape of claim decompilation
+is good at settling. Not checked against shipped data and never run under an
+emulator, so per the [rubric](../reverse-engineering/confidence-rubric.md) it
+stays below 95 like the rest of this page; the earlier 97 predated the rubric
+saying explicitly that nothing here has earned the top band.
 
 So [ADR-0002](../architecture/adr/0002-determinism-model.md)'s fallback of
 mirroring a fixed-point format exactly does not apply. Bit-exactness is not

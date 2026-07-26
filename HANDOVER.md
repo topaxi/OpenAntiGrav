@@ -4,12 +4,87 @@ State that is **not** inferrable from the repository itself. Everything about
 formats, decisions and the plan lives in [`docs/`](docs/README.md); this file
 covers what a fresh reader would otherwise have to rediscover.
 
-Written 2026-07-26, at commit `17cc488`.
+Written 2026-07-26, at commit `eb9a30d` plus uncommitted doc changes from this
+session (not yet committed; see below for what they are).
 
 ## In flight
 
-Nothing. `just check` passes 297 tests; `just test-data` adds the 14 ground-truth
-ones that need `data/images/` and passes 311.
+Nothing code-side. `just check` passes 297 tests; `just test-data` adds the 14
+ground-truth ones that need `data/images/` and passes 311. This session touched
+only `docs/`, so those numbers are unchanged.
+
+**This session closed two of the three open items from the previous handover**
+(confidence rescoring, and drafting the ADR-0006 question) and made another
+negative-result pass at the `.fnt` atlas. Details below, in place of the
+previous handover's "still open" list.
+
+1. **Confidence rescoring is done** for the four pages the previous handover
+   named. `formats/wad.md`'s two claims (95, 97) are now 94 each;
+   `formats/psp-texture.md`'s header/palette/layout claim (95) is 94;
+   `formats/vex.md`'s node-tree claim (95) is 94 — all four were data-agreement
+   evidence (an exact arithmetic invariant across many real files), which the
+   rubric caps at 94. `physics/README.md`'s float-vs-fixed-point claim (97) is
+   now **92**: unlike the other three it has no cross-file data agreement, so
+   it does not get the data-agreement ceiling, but it is an exhaustive negative
+   over the whole craft path with every call site consistent — exactly what the
+   rubric's 85-94 band describes — and scoring it below its neighbours on the
+   same page (90, 91) for weaker evidence would have been worse than leaving it
+   at 97. Each page now states which evidence class it is and why, the way
+   `lzss.md` already did. No other pages were touched — the remaining
+   90/91/85/86/82 scores on `physics/README.md` and the 92/90 on `vex.md` were
+   not in scope and were left alone.
+2. **The `.fnt` atlas layout is still not resolved**, but four more transform
+   families are now ruled out and recorded in `fnt.md`: column-major reading, a
+   four-bitplane decomposition, a Morton/Z-order curve inside blocks, and an
+   alpha-weighted re-scoring of the whole prior block-swizzle sweep (in case the
+   boolean "index nonzero" oracle was drowning in antialiasing dust rather than
+   the transform being wrong — it wasn't; the ranking barely moved). None of
+   this narrows the search. The exploration script lives at
+   `/home/topaxi/.claude/jobs/f60165c3/tmp/fnt/` in this session's job
+   directory, not in the repo — it is throwaway, not a fixture, so it was not
+   committed. Worth knowing if picking this up again: the palette entries this
+   session decoded for the "ink" indices (12-15) are not monotonic in alpha for
+   at least two of the five fonts, which is either meaningless or a clue about
+   how the index-to-palette mapping works; not chased further because it is a
+   different question from the pixel layout.
+3. **ADR-0006's carve-out is drafted, not applied.** A survey of `docs/`
+   (below) found no raw asset-content dumps — no texture, audio or model bytes
+   — only header/magic-number hex, path and name strings, and one small set of
+   decoded palette-alpha values, all used as evidence for a specific claim
+   rather than as content. A candidate carve-out sentence:
+
+   > A worked example limited to what a specific claim needs — a header's raw
+   > bytes, a handful of resolved path strings, a small decoded palette — is
+   > format documentation, not game content, provided it could not stand in for
+   > (or be reassembled into) the original asset.
+
+   This is a proposal for the developer to accept, reject or rewrite, not a
+   change to the ADR. The survey, by file:
+   - `formats/psp-texture.md`: a 16-byte header hex comparison, two decoded
+     RGBA-quad sequences from real UI textures. Minimal.
+   - `formats/wad.md`: one 16-byte header hex dump, a 3-row hash worked-example
+     table, and disc paths quoted inline throughout. Mostly minimal; the
+     accumulation of real paths across the page is the closest thing to a
+     borderline case here.
+   - `formats/pmf.md`: standard MPEG PES marker bytes (not game-specific) plus
+     3 real movie filenames. Minimal.
+   - `formats/vex.md`: a 16-row table of `sprintf` path templates recovered
+     from the binary, plus 7 literal team-name strings. Borderline — small but
+     a real string-table excerpt.
+   - `formats/fnt.md`: a 5-row table of real font filenames and dimensions.
+     Minimal.
+   - `formats/fexml.md`, `formats/track.md`: short real XML snippets
+     illustrating the shortening scheme. Minimal.
+   - `formats/handling-stats.md`: explicitly reproduces no values. Compliant
+     already.
+   - `psp/pulse-disc-layout.md`, `ps2/pulse-disc-layout.md`: full real
+     file/directory listings (names, sizes, entropy) and a few header hex
+     sequences. The most extensive real-path content on the site, but it is
+     directory metadata, not payload — arguably the strongest test case for
+     wording the carve-out precisely.
+   - `ghidra/functions/psp-pulse/wad-subsystem.md`,
+     `frontend-video.md`: real paths quoted as hash-verification examples.
+     Minimal.
 
 ## The code review has landed, and most of it is done
 
@@ -49,20 +124,12 @@ Still open, and each needs a decision rather than a patch:
    module was written to match the decoder, so a wrong field order would pass
    both. The consumption check above is now the suite's only independent oracle,
    and it constrains the layout without pinning it.
-2. **The confidence scores systematically claim 95+ for work nobody has run.** I
-   amended the [rubric](docs/reverse-engineering/confidence-rubric.md) to say
-   what data validation actually buys (ceiling 94) instead of leaving the top band
-   decorative, and scored the track work by it. I did **not** rescore other
-   people's pages: `formats/wad.md` (95 and 97),
-   `formats/psp-texture.md` (95), `formats/vex.md` (95) and `physics/README.md`
-   (97 on a negative claim from static reading). `formats/lzss.md` is done: it is
-   94 now, for the reason the rubric gives.
-3. **ADR-0006's "no game content" rule is applied inconsistently.** Several
-   format pages quote real bytes, palettes and string tables, which the ADR as
-   written forbids since it explicitly rejected the de-minimis argument. Most of
-   it is defensible as format documentation, so the ADR probably needs a stated
-   carve-out for structural excerpts rather than the pages needing trimming. That
-   is a call for the developer.
+2. ~~The confidence scores systematically claim 95+ for work nobody has run.~~
+   Resolved this session for the four named pages; see "In flight" above for
+   the new scores and why.
+3. ~~ADR-0006's "no game content" rule is applied inconsistently.~~ A carve-out
+   is drafted this session; see "In flight" above. Landing it is still a call
+   for the developer.
 4. ~~`vex::textures` skipping an unsupported depth shifts every later texture
    index.~~ Fixed: both it and `mesh_materials` return one slot per node now.
 
@@ -224,8 +291,16 @@ which is why nothing should be scored above 94.
 
 1. **The `.fnt` atlas layout.** No longer urgent for correctness, since the
    picker reads properly with our own glyphs, but it is the last thing between the
-   front end and Pulse's own type. It is the same unresolved question as `.mip`
-   swizzling, and solving one probably solves both.
+   front end and Pulse's own type. `fnt.md` called this "the same unresolved
+   problem as `.mip` swizzling"; narrowed this session, not resolved.
+   `psp-texture.md` only answers whether `.mip` pixel data is swizzled *in the
+   file* (no), and says outright that whether the PSP swizzles at upload time
+   is still open. So `.mip`'s file-storage answer is not a lead for `.fnt`, but
+   the two could still be the same upload-time transform — that question is
+   open on both sides, not closed. This session also ruled out four more
+   transform families for `.fnt` itself (column-major, bitplanes, Morton order,
+   and an alpha-weighted oracle) without finding it; see `fnt.md` for the full
+   list of what has been tried.
 2. **Confirm the image base** against PPSSPP before more addresses are written
    down.
 3. **Migrate the three older copies** of the disc-to-blob pipeline onto

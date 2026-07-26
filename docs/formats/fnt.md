@@ -1,8 +1,14 @@
 # Bitmap fonts (`.fnt`)
 
 **Status: partial.** The metrics are resolved and validated across all five
-fonts. The glyph atlas's **pixel layout is not**, and it is the same unresolved
-problem as [PSP texture swizzling](psp-texture.md).
+fonts. The glyph atlas's **pixel layout is not**: read as documented it is
+noise, and no transform tried so far recovers glyphs from it. [PSP texture
+swizzling](psp-texture.md) answers only whether `.mip` pixel data is swizzled
+*in the file*: it is not. That page leaves open whether the PSP swizzles at
+upload time, which this project's renderer never needed to answer since it
+never uploads to real VRAM. So `.mip`'s resolved question is not a lead for
+`.fnt` here, but it does not rule out the two being the same underlying
+upload-time transform either — that is still open, on both sides.
 
 Not implemented. Documented first so that whoever resolves the swizzle can
 implement both at once. Until then the front end draws with
@@ -102,6 +108,19 @@ is noise in horizontal bands. Tried and rejected:
   coherence of ink. The best score was 0.80 and 0.68 respectively, where a
   correct decode should be near 1.
 - Row de-interleaving at every stride from 2 to 32.
+- Column-major (transposed) reading, and a four-bitplane decomposition (each of
+  the 4 index bits as its own `w*h/8`-byte plane). Both score below the plain
+  linear read.
+- A Morton (Z-order) curve inside each block, block sizes 4 to 32 in both
+  dimensions. No better than the block-swizzle sweep above.
+- Re-scoring the whole block-swizzle sweep with ink weighted by the palette's
+  alpha channel instead of "index nonzero", on the theory that the boolean
+  oracle was drowning in low-alpha antialiasing dust. The ranking barely moves
+  (best 0.41 against a 0.39 linear baseline) and the best candidate still
+  renders as noise, so the boolean oracle was not the problem.
+
+None of this narrows the search; it rules out two more transform families
+(bitplanes, Morton order) without finding the right one.
 
 Two things make this worth a second look rather than a rewrite. The `<Font>`
 elements carry `borderExtendPixels="3"` and text widgets carry `RealGlow`, so ink

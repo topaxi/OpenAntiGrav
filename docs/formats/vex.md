@@ -65,7 +65,11 @@ misses it. The header's two sizes are exact:
 The class-ID to name table is at `0x08ab2370`, stride 12
 (`{u32 id, char *name, ptr}`), with names at `0x08a84d40`.
 
-Confidence: **95**, validated against real models.
+Confidence: **94**, validated against real models: `child_count` as a `u16`
+sums to exactly one less than the node count, ships and tracks alike, which is
+an exact arithmetic invariant rather than a plausible reading. Per the
+[rubric](../reverse-engineering/confidence-rubric.md), data agreement caps at
+94, even across many real files; the earlier 95 predated the rubric saying so.
 
 ## Node types
 

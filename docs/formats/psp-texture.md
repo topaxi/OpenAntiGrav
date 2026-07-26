@@ -85,10 +85,15 @@ alpha channel.
 Channel order is RGBA, confirmed by the logo rendering in the correct cyan
 rather than a channel-swapped orange.
 
-Confidence: **95** for header, palette, pixel layout and channel order. The 4-bit
-nibble order (low nibble first) is **85**: the only 4bpp sample is a symmetric
-hexagon, which a mirrored decode would not visibly disturb, though its gradient
-bands are smooth where a swapped decode would comb them.
+Confidence: **94** for header, palette, pixel layout and channel order. The
+stored byte count matches `w * h * bpp / 8` exactly, and decoding renders
+recognisable, previously-unseen artwork (the Pulse logo, an icon sheet) rather
+than noise. Per the [rubric](../reverse-engineering/confidence-rubric.md), that
+is data agreement rather than a runtime trace, so it caps at 94; the earlier 95
+predated the rubric saying so. The 4-bit nibble order (low nibble first) is
+**85**: the only 4bpp sample is a symmetric hexagon, which a mirrored decode
+would not visibly disturb, though its gradient bands are smooth where a swapped
+decode would comb them.
 
 ## Open questions
 

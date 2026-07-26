@@ -60,8 +60,13 @@ orderings against all 193 entries of `WADSP.WAD`:
 | `+0x08` = stored, `+0x0c` = uncompressed | 2 / 193 |
 | `+0x08` = uncompressed, `+0x0c` = stored | **193 / 193** |
 
-Confidence: **95**. Verified across two independent archives on the compressed
-platform, and consistent with all seven uncompressed archives.
+Confidence: **94**. Verified across two independent archives on the compressed
+platform, and consistent with all seven uncompressed archives: an exact
+arithmetic invariant (the offset chain) resolved between the two orderings on
+193/193 real entries. Per the
+[rubric](../reverse-engineering/confidence-rubric.md), that is data agreement,
+not a runtime trace, so it caps at 94; the earlier 95 predated the rubric
+saying so.
 
 ### Worked example
 
@@ -147,7 +152,12 @@ There is also an escape hatch: a name of exactly `#` plus eight **uppercase** he
 digits is taken as a literal hash. No such string exists in the binary, so it is
 probably tools-only.
 
-Confidence: **97**.
+Confidence: **94**. Recovered from decompilation (`Wad_HashName`) and checked
+against 176 real entries across four archives, including the mixed-case
+normalisation case above. Per the
+[rubric](../reverse-engineering/confidence-rubric.md), a hash that reproduces
+correctly across many real names is data agreement, not a runtime trace, so it
+caps at 94; the earlier 97 predated the rubric saying so.
 
 ```sh
 oag-wad hash 'Data\FE\Images\hex_bg.mip'
