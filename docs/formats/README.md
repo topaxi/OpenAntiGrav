@@ -20,7 +20,8 @@ These are the project's actual work.
 | [WAD container](wad.md) | `.wad` | PSP, PS2 | **understood** | Implemented and validated against all nine archives. Entry names are hashes; the hash function is unknown. |
 | [PSP indexed texture](psp-texture.md) | `.mip` | PSP | **understood** | Implemented; renders correctly. Not swizzled. |
 | [LZSS](lzss.md) | - | PS2 | **understood** | Implemented and verified against all 6,053 compressed entries. |
-| [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | **partial** | **The** 3D format: ships, tracks, everything. Maya export. Node tree read; track nodes undecoded. |
+| [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | **understood** | **The** 3D format. Node tree, geometry and embedded textures implemented. |
+| [Track data](track.md) | - | PSP | **partial** | Spline graph, racing line, PVS sections. Structure recovered, not implemented or validated. |
 | [Front-end XML](fexml.md) | `.xml` | PSP, PS2 | **understood** | Name-shortened XML. Screens, widgets, handling stats. |
 | [Handling stats](handling-stats.md) | `.xml` | PSP | **understood** | Ship tuning is data, not code. |
 | Font | - | PSP | unknown | `\x01FNT` blobs inside WADs. |

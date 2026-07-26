@@ -302,9 +302,9 @@ Names proposed, not applied. See
 
 ## Not determined
 
-- **The `section` and `WO Track` node payloads**, which hold the spline control
-  points, lap and checkpoint ordering, and the AI racing line. This is the
-  highest-value remaining item for both M1 and M5.
+- ~~The `section` and `WO Track` node payloads~~ — recovered, see
+  [track data](track.md). Note the correction: `section` is a **visibility
+  partition**, and the spline lives in `WO Track`.
 - **Primitive type values.** No code inspects them; the byte goes straight to
   `sceGuDrawArray`. Observed 3 (triangles) and 4 (strip) in real models. A strip
   needs degenerate triangles to join, since the GE has no primitive restart.

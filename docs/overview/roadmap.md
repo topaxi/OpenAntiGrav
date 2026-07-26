@@ -41,8 +41,10 @@ Decode the containers, then the assets inside them.
 - [x] [Front-end XML](../formats/fexml.md) and [handling stats](../formats/handling-stats.md)
 - [~] [`.vex` scene format](../formats/vex.md): node tree read; track nodes and
       geometry decoding outstanding
-- [ ] Decode `.vex` mesh batches into portable vertex buffers
-- [ ] Track `section`/`gate` payloads: spline, checkpoints, AI line
+- [x] `.vex` mesh batches decoded into portable vertex buffers, with textures
+- [x] [Track data](../formats/track.md): spline graph, racing line, PVS sections
+      recovered from the binary; **not yet validated against a real track file**
+- [ ] Parse a real track and render it
 - [ ] Audio: the music and effect banks
 - [ ] `oag-view`, a standalone asset viewer
 
@@ -159,8 +161,8 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 
 | Question | Blocks | Tracked in |
 | --- | --- | --- |
-| What do `section` and `gate` nodes contain? Spline, checkpoints, AI line. | M1, M5 | [`.vex`](../formats/vex.md) |
-| How do `.vex` mesh batches encode vertices? | M1, M4 | [`.vex`](../formats/vex.md) |
+| Where is lap counting? `gate` has no runtime class at all. | M5 | [track data](../formats/track.md) |
+| How is a ship assigned a grid slot? | M5 | [track data](../formats/track.md) |
 | What does the per-vertex collision scalar mean? | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
 | What are the coordinate conventions? Handedness, units, angles. | M4 | [physics](../physics/README.md) |
