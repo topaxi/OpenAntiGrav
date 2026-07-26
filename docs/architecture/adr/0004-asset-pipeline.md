@@ -104,6 +104,44 @@ deliberate, documented choice rather than a side effect. Normalisation that
 quietly improves filtering or gamma is the failure mode to watch, because it is
 invisible in code review and obvious side by side with the original.
 
+### Content we ship ourselves is the opposite problem
+
+H.264 is ubiquitous, so it is tempting to reach for it as *our* video format too.
+The reasoning that makes transcoding right for the originals does not carry over,
+and it is worth writing down why before someone re-derives it.
+
+For an original asset, an external tool costs nothing extra. The user must supply
+the content regardless, so a one-time conversion is friction on top of "bring
+your own disc", and it buys us out of a decoder we would otherwise have to
+reproduce.
+
+For an asset **we** ship, we choose the format. Choosing one the engine cannot
+read natively re-imports the dependency the amendment above just removed: either
+`ffmpeg` becomes a hard requirement for a first-run experience we control, or an
+H.264 decoder goes back into the workspace. That is paying the cost without the
+reason for it.
+
+What is actually decodable in process, without a C dependency:
+
+| Format | Pure-Rust decoder | Notes |
+| --- | --- | --- |
+| AV1 | `rav1d`, a maintained `dav1d` port | Royalty-free. Software decode only on older GPUs, which is fine for seconds of footage |
+| MJPEG | `zune-jpeg`, `jpeg-decoder`, both mature | Trivial to decode, poor ratio |
+| H.264 | none production-grade | `openh264` and `ffmpeg-next` are both C |
+
+So:
+
+- **H.264 stays the master and interchange format** for anything authored. Every
+  tool emits it, hardware decodes it, and it is what a contributor will hand us.
+- **If we ever ship real video, it is AV1**, decoded by `rav1d`. Royalty-free
+  matters for a project under MIT OR Apache-2.0: shipping H.264-encoded content
+  and a decoder raises a patent question that AV1 does not.
+- **Prefer not to ship video at all.** The only content we would realistically
+  own is a title or attribution card, and that is a texture and a fade: a shader,
+  no codec, no cache, no dependency, and it scales to any resolution instead of
+  being frozen at 480x272. Video is the wrong tool for the one thing here that is
+  ours.
+
 ## Consequences
 
 **Good.** No legal exposure. One code path downstream of the loader. The PS2
