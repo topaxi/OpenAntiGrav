@@ -193,25 +193,60 @@ Confidence: **90** for `Mesh_EmitDrawArray` (`0x0890c1e4`) emitting
 
 ## Embedded textures
 
-Textures are appended after the node tree rather than living in separate WAD
-entries, and are bound by `Texture_BindEmbeddedData` (`0x08927f28`):
+Textures live in a block appended after the node tree, described by
+`Texture` nodes (class **`0x3c1`**) whose payload is:
 
 ```text
-+0x00  u16  width
-+0x02  u16  height
-+0x04  u8   bits_per_pixel
-+0x05  u8   mip_count
-+0x06  u8   flags
-+0x08  u32  clut_size
-+0x0c  u32  texel_size
-+0x10  ptr  texels
-+0x14  ptr  clut
++0x00  u16   width
++0x02  u16   height
++0x04  u8    bits_per_pixel      4 or 8
++0x05  u8    mip_count
++0x06  u8    flags
++0x07  u8    texture index
++0x08  u32   clut_size
++0x0c  u32   texel_size
++0x10  ptr   texels              zero at rest, patched at load
++0x14  ptr   clut                zero at rest, patched at load
++0x38  char  runtime asset path, e.g. Data\Ships\Feisar\Textures\texture1.tga
 ```
 
-That corroborates the [standalone `.mip` layout](psp-texture.md) and answers one
-of its open questions: **`unk_0x06` is a mip count**, and a texture with mips
-carries more pixel data than `w * h * bpp / 8`. The `.mip` size arithmetic
-therefore holds only for `mip_count == 1`, which is every texture examined.
+The node *name* carries the original artist path, for example
+`Z:/WipeoutPSP/X2/Data/Ships/Feisar/Textures/engine_general.tga`.
+
+**Nothing points at the pixel data.** Both pointer fields are zero in the file.
+Instead each texture's palette and texels are packed back to back, in node
+order, starting immediately after the tree:
+
+```text
+for each Texture node, in order:
+    clut   (clut_size bytes, RGBA8888)
+    texels (texel_size bytes, base level then mips)
+```
+
+The sizes add up **exactly** to the header's declared texture length, which is
+what confirms the packing: for the Feisar ship, eight textures totalling 47,296
+bytes against a declared 47,296.
+
+Only the base level is needed for display; the mips follow it.
+
+This also answers an open question from the
+[standalone `.mip` layout](psp-texture.md): the byte after `bits_per_pixel` is a
+**mip count**, so the `.mip` size arithmetic holds only when it is 1, which is
+true of every standalone texture examined but not of these.
+
+## Materials
+
+At mesh payload `+0x30`, stride `0x14`, count at `+0x02`:
+
+```text
++0x00  u16  flags
++0x04  u32  texture index into the model's texture array
++0x08  u32  second texture index, for the 0x2000 extra pass
+```
+
+A batch's `material_index` selects an entry here, which then selects a texture.
+The mapping is confirmed semantically as well as structurally: the mesh named
+`underbrake_flashrightShape` resolves to `colours_flashing_GLOW.tga`.
 
 ## Path templates
 

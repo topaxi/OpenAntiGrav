@@ -13,6 +13,22 @@ pub struct GpuVertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub colour: [f32; 4],
+    pub texcoord: [f32; 2],
+}
+
+/// A run of indices sharing one texture.
+pub struct DrawCall {
+    pub range: std::ops::Range<u32>,
+    /// Index into [`Model::textures`], or `None` for untextured.
+    pub texture: Option<usize>,
+}
+
+/// A texture decoded from the model.
+pub struct ModelTexture {
+    pub label: String,
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
 }
 
 /// A model flattened into one vertex and one index buffer.
@@ -21,6 +37,10 @@ pub struct Model {
     pub label: String,
     pub vertices: Vec<GpuVertex>,
     pub indices: Vec<u32>,
+    /// One per material run, in draw order.
+    pub draws: Vec<DrawCall>,
+    /// Textures embedded in the model.
+    pub textures: Vec<ModelTexture>,
     /// Centre of the bounding box, so the camera can frame the model.
     pub centre: [f32; 3],
     /// Radius of the bounding sphere.
@@ -81,8 +101,26 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
     }
 
     let nodes = vex::nodes(data).context("walking the node tree")?;
+
+    let textures: Vec<ModelTexture> = vex::textures(data)
+        .context("extracting textures")?
+        .into_iter()
+        .map(|t| ModelTexture {
+            label: t
+                .name
+                .as_deref()
+                .and_then(|n| n.rsplit(['/', '\\']).next())
+                .unwrap_or("?")
+                .to_string(),
+            width: u32::from(t.width),
+            height: u32::from(t.height),
+            rgba: t.to_rgba(),
+        })
+        .collect();
+
     let mut vertices: Vec<GpuVertex> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
+    let mut draws: Vec<DrawCall> = Vec::new();
     let mut mesh_count = 0;
 
     for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
@@ -91,8 +129,11 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
 
         // List A is the ordinary render list; B is a second pass. Taking only A
         // avoids drawing the same surface twice.
+        let materials = vex::mesh_materials(payload);
+
         for batch in vex::mesh_batches(payload, 0).context("decoding batches")? {
             let base = vertices.len() as u32;
+            let first_index = indices.len() as u32;
             for v in &batch.vertices {
                 vertices.push(GpuVertex {
                     position: v.position,
@@ -107,11 +148,26 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
                             f32::from(c[3]) / 255.0,
                         ]
                     }),
+                    texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
                 });
             }
             for tri in batch.triangles() {
                 indices.extend([base + tri[0], base + tri[1], base + tri[2]]);
                 contributed = true;
+            }
+
+            let last_index = indices.len() as u32;
+            if last_index > first_index {
+                // The material index selects an entry in this mesh's material
+                // list, which in turn indexes the model's texture array.
+                let texture = materials
+                    .get(usize::from(batch.material_index))
+                    .map(|&t| t as usize)
+                    .filter(|&t| t < textures.len());
+                draws.push(DrawCall {
+                    range: first_index..last_index,
+                    texture,
+                });
             }
         }
         if contributed {
@@ -145,6 +201,8 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
         label: label.to_string(),
         vertices,
         indices,
+        draws,
+        textures,
         centre,
         radius,
         mesh_count,

@@ -50,6 +50,9 @@ pub const MAGIC: &[u8; 4] = b"VEXX";
 /// Class ID of a `Mesh` node.
 pub const CLASS_MESH: u32 = 0x125;
 
+/// Class ID of a `Texture` node.
+pub const CLASS_TEXTURE: u32 = 0x3c1;
+
 /// Divisor for `s16` positions and the `f32` scale.
 ///
 /// The game's own offline direction uses 32767; 32768 matches the hardware
@@ -447,6 +450,138 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
     }
 
     Ok(out)
+}
+
+/// A texture embedded in the file.
+#[derive(Debug, Clone)]
+pub struct EmbeddedTexture {
+    /// Original asset path, from the node name.
+    pub name: Option<String>,
+    /// Width in pixels.
+    pub width: u16,
+    /// Height in pixels.
+    pub height: u16,
+    /// 4 or 8.
+    pub bits_per_pixel: u8,
+    /// Number of mip levels present. Only the base level is decoded.
+    pub mip_count: u8,
+    /// Palette, RGBA8888.
+    pub palette: Vec<[u8; 4]>,
+    /// Base-level pixel indices, one per pixel.
+    pub indices: Vec<u8>,
+}
+
+impl EmbeddedTexture {
+    /// Expands the base level to RGBA8888.
+    #[must_use]
+    pub fn to_rgba(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.indices.len() * 4);
+        for &i in &self.indices {
+            let c = self
+                .palette
+                .get(i as usize)
+                .copied()
+                .unwrap_or([255, 0, 255, 255]);
+            out.extend_from_slice(&c);
+        }
+        out
+    }
+}
+
+/// Extracts the textures appended after the node tree.
+///
+/// Their data is not pointed at from anywhere: the header's pointer fields are
+/// zero at rest and patched at load. Instead each texture's palette and texels
+/// are packed back to back in node order, starting immediately after the tree.
+///
+/// That the sizes add up exactly to the header's declared texture length is
+/// what confirms the packing, and this function checks it.
+pub fn textures(data: &[u8]) -> Result<Vec<EmbeddedTexture>> {
+    let block = FILE_HEADER_LEN + tree_len(data)?;
+    let mut at = block;
+    let mut out = Vec::new();
+
+    for node in nodes(data)?
+        .into_iter()
+        .filter(|n| n.class_id == CLASS_TEXTURE)
+    {
+        let p = &data[node.payload()];
+        if p.len() < 0x10 {
+            continue;
+        }
+
+        let width = u16_at(p, 0);
+        let height = u16_at(p, 2);
+        let bits_per_pixel = p[4];
+        let mip_count = p[5];
+        let clut_size = u32_at(p, 8) as usize;
+        let texel_size = u32_at(p, 12) as usize;
+
+        let end = at + clut_size + texel_size;
+        if end > data.len() {
+            return Err(Error::OutOfBounds {
+                what: "embedded texture",
+                end,
+                len: data.len(),
+            });
+        }
+        if !matches!(bits_per_pixel, 4 | 8) {
+            at = end;
+            continue;
+        }
+
+        let palette: Vec<[u8; 4]> = data[at..at + clut_size]
+            .chunks_exact(4)
+            .map(|c| [c[0], c[1], c[2], c[3]])
+            .collect();
+
+        // Only the base level; mips follow it and are not needed for viewing.
+        let pixels = usize::from(width) * usize::from(height);
+        let base_bytes = pixels * usize::from(bits_per_pixel) / 8;
+        let texels = &data[at + clut_size..end];
+
+        let indices = if bits_per_pixel == 8 {
+            texels.get(..base_bytes).unwrap_or(texels).to_vec()
+        } else {
+            let mut v = Vec::with_capacity(pixels);
+            for &b in texels.get(..base_bytes).unwrap_or(texels) {
+                v.push(b & 0x0f);
+                v.push(b >> 4);
+            }
+            v
+        };
+
+        out.push(EmbeddedTexture {
+            name: node.name,
+            width,
+            height,
+            bits_per_pixel,
+            mip_count,
+            palette,
+            indices,
+        });
+        at = end;
+    }
+
+    Ok(out)
+}
+
+/// Materials of one mesh payload.
+///
+/// Stride 0x14, starting at `+0x30`. The `u32` at `+0x04` indexes the model's
+/// texture array.
+#[must_use]
+pub fn mesh_materials(payload: &[u8]) -> Vec<u32> {
+    if payload.len() < 0x30 {
+        return Vec::new();
+    }
+    let count = usize::from(u16_at(payload, 2));
+    (0..count)
+        .filter_map(|i| {
+            let at = 0x30 + i * 0x14;
+            (at + 8 <= payload.len()).then(|| u32_at(payload, at + 4))
+        })
+        .collect()
 }
 
 /// Decodes the batches of one mesh payload.

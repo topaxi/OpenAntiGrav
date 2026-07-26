@@ -11,17 +11,21 @@ struct Uniforms {
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(1) @binding(0) var albedo: texture_2d<f32>;
+@group(1) @binding(1) var albedo_sampler: sampler;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) colour: vec4<f32>,
+    @location(3) texcoord: vec2<f32>,
 };
 
 struct VertexOutput {
     @builtin(position) clip: vec4<f32>,
     @location(0) normal: vec3<f32>,
     @location(1) colour: vec4<f32>,
+    @location(2) texcoord: vec2<f32>,
 };
 
 @vertex
@@ -33,6 +37,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // without needing an inverse transpose.
     out.normal = (uniforms.model * vec4<f32>(in.normal, 0.0)).xyz;
     out.colour = in.colour;
+    out.texcoord = in.texcoord;
     return out;
 }
 
@@ -44,5 +49,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let light = 0.15 + 0.75 * key + 0.25 * fill;
 
-    return vec4<f32>(in.colour.rgb * light, 1.0);
+    let texel = textureSample(albedo, albedo_sampler, in.texcoord);
+    // Vertex colour modulates the texture, as the GE's texture-env does.
+    return vec4<f32>(texel.rgb * in.colour.rgb * light, 1.0);
 }

@@ -83,7 +83,7 @@ pub fn capture(model: &Model, path: &Path, width: u32, height: u32) -> Result<()
         view_formats: &[],
     });
 
-    let (pipeline, bind_group, vertex_buffer, index_buffer) =
+    let (pipeline, bind_group, vertex_buffer, index_buffer, texture_binds) =
         build(&device, &queue, model, format)?;
 
     let uniforms = matrices(model, width as f32 / height as f32, 0.9, 0.35);
@@ -158,7 +158,14 @@ pub fn capture(model: &Model, path: &Path, width: u32, height: u32) -> Result<()
         pass.set_bind_group(0, &bind_group, &[]);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        pass.draw_indexed(0..model.indices.len() as u32, 0, 0..1);
+
+        // One draw per material run. Slot 0 is the white fallback, so a texture
+        // index of n binds slot n + 1.
+        for draw in &model.draws {
+            let slot = draw.texture.map_or(0, |t| t + 1);
+            pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+        }
     }
     encoder.copy_texture_to_buffer(
         colour.as_image_copy(),
@@ -197,6 +204,7 @@ type Built = (
     wgpu::BindGroup,
     wgpu::Buffer,
     wgpu::Buffer,
+    Vec<wgpu::BindGroup>,
 );
 
 fn build(
@@ -224,9 +232,31 @@ fn build(
         }],
     });
 
+    let texture_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("albedo"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("mesh"),
-        bind_group_layouts: &[Some(&layout)],
+        bind_group_layouts: &[Some(&layout), Some(&texture_layout)],
         immediate_size: 0,
     });
 
@@ -240,7 +270,7 @@ fn build(
                 array_stride: std::mem::size_of::<GpuVertex>() as u64,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
-                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4
+                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2
                 ],
             })],
             compilation_options: Default::default(),
@@ -286,6 +316,64 @@ fn build(
     });
     queue.write_buffer(&index_buffer, 0, bytemuck::cast_slice(&model.indices));
 
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("albedo"),
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        ..Default::default()
+    });
+
+    let make = |width: u32, height: u32, rgba: &[u8], label: &str| {
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            texture.as_image_copy(),
+            rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(label),
+            layout: &texture_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        })
+    };
+
+    // A white 1x1 stands in for untextured draws, so the shader needs no branch.
+    let mut texture_binds = vec![make(1, 1, &[255, 255, 255, 255], "white")];
+    for t in &model.textures {
+        texture_binds.push(make(t.width, t.height, &t.rgba, &t.label));
+    }
+
     let placeholder = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("placeholder"),
         size: std::mem::size_of::<Uniforms>() as u64,
@@ -301,5 +389,11 @@ fn build(
         }],
     });
 
-    Ok((pipeline, bind_group, vertex_buffer, index_buffer))
+    Ok((
+        pipeline,
+        bind_group,
+        vertex_buffer,
+        index_buffer,
+        texture_binds,
+    ))
 }
