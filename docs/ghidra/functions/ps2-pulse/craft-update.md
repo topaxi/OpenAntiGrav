@@ -233,6 +233,13 @@ axis at `craft+0x180`, component by component:
 Every component is a **positive** multiple of `up`. There is no negation on any
 of the three and the packed `w` lane is zero. Confidence **92**.
 
+`Ship_HoverTwoPoint`'s call site (`0x0015bd00`..`0x0015bd38`) is the same shape
+instruction for instruction: one scalar magnitude, three plain `mul.S` against
+the source vector's components, the same `pextlw` repack, no negation on any
+lane. Its source vector was **not** confirmed to be the up axis, so this is
+recorded as "same idiom, no per-component sign" rather than as a second full
+check. The resolution below does not depend on it either way.
+
 ### The integrator rotates the basis by `-w` - the answer
 
 `Body_Integrate` builds a skew matrix from the vector at `body+0x150` and the

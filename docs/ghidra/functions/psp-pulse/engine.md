@@ -256,7 +256,8 @@ and now has a measured constraint to satisfy: whatever the accumulator holds,
 supporting it.** The PS2 integrator has been read at instruction level: it
 advances the basis rows by `e' = e x w`, not the textbook `e' = w x e`. So the
 engine's angular velocity is the negative of the physical one, the accumulators
-hold torque in that same negated convention, and the two "contradictory" terms
+carry that same negated sign - whichever of torque or angular acceleration they
+turn out to hold, which is still open above - and the two "contradictory" terms
 - the `-400` surface alignment and the hover spring's `F x r` - are **correct as
 written** rather than in need of flipping. Nothing compensates them because
 nothing has to.
