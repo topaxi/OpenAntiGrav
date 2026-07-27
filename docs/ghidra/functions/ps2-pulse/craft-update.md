@@ -7,8 +7,11 @@ This page exists to answer a specific question that
 [docs/physics/README.md](../../../physics/README.md) could not settle from the
 PSP binary alone: the surface-alignment torque's gain and sign, the roll damping
 beside it, and whether the sub-step count rescues a pair that reads as
-marginally unstable. It answers two of those, contradicts the third, and leaves
-the sign question open in a more useful shape than it was.
+marginally unstable. It answers two of those and contradicts the third, and it
+now also answers the sign question the first edition could only sharpen: the
+apparent inversion is
+[a sign convention on `w`](#the-angular-sign-convention-w_game---w_physics), not
+an error, and nothing compensates it because nothing needs to.
 
 **The names below are applied**, from [names.tsv](names.tsv). Nothing scores
 below 70.
@@ -94,6 +97,11 @@ the vendor ISA reference rather than from memory - see
 below. `A` is the up axis (`craft+0x180`) and `B` is the averaged contact
 normal, so the term is `-400 * (up x avgNormal)`.
 
+**And that term is aligning, not anti-aligning.** It reads backwards only
+against the textbook sign convention for angular velocity, which this engine
+does not use; see
+[the angular sign convention](#the-angular-sign-convention-w_game---w_physics).
+
 ## The cross-product convention, settled against the ISA manual
 
 Every sign question on this page rests on one thing: what
@@ -146,7 +154,9 @@ manual. Applying the definitions:
 
 - **`Ship_HoverFourCorner`**: `fs = vf2 = up`, `ft = vf1 = avgNormal`, then
   `fd.x = up.y*n.z - n.y*up.z`, which is `(up x avgNormal).x`. The `-400`
-  broadcast in `vf3` multiplies that. **The term is anti-aligning as written.**
+  broadcast in `vf3` multiplies that. **The term reads as anti-aligning under
+  the textbook convention** - which is not the one the engine uses; see
+  [the angular sign convention](#the-angular-sign-convention-w_game---w_physics).
 - **`Body_AddForceAtPoint`**: `fs = vf1 = force`, `ft = vf2 = r`, then
   `fd.x = F.y*r.z - r.y*F.z`, which is `(F x r).x`, the negative of the
   physical `r x F`.
@@ -157,64 +167,182 @@ about the game: it is a vendor-documented instruction definition, cross-checked
 against the raw encoding of the four instructions in question. It says what the
 arithmetic is, not what the game does with it.
 
-## `Body_AddForceAtPoint` computes `F x r`, and that is the useful clue
+## `Body_AddForceAtPoint` computes `F x r`
+
+Signature, from the prologue at `0x0015da60`, which moves `a1` into `s2` and
+`a2` into `s1` - the reverse of the obvious order:
+
+```c
+void Body_AddForceAtPoint(Body *body /* a0 */, const vec4 *force /* a1 */,
+                          const vec4 *point /* a2 */);
+```
+
+`a1` is the force, not the point: the function's first act, in the delay slot of
+its own prologue, is `Body_AddForceWorld(body, a1)`.
 
 ```
 0015da84  lqc2  vf1,0x30(s0)      ; body position
-0015da8c  lqc2  vf2,0x0(s1)       ; the world point
+0015da8c  lqc2  vf2,0x0(s1)       ; the world point (a2)
 0015da94  vsub  vf2,vf2,vf1       ; r = point - position
-0015da98  lqc2  vf1,0x0(s2)       ; the force
+0015da98  lqc2  vf1,0x0(s2)       ; the force (a1)
 0015da9c  vopmula.xyz ACC,vf1,vf2 ; A = force, B = r
 0015daa0  vopmsub.xyz vf1,vf2,vf1 ; d = A x B = force x r
 0015daa4  jal   Body_AddTorqueWorld
 ```
 
-Physical torque is `r x F`. This is `F x r`, its negative - and unlike the
-alignment gain, **this term's correct sign is fixed by mechanics rather than by
-anyone's reading of the prose.** It is the hover spring's own torque: the force
-that pushes each corner probe up, applied at that probe.
+Textbook torque is `r x F`. This is `F x r`, its negative - the same apparent
+inversion the `-400` alignment gain carries, on the term where the intended
+answer is least arguable. The next section settles both.
 
-That matters because it makes the anomaly **systematic**. Two terms in the same
-accumulator, arrived at independently, both carry a sign that the ordinary
-convention says is backwards. [engine.md](../psp-pulse/engine.md) predicted
-exactly this - "if both of those terms really do need flipping, the sign lives
-downstream, in how the angular accumulators are applied to the body" - and this
-is a third instance of the same shape, on the term where the intended answer is
-least arguable.
+## The angular sign convention: `w_game = -w_physics`
 
-**Where the compensation happens was not found, and this page does not claim
-it.** `Body_AddTorqueWorld` (`0x0015ddb8`) is a plain `+=` into `body+0x130`.
-`Body_Integrate` reads `body+0x130`, rotates it through the matrix at
-`+0xc0`..`+0xf0` and adds it to the angular velocity at `+0x160`, also with a
-plain `+=` and no negation. So on the path actually read, nothing flips it.
+This page originally offered three candidate explanations for that inversion.
+All three have now been checked. Two are dead; the third is right, but not in
+the place it was expected, and the answer is that **there is nothing to
+compensate.**
 
-Since the retail PS2 game demonstrably does not spin its ships inside-out, the
-compensation is somewhere. This page originally offered three candidates.
-**One of them is now refuted.**
+### The `vopmsub` operand convention is exactly as read - dead
 
 > ~~the EE's `vopmsub` operand convention is the reverse of the one used here,
 > in which case all three terms flip together and everything is consistent with
 > the prose.~~
->
-> **Dead.** The convention was checked against the *VU User's Manual* v6.0 and
-> against the raw instruction encodings; it is the one used here. See
-> [the section above](#the-cross-product-convention-settled-against-the-isa-manual).
-> This was the cheap explanation that would have made the whole question go
-> away, and it does not hold.
 
-Two candidates remain, and this page cannot say which:
+Refuted against the *VU User's Manual* v6.0 and the raw instruction encodings;
+see [the section above](#the-cross-product-convention-settled-against-the-isa-manual).
+The readings `force x r` and `up x avgNormal` are literal.
 
-- the compensation is in the `+0xc0` matrix or the inertia handling, **neither
-  of which has been read** - this is the concrete next step, since
-  `Body_Integrate` rotates `body+0x130` through that matrix before it reaches
-  the angular velocity and nothing else on the path touches the sign;
-- `Ship_HoverFourCorner` passes an already-negated force to
-  `Body_AddForceAtPoint`, which was not checked component by component.
+### The force is not pre-negated - dead
 
-Confidence **85** that the anomaly is systematic rather than independent errors,
-unchanged - eliminating one explanation narrows where the resolution lives
-without making the observation itself any stronger. Confidence **0** on which of
-the two remaining explanations is right.
+> ~~`Ship_HoverFourCorner` passes an already-negated force to
+> `Body_AddForceAtPoint`.~~
+
+The call site (`0x0015ac98`..`0x0015acec`) builds the force from the craft's up
+axis at `craft+0x180`, component by component:
+
+```
+0015ac98  lq     v0,0x180(s4)     ; up
+0015acc0  mul.S  f6,f6,f0         ; springMag * (1 + 0.8*clamp(...))
+0015acc4  mul.S  f3,f6,f3         ; * up.z
+0015acc8  mul.S  f1,f6,f1         ; * up.x
+0015accc  mul.S  f2,f6,f2         ; * up.y
+0015acd8  pextlw ...              ; repack as (x, y, z, 0)
+0015acec  jal    Body_AddForceAtPoint
+0015acf0  _sq    v0,0x60(sp)      ; delay slot; a1 == sp+0x60, so this is `force`
+```
+
+Every component is a **positive** multiple of `up`. There is no negation on any
+of the three and the packed `w` lane is zero. Confidence **92**.
+
+### The integrator rotates the basis by `-w` - the answer
+
+`Body_Integrate` builds a skew matrix from the vector at `body+0x150` and the
+sub-step `h` (`0x0015d134`..`0x0015d1f4`), then applies it to the three basis
+rows at `body+0x00`/`+0x10`/`+0x20` (`0x0015d218`..`0x0015d268`). The three base
+constants it starts from, at `0x002c69f0`/`+0x10`/`+0x20`, were **read out of
+memory and are all zero**, so with `w = (x, y, z)` the built vectors are exactly
+
+```text
+v0 = ( 0,   -z*h,  y*h)
+v1 = ( z*h,  0,   -x*h)
+v2 = (-y*h,  x*h,  0  )
+```
+
+and each row is updated by
+
+```text
+row_i += v_i.x * row0 + v_i.y * row1 + v_i.z * row2
+```
+
+Writing the first one out, `d(row0) = h * (-z*row1 + y*row2)`. The textbook
+kinematics `e' = w x e` gives `w x e0 = (0, z, -y)`, that is
+`d(row0) = h * (z*row1 - y*row2)`. Rows 1 and 2 carry the same negation.
+**The integrator computes `e' = e x w`, which is `-(w x e)`.**
+
+Note this derivation uses no outer-product instruction at all - it is `vmulax` /
+`vmadday` / `vmaddz` throughout - so it is independent of the convention settled
+above.
+
+That closes it. The engine's angular velocity is the negative of the textbook
+one, a left-hand-rule pseudovector, and both halves of the rigid-body
+formulation are flipped together:
+
+| Textbook | This engine |
+| --- | --- |
+| `tau = r x F` | `tau = F x r` |
+| `e' = w x e` | `e' = e x w` |
+| align `up` to `n`: `+k * (up x n)` | `-k * (up x n)`, with `k = 400` |
+
+Substituting `w_game = -w_physics` turns each right-hand entry into the left
+one. **So nothing is inverted and nothing needs compensating: `F x r` and
+`-400 * cross(up, avgNormal)` are both correct, and the alignment torque really
+does level the ship.** [docs/physics/README.md](../../../physics/README.md)'s
+prose and the arithmetic agree after all; what was missing was the convention,
+not a sign.
+
+This is **not** a handedness result, and the two pages that reached for
+handedness were right to reject it. `Body_Integrate`'s orthonormaliser
+(`0x0015d5f4`..`0x0015d630`) rebuilds the basis as `row0 = row1 x row2`, which is
+cyclically the same statement as [engine.md](../psp-pulse/engine.md)'s
+runtime-measured `cross(row0, row1) = row2` on 200 of 200 ticks. PS2 code and PSP
+measurement agree the basis is positively oriented under the ordinary
+component-wise cross product. Handedness is not the variable. The sign of `w`
+is, and it is a separate question that was being conflated with it.
+
+**Two independent legs, and the second is blind to the first's one assumption.**
+
+- *The instruction read above* assumes only that the matrix at `body+0x80`,
+  which maps `+0x160` onto `+0x150`, does not flip a sign. It is built from the
+  orthonormalised basis, so it is a rotation and its determinant is `+1`. Which
+  frame `+0x150` and `+0x160` are each expressed in is **not** settled here, and
+  [engine.md](../psp-pulse/engine.md)'s deliberate confidence-74 cap on the
+  local/world split of the angular accumulators stands untouched.
+- *[engine.md](../psp-pulse/engine.md)'s weathervane term* needs no assumption at
+  all: `angularWorld += cross(forward, velocity) * (grounded ? -0.1 : -0.3)`,
+  with the coefficients as hardcoded literals and the intended effect - turning
+  the nose toward the direction of travel - already stated there. That is
+  backwards under the textbook convention and correct under this one, from a
+  third term arrived at independently of the other two.
+- *[engine.md](../psp-pulse/engine.md)'s steering measurement* is end-to-end,
+  accumulator sign in and observed rotation sign out, so it bypasses every
+  intermediate transform including the one the first leg assumes about. Holding
+  left puts `craft+0x2c0` at about `-96`, `angularLocal.y = steer *
+  Turning.amount`, and the measured `dot(cross(fwd_t, fwd_t+1), up) / dt` is
+  `+1.51 rad/s` on 199 of 199 ticks: the accumulator's sign is the opposite of
+  the rotation it produces. That is precisely the constraint engine.md said any
+  answer would have to satisfy. It is listed third only because it depends on
+  `Turning.amount > 0`, which is plausible - it is not one of the four fields
+  that page shows being scaled at load - but was not verified.
+
+Confidence **88** for the convention in the PS2 build: raw disassembly rather
+than decompiler output, a vendor ISA manual for the one instruction pair that
+could have flipped the reading, all three base constants read out of memory, and
+a runtime measurement on the other build that it explains. Not higher because
+`Body_Integrate` was not itself observed at runtime.
+
+Confidence **80** that the PSP build shares the convention. Its integrator has
+never been located, so the cross-platform half rests on the steering and
+weathervane terms agreeing, not on reading PSP code.
+
+### What this means for a reimplementation
+
+Recorded here rather than acted on; no Rust was touched.
+
+**Apply exactly one flip.** Either negate every torque source and keep the
+textbook `e' = w x e`, or keep the original's torque expressions verbatim and
+integrate `e' = e x w`. Doing both restores the bug; doing neither is what makes
+a port diverge.
+
+- The hover spring's `F x r` flips too, not only the `-400` term. Any stability
+  argument that covers one has to cover both.
+- **Angular damping is invariant and must not be touched.** `tau = -c * w` is a
+  negative multiple of `w` in either convention, so it is already correct, and
+  "fixing" it as well flips it wrong.
+- A port that integrates orientation the textbook way while copying
+  `-400 * cross(up, n)` verbatim has an **anti**-aligning surface torque. That is
+  not the marginal-stability question the sub-step arithmetic below describes; it
+  is unconditional divergence, and the two failure modes look similar from the
+  outside.
+- The same applies to the weathervane torque and to the steering sign.
 
 ## Angular damping, confirmed exactly
 
@@ -362,24 +490,30 @@ Read while looking for the above; recorded because it corroborates
 ## Not determined
 
 - **The sub-step count.** See above.
-- **Where the torque sign is compensated.** Still the highest-value thing left.
-  The previous edition of this page expected the `vopmsub` convention check to
-  settle it; that check has been done and it **eliminated one branch rather than
-  answering the question**. The concrete next step is now the matrix at
-  `body+0xc0`..`+0xf0` and the inertia handling around it - read what builds it
-  and whether it is a plain rotation or carries a sign or an inverse-inertia
-  term. Failing that, `Ship_HoverFourCorner`'s force argument component by
-  component.
+- ~~**Where the torque sign is compensated.**~~ **Answered**, and the answer is
+  that it is not compensated anywhere because it does not need to be. See
+  [the angular sign convention](#the-angular-sign-convention-w_game---w_physics).
+  The matrix at `body+0xc0`..`+0xf0` is not the site: it is built as the
+  adjugate of the basis scaled by `1/det` (`0x0015d478`..`0x0015d4f0`), i.e. its
+  inverse, which for the orthonormal basis is the transpose - exactly what
+  [engine.md](../psp-pulse/engine.md)'s runtime dump measured element for
+  element. A rotation inverse has determinant `+1` and cannot flip a sign.
 - **The remaining `Ship_Update*` control terms** - engine, brakes, steering,
   pitch, airbrakes, drag, weathervane. `Ship_UpdateCraft` was read only far
   enough to find the hover and damping calls; the ordering table on
   [engine.md](../psp-pulse/engine.md) is **not** corroborated here.
-- **The inertia handling**, and whether the angular accumulators hold torque or
-  angular acceleration. `Body_Integrate` divides the force accumulator by a mass
-  term at `body+0x370+8` but applies the angular accumulator through the `+0xc0`
-  matrix with no visible inertia division, which hints at angular acceleration -
-  not enough to claim it.
-- **Nothing here was verified at runtime.**
+- **Whether the angular accumulators hold torque or angular acceleration.**
+  `Body_Integrate` divides the force accumulator by a mass term at
+  `body+0x370+8` but applies the angular accumulator through the `+0xc0` matrix
+  with no visible inertia division, which hints at angular acceleration - not
+  enough to claim it. The sign result above is unaffected either way: an inertia
+  tensor is positive definite and cannot invert a sign.
+- **Which frame `body+0x150` and `body+0x160` are each expressed in.** The
+  matrix at `body+0x80` maps the second onto the first; it is a rotation, so it
+  cannot change a sign, but it was not identified.
+- **Nothing here was verified at runtime.** The convention result is the one
+  claim on this page with a runtime leg, and that leg is a measurement on the
+  *other* build.
 
 ## History
 
@@ -398,3 +532,12 @@ Read while looking for the above; recorded because it corroborates
   `h`, so the requirement is `c >= k*H*(n+1)/(2n)` - 4.44 at three sub-steps.
   The conclusion that raising the sub-step count cannot fix the instability is
   unaffected.
+- 2026-07-27, third pass: **the sign question is closed.** The two remaining
+  explanations were checked and both are dead - the hover force is a positive
+  multiple of `up` at the call site, and the `+0xc0` matrix is a plain rotation
+  inverse. The resolution is that `Body_Integrate` integrates the basis as
+  `e' = e x w`, so the engine's angular velocity is the negative of the textbook
+  one and `F x r` and `-400 * (up x n)` are both **correct** rather than
+  inverted. Confidence 88 in the PS2 build, 80 cross-platform. Also fixed
+  `Body_AddForceAtPoint`'s argument order: it is `(body, force, point)`, which
+  the prologue's `a1 -> s2` / `a2 -> s1` swap disguises.
