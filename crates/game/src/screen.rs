@@ -108,6 +108,35 @@ pub struct Redirect {
     pub goto: Option<String>,
 }
 
+/// An `Image` widget that names a texture.
+///
+/// The solid-colour kind, which has a `color` and no `src`, is a backdrop and
+/// goes to [`Screen::fills`] instead.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Image {
+    /// Widget name, when it has one.
+    pub name: Option<String>,
+    /// The texture's archive entry name, with the extension the XML gives.
+    pub src: String,
+    /// Left edge. Absent in the XML means zero, as it does for `Text`.
+    pub x: f32,
+    /// Top edge.
+    pub y: f32,
+    /// Authored width, when the XML gives one. Absent means the texture's own.
+    pub width: Option<f32>,
+    /// Authored height, likewise.
+    pub height: Option<f32>,
+    /// Modulating colour as ARGB. White when unstated, which leaves the
+    /// texture's own colours alone.
+    pub color: u32,
+    /// The `AutoLoad` attribute.
+    ///
+    /// Recorded but not acted on: this build loads every referenced texture up
+    /// front, so there is nothing yet for a load-on-demand flag to change. It is
+    /// parsed rather than dropped because the attribute is real.
+    pub auto_load: bool,
+}
+
 /// One screen, flattened out of the tree.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Screen {
@@ -119,6 +148,8 @@ pub struct Screen {
     pub path: String,
     /// Solid-colour `Image` backdrops, as ARGB.
     pub fills: Vec<u32>,
+    /// `Image` widgets that name a texture, in document order.
+    pub images: Vec<Image>,
     /// The `Movie` widget, if the screen has one.
     pub movie: Option<Movie>,
     /// `Text` widgets in document order.
@@ -225,16 +256,17 @@ impl Screens {
 
         for child in &node.children {
             match child.name.to_ascii_lowercase().as_str() {
-                "image" => {
-                    // A solid colour with no `src` is a backdrop; one with a
-                    // `src` is a sprite this build does not draw yet.
-                    if child.value("src").is_none()
-                        && let Some(color) = child.value("color")
-                        && let Some(argb) = parse_argb(color)
-                    {
-                        screen.fills.push(argb);
+                "image" => match child.value("src") {
+                    // A `src` names a texture; a bare colour is a backdrop.
+                    Some(src) => screen.images.push(self.image_from_node(child, src)),
+                    None => {
+                        if let Some(color) = child.value("color")
+                            && let Some(argb) = parse_argb(color)
+                        {
+                            screen.fills.push(argb);
+                        }
                     }
-                }
+                },
                 "movie" => screen.movie = Some(Movie::from_node(child)),
                 "text" => screen.texts.push(self.text_from_node(child)),
                 "redirect" => screen.redirects.push(redirect_from_node(child)),
@@ -248,6 +280,22 @@ impl Screens {
 
         for child in &node.children {
             self.collect(child, Some(&path));
+        }
+    }
+
+    fn image_from_node(&self, node: &Node, src: &str) -> Image {
+        Image {
+            name: node.attr("name").map(str::to_string),
+            src: src.to_string(),
+            x: self.number(node.value("x")).unwrap_or(0.0),
+            y: self.number(node.value("y")).unwrap_or(0.0),
+            width: self.number(node.value("width")),
+            height: self.number(node.value("height")),
+            color: self
+                .resolve(node.value("color").unwrap_or_default())
+                .and_then(parse_argb)
+                .unwrap_or(0xffff_ffff),
+            auto_load: node.flag("AutoLoad").unwrap_or(false),
         }
     }
 

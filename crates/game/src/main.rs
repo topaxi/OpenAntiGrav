@@ -94,6 +94,15 @@ struct Cli {
     #[arg(long)]
     until: Option<String>,
 
+    /// With `--screenshot`, draw one named screen out of the front-end XML and
+    /// stop, instead of running the sequence.
+    ///
+    /// A debugging view of a screen the boot order does not reach yet, e.g.
+    /// `--screen "Show Logo"`. Names are the XML's own, and a `Parent->Child`
+    /// path works too.
+    #[arg(long)]
+    screen: Option<String>,
+
     /// With `--screenshot`, run this many ticks before capturing.
     ///
     /// A capture that reaches `Launch Game` spends what is left of them on the
@@ -243,6 +252,7 @@ fn main() -> Result<()> {
                 race: Some(race_options),
                 log_every: cli.log_every,
                 size: parse_size(&cli.size)?,
+                screen: cli.screen.clone(),
             },
         );
     }
@@ -545,6 +555,7 @@ impl Stage {
             gpu.config.format,
             video_format,
             loaded.font.clone(),
+            &loaded.sprites,
         )?;
         Ok(Self::Frontend(Box::new(FrontendStage {
             renderer,

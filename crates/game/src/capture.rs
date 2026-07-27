@@ -46,6 +46,13 @@ pub struct Options {
     pub log_every: u32,
     /// Image size.
     pub size: (u32, u32),
+    /// Render one named screen straight out of the XML and stop.
+    ///
+    /// A debugging view, not a step of the sequence: it does not run the state
+    /// machine, take input or advance the movie. It exists so a screen the boot
+    /// order does not reach yet - most of them - can still be looked at. See
+    /// [`crate::frontend::Frontend::draw_screen`].
+    pub screen: Option<String>,
 }
 
 /// How many ticks the runner will take before giving up on `until`.
@@ -60,14 +67,41 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         mut frontend,
         mut movie,
         font,
+        sprites,
         ..
     } = loaded;
+
+    // Checked before anything is printed or stepped: a name that matches
+    // nothing would otherwise draw the backdrop and nothing else, which looks
+    // exactly like a screen that is empty. The list of what does exist is short
+    // enough to just print.
+    if let Some(name) = &options.screen
+        && !frontend
+            .screens()
+            .screens
+            .iter()
+            .any(|s| s.name == *name || s.path == *name)
+    {
+        anyhow::bail!(
+            "no screen named {name:?}; this XML has {}",
+            frontend
+                .screens()
+                .screens
+                .iter()
+                .map(|s| format!("{:?}", s.path))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
 
     let dt = 1.0 / 60.0;
     let mut input = Input::new();
     let mut ticks = 0u32;
 
-    loop {
+    // `--screen` draws the XML and nothing else, so the sequence is not run at
+    // all: stepping it would only move the state machine somewhere the capture
+    // then ignores.
+    while options.screen.is_none() {
         // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
         // so the ticks they asked for are spent on the race rather than on a state
         // whose whole content is the word LAUNCH GAME.
@@ -105,10 +139,13 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         ticks += 1;
     }
 
-    println!(
-        "after {ticks} tick(s), state {:?}",
-        frontend.machine().current().unwrap_or("nothing")
-    );
+    match &options.screen {
+        Some(name) => println!("drawing screen {name:?} from the XML, sequence not run"),
+        None => println!(
+            "after {ticks} tick(s), state {:?}",
+            frontend.machine().current().unwrap_or("nothing")
+        ),
+    }
 
     let (width, height) = options.size;
 
@@ -135,7 +172,10 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         );
     }
 
-    let list = frontend.draw_list();
+    let list = match &options.screen {
+        Some(name) => frontend.draw_screen(name),
+        None => frontend.draw_list(),
+    };
 
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -152,7 +192,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     // Rgba8Unorm rather than the surface's sRGB format: the readback is written
     // straight into a PNG, so a second gamma encode would double-correct.
     let format = wgpu::TextureFormat::Rgba8Unorm;
-    let mut renderer = Renderer::new(&device, &queue, format, video_format, font)?;
+    let mut renderer = Renderer::new(&device, &queue, format, video_format, font, &sprites)?;
 
     if let (Some(frames), Some(wanted)) = (movie.frames.as_mut(), video_frame(&list)) {
         let mut bytes = Vec::new();

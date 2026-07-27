@@ -98,6 +98,15 @@ pub enum Draw {
         /// Which frame to show.
         frame: usize,
     },
+    /// One of the front end's own images, from the sprite sheet.
+    Sprite {
+        /// Where it goes on the 480x272 screen: `[x, y, width, height]`.
+        rect: [f32; 4],
+        /// Where it is in the sheet, in sheet pixels: `[x, y, width, height]`.
+        uv: [f32; 4],
+        /// Modulating colour. White leaves the texture alone.
+        color: [f32; 4],
+    },
     /// A line of text with its baseline-less top-left at `x, y`.
     Text {
         /// Left or anchor edge, depending on `align`.
@@ -144,6 +153,12 @@ pub struct Frontend {
     selected: usize,
     /// The picked language, once one is picked.
     chosen: Option<String>,
+    /// Where each referenced image sits in the sprite sheet.
+    ///
+    /// The sheet's pixels live in the renderer; the model only needs to know
+    /// each image's size and offset, which is what turns an `Image` widget into
+    /// a rectangle. A `Vec` keeps the order the screens declared.
+    placements: Vec<(String, crate::sprite::Placed)>,
     player: crate::movie::Player,
     /// Whether a picture is available at all.
     has_picture: bool,
@@ -172,6 +187,7 @@ impl Frontend {
         screens: Screens,
         strings: StringTable,
         languages: Vec<Language>,
+        placements: Vec<(String, crate::sprite::Placed)>,
         movie_frames: usize,
         has_picture: bool,
     ) -> Self {
@@ -203,6 +219,7 @@ impl Frontend {
             languages,
             selected: 0,
             chosen: None,
+            placements,
             player: crate::movie::Player::new(frames, false),
             has_picture,
             // Without a picture the intro is a black screen for eight seconds,
@@ -464,17 +481,101 @@ impl Frontend {
         out
     }
 
-    fn draw_language_selection(&self, out: &mut Vec<Draw>) {
-        let Some(screen) = self.screens.language_selection() else {
-            return;
+    /// A named screen's own widgets, drawn from the XML alone.
+    ///
+    /// This is what the disc's data describes and nothing else: no state, no
+    /// input, no animation. `--screen` renders through it, which is how the
+    /// image path is checked without moving any screen into the boot order.
+    #[must_use]
+    pub fn draw_screen(&self, name: &str) -> Vec<Draw> {
+        let (width, height) = SCREEN;
+        let mut out = vec![Draw::Fill {
+            rect: [0.0, 0.0, width, height],
+            color: [0.0, 0.0, 0.0, 1.0],
+        }];
+
+        let Some(screen) = self
+            .screens
+            .screens
+            .iter()
+            .find(|s| s.name == name || s.path == name)
+        else {
+            return out;
         };
 
+        self.draw_backdrops(screen, &mut out);
+        for text in &screen.texts {
+            let Some(id) = text.idstring.as_deref().or(text.string.as_deref()) else {
+                continue;
+            };
+            out.push(Draw::Text {
+                x: text.x,
+                y: text.y,
+                scale: text.scale,
+                color: argb_to_rgba(text.color),
+                align: Align::parse(&text.align),
+                text: self.strings.get_or_id(id).to_string(),
+            });
+        }
+        out
+    }
+
+    /// A screen's solid backdrops and its images, in that order.
+    fn draw_backdrops(&self, screen: &Screen, out: &mut Vec<Draw>) {
         for &fill in &screen.fills {
             out.push(Draw::Fill {
                 rect: [0.0, 0.0, SCREEN.0, SCREEN.1],
                 color: argb_to_rgba(fill),
             });
         }
+
+        for image in &screen.images {
+            let Some(placed) = self
+                .placements
+                .iter()
+                .find(|(src, _)| *src == image.src)
+                .map(|(_, placed)| *placed)
+            else {
+                continue;
+            };
+
+            // An `Image` with no `x` is centred rather than pinned to the left
+            // edge. `Show Logo`'s logo is a 512-wide texture on a 480-wide
+            // screen, so the two readings differ by 16 pixels, and the texture
+            // itself settles which: its art is transparent out to column 23 on
+            // the left and from 488 on the right, so it is authored centred
+            // inside its own 512. Centred on screen the art lands at 7..471 with
+            // even margins; pinned at `x = 0` it would run to 487 and lose its
+            // right edge. Confidence 85 - measured from the one image there is,
+            // not read out of the widget's layout code.
+            // See `docs/architecture/frontend-boot.md`.
+            let w = image.width.unwrap_or(placed.width as f32);
+            let h = image.height.unwrap_or(placed.height as f32);
+            let x = if image.x == 0.0 {
+                (SCREEN.0 - w) / 2.0
+            } else {
+                image.x
+            };
+
+            out.push(Draw::Sprite {
+                rect: [x, image.y, w, h],
+                uv: [
+                    placed.x as f32,
+                    placed.y as f32,
+                    placed.width as f32,
+                    placed.height as f32,
+                ],
+                color: argb_to_rgba(image.color),
+            });
+        }
+    }
+
+    fn draw_language_selection(&self, out: &mut Vec<Draw>) {
+        let Some(screen) = self.screens.language_selection() else {
+            return;
+        };
+
+        self.draw_backdrops(screen, out);
 
         // The picker's own `Text` widgets, at their own coordinates, in their own
         // colours, with their strings from the string table.
@@ -601,6 +702,7 @@ mod tests {
             Screens::from_xml(XML),
             StringTable::default(),
             languages(),
+            Vec::new(),
             frames,
             false,
         )
@@ -743,6 +845,7 @@ mod tests {
             Screens::from_xml(XML),
             StringTable::default(),
             languages(),
+            Vec::new(),
             0,
             false,
         );
@@ -861,6 +964,7 @@ mod tests {
             Screens::from_xml(XML),
             StringTable::default(),
             languages(),
+            Vec::new(),
             300,
             true,
         );
@@ -879,6 +983,7 @@ mod tests {
         let mut frontend = Frontend::new(
             Screens::from_xml(XML),
             StringTable::default(),
+            Vec::new(),
             Vec::new(),
             300,
             false,

@@ -54,6 +54,7 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 | Flag | What it does |
 | --- | --- |
 | `--movie <entry>` | Which reel the intro plays: a `Data.wad` entry name, or `hash:XXXXXXXX` for one of the reels whose name is not recovered. Defaults to `hash:b1ba72c3`, the European cut of the dev/pub reel - see [frontend boot](../architecture/frontend-boot.md#the-devpub-reel). `--movie 'Data\Movies\Intro.PMF'` plays the 40-second reel the `LogoFMV` screen shows later instead. |
+| `--screen <name>` | With `--screenshot`, draw one named screen straight out of the front-end XML and stop, instead of running the sequence. A debugging view of the screens the boot order does not reach - `--screen "Show Logo"` is the Pulse logo and "Press START button". Names are the XML's own; a `Parent->Child` path works too. |
 | `--race` | Go straight to the race. Checked before the front end loads anything, so it never parses the menus or transcodes the intro. |
 | `--track <name>` | The track's `.vex` entry in `Data.wad`. |
 | `--team <name>` | Which team's `handlingstats.xml` and model to fly. |

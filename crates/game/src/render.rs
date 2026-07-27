@@ -1,8 +1,8 @@
 //! Rasterises a [`Draw`] list with wgpu.
 //!
-//! Two pipelines and nothing else: one for colour-modulated quads out of the
-//! glyph atlas, which covers both text and solid fills, and one for a movie
-//! frame out of three 8-bit planes. Everything is positioned in the PSP's
+//! Two pipelines and nothing else: one for colour-modulated quads, which covers
+//! text, solid fills and the front end's own images, and one for a movie frame
+//! out of three 8-bit planes. Everything is positioned in the PSP's
 //! 480x272 screen space and letterboxed into whatever the window is, so the XML's
 //! own coordinates can be used untouched.
 //!
@@ -22,7 +22,9 @@ struct Uniforms {
     viewport: [f32; 2],
     screen: [f32; 2],
     atlas: [f32; 2],
-    padding: [f32; 2],
+    /// The sprite sheet's size, for normalising its pixel-space UVs. This took
+    /// the slot a padding pair held, so the struct is still 32 bytes.
+    sprites: [f32; 2],
 }
 
 /// One quad.
@@ -32,7 +34,19 @@ struct Quad {
     rect: [f32; 4],
     uv: [f32; 4],
     color: [f32; 4],
+    /// Which texture `uv` indexes: [`MODE_ATLAS`] or [`MODE_SPRITE`].
+    ///
+    /// Per-quad rather than per-pipeline, so images, text and fills stay in one
+    /// instance stream and the draw list's own back-to-front order is honoured
+    /// without splitting the pass. The movie still needs a split because it is a
+    /// genuinely different pipeline; a sprite is not.
+    mode: f32,
 }
+
+/// A quad whose `uv` is in glyph-atlas pixels, sampled for coverage.
+const MODE_ATLAS: f32 = 0.0;
+/// A quad whose `uv` is in sprite-sheet pixels, sampled as RGBA.
+const MODE_SPRITE: f32 = 1.0;
 
 /// How many quads the instance buffer holds before it is grown.
 const INITIAL_QUADS: usize = 1024;
@@ -58,6 +72,8 @@ pub struct Renderer {
     quad_buffer: wgpu::Buffer,
     quad_capacity: usize,
     atlas: Atlas,
+    /// The sprite sheet's pixel size, which the shader needs to normalise UVs.
+    sprites: (u32, u32),
     video: Option<Video>,
     quads: Vec<Quad>,
 }
@@ -86,6 +102,7 @@ impl Renderer {
         format: wgpu::TextureFormat,
         video: Option<VideoFormat>,
         atlas: Atlas,
+        sprites: &crate::sprite::Sheet,
     ) -> Result<Self> {
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("oag-game uniforms"),
@@ -127,12 +144,55 @@ impl Renderer {
         );
         let atlas_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        // The disc's images are authored at screen resolution and drawn at it,
+        // so linear filtering here only softens what should be a 1:1 blit. It is
+        // linear anyway because nothing guarantees 1:1 once a screen scales an
+        // image, and a magnified nearest sample is the worse failure.
+        let sprite_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("sprites"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
+        // **The sheet's format has to follow the target's colour space**, and
+        // getting this wrong is not subtle. A `.mip` palette holds sRGB bytes.
+        // Declaring the texture sRGB makes sampling return linear, which is
+        // right when the target is sRGB and encodes on write - the window - and
+        // wrong when it is not: the headless capture targets `Rgba8Unorm` on
+        // purpose, so linear values would go into the PNG unencoded. Measured
+        // rather than reasoned: the logo's dominant teal is `(36, 147, 153)` in
+        // the texture and came out `(5, 74, 81)` in a capture, which is that
+        // colour linearised exactly once.
+        //
+        // Text and fills are not affected either way - they write their colour
+        // straight through with no sRGB source - so this is the only draw kind
+        // that can differ between the window and a screenshot.
+        let sprite_format = if format.is_srgb() {
+            wgpu::TextureFormat::Rgba8UnormSrgb
+        } else {
+            wgpu::TextureFormat::Rgba8Unorm
+        };
+
+        let sprite_texture = upload_rgba(
+            device,
+            queue,
+            "sprite sheet",
+            sprite_format,
+            sprites.width,
+            sprites.height,
+            &sprites.rgba,
+        );
+        let sprite_view = sprite_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let ui_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("ui"),
             entries: &[
                 uniform_entry(0),
                 texture_entry(1),
                 sampler_entry(2, sampler_kind(atlas.is_real())),
+                texture_entry(3),
+                sampler_entry(4, wgpu::SamplerBindingType::Filtering),
             ],
         });
 
@@ -151,6 +211,14 @@ impl Renderer {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&atlas_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&sprite_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(&sprite_sampler),
                 },
             ],
         });
@@ -178,7 +246,8 @@ impl Renderer {
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x4,
                         1 => Float32x4,
-                        2 => Float32x4
+                        2 => Float32x4,
+                        3 => Float32
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -211,6 +280,7 @@ impl Renderer {
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
             atlas,
+            sprites: (sprites.width, sprites.height),
             video,
             quads: Vec::new(),
         })
@@ -283,7 +353,7 @@ impl Renderer {
                 viewport: letterbox(target),
                 screen: [SCREEN.0, SCREEN.1],
                 atlas: [self.atlas.width as f32, self.atlas.height as f32],
-                padding: [0.0, 0.0],
+                sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
             }),
         );
 
@@ -297,6 +367,12 @@ impl Renderer {
             match draw {
                 Draw::Fill { rect, color } => self.push_solid(*rect, *color),
                 Draw::Video { .. } => video_at = Some(self.quads.len() as u32),
+                Draw::Sprite { rect, uv, color } => self.quads.push(Quad {
+                    rect: *rect,
+                    uv: *uv,
+                    color: *color,
+                    mode: MODE_SPRITE,
+                }),
                 Draw::Text {
                     x,
                     y,
@@ -373,6 +449,7 @@ impl Renderer {
             // reads full coverage.
             uv: [solid.x as f32 + 0.5, solid.y as f32 + 0.5, 0.0, 0.0],
             color,
+            mode: MODE_ATLAS,
         });
     }
 
@@ -405,6 +482,7 @@ impl Renderer {
                     cell.height as f32,
                 ],
                 color,
+                mode: MODE_ATLAS,
             });
             pen += cell.advance * scale;
         }
@@ -578,6 +656,46 @@ fn blank_r8(device: &wgpu::Device, label: &str, width: u32, height: u32) -> wgpu
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     })
+}
+
+fn upload_rgba(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: &str,
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+    bytes: &[u8],
+) -> wgpu::Texture {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size: wgpu::Extent3d {
+            width: width.max(1),
+            height: height.max(1),
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        texture.as_image_copy(),
+        bytes,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(width * 4),
+            rows_per_image: Some(height),
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+    texture
 }
 
 fn upload_r8(

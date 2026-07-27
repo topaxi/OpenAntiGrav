@@ -23,6 +23,8 @@ pub struct Boot {
     pub frontend: Frontend,
     /// The intro movie, whether or not it has a picture.
     pub movie: Movie,
+    /// Every front-end image the screens reference, in one texture.
+    pub sprites: crate::sprite::Sheet,
     /// The text atlas: the disc's own font when it decodes, ours when it does
     /// not.
     pub font: crate::font::Atlas,
@@ -73,9 +75,23 @@ pub fn load(options: &Options) -> Result<Boot> {
     let languages = load_languages(&mut archives.data, &mut report);
     let strings = load_strings(&mut archives.data, &languages, &mut report);
     let movie = load_movie(&mut archives.data, options, &mut report)?;
+    let sprites = load_sprites(&mut archives.fe, &mut archives.data, &screens, &mut report);
 
     let frames = movie.frames.as_ref().map_or(0, |f| f.len);
-    let frontend = Frontend::new(screens, strings, languages, frames, movie.frames.is_some());
+    let placements = screens
+        .screens
+        .iter()
+        .flat_map(|s| s.images.iter())
+        .filter_map(|image| sprites.get(&image.src).map(|p| (image.src.clone(), p)))
+        .collect();
+    let frontend = Frontend::new(
+        screens,
+        strings,
+        languages,
+        placements,
+        frames,
+        movie.frames.is_some(),
+    );
 
     if let Some(goto) = frontend.language_auto_redirect() {
         report.push(format!(
@@ -88,8 +104,60 @@ pub fn load(options: &Options) -> Result<Boot> {
         font,
         frontend,
         movie,
+        sprites,
         report,
     })
+}
+
+/// Decodes every image the screens name.
+///
+/// The names come from the screens rather than from a list here, so a screen
+/// that gains an `Image` gains its texture without this function changing.
+///
+/// **Both archives are searched, in that order, and they have to be.**
+/// `pulse_logo.mip` is in `FE.wad` *and* `Data.wad` at the same size, which
+/// makes `FE.wad` look sufficient; `gameshare_backdrop.mip` is in `Data.wad`
+/// only, which proves it is not.
+fn load_sprites(
+    fe: &mut oag_assets::Archive,
+    data: &mut oag_assets::Archive,
+    screens: &Screens,
+    report: &mut Vec<String>,
+) -> crate::sprite::Sheet {
+    let mut srcs: Vec<String> = Vec::new();
+    for screen in &screens.screens {
+        for image in &screen.images {
+            if !srcs.contains(&image.src) {
+                srcs.push(image.src.clone());
+            }
+        }
+    }
+
+    if srcs.is_empty() {
+        return crate::sprite::Sheet::default();
+    }
+
+    let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
+    for src in &srcs {
+        match fe.read_name(src).or_else(|_| data.read_name(src)) {
+            Ok(blob) => blobs.push((src.clone(), blob)),
+            Err(e) => report.push(format!(
+                "image {src}: in neither {} nor {}: {e}",
+                fe.label(),
+                data.label()
+            )),
+        }
+    }
+
+    let sheet = crate::sprite::Sheet::build(&blobs, report);
+    report.push(format!(
+        "{} of {} front-end image(s) decoded into a {}x{} sheet",
+        sheet.len(),
+        srcs.len(),
+        sheet.width,
+        sheet.height
+    ));
+    sheet
 }
 
 /// Reads the front end's own font, falling back to the built-in glyphs.

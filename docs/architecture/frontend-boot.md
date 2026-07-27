@@ -119,6 +119,52 @@ American thing about it:
 The executable is the EU build. `--movie hash:3d2c85f8` and
 `--movie hash:41fbd22f` select the other two.
 
+## The front end's own images
+
+An `Image` widget with a `src` names a `.mip` entry, and those now draw. The
+textures are decoded once at load into a single RGBA sheet
+([`sprite.rs`](../../crates/game/src/sprite.rs)) and drawn through the same quad
+pipeline as text and solid fills, chosen per quad by a mode flag rather than by a
+second pipeline - so the draw list's own back-to-front order is kept without
+splitting the pass the way the movie has to.
+
+Two things this settled that were worth finding out:
+
+- **The images are not all in one archive.** `pulse_logo.mip` is in `FE.wad`
+  *and* `Data.wad` at the same size, which makes `FE.wad` look sufficient;
+  `gameshare_backdrop.mip` is in `Data.wad` only. Both are searched.
+- **A sheet needs a gutter.** Stacked without one, linear filtering at an
+  image's top edge samples the last row of the image above it, which drew a
+  faint line across the Pulse logo from the backdrop stacked over it.
+
+`--screen "Show Logo"` renders a named screen out of the XML without running the
+sequence, which is how this is checked while the boot order is unchanged.
+
+### Image layout
+
+**An `Image` with no `x` is centred**, confidence **85**. `Show Logo`'s image
+gives a `y` and no `x`, and its texture is 512 wide on a 480-wide screen, so
+centring and left-pinning differ by 16 pixels. The texture settles it: its art is
+transparent out to column 23 on the left and from column 488 on the right, so it
+is authored centred inside its own 512. Centred on screen the art lands at 7..471
+with even margins; pinned at `x = 0` it would run to 487 and lose its right edge.
+Measured from the one image there is, not read out of the widget's layout code.
+
+**Colour space is not a detail here.** A `.mip` palette holds sRGB bytes, so
+declaring the sheet's texture `Rgba8UnormSrgb` makes sampling return linear -
+right for the window, whose surface encodes on write, and wrong for the headless
+capture, which targets `Rgba8Unorm` deliberately so the PNG is not double-encoded.
+The sheet's format therefore follows the target's. Caught by measurement: the
+logo's dominant teal is `(36, 147, 153)` in the texture and came out
+`(5, 74, 81)` in a capture, which is that colour linearised exactly once. Text and
+solid fills never showed it, because they write their colour straight through with
+no sRGB source.
+
+**`Viewport` is not implemented.** `Show Logo`'s `BOOT_LEGAL` text sits inside
+one, and [`screen.rs`](../../crates/game/src/screen.rs) only reads a screen's
+direct children, so that line is absent from the render. A `Viewport` is a
+clipping rectangle; nothing about it is decoded yet.
+
 ### What the disc actually does at boot
 
 Run under PPSSPP from a cold boot, with breakpoints on `MoviePlayer_Open`

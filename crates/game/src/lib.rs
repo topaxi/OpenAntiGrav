@@ -38,6 +38,7 @@ pub mod movie;
 pub mod race;
 pub mod render;
 pub mod screen;
+pub mod sprite;
 pub mod state_machine;
 
 /// Frames of the reel the intro state can possibly show, plus one.
