@@ -12,9 +12,10 @@ oag-view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
 oag-view <archive> --names data/extracted/psp/all.names
 ```
 
-Left and right arrows change asset, Escape quits. With `--mesh` or `--track`
-the window shows one model instead, and arrow keys orbit the camera; see
-[Models](#models). The disc image is opened read-only and nothing is written.
+Left and right arrows change asset, Escape quits. With `--mesh`, `--track` or
+`--collision` the window shows one model instead, and arrow keys orbit the
+camera; see [Models](#models). The disc image is opened read-only and nothing is
+written.
 
 The 3D renderer itself is no longer part of this tool. The mesh loader, the wgpu
 pipeline and its shader, the track-ribbon builder, the offscreen capture and the
@@ -111,6 +112,92 @@ same orbit window and controls described under [Models](#models) apply here.
 
 Junctions show as small gaps in the ribbon: each path owns its own control
 points, so consecutive paths are one step apart rather than sharing a vertex.
+
+## Collision
+
+```sh
+oag-view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
+    --collision 'Data\Environments\01_Track\track.vex' --screenshot /tmp/walls.png
+```
+
+Draws the [collision soup](../formats/collision.md) - the geometry the physics
+world is actually made of - out of the same `.vex` `--track` reads. Each of the
+five collision classes gets its own colour:
+
+| Class | Colour |
+| --- | --- |
+| `Wall` | red |
+| `Floor` | blue |
+| `Reset` | magenta |
+| `Mag Floor` | green |
+| `Cage` | grey, and **not drawn unless `--cage` is given** |
+
+**`Cage` is excluded by default on purpose, and the view is not buggy for
+leaving it out.** The original parses cage nodes and branches straight past them,
+so they are not collidable; `oag_gameplay::collision_world` drops them for the
+same reason. The default picture is therefore what the physics world contains,
+not what the file holds. `--cage` shows the rest.
+
+### It draws outlines, not surfaces
+
+The default is a **wireframe**: each triangle is drawn as an outline, so
+geometry behind a wall stays visible. That is not a style choice. The mesh
+pipeline writes depth, compares `Less` and forces alpha to 1.0, so a solid render
+of a closed wall is a picture of the outside of a box and tells you nothing about
+what is inside it. The whole point of this view is the opposite question - *do
+the walls enclose the driveable ribbon?* - so it has to be see-through.
+
+The outlines are built by insetting each triangle towards its own centroid and
+filling the ring between the two. That needs no `POLYGON_MODE_LINE` device
+feature, so it works on every backend including the headless capture path. Two
+consequences worth knowing: interior edges are drawn twice, once from each
+adjacent face, and the line width is one value for the whole model, taken from
+the mean edge length rather than the bounding radius. Scaling it to the bounding
+radius was the first attempt and produced sub-pixel dotted lines on anything long
+and thin, which a track is.
+
+`--solid` fills the triangles instead. Useful for a single surface, useless for a
+closed one. Solid faces are shaded **two-sided, on the CPU**, not through the
+light rig, because collision winding does not reliably face outwards: through the
+rig, a back-facing triangle comes out black and half a track's collision would
+silently vanish into the background.
+
+### `--with-spline` is the actual check
+
+```sh
+oag-view <archive> --collision 'Data\Environments\01_Track\track.vex' \
+    --with-spline --screenshot /tmp/enclosure.png
+```
+
+Overlays the `--track` ribbon on the collision outlines, from the same file, and
+prints whether the wall bounding box contains the ribbon's. The picture and the
+verdict answer the same question; the verdict is the one a script can read.
+
+### What it prints
+
+Per class: node, mesh and triangle counts, and the extent on each axis. The
+extents are the interesting part.
+[collision.md](../formats/collision.md#the-world-space-extent-contradicts-the-documented-broadphase-packing)
+records an unresolved
+contradiction between the sweep-and-prune reading, whose packed ids only span
+-1024..+1023, and world extents already measured at 1,335.8 on PSP and 1,554.1 on
+PS2. The tool prints the furthest reach from the origin and says so explicitly
+when it exceeds ±1024, so the contradiction is visible **per track** rather than
+only as a whole-disc maximum - which is what would say whether it is one outlier
+track or all of them.
+
+That output is a finding, not a rendering bug. If a track's collision runs past
+±1024, the packing reading is wrong or describes a different coordinate space;
+nothing about the picture is affected either way.
+
+### Not collision response
+
+This view reads geometry and surface class only. It does not read restitution and
+does not simulate anything; `oag-render` cannot, by
+[the dependency rules](../architecture/workspace-layout.md). It also does **not**
+go through `oag-gameplay`: it decodes with `oag_formats::collision` directly, so
+the viewer does not pull a gameplay crate in to draw a triangle. The one rule it
+copies from `collision_world` is the cage exclusion above.
 
 ## Limitations
 

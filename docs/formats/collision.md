@@ -229,6 +229,12 @@ thing from the per-mesh one. Nothing here resolves it; the conflict is precise
 enough to be settled by re-reading `Sap_Init` (`0x0882f8f4`) against a real
 track's extent.
 
+`oag-view --collision <track.vex>` prints the reach from the origin per track and
+flags anything past ±1024, so the per-track distribution is one command away -
+see [oag-view](../tools/oag-view.md#collision). The numbers above are whole-disc
+maxima; whether one track is the outlier or every track exceeds it is not
+recorded here.
+
 ### The header word is probably not a version
 
 The first `u32` is `0xffff_ffff` on all 319 nodes, and the loader reads it without
