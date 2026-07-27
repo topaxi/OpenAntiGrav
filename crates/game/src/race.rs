@@ -66,9 +66,31 @@ use oag_render::{mesh, mesh_render, track as track_render};
 
 /// The track a race is flown on unless another is named.
 ///
-/// One of the two names `oag-view` already draws, so the picture can be compared
-/// against a tool that predates the simulation.
-pub const DEFAULT_TRACK: &str = r"Data\Environments\01_Track\track.vex";
+/// **`16_Track`, and this is a measurement rather than a preference.** The reference
+/// scenario every PPSSPP capture uses is Talon's Junction White (see
+/// `docs/reverse-engineering/ppsspp-debugger.md`), and the directory that holds it was
+/// assumed to be `01_Track` until the recording was checked against the geometry
+/// instead of against the name:
+///
+/// - `Data\Plugins\PI001\Definition.xml` lists `<PI_Track name="16_Track">` **first**,
+///   at `soundregister="1"`, with `location="Data\Environments\16_Track"`.
+///   `01_Track` is `soundregister="18"`.
+/// - Decisively, the capture's own 200 recorded positions were cast against every
+///   track on the disc. `16_Track` is the only one that finds geometry under **200 of
+///   200** of them, and the mean height it finds is **4.002** against the
+///   `4.125 - 0.147 = 3.978` this crate's own spring predicts for a resting ship.
+///   Every other track and every sign convention comes out at a few dozen units off
+///   or misses outright.
+///
+/// So a trace comparison run against `01_Track` seeded the original's Talon's Junction
+/// position into a different track's collision soup, which is why `grounded` read `0.0`
+/// from the first tick while the recording read `1.0` on all 200. That was read as a
+/// force-law failure and it was a track-selection one.
+///
+/// Note the reciprocal fact recorded with it: the same 200 positions sit a fairly
+/// constant **~21 units** from `16_Track`'s AI racing line, so `spline_distance` and
+/// "on the driveable surface" are not the same measurement for this recording.
+pub const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
 
 /// The team whose `handlingstats.xml` and model a race uses by default.
 ///

@@ -204,65 +204,75 @@ team's hull - nothing in the executable has been read that states the convention
 
 ## What it actually does, and what it does not
 
-Everything below was measured on the USA PSP disc with Feisar in the Venom class, on
-`01_Track`, with thrust held from the first tick. It is reproducible with the command
-under [Running it](#running-it) and asserted by
+Everything below was measured on the USA PSP disc with **Assegai in the Venom class
+on `16_Track`** - the reference scenario every PPSSPP capture uses, which
+`race::DEFAULT_TRACK`/`DEFAULT_TEAM` now default to exactly - with thrust held from
+the first tick. It is reproducible with the command under [Running it](#running-it)
+and asserted by
 [`race_ground_truth.rs`](../../crates/game/tests/race_ground_truth.rs).
 
 **What works.** A ship spawns on the racing line the right way up, its hover probes
 find the track's collision geometry, and it accelerates forward - along its own
-forward axis, not merely somewhere - down the spline. At two seconds it has travelled
-tens of units, is doing tens of units per second, and has never been more than about
-a third of the "off the track" envelope away from the spline; it was in contact with
-the surface on roughly seven ticks in ten, though on **one** hover probe rather than
-two for almost all of them. Every downward probe from a spread of two
+forward axis, not merely somewhere - down the spline. Over two seconds it is in
+contact on **120 of 120 ticks with both probes on every one of them**, holding a hover
+height between 3.8 and 4.4 against a 4.125 target, and never more than 4.3 units from
+the spline against a 114-unit envelope. Every downward probe from a spread of two
 hundred samples along the whole spline finds collision geometry within one probe
 reach, so the spline decode and the collision decode agree about where the track is,
 and `--art` shows the art meshes agreeing with both.
 
-**What does not work: it cannot fly a lap.** At around 100 ticks a growing
-oscillation about the hover target height costs the ship the probe contact it had
-left; it pitches, is thrown clear of the surface, and by around tick 166 it is
-outside the envelope. From there it leaves the track sideways and falls indefinitely
-at a terminal 234 units per second, still finite after 3600 ticks. From other
-starting heights the same instability instead produces a non-finite state within a
-few hundred ticks, which is why the test accepts either.
+### The suspension was never the problem: the default track was
 
-Three measurements say this is the recovered force law and not the composition above
-it, and none of the three is in the shipped code:
+This section previously recorded a growing oscillation about the hover target that
+cost the ship its probe contact at about 100 ticks and threw it clear by 166, with a
+missing inertia tensor as the amplifier and single-probe contact as the trigger - the
+ship was grounded on 83 of 120 ticks and on *both* probes on only 6. **That was a ship
+being flown over the wrong track's collision geometry.**
 
-1. It reproduces with the same parameters on a **flat infinite floor** with no track,
-   no spline, no collision decode and no camera, driven exactly the way
-   `crates/physics/tests/ship_dynamics.rs` drives it.
-2. At **a quarter of the timestep** the same parameters are stable.
-3. At the full timestep with a **textbook box inertia tensor** built from `<Misc>`,
-   the same parameters are stable.
+The scenario is Talon's Junction White, and the directory holding it was assumed to be
+`01_Track`. It is `16_Track`, which is the first `<PI_Track>` in
+`Data\Plugins\PI001\Definition.xml` at `soundregister="1"`, where `01_Track` is
+`soundregister="18"`. The decisive evidence is geometric rather than nominal: the 200
+recorded positions of a real capture of this scenario were cast against every track on
+the disc, and `16_Track` is the only one that finds geometry under **200 of 200** of
+them - at a mean height of **4.002**, against the `4.125 - 0.147 = 3.978` this
+project's own hover spring independently predicts for a ship at rest. Every other
+track and every sign convention misses outright or lands tens of units away.
 
-A single probe in contact is an off-centre force, so it is a pitch torque applied
-every tick, and over the measured two seconds that is the state the ship is in for
-almost all of the ticks it is grounded at all. That looks like the trigger. The
-amplifier is the one thing the ship data does not carry: an **inertia tensor**.
-`Body::inertia` is `(1, 1, 1)` because nothing observed says how the original builds
-one, while the hover probes apply their force about six units from the centre of
-mass, so the torque they generate is divided by 1 rather than by a real moment.
-Deriving a box tensor from the hull dimensions would make the demo look better and
-would be an invented constant, which
-[ADR-0005](../architecture/adr/0005-ghidra-conventions.md)'s reasoning says is worse
-than a visible gap.
+Three things follow, and the third matters most:
 
-The other suspect is that `hover::target_height` exceeds `<Antigrav ride_height>` on
-this data, because of the additive `antigrav_height_adjust` term that
-`oag_physics::hover` already records as a guess at confidence 50 with "nothing was
-found that writes it". `ride_height` is *also* the probe's raycast length, so a target
-above it means there is no height at which the spring is at rest and the probes are in
-contact: the oscillation is structural under that reading rather than being a stiff
-spring settling. Zeroing the offset makes target and reach equal. That is one line in
-`oag_physics::hover` and is not this mode's to change.
+- The suspension numbers above are what a working air cushion looks like, and both
+  `TARGET_GLOBAL_SCALE = 0.75` and the `<Misc>` box inertia are corroborated rather
+  than merely plausible - the measured 4.002 is the height they predict.
+- The trace comparison's headline finding, that `grounded` read `0.0` from the very
+  first tick while the recording read `1.0` on all 200, was **track selection, not the
+  force law**. With `16_Track` the two agree exactly for the first 29 ticks.
+- A wrong *name* produced a symptom that read as a wrong *force law*, and three
+  separate physics explanations were built on top of it. The check that broke it -
+  cast the recording's own positions at every candidate and see which one the ship is
+  actually standing on - needs no disassembly and takes a minute.
 
-Neither is a tuning problem and neither is fixed here. Both are for M3's
-[trace comparison](../reverse-engineering/verification-protocol.md), which is the
-first point at which anything about the force law can be checked against the original
-rather than against itself.
+### What does not work: there is no speed equilibrium
+
+At full throttle the real capture holds **23.6 to 25.1 units/s** and is very slightly
+*decelerating*. This simulation passes **99.9 by tick 120** and keeps climbing to
+about 115, and it leaves the 114-unit envelope at about tick **257** - not by falling
+off the surface but by being unable to follow a track section at four times the
+intended speed. It stays grounded on both probes until tick 170 while doing 115.
+
+The arithmetic, from the recording rather than from a fit: with quadratic drag at
+`-0.005` while grounded and rolling resistance at `2.0`, a steady 24 units/s needs a
+net thrust of `0.005 * 24^2 + 2 = 4.9` units. `oag_physics::engine::engine` produces
+**83.6** once the `accelcap` stops binding, which is a factor of about **17**.
+
+Where that factor lives is **not determined**, and the candidates are all recorded
+gaps rather than new guesses: `Engine.amount`'s load-time `1e-3` scale, the
+unrecovered `craft+0x294` multiplier that
+`oag_physics::engine::ENGINE_OUTPUT_SCALE` carries as `1.0`, the two drag
+coefficients, or the relationship between `<Physical mass>` and the rigid body's own
+mass that `docs/ghidra/functions/psp-pulse/engine.md` records as untraced. Nothing is
+tuned here to close it: a value fitted to one capture would be indistinguishable from
+a recovered one six months from now.
 
 Two other known gaps, both expected: an **inverted ship falls off**, because the
 magstrip magnetic hold is not decoded and not implemented (see

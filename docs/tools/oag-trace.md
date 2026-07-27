@@ -146,33 +146,50 @@ disc exactly as `oag-game` reads them.
 Run against a real capture - the [reference
 scenario](../reverse-engineering/ppsspp-debugger.md#the-reference-scenario), 200
 ticks of Talon's Junction White in Venom on an Assegai - against our own
-simulation seeded from the same first row and given the same held thrust:
+simulation seeded from the same first row and given the same held thrust.
+
+**The first run of this comparison was against the wrong track, and its headline
+finding was an artefact of that.** It reported `grounded` at `1.0` on all 200
+recorded ticks and `0.0` on all but our seeded tick 0, and read that as our hover
+probes finding nothing on the original's own starting position - "the ship falls
+through the floor at the first step", a force-law failure. It was not. The
+scenario's Talon's Junction lives in `Data\Environments\16_Track`, not the
+`01_Track` this tool and `oag-game` both defaulted to, so the run was seeding a
+Talon's Junction ship into a different track's collision soup. See
+[`oag-game`'s note](oag-game.md#the-suspension-was-never-the-problem-the-default-track-was)
+for the measurement that settled it - 200 of 200 recorded positions find geometry on
+`16_Track` at a mean height of 4.002, against the 3.978 our own spring predicts.
+
+**Read this as a lesson about the tool, not only about the track.** `compare` is
+built to say *where* two runs diverge and it did that correctly; what it cannot do
+is notice that its two inputs describe different worlds. A `--track` that is merely
+wrong produces a clean, confident, entirely misleading physics report, and three
+separate force-law explanations were built on top of this one before anybody cast
+the recording's own positions at the geometry.
+
+With `16_Track`, on the same capture and the same held thrust:
 
 | Field | First tick outside tolerance | Max error | Trend |
 | --- | ---: | ---: | --- |
-| `speed` | 0 | 188 units/s | growing |
-| `grounded` | 1 | 1.0 (exact field) | bounded |
-| `velocity` | 1 | 211 units/s | growing |
-| `orientation.forward` | 1 | 1.52 rad | growing |
-| `speed_cached` | 2 | 188 units/s | growing |
-| `position` | 3 | 424 units | growing |
+| `grounded` | 30 | 1.0 (exact field), 30 of 200 ticks | growing |
+| `speed` | 0 | 152 units/s | growing |
+| `velocity` | 1 | 172 units/s | growing |
+| `orientation.forward` | 1 | 1.72 rad | growing |
+| `position` | 3 | 259 units | growing |
 | `throttle`, `brake`, `steer`, airbrakes | - | 0 | exact |
 
-`speed` leads the report and should be read past: it is out at tick 0, which is
-the *seeded* row, so it cannot be a physics result. It is the `+0x398` mismatch
-described below - the recording disagreeing with our model of what that column
-holds. The physics headline is the tick 1 group.
+`speed` leads the report and should still be read past: it is out at tick 0, which
+is the *seeded* row, so it cannot be a physics result. It is the `+0x398` mismatch
+described below.
 
-**The ship falls through the floor at the first step.** `grounded` is 1.0 on all
-200 recorded ticks and 0.0 on all but tick 0 of ours - and tick 0 is the seeded
-initial condition, so our hover probes find nothing *on the original's own
-starting position*. Everything below it in the table follows from that: our ship
-free-falls 420 units while the original stays on the track, and its speed grows
-to 211 units/s against a recorded 22.7. The control columns match exactly, so the
-input path and the scaling are right and the divergence is entirely in the force
-law. This is the measurement `docs/physics/README.md`'s hover section was waiting
-for: the probe reach, the ride height, or the target height is wrong, and the
-trace says which tick to look at.
+**`grounded` now agrees exactly for the first 29 ticks**, and what breaks it is not
+the suspension: our ship over-accelerates. The recording holds 23.6 to 25.1 units/s
+at throttle 100 while ours passes 55 by tick 30, 81 by tick 100 and 170 by tick 190,
+and it starts shedding probe contact as soon as it is going fast enough that the
+surface curves away from under it. The control columns match exactly, so this is a
+force *magnitude* question - see
+[`oag-game`'s "no speed equilibrium"](oag-game.md#what-does-not-work-there-is-no-speed-equilibrium)
+for the arithmetic and the four candidates.
 
 **The handedness question is settled, and not by simulation.** The capture alone
 answers it: the ship travels along **+row 2** (`dot(velocity_hat, fwd) = +0.997`

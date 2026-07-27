@@ -30,8 +30,10 @@ use oag_trace::replay::{Basis, DeltaSource, Held, Inputs, Options};
 use oag_trace::{Trace, compare, replay};
 
 /// The track a recording is assumed to have been taken on unless another is
-/// named. The same default `oag-game` races on.
-const DEFAULT_TRACK: &str = r"Data\Environments\01_Track\track.vex";
+/// named. The same default `oag-game` races on, and the directory the reference
+/// scenario's Talon's Junction actually lives in - see `oag_game::race::DEFAULT_TRACK`
+/// for the measurement that settled it against the previously assumed `01_Track`.
+const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
 
 /// The team whose `handlingstats.xml` is read unless another is named. The
 /// same default `oag-game` races on, and the team the reference scenario in

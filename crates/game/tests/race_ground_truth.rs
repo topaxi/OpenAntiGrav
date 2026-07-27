@@ -33,9 +33,22 @@
 //!
 //! It cannot fly a lap. [`the_ship_does_not_stay_on_the_track_yet`] is the recorded
 //! negative result, with what was measured; the summary is in
-//! `docs/tools/oag-game.md`. That failure reproduces with the same parameters on a
-//! flat infinite floor with no track, no spline and no camera, so it is not this
-//! composition, and nothing here is tuned to hide it.
+//! `docs/tools/oag-game.md`.
+//!
+//! **What that failure is has changed, and the earlier diagnosis was wrong.** It used
+//! to be a suspension that dropped a probe and threw the ship: on the previous default
+//! track the ship was grounded on 83 of 120 ticks with *both* probes on only 6, and it
+//! left the envelope by tick 166. The default track was the bug - see
+//! [`oag_game::race::DEFAULT_TRACK`] - and with the right one the same run is grounded
+//! on **120 of 120** ticks with both probes on all 120, hover height steady between
+//! 3.8 and 4.4 against a 4.125 target, and the envelope holds to tick **257**.
+//!
+//! What is left is a different failure with a different cause: **the ship has no speed
+//! equilibrium.** A real capture of this exact scenario holds 23.6-25.1 units/s at full
+//! throttle; this simulation passes 99 by tick 120 and keeps climbing, and it leaves
+//! the track because a track section eventually turns faster than a ship at four times
+//! the intended speed can follow. That is an engine/drag magnitude question, not a
+//! suspension one, and nothing here is tuned to hide it.
 
 use std::path::{Path, PathBuf};
 
@@ -49,9 +62,9 @@ use oag_physics::{Raycaster, SpeedClass};
 /// Ticks the well-behaved assertions cover: two seconds at the fixed 60 Hz.
 ///
 /// Not a chosen-because-it-passes number in the usual sense, and worth being honest
-/// about: the ship is measurably fine for about 100 ticks and measurably gone by
-/// about 166, so two seconds is inside the first and short of the second. When the
-/// physics improves this should grow, and
+/// about: the ship holds both probes for all 120 of these and is measurably gone by
+/// about 257, so two seconds is comfortably inside the first and short of the second.
+/// When the physics improves this should grow, and
 /// [`the_ship_does_not_stay_on_the_track_yet`] is what will notice.
 const TICKS: u32 = 120;
 
@@ -172,6 +185,17 @@ fn a_ship_spawns_on_the_spline_and_flies_along_it() {
         grounded_ticks > 0,
         "no hover probe ever reached the track's collision geometry"
     );
+    // And it hovered on *both* probes, every tick. This is the pin on
+    // `race::DEFAULT_TRACK`: against the track this scenario was previously flown on,
+    // the same run held both probes on 6 of these 120 ticks and one on 83, which reads
+    // as a suspension that cannot hold a ship and was actually a ship being flown over
+    // the wrong track's collision geometry. Strict on purpose - a single dropped probe
+    // here is a regression worth looking at, and this test never runs in CI.
+    assert_eq!(
+        both_probes, TICKS,
+        "both hover probes were in contact on only {both_probes} of {TICKS} tick(s); \
+         see race::DEFAULT_TRACK"
+    );
     // And it went somewhere. Thrust held for two seconds against an engine that
     // reaches tens of units per second cannot leave it where it started.
     let travelled = (end.position - start.position).length();
@@ -290,15 +314,22 @@ fn the_front_end_hands_off_into_a_driveable_race() {
 /// exists so the failure is measured rather than remembered, and so nobody
 /// rediscovers it by hand.
 ///
-/// What is measured: the suspension oscillates about its target height without
-/// damping out, and once one of the two probes loses contact the ship pitches, is
-/// thrown clear of the surface and eventually leaves the envelope entirely. The
-/// prime suspect is that nothing in the recovered ship data carries an **inertia
-/// tensor**, so `Body::inertia` is `(1, 1, 1)` while the hover probes apply their
-/// force about six units from the centre of mass. Two diagnostics point the same way
-/// and neither is in the shipped code: at a quarter of the timestep the same
-/// parameters are stable, and so is a textbook box tensor built from `<Misc>` at the
-/// full timestep.
+/// What is measured, as of the `DEFAULT_TRACK` correction: the suspension is fine -
+/// both probes hold contact for the whole of [`TICKS`] at a steady 3.8 to 4.4 against
+/// a 4.125 target - and the ship leaves the envelope at about tick **257** because it
+/// is going far too fast to follow the track, not because it fell off it.
+///
+/// **The remaining cause is a missing speed equilibrium.** A real capture of this same
+/// scenario (`data/traces/talons-junction-venom-assegai.csv`) holds 23.6 to 25.1
+/// units/s at throttle 100 and is very slightly *decelerating*; this simulation is at
+/// 99.9 by tick 120 and still climbing. The force balance the recording implies is
+/// `2 * thrust = 0.005 * v^2 + 2` at `v = 24`, so about **4.9 units** of net thrust
+/// against the **83.6** `oag_physics::engine::engine` produces once the accelcap stops
+/// binding - a factor of about 17. Whether that is `Engine.amount`'s load-time scale,
+/// the unrecovered `craft+0x294` multiplier
+/// (`oag_physics::engine::ENGINE_OUTPUT_SCALE`, guessed at `1.0`), the drag
+/// coefficients, or a mass that is not the body's is **not determined**, and nothing
+/// is tuned here to make the number come out.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_ship_does_not_stay_on_the_track_yet() {
