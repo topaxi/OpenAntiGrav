@@ -27,7 +27,7 @@ use oag_gameplay::{collision_world, handling_for};
 use oag_physics::{CollisionWorld, Environment, Handling, SpeedClass};
 use oag_trace::compare::Tolerances;
 use oag_trace::replay::{Basis, DeltaSource, Held, Inputs, Options};
-use oag_trace::{Trace, compare, replay};
+use oag_trace::{Script, Trace, compare, replay};
 
 /// The track a recording is assumed to have been taken on unless another is
 /// named. The same default `oag-game` races on, and the directory the reference
@@ -84,6 +84,14 @@ enum Command {
         /// Write the simulated trace here, in the same columns.
         #[arg(long)]
         out: Option<PathBuf>,
+        /// Drive the run from a committed input script, the same file
+        /// `psp-trace.py --script` drove the capture with.
+        ///
+        /// The only mode where a *varying* input is known rather than inferred.
+        /// See `oag_trace::script` for the format and
+        /// `verification/scenarios/` for the committed ones.
+        #[arg(long, value_name = "FILE", conflicts_with_all = ["hold", "steer", "airbrake_left", "airbrake_right"])]
+        script: Option<PathBuf>,
         /// Hold a button for the whole run, e.g. `--hold cross`. Repeatable.
         ///
         /// Matches `psp-trace.py --hold`. Giving any held input switches the run
@@ -111,6 +119,19 @@ enum Command {
         no_collision: bool,
         #[command(flatten)]
         tolerances: ToleranceArgs,
+    },
+    /// Validate an input script and say what it does.
+    ///
+    /// `--expand` writes one line per tick, which is exactly what
+    /// `scripts/input_script.py --expand` writes: diffing the two is a proof
+    /// that the emulator side and this side read a script identically, which is
+    /// the whole premise of driving both from one file.
+    Script {
+        /// The script, e.g. `verification/scenarios/steer-both-ways.inputs`.
+        script: PathBuf,
+        /// Write one line per tick instead of a summary.
+        #[arg(long)]
+        expand: bool,
     },
     /// Compare two traces that already exist.
     Compare {
@@ -194,6 +215,16 @@ impl From<ToleranceArgs> for Tolerances {
 fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Show { trace } => show(&trace),
+        Command::Script { script, expand } => {
+            let parsed = read_script(&script)?;
+            if expand {
+                print!("{}", parsed.to_expanded());
+            } else {
+                println!("{} tick(s)", parsed.len());
+                print!("{}", parsed.to_text());
+            }
+            Ok(())
+        }
         Command::Compare {
             recorded,
             simulated,
@@ -211,6 +242,7 @@ fn main() -> Result<()> {
             team,
             class,
             out,
+            script,
             hold,
             steer,
             airbrake_left,
@@ -226,6 +258,7 @@ fn main() -> Result<()> {
             team,
             class,
             out,
+            script,
             hold,
             steer,
             airbrake_left,
@@ -253,6 +286,7 @@ struct RunArgs {
     team: String,
     class: String,
     out: Option<PathBuf>,
+    script: Option<PathBuf>,
     hold: Vec<String>,
     steer: Option<f32>,
     airbrake_left: Option<f32>,
@@ -294,7 +328,7 @@ fn run(args: RunArgs) -> Result<()> {
     };
 
     let options = Options {
-        inputs: inputs(&args)?,
+        inputs: inputs(&args, recorded.len())?,
         dt: if args.fixed_dt {
             DeltaSource::Fixed(FIXED_DT)
         } else {
@@ -332,9 +366,26 @@ fn run(args: RunArgs) -> Result<()> {
     Ok(())
 }
 
-/// How the replay is driven: the recording's own control states, or a fixed
-/// input the capture was taken with.
-fn inputs(args: &RunArgs) -> Result<Inputs> {
+/// How the replay is driven: an authored script, a fixed input the capture was
+/// taken with, or - failing both - the recording's own control states.
+fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
+    if let Some(path) = &args.script {
+        let script = read_script(path)?;
+        if script.is_empty() {
+            bail!("{}: the script has no ticks in it", path.display());
+        }
+        if script.len() < ticks {
+            eprintln!(
+                "note: {} covers {} tick(s) and the recording has {ticks}, so the \
+                 script's last state is held for the remaining {}. That is nearly \
+                 always an over-short script rather than an intent.",
+                path.display(),
+                script.len(),
+                ticks - script.len(),
+            );
+        }
+        return Ok(Inputs::Scripted(script.states));
+    }
     if args.hold.is_empty()
         && args.steer.is_none()
         && args.airbrake_left.is_none()
@@ -395,6 +446,12 @@ fn load(
     );
 
     Ok((handling, collision))
+}
+
+fn read_script(path: &Path) -> Result<Script> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    Script::parse(&text).with_context(|| format!("parsing {}", path.display()))
 }
 
 fn read_trace(path: &Path) -> Result<Trace> {

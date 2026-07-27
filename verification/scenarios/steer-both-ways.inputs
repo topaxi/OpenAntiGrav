@@ -1,0 +1,39 @@
+# A variant of scenario 2 of docs/reverse-engineering/verification-protocol.md:
+# steering response, taken both ways in one run.
+#
+# Thrust throughout, with a half-second of full left, a straight, and then a
+# half-second of full right. 200 ticks, matching the reference capture's length.
+#
+# Why both ways rather than the protocol's single constant turn: the sign of the
+# yaw response is one of the things this harness exists to settle - row 0 of the
+# recorded basis being the ship's *left* is an 84-confidence finding, and
+# `oag-trace --basis` exists because of it. A run that turns one way and then the
+# other is symmetric about the straight in the middle, so a sign error shows up
+# as the two halves swapping rather than as a plausible-looking curve. A single
+# constant turn cannot distinguish those.
+#
+# Why half a second and not longer: at the reference scenario's ~24 units/s and
+# the ~1.5 rad/s yaw rate measured for a held steer, 30 ticks is about 43
+# degrees. Long enough to be far outside any tolerance if the steering model is
+# wrong, short enough that the ship should still be on Talon's Junction's first
+# straight rather than in a wall - a scrape would confound the steering
+# measurement with the collision response, which is scenario 4's job.
+#
+# The straight in the middle is not padding. It is where the ship's own damping
+# is the only thing acting on the yaw, which is the part of the steering model a
+# held input never exercises.
+#
+# Reference scenario: Time Trial, Venom, Talon's Junction White
+# (Data\Environments\16_Track), Assegai.
+#
+# Reading a capture of this back tells you the input phase for free: the
+# recorded `steer` column is flat until the tick the game first saw `left`, so
+# the offset between "tick 60 of the script" and "the tick steer moves" is the
+# emulator's input latency, measured rather than assumed. See
+# `psp-trace.py --script-lead`.
+
+60 cross
+30 cross left
+30 cross
+30 cross right
+50 cross

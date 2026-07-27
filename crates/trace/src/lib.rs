@@ -28,8 +28,17 @@
 //! | Module | What it is |
 //! | --- | --- |
 //! | [`mod@trace`] | The CSV format, exactly as the capture script writes it |
+//! | [`mod@script`] | The committed input-script format both sides are driven by |
 //! | [`mod@replay`] | Driving `oag-gameplay` and `oag-physics` over a recording's scenario |
 //! | [`mod@compare`] | The tolerance table, the first divergence, and the trends |
+//!
+//! # Traces are not committed; scripts are
+//!
+//! A trace is *derived game data* - it comes off a disc, through an emulator, and
+//! must never be committed. An input script is the opposite: a list of button
+//! names somebody chose, containing nothing that came from the original, and it
+//! is committed precisely so that a capture and a replay months apart can be
+//! driven by the same authored intent. See [`mod@script`].
 //!
 //! # What this crate deliberately does not do
 //!
@@ -47,8 +56,10 @@
 
 pub mod compare;
 pub mod replay;
+pub mod script;
 pub mod trace;
 
 pub use compare::{Comparison, Divergence, Field, Tolerances, compare};
 pub use replay::{Options, replay};
+pub use script::Script;
 pub use trace::{Frame, Trace};

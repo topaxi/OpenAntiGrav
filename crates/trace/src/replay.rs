@@ -28,11 +28,13 @@
 //!   produced them, so [`Inputs::FromTrace`] feeds a ramped signal into our own
 //!   ramp and will lag on any tick where the input is moving. [`Inputs::Held`]
 //!   is the honest mode for a capture taken with `psp-trace.py --hold`, where the
-//!   input is constant and known.
-//!   A second, smaller reason to prefer it: a recorded row is read at the *entry*
-//!   of `Ship_UpdateCraft`, so its control states are what tick n-1 wrote, and
-//!   feeding them as tick n's input lags our ramps by one frame on top of the
-//!   double ramp. Under a constant held input neither effect exists.
+//!   input is constant and known, and [`Inputs::Scripted`] is the honest mode for
+//!   one taken with `psp-trace.py --script`, where it is varying and *still*
+//!   known, because both sides read the same committed file.
+//!   A second, smaller reason to prefer either: a recorded row is read at the
+//!   *entry* of `Ship_UpdateCraft`, so its control states are what tick n-1
+//!   wrote, and feeding them as tick n's input lags our ramps by one frame on top
+//!   of the double ramp. Under an authored input neither effect exists.
 //! - **`time_since_landing` and the leap timer are not in the capture**, so a run
 //!   starts outside the landing window with no leap in progress.
 
@@ -114,22 +116,14 @@ pub enum DeltaSource {
 }
 
 /// One fixed input, held for the whole run.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Held {
-    /// Abstract button indices, as a mask. See `oag_gameplay::input::button`.
-    pub buttons: u32,
-    /// Analog stick X.
-    pub stick_x: f32,
-    /// Analog stick Y.
-    pub stick_y: f32,
-    /// Left airbrake, `0..=1`.
-    pub airbrake_left: f32,
-    /// Right airbrake, `0..=1`.
-    pub airbrake_right: f32,
-}
+///
+/// The same five quantities a scripted tick carries, and the same type: a held
+/// input is a one-state script, and saying so in the type system is what stops
+/// the two modes from drifting apart.
+pub type Held = crate::script::State;
 
 /// How the run is driven.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub enum Inputs {
     /// Rebuild each tick's input from that tick's recorded control states.
     ///
@@ -138,10 +132,18 @@ pub enum Inputs {
     FromTrace,
     /// Hold one input for the whole run, matching `psp-trace.py --hold`.
     Held(Held),
+    /// Drive each tick from an authored [`Script`](crate::script::Script),
+    /// matching `psp-trace.py --script`.
+    ///
+    /// The only mode where a *varying* input is known rather than inferred, and
+    /// the only one that is reusable: the same committed file drove the capture
+    /// this run is being compared against. A script shorter than the recording
+    /// holds its last state - see [`Script::at`](crate::script::Script::at).
+    Scripted(Vec<Held>),
 }
 
 /// How to replay a recording.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Options {
     /// Where the input comes from.
     pub inputs: Inputs,
@@ -273,7 +275,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         ));
         speed_cached = state.body.linear_velocity.dot(state.body.forward());
 
-        let snapshot = snapshot_for(recorded, &mut buttons, options.inputs);
+        let snapshot = snapshot_for(recorded, &mut buttons, &options.inputs, index);
         let controls = ship_controls(&snapshot);
         let ship = &mut world.ships[0];
         oag_physics::step(
@@ -317,8 +319,15 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, basis: Bas
 ///
 /// The button edges are carried across ticks in `buttons` rather than rebuilt per
 /// tick, because a snapshot built from scratch would report every held button as
-/// freshly pressed on every tick.
-fn snapshot_for(recorded: &Frame, buttons: &mut Input, inputs: Inputs) -> InputSnapshot {
+/// freshly pressed on every tick. That matters for [`Inputs::Scripted`] and not
+/// for the other two: a script is the only mode where a button goes down part-way
+/// through a run, so it is the only one where an edge is ever real.
+fn snapshot_for(
+    recorded: &Frame,
+    buttons: &mut Input,
+    inputs: &Inputs,
+    index: usize,
+) -> InputSnapshot {
     let (mask, snapshot) = match inputs {
         Inputs::FromTrace => (
             if recorded.throttle > 0.0 {
@@ -334,16 +343,17 @@ fn snapshot_for(recorded: &Frame, buttons: &mut Input, inputs: Inputs) -> InputS
                 ..InputSnapshot::new()
             },
         ),
-        Inputs::Held(held) => (
-            held.buttons,
-            InputSnapshot {
-                stick_x: held.stick_x,
-                stick_y: held.stick_y,
-                airbrake_left: held.airbrake_left,
-                airbrake_right: held.airbrake_right,
-                ..InputSnapshot::new()
-            },
-        ),
+        Inputs::Held(held) => (held.buttons, snapshot_of(held)),
+        // A script shorter than the recording holds its last state rather than
+        // releasing everything; `Script::at` is where that is argued.
+        Inputs::Scripted(states) => {
+            let state = states
+                .get(index)
+                .or_else(|| states.last())
+                .copied()
+                .unwrap_or_default();
+            (state.buttons, snapshot_of(&state))
+        }
     };
     buttons.begin_frame(mask);
     InputSnapshot {
@@ -351,6 +361,17 @@ fn snapshot_for(recorded: &Frame, buttons: &mut Input, inputs: Inputs) -> InputS
         ..snapshot
     }
     .sanitised()
+}
+
+/// The axes of one authored input state, without its button edges.
+fn snapshot_of(state: &Held) -> InputSnapshot {
+    InputSnapshot {
+        stick_x: state.stick_x,
+        stick_y: state.stick_y,
+        airbrake_left: state.airbrake_left,
+        airbrake_right: state.airbrake_right,
+        ..InputSnapshot::new()
+    }
 }
 
 #[cfg(test)]
@@ -617,6 +638,103 @@ mod tests {
             &Options::default(),
         );
         assert!(simulated.frames.iter().all(|f| f.throttle == 100.0));
+    }
+
+    /// The point of a script: the input *changes* part-way through a run, and it
+    /// changes on the tick the file says rather than on whatever tick the
+    /// recording happened to.
+    #[test]
+    fn a_scripted_input_changes_on_the_tick_the_script_says() {
+        let mut recorded = coasting(6, 1.0 / 60.0, Vec3::ZERO);
+        for frame in &mut recorded.frames {
+            // The recording says thrust throughout, and the script must win.
+            frame.throttle = 100.0;
+        }
+        let script = crate::script::Script::parse("3 none\n3 cross\n").expect("parses");
+        let options = Options {
+            inputs: Inputs::Scripted(script.states.clone()),
+            ..Options::default()
+        };
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &options,
+        );
+        // Tick 0 is the seeded initial condition, so it still carries the
+        // recording's throttle; ticks 1 and 2 are the script's `none`, and the
+        // thrust the script asks for at tick 3 shows in the row *after* it,
+        // because a row is sampled before its own step.
+        assert_eq!(simulated.frames[1].throttle, 0.0);
+        assert_eq!(simulated.frames[3].throttle, 0.0);
+        assert!(simulated.frames[4].throttle > 0.0);
+    }
+
+    /// A script's steering must reach the force law through the same axis a pad's
+    /// would, or a scripted turn is not the turn a player would take. Asserted on
+    /// the snapshot rather than on the ship's own `steer`, which is downstream of
+    /// a ramp whose rate the inert test parameter set holds at zero.
+    #[test]
+    fn a_scripted_dpad_reaches_the_stick_axis_and_the_cross_bit() {
+        let script = crate::script::Script::parse("2 cross left\n").expect("parses");
+        let inputs = Inputs::Scripted(script.states.clone());
+        let mut buttons = Input::new();
+        let snapshot = snapshot_for(&Frame::default(), &mut buttons, &inputs, 0);
+        assert_eq!(snapshot.stick_x, -1.0, "left is negative stick x");
+        assert!(snapshot.buttons.is_held(button::CROSS));
+        assert!(snapshot.buttons.is_pressed(button::LEFT), "tick 0 is an edge");
+
+        let snapshot = snapshot_for(&Frame::default(), &mut buttons, &inputs, 1);
+        assert!(
+            !snapshot.buttons.is_pressed(button::LEFT),
+            "a button held across two scripted ticks is not pressed twice"
+        );
+    }
+
+    /// A script shorter than the recording holds its last state rather than
+    /// releasing everything, which would put a deceleration into the comparison
+    /// that nobody asked for.
+    #[test]
+    fn a_short_script_holds_its_last_state_for_the_rest_of_the_run() {
+        let recorded = coasting(8, 1.0 / 60.0, Vec3::ZERO);
+        let script = crate::script::Script::parse("2 cross\n").expect("parses");
+        let options = Options {
+            inputs: Inputs::Scripted(script.states.clone()),
+            ..Options::default()
+        };
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &options,
+        );
+        assert!(simulated.frames[7].throttle > 0.0);
+    }
+
+    /// A one-state script and the equivalent held input are the same run. They
+    /// share a type for exactly this reason, and this is what says so.
+    #[test]
+    fn a_one_state_script_is_the_same_run_as_the_equivalent_held_input() {
+        let recorded = coasting(30, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let script = crate::script::Script::parse("30 cross\n").expect("parses");
+        let run = |inputs| {
+            replay(
+                &recorded,
+                &inert_handling(),
+                &Environment::default(),
+                &CollisionWorld::new(),
+                &Options {
+                    inputs,
+                    ..Options::default()
+                },
+            )
+        };
+        assert_eq!(
+            run(Inputs::Scripted(script.states.clone())),
+            run(Inputs::Held(script.states[0]))
+        );
     }
 
     #[test]

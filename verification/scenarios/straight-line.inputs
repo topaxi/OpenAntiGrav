@@ -1,0 +1,19 @@
+# Scenario 1 of docs/reverse-engineering/verification-protocol.md: straight line.
+#
+# Full thrust, no steering, for 200 ticks. Isolates acceleration and drag: the
+# only forces acting are the engine, the passive resistances and whatever the
+# hover probes find under the ship.
+#
+# This is deliberately identical to the `--hold cross` capture that
+# docs/reverse-engineering/ppsspp-debugger.md#the-reference-scenario already
+# documents as working. It exists so the scripted path can be checked against a
+# result that was measured before scripts existed: a capture taken with
+# `--script straight-line.inputs` and one taken with `--hold cross` must agree,
+# and if they do not, the script machinery is what changed, not the physics.
+#
+# Reference scenario: Time Trial, Venom, Talon's Junction White
+# (Data\Environments\16_Track), Assegai. Start the capture with `--warmup`
+# large enough to be past the countdown - holding thrust through it is a false
+# start, which is why a script's warmup holds nothing.
+
+200 cross
