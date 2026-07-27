@@ -21,10 +21,56 @@ just build-allegrex             # leaves an installable zip in data/tools/
 Then `File > Install Extensions > +` in Ghidra, restart, and re-import. Details
 in [Allegrex and the VFPU](../psp/allegrex-vfpu.md).
 
-The PS2's Emotion Engine is a plain MIPS variant and works out of the box.
+**Stock Ghidra is not sufficient for PS2 binaries either, and fails more
+dangerously than the PSP case.** Its generic MIPS support auto-detects the
+Emotion Engine's R5900 core as `MIPS:LE:64:64-32R6addr` - MIPS Release 6, a
+2014 ISA revision that reassigns much of the opcode space MIPS III (what the
+R5900 actually implements) used. That is not a near-miss: R5900 code decoded
+as R6 is mostly wrong, and analysis finds almost nothing (1 function on
+`SCES_547.48`, versus 5,234 once the language is right).
 
-The Ghidra project lives in `data/ghidra/`, which is gitignored. The project
-database is a working copy; the record of truth is `docs/ghidra/`. See
+Worse, some of the R5900's MMI (multimedia instruction) encodings alias onto
+opcodes stock Ghidra recognises as MIPS DSP ASE - a real but different vendor
+extension. Rather than rejecting the byte pattern, it silently decodes a
+plausible-looking but wrong instruction (`ADDU.QB`, `DPA.W.PH` seen in
+practice), which reads as legitimate disassembly rather than an obvious
+failure. `halt_baddata` a few instructions later, if present, is the tell.
+
+Install [ghidra-emotionengine-reloaded](https://github.com/chaoticgd/ghidra-emotionengine-reloaded)
+before importing anything. Build from source against the installed Ghidra,
+same reasoning as Allegrex above - the declared extension version must match
+Ghidra's exactly and upstream does not publish a build for every point
+release:
+
+```sh
+git clone https://github.com/chaoticgd/ghidra-emotionengine-reloaded.git \
+    data/tools/ghidra-emotionengine-reloaded
+gradle -PGHIDRA_INSTALL_DIR=/opt/ghidra --no-daemon \
+    --project-dir data/tools/ghidra-emotionengine-reloaded buildExtension
+# zip lands in data/tools/ghidra-emotionengine-reloaded/dist/
+```
+
+No JDK 21 pin here: this project has no Gradle wrapper and no Kotlin
+toolchain declaration, so the system JDK works (confirmed against JDK 25).
+
+Then `File > Install Extensions > +`, restart Ghidra, and re-import. Unlike
+Allegrex, no manual language selection is needed afterward: the extension
+ships its own `.opinion` file matching the EE's ELF `e_flags`, so a plain
+import auto-detects language `r5900:LE:32:default` directly. It also declares
+a single `default` compiler spec calibrated for the EE - there is no
+o32/n32/o64 choice to make, unlike picking a bare `MIPS:LE:64:*` language by
+hand.
+
+PS2 does not need the image-base fix PSP does: `SCES_547.48`'s `LOAD` segment
+already declares `VirtAddr 0x00100000`, the PS2 user-module convention, so the
+ELF loader places it correctly with no manual rebase step.
+
+The Ghidra project (`OpenAntiGrav.gpr` / `OpenAntiGrav.rep/`) lives at the
+repository root, not under `data/`, and is gitignored by name rather than by
+directory - see the comment above `*.gpr` in `.gitignore`: a project opened at
+the repo root leaves its lock beside the `.gpr`, and that lock records the
+developer's hostname and username. The project database is a working copy;
+the record of truth is `docs/ghidra/`. See
 [ADR-0005](../architecture/adr/0005-ghidra-conventions.md).
 
 ### GhidraMCP
