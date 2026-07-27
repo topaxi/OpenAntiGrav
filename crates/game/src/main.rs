@@ -156,6 +156,12 @@ struct Cli {
     #[arg(long)]
     art: bool,
 
+    /// Overlay the collision soup - the geometry the physics world is actually
+    /// made of, the same view `oag-view --collision` draws - on top of the
+    /// track model chosen above.
+    #[arg(long)]
+    collision: bool,
+
     /// In a race, print a telemetry line every this many ticks. Zero prints
     /// none.
     #[arg(long, default_value_t = 60)]
@@ -180,6 +186,7 @@ fn main() -> Result<()> {
         team: cli.team.clone(),
         class,
         art: cli.art,
+        collision: cli.collision,
     };
 
     // Before `boot::load`, deliberately: the front end's load parses the front-end
@@ -552,6 +559,7 @@ impl Stage {
             setup,
             track_model,
             ship_model,
+            collision_model,
             ..
         } = loaded;
         let scene = race::Scene::new(
@@ -559,6 +567,7 @@ impl Stage {
             &gpu.queue,
             track_model,
             ship_model,
+            collision_model,
             gpu.config.format,
             gpu.size(),
         )?;

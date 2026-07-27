@@ -61,6 +61,7 @@ use oag_gameplay::{
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
+use oag_render::collision as render_collision;
 use oag_render::mesh::Model;
 use oag_render::{mesh, mesh_render, track as track_render};
 
@@ -163,6 +164,10 @@ pub struct Options {
     pub class: SpeedClass,
     /// Draw the track's art meshes instead of the driveable ribbon.
     pub art: bool,
+    /// Overlay the collision soup - the geometry the physics world is actually
+    /// made of - the same view `oag-view --collision` draws, wireframe and
+    /// Cage-excluded, on top of whichever track model was chosen above.
+    pub collision: bool,
 }
 
 impl Default for Options {
@@ -173,6 +178,7 @@ impl Default for Options {
             team: DEFAULT_TEAM.to_string(),
             class: SpeedClass::Venom,
             art: false,
+            collision: false,
         }
     }
 }
@@ -204,6 +210,8 @@ pub struct Loaded {
     pub track_model: Model,
     /// What to draw for the ship.
     pub ship_model: Model,
+    /// The collision soup, if [`Options::collision`] asked for it.
+    pub collision_model: Option<Model>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
@@ -313,6 +321,22 @@ pub fn load(options: &Options) -> Result<Loaded> {
         spline.max_half_width()
     ));
 
+    let collision_model = if options.collision {
+        let soup = render_collision::build_model(
+            &label,
+            &nodes,
+            render_collision::Style::Wireframe,
+            false,
+        );
+        report.push(format!(
+            "drawing the collision soup: {} triangle(s) as outlines",
+            soup.indices.len() / 3
+        ));
+        Some(soup)
+    } else {
+        None
+    };
+
     Ok(Loaded {
         setup: Setup {
             ai,
@@ -322,6 +346,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             chase,
         },
         track_model,
+        collision_model,
         ship_model,
         report,
     })
@@ -987,6 +1012,10 @@ impl Drawable {
 pub struct Scene {
     track: Drawable,
     ship: Drawable,
+    /// The collision soup overlay, present only when `Options::collision` asked
+    /// for it. Drawn with the identity transform, same as the track: the
+    /// collision geometry is already in world space.
+    collision: Option<Drawable>,
     depth: wgpu::Texture,
     /// Where the far plane goes, from the track's own extent.
     far: f32,
@@ -1003,6 +1032,7 @@ impl Scene {
         queue: &wgpu::Queue,
         track_model: Model,
         ship_model: Model,
+        collision_model: Option<Model>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
     ) -> Result<Self> {
@@ -1012,9 +1042,13 @@ impl Scene {
         let far = track_model.radius * 4.0;
         let track = Drawable::new(device, queue, track_model, format)?;
         let ship = Drawable::new(device, queue, ship_model, format)?;
+        let collision = collision_model
+            .map(|model| Drawable::new(device, queue, model, format))
+            .transpose()?;
         Ok(Self {
             track,
             ship,
+            collision,
             depth: depth_texture(device, size),
             far,
         })
@@ -1045,6 +1079,9 @@ impl Scene {
         self.track.write(queue, view_projection, Mat4::IDENTITY);
         self.ship
             .write(queue, view_projection, race.ship_model_matrix());
+        if let Some(collision) = &self.collision {
+            collision.write(queue, view_projection, Mat4::IDENTITY);
+        }
 
         let depth_view = self
             .depth
@@ -1079,6 +1116,9 @@ impl Scene {
         });
         self.track.draw(&mut pass);
         self.ship.draw(&mut pass);
+        if let Some(collision) = &self.collision {
+            collision.draw(&mut pass);
+        }
     }
 }
 
@@ -1130,6 +1170,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         setup,
         track_model,
         ship_model,
+        collision_model,
         ..
     } = loaded;
     let mut race = Race::start(setup);
@@ -1168,6 +1209,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         &queue,
         track_model,
         ship_model,
+        collision_model,
         format,
         (width, height),
     )?;

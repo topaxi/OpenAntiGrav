@@ -58,6 +58,7 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 | `--team <name>` | Which team's `handlingstats.xml` and model to fly. |
 | `--class <name>` | `venom`, `flash`, `rapier` or `phantom`. |
 | `--art` | Draw the track's art meshes instead of its driveable ribbon. |
+| `--collision` | Overlay the collision soup - the geometry the physics world is actually made of, the same view [`oag-view --collision`](oag-view.md#collision) draws - on top of whichever track model was chosen above. |
 | `--log-every <n>` | Print a telemetry line every `n` ticks. `0` for none. |
 | `--size <WxH>` | With `--screenshot`, the image's size. Default `1440x816`. |
 | `--dry-run` | Report what was loaded and exit. |
