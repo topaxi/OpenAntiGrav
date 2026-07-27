@@ -31,6 +31,7 @@ use std::path::{Path, PathBuf};
 
 use oag_disc::DiscImage;
 use oag_formats::fnt::{self, Font};
+use oag_formats::texture::{self, Texture};
 use oag_formats::wad::{self, Compression, Directory};
 
 /// The PSP archive that holds the fonts.
@@ -183,5 +184,141 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
     assert!(
         worst_bounds > 0.90,
         "worst edge-ink rate {worst_bounds:.3}: glyph boxes do not bound the ink"
+    );
+}
+
+/// Mean pixel step across a swizzle-block seam, over the mean step elsewhere.
+///
+/// The GE's blocks are 16 bytes wide. A correct decode has nothing special
+/// happening at those boundaries, so the ratio sits near 1; reading a swizzled
+/// image linearly - or unswizzling one that was already linear - splices
+/// unrelated pixels together there and the ratio climbs. This is the check that
+/// says which reading the `+0x07` flag is selecting, and it works on both
+/// answers rather than only on "swizzled".
+fn seam_ratio(indices: &[u8], width: usize, height: usize, block_pixels: usize) -> f64 {
+    let (mut seam, mut seam_n, mut other, mut other_n) = (0u64, 0u64, 0u64, 0u64);
+    for y in 0..height {
+        for x in 0..width - 1 {
+            let at = y * width + x;
+            let step = u64::from(i32::from(indices[at]).abs_diff(i32::from(indices[at + 1])));
+            if (x + 1) % block_pixels == 0 {
+                seam += step;
+                seam_n += 1;
+            } else {
+                other += step;
+                other_n += 1;
+            }
+        }
+    }
+    if seam_n == 0 || other_n == 0 {
+        return 1.0;
+    }
+    #[expect(clippy::cast_precision_loss, reason = "sums over a small texture")]
+    let ratio = (seam as f64 / seam_n as f64) / (other as f64 / other_n as f64).max(1e-9);
+    ratio
+}
+
+#[test]
+#[ignore = "needs a PSP disc image under data/images"]
+fn mip_textures_honour_the_swizzle_flag() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == FE_WAD)
+        .expect("FE.wad present")
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, Directory::directory_len(count))
+        .expect("directory");
+    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    let mut textures = 0;
+    let mut flagged = 0;
+    let mut discriminating = 0;
+    let mut flag_wins = 0;
+
+    for (index, entry) in dir.entries.iter().enumerate() {
+        if entry.size == 0 {
+            continue;
+        }
+        let blob = disc
+            .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
+            .expect("blob");
+        let Ok(parsed) = Texture::parse(&blob) else {
+            continue;
+        };
+        textures += 1;
+        let (w, h) = (usize::from(parsed.width), usize::from(parsed.height));
+        let bpp = usize::from(parsed.bits_per_pixel);
+        let row_bytes = w * bpp / 8;
+        // `unknown[2]` is `+0x07`, whose bit 0 is the swizzle flag.
+        let is_swizzled = parsed.unknown[2] & texture::FLAG_SWIZZLED != 0;
+        flagged += usize::from(is_swizzled);
+
+        // One block column makes the swizzle the identity, so a texture that
+        // narrow cannot tell the two readings apart at all.
+        if row_bytes <= texture::SWIZZLE_BLOCK_BYTES {
+            continue;
+        }
+        discriminating += 1;
+
+        let stored = &blob[16 + (1usize << bpp) * 4..];
+        let expand = |bytes: &[u8]| -> Vec<u8> {
+            if bpp == 8 {
+                bytes.to_vec()
+            } else {
+                bytes.iter().flat_map(|&b| [b & 0x0f, b >> 4]).collect()
+            }
+        };
+        let linear = expand(stored);
+        let unswizzled = expand(&texture::unswizzle(stored, row_bytes, h));
+        let block_pixels = texture::SWIZZLE_BLOCK_BYTES * 8 / bpp;
+
+        let as_linear = seam_ratio(&linear, w, h, block_pixels);
+        let as_unswizzled = seam_ratio(&unswizzled, w, h, block_pixels);
+        let (chosen, rejected) = if is_swizzled {
+            (as_unswizzled, as_linear)
+        } else {
+            (as_linear, as_unswizzled)
+        };
+        flag_wins += usize::from(chosen < rejected);
+        println!(
+            "  entry {index:2} {w:3}x{h:<3} bpp={bpp} flag={} seam linear={as_linear:5.2} \
+             unswizzled={as_unswizzled:5.2} {}",
+            u8::from(is_swizzled),
+            if chosen < rejected { "ok" } else { "MISS" }
+        );
+    }
+
+    println!("textures {textures}, flagged {flagged}, discriminating {discriminating}");
+    println!("flag picks the smoother reading on {flag_wins} of {discriminating}");
+
+    assert!(textures >= 13, "only {textures} textures found");
+    assert!(
+        flagged > 0,
+        "no texture sets the flag, so this proves nothing"
+    );
+    assert!(
+        discriminating >= 10,
+        "only {discriminating} wide enough to check"
+    );
+    // Both answers are exercised: some blobs are stored linear and some
+    // swizzled, and the flag picks the seam-free reading either way. The one
+    // allowed miss is a 32x16 blob, four blocks in total, where the statistic
+    // has almost nothing to average over.
+    assert!(
+        flag_wins + 1 >= discriminating,
+        "the +0x07 flag picked the seamier reading on {} of {discriminating}",
+        discriminating - flag_wins
     );
 }

@@ -36,6 +36,61 @@
 /// Bytes of header before the palette.
 pub const HEADER_LEN: usize = 16;
 
+/// Bit 0 of `+0x07`: the pixels are stored swizzled for the GE.
+///
+/// `Texture_BindEmbeddedData` in the PSP executable copies this bit into the
+/// texture node's own flags, and swizzles at load **only** when it is clear.
+/// See `docs/formats/psp-texture.md`.
+pub const FLAG_SWIZZLED: u8 = 1;
+
+/// Bytes of one swizzle block row.
+pub const SWIZZLE_BLOCK_BYTES: usize = 16;
+
+/// Rows in one swizzle block.
+pub const SWIZZLE_BLOCK_ROWS: usize = 8;
+
+/// Undoes the GE's 16-byte by 8-row block swizzle.
+///
+/// `row_bytes` is the image's width in bytes. This is the exact inverse of
+/// `Texture_SwizzleForGe` (`0x08926da8`), which walks block rows, then block
+/// columns, then the 8 rows within a block, copying 16 bytes at a time out of a
+/// linear image.
+///
+/// A `row_bytes` of 16 or a `height` under 8 makes the swizzle the identity,
+/// which is why the disc's one 4bpp texture cannot tell the two readings apart.
+#[must_use]
+pub fn unswizzle(src: &[u8], row_bytes: usize, height: usize) -> Vec<u8> {
+    let mut dst = vec![0u8; src.len()];
+    if row_bytes % SWIZZLE_BLOCK_BYTES != 0 || row_bytes == 0 {
+        dst.copy_from_slice(src);
+        return dst;
+    }
+    let mut read = 0;
+    for block_row in 0..height / SWIZZLE_BLOCK_ROWS {
+        for block_col in 0..row_bytes / SWIZZLE_BLOCK_BYTES {
+            for row in 0..SWIZZLE_BLOCK_ROWS {
+                let at = (block_row * SWIZZLE_BLOCK_ROWS + row) * row_bytes
+                    + block_col * SWIZZLE_BLOCK_BYTES;
+                let (Some(chunk), true) = (
+                    src.get(read..read + SWIZZLE_BLOCK_BYTES),
+                    at + SWIZZLE_BLOCK_BYTES <= dst.len(),
+                ) else {
+                    return dst;
+                };
+                dst[at..at + SWIZZLE_BLOCK_BYTES].copy_from_slice(chunk);
+                read += SWIZZLE_BLOCK_BYTES;
+            }
+        }
+    }
+    // A height that is not a multiple of 8 leaves a tail the block walk never
+    // reaches; copy it through rather than leaving it black.
+    let done = (height / SWIZZLE_BLOCK_ROWS) * SWIZZLE_BLOCK_ROWS * row_bytes;
+    if done < src.len() {
+        dst[done..].copy_from_slice(&src[done..]);
+    }
+    dst
+}
+
 /// Something wrong with a texture blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
@@ -178,7 +233,20 @@ impl Texture {
             .map(|c| [c[0], c[1], c[2], c[3]])
             .collect();
 
-        let packed = &data[HEADER_LEN + palette_len..];
+        let stored = &data[HEADER_LEN + palette_len..];
+        // Bit 0 of `+0x07` says the pixels are stored in the GE's swizzled
+        // layout rather than raster order. Five of `FE.wad`'s thirteen textures
+        // set it, and reading those linearly gives noise: `00006_cee1c5a4`
+        // decodes to the Japanese Wipeout logotype only once unswizzled.
+        let row_bytes = usize::from(width) * usize::from(bits_per_pixel) / 8;
+        let swizzled = data[7] & FLAG_SWIZZLED != 0;
+        let unswizzled;
+        let packed: &[u8] = if swizzled && row_bytes % SWIZZLE_BLOCK_BYTES == 0 {
+            unswizzled = unswizzle(stored, row_bytes, usize::from(height));
+            &unswizzled
+        } else {
+            stored
+        };
         let indices = if bits_per_pixel == 8 {
             packed.to_vec()
         } else {
@@ -279,6 +347,48 @@ mod tests {
             width as usize * height as usize * bpp as usize / 8,
         ));
         out
+    }
+
+    #[test]
+    fn unswizzle_is_a_permutation_and_its_own_documented_inverse() {
+        for (row_bytes, height) in [
+            (16usize, 8usize),
+            (128, 128),
+            (256, 256),
+            (32, 64),
+            (512, 128),
+        ] {
+            let src: Vec<u8> = (0..row_bytes * height).map(|i| (i % 251) as u8).collect();
+            let out = unswizzle(&src, row_bytes, height);
+            let mut a = src.clone();
+            let mut b = out.clone();
+            a.sort_unstable();
+            b.sort_unstable();
+            assert_eq!(a, b, "{row_bytes}x{height} is not a permutation");
+        }
+        // One block column makes the swizzle the identity, which is exactly why
+        // the disc's 32x32 4bpp texture cannot distinguish the two readings.
+        let src: Vec<u8> = (0..16 * 32).map(|i| (i % 251) as u8).collect();
+        assert_eq!(unswizzle(&src, 16, 32), src);
+    }
+
+    #[test]
+    fn a_swizzled_blob_is_unswizzled_on_parse() {
+        let mut blob = build(64, 16, 8, 0);
+        blob[7] = 3; // bit 0 set: stored swizzled
+        let pixels = 64 * 16;
+        let start = HEADER_LEN + 256 * 4;
+        for i in 0..pixels {
+            blob[start + i] = (i % 251) as u8;
+        }
+        let parsed = Texture::parse(&blob).expect("parse");
+        let expected = unswizzle(&blob[start..start + pixels], 64, 16);
+        assert_eq!(parsed.indices, expected);
+        assert_ne!(parsed.indices, blob[start..start + pixels].to_vec());
+
+        blob[7] = 2; // bit 0 clear: stored linear
+        let linear = Texture::parse(&blob).expect("parse");
+        assert_eq!(linear.indices, blob[start..start + pixels].to_vec());
     }
 
     /// The case that reached [`crate::png::encode_rgba`]'s assertion.

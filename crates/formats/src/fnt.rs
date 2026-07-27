@@ -76,14 +76,7 @@ pub const GLYPH_LEN: usize = 18;
 /// Bytes of atlas header before the palette.
 pub const ATLAS_HEADER_LEN: usize = 0x40;
 
-/// Bytes of one swizzle block row.
-pub const SWIZZLE_BLOCK_BYTES: usize = 16;
-
-/// Rows in one swizzle block.
-pub const SWIZZLE_BLOCK_ROWS: usize = 8;
-
-/// `flags` bit meaning the texels are stored swizzled.
-pub const FLAG_SWIZZLED: u8 = 1;
+pub use crate::texture::{FLAG_SWIZZLED, SWIZZLE_BLOCK_BYTES, SWIZZLE_BLOCK_ROWS};
 
 /// Something wrong with a font.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,6 +112,13 @@ pub enum Error {
         /// The codepoint.
         codepoint: u16,
     },
+    /// The atlas is swizzled but not a whole number of swizzle blocks.
+    UnswizzleableAtlas {
+        /// Atlas width.
+        width: u16,
+        /// Atlas height.
+        height: u16,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -144,6 +144,11 @@ impl std::fmt::Display for Error {
             Self::BoxMismatch { codepoint } => {
                 write!(f, "glyph {codepoint:#06x} has a box that is not its size")
             }
+            Self::UnswizzleableAtlas { width, height } => write!(
+                f,
+                "a swizzled {width}x{height} atlas is not a whole number of \
+                 {SWIZZLE_BLOCK_BYTES}x{SWIZZLE_BLOCK_ROWS} blocks"
+            ),
         }
     }
 }
@@ -208,36 +213,6 @@ fn half(data: &[u8], at: usize) -> u16 {
 #[must_use]
 pub fn looks_like_font(data: &[u8]) -> bool {
     data.len() >= 4 && data[0] == VERSION && &data[1..4] == MAGIC
-}
-
-/// Undoes the PSP's 16-byte by 8-row block swizzle.
-///
-/// `row_bytes` is the image's width in **bytes**, so half the pixel width at
-/// 4bpp. This is the exact inverse of `Texture_SwizzleForGe`: that function
-/// walks block rows, then block columns, then the 8 rows within a block,
-/// copying 16 bytes at a time out of a linear image.
-#[must_use]
-pub fn unswizzle(src: &[u8], row_bytes: usize, height: usize) -> Vec<u8> {
-    let mut dst = vec![0u8; src.len()];
-    if row_bytes % SWIZZLE_BLOCK_BYTES != 0 || height % SWIZZLE_BLOCK_ROWS != 0 {
-        dst.copy_from_slice(src);
-        return dst;
-    }
-    let mut read = 0;
-    for block_row in 0..height / SWIZZLE_BLOCK_ROWS {
-        for block_col in 0..row_bytes / SWIZZLE_BLOCK_BYTES {
-            for row in 0..SWIZZLE_BLOCK_ROWS {
-                let at = (block_row * SWIZZLE_BLOCK_ROWS + row) * row_bytes
-                    + block_col * SWIZZLE_BLOCK_BYTES;
-                let Some(chunk) = src.get(read..read + SWIZZLE_BLOCK_BYTES) else {
-                    return dst;
-                };
-                dst[at..at + SWIZZLE_BLOCK_BYTES].copy_from_slice(chunk);
-                read += SWIZZLE_BLOCK_BYTES;
-            }
-        }
-    }
-    dst
 }
 
 impl Font {
@@ -340,7 +315,15 @@ impl Font {
         let linear = if flags & FLAG_SWIZZLED == 0 {
             texels.to_vec()
         } else {
-            unswizzle(texels, row_bytes, usize::from(height))
+            // The block walk only covers whole 16-byte columns and whole 8-row
+            // bands. Every shipped atlas is 256 or 512 wide by 128 or 256 tall,
+            // so this never fires; refusing beats returning wrong pixels
+            // silently, which is the same call `texture` makes for odd 4bpp.
+            if row_bytes % SWIZZLE_BLOCK_BYTES != 0 || usize::from(height) % SWIZZLE_BLOCK_ROWS != 0
+            {
+                return Err(Error::UnswizzleableAtlas { width, height });
+            }
+            crate::texture::unswizzle(texels, row_bytes, usize::from(height))
         };
 
         // Low nibble first: pixel 0 is the low half of byte 0, as in `.mip`.
@@ -496,19 +479,6 @@ mod tests {
                     "({x},{y}) high"
                 );
             }
-        }
-    }
-
-    #[test]
-    fn unswizzle_is_a_permutation() {
-        for (row_bytes, height) in [(16usize, 8usize), (128, 128), (256, 256), (32, 64)] {
-            let src: Vec<u8> = (0..row_bytes * height).map(|i| (i % 251) as u8).collect();
-            let out = unswizzle(&src, row_bytes, height);
-            let mut a = src.clone();
-            let mut b = out.clone();
-            a.sort_unstable();
-            b.sort_unstable();
-            assert_eq!(a, b, "{row_bytes}x{height}");
         }
     }
 
