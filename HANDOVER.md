@@ -1826,6 +1826,80 @@ Image base `0x08804000`, confirmed against PPSSPP's own loader log and against
 root (`OpenAntiGrav.gpr`) rather than `data/ghidra/`; moving it is safe once
 closed.
 
+## Session boundary: stopping here on purpose (usage window), not because anything is stuck
+
+Both physics-side agents finished and committed cleanly moments after the
+previous edition of this note was written (which had caught them
+mid-diff - superseded, corrected below). No new agents were spawned per the
+user's instruction; whoever resumes should either reconnect to the named
+agents below if the session is still live, or brief a fresh one from this
+description - don't re-derive any of it from scratch.
+
+### `engine-scale-re` - the collision stun gate is implemented, real, and does NOT close the observed gap
+
+Committed as `21798c6`. `ShipState::stun_timer` (`crates/physics/src/ship.rs`),
+armed by `crates/physics/src/wall.rs`'s `wall::resolve` (`STUN_PER_CONTACT =
+0.5`, added not assigned, only on a genuine inward impact so sliding along a
+wall doesn't cut the engine every frame), and gated correctly in both
+`engine()` (no thrust or lift while the stun or leap timer runs) and lateral
+grip (`crates/physics/src/forces.rs`, decremented at the same step the
+original does it, so the engine reads the pre-decrement value in the same
+frame). Three real tests pass, `cargo nextest run -p oag-physics -p
+oag-trace` is 223/223 green.
+
+**I re-ran the actual verification this was built to satisfy, and it does
+not close the gap.** `cargo run -p oag-trace -- run
+data/traces/talons-junction-venom-assegai.csv --source
+data/images/pulse-psp-usa.chd --team Assegai --class venom --hold cross`
+still diverges exactly as before the fix - speed climbs to 118+ units/s by
+tick 199, first divergence at tick 0, growing trend on position/velocity/
+speed, nothing improved. **The likely reason, which is exactly the caveat
+flagged when this task was handed off**: the reference scenario is straight
+thrust with no steering (`--hold cross`, steer always zero), so the ship in
+this specific replay probably never actually contacts a wall at all - the
+stun timer is a real, correct, well-tested feature, but it never arms on
+this capture, so it can't be what's suppressing thrust in the original's own
+run. **The engine/resistance mystery is still open** for this scenario
+specifically. The RE finding (the gate exists, confidence 88/85) stands on
+its own merits regardless; what doesn't hold is the inference that it
+explains *this* capture's deceleration. Next step for whoever resumes:
+confirm directly whether the original ship in this exact capture ever
+registers a wall contact (the recorded trace has no contact/grounded-on-wall
+column today - may need a fresh capture with more state, or reasoning from
+position vs. the track's collision geometry) before looking anywhere else;
+if it genuinely never touches a wall, the missing resistance has to be
+something this session's full `Ship_UpdateCraft` callee enumeration
+(see "The engine mystery is resolved" above) already covers, which reopens
+the question of why that enumeration didn't turn up a resistance term big
+enough - or whether the "58 units of thrust" recomputation itself has an
+error nobody's caught yet.
+
+### `verification-script` - the input-script format works end to end, on its own terms
+
+Committed as `ca6323c`. `crates/trace/src/script.rs` (the plain-text,
+run-length-encoded format - `60 cross` / `30 cross left` style lines) and an
+`oag-trace script`/`Inputs::Scripted` path in `replay.rs`/`main.rs` all
+compile and pass (`the_committed_scenarios_parse_and_are_two_hundred_ticks`
+and others, part of the 223/223 total above). Two real example scenarios are
+committed: `verification/scenarios/straight-line.inputs` and
+`verification/scenarios/steer-both-ways.inputs`.
+
+**Not yet checked in this snapshot**: whether `scripts/psp-trace.py` has a
+matching `--script` mode to actually drive PPSSPP with the same file (the
+brief asked for this; confirm it exists before assuming the emulator side is
+done), and whether a real capture-vs-script-replay agreement check was ever
+run (the straight-line script was deliberately written to reproduce the
+existing `--hold cross` capture exactly, specifically so this comparison
+would be the proof - that comparison itself wasn't re-verified this
+session). Worth doing before trusting the new path for anything beyond unit
+tests.
+
+### `psp-xml-reader` - determinism gate audit (task #28)
+
+No visible progress in this final snapshot - `crates/core` is untouched.
+Purely an audit task, safe to resume or reassign cold with no risk of lost
+work.
+
 ## Where I would go next
 
 **Everything numbered 1-7 in the previous edition of this list is done**, this
