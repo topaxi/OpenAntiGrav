@@ -213,27 +213,84 @@ outright that a failure there is a **finding**, not a bug.
 
 ## Open questions
 
-### The world-space extent contradicts the documented broadphase packing
+### The broadphase does not pack world space: a survey of all 16 tracks
 
 Collision vertices are world space: every node sits at depth 1 with an identity
-world transform, on both discs. The largest coordinate is **1,335.8 on PSP and
-1,554.1 on PS2**.
-
+world transform, on both discs.
 [The sweep-and-prune reading](../ghidra/functions/psp-pulse/collision.md#two-level-sweep-and-prune)
-packs endpoints as `bits[0:11] = ((int)coord + 0x400) * 2`, which covers roughly
-**-1024 to +1023**. Both cannot be right as stated. Either the packing reading is
-wrong, or the broadphase clamps out-of-range coordinates, or it operates in a
-space that is not the one these vertices are in - per-object local coordinates,
-for instance, which would make the world broadphase's 1024-slot list a different
-thing from the per-mesh one. Nothing here resolves it; the conflict is precise
-enough to be settled by re-reading `Sap_Init` (`0x0882f8f4`) against a real
-track's extent.
+packs endpoints as `bits[0:11] = ((int)coord + 0x400) * 2`. Twelve bits hold
+`0..4095`, so `coord + 1024` runs `0..2047`: the packing covers a **2048-unit
+window, centred on the origin**, quantised to one unit.
 
-`oag-view --collision <track.vex>` prints the reach from the origin per track and
-flags anything past ±1024, so the per-track distribution is one command away -
-see [oag-view](../tools/oag-view.md#collision). The numbers above are whole-disc
-maxima; whether one track is the outlier or every track exceeds it is not
-recorded here.
+This page previously recorded only whole-disc maxima - 1,335.8 on PSP and 1,554.1
+on PS2 - and left it at "both cannot be right as stated". **Every track has now
+been measured**, with `oag-view --collision` over both discs, and the answer is
+sharper than a contradiction.
+
+| Environment | Reach from origin | Widest span | Over ±1024 | PSP | PS2 |
+| --- | ---: | ---: | :-: | :-: | :-: |
+| `01_Track` | 884.6 | 1321.7 | | yes | yes |
+| `02_Track` | 1015.6 | 1517.9 | | yes | yes |
+| `03_Track` | 819.7 | 1476.0 | | yes | yes |
+| `04_Track` | 837.1 | 1601.8 | | yes | yes |
+| `05_Track` | 1005.9 | 1564.2 | | yes | yes |
+| `06_Track` | 1038.8 | 1425.3 | **yes** | yes | yes |
+| `07_Track` | **1335.8** | 1250.6 | **yes** | yes | yes |
+| `08_Track` | **1554.1** | 1739.1 | **yes** | - | yes |
+| `09_Track` | 886.5 | 1242.5 | | yes | yes |
+| `10_Track` | 1072.2 | **2026.6** | **yes** | yes | yes |
+| `11_Track` | 1129.2 | 1757.8 | **yes** | - | yes |
+| `12_Track` | 979.7 | 1693.4 | | - | yes |
+| `13_Track` | 1155.4 | 1711.2 | **yes** | yes | yes |
+| `14_Track` | 969.8 | 1748.2 | | yes | yes |
+| `15_Track` | 1132.4 | 1755.2 | **yes** | - | yes |
+| `16_Track` | 856.2 | 1481.3 | | yes | yes |
+
+Measured on `pulse-psp-usa.chd` and `pulse-ps2-eu.chd`. "Reach" is the furthest
+any collidable vertex sits from the origin on any axis; "widest span" is the
+longest edge of the collidable bounding box.
+
+**Two facts settle it.**
+
+1. **Seven of sixteen tracks exceed ±1024**, so this is not one outlier. The
+   whole-disc maxima this page used to quote are simply `07_Track` (PSP) and
+   `08_Track` (PS2); they are ordinary track collision geometry and nothing more
+   exotic.
+2. **Not one track exceeds 2048 in span.** The widest is `10_Track` at
+   **2026.6**, which fills 99% of the packing's 2048-unit range and clears it with
+   21 units to spare.
+
+A designer working to a 2048-unit budget is the only reading that puts a track at
+99% of exactly that number by accident. So the conflict resolves in favour of the
+packing being right and the *input* to it not being world space:
+
+> **The broadphase packs coordinates relative to some origin of its own** - the
+> world's bounding-box minimum, or a per-level offset - not raw world
+> coordinates. Every shipped track fits the 2048-unit window; none of them fits it
+> *centred on the world origin*.
+
+That is a **falsifiable prediction, not a determination**: nothing here has read
+the code. What it does is turn "both cannot be right" into a specific thing to
+look for. Re-reading `Sap_Init` (`0x0882f8f4`) should show a base subtracted
+before the `+ 0x400`, or a coordinate that arrives already relative. If it shows a
+raw world coordinate with no base, then the *packing* reading is what is wrong,
+because the data above rules out the geometry being at fault. Confidence **75**
+in the prediction; the measurements themselves are direct.
+
+Two smaller findings from the same survey:
+
+- **The collision geometry is identical across platforms.** All twelve
+  environments present on both discs report the same reach and the same span to
+  the decimal. The PS2 exclusives are `08`, `11`, `12` and `15`.
+- **A track's four variants share one collision set.** `track.vex`,
+  `track_reversed.vex`, `zone_track.vex` and `zone_track_reversed.vex` report
+  identical geometry, so the 40 PSP and 54 PS2 track files carry only 12 and 16
+  distinct collision sets. The single exception is PS2 `11_Track`, whose
+  `zone_track` pair reaches 1132.0 against the `track` pair's 1129.2 - worth
+  knowing before assuming the variants are interchangeable.
+
+Reproduce with `oag-view --collision <track.vex>`, which prints both numbers and
+flags each bound separately; see [oag-view](../tools/oag-view.md#collision).
 
 ### The header word is probably not a version
 

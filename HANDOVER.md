@@ -707,6 +707,50 @@ per-section timed impulse scaled by two never-read per-speed-class tables
 (`0x08b36bc0`, `0x08b36bd0` on PSP). Reading those tables is the concrete
 next step, and it's Ghidra work, not further physics-crate tuning.
 
+## The track-section force lead is dead - it was a speed-boost pad, not resistance
+
+Following its own next step from the previous section, the same agent read
+`FUN_08848f9c` and its two tables. **It's `Ship_ApplySpeedupPad`** - the
+speed-pad boost, filled from `<GlobalClass><SpeedupPads amount="..."
+time="..."/></GlobalClass>` per speed class - and it only ever pushes the
+craft *along* the section direction. It can only add speed. **It cannot be
+the missing resistance**, and the one candidate that was both unimplemented
+and track-dependent is now ruled out.
+
+**Two genuinely new, previously undocumented damping terms turned up while
+reading `Body_Integrate`** for this: a linear velocity damping and an angular
+one, both applied inside the sub-step loop after the force accumulators,
+both defaulting to `0.01` per the ship-entity constructor (confidence 80).
+Real, and worth implementing for fidelity, but confirmed **too small to be
+the gap**: at `0.01`, the linear term opposes motion with about `0.24` units
+of equivalent force at 24 units/s, against the ~53 that's missing.
+
+**The agent then did something worth naming as good practice**: it stopped
+and questioned its own framing before continuing to eliminate candidates.
+The whole "resistance is ~12x short" conclusion assumes the 200-tick
+(3.33-second) capture is a genuine speed *equilibrium* - but over a window
+that short, a slow transient converging toward a much higher equilibrium
+looks the same in raw speed range as a true steady state. The only thing
+that tells them apart is the recorded *sign*, and the agent flagged this as
+unverified rather than assumed. **I checked it directly against the real
+trace file** (`data/traces/talons-junction-venom-assegai.csv`, still on
+disk): speed goes `24.271 -> 24.264 -> 24.257 -> ... -> 23.620 -> ... ->
+23.571` across the 200 ticks, monotonically declining. **It is genuinely
+decelerating.** The equilibrium framing holds; this isn't a transient
+climbing toward something higher, which would have flipped the whole
+diagnosis toward the mass hypothesis instead. Relayed back so the
+investigation can continue on the confirmed premise rather than an assumed
+one.
+
+**Where this leaves it**: the track-section force was the only lead with a
+strong prior (unimplemented *and* track-dependent), and it's dead. What's
+left is either re-verifying the already-implemented world-force writers
+(brakes, airbrake lateral/slide, gravity, the hover epilogue's downforce,
+vertical damping) against real numbers rather than trusting them because
+they're already coded, or finding a term `Ship_UpdateCraft` calls that was
+never enumerated as a world-force writer at all. Handed back to continue;
+not yet resolved.
+
 ## The FEGlobals/FEConst indirection is read, and it retires a loose end
 
 The agent that resolved the PSP XML reader question went on to read the
@@ -1682,15 +1726,20 @@ vertex type `0x1b9` is decoded (it was a VIF packet, not a GU variant); the
 of more blind transform-guessing. Item 8 (the determinism gate) was not
 checked this pass and is carried forward below. What's actually left:
 
-1. **The engine resistance gap, ~12x short, now precisely diagnosed rather
-   than merely observed.** See "The thrust-gap diagnosis just inverted"
-   above: it's not thrust, it's missing resistance, and the concrete next
-   step is reading two never-read per-speed-class tables
-   (`0x08b36bc0`/`0x08b36bd0`) behind the unimplemented **track-section
-   force** (`FUN_08848f9c` PSP / `FUN_0015a300` PS2). This is the one thing
-   standing between the current build and a ship that can actually complete
-   a lap - the suspension and wall collision are both already fixed and
-   waiting on this.
+1. **The engine resistance gap, ~12x short, confirmed genuine (the capture is
+   really decelerating, not a transient - checked directly against the trace
+   file) but its one strong-prior candidate is now dead.** See "The
+   thrust-gap diagnosis just inverted" and "The track-section force lead is
+   dead" above: it's not thrust, it's missing resistance, and the
+   track-section force turned out to be a speed-*boost* pad (wrong sign
+   entirely), not a resistance term. What's left: re-verify the
+   already-implemented world-force writers (brakes, airbrake lateral/slide,
+   gravity, hover epilogue downforce, vertical damping) against real
+   numbers rather than trusting them for being already coded, or find a
+   `Ship_UpdateCraft` call that was never enumerated as a world-force writer
+   at all. This is still the one thing standing between the current build
+   and a ship that can complete a lap - the suspension and wall collision
+   are both already fixed and waiting on this.
 2. **Make `oag-game` platform-generic.** Right now `oag-game`/`just play`
    hardcodes the PSP's archive layout (`PSP_GAME/USRDIR/Data.wad`) and
    flatly errors if pointed at the PS2 disc - confirmed directly this pass.
