@@ -1387,7 +1387,9 @@ mod tests {
                 ..Default::default()
             },
             antigrav: oag_physics::params::Antigrav {
-                ride_height: 4.0,
+                // Chosen so the resulting spawn height cannot coincide with
+                // `track::HOVER_LIFT`, which the assertion below distinguishes it from.
+                ride_height: 8.0,
                 ..Default::default()
             },
             pitch: oag_physics::params::Pitch {
@@ -1409,10 +1411,16 @@ mod tests {
         // Lifted off the surface line by the height its own suspension holds it at,
         // which is neither `track::HOVER_LIFT` nor the probe's full reach; see
         // `spawn_height`. This fixture has no gravity, so the sag is zero and the rest
-        // height is the target - and the target is `ride_height` alone, because the
-        // `antigrav_height_adjust` of 0.5 no longer contributes.
-        assert_eq!(spawn_height(&handling), 4.0);
+        // height is the target itself: `ride_height` scaled by the measured
+        // `TARGET_GLOBAL_SCALE`, with the `antigrav_height_adjust` of 0.5 contributing
+        // nothing because `craft+0x74` reads zero in the running game.
+        assert_eq!(
+            spawn_height(&handling),
+            8.0 * oag_physics::hover::TARGET_GLOBAL_SCALE
+        );
         assert_ne!(spawn_height(&handling), track::HOVER_LIFT);
+        // Well inside the probes' reach, which is what gives the suspension travel.
+        assert!(spawn_height(&handling) < handling.antigrav.ride_height);
         let up = (-Vec3::from_array(start.down)).normalize();
         let offset = race.ship().physics.body.position - Vec3::from_array(start.pos);
         assert!(
@@ -1445,17 +1453,24 @@ mod tests {
         };
 
         let gradient = 0.3 * oag_physics::hover::HOVER_K * 85.0;
-        let expected = 5.5 - 5.0 / gradient;
+        let target = 5.5 * oag_physics::hover::TARGET_GLOBAL_SCALE;
+        let expected = target - 5.0 / gradient;
         assert!(
             (spawn_height(&handling) - expected).abs() < 1e-5,
             "{} was not {expected}",
             spawn_height(&handling)
         );
 
-        // Strictly below the reach - which is the whole point - and by a margin that is
-        // small, which is the recorded open reading rather than a defect here.
+        // Strictly below the reach, with real headroom above it. The margin used to be
+        // the spring's sag alone, 0.147 units, because the target was read as equal to
+        // the cast length; `TARGET_GLOBAL_SCALE` is measured at 0.75 now, so a resting
+        // ship sits about 1.5 units below the height at which it loses the ground.
+        let headroom = handling.antigrav.ride_height - spawn_height(&handling);
         assert!(spawn_height(&handling) < handling.antigrav.ride_height);
-        assert!(handling.antigrav.ride_height - spawn_height(&handling) < 0.2);
+        assert!(
+            headroom > 1.0,
+            "only {headroom} of probe headroom; the suspension has no travel again"
+        );
 
         // And mass really does cancel.
         let heavier = Handling {

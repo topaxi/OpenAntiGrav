@@ -27,30 +27,29 @@
 //! Adding an explicit pitch-to-track term would change the character of the whole
 //! model.
 //!
-//! # The suspension has almost no travel, and that is the open question here
+//! # How much travel the suspension has, which used to be an open question
 //!
-//! Because the target equals the reach, a probe in contact reports a height in
-//! `0..=ride_height`, and the spring rests where its force carries the ship's weight:
+//! A probe in contact reports a height in `0..=ride_height`, and the spring rests
+//! where its force carries the ship's weight:
 //!
 //! ```text
 //! sag = normal_gravity / (0.3 * HOVER_K * (normal_gravity + track_gravity))
 //! ```
 //!
-//! `mass` cancels. On the observed data that is **0.147 units against a 5.5 reach** -
-//! the spring calibrates against `normal_gravity + track_gravity` (85) while the load
-//! it actually carries is `normal_gravity` alone (5), so it holds the ship 2.7 % of the
-//! way down its own range, hard against the top. A disturbance past that drops both
-//! probes, and gravity's grounded-to-airborne step - `normal_gravity` to
-//! `flight_gravity`, 5 to 95 on the same data, and **one frame stale** - turns the
-//! overshoot into a larger one. Measured at rest with no input: on a flat floor the
-//! ship holds; on a real track, whose surface varies about 0.04 either side, the
-//! residual bob reaches roughly 0.19 and the cycle escapes.
+//! `mass` cancels, and on the observed data the sag is 0.147 units. What used to make
+//! that fatal was reading the target as *equal* to the reach, which left a resting ship
+//! 2.7 % of the way down its own range, hard against the top: any disturbance past
+//! 0.147 units dropped both probes, and gravity's grounded-to-airborne step -
+//! `normal_gravity` to `flight_gravity`, 5 to 95, and **one frame stale** - turned the
+//! overshoot into a larger one until the ship was thrown clear.
 //!
-//! **Three readings could each give the probes headroom, and presumably exactly one is
-//! right**; none is decidable without a trace. `craft+0x74` is negative (what
-//! `docs/physics/README.md` predicts), [`TARGET_GLOBAL_SCALE`] is below one, or the
-//! raycast length is not `ride_height`. Nothing here picks one. Making grounded gravity
-//! `normal + track` was tried and is **falsified**: it moves the calibration and the
+//! **That is settled, and the answer was [`TARGET_GLOBAL_SCALE`].** It is `0.75`, read
+//! off the running game rather than guessed, so the target is `4.125` against a `5.5`
+//! reach and a resting ship sits about **1.5 units** below the height at which it loses
+//! the ground - ten times the old margin. The other two candidates are **falsified**:
+//! `craft+0x74` measures `0.0` in a live race, and lengthening the raycast makes the
+//! ship's behaviour measurably worse rather than better. Making grounded gravity
+//! `normal + track` was also tried and is falsified: it moves the calibration and the
 //! load together, leaves the ratio unchanged, and throws the ship sooner.
 
 use oag_core::math::Vec3;
@@ -63,15 +62,19 @@ use crate::ship::ShipState;
 /// The global hover stiffness scale, `K`.
 ///
 /// The static image holds this global as `1.0`, but **ship construction
-/// overwrites it with `1.3333` before any race runs**, so `1.0` is never the
-/// value the force law sees. Confidence **90**, and it scales hover stiffness
-/// directly, which makes it one of the first things worth confirming with a
-/// runtime read once M3's harness can break on a global: a factor of 1.33 on the
-/// suspension is the difference between a ship that skims and one that scrapes.
+/// overwrites it with `4/3` before any race runs**, so `1.0` is never the value
+/// the force law sees.
 ///
-/// Written as the decimal the original holds rather than as `4.0 / 3.0`, which is
-/// a different `f32`.
-pub const HOVER_K: f32 = 1.333_3;
+/// **Runtime-verified**, which is the confirmation the previous note asked for:
+/// `0x08ab0e20` reads `1.3333333730697632`, bit pattern `0x3faaaaab`, off a
+/// breakpoint in `Ship_UpdateCraft` during a real Time Trial. Confidence **95**.
+///
+/// That measurement also **corrects the literal**. This was written as `1.333_3`,
+/// with a note saying the original holds that decimal rather than `4.0 / 3.0`
+/// "which is a different `f32`". The note had the right concern and the wrong way
+/// round: `1.333_3` is `0x3faaa64c` and the game holds `0x3faaaaab`, so the exact
+/// quotient is what the original has and the decimal was the approximation.
+pub const HOVER_K: f32 = 4.0 / 3.0;
 
 /// How long after touchdown `landing_rebound` replaces `rebound`, in seconds.
 pub const LANDING_WINDOW: f32 = 0.2;
@@ -83,11 +86,37 @@ pub const TARGET_MAG_LOCK_GAIN: f32 = 0.2;
 
 /// The global scale on the hover target height, `K2` at `0x08ab0e1c`.
 ///
-/// **Its value was not read.** The identity is used so that it cannot silently
-/// scale the target, and it is named rather than dropped so that the multiplication
-/// is visible when someone does read it. A guess awaiting M3; unlike [`HOVER_K`],
-/// there is not even a static-image value to go on.
-pub const TARGET_GLOBAL_SCALE: f32 = 1.0;
+/// **`0.75`, and it is now read rather than guessed.** This was the identity, with
+/// a note that its value had never been recovered and that the multiplication was
+/// kept visible so somebody could fill it in. This is that reading, taken two
+/// independent ways off Pulse running in PPSSPP during a Time Trial:
+///
+/// - The global itself. `0x08ab0e1c` holds `0.75`, bit pattern `0x3f400000`.
+/// - The result it produces. At a breakpoint in `Ship_UpdateCraft`, the spring
+///   target `craft+0x2f0` reads **4.125** while the handling block's
+///   `ride_height` reads **5.5**, and `4.125 / 5.5 = 0.75` exactly, with
+///   `craft+0x74` reading `0.0` so no additive offset is in play.
+///
+/// Confidence **92**: the global's address was already identified by static
+/// analysis, both readings agree to the bit, and the arithmetic admits no other
+/// factor. Not 95, because it was read on one ship in one class on one track and
+/// nothing was traced across a magstrip or a leap, where the other two factors in
+/// [`target_height`] would move.
+///
+/// # This is the headroom the suspension was missing
+///
+/// With the identity, the target equalled `ride_height`, which is *also* the probe
+/// cast length, so the ship rested a spring-sag below the very top of its own reach:
+/// 0.147 units of travel on the observed data, 2.7 % of the ride height. Any
+/// disturbance past that dropped both probes. At `0.75` the target is `4.125`
+/// against a `5.5` reach, so a resting ship sits about **1.5 units** below the point
+/// where it loses the ground, which is ten times the margin and is what a suspension
+/// is supposed to have.
+///
+/// That retires the open question this module recorded three candidate answers for.
+/// It was **not** the additive `craft+0x74` offset (measured `0.0`) and **not** the
+/// cast length (a longer cast measurably made things worse); it was this scale.
+pub const TARGET_GLOBAL_SCALE: f32 = 0.75;
 
 /// The largest reduction the leap timer can make to the hover target height.
 ///
@@ -257,6 +286,34 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// `k = 400`, `c = 2`, the sub-step count, or the once-per-frame evaluation is
 /// misread, and a trace distinguishes them. **Nothing here is tuned to hide it**;
 /// see `HANDOVER.md`'s note that changing a magnitude would destroy the measurement.
+///
+/// ## The original does not do this, and that is now measured rather than assumed
+///
+/// The question "is the original marginally unstable and simply never sits in that
+/// state" has an answer, and it is **no**. Pulse was driven into a Time Trial under
+/// PPSSPP and a 150-tick trace taken with **no input at all**, through
+/// `scripts/psp-trace.py`:
+///
+/// | Quantity | Original, 150 ticks at rest |
+/// | --- | --- |
+/// | `grounded` | `1.0` on every tick, no flicker |
+/// | distance travelled | 0.0087 units |
+/// | `pos_y` range | 0.00019 units |
+/// | up-axis deviation from its own mean | max **0.000476 rad** (0.027 deg) |
+///
+/// A ship sitting on a real, banked track surface, where this torque is certainly
+/// non-zero, holds its attitude to within half a milliradian and shows **no
+/// oscillation at all** - let alone one growing 2 % a tick at the 20 rad/s this gain
+/// implies. So the instability is an artefact of the reading, not a property of the
+/// game, and the four candidates above are now a search for *which* is wrong rather
+/// than a question of whether any is.
+///
+/// **The gain itself was hunted for and not found.** The hover constant pool around
+/// `0x08ab0e00` holds [`TARGET_GLOBAL_SCALE`], [`HOVER_K`] and
+/// [`BANK_TO_YAW_GAIN`] - `0x08ab1098` reads `30.0` - but contains no `400.0`, and no
+/// `-2.0`/`-5.0` pair for the damping. Whatever this term's real magnitudes are, they
+/// live elsewhere. That is the next measurement, and it is the last thing between the
+/// simulation and a ship that stays on a track.
 ///
 /// **Only the sign is settled. The magnitude is not.** `400` is transcribed and
 /// stays M3 work, along with everything else on that page. Confidence **84** on
@@ -1047,7 +1104,10 @@ mod tests {
             ..Handling::ZERO
         };
 
-        assert_eq!(target_height(&handling, 0.0, 0.0), 12.0);
+        assert_eq!(
+            target_height(&handling, 0.0, 0.0),
+            12.0 * TARGET_GLOBAL_SCALE
+        );
     }
 
     /// The target must never exceed the raycast length, because they are the same
@@ -1099,12 +1159,13 @@ mod tests {
             ..Handling::ZERO
         };
 
-        assert_eq!(target_height(&handling, 1.0, 0.0), 12.0);
-        assert_eq!(target_height(&handling, 0.0, 1.5), 8.5);
+        let k2 = TARGET_GLOBAL_SCALE;
+        assert_eq!(target_height(&handling, 1.0, 0.0), 12.0 * k2);
+        assert_eq!(target_height(&handling, 0.0, 1.5), 8.5 * k2);
         // Clamped at four, however long the timer says.
-        assert_eq!(target_height(&handling, 0.0, 100.0), 6.0);
+        assert_eq!(target_height(&handling, 0.0, 100.0), 6.0 * k2);
         // And a spent timer takes nothing off.
-        assert_eq!(target_height(&handling, 0.0, 0.0), 10.0);
+        assert_eq!(target_height(&handling, 0.0, 0.0), 10.0 * k2);
     }
 
     /// `Handling::ZERO` has `ride_height = 0.0`, so the probe segment has zero
