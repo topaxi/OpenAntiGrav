@@ -51,7 +51,12 @@ Decode the containers, then the assets inside them.
 - [x] Parse a real track and render it: `oag-view --track` draws the driveable
       ribbon, `--mesh` draws all 482 art meshes in place, and the two outlines
       agree
-- [ ] Audio: the music and effect banks
+- [x] Audio: [PSP `.bnk` sound banks](../formats/psp-audio.md) (`SBlk`
+      container, PS-ADPCM waveforms, confidence 94/92) and
+      [PS2 music](../formats/ps2-audio.md) (48 kHz stereo PCM, channel order
+      and sample rate both cross-validated against the PSP's ATRAC3plus
+      masters). Per-sound boundaries within a bank and track names are still
+      open.
 - [x] `oag-view`, a standalone asset viewer: textures, and models/tracks with
       an interactive orbit camera
 

@@ -591,6 +591,54 @@ the blind one, used exclusively by the front-end widget layer while every
 gameplay parser goes through the blind one. Neither Ghidra function existed
 before this pass - both were only visible in raw disassembly.
 
+## Audio decoded on both platforms - M1's checklist is now fully checked
+
+The agent that decoded PS2 textures went on to crack both of M1's remaining
+"unknown" formats: PSP `.bnk` sound banks and the PS2 music archive. Both
+close on real invariants across full corpora, confidence 94 (container) /
+92 (contents) on each, per the rubric's data-agreement cap.
+
+**PSP `.bnk`**: an `SBlk`-magic container (Sony's SCREAM audio engine is the
+strong, not yet confirmed, suspect - the PS2 disc ships `IOP/SCREAM.IRX`, the
+PSP has no equivalent file to check against) holding PS-ADPCM waveform data.
+Validated on all 39 banks on the disc: the waveform size is stated three
+independent times in the header and agrees every time, every stride (cue 12,
+command 8, voice 16 bytes) matches its own declared count exactly, and across
+546,681 decoded ADPCM blocks the flag/predictor census stays in-spec on
+546,450 of them. **What's still missing is where each individual sound starts
+within a bank** - the command table is a small per-sound script, not a plain
+offset directory, and the one bank simple enough to reverse by hand
+(`frontend.bnk`, 10 commands, all one opcode) doesn't generalise to the more
+complex race banks. A block-index encoding for that table was tested and
+**ruled out** (a `u16` reading of the known boundaries matches only 2 of 7,
+which is chance) rather than left unconsidered.
+
+**PS2 music (`PS2MUSIC.WAD`, distinct from the ordinary WAD container despite
+the name)**: raw 48 kHz 16-bit stereo PCM, no header worth the name. Two
+numbers that aren't stated anywhere in the container were pinned by
+cross-referencing the *other* disc rather than by guessing:
+
+- **Which channel is left** can't be read off either autocorrelation or plain
+  left/right correlation alone - both are symmetric under swapping the
+  channels. Aligning each PS2 track against its PSP ATRAC3plus counterpart on
+  the *mid* signal (`ch0+ch1`) and then correlating the *side* signal
+  (`ch0-ch1`, which **is** antisymmetric under a swap) settles it: all three
+  spot-checked tracks come out around +0.93 to +0.98, where a swapped channel
+  order would read around -0.98. Channel 0 is left.
+- **The sample rate is 48,000 Hz, not the also-plausible 44,100.** The PSP disc
+  carries the same sixteen tracks as ATRAC3plus, which does state its rate;
+  at 48 kHz every one of the sixteen PS2 track durations matches a *distinct*
+  PSP track to within 11 ms (the residual being the ATRAC3plus decoder's own
+  trailing-frame padding, consistent in sign and size across all sixteen); at
+  44,100 Hz the match collapses, with one PSP track claimed by eight PS2
+  tracks. Two discs encoding the same masters with different tools agreeing to
+  four significant figures across sixteen tracks is not a coincidence.
+
+Both formats' "not determined" lists are honest about what's left: per-sound
+boundaries and the command opcodes for `.bnk`; track names and whether the
+game streams PS2 music directly, for the music archive. `docs/overview/roadmap.md`'s
+M1 audio checklist item is now checked.
+
 ## PS2 textures found, decoded, and rendering - M1's last real gap is closed
 
 A fresh agent (replacing the one that decoded PS2 mesh geometry, after it hit
