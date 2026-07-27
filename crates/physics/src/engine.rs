@@ -30,15 +30,26 @@ use oag_core::math::Vec3;
 use crate::params::Handling;
 use crate::ship::{ShipControls, ShipState};
 
-/// The unknown per-craft scalar the engine multiplies its output by.
+/// The start-line boost multiplier the engine scales its output by, `1.0` while
+/// racing.
 ///
 /// `T = T * craft+0x294 * 2.0`, unconditionally, at the end of
-/// `Ship_UpdateEngine`. **Nothing was found that writes `craft+0x294`**, so the
-/// identity is chosen here: it keeps the `* 2.0` visible without inventing a
-/// second factor. A guess awaiting M3, and one worth checking, since anything
-/// other than 1.0 scales all thrust.
+/// `Ship_UpdateEngine`. **`craft+0x294` is now recovered**, and it is the
+/// start-line boost multiplier rather than a hidden global gain - see
+/// `docs/ghidra/functions/psp-pulse/engine.md`, "The two engine multipliers are
+/// recovered". Three writers agree it is `1.0` outside the start-line window:
+/// the craft constructor `Ship_InitCraft` (`0x08849354`), the per-race reset
+/// `Race_ResetCraftBoosts_q` (`0x088271b4`), and `Ship_UpdateStartBoost`
+/// (`0x0883fdec`), which drives it from a `windowStart`/`overallDuration`/
+/// `stallMul`/`normalMul`/`boostMul` group loaded from XML for the first second
+/// or two of a race and then stores `1.0` back. So `1.0` here is a **recovered
+/// value**, at confidence 88, not the identity chosen for want of anything
+/// better. Confidence 88.
 ///
-/// # M3 has now checked it, and `1.0` is measurably wrong
+/// The start boost itself is not implemented: it needs the race-start grade at
+/// `player+0x36c` and the XML group above, neither of which this crate has.
+///
+/// # The measured 17x gap is real, and it is not this constant
 ///
 /// A real capture of the reference scenario
 /// (`docs/reverse-engineering/ppsspp-debugger.md`; Time Trial, Venom, Talon's
@@ -61,14 +72,32 @@ use crate::ship::{ShipControls, ShipState};
 /// units/s against the recording's 23.6 to 25.1 for **160 of the 200 ticks** - the
 /// whole speed divergence closes on this one scalar.
 ///
-/// **It is deliberately left at `1.0`.** `0.084` is a number fitted to one capture and
-/// nothing has been read that writes `craft+0x294`; committing it would put an
-/// invented constant where a recovered one belongs, and six months from now the two
-/// would be indistinguishable. What the measurement buys is a *target*: whoever reads
-/// `craft+0x294`'s writer can check the value they find against 0.084 before believing
-/// it.
+/// **`0.084` is not what `craft+0x294` holds.** It holds `1.0` while racing, read out
+/// of three writers. Nor is it the other engine multiplier: `craft+0x2a0` is `1.2`,
+/// the speed-up pickup, written together with the `0x0004` flag that gates it, so it
+/// contributes nothing on a Time Trial lap and could not scale *down* if it did. Both
+/// arms of the "it's a multiplier nobody has read" hypothesis are therefore closed,
+/// and the factor lives somewhere else.
 ///
-/// Two things narrow where else the factor could live, and both are dead ends:
+/// # Where the 17x has to be instead
+///
+/// By elimination on the same force balance. A steady 24 units/s needs `T ~= 4.88`,
+/// so `min(throttle * amount, cap) ~= 2.44` before the `* 2.0`. But
+/// `cap = 0.5 * 23.35 + accelcap = 11.68 + accelcap`, which cannot be as low as
+/// `2.44` for any non-negative `accelcap`. So one of exactly two things is true:
+///
+/// - `Engine.amount` as the original loads it is about `0.0244`, against the `0.418`
+///   this crate has - a **17x error in the XML value or in the load-time `* 1e-3`
+///   scaling**, in [`crate::params`], not in this force law; or
+/// - `Engine.accelcap` is *negative* for Assegai/Venom (about `-9.2`), the cap arm
+///   binds after all, and the reasoning above is void.
+///
+/// The discriminating check is to read the two loaded floats at `craft+0x70 + 0x28`
+/// (`amount`) and `+0x30` (`accelcap`) in a running race for that ship and class, and
+/// compare them against what this crate loads. Until that is done, this constant stays
+/// at the value that was actually recovered.
+///
+/// Two other things narrow where the factor could live, and both are dead ends:
 ///
 /// - **Not the drag coefficients.** `-0.005` grounded, `-0.002` airborne and `-0.1`
 ///   reversing are confirmed at instruction level in the PS2 build as well
@@ -82,9 +111,30 @@ use crate::ship::{ShipControls, ShipState};
 ///   `Body::mass == Physical::mass`, and a body mass 17x the parameter one would put
 ///   that at 1.6.
 ///
-/// The remaining unread candidate is `craft+0x2a0`, the flag-gated multiplier this
-/// crate also does not implement.
 pub const ENGINE_OUTPUT_SCALE: f32 = 1.0;
+
+/// The flag-gated engine multiplier: the speed-up pickup, a flat +20 % on thrust.
+///
+/// `if (flags & 0x0004) T *= craft+0x2a0`, in `Ship_UpdateEngine`. The only writer
+/// that uses a craft base is `0x0883b3b8`, and it writes the value and the gating
+/// flag in the same branch:
+///
+/// ```text
+/// if ((pickup->0x1b8 & 0x800) == 0) { craft+0x2a0 = 0;   flags &= ~0x0004 }
+/// else                              { craft+0x2a0 = 1.2; flags |=  0x0004 }
+/// ```
+///
+/// so the `0` case is unreachable through the read: the flag is set only on the
+/// branch that stores `0x3f99999a` (`1.2f`). Confidence 85; the constant is read
+/// straight out of the instruction stream, and what is weaker is calling the `0x800`
+/// pickup-flag bit "speed-up" specifically.
+///
+/// **Not applied.** Doing so needs the pickup system and the `craft+0x1c0` flag word,
+/// neither of which this crate has, and on the Time Trial capture the trace is
+/// compared against there is no pickup, so the multiplier is inert there anyway. It is
+/// recorded because it was one of the two candidates for the missing 17x on thrust,
+/// and it rules itself out: `1.2` cannot scale anything down.
+pub const ENGINE_PICKUP_SPEEDUP: f32 = 1.2;
 
 /// The fixed doubling on the engine's output, from the same expression.
 pub const ENGINE_OUTPUT_DOUBLE: f32 = 2.0;
@@ -153,7 +203,7 @@ impl EngineForce {
 /// previous frame's 0/0.5/1 fraction.
 ///
 /// **Not implemented, all of it flag-gated on the undecoded `craft+0x1c0`:** the
-/// uncapped mode (`cap = 1e10`), the `craft+0x2a0` multiplier, turbo and its boost
+/// uncapped mode (`cap = 1e10`), the [`ENGINE_PICKUP_SPEEDUP`] multiplier, turbo and its boost
 /// lift, the one-shot scale at `craft+0x31c`, the kill switch at bit `0x2000`, and
 /// the four-corner mode's auto-speed law. Each needs a flag nobody has decoded, so
 /// implementing them would mean inventing their triggers.

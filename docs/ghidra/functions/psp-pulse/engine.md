@@ -421,13 +421,13 @@ if (normal mode) {
     T = g_autospeed_base + g_autospeed_step * (float)craft+0x28c
 }
 
-if (flags & 0x0004)  T *= craft+0x2a0                   // a scalar multiplier
+if (flags & 0x0004)  T *= craft+0x2a0                   // the speed-up pickup, 1.2
 lift = 0
 if ((flags & 0x0200) || (flags & 0x0400)) and craft+0x2a4 == 1 {
     T += Engine.turbo
     if (controls.buttons & 1)  lift = g_boost_lift * T
 }
-T = T * craft+0x294 * 2.0
+T = T * craft+0x294 * 2.0                               // start-boost mul, 1.0 when racing
 if (craft+0x31c < 1.0) { T *= craft+0x31c; craft+0x31c = 1.0 }  // one-shot scale
 if (flags & 0x2000) { throttle = 0; T = 0; lift = 0 }
 
@@ -436,6 +436,132 @@ localForce.y += lift
 ```
 
 Confidence **84**.
+
+### The two engine multipliers are recovered, and both are 1.0 while racing
+
+Earlier revisions of this page recorded `craft+0x294` and `craft+0x2a0` as
+"unrecovered - nothing was found that writes them". **Both writers have now been
+read.** Neither is a hidden global scale on thrust; both are gameplay modifiers
+that sit at their neutral value during ordinary racing.
+
+#### `craft+0x294` is the start-line boost multiplier
+
+Three independent sites write it, and every one of them writes `1.0` outside the
+start-line window:
+
+| Address | Function | Store |
+| --- | --- | --- |
+| `0x08849424`..`0x0884947c` | `Ship_InitCraft` (`0x08849354`) | `craft+0x294 = 0x3f800000` (`1.0`) |
+| `0x08827250` | `Race_ResetCraftBoosts_q` (`0x088271b4`) | `entity->craft(+0x94)+0x294 = 1.0`, per craft, in a loop over the field |
+| `0x0883ff40` | `Ship_UpdateStartBoost` (`0x0883fdec`) | `craft+0x294 = 1.0` once the boost window has elapsed |
+
+`Ship_InitCraft` is unambiguously the craft constructor: alongside `+0x294` it
+initialises `+0x1c0` (the flag word) to 0, `+0x2a4` to 1, `+0x2b0` (grounded
+fraction) to 0, `+0x2b8` (throttle state) to 0, `+0x2fc` to `0.5`, `+0x2b4` to
+`10.0` and `+0x31c` (the one-shot scale) to `1.0` - the same offsets this page
+reads elsewhere. It is called from `0x08840c74`.
+
+`Ship_UpdateStartBoost` is where the non-1.0 values come from. Its shape:
+
+```
+if (craft+0x2a4 != 1) { player+0x888 = 0; return }   // timer reset
+t = player+0x888                                     // seconds since the start
+if (t < g_boost_overallDuration + 0.5) {
+    if (t < g_boost_overallDuration) {
+        switch (player+0x36c) {                      // the start-grade, 0..3
+        case 0: craft+0x294 = g_boost_normalMul
+        case 1: craft+0x294 = g_boost_stallMul
+        case 2: craft+0x294 = g_boost_boostMul
+        case 3: craft+0x294 = g_boost_boostMul * perClassTable[...]
+        }
+    } else {
+        craft+0x294 = 1.0                            // window over
+    }
+    player+0x888 = t + dt
+}
+```
+
+The four globals are XML-loaded, not literals. `Xml_ReadBoostSettings`
+(`0x088390b4`) fills them by attribute name, which is what pins their meaning:
+
+| Global | Attribute |
+| --- | --- |
+| `0x08ab0d70` | `windowStart` |
+| `0x08ab0d74` | `windowEnd` |
+| `0x08ab0d78` | `stallEnd` |
+| `0x08ab0d7c` | `overallDuration` |
+| `0x08ab0d80` | `stallMul` |
+| `0x08ab0d84` | `normalMul` |
+| `0x08ab0d88` | `boostMul` |
+
+The numeric values live in a disc XML file, not in the executable - all four
+addresses read as zero in the image. That is not an unrecovered code gap; it is
+data, and it also means that with nothing supplying `overallDuration` the window
+test falls straight through to the `= 1.0` branch.
+
+**So `craft+0x294 == 1.0` for the whole of a normal lap.** Confidence **88**:
+three writers agree, the constructor identification is corroborated by seven
+other offsets this page already reads, and the XML attribute names are literal
+strings compared by `Xml_AttributeNameIs`.
+
+#### `craft+0x2a0` is the speed-up pickup, and it is 1.2
+
+`0x0883b3b8` (a per-frame player/HUD update) is the only writer of `craft+0x2a0`
+that uses a craft base, and it writes exactly two values, in the same branch that
+sets and clears the `0x0004` flag that gates the read:
+
+```
+if ((pickup->0x1b8 & 0x800) == 0) {          // no speed-up pickup held
+    craft+0x2a0  = 0
+    craft+0x1c0 &= ~0x0004
+} else {
+    craft+0x1c0 |= 0x0004
+    craft+0x2a0  = 0x3f99999a                // 1.2f
+}
+```
+
+The flag and the value are written together, so the `0` case is never read:
+`Ship_UpdateEngine` only loads `+0x2a0` when bit `0x0004` is set, and that bit is
+set only on the branch that stores `1.2`. **The multiplier is a flat +20 % on
+thrust while a speed-up pickup is active**, and it contributes nothing at all
+otherwise. Confidence **85** - the constant is read straight out of the
+instruction stream; what is slightly weaker is the identification of the `0x800`
+pickup-flag bit as "speed-up" specifically, which comes from the surrounding
+code (it also feeds `FUN_08848664` with the pickup's `+0x148` timer and forces
+the HUD icon id to 6) rather than from a string.
+
+#### What this closes, and what it does not
+
+The measurement recorded on `ENGINE_OUTPUT_SCALE` in
+`crates/physics/src/engine.rs` implies the original's thrust is about **17x**
+smaller than this crate computes. **It is not these two multipliers.** Both are
+`>= 1.0` in the branch that a Time Trial lap with no pickups takes, so no
+combination of them can produce a factor below one, let alone `0.084`.
+
+The enumeration behind that negative: `search_instructions` over every store with
+a literal `0x294(` or `0x2a0(` displacement, plus the same over `0x290(` to catch
+a `sv.q` covering `0x290`-`0x29c` as a quad. Every `sv.q` at `0x290` in the image
+is stack-relative (`0x290(sp)`); no vector store aliases these fields off a craft
+base. What that scan cannot see is a store through a rebased pointer, the way
+`Ship_UpdateEngine` itself writes its accumulator via `addiu a0,a0,0x320`, so the
+negative is confidence **80** rather than higher.
+
+Where the 17x has to live instead, by elimination on the force balance already
+recorded in `engine.rs`: a steady 24 units/s needs `T ~= 4.88`, so
+`min(throttle * Engine.amount, cap) ~= 2.44` before the `* 2.0`. But
+`cap = 0.5 * 23.35 + Engine.accelcap = 11.68 + accelcap`, which cannot be as low
+as `2.44` unless `accelcap` is about `-9.2`. So either
+
+- `Engine.amount` as loaded is about `0.0244` where this crate has about `0.418`
+  - a **17x error in the XML value or its load-time `* 1e-3` scaling**, not in the
+  force law; or
+- `Engine.accelcap` is *negative* for Assegai/Venom and the cap arm binds after
+  all.
+
+Both are questions about `crates/physics/src/params.rs` and the handling-XML
+reader, not about `Ship_UpdateEngine`. The discriminating check is to read the
+two loaded floats at `craft+0x70 + 0x28` (`amount`) and `+0x30` (`accelcap`) for
+Assegai/Venom and compare them against what this crate loads.
 
 ### Engine `gain` and `falloff` are dead
 
