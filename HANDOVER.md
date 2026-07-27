@@ -302,6 +302,74 @@ layout, so a second reading of the force law could settle open questions
 there (the roll-oscillator constants among them) the same way LZSS and the
 handling loader just got settled.
 
+## The roll-oscillator margin is now settled at instruction level, in a second binary - and the crate was already right
+
+The same agent took its own suggestion and read the PS2 build's craft-update
+and rigid-body path (`docs/ghidra/functions/ps2-pulse/craft-update.md`,
+13 symbols, nothing below 78). **This agent hit a context limit
+("Prompt is too long") right after finishing its work and could not send its
+own final report** - its last edit landed uncommitted, was recovered and
+committed on its behalf (`941a4ee` plus a follow-up), and is folded in here
+instead of in its own words. Anyone picking up further PS2 Ghidra work should
+start a fresh agent rather than trying to resume this one.
+
+Three things settled, one deepened:
+
+1. **The surface-alignment gain really is `-400.0`, confirmed at instruction
+   level in both binaries.** `Ship_HoverFourCorner`/`Ship_HoverTwoPoint`
+   materialise `0xC3C80000` as an immediate on PS2, same magnitude, same sign,
+   same operand order as PSP. `docs/physics/README.md`'s standing suspicion
+   that this was a transcription error is retired: two different compilers on
+   two different ISAs producing the identical constant is not a coincidence.
+2. **Roll damping is `-2.0`, confirmed exactly - but only outside "mode 0"**,
+   which uses `-5.0` instead (`craft+0x2d4` selects; yaw damping is a hard
+   `-5.0` always, pitch damping is per-ship). Whatever repro is used for this
+   instability needs its ship in the right mode for `c = 2` to be the number
+   that applies.
+3. **Sub-stepping cannot rescue this instability, confirmed from the PS2's own
+   `Body_Integrate` disassembly, not just inferred from the Rust integrator's
+   contract**: the force/torque accumulators are filled once per frame and read
+   *inside* the sub-step loop with nothing recomputing them between
+   iterations - the original does this too, it isn't a simplification this
+   project's reimplementation introduced. Redone properly (accounting for the
+   real n-substep position/velocity update rather than a naive single Euler
+   step), the required damping is `c >= k*H*(n+1)/(2n)`:
+
+   | Sub-steps | `c` required | Against the actual `c = 2` |
+   | ---: | ---: | ---: |
+   | 1 | 6.67 | 3.33x short |
+   | 3 | **4.44** | **2.22x short** |
+   | infinite | 3.33 | 1.67x short |
+
+   **The `n = 3` row is exactly what `crates/physics/src/hover.rs`'s own
+   stability note already computes.** So the crate's math was already right;
+   `docs/physics/README.md`'s older `h <= c/k` reading (which assumes forces
+   are re-evaluated every sub-step, giving a falsely-reassuring 1.11x) is
+   the thing that needs correcting, not the other way round. **This margin is
+   real, it is confirmed in a second binary at instruction level, and it
+   cannot be fixed by raising the sub-step count or by any of the constants
+   just confirmed exact** - if a fix is needed, it has to come from somewhere
+   this reading hasn't reached yet.
+4. **The handedness question deepened rather than closed.** `Body_AddForceAtPoint`
+   computes torque as `F x r`, not the physically-correct `r x F` - confirmed
+   in raw VU assembly, on the one term whose correct sign is fixed by
+   mechanics rather than by anyone's prose. That makes the anomaly
+   **systematic across at least two terms**, corroborating `engine.md`'s
+   standing "the sign lives downstream" hypothesis over "someone mistyped it"
+   - but where it's compensated is still unlocated: `Body_AddTorqueWorld` and
+   `Body_Integrate`'s rotation update are both plain `+=` with no negation on
+   the path read so far. Three explanations are on the table and none is
+   picked: the compensation is in the unread inertia/rotation-matrix path at
+   `body+0xc0`; the force is already pre-negated before this call, uninspected
+   component-by-component; or the EE's `vopmsub` operand convention is the
+   reverse of what was assumed here, which would flip all three terms at once
+   and make everything consistent with "it aligns, it doesn't diverge" after
+   all. The last is flagged as cheapest to settle and highest-value.
+
+One more unresolved difference, not yet chased: the PS2's four-corner
+bank-to-yaw term uses `50.0` where the PSP uses `30`; neither value is
+runtime-verified yet.
+
 ## `oag-trace` exists now: M3's missing comparison side is built
 
 A new crate, `crates/trace` (`oag-trace`, lib + bin, added to the workspace),
