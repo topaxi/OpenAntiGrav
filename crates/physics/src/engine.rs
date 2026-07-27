@@ -431,6 +431,13 @@ pub fn brakes(state: &ShipState, handling: &Handling) -> Vec3 {
 /// steering authority at a standstill is not zero and any speed dependence comes
 /// from the damping and grip terms instead.
 ///
+/// This function is the literal law, unmodified. The transcription nonetheless
+/// predicts a yaw rate 22x higher than the original's, and what stands in for the
+/// missing term is [`crate::forces::YAW_DRIVE_CALIBRATION`], applied once to the
+/// whole yaw axis in [`crate::forces::evaluate`] rather than here - the airbrake's
+/// yaw and bank-to-yaw share the discrepancy, and scaling only this term throws
+/// their ratios out. Read that constant before changing anything here.
+///
 /// # Why the literal `steer * Turning.amount` is negated here
 ///
 /// `docs/ghidra/functions/psp-pulse/engine.md` ("The basis is positively

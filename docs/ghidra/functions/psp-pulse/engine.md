@@ -72,7 +72,12 @@ page could not settle from the XML alone:
 | `Airbrake.amount` | `xml * 0.0001` | in `HandlingXml_ParseAirbrake` |
 | `Airbrake.slidegrip` | `xml * 0.0001` | in `HandlingXml_ParseAirbrake` |
 
-Confidence **88**. Two consequences worth stating outright:
+Confidence **88**. `Turning.amount` was later read the same way and is **not** on
+this list - `HandlingXml_ParseTurning` stores it verbatim, confidence 95, see
+[Steering](#steering). That is worth stating explicitly because it removes the
+obvious explanation for the 22x yaw discrepancy recorded there.
+
+Two consequences worth stating outright:
 
 - **`Brakes.amount` is negative in memory.** The brake term applies force along
   `+normalize(velocity)`, so the sign lives in the parameter, not in the force
@@ -934,6 +939,76 @@ Confidence **84**. Two details worth keeping:
 `Turning.amount` feeds body-local yaw acceleration directly, with no speed
 factor. Steering authority at a standstill is therefore not zero, and any
 speed-dependence must come from the damping and grip terms.
+
+### The whole path is now read, and it disagrees with the hardware by 22x
+
+Every link was followed to instruction level, and none of them carries a scale:
+
+- `HandlingXml_ParseTurning` (`0x088398e0`) stores `amount` with
+  `swc1 f0,0xd0(a0)` - **verbatim**. This settles the "untested but plausible"
+  caveat above: `Turning.amount` is genuinely *not* one of the four pre-scaled
+  fields, and it is positive. Confidence **95**, read from disassembly.
+- `Xml_AttributeAsFloat` (`0x0895379c`) is a plain decimal reader - digits,
+  one `.`, one `-`, no exponent - so an authored value arrives unchanged.
+- `Ship_ApplyAngularDamping` (`0x08848ed0`) adds
+  `(-pitch_damping, -5, -2) * localAngularVelocity` to `craft+0x340`, the **same**
+  accumulator steering writes to. The `-5` is `viim_s(5); vneg_s`, and the `-2`
+  becomes `-5` in the undecoded `craft+0x2a4` mode 0.
+- `Body_AddTorqueLocal` (`0x0884d5bc`) forwards `craft+0x340` to `body+0x120`
+  with no scaling, and `Ship_UpdateCraft` zeroes `craft+0x340` at the top of every
+  frame, so it is a per-frame accumulator rather than persistent state.
+
+**This closes the "torque or angular acceleration" question** left open by the
+sign-convention section above, in the only way that matters for magnitude: it does
+not matter. Steering and damping land in one accumulator, so any common factor -
+the inertia tensor included - cancels at equilibrium, leaving
+
+```text
+omega_y = steer * Turning.amount / 5
+```
+
+unconditionally. Substituting the shipped Assegai `Turning` block and the
+full-deflection `steer` near 96 that the captures show gives a terminal yaw rate
+about **22x** the `1.5 rad/s` the hardware actually turns at - the same
+`1.5 rad/s` this page measures above at confidence 90, and independently
+reproducible from both captures in `data/traces/` as
+`dot(cross(fwd_t, fwd_t+1), up) / dt`. (The product is not recorded here, per
+[handling stats](../../../formats/handling-stats.md)'s standing decision.)
+
+Confidence **90** on the discrepancy: the law is read from disassembly and the
+measurement is end-to-end on hardware, so the two are hard to reconcile away.
+
+**So a yaw-opposing term in `Ship_UpdateCraft` is missing from this page.** The
+longitudinal axis had the same shape of gap - "resistance is 12x short" - and it
+turned out not to be resistance at all but *thrust the original does not apply*,
+via `Ship_UpdateEngine`'s early return on the collision-stun timer `craft+0x290`.
+A yaw analogue is the first place to look, and `Ship_ApplyLateralGrip`
+(`0x08848b78`) returns early on that same timer.
+
+Until it is found, `oag_physics::forces::YAW_DRIVE_CALIBRATION` stands in for
+it: `0.0452`, fitted independently to each capture (`0.0454` left, `0.0450`
+right, RMS error `0.10` and `0.04 rad/s` against a signal of `1.5`) and pinned by
+`crates/trace/tests/yaw_authority_ground_truth.rs`.
+
+**It scales the whole body-local yaw axis, not the steering term.** All three yaw
+drives - the airbrake differential, steering, and the hover epilogue's
+`30 * right.y` bank-to-yaw - land in `craft+0x340` together, so whatever
+resistance is missing acts on all of them. Scaling only steering was tried first
+and fails in play: it leaves bank-to-yaw 22x too strong *relative to* steering,
+dropping the break-even camber where a corner out-turns full opposite lock to
+about 14 degrees, so a banked section steers the ship for the player. The damping
+is deliberately left outside the factor - scaling that too would cancel straight
+back out of the equilibrium. It is **a calibration, not a
+recovered value**, confidence **80** on reproducing the captures and **45** on any
+mechanism. One lead, recorded but not built on: `1 / 0.0452` is `22.1`, and a
+textbook box tensor for the shipped Assegai hull gives a yaw moment of `16.6` -
+the right order, 33 % out.
+
+Applying it to the input rather than to the damping is itself evidence-led.
+Raising the damping to about `107` reaches the same equilibrium but collapses the
+time constant from `0.2 s` to `0.009 s`, and the captures rule that out: `steer`
+chatters about +/-8 % at roughly 20 Hz - the authentic non-clamping ramp above -
+and the recorded yaw rate does not follow it, it decays smoothly.
 
 ## Pitch
 

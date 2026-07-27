@@ -407,16 +407,35 @@ plausible-looking number would be indistinguishable from a recovered one later.
   `oag_physics::Handling` holds the scaled in-memory form, and `oag-gameplay` applies the
   factors between them. **Applying them twice is the most likely integration bug here**
   and it would be silent: the ship would simply be sluggish.
-- **The control range.** Three separate pieces of arithmetic only come out right if the
-  control states run `0..=100` rather than `0..=1`: the brake ramp's `100.0` clamp, the
-  engine's `throttle > 100.0` test, and the grip coefficient reaching exactly zero at full
-  airbrake. That the *analog axes* share that scale is an inference, and `Turning.amount`
-  is not pre-scaled, so if the steering axis were on some other range the yaw authority
-  would be out by that factor.
+- **The control range - settled for the steering axis.** Three separate pieces of
+  arithmetic only come out right if the control states run `0..=100` rather than `0..=1`:
+  the brake ramp's `100.0` clamp, the engine's `throttle > 100.0` test, and the grip
+  coefficient reaching exactly zero at full airbrake. That the *analog axes* share that
+  scale was an inference; for `stick_x` it is now **measured**. Both captures in
+  `data/traces/` show `craft+0x2c0` ramping and falling at rates that reproduce the
+  shipped `Turning.gain`/`Turning.falloff` to under 1 %, which only works on the
+  `0..=100` reading. `stick_y` stays an inference - the craft control block holds no
+  second axis to capture.
+
+  **The old warning attached to this entry - that an unscaled `Turning.amount` would put
+  yaw out by whatever the axis scale was wrong by - is falsified.** The axis scale is
+  right and `Turning.amount` really is stored verbatim, yet yaw still comes out about
+  **22x** too strong. Dividing by the control range "fixes" it to 4.7x too weak. See
+  [engine.md](../ghidra/functions/psp-pulse/engine.md#steering) for the instruction-level
+  reading and `oag_physics::forces::YAW_DRIVE_CALIBRATION` for what stands in
+  meanwhile - applied to the whole body-local yaw axis, because the bank-to-yaw
+  coupling recorded above shares the same accumulator and therefore the same
+  discrepancy.
 - **Whether the two angular accumulators hold torque or angular acceleration.** Nothing in
   any term visibly divides by an inertia, and the angular damping term's shape is
   dimensionally an acceleration, so `oag-physics` treats both as acceleration. Under that
   reading the inertia tensor has no effect on any angular term at all.
+
+  **For magnitude this no longer matters, and that is now proven rather than assumed.**
+  `Ship_UpdateSteering` and `Ship_ApplyAngularDamping` write to the *same* accumulator
+  (`craft+0x340`), which `Ship_UpdateCraft` zeroes every frame and `Body_AddTorqueLocal`
+  forwards unscaled, so any common factor - the inertia tensor included - cancels out of
+  the resulting equilibrium whichever quantity the accumulator turns out to hold.
 - **The alignment gain and the roll damping are marginally unstable together**, by 11 % at
   the specified sub-step; see
   [the arithmetic above](#a-numeric-prerequisite-for-m3-found-while-implementing-this).

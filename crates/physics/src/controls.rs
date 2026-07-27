@@ -25,10 +25,23 @@ use crate::ship::{ShipControls, ShipState};
 ///   reach `100` while `slidegrip` runs `0..0.01`.
 ///
 /// So the conversion happens here, once, where a normalised input becomes a state.
-/// That the analog axes use the same scale is an **inference** from the three facts
-/// above rather than something read, and it is a guess awaiting M3 - `Turning.amount`
-/// is not pre-scaled, so if the steering axis were on some other range the yaw
-/// authority would be out by that factor.
+///
+/// **The steering axis is now measured, and it is on this scale.** Both captures in
+/// `data/traces/` show `craft+0x2c0` ramping at 498/s and falling at 924/s under
+/// full deflection, which reproduces the shipped `Turning.gain` and
+/// `Turning.falloff` to under 1 % only on the `0..=100` reading. That retires the
+/// inference for this axis; `stick_y` is still untested, since the craft control
+/// block holds no second axis to capture.
+///
+/// **Do not "fix" the yaw authority by dividing it by `CONTROL_RANGE`.** An earlier
+/// version of this comment warned that an unscaled `Turning.amount` would put yaw
+/// out by whatever factor the axis scale was wrong by, and invited exactly that
+/// edit. It is falsified: the axis scale is right, `HandlingXml_ParseTurning`
+/// really does store `amount` verbatim (`swc1 f0,0xd0(a0)`), and the yaw error is
+/// **22x, not 100x**. Dividing by 100 here lands 4.7x too *weak* - measured, RMS
+/// error 1.05 rad/s against captures whose signal is 1.5. The real discrepancy and
+/// what stands in for it are documented at
+/// [`crate::forces::YAW_DRIVE_CALIBRATION`].
 pub const CONTROL_RANGE: f32 = 100.0;
 
 /// The brake state's ceiling, and so every control state's nominal maximum.
