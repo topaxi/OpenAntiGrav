@@ -86,6 +86,29 @@ pub const SHIP_RESTITUTION: Option<f32> = Some(crate::collide::WALL_RESTITUTION)
 /// [`WallResponse::hull_degenerate`].
 pub const MIN_HULL_EXTENT: f32 = 1e-4;
 
+/// Seconds of [`ShipState::stun_timer`] a resolved contact adds.
+///
+/// `craft+0x290 += 0.5` in `Ship_ApplyCollisionImpulse` (`0x0883f274`), which is
+/// the original's site for applying a contact impulse. Confidence 85; see
+/// `docs/ghidra/functions/psp-pulse/engine.md`.
+///
+/// **Added, not assigned**, exactly as the original does, so a ship that keeps
+/// hitting things accumulates stun rather than holding a flat half second.
+///
+/// # This crate arms it from the wall constraint, which is not where the original does
+///
+/// `Ship_ApplyCollisionImpulse` runs on the entity, outside `Ship_UpdateCraft`, and
+/// handles impulses from every source - walls, other ships, weapons. This crate has
+/// only the wall constraint, so that is the one source wired up. The gate it feeds
+/// is faithful; the set of things that can trigger it is not yet complete, and a
+/// ship-to-ship contact should arm the same timer when that exists.
+///
+/// The original's impulse path also projects the impulse onto the ship's forward
+/// axis before applying it, which [`resolve`] does not: this crate removes the
+/// inward normal velocity instead. That difference is in the impulse, not in the
+/// stun, and is left as it was.
+pub const STUN_PER_CONTACT: f32 = 0.5;
+
 /// One resolved contact between the hull and a surface.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WallContact {
@@ -223,6 +246,15 @@ pub fn resolve<R: Raycaster + ?Sized>(
     } else {
         Vec3::ZERO
     };
+
+    // Arm the collision stun, the other half of the contact response: for the next
+    // half second the engine produces nothing and the ship has no lateral grip. Only
+    // when the hull was actually moving into the surface - a ship sliding along a
+    // wall is already being pushed out every frame by the escape above, and stunning
+    // it for that would cut the engine for the whole length of the wall.
+    if velocity_delta != Vec3::ZERO {
+        state.stun_timer += STUN_PER_CONTACT;
+    }
 
     WallResponse {
         resolved: Some(contact),
@@ -503,6 +535,59 @@ mod tests {
             assert_eq!(state.body, before, "{surface:?}");
             assert!(!responds(surface));
         }
+    }
+
+    /// A real impact arms the collision stun, which is what cuts the engine and the
+    /// grip for the next half second.
+    #[test]
+    fn an_impact_arms_the_collision_stun() {
+        let mut state = ship_at(1.0, 10.0);
+        assert_eq!(state.stun_timer, 0.0);
+
+        let response = resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &wall(1.6, Surface::Wall),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+        assert!(response.resolved.is_some());
+        assert_ne!(response.velocity_delta, Vec3::ZERO);
+        assert_eq!(state.stun_timer, STUN_PER_CONTACT);
+    }
+
+    /// It accumulates rather than refreshing - `craft+0x290 += 0.5`, not `= 0.5`.
+    #[test]
+    fn repeated_impacts_accumulate_stun() {
+        let mut state = ship_at(1.0, 10.0);
+        for hit in 1..=3 {
+            state.body.position = Vec3::new(1.0, 0.0, 0.0);
+            state.body.linear_velocity = Vec3::new(10.0, 0.0, 0.0);
+            resolve(
+                &mut state,
+                &handling(),
+                &Environment::default(),
+                &wall(1.6, Surface::Wall),
+                Vec3::new(1.0, 0.0, 0.0),
+            );
+            assert_eq!(state.stun_timer, STUN_PER_CONTACT * hit as f32);
+        }
+    }
+
+    /// A ship sliding along a wall is pushed out every frame without ever moving
+    /// into it. Stunning on that would cut the engine for the whole length of the
+    /// wall, which is the difference between scraping and stopping dead.
+    #[test]
+    fn a_scrape_along_a_wall_does_not_arm_the_stun() {
+        let mut state = ship_at(1.0, -10.0);
+        resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &wall(1.6, Surface::Wall),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+        assert_eq!(state.stun_timer, 0.0);
     }
 
     /// A ship already leaving a surface must not be shoved along the normal, or a

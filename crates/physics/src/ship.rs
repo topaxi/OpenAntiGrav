@@ -194,6 +194,26 @@ pub struct ShipState {
     /// it is fully inverted. Nothing in this crate drives it; a reverse-controls
     /// pickup would. Treating it as a boolean would snap where the original ramps.
     pub reverse_controls: f32,
+    /// Seconds left on the collision stun at `craft+0x290`.
+    ///
+    /// While it runs, **the engine produces no thrust at all** and lateral grip is
+    /// suppressed: a struck ship coasts and slides. `Ship_UpdateEngine` returns from
+    /// its prologue without writing to either accumulator, and
+    /// `Ship_ApplyLateralGrip` returns after decrementing this. See
+    /// `docs/ghidra/functions/psp-pulse/engine.md`, "The engine has an early return
+    /// that produces no thrust at all"; confidence 88 on the gate, 85 on reading the
+    /// field as a collision stun.
+    ///
+    /// Armed by [`crate::wall::resolve`] with [`crate::wall::STUN_PER_CONTACT`], the
+    /// original's `craft+0x290 += 0.5` in `Ship_ApplyCollisionImpulse`. It is
+    /// **added, not assigned**, so sustained contact accumulates rather than
+    /// refreshing to a fixed value.
+    ///
+    /// Decremented in [`crate::forces::evaluate`] at the lateral-grip step rather
+    /// than with the control ramps, because that is where the original decrements it
+    /// and it is what makes the engine see the *pre*-decrement value in the same
+    /// frame.
+    pub stun_timer: f32,
     /// Seconds left on the timer at `craft+0x2e0`.
     ///
     /// While it runs, the hover target height is reduced by `min(timer, 4.0)` and
@@ -234,6 +254,7 @@ impl Default for ShipState {
             brake: 0.0,
             steer: 0.0,
             reverse_controls: 0.0,
+            stun_timer: 0.0,
             leap_timer: 0.0,
             grounded: 0.0,
             grounded_prev: 0.0,

@@ -202,10 +202,30 @@ use crate::ship::{ShipControls, ShipState};
 /// 200 ticks, about `-0.21` units/s^2, i.e. a craft mass near 23.
 ///
 /// **So `ENGINE_OUTPUT_SCALE` is right, every constant here is right, and the drag
-/// coefficients are right.** What is missing is the gate, not a magnitude. It is not
-/// implemented here because it needs the contact impulse and the `craft+0x1c0` flag
-/// word, and because [`engine`] has no state to hold a timer in - it belongs with the
-/// collision response, alongside the stun's other half in the grip term.
+/// coefficients are right.** What was missing is the gate, not a magnitude. It is now
+/// implemented: [`ShipState::stun_timer`] holds the timer, [`crate::wall::resolve`]
+/// arms it, and [`engine`] and the lateral grip both read it.
+///
+/// # Which timer is armed in the reference capture is *not* established
+///
+/// The early return has two arms, and this analysis shows only that one of them must
+/// have been taken. It does **not** show which:
+///
+/// - **The collision stun** (`craft+0x290`), if the run touched a wall. Sustained
+///   contact keeps re-arming it, which would hold thrust at zero for the whole
+///   window. Against this: a Time Trial run holding accelerate should not be scraping
+///   a wall, and the stun also kills lateral grip, which would show as a visible
+///   slide.
+/// - **The leap timer** (`craft+0x2e0`), whose arming condition
+///   [`ShipState::leap_timer`] records as unknown, with "a leap, a respawn and a race
+///   start are all plausible". A capture taken near a race start would have it
+///   running, which fits a clean straight-line run better than wall contact does.
+///
+/// **Neither timer is in the capture**, so no amount of re-reading the existing CSV
+/// settles it. The decisive measurement is one line in `scripts/psp-trace.py`: record
+/// `craft+0x290` and `craft+0x2e0` alongside the columns it already takes, and
+/// re-capture. That distinguishes the two arms, and it would also confirm the gate
+/// fired at all rather than leaving this a very good inference.
 ///
 /// # A caveat on the framing, which the resolution above supersedes
 ///
@@ -299,6 +319,8 @@ impl EngineForce {
 /// The engine.
 ///
 /// ```text
+/// if (craft+0x290 > 0 || (!(flags & 0x10) && craft+0x2e0 > 0))
+///     && !(flags & 0x200)  { craft+0x2b8 = 0; return }   // no thrust, no lift
 /// T = throttle * Engine.amount                 // amount already * 1e-3 at load
 /// T = T * grounded + T * 0.2 * (1 - grounded)
 /// cap = 0.5 * speed + Engine.accelcap
@@ -309,6 +331,12 @@ impl EngineForce {
 ///
 /// `speed` is `|dot(velocity, forward)|`, not `|velocity|`. `grounded` is the
 /// previous frame's 0/0.5/1 fraction.
+///
+/// The early return **is** implemented, on both timers. The `0x0200` escape from it
+/// is not, because nothing decodes that flag; the effect is that a stunned ship here
+/// always loses its engine where the original might not. The `0x0010` escape on the
+/// leap arm is not implemented either, for the same reason - and since nothing in
+/// this crate arms [`ShipState::leap_timer`], that arm is inert today regardless.
 ///
 /// **Not implemented, all of it flag-gated on the undecoded `craft+0x1c0`:** the
 /// uncapped mode (`cap = 1e10`), the [`ENGINE_PICKUP_SPEEDUP`] multiplier, turbo and its boost
@@ -322,6 +350,20 @@ pub fn engine(
     grounded: f32,
     forward_speed: f32,
 ) -> EngineForce {
+    // The prologue's early return, at `0x0884c634`. A stunned or leaping craft gets
+    // no thrust and no lift at all - the original writes nothing to either
+    // accumulator and returns. See `ShipState::stun_timer`.
+    //
+    // **The original's `craft+0x2b8 = 0` on this path is not reproduced.**
+    // `ShipState::thrust` is rewritten from the input by `controls::update` every
+    // tick, so zeroing it here would be overwritten before anything read it; the
+    // original's store is observable only to the other readers of `craft+0x2b8`
+    // within the stun, which are the HUD's throttle display. Keeping `engine` a
+    // function of `&ShipState` is worth more than a cosmetic store.
+    if state.stun_timer > 0.0 || state.leap_timer > 0.0 {
+        return EngineForce::default();
+    }
+
     let throttle = state.thrust;
 
     let mut thrust = throttle * handling.engine.amount;
@@ -516,6 +558,48 @@ mod tests {
         assert!(force.z < 0.0, "force was {force:?}");
         assert_eq!(force.x, 0.0);
         assert_eq!(force.y, 0.0);
+    }
+
+    /// The whole point of the gate: a stunned ship at full throttle produces
+    /// nothing. This is what stopped this crate accelerating to four times the
+    /// original's speed, so it pins the behaviour rather than just the field.
+    #[test]
+    fn a_stunned_ship_produces_no_thrust_at_full_throttle() {
+        let handling = test_handling();
+        let mut state = ship_moving_forward(24.0);
+        state.thrust = 100.0;
+
+        let running = engine(&state, &handling, 1.0, 24.0);
+        assert!(
+            running.thrust > 0.0,
+            "the un-stunned baseline must be non-zero"
+        );
+
+        state.stun_timer = 0.5;
+        assert_eq!(engine(&state, &handling, 1.0, 24.0), EngineForce::default());
+    }
+
+    /// The gate is `> 0`, so a timer that has counted exactly to zero is running
+    /// again. An `>=` here would leave every ship permanently dead.
+    #[test]
+    fn a_stun_timer_at_exactly_zero_does_not_gate() {
+        let handling = test_handling();
+        let mut state = ship_moving_forward(24.0);
+        state.thrust = 100.0;
+        state.stun_timer = 0.0;
+
+        assert!(engine(&state, &handling, 1.0, 24.0).thrust > 0.0);
+    }
+
+    /// The same early return has a second arm, on the leap timer.
+    #[test]
+    fn a_leaping_ship_produces_no_thrust_either() {
+        let handling = test_handling();
+        let mut state = ship_moving_forward(24.0);
+        state.thrust = 100.0;
+        state.leap_timer = 1.0;
+
+        assert_eq!(engine(&state, &handling, 1.0, 24.0), EngineForce::default());
     }
 
     #[test]

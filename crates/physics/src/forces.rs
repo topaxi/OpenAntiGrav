@@ -272,9 +272,18 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let contact_grounded = state.grounded;
     let contact = contact_grounded > 0.0;
 
-    // 9. Lateral grip, into the *local* force accumulator, and only once the leap
-    //    timer has expired.
-    let lateral_grip = if state.leap_timer > 0.0 {
+    // 9. Lateral grip, into the *local* force accumulator, and only once both the
+    //    collision stun and the leap timer have expired.
+    //
+    //    `Ship_ApplyLateralGrip` opens with `if (craft+0x290 > 0) { craft+0x290 -=
+    //    dt; return; }`, so the stun both suppresses the grip and is what counts it
+    //    down. Decrementing here rather than with the control ramps is deliberate:
+    //    the engine ran at step 2 and has already read the pre-decrement value, which
+    //    is the original's ordering. See `ShipState::stun_timer`.
+    let lateral_grip = if state.stun_timer > 0.0 {
+        state.stun_timer = (state.stun_timer - dt).max(0.0);
+        Vec3::ZERO
+    } else if state.leap_timer > 0.0 {
         Vec3::ZERO
     } else {
         airbrake::lateral_grip(state, handling, contact_grounded)
@@ -584,6 +593,83 @@ mod tests {
             1.0 / 60.0,
         );
         assert_eq!(held.lateral_grip, Vec3::ZERO);
+    }
+
+    /// The collision stun suppresses lateral grip too, and is what counts itself
+    /// down - `Ship_ApplyLateralGrip` owns the decrement.
+    #[test]
+    fn the_collision_stun_suppresses_lateral_grip_and_counts_itself_down() {
+        let handling = Handling {
+            antigrav: Antigrav {
+                grip_ground: 2.0,
+                grip_air: 1.0,
+                ..test_handling().antigrav
+            },
+            ..test_handling()
+        };
+        let world = flat_floor();
+        let dt = 1.0 / 60.0;
+
+        let mut stunned = ship_at(4.0);
+        stunned.body.linear_velocity = Vec3::new(10.0, 0.0, -60.0);
+        stunned.grounded = 1.0;
+        stunned.stun_timer = 0.5;
+
+        let held = evaluate(
+            &mut stunned,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            dt,
+        );
+        assert_eq!(held.lateral_grip, Vec3::ZERO);
+        assert_eq!(stunned.stun_timer, 0.5 - dt);
+    }
+
+    /// The stun must actually expire, and stop at zero rather than going negative -
+    /// a negative timer would read as "not stunned" but is a trap for anything that
+    /// later tests the sign.
+    #[test]
+    fn the_collision_stun_stops_at_zero_and_grip_returns() {
+        let handling = Handling {
+            antigrav: Antigrav {
+                grip_ground: 2.0,
+                grip_air: 1.0,
+                ..test_handling().antigrav
+            },
+            ..test_handling()
+        };
+        let world = flat_floor();
+        let dt = 1.0 / 60.0;
+
+        let mut ship = ship_at(4.0);
+        ship.body.linear_velocity = Vec3::new(10.0, 0.0, -60.0);
+        ship.grounded = 1.0;
+        ship.stun_timer = dt * 0.5;
+
+        let during = evaluate(
+            &mut ship,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            dt,
+        );
+        assert_eq!(during.lateral_grip, Vec3::ZERO);
+        assert_eq!(ship.stun_timer, 0.0, "clamped rather than negative");
+
+        ship.body.linear_velocity = Vec3::new(10.0, 0.0, -60.0);
+        ship.grounded = 1.0;
+        let after = evaluate(
+            &mut ship,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            dt,
+        );
+        assert_ne!(after.lateral_grip, Vec3::ZERO, "grip must come back");
     }
 
     /// The world force accumulator holds forces, not accelerations: gravity is the
