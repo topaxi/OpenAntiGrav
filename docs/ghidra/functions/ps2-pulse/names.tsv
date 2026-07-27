@@ -76,6 +76,8 @@
 0x0015ca48	function	Body_ClearAccumulators	88	craft-update.md
 0x0015c448	function	Ship_UpdateEngine	90	craft-update.md
 0x001592e8	function	Ship_InitCraft	85	craft-update.md
+0x0015cb98	function	Body_Init	85	craft-update.md
+0x0015d018	function	Body_SetPosition	80	craft-update.md
 0x0015c2d8	function	Ship_UpdatePitch	90	craft-update.md
 0x0015a290	function	Ship_ApplyWeathervaneTorque	88	craft-update.md
 0x00159f10	function	Ship_ApplyRollingResistance	88	craft-update.md

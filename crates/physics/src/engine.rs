@@ -150,19 +150,48 @@ use crate::ship::{ShipControls, ShipState};
 ///   `Body::mass == Physical::mass`, and a body mass an order of magnitude above the
 ///   parameter one would put that at 1.6.
 ///
-/// # Where to look next
+/// # The track-section force was the lead, and it is the wrong sign
 ///
-/// The world force accumulator (`craft+0x330`) has writers this crate does not
-/// implement, and one of them has to be carrying the missing `~0.095 * v^2`. Per
-/// `docs/ghidra/functions/psp-pulse/engine.md`'s enumeration, the full list is the
-/// brakes, the airbrake lateral and slide terms, gravity, quadratic drag, rolling
-/// resistance, the hover spring epilogue's downforce, the vertical-damping term and
-/// the **track-section force** (`FUN_08848f9c` on PSP, `FUN_0015a300` on PS2). The
-/// last of those is the least examined: it is a per-section timed impulse along the
-/// section direction, scaled by two per-speed-class tables at `0x08b36bc0` and
-/// `0x08b36bd0`, and neither table has been read. It is the first thing to check,
-/// because it is the only term in the list that is both unimplemented here and
-/// track-dependent - which the reference capture is.
+/// `FUN_08848f9c` was the only world-force writer both unimplemented here and
+/// track-dependent, so it was the obvious candidate. It has now been read, along
+/// with the two per-speed-class tables it indexes, and it is
+/// **`Ship_ApplySpeedupPad`**: the speed-pad boost. The tables at `0x08b36bc0` and
+/// `0x08b36bd0` are filled by `Xml_ReadGlobalSettings` (`0x0883a970`) from
+/// `<GlobalClass name="..."><SpeedupPads amount="..." time="..."/></GlobalClass>`,
+/// one entry per speed class. It pushes the craft *along* the section direction,
+/// so it can only add speed. **It cannot be the missing resistance.**
+///
+/// # Two damping terms nobody had recorded - real, but far too small
+///
+/// Re-reading `Body_Integrate` turned up a pair of terms the physics docs do not
+/// mention at all. Inside the sub-step loop, after both force accumulators:
+///
+/// ```text
+/// velocity        -= velocity        * h * body+0x384
+/// angularVelocity -= angularVelocity * h * body+0x380
+/// ```
+///
+/// `Body_Init` (`0x0015cb98`, PS2) zeroes both, and the ship-entity constructor
+/// (`FUN_00150d20`) then sets **both to `0.01`**, along with `body+0x388 = 0.4` and
+/// `body+0x394 = 0.1`. So a real craft carries a linear velocity damping of `0.01`
+/// per second that this crate does not implement. Confidence 80.
+///
+/// It should be implemented for fidelity, but it is **not** the gap: at `0.01` and
+/// the `invMass` of `1.0` that `Body_Init` defaults to, it opposes motion with about
+/// `0.24` of equivalent force at 24 units/s, against the ~53 that is missing.
+///
+/// # A caveat on the framing, which now matters more than it did
+///
+/// Everything above treats the recording as a *speed equilibrium*. It is a
+/// **3.33-second window** (200 ticks), and over that long a slow transient toward a
+/// far higher equilibrium is not distinguishable from a steady state by the speed
+/// range alone. What makes it an equilibrium rather than a transient is the recorded
+/// *sign*: the capture is described as very slightly decelerating, and a ship
+/// climbing toward a higher equilibrium would be accelerating. The entire "resistance
+/// is 12x short" conclusion rests on that one sign, so it is worth re-confirming
+/// straight off the capture before anyone changes a coefficient on the strength of
+/// it. If the sign is actually positive, the diagnosis flips again - to the *mass*,
+/// which cancels out of an equilibrium but sets the whole timescale of a transient.
 pub const ENGINE_OUTPUT_SCALE: f32 = 1.0;
 
 /// The flag-gated engine multiplier: the speed-up pickup, a flat +20 % on thrust.

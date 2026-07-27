@@ -123,6 +123,8 @@
 0x0883a2f0	function	Handling_ParseStats	88	engine.md
 0x08849618	function	Ship_UpdateCraft	82	engine.md
 0x08849354	function	Ship_InitCraft	88	engine.md
+0x08848f9c	function	Ship_ApplySpeedupPad	85	engine.md
+0x0883a970	function	Xml_ReadGlobalSettings	85	engine.md
 0x0883fdec	function	Ship_UpdateStartBoost	85	engine.md
 0x088390b4	function	Xml_ReadBoostSettings	88	engine.md
 0x088271b4	function	Race_ResetCraftBoosts_q	60	engine.md

@@ -404,6 +404,34 @@ for (i = 0; i < substeps; i++) {
 `Ship_UpdateCraft` fills them once per frame; every sub-step then applies the
 same frozen values.
 
+### Two damping terms, and what initialises them
+
+The sketch also omits a pair of damping terms applied at the end of each sub-step,
+after both force accumulators:
+
+```c
+velocity        -= velocity        * h * body+0x384;
+angularVelocity -= angularVelocity * h * body+0x380;
+```
+
+`Body_Init` (`0x0015cb98`) zeroes both, along with every accumulator, and defaults
+the `invMass` at `body+0x378` to `1.0`. The ship-entity constructor
+(`FUN_00150d20`, the function that also calls `Ship_InitCraft` and
+`Handling_LoadForTeam`) then sets **both damping coefficients to `0.01`**
+(`0x3c23d70a`), plus `body+0x388 = 0.4` and `body+0x394 = 0.1`, whose meanings are
+not established. Confidence **80** - read off VU-macro decompiler output.
+
+`Body_SetPosition` (`0x0015d018`) is `(float x, float y, float z, Body *body)` and
+writes the three lanes of `body+0x30`; it is named here because the ship
+constructor calls it with `0.75 * 150.0` in `y`, which reads like a mass at a
+glance and is a **spawn height**. Confidence **80**.
+
+Neither damping term appears in [physics](../../../physics/README.md) or in
+`crates/physics`, and the linear one is a genuine gap in this reimplementation.
+It is not, however, large enough to explain the open thrust/resistance discrepancy
+recorded in `crates/physics/src/engine.rs`: at `0.01` against an `invMass` of
+`1.0` it opposes motion with about `0.24` of equivalent force at 24 units/s.
+
 ### The local force accumulator is applied on exactly the same terms
 
 The sketch above omits `body+0x110`, the **body-local** force accumulator, which

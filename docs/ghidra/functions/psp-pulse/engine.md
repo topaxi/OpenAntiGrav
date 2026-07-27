@@ -632,27 +632,92 @@ confirmed as `-0.005` grounded in *both* binaries, delay slots included, with
 coincidence pins is the *magnitude* to look for: something contributing roughly
 `0.095 * v^2` of opposing force to a grounded craft.
 
-The first place to look is the **track-section force** (`FUN_08848f9c` here,
-`FUN_0015a300` on PS2), the one world-force writer that is both unimplemented in
-`crates/physics` and track-dependent, which the reference capture is. It is a
-per-section timed impulse along the section direction:
+#### The track-section force is the speed-pad boost, and it is the wrong sign
+
+`FUN_08848f9c` was the obvious candidate - the one world-force writer both
+unimplemented in `crates/physics` and track-dependent, which the reference
+capture is. It has now been read, and it is **`Ship_ApplySpeedupPad`**:
 
 ```
-on entering a new section:
-    craft+0x298 = g_section_duration[class]     // 0x08b36bd0
-    craft+0x29c = g_section_magnitude[class]    // 0x08b36bc0
-each frame, while craft+0x298 > 0:
+q = FUN_08887144(g_world, craft+0x1a0, &section, ...)   // locate by position
+if (q == 0) { craft+0x1d0 = 0; craft+0x2d0 += dt }
+else {
+    craft+0x2d0 = 0
+    craft+0x298 = g_speeduppad_time[class]              // 0x08b36bd0
+    craft+0x29c = g_speeduppad_amount[class]            // 0x08b36bc0
+    craft+0x1b0..0x1bc = section->direction             // section + 0x20
+    if (section changed) { ...lap and sector counting... }
+}
+if (craft+0x298 > 0) {
     craft+0x298 -= dt
-    f = (craft+0x298 > 0.1) ? craft+0x29c * 10.0 * craft+0x298 : craft+0x29c
-    if (craft+0x2cc < 1.0)  f *= craft+0x2cc
-    worldForce += sectionDirection(craft+0x1b0) * f
+    f   = (craft+0x298 > 0.1) ? craft+0x29c * 10.0 * craft+0x298 : craft+0x29c
+    dir = craft+0x1b0
+    if (controls->0x24 & 1)  dir += craft+0x160 * g_speedpad_jump   // 0x08b36bec
+    if (craft+0x2cc < 1.0)   f *= craft+0x2cc
+    worldForce += dir * f
+}
 ```
 
-Confidence **75** on that shape; the two per-speed-class tables have **not** been
-read, and their sign decides whether this term drives the craft or opposes it.
-`Ship_InitCraft` zeroes both `+0x298` and `+0x29c`, so the term is inert until a
-section is entered - which is why it never shows up in a static reading of the
-force law.
+**The two tables are now read**, and they settle the sign. Both are filled by
+`Xml_ReadGlobalSettings` (`0x0883a970`) from
+
+```xml
+<GlobalClass name="<speedclass>">
+    <SpeedupPads amount="..." time="..."/>
+    <WeaponPad refresh_time="..." elimination_refresh_time="..."/>
+    <GravityMul airborne="..."/>
+</GlobalClass>
+```
+
+one entry per speed class, indexed by `g_handling_parse_class`: `0x08b36bc0` is
+`amount` (the magnitude, into `craft+0x29c`) and `0x08b36bd0` is `time` (the
+duration, into `craft+0x298`). The element name string is at `0x08a7b41c` and the
+`time` attribute name at `0x08a7b428`; both were read out of memory rather than
+inferred. Confidence **85**.
+
+So the term applies a force **along** the section direction for `time` seconds
+after touching a pad, ramping down as the timer expires. It is a boost. **It
+cannot be the missing resistance**, and implementing it would move this crate's
+speed the wrong way. The lead is closed.
+
+The tables are `.bss` and hold nothing in the image, so the per-class numbers are
+shipped data and are not recorded here.
+
+#### Two damping terms in `Body_Integrate` that no page had recorded
+
+Re-reading `Body_Integrate` (`0x0015d088`, PS2) for this turned up a pair of terms
+missing from [physics](../../../physics/README.md) and from
+[craft-update.md](../ps2-pulse/craft-update.md). Inside the sub-step loop, after
+both force accumulators are applied:
+
+```c
+velocity        -= velocity        * h * body+0x384;
+angularVelocity -= angularVelocity * h * body+0x380;
+```
+
+`Body_Init` (`0x0015cb98`) zeroes both, and the ship-entity constructor
+(`FUN_00150d20`, which is also what calls `Ship_InitCraft` and
+`Handling_LoadForTeam`) sets **both to `0.01`** (`0x3c23d70a`), together with
+`body+0x388 = 0.4` and `body+0x394 = 0.1`. `Body_Init` also defaults the `invMass`
+at `body+0x378` to `1.0`. Confidence **80** - read off VU-macro output, and the
+`0x388`/`0x394` fields' meanings are not established.
+
+A craft therefore carries a linear velocity damping this crate does not implement.
+It should be, for fidelity, but **it is not the gap**: at `0.01` against an
+`invMass` of `1.0` it opposes motion with about `0.24` of equivalent force at 24
+units/s, against the ~53 that is missing.
+
+#### A caveat on the framing
+
+All of the above treats the recording as a speed *equilibrium*. It is a
+**3.33-second window**, and over that long a slow transient toward a much higher
+equilibrium is not distinguishable from a steady state by the speed range alone.
+What makes it an equilibrium is the recorded *sign* - the capture is described as
+very slightly decelerating, and a ship climbing toward a higher equilibrium would
+be accelerating. The whole "resistance is 12x short" conclusion rests on that one
+sign. It is worth re-confirming directly off the capture before anyone changes a
+coefficient, because if the sign is positive the diagnosis flips to the **mass**,
+which cancels out of an equilibrium but sets the entire timescale of a transient.
 
 ### Engine `gain` and `falloff` are dead
 
