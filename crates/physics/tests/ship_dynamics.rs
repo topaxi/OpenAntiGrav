@@ -190,6 +190,11 @@ fn forces_are_evaluated_once_per_frame_and_not_once_per_sub_step() {
 /// constraint existed: whatever `step` costs in raycasts, it must not grow with
 /// the sub-step count or drift between ticks. Ten ticks cost ten times one tick,
 /// where a force evaluated per sub-step would cost three times that.
+///
+/// The per-tick count is only *constant* because nothing in this world responds
+/// to the wall constraint: a hit on the swept query short-circuits the eight hull
+/// probes, so a fixture with a wall in it would legitimately vary. If this fails
+/// after someone adds one, that is the fixture changing and not `step`.
 #[test]
 fn the_query_cost_of_a_tick_does_not_grow_with_the_sub_steps() {
     let handling = fixture();
@@ -892,9 +897,13 @@ fn a_ship_under_a_ceiling_probes_along_its_own_up_axis() {
     );
 }
 
-/// A vertical wall in the plane `x = at`, tall and wide enough that a ship
-/// cannot go round it.
-fn wall_at(at: f32) -> TriangleSoup {
+/// A vertical quad in the plane `x = at`, tall and wide enough that a ship
+/// cannot go round it, tagged with whatever surface the caller wants.
+///
+/// The surface is a parameter because the two tests below need the *same*
+/// geometry under two different tags: that is the whole of what the hoverable
+/// gate decides.
+fn vertical_quad_at(at: f32, surface: Surface) -> TriangleSoup {
     TriangleSoup::new(
         vec![
             [at, -500.0, -500.0],
@@ -904,9 +913,13 @@ fn wall_at(at: f32) -> TriangleSoup {
         ],
         vec![[0, 1, 2], [0, 2, 3]],
         Vec::new(),
-        Surface::Wall,
+        surface,
         1,
     )
+}
+
+fn wall_at(at: f32) -> TriangleSoup {
+    vertical_quad_at(at, Surface::Wall)
 }
 
 /// The behaviour this whole constraint exists for, through the real entry point.
@@ -955,20 +968,27 @@ fn a_ship_flown_at_a_wall_ends_up_on_the_near_side_of_it_and_turns_round() {
     assert!(reversed, "the ship never bounced back off the wall");
 }
 
-/// The same flight without a wall must be unaffected, or the constraint is
-/// firing on geometry it has no business touching. Pins the `is_hoverable` gate
-/// end to end: the floor underneath is present in both runs.
+/// A hoverable surface **in reach of a lateral probe** must still produce no
+/// response, because the hover spring owns those and a wall push there would
+/// shove a hard-banked ship off the surface it is resting on.
+///
+/// The geometry has to be inside the hull's reach for this to test anything. An
+/// earlier version put the quad far away and passed with the gate deleted: the
+/// only surface in range was the floor below, which no lateral probe points at.
+/// Here the quad sits half a unit to the ship's right, well inside the one-unit
+/// half-width, so a regression in `wall::responds` diverges on the first tick.
 #[test]
-fn a_flight_over_open_floor_is_identical_with_and_without_the_wall_behind_it() {
+fn a_hoverable_surface_within_reach_of_a_lateral_probe_is_still_ignored() {
     let handling = fixture();
 
-    let run = |wall: Option<f32>| {
+    // Half the hull width is 1.0, so a quad at x = 0.5 is squarely inside it.
+    // The hover probes cast straight down from x = 0 and never reach it.
+    let run = |beside: Option<Surface>| {
         let mut world = flat_floor(Surface::Floor);
-        if let Some(at) = wall {
-            world.push(wall_at(at));
+        if let Some(surface) = beside {
+            world.push(vertical_quad_at(0.5, surface));
         }
         let mut state = ship_at(4.0, &handling);
-        state.body.linear_velocity = Vec3::new(40.0, 0.0, 0.0);
         for _ in 0..120 {
             step(
                 &mut state,
@@ -982,6 +1002,12 @@ fn a_flight_over_open_floor_is_identical_with_and_without_the_wall_behind_it() {
         state.body
     };
 
-    // The wall is far beyond anything 120 ticks at 40 units/s can reach.
-    assert_eq!(run(None), run(Some(10_000.0)));
+    let alone = run(None);
+    for surface in [Surface::Floor, Surface::MagFloor] {
+        assert_eq!(alone, run(Some(surface)), "{surface:?} produced a response");
+    }
+
+    // And the control: the identical quad tagged `Wall` *must* change the run,
+    // or the assertions above are passing because nothing is in reach at all.
+    assert_ne!(alone, run(Some(Surface::Wall)));
 }
