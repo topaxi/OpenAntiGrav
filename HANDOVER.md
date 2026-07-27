@@ -135,6 +135,71 @@ that carries them. Verified both ways: PSP's default set still applies clean
 record that its header/entry layout is now confirmed in a second binary, and
 `docs/formats/handling-stats.md` should gain the `<Misc>` element.
 
+## LZSS has its second binary now, and it agrees - with two new caveats
+
+The same agent went on to read `SCES_547.48`'s LZSS decoder
+(`Lzss_Decode`, `0x00214080`, plus `Lzss_ReadBits` at `0x00213f70`) end to end.
+**No divergence.** Window `0x1fff` (8192), write cursor seeded to 1, a 13-bit
+position used as a direct (not relative) ring index, length biased by two into
+a loop that runs one iteration past the bias (3..18), flag bit 1 = literal /
+0 = match, MSB-first bit reading with no byte alignment - every parameter
+already in [`docs/formats/lzss.md`](docs/formats/lzss.md) is visible in the
+PS2 code, under a different compiler and ISA. Committed as `23664bf` and a
+follow-up doc amendment `a169521`.
+
+**No live disc validation was possible** - `data/` doesn't exist in this
+working tree for this agent (no image mounted). What it did instead:
+transcribed a *second* Rust decoder directly from the PS2 disassembly, in the
+PS2 code's own shape (resumable state machine) rather than the existing
+PSP-derived decoder's shape, and diffed the two over 40,000 random streams, a
+full ring wrap, and degenerate inputs - agreeing on every byte. It then
+deliberately broke the reference eight different ways (length bias, flag
+polarity, bit order, field order, mask reset point, cursor start,
+absolute-vs-relative addressing, window size) to confirm the comparison
+actually has teeth, after noticing its first sweep silently passed with a
+no-op mutation.
+
+**Confidence deliberately held at 94, not raised to 95**: the rubric's top band
+needs a runtime trace *and* a second binary, and this only supplies the
+second leg. Recorded explicitly so nobody "rounds up" later.
+
+**Two new findings, neither reachable from the PSP side alone:**
+
+1. **The PS2 decompression ring is never zeroed** - a fresh, unzeroed heap
+   allocation per stream. Since ring positions are absolute rather than
+   relative, a match *can* legally address a slot the stream hasn't written
+   yet; the real console would read heap garbage there, our decoder returns
+   zero. All 6,053 shipped streams happen to decode correctly under the
+   zero assumption - so this is a fact about what the shipping encoder never
+   emits, not a bug in the format reading. **A hand-built or fuzzed stream
+   could tell the two apart where no real archive on either disc can.**
+2. **A dead 98,316-byte encoder workspace** (`Lzss_AllocBuffers`/
+   `Lzss_FreeBuffers`, allocated and freed, never read or written by anything
+   else). `98,316 = 3 * (8192+1) * 4` is exactly Okumura's `lson`/`rson`/`dad`
+   search-tree shape for an 8192 window - the *compressor's* structure,
+   shipped compiled out of a binary that only ever decodes. Confirmed by a
+   full instruction-operand scan (2 references to this workspace across
+   361,812 instructions, versus 6 for the real ring, 3 of them inside
+   `Lzss_Decode` itself) after a plain `get_xrefs_to` call under-reported and
+   was caught rather than trusted.
+
+10 new Ghidra symbols (58 total on `SCES_547.48` now), one below 70
+(`g_lzss_encoder_tree`, 68, `_q`-suffixed). `cargo nextest -p oag-formats`:
+192/192.
+
+**Tooling note surfaced by this agent, worth the user's attention:** `sd`
+(listed in the global CLAUDE.md as an available CLI tool) is **not installed**
+in this environment, and whatever currently answers to that name **exits 0
+while doing nothing** rather than failing loudly - it silently no-op'd this
+agent's first negative-control mutation sweep and briefly made a broken test
+read as passing. Worth installing `sd` for real, or removing it from the tool
+list, before anyone relies on it for an edit that matters.
+
+The PS2 Ghidra work paused here on purpose: the `0x00202d48`-`0x00203a80` XML
+reader family (confidence 60, would unlock every XML-driven subsystem at once)
+was flagged but deliberately not started, in favour of handing off one clean,
+finished deliverable rather than a partial one.
+
 ## `oag-trace` exists now: M3's missing comparison side is built
 
 A new crate, `crates/trace` (`oag-trace`, lib + bin, added to the workspace),
