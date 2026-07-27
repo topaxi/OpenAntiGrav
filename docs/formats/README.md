@@ -22,8 +22,9 @@ These are the project's actual work.
 | [LZSS](lzss.md) | - | PS2 | **understood** | Implemented and verified against all 6,053 compressed entries. |
 | [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | **partial** | **The** 3D format. Node tree, geometry and embedded textures implemented; `Transform` nodes and the scene hierarchy are not, so a whole track cannot be assembled yet. |
 | [Track data](track.md) | - | PSP | **understood** | The `WO Track` spline graph, racing line and AI corridor. Implemented, and validated against all 40 track files with nothing left over. The `section` PVS payload is documented but not implemented. |
+| [Collision geometry](collision.md) | - | PSP, PS2 | **understood** | An indexed triangle soup in `.vex` nodes under five collision class IDs, separate from the render mesh. Implemented and validated on both discs: 319 of 319 nodes close exactly over 602,086 vertices. |
 | [Front-end XML](fexml.md) | `.xml` | PSP, PS2 | **understood** | Name-shortened XML. Screens, widgets, handling stats. |
-| [Handling stats](handling-stats.md) | `.xml` | PSP | **understood** | Ship tuning is data, not code. |
+| [Handling stats](handling-stats.md) | `.xml` | PSP, PS2 | **understood** | Ship tuning is data, not code. Implemented and validated on both discs: 8 teams x 4 speed classes, every attribute required. Four fields are [pre-scaled at load](../ghidra/functions/psp-pulse/engine.md). |
 | [PSP movie](pmf.md) | `.PMF` | PSP | **understood** | PSMF header and MPEG program stream. Header and demuxer implemented and validated against all 17 movies; the H.264 inside is [transcoded out of process](../architecture/adr/0004-asset-pipeline.md), not decoded here. |
 | [Bitmap font](fnt.md) | `.fnt` | PSP | **partial** | Metrics resolved and validated across all five fonts; the glyph atlas's pixel layout is the same unresolved swizzle as [`.mip`](psp-texture.md). |
 | Sound bank | `.bnk` | PSP | unknown | `03000000` blobs. |

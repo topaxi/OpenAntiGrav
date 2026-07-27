@@ -24,6 +24,16 @@
 //! 64 blobs in `FEData.wad`, all 18 short codes carry more than one meaning.
 //!
 //! This is a size optimisation, not encryption.
+//!
+//! # Two layers
+//!
+//! [`expand`] undoes the shortening and hands back text. [`parse`] turns that
+//! text into a [`Node`] tree. Both are here because every consumer needs both:
+//! the front end reads screens out of it, and
+//! [`handling`](crate::handling) reads `handlingstats.xml`, which is the same
+//! format with a different schema. A second hand-rolled tree walker in each
+//! consumer is how a `Values` child or a `>` inside an attribute value comes to
+//! be handled correctly in one place and not the other.
 
 use std::collections::HashMap;
 
@@ -122,7 +132,22 @@ pub fn expand(data: &[u8]) -> Result<String> {
 /// values like `x="FEGlobals->MenuXOffset"`, and stopping at the first `>`
 /// truncates the tag, dropping every attribute after it and emitting the
 /// remainder as text.
+///
+/// Comments and processing instructions end at **their own** terminator rather
+/// than at the first unquoted `>`, and that is not pedantry. The PS2 ship files
+/// open with a malformed declaration, `<?xml version="1.0" encoding=utf-81"?>`:
+/// the unquoted `encoding` leaves an odd number of `"` in the tag, which inverts
+/// quote tracking for the whole rest of the file and swallows the entire document
+/// into one unterminated tag. Ending the declaration where XML says it ends costs
+/// two lines and makes eight shipped files readable.
 fn tag_end(rest: &str) -> Option<usize> {
+    if let Some(body) = rest.strip_prefix("<!--") {
+        return body.find("-->").map(|at| at + "<!--".len() + 2);
+    }
+    if rest.starts_with("<?") {
+        return rest.find("?>").map(|at| at + 1);
+    }
+
     let mut quoted = false;
     for (index, byte) in rest.bytes().enumerate() {
         match byte {
@@ -175,36 +200,181 @@ fn expand_tag(tag: &str, map: &HashMap<String, String>) -> String {
     out
 }
 
+/// A parsed XML element.
+///
+/// Text content is discarded: no schema in this format carries any. Attributes
+/// keep document order, because some of them are positional lists and a
+/// `HashMap` would reorder them differently on every run.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Node {
+    /// Element name, as it appears after [`expand`] has run.
+    pub name: String,
+    /// Attributes in document order.
+    pub attrs: Vec<(String, String)>,
+    /// Child elements in document order.
+    pub children: Vec<Node>,
+}
+
+impl Node {
+    /// An attribute by name, case-insensitively.
+    ///
+    /// The XML is inconsistent about case (`font="menu"` and `font="Menu"` both
+    /// appear, as do `color` and `Color`), so matching exactly would silently
+    /// drop attributes.
+    #[must_use]
+    pub fn attr(&self, name: &str) -> Option<&str> {
+        self.attrs
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+    }
+
+    /// An attribute of this element or of its `Values` child.
+    ///
+    /// `Values` is an **attribute carrier for its parent**, a convention of the
+    /// format rather than of any one schema: `<Movie><Values src="..."/></Movie>`
+    /// and `<Movie src="..."/>` mean the same thing, and both spellings occur.
+    /// The element's own attribute wins, so a carrier cannot shadow it.
+    #[must_use]
+    pub fn value(&self, name: &str) -> Option<&str> {
+        self.attr(name).or_else(|| {
+            self.children
+                .iter()
+                .filter(|c| c.name.eq_ignore_ascii_case("Values"))
+                .find_map(|c| c.attr(name))
+        })
+    }
+
+    /// A boolean attribute. True for `"true"` or `"1"`, as
+    /// `Movie_ParseAttributes` has it.
+    #[must_use]
+    pub fn flag(&self, name: &str) -> Option<bool> {
+        self.value(name)
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+    }
+
+    /// Children with this element name, case-insensitively.
+    pub fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Node> {
+        self.children
+            .iter()
+            .filter(move |c| c.name.eq_ignore_ascii_case(name))
+    }
+}
+
+/// Parses expanded front-end XML into a synthetic root node.
+///
+/// The files have several top-level elements, so the root is `"#document"`
+/// rather than any element from the file.
+///
+/// This is deliberately forgiving. The goal is to read whatever the shipped
+/// files contain, not to validate them: an unterminated document still yields
+/// everything it opened, and a stray close tag is ignored rather than unwinding
+/// past the root. A schema on top of this decides what counts as broken - see
+/// [`handling::parse`](crate::handling::parse), which turns a missing element or
+/// attribute into a typed error precisely because silently defaulting one to
+/// zero would look like a tuning problem rather than a bug.
+#[must_use]
+pub fn parse(xml: &str) -> Node {
+    let mut stack = vec![Node {
+        name: "#document".to_string(),
+        ..Node::default()
+    }];
+    let mut at = 0usize;
+
+    while at < xml.len() {
+        let Some(open) = xml[at..].find('<').map(|i| i + at) else {
+            break;
+        };
+        let Some(close) = tag_end(&xml[open..]).map(|i| i + open) else {
+            break;
+        };
+        at = close + 1;
+
+        let inner = &xml[open + 1..close];
+        // Comments, declarations and processing instructions carry no structure.
+        if inner.starts_with('!') || inner.starts_with('?') {
+            continue;
+        }
+
+        if let Some(name) = inner.strip_prefix('/') {
+            let name = name.trim();
+            // Tolerate a stray close tag rather than unwinding past the root.
+            if stack.len() > 1
+                && stack
+                    .last()
+                    .is_some_and(|n| n.name.eq_ignore_ascii_case(name))
+            {
+                let node = stack.pop().expect("checked above");
+                if let Some(parent) = stack.last_mut() {
+                    parent.children.push(node);
+                }
+            }
+            continue;
+        }
+
+        let self_closing = inner.ends_with('/');
+        let inner = inner.trim_end_matches('/');
+        let name_end = inner.find(char::is_whitespace).unwrap_or(inner.len());
+        let node = Node {
+            name: inner[..name_end].to_string(),
+            attrs: attributes(&inner[name_end..]),
+            children: Vec::new(),
+        };
+
+        if self_closing {
+            if let Some(parent) = stack.last_mut() {
+                parent.children.push(node);
+            }
+        } else {
+            stack.push(node);
+        }
+    }
+
+    // An unterminated document still yields everything it did open.
+    while stack.len() > 1 {
+        let node = stack.pop().expect("checked above");
+        if let Some(parent) = stack.last_mut() {
+            parent.children.push(node);
+        }
+    }
+    stack.pop().unwrap_or_default()
+}
+
 /// Extracts `name="value"` pairs from a tag body.
+///
+/// Whitespace is tested with the **ASCII** predicate on purpose. `char`'s
+/// version also matches `U+0085` and `U+00A0`, whose bytes inside a `&str` are
+/// only ever UTF-8 continuation bytes, so a name containing one would be sliced
+/// mid-character and panic.
 fn attributes(body: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let bytes = body.as_bytes();
-    let mut i = 0;
+    let mut at = 0usize;
 
-    while i < bytes.len() {
-        while i < bytes.len() && (bytes[i] as char).is_whitespace() {
-            i += 1;
+    while at < bytes.len() {
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
         }
-        let key_start = i;
-        while i < bytes.len() && bytes[i] != b'=' && !(bytes[i] as char).is_whitespace() {
-            i += 1;
+        let key_at = at;
+        while at < bytes.len() && bytes[at] != b'=' && !bytes[at].is_ascii_whitespace() {
+            at += 1;
         }
-        if key_start == i || i >= bytes.len() || bytes[i] != b'=' {
+        if key_at == at || at >= bytes.len() || bytes[at] != b'=' {
             break;
         }
-        let key = body[key_start..i].to_string();
+        let key = body[key_at..at].to_string();
 
-        i += 1; // '='
-        if i >= bytes.len() || bytes[i] != b'"' {
+        at += 1; // '='
+        if at >= bytes.len() || bytes[at] != b'"' {
             break;
         }
-        i += 1; // opening quote
-        let value_start = i;
-        while i < bytes.len() && bytes[i] != b'"' {
-            i += 1;
+        at += 1; // opening quote
+        let value_at = at;
+        while at < bytes.len() && bytes[at] != b'"' {
+            at += 1;
         }
-        out.push((key, body[value_start..i].to_string()));
-        i += 1; // closing quote
+        out.push((key, body[value_at..at].to_string()));
+        at += 1; // closing quote
     }
 
     out
@@ -365,5 +535,87 @@ mod tests {
     fn identifies_candidates_by_their_leading_bytes() {
         assert!(is_fexml(b"<code as=\"Values\">"));
         assert!(!is_fexml(b"<?xml version=\"1.0\"?>"));
+    }
+
+    #[test]
+    fn builds_a_tree_from_expanded_text() {
+        let root = parse(&expand(SAMPLE.as_bytes()).unwrap());
+        assert_eq!(root.name, "#document");
+        let screen = &root.children[0];
+        assert_eq!(screen.name, "Screen");
+        assert_eq!(screen.attr("name"), Some("Top"));
+        assert_eq!(screen.children[0].name, "Model");
+    }
+
+    #[test]
+    fn an_angle_bracket_in_a_value_does_not_end_the_tag() {
+        let node = parse(r#"<Text x="FEGlobals->X" y="2"></Text>"#);
+        let text = &node.children[0];
+        assert_eq!(text.attr("x"), Some("FEGlobals->X"));
+        assert_eq!(text.attr("y"), Some("2"));
+    }
+
+    #[test]
+    fn attributes_match_case_insensitively() {
+        let node = parse(r#"<Text Color="0xFF00FF00"></Text>"#);
+        assert_eq!(node.children[0].attr("color"), Some("0xFF00FF00"));
+    }
+
+    #[test]
+    fn unterminated_markup_yields_what_it_opened() {
+        let root = parse("<Screen name=\"Top\"><Text");
+        assert_eq!(root.children.len(), 1);
+        assert_eq!(root.children[0].attr("name"), Some("Top"));
+    }
+
+    #[test]
+    fn a_stray_close_tag_is_ignored() {
+        let root = parse("</Screen><Screen name=\"Top\"></Screen>");
+        assert_eq!(root.children.len(), 1);
+    }
+
+    #[test]
+    fn self_closing_elements_close_themselves() {
+        let root = parse(r#"<Screen name="Top"><Values x="1"/></Screen>"#);
+        assert_eq!(root.children.len(), 1);
+        assert_eq!(root.children[0].children.len(), 1);
+        assert_eq!(root.children[0].value("x"), Some("1"));
+    }
+
+    #[test]
+    fn an_elements_own_attribute_beats_its_values_carrier() {
+        let root = parse(r#"<Movie src="own"><Values src="carrier" sound="true"/></Movie>"#);
+        let movie = &root.children[0];
+        assert_eq!(movie.value("src"), Some("own"));
+        assert_eq!(movie.flag("sound"), Some(true));
+        assert_eq!(movie.flag("absent"), None);
+    }
+
+    /// The PS2 ship files really do ship this declaration. Its unquoted
+    /// `encoding` leaves an odd number of quotes in the tag, so tracking them
+    /// across a `>` puts the parser out of phase for the whole file: every
+    /// element after it disappears.
+    #[test]
+    fn a_malformed_declaration_does_not_swallow_the_document() {
+        let root = parse(concat!(
+            r#" <?xml version="1.0" encoding=utf-81"?>"#,
+            "\r\n<Handling>\r\n  <Stats team=\"Testers\"></Stats>\r\n</Handling>",
+        ));
+        assert_eq!(root.children.len(), 1, "{root:?}");
+        assert_eq!(root.children[0].name, "Handling");
+        assert_eq!(root.children[0].children[0].attr("team"), Some("Testers"));
+    }
+
+    #[test]
+    fn a_comment_ends_at_its_own_terminator() {
+        let root = parse(r#"<!-- a "quoted > thing --><Screen name="Top"></Screen>"#);
+        assert_eq!(root.children.len(), 1);
+        assert_eq!(root.children[0].attr("name"), Some("Top"));
+    }
+
+    #[test]
+    fn children_are_selected_by_name_case_insensitively() {
+        let root = parse("<Stats><Class/><class/><Misc/></Stats>");
+        assert_eq!(root.children[0].children_named("CLASS").count(), 2);
     }
 }

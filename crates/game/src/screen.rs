@@ -19,129 +19,11 @@ use std::collections::HashMap;
 
 use crate::input::button_from_name;
 
-/// A parsed XML element.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Node {
-    /// Element name, expanded through the file's own dictionary.
-    pub name: String,
-    /// Attributes in document order.
-    pub attrs: Vec<(String, String)>,
-    /// Child elements. Text content is discarded: this schema has none.
-    pub children: Vec<Node>,
-}
-
-impl Node {
-    /// An attribute by name, case-insensitively.
-    ///
-    /// The XML is inconsistent about case (`font="menu"` and `font="Menu"` both
-    /// appear, as do `color` and `Color`), so matching exactly would silently
-    /// drop attributes.
-    #[must_use]
-    pub fn attr(&self, name: &str) -> Option<&str> {
-        self.attrs
-            .iter()
-            .find(|(key, _)| key.eq_ignore_ascii_case(name))
-            .map(|(_, value)| value.as_str())
-    }
-
-    /// An attribute of this element or of its `Values` child.
-    #[must_use]
-    pub fn value(&self, name: &str) -> Option<&str> {
-        self.attr(name).or_else(|| {
-            self.children
-                .iter()
-                .filter(|c| c.name.eq_ignore_ascii_case("Values"))
-                .find_map(|c| c.attr(name))
-        })
-    }
-
-    /// A boolean attribute. True for `"true"` or `"1"`, as
-    /// `Movie_ParseAttributes` has it.
-    #[must_use]
-    pub fn flag(&self, name: &str) -> Option<bool> {
-        self.value(name)
-            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
-    }
-
-    /// Children with this element name, case-insensitively.
-    pub fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Node> {
-        self.children
-            .iter()
-            .filter(move |c| c.name.eq_ignore_ascii_case(name))
-    }
-}
-
-/// Parses expanded front-end XML into a synthetic root node.
-///
-/// The files have several top-level elements, so the root is `"#document"`
-/// rather than any element from the file.
-#[must_use]
-pub fn parse(xml: &str) -> Node {
-    let mut stack = vec![Node {
-        name: "#document".to_string(),
-        ..Node::default()
-    }];
-    let bytes = xml.as_bytes();
-    let mut at = 0usize;
-
-    while at < bytes.len() {
-        let Some(open) = find(bytes, at, b'<') else {
-            break;
-        };
-        let Some(close) = tag_end(bytes, open) else {
-            break;
-        };
-        at = close + 1;
-
-        let inner = &xml[open + 1..close];
-        // Comments, declarations and processing instructions carry no structure.
-        if inner.starts_with('!') || inner.starts_with('?') {
-            continue;
-        }
-
-        if let Some(name) = inner.strip_prefix('/') {
-            let name = name.trim();
-            // Tolerate a stray close tag rather than unwinding past the root.
-            if stack.len() > 1
-                && stack
-                    .last()
-                    .is_some_and(|n| n.name.eq_ignore_ascii_case(name))
-            {
-                let node = stack.pop().expect("checked above");
-                if let Some(parent) = stack.last_mut() {
-                    parent.children.push(node);
-                }
-            }
-            continue;
-        }
-
-        let self_closing = inner.ends_with('/');
-        let inner = inner.trim_end_matches('/');
-        let name_end = inner.find(char::is_whitespace).unwrap_or(inner.len());
-        let node = Node {
-            name: inner[..name_end].to_string(),
-            attrs: attributes(&inner[name_end..]),
-            children: Vec::new(),
-        };
-
-        if self_closing {
-            if let Some(parent) = stack.last_mut() {
-                parent.children.push(node);
-            }
-        } else {
-            stack.push(node);
-        }
-    }
-
-    // An unterminated document still yields everything it did open.
-    while stack.len() > 1 {
-        let node = stack.pop().expect("checked above");
-        if let Some(parent) = stack.last_mut() {
-            parent.children.push(node);
-        }
-    }
-    stack.pop().unwrap_or_default()
-}
+// The XML tree parser itself is a format concern and lives in `oag-formats`
+// next to the dictionary expander, so the front end and the handling-stats
+// decoder share one copy rather than growing two. Re-exported because this
+// module is where the rest of the crate reaches for it.
+pub use oag_formats::fexml::{Node, parse};
 
 /// One `Movie` widget's attributes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -462,63 +344,6 @@ pub fn argb_to_rgba(argb: u32) -> [f32; 4] {
     [r, g, b, a]
 }
 
-fn find(bytes: &[u8], from: usize, byte: u8) -> Option<usize> {
-    bytes[from.min(bytes.len())..]
-        .iter()
-        .position(|&b| b == byte)
-        .map(|at| at + from)
-}
-
-/// Index of the `>` closing the tag that starts at `open`, skipping quotes.
-fn tag_end(bytes: &[u8], open: usize) -> Option<usize> {
-    let mut quoted = false;
-    let mut at = open + 1;
-    while at < bytes.len() {
-        match bytes[at] {
-            b'"' => quoted = !quoted,
-            b'>' if !quoted => return Some(at),
-            _ => {}
-        }
-        at += 1;
-    }
-    None
-}
-
-/// Extracts `name="value"` pairs from a tag body.
-fn attributes(body: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    let bytes = body.as_bytes();
-    let mut at = 0usize;
-
-    while at < bytes.len() {
-        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
-            at += 1;
-        }
-        let key_at = at;
-        while at < bytes.len() && bytes[at] != b'=' && !bytes[at].is_ascii_whitespace() {
-            at += 1;
-        }
-        if key_at == at || at >= bytes.len() || bytes[at] != b'=' {
-            break;
-        }
-        let key = body[key_at..at].to_string();
-
-        at += 1;
-        if at >= bytes.len() || bytes[at] != b'"' {
-            break;
-        }
-        at += 1;
-        let value_at = at;
-        while at < bytes.len() && bytes[at] != b'"' {
-            at += 1;
-        }
-        out.push((key, body[value_at..at].to_string()));
-        at += 1;
-    }
-
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,44 +481,9 @@ mod tests {
     }
 
     #[test]
-    fn an_angle_bracket_in_a_value_does_not_end_the_tag() {
-        let node = parse(r#"<Text x="FEGlobals->X" y="2"></Text>"#);
-        let text = &node.children[0];
-        assert_eq!(text.attr("x"), Some("FEGlobals->X"));
-        assert_eq!(text.attr("y"), Some("2"));
-    }
-
-    #[test]
-    fn attributes_match_case_insensitively() {
-        let node = parse(r#"<Text Color="0xFF00FF00"></Text>"#);
-        assert_eq!(node.children[0].attr("color"), Some("0xFF00FF00"));
-    }
-
-    #[test]
-    fn unterminated_markup_yields_what_it_opened() {
-        let root = parse("<Screen name=\"Top\"><Text");
-        assert_eq!(root.children.len(), 1);
-        assert_eq!(root.children[0].attr("name"), Some("Top"));
-    }
-
-    #[test]
-    fn a_stray_close_tag_is_ignored() {
-        let root = parse("</Screen><Screen name=\"Top\"></Screen>");
-        assert_eq!(root.children.len(), 1);
-    }
-
-    #[test]
     fn parses_argb() {
         assert_eq!(parse_argb("0xFF5FDBF6"), Some(0xff5f_dbf6));
         assert_eq!(parse_argb("nonsense"), None);
         assert_eq!(argb_to_rgba(0xff00_0000), [0.0, 0.0, 0.0, 1.0]);
-    }
-
-    #[test]
-    fn self_closing_elements_close_themselves() {
-        let root = parse(r#"<Screen name="Top"><Values x="1"/></Screen>"#);
-        assert_eq!(root.children.len(), 1);
-        assert_eq!(root.children[0].children.len(), 1);
-        assert_eq!(root.children[0].value("x"), Some("1"));
     }
 }

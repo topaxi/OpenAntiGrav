@@ -13,8 +13,10 @@
 //! `docs/formats/` recording the evidence for the layout, so the documentation
 //! and the implementation stay in step.
 
+pub mod collision;
 pub mod entropy;
 pub mod fexml;
+pub mod handling;
 pub mod lzss;
 pub mod pmf;
 pub mod png;
