@@ -619,12 +619,36 @@ by tick 120 and keeps climbing past 115 - it now leaves the track by
 outrunning what a turn can hold, not by falling through the floor. From the
 recording's own numbers: a steady 24 units/s needs about 4.9 units of net
 thrust against drag and rolling resistance; `oag_physics::engine::engine`
-produces about **83.6**, roughly **17x** too much. Nobody has determined
-where that factor lives - candidates are `Engine.amount`'s load-time scale,
-the unrecovered `craft+0x294` multiplier (`ENGINE_OUTPUT_SCALE`, currently
-guessed at `1.0`), the two drag coefficients, or an untraced mass mismatch -
-and nothing has been tuned to close it, per this project's own standing rule
-against fitting a value to one capture.
+produces about **83.6**, roughly **17x** too much.
+
+**Both previously-unrecovered engine multipliers are now found, and both are
+ruled out as the cause - narrowing the search rather than closing it.** A
+follow-up pass located real writers for both `craft+0x294` and `craft+0x2a0`:
+
+- `craft+0x294` is a **start-line boost**, not a hidden global gain. Three
+  writers agree - `Ship_InitCraft`, a per-race reset, and
+  `Ship_UpdateStartBoost`, which drives it from a handling-XML group for the
+  first second or two of a race and then stores `1.0` back. **Confirmed in a
+  second binary too**: the PS2's equivalent at `craft+0x2c4` is also exactly
+  `1.0` outside the start window. So `ENGINE_OUTPUT_SCALE = 1.0` is now a
+  **recovered** value, not a placeholder - confidence 88.
+- `craft+0x2a0` is a **speed-up pickup** multiplier, `1.2`, gated on a pickup
+  flag found at its own writer. It's inert on a pickup-free Time Trial capture
+  and, being `1.2`, could not explain a *deficit* even if it applied.
+
+**So the 17x factor lives somewhere else, and elimination arithmetic narrows
+it to exactly two candidates.** A steady 24 units/s needs
+`min(throttle * amount, cap) ~= 2.44` before the engine's final `* 2.0`, but
+`cap = 0.5 * 23.35 + accelcap = 11.68 + accelcap` cannot be as low as `2.44`
+for any non-negative `accelcap` - so either **`Engine.amount` as loaded is
+about 17x smaller than this crate's `0.418`** (an XML-value or load-time-scale
+error, in `crate::params`, not in the force law), or **`Engine.accelcap` is
+negative for Assegai/Venom** (about `-9.2`), which would mean the cap arm
+binds differently than assumed and voids the arithmetic above entirely. The
+discriminating check - reading the two actual loaded floats for this ship/
+class, against a real disc or a running race - is written down but not yet
+done. Nothing has been tuned to close the gap, per this project's own
+standing rule against fitting a value to one capture.
 
 **The methodological lesson, worth keeping**: `oag-trace compare` is built to
 say *where* two runs diverge, and it did that correctly both times. What it
