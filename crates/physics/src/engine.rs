@@ -37,6 +37,53 @@ use crate::ship::{ShipControls, ShipState};
 /// identity is chosen here: it keeps the `* 2.0` visible without inventing a
 /// second factor. A guess awaiting M3, and one worth checking, since anything
 /// other than 1.0 scales all thrust.
+///
+/// # M3 has now checked it, and `1.0` is measurably wrong
+///
+/// A real capture of the reference scenario
+/// (`docs/reverse-engineering/ppsspp-debugger.md`; Time Trial, Venom, Talon's
+/// Junction White, Assegai) holds **23.6 to 25.1 units/s at throttle 100** across 200
+/// ticks and is very slightly *decelerating*, so the original's net longitudinal force
+/// is about zero there. This crate, replaying the same capture through
+/// `oag-trace run`, passes 55 by tick 30, 81 by tick 100 and 170 by tick 190: it has
+/// **no speed equilibrium at all** below about 128 units/s.
+///
+/// The arithmetic that gap implies, with every other term left exactly as transcribed:
+///
+/// ```text
+/// cap  = 0.5 * 23.35 + accelcap                 // the cap does bind at racing speed
+/// T    = min(throttle * amount, cap) * X * 2    // X is this constant
+/// need = 0.005 * 24^2 + 2.0                     // grounded drag + rolling resistance
+///      = 4.88, against 58 at X = 1
+/// ```
+///
+/// so `X ~= 0.084`. Set to that, and to nothing else, the replay holds 22 to 25
+/// units/s against the recording's 23.6 to 25.1 for **160 of the 200 ticks** - the
+/// whole speed divergence closes on this one scalar.
+///
+/// **It is deliberately left at `1.0`.** `0.084` is a number fitted to one capture and
+/// nothing has been read that writes `craft+0x294`; committing it would put an
+/// invented constant where a recovered one belongs, and six months from now the two
+/// would be indistinguishable. What the measurement buys is a *target*: whoever reads
+/// `craft+0x294`'s writer can check the value they find against 0.084 before believing
+/// it.
+///
+/// Two things narrow where else the factor could live, and both are dead ends:
+///
+/// - **Not the drag coefficients.** `-0.005` grounded, `-0.002` airborne and `-0.1`
+///   reversing are confirmed at instruction level in the PS2 build as well
+///   (`Ship_ApplyQuadraticDrag`, `0x0015c3a0`), at confidence 88. Forcing the grounded
+///   coefficient to `-0.1` *does* reproduce the recorded speed just as well, which is
+///   what makes it worth stating that this route is closed by evidence rather than by
+///   preference.
+/// - **Not the mass.** The two masses cancel out of a force balance entirely, and the
+///   ratio between them is independently pinned near 1 by the hover height: the same
+///   capture rests 4.002 above the surface against the 3.978 the spring predicts when
+///   `Body::mass == Physical::mass`, and a body mass 17x the parameter one would put
+///   that at 1.6.
+///
+/// The remaining unread candidate is `craft+0x2a0`, the flag-gated multiplier this
+/// crate also does not implement.
 pub const ENGINE_OUTPUT_SCALE: f32 = 1.0;
 
 /// The fixed doubling on the engine's output, from the same expression.
