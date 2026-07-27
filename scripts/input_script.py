@@ -57,14 +57,24 @@ BUTTONS = [
 ]
 BUTTON_INDEX = dict(BUTTONS)
 
-# PPSSPP's own button names, for `input.buttons.send`. Identical to ours for
-# every button a script may name, which is not a coincidence - the abstract layer
-# was named after the same hardware - but written out rather than assumed, so a
-# future divergence is a one-line fix here instead of a silent mis-send.
+# PPSSPP's own button names, for `input.buttons.send`. The same as ours for ten
+# of the twelve, and **not** for the shoulders: PPSSPP calls them `ltrigger` and
+# `rtrigger`, and answers `l` with
+#
+#     input.buttons.send: Unsupported 'buttons' object key 'l'
+#
+# The debugger page's API table said `l` and `r`, which was taken from the PSP's
+# own naming rather than tested; the first scripted capture found it in the first
+# second. Measured against PPSSPP v1.20.4 by sending each candidate and reading
+# the error: `ltrigger`/`rtrigger` accepted, and `l`, `r`, `L`, `R`,
+# `trigger.left`, `lt`, `rt` and `shoulder.left` all refused.
+#
+# This is why the mapping is a table rather than an assumption.
 PPSSPP_NAME = {
     "cross": "cross", "circle": "circle", "square": "square",
     "triangle": "triangle", "up": "up", "down": "down", "left": "left",
-    "right": "right", "l": "l", "r": "r", "start": "start", "select": "select",
+    "right": "right", "l": "ltrigger", "r": "rtrigger",
+    "start": "start", "select": "select",
 }
 
 AXES = {
@@ -331,7 +341,8 @@ def _self_test():
     assert analog_payload(states[0]) == (-0.25, 0.0)
     assert analog_payload(parse("1 left\n")[0]) is None, "a d-pad press is not analog"
 
-    assert button_payload(parse("1 airbrake_left=1\n")[0])["l"] is True
+    assert button_payload(parse("1 airbrake_left=1\n")[0])["ltrigger"] is True
+    assert "l" not in button_payload(parse("1 l\n")[0]), "PPSSPP calls it ltrigger"
     assert unrepresentable(parse("1 airbrake_left=0.5\n")), "a fractional airbrake"
     assert not unrepresentable(parse("1 l\n"))
 
