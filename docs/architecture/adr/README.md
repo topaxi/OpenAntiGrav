@@ -18,6 +18,7 @@ out to be wrong.
 | [0005](0005-ghidra-conventions.md) | Ghidra naming and documentation conventions | Accepted |
 | [0006](0006-no-copyrighted-content.md) | No copyrighted content in the repository | Accepted |
 | [0007](0007-fixed-timestep-vs-original.md) | Keep a fixed timestep, and diverge from the original | Accepted |
+| [0008](0008-av1-movie-cache.md) | Cache movies as lossless AV1, and decode them in process | Accepted |
 
 ## Format
 

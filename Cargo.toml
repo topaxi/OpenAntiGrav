@@ -34,6 +34,13 @@ oag-render = { path = "crates/render" }
 
 anyhow = "1"
 thiserror = "2"
+
+# The AV1 decoder the movie cache is played back through: a Rust port of dav1d,
+# so no C toolchain enters the build. `default-features = false` drops the `asm`
+# feature, which would require `nasm`. See docs/architecture/adr/0008.
+re_rav1d = { version = "0.1.3", default-features = false, features = [
+  "bitdepth_8",
+] }
 clap = { version = "4", features = ["derive"] }
 chd = "0.3"
 bytemuck = "1"

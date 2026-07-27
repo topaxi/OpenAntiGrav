@@ -113,36 +113,48 @@ two naming rules from `LoadXML`, both by finding the entry that the rule predict
 ## Playing it, without shipping a decoder
 
 Per [ADR-0004](adr/0004-asset-pipeline.md), the movie is **converted once and
-cached**, not decoded in process.
+cached**, not decoded in process. Per
+[ADR-0008](adr/0008-av1-movie-cache.md), what the cache holds is **lossless AV1**,
+which is decoded in process on playback.
 
 ```text
-Data.wad entry  ->  pmf::demux  ->  H.264 elementary stream  ->  ffmpeg  ->  raw yuv420p
-                    (ours)                                       (theirs)     (cached)
+Data.wad entry -> pmf::demux -> H.264 elementary stream -> ffmpeg -> lossless AV1 -> rav1d
+                  (ours)                                   (theirs)   (cached)       (ours)
 ```
 
 | Step | Where | Why there |
 | --- | --- | --- |
 | Header parse and demux | [`oag-formats::pmf`](../../crates/formats/src/pmf.rs) | Ours to do, testable without a GPU, no dependencies |
 | H.264 decode | `ffmpeg`, out of process | An in-workspace decoder is a large non-Rust dependency or a year of work, to show a logo |
-| Colour conversion | [`video.wgsl`](../../crates/game/src/video.wgsl) | Free on the GPU, and keeps the cache at 1.5 bytes per pixel |
+| AV1 encode | `ffmpeg`'s `libaom-av1`, lossless | Once per movie. Lossless, so the picture is bit-for-bit what the H.264 decoder produced |
+| Container | [`oag-formats::ivf`](../../crates/formats/src/ivf.rs) | 32-byte header, 12 bytes per frame. Cheaper to parse by hand than to pull in an MP4 demuxer |
+| AV1 decode | [`oag-formats::av1`](../../crates/formats/src/av1.rs), in process | `re_rav1d` is pure Rust, so no C toolchain enters the build |
+| Colour conversion | [`video.wgsl`](../../crates/game/src/video.wgsl) | Free on the GPU, and keeps the decoded frame at 1.5 bytes per pixel |
 
 The cache lives in `data/cache/movies/`, already gitignored, keyed on the entry's
 name hash and size so a different disc image cannot collide:
 
 ```text
-71d3c1ec-5736448.h264                          the demuxed elementary stream
-71d3c1ec-5736448-480x272-yuv420p-261.raw       261 frames, 51 MiB
+71d3c1ec-5736448.h264                        the demuxed elementary stream
+71d3c1ec-5736448-480x272-av1ll-261.ivf       261 frames, 1.17 MiB
 ```
 
-**Only 261 frames are converted**, because the intro state stops at frame 260
-whatever the reel's length. Converting all 1200 would be 235 MiB of cache for
-eight seconds of screen time. `--full-movie` converts everything.
+`av1ll` in the name is the encoding, and it is in the **filename** so that
+changing the encoder invalidates by name rather than silently reusing an older
+file. That matters because `ffmpeg`'s `-lossless 1` on its own is ignored and
+produces a lossy encode - see the trap in [`HANDOVER.md`](../../HANDOVER.md).
 
-`yuv420p` was chosen over RGBA for two reasons: it is what the decoder produces
-natively, so the transcode does no colour conversion, and it is 1.5 bytes per
-pixel rather than 4. Frames are streamed from the file one at a time rather than
-held in memory. The shader converts with BT.601 limited range, which is an
-assumption; a wrong choice shows up as washed-out colour, not a broken picture.
+**Only 261 frames are converted**, because the intro state stops at frame 260
+whatever the reel's length. `--full-movie` converts everything, which is 33 MiB
+rather than 1.17 MiB, and takes about 80 seconds instead of 8.
+
+`yuv420p` was chosen over RGBA for two reasons: it is what both decoders produce
+natively, so nothing in the chain converts colour, and it is 1.5 bytes per pixel
+rather than 4. Frames are decoded one at a time rather than held in memory, in
+stream order; seeking backwards - which a looping movie does at every wrap -
+flushes the decoder and replays from the start. The shader converts with BT.601
+limited range, which is an assumption; a wrong choice shows up as washed-out
+colour, not a broken picture.
 
 **Without `ffmpeg` the game still runs.** The sequence plays out over the movie's
 real duration against the black backdrop the `LogoFMV` screen puts behind the

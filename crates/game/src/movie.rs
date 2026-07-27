@@ -1,11 +1,17 @@
-//! Movie playback: demux here, decode elsewhere, cache the result.
+//! Movie playback: demux here, transcode out of process, decode in process.
 //!
 //! A `.PMF` holds H.264 video and ATRAC3+ audio. Demuxing it is ours to do and
-//! lives in [`oag_formats::pmf`]. Decoding it is not: per
-//! `docs/architecture/adr/0004-asset-pipeline.md`, the original is **converted
-//! once into a convenient intermediate and cached**, and playback reads the
-//! cache. The conversion runs out of process through `ffmpeg`, so no decoder
-//! ships in the workspace.
+//! lives in [`oag_formats::pmf`]. Decoding **H.264** is not: per
+//! `docs/architecture/adr/0004-asset-pipeline.md`, the original is converted
+//! once and cached, and the conversion runs out of process through `ffmpeg`, so
+//! no H.264 decoder ships in the workspace.
+//!
+//! What the cache holds is **lossless AV1 in an IVF container**, not raw
+//! frames: see `docs/architecture/adr/0008-av1-movie-cache.md`. Lossless, so
+//! the picture is bit-for-bit what the raw cache used to hold and ADR-0004's
+//! fidelity rule is untouched; AV1, because [`oag_formats::av1`] decodes it in
+//! process with no C toolchain. The intro's cache goes from 48.8 MiB to
+//! 1.17 MiB that way.
 //!
 //! When `ffmpeg` is absent, playback still happens: the player advances its
 //! frame counter over the movie's real duration and the renderer draws the black
@@ -17,19 +23,29 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
-use oag_formats::pmf;
+use anyhow::{Context, Result, anyhow, bail};
+use oag_formats::{av1, pmf};
 
 /// The rate the PSP presents movie frames at, as a rational.
 pub const FRAME_RATE: (u64, u64) = (30_000, 1001);
 
-/// Colour format of the cached frames: planar 8-bit YUV, chroma at half
+/// Colour format the cache decodes to: planar 8-bit YUV, chroma at half
 /// resolution in both axes.
 ///
-/// Chosen because it is what the H.264 decoder produces natively, so the
-/// transcode does no colour conversion, and it is 1.5 bytes per pixel rather
-/// than 4. The conversion to RGB happens in the fragment shader.
+/// Chosen because it is what the H.264 decoder produces natively, so neither
+/// the transcode nor the AV1 decode does any colour conversion, and it is
+/// 1.5 bytes per pixel rather than 4. The conversion to RGB happens in the
+/// fragment shader.
 pub const PIXEL_FORMAT: &str = "yuv420p";
+
+/// Identifies the cache encoding in a cache file's name.
+///
+/// It is in the **filename**, not just the contents, so that changing the
+/// encoder or its settings invalidates by name and cannot silently reuse an
+/// older file. That matters more than it looks: `ffmpeg`'s `-lossless 1` on its
+/// own is silently ignored and produces a lossy encode, so a cache written
+/// before the flags were right must never be mistaken for a good one.
+const CACHE_CODEC: &str = "av1ll";
 
 /// A movie that has been demuxed, and possibly transcoded.
 #[derive(Debug)]
@@ -48,13 +64,16 @@ pub struct Movie {
     pub no_picture_reason: Option<String>,
 }
 
-/// Decoded frames on disk, read one at a time.
+/// The cached movie, decoded a frame at a time.
+///
+/// Playback is sequential, so this decodes forward and only rewinds when asked
+/// for a frame it has already passed - which is what a looping movie like the
+/// menu backdrop does at every wrap.
 #[derive(Debug)]
 pub struct FrameStore {
     path: PathBuf,
-    file: std::fs::File,
-    frame_len: usize,
-    /// How many whole frames the file holds.
+    source: av1::FrameSource,
+    /// How many frames the cache holds.
     pub len: usize,
     /// Bytes in the luma plane.
     pub luma_len: usize,
@@ -67,22 +86,38 @@ pub struct FrameStore {
 }
 
 impl FrameStore {
-    /// Reads frame `index` into `out`, which is resized to one frame.
-    pub fn read_frame(&mut self, index: usize, out: &mut Vec<u8>) -> Result<()> {
-        use std::io::{Read, Seek, SeekFrom};
+    /// Opens a cached AV1 movie and checks it is the size the caller expects.
+    fn open(path: PathBuf, width: u32, height: u32) -> Result<Self> {
+        let blob = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+        let source = av1::FrameSource::new(blob)
+            .map_err(|e| anyhow!("{} is not usable: {e}", path.display()))?;
 
-        if index >= self.len {
+        let geometry = source.geometry();
+        if (geometry.width, geometry.height) != (width, height) {
             bail!(
-                "{} holds {} frames, asked for {index}",
-                self.path.display(),
-                self.len
+                "{} holds {}x{} frames, but the movie declares {width}x{height}",
+                path.display(),
+                geometry.width,
+                geometry.height
             );
         }
-        out.resize(self.frame_len, 0);
-        self.file
-            .seek(SeekFrom::Start((index * self.frame_len) as u64))?;
-        self.file.read_exact(out)?;
-        Ok(())
+
+        Ok(Self {
+            len: source.len(),
+            luma_len: geometry.luma_len(),
+            chroma_len: geometry.chroma_len(),
+            chroma_width: geometry.chroma_width,
+            chroma_height: geometry.chroma_height,
+            source,
+            path,
+        })
+    }
+
+    /// Decodes frame `index` into `out`, which is resized to one frame.
+    pub fn read_frame(&mut self, index: usize, out: &mut Vec<u8>) -> Result<()> {
+        self.source
+            .frame(index, out)
+            .map_err(|e| anyhow!("decoding frame {index} of {}: {e}", self.path.display()))
     }
 
     /// Where the cache file lives.
@@ -177,7 +212,7 @@ pub fn open(blob: &[u8], key: &str, cache_dir: &Path, extent: Extent) -> Result<
     }
 }
 
-/// Converts an H.264 elementary stream into raw frames under `cache_dir`.
+/// Converts an H.264 elementary stream into lossless AV1 under `cache_dir`.
 ///
 /// Returns the reason as an error when conversion is impossible, which the
 /// caller turns into a fallback rather than a failure.
@@ -189,51 +224,39 @@ fn transcode(
     height: u32,
     frames: usize,
 ) -> Result<FrameStore> {
-    let luma_len = (width * height) as usize;
-    let chroma_width = width.div_ceil(2);
-    let chroma_height = height.div_ceil(2);
-    let chroma_len = (chroma_width * chroma_height) as usize;
-    let frame_len = luma_len + 2 * chroma_len;
-
     let name = format!(
-        "{key}-{width}x{height}-{PIXEL_FORMAT}-{}.raw",
+        "{key}-{width}x{height}-{CACHE_CODEC}-{}.ivf",
         Extent::Frames(frames).key()
     );
     let out = cache_dir.join(&name);
 
-    let ready = std::fs::metadata(&out).is_ok_and(|m| m.len() == (frame_len * frames) as u64);
+    // A previous run's file is reused only if it opens *and* holds the frames
+    // asked for. Unlike the raw cache this cannot be checked by file length, so
+    // it is checked by decoding the container - cheap, since that is a parse of
+    // the frame headers and not of the pictures.
+    let ready = FrameStore::open(out.clone(), width, height)
+        .ok()
+        .filter(|store| store.len == frames);
 
-    if !ready {
-        std::fs::create_dir_all(cache_dir)
-            .with_context(|| format!("creating {}", cache_dir.display()))?;
-
-        // Written beside the frames because it is the exact input ffmpeg saw, so
-        // a mismatch can be reproduced by hand.
-        let es = cache_dir.join(format!("{key}.h264"));
-        std::fs::write(&es, video).with_context(|| format!("writing {}", es.display()))?;
-
-        run_ffmpeg(&es, &out, frames)?;
+    if let Some(store) = ready {
+        return Ok(store);
     }
 
-    let len = std::fs::metadata(&out)
-        .with_context(|| format!("stat {}", out.display()))?
-        .len() as usize
-        / frame_len;
+    std::fs::create_dir_all(cache_dir)
+        .with_context(|| format!("creating {}", cache_dir.display()))?;
 
-    if len == 0 {
-        bail!("{} holds no whole frames", out.display());
+    // Written beside the cache because it is the exact input ffmpeg saw, so a
+    // mismatch can be reproduced by hand.
+    let es = cache_dir.join(format!("{key}.h264"));
+    std::fs::write(&es, video).with_context(|| format!("writing {}", es.display()))?;
+
+    run_ffmpeg(&es, &out, frames)?;
+
+    let store = FrameStore::open(out, width, height)?;
+    if store.len == 0 {
+        bail!("{} holds no frames", store.path().display());
     }
-
-    Ok(FrameStore {
-        file: std::fs::File::open(&out).with_context(|| format!("opening {}", out.display()))?,
-        path: out,
-        frame_len,
-        len,
-        luma_len,
-        chroma_len,
-        chroma_width,
-        chroma_height,
-    })
+    Ok(store)
 }
 
 fn run_ffmpeg(input: &Path, output: &Path, frames: usize) -> Result<()> {
@@ -247,14 +270,33 @@ fn run_ffmpeg(input: &Path, output: &Path, frames: usize) -> Result<()> {
         .arg("-i")
         .arg(input)
         .args(["-frames:v", &frames.to_string()])
-        .args(["-f", "rawvideo"])
+        .args(["-c:v", "libaom-av1"])
+        // All five of these are needed together. `-lossless 1` alone is
+        // silently ignored and yields a ~200 kbit/s lossy encode that looks
+        // like a spectacular compression win; the quantiser has to be pinned to
+        // zero and the rate control disabled as well. Verified by decoding the
+        // result and comparing it byte for byte with the raw frames.
+        .args(["-b:v", "0"])
+        .args(["-crf", "0"])
+        .args(["-qmin", "0"])
+        .args(["-qmax", "0"])
+        .args(["-aom-params", "lossless=1"])
+        // `-cpu-used` below 6 is *also* not bit-exact in this mode, reproducibly
+        // so, as well as slower. 6 is both correct and quick: the whole 1200
+        // frame intro encodes in about 80 seconds.
+        .args(["-cpu-used", "6"])
+        .args(["-row-mt", "1"])
         .args(["-pix_fmt", PIXEL_FORMAT])
+        .args(["-f", "ivf"])
         .arg(output)
         .status();
 
     match status {
         Ok(status) if status.success() => Ok(()),
-        Ok(status) => bail!("ffmpeg exited with {status}"),
+        Ok(status) => bail!(
+            "ffmpeg exited with {status}. If it reports an unknown encoder, this \
+             build of ffmpeg lacks libaom-av1"
+        ),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(
             "ffmpeg is not on PATH. Install it to see the intro video; \
              without it the sequence still plays, with a black picture"

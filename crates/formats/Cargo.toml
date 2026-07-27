@@ -7,6 +7,17 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+# AV1 decoding, for the movie cache. Off by default so that the tools which
+# only parse Wipeout containers keep building with no dependencies at all.
+av1 = ["dep:re_rav1d"]
+
+[dependencies]
+# `default-features = false` drops the `asm` feature, which needs `nasm` at
+# build time. A 480x272 movie decodes around 900fps without it - thirty times
+# faster than playback. `bitdepth_8` is all the 8-bit I420 path needs.
+re_rav1d = { workspace = true, optional = true }
+
 # Ground-truth tests read real tracks out of a disc image. This is a
 # dev-dependency only: the library itself knows nothing about discs.
 [dev-dependencies]
