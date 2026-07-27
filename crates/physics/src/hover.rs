@@ -315,14 +315,63 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// live elsewhere. That is the next measurement, and it is the last thing between the
 /// simulation and a ship that stays on a track.
 ///
-/// **Only the sign is settled. The magnitude is not.** `400` is transcribed and
-/// stays M3 work, along with everything else on that page. Confidence **84** on
-/// the direction, which is the rubric's ceiling for decompilation-only evidence:
+/// # The magnitude is now measured, and it is not 400
+///
+/// `docs/physics/README.md` transcribes this gain as `400`, and everything above
+/// settles only its **sign**. The magnitude has now been measured directly, by
+/// perturbing the original and watching it recover - a step response, which is the
+/// standard way to identify a second-order system and needs no disassembly at all.
+///
+/// Pulse was driven into a Time Trial under PPSSPP, broken in `Ship_UpdateCraft`, and
+/// the rigid body's basis rows were **rewritten** through `memory.write_u32` to roll
+/// the ship by `0.25 rad` about its own forward axis. The recovery was then traced per
+/// frame. Note the craft update runs once per ship, so the breakpoint fires about
+/// eight times a frame on a full grid; the distinct values are the frames.
+///
+/// ```text
+/// roll, rad, from the 0.25 perturbation, one value per frame:
+/// 0.2500 0.2493 0.2466 0.2424 0.2367 0.2295 0.2210 0.2113 0.2004 0.1886
+/// 0.1758 0.1621 0.1476 0.1329 0.1175 0.1014 0.0855 0.0693 0.0531 0.0369
+/// 0.0210 0.0055 -0.0097 -0.0244 -0.0384 -0.0518 -0.0646 -0.0762 ...
+/// ```
+///
+/// It is a clean damped cosine: velocity starts at zero, the curve is flat at the top,
+/// it crosses zero at **frame 21** and overshoots. So
+///
+/// ```text
+/// quarter period = 21 frames at 60 Hz  ->  T = 1.4 s  ->  omega = 4.49 rad/s
+/// stiffness  = omega^2                                 ~= 20.2
+/// envelope decay over 0.583 s gives zeta               ~= 0.18
+/// damping    = 2 * zeta * omega                        ~= 1.6
+/// ```
+///
+/// Two things fall out. The damping is **about 1.6 against the transcribed `2.0`** in
+/// [`crate::passive::ROLL_DAMPING`], so that constant is roughly right. The stiffness
+/// is **about 20 against a transcribed 400**, a factor of twenty, and that single
+/// number is what made this crate's ship tumble: at `400` the oscillator runs at
+/// `sqrt(400) = 20 rad/s`, and the stability bound below is violated 2.22-fold. At the
+/// measured `20.2` it runs at 4.49 rad/s, `det = 0.9704`, and roll **decays** about
+/// 1.5 % a tick instead of growing 2 %.
+///
+/// **What the factor of twenty actually is remains open, and that matters.** The most
+/// likely reading is that the recovered `400` is a genuine torque which the original
+/// divides by a roll moment of inertia of about 20, while this crate routes the term
+/// through [`crate::forces::drain`] as an angular *acceleration* that never sees the
+/// inertia tensor - `400 / 20.2 = 19.8` is suspiciously close to a real moment for a
+/// hull this size. If that is right, the correct fix is structural and this constant
+/// goes back to `400` once the accumulator semantics are settled. Until then the value
+/// here is **the measured behaviour**, which is the thing a trace comparison checks,
+/// rather than a transcription that is known to reproduce the wrong motion.
+///
+/// Confidence **80** on the magnitude: the step response is unambiguous and
+/// reproducible, but it was taken on one ship on one track, the fit is by hand from a
+/// quarter period and one overshoot, and the decomposition into gain-over-inertia is
+/// explicitly not resolved. Confidence **84** on the direction, unchanged:
 /// the arithmetic is compulsory, but the decompilation as recorded is
 /// self-contradictory, no call site was re-read, and nothing is runtime-verified.
 /// See the resolved-contradiction note in `docs/physics/README.md` for what would
 /// raise it.
-pub const ALIGNMENT_GAIN: f32 = 400.0;
+pub const ALIGNMENT_GAIN: f32 = 20.2;
 
 /// The bank-to-yaw coupling gain, grounded only.
 ///
@@ -1035,50 +1084,53 @@ mod tests {
         assert_eq!(hover.escape, Vec3::new(0.0, 0.8, 0.0));
     }
 
-    /// The roll oscillator is unstable as specified, and by how much is the
-    /// measurement this pins.
+    /// The roll oscillator is stable, and the margin is pinned so it cannot drift back.
     ///
-    /// **This test asserting instability is deliberate.** The margin is one of M3's
-    /// sharpest questions, and the way to lose it is for somebody to nudge
-    /// [`ALIGNMENT_GAIN`], [`crate::passive::ROLL_DAMPING`] or [`crate::ship::SUBSTEPS`]
-    /// until a race looks better. Any of those three changes this number, so this
-    /// fails and says so rather than letting the change pass silently.
+    /// This test used to assert the opposite. With the transcribed gain of `400` the
+    /// oscillator ran at 20 rad/s and `det` came out at `1.0402`, growing roll about
+    /// 2 % a tick until the ship inverted; its failure message said to rewrite it if
+    /// the system ever became stable. The step response measured off the original
+    /// (see [`ALIGNMENT_GAIN`]) made that happen, so this is that rewrite.
     ///
-    /// If a trace ever settles one of them, update the figures here and in
-    /// [`ALIGNMENT_GAIN`]'s documentation together - they are one finding.
+    /// The arithmetic is still the point, and it is **not** the `h <= c/k` form: the
+    /// acceleration is computed once from the frame's starting state and held across
+    /// all three sub-steps, so the governing step is the frame `H = 1/60`. See
+    /// [`crate::integrate`].
+    ///
+    /// Any change to [`ALIGNMENT_GAIN`], [`crate::passive::ROLL_DAMPING`] or
+    /// [`crate::ship::SUBSTEPS`] moves this number, which is the point of pinning it.
     #[test]
-    fn the_roll_oscillator_margin_is_the_documented_one() {
+    fn the_roll_oscillator_is_stable_by_the_margin_that_was_measured() {
         let k = ALIGNMENT_GAIN;
         let c = -crate::passive::ROLL_DAMPING;
-        // The frame, not the sub-step: the acceleration is computed once per frame and
-        // held across all of them. See `crate::integrate`.
         let h = 1.0f32 / 60.0;
 
         let det = (1.0 - k * h * h / 3.0) * (1.0 - c * h) + k * h * h - c * k * h * h * h / 3.0;
         let per_tick = det.sqrt();
 
         assert!(
-            det > 1.0,
-            "the roll oscillator is stable now (det {det}); if that is a real finding, \
-             delete this test and rewrite ALIGNMENT_GAIN's stability section"
+            det < 1.0,
+            "the roll oscillator is unstable again (det {det}); a ship at rest will \
+             tumble within a few hundred ticks. See ALIGNMENT_GAIN for the measurement."
         );
         assert!(
-            (per_tick - 1.020_167).abs() < 1e-4,
-            "roll now grows {per_tick} per tick, not the documented 1.020167 - a magnitude \
-             moved, so update ALIGNMENT_GAIN's documentation with the evidence for it"
+            (per_tick - 0.98509).abs() < 1e-3,
+            "roll now decays {per_tick} per tick, not the 0.98509 the measured gain gives"
         );
 
-        // The same statement as a condition on the damping, which is the form the
-        // documentation quotes.
+        // The measured natural frequency, which is what the step response pinned:
+        // a quarter period of 21 frames at 60 Hz.
+        let omega = k.sqrt();
+        assert!(
+            (omega - 4.49).abs() < 0.05,
+            "the oscillator runs at {omega} rad/s, not the measured 4.49"
+        );
+
+        // And the stability condition in the form the documentation quotes.
         let needed = (2.0 / 3.0) * k * h;
         assert!(
-            (needed - 4.4444).abs() < 1e-3,
-            "the damping needed for stability is now {needed}"
-        );
-        assert!(
-            (needed / c - 2.222).abs() < 1e-2,
-            "the shortfall is now {}",
-            needed / c
+            c > needed,
+            "damping {c} is below the {needed} this frame time needs"
         );
     }
 
