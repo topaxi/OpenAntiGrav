@@ -41,7 +41,7 @@ use clap::{Parser, Subcommand};
 use oag_assets::Archive;
 use oag_formats::texture::Texture;
 use oag_formats::wad::{self, Blob, Compression, Directory};
-use oag_formats::{fexml, lzss, png};
+use oag_formats::{fexml, lzss, png, ps2_texture};
 use oag_tools::humanise;
 
 /// How much of a blob to read when only its type tag is wanted.
@@ -500,13 +500,23 @@ fn extract(spec: &str, out: &Path, want_png: bool) -> Result<()> {
         // the game actually looks entries up by, so it is the stable
         // identifier.
         let texture = Texture::parse(&data).ok();
-        let tag = match (&texture, Blob::peek(&data).and_then(|b| b.tag)) {
+        // The PS2's textures are a different format entirely - a GS upload
+        // packet, see docs/formats/ps2-texture.md - but they are recognised the
+        // same way, by their own size arithmetic, so trying both cannot
+        // misclassify.
+        let ps2 = if texture.is_none() {
+            ps2_texture::parse(&data).ok()
+        } else {
+            None
+        };
+        let tag = match (&texture, &ps2, Blob::peek(&data).and_then(|b| b.tag)) {
             // A texture has no magic, so it is only recognisable by its size
             // arithmetic. Checking it first stops the first two bytes of a
             // width being mistaken for a type tag.
-            (Some(_), _) => "mip".to_string(),
-            (None, Some(tag)) => tag.to_ascii_lowercase(),
-            (None, None) => "bin".to_string(),
+            (Some(_), _, _) => "mip".to_string(),
+            (None, Some(_), _) => "gstex".to_string(),
+            (None, None, Some(tag)) => tag.to_ascii_lowercase(),
+            (None, None, None) => "bin".to_string(),
         };
         let name = format!("{i:05}_{:08x}.{tag}", entry.name_hash);
 
@@ -518,6 +528,15 @@ fn extract(spec: &str, out: &Path, want_png: bool) -> Result<()> {
             if tex.looks_swizzled() {
                 swizzled_looking += 1;
             }
+            let image =
+                png::encode_rgba(u32::from(tex.width), u32::from(tex.height), &tex.to_rgba());
+            let png_name = format!("{i:05}_{:08x}.png", entry.name_hash);
+            std::fs::write(out.join(&png_name), &image)
+                .with_context(|| format!("writing {png_name}"))?;
+        }
+
+        if let (true, Some(tex)) = (want_png, ps2) {
+            textures += 1;
             let image =
                 png::encode_rgba(u32::from(tex.width), u32::from(tex.height), &tex.to_rgba());
             let png_name = format!("{i:05}_{:08x}.png", entry.name_hash);
