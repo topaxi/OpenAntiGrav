@@ -260,6 +260,38 @@ to 22.7, and a fresh craft address after the restart. The stalled and moving
 cases are told apart in one line - if the distance between the first and last
 position is near zero while the throttle column reads 100, the start was stalled.
 
+## Save states, and the input-recording API that may replace them
+
+The protocol wants a save state as the fixed starting point, so that a scenario
+does not have to be re-reached by the menu walk below every time. **The websocket
+debugger has no save-state command**: `savestate.save`, `savestate.load`,
+`game.savestate` and `state.save` are all answered with `Bad message: unknown
+event` on v1.20.4. Driving the SDL build's own hotkey from outside did not work
+either - `xdotool key F1` at the window produced no file under
+`~/.config/ppsspp/PSP/PPSSPP_STATE`. So the starting point is still the menu walk,
+and a capture still costs a countdown.
+
+What the API *does* have, and what is probably the better answer, is **input
+recording**:
+
+| Command | Notes |
+| --- | --- |
+| `replay.begin` | Start recording the input stream |
+| `replay.flush` | Stop, and return it as `version` plus `base64` |
+| `replay.execute` | Play a recorded stream back; wants `version` and the data |
+| `replay.abort` / `replay.status` | Cancel, and ask whether either is running |
+
+All four answer on v1.20.4. That is a route to the two things missing here that
+hand-authoring a script does badly: a **full lap**, which nobody wants to write 6,000
+ticks of by hand, and a *human-driven* reference run that could be dumped and
+converted into the committed script format rather than guessed at. Nothing has
+been built on it, and how `replay.execute`'s stream aligns with the per-tick
+breakpoint is unknown.
+
+For the record, since it is the obvious other idea: **there is no published
+Wipeout Pulse TAS** to borrow inputs from. PSP TASing through libtas exists and
+Wipeout *Pure* is mentioned as working, but no Pulse run was found.
+
 ## The reference scenario
 
 Reproduced from a cold boot, and worth keeping as *the* scenario so captures
