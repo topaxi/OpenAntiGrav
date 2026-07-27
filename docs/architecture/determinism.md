@@ -131,16 +131,64 @@ integrator has not been read yet and may turn out to want different treatment.
 
 ## How this is enforced
 
-| Layer | What it catches |
-| --- | --- |
-| [`oag-core::probe`](../../crates/core/src/probe.rs) | Float divergence in the shared foundation |
-| [`crates/core/tests/determinism.rs`](../../crates/core/tests/determinism.rs) | Drift against committed reference hashes |
-| CI `determinism` job | Divergence between Linux, Windows and macOS |
-| [`StateHasher`](../../crates/core/src/hash.rs) | Per-tick state comparison, once there is state |
+| Layer | What it catches | Scope |
+| --- | --- | --- |
+| [`oag-core::probe`](../../crates/core/src/probe.rs) | Float divergence in the shared foundation | `oag-core` only |
+| [`crates/core/tests/determinism.rs`](../../crates/core/tests/determinism.rs) | Drift against committed reference hashes | `oag-core` only |
+| CI `determinism` job | Divergence between Linux, Windows and macOS | runs `-p oag-core` only |
+| [`StateHasher`](../../crates/core/src/hash.rs) | Per-tick state comparison | **no callers outside `oag-core`** |
 
 The probe exercises what the real simulation will lean on hardest: accumulated
 arithmetic, `sqrt`, `sin`, quaternion composition and normalisation, seeded
 random draws, and a data-dependent branch.
+
+### The gate does not cover `oag-physics` or `oag-gameplay`
+
+Audited 2026-07-27, and worth stating plainly because the table above used to
+end with "once there is state". **There is state now, and nothing hashes it.**
+
+- [`probe::run`](../../crates/core/src/probe.rs) is a hand-built miniature
+  simulation living inside `oag-core`. It hashes exactly **three quantities** -
+  a position, a velocity and an orientation, ten `f32` - plus one `u32` drawn
+  from the RNG. It cannot reach the simulation crates, because `oag-core` is the
+  bottom of the dependency graph and nothing may point upward from it.
+- `oag_gameplay::World` is `tick`, an `Rng`, and `[Ship; 8]`; each `Ship` holds a
+  `ShipState` of eleven fields, whose `Body` alone is four `Vec3`, a `Quat`, a
+  scalar mass and an inertia `Vec3`. **None of it is hashed by anything.**
+- `StateHasher` has no caller anywhere outside `oag-core`.
+- The CI job that runs on three operating systems runs `-p oag-core`. The job
+  that runs the whole workspace runs on Linux only, so the physics and gameplay
+  tests are not even *executed* on Windows or macOS, let alone compared.
+
+**What this does and does not mean.** The foundation-level risk is genuinely
+covered, and by a superset of what the simulation currently does: the probe uses
+`sin`, and the simulation crates today call **no transcendental at all** - three
+`sqrt` sites and glam's own `length`/`normalize`, which are `sqrt`. So a
+platform whose float pipeline diverges would still be caught.
+
+What is not covered is anything a simulation crate could introduce *for itself*.
+Specifically, and none of these has any equivalent in the probe:
+
+- **Order-dependent reductions over collections.** The nearest-hit scan across
+  `CollisionWorld::colliders()`, the deepest-of-eight hull probe comparison, and
+  the nearest-sample scan in the race loop are all reductions whose result
+  depends on iteration order. They are over `Vec`s today, which is correct - but
+  nothing would fail if one became a `HashMap`.
+- **Accumulation order.** `forces::evaluate` sums roughly fourteen terms into
+  four accumulators in a fixed order that is itself evidence. The probe sums
+  three.
+- **`Quat::inverse` and quaternion-vector rotation**, which the integrator uses
+  every tick to move torque in and out of the body frame. The probe composes and
+  normalises quaternions but does neither of these.
+
+So the honest summary is that the gate proves the *floor* is portable and proves
+nothing about the two crates built on it. Closing that needs a hash-and-compare
+over a real `World` after N ticks, with its own committed reference and its own
+place in the CI matrix. It is deliberately **not** done as part of this audit:
+the reference constant has to be generated from the simulation as it stands, and
+generating one while the force law is actively being changed would commit a
+number that is stale on arrival - which, under this page's own "never update the
+constants" rule, is worse than the gap it closes.
 
 **When the determinism test fails, do not update the constants.** That converts
 a real bug into a silent one. The failure output names the platform, and each CI
