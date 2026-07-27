@@ -86,8 +86,57 @@ Recovered from expanded files, not exhaustive:
 | `Entry`, `Class`, `Difficulty` | Menu and mode data |
 | `LoadXML` | Includes another XML file |
 
+## `FEGlobals->` and `FEConst->`: named values where a number is expected
+
+An attribute that expects a number may instead name a value held in a run-time
+registry. Two spellings, and **they are the same namespace and the same
+registry** - they differ only in when the name is resolved:
+
+```xml
+<Values Color="0xff8000"/>              <!-- a literal -->
+<Values Color="FEConst->HiliteColor"/>  <!-- resolved once, at load -->
+<Values Color="FEGlobals->HiliteColor"/><!-- re-resolved on every use -->
+```
+
+- **`FEConst->Name`** is a *snapshot*. The registry is read while the file is
+  being parsed and the resulting number is baked into the widget.
+- **`FEGlobals->Name`** is a *live binding*. The parser stores the name's hash
+  in the field and sets a bit in the widget's flags word; every read re-resolves
+  it, so changing the global changes what the widget shows.
+
+Rules a writer or a reimplementation needs:
+
+- **The sigil is an arrow, `->`.** Matching is case-insensitive, like the rest
+  of the reader, so `feglobals->x` also works.
+- **A value is only examined when it starts with `FE`** (either case).
+  Everything else goes straight to the number parser, so ordinary values are
+  unaffected and a leading `FE` is the only thing to avoid.
+- **A value that starts with `FE` but matches neither sigil is silently
+  dropped** - the destination field is left at whatever it already held. There
+  is no error and no fallback to parsing it as a number.
+- **Registry values are stored as text** and re-parsed on each read, so the same
+  global can be read as an integer by one attribute and as a float by another.
+- **The float form of this reader parses correctly**, via `strtod` - unlike the
+  default float accessor noted below, it does understand `1e-5`. Which of the
+  two an attribute uses depends on the widget.
+- **Names are prefixed in code, not in XML.** `FEGlobals->TeamModel` is the
+  entry the C++ side calls `FE_TeamModel`; the reader prepends `FE_` before
+  hashing.
+
+Widgets can also *publish* their own value as a global, which is what makes the
+live form useful: one widget's state drives another widget's attribute.
+
+Mechanism, addresses and the registry layout are on
+[ps2-pulse/fe-globals.md](../ghidra/functions/ps2-pulse/fe-globals.md); the PSP
+build has the same three-way test and the same two literals. **Which attributes
+accept the indirection is not enumerated** - only `Color` on a text widget's
+`<Values>` is confirmed, out of 26 call sites.
+
 ## Open questions
 
+- **Which attributes accept `FEGlobals->` / `FEConst->`**, and the full list of
+  registered global names. Only `FE_TeamModel` and `FE_ModelSkin` are confirmed
+  entries.
 - The full element and widget set. Each widget registers a name and a vtable in
   the binary, so the complete list is recoverable from the registration sites.
 - ~~Whether the PS2 release uses the same schema.~~ It does, at least for the

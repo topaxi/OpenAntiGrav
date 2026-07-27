@@ -298,12 +298,12 @@ parser is a trap worth knowing about before comparing two subsystems' values.
 - `Xml_ParseIntHexOrDecimal` (`0x002030e0`) keeps its `Xml_` prefix on evidence
   rather than by association: all three of its callers are XML value parsers.
   Besides `Xml_AttributeAsIntHex`, `0x0017c630` reads an attribute as a string
-  and then resolves it as either a literal number or an `FEGlobals>` /
-  `FEConst>` indirection, and `0x0017c9f8` resolves the constant that lookup
-  returns. So the front end can write `value="FEGlobals>Something"` where a
-  number is expected - a schema feature [fexml.md](../../../formats/fexml.md)
-  does not mention. Those two are **not renamed**: the indirection is clear but
-  what the two tables at `0x00301988` hold was not read.
+  and then resolves it as either a literal number or an `FEGlobals->` /
+  `FEConst->` indirection, and `0x0017c9f8` resolves the constant that lookup
+  returns. So the front end can write `value="FEGlobals->Something"` where a
+  number is expected. **Both are now read and named**, with the registry at
+  `0x00301988` behind them - see [fe-globals.md](fe-globals.md), and
+  [fexml.md](../../../formats/fexml.md) for the schema side.
 - `Xml_AttributeAsOwnedString` (`0x00203a80`) copies the value into an
   allocation owned by the document (`Xml_InternString`) and hands back a pointer
   that stays valid until `Xml_CloseDocument`. Callers store it as a plain

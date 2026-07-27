@@ -147,3 +147,19 @@
 0x00115540	function	tolower	90	libc.md
 0x00111740	function	strcasecmp	88	libc.md
 0x0029f8c0	data	_ctype_	88	libc.md
+
+# Front-end globals: the FEGlobals-> / FEConst-> indirection in front-end XML.
+0x0017c630	function	Xml_AttributeAsIntOrGlobalRef	90	fe-globals.md
+0x0017c710	function	Xml_AttributeAsFloatOrGlobalRef	90	fe-globals.md
+0x0017c810	function	FeGlobals_HashName	90	fe-globals.md
+0x0017c9f8	function	FeGlobals_GetIntByHash	90	fe-globals.md
+0x0017c980	function	FeGlobals_GetFloatByHash	90	fe-globals.md
+0x0017c908	function	FeGlobals_RegisterByName	85	fe-globals.md
+0x0017c870	function	FeGlobals_GetIntByName	82	fe-globals.md
+0x001fc770	function	FeGlobals_FindAndAcquire	82	fe-globals.md
+0x001fc4f8	function	FeGlobals_Insert	80	fe-globals.md
+0x001fc6b0	function	FeGlobals_Remove	78	fe-globals.md
+0x001fc868	function	FeGlobals_Release	78	fe-globals.md
+0x00301988	data	g_fe_globals	85	fe-globals.md
+0x0025c460	function	strncasecmp	90	fe-globals.md
+0x001fed38	function	Hash_Crc32String	82	fe-globals.md

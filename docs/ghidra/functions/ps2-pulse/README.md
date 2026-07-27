@@ -21,11 +21,12 @@ form, and Ghidra's string search will return all three.
 | [Craft update and rigid body](craft-update.md) | The surface-alignment gain, angular damping, the integrator and its sub-step loop |
 | [Input](input.md) | The abstract button layer, the four edge masks, per-player pad blocks |
 | [Camera views](camera.md) | The player-selectable in-race views and the SELECT cycle |
+| [Front-end globals](fe-globals.md) | The `FEGlobals->` / `FEConst->` indirection, its registry, and the flag-bit tagging that makes one a live binding |
 | [Recovered C library](libc.md) | `strlen`, `strcmp`, `strcasecmp`, `tolower`, `_ctype_` |
 
 ## Renames
 
-**Applied.** 106 symbols, collected in [names.tsv](names.tsv). There is no
+**Applied.** 132 symbols, collected in [names.tsv](names.tsv). There is no
 `just` recipe for this set yet; run the script directly against a bridge with
 `SCES_547.48` open:
 
@@ -95,7 +96,7 @@ rule or because the hypothesis is untested.
 | `0x0014e600` / `0x0014e518` | The two `<Global>` sub-element parsers `HandlingXml_ParseGlobal` dispatches to. Shape is clear, contents unread | 55 |
 | `0x00257740` | The stored (uncompressed) WAD stream constructor | 55 |
 | `0x001fd8c0` | Registers an already-loaded buffer in the resource registry beside `Resource_Find` / `Resource_Load`. Same node layout, but no caller was traced | 60 |
-| `0x001fed88` / `0x001fede8` / `0x001fee90` / `0x001fef20` | A third CRC-32 family with its own table at `0x003025e0`: an **uppercase**-folding string hash, a raw string hash, and a two-word hash. Not the WAD hash (wrong fold direction); what uses it was not traced | 55 |
+| `0x001fed88` / `0x001fede8` / `0x001fee90` / `0x001fef20` | A third CRC-32 family with its own table at `0x003025e0`: an **uppercase**-folding string hash, a raw string hash, and a two-word hash. Not the WAD hash (wrong fold direction). **What uses it is now traced**: the front-end globals registry, through the wrapper `Hash_Crc32String` (`0x001fed38`) - see [fe-globals.md](fe-globals.md). The four listed here are still unrenamed | 60 |
 | `0x0014f108` | Returns the current camera view setting, from `g_settings` or from a per-player array depending on a global that reads like an attract-mode switch | 55 |
 | `0x00201f30` / `0x0010aec8` | The pad read. A thin shim over a library call; no import table was resolved for this binary | 50 |
 | `0x002849a0` | A per-pad global that suppresses every button except cross. Reads like a menu or demo lockout | 40 |

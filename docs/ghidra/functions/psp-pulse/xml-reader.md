@@ -270,12 +270,14 @@ is at offset 0 - so it is nameable only from its role in `Xml_OpenFile`'s
 `Xml_ParseIntHexOrDecimal` keeps its `Xml_` prefix on evidence: its three
 callers are all XML value parsers. Besides `Xml_AttributeAsIntHex`, `0x08888bd8`
 reads an attribute as a string and dispatches on a `"FE"` prefix
-(`0x08a7d2c0`) - `FEGlobals>` or `FEConst>` resolves an indirection, anything
-else parses as a literal number - and `0x08889048` resolves the constant. So the
-PSP front end has **the same `value="FEGlobals>Something"` indirection** the PS2
-work found, and it is likewise absent from
-[fexml.md](../../../formats/fexml.md)'s schema notes. Those two are **not
-renamed**; the tables they read were not decoded.
+(`0x08a7d2c0`) - `FEGlobals->` (`0x08a7d2a8`) or `FEConst->` (`0x08a7d2b4`)
+resolves an indirection, anything else parses as a literal number - and
+`0x08889048` resolves the constant. Both literals were read out of this binary,
+not carried over from the PS2. So the PSP front end has **the same
+`value="FEGlobals->Something"` indirection**, now documented on
+[ps2-pulse/fe-globals.md](../ps2-pulse/fe-globals.md) and in
+[fexml.md](../../../formats/fexml.md). The PSP functions are still **not
+renamed**: their registry and float variant were not traced here.
 
 ## Library routines this family pins down
 
