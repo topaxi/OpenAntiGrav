@@ -209,6 +209,55 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// product it inherits from that path. Which is a prediction, and a cheap one to
 /// check against the next such term recovered.
 ///
+/// # This gain makes the ship unstable, and the margin is 2.2x rather than 11 %
+///
+/// Roll under this term is a damped oscillator with stiffness `k = 400` here and
+/// damping `c = 2` from [`crate::passive::ROLL_DAMPING`]. The margin by which the
+/// integrator fails to hold it was previously recorded as 11 %, from `h <= c/k =
+/// 0.005` against a `1/180` sub-step. **That reading is superseded**, because it
+/// assumes the force is re-evaluated every sub-step and
+/// [`crate::integrate`] does not do that: the angular acceleration is computed once
+/// from the frame's starting state and held across all three sub-steps.
+///
+/// Propagating one frame of the scheme the integrator actually runs - `a` fixed,
+/// then three sub-steps of `h = H/3` - gives
+///
+/// ```text
+/// theta'  = theta + H*theta_dot + (H^2/3)*a
+/// dtheta' = theta_dot + H*a                       a = -k*theta - c*theta_dot
+///
+/// det = (1 - k*H^2/3)(1 - c*H) + k*H^2 - c*k*H^3/3
+/// ```
+///
+/// so the governing step is the **frame** `H = 1/60`, not the sub-step, and the
+/// stability condition is
+///
+/// ```text
+/// c >= (2/3) * k * H     <=>     H <= 3c / (2k) = 0.0075 s
+/// ```
+///
+/// At `k = 400`, `c = 2` and `H = 1/60` that needs `c >= 4.444` and it has `2`: the
+/// frame is **2.22x** too large, and `det = 1.040741`, so roll grows by
+/// `sqrt(det) = 1.020167` per tick. **Measured, not just derived**: a ship at rest on
+/// a flat floor with an initial roll of 0.01 rad grows its peaks at 1.018 to 1.022 per
+/// tick over 200 ticks, with a period of 19 ticks against the `sqrt(400) = 20 rad/s`
+/// the gain predicts.
+///
+/// That measurement corroborates a second finding independently. This torque reaches
+/// the body through [`crate::forces::drain`], which multiplies by the inertia tensor
+/// that [`crate::integrate`] then divides out, so it acts as an angular *acceleration*
+/// and never sees the inertia. Roll inertia for a real hull is about 3.1, so a torque
+/// that *were* divided by it would give `k_eff = 129` and a visibly different growth
+/// rate. The measured rate matches the undivided `k = 400`, which is the round trip
+/// confirmed from the outside.
+///
+/// **The consequence is sharper than the old reading's.** An 11 % margin is
+/// consistent with an original that is marginally unstable and never sits in that
+/// state; a 2.22 x margin is not - a ship on the grid would visibly tumble. So one of
+/// `k = 400`, `c = 2`, the sub-step count, or the once-per-frame evaluation is
+/// misread, and a trace distinguishes them. **Nothing here is tuned to hide it**;
+/// see `HANDOVER.md`'s note that changing a magnitude would destroy the measurement.
+///
 /// **Only the sign is settled. The magnitude is not.** `400` is transcribed and
 /// stays M3 work, along with everything else on that page. Confidence **84** on
 /// the direction, which is the rubric's ceiling for decompilation-only evidence:
@@ -927,6 +976,53 @@ mod tests {
         assert_eq!(hover.probes[0].escape, Vec3::new(0.0, 0.8, 0.0));
         assert_eq!(hover.probes[1].escape, Vec3::new(0.0, 0.3, 0.0));
         assert_eq!(hover.escape, Vec3::new(0.0, 0.8, 0.0));
+    }
+
+    /// The roll oscillator is unstable as specified, and by how much is the
+    /// measurement this pins.
+    ///
+    /// **This test asserting instability is deliberate.** The margin is one of M3's
+    /// sharpest questions, and the way to lose it is for somebody to nudge
+    /// [`ALIGNMENT_GAIN`], [`crate::passive::ROLL_DAMPING`] or [`crate::ship::SUBSTEPS`]
+    /// until a race looks better. Any of those three changes this number, so this
+    /// fails and says so rather than letting the change pass silently.
+    ///
+    /// If a trace ever settles one of them, update the figures here and in
+    /// [`ALIGNMENT_GAIN`]'s documentation together - they are one finding.
+    #[test]
+    fn the_roll_oscillator_margin_is_the_documented_one() {
+        let k = ALIGNMENT_GAIN;
+        let c = -crate::passive::ROLL_DAMPING;
+        // The frame, not the sub-step: the acceleration is computed once per frame and
+        // held across all of them. See `crate::integrate`.
+        let h = 1.0f32 / 60.0;
+
+        let det = (1.0 - k * h * h / 3.0) * (1.0 - c * h) + k * h * h - c * k * h * h * h / 3.0;
+        let per_tick = det.sqrt();
+
+        assert!(
+            det > 1.0,
+            "the roll oscillator is stable now (det {det}); if that is a real finding, \
+             delete this test and rewrite ALIGNMENT_GAIN's stability section"
+        );
+        assert!(
+            (per_tick - 1.020_167).abs() < 1e-4,
+            "roll now grows {per_tick} per tick, not the documented 1.020167 - a magnitude \
+             moved, so update ALIGNMENT_GAIN's documentation with the evidence for it"
+        );
+
+        // The same statement as a condition on the damping, which is the form the
+        // documentation quotes.
+        let needed = (2.0 / 3.0) * k * h;
+        assert!(
+            (needed - 4.4444).abs() < 1e-3,
+            "the damping needed for stability is now {needed}"
+        );
+        assert!(
+            (needed / c - 2.222).abs() < 1e-2,
+            "the shortfall is now {}",
+            needed / c
+        );
     }
 
     /// `ride_height` is the primary term of the hover target, which is the correction

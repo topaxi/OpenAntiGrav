@@ -21,6 +21,26 @@
 //! [`Body`] and not a ship, a parameter set or a raycaster. Re-evaluating forces
 //! per sub-step is the obvious "improvement" and it is wrong; the split is what
 //! makes it unavailable rather than merely discouraged.
+//!
+//! # That split decides the stability margin, and it is easy to get wrong
+//!
+//! Because the acceleration is computed once from the frame's starting state and
+//! held, a stiff term's stability is governed by the **frame** `H = dt`, not by the
+//! sub-step `H/3`. Sub-stepping refines where the state lands inside the frame; it
+//! does not refresh the force, so it does not buy the stability that three genuine
+//! Euler steps would. Propagating one frame of this scheme for `a = -k*theta -
+//! c*theta_dot` gives
+//!
+//! ```text
+//! det = (1 - k*H^2/3)(1 - c*H) + k*H^2 - c*k*H^3/3      stable while det <= 1
+//!     <=>  c >= (2/3) * k * H   <=>   H <= 3c / (2k)
+//! ```
+//!
+//! which is a **different and stricter** bound than the `h <= c/k` one gets by
+//! assuming a force per sub-step. For the surface-alignment torque it is the
+//! difference between an 11 % overshoot and a 2.22x one; the worked numbers and the
+//! measurement that confirms them are on [`crate::hover::ALIGNMENT_GAIN`]. Anyone
+//! re-deriving a stability margin for a term in this engine has to start here.
 
 use oag_core::math::{Quat, Vec3};
 
