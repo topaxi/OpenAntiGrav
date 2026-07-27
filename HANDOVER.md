@@ -129,6 +129,116 @@ re-derive them from the old wording:
 - Piping a probe's stdout through `tail` buffers the whole run, so a background
   capture looks like it produced nothing until it exits. Redirect to a file.
 
+## The physics/gravity Ghidra pass: gravity confirmed, two leads, nothing landed
+
+A deliberate sweep of the force law against `BOOT.BIN`, prompted by "the racing
+feel must match as closely as possible". **Read the last section first if you are
+about to implement the downforce - it is the one that stops you.**
+
+### Confirmed, no change needed
+
+**Gravity is correct as implemented.** `passive::gravity` matches
+`Ship_UpdateCraft`'s `vmul_p` chain term for term: `normal_gravity` grounded,
+`flight_gravity` airborne, blended by the *previous* frame's fraction via
+`vocp_s`, mass from `body+0x374`, world `.y` only, per-class scale on
+`normal_gravity` **alone**.
+
+**`g_class_gravity_scale` is `1.0, 1.0, 1.0, 1.0`** (`0x08ab0dcc`, four floats).
+`Environment::class_gravity_scale` documented the identity as a default because
+the table "was not read". It is now. Confidence 90.
+
+**`BANK_TO_YAW_GAIN` is `30.0`, and the PS2's `50` was never a contradiction** -
+that one belongs to `Ship_HoverFourCorner`, a *different function* selected by
+`DAT_08b31048 == 6`. The two-point path this crate models reads 30.
+
+**The alignment torque** is `cross(up, avgNormal) * -400` with the right-axis
+component projected out, into the **world** angular accumulator. As transcribed.
+
+**The weathervane** is `cross(forward, velocity) * -0.1` grounded, `-0.3`
+airborne. As transcribed.
+
+### The yaw-resistance hunt is now a closed negative
+
+`engine.md`'s suggested lead was `Ship_ApplyLateralGrip` (`0x08848b78`). **It is
+not the answer**: it writes a body-local *force* along `X` into `body+0x110`, at
+the centre of mass, so it produces no torque at all.
+
+With that read, **every** writer to `craft+0x340`/`+0x350` on the grounded racing
+path is now enumerated and verified: airbrake yaw, steering, pitch, alignment,
+bank-to-yaw, weathervane, angular damping. This crate implements all seven, and
+none of them is the missing 22x.
+
+**So no further static reading will find it, and that is the useful result.** The
+mechanism is not in `Ship_UpdateCraft`. The next step has to be dynamic, and it is
+blocked on a harness gap the docs already noted: **there is no angular-velocity
+column in the capture**. Adding `body+0x160` to `scripts/psp-trace.py` and
+`oag_trace::Frame` would let a capture answer directly what the yaw rate does
+frame by frame, instead of it being inferred from consecutive basis rows. That is
+the single highest-value thing to build next.
+
+### Two changes were written, measured, and deliberately reverted
+
+Both are recorded here rather than in the code because **neither survived
+contact with the crate's own runtime-verified numbers**, and a half-landed force
+term is worse than none.
+
+**1. The grounded downforce.** `Ship_HoverTwoPoint` (`0x0884a658`) ends with
+
+```text
+worldForce += -averageNormal * (class[0x6c] * mass * grounded) * (1 - magLockBlend)
+```
+
+and `class[0x6c]` is `track_gravity` on the same offset arithmetic that makes
+`class[0x64]`/`class[0x68]` the gravity pair the verified gravity term reads.
+`hover::DOWNFORCE_SCALE` is `0.0` and is documented as "shape implemented,
+magnitude unrecorded", so this looked like the missing magnitude. Implemented, it
+improved the straight-line replay (excess climb `+9.85` to `+6.71` against the
+recording's `+4.80`; speed runaway `55.5` to `41.5`).
+
+**It is nonetheless wrong, or at least not this simple, and here is the argument
+that stops it.** `TARGET_GLOBAL_SCALE` is `0.75` and **runtime-verified** (`4.125`
+target against a `5.5` `ride_height`, read off a live Time Trial). This module's
+own arithmetic gives a resting sag of `normal_gravity / (0.3 * K * (normal_gravity
++ track_gravity))` = `0.147`, so a resting ship sits at `3.978` - and the original
+*measures* `4.002`. That sag is computed with **gravity alone**. A downforce of
+`track_gravity * mass` is seventeen times grounded gravity and would put the
+resting height near `1.6`, nowhere near the measured `4.002`.
+
+So one of these is wrong: the reading of `class[0x6c]`, the assumption that
+`craft+0x2b0` is the grounded fraction at that point, or the belief that this term
+is active at rest. **Do not implement it until that is resolved.** The fact that
+it improved the replay is not evidence - the replay diverges for other reasons.
+
+**2. The hover probe geometry.** `Ship_InitCraft` (`0x08849354`) writes
+`craft+0xc0`/`+0xd0` as constants `(0, -1.5, +/-6)` scaled by `0x08ab0e1c`, and
+`Ship_HoverTwoPoint` reads the rotated copies at `craft+0x120`/`+0x130`.
+`hover::probe_offsets` instead derives them from `<Misc length>/2` with **no
+vertical offset**, and flags itself as a guess. So the spacing should not scale per
+ship, and the probes should hang `1.5` below the centre of mass.
+
+Implemented alongside the downforce it restored the settling height and passed
+`a_ship_at_rest_on_flat_ground_stays_at_rest` - but it **destabilised the
+suspension**: `a_ship_pressed_into_the_floor_never_ends_up_below_it` sinks through
+the floor around tick 250. With the probes below the centre of mass, a ship whose
+probes go under a surface sees no ground at all and nothing recovers it. That
+needs the hull constraint to carry the case before the geometry can change.
+
+What was **not** traced either time: whether anything overwrites `craft+0xc0`
+per ship. Nothing was found that does.
+
+### Where this leaves the ordering
+
+1. Add the angular-velocity column to the capture harness. Everything else is
+   guessing without it.
+2. Resolve the downforce contradiction above - it is a real term in the binary and
+   this crate applies none of it.
+3. `ALIGNMENT_INERTIA = 19.8` is admitted as fitted and the original divides that
+   torque by nothing. Note but do not build on the coincidence that
+   `YAW_DRIVE_CALIBRATION` is `1/22.1` and this is `1/19.8`; the yaw equilibrium
+   is provably inertia-independent, so they are unlikely to be one mechanism.
+4. Drag and rolling resistance, which set top speed - still with **no clean ground
+   truth**, because the only straight-line capture is a stunned ship coasting.
+
 ## The engine died on wall contact: the collision stun was frame-triggered
 
 Reported from play as "at some point the racer completely stopped accelerating".
@@ -1989,6 +2099,8 @@ exactly the RNG mistake this file already records.
 | Sideshift | Recovered as a mechanism, but **which buttons fire it is not known**, so `oag_gameplay::controls` returns `Sideshift::None` always and a test pins the gap. |
 | The game's own font | Unchanged: `.fnt` metrics decode, the atlas's pixel layout does not. |
 | Front-end widget offsets, audio, batch list B, transparency sorting, mip levels, `section` payloads, the 29 unresolved import stubs | Unchanged from the previous handover. |
+| **Unverified lead: the same sRGB trap may be in `mesh_render.rs`** | The front end's sprite sheet had to have its texture format follow the *target's* colour space, because sampling an `Rgba8UnormSrgb` texture returns linear and the headless capture targets `Rgba8Unorm` on purpose. It cost the logo two thirds of its brightness and looked like art direction, not a bug - `(36, 147, 153)` in the texture came out `(5, 74, 81)` in the PNG. `crates/render/src/mesh_render.rs` has the same shape: `Rgba8Unorm` target at line 91, `Rgba8UnormSrgb` textures at 387. **Not checked** - a textured `oag-view` capture next to a window would settle it in a minute. |
+| `Viewport`, and where an `Image` with no `x` goes | The front end draws `Image src=` widgets now, so `--screen "Show Logo"` shows the Pulse logo and "Press START button". Two gaps behind it: a `Viewport` is a clipping rectangle nobody has decoded, and `screen.rs` reads only a screen's direct children, so `Show Logo`'s `BOOT_LEGAL` line - which is inside one - is silently absent. And an `Image` with no `x` is centred on a guess: the only case on that screen is 512 wide on a 480-wide screen, where centring and left-pinning differ by 16 pixels and the picture cannot tell them apart. |
 | **The Memory Stick and profile system** | **Scope decision, 2026-07-27, not a gap.** One automatic save slot, the way a modern PC game does it. The disc's boot chain between `Language Selection` and `Main Menu` is eight screens and all but two exist to serve Memory Stick mechanics: `RemoveMemoryStickWarning`, `MemoryStickWarning`, `NoStickAtBootScreen`, `DisplayInsufficientSpace`, `LoadProfileDialog`, `AutoLoadProfileCheckScreen`, `AutoLoadingProfileScreen`, the `LoadProfileFailed`/`LoadProfileDataCorrupt` arms, and the first-boot `NameSetup2FromBoot` -> `TagSetup2FromBoot` -> `CreateFromBoot` chain. None of it is to be built. When M6 opens, model `LogoFMV`, `LogoFMVRedirectScreen` and `Show Logo`, then go straight to `Main Menu`. Do not read the omitted screens as unimplemented work. |
 
 ## Method that is not obvious
