@@ -27,7 +27,10 @@ below 70.
 | `0x0015dda0` | `Body_AddTorqueLocal` | 88 |
 | `0x0015d088` | `Body_Integrate` | 88 |
 | `0x001596f8` | `Ship_UpdateCraft` | 88 |
+| `0x0015a290` | `Ship_ApplyWeathervaneTorque` | 88 |
+| `0x0015c3a0` | `Ship_ApplyQuadraticDrag` | 88 |
 | `0x0015b978` | `Ship_HoverTwoPoint` | 85 |
+| `0x0015a1d0` | `Ship_ApplyGravity` | 85 |
 | `0x0015ded8` | `World_StepBodies` | 80 |
 | `0x0015b070` | `Ship_UpdateMagLock` | 78 |
 | `0x0019f020` | `Handling_LoadForTeam` | 78 |
@@ -475,6 +478,122 @@ Read while looking for the above; recorded because it corroborates
   gated on `craft+0x2d4 != 0`. Recorded as a difference; neither value is
   runtime-verified and the field at `+0x194` was not independently identified,
   so this is **not** yet a claim that the two builds tune it differently.
+
+## The passive force terms, checked against the PSP page
+
+`Ship_UpdateCraft` has sixteen callees. Four more of them have now been
+identified **by content rather than by position** - size and layout order do not
+transfer between the two builds, and guessing from them produced two wrong
+matches before the decompiler corrected them. The constants are what identify
+these functions, and they are distinctive enough to be near-conclusive.
+
+### Weathervane torque - identical
+
+`Ship_ApplyWeathervaneTorque` (`0x0015a290`), found by searching for the `-0.3`
+immediate (`lui at,0xbe99`), which occurs in only three functions in the
+executable:
+
+```c
+torque = cross(craft+0x1a0, craft+0x1b0) * ((craft->flags & 1) ? -0.1f : -0.3f);
+Body_AddTorqueWorld(craft->body, torque);
+```
+
+`-0.3` is `0xbe99999a` and `-0.1` is `0xbdcccccd`, both as `lui` immediates.
+[engine.md](../psp-pulse/engine.md) gives
+`angularWorld += cross(forward, velocity) * (grounded ? -0.1 : -0.3)`.
+**Both coefficients, the grounded selector and the operand order all match**, so
+`craft+0x1a0` is forward and `craft+0x1b0` is velocity in the PS2 layout.
+Confidence **88**.
+
+This is also a **third instance of the sign convention, now in the PS2 binary
+rather than only on the PSP page.** `cross(forward, velocity)` scaled by a
+*negative* coefficient turns the nose toward the direction of travel only if
+`w_game = -w_physics`; under the textbook convention it would turn it away. The
+corroborating leg cited
+[above](#the-angular-sign-convention-w_game---w_physics) is no longer
+PSP-measurement-only.
+
+### Quadratic drag - matches, minus one branch
+
+`Ship_ApplyQuadraticDrag` (`0x0015c3a0`), found by the `-0.005` immediate
+(`lui at,0xbba3`), which is unique in the executable:
+
+```c
+k = (craft+0x320 < -0.2f)      ? -0.1f     /* 0xbdcccccd */
+  : !(craft->flags & 1)        ? -0.002f   /* 0xbb03126f, airborne */
+  :                              -0.005f;  /* 0xbba3d70a, grounded */
+worldForce += velocity * craft+0x320 * k;
+```
+
+Three of the four coefficients, the `-0.2` reverse threshold, the grounded
+selector and the whole shape are **identical** to
+[engine.md](../psp-pulse/engine.md). `craft+0x320` is the cached forward speed
+in the PS2 layout (the PSP's `craft+0x2ec`); note that `+0x320` is the *local
+force accumulator* on the PSP, so the craft struct is laid out differently
+between builds and offsets must not be carried across.
+
+**The PS2 function has no `-0.9` branch.** [engine.md](../psp-pulse/engine.md)
+records `k = -0.9` when `craft+0x2a4 == 0`, described there as multiplying drag
+by roughly 180x in that mode. Nothing in `Ship_ApplyQuadraticDrag` tests a mode
+enum and no `-0.9` immediate reaches it. Recorded as a **difference, not a
+correction**: whether the PS2 hoisted that case to the call site in
+`Ship_UpdateCraft` was **not** checked, and until it is, "the PS2 drops the
+mode-0 drag multiplier" is a hypothesis at confidence **55**, not a finding.
+The three shared coefficients are confidence **88**.
+
+### Gravity - outlined here, and it differs in two ways
+
+The PSP applies gravity inline in `Ship_UpdateCraft`; the PS2 has it as a
+function, `Ship_ApplyGravity` (`0x0015a1d0`):
+
+```c
+mass = body->mass;                                  /* body+0x374, same offset */
+g = -( normal_gravity            * mass * grounded
+     + flight_gravity * scale[i] * mass * (1 - grounded) )
+    * (1 - magLockBlend);
+Body_AddForceWorld(body, g_along_one_axis);
+```
+
+`normal_gravity` and `flight_gravity` are read through the cached block pointer
+at `craft+0x90` at block-relative `0x64` and `0x68`, which are absolute `0xf8`
+and `0xfc` - exactly where [engine.md](../psp-pulse/engine.md)'s parser table
+puts them. `grounded` is `craft+0x2e0` and `magLockBlend` is `craft+0x2b0`, both
+already fixed by other terms on this page. So the *structure* corroborates.
+Two details do not:
+
+- **The per-class scale sits on `flight_gravity` here, not on
+  `normal_gravity`.** engine.md states the opposite. One of the two pages is
+  wrong about which term the table at `DAT_0027e828` / `0x08ab0dcc` multiplies,
+  and this page cannot say which build is which without re-reading the PSP.
+- **The whole expression is scaled by `(1 - magLockBlend)`.** engine.md records
+  that factor on the vertical-damping term and the bank-to-yaw term but not on
+  gravity. So on the PS2 a fully mag-locked ship has no gravity at all, which is
+  a sensible thing for a mag-lock to do and is worth checking on the PSP.
+
+Confidence **85** for the PS2 reading, **50** on which build the two differences
+actually belong to - that needs the PSP function re-read, not this one.
+
+### The track-section force - structurally identical, still unnamed
+
+`FUN_0015a300` is [engine.md](../psp-pulse/engine.md)'s `FUN_08848f9c`, and it
+is **left unnamed here for the same reason it is left unnamed there**: what the
+force is *for* is a guess at confidence 45, and ADR-0005 says a guess dressed as
+a name stops other people from looking.
+
+The match is close enough to be certain of the identification, though. It looks
+up the craft's track section from its position, stores the section's direction
+into `craft+0x1d0`, bumps lap-style counters on the race object
+(`+0x960`, and a per-slot counter at `+0xa5c + n*0x10`), re-arms a timer every
+frame a section is found, and adds a world force along the stored direction with
+**a magnitude and a duration read from two separate per-class tables** -
+`DAT_0033c350` and `DAT_0033c340`, indexed by the same class global. engine.md
+describes exactly that, including the two-table detail
+(`0x08b36bc0` / `0x08b36bd0`). Confidence **85** on the identification.
+
+One mechanism engine.md does not record: **the force fades**. The timer counts
+down by `dt`, and while it is above `0.1` the magnitude is scaled by
+`timer * 10`, dropping to the raw magnitude below that. So it is a decaying
+impulse re-armed every frame, not a flat continuous push.
 
 ## Cross-platform
 
