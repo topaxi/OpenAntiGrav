@@ -658,6 +658,24 @@ turbo add under bits 9/10 with the mode `== 1` guard and the button-gated boost
 lift; the `* craft+0x2c4 * 2.0` tail; the one-shot sub-1.0 scale that resets
 itself to `1.0`; and the flag-bit-13 kill.
 
+**`craft+0x2c4` is `1.0`, in this build too.** The PSP page records both engine
+multipliers as recovered - `craft+0x294` is the start-line boost multiplier and
+`craft+0x2a0` the speed-up pickup - and the PS2 constructor agrees on the first
+of them. `Ship_InitCraft` (`0x001592e8`) writes
+`*(craft + 0x2c4) = 0x3f800000`, i.e. `1.0`, at `0x00159510`. Only three float
+stores anywhere in the image target a `0x2c4` displacement, and this is the only
+one on a craft base.
+
+The constructor identification is structural rather than by string: it is the
+PSP `Ship_InitCraft`'s twin statement for statement, including the two
+`(0, -1.5, 6, 0)` / `(0, -1.5, -6, 0)` vectors scaled by a shared global, the
+`10.0` at `+0x2e4` where PSP has it at `+0x2b4`, the `0.5` at `+0x330`, the
+`0.5`/`1.0` pair at `+0x34c`/`+0x350` where PSP has `+0x318`/`+0x31c`, and the
+same trailing reciprocal-table fixup loop over a file-scope array. Confidence
+**85**. It does *not* initialise the flag-bit-2 multiplier at all, which is also
+true of the PSP constructor - on PSP that field is written only by the pickup
+code, together with the flag that gates it.
+
 **The dead `gain`/`falloff` ramp reproduces exactly.** The function computes the
 ramp into `craft+0x2e8`, clamps it at zero, and then overwrites it with the raw
 input two statements later, so the thrust is computed from the input and not
