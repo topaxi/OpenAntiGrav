@@ -60,6 +60,18 @@ real-data check or reporting untested code as verified.** Give the
 orchestrating session the exact command to run - it has the images and can
 verify directly, the way a human maintainer would from their own checkout.
 
+**Separately, and even when `data/` genuinely is populated: `fd` and `rg`
+respect `.gitignore` by default, so both silently return nothing under
+`data/` with exit code 0 - no error, no warning, just an empty result that
+reads exactly like "there's nothing here."** Confirmed directly: `rg -l
+"chd" data/` and `fd . data/images` both come back empty against a fully
+populated `data/images/`, while `rg --no-ignore` and `fd --no-ignore` find
+everything. Use `--no-ignore` with either tool inside `data/`, or just use
+`ls`/`find`/`grep` directly, which don't filter by `.gitignore` at all. This
+is a second, independent way real data can look absent when it isn't -
+distinct from the sandbox issue above, and it can bite even the
+orchestrating session, not only a spawned agent.
+
 ## Architecture
 
 **Core principle: the simulation must not know a renderer exists.** It takes an input
