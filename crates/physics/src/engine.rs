@@ -180,7 +180,34 @@ use crate::ship::{ShipControls, ShipState};
 /// the `invMass` of `1.0` that `Body_Init` defaults to, it opposes motion with about
 /// `0.24` of equivalent force at 24 units/s, against the ~53 that is missing.
 ///
-/// # A caveat on the framing, which now matters more than it did
+/// # Resolved: the gap is thrust this crate applies and the original does not
+///
+/// `Ship_UpdateEngine` has an **early return that [`engine`] below does not
+/// implement**. With flag `0x200` clear, `craft+0x290 > 0` makes it zero the throttle
+/// state and return having written no thrust and no lift at all (`0x0884c634`, read
+/// from disassembly with the branch-likely delay slots resolved; confidence 88).
+/// `craft+0x2e0 > 0` does the same when flag `0x10` is clear.
+///
+/// `craft+0x290` is a **collision stun timer**. `Ship_ApplyLateralGrip` decrements it
+/// and returns early while it runs, so a stunned craft also gets no lateral grip;
+/// `Ship_ApplyCollisionImpulse` (`0x0883f274`) arms it with `craft+0x290 += 0.5` when
+/// it applies a contact impulse. A hit costs half a second of engine *and* grip, and
+/// repeated contact keeps re-arming it. Confidence 85.
+///
+/// That closes the balance. `Ship_UpdateCraft`'s callee set has now been enumerated
+/// directly and contains no unaccounted force term, so nothing can supply the ~53 of
+/// resistance the earlier reading demanded. A craft inside the stun window instead
+/// has `T = 0`, leaving only `0.005 * 24^2 + 2.0 = 4.88` to decelerate it - gently and
+/// monotonically, at `4.88 / m`. The capture falls from 24.271 to 23.571 across its
+/// 200 ticks, about `-0.21` units/s^2, i.e. a craft mass near 23.
+///
+/// **So `ENGINE_OUTPUT_SCALE` is right, every constant here is right, and the drag
+/// coefficients are right.** What is missing is the gate, not a magnitude. It is not
+/// implemented here because it needs the contact impulse and the `craft+0x1c0` flag
+/// word, and because [`engine`] has no state to hold a timer in - it belongs with the
+/// collision response, alongside the stun's other half in the grip term.
+///
+/// # A caveat on the framing, which the resolution above supersedes
 ///
 /// Everything above treats the recording as a *speed equilibrium*. It is a
 /// **3.33-second window** (200 ticks), and over that long a slow transient toward a

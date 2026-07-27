@@ -707,6 +707,76 @@ It should be, for fidelity, but **it is not the gap**: at `0.01` against an
 `invMass` of `1.0` it opposes motion with about `0.24` of equivalent force at 24
 units/s, against the ~53 that is missing.
 
+#### The engine has an early return that produces no thrust at all
+
+**This is the resolution, and the pseudocode above is missing it.**
+`Ship_UpdateEngine` does not always reach the force law. Its prologue, at
+`0x0884c634`, can return having written nothing:
+
+```
+0884c634: lwc1  f14,0x290(a0)     # the stun timer
+0884c638: c.le.s f14,f13          # <= 0 ?
+0884c640: bc1fl 0x0884c678        # > 0 -> skip to the flag test
+0884c648: lw    a1,0x1c0(a0)
+0884c64c: andi  a1,a1,0x10        # (only when the timer is clear)
+0884c658: bnel  a1,zero,0x0884c678
+0884c660: lwc1  f14,0x2e0(a0)
+0884c66c: bc1t  0x0884c6b0        # craft+0x2e0 <= 0 -> the normal path
+0884c678: andi  a1,a1,0x200
+0884c684: bne   a1,zero,0x0884c6b0   # flag 0x200 -> the normal path anyway
+0884c6a4: swc1  f13,0x2b8(a0)        # throttleState = 0
+0884c6a8: b     0x0884c99c           # return, no thrust, no lift
+```
+
+So, with flag `0x200` clear, **`craft+0x290 > 0` means zero thrust and a zeroed
+throttle state.** `craft+0x2e0 > 0` does the same when flag `0x10` is clear.
+Confidence **88** - read from disassembly with the branch-likely delay slots
+resolved.
+
+`craft+0x290` is a **collision stun timer**, and two functions pin that:
+
+- `Ship_ApplyLateralGrip` (`0x08848b78`) opens with
+  `if (craft+0x290 > 0) { craft+0x290 -= dt; }` **and returns** - so while the
+  timer runs, the craft also gets *no lateral grip* and slides.
+- `Ship_ApplyCollisionImpulse` (`0x0883f274`) is what arms it. When the entity has
+  a pending impulse at `entity->0x4c + 0x110` and flag `0x10` of the pickup word is
+  clear, it projects the impulse onto the ship's forward axis, applies it to the
+  body, and then does `craft+0x290 += 0.5` before clearing the impulse.
+
+**A hit costs half a second of engine and grip, and repeated contact keeps
+re-arming it.** Confidence **85**.
+
+This closes the arithmetic that the rest of this section could not. With the real
+shipped `Engine` values the force law gives `T ~= 58` at the recorded speed, and no
+resistance term in `Ship_UpdateCraft` - all of which are now enumerated, see below
+- comes anywhere near that. A craft inside the stun window has `T = 0` instead, and
+the only remaining longitudinal forces are quadratic drag and rolling resistance,
+`0.005 * 24^2 + 2.0 = 4.88`, which decelerates it gently and monotonically. The
+reference capture decelerates from 24.271 to 23.571 over its 200 ticks - about
+`-0.21` units/s^2, i.e. `4.88 / m` for a craft mass near 23.
+
+**So the missing "12x of resistance" is not resistance at all.** It is thrust this
+crate applies and the original does not.
+
+#### The world-force writer list is complete
+
+Checked directly rather than from the step table: `Ship_UpdateCraft`'s full callee
+set is `Ship_UpdateHover`, `Ship_UpdateEngine`, `Ship_UpdateBrakes`,
+`Ship_UpdateSteering`, `Ship_UpdatePitch`, `Ship_UpdateAirbrakes`,
+`Ship_ApplyQuadraticDrag`, `Ship_ApplyRollingResistance`, `Ship_ApplySpeedupPad`,
+`Ship_ApplyLateralGrip`, `Ship_ApplyWeathervaneTorque`, `Ship_ApplyAngularDamping`,
+the three `Body_Add*` helpers, and three that had no names:
+
+| Address | Name | What it is |
+| --- | --- | --- |
+| `0x0884d850` | `Body_SetMass` | `body+0x374 = m; body+0x378 = 1/m` |
+| `0x0884da24` | `Body_ClearAccumulators` | zeroes `body+0x100/0x110/0x120/0x130` |
+| `0x0884da5c` | `Body_ClearVelocity` | zeroes `body+0x140` and `body+0x160` |
+
+None of the three is a force term, and gravity and vertical damping are applied
+inline. **There is no unenumerated resistance term**, which is what forced the
+conclusion above.
+
 #### A caveat on the framing
 
 All of the above treats the recording as a speed *equilibrium*. It is a

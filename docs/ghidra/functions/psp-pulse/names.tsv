@@ -124,6 +124,10 @@
 0x08849618	function	Ship_UpdateCraft	82	engine.md
 0x08849354	function	Ship_InitCraft	88	engine.md
 0x08848f9c	function	Ship_ApplySpeedupPad	85	engine.md
+0x0883f274	function	Ship_ApplyCollisionImpulse	85	engine.md
+0x0884d850	function	Body_SetMass	88	engine.md
+0x0884da24	function	Body_ClearAccumulators	85	engine.md
+0x0884da5c	function	Body_ClearVelocity	80	engine.md
 0x0883a970	function	Xml_ReadGlobalSettings	85	engine.md
 0x0883fdec	function	Ship_UpdateStartBoost	85	engine.md
 0x088390b4	function	Xml_ReadBoostSettings	88	engine.md
