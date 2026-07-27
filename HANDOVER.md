@@ -570,6 +570,27 @@ the frame-stale-groundedness finding depends on - was never checked, since
 every PS2 identification above came from matching callees rather than reading
 the call sequence.
 
+## The PSP has the same exponent-blind float parser - confirmed, not assumed
+
+A fresh agent located the PSP's generic XML reader (`docs/ghidra/functions/psp-pulse/xml-reader.md`,
+new page, anchored from `Movie_ParseAttributes`'s callees the same way the PS2
+page anchored from `Handling_ParseStats`) and settled the one open
+cross-platform question the PS2 work left behind: **`Xml_AttributeAsFloat`
+(`0x0895379c`) is the identical hand-rolled, exponent-blind parser on PSP
+too** - every character that isn't a digit, `.` or `-` is ignored rather than
+ending the scan, so `1e-5` parses as `-15`. Confidence **95**: unambiguous
+decompilation, a second binary agreeing instruction-for-instruction, and every
+consumer traced rather than assumed - which is every handling parser
+(`ParsePhysical`/`ParseAntigrav`/`ParseEngine`/etc.) and all five camera
+parsers. `docs/formats/handling-stats.md` and `docs/formats/fexml.md`'s "no
+scientific notation" caveat is no longer PS2-only evidence.
+
+**The same split exists on both builds**: a second, correct accessor
+(`Xml_AttributeAsFloatLibc`, a real `atof`/`strtod` wrapper) exists alongside
+the blind one, used exclusively by the front-end widget layer while every
+gameplay parser goes through the blind one. Neither Ghidra function existed
+before this pass - both were only visible in raw disassembly.
+
 ## PS2 textures found, decoded, and rendering - M1's last real gap is closed
 
 A fresh agent (replacing the one that decoded PS2 mesh geometry, after it hit
