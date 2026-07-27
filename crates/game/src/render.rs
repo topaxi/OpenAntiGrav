@@ -85,9 +85,8 @@ impl Renderer {
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         video: Option<VideoFormat>,
+        atlas: Atlas,
     ) -> Result<Self> {
-        let atlas = Atlas::build();
-
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("oag-game uniforms"),
             size: std::mem::size_of::<Uniforms>() as u64,
@@ -102,12 +101,19 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        // Nearest filtering: the glyphs are 5x7, and smoothing them would turn
-        // crisp pixels into mush at the scales the menu uses.
+        // The built-in 5x7 glyphs are hard-edged pixel art and smoothing them
+        // turns crisp shapes into mush; the disc's fonts are antialiased and
+        // drawn at fractional scales, where nearest sampling combs them. So the
+        // filter follows the atlas rather than being fixed.
+        let filter = if atlas.is_real() {
+            wgpu::FilterMode::Linear
+        } else {
+            wgpu::FilterMode::Nearest
+        };
         let atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("atlas"),
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
+            mag_filter: filter,
+            min_filter: filter,
             ..Default::default()
         });
 
@@ -126,7 +132,7 @@ impl Renderer {
             entries: &[
                 uniform_entry(0),
                 texture_entry(1),
-                sampler_entry(2, wgpu::SamplerBindingType::NonFiltering),
+                sampler_entry(2, sampler_kind(atlas.is_real())),
             ],
         });
 
@@ -377,28 +383,30 @@ impl Renderer {
             Align::Centre => x - width / 2.0,
             Align::Right => x - width,
         };
-        let advance = (font::GLYPH_WIDTH + 1) as f32 * scale;
 
         for ch in text.chars() {
             let Some(cell) = self.atlas.cell(ch) else {
                 continue;
             };
+            // Size and advance come from the cell rather than a constant: the
+            // disc's fonts are proportional, and the built-in set fills the
+            // same fields in with its fixed 5x7 box.
             self.quads.push(Quad {
                 rect: [
                     pen,
                     y,
-                    font::GLYPH_WIDTH as f32 * scale,
-                    font::GLYPH_HEIGHT as f32 * scale,
+                    cell.width as f32 * scale,
+                    cell.height as f32 * scale,
                 ],
                 uv: [
                     cell.x as f32,
                     cell.y as f32,
-                    font::GLYPH_WIDTH as f32,
-                    font::GLYPH_HEIGHT as f32,
+                    cell.width as f32,
+                    cell.height as f32,
                 ],
                 color,
             });
-            pen += advance;
+            pen += cell.advance * scale;
         }
     }
 }
@@ -534,6 +542,15 @@ fn texture_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
             multisampled: false,
         },
         count: None,
+    }
+}
+
+/// The binding type a sampler of the chosen filter mode needs.
+fn sampler_kind(filtering: bool) -> wgpu::SamplerBindingType {
+    if filtering {
+        wgpu::SamplerBindingType::Filtering
+    } else {
+        wgpu::SamplerBindingType::NonFiltering
     }
 }
 

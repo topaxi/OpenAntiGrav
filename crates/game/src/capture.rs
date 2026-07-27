@@ -59,6 +59,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     let Boot {
         mut frontend,
         mut movie,
+        font,
         ..
     } = loaded;
 
@@ -151,7 +152,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     // Rgba8Unorm rather than the surface's sRGB format: the readback is written
     // straight into a PNG, so a second gamma encode would double-correct.
     let format = wgpu::TextureFormat::Rgba8Unorm;
-    let mut renderer = Renderer::new(&device, &queue, format, video_format)?;
+    let mut renderer = Renderer::new(&device, &queue, format, video_format, font)?;
 
     if let (Some(frames), Some(wanted)) = (movie.frames.as_mut(), video_frame(&list)) {
         let mut bytes = Vec::new();

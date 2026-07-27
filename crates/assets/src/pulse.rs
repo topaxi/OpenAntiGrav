@@ -34,6 +34,27 @@ pub mod names {
     /// The looping backdrop behind the main menu.
     pub const BACKDROP_MOVIE: &str = r"Data\Movies\Backdrop.PMF";
 
+    /// The five `.fnt` bitmap fonts, in `FE.wad`.
+    ///
+    /// Named from the `<Font Src="...">` attributes in the language plugins and
+    /// confirmed by hashing: each of these hashes to an entry that really is in
+    /// the archive. See `docs/formats/fnt.md`.
+    pub mod fonts {
+        /// `Default`, 13-pixel line height.
+        pub const TEXT: &str = r"Data\FE\Fonts\pulse_text.fnt";
+        /// `Small`, `Title`, `InGame` and `Stats`, 17-pixel line height.
+        pub const PULSE_14: &str = r"Data\FE\Fonts\Pulse_14.fnt";
+        /// `Menu`, 22-pixel line height.
+        pub const PULSE_20: &str = r"Data\FE\Fonts\Pulse_20.fnt";
+        /// `HUD`, 25-pixel line height, the only 512-wide atlas.
+        pub const HUD: &str = r"Data\FE\Fonts\PulseHud.fnt";
+        /// `HUDSmall`, 10-pixel line height.
+        pub const SMALL: &str = r"Data\FE\Fonts\small.fnt";
+    }
+
+    /// The font the front end draws body text with.
+    pub const DEFAULT_FONT: &str = fonts::TEXT;
+
     /// A language plugin's font table, native language name and string table
     /// pointer.
     #[must_use]

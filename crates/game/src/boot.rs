@@ -23,6 +23,9 @@ pub struct Boot {
     pub frontend: Frontend,
     /// The intro movie, whether or not it has a picture.
     pub movie: Movie,
+    /// The text atlas: the disc's own font when it decodes, ours when it does
+    /// not.
+    pub font: crate::font::Atlas,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
@@ -61,6 +64,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         archives.data.directory().entries.len()
     ));
 
+    let font = load_font(&mut archives.fe, &mut report);
     let screens = load_screens(&mut archives.data, &mut report)?;
     let languages = load_languages(&mut archives.data, &mut report);
     let strings = load_strings(&mut archives.data, &languages, &mut report);
@@ -77,10 +81,42 @@ pub fn load(options: &Options) -> Result<Boot> {
     }
 
     Ok(Boot {
+        font,
         frontend,
         movie,
         report,
     })
+}
+
+/// Reads the front end's own font, falling back to the built-in glyphs.
+///
+/// A missing or undecodable font is not fatal: the menu still draws, in the 5x7
+/// approximation, and the report says which one is on screen. That matters more
+/// than it sounds - the two look very different, and a silent fallback would
+/// make a rendering bug indistinguishable from a loading one.
+fn load_font(fe: &mut oag_assets::Archive, report: &mut Vec<String>) -> crate::font::Atlas {
+    let name = oag_assets::pulse::names::DEFAULT_FONT;
+    match fe
+        .read_name(name)
+        .map_err(|e| e.to_string())
+        .and_then(|blob| oag_formats::fnt::Font::parse(&blob).map_err(|e| e.to_string()))
+    {
+        Ok(font) => {
+            let atlas = crate::font::Atlas::from_font(&font);
+            report.push(format!(
+                "font {name}: {}x{} atlas, {} glyphs, line height {}",
+                font.width,
+                font.height,
+                font.glyphs.len(),
+                font.line_height
+            ));
+            atlas
+        }
+        Err(why) => {
+            report.push(format!("font {name} unavailable ({why}); drawing with 5x7"));
+            crate::font::Atlas::build()
+        }
+    }
 }
 
 fn load_screens(data: &mut oag_assets::Archive, report: &mut Vec<String>) -> Result<Screens> {

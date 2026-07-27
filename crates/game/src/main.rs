@@ -530,7 +530,13 @@ impl Stage {
         video_format: Option<VideoFormat>,
         trace: bool,
     ) -> Result<Self> {
-        let renderer = Renderer::new(&gpu.device, &gpu.queue, gpu.config.format, video_format)?;
+        let renderer = Renderer::new(
+            &gpu.device,
+            &gpu.queue,
+            gpu.config.format,
+            video_format,
+            loaded.font.clone(),
+        )?;
         Ok(Self::Frontend(Box::new(FrontendStage {
             renderer,
             frontend: loaded.frontend,

@@ -1,21 +1,22 @@
-//! A small bitmap font, written for this project.
+//! The text atlas: the game's own font when the disc has one, ours when it does
+//! not.
 //!
-//! # Why not the game's own font
+//! # Two sources, one shape
 //!
-//! `FE.wad` holds five `.fnt` files and their **metrics decode cleanly**: a
-//! codepoint table, one 18-byte record per glyph giving its box in a texture
-//! atlas, and a 4bpp palette-indexed atlas whose declared size matches to the
-//! byte. All five files validate against each other. See
-//! `docs/formats/fnt.md`.
+//! [`Atlas::from_font`] builds this from a decoded [`oag_formats::fnt::Font`] -
+//! the disc's real glyphs, real boxes and real advances. [`Atlas::build`] is the
+//! fallback: 5x7, uppercase only, written for this project, and meant to look
+//! like the approximation it is.
 //!
-//! What is *not* resolved is the atlas's **pixel layout**. Read literally it is
-//! noise, and none of the PSP swizzle variants tried recovers glyph shapes. That
-//! is the same wall `.mip` textures hit, recorded in `docs/formats/psp-texture.md`,
-//! and it is one problem, not two: resolving it fixes both.
+//! Both produce one 8-bit coverage plane with a fully opaque patch for solid
+//! fills, and a per-character [`Cell`] carrying its own size and advance, so the
+//! renderer draws either without knowing which it has.
 //!
-//! So the menu draws with the glyphs below until then. They are 5x7, uppercase
-//! only, and mine. That is a visible approximation and it is meant to look like
-//! one.
+//! The real atlas is coverage-only on purpose. Its palette is a 16-level alpha
+//! ramp over a single RGB - white in the three menu fonts, black in the two HUD
+//! ones - so the colour carries no information the vertex colour does not
+//! already supply, and dropping to one channel keeps the existing pipeline.
+//! See `docs/formats/fnt.md`.
 //!
 //! # Folding, and the letter that disappeared
 //!
@@ -29,6 +30,10 @@
 //! The set now carries the Latin-1 accented capitals these five languages need,
 //! with the base letter compressed into six rows so the diacritic has one. They
 //! read slightly squat next to their neighbours, which is what a 5x7 cell costs.
+
+use std::collections::BTreeMap;
+
+use oag_formats::fnt;
 
 /// Glyph width in pixels.
 pub const GLYPH_WIDTH: u32 = 5;
@@ -506,13 +511,28 @@ const GLYPHS: &[(char, [&str; 7])] = &[
     ),
 ];
 
-/// Where a glyph sits in the atlas.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Where a glyph sits in the atlas, and how much room it takes.
+///
+/// The size and advance travel with the cell because a real font's glyphs are
+/// not all one size; the built-in set fills them in with its fixed 5x7 cell so
+/// the renderer has one path.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cell {
     /// Left edge in atlas pixels.
     pub x: u32,
     /// Top edge in atlas pixels.
     pub y: u32,
+    /// Width in atlas pixels.
+    pub width: u32,
+    /// Height in atlas pixels.
+    pub height: u32,
+    /// How far the pen moves after drawing, in pixels.
+    ///
+    /// A real font's boxes share `v0` across an atlas row and are cut to the
+    /// row's height, so the glyph's position within the line is already baked
+    /// into the box and a quad drawn at the line's top edge lands correctly.
+    /// There is no separate bearing to apply.
+    pub advance: f32,
 }
 
 /// The glyph atlas: one 8-bit coverage byte per pixel.
@@ -526,6 +546,16 @@ pub struct Atlas {
     pub coverage: Vec<u8>,
     /// The fully opaque texel used to draw solid rectangles.
     pub solid: Cell,
+    /// Distance between baselines in pixels, for callers laying out rows.
+    pub line_height: f32,
+    /// Real glyphs keyed by codepoint, empty for the built-in set.
+    ///
+    /// A `BTreeMap` rather than a hash map so the iteration order is stable;
+    /// nothing here feeds the simulation, but determinism by default is cheaper
+    /// than remembering where the exception was.
+    glyphs: BTreeMap<char, Cell>,
+    /// Whether this came off the disc.
+    real: bool,
 }
 
 impl Atlas {
@@ -553,18 +583,77 @@ impl Atlas {
             }
         }
 
-        let solid = Cell {
-            x: GLYPHS.len() as u32 * CELL,
-            y: 0,
-        };
-        coverage[(solid.y * width + solid.x) as usize] = 0xff;
+        let solid = solid_patch(&mut coverage, width, GLYPHS.len() as u32 * CELL, 0);
 
         Self {
             width,
             height,
             coverage,
             solid,
+            line_height: CELL as f32,
+            glyphs: BTreeMap::new(),
+            real: false,
         }
+    }
+
+    /// Builds the atlas from one of the disc's own fonts.
+    ///
+    /// The coverage plane is the atlas's palette **alpha**, one byte per pixel,
+    /// with one extra row appended to hold the opaque patch solid fills sample.
+    /// The `.fnt` block is exactly its own pixels with no slack, so there is
+    /// nowhere in it to borrow a texel from.
+    #[must_use]
+    pub fn from_font(font: &fnt::Font) -> Self {
+        let width = u32::from(font.width);
+        let source_height = u32::from(font.height);
+        // One extra row for the solid patch, and the patch is 2x2 so linear
+        // filtering cannot pull a transparent neighbour into a solid fill.
+        let height = source_height + 2;
+        let mut coverage = vec![0u8; (width * height) as usize];
+
+        for y in 0..source_height {
+            for x in 0..width {
+                coverage[(y * width + x) as usize] = font.alpha_at(x as usize, y as usize);
+            }
+        }
+        let solid = solid_patch(&mut coverage, width, 0, source_height);
+
+        let mut glyphs = BTreeMap::new();
+        for glyph in &font.glyphs {
+            let Some(ch) = char::from_u32(u32::from(glyph.codepoint)) else {
+                continue;
+            };
+            glyphs.insert(
+                ch,
+                Cell {
+                    x: u32::from(glyph.u0),
+                    y: u32::from(glyph.v0),
+                    width: u32::from(glyph.width),
+                    height: u32::from(glyph.height),
+                    advance: f32::from(glyph.advance),
+                },
+            );
+        }
+
+        Self {
+            width,
+            height,
+            coverage,
+            solid,
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "line heights are 10 to 25 pixels"
+            )]
+            line_height: font.line_height as f32,
+            glyphs,
+            real: true,
+        }
+    }
+
+    /// Whether these glyphs came off the disc rather than out of this file.
+    #[must_use]
+    pub fn is_real(&self) -> bool {
+        self.real
     }
 
     /// The cell for `ch`, folding case and then accents.
@@ -588,11 +677,27 @@ impl Atlas {
             _ => ch,
         };
 
+        if self.real {
+            // Try the character as written first: a real font carries lower
+            // case and accents of its own, so folding before looking would
+            // throw away glyphs the disc actually has.
+            return self
+                .glyphs
+                .get(&ch)
+                .or_else(|| self.glyphs.get(&folded))
+                .or_else(|| self.glyphs.get(&base_letter(ch)))
+                .or_else(|| self.glyphs.get(&base_letter(folded)))
+                .copied();
+        }
+
         let find = |c: char| GLYPHS.iter().position(|(g, _)| *g == c);
         let index = find(folded).or_else(|| find(base_letter(folded)))?;
         Some(Cell {
             x: index as u32 * CELL,
             y: 0,
+            width: GLYPH_WIDTH,
+            height: GLYPH_HEIGHT,
+            advance: (GLYPH_WIDTH + 1) as f32,
         })
     }
 }
@@ -620,8 +725,32 @@ pub fn base_letter(ch: char) -> char {
 /// Width of `text` in pixels at scale 1, counting only glyphs that exist.
 #[must_use]
 pub fn measure(atlas: &Atlas, text: &str) -> f32 {
-    let count = text.chars().filter(|&c| atlas.cell(c).is_some()).count();
-    (count as u32 * (GLYPH_WIDTH + 1)) as f32
+    text.chars()
+        .filter_map(|c| atlas.cell(c))
+        .map(|cell| cell.advance)
+        .sum()
+}
+
+/// Writes the opaque patch solid fills sample, and returns its cell.
+///
+/// Two by two rather than a single texel so that linear filtering, which a real
+/// antialiased font wants, cannot pull a transparent neighbour into a fill.
+fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
+    for dy in 0..2 {
+        for dx in 0..2 {
+            let at = ((y + dy) * width + x + dx) as usize;
+            if let Some(texel) = coverage.get_mut(at) {
+                *texel = 0xff;
+            }
+        }
+    }
+    Cell {
+        x,
+        y,
+        width: 2,
+        height: 2,
+        advance: 0.0,
+    }
 }
 
 #[cfg(test)]
