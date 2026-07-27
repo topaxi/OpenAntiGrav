@@ -86,6 +86,15 @@ struct Survey {
     header_words: BTreeMap<u32, usize>,
     padding: BTreeMap<usize, usize>,
     max_coord: f32,
+    /// Widest axis of any one file's union-of-collidable bounding box, and which
+    /// entry it came from.
+    ///
+    /// The sweep-and-prune packing covers a 2048-unit **window**; `max_coord`
+    /// says whether raw world coordinates fit that window centred on the origin,
+    /// and this says whether they would fit it centred anywhere. See
+    /// `docs/formats/collision.md`.
+    max_span: f32,
+    max_span_entry: usize,
     non_neutral_scalars: usize,
     /// Class IDs, other than the five known ones, whose payload nevertheless
     /// satisfies the closure check. Expected to be empty.
@@ -107,6 +116,10 @@ impl Survey {
         println!("  payload first word, by node: {:x?}", self.header_words);
         println!("  alignment padding, by node: {:?}", self.padding);
         println!("  largest coordinate: {}", self.max_coord);
+        println!(
+            "  widest per-file collidable span: {} (entry {})",
+            self.max_span, self.max_span_entry
+        );
         println!("  non-neutral vertex scalars: {}", self.non_neutral_scalars);
         println!(
             "  other class IDs whose payload closes as collision: {:x?}",
@@ -180,6 +193,34 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
                 if geometry.padded_len() == payload.len() && geometry.vertex_count() > 2 {
                     *into.false_positives.entry(node.class_id).or_default() += 1;
                 }
+            }
+        }
+
+        // Union box of everything collidable in this one file, for `max_span`.
+        // `Cage` is excluded because it is not collidable, matching what the
+        // broadphase would actually be asked to hold.
+        let mut lo = [f32::MAX; 3];
+        let mut hi = [f32::MIN; 3];
+        let mut any = false;
+        for node in &found {
+            if node.kind == SurfaceKind::Cage {
+                continue;
+            }
+            for mesh in &node.geometry.meshes {
+                for v in &mesh.vertices {
+                    any = true;
+                    for axis in 0..3 {
+                        lo[axis] = lo[axis].min(v[axis]);
+                        hi[axis] = hi[axis].max(v[axis]);
+                    }
+                }
+            }
+        }
+        if any {
+            let span = (0..3).fold(0.0f32, |m, axis| m.max(hi[axis] - lo[axis]));
+            if span > into.max_span {
+                into.max_span = span;
+                into.max_span_entry = index;
             }
         }
 

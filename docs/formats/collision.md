@@ -227,6 +227,11 @@ on PS2 - and left it at "both cannot be right as stated". **Every track has now
 been measured**, with `oag-view --collision` over both discs, and the answer is
 sharper than a contradiction.
 
+Both numbers below are measured over the **union of all collidable classes in one
+file**, which is the set the *world-level* broadphase would hold. The second,
+per-mesh level packs a single mesh's endpoints, and a mesh is far smaller - 32
+vertices or so - so nothing here says anything about that level.
+
 | Environment | Reach from origin | Widest span | Over ±1024 | PSP | PS2 |
 | --- | ---: | ---: | :-: | :-: | :-: |
 | `01_Track` | 884.6 | 1321.7 | | yes | yes |
@@ -257,17 +262,24 @@ longest edge of the collidable bounding box.
    `08_Track` (PS2); they are ordinary track collision geometry and nothing more
    exotic.
 2. **Not one track exceeds 2048 in span.** The widest is `10_Track` at
-   **2026.6**, which fills 99% of the packing's 2048-unit range and clears it with
-   21 units to spare.
+   **2026.6057**, which fills 98.96% of the packing's 2048-unit range and clears
+   it by 21.4 units.
+
+   That second fact is **exhaustive, not a sample of named files**. The
+   collision ground-truth test now walks every `.vex` entry of both discs by
+   index - 1,038 files and 189 collision nodes on PS2, 340 and 130 on PSP,
+   which is every collision node either disc ships - and reports the widest
+   per-file collidable span it finds. It is 2026.6057 on both, because
+   `10_Track` is on both. Nothing anywhere on either disc is wider.
 
 A designer working to a 2048-unit budget is the only reading that puts a track at
 99% of exactly that number by accident. So the conflict resolves in favour of the
 packing being right and the *input* to it not being world space:
 
-> **The broadphase packs coordinates relative to some origin of its own** - the
-> world's bounding-box minimum, or a per-level offset - not raw world
-> coordinates. Every shipped track fits the 2048-unit window; none of them fits it
-> *centred on the world origin*.
+> **If the packing reading is right, its input cannot be raw world space.** The
+> broadphase must subtract an origin of its own - the world's bounding-box
+> minimum, or a per-level offset - before packing. Every shipped track fits the
+> 2048-unit window; not one of them fits it *centred on the world origin*.
 
 That is a **falsifiable prediction, not a determination**: nothing here has read
 the code. What it does is turn "both cannot be right" into a specific thing to
@@ -282,12 +294,20 @@ Two smaller findings from the same survey:
 - **The collision geometry is identical across platforms.** All twelve
   environments present on both discs report the same reach and the same span to
   the decimal. The PS2 exclusives are `08`, `11`, `12` and `15`.
-- **A track's four variants share one collision set.** `track.vex`,
+- **A track's variants share one collision set.** `track.vex`,
   `track_reversed.vex`, `zone_track.vex` and `zone_track_reversed.vex` report
-  identical geometry, so the 40 PSP and 54 PS2 track files carry only 12 and 16
-  distinct collision sets. The single exception is PS2 `11_Track`, whose
-  `zone_track` pair reaches 1132.0 against the `track` pair's 1129.2 - worth
-  knowing before assuming the variants are interchangeable.
+  identical geometry, so the 40 PSP and 55 PS2 named track files carry only 12
+  and 16 distinct collision sets. The single exception is PS2 `11_Track`, whose
+  zone variants reach 1132.0 against the plain pair's 1129.2 - worth knowing
+  before assuming the variants are interchangeable.
+- **There is a fifth variant name.** [track data](track.md) lists four;
+  `Data\Environments\11_Track\track_zone.vex` exists on the PS2 disc as well,
+  found by hashing candidate names against the archive's directory rather than by
+  mining. That brings the named PS2 track files to 55 against 59 `Floor
+  Collision` nodes, so **four collision-bearing PS2 files still have no recovered
+  name**. They are covered by the exhaustive by-index sweep above, so they cannot
+  change the conclusion, but the per-track table is a table of *named* files and
+  does not claim to be all 59.
 
 Reproduce with `oag-view --collision <track.vex>`, which prints both numbers and
 flags each bound separately; see [oag-view](../tools/oag-view.md#collision).
