@@ -178,13 +178,34 @@ fn report_collision(nodes: &[oag_formats::collision::CollisionNode]) {
 
     if let Some((lo, hi)) = collision::bounds_of(nodes, collision::is_collidable) {
         let reach = (0..3).fold(0.0f32, |m, i| m.max(lo[i].abs().max(hi[i].abs())));
+        let span = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+        let widest = span.iter().fold(0.0f32, |m, &s| m.max(s));
         println!("  collidable extent: {reach:.1} units from the origin at furthest");
-        // Not a rendering concern, but this is the only place the number gets
-        // measured, so say so rather than leaving it in a screenshot.
+        println!(
+            "  collidable span:   {:.1} x {:.1} x {:.1}, widest axis {widest:.1}",
+            span[0], span[1], span[2]
+        );
+
+        // Not a rendering concern, but this is the only place the numbers get
+        // measured, so say so rather than leaving them in a screenshot.
+        //
+        // Both are printed because they answer different questions about the
+        // sweep-and-prune packing. `((int)coord + 0x400) * 2` in 12 bits covers a
+        // **2048-unit window centred on the origin**, so the reach is what decides
+        // whether raw world coordinates fit, and the span is what decides whether
+        // coordinates *relative to the geometry's own box* would. A track that
+        // busts the first and clears the second is evidence the broadphase does
+        // not pack world space.
         if reach > 1024.0 {
             println!(
-                "  NOTE: past +/-1024, which the sweep-and-prune reading in \
-                 docs/formats/collision.md says packed ids cannot express."
+                "  NOTE: reach is past +/-1024, so raw world coordinates do not \
+                 fit the packing in docs/formats/collision.md."
+            );
+        }
+        if widest > 2048.0 {
+            println!(
+                "  NOTE: the widest span is past 2048, so no origin choice makes \
+                 this track fit the packing."
             );
         }
     }
