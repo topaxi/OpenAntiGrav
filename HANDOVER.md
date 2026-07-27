@@ -707,6 +707,54 @@ per-section timed impulse scaled by two never-read per-speed-class tables
 (`0x08b36bc0`, `0x08b36bd0` on PSP). Reading those tables is the concrete
 next step, and it's Ghidra work, not further physics-crate tuning.
 
+## The engine mystery is resolved: it was never a missing force, it's a missing gate
+
+Following its own advice from the previous section - re-verify the
+already-implemented writers, or find a call `Ship_UpdateCraft` makes that was
+never enumerated at all - the agent did the second, exhaustively, and closed
+the whole investigation.
+
+**`Ship_UpdateCraft`'s complete callee set has now been read directly from
+disassembly, not inferred from a step table, and there is no unaccounted
+force term in it.** Every hover/engine/steering/pitch/airbrake/drag/grip/
+weathervane/damping function is named, plus three previously-unnamed
+`Body_*` helpers (`Body_SetMass`, `Body_ClearAccumulators`,
+`Body_ClearVelocity`) - none of which is a force term. **The "12x too little
+resistance" framing was itself wrong**, not just its candidates.
+
+**What's actually there is an early return in `Ship_UpdateEngine`
+(`0x0884c634`) that this crate's `engine()` doesn't implement**: with a flag
+bit clear, `craft+0x290 > 0` zeroes the throttle state and returns with **no
+thrust and no lift produced at all**, confirmed by reading the branch-likely
+delay slots directly (confidence 88). `craft+0x290` is a **collision stun
+timer** - `Ship_ApplyLateralGrip` early-returns on the same condition (so a
+stunned craft also loses lateral grip and slides), and
+`Ship_ApplyCollisionImpulse` (`0x0883f274`) is what arms it: every contact
+impulse applied to the body adds `+0.5` seconds to the timer, and repeated
+contact keeps re-arming it (confidence 85).
+
+**That closes the arithmetic exactly.** With the real disc-confirmed `Engine`
+values, the force law gives `T ~= 58` at the recorded speed - correct,
+confirmed twice over now - and *nothing* in the fully-enumerated callee list
+supplies that much resistance. But a craft inside the 0.5-second stun window
+has `T = 0`, leaving only quadratic drag and rolling resistance
+(`0.005 * 24^2 + 2.0 = 4.88`) to decelerate it gently and monotonically -
+which matches the real capture's measured `-0.21` units/s^2 almost exactly,
+for a craft mass near 23 (a check this session had no other way to reach, not
+an independently recovered constant - worth remembering if it's ever cited
+elsewhere).
+
+**So: `ENGINE_OUTPUT_SCALE`, the doubling, `Engine.amount`/`accelcap`, and the
+drag coefficients were never wrong, at any point in this whole investigation.**
+What's missing is a piece of *collision response* - a stun timer armed by
+contact impulses that gates both thrust and lateral grip - not a physics
+constant or an unread force term. It hasn't been implemented in Rust yet;
+that's the actual, final remaining step, and it belongs alongside the
+wall-collision-response code from earlier this session, not inside
+`engine.rs` alone, since arming the timer is a collision-response
+responsibility even though checking it gates the engine. Handed back to
+implement and verify against the real capture.
+
 ## The track-section force lead is dead - it was a speed-boost pad, not resistance
 
 Following its own next step from the previous section, the same agent read
