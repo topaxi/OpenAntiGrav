@@ -150,11 +150,18 @@ simulation seeded from the same first row and given the same held thrust:
 
 | Field | First tick outside tolerance | Max error | Trend |
 | --- | ---: | ---: | --- |
+| `speed` | 0 | 188 units/s | growing |
 | `grounded` | 1 | 1.0 (exact field) | bounded |
 | `velocity` | 1 | 211 units/s | growing |
-| `position` | 3 | 423 units | growing |
 | `orientation.forward` | 1 | 1.52 rad | growing |
+| `speed_cached` | 2 | 188 units/s | growing |
+| `position` | 3 | 424 units | growing |
 | `throttle`, `brake`, `steer`, airbrakes | - | 0 | exact |
+
+`speed` leads the report and should be read past: it is out at tick 0, which is
+the *seeded* row, so it cannot be a physics result. It is the `+0x398` mismatch
+described below - the recording disagreeing with our model of what that column
+holds. The physics headline is the tick 1 group.
 
 **The ship falls through the floor at the first step.** `grounded` is 1.0 on all
 200 recorded ticks and 0.0 on all but tick 0 of ours - and tick 0 is the seeded
@@ -178,12 +185,28 @@ travel. Running the comparison the other way (`--basis right-up-back`) is worse
 on every field - 2.80 rad of orientation error against 1.52, 512 units of
 position against 423 - which is the switch doing its job.
 
-**`speed` at body `+0x398` is not the velocity's length.** It runs a steady 3.67 %
-high (ratio 1.0367, sd 0.0026 over 200 ticks). `speed_cached` on the craft *is*
-the length, one tick stale. Our simulated column writes the length, so a
-comparison shows this as a permanent ~3.7 % divergence on `speed` and near-zero
-on `speed_cached`: that is the recording disagreeing with our model of it, not a
-physics error, and it stays visible rather than being scaled away.
+**Neither speed column is the velocity's length.** `speed_cached` on the craft is
+**the previous tick's `dot(velocity, forward)`** - the forward-projected speed.
+Over the 200 ticks it matches that to a mean of 3.3e-6 and a max of 9.7e-6, which
+at a speed of 24 is the capture's own `%.7g` rounding and therefore an exact
+identity; against a stale *magnitude*, which an earlier and shorter pass recorded
+and this supersedes, it is out by a mean of 0.077. The two readings only separate
+when the ship is not travelling straight ahead - through a corner they differ by
+the cosine of the slip angle - which is why a straight-line capture could be read
+either way.
+
+`speed` at body `+0x398` is neither: it runs 3.67 % above the length (ratio
+1.0367, sd 0.0026) and 4.02 % above the forward projection (1.0402, sd 0.0028),
+and those spreads overlap, so this capture cannot say which it is a scaling of,
+nor separate a constant factor from a constant offset across a 3 % speed range.
+
+A run writes the projection for `speed_cached`, which is what was measured, and
+the length for `speed`, which is the closer of two readings that this capture
+cannot separate. So a comparison carries a permanent ~3.5 % divergence on `speed`
+from tick 0 onwards. That is the recording disagreeing with our model of it
+rather than a physics error, and it is left visible rather than scaled away -
+but it does mean `speed` heads the first-divergence line while saying nothing
+about the force law.
 
 ## Not yet
 

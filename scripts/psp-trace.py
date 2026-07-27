@@ -54,10 +54,21 @@ CRAFT_FIELDS = [
 # **`speed` at +0x398 is not the velocity's own length**, which an earlier pass
 # recorded here and a real capture disproved: over 200 ticks of Talon's Junction
 # it runs a steady 3.67 % high (ratio 1.0367, sd 0.0026), about 0.86 units/s.
-# `speed_cached` on the craft *is* the velocity's length, one tick stale. What
-# +0x398 actually holds is not established, and the capture's own speed range is
-# only 3 %, so a constant offset and a constant factor cannot be told apart from
-# this data. Both columns are recorded; neither is assumed.
+# Nor is it the forward projection (ratio 1.0402, sd 0.0028) - the two candidates
+# are within each other's spread here, so this capture cannot tell them apart.
+# What +0x398 holds is not established, and the capture's own speed range is only
+# 3 %, so a constant offset and a constant factor cannot be separated either.
+#
+# `speed_cached` on the craft **is** the previous tick's `dot(velocity, forward)`
+# - the forward-projected speed, not the velocity's magnitude. Over the same 200
+# ticks it matches that to a mean 3.3e-6 and a max 9.7e-6, which is the CSV's own
+# `%.7g` rounding at a speed of 24 and therefore an exact identity; against the
+# stale magnitude it is out by a mean 0.077. A shorter pass recorded the
+# magnitude reading here, and this supersedes it. The distinction matters as soon
+# as the ship is not travelling straight ahead: sliding through a corner, the two
+# differ by the cosine of the slip angle.
+#
+# Both columns are recorded; neither is assumed.
 BODY_FIELDS = [
     ("right_x", 0x000), ("right_y", 0x004), ("right_z", 0x008),
     ("up_x", 0x010), ("up_y", 0x014), ("up_z", 0x018),

@@ -248,8 +248,11 @@ pub fn replay<R: Raycaster + ?Sized>(
 
     let mut buttons = Input::new();
     // Seeded from the recording so tick 0 agrees by construction; after that it
-    // is the previous tick's speed, which is what makes the field one tick stale
-    // in the original (199/199 on the capture it was measured on).
+    // is the previous tick's *forward-projected* speed, `dot(velocity, forward)`,
+    // which is what the original's own field was measured to hold - to a max of
+    // 9.7e-6 over 200 ticks, the capture's print rounding at that speed. Not the
+    // velocity's magnitude: the two only separate once the ship is sliding, where
+    // they differ by the cosine of the slip angle.
     let mut speed_cached = first.speed_cached;
     let mut out = Trace {
         frames: Vec::with_capacity(trace.len()),
@@ -268,7 +271,7 @@ pub fn replay<R: Raycaster + ?Sized>(
             speed_cached,
             options.basis,
         ));
-        speed_cached = state.body.linear_velocity.length();
+        speed_cached = state.body.linear_velocity.dot(state.body.forward());
 
         let snapshot = snapshot_for(recorded, &mut buttons, options.inputs);
         let controls = ship_controls(&snapshot);
@@ -500,6 +503,45 @@ mod tests {
         );
         let comparison = compare(&recorded, &simulated, &Tolerances::default());
         assert!(!comparison.diverged(), "{comparison}");
+    }
+
+    /// `speed_cached` is the previous tick's *forward-projected* speed, not the
+    /// previous tick's speed. A straight-line capture cannot tell those apart, so
+    /// this fixture puts the velocity across the nose, where the magnitude reading
+    /// would emit 22 and the projection emits nothing.
+    #[test]
+    fn speed_cached_is_the_forward_projection_and_not_the_magnitude() {
+        let across = Vec3::new(22.0, 0.0, 0.0);
+        // Aimed along +z (row 2 is the nose) while travelling along +x.
+        let recorded = Trace {
+            frames: (0..4)
+                .map(|tick| Frame {
+                    tick,
+                    dt: 1.0 / 60.0,
+                    row0: Vec3::X,
+                    up: Vec3::Y,
+                    forward: Vec3::Z,
+                    ..frame(across * (tick as f32 / 60.0), across)
+                })
+                .collect(),
+        };
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        // Tick 0 is seeded from the recording, so the first tick the replay
+        // computes for itself is tick 1.
+        assert!(
+            simulated.frames[1].speed_cached.abs() < 1e-3,
+            "{} is the magnitude, not the projection",
+            simulated.frames[1].speed_cached
+        );
+        // And the magnitude really is 22 here, so the two readings are separated
+        // by this fixture rather than merely agreeing on a small number.
+        assert!((simulated.frames[1].speed - 22.0).abs() < 1e-3);
     }
 
     /// Replaying the same recording twice must produce the same trace, or nothing
