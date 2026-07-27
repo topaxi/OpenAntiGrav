@@ -149,6 +149,40 @@
 0x08838d8c	function	HandlingXml_ParseExternalCameraClose	92	camera.md
 0x08880724	function	Camera_SetMode	82	camera.md
 
+# The generic XML reader: one scanning parser behind the front end, the handling
+# stats and the camera blocks. Structurally identical to the PS2's.
+0x0895379c	function	Xml_AttributeAsFloat	95	xml-reader.md
+0x08953b0c	function	Xml_NextAttribute	92	xml-reader.md
+0x089540a4	function	Xml_NextElement	92	xml-reader.md
+0x0895372c	function	Xml_AttributeNameIs	92	xml-reader.md
+0x08953a88	function	Xml_ElementNameIs	92	xml-reader.md
+0x08953930	function	Xml_AttributeAsBool	92	xml-reader.md
+0x08953ddc	function	Xml_OpenFile	92	xml-reader.md
+0x08953a50	function	Xml_FirstChildElement	90	xml-reader.md
+0x08953f78	function	Xml_GetRootElement	90	xml-reader.md
+0x08953ac0	function	Xml_BeginAttributes	90	xml-reader.md
+0x089538dc	function	Xml_AttributeAsString	90	xml-reader.md
+0x08953cdc	function	Xml_InitDocument	88	xml-reader.md
+0x08953764	function	Xml_AttributeValueIs	88	xml-reader.md
+0x08953878	function	Xml_AttributeAsInt	88	xml-reader.md
+0x089538a4	function	Xml_AttributeAsFloatLibc	85	xml-reader.md
+0x08953904	function	Xml_AttributeAsIntHex	85	xml-reader.md
+0x089539d8	function	Xml_AttributeAsOwnedString	85	xml-reader.md
+0x08953868	function	Xml_GetAttributeValue	85	xml-reader.md
+0x08954014	function	Xml_InternString	85	xml-reader.md
+0x08953a14	function	Xml_InitElement	85	xml-reader.md
+0x08953650	function	Xml_ParseIntHexOrDecimal	82	xml-reader.md
+0x08953cd0	function	Xml_SetElementRange	82	xml-reader.md
+0x08953fc0	function	Xml_CloseDocument	78	xml-reader.md
+0x08953870	function	Xml_GetAttributeName	78	xml-reader.md
+0x08953a24	function	Xml_DestroyElement	75	xml-reader.md
+0x089732d8	function	strcasecmp	92	xml-reader.md
+0x08973770	function	strrchr	90	xml-reader.md
+0x0897274c	function	atoi	90	xml-reader.md
+0x08972730	function	atof	88	xml-reader.md
+0x089792a0	function	strtol	85	xml-reader.md
+0x08974930	function	strtod	82	xml-reader.md
+
 # Import stubs are not listed here. They are derived from the binary's own NID
 # tables by scripts/resolve-psp-imports.py, which verifies every name against
 # the NID it must hash to; see imports.md.

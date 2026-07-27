@@ -33,8 +33,10 @@ use oag_trace::{Trace, compare, replay};
 /// named. The same default `oag-game` races on.
 const DEFAULT_TRACK: &str = r"Data\Environments\01_Track\track.vex";
 
-/// The team whose `handlingstats.xml` is read unless another is named.
-const DEFAULT_TEAM: &str = "Feisar";
+/// The team whose `handlingstats.xml` is read unless another is named. The
+/// same default `oag-game` races on, and the team the reference scenario in
+/// `docs/reverse-engineering/ppsspp-debugger.md` uses.
+const DEFAULT_TEAM: &str = "Assegai";
 
 /// Our own fixed timestep, for `--fixed-dt`. ADR-0007.
 const FIXED_DT: f32 = 1.0 / 60.0;

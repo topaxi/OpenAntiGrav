@@ -91,14 +91,23 @@ parser is `Movie_ParseAttributes` at `0x088ba284`, confidence **95**:
 | `localised` | - | Selects the filename suffix |
 | `stoppowersave` | `+0x308` | |
 
-Booleans are true when the value is `"true"` **or** `"1"`.
+The parser's first act is `Xml_ElementNameIs(elem, "Values")`, returning 0 if
+that fails - so **`<Movie>` does require a `Values` child**; attributes are not
+read off the `<Movie>` tag itself.
+
+The widget does **not** use the shared `Xml_AttributeAsBool`
+(see [xml-reader.md](xml-reader.md)). It reads each flag with
+`Xml_AttributeAsString` into a 64-byte stack buffer and runs its own
+`strcasecmp`, which is why the spellings here are narrower than the shared
+accessor's five: `autoredirect`, `autostart`, `repeat` and `stoppowersave` are
+true for `"true"` **or** `"1"`, while `sound` accepts only `"true"`.
 
 The filename is assembled at runtime:
 
 ```c
 copy(src, buf);
-if (localised is absent or "true") append(".PMF");
-else                               append("_US.PMF");
+if (localised == "true") append("_US.PMF");   /* case-insensitive */
+else                     append(".PMF");      /* absent, or anything else */
 ```
 
 So **the intro movie's filename is not in the executable**. It lives in the
@@ -168,5 +177,4 @@ state (`0x088e3938`), which starts playback immediately on entry.
 - ~~The `sceKernelLoadModule` thunk~~: `0x08a7738c`, one of the six
   `ModuleMgrForUser` stubs resolved by NID in [import stubs](imports.md).
 - The exact GU texture state in the render path.
-- Whether the parser requires a `Values` child element or accepts attributes
-  directly on `<Movie>`.
+- ~~Whether the parser requires a `Values` child element~~: it does, see above.

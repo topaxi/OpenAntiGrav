@@ -16,11 +16,12 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Camera views](camera.md) | The player-selectable in-race views and how SELECT cycles them |
 | [Engine, brakes, steering, pitch](engine.md) | The craft update frame, every control force term, and the complete handling parameter block |
 | [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |
+| [XML reader](xml-reader.md) | The one parser behind the front end, handling stats and camera blocks, and its exponent-blind float accessor |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
 
 ## Renames
 
-**Applied.** 426 symbols: 120 from the pages above, collected in
+**Applied.** 464 symbols: 158 from the pages above, collected in
 [names.tsv](names.tsv), plus 306 import stubs derived from the binary itself.
 
 ```sh
@@ -50,3 +51,4 @@ Nothing in this set scored below 70, so no `_q` names exist yet.
 | `0x0883a2f0` | `Handling_ParseStats` | 88 | Placed all 32 handling parameters and found four are pre-scaled at load |
 | `0x08849618` | `Ship_UpdateCraft` | 82 | The craft frame: what order the force terms run in, and which read stale groundedness |
 | `0x0883c0cc` | `Camera_UpdatePlayerView` | 88 | The three player views, the SELECT cycle, and the sign convention of the on-disc camera offsets |
+| `0x0895379c` | `Xml_AttributeAsFloat` | 95 | The float accessor every handling and camera parameter goes through cannot read exponent notation, on this build as well as the PS2 |

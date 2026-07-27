@@ -147,6 +147,25 @@ carrier form** - in all 16 real files the attributes sit directly on their
 elements - so this is tolerance for a documented convention of the format, not a
 reading of the ship data.
 
+### Never emit scientific notation when regenerating one
+
+The float accessor the game reads every parameter in this file with is
+hand-rolled and **cannot read exponent notation**. It skips any character that
+is not a digit, `.` or `-` instead of stopping at it, so `1e-5` parses as `-15`
+and `1.5e3` as `-15.3`. There is no error and no clamp.
+
+This is confirmed on **both** builds - `Xml_AttributeAsFloat` at `0x0895379c`
+on the [PSP](../ghidra/functions/psp-pulse/xml-reader.md) and `0x00203868` on
+the [PS2](../ghidra/functions/ps2-pulse/xml-reader.md) - and on the PSP every
+`HandlingXml_Parse*` function calls it directly, so it is not something a
+future build might have fixed. A correct `strtod`-based accessor exists in the
+same parser, but nothing in this file goes through it.
+
+No shipped `handlingstats.xml` uses exponent notation, so nothing is broken
+today. It only matters for tooling: **a writer must format every value in plain
+decimal**, which also means it must not let a language's default float
+formatting fall back to `1e-5` for small magnitudes.
+
 ## Cross-check against the code
 
 The names here **independently confirm** the parameter block recovered from the

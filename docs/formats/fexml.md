@@ -97,8 +97,11 @@ Recovered from expanded files, not exhaustive:
 
 ## Parser behaviour worth knowing
 
-From [the PS2 reader](../ghidra/functions/ps2-pulse/xml-reader.md), and it
-applies to anything that writes these files as well as anything that reads them:
+From the reader itself, documented on both builds
+([PSP](../ghidra/functions/psp-pulse/xml-reader.md),
+[PS2](../ghidra/functions/ps2-pulse/xml-reader.md)) and structurally identical
+between them. It applies to anything that writes these files as well as anything
+that reads them:
 
 - **Element and attribute names are matched case-insensitively.**
 - **Nothing is escaped.** No entities, no CDATA; values are raw byte ranges, and
@@ -106,5 +109,14 @@ applies to anything that writes these files as well as anything that reads them:
 - **Values live in attributes.** Nothing in the reader looks at text between
   tags.
 - **The default float accessor does not understand exponent notation.** `1e-5`
-  parses as `-15`, silently. A second, `strtod`-based accessor exists and is
-  used by a minority of call sites.
+  parses as `-15`, silently: any character that is not a digit, `.` or `-` is
+  skipped rather than ending the number. **Confirmed on both builds** -
+  `0x0895379c` on the PSP, `0x00203868` on the PS2 - so this is not a
+  quirk of one port. A second, `strtod`-based accessor
+  (`Xml_AttributeAsFloatLibc`) exists on both, and on the PSP it is what the
+  front-end widget layer actually uses; the blind one is what the handling and
+  camera data go through. Never emit scientific notation into either.
+- **A `<code>` key outside `a`..`r` corrupts the document.** The dictionary
+  store does no range check while the two expansion sites do; the slot just past
+  `r` is the document's interned-string list head. Same on both builds. No
+  shipped file does it; a generated one could.

@@ -71,7 +71,14 @@ use oag_render::{mesh, mesh_render, track as track_render};
 pub const DEFAULT_TRACK: &str = r"Data\Environments\01_Track\track.vex";
 
 /// The team whose `handlingstats.xml` and model a race uses by default.
-pub const DEFAULT_TEAM: &str = "Feisar";
+///
+/// **Assegai, not Feisar** - chosen to match the reference scenario used for
+/// every PPSSPP capture this project has taken (Time Trial, Venom, Talon's
+/// Junction White, Assegai; see
+/// `docs/reverse-engineering/ppsspp-debugger.md`'s "reference scenario"
+/// section), so `just play --race`'s defaults and a captured trace are
+/// directly comparable without passing `--team`/`--class` every time.
+pub const DEFAULT_TEAM: &str = "Assegai";
 
 /// Turns the ship model's own facing into the body's.
 ///

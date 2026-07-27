@@ -21,7 +21,7 @@ Maintained as pages are added, sorted by subsystem.
 | --- | --- | --- |
 | WAD subsystem | [psp-pulse/wad-subsystem.md](psp-pulse/wad-subsystem.md) | [ps2-pulse/wad-subsystem.md](ps2-pulse/wad-subsystem.md) |
 | LZSS decoder | covered by the WAD page | [ps2-pulse/lzss.md](ps2-pulse/lzss.md) |
-| XML reader | not located | [ps2-pulse/xml-reader.md](ps2-pulse/xml-reader.md) |
+| XML reader | [psp-pulse/xml-reader.md](psp-pulse/xml-reader.md) | [ps2-pulse/xml-reader.md](ps2-pulse/xml-reader.md) |
 | Main loop | [psp-pulse/main-loop.md](psp-pulse/main-loop.md) | - |
 | Input | [psp-pulse/input.md](psp-pulse/input.md) | [ps2-pulse/input.md](ps2-pulse/input.md) |
 | Collision | [psp-pulse/collision.md](psp-pulse/collision.md) | - |
