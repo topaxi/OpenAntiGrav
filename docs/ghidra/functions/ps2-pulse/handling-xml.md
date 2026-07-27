@@ -129,20 +129,27 @@ PS2-only, and those two possibilities have different consequences for
 `docs/formats/handling-stats.md`.
 
 **`HandlingXml_ParseGlobal` (`0x0014df58`)** handles the `<Global>` sibling of
-`<Stats>`: a `<Class>`-keyed set of per-class scalars written to four separate
-`.bss` arrays (`0x0033c320`, `0x0033c330`, `0x0033c340`, `0x0033c350` and
-`0x0027e828`), plus three sub-elements dispatched to `0x0014e600` and one to
+`<Stats>`: a `<Class>`-keyed set of per-class values written to five separate
+`.bss` arrays, plus three sub-elements dispatched to `0x0014e600` and one to
 `0x0014e518`. Named at **82** - the dispatch shape is unambiguous, but what the
-five arrays feed was not traced, so nothing is claimed about their meaning.
+arrays feed was not traced, so nothing is claimed about their meaning.
+
+**Three of the five are floats and two are strings.** `0x0033c340`,
+`0x0033c350` and `0x0027e828` are written through `Xml_AttributeAsFloat`;
+`0x0033c330` and `0x0033c320` are written through
+`Xml_AttributeAsOwnedString` and therefore hold `char *` into
+document-owned allocations, not numbers. An earlier revision of this page called
+all five "per-class scalars", which was wrong; see
+[xml-reader.md](xml-reader.md) for how the two accessors differ.
 
 ## Not determined
 
-- **The XML reader itself.** `Handling_ParseStats` sits on a small family of
-  helpers around `0x00202d48`..`0x00203a80` (document open, first/next child,
-  element-name compare, first/next attribute, attribute-name compare, attribute
-  as float / as int / as string). They are obvious from use but were not
-  individually verified, so none is renamed. They are the cheapest remaining
-  win in this area and would unlock every other XML-driven subsystem at once.
+- ~~**The XML reader itself.**~~ Done: see [xml-reader.md](xml-reader.md). One
+  consequence lands directly on this page - `Xml_AttributeAsFloat`
+  (`0x00203868`), which every parser above uses, is hand-rolled and **does not
+  understand exponent notation**. `1e-5` in `HandlingStats.xml` would parse as
+  `-15`. No shipped value uses it, but a tool regenerating the file must not
+  emit it.
 - **Whether the PSP build has `<Misc>`.** See above.
 - **Nothing here was verified at runtime.**
 

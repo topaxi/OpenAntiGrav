@@ -16,6 +16,7 @@ form, and Ghidra's string search will return all three.
 | --- | --- |
 | [WAD subsystem](wad-subsystem.md) | Two copies of the name hash, mount, lookup, and the entry layout |
 | [LZSS decoder](lzss.md) | The decompressing stream: bit reader, ring, match encoding, and a dead encoder workspace |
+| [XML reader](xml-reader.md) | The parser every data-driven subsystem goes through, and the `<code>` short-name dictionary |
 | [Handling stats loader](handling-xml.md) | All 32 handling parameters, all 27 camera parameters, the five load-time scale factors |
 | [Input](input.md) | The abstract button layer, the four edge masks, per-player pad blocks |
 | [Camera views](camera.md) | The player-selectable in-race views and the SELECT cycle |
@@ -23,7 +24,7 @@ form, and Ghidra's string search will return all three.
 
 ## Renames
 
-**Applied.** 58 symbols, collected in [names.tsv](names.tsv). There is no
+**Applied.** 93 symbols, collected in [names.tsv](names.tsv). There is no
 `just` recipe for this set yet; run the script directly against a bridge with
 `SCES_547.48` open:
 
@@ -55,6 +56,7 @@ names but the agreements and the disagreements.
 | `size_in == size_out` is the outer test, not the compression flag | [wad-subsystem.md](../psp-pulse/wad-subsystem.md) | It is the only test `Wad_Open` makes when choosing a stream |
 | The 8-byte WAD header and 16-byte entries, `{hash, offset, size_out, size_in}` | [formats/wad.md](../../../formats/wad.md) | `Wad_MountArchive` reads exactly that shape |
 | The whole LZSS bit layout: 13-bit absolute position, 4-bit length, `+3` bias, 8192-byte ring, cursor at 1, MSB first | [formats/lzss.md](../../../formats/lzss.md) | `Lzss_Decode` reads the same fields in the same order; an independent transcription of it agrees byte for byte with ours. See [lzss.md](lzss.md) |
+| The `<code>` short-name dictionary: per file, 18 codes, keyed on the first letter | [formats/fexml.md](../../../formats/fexml.md) | `Xml_OpenFile` builds an 18-slot table on the document from a `code` element, keyed by `name[0] - 'a'`. Inferred from data there, read off the parser here. See [xml-reader.md](xml-reader.md) |
 | The abstract button layer and its four edge masks | [input.md](../psp-pulse/input.md) | Same raw masks, same indices, same `pressed = held & ~last` derivation |
 | Three player camera views cycling `OPT_INT` -> `OPT_CLOSE` -> `OPT_FAR` on SELECT | [camera.md](../psp-pulse/camera.md) | Same three literals, same rotation, same hide-own-ship flag pattern |
 
@@ -86,9 +88,9 @@ rule or because the hypothesis is untested.
 
 | Address | Hypothesis | Conf |
 | --- | --- | ---: |
-| `0x00202d48`..`0x00203a80` | The XML reader family: document open, first/next child, element-name compare, first/next attribute, attribute-name compare, attribute as float / int / string. Obvious from use in `Handling_ParseStats`, individually unverified. Naming these would unlock every XML-driven subsystem at once | 60 |
+| `0x0014e600` / `0x0014e518` | The two `<Global>` sub-element parsers `HandlingXml_ParseGlobal` dispatches to. Shape is clear, contents unread | 55 |
 | `0x00257740` | The stored (uncompressed) WAD stream constructor | 55 |
-| `0x001fd618` / `0x001fd6b8` / `0x001fd8c0` | A name-hashed resource registry: find-by-hash, load-file-and-register, register-from-memory, over a singly linked list rooted at `0x00284840`. It is what calls `Resource_HashName`; it is not the WAD directory, so mapping these three onto PSP `Wad_*` names would be wrong | 60 |
+| `0x001fd8c0` | Registers an already-loaded buffer in the resource registry beside `Resource_Find` / `Resource_Load`. Same node layout, but no caller was traced | 60 |
 | `0x001fed88` / `0x001fede8` / `0x001fee90` / `0x001fef20` | A third CRC-32 family with its own table at `0x003025e0`: an **uppercase**-folding string hash, a raw string hash, and a two-word hash. Not the WAD hash (wrong fold direction); what uses it was not traced | 55 |
 | `0x0014f108` | Returns the current camera view setting, from `g_settings` or from a per-player array depending on a global that reads like an attract-mode switch | 55 |
 | `0x00201f30` / `0x0010aec8` | The pad read. A thin shim over a library call; no import table was resolved for this binary | 50 |

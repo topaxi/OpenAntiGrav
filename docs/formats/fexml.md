@@ -35,6 +35,20 @@ silently corrupt most files, so the expander uses each file's own.
 
 This is a size optimisation, not encryption.
 
+**Confirmed in the reader.** Everything above was inferred from the data; the
+PS2 executable's XML reader does exactly it. `Xml_OpenFile` scans the first
+element, and if it is named `code` it stores each attribute's value into an
+**18-slot** table on the document object, keyed by the **first character** of the
+attribute name - so `as="Values"` keys on `a` and the trailing `s` is not read.
+`Xml_NextElement` and `Xml_NextAttribute` then expand any name that is exactly
+one character in `a`..`r`. The table lives on the document, so per-file scope is
+not a convention but the only thing expressible. Details, including three traps
+for anyone writing these files, are on
+[the PS2 XML reader page](../ghidra/functions/ps2-pulse/xml-reader.md).
+
+That the 18 slots in the reader match the 18 codes counted across `FEData.wad`
+by two unrelated routes is the strongest evidence on this page.
+
 ## Reading it
 
 ```sh
@@ -76,7 +90,21 @@ Recovered from expanded files, not exhaustive:
 
 - The full element and widget set. Each widget registers a name and a vtable in
   the binary, so the complete list is recoverable from the registration sites.
-- Whether the PS2 release uses the same schema. Its archives decompress now, and
-  the first PS2 blob decoded happened to be a `<Screen name="Top">`, so at least
-  the shape matches.
+- ~~Whether the PS2 release uses the same schema.~~ It does, at least for the
+  shortening: the PS2 reader parses `<code>` exactly as described above. Whether
+  the *element* vocabulary matches is still open.
 - How layout and anchoring are expressed.
+
+## Parser behaviour worth knowing
+
+From [the PS2 reader](../ghidra/functions/ps2-pulse/xml-reader.md), and it
+applies to anything that writes these files as well as anything that reads them:
+
+- **Element and attribute names are matched case-insensitively.**
+- **Nothing is escaped.** No entities, no CDATA; values are raw byte ranges, and
+  the parser NUL-terminates each one in place inside the loaded buffer.
+- **Values live in attributes.** Nothing in the reader looks at text between
+  tags.
+- **The default float accessor does not understand exponent notation.** `1e-5`
+  parses as `-15`, silently. A second, `strtod`-based accessor exists and is
+  used by a minority of call sites.
