@@ -378,11 +378,12 @@ pub struct Batch {
     pub vertices: Vec<Vertex>,
     /// The vertex count the batch header declares, at `+0x04`.
     ///
-    /// The same as `vertices.len()` on PSP. On PS2 it is the count of the draw
-    /// the batch *describes*, while `vertices` holds what its VIF packet
-    /// actually unpacks, and a strip split across chunks unpacks two extra per
-    /// boundary to continue itself. Kept because the relationship between the two
-    /// is an invariant worth being able to check from outside; see
+    /// **Not always `vertices.len()`.** On PSP the two agree except where a batch
+    /// uses its alternate block, which is counted at `+0x06` instead. On PS2 this
+    /// is the count of the draw the batch *describes*, while `vertices` holds
+    /// what its VIF packet unpacks: a strip split across chunks unpacks two extra
+    /// per boundary to continue itself. Kept because the relationship between the
+    /// two is an invariant worth being able to check from outside; see
     /// [`vif_vertices`].
     pub declared_vertex_count: u16,
     /// The batch's own bounding box in model units.
@@ -939,7 +940,13 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
                     f32_at(payload, at + off + 8),
                 ]
             };
-            let vertices = vif_vertices(payload, at + header_size, payload_size, vertex_type)?;
+            let vertices = vif_vertices(
+                payload,
+                at + header_size,
+                payload_size,
+                vertex_type,
+                primitive_type,
+            )?;
             (vertices, (corner(0x20), corner(0x30)))
         } else {
             let layout = VertexLayout::from_vertex_type(vertex_type)?;
@@ -1110,20 +1117,33 @@ const PS2_COLOUR_ONE: u16 = 128;
 /// `UNPACK` per attribute at a fixed VU address: position at 4, colour at 5,
 /// texture coordinates at 6, normals at 7. A chunk is one draw, so a strip
 /// longer than VU1 memory allows is split across several - by **repeating two
-/// vertices**, which both continues the strip and keeps its winding parity, and
-/// which is why the decoded vertex count exceeds the batch header's by two per
-/// extra chunk.
+/// vertices**, which is why the decoded vertex count exceeds the batch header's
+/// by two per extra chunk.
+///
+/// # Why the chunks are concatenated
+///
+/// Returning one vertex list, rather than the chunks separately, is only correct
+/// because of a second property: **every chunk but the last has an even vertex
+/// count**, on all 89,302 strip batches of the PS2 disc. A strip's winding
+/// alternates per triangle, so the first triangle of the next chunk starts at an
+/// even global index and hardware order and concatenated order agree; the two
+/// repeated vertices become zero-area triangles at the seam. An odd non-final
+/// chunk would wind every triangle after it backwards - inside-out geometry
+/// wherever the batch is culled - so it is refused here rather than drawn, and
+/// the day one turns up is the day this needs per-chunk triangle generation.
 ///
 /// # Errors
 ///
 /// [`Error::Vif`] if the command stream does not walk, and [`Error::Packet`] if
 /// the framing does not close, an attribute array is missing or has the wrong
-/// shape, or the attributes present disagree with the vertex type.
+/// shape, the normal array disagrees with the vertex type, or a split strip's
+/// chunk has an odd vertex count.
 pub fn vif_vertices(
     payload: &[u8],
     at: usize,
     payload_size: usize,
     vertex_type: u16,
+    primitive_type: u8,
 ) -> Result<Vec<Vertex>> {
     let base = at;
     let packet = |what: &'static str| Error::Packet { what, at: base };
@@ -1162,6 +1182,8 @@ pub fn vif_vertices(
 
     let mut out = Vec::new();
     let mut chunk: [Option<crate::vif::Unpack>; 4] = [None, None, None, None];
+    // Lengths of the chunks emitted so far, for the parity check below.
+    let mut lengths: Vec<usize> = Vec::new();
     let slot = |address: u16| match address {
         VU_POSITION => Some(0usize),
         VU_COLOUR => Some(1),
@@ -1182,14 +1204,24 @@ pub fn vif_vertices(
             crate::vif::Code::Mscnt | crate::vif::Code::Mscal(_)
                 if chunk.iter().any(Option::is_some) =>
             {
+                let before = out.len();
                 emit_vif_chunk(payload, start, &chunk, want_normal, &mut out, &packet)?;
+                lengths.push(out.len() - before);
                 chunk = [None, None, None, None];
             }
             _ => {}
         }
     }
     if chunk.iter().any(Option::is_some) {
+        let before = out.len();
         emit_vif_chunk(payload, start, &chunk, want_normal, &mut out, &packet)?;
+        lengths.push(out.len() - before);
+    }
+
+    if primitive_type == PRIM_TRIANGLE_STRIP
+        && lengths.iter().rev().skip(1).any(|length| length % 2 != 0)
+    {
+        return Err(packet("a split strip has a chunk with an odd vertex count"));
     }
 
     Ok(out)

@@ -224,11 +224,19 @@ consecutive.
 Three consequences worth knowing:
 
 - **A chunk is one draw.** A strip longer than VU1 memory allows is split across
-  several, and the split **repeats two vertices** - which continues the strip and
-  keeps its winding parity even. 44,967 of the 89,302 strip batches are split, so
-  their decoded vertex count exceeds the batch header's by two per boundary. That
-  is not an error, and concatenating the chunks is correct: the repeats become
-  zero-area triangles at the seams.
+  several, and the split **repeats two vertices**. 44,967 of the 89,302 strip
+  batches are split, so their decoded vertex count exceeds the batch header's by
+  two per boundary. That is not an error, and concatenating the chunks is
+  correct: the repeats become zero-area triangles at the seams.
+
+  Correct, though, for a reason worth stating rather than assuming: **every chunk
+  but the last has an even vertex count**, on all 89,302 strip batches. A strip's
+  winding alternates per triangle, so an even chunk length means the next chunk's
+  first triangle starts at an even index and the concatenation winds the way the
+  hardware would. One odd non-final chunk would invert every triangle after it -
+  inside-out geometry wherever the batch is culled - so the decoder refuses that
+  case instead of drawing it, and the ground-truth run over the whole disc is
+  what says the case does not arise.
 - **Triangle lists use `V4_32` positions**, and the fourth float is a per-vertex
   flag in a repeating `1,1,0` pattern - the ADC/kick convention for drawing a
   list through strip hardware, suppressing the first two vertices of each

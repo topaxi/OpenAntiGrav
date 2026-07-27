@@ -29,7 +29,10 @@
 //! - The **vertex counts reconcile** with the batch header: a triangle list
 //!   unpacks exactly as many vertices as the header declares, and a strip
 //!   unpacks two extra per chunk boundary, which is how the hardware continues a
-//!   strip across a draw while keeping its winding parity.
+//!   strip across a draw. The decoder additionally refuses a split strip whose
+//!   non-final chunk has an odd vertex count, because concatenating the chunks
+//!   is only winding-correct while they are even; this run passing is the
+//!   evidence that none exists.
 //! - Where normals are present they are **unit length**, which is not something
 //!   an accidentally-correct address would produce.
 
