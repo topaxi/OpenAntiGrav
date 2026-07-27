@@ -186,3 +186,4 @@
 # Import stubs are not listed here. They are derived from the binary's own NID
 # tables by scripts/resolve-psp-imports.py, which verifies every name against
 # the NID it must hash to; see imports.md.
+0x08926da8	function	Texture_SwizzleForGe	90	../../../formats/fnt.md

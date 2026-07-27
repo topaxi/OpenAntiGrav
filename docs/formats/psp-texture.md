@@ -91,9 +91,11 @@ recognisable, previously-unseen artwork (the Pulse logo, an icon sheet) rather
 than noise. Per the [rubric](../reverse-engineering/confidence-rubric.md), that
 is data agreement rather than a runtime trace, so it caps at 94; the earlier 95
 predated the rubric saying so. The 4-bit nibble order (low nibble first) is
-**85**: the only 4bpp sample is a symmetric hexagon, which a mirrored decode
-would not visibly disturb, though its gradient bands are smooth where a swapped
-decode would comb them.
+**92**: the only 4bpp `.mip` is a symmetric hexagon, so a mirrored decode does
+not move the silhouette, but the comparison is decisive on inspection anyway -
+low nibble first gives smooth gradient bands where high nibble first combs every
+edge into one-pixel teeth. The [`.fnt`](fnt.md) atlas is a second, much larger
+4bpp corpus and uses the same order.
 
 ## Open questions
 
@@ -113,6 +115,14 @@ oag-wad extract data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad -o /tmp/fe 
 
 `Texture::looks_swizzled` remains as a triage heuristic for other archives, but
 it reports nothing in `FE.wad`.
+
+The **why** is now read out of the executable rather than assumed.
+`Texture_SwizzleForGe` (`0x08926da8`, documented on [`.fnt`](fnt.md)) converts a
+linear image into the GE's 16-byte by 8-row block layout in place, and
+`Texture_BindEmbeddedData` runs it on any texture whose `flags` bit 0 is clear,
+setting the bit afterwards. Linear on disc is therefore the rule, and the only
+exception found so far is the `.fnt` glyph atlas, which ships with that bit
+already set and so is stored swizzled.
 
 ### `unk_0x05` to `unk_0x08`
 

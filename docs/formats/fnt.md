@@ -1,18 +1,13 @@
 # Bitmap fonts (`.fnt`)
 
-**Status: partial.** The metrics are resolved and validated across all five
-fonts. The glyph atlas's **pixel layout is not**: read as documented it is
-noise, and no transform tried so far recovers glyphs from it. [PSP texture
-swizzling](psp-texture.md) answers only whether `.mip` pixel data is swizzled
-*in the file*: it is not. That page leaves open whether the PSP swizzles at
-upload time, which this project's renderer never needed to answer since it
-never uploads to real VRAM. So `.mip`'s resolved question is not a lead for
-`.fnt` here, but it does not rule out the two being the same underlying
-upload-time transform either — that is still open, on both sides.
+**Status: understood.** Metrics and the glyph atlas are both decoded,
+implemented in [`oag-formats::fnt`](../../crates/formats/src/fnt.rs) and
+validated across all five fonts: 863 glyphs, and every atlas renders as a
+recognisable character set - digits, upper and lower case, the accented Latin-1
+capitals the five shipped languages need, and the PSP button glyphs.
 
-Not implemented. Documented first so that whoever resolves the swizzle can
-implement both at once. Until then the front end draws with
-[its own 5x7 glyphs](../../crates/game/src/font.rs).
+The atlas resisted several passes of blind structural search. It was not a
+transform that was missing; it was **where the pixels start**.
 
 ## Where they are
 
@@ -61,100 +56,163 @@ Then, in order:
 +0x0d  u8[5] unknown; 0xff except one byte on some glyphs
 ```
 
-- **Atlas**, a 4bpp palette-indexed image in the [`.mip`](psp-texture.md) shape
-  but with its own header:
+- **Atlas**, below.
+
+## The atlas is a `.vex` Texture node, and its header is 64 bytes
+
+This is the correction that unlocked everything. The atlas is **not** shaped
+like a [standalone `.mip`](psp-texture.md). It is the same `Texture` node
+payload a [`.vex`](vex.md#embedded-textures) model embeds, and the pixel data
+does not begin until `+0x80`:
 
 ```text
-+0x00  u16   width
-+0x02  u16   height
-+0x04  u8    bits per pixel, 4
-+0x05  u8[3] flags, `01 01 00` in all five
-+0x08  u32   palette bytes, 64
-+0x0c  u32   pixel bytes, width * height / 2
-+0x10        palette, 16 RGBA8888 entries
-             indices, two per byte
++0x00  u16    width
++0x02  u16    height
++0x04  u8     bits_per_pixel, 4
++0x05  u8     mip_count, 1
++0x06  u8     flags; bit 0 means the texels are already swizzled
++0x07  u8     texture index
++0x08  u32    clut_size, 64
++0x0c  u32    texel_size, width * height / 2
++0x10  ptr    texels, zero at rest, patched at load
++0x14  ptr    clut, zero at rest, patched at load
++0x18  u8[40] zero
++0x40  clut, 16 RGBA8888 entries
++0x80  texels, width * height / 2 bytes
 ```
 
-## What pins the metrics down
+Every previous pass read the palette at `+0x10` and the pixels at `+0x50`, which
+is what a `.mip` header would imply. Both are **48 bytes early**. The palette
+comes out with 12 of its 16 entries fully transparent, and the pixels come out
+shifted by 96, which is a displacement no block-geometry sweep can undo - which
+is why sweeping every geometry from 4 to 128 bytes wide found "glyph-*like*
+structure but not glyphs" and stalled there for several passes.
 
-Four checks, all of which hold for all five fonts:
+## The texels are stored already swizzled
 
-1. **Every record's codepoint equals its codepoint-table entry.** 197, 205, 205,
-   128 and 128 records, all matching.
-2. **`u1 - u0 == width` and `v1 - v0 == height`** for every glyph. The box and
-   the size are stored separately and they agree.
-3. **The atlas header's own arithmetic**: `16 + palette_bytes + pixel_bytes`
-   accounts for the whole tail, with exactly 48 zero bytes of padding after it in
-   every one of the five.
-4. **Every glyph box lies inside the atlas**, tightly: maximum `u1` is 255 of 256
-   for the 256-wide fonts and 508 of 512 for `PulseHud`. A wrong width would put
-   glyphs outside.
+Unusually. Every other texture on the disc is stored **linearly** and swizzled by
+the game at load time; the `.fnt` atlas is the exception, and the file itself
+says so.
 
-The glyph count is `count` minus one when the codepoint table ends in `0x0000`,
-which is also `(atlas_offset - offset_table_end) / 18` in all five files. Two
-derivations, same answer.
+`Texture_SwizzleForGe` at `0x08926da8` converts a linear image into the GE's
+layout in place: 16-byte by 8-row blocks, emitted block-row major, then block
+column, then the 8 rows inside a block. `Texture_BindEmbeddedData`
+(`0x08927f28`) calls it **only when bit 0 of the node's `flags` byte at `+0x06`
+is clear**, and sets that bit afterwards so it never runs twice. Every font
+atlas ships with the bit already set, so the game skips the conversion and the
+data on disc is swizzled. A reader has to undo it.
 
-Confidence **92** for the metrics.
+Two nibbles per byte, **low nibble first**, the same order as `.mip`.
 
-## What is not resolved
+## Evidence
 
-**The atlas pixel layout.** Read literally, as 4bpp indices row-major, the atlas
-is noise in horizontal bands. Tried and rejected:
+### The block closes exactly, which is what pins the header at 64
 
-- PSP swizzle with 16-byte by 8-row blocks, both traversal orders and both
-  nibble orders. This produces glyph-*like* structure but not glyphs.
-- Every block geometry from 4 to 128 bytes wide and 1 to 32 rows tall, scored
-  two ways: what fraction of ink falls inside a declared glyph box, and vertical
-  coherence of ink. The best score was 0.80 and 0.68 respectively, where a
-  correct decode should be near 1.
-- Row de-interleaving at every stride from 2 to 32.
-- Column-major (transposed) reading, and a four-bitplane decomposition (each of
-  the 4 index bits as its own `w*h/8`-byte plane). Both score below the plain
-  linear read.
-- A Morton (Z-order) curve inside each block, block sizes 4 to 32 in both
-  dimensions. No better than the block-swizzle sweep above.
-- Re-scoring the whole block-swizzle sweep with ink weighted by the palette's
-  alpha channel instead of "index nonzero", on the theory that the boolean
-  oracle was drowning in low-alpha antialiasing dust. The ranking barely moves
-  (best 0.41 against a 0.39 linear baseline) and the best candidate still
-  renders as noise, so the boolean oracle was not the problem.
+```text
+0x40 + clut_size + texel_size == atlas block length
+```
 
-None of this narrows the search; it rules out two more transform families
-(bitplanes, Morton order) without finding the right one.
+with `clut_size == 4 << bits_per_pixel` and `texel_size == width * height / 2`,
+on all five fonts, **with no padding at all**. The older reading needed 48
+trailing bytes of unexplained padding to balance; there are none. The
+`4 << bpp` sizing is independently what `FUN_08928550` in the executable
+computes when it places the texel pointer after the CLUT.
 
-Two things make this worth a second look rather than a rewrite. The `<Font>`
-elements carry `borderExtendPixels="3"` and text widgets carry `RealGlow`, so ink
-outside the declared glyph box is expected and the first scoring metric is
-therefore capped below 1 even for a correct decode. And `.mip` textures have the
-**same** unresolved question, recorded in [psp-texture.md](psp-texture.md), so
-this is one problem rather than two.
+### The palette becomes a palette
 
-The `+0x14` field, 0 in three fonts and 4 in two, is the obvious candidate for a
-layout flag. The two fonts with 4 are also the two whose codepoint table has no
-terminator, so it may be a version marker instead.
+Read at `+0x40`, every one of the five fonts has **16 distinct alpha levels**
+spanning 0 to 254 - exactly the quantised antialiasing ramp a 4-bit font atlas
+needs. `pulse_text`, `Pulse_14` and `Pulse_20` are pure white with 16 alphas;
+`PulseHud` and `small` are black with 16 alphas, which is what an outlined HUD
+font looks like.
+
+Read 48 bytes early the same fonts have four or five distinct alphas and a dozen
+dead entries, and `small.fnt`'s brightest visible entry is alpha 26 of 255. No
+font can be drawn with that, and it is the tell that should have been followed
+sooner: the failure was never only in the pixel layout.
+
+### The glyph boxes bound real ink
+
+`u1 - u0` is the glyph's declared width, so the box is **tight horizontally** and
+both edge columns have to be inked. Across 823 glyphs at least 3x3:
+
+| Font | Glyphs checked | Edge columns inked |
+| --- | ---: | ---: |
+| `pulse_text` | 184 | 0.973 |
+| `Pulse_14` | 199 | 0.967 |
+| `Pulse_20` | 199 | 0.967 |
+| `PulseHud` | 123 | **1.000** |
+| `small` | 118 | **1.000** |
+
+The same measurement on the old reading gives 0.44 overall. The handful of
+misses are glyphs whose outermost antialiasing step quantises to the fully
+transparent palette entry.
+
+`v0`/`v1` are deliberately **not** tested the same way: they are shared by every
+glyph on an atlas row rather than tight to the ink, so a lowercase letter
+legitimately leaves the top rows of its box empty. That asymmetry is itself a
+finding - an earlier "ink inside the glyph box" metric that treated the vertical
+box as tight was capped well below 1 even for a correct decode.
+
+### It renders
+
+`PulseHud.fnt` decodes to legible `0123456789`, `abcdefghijklmnopqrst` and two
+rows of accented capitals; `Pulse_20.fnt` to the full ASCII range plus the PSP's
+L, R, START, SELECT, HOME and face-button glyphs. That is the same standard
+[`.mip`](psp-texture.md) was held to: previously-unseen artwork, not noise.
+
+Confidence: **94**. The size identity is exact and holds on all five fonts, the
+palette and edge-ink measurements are corpus-wide, and the swizzle direction and
+the `flags` bit are read directly out of the executable rather than inferred.
+Per the [rubric](../reverse-engineering/confidence-rubric.md) that is data
+agreement plus static reading rather than a runtime trace, which caps at 94.
+
+## Functions
+
+| Address | Name | Conf |
+| --- | --- | ---: |
+| `0x08926da8` | `Texture_SwizzleForGe` | 90 |
+
+`Texture_BindEmbeddedData` (`0x08927f28`) is documented in [`.vex`](vex.md).
+
+## Reproducing
+
+```sh
+just test-data      # runs crates/formats/tests/fnt_ground_truth.rs
+oag-wad extract 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad' -o /tmp/fe
+```
+
+The five `.fnt` entries are `00000`-`00004`. The test reports:
+
+```text
+  entry  0 256x128 lh=13 glyphs=197 checked=184 edge-ink=0.973
+  entry  1 256x256 lh=17 glyphs=205 checked=199 edge-ink=0.967
+  entry  2 256x256 lh=22 glyphs=205 checked=199 edge-ink=0.967
+  entry  3 512x256 lh=25 glyphs=128 checked=123 edge-ink=1.000
+  entry  4 256x128 lh=10 glyphs=128 checked=118 edge-ink=1.000
+alpha levels {16: 5}
+```
 
 ## Not determined
 
-- The atlas pixel layout, above.
+- **`+0x14`**, 0 in three fonts and 4 in two. The two with 4 are also the two
+  whose codepoint table has no terminator and the two whose palette is black
+  rather than white, so a version marker remains the best guess. It does not
+  affect decoding.
 - The five bytes at `+0x0d` of a glyph record. Mostly `0xff`; the space glyph has
   one `0x00`. Kerning is the guess.
-- Whether the palette is meaningful. Index 0 is transparent and the top indices
-  are white with varying alpha, which reads like an antialiasing ramp, but three
-  mid entries are opaque colours that a font should not need.
-- `+0x14`.
+- **Why the atlas ships swizzled when nothing else does.** The `flags` bit is a
+  general mechanism, not a font-specific one, so this is an asset-pipeline choice
+  rather than a format rule. No other blob on the disc has been found with the
+  bit set.
+- The `+0x18` field of the atlas header and the 40 zero bytes after the two
+  pointers. Reserved, on the evidence of being zero in all five.
 
-## Until the atlas is readable
+## Rendering it
 
-`oag-game` draws with a 5x7 font of its own, and how it *fails* matters as much
-as how it draws. An accented letter with no glyph used to be skipped, which cost
-the letter and not just the accent: the disc's `Français` came out as `FRANAIS`.
-
-The fold is now two steps, in order. Case first, over the whole of Latin-1 rather
-than ASCII, because `to_ascii_uppercase` leaves `ç` untouched and the lookup then
-misses. Then, for an accented letter with no glyph, the **base letter** stands in.
-Losing a letter changes a word; losing an accent only misspells it.
-
-The set carries the accented capitals these five languages need, with the base
-letter compressed into six of the seven rows so the diacritic has one. They read
-slightly squat, which is what a 5x7 cell costs, and it is one more reason to
-finish decoding the real atlas.
+`oag-game` still draws with [its own 5x7 glyphs](../../crates/game/src/font.rs);
+wiring the real atlas into the front end is a separate change from decoding it.
+That fallback matters less now, but how it *fails* is still worth keeping: an
+accented letter with no glyph folds to its base letter rather than being
+skipped, because losing a letter changes a word where losing an accent only
+misspells it. The disc's `Français` used to come out as `FRANAIS`.
