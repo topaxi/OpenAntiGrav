@@ -58,19 +58,29 @@ Decode the containers, then the assets inside them.
 **Exit criterion:** a Pulse track and a ship model render in `oag-view` from an
 unmodified disc image, on both the PSP and PS2 asset paths.
 
-**Met, on geometry.** PS2 mesh batches were the last gap: their vertex type is
-a VIF/GS packet, not the PSP's GU vertex array, and decoding it closed on an
-exact arithmetic invariant across all 757 PS2 `.vex` files (98,243 batches,
-11.8 million vertices, confidence 94) - the PS2 `01_Track` and Feisar ship
-come out the same size as their PSP counterparts (radius 831.02 vs 830.92,
-and 6.45 on both, respectively). See
+**Met.** PS2 mesh batches were the first gap: their vertex type is a VIF/GS
+packet, not the PSP's GU vertex array, and decoding it closed on an exact
+arithmetic invariant across all 757 PS2 `.vex` files (98,243 batches, 11.8
+million vertices, confidence 94) - the PS2 `01_Track` and Feisar ship come out
+the same size as their PSP counterparts (radius 831.02 vs 830.92, and 6.45 on
+both, respectively). See
 [PS2 vertex decoding](../formats/vex.md#ps2-the-vertex-type-still-names-the-attributes-but-the-data-is-a-vif-packet).
-`--mesh` renders both asset paths' geometry correctly now, but **not with
-visual parity**: PS2 models come out as featureless white silhouettes, both
-because PS2 textures still aren't located (unchanged open question) and
-because every PS2 chunk happens to carry vertex colour, which `oag-view`
-already treats as "prelit, skip the light rig" - so PS2 models are simply
-unlit rather than merely untextured.
+
+PS2 textures were the second gap, and are now also decoded: they are not
+embedded in `.vex` at all (that block is always length zero) but standalone
+GS-upload-packet entries in the PS2 WADs, PSMT8/PSMCT32-swizzled with a CSM1
+palette, confidence 94 across 5,348 real textures with every declared size
+closing against every other one.
+`oag-view --mesh ... --textures <hash>` now draws the PS2 Feisar ship in its
+own livery rather than a white silhouette. See
+[PS2 texture format](../formats/ps2-texture.md). **Both asset paths now render
+with visual parity, not merely geometric parity.**
+
+Two things are still open, neither blocking the exit criterion: **how the game
+finds a model's texture set** (it's an ordinarily-hashed WAD entry, and the
+name that hashes to it hasn't been recovered, so `oag-view` takes it
+explicitly rather than automatically) and **`PSMT4`-swizzled textures** (5 of
+5,348, refused rather than guessed at).
 
 **Where to start:** containers are done. `oag-wad` reads every archive on every
 disc, decompresses, resolves names by hash and renders textures to PNG. What

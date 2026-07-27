@@ -511,6 +511,59 @@ the physics investigation.
   it's compared against the seeded row; read past that line to the tick-1
   group above for the actual physics finding.
 
+## PS2 textures found, decoded, and rendering - M1's last real gap is closed
+
+A fresh agent (replacing the one that decoded PS2 mesh geometry, after it hit
+the same context-overflow failure noted above) went looking for where PS2
+textures actually live, since the embedded block in a PS2 `.vex` file is
+always length zero. **They are standalone WAD entries, never embedded**, and
+a model's set is additionally bundled into a small nested WAD (same 8-byte
+header, 16-byte entries as the outer archive) keyed by a hash that has not
+been recovered - so `oag-view` takes the entry explicitly for now rather than
+finding it automatically. Confidence **94**, on invariants checked across all
+**5,348** real PS2 textures across both WADs: a dimension declared twice (a
+packed log2 byte and explicit width/height words) agreeing on all 5,348;
+both GS `GIFtag`s declaring their own payload size in a way that has to match
+the dimensions' implied byte count, also 5,348 of 5,348; and the total blob
+size closing by formula on 5,348 of 5,350 candidates.
+
+**The format is a GS upload DMA packet, not a texture file** - `TRXPOS`/
+`TRXREG`/`TRXDIR` register writes framing two GIF transfers (texels, then
+palette), which is real PS2 hardware behaviour rather than anything specific
+to this game. Two findings worth knowing if this code is ever touched:
+
+- **The dimension words are stored height-first**, which only shows up because
+  `TRXREG` is a fixed, asymmetric function of the true dimensions - reading
+  width-first decodes every *square* texture correctly (most of them) and
+  scrambles every other one silently.
+- **Most textures (5,077 of 5,348) are 8-bit-indexed data pre-swizzled into
+  PSMT8 order so it can be uploaded as PSMCT32**, the standard PS2 trick for a
+  format the GS has no fast host-upload path for. The swizzle permutation is
+  only well-defined for widths of 16 and up, and **the widths where it breaks
+  down are exactly the widths the game switches to a direct linear transfer
+  for (4 and 8)** - the arithmetic predicting the same fallback set the data
+  actually uses is a corroboration, not a coincidence. The palette is in
+  `CSM1` order (a bit-swapped index within each group of 32) and alpha runs
+  0-128 rather than 0-255, the same GS convention already found for PS2 vertex
+  colour.
+
+**It renders.** `oag-view --mesh 'Data\Ships\Feisar\Ship.vex' --textures
+0xfc3f75cf` against `WADS2.WAD` draws the Feisar ship in its actual blue and
+yellow livery, team name legible, UVs landing on the right panels - not just
+"doesn't crash," but recognisable, correctly-oriented artwork. `docs/overview/roadmap.md`'s
+M1 exit criterion is updated from "met on geometry" to **met**, full stop, on
+both platforms.
+
+**Not determined, and not blocking**: the PSMT4 swizzle (5 of 5,348 textures,
+refused rather than guessed at); what the two unexplained fields at `+0x08`/
+`+0x0c` are (look like a GS memory allocation the file has no reason to fix,
+not needed to decode); and the texture-set lookup mechanism above. Also
+recorded as a live discrepancy: a PS2 `.vex`'s own `Texture` node payloads are
+stale PSP-shaped leftovers (mip counts, sizes) that disagree with the actual
+loaded texture entirely - the Feisar node claims 512x512 8bpp with 6 mips,
+the real entry is 256x256 with one level and the PS2 blobs carry no mips at
+all.
+
 Also landed in the same commit: `scripts/psp-trace.py` gained `--ship`/`--craft`
 selection, because a race breakpoints on `Ship_UpdateCraft` once per ship per
 tick with a different craft each time - the previous capture logic stopped at
