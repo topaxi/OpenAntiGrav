@@ -223,6 +223,62 @@ hundred samples along the whole spline finds collision geometry within one probe
 reach, so the spline decode and the collision decode agree about where the track is,
 and `--art` shows the art meshes agreeing with both.
 
+### Walls now push back
+
+A ship no longer passes through track walls. `oag_physics::wall` runs at the end of
+every `step`, after the integrator, and pushes the hull back out of anything it
+ended up inside, removing the inward velocity with restitution.
+
+Three parts of it are read off the original, and the rest is not:
+
+- **The hull is a box**, and its extents are the ship's own `<Misc width height
+  length/>`. No dimension here is invented.
+- **Restitution is `0.05` for `Wall`.** The file's `-1.0` for floors is a
+  **sentinel meaning "never bounce"**, not a coefficient - implementing the
+  literal would add energy on every contact - so it is carried as `Option<f32>`
+  and combined by a rule that forces zero when either side is a sentinel. See
+  [collision.md](../formats/collision.md#surface-types-and-the-restitution-sentinel).
+- **Contact generation is box-against-triangle**, as
+  [the RE page](../ghidra/functions/psp-pulse/collision.md#raycasts) records.
+
+**The response law itself is an implementation choice, not a reading.** The
+original's contact *generation* is documented - a per-triangle separating-axis
+reject then ten box sample points, into 0x40-byte slots - but what consumes those
+contacts is not, so this is an ordinary projection: push out by the penetration
+depth, then remove the inward velocity and give back `restitution` of it. M3's
+trace comparison is what will replace it. It runs as a projection after
+integration rather than as a force term deliberately: a contact spring stiff
+enough to stop a ship inside one frame is exactly the stiffness an integrator that
+evaluates force once and holds it across three sub-steps cannot carry.
+
+Four consequences worth knowing before reading the picture:
+
+- **Only walls respond.** `Floor` and `MagFloor` are skipped because the hover
+  spring owns them, and a lateral probe firing on a floor would shove a
+  hard-banked ship sideways off a surface it is meant to be resting on. `Reset` is
+  skipped one layer down by the raycaster. So in a real race the contact
+  restitution is always `0.05`.
+- **A swept query catches tunnelling.** Walls are zero-thickness single-sided
+  shells, so a ship that crosses one within a frame is past every hull probe. One
+  ray along the frame's displacement covers that case.
+- **No angular response.** Contacts apply at the centre of mass, so a glancing hit
+  slows a ship without yawing it. The original's contacts carry a point and would
+  produce torque.
+- **One contact per frame**, the deepest. The original keeps 128 slots, so a ship
+  wedged into a corner resolves one wall per frame rather than both.
+
+Pinned by unit tests in `oag_physics::wall`, by two end-to-end tests in
+[`ship_dynamics.rs`](../../crates/physics/tests/ship_dynamics.rs) - one that a ship
+flown at a wall stays on the near side and turns round, one that a flight over open
+floor is bit-identical with and without a distant wall - and, against real track
+geometry, by
+[`wall_collision_ground_truth.rs`](../../crates/game/tests/wall_collision_ground_truth.rs).
+That last one is the only test that sees a shipped wall's own winding, scale and
+triangle density; the synthetic ones author all three.
+
+Collision *response* beyond this - damage, the shield pool, the `Reset` respawn -
+is not implemented.
+
 ### The suspension was never the problem: the default track was
 
 This section previously recorded a growing oscillation about the hover target that
