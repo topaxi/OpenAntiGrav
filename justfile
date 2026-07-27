@@ -106,6 +106,11 @@ extract-iso image="data/images/pulse-psp-usa.chd" out="data/cache/pulse-psp-usa.
 trace *ARGS:
     uv run --with websocket-client python scripts/psp-trace.py {{ARGS}}
 
+# Compare our simulation against a captured trace: first divergent tick, and by
+# how much. See docs/tools/oag-trace.md.
+trace-compare *ARGS:
+    cargo run -q -p oag-trace -- {{ARGS}}
+
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
 build-allegrex *ARGS:

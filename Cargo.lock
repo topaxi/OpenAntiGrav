@@ -1176,6 +1176,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-trace"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "oag-assets",
+ "oag-core",
+ "oag-formats",
+ "oag-gameplay",
+ "oag-physics",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "oag-view"
 version = "0.1.0"
 dependencies = [

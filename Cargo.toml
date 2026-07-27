@@ -11,6 +11,7 @@ members = [
   "crates/physics",
   "crates/render",
   "crates/tools",
+  "crates/trace",
   "crates/view",
 ]
 

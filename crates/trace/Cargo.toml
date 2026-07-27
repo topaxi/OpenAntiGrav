@@ -1,0 +1,29 @@
+[package]
+name = "oag-trace"
+description = "Compares a simulation run against a per-tick trace captured from the original"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "oag-trace"
+path = "src/main.rs"
+
+# `oag-assets` and `oag-formats` are here for one reason: a comparison run needs
+# the same handling parameters and the same collision geometry the original was
+# running with, and both live on the player's own disc. Nothing in the comparison
+# engine itself touches a disc, so the library half stays usable without one.
+[dependencies]
+oag-assets.workspace = true
+oag-core.workspace = true
+oag-formats.workspace = true
+oag-gameplay.workspace = true
+oag-physics.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,623 @@
+//! The simulated side: run our own physics over a recording's scenario and emit
+//! a trace in the same shape.
+//!
+//! The run is seeded from the recording's **first row** - position, basis,
+//! velocity and the five control states - so the two start from the same state by
+//! construction and tick 0 is an initial condition rather than a measurement.
+//! Everything after that is ours.
+//!
+//! # Sampled before the step, not after
+//!
+//! `scripts/psp-trace.py` breaks on `Ship_UpdateCraft`'s entry, so a recorded row
+//! is the craft as the update *found* it. This module emits its row before
+//! stepping for the same reason. Emitting after the step instead would compare
+//! every field one tick out of phase, which looks exactly like a small systematic
+//! lag in the physics and is not one.
+//!
+//! # What cannot be replayed, and is not faked
+//!
+//! - **Angular velocity is not in the capture.** A run therefore starts with the
+//!   ship's rotation at rest, whatever the original was doing. On a capture that
+//!   begins in a corner this alone will diverge the orientation, so start captures
+//!   on a straight.
+//! - **Pitch is not in the capture** either: the craft's control block holds
+//!   `steer` but no second axis, so [`oag_physics::ShipControls::steer_y`] is
+//!   always zero here.
+//! - **The recorded control states are already ramped.** `steer`, `brake` and both
+//!   airbrakes are the original's *output* states, not the stick positions that
+//!   produced them, so [`Inputs::FromTrace`] feeds a ramped signal into our own
+//!   ramp and will lag on any tick where the input is moving. [`Inputs::Held`]
+//!   is the honest mode for a capture taken with `psp-trace.py --hold`, where the
+//!   input is constant and known.
+//!   A second, smaller reason to prefer it: a recorded row is read at the *entry*
+//!   of `Ship_UpdateCraft`, so its control states are what tick n-1 wrote, and
+//!   feeding them as tick n's input lags our ramps by one frame on top of the
+//!   double ramp. Under a constant held input neither effect exists.
+//! - **`time_since_landing` and the leap timer are not in the capture**, so a run
+//!   starts outside the landing window with no leap in progress.
+
+use oag_core::math::{Mat3, Quat, Vec3};
+use oag_gameplay::input::{Input, button};
+use oag_gameplay::{InputSnapshot, Ship, World, ship_controls};
+use oag_physics::controls::CONTROL_RANGE;
+use oag_physics::{Environment, Handling, Raycaster, ShipState};
+
+use crate::trace::{Frame, Trace};
+
+/// The world's generator seed.
+///
+/// Fixed and arbitrary: nothing in the recovered force law draws from the
+/// generator. The same value `oag_game::race::SEED` uses, written again rather
+/// than imported because nothing may depend on the composition root.
+pub const SEED: u64 = 1;
+
+/// How the recorded basis maps onto the body's axes.
+///
+/// The capture names its three rows `right`, `up` and `fwd`, and row 0 was
+/// **measured to be the ship's left**: holding left gives `steer = -96` and
+/// `+1.51 rad/s` about row 1, holding right the mirror of that, 199/199
+/// consistent, so forward rotates toward row 0 on a left turn. Confidence 84.
+///
+/// # Why the alternative reading flips two rows, not one
+///
+/// The recorded basis is positively oriented - `cross(row0, row1) = row2` on
+/// 200/200 ticks - while [`oag_physics::Body`]'s is not: `right x up = -forward`,
+/// because forward is `-Z`. So mapping one onto the other takes an **odd** number
+/// of sign flips, and a reading that flipped only row 0 would describe a
+/// reflection rather than a rotation. Row 0 and row 2 are both named from use
+/// sites that fix an axis but not its sign, so the coherent alternative to "row 0
+/// is left" is "row 0 is right and row 2 points backwards", which is what
+/// [`Self::RightUpBack`] is.
+///
+/// It is a switch rather than a constant because this is exactly the kind of
+/// finding a trace comparison exists to settle: run a comparison both ways and
+/// see which keeps the orientation inside `1e-4` rad.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Basis {
+    /// Rows are left, up and forward. The measured reading.
+    #[default]
+    LeftUpForward,
+    /// Rows are right, up and backward, as the capture's column names say -
+    /// except that row 2 must then be the tail, not the nose.
+    RightUpBack,
+}
+
+impl Basis {
+    /// The body's right, up and forward axes, given a recorded basis.
+    #[must_use]
+    pub fn to_body(self, row0: Vec3, row1: Vec3, row2: Vec3) -> (Vec3, Vec3, Vec3) {
+        match self {
+            Self::LeftUpForward => (-row0, row1, row2),
+            Self::RightUpBack => (row0, row1, -row2),
+        }
+    }
+
+    /// The recorded basis, given the body's axes. The inverse of
+    /// [`Self::to_body`], and an involution in both readings.
+    #[must_use]
+    pub fn to_rows(self, right: Vec3, up: Vec3, forward: Vec3) -> (Vec3, Vec3, Vec3) {
+        self.to_body(right, up, forward)
+    }
+}
+
+/// Where each tick's delta comes from.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum DeltaSource {
+    /// The recording's own `dt`, which is variable and averages `1/59.94`.
+    ///
+    /// The default, and the only one that makes a tick-for-tick comparison
+    /// meaningful: the original integrates the frame it actually got.
+    #[default]
+    Trace,
+    /// A fixed delta, for asking what our own 60 Hz timestep costs. ADR-0007.
+    Fixed(f32),
+}
+
+/// One fixed input, held for the whole run.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Held {
+    /// Abstract button indices, as a mask. See `oag_gameplay::input::button`.
+    pub buttons: u32,
+    /// Analog stick X.
+    pub stick_x: f32,
+    /// Analog stick Y.
+    pub stick_y: f32,
+    /// Left airbrake, `0..=1`.
+    pub airbrake_left: f32,
+    /// Right airbrake, `0..=1`.
+    pub airbrake_right: f32,
+}
+
+/// How the run is driven.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum Inputs {
+    /// Rebuild each tick's input from that tick's recorded control states.
+    ///
+    /// The general mode, and the approximate one: see the module docs on ramping.
+    #[default]
+    FromTrace,
+    /// Hold one input for the whole run, matching `psp-trace.py --hold`.
+    Held(Held),
+}
+
+/// How to replay a recording.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Options {
+    /// Where the input comes from.
+    pub inputs: Inputs,
+    /// Where the delta comes from.
+    pub dt: DeltaSource,
+    /// How the recorded basis maps onto the body's axes.
+    pub basis: Basis,
+}
+
+/// The ship state a recording's first row describes.
+///
+/// Mass is copied from the parameter set into the body because the force law
+/// reads `handling.physical.mass` and the integrator reads `body.mass`: they are
+/// one quantity stored twice and keeping them equal is the integrating layer's
+/// job, which here is this function. The inertia is left at its default, which is
+/// the same known gap `oag_game::race` records - nothing in the ship data says
+/// how the original builds a tensor.
+#[must_use]
+pub fn initial_state(frame: &Frame, handling: &Handling, basis: Basis) -> ShipState {
+    let mut state = ShipState {
+        thrust: frame.throttle,
+        brake: frame.brake,
+        steer: frame.steer,
+        airbrake_left: frame.airbrake_left,
+        airbrake_right: frame.airbrake_right,
+        grounded: frame.grounded,
+        grounded_prev: frame.grounded,
+        ..ShipState::default()
+    };
+    state.body.mass = handling.physical.mass;
+    state.body.position = frame.position;
+    state.body.linear_velocity = frame.velocity;
+    state.body.orientation = orientation_of(frame, basis);
+    state
+}
+
+/// The orientation a recorded basis describes.
+///
+/// [`oag_physics::Body`] holds an orientation, not a matrix, and its axes are
+/// `X = right`, `Y = up`, `-Z = forward`; so the rotation's third column is the
+/// negated forward, not the forward. Getting that wrong yaws the whole run by
+/// half a turn on tick 0, which is loud rather than subtle, and the test below is
+/// what keeps it that way.
+///
+/// The columns are re-orthonormalised on the way in - the capture writes seven
+/// significant digits, so a recorded basis arrives about `1e-6` off orthonormal
+/// and `Quat::from_mat3` wants a rotation.
+#[must_use]
+pub fn orientation_of(frame: &Frame, basis: Basis) -> Quat {
+    let (right, up, forward) = basis.to_body(frame.row0, frame.up, frame.forward);
+    let (right, up, forward) = (
+        right.normalize_or_zero(),
+        up.normalize_or_zero(),
+        forward.normalize_or_zero(),
+    );
+    if right == Vec3::ZERO || up == Vec3::ZERO || forward == Vec3::ZERO {
+        return Quat::IDENTITY;
+    }
+    // Gram-Schmidt off the forward axis, which is the one the ship is aimed
+    // along: rounding is shared out rather than concentrated in whichever column
+    // happened to be last.
+    let z = -forward;
+    let x = (right - z * right.dot(z)).normalize_or_zero();
+    if x == Vec3::ZERO {
+        return Quat::IDENTITY;
+    }
+    let y = z.cross(x);
+    debug_assert!(
+        (y - up).length() < 1e-2,
+        "the recorded basis is not the one this reading describes"
+    );
+    Quat::from_mat3(&Mat3::from_cols(x, y, z)).normalize()
+}
+
+/// Runs our simulation over a recording's scenario and returns a trace of it.
+///
+/// One ship in slot 0 of a [`World`], stepped through
+/// [`oag_physics::step`] exactly as `oag_game`'s race loop steps it - the input
+/// goes through [`oag_gameplay::ship_controls`], so "cross is thrust" is read out
+/// of the one place that says so rather than restated here.
+///
+/// The returned trace has one row per row of the input, in the same columns, and
+/// its tick numbers continue the recording's.
+#[must_use]
+pub fn replay<R: Raycaster + ?Sized>(
+    trace: &Trace,
+    handling: &Handling,
+    environment: &Environment,
+    raycaster: &R,
+    options: &Options,
+) -> Trace {
+    let Some(first) = trace.frames.first() else {
+        return Trace::default();
+    };
+
+    let mut world = World::new(SEED);
+    world.ships[0] = Ship {
+        physics: initial_state(first, handling, options.basis),
+        handling: *handling,
+        segment: 0,
+        active: true,
+    };
+    world.ship_count = 1;
+
+    let mut buttons = Input::new();
+    // Seeded from the recording so tick 0 agrees by construction; after that it
+    // is the previous tick's speed, which is what makes the field one tick stale
+    // in the original (199/199 on the capture it was measured on).
+    let mut speed_cached = first.speed_cached;
+    let mut out = Trace {
+        frames: Vec::with_capacity(trace.len()),
+    };
+
+    for (index, recorded) in trace.frames.iter().enumerate() {
+        let dt = match options.dt {
+            DeltaSource::Trace => recorded.dt,
+            DeltaSource::Fixed(dt) => dt,
+        };
+        let state = &world.ships[0].physics;
+        out.frames.push(frame_of(
+            state,
+            first.tick + index as u64,
+            dt,
+            speed_cached,
+            options.basis,
+        ));
+        speed_cached = state.body.linear_velocity.length();
+
+        let snapshot = snapshot_for(recorded, &mut buttons, options.inputs);
+        let controls = ship_controls(&snapshot);
+        let ship = &mut world.ships[0];
+        oag_physics::step(
+            &mut ship.physics,
+            &controls,
+            &ship.handling,
+            environment,
+            raycaster,
+            dt,
+        );
+        world.tick += 1;
+    }
+
+    out
+}
+
+/// One tick of our state, in the recording's columns.
+fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, basis: Basis) -> Frame {
+    let body = &state.body;
+    let (row0, up, forward) = basis.to_rows(body.right(), body.up(), body.forward());
+    Frame {
+        tick,
+        dt,
+        grounded: state.grounded,
+        throttle: state.thrust,
+        brake: state.brake,
+        steer: state.steer,
+        airbrake_left: state.airbrake_left,
+        airbrake_right: state.airbrake_right,
+        speed_cached,
+        row0,
+        up,
+        forward,
+        position: body.position,
+        velocity: body.linear_velocity,
+        speed: body.linear_velocity.length(),
+    }
+}
+
+/// The input snapshot for one tick.
+///
+/// The button edges are carried across ticks in `buttons` rather than rebuilt per
+/// tick, because a snapshot built from scratch would report every held button as
+/// freshly pressed on every tick.
+fn snapshot_for(recorded: &Frame, buttons: &mut Input, inputs: Inputs) -> InputSnapshot {
+    let (mask, snapshot) = match inputs {
+        Inputs::FromTrace => (
+            if recorded.throttle > 0.0 {
+                1u32 << button::CROSS
+            } else {
+                0
+            },
+            InputSnapshot {
+                stick_x: recorded.steer / CONTROL_RANGE,
+                stick_y: 0.0,
+                airbrake_left: recorded.airbrake_left / CONTROL_RANGE,
+                airbrake_right: recorded.airbrake_right / CONTROL_RANGE,
+                ..InputSnapshot::new()
+            },
+        ),
+        Inputs::Held(held) => (
+            held.buttons,
+            InputSnapshot {
+                stick_x: held.stick_x,
+                stick_y: held.stick_y,
+                airbrake_left: held.airbrake_left,
+                airbrake_right: held.airbrake_right,
+                ..InputSnapshot::new()
+            },
+        ),
+    };
+    buttons.begin_frame(mask);
+    InputSnapshot {
+        buttons: *buttons,
+        ..snapshot
+    }
+    .sanitised()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compare::{Field, Tolerances, compare};
+    use oag_physics::CollisionWorld;
+
+    /// How heavy a test ship is, and why.
+    ///
+    /// **There is no force-free configuration of the recovered force law.** Two of
+    /// its terms are constants rather than handling parameters - rolling
+    /// resistance is a flat `2.0` opposing motion
+    /// ([`oag_physics::passive::ROLLING_RESISTANCE`]) and the airborne quadratic
+    /// drag coefficient is `-0.002` - so an all-zero parameter set still
+    /// decelerates: at mass 1 that is 2 units/s^2, which is a third of a slow
+    /// ship's velocity every tick. They are *forces*, so mass is the only dial
+    /// that makes them negligible, and a ship this heavy accelerates at 2e-6
+    /// units/s^2: nothing over a two-second run.
+    ///
+    /// This is a property of the harness's fixtures, not a claim about any ship.
+    const TEST_MASS: f32 = 1e6;
+
+    /// A parameter set that is inert except for mass, so a replay is as close to a
+    /// free body as the force law allows. The real values are read off the
+    /// player's own disc.
+    fn inert_handling() -> Handling {
+        let mut handling = Handling::ZERO;
+        handling.physical.mass = TEST_MASS;
+        handling
+    }
+
+    fn frame(position: Vec3, velocity: Vec3) -> Frame {
+        Frame {
+            position,
+            velocity,
+            speed: velocity.length(),
+            speed_cached: velocity.length(),
+            ..Frame::default()
+        }
+    }
+
+    /// A straight coast at constant velocity, in the recording's own conventions.
+    ///
+    /// A recorded basis is positively oriented - `cross(row0, up) = forward` - so
+    /// a ship aimed along `+z` with up `+y` records row 0 along `+x`, and under
+    /// the measured reading that row 0 is the ship's **left**, making the body's
+    /// right `-x`. Getting this fixture wrong is the same mistake as getting the
+    /// reading wrong, so it is spelled out rather than eyeballed.
+    fn coasting(ticks: usize, dt: f32, velocity: Vec3) -> Trace {
+        Trace {
+            frames: (0..ticks)
+                .map(|tick| Frame {
+                    tick: tick as u64,
+                    dt,
+                    row0: Vec3::X,
+                    up: Vec3::Y,
+                    forward: Vec3::Z,
+                    ..frame(velocity * (tick as f32 * dt), velocity)
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn the_fixture_basis_is_positively_oriented_like_a_real_one() {
+        let frame = coasting(1, 1.0 / 60.0, Vec3::ZERO).frames[0];
+        assert!(frame.basis_is_positively_oriented(1e-6));
+    }
+
+    #[test]
+    fn the_recorded_basis_becomes_the_body_s_orientation() {
+        let recorded = coasting(1, 1.0 / 60.0, Vec3::ZERO).frames[0];
+        let orientation = orientation_of(&recorded, Basis::LeftUpForward);
+        // Row 0 is the ship's left, so the body's right is -x; row 2 is the nose,
+        // so the body's forward - which is its own -z - is +z.
+        assert!((orientation * Vec3::X - Vec3::NEG_X).length() < 1e-6);
+        assert!((orientation * Vec3::Y - Vec3::Y).length() < 1e-6);
+        assert!((orientation * Vec3::NEG_Z - Vec3::Z).length() < 1e-6);
+    }
+
+    /// Both readings of the basis must be rotations. One flipped row would be a
+    /// reflection, which `Quat::from_mat3` turns into silent nonsense rather than
+    /// an error - so the alternative reading flips two rows, and this is what says
+    /// so in arithmetic.
+    #[test]
+    fn both_readings_of_the_basis_are_proper_rotations() {
+        let recorded = coasting(1, 1.0 / 60.0, Vec3::ZERO).frames[0];
+        for basis in [Basis::LeftUpForward, Basis::RightUpBack] {
+            let q = orientation_of(&recorded, basis);
+            let (x, y, z) = (q * Vec3::X, q * Vec3::Y, q * Vec3::Z);
+            assert!(
+                (x.cross(y) - z).length() < 1e-5,
+                "{basis:?} is a reflection"
+            );
+            assert!((q.length() - 1.0).abs() < 1e-6);
+        }
+    }
+
+    /// The two readings disagree about which way the ship faces, which is the
+    /// whole point of being able to run a comparison both ways.
+    #[test]
+    fn the_two_readings_of_the_basis_face_opposite_ways() {
+        let recorded = coasting(1, 1.0 / 60.0, Vec3::ZERO).frames[0];
+        let measured = orientation_of(&recorded, Basis::LeftUpForward) * Vec3::NEG_Z;
+        let other = orientation_of(&recorded, Basis::RightUpBack) * Vec3::NEG_Z;
+        assert!((measured + other).length() < 1e-6, "{measured} vs {other}");
+    }
+
+    #[test]
+    fn a_frame_round_trips_through_a_reading_of_the_basis() {
+        for basis in [Basis::LeftUpForward, Basis::RightUpBack] {
+            let (right, up, forward) = basis.to_body(Vec3::X, Vec3::Y, Vec3::Z);
+            assert_eq!(
+                basis.to_rows(right, up, forward),
+                (Vec3::X, Vec3::Y, Vec3::Z)
+            );
+        }
+    }
+
+    #[test]
+    fn a_replay_starts_exactly_where_the_recording_starts() {
+        let recorded = coasting(8, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        assert_eq!(simulated.len(), recorded.len());
+        assert_eq!(simulated.frames[0].position, recorded.frames[0].position);
+        assert_eq!(simulated.frames[0].velocity, recorded.frames[0].velocity);
+        assert_eq!(simulated.frames[0].tick, recorded.frames[0].tick);
+        assert!((simulated.frames[0].row0 - recorded.frames[0].row0).length() < 1e-6);
+    }
+
+    /// A near-free body is the harness's own self-check: if *this* diverges, the
+    /// bug is in the harness rather than in the physics. See [`TEST_MASS`] for why
+    /// "near".
+    #[test]
+    fn a_coasting_ship_tracks_a_straight_line_recording() {
+        let recorded = coasting(120, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        let comparison = compare(&recorded, &simulated, &Tolerances::default());
+        assert!(!comparison.diverged(), "{comparison}");
+    }
+
+    /// Replaying the same recording twice must produce the same trace, or nothing
+    /// the harness reports means anything. `docs/architecture/determinism.md`.
+    #[test]
+    fn a_replay_is_reproducible() {
+        let recorded = coasting(60, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let run = || {
+            replay(
+                &recorded,
+                &inert_handling(),
+                &Environment::default(),
+                &CollisionWorld::new(),
+                &Options::default(),
+            )
+        };
+        assert_eq!(run(), run());
+    }
+
+    /// Sampling after the step instead of before it is the mistake this pins: it
+    /// shifts every row by one tick, which reads as a lag in the physics.
+    #[test]
+    fn rows_are_sampled_before_the_step_not_after() {
+        let dt = 1.0 / 60.0;
+        let velocity = Vec3::new(0.0, 0.0, 22.0);
+        let recorded = coasting(4, dt, velocity);
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        // Row 1 must hold one tick of travel, not two and not none.
+        let travelled = simulated.frames[1].position - simulated.frames[0].position;
+        assert!((travelled - velocity * dt).length() < 1e-5, "{travelled}");
+    }
+
+    #[test]
+    fn a_held_input_ignores_what_the_recording_says_the_controls_were() {
+        let mut recorded = coasting(4, 1.0 / 60.0, Vec3::ZERO);
+        for frame in &mut recorded.frames {
+            frame.throttle = 100.0;
+        }
+        let options = Options {
+            inputs: Inputs::Held(Held::default()),
+            ..Options::default()
+        };
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &options,
+        );
+        // Tick 0 is the seeded initial condition, so the recording's throttle is
+        // still there; from tick 1 the held input - nothing - is what drives it.
+        assert_eq!(simulated.frames[0].throttle, 100.0);
+        assert_eq!(simulated.frames[1].throttle, 0.0);
+    }
+
+    #[test]
+    fn a_trace_derived_input_carries_the_recorded_throttle_through() {
+        let mut recorded = coasting(4, 1.0 / 60.0, Vec3::ZERO);
+        for frame in &mut recorded.frames {
+            frame.throttle = 100.0;
+        }
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        assert!(simulated.frames.iter().all(|f| f.throttle == 100.0));
+    }
+
+    #[test]
+    fn an_empty_recording_replays_to_an_empty_trace() {
+        let simulated = replay(
+            &Trace::default(),
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        assert!(simulated.is_empty());
+    }
+
+    /// The whole harness is worthless if it cannot say *when* a run went wrong, so
+    /// this drives a real divergence through it: gravity in the parameter set that
+    /// the recording's straight line does not have.
+    #[test]
+    fn a_physics_difference_shows_up_as_a_dated_divergence() {
+        let recorded = coasting(120, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let mut handling = inert_handling();
+        handling.physical.normal_gravity = 9.8;
+        handling.physical.flight_gravity = 9.8;
+        let simulated = replay(
+            &recorded,
+            &handling,
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        let comparison = compare(&recorded, &simulated, &Tolerances::default());
+        let divergence = comparison
+            .first_divergence
+            .clone()
+            .expect("gravity must show");
+        assert!(
+            divergence.tick > 0,
+            "tick 0 is the seeded initial condition"
+        );
+        assert_eq!(
+            comparison.field(Field::Position).trend.verdict,
+            crate::compare::TrendVerdict::Growing,
+            "a constant acceleration is a systematic error, not a bounded one"
+        );
+    }
+}
