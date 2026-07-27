@@ -241,10 +241,25 @@ listed as not determined on both pages. If that is what this is, both expression
 are correct in the original's own frame, nothing is a typo, and a reimplementation
 in a right-handed frame must flip every cross product inherited from this path.
 
-**That is a falsifiable prediction: the next cross-product term recovered from
-the craft path should need the same flip.** Checking it is cheap and it would
-settle the handedness question as a side effect. This is the most valuable open
-thread in the repository right now.
+**That was a falsifiable prediction, and this pass falsified the mechanism behind
+it.** Measured off a running race: `cross(row0, row1) = row2` exactly on 200 of
+200 ticks, so the original's basis is positively oriented under the ordinary
+component-wise cross product - the same arithmetic we use. There is no
+frame-handedness difference available as the common cause of those two signs.
+
+What the same measurements did settle is sharper and more useful. Holding left
+gives `steer = -96` and `+1.51 rad/s` about row 1; holding right gives `+96` and
+`-1.42`; 199/199 and 0/199 consistent, mirror-symmetric in sign and magnitude, so
+it is steering rather than collision. Two consequences: **row 0 is the left
+direction, not the right one** - it is named from use sites that fix the axis but
+not its sign, and a reimplementation mapping it onto `+x = right` steers
+backwards and puts the lateral grip term the wrong way with it - and any
+reading of the angular accumulators now has a constraint to satisfy, namely that
+`yaw = steer * Turning.amount` into local `.y` must come out as `-k * steer`
+about row 1, `k` about `0.0155` at 22 units/s. If those two torque terms really
+do need flipping, the sign lives in how accumulators are applied to the body, not
+in the coordinate frame. See
+[engine.md](docs/ghidra/functions/psp-pulse/engine.md).
 
 Scored 84, not 85, and the reasoning is worth copying: the arithmetic admits no
 third reading, but neither leg of the rubric's 85-94 band applies, because the

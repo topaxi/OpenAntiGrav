@@ -198,8 +198,59 @@ accumulator to the body.
 
 Row conventions, established by cross-checking three independent uses (the
 raycast direction, the `|dot(v, row2)|` speed scalar, and the lateral grip term's
-`dot(v, row0)`): **row 0 is right, row 1 is up, row 2 is forward.** Handedness
-and units are still not determined.
+`dot(v, row0)`): **row 0 is right, row 1 is up, row 2 is forward.** Units are
+still not determined; handedness now is, and the naming of row 0 does not
+survive it.
+
+### The basis is positively oriented, and row 0 points left
+
+Two measurements off a running race, and they constrain the coordinate question
+that [physics](../../../physics/README.md) and the
+[roadmap](../../../overview/roadmap.md) both carry as open.
+
+**`cross(row0, row1) = row2` exactly, on 200 of 200 sampled ticks**, with
+`dot(cross(row0, row1), row2) = 1.000000` throughout. The transform is a proper
+rotation and the ordered triple is positively oriented **under the ordinary
+component-wise cross product** - the same arithmetic a reimplementation uses. So
+there is no component-level handedness difference between the original's basis
+and ours to flip anything. Confidence **95**.
+
+**Steering rotates the ship the other way from its own sign.** Holding left and
+holding right, one after the other from clean restarts, thrust held in both:
+
+| Held | mean `craft+0x2c0` | mean yaw about row 1 | agreement |
+| --- | ---: | ---: | --- |
+| left | `-96.44` | `+1.51 rad/s` | 199/199 ticks positive |
+| right | `+96.55` | `-1.42 rad/s` | 0/199 ticks positive |
+
+where yaw is `dot(cross(fwd_t, fwd_t+1), up) / dt`. The mirror symmetry in both
+sign and magnitude is what rules out collision or track camber as the cause.
+So the measured law is `yaw_rate = -k * steer`, `k` about `0.0155 rad/s` per unit
+of steer at roughly 22 units/s. Confidence **90**.
+
+Two things follow, and the second matters more than the first.
+
+1. **`craft+0x2c0` is signed, left negative, and it exceeds 100** - values of
+   `-108` were seen. The `0..=100` control range is the input's, not this field's,
+   which is consistent with this page's own `yaw = (steer + craft+0x2e4) * amount`
+   and its added steering bias.
+2. **Turning left rotates forward toward `+row0`.** Read in a right-handed frame
+   with the ordinary cross product - which the first measurement says is the
+   right way to read it - **row 0 is the left direction, not the right one**. It
+   is named `right` above from its use sites, which fix the axis but not its
+   sign. A reimplementation that maps row 0 onto its own `+x = right` will steer
+   backwards, and the lateral grip term, which is the other `row0` consumer, will
+   push the wrong way with it.
+
+This also does **not** support the handedness explanation offered for the two
+cross-product sign contradictions on the physics page. The basis is positively
+oriented under our own arithmetic, so a frame-handedness difference is not
+available as the common cause. If both of those terms really do need flipping,
+the sign lives downstream - in how the angular accumulators are applied to the
+body, which is [an open question in its own right](../../../overview/roadmap.md)
+and now has a measured constraint to satisfy: whatever the accumulator holds,
+`yaw = steer * Turning.amount` written into local `.y` has to come out as
+`-k * steer` about row 1.
 
 Order of terms, all of which write only accumulators unless noted:
 
