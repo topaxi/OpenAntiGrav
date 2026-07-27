@@ -113,6 +113,33 @@
 0x0887ce78	function	AiTrack_LocatePosition	90	../../../formats/track.md
 0x0887e464	function	AiTrack_UpdateCursor	90	../../../formats/track.md
 
+0x0883945c	function	HandlingXml_ParseEngine	90	engine.md
+0x0883962c	function	HandlingXml_ParseBrakes	90	engine.md
+0x088398e0	function	HandlingXml_ParseTurning	90	engine.md
+0x08839a04	function	HandlingXml_ParseAirbrake	90	engine.md
+0x08839278	function	HandlingXml_ParseAntigrav	90	engine.md
+0x08838f50	function	HandlingXml_ParsePhysical	90	engine.md
+0x0883977c	function	HandlingXml_ParsePitch	90	engine.md
+0x0883a2f0	function	Handling_ParseStats	88	engine.md
+0x08849618	function	Ship_UpdateCraft	82	engine.md
+0x0884c5c8	function	Ship_UpdateEngine	84	engine.md
+0x08848788	function	Ship_UpdateSteering	84	engine.md
+0x0884c9a4	function	Ship_UpdateAirbrakes	84	engine.md
+0x088489d8	function	Ship_UpdateBrakes	82	engine.md
+0x08848d08	function	Ship_UpdatePitch	82	engine.md
+0x0884870c	function	Ship_UpdateHover	82	engine.md
+0x0884d4c8	function	Body_AddForceWorld	82	engine.md
+0x08839c68	function	HandlingXml_ParseAirbrakeGraphics	80	engine.md
+0x08848b78	function	Ship_ApplyLateralGrip	80	engine.md
+0x08848e28	function	Ship_ApplyQuadraticDrag	80	engine.md
+0x08848ed0	function	Ship_ApplyAngularDamping	80	engine.md
+0x08848f4c	function	Ship_ApplyRollingResistance	76	engine.md
+0x0884d5bc	function	Body_AddTorqueLocal	74	engine.md
+0x0884d604	function	Body_AddTorqueWorld	74	engine.md
+0x08848dc4	function	Ship_ApplyWeathervaneTorque	74	engine.md
+0x08b36bfc	data	g_handling_parse_class	85	engine.md
+0x08ab0dcc	data	g_class_gravity_scale	78	engine.md
+
 # Import stubs are not listed here. They are derived from the binary's own NID
 # tables by scripts/resolve-psp-imports.py, which verifies every name against
 # the NID it must hash to; see imports.md.

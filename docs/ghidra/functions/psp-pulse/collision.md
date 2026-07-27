@@ -116,14 +116,43 @@ respawn. Confidence **86**.
 | `0x0884a658` | `Ship_HoverTwoPoint` | 80 |
 | `0x0884ba0c` | `Ship_UpdateMagLock` | 78 |
 
+## Three of these were settled by decoding the data
+
+Implementing the format (see [collision geometry](../../../formats/collision.md))
+resolved three items that used to be in the list below, and turned one claim into
+a contradiction that needs resolving here.
+
+- **The chunk-header `u16` at `+0x04` is the element stride.** It matches the
+  type's stride on 56,235 of 56,235 chunks across both discs. So it is not a
+  discarded field; it is a redundant one, and checking it makes a drifting walk
+  fail at the next chunk instead of decoding garbage.
+- **The payload's leading `u32` is `0xffff_ffff` on all 319 nodes.** That is
+  indistinguishable from a pointer slot patched at load, and confidence that it
+  is a version number is only **40**, so it stays unnamed.
+- **Cage Collision is not dead content: it is the other SKU.** There are 6 cage
+  nodes on the PS2 disc and 0 on the PSP one, which is why the PSP loader
+  branches past them. That retires the "dead content, or another SKU"
+  disjunction at confidence **90**.
+
+**And one live contradiction.** Collision vertices reach world-space extents of
+1,335.8 on PSP and 1,554.1 on PS2, but the sweep-and-prune packing documented
+above, `((int)coord + 0x400) * 2` into 11 bits, covers only about +/-1024. Both
+readings cannot be right. Either the packing is per-axis relative to something
+rather than absolute, or the quantisation is not what it appears to be, or the
+broadphase is fed transformed coordinates. Unresolved, and worth knowing before
+anyone implements the SAP: a straight transcription would silently drop geometry
+at the far end of a large track.
+
 ## Not determined
 
 - **What the per-vertex f32 scalar means.** It reaches the hit result and
   accumulates into ship state. "Grip, friction or roughness" is a guess at
-  confidence **40**, so it is deliberately unnamed.
-- The chunk-header `u16` at `+0x04` and the payload's leading `u32`, both
-  discarded by the loader.
-- Why Cage Collision is skipped at load.
+  confidence **40**, so it is deliberately unnamed. **This is now known to be
+  unanswerable from the assets**: all 602,086 scalars on both discs are exactly
+  `1.0`, so the field is authored and unused, and only its consumer can say what
+  it was for.
+- How the sweep-and-prune packing accommodates coordinates outside +/-1024. See
+  above.
 - The magnetic-hold block's physics.
 - Whether the 1024-id limit is enforced for meshes with more than 1024
   triangles; the count field is a `u16`, so the format permits more.

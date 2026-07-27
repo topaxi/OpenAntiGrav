@@ -1,10 +1,30 @@
 # Physics
 
-**Status: model recovered from static analysis, nothing implemented.**
+**Status: model recovered from static analysis. The structure below is
+implemented in [`oag-physics`](../../crates/physics/src/lib.rs) and none of it is
+runtime-verified.**
 
 The shape of the ship dynamics is known, and every constant it needs lives in
 [handling stats](../formats/handling-stats.md). Nothing here has been verified at
-runtime; treat it as a specification to test against, not as truth.
+runtime; treat it as a specification to test against, not as truth. What exists
+in code is a transcription of this page, deliberately including the parts of it
+that look wrong. See [what is implemented](#what-is-implemented) for the split,
+[the cross-product signs](#the-cross-product-signs-a-contradiction-here-resolved)
+for the contradiction on this page that arithmetic could settle, and
+[still open](#still-open) for the readings the evidence leaves undetermined.
+
+**This page no longer covers the whole force law.**
+[Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse/engine.md) was read
+out of `BOOT.BIN` afterwards, and it is the authority wherever the two disagree: it was
+read from the XML loader and the craft update path directly, with addresses and a
+per-component enumeration of every accumulator write. It **corrected five things on this
+page**, all of them now marked in place: `ride_height` does reach the force law, the
+`slidegrip` pseudocode was right once its load-time scaling is known, gravity has no
+track-relative component, groundedness is one frame stale for every control term rather
+than only for the hover spring's load factor, and the roll negative needed narrowing from
+"no Z component is ever written" to "no *control input* writes one". It also closed this
+page's "no angular damping" gap, and it introduced a second instance of the
+[cross-product sign problem](#the-cross-product-signs-a-contradiction-here-resolved).
 
 ## The two answers that were blocking M4
 
@@ -83,8 +103,15 @@ Several details are counter-intuitive and worth calling out:
   differences come from the gravity values, not from a spring constant.
 - **`rebound` and `landing_rebound` scale only the damping**, never the spring.
   `landing_rebound` replaces `rebound` for the first 0.2 s after touchdown.
-- **`ride_height` never appears in the force law.** It is only the raycast
-  length; the height the ship settles at is emergent.
+- ~~**`ride_height` never appears in the force law.**~~ **Corrected.** It is the
+  raycast length *and* the primary term of the hover spring's target height. The offset
+  chain from the parser to the spring is traced in
+  [engine.md](../ghidra/functions/psp-pulse/engine.md) at confidence **88**:
+  `target = (ride_height + craft+0x74 - min(leapTimer, 4)) * (1 + 0.2 * magLockBlend) * K2`.
+  What writes the additive `craft+0x74` was not found, so the composition is still open;
+  `antigrav_height_adjust` is the obvious suspect and nothing was found that copies it
+  there. The height the ship settles at is still emergent, being wherever the spring
+  balances the load, but it is emergent *around a target that the data sets*.
 - **Nothing explicitly pitches the ship to the track.** Pitch and roll response
   is entirely emergent from applying two forces at two points.
 - Contact is accepted only for surface types 1 (Floor) and 3 (Mag Floor).
@@ -99,17 +126,121 @@ floor surface, position is teleported by `up * (1 - h)` with no velocity change.
 That is penetration escape for the last unit only.
 
 Grounded-only terms from the same function: a surface-alignment torque of
-`-400 * cross(up, avgNormal)` with the right-axis component projected out, which
-levels roll and yaw but deliberately **not** pitch; a bank-to-yaw coupling of
-`+30 * right.y`; and a downforce along the ground normal opposing the hover
-spring.
+magnitude `400` along `cross(up, avgNormal)` with the right-axis component
+projected out, which levels roll and yaw but deliberately **not** pitch; a
+bank-to-yaw coupling of `+30 * right.y`; and a downforce along the ground normal
+opposing the hover spring.
 
 Confidence **91** for the force law.
+
+### The cross-product signs: a contradiction here, resolved
+
+This page originally recorded that term as `-400 * cross(up, avgNormal)` *and*, in
+the same sentence, as one "which levels roll and yaw". **Those two statements
+cannot both be true**, and the disagreement is settled by arithmetic rather than by
+re-reading the prose, which is the lesson [`HANDOVER.md`](../../HANDOVER.md) draws
+from every other disagreement this project has had.
+
+Let `omega = up x n`. A torque along `omega` grows angular velocity along `omega`,
+and the up axis then moves as
+
+```text
+d(up)/dt = omega x up = (up x n) x up
+         = n * (up . up) - up * (n . up)      [ (a x b) x c = b(a.c) - a(b.c) ]
+         = n - up * (n . up)                  [ up is a unit vector ]
+```
+
+which is the component of `n` perpendicular to `up`: it points **from `up` toward
+`n`**. So `+k * cross(up, n)` aligns and `-k * cross(up, n)` diverges, and no
+magnitude can change that - not the gain, not the inertia tensor, not the probe
+offsets, not the target height. The prose's claim is about *behaviour*, which is
+what a trace would show and is the stronger claim; a leading sign or an operand
+order is a detail of how a decompiled expression was written down. Two readings of
+the original produce the aligning term and both fit the prose: transposed operands,
+`cross(avgNormal, up)`, or a transposed sign.
+
+Simulation of the transcription corroborates it: with the literal `-400`, a ship
+placed on a flat floor with a 0.02 rad roll grows to a full tumble in under a
+second of simulated time at 60 Hz, which is the signature of anti-alignment rather
+than of a mistuned gain.
+
+**A second term has since turned out to have the same shape, and that changes the best
+explanation.** [engine.md](../ghidra/functions/psp-pulse/engine.md)'s weathervane torque
+is `cross(forward, velocity) * (grounded ? -0.1 : -0.3)`, described two lines later as
+"what turns the nose toward the direction of travel" - the identical pattern, a negative
+coefficient on a cross product that the same identity says must be positive for the
+stated behaviour. An anti-weathervaning term would spin every ship out of every corner.
+
+Two independent transcription errors of one shape is a poor explanation where a
+**systematic handedness difference** is a good one, and handedness is listed as not
+determined on both pages. If that is what this is, both expressions are correct as
+written *in the original's own frame*, nothing is a typo, and a reimplementation in a
+right-handed frame is simply obliged to flip every cross product it inherits from this
+path. That is a prediction: the next cross-product term recovered from the craft path
+should need the same flip. Cheap to check, and it would settle the handedness question
+as a side effect.
+
+**Confidence 84** on the direction, which is the top of the *Probable* band and the
+[rubric](../reverse-engineering/confidence-rubric.md)'s stated ceiling for
+decompilation-only evidence. Deliberately not 85, even though the arithmetic admits
+no third reading: neither leg of the 85-94 band applies. The decompilation as
+recorded here is not unambiguous - it contradicts itself, which is the whole
+problem - no call site was re-read, and there is no multi-file data invariant. What
+puts it at the top of its band rather than lower is that the derivation is
+compulsory and that simulation agrees. What would raise it: re-reading
+`Ship_HoverTwoPoint` at `0x0884a658` to see which of the two candidate errors this
+was, and then a trace.
+
+**Only the signs are settled: the magnitudes `400`, `0.1` and `0.3` are unverified and
+stay M3 work**, like everything else on this page. `oag-physics` implements the aligning
+direction for both terms, carries the derivation at each constant, and pins each
+direction with a test asserting it on the torque itself rather than through a simulation,
+so that neither the integrator nor an invented inertia tensor can mask a regression.
+
+### A numeric prerequisite for M3, found while implementing this
+
+The alignment gain and the roll damping are **just outside the stability limit of the
+integrator this page specifies**, and the arithmetic is worth having on record because it
+turns a vague "the ship wobbles" into a number.
+
+First, this **closes an earlier observation**, made while implementing from this page
+alone, that there is no angular damping anywhere in the model. That was true of what this
+page recorded and false of the game: `pitch_damping` is consumed by
+`Ship_ApplyAngularDamping` rather than by the pitch term, and that function damps all
+three axes at `(-pitch_damping, -5.0, -2.0)` times the body-local angular velocity. Only
+the pitch axis is per ship; yaw and roll damping are the same for every craft in the game.
+
+`Ship_ApplyAngularDamping` damps roll at a hard `-2.0`, so roll is a damped oscillator
+with stiffness `k = 400` and damping `c = 2.0`. Explicit Euler on `x'' = -k x - c x'` has
+amplification `|lambda|^2 = 1 - h c + h^2 k`, so it is stable exactly while
+
+```text
+h <= c / k = 2.0 / 400.0 = 0.005
+```
+
+and the specified sub-step is `h = 1/180 = 0.00556`, about **11 % too large**. A ship
+sitting still on flat ground with a small roll therefore grows its oscillation by roughly
+a third per period and tumbles within a few seconds, which `oag-physics` reproduces.
+
+Three properties make this a useful measurement rather than a curiosity:
+
+- It is **independent of the inertia tensor**, since `k` and `c` scale together, so no
+  plausible inertia tunes it away.
+- It is **independent of whether the angular accumulators hold torque or angular
+  acceleration**, for the same reason - which matters, because that question is open.
+- It would be stable at `h < 0.005`, which is **four** sub-steps of a 60 Hz frame rather
+  than three.
+
+So one of the following is true, and a trace distinguishes them in minutes: a magnitude
+is wrong, the sub-step count is not three, or the original really is marginally unstable
+in that state and gets away with it because a racing ship is never in it - the weathervane
+and the grip terms dominate whenever the ship is moving.
 
 ## Airbrakes
 
 Each side ramps toward its analog input at `gain` upward and `falloff` downward,
-so `falloff` is a per-second decay rate rather than a drag coefficient.
+so `falloff` is a per-second decay rate rather than a drag coefficient. The states run
+`0..=100`, not `0..=1`; see the [control range](#still-open) note.
 
 ```
 slide  = |L - R| * drag * |steerX| * 0.01
@@ -120,10 +251,16 @@ angAccelLocal.y += speed * turn * (R - L) * 0.001
 
 - `amount` is a **lateral force gain**, not a drag.
 - `turn` feeds body-local angular acceleration directly.
-- **Airbrakes produce no direct roll torque.** No Z component is ever written.
-  Visible roll must come from the surface-alignment and bank-coupling terms, or
-  from graphics-only state. Confidence **85** on this negative, established by
-  checking every write to the angular accumulators.
+- **Airbrakes produce no direct roll torque.** Confidence **85** on this negative,
+  established by checking every write to the angular accumulators. Visible roll must come
+  from the surface-alignment and bank-coupling terms, or from graphics-only state.
+- **Narrowed.** This page used to add "no Z component is ever written", which
+  [engine.md](../ghidra/functions/psp-pulse/engine.md) showed was too strong. The precise
+  claim is that **no control input writes an angular Z**: not the engine, the brakes, the
+  steering, the airbrakes or the pitch axis, so roll is never *commanded*. Angular Z is
+  written in exactly two places and both are passive - `Ship_ApplyAngularDamping` and the
+  surface-alignment torque. Confidence **80** on the narrowed version, which is lower
+  because `Ship_UpdateMagLock` was not scanned and a Z write there would have been missed.
 - `sideshift` is a one-shot lateral impulse applied straight to the body,
   bypassing the craft accumulator.
 
@@ -137,7 +274,16 @@ lateral += grip_air    * dot(vel, right) * k * (1 - grounded)
 
 With the load scaling, `slidegrip` reads as **percent of grip retained at full
 airbrake**, 0 to 100: at 0 grip vanishes and the ship drifts freely, at 100 it is
-unchanged. Confidence **86**.
+unchanged. Confidence **86**, and now **90**, because
+[engine.md](../ghidra/functions/psp-pulse/engine.md) found the load-time factor that
+makes the pseudocode above and this reading the same statement: the parser stores
+`slidegrip * 1e-4`, so an XML 0..100 is 0..0.01 in memory, `(0.01 - slidegrip)` runs from
+`0.01` down to exactly `0`, and the control states run 0..100 rather than 0..1.
+
+**Worth recording as a method note.** This crate first implemented the prose and
+rejected the pseudocode as garbled, on the grounds that taken at face value it multiplied
+grip by about a hundred. The pseudocode was correct and the *units* were missing. A
+formula that cannot be right on the units in front of you is evidence about the units.
 
 **There is no dedicated airbrake drag term.** Speed loss under braking is
 indirect: lateral grip converting sideways motion into body-frame force, plus the
@@ -154,15 +300,149 @@ suspension: spring, damping and lift are all scaled by `(1 - blend)` while a
 separate magnetic-hold block takes over. Confidence **82**; the hold block's own
 physics was not decoded.
 
+## What is implemented
+
+[`oag-physics`](../../crates/physics/src/lib.rs) transcribes this page and
+[engine.md](../ghidra/functions/psp-pulse/engine.md). It is structure only: no constant
+was invented, nothing was tuned, and every test in that crate asserts a structural
+invariant rather than a speed, a height or a turn rate. M3's
+[verification protocol](../reverse-engineering/verification-protocol.md) comes before any
+tuning, per the [roadmap](../overview/roadmap.md).
+
+**Implemented, transcribed from the evidence:**
+
+| Term | Where | From |
+| --- | --- | --- |
+| Clamped delta, forces evaluated once, three explicit Euler sub-steps of `dt/3` | [`integrate.rs`](../../crates/physics/src/integrate.rs) | this page |
+| Two-probe air cushion: spring, damping multiplier, rebound and landing blend, magstrip blend consumption, target height from `ride_height` | [`hover.rs`](../../crates/physics/src/hover.rs) | both |
+| Penetration escape at `h < 1.0`, surface alignment, bank-to-yaw, downforce shape | [`hover.rs`](../../crates/physics/src/hover.rs) | this page |
+| Engine thrust and its cap, the brake and its ramp, steering and its asymmetric ramp, the pitch axis | [`engine.rs`](../../crates/physics/src/engine.rs) | engine.md |
+| The five control states and their ramps, on the original's `0..=100` scale | [`controls.rs`](../../crates/physics/src/controls.rs) | engine.md |
+| Quadratic drag with all four coefficients, rolling resistance, weathervane, angular damping, vertical damping, gravity | [`passive.rs`](../../crates/physics/src/passive.rs) | engine.md |
+| Airbrake ramps, slide, lateral force, yaw, sideshift impulse, lateral grip | [`airbrake.rs`](../../crates/physics/src/airbrake.rs) | both |
+| Four accumulators, the fifteen-step term order, and the stale/fresh groundedness split | [`forces.rs`](../../crates/physics/src/forces.rs) | engine.md |
+| Segment-triangle narrowphase as a plane sign change plus three edge half-space tests | [`collide.rs`](../../crates/physics/src/collide.rs) | [collision](../ghidra/functions/psp-pulse/collision.md) |
+
+**Implemented as a shape with the coefficient left at the identity or zero**, because the
+evidence records that the term exists and not how large it is. That is deliberate: a
+plausible-looking number would be indistinguishable from a recovered one later.
+
+- The grounded **downforce** magnitude (zero).
+- `K2`, the global scale on the hover target height (identity).
+- The engine's `craft+0x294` output multiplier (identity).
+- The per-class gravity scale from the table at `0x08ab0dcc` (identity, and an input
+  rather than a constant, since it belongs to the speed class).
+
+**Deliberately not implemented, and why:**
+
+- **Everything flag-gated on the undecoded `craft+0x1c0`**: turbo and its boost lift, the
+  uncapped-thrust mode, the `craft+0x2a0` and `craft+0x31c` engine multipliers, the engine
+  kill switch, and the steering bias at `craft+0x2e4`. Implementing them means inventing
+  their triggers.
+- **The `craft+0x2a4` mode enum**, which selects a `-0.9` drag coefficient, a `-5.0` roll
+  damping and a disabled `rebound` in mode 0, and skips the control block entirely in 4,
+  5, 6 and 8. Naming it is a guess at confidence 40, so the racing values are used.
+- **The four-corner hover variant and its auto-speed law.** The selector is now *known* -
+  `DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, confidence 84 - and the same condition gates
+  the brakes off, but what the mode *is* sits at confidence 50.
+- **The magnetic hold.** The 0-to-1 blend that cancels the ordinary suspension is
+  implemented and consumed, and nothing drives it, because the hold block's own physics
+  was not decoded. Detecting a magstrip without the hold would cancel the suspension and
+  drop the ship.
+- **The track-section force** (`FUN_08848f9c`), a guess at confidence 45 as to what it
+  even is.
+- **The per-team in-air pitch bias** at `stats_base + 0x90`, which is outside every class
+  block and whose XML element is unknown, so there is no field to read it from.
+- **The gate on pitch input** (`FUN_088492bc`), not decoded, so pitch applies
+  unconditionally.
+- **The sweep-and-prune broadphase.** A linear scan over triangles behind an AABB reject
+  is correct and is not the bottleneck yet. Worth recording before anyone implements it:
+  the original's packing quantises coordinates to 1 unit over roughly +/-1024 and caps ids
+  at 1024 per list, a hard limit inherited from the data rather than a design choice.
+- **The in-air roll-levelling branch**, which is [dead code](#a-dead-branch-not-to-port).
+- **The engine throttle ramp**, which is dead in the original: `<Engine gain/>` and
+  `<Engine falloff/>` are parsed and overwritten by the raw input before anything reads
+  them, verified in disassembly at confidence 85. Both parameters are carried and unused.
+  Reintroducing the ramp is the obvious mistake, and the throttle lag it adds is exactly
+  the kind of difference that reads as "feels close enough".
+
 ## Still open
 
 - **Nothing is runtime-verified.** All of the above is static analysis.
+- **The parameter scaling boundary.** Four fields are pre-scaled at load
+  (`Engine.amount` x0.001, `Brakes.amount` x-0.01, `Airbrake.amount` x1e-4,
+  `Airbrake.slidegrip` x1e-4). `oag_formats::handling` returns the document's raw values,
+  `oag_physics::Handling` holds the scaled in-memory form, and `oag-gameplay` applies the
+  factors between them. **Applying them twice is the most likely integration bug here**
+  and it would be silent: the ship would simply be sluggish.
+- **The control range.** Three separate pieces of arithmetic only come out right if the
+  control states run `0..=100` rather than `0..=1`: the brake ramp's `100.0` clamp, the
+  engine's `throttle > 100.0` test, and the grip coefficient reaching exactly zero at full
+  airbrake. That the *analog axes* share that scale is an inference, and `Turning.amount`
+  is not pre-scaled, so if the steering axis were on some other range the yaw authority
+  would be out by that factor.
+- **Whether the two angular accumulators hold torque or angular acceleration.** Nothing in
+  any term visibly divides by an inertia, and the angular damping term's shape is
+  dimensionally an acceleration, so `oag-physics` treats both as acceleration. Under that
+  reading the inertia tensor has no effect on any angular term at all.
+- **The alignment gain and the roll damping are marginally unstable together**, by 11 % at
+  the specified sub-step; see
+  [the arithmetic above](#a-numeric-prerequisite-for-m3-found-while-implementing-this).
+- **Nothing recovered can hold an inverted ship.** Gravity writes world `.y` only,
+  `track_gravity` reaches the force law solely through the hover spring's *magnitude*, and
+  the hover spring always pushes the ship *away* from the surface it found. So the
+  magnetic hold must be what holds a ship to a ceiling, and it is exactly the block that
+  was not decoded. Consistent, but it means inverted sections cannot be tested at all
+  until that block is read.
+- **The hover target's additive offset**, `craft+0x74`. Nothing was found that writes it,
+  and `antigrav_height_adjust` is only a suspect (a search for readers of that field found
+  none, a weak negative at confidence 50). It matters more than it looks: with the offset
+  at zero the target equals the raycast length, so a ship sits only its own spring sag
+  below the top of its probe range and a small pitch loses contact. A negative offset
+  would give the probes headroom.
+- **Whether the airbrake `drag` term accelerates or decelerates.** Every factor in
+  `world += forward * speed * slide * 0.001` is non-negative, so the literal reading
+  accelerates while the parameter's name argues the other way. Implemented literally,
+  flagged in code as a guess.
+- **The quadratic drag's direction while reversing.** `velocity * forwardSpeed * k`
+  delivers power `|v|^2 * forwardSpeed * k`; with `k` always negative that is dissipative
+  exactly while `forwardSpeed > 0` and *adds energy* while reversing. Unlike the
+  cross-product signs, no prose on either page contradicts the expression - the "20 to 50
+  times more drag" note is about the coefficient's magnitude - so it is transcribed
+  literally, and no test in `oag-physics` lets a ship reverse.
+- **The rebound blend inside the landing window.**
+  `0.5 * (rebound * t + landing_rebound * (1 - 5*t))` is discontinuous at `t = 0.2`, where
+  it evaluates to `0.1 * rebound` against the other arm's `rebound`, and it multiplies a
+  coefficient by a time. `1 - 5*t` reaching zero exactly at the window's end is the one
+  part that reads as intended, so a factor was probably lost when this was written down.
+  Transcribed as written.
+- **The probe point velocity.** This page writes
+  `bodyLinearVel + M * cross(probeLocal, angularVel)`, the negation of the conventional
+  rigid-body point velocity. The crate uses the conventional `omega x r`, since that is
+  what damps a descending nose rather than pumping it.
+- **Where the two probes sit.** `<Misc length/>` sets it, with what factor is not
+  recorded; the crate places them symmetrically at half a hull length.
+- **Whether `sideshift` is an impulse or a velocity**, which decides whether it is divided
+  by mass. Applied as a velocity change.
+- **Which speed the airbrake terms use.** This page writes only "speed"; the craft caches
+  `|dot(velocity, forward)|` and the engine reads it from there, so that is what the crate
+  uses, rather than `|velocity|` as the brake does.
+- **Whether the brake force is horizontal-only.** A VFPU target prefix reads, under the
+  standard selector, as zeroing the world `y` lane. Confidence 55, the encoding was not
+  confirmed, and it is low-stakes because braking only runs while grounded. Not
+  implemented.
+- **The pitch axis's sign convention**, and coordinate conventions generally: handedness,
+  units and angle representation are open on both pages. Triangle winding in the collision
+  data is unknown too, and the crate assumes a normal that points out of the surface.
+- **The XML `mass` at `+0xf4` versus the body mass at `body+0x374`.** Every force term in
+  engine.md reads the latter; the hover spring on this page reads "mass". The crate reads
+  the parameter set for the spring and the body for gravity, and keeping the two equal is
+  the integration layer's job.
 - The magnetic-hold force law.
-- Sign conventions on terms that depend on loaded values, notably whether the
-  airbrake `drag` term accelerates or decelerates.
-- A four-corner hover variant exists alongside the two-point one; which is used
-  when was not established.
-- Coordinate conventions: handedness, units, angle representation.
+- What the `craft+0x2a4` mode enum is, and the eleven flag bits at `craft+0x1c0` other than
+  bit 0.
+- **What arms the `craft+0x2e0` timer**, which lowers the hover target and suppresses
+  lateral grip while it runs. A leap, a respawn and a race start are all plausible.
 
 ## A dead branch not to port
 

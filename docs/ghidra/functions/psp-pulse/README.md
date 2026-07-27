@@ -13,12 +13,13 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Main loop](main-loop.md) | Frame pacing, timestep, state machine |
 | [Input](input.md) | Pad polling, the abstract button layer, deadzone and gain |
 | [Collision](collision.md) | Triangle soup, sweep and prune, surface types |
+| [Engine, brakes, steering, pitch](engine.md) | The craft update frame, every control force term, and the complete handling parameter block |
 | [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
 
 ## Renames
 
-**Applied.** 400 symbols: 94 from the pages above, collected in
+**Applied.** 426 symbols: 120 from the pages above, collected in
 [names.tsv](names.tsv), plus 306 import stubs derived from the binary itself.
 
 ```sh
@@ -45,3 +46,5 @@ Nothing in this set scored below 70, so no `_q` names exist yet.
 | `0x089411e8` | `Wad_Open` | 93 | Hash plus rotating linear scan |
 | `0x0894f1cc` | `Input_IsPressed` | 92 | Abstract button layer, fully mapped |
 | `0x088ba284` | `Movie_ParseAttributes` | 95 | The front end is XML-driven |
+| `0x0883a2f0` | `Handling_ParseStats` | 88 | Placed all 32 handling parameters and found four are pre-scaled at load |
+| `0x08849618` | `Ship_UpdateCraft` | 82 | The craft frame: what order the force terms run in, and which read stale groundedness |
