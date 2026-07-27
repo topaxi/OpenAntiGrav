@@ -122,8 +122,10 @@ the widths where it is not are **exactly** the ones the game stores linearly
 instead — 4 and 8. That is a satisfying corroboration rather than a coincidence:
 the halved rectangle the 32-bit path needs cannot be formed below that width, so
 the game falls back, and the fallback set the arithmetic predicts is the set the
-data has. The three widths that use the direct path *and* could have used the
-other one (32x128, 64x128, 512x512) are not explained.
+data has. The three shapes that use the direct path *and* could have used the
+other one (32x128, 64x128, 512x512) are not explained - but they are not
+mislabelled: all 185 testable linear textures decode smoother linearly than
+swizzled, see [the permutation evidence](#the-permutation-separately).
 
 ## The palette is in `CSM1` order
 
@@ -170,6 +172,37 @@ Almost every field is declared twice, and the two declarations have to agree:
 - The **total closes**, by the formula above, on 5,348 of 5,350 blobs that pass
   the log2 check.
 
+### The permutation, separately
+
+Everything above says the blob *is* a texture and where its parts are. It says
+nothing about whether the texels were unpicked correctly, and plenty of wrong
+permutations are bijections, so that needs its own check.
+
+Scoring each decoded texture's **total variation** - the sum of `|delta|`
+between adjacent indices, horizontally and vertically - against the same texels
+read under the *opposite* layout is the check that discriminates: a wrong
+permutation scatters pixels that belong together and raises local discontinuity.
+Over the whole disc:
+
+| Layout | Textures 32x16 or larger | Smoother as decoded |
+| --- | ---: | ---: |
+| `PSMT8` | 4,956 | **4,856** (98.0%) |
+| linear | 185 | **185** (100%) |
+
+The hundred `PSMT8` exceptions are flat or noise-like blobs with almost no
+variation in either reading. The linear column is the one that matters most,
+because that group has no other evidence behind it: it says the `TRXREG`-based
+classifier is not mislabelling swizzled textures as linear, including the
+32x128, 64x128 and 512x512 cases where the swizzle formula *would* have been a
+valid permutation.
+
+The neighbour-**asymmetry** test that [`Texture::looks_swizzled`](psp-texture.md)
+uses was tried first and does not work here, which is worth recording so nobody
+tries it again: PSP swizzle moves data in 16-byte rows, so reading it linearly
+leaves columns correlated and rows not, but the GS `PSMT8` permutation is local
+in both axes. It flagged 541 textures decoded against 531 read raw - no signal
+at all.
+
 ### It renders
 
 `oag-view --mesh "Data\Ships\Feisar\Ship.vex" --textures 0xfc3f75cf` against
@@ -178,13 +211,20 @@ along the hull and the UVs landing on the right panels. Decoded standalone, the
 same textures come out as recognisable ship atlases, a logo sheet and panel
 artwork rather than noise.
 
-Confidence: **94** for the header, both packet shapes, the `PSMT8` swizzle, the
-`CSM1` palette order and the alpha scale. Every declared size closes against
-every other one across 5,348 real files, and decoding produces
-previously-unseen, correctly-coloured artwork that lines up with a separately
-decoded mesh's texture coordinates. Per the
-[rubric](../reverse-engineering/confidence-rubric.md) that is data agreement
-rather than a runtime trace, which caps at 94.
+Confidence: **94** for the header layout, the packet framing, the height-first
+dimensions and the alpha scale - every declared size closes against every other
+one across 5,348 real files, and the framing is what those closures actually
+evidence.
+
+Confidence **92** for the `PSMT8` permutation, the linear/swizzled split and the
+`CSM1` palette order. The evidence is different in kind: a corpus-wide
+smoothness comparison against the opposite reading rather than an exact
+arithmetic identity, plus the ship render, where texture coordinates decoded by a
+completely separate path land on the right panels of the right artwork. Strong,
+and not exact.
+
+Per the [rubric](../reverse-engineering/confidence-rubric.md) both are data
+agreement rather than a runtime trace, which caps at 94 regardless.
 
 ## Reproducing
 
@@ -207,6 +247,8 @@ pixels       140638128
 layouts      {"linear": 266, "psmt4": 5, "psmt8": 5077}
 flags        {8192: 3925, 8256: 1423}
 shapes       39
+testable     {"linear": 185, "psmt8": 4956}
+smoother     {"linear": 185, "psmt8": 4856}
 ```
 
 ## Not determined

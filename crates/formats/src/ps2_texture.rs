@@ -85,8 +85,9 @@ pub const CLUT_SETUP_QWORDS: usize = 4;
 
 /// Smallest block the game transfers, in bytes.
 ///
-/// Both the texel and the palette block are padded up to this, which is why a
-/// 4x4 texture is not 16 bytes of pixels but 256.
+/// Each block is *budgeted* this much even when it needs less, which is why a
+/// 4x4 texture is 1,549 bytes rather than 1,309. The blocks themselves sit back
+/// to back and the slack lands at the end of the file.
 pub const MIN_TRANSFER_BYTES: usize = 256;
 
 /// `GIFtag` `FLG` value for an image-mode transfer.
@@ -291,7 +292,7 @@ pub fn header(data: &[u8]) -> Result<Header> {
     let texel_bytes = pixels * usize::from(bits_per_pixel) / 8;
     let palette_bytes = (1usize << bits_per_pixel) * 4;
 
-    check_giftag(data, TEXEL_GIFTAG_OFFSET, texel_bytes)?;
+    check_giftag(data, TEXEL_GIFTAG_OFFSET, texel_bytes, false)?;
 
     // The palette packet follows the texels **unpadded**; the padding that
     // brings each transfer up to its 256-byte minimum lands at the end of the
@@ -307,7 +308,7 @@ pub fn header(data: &[u8]) -> Result<Header> {
             got: data.len(),
         });
     }
-    check_giftag(data, clut_setup + 3 * 16, palette_bytes)?;
+    check_giftag(data, clut_setup + 3 * 16, palette_bytes, true)?;
 
     let trxreg = read_u64(data, TRXREG_OFFSET);
     // Masked to the GS field width, so both fit a u32 with room to spare.
@@ -336,14 +337,15 @@ pub fn header(data: &[u8]) -> Result<Header> {
     })
 }
 
-fn check_giftag(data: &[u8], offset: usize, expected: usize) -> Result<()> {
+fn check_giftag(data: &[u8], offset: usize, expected: usize, last: bool) -> Result<()> {
     if data.len() < offset + 16 {
         return Err(Error::TooShort { got: data.len() });
     }
     let tag = read_u64(data, offset);
     let declared = (tag & 0x7fff) as usize * 16;
     let flg = (tag >> 58) & 3;
-    if flg != GIF_FLG_IMAGE || declared != expected {
+    let eop = (tag >> 15) & 1 == 1;
+    if flg != GIF_FLG_IMAGE || declared != expected || eop != last {
         return Err(Error::BadGifTag {
             offset,
             declared,
@@ -446,7 +448,50 @@ pub fn unswizzle_clut(stored: &[u8], bits_per_pixel: u8) -> Vec<[u8; 4]> {
         .collect()
 }
 
+/// [`Ps2Texture::roughness`] over an arbitrary index buffer.
+///
+/// Free-standing so a caller can score a *different* reading of the same texels
+/// as a control.
+#[must_use]
+pub fn roughness_of(indices: &[u8], width: usize, height: usize) -> u64 {
+    if width < 2 || height < 2 || indices.len() < width * height {
+        return 0;
+    }
+    let diff =
+        |a: usize, b: usize| u64::from(i32::from(indices[a]).abs_diff(i32::from(indices[b])));
+    let mut total = 0u64;
+    for y in 0..height - 1 {
+        for x in 0..width - 1 {
+            total += diff(y * width + x, y * width + x + 1);
+            total += diff(y * width + x, (y + 1) * width + x);
+        }
+    }
+    total
+}
+
 impl Ps2Texture {
+    /// Total variation of the decoded indices: the sum of `|delta|` between
+    /// horizontally and vertically adjacent pixels.
+    ///
+    /// This exists to **check this decoder**, not to describe the texture. Any
+    /// wrong permutation of the texels scatters pixels that belong together, so
+    /// it raises local discontinuity; the right one minimises it. Comparing this
+    /// against the same texels read the other way round is what says the
+    /// [`Layout::Psmt8`] permutation is correct rather than merely bijective,
+    /// and the ground-truth test runs that comparison over the whole disc.
+    ///
+    /// The neighbour-*asymmetry* test that [`crate::texture::Texture::looks_swizzled`]
+    /// uses does **not** work here and was tried first: PSP swizzle moves data in
+    /// 16-byte rows, so reading it linearly leaves columns correlated and rows
+    /// not, but the GS `PSMT8` permutation is local in both axes and the
+    /// asymmetry barely moves (541 textures flagged decoded against 531 read
+    /// raw - no signal at all). Total variation separates them cleanly.
+    #[must_use]
+    pub fn roughness(&self) -> u64 {
+        let (w, h) = (usize::from(self.width), usize::from(self.height));
+        roughness_of(&self.indices, w, h)
+    }
+
     /// Expands to RGBA8888, row-major from the top left.
     ///
     /// Alpha is doubled and saturated, taking the GS's 128 to 255.
