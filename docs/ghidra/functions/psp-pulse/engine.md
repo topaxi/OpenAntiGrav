@@ -30,6 +30,11 @@ speed-class names; the stride is `class * 0x80`.
 
 Confidence **90**.
 
+Every one of those parsers reads its values with `Xml_AttributeAsFloat`
+(`0x0895379c`), which **cannot read exponent notation** - see
+[xml-reader.md](xml-reader.md). Nothing shipped uses it, but a tool that
+regenerates `handlingstats.xml` must emit plain decimal.
+
 **The arithmetic closes exactly.** 6 + 3 + 5 + 3 + 7 + 4 + 4 = 32 fields; 32
 floats is `0x80` bytes; the observed per-class stride is `0x80`; the first field
 sits at `0x94` and the last at `0x110`, so the block runs `0x94 .. 0x114` and

@@ -34,9 +34,11 @@ return negative ? -value : value;
 ```
 
 Every character that is not a digit, `.` or `-` is **ignored rather than
-terminating the scan**, exactly as on the PS2. `1e-5` parses as digits `1` and
-`5` with a `-` seen somewhere, giving `-15`. `+3.0` parses as `3.0`. Trailing
-units or stray text are silently absorbed. No overflow or precision handling.
+terminating the scan**, exactly as on the PS2. An exponent's digits are
+therefore absorbed as extra mantissa digits at whatever scale the scan has
+reached, and its sign is applied to the whole number: `1e-5` parses as `-15`,
+while `1.5e3` parses as `1.53`. `+3.0` parses as `3.0`. Trailing units or stray
+text are silently absorbed. No overflow or precision handling.
 
 The consumers are traced, which is what makes this actionable rather than
 academic. Direct callers of `0x0895379c` include **every** handling parser -
@@ -56,9 +58,12 @@ consumers traced rather than assumed.
 
 `Xml_AttributeAsFloatLibc` (`0x089538a4`) is a real parser: it calls
 `atof` (`0x08972730`, a `strtod(s, NULL)` wrapper) and narrows the `double` to
-`float` before storing. It has well over a hundred call sites, all of them in
-the front-end widget layer (`0x0888...`-`0x088d...`), and **none** in the
-handling or camera loaders.
+`float` before storing. It has well over a hundred call sites; the ~120 sampled
+were all in the front-end widget layer (`0x0888...`-`0x088d...`) and none was a
+handling or camera loader. The cross-reference list was capped, so read that as
+"none seen" rather than a verified absence - what *is* verified, from a complete
+listing, is the other direction: every handling and camera parser calls the
+blind accessor.
 
 That is the same split as the PS2: two accessors with different numeric
 grammars in one parser, gameplay data on the blind one and the front end on the
@@ -315,9 +320,15 @@ the reader, and [frontend-video.md](frontend-video.md) has been corrected:
 ## Not determined
 
 - **`Xml_OpenMemory`.** The PS2 has one (`0x00203058`) that loads a document
-  from a buffer without reading `<code>`. The PSP family's address block runs
-  `0x08953650`..`0x08954437` with no unaccounted bytes and nothing XML-shaped
-  on either side, so if the PSP has one it is not adjacent to its siblings.
+  from a buffer without reading `<code>`, and it sits immediately *before*
+  `Xml_ParseIntHexOrDecimal` at the head of the PS2 block. The mirror position
+  on the PSP is occupied: the unrelated `FUN_08953324` ends at `0x0895364f`,
+  exactly where `Xml_ParseIntHexOrDecimal` begins. So if the PSP has one it is
+  not adjacent to its siblings. The rest of the block
+  (`0x08953650`..`0x08954437`) was walked for gaps, but only six functions'
+  extents were measured exactly - the rest is inference from instruction counts,
+  and that is precisely the reasoning that hid `Xml_AttributeValueIs` and
+  `Xml_AttributeAsFloatLibc` until the gaps were disassembled.
 - **Where the `+0x258` interned-string list is freed**, given
   `Xml_CloseDocument` does not do it and has one caller.
 - **Element text content.** Nothing in this family reads text between tags, on

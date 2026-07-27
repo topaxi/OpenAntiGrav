@@ -144,6 +144,9 @@ own attribute parser, into one per-team structure:
 | `<ExternalCameraFar>` | `HandlingXml_ParseExternalCameraFar` (`0x08838bc8`) | `+0x34` pos_height, `+0x38` **pos_length**, `+0x3c` lookat_height, `+0x40` lookat_length, `+0x44` fov, `+0x48` spring_horiz, `+0x4c` spring_vert |
 | `<ExternalCameraClose>` | `HandlingXml_ParseExternalCameraClose` (`0x08838d8c`) | `+0x50` .. `+0x68`, same seven in the same order |
 
+All five parsers read their values with `Xml_AttributeAsFloat` (`0x0895379c`),
+which **cannot read exponent notation** - see [xml-reader.md](xml-reader.md).
+
 **The block closes exactly.** `5 + 4 + 4 + 7 + 7 = 27` floats = `0x6c` bytes,
 `+0x00` through `+0x68` with no gap and no overlap, and `+0x6c` is already the
 next subsystem: `+0x6c`, `+0x70` and `+0x74` hold `<AirbrakeGraphics>`'s

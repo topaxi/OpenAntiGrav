@@ -151,8 +151,11 @@ reading of the ship data.
 
 The float accessor the game reads every parameter in this file with is
 hand-rolled and **cannot read exponent notation**. It skips any character that
-is not a digit, `.` or `-` instead of stopping at it, so `1e-5` parses as `-15`
-and `1.5e3` as `-15.3`. There is no error and no clamp.
+is not a digit, `.` or `-` instead of stopping at it, so the exponent's digits
+are absorbed as extra mantissa digits at whatever scale the scan has reached and
+its sign is applied to the whole number. `1e-5` parses as `-15`; `1.5e3` parses
+as `1.53`. Same defect, opposite-looking answers depending on where the `.` is.
+There is no error and no clamp.
 
 This is confirmed on **both** builds - `Xml_AttributeAsFloat` at `0x0895379c`
 on the [PSP](../ghidra/functions/psp-pulse/xml-reader.md) and `0x00203868` on
