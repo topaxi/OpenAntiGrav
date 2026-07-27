@@ -983,6 +983,46 @@ nothing existing changed shape. Verified with a real screenshot against the
 patch all render correctly alongside the ship, and all 83 `oag-game` tests
 still pass.
 
+## The sweep-and-prune ±1024 contradiction is resolved - by measuring, not arguing
+
+This page used to say "both cannot be right as stated" about the broadphase
+packing (`bits[0:11] = ((int)coord + 0x400) * 2`, apparently ±1024) against
+world extents that reach 1,335.8/1,554.1. **A full survey of all 16 track
+environments on both discs, using `oag-view --collision`, turns that into a
+falsifiable prediction instead of a standing contradiction.**
+
+Two facts, and they only make sense together:
+
+1. **The packing window is 2048 units, not 1024** - twelve bits hold
+   `0..4095`, so `coord + 1024` runs the full `0..2047`. The earlier ±1024
+   phrasing conflated the offset with the window.
+2. **Seven of sixteen tracks individually exceed ±1024** - so the two
+   whole-disc maxima this page used to quote (1,335.8/1,554.1) were never an
+   outlier, they were just the two largest of seven ordinary tracks. **But
+   not one of the sixteen exceeds a 2048-unit *span*** - the widest,
+   `10_Track`, comes in at 2026.6, precisely 99% of the window with 21 units
+   to spare.
+
+A designer budgeting to exactly 2048 units and a track landing at 99% of it
+is not a coincidence. So the resolution favours the packing being right and
+the *input coordinate* not being raw world space: **the broadphase likely
+packs relative to some per-level origin** (the level's own bounding-box
+minimum, most plausibly), not the world origin every other subsystem uses.
+**This is recorded as a prediction, not a finding** - nobody has re-read
+`Sap_Init` yet - but it's now a specific, checkable one: a base subtracted
+before the `+0x400` confirms it; a raw world coordinate with no base means
+the packing reading itself is what's wrong instead. Confidence 75 on the
+prediction; the 32 real measurements behind it (16 tracks x 2 discs) are
+direct.
+
+**Two bonus findings from the same survey**: collision geometry is
+byte-identical across platforms for every one of the 12 environments both
+discs share (same reach, same span, to the decimal), and a track's four
+variants (forward/reversed/zone/zone-reversed) all share one collision set
+- except PS2 `11_Track`, whose zone pair reaches 1132.0 against the ordinary
+pair's 1129.2, worth knowing before assuming the variants are always
+interchangeable.
+
 ## Track walls render now, as a debug view - and it caught its own bug
 
 `oag-view --collision <track.vex>` draws the collision triangle soup (Wall,
