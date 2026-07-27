@@ -16,6 +16,15 @@ Left and right arrows change asset, Escape quits. With `--mesh` or `--track`
 the window shows one model instead, and arrow keys orbit the camera; see
 [Models](#models). The disc image is opened read-only and nothing is written.
 
+The 3D renderer itself is no longer part of this tool. The mesh loader, the wgpu
+pipeline and its shader, the track-ribbon builder, the offscreen capture and the
+camera maths live in `oag-render`, so the game draws a track and a ship through
+exactly the same code; see
+[workspace layout](../architecture/workspace-layout.md). What is left here is
+the viewer: the CLI, the window, the key handling and the texture browser. That
+also means a change in the picture below is now a change in a shared renderer,
+not in a tool nothing else depends on.
+
 ## Headless screenshots
 
 ```sh
@@ -59,6 +68,10 @@ Right rotate, Up and Down pitch, `+`/`-` (or PageUp/PageDown) zoom, Escape
 quits. `--yaw` and `--pitch` set the starting angle. The window draws through
 the same pipeline `--screenshot` does, so what you see interactively is what
 the screenshot would have captured at that angle.
+
+The orbit camera's arithmetic is `oag_render::camera::orbit`, which is a pure
+function of the held keys and the elapsed time and is unit tested without a
+window or a GPU. Only the mapping from real keys onto it is in this crate.
 
 The lighting is not Pulse's. A single light leaves faces pointing away from it
 unreadably black, and the point here is to see the geometry and catch decoding

@@ -23,6 +23,7 @@ pub struct GpuVertex {
 }
 
 /// A run of indices sharing one texture.
+#[derive(Debug)]
 pub struct DrawCall {
     pub range: std::ops::Range<u32>,
     /// Index into [`Model::textures`], or `None` for untextured.
@@ -30,6 +31,7 @@ pub struct DrawCall {
 }
 
 /// A texture decoded from the model.
+#[derive(Debug)]
 pub struct ModelTexture {
     pub label: String,
     pub width: u32,
@@ -38,6 +40,7 @@ pub struct ModelTexture {
 }
 
 /// A model flattened into one vertex and one index buffer.
+#[derive(Debug)]
 pub struct Model {
     /// Human-readable source, for the window title.
     pub label: String,

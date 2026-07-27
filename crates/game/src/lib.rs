@@ -8,6 +8,12 @@
 //! and two-second holds, START to skip, then the Language Selection screen driven
 //! by the disc's own front-end XML.
 //!
+//! [`race`] is the other mode: a track and a ship loaded off the same disc, the
+//! simulation stepped at a fixed 60 Hz from the keyboard, drawn from the chase
+//! camera the ship's own data describes. It shares the disc access, the timestep
+//! and the headless-capture shape with the front end and shares no code with its
+//! renderer, because a ribbon and a menu have nothing in common but a surface.
+//!
 //! Nothing is written to the disc image, and the only thing written anywhere is
 //! the movie cache under `data/cache/`; see
 //! `docs/architecture/adr/0004-asset-pipeline.md`.
@@ -16,10 +22,18 @@ pub mod boot;
 pub mod capture;
 pub mod font;
 pub mod frontend;
-pub mod input;
-pub mod keys;
+/// The abstract button layer, which lives in `oag-gameplay` because the
+/// simulation owns the input snapshot type and everything that produces one
+/// depends on it. Re-exported here so the front end's own call sites read the
+/// same as they did when it was a module of this crate.
+pub use oag_gameplay::input;
+/// Keyboard mapping, which lives in `oag-input` for the mirror-image reason: it
+/// is a device concern, and the front end is one of its consumers rather than
+/// its owner.
+pub use oag_input::keys;
 pub mod language;
 pub mod movie;
+pub mod race;
 pub mod render;
 pub mod screen;
 pub mod state_machine;

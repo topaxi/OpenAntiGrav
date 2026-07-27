@@ -1,0 +1,18 @@
+[package]
+name = "oag-physics"
+description = "Ship dynamics and collision queries: the deterministic half of the simulation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# Deliberately depends on nothing but `oag-core`. Not on `oag-formats`, so the
+# on-disc handling schema and the physics parameter set stay separate types, and
+# not on any renderer, windowing or audio crate. See
+# docs/architecture/workspace-layout.md.
+[dependencies]
+oag-core.workspace = true
+
+[lints]
+workspace = true

@@ -1118,9 +1118,50 @@ dependencies = [
  "oag-assets",
  "oag-core",
  "oag-formats",
+ "oag-gameplay",
+ "oag-input",
+ "oag-physics",
+ "oag-render",
  "pollster",
  "wgpu",
  "winit",
+]
+
+[[package]]
+name = "oag-gameplay"
+version = "0.1.0"
+dependencies = [
+ "oag-core",
+ "oag-formats",
+ "oag-physics",
+]
+
+[[package]]
+name = "oag-input"
+version = "0.1.0"
+dependencies = [
+ "oag-gameplay",
+ "winit",
+]
+
+[[package]]
+name = "oag-physics"
+version = "0.1.0"
+dependencies = [
+ "oag-core",
+]
+
+[[package]]
+name = "oag-render"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "oag-assets",
+ "oag-core",
+ "oag-formats",
+ "pollster",
+ "wgpu",
 ]
 
 [[package]]
@@ -1142,8 +1183,8 @@ dependencies = [
  "bytemuck",
  "clap",
  "oag-assets",
- "oag-core",
  "oag-formats",
+ "oag-render",
  "pollster",
  "wgpu",
  "winit",

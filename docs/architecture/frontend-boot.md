@@ -214,7 +214,12 @@ Input is the [abstract button layer](../ghidra/functions/psp-pulse/input.md)
 reproduced as-is: bit indices, not masks, with `activate` mapped to cross and
 `cancel` to circle. START is index `0xe`, and reading that as a mask would test
 up and down instead, which is why there is
-[a test](../../crates/game/src/input.rs) saying so.
+[a test](../../crates/gameplay/src/input.rs) saying so.
+
+That module lives in `oag-gameplay` rather than in `oag-game`, because the
+simulation owns the input snapshot type and everything that produces one - the
+front end, a keyboard, a replay - depends on it. The keyboard mapping itself is
+in `oag-input`. See [workspace layout](workspace-layout.md).
 
 ## Timestep
 

@@ -4,490 +4,450 @@ State that is **not** inferrable from the repository itself. Everything about
 formats, decisions and the plan lives in [`docs/`](docs/README.md); this file
 covers what a fresh reader would otherwise have to rediscover.
 
-Written 2026-07-26. As of `98fcf28` this file covered the confidence rescoring,
-the ADR-0006 draft, the `oag-assets` migration and the PPSSPP image-base
-confirmation; this pass adds the interactive orbit camera below, still on
-2026-07-26.
+Written 2026-07-26. The previous pass covered the interactive orbit camera and
+the `vex::textures` PS2 fix. This pass is much larger: it opened M4, added five
+crates, decoded two formats, and recovered the control force law that M4 was
+actually blocked on.
+
+## Read this first: the disc images are in place
+
+`data/images/` now holds all three, copied from `~/Downloads` this session:
+
+| File | SHA-256 matches [`source-images.md`](docs/reverse-engineering/source-images.md) |
+| --- | --- |
+| `pulse-psp-usa.chd` | yes |
+| `pulse-ps2-eu.chd` | yes |
+| `pure-psp-usa.chd` | yes |
+
+All three hashes were recomputed and match the recorded values, so **every
+finding in `docs/` is reproducible against exactly this data**, and
+`just test-data` works. Earlier sessions had them and a later one did not, which
+cost that session the ability to verify anything; check they are still there
+before concluding a ground-truth test "cannot run". The originals in
+`~/Downloads` were copied, not moved, and are untouched.
 
 ## In flight
 
-Nothing blocked. `just check` passes 306 tests (299 at the start of this
-session, plus six new `orbit::advance` unit tests and one new `vex::textures`
-fixture test); `just test-data` adds 14 ground-truth ones and passes 320.
+Nothing blocked. `just` passes: fmt-check, clippy `-D warnings`, **546 tests**
+(306 at the start of this session), check-docs. `just test-data` runs **568, all
+passing**, which is those plus the 22 `#[ignore]`d ground-truth tests, exercised
+against both Pulse discs and Pure. `just audit-leakage` is clean.
 
-**Models and tracks now render in the `oag-view` window, not just to a
-screenshot.** This was M1's last unchecked item
-([roadmap.md](docs/overview/roadmap.md)) and the first row of the table below,
-"Models in the window" — both are closed. `--mesh` and `--track`, without
-`--screenshot`, now open a window with an orbit camera: Left/Right rotate,
-Up/Down pitch, `+`/`-` (or PageUp/PageDown) zoom, Escape quits. See
-[oag-view.md](docs/tools/oag-view.md#models).
+M4 is open and partly built. What exists now that did not this morning:
 
-`crates/view/src/orbit.rs` draws through the exact pipeline
-`mesh_render::build` already built for `--screenshot` — nothing about the
-shaders, buffers or draw loop is new, only the render target (a live surface
-instead of an offscreen texture plus readback) and that the camera angle now
-comes from held keys each frame instead of one fixed value. `mesh_render.rs`
-was split to expose `build`, `write_uniforms` and the depth format as
-`pub(crate)` so both paths share one pipeline rather than growing a second
-copy — see [workspace-layout.md](docs/architecture/workspace-layout.md)'s note
-on the disc-to-blob pipeline duplication this project already paid down once.
+| Crate | What it is |
+| --- | --- |
+| `oag-physics` | Ship dynamics and collision queries. Depends on `oag-core` **only**. |
+| `oag-gameplay` | `World`, `Ship`, `InputSnapshot`, spline spawning, and the two bridges from the on-disc schemas onto the simulation's types. |
+| `oag-render` | The wgpu renderer, extracted out of `oag-view` so `oag-game` can use it. Owns no window. |
+| `oag-input` | Devices onto the abstract button layer and the input snapshot. |
 
-The camera's yaw/pitch/zoom update is a pure function (`orbit::advance`) taking
-the held-key set and a frame's `dt`, purely so the clamping (pitch short of
-vertical, where `look_at`'s up vector degenerates; zoom to a fixed range) could
-be unit tested without a window or a GPU. Six tests cover it.
+Plus `oag_formats::collision` and `oag_formats::handling`, and
+[`docs/ghidra/functions/psp-pulse/engine.md`](docs/ghidra/functions/psp-pulse/engine.md),
+which is the single most load-bearing new document in the tree.
 
-**Verified two ways.** `--mesh` and `--track` screenshots taken before and
-after this change, on both the ship and a real track, come out
-byte-**identical** — the offscreen path is untouched, only refactored to share
-code with the new one. And the window itself was opened under this
-environment's real Wayland compositor (`DISPLAY` points at its rootless
-XWayland, not a plain Xvfb) and screen-captured with `grim`
-(Wayland-native; `ffmpeg -f x11grab` or ImageMagick's `import` against the
-XWayland display both only see the empty rootless-X11 root window, not the
-compositor's output, so neither is useful here) to confirm the ship and the
-track actually draw, correctly textured and lit, before the `mesh_render.rs`
-split and again after. Interactive key-driven rotation was not
-verified visually — no input-injection tool (`xdotool`, `ydotool`, `wtype`) was
-available in this environment — so `orbit::advance`'s unit tests are what back
-the camera-update behaviour specifically; the render path is confirmed by the
-above.
+Two modules **moved**, and the reason is worth keeping: `input.rs` went from
+`oag-game` to `oag-gameplay` because the simulation owns the snapshot type, and
+`keys.rs` went to `oag-input` because a device mapping is not a game concern.
+Both are re-exported from `oag_game` so the front end's call sites read as they
+did.
 
-**A privacy note for whoever reads capture logs from this session:** the first
-two `grim` screenshots incidentally captured a few lines of an unrelated window
-on the same desktop (a different chat session, about home router
-configuration). That was not this project's content, was not something this
-session needed, and the capture files have been deleted rather than kept
-around. Worth knowing if a future session does the same kind of live-window
-check on a shared desktop: `grim` (or any full-output capture) grabs whatever
-else is on screen, not just the target window.
+## There is a ship on a track now, and it cannot finish a lap
 
-**Tried the PS2 disc against the orbit window above, since M1's exit criterion
-names both asset paths and nobody had actually pointed `oag-view` at PS2 data
-before.** Two findings, both now in [vex.md](docs/formats/vex.md):
+```sh
+just play --race                       # arrows steer, X/Return thrust, Q/E airbrakes
+just play --race --art --screenshot /tmp/race.png --ticks 45 --hold cross
+just play --race --dry-run             # report what came off the disc, then exit
+```
 
-1. **PS2 `.vex` scenes have a zero-length embedded texture block.**
-   `Data\Ships\Feisar\Ship.vex` from the PS2 disc's `WADS2.WAD` declares
-   `texture_len = 0`, but its `Texture` nodes still carry plausible non-zero
-   `clut_size`/`texel_size` fields — `oag_formats::vex::textures` read those as
-   if PSP's packing applied and walked off the end of the file. Fixed: the
-   header's declared length is now checked before any node's fields are
-   trusted, with a synthetic-fixture regression test
-   (`vex::tests::a_zero_length_texture_block_returns_none_for_every_slot`) so
-   this doesn't need a real PS2 image to catch a regression. Where PS2 textures
-   actually live is not known; `WADSP.WAD` (a separate, uncompressed-mostly
-   archive) is an untested guess, not a finding.
-2. **PS2 mesh batches use a vertex type (`0x1b9`) outside the twelve GU
-   combinations this decoder recognises**, and this is not fixed. It surfaced
-   as a clean, named error rather than a misdecode — exactly what
-   `UnsupportedVertexType` exists for — once the texture bug above stopped
-   masking it.
+`oag-game --race` loads a track and a ship off the disc, spawns the ship on the
+racing line, steps the simulation at a fixed 60 Hz from the keyboard and draws it
+from the chase camera the ship's own data describes. `--art` draws the track's art
+meshes instead of the diagnostic ribbon; the ship sits in the same place in both,
+which demonstrates spline, collision and render geometry share one world space.
 
-Net effect: `--track` now renders correctly on **both** PSP and PS2 discs with
-no changes at all (it never touches texture or mesh-vertex decoding, only the
-spline), which is real cross-platform validation of the `WO Track` format
-nobody had checked before. `--mesh` renders on PSP; on PS2 it gets past
-textures now but still fails on the vertex type. M1's exit criterion ("a track
-**and** a ship model render... on both the PSP and PS2 asset paths") is
-therefore still open — closer, not closed. Decoding `0x1b9` is the next
-concrete step and is scoped narrowly enough to pick up directly; see "where I
-would go next".
+**What works.** The ship spawns the right way up on the racing line, the probes
+find the collision soup, and thrust drives it forward along its own forward axis.
+Over 120 ticks it is grounded on 83, peaks at 79.9 speed, and stays within 18.7 of
+the spline against a 66.4 envelope. All 203 sampled downward probes along the
+whole spline find geometry.
 
-Previous session's items, for continuity: it closed confidence rescoring and
-the ADR-0006 draft, migrated the disc-to-blob pipeline onto `oag-assets`,
-confirmed the PSP image base against PPSSPP, and made a negative-result pass at
-the `.fnt` atlas without closing it. **LZSS being tested only by its own
-inverse is still untouched** — nothing this pass bears on it either. Details
-below.
+**What does not.** At about 100 ticks the ship loses its last probe contact,
+pitches, is thrown clear, and is outside the envelope by tick 166. This is the
+force law, not the composition, and three diagnostics say so: it reproduces on a
+**flat infinite floor** with no track, spline or camera involved; it is **stable at
+1/240 s**; and it is **stable at 60 Hz given a textbook box inertia** from
+`<Misc>`. That is the `h <= c/k` arithmetic below, showing up exactly where it
+predicted. **Nothing was tuned to hide it**, and
+`the_ship_does_not_stay_on_the_track_yet` records it as a test whose failure
+message says to delete it.
 
-1. **Confidence rescoring is done** for the four pages the previous handover
-   named. `formats/wad.md`'s two claims (95, 97) are now 94 each;
-   `formats/psp-texture.md`'s header/palette/layout claim (95) is 94;
-   `formats/vex.md`'s node-tree claim (95) is 94 — all four were data-agreement
-   evidence (an exact arithmetic invariant across many real files), which the
-   rubric caps at 94. `physics/README.md`'s float-vs-fixed-point claim (97) is
-   now **92**: unlike the other three it has no cross-file data agreement, so
-   it does not get the data-agreement ceiling, but it is an exhaustive negative
-   over the whole craft path with every call site consistent — exactly what the
-   rubric's 85-94 band describes — and scoring it below its neighbours on the
-   same page (90, 91) for weaker evidence would have been worse than leaving it
-   at 97. Each page now states which evidence class it is and why, the way
-   `lzss.md` already did. No other pages were touched — the remaining
-   90/91/85/86/82 scores on `physics/README.md` and the 92/90 on `vex.md` were
-   not in scope and were left alone.
-2. **The `.fnt` atlas layout is still not resolved**, but four more transform
-   families are now ruled out and recorded in `fnt.md`: column-major reading, a
-   four-bitplane decomposition, a Morton/Z-order curve inside blocks, and an
-   alpha-weighted re-scoring of the whole prior block-swizzle sweep (in case the
-   boolean "index nonzero" oracle was drowning in antialiasing dust rather than
-   the transform being wrong — it wasn't; the ranking barely moved). None of
-   this narrows the search. The exploration script lives at
-   `/home/topaxi/.claude/jobs/f60165c3/tmp/fnt/` in this session's job
-   directory, not in the repo — it is throwaway, not a fixture, so it was not
-   committed. Worth knowing if picking this up again: the palette entries this
-   session decoded for the "ink" indices (12-15) are not monotonic in alpha for
-   at least two of the five fonts, which is either meaningless or a clue about
-   how the index-to-palette mapping works; not chased further because it is a
-   different question from the pixel layout.
-3. **ADR-0006's carve-out is drafted, not applied.** A survey of `docs/`
-   (below) found no raw asset-content dumps — no texture, audio or model bytes
-   — only header/magic-number hex, path and name strings, and one small set of
-   decoded palette-alpha values, all used as evidence for a specific claim
-   rather than as content. A candidate carve-out sentence:
+Three things it found that live in crates the race work did not own, all still
+open:
 
-   > A worked example limited to what a specific claim needs — a header's raw
-   > bytes, a handful of resolved path strings, a small decoded palette — is
-   > format documentation, not game content, provided it could not stand in for
-   > (or be reassembled into) the original asset.
+1. **`ChaseParams::pos_length` is stored negative** in every
+   `<ExternalCameraFar/Close>` on the disc, while `oag_render::camera::chase`
+   documents it as a positive distance behind and negates it again - which puts
+   the eye in front of the ship. `race.rs` negates at the adapter boundary,
+   confidence 80. The convention probably belongs in `oag-render`. This is exactly
+   the "cheap to check once there is a ship to look at" test that module wrote
+   down for itself.
+2. **`hover::target_height` exceeds `<Antigrav ride_height>`, which is also the
+   probe cast length.** So there is no height at which the spring rests *and* the
+   probes still see ground, and the oscillation is structural under the current
+   reading. The culprit is the additive `antigrav_height_adjust`, which
+   `oag_physics::hover` already flags as a confidence-50 guess with nothing found
+   that writes it. Zeroing it makes target and reach equal. One line, but it is a
+   physics decision and wants evidence, not a patch.
+3. **Single-probe contact is the norm**: both probes touch on only 6 of 120 ticks,
+   one on 83. An off-centre force every tick is a pitch torque every tick, which
+   the missing inertia tensor (`Body::inertia` is still `(1,1,1)`) then amplifies.
 
-   This is a proposal for the developer to accept, reject or rewrite, not a
-   change to the ADR. The survey, by file:
-   - `formats/psp-texture.md`: a 16-byte header hex comparison, two decoded
-     RGBA-quad sequences from real UI textures. Minimal.
-   - `formats/wad.md`: one 16-byte header hex dump, a 3-row hash worked-example
-     table, and disc paths quoted inline throughout. Mostly minimal; the
-     accumulation of real paths across the page is the closest thing to a
-     borderline case here.
-   - `formats/pmf.md`: standard MPEG PES marker bytes (not game-specific) plus
-     3 real movie filenames. Minimal.
-   - `formats/vex.md`: a 16-row table of `sprintf` path templates recovered
-     from the binary, plus 7 literal team-name strings. Borderline — small but
-     a real string-table excerpt.
-   - `formats/fnt.md`: a 5-row table of real font filenames and dimensions.
-     Minimal.
-   - `formats/fexml.md`, `formats/track.md`: short real XML snippets
-     illustrating the shortening scheme. Minimal.
-   - `formats/handling-stats.md`: explicitly reproduces no values. Compliant
-     already.
-   - `psp/pulse-disc-layout.md`, `ps2/pulse-disc-layout.md`: full real
-     file/directory listings (names, sizes, entropy) and a few header hex
-     sequences. The most extensive real-path content on the site, but it is
-     directory metadata, not payload — arguably the strongest test case for
-     wording the carve-out precisely.
-   - `ghidra/functions/psp-pulse/wad-subsystem.md`,
-     `frontend-video.md`: real paths quoted as hash-verification examples.
-     Minimal.
-4. **The disc-to-blob pipeline is now one copy, not three.** `oag-tools`'s
-   `oag-wad`, `oag-view`'s asset loader (`assets.rs`) and its mesh loader
-   (`mesh.rs`) all used to hand-roll "open a disc image, find a `.wad`, read
-   its directory, decompress a blob"; all three now go through
-   `oag_assets::Archive`, which is what [workspace-layout.md](docs/architecture/workspace-layout.md)
-   said should happen. `Archive` grew three methods to cover what the old code
-   needed beyond a decoded read: `len()` (the archive's own size, for
-   `oag-wad`'s summary line), `read_raw()` (undecompressed bytes, for
-   `oag-wad verify`'s LZSS-leftover diagnostic — the project's only
-   independent LZSS oracle, so this one had to come out byte-identical, not
-   just "equivalent"), and `peek_raw()` (an unclamped raw peek, so `tags`
-   keeps its short-circuit and stays a directory-speed scan on `WADS2.WAD`'s
-   360 MB instead of decompressing every one of its 5,861 streams just to look
-   at 16 bytes of each — the first version of this migration got that wrong).
+Findings 2 and 3 together are probably the whole of why it cannot fly a lap, and
+both are cheap to test. Start there before touching the integrator.
 
-   Verified two ways. `oag-wad list`, `tags` and `verify` against both the PSP
-   disc and **both** PS2 archives (`WADSP.WAD`, 192 compressed streams;
-   `WADS2.WAD`, 5,861) were snapshotted before and after and diffed
-   byte-identical — PSP alone wouldn't have exercised the LZSS path at all,
-   since every PSP archive stores everything uncompressed. And `oag-view
-   --screenshot` was run through all three of its loading paths (a texture
-   archive, `--mesh` on the Feisar ship, `--track` on `01_Track`) and each
-   still renders correctly.
+## The engine force law is recovered, and it corrected four things
 
-   One behaviour was deliberately preserved rather than "fixed": `oag-view`'s
-   asset loader skips an entry it can't decode instead of failing the whole
-   load (`let Ok(data) = archive.read(index) else { continue }`), where
-   `Archive::read` on its own would error out. That tolerance is the old
-   code's, kept on purpose — a viewer that refuses to open over one bad
-   texture would be worse than the current code, not better.
+M4 was blocked on something nobody had written down:
+[`docs/physics/README.md`](docs/physics/README.md) specifies the air cushion, the
+airbrakes, grip, drag and magstrips in detail, and says **nothing** about how
+`<Engine>`, `<Brakes>`, `<Turning>` and `<pitch>` become force. A ship built from
+that page hovers and slides but cannot drive.
 
-## The code review has landed, and most of it is done
+That is now recovered from `BOOT.BIN` into
+[engine.md](docs/ghidra/functions/psp-pulse/engine.md): the craft update frame
+(`Ship_UpdateCraft`, `0x08849618`), every control term, the passive terms, and
+**all 32 handling parameters placed** with the block's byte accounting closing
+exactly - `6+3+5+3+7+4+4 = 32` floats = `0x80` = the observed per-class stride,
+no gap and no overlap. Read from the XML loader itself, so name-to-offset is a
+direct read rather than inference. 26 renames, nothing below confidence 70.
 
-The review the previous handover was waiting for arrived, and it was good: it
-built and ran proofs of concept rather than reading. Its correctness findings are
-**fixed**, each with the test that would have caught it. What remains is listed
-below, and it is the part that needs judgement rather than typing.
+Four of its findings corrected work that had already been written:
 
-Fixed, for the record: the RNG (see below), the 4bpp texture panic, the CHD
-divide-by-zero, two unbounded allocations, `safe_join`'s missing tests and its
-Windows colon leak, `vex::nodes`' depth calculation, the circular `TickClock`
-drift test, `from_16_16`'s false exactness claim, three stale comments, and the
-tracked Ghidra lock files.
+1. **Four parameters are pre-scaled by the loader** (`Engine.amount` x0.001,
+   `Brakes.amount` x-0.01, `Airbrake.amount` and `slidegrip` x1e-4). This answers
+   the Units question [handling-stats.md](docs/formats/handling-stats.md) could
+   not settle from the XML alone. The scaling is applied in
+   `oag_gameplay::handling`, at the same point in the pipeline the original does
+   it; `oag_formats::handling` deliberately returns the document's raw values and
+   `oag_physics::Handling` holds the scaled form. **Applying it twice is the most
+   likely bug in this area and it would be silent** - the ship would just be
+   sluggish. `oag_gameplay::handling::SCALED_FIELDS` exists so the set is
+   greppable, with a test that it has not grown.
+2. **`Engine.gain`/`falloff` are dead.** The throttle state is ramped, stored,
+   then overwritten with the raw input two instructions later. Verified in
+   disassembly, not in the decompiler. `oag-physics` had faithfully implemented
+   that ramp, in good faith, because the page said the idiom was documented.
+3. **`ride_height` IS in the force law**, contradicting that page's "it never
+   appears": it reaches the hover spring's target through `craft+0x2f0`.
+4. **Groundedness is one frame stale for the control terms but not for grip.**
+   Hover is step 8 of 15 and clears the contact flag on entry, so engine, brakes,
+   pitch, drag and gravity read *last* frame's value while lateral grip and the
+   weathervane read this frame's. The lag was known for the hover spring; it
+   actually splits the force law in two. **A reimplementation that resolves
+   contacts first diverges on every takeoff and landing frame.**
 
-**The RNG one is worth knowing about even though it is fixed.** `Rng::next_u32`
-was not xoshiro128\*\*: it wrote the state update as one parallel assignment
-where the reference reads two already-updated words, which dropped two of four
-terms and took the transition matrix from rank 128 to 119. A non-bijective step
-loses state every call, so the period was not what the type claimed. Every test
-passed, because every test compared the generator against itself. The determinism
-gate could not see it either: it catches a generator that *drifts* from a
-recorded baseline, not one that was wrong before the baseline was taken. The
-lesson generalises past the RNG, and it is why the reference vector in `rng.rs`
-says not to regenerate it from the implementation.
+It also found real angular damping at `(-pitch_damping, -5, -2)`, which retires
+an earlier "there is no angular damping at all" finding - that was true of the
+page, not of the game.
 
-The WAD compression rule and the LZSS verification claim are also resolved, and
-both turned out to be worth the trip. The rule is **two** tests, not one: equal
-size fields mean stored, whatever bit 31 says, and only a compressed entry
-consults the flag. And `verify` was tautological, but a real oracle was available
-next to it: every one of the 6,053 LZSS streams is consumed to within one or two
-bytes of its end, never zero and never three, which the decoder cannot arrange
-for itself. Details in [lzss.md](docs/formats/lzss.md).
+## The best method lesson this session: two contradictions, and what they turned out to be
 
-Still open, and each needs a decision rather than a patch:
+`docs/physics/README.md` recorded the surface-alignment torque as
+`-400 * cross(up, avgNormal)` **and**, in the same sentence, as one "which levels
+roll and yaw". Those cannot both hold. For unit `up`,
+`(up x n) x up = n - up(n.up)`, the component of `n` perpendicular to `up`, so
+`+k * cross(up, n)` aligns and `-k` diverges - and no magnitude, inertia tensor or
+lever arm can change that. Simulation agreed: the literal sign tumbles a ship in
+under a second.
 
-1. **LZSS is still tested only by its own inverse.** The encoder in its test
-   module was written to match the decoder, so a wrong field order would pass
-   both. The consumption check above is now the suite's only independent oracle,
-   and it constrains the layout without pinning it.
-2. ~~The confidence scores systematically claim 95+ for work nobody has run.~~
-   Resolved this session for the four named pages; see "In flight" above for
-   the new scores and why.
-3. ~~ADR-0006's "no game content" rule is applied inconsistently.~~ A carve-out
-   is drafted this session; see "In flight" above. Landing it is still a call
-   for the developer.
-4. ~~`vex::textures` skipping an unsupported depth shifts every later texture
-   index.~~ Fixed: both it and `mesh_materials` return one slot per node now.
+**The interesting part is what happened next.** The weathervane torque recovered
+from `engine.md` has the identical shape - `cross(forward, velocity) * -0.1`,
+described two lines later as "what turns the nose toward the direction of
+travel". Two independent transcription errors of one shape is a poor explanation
+where a **systematic handedness difference** is a good one, and handedness is
+listed as not determined on both pages. If that is what this is, both expressions
+are correct in the original's own frame, nothing is a typo, and a reimplementation
+in a right-handed frame must flip every cross product inherited from this path.
 
-A lesson from this session worth keeping, because it turned up three times in
-three different forms. **Writing something down does not make it right, and the
-more confidently it is written the longer it survives.**
+**That is a falsifiable prediction: the next cross-product term recovered from
+the craft path should need the same flip.** Checking it is cheap and it would
+settle the handedness question as a side effect. This is the most valuable open
+thread in the repository right now.
 
-- `child_count` was documented as a `u32`, on the strength of running the decoder
-  against a real file. It is a `u16`, and the 32-bit read is correct on 97% of
-  nodes, which is exactly why it lasted.
-- The `.vex` frame axis was documented as `up`. It points down.
-- The font's `cell()` had a test asserting that `Français` measured one glyph
-  *shorter* than `Francais`. That is the bug written down as an invariant, and a
-  test in that shape actively defends the behaviour it should be catching.
+Scored 84, not 85, and the reasoning is worth copying: the arithmetic admits no
+third reading, but neither leg of the rubric's 85-94 band applies, because the
+decompilation as recorded is self-contradictory, no call site was re-read, and
+there is no multi-file data invariant.
 
-In the first two the *original* reading was closer than the correction. In all
-three, what settled it was an invariant that has to hold arithmetically, not a
-more careful read of the same code. Prefer those, and when you find one, put it in
-a test.
+### A number that turns "the ship wobbles" into a measurement
+
+Roll is a damped oscillator with stiffness `k = 400` (alignment) and damping
+`c = 2.0` (`Ship_ApplyAngularDamping`). Explicit Euler is stable exactly while
+`h <= c/k = 0.005`, and the specified sub-step is `h = 1/180 = 0.00556` - about
+**11 % too large**. So a ship sitting still on flat ground with a small roll grows
+its oscillation by roughly a third per period and tumbles in a few seconds, which
+`oag-physics` reproduces.
+
+It is independent of the inertia tensor and of whether the angular accumulators
+hold torque or angular acceleration, so neither open question tunes it away. One
+of three things is true, and a trace distinguishes them in minutes: a magnitude is
+wrong, the sub-step count is not three, or the original is marginally unstable in
+that state and gets away with it because a racing ship is never in it. **This is
+the first concrete thing M3 should measure.**
+
+## Two formats decoded, both validated on both discs
+
+**Collision geometry** ([collision.md](docs/formats/collision.md)) is an indexed
+triangle soup in `.vex` nodes under five collision class IDs, separate from the
+render mesh. The premise that it lives in the track `.vex` was unverified when the
+work started and is now confirmed two ways: the class table, and the decoder used
+as a detector firing on exactly those five IDs and no others across ~132,000
+nodes. Validated over **319 nodes, 18,745 objects, 602,086 vertices, 594,615
+triangles**, no exceptions. New findings:
+
+- The "unknown `u16`" at chunk `+0x04` **is the element stride** (56,235/56,235).
+- Chunk 3 is per-vertex, as predicted at confidence 88 (18,745/18,745).
+- Every object stores exactly 3 chunks in order **1, 3, 2** - scalars before
+  indices, which keeps the `f32` array 4-byte aligned when an odd triangle count
+  ends the index array on a half-word.
+- **All 602,086 vertex scalars are exactly `1.0`.** The field is authored and
+  unused, so "what does the per-vertex scalar mean" is **not answerable from the
+  assets** - only its consumer can say. The roadmap's open question is re-scoped.
+- **Cage Collision is not dead content, it is the other SKU**: 6 nodes on PS2, 0
+  on PSP.
+- **Vertices are already world space** (identity transform, depth 1, 319/319). A
+  consumer that composes the transform chain moves them twice.
+- **The same format is in Wipeout Pure**, class IDs `0x36b`/`0x36c`/`0x37f`, 48/48
+  closing exactly. Which is which is *not* determined (confidence 45), so nothing
+  was named.
+- **A live contradiction**: world extents reach 1,335.8 (PSP) and 1,554.1 (PS2),
+  but the documented sweep-and-prune packing `((int)coord + 0x400) * 2` covers only
+  about +/-1024. A straight transcription would silently drop geometry at the far
+  end of a large track.
+
+**Handling stats** are parsed and validated: 8 teams x 4 speed classes on **both**
+discs, 174 attributes per file, every one required - a missing attribute is a
+typed error, never a zero, because a `mass` that quietly arrived as `0.0` reads as
+a tuning problem and gets looked for in the wrong place for a long time. `"nan"`
+and `"inf"` are rejected too, since Rust's `f32` parser accepts them.
+
+### Where the two readings disagreed, and which won
+
+`engine.md` and `docs/physics/README.md` overlap and conflict in five places.
+`engine.md` won each time, because it was read from the loader and the craft path
+with addresses rather than summarised. Recorded so nobody re-litigates it:
+
+| Question | Taken from | Note |
+| --- | --- | --- |
+| Bank-to-yaw: `+30 * right.y`, or that times `(1 - magLockBlend)` | `engine.md` | |
+| Which speed the airbrake terms use | `engine.md` | The craft caches `abs(dot(v, forward))`; the brake uses `length(velocity)`, per its own section |
+| Whether `ride_height` is in the force law | `engine.md` | It is. Ships now settle at a data-set height rather than an emergent one, which is the largest behavioural change of the session |
+| Whether the engine ramp exists | `engine.md` | It does not |
+| Two masses: spring reads `Physical::mass`, gravity reads `Body::mass` | both | Equal in practice; **keeping them equal is the integration layer's job** and nothing does it for you |
+
+One interface note, because it looks like a 100x bug and is not:
+`oag_physics::controls` works on the original's `0..=100` control scale, but
+`ShipControls` remains normalised (`-1..=1` axes, `0..=1` triggers) and the
+multiply by `CONTROL_RANGE` happens inside `oag-physics`. Callers must **not**
+pre-scale.
+
+## Traps and near-misses from this session
+
+- **The PS2 `handlingstats.xml` files have a malformed prolog**:
+  `<?xml version="1.0" encoding=utf-81"?>` - unquoted value, stray digit, **odd
+  number of quotes**. Tracking quotes across the closing `>` put the scanner
+  permanently out of phase and returned an *empty document with no error*. Two-line
+  fix (end a processing instruction at its own `?>`), eight otherwise unreadable
+  files. Wrong, silent, and it would have looked like a physics bug.
+- **The collision walk came up 10 bytes short**, and the answer was 16-byte node
+  padding - **not** the `u16`-chunk-count hypothesis the error message itself
+  suggested. The arithmetic invariant beat a careful re-read again, and it beat a
+  plausible hypothesis that the code was already nudging toward.
+- **`docs/formats/handling-stats.md` was reproducing two real tuning values** in
+  its Units note, an ADR-0006 violation that predated this session. Rewritten to
+  describe the ratio. Worth a periodic sweep; the rule is easy to breach while
+  making a legitimate point.
+- **Do not run `just` or `cargo fmt --all` while background agents are editing.**
+  A gate run taken mid-edit reported a physics test failure that no longer
+  existed, and `cargo fmt --all` rewrites files an agent holds open, breaking its
+  next edit. Scope to `-p <crate>` while work is in flight.
+- **`ls` and `rg` intermittently fail on relative paths in this shell**
+  (`permission denied`, `No such file or directory`) on directories that plainly
+  exist; absolute paths work. Suspected `ecryptfs`. Use absolute paths in scripts.
+- `data/` is on `ecryptfs`, so **`cp --reflink` does not work** - copying the
+  three images is a real 4 GB copy, and there is no cheap clone.
+
+### How to verify a renderer refactor with no "before" to compare against
+
+This is reusable and it closed the one gap the `oag-render` extraction otherwise
+had. `git worktree add <tmp> HEAD` gives a clean pre-change checkout; symlink
+`data/images` into it (note the worktree already contains a tracked
+`data/README.md`, so link `data/images`, not `data`), build `oag-view --release`
+there, and capture screenshots. Then capture the same three from the working tree
+and `cmp` them.
+
+Result this session: `--mesh` on the Feisar ship, `--track` on `01_Track` and a
+texture from `FE.wad` all came out **byte-identical** across the extraction. That
+is what makes the refactor verified rather than only "behaviour-preserving by
+construction".
+
+## Verification status: what to lean on
+
+**Verified against real data this session:** the collision layout (319/319 closure
+on both discs), the handling schema (8 teams x 4 classes on both discs), the
+`oag-render` extraction (byte-identical screenshots), and the three image hashes.
+
+**Verified earlier and still good:** the WAD name hash and size-field ordering,
+LZSS, texture decoding, `.vex` geometry and textures, the `section` count, the
+whole `WO Track` layout, the junction slot ordering, the import stub names, the
+PSP image base.
+
+**Static reading, never executed:** *all* of the physics. `oag-physics` transcribes
+`docs/physics/README.md` and `engine.md`, asserts structure, and **tunes nothing**.
+The one exception is the two cross-product signs, settled by arithmetic - and even
+there only the signs, not the magnitudes. Nothing in the force law has been
+compared against the original running, which is what M3 is for. Do not raise a
+confidence score on the strength of the simulation agreeing with itself; that was
+exactly the RNG mistake this file already records.
 
 ## What is deliberately not done
 
-These are choices, not oversights.
-
 | Not done | Why |
 | --- | --- |
-| The game's own font | `oag-game`'s language picker uses a 5x7 font of ours. The `.fnt` metrics decode and validate; the atlas's pixel layout does not. The five language names render correctly, accents included, but the type is not Pulse's. See [fnt.md](docs/formats/fnt.md). |
-| Front-end widget offsets | Screen XML coordinates are absolute within the real widget tree, and we do not apply parent offsets, so anything authored near an edge lands slightly outside it. Text is nudged back into the viewport as a stopgap, and it is commented as one. |
-| Audio | ATRAC3+ frames are demuxed and handed over intact. Nothing decodes them. |
-| Batch list B | `oag-view` renders only list A of each mesh, to avoid drawing surfaces twice. That may be dropping a legitimate second pass (reflections, decals). |
-| Transparency sorting | `Glass_ADD.tga` implies additive surfaces that currently draw opaque. The `pass_mask` bits needed are documented in [vex.md](docs/formats/vex.md). |
-| Mip levels | Decoded but unused. |
-| `section` payloads | Documented, not implemented. They are visibility only, so nothing renders differently without them. |
-| The 29 unresolved import stubs | 16 are `sceNp*`, whose NIDs are not SHA-1 of the name, so they need a published table rather than a hash. |
+| Engine/brake/steer/pitch **verification** | The force law is recovered and implemented; nothing has been traced. M3. |
+| The magstrip magnetic hold | Its force law was not decoded. Consequence: **an inverted ship falls off.** Nothing recovered pulls a ship toward a ceiling - gravity writes world `.y` only and the hover spring always pushes *away* from the surface it found. Expected, not a bug. |
+| The four-corner hover variant | The selector is now known (`DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, which also disables the brakes and swaps in an auto-speed law). The variant itself is not implemented. |
+| Sweep and prune | A linear scan behind an AABB reject. Correct, and not the bottleneck. See the +/-1024 contradiction above before implementing it. |
+| Quadratic drag and hover downforce magnitudes | Implemented as shape with the coefficient at `0.0`, because the pages record that the terms exist and not how large they are. |
+| **The ship is rotationally unstable at rest** | Not a bug to patch. It is the `h <= c/k` arithmetic above showing through: a stationary ship with a small roll grows its oscillation and tumbles in a few seconds. Fixing it by changing a magnitude would destroy the measurement, which is currently M3's sharpest question. |
+| **Quadratic drag adds energy while reversing** | `velocity * forwardSpeed * k` is dissipative only while `forwardSpeed > 0`. No prose contradicts the expression, unlike the cross-product terms, so it is transcribed literally and no test lets a ship reverse. A real hazard the moment anything can. |
+| Sideshift | Recovered as a mechanism, but **which buttons fire it is not known**, so `oag_gameplay::controls` returns `Sideshift::None` always and a test pins the gap. |
+| The game's own font | Unchanged: `.fnt` metrics decode, the atlas's pixel layout does not. |
+| Front-end widget offsets, audio, batch list B, transparency sorting, mip levels, `section` payloads, the 29 unresolved import stubs | Unchanged from the previous handover. |
 
 ## Method that is not obvious
 
-### Symbol names are reproducible now
-
-The Ghidra database is not committed, so a fresh import starts at `FUN_08940d0c`
-again. It does not have to:
+### Symbol names are reproducible
 
 ```sh
-just apply-names        # 400 symbols into whichever program the bridge has open
+just apply-names        # 426 symbols into whichever program the bridge has open
 ```
 
-94 come from [`names.tsv`](docs/ghidra/functions/psp-pulse/names.tsv), which is
-hand-maintained next to the evidence pages, and 306 are import stubs re-derived
-from the binary itself. `scripts/apply-ghidra-names.py` refuses any row whose
-address and name are not both still on its evidence page, so ADR-0005's "no
-rename without documentation" is enforced rather than trusted.
+120 come from [`names.tsv`](docs/ghidra/functions/psp-pulse/names.tsv) (up from 94)
+and 306 are import stubs re-derived from the binary.
+`scripts/apply-ghidra-names.py` refuses any row whose address and name are not
+both still on its evidence page, so ADR-0005 is enforced rather than trusted.
 
-**Two traps in that bridge.** Its `dry_run` parameter is *not* honoured by the
-rename endpoints: it reports what it would do and does it anyway, which is how
-the first name got applied by accident. And it rejects global names that lack a
-Hungarian type prefix, which is not this project's convention, so data addresses
-go through `create_label` instead of `rename_or_label`.
+**Two traps in the Ghidra bridge.** `dry_run` is *not* honoured by the rename
+endpoints: it reports what it would do and does it anyway. And it rejects global
+names lacking a Hungarian type prefix, which is not this project's convention, so
+data addresses go through `create_label`.
+
+`just check-docs` validates that links **resolve**, not that a page is
+**reachable**. `engine.md` was an orphan when it landed. If you add a page, add
+its row to the relevant `README.md` too.
 
 ### Naming imports is a check, not a guess
 
-A PSP import NID is the first four bytes of `SHA-1(name)`, little-endian. That is
-one-way, so hash the candidate names instead and keep the matches: a wrong name
-cannot produce the right NID. 306 of 335 stubs resolve this way, and the rule was
-confirmed first against two NIDs the project had already recovered independently.
-See [imports.md](docs/ghidra/functions/psp-pulse/imports.md). Adding a name to
-`scripts/psp-import-names.txt` and re-running is the whole workflow.
+A PSP import NID is the first four bytes of `SHA-1(name)`, little-endian. Hash
+candidates and keep the matches; a wrong name cannot produce the right NID. 306 of
+335 resolve. See [imports.md](docs/ghidra/functions/psp-pulse/imports.md).
 
 ### Finding entries by name
 
-WADs store only a CRC-32 of each name, and most names are built at runtime from
-templates, so they are not in the executable. `scripts/mine-names.py` rebuilds
-the candidate list and gets **292 of 1,142** entries in `Data.wad`:
-
-```sh
-just mine-names data/images/pulse-psp-usa.chd
-```
-
-The step that matters is the third one. **Track directories are numbered**
-(`01_Track`), not named after the track, so no amount of guessing finds them.
-`Data\Plugins\PI001\Definition.xml` lists every track with a `location`
-attribute; that plus the binary's `%s\%strack%s.vex` template is what makes
-track files reachable at all.
-
-The output is gitignored, since it is derived from your disc. Regenerate it
-rather than looking for it.
+WADs store only a CRC-32 of each name and most names are built at runtime, so
+`scripts/mine-names.py` rebuilds the candidate list: `just mine-names <image>`,
+292 of 1,142 in `Data.wad`. The step that matters is that **track directories are
+numbered** (`01_Track`), so `Data\Plugins\PI001\Definition.xml`'s `location`
+attributes plus the `%s\%strack%s.vex` template are what make track files
+reachable at all.
 
 ### Validating a decoder
 
-Every format decoded here had a self-check available, and using it has caught real
-errors seven times, and confirmed a format outright twice more. That is the
-single most useful habit in this repository:
+Every format decoded here had a self-check available, and using it has now caught
+real errors nine times and confirmed a format outright three more. **Look for the
+arithmetic that must hold before writing the parser, then put it in a test rather
+than in prose.**
 
-- **WAD**: the offset chain. Testing both orderings of the size fields gave
-  193/193 against 2/193, which resolved a transposition.
-- **`.vex` geometry**: each batch's own declared bounding box. Vertices must fall
-  inside it, so a wrong stride or scale shows immediately, and with a misread
-  colour format the position bytes come out of the middle of a colour. This is
-  what validated the 16-bit colour formats the tracks use, over 3,181 batches.
-- **`.vex` node tree**: immediate child counts must sum to one less than the node
-  count. Exact on every file as a `u16`; 111 million for 2,071 nodes as a `u32`,
-  which is how the field's width was settled.
-- **Embedded textures**: the sizes sum exactly to the declared block length.
+- **WAD**: the offset chain. 193/193 against 2/193 resolved a transposition.
+- **`.vex` geometry**: each batch's declared bounding box, over 342,115 vertices.
+- **`.vex` node tree**: child counts sum to one less than the node count. Exact as
+  a `u16`; 111 million as a `u32`, which settled the width.
+- **Embedded textures**: sizes sum to the declared block length.
 - **Track**: exactly 64 `section` nodes, matching the 64-bit PVS mask.
-- **`WO Track`**: the payload has to close. `0x20 + 0x20 + 0x20*paths +
-  0x10*junctions + 0x70*points` equals the payload length on **40 of 40** track
-  files, which is what found the reserved block the previous pass had missed.
-- **LZSS**: where the *reader* stops. The decoder halts on output length, so a
-  size match proves nothing, but every one of the 6,053 streams is consumed to
-  within one or two bytes of its end. It cannot arrange that for itself.
-- **PMF**: three at once, from the front-end agent. Header arithmetic exact, zero
-  stray bytes when demuxing, and access-unit counts matching the presentation
-  duration at 30000/1001 Hz.
+- **`WO Track`**: the payload closes on 40 of 40 files.
+- **LZSS**: where the *reader* stops - every one of 6,053 streams consumed to
+  within one or two bytes of its end.
+- **PMF**: header arithmetic, zero stray bytes, access-unit counts against
+  duration.
+- **Collision**: the walk closes on **319 of 319** nodes once 16-byte node padding
+  is accounted for, which also pinned the chunk count at 32 bits and turned the
+  unknown `u16` into the stride.
+- **Handling stats**: completeness. 8 teams x 4 classes x every attribute, with a
+  test that removes each of 174 attributes in turn and requires every removal to
+  error.
+- **The handling parameter block**: 32 floats = `0x80` = the observed per-class
+  stride, closing with no gap or overlap, which is what placed the 13 previously
+  unknown offsets.
 
-**Look for the arithmetic that must hold before writing the parser.** It is
-usually there, and it converts a plausible reading into a determination.
+### Running the game headlessly
 
-**Then put it in a test, not in prose.** The `.vex` bounding-box check spent
-months as a measurement someone took by hand and wrote up as though it were a
-standing guarantee; the review caught that, and it is now an assertion over
-342,115 vertices. `crates/formats/tests/track_ground_truth.rs` is the shape to
-copy, including `OAG_REQUIRE_GAME_DATA=1` so an absent disc image fails instead of
-skipping green.
-
-### Running the game headlessly, for the first time this project has
-
-`PPSSPPHeadless` (package `ppsspp`, alongside the GUI `PPSSPPSDL`) boots
-straight from a raw ISO with no display needed — useful over SSH or in this
-session, and presumably in CI eventually. It does not read a CHD directly:
+`PPSSPPHeadless` boots straight from a raw ISO with no display:
 
 ```sh
 chdman extractdvd -i data/images/pulse-psp-usa.chd -o /tmp/pulse-psp-usa.iso
 PPSSPPHeadless /tmp/pulse-psp-usa.iso -l --timeout=8 > log.txt
 ```
 
-`extractdvd` takes a few minutes and produces a ~450 MB ISO; regenerate it
-rather than committing it, same as everything else `data/`-derived. `-l` logs
-the full HLE trace, not just emulated printfs, which is where the image-base
-confirmation below came from. `--debugger=PORT` opens a websocket debugger
-that breaks at start — not used this session, but it's the way in for
-anything beyond reading the boot log, and it's what M3's scripted-input
-harness would presumably drive.
+`-l` logs the full HLE trace. `--debugger=PORT` opens a websocket debugger that
+breaks at start - not used yet, and it is the way in for M3's scripted input.
 
 ### Ghidra
 
 `BOOT.BIN` must be loaded with the **Allegrex** processor module, not stock
-`MIPS:LE:32`. Stock Ghidra silently decodes VFPU instructions as nonexistent
-64-bit MIPS III ones and the decompiler builds confident, fictional C from
-them. `just build-allegrex` produces the extension; see
-[allegrex-vfpu.md](docs/psp/allegrex-vfpu.md).
+`MIPS:LE:32`, or the decompiler builds confident fictional C from VFPU
+instructions. `just build-allegrex`, needs JDK 21.
 
-The image base is `0x08804000`. That is the conventional PSP module load
-address, and it is now **confirmed against PPSSPP 1.20.4**: `chdman extractdvd`
-turned the CHD into a raw ISO, `PPSSPPHeadless <iso> -l` booted it, and the
-loader's own log placed the module's first segment and its `.text` section at
-exactly `08804000`, tagged to the right game (`UCUS98712`, matching the disc's
-own serial). That log is for the decrypted `EBOOT.BIN`, not the `BOOT.BIN`
-Ghidra analyses, so the chain isn't complete on its own — closed by pulling
-`BOOT.BIN`'s own ELF program headers off the disc and checking them against
-what PPSSPP loaded: identical, segment for segment. See
-[allegrex-vfpu.md](docs/psp/allegrex-vfpu.md#on-the-value) for both. This was
-the only outstanding Ghidra item that needed the developer, and it's confirmed
-now.
-
-The Ghidra project currently lives in the repository root (`OpenAntiGrav.gpr`),
-not in `data/ghidra/` where [workflow.md](docs/ghidra/workflow.md) says it
-should. That is why its lock file leaked into git. Moving it is safe once the
-project is closed.
-
-## Provenance and how much to trust it
-
-Most reverse-engineering findings came from background agents reading Ghidra.
-They were instructed to report evidence and score confidence, and the scores in
-`docs/` are theirs unless a page says otherwise.
-
-**Independently verified against real data:** the WAD name hash, the size field
-ordering, LZSS, texture decoding, `.vex` geometry and textures, the `section`
-count, the whole `WO Track` layout, the junction slot ordering, the import stub
-names. These are the claims to lean on.
-
-**Single-source static reading, never executed:** the physics force law, the
-collision query path, the frontend state machine, the video path. All plausible,
-none runtime-verified. **The one exception is the image base** (above): that
-one fact has been checked against PPSSPP's own loader log. Nothing else has —
-booting the game to read a log line is not the same as tracing a specific
-function's behaviour, so this does not license raising any function's
-confidence score. The rubric's `Runtime trace | 94` tier was never written
-assuming an emulator was out of reach; what changed is narrower: this project
-had never actually run anything under one until this session, and now it has,
-once, for one fact.
+Image base `0x08804000`, confirmed against PPSSPP's own loader log and against
+`BOOT.BIN`'s ELF program headers. The Ghidra project still lives in the repository
+root (`OpenAntiGrav.gpr`) rather than `data/ghidra/`; moving it is safe once
+closed.
 
 ## Where I would go next
 
-1. **The `.fnt` atlas layout.** No longer urgent for correctness, since the
-   picker reads properly with our own glyphs, but it is the last thing between the
-   front end and Pulse's own type. `fnt.md` called this "the same unresolved
-   problem as `.mip` swizzling"; narrowed this session, not resolved.
-   `psp-texture.md` only answers whether `.mip` pixel data is swizzled *in the
-   file* (no), and says outright that whether the PSP swizzles at upload time
-   is still open. So `.mip`'s file-storage answer is not a lead for `.fnt`, but
-   the two could still be the same upload-time transform — that question is
-   open on both sides, not closed. This session also ruled out four more
-   transform families for `.fnt` itself (column-major, bitplanes, Morton order,
-   and an alpha-weighted oracle) without finding it; see `fnt.md` for the full
-   list of what has been tried.
-2. ~~Confirm the image base against PPSSPP before more addresses are written
-   down.~~ Done this session; see the Ghidra section above.
-3. ~~Migrate the three older copies of the disc-to-blob pipeline onto
-   `oag-assets`.~~ Done this session; see "In flight" below. `oag-assets` is
-   still asset access only, not yet the platform-normalising registry
-   [workspace-layout.md](docs/architecture/workspace-layout.md) describes —
-   that part is still open.
-4. **Runtime verification** of anything in the physics documentation, which is
-   the M3 harness in miniature and would let the top confidence band mean
-   something. Not attempted this session — it is M3's actual scope (scripted
-   input, save-state scenarios, trace capture, `oag-trace`), not a quick
-   add-on — but it just got more tractable: this session confirmed
-   `PPSSPPHeadless` runs headlessly in this environment and its `-l` flag logs
-   from the HLE layer, and it also has a `--debugger=PORT` flag for a
-   websocket debugger that breaks at start, neither of which had been checked
-   against before PPSSPP was installed here.
-5. **Decode PS2 vertex type `0x1b9`**, the concrete blocker on M1's exit
-   criterion now that the texture-block issue is fixed. `oag-view --mesh` on
-   the PS2 disc is the fastest feedback loop: it fails loudly and immediately
-   with the exact value, no emulator needed. Comparing the PSP and PS2 builds
-   of the same ship (`Data\Ships\Feisar\Ship.vex`, both already on hand) is the
-   obvious first move, per [methodology.md](docs/reverse-engineering/methodology.md)'s
-   "two binaries are better than one" — whatever in the PS2 batch header
-   replaces the GU vertex type is likely readable by diffing the two batch
-   headers directly, without touching Ghidra at all. Once one PS2 ship
-   decodes, `--track`'s existing cross-platform pass means a track *and* a
-   ship on both platforms is in reach, which is the actual M1 exit criterion.
-
-## Traps that cost time here
-
-- **`python` string-replace patching of code already edited** fails silently and
-  ships a build where a feature does nothing. Caught only because output said
-  "0 textures" when 13 were known. Read the file and use a real edit.
-- **A `.gitignore` pattern of `/*.lock`** silently swallows `Cargo.lock`, and
-  `git check-ignore` will *not* warn you because the file is already tracked.
-  Use `--no-index` to test ignore rules.
-- **wgpu 30** moved presentation to `Queue::present`, push constants to
-  `immediate_size`, `multiview` to `multiview_mask`, and made
-  `get_current_texture` return an enum rather than a `Result`.
-- **The Gradle wrapper for the Allegrex build needs JDK 21**, not the system
-  default. The failure does not mention the JDK.
-- **`ls -la` fails in this shell** (aliased); use `eza -l`. `eza` also prints
-  nothing useful for a bare directory listing in a pipe, so `fd -d 1` is more
-  reliable in scripts.
+1. **Make the ship fly a lap, and try the two cheap explanations first.** The
+   hover target exceeding the probe reach, and the missing inertia tensor, are
+   findings 2 and 3 above; both are small, both are testable against
+   `just play --race`, and neither needs an emulator. Only if those do not settle
+   it is the integrator itself the suspect.
+2. **M3, and start with the two numbers this session produced.** The
+   integrator-stability arithmetic above (`h <= 0.005` vs `1/180`) and the
+   handedness prediction are both falsifiable in minutes with a trace, and both
+   currently cap confidence across the whole physics tree.
+   `PPSSPPHeadless --debugger=PORT` is the way in.
+3. **Test the handedness prediction.** Recover one more cross-product term from
+   the craft path. If it needs the same flip, the systematic-handedness
+   explanation is confirmed and the coordinate-conventions open question falls out
+   with it. Cheapest high-value RE task available.
+4. **Find the call site of `Ship_UpdateCraft`.** It is vtable-dispatched, and its
+   absence caps that page's confidence at 82. It would also settle the frame
+   ordering that item 4 of the corrections above depends on.
+5. **Decode PS2 vertex type `0x1b9`**, still M1's exit criterion. `--track` now
+   renders on both discs; `--mesh` gets past textures on PS2 and fails on this.
+   Comparing the PSP and PS2 batch headers of the same ship is the obvious first
+   move and needs no emulator.
+6. **The `.fnt` atlas layout.** Unchanged and still the last thing between the
+   front end and Pulse's own type. Four more transform families were ruled out two
+   sessions ago; see [fnt.md](docs/formats/fnt.md) for what has been tried.
+7. **LZSS is still tested only by its own inverse.** The stream-consumption check
+   is the only independent oracle and it constrains the layout without pinning it.
+   Untouched again this session.
+8. **Check whether the determinism gate actually covers the new simulation.**
+   `crates/core/tests/determinism.rs` compares a hash against a committed
+   reference, and `CLAUDE.md` calls that gate load-bearing. It was written before
+   `oag-physics` and `oag-gameplay` existed, and nobody checked this session
+   whether any of their state feeds it. If it does not, the two crates that most
+   need the guarantee are outside the gate. Worth an hour, and note the standing
+   rule: **when that test fails, find the bug - never update the reference
+   constants to make it pass.**

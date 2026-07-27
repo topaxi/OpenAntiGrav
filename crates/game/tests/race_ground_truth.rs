@@ -1,0 +1,293 @@
+//! Flies a ship on a real track, out of a real disc image.
+//!
+//! **`#[ignore]`d and never run in CI.** It needs game content, which this project
+//! does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! just test-data
+//! # or only this crate:
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all
+//! ```
+//!
+//! # What this is for
+//!
+//! Every layer under a race has its own tests against synthetic data. What none of
+//! them can check is whether the *composition* is right: whether the collision
+//! geometry a ship hovers on is the same geometry the spline runs along, whether the
+//! handling parameters arrive scaled exactly once, whether a spawn pose built from a
+//! `.vex` frame puts a ship the right way up. Those only fail on real data, so this
+//! is the only place they can be asserted.
+//!
+//! Everything asserted is structural: something is finite, something is bounded by a
+//! number the *track itself* supplies, something changed. Nothing here asserts a
+//! speed, a height or a settling point as though it were known - the force law is
+//! transcribed static analysis that has never been run against the original, so a
+//! test that pinned a speed would be pinning this project's own arithmetic and
+//! calling it a measurement. See `crates/physics/tests/ship_dynamics.rs`, which says
+//! the same thing at its own level.
+//!
+//! # And the ship does not stay on the track
+//!
+//! It cannot fly a lap. [`the_ship_does_not_stay_on_the_track_yet`] is the recorded
+//! negative result, with what was measured; the summary is in
+//! `docs/tools/oag-game.md`. That failure reproduces with the same parameters on a
+//! flat infinite floor with no track, no spline and no camera, so it is not this
+//! composition, and nothing here is tuned to hide it.
+
+use std::path::{Path, PathBuf};
+
+use oag_core::math::Vec3;
+use oag_game::race;
+use oag_gameplay::input::button;
+use oag_physics::{Raycaster, SpeedClass};
+
+/// Ticks the well-behaved assertions cover: two seconds at the fixed 60 Hz.
+///
+/// Not a chosen-because-it-passes number in the usual sense, and worth being honest
+/// about: the ship is measurably fine for about 100 ticks and measurably gone by
+/// about 166, so two seconds is inside the first and short of the second. When the
+/// physics improves this should grow, and
+/// [`the_ship_does_not_stay_on_the_track_yet`] is what will notice.
+const TICKS: u32 = 120;
+
+fn image() -> Option<PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/pulse-psp-usa.chd");
+
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    println!("skipping: {} not present", path.display());
+    None
+}
+
+fn load() -> Option<race::Loaded> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: SpeedClass::Venom,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    for line in &loaded.report {
+        println!("{line}");
+    }
+    Some(loaded)
+}
+
+/// The track's own scale for "still roughly on the track".
+///
+/// Two of the widest half-width the track has anywhere, which on the default track
+/// is tens of units. Derived from the data rather than picked, so it means the same
+/// thing on a wider track, and generous on purpose: this is meant to catch a ship
+/// that has left, not to grade the driving.
+fn envelope(loaded: &race::Loaded) -> f32 {
+    loaded.setup.spline.max_half_width() * 2.0
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_ship_spawns_on_the_spline_and_flies_along_it() {
+    let Some(loaded) = load() else { return };
+    let bound = envelope(&loaded);
+    let handling = loaded.setup.handling;
+    let mut race = race::Race::start(loaded.setup);
+
+    // The spawn itself: on the racing line, the suspension's target height above the
+    // surface, the right way up, and with the mass the force law will read also in
+    // the body the integrator divides by.
+    let start = race.telemetry();
+    assert!(start.position.is_finite(), "{:?}", start.position);
+    assert_eq!(race.ship().physics.body.mass, handling.physical.mass);
+    assert!(
+        (start.height_above_spline - race::spawn_height(&handling)).abs() < 0.01,
+        "spawned at {} above the spline, wanted {}",
+        start.height_above_spline,
+        race::spawn_height(&handling)
+    );
+    // `up` from a `.vex` frame is the surface normal negated, and getting that
+    // backwards buries the ship. On this track's first sample the surface is roughly
+    // level, so the ship's own up must have a positive world y.
+    assert!(
+        race.ship().physics.body.up().y > 0.5,
+        "the ship is not the right way up: {}",
+        race.ship().physics.body.up()
+    );
+
+    let mut held = race::HeldButtons::new(1 << button::CROSS);
+    let mut grounded_ticks = 0u32;
+    // Counted apart, because one probe in contact and two are different situations:
+    // a single probe is a pitch torque applied every tick.
+    let mut both_probes = 0u32;
+    let mut worst_distance = 0.0f32;
+    let mut peak_speed = 0.0f32;
+
+    for tick in 0..TICKS {
+        let snapshot = held.snapshot();
+        race.tick(&snapshot);
+        let telemetry = race.telemetry();
+
+        assert!(
+            telemetry.position.is_finite(),
+            "tick {tick}: {}",
+            race::describe(&telemetry)
+        );
+        assert!(
+            telemetry.spline_distance < bound,
+            "tick {tick}: {bound:.1} units off the spline is off the track: {}",
+            race::describe(&telemetry)
+        );
+
+        if race.ship().physics.grounded > 0.0 {
+            grounded_ticks += 1;
+        }
+        if race.ship().physics.grounded == 1.0 {
+            both_probes += 1;
+        }
+        worst_distance = worst_distance.max(telemetry.spline_distance);
+        peak_speed = peak_speed.max(telemetry.speed);
+    }
+
+    let end = race.telemetry();
+    println!("{}", race::describe(&end));
+    println!(
+        "grounded on {grounded_ticks}/{TICKS} tick(s), both probes on {both_probes}, \
+         worst spline distance {worst_distance:.2} of {bound:.1}, peak speed {peak_speed:.2}"
+    );
+
+    // It hovered: a probe reached the collision geometry on some tick. Without this
+    // the ship could be in free fall and everything above would still hold.
+    assert!(
+        grounded_ticks > 0,
+        "no hover probe ever reached the track's collision geometry"
+    );
+    // And it went somewhere. Thrust held for two seconds against an engine that
+    // reaches tens of units per second cannot leave it where it started.
+    let travelled = (end.position - start.position).length();
+    assert!(
+        travelled > 10.0,
+        "the ship travelled {travelled:.2} units in {TICKS} ticks: {}",
+        race::describe(&end)
+    );
+    // And it went *forwards*. Three separate conventions have to agree for this to
+    // hold - the spline's tangent, the rotation `Pose::from_sample` builds from it,
+    // and the body axis the engine pushes along - and any one of them inverted would
+    // still satisfy every assertion above.
+    let forward = race.ship().physics.body.forward();
+    let along = race.ship().physics.body.linear_velocity.dot(forward);
+    assert!(
+        along > 0.0,
+        "thrust drove the ship backwards along its own forward axis: {along:.2}"
+    );
+    assert_eq!(race.world.tick, u64::from(TICKS));
+}
+
+/// The recorded negative result: a ship cannot yet be flown for ten seconds.
+///
+/// **When this test fails, the physics got better and this test should be deleted**,
+/// along with the section it is referenced from in `docs/tools/oag-game.md`. It
+/// exists so the failure is measured rather than remembered, and so nobody
+/// rediscovers it by hand.
+///
+/// What is measured: the suspension oscillates about its target height without
+/// damping out, and once one of the two probes loses contact the ship pitches, is
+/// thrown clear of the surface and eventually leaves the envelope entirely. The
+/// prime suspect is that nothing in the recovered ship data carries an **inertia
+/// tensor**, so `Body::inertia` is `(1, 1, 1)` while the hover probes apply their
+/// force about six units from the centre of mass. Two diagnostics point the same way
+/// and neither is in the shipped code: at a quarter of the timestep the same
+/// parameters are stable, and so is a textbook box tensor built from `<Misc>` at the
+/// full timestep.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_ship_does_not_stay_on_the_track_yet() {
+    let Some(loaded) = load() else { return };
+    let bound = envelope(&loaded);
+    let mut race = race::Race::start(loaded.setup);
+    let mut held = race::HeldButtons::new(1 << button::CROSS);
+
+    let mut left_at = None;
+    let mut nonfinite_at = None;
+    for tick in 0..600u32 {
+        let snapshot = held.snapshot();
+        race.tick(&snapshot);
+        let telemetry = race.telemetry();
+
+        if left_at.is_none() && telemetry.spline_distance >= bound {
+            left_at = Some(tick);
+        }
+        if !telemetry.position.is_finite() {
+            nonfinite_at = Some(tick);
+            break;
+        }
+    }
+
+    println!(
+        "left the {bound:.1}-unit envelope at tick {left_at:?}, went non-finite at \
+         tick {nonfinite_at:?}"
+    );
+    assert!(
+        left_at.is_some() || nonfinite_at.is_some(),
+        "the ship stayed on the track for 600 ticks: the physics improved, so delete \
+         this test and the known-limitations section of docs/tools/oag-game.md"
+    );
+}
+
+/// The spline and the collision geometry have to be the same track.
+///
+/// Nothing under this test can catch a mismatch: `oag-formats` decodes each of them
+/// correctly in isolation, and a ship hovering over geometry a hundred units from
+/// the spline it spawned on would look like a physics bug rather than a loading one.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_collision_geometry_is_under_the_spline() {
+    let Some(loaded) = load() else { return };
+    let handling = loaded.setup.handling;
+    let spline = &loaded.setup.spline;
+    let collision = &loaded.setup.collision;
+
+    assert!(!spline.is_empty(), "the track produced no spline samples");
+    assert!(
+        !collision.colliders().is_empty(),
+        "the track produced no colliders"
+    );
+
+    // Cast down the surface normal at a spread of samples along the track, from one
+    // probe reach above the surface line to one below it. `ride_height` is the length
+    // the ship's own probes use, so a miss here is a place a ship on the spline would
+    // find nothing to hover on.
+    let reach = handling.antigrav.ride_height;
+    let mut hits = 0;
+    let mut probes = 0;
+    let step = (spline.len() / 200).max(1);
+    for index in (0..spline.len()).step_by(step) {
+        let Some(sample) = spline.sample(index) else {
+            continue;
+        };
+        let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
+        let from = Vec3::from_array(sample.pos) + up * reach;
+        probes += 1;
+        if collision
+            .raycast(oag_physics::Ray::new(from, -up, reach * 2.0), None, false)
+            .is_some()
+        {
+            hits += 1;
+        }
+    }
+
+    println!("{hits}/{probes} downward probes found collision geometry within {reach} units");
+    // Not all of them: a junction's samples overlap, the spline runs through
+    // scenery-only stretches, and the two decoders were never promised to agree
+    // everywhere. Most of them is the claim.
+    assert!(
+        hits * 2 > probes,
+        "only {hits} of {probes} samples have anything under them within \
+         {reach} units; the spline and the collision geometry are not the same track"
+    );
+}

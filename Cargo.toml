@@ -6,6 +6,10 @@ members = [
   "crates/disc",
   "crates/formats",
   "crates/game",
+  "crates/gameplay",
+  "crates/input",
+  "crates/physics",
+  "crates/render",
   "crates/tools",
   "crates/view",
 ]
@@ -22,6 +26,10 @@ oag-assets = { path = "crates/assets" }
 oag-core = { path = "crates/core" }
 oag-disc = { path = "crates/disc" }
 oag-formats = { path = "crates/formats" }
+oag-gameplay = { path = "crates/gameplay" }
+oag-input = { path = "crates/input" }
+oag-physics = { path = "crates/physics" }
+oag-render = { path = "crates/render" }
 
 anyhow = "1"
 thiserror = "2"

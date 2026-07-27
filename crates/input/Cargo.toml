@@ -1,0 +1,18 @@
+[package]
+name = "oag-input"
+description = "Maps real devices onto the abstract button layer and the simulation's input snapshot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# The arrow points this way round on purpose: `oag-gameplay` owns the snapshot
+# type and this crate produces one. Nothing in the simulation may depend on this
+# crate. See docs/architecture/workspace-layout.md.
+[dependencies]
+oag-gameplay.workspace = true
+winit = "0.30"
+
+[lints]
+workspace = true

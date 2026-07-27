@@ -4,6 +4,11 @@
 //! offscreen capture path, aimed at a real surface instead of a readback
 //! buffer, with yaw, pitch and zoom driven continuously by held keys instead
 //! of one fixed angle passed on the command line.
+//!
+//! Only the window is here. The camera maths is
+//! [`oag_render::camera::orbit`], which knows nothing about `winit` and is
+//! tested without one; this module just maps real keys onto its [`Held`] and
+//! feeds it the elapsed time.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -16,22 +21,9 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
-use crate::mesh::Model;
-use crate::mesh_render::{self, DEPTH_FORMAT, UNIFORMS_SIZE};
-
-/// Radians per second the arrow keys rotate the camera.
-const ROTATE_RATE: f32 = 1.2;
-
-/// Zoom multiplier change per second while a zoom key is held.
-const ZOOM_RATE: f32 = 0.8;
-
-/// Keeps the camera short of straight down or up, where `look_at`'s up vector
-/// degenerates and the orbit flips.
-const PITCH_LIMIT: f32 = 1.5;
-
-/// How close and how far the zoom multiplier is allowed to go. 1.0 is the
-/// bounding-sphere framing [`mesh_render`] uses by default.
-const ZOOM_RANGE: std::ops::RangeInclusive<f32> = 0.3..=4.0;
+use oag_render::camera::orbit::{Held, Orbit, PITCH_LIMIT, advance};
+use oag_render::mesh::Model;
+use oag_render::mesh_render::{self, DEPTH_FORMAT, UNIFORMS_SIZE};
 
 /// Opens a window and orbits `model` under keyboard control until closed.
 ///
@@ -53,60 +45,6 @@ pub fn run(model: Model, yaw: f32, pitch: f32) -> Result<()> {
     };
     event_loop.run_app(&mut app)?;
     Ok(())
-}
-
-/// Which camera keys are currently down.
-#[derive(Default)]
-struct Held {
-    yaw_neg: bool,
-    yaw_pos: bool,
-    pitch_neg: bool,
-    pitch_pos: bool,
-    zoom_in: bool,
-    zoom_out: bool,
-}
-
-/// The orbit camera's yaw, pitch and zoom.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Orbit {
-    yaw: f32,
-    pitch: f32,
-    zoom: f32,
-}
-
-/// Advances `orbit` by `dt` seconds according to which keys are held.
-///
-/// Pitch clamps short of straight down or up, where `mesh_render`'s `look_at`
-/// up vector degenerates and the orbit flips. Zoom clamps to [`ZOOM_RANGE`].
-/// Pure so the clamping can be tested without a window or a GPU.
-fn advance(orbit: Orbit, held: &Held, dt: f32) -> Orbit {
-    let mut yaw = orbit.yaw;
-    let mut pitch = orbit.pitch;
-    let mut zoom = orbit.zoom;
-
-    if held.yaw_neg {
-        yaw -= ROTATE_RATE * dt;
-    }
-    if held.yaw_pos {
-        yaw += ROTATE_RATE * dt;
-    }
-    if held.pitch_pos {
-        pitch += ROTATE_RATE * dt;
-    }
-    if held.pitch_neg {
-        pitch -= ROTATE_RATE * dt;
-    }
-    pitch = pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT);
-
-    if held.zoom_in {
-        zoom -= ZOOM_RATE * dt;
-    }
-    if held.zoom_out {
-        zoom += ZOOM_RATE * dt;
-    }
-    zoom = zoom.clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end());
-
-    Orbit { yaw, pitch, zoom }
 }
 
 struct App {
@@ -399,94 +337,4 @@ fn make_depth_view(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Text
         view_formats: &[],
     });
     depth.create_view(&wgpu::TextureViewDescriptor::default())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn held(set: impl FnOnce(&mut Held)) -> Held {
-        let mut held = Held::default();
-        set(&mut held);
-        held
-    }
-
-    #[test]
-    fn no_keys_held_leaves_the_camera_still() {
-        let start = Orbit {
-            yaw: 0.1,
-            pitch: 0.2,
-            zoom: 1.5,
-        };
-        assert_eq!(advance(start, &Held::default(), 1.0), start);
-    }
-
-    #[test]
-    fn zero_dt_leaves_the_camera_still_even_with_keys_held() {
-        let start = Orbit {
-            yaw: 0.1,
-            pitch: 0.2,
-            zoom: 1.5,
-        };
-        let held = held(|h| {
-            h.yaw_pos = true;
-            h.pitch_pos = true;
-            h.zoom_in = true;
-        });
-        assert_eq!(advance(start, &held, 0.0), start);
-    }
-
-    #[test]
-    fn yaw_left_and_right_move_opposite_ways() {
-        let start = Orbit {
-            yaw: 0.0,
-            pitch: 0.0,
-            zoom: 1.0,
-        };
-        let right = advance(start, &held(|h| h.yaw_pos = true), 1.0);
-        let left = advance(start, &held(|h| h.yaw_neg = true), 1.0);
-        assert!(right.yaw > start.yaw);
-        assert!(left.yaw < start.yaw);
-        assert_eq!(right.yaw, -left.yaw);
-    }
-
-    #[test]
-    fn opposite_keys_held_together_cancel() {
-        let start = Orbit {
-            yaw: 0.3,
-            pitch: 0.0,
-            zoom: 1.0,
-        };
-        let held = held(|h| {
-            h.yaw_neg = true;
-            h.yaw_pos = true;
-        });
-        assert_eq!(advance(start, &held, 1.0), start);
-    }
-
-    #[test]
-    fn pitch_clamps_short_of_vertical_however_long_held() {
-        let start = Orbit {
-            yaw: 0.0,
-            pitch: 0.0,
-            zoom: 1.0,
-        };
-        let up = advance(start, &held(|h| h.pitch_pos = true), 1000.0);
-        assert_eq!(up.pitch, PITCH_LIMIT);
-        let down = advance(start, &held(|h| h.pitch_neg = true), 1000.0);
-        assert_eq!(down.pitch, -PITCH_LIMIT);
-    }
-
-    #[test]
-    fn zoom_clamps_to_its_range_however_long_held() {
-        let start = Orbit {
-            yaw: 0.0,
-            pitch: 0.0,
-            zoom: 1.0,
-        };
-        let close = advance(start, &held(|h| h.zoom_in = true), 1000.0);
-        assert_eq!(close.zoom, *ZOOM_RANGE.start());
-        let far = advance(start, &held(|h| h.zoom_out = true), 1000.0);
-        assert_eq!(far.zoom, *ZOOM_RANGE.end());
-    }
 }

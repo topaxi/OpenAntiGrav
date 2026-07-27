@@ -19,6 +19,7 @@ rule here follows from it.
 | `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, platform identification. |
 | `oag-formats` | `crates/formats` | Asset container identification and parsing. Currently triage only; parsers land as formats are decoded. |
 | `oag-tools` | `crates/tools` | Command line tools: `oag-unpack`, `oag-wad`. |
+| `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track-ribbon builder, cameras. Owns no window, so the viewer and the game can each keep their own. |
 | `oag-view` | `crates/view` | wgpu asset viewer. The first crate with a window. |
 | `oag-assets` | `crates/assets` | Runtime asset access: a WAD read from a path or straight out of a disc image, by index, name or name hash. |
 | `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. |
@@ -31,7 +32,6 @@ crate created before its shape is understood tends to get the wrong shape.
 | Crate | Milestone | Purpose |
 | --- | --- | --- |
 | `oag-trace` | M3 | Trace capture and comparison against the original. |
-| `oag-render` | M4 | wgpu renderer. |
 | `oag-input` | M4 | Input mapping and the per-tick input snapshot. |
 | `oag-physics` | M4 | Ship dynamics and collision. |
 | `oag-gameplay` | M4 | The `World` struct and the tick function. |
@@ -71,6 +71,18 @@ Two rules, both enforceable:
    `[[bin]]` depends on its own `[lib]`, which is inside the crate and so does
    not breach this; the library exists purely so the boot sequence is reachable
    from tests.
+
+`oag-render` arrived early too, for the same kind of reason: the only 3D renderer
+in the repository was inside `oag-view`, and the game needs the same pipeline to
+draw a track and a ship. The mesh loader, the wgpu mesh pipeline and its shader,
+the track-ribbon builder, the offscreen render-and-readback capture and the
+camera maths all moved out of `crates/view` into `crates/render` unchanged; what
+stayed behind is the viewer itself - the CLI, the `winit` event loop, the texture
+browser and its screenshot path. `oag-render` has **no `winit` dependency** and
+never will: a crate that owns a window cannot be shared with a game that owns its
+own. Its seam is `mesh_render::build(&device, &queue, &model, format)`, the same
+shape `oag-game`'s own front-end renderer already has, so each caller keeps its
+surface to itself.
 
 `oag-assets` and `oag-game` both arrived earlier than the table above expected:
 the front end needed asset access and a binary before any of M4 existed.

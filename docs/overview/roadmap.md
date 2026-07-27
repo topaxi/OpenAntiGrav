@@ -45,6 +45,9 @@ Decode the containers, then the assets inside them.
 - [x] `.vex` mesh batches decoded into portable vertex buffers, with textures
 - [x] [Track data](../formats/track.md): spline graph, racing line, PVS sections,
       validated against all 40 track files on the disc with nothing left over
+- [x] [Collision geometry](../formats/collision.md): the indexed triangle soup,
+      separate from the render mesh, validated on both discs with 319 of 319
+      nodes closing exactly over 602,086 vertices
 - [x] Parse a real track and render it: `oag-view --track` draws the driveable
       ribbon, `--mesh` draws all 482 art meshes in place, and the two outlines
       agree
@@ -79,6 +82,9 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] [Input](../ghidra/functions/psp-pulse/input.md), [collision](../ghidra/functions/psp-pulse/collision.md),
       [video](../ghidra/functions/psp-pulse/frontend-video.md), [physics model](../physics/README.md)
 - [x] Physics is float, not fixed-point; integrator is 3 sub-steps of dt/3
+- [x] [Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse/engine.md):
+      the craft update frame, every control force term, and all 32 handling
+      parameters placed with the block's byte accounting closing exactly
 - [ ] Memory management and the heap layout
 - [ ] Resource loading: how a WAD entry becomes a live object
 - [ ] Game state machine
@@ -88,6 +94,11 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 **Exit criterion:** engine lifecycle and memory map documented; at least 50
 functions documented to the standard in
 [`ghidra/function-template.md`](../ghidra/function-template.md).
+
+The function count is met: [names.tsv](../ghidra/functions/psp-pulse/names.tsv)
+carries **120** documented symbols, each refused by
+`scripts/apply-ghidra-names.py` unless its address and name are still on an
+evidence page. The memory map is what remains.
 
 ---
 
@@ -108,14 +119,42 @@ reports where and by how much it diverges.
 
 ## M4 - Playable core
 
-- [ ] wgpu renderer MVP: track geometry, ships, a free camera
-- [ ] Input
-- [ ] Chase camera
-- [ ] Ship physics: thrust, steering, airbrakes, pitch, the air cushion
-- [ ] Collision against track and walls
+- [x] wgpu renderer MVP: `oag-render` draws track geometry and ships, and
+      `oag-game --race` puts a ship on a real track with a chase camera, headless
+      or in a window. See [oag-game](../tools/oag-game.md).
+- [x] Input: `oag-input` maps devices onto the abstract button layer and produces
+      the `InputSnapshot` the simulation consumes
+- [x] Chase camera: `oag_render::camera::chase`, its seven parameters taken from
+      `<ExternalCameraFar>` rather than invented
+- [x] Ship physics **implemented, none of it verified**: thrust, steering, brakes,
+      airbrakes, pitch, the air cushion, grip, drag and the passive torques, from
+      [physics](../physics/README.md) and
+      [engine](../ghidra/functions/psp-pulse/engine.md). Every magnitude is
+      transcribed static analysis; only two cross-product signs are settled, and
+      those by arithmetic rather than by measurement.
+- [x] Collision against track and walls: the [triangle soup](../formats/collision.md)
+      decoded and validated on both discs, queried by a segment-triangle
+      narrowphase behind an AABB reject. The sweep-and-prune broadphase is not
+      implemented, and [an unresolved contradiction](../ghidra/functions/psp-pulse/collision.md)
+      in its coordinate packing should be settled before it is.
 
 **Exit criterion:** a single-ship time trial that passes trace comparison for
 the full lap, and that feels right to someone who knows the original.
+
+**Nothing here is close to that exit criterion**, and the ticks above say only
+that code exists. There is no trace comparison, because that is M3 and M3 has not
+started.
+
+Concretely: **the ship cannot yet fly a lap.** It spawns on the racing line,
+hovers, and drives forward, and then loses probe contact after about 100 ticks and
+is thrown off the track by 166. That is recorded as a failing-on-purpose test,
+`the_ship_does_not_stay_on_the_track_yet`, whose message says to delete it when it
+starts passing. Three measurements produced while implementing this say the model
+as transcribed is not yet right: the roll oscillator is
+[11 % outside the specified integrator's stability limit](../physics/README.md),
+the hover target exceeds the probe cast length so no resting height exists, and
+two cross-product terms had to be flipped to produce the behaviour their own
+evidence pages describe.
 
 ---
 
@@ -168,7 +207,10 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 | --- | --- | --- |
 | Where is lap counting? `gate` has no runtime class at all. | M5 | [track data](../formats/track.md) |
 | How is a ship assigned a grid slot? | M5 | [track data](../formats/track.md) |
-| What does the per-vertex collision scalar mean? | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
+| What does the per-vertex collision scalar mean? **Not answerable from assets**: all 602,086 are exactly `1.0`, so only the consumer can say. | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
+| How does the sweep-and-prune packing hold coordinates beyond +/-1024, when real tracks reach 1,554? | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
 | What are the coordinate conventions? Handedness, units, angles. | M4 | [physics](../physics/README.md) |
+| What calls `Ship_UpdateCraft`? Dispatched through a vtable, so the frame's own confidence is capped until the call site is found. | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |
+| Do the angular accumulators hold torque or angular acceleration? | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |
 | Why does the US PSP disc carry a directory named for the *European* serial? | nothing yet | [PSP disc layout](../psp/pulse-disc-layout.md) |

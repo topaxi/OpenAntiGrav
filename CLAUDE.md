@@ -80,11 +80,15 @@ Existing crates:
 | `oag-formats` | `crates/formats` | Asset container identification and parsing (WAD, LZSS, textures, `.vex`, track data, front-end XML, PMF, fonts). |
 | `oag-assets` | `crates/assets` | Runtime asset access: `Archive` reads a WAD by path or straight out of a disc image, by index/name/hash. |
 | `oag-tools` | `crates/tools` | CLI: `oag-unpack`, `oag-wad`. |
-| `oag-view` | `crates/view` | wgpu asset viewer, standalone. |
+| `oag-physics` | `crates/physics` | Ship dynamics and collision queries. Depends on `oag-core` and nothing else, deliberately. |
+| `oag-gameplay` | `crates/gameplay` | The `World` struct, the `InputSnapshot` type the simulation consumes, spline spawning. |
+| `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track ribbon, cameras. Owns no window. |
+| `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
+| `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
 | `oag-game` | `crates/game` | Composition root; boots the front end. A thin `[[bin]]` over `[lib]` so boot logic is testable headlessly. |
 
-Later crates (`oag-trace`, `oag-render`, `oag-input`, `oag-physics`, `oag-gameplay`,
-`oag-race`, `oag-weapons`, `oag-ai`, `oag-audio`, `oag-ui`, `oag-replay`, `oag-net`) are
+Later crates (`oag-trace`, `oag-race`, `oag-weapons`, `oag-ai`, `oag-audio`,
+`oag-ui`, `oag-replay`, `oag-net`) are
 added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the
 full table and reasoning. Don't create placeholder crates ahead of that.

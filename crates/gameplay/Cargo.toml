@@ -1,0 +1,19 @@
+[package]
+name = "oag-gameplay"
+description = "The World struct, the input snapshot the simulation consumes, and the tick function"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `oag-input` is deliberately absent: this crate owns the input *snapshot type*
+# and the input system depends on it, not the other way round. So is every
+# renderer, audio and windowing crate. See docs/architecture/workspace-layout.md.
+[dependencies]
+oag-core.workspace = true
+oag-formats.workspace = true
+oag-physics.workspace = true
+
+[lints]
+workspace = true

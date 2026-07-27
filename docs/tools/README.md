@@ -6,7 +6,7 @@
 | [`oag-view`](oag-view.md) | **working** | Display assets from a disc image; headless screenshots |
 | `oag-convert` | M1 | Convert assets to standard formats |
 | `oag-trace` | M3 | Compare a simulation run against a trace from the original |
-| `oag-game` | M4 | The engine itself |
+| [`oag-game`](oag-game.md) | **working** | The engine itself: the front end, and `--race` |
 
 All are run through `just` for convenience:
 

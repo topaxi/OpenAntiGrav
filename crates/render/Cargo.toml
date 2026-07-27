@@ -1,33 +1,19 @@
 [package]
-name = "oag-game"
-description = "Runs Wipeout Pulse from a disc image: the composition root"
+name = "oag-render"
+description = "The wgpu renderer: meshes, track ribbons and cameras, shared by the viewer and the game"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[lib]
-name = "oag_game"
-path = "src/lib.rs"
-
-[[bin]]
-name = "oag-game"
-path = "src/main.rs"
-
 [dependencies]
 oag-assets.workspace = true
 oag-core.workspace = true
 oag-formats.workspace = true
-oag-gameplay.workspace = true
-oag-input.workspace = true
-oag-physics.workspace = true
-oag-render.workspace = true
 anyhow.workspace = true
-clap.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu = "30"
-winit = "0.30"
 pollster = "0.4"
 
 [lints]

@@ -8,7 +8,7 @@
 
 use winit::keyboard::{Key, NamedKey};
 
-use crate::input::button;
+use oag_gameplay::input::button;
 
 /// Maps a key to an abstract button index, or `None` if it is not bound.
 #[must_use]

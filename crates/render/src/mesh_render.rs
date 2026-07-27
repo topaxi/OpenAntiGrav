@@ -45,10 +45,10 @@ fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32, zoom: f32) -> Unif
 
 /// The depth format `build`'s pipeline is fixed to; a caller's own depth
 /// texture must match it.
-pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 /// Recomputes the camera and model matrices and uploads them to `buffer`.
-pub(crate) fn write_uniforms(
+pub fn write_uniforms(
     queue: &wgpu::Queue,
     buffer: &wgpu::Buffer,
     model: &Model,
@@ -62,7 +62,7 @@ pub(crate) fn write_uniforms(
 }
 
 /// Size, in bytes, of the uniform buffer `write_uniforms` expects.
-pub(crate) const UNIFORMS_SIZE: u64 = std::mem::size_of::<Uniforms>() as u64;
+pub const UNIFORMS_SIZE: u64 = std::mem::size_of::<Uniforms>() as u64;
 
 /// Renders one frame of `model` to a PNG from a given orbit angle.
 ///
@@ -239,7 +239,7 @@ pub fn capture_from(
     Ok(())
 }
 
-pub(crate) type Built = (
+pub type Built = (
     wgpu::RenderPipeline,
     wgpu::BindGroup,
     wgpu::Buffer,
@@ -253,7 +253,7 @@ pub(crate) type Built = (
 /// both draw through the one pipeline. The returned `BindGroup` is a
 /// placeholder bound to an empty buffer; a real uniform buffer and bind group
 /// must be created against `pipeline.get_bind_group_layout(0)` by the caller.
-pub(crate) fn build(
+pub fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model: &Model,

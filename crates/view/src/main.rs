@@ -14,16 +14,18 @@
 //! GPU. If it draws the right picture, every layer beneath it is right.
 
 mod assets;
-mod mesh;
-mod mesh_render;
 mod offscreen;
 mod orbit;
-mod track;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+// The mesh loader, the track-ribbon builder and the pipeline that draws them
+// live in `oag-render`, so the game draws through the same code. What is left
+// here is the viewer: the CLI, the window and the texture browser.
+use oag_render::{mesh, mesh_render, track};
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
