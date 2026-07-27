@@ -22,6 +22,7 @@ pub mod pmf;
 pub mod png;
 pub mod ps2_music;
 pub mod ps2_texture;
+pub mod sblk;
 pub mod signature;
 pub mod texture;
 pub mod track;

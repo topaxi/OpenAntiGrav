@@ -31,12 +31,20 @@ use std::path::{Path, PathBuf};
 
 use oag_disc::DiscImage;
 use oag_formats::ps2_music::{self, Directory};
+use oag_formats::sblk::{self, Bank};
+use oag_formats::wad;
 
 /// The PS2 music archive, relative to the disc root.
 const PS2_MUSIC: &str = "54748/PS2MUSIC.WAD";
 
 /// Bytes of each track to sample for the stereo statistics.
 const PROBE_BYTES: u64 = 2 << 20;
+
+/// The PSP archives that hold sound banks.
+const PSP_ARCHIVES: [&str; 2] = ["PSP_GAME/USRDIR/FE.wad", "PSP_GAME/USRDIR/Data.wad"];
+
+/// Fewer banks than this means the walk stopped finding them.
+const MIN_BANKS: usize = 30;
 
 fn image(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -196,4 +204,173 @@ fn the_ps2_music_archive_chains_exactly_and_holds_interleaved_stereo() {
             "track {index}: channel correlation {correlation:.3} is too low for a stereo mix"
         );
     }
+}
+
+#[derive(Default)]
+struct BankSurvey {
+    blobs: usize,
+    banks: usize,
+    blocks: usize,
+    in_spec: usize,
+    defined_flags: usize,
+    named: usize,
+    /// Banks whose name round-trips to their own WAD entry hash.
+    name_matches: usize,
+    /// Of those, how many were short enough to be stored whole.
+    name_candidates: usize,
+    /// Mean step over RMS for each bank's decoded audio.
+    roughness: Vec<f64>,
+}
+
+fn survey_banks(disc: &mut DiscImage, archive_path: &str, into: &mut BankSurvey) {
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == archive_path)
+        .unwrap_or_else(|| panic!("{archive_path} present"))
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = wad::Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, wad::Directory::directory_len(count))
+        .expect("directory");
+    let dir = wad::Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    for (index, entry) in dir.entries.iter().enumerate() {
+        if entry.size == 0 {
+            continue;
+        }
+        let raw = disc
+            .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
+            .expect("blob");
+        let blob = match entry.compression {
+            wad::Compression::None => raw,
+            wad::Compression::Lzss => {
+                oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize).expect("lzss")
+            }
+            wad::Compression::Zlib => panic!("{archive_path} entry {index}: unexpected zlib entry"),
+        };
+        into.blobs += 1;
+        if !sblk::looks_like_bank(&blob) {
+            continue;
+        }
+
+        let bank =
+            Bank::parse(&blob).unwrap_or_else(|e| panic!("{archive_path} entry {index}: {e}"));
+        into.banks += 1;
+        into.blocks += bank.adpcm_blocks();
+        for block in bank.waveforms.chunks_exact(sblk::ADPCM_BLOCK_LEN) {
+            into.in_spec += usize::from(sblk::adpcm_block_is_in_spec(block));
+            into.defined_flags += usize::from(sblk::adpcm_flag_is_defined(block));
+        }
+
+        if !bank.name.is_empty() {
+            into.named += 1;
+            // The field forces a NUL at byte 7, so only a name of 6 characters
+            // or fewer is certainly stored whole and can be expected to hash
+            // back. The longer ones are truncated and cannot.
+            if bank.name.len() <= 6 {
+                into.name_candidates += 1;
+                let path = format!(r"Data\Sound\{}.bnk", bank.name);
+                into.name_matches += usize::from(wad::hash_name(&path) == entry.name_hash);
+            }
+        }
+
+        // Decoding has to produce exactly the documented sample count, which is
+        // what says the block size and the samples-per-block are both right.
+        let pcm = sblk::decode_adpcm(bank.waveforms);
+        assert_eq!(
+            pcm.len(),
+            bank.adpcm_blocks() * sblk::ADPCM_BLOCK_SAMPLES,
+            "{archive_path} entry {index}: wrong sample count"
+        );
+
+        // In-spec header bytes say the *framing* is PS-ADPCM; they say nothing
+        // about the filters or the shift direction being right. Roughness does:
+        // a wrong decode of a 4-bit differential codec is white noise, whose
+        // mean step is about 1.4 times its RMS, and real audio is far below
+        // that. Both are computed on the same samples.
+        if pcm.len() > 1024 {
+            let steps: f64 = pcm
+                .windows(2)
+                .map(|w| f64::from(i32::from(w[0]).abs_diff(i32::from(w[1]))))
+                .sum();
+            let energy: f64 = pcm.iter().map(|&s| f64::from(s) * f64::from(s)).sum();
+            #[expect(clippy::cast_precision_loss, reason = "sample counts are small")]
+            let n = pcm.len() as f64;
+            let rms = (energy / n).sqrt();
+            let roughness = steps / (n - 1.0) / rms.max(1.0);
+            into.roughness.push(roughness);
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs a PSP disc image under data/images"]
+fn every_psp_sound_bank_frames_exactly_and_holds_ps_adpcm() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+
+    let mut survey = BankSurvey::default();
+    for archive in PSP_ARCHIVES {
+        survey_banks(&mut disc, archive, &mut survey);
+    }
+
+    println!("blobs          {}", survey.blobs);
+    println!("banks          {}", survey.banks);
+    println!("adpcm blocks   {}", survey.blocks);
+    println!("in spec        {}", survey.in_spec);
+    println!("defined flags  {}", survey.defined_flags);
+    println!("named          {}", survey.named);
+    println!(
+        "name matches   {} of {} short enough to check",
+        survey.name_matches, survey.name_candidates
+    );
+    let worst = survey.roughness.iter().copied().fold(0.0f64, f64::max);
+    #[expect(clippy::cast_precision_loss, reason = "39 banks")]
+    let mean = survey.roughness.iter().sum::<f64>() / survey.roughness.len() as f64;
+    println!("roughness      mean {mean:.3}, worst {worst:.3} (white noise is ~1.41)");
+
+    assert!(
+        survey.banks >= MIN_BANKS,
+        "only {} banks found, expected at least {MIN_BANKS}",
+        survey.banks
+    );
+    // `Bank::parse` already refuses anything whose framing does not close, so
+    // reaching here at all is the framing result. These are about the payload.
+    //
+    // A byte drawn at random is in spec 5/16 of the time for the predictor and
+    // shift together, and its flag is one of eight values 1/32 of the time. At
+    // half a million blocks, anything near 100% is only explicable as PS-ADPCM.
+    assert!(
+        survey.in_spec * 1000 >= survey.blocks * 999,
+        "{} of {} blocks have an in-spec predictor and shift",
+        survey.in_spec,
+        survey.blocks
+    );
+    assert!(
+        survey.defined_flags * 1000 >= survey.blocks * 999,
+        "{} of {} blocks have a defined flag byte",
+        survey.defined_flags,
+        survey.blocks
+    );
+    // Every bank whose name survived the 7-character field resolves to its own
+    // archive entry, which is what says the name field is a name.
+    // Decoded audio, not noise. The bound is deliberately loose: percussion
+    // and engine loops are genuinely rough, and the point is the gap to 1.41.
+    assert!(
+        worst < 1.0,
+        "a bank decoded with a mean step of {worst:.3} times its RMS, which is noise"
+    );
+    assert!(survey.name_candidates >= 3);
+    assert_eq!(
+        survey.name_matches, survey.name_candidates,
+        "a bank name did not hash back to its own entry"
+    );
 }

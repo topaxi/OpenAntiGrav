@@ -28,7 +28,7 @@ These are the project's actual work.
 | [Handling stats](handling-stats.md) | `.xml` | PSP, PS2 | **understood** | Ship tuning is data, not code. Implemented and validated on both discs: 8 teams x 4 speed classes, every attribute required. Four fields are [pre-scaled at load](../ghidra/functions/psp-pulse/engine.md). |
 | [PSP movie](pmf.md) | `.PMF` | PSP | **understood** | PSMF header and MPEG program stream. Header and demuxer implemented and validated against all 17 movies; the H.264 inside is [transcoded out of process](../architecture/adr/0004-asset-pipeline.md), not decoded here. |
 | [Bitmap font](fnt.md) | `.fnt` | PSP | **partial** | Metrics resolved and validated across all five fonts; the glyph atlas's pixel layout is the same unresolved swizzle as [`.mip`](psp-texture.md). |
-| Sound bank | `.bnk` | PSP | unknown | `03000000` blobs. |
+| [PSP sound bank](psp-audio.md) | `.bnk` | PSP | **partial** | An `SBlk` descriptor block plus PS-ADPCM waveforms. Container, header and codec implemented and validated across all 39 banks and 546,681 audio blocks; banks also carry their own name. Where each individual sound starts inside a bank is [not resolved](psp-audio.md#not-determined). |
 | Particle system | `.pob` | PSP | unknown | Magic `SYSP`. |
 | Ship data | `.dat` | PSP | unknown | Paired with ships; likely handling or collision. |
 | [PS2 music archive](ps2-audio.md) | `.wad` | PS2 | **understood** | `PS2MUSIC.WAD`, **not** the WAD container: a 12-byte-entry directory over 48 kHz 16-bit stereo PCM, uncompressed. Implemented; the chain closes to the byte and the sample rate is pinned against the PSP's ATRAC3plus copies of the same sixteen tracks. |
