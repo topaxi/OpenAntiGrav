@@ -252,6 +252,36 @@ and now has a measured constraint to satisfy: whatever the accumulator holds,
 `yaw = steer * Turning.amount` written into local `.y` has to come out as
 `-k * steer` about row 1.
 
+**That paragraph now has its answer, and this measurement is one of the two legs
+supporting it.** The PS2 integrator has been read at instruction level: it
+advances the basis rows by `e' = e x w`, not the textbook `e' = w x e`. So the
+engine's angular velocity is the negative of the physical one, the accumulators
+hold torque in that same negated convention, and the two "contradictory" terms
+- the `-400` surface alignment and the hover spring's `F x r` - are **correct as
+written** rather than in need of flipping. Nothing compensates them because
+nothing has to.
+
+The measurement above is what makes that reading more than a code artifact: it
+is end-to-end, accumulator sign in and observed rotation sign out, so it bypasses
+every intermediate transform in the integrator. `steer < 0` giving
+`angularLocal.y < 0` and yet `+1.51 rad/s` about row 1 on 199 of 199 ticks *is*
+`w_game = -w_physics`, provided `Turning.amount > 0` - which is untested but
+plausible, since it is not one of the four fields this page shows being scaled at
+load. The weathervane term corroborates it without even that caveat:
+`cross(forward, velocity) * (-0.1 / -0.3)` turns the nose *toward* the direction
+of travel only under the negated convention.
+
+Read the derivation and its confidence split - 88 for the PS2 build, 80 for the
+claim generalising here - in
+[ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md#the-angular-sign-convention-w_game---w_physics).
+**This page's own 84 ceiling is a methodology cap on decompilation alone, and it
+does not bind that result**, which rests on raw disassembly, a vendor ISA manual
+and this runtime measurement together. What is being raised is specifically the
+angular-accumulator sign convention. The handedness question is *not* raised by
+it and is not the same question: the basis is positively oriented in both builds,
+measured here and rebuilt as `row0 = row1 x row2` by the PS2 orthonormaliser.
+The two were being conflated, and separating them is most of the answer.
+
 Order of terms, all of which write only accumulators unless noted:
 
 | Order | Function | Writes |
@@ -310,6 +340,13 @@ not determined.** Nothing in any term visibly divides by an inertia, and
 [physics](../../../physics/README.md) calls this `angAccelLocal`. The `AddTorque`
 names are chosen for the `Subsystem_VerbNoun` scheme and should not be read as
 settling the question; the integrator was not examined.
+
+**Their sign convention is determined, though**, from the PS2 integrator plus the
+steering measurement below: whichever of the two they hold, they hold it with the
+sign of `-w_physics`. See
+[ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md#the-angular-sign-convention-w_game---w_physics).
+The torque-versus-acceleration question does not disturb it - an inertia tensor
+is positive definite and cannot invert a sign.
 
 ### Every write, by component
 
@@ -723,7 +760,12 @@ stored**. Same conclusion, now with the location.
   (`0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80, 0x100, 0x200, 0x400, 0x800,
   0x1000, 0x2000`). Only bit 0 is established (grounded, set by the hover probes).
   The rest are described where they appear and not named.
-- **Units and handedness.** Still open, and this page does not settle them.
+- **Units.** Still open, and this page does not settle them.
+- **Handedness.** Still open in the sense of world units and axis directions.
+  What is *no longer* open, and was being confused with it, is the angular sign
+  convention: `w_game = -w_physics`, established from the PS2 integrator and the
+  steering measurement above. The basis itself is positively oriented under the
+  ordinary component-wise cross product in both builds.
 
 ## Applied renames
 
@@ -804,6 +846,12 @@ Part of the craft path has now been read in the PS2 build; see
   `object+0x38`, clearing `*(object + 0x370)` immediately before - the same
   offset this page's disassembly shows. Different enclosing function, same
   dispatch idiom.
+- **The angular sign convention**, which is the one item flowing the other way:
+  the PS2's `Body_Integrate` explains this page's own runtime steering
+  measurement instead of merely agreeing with a static reading. `w_game =
+  -w_physics`; the surface-alignment and weathervane torques are correct as
+  written. The PSP integrator has never been located, so this transfers at
+  confidence **80** rather than the 88 it carries on the PS2 page.
 
 Two things it does **not** corroborate, both recorded on that page: the ordering
 of the fifteen force terms (the PS2 `Ship_UpdateCraft` was read only far enough
