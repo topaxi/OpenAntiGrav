@@ -213,9 +213,44 @@ alpha levels {16: 5}
 
 ## Rendering it
 
-`oag-game` still draws with [its own 5x7 glyphs](../../crates/game/src/font.rs);
-wiring the real atlas into the front end is a separate change from decoding it.
-That fallback matters less now, but how it *fails* is still worth keeping: an
-accented letter with no glyph folds to its base letter rather than being
-skipped, because losing a letter changes a word where losing an accent only
-misspells it. The disc's `Français` used to come out as `FRANAIS`.
+`oag-game` draws the front end with these glyphs. `boot::load` reads
+`Data\FE\Fonts\pulse_text.fnt` - the `Default` font - out of `FE.wad`,
+`font::Atlas::from_font` turns it into the one coverage plane the UI pipeline
+already samples, and `push_text` emits one quad per glyph from the record's own
+box and advance. The language screen renders `Français` and `Español` with their
+accents, in the game's own typeface, at proportional widths:
+
+```sh
+just play --no-video --screenshot /tmp/language.png \
+  --until "Language Selection" --hold start
+```
+
+Three details were worth getting right rather than assuming:
+
+- **Coverage, not colour.** The palette is a 16-level alpha ramp over a single
+  RGB - white in the three menu fonts, black in the two HUD ones - so the colour
+  carries nothing the vertex colour does not already supply. One `R8` channel
+  keeps the existing pipeline and the existing bind group.
+- **The atlas has no spare texel.** The block is exactly its own pixels, and the
+  UI pipeline draws solid fills by sampling an opaque texel from the same
+  texture. So the atlas is uploaded two rows taller than the font, with a 2x2
+  opaque patch in the extra rows - 2x2 rather than one texel because a real
+  antialiased font wants linear filtering, and a single opaque texel surrounded
+  by transparent ones would bleed.
+- **The sampler follows the atlas.** Linear for the disc's fonts, which are
+  antialiased and drawn at fractional scales; nearest for the built-in 5x7 set,
+  which is hard-edged pixel art that smoothing turns to mush.
+
+### The fallback is still there, and still folds
+
+`font::Atlas::build` and its 5x7 glyphs remain, and `boot::load` falls back to
+them - with a line in the boot report saying so - if the font is missing or does
+not decode. A silent fallback would make a rendering bug indistinguishable from
+a loading one, and the two look very different on screen.
+
+The accent fold survives the switch and is now tried in a different order. A
+real font carries its own lower case and accents, so the character as written is
+looked up **first**; only if the disc's font genuinely lacks it does the old
+chain run - case fold across the whole of Latin-1, then the base letter. Losing a
+letter changes a word; losing an accent only misspells it, which is why the
+disc's `Français` must never come out as `FRANAIS`.
