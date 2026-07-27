@@ -404,6 +404,35 @@ for (i = 0; i < substeps; i++) {
 `Ship_UpdateCraft` fills them once per frame; every sub-step then applies the
 same frozen values.
 
+### The local force accumulator is applied on exactly the same terms
+
+The sketch above omits `body+0x110`, the **body-local** force accumulator, which
+is where all engine thrust and the lateral-grip term end up. It is read in the
+same sub-step loop, immediately after the world force, and applied like this:
+
+```c
+worldFromLocal = row0 * lf.x + row1 * lf.y + row2 * lf.z;   /* body+0x00/+0x10/+0x20 */
+velocity += worldFromLocal * invMass * h;
+```
+
+using the rows *as already advanced by this sub-step*, and the **same**
+`invMass` word at `body+0x378` and the same `h` as the world force one line
+earlier. There is no second scale factor, no separate mass, and no `dt`
+asymmetry between the two accumulators - the only difference between them is the
+basis rotation, which is what "local" means.
+
+This is worth stating because the asymmetry it rules out is an attractive
+explanation for a real, open discrepancy: this crate's engine produces roughly
+17x more thrust than a genuine capture of the reference scenario shows (see
+`ENGINE_OUTPUT_SCALE` in `crates/physics/src/engine.rs`), and thrust is the one
+force term that goes through the *local* accumulator while quadratic drag and
+rolling resistance go through the *world* one. **If the two were scaled
+differently, that would be the bug. They are not.** `crates/physics`'s `drain`,
+which rotates the local accumulator by the orientation and adds both to one
+force, matches the original. Confidence **85**: read off the decompiled VU-macro
+sequence at `0x0015d088` rather than off clean scalar code, which is what keeps
+it below the 88 the rest of `Body_Integrate` carries.
+
 That changes the stability arithmetic. Write the roll oscillator as
 `a = −k·x₀ − c·ω₀`, frozen for the frame, and note the loop updates position
 *before* velocity. Over `n` sub-steps of `h = H/n`:
@@ -928,7 +957,7 @@ unit(v)` would apply a 2-unit shove to a nearly stationary ship. Confidence
 | `Body_AddForceAtPoint` | `0x0015da60` | not located |
 | `Body_Integrate` | `0x0015d088` | not located |
 | `World_StepBodies` | `0x0015ded8` | the unnamed function at `0x0884f70c` |
-| body accumulators | `+0x100` / `+0x120` / `+0x130` | `+0x100` / `+0x120` / `+0x130` |
+| body accumulators | `+0x100` / `+0x110` / `+0x120` / `+0x130` | `+0x100` / `+0x110` / `+0x120` / `+0x130` |
 
 ## Not determined
 

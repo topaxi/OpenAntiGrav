@@ -87,15 +87,39 @@ use crate::ship::{ShipControls, ShipState};
 /// `2.44` for any non-negative `accelcap`. So one of exactly two things is true:
 ///
 /// - `Engine.amount` as the original loads it is about `0.0244`, against the `0.418`
-///   this crate has - a **17x error in the XML value or in the load-time `* 1e-3`
-///   scaling**, in [`crate::params`], not in this force law; or
+///   this crate has; or
 /// - `Engine.accelcap` is *negative* for Assegai/Venom (about `-9.2`), the cap arm
 ///   binds after all, and the reasoning above is void.
 ///
-/// The discriminating check is to read the two loaded floats at `craft+0x70 + 0x28`
-/// (`amount`) and `+0x30` (`accelcap`) in a running race for that ship and class, and
-/// compare them against what this crate loads. Until that is done, this constant stays
-/// at the value that was actually recovered.
+/// **The second is refuted by the force law itself.** The cap feeds a plain `min`
+/// with no clamp at zero anywhere before the accumulate, so a negative `accelcap`
+/// would make `cap` negative at low speed, `min` would select it over any
+/// non-negative `throttle * amount`, and a ship at full throttle on the start line
+/// would be pushed *backwards* - and could never reach the `-2 * accelcap ~= 18.4`
+/// units/s at which the cap turns positive. See
+/// `docs/ghidra/functions/psp-pulse/engine.md`, "The second branch is refuted by the
+/// force law itself".
+///
+/// **Nor is it the load-time scaling.** `HandlingXml_ParseEngine` (`0x0883945c`)
+/// multiplies `amount` in place by exactly `0.001` and stores `accelcap` verbatim;
+/// `oag_gameplay::handling::ENGINE_AMOUNT_SCALE` is `0.001` on the same field and
+/// nothing else. The two agree exactly, at confidence 90.
+///
+/// **Nor is it an asymmetry between the two force accumulators**, the other
+/// attractive explanation: thrust goes through the body-*local* accumulator while
+/// drag and rolling resistance go through the *world* one, but `Body_Integrate`
+/// (`0x0015d088`, PS2) rotates the local one by the basis and then applies the same
+/// `invMass * h` to both, which is exactly what [`crate::forces`]'s `drain` does.
+/// Confidence 85.
+///
+/// So what is left is the *value*: the raw `<Engine amount>` this crate ends up with
+/// is about `418` where the original's is about `24.4`. Settling it needs the disc -
+/// extract `Data\Ships\Assegai\handlingstats.xml`, read the Venom class's raw
+/// attribute strings, and compare against what [`crate::params::Engine::amount`] gets.
+/// A cheap thing to check first: `Xml_AttributeAsFloat` cannot read exponent notation
+/// and `crates/formats`'s parser can, so a shipped value in exponent form is read
+/// differently by the two. Until that is done, this constant stays at the value that
+/// was actually recovered.
 ///
 /// Two other things narrow where the factor could live, and both are dead ends:
 ///

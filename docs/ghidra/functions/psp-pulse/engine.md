@@ -553,15 +553,60 @@ recorded in `engine.rs`: a steady 24 units/s needs `T ~= 4.88`, so
 as `2.44` unless `accelcap` is about `-9.2`. So either
 
 - `Engine.amount` as loaded is about `0.0244` where this crate has about `0.418`
-  - a **17x error in the XML value or its load-time `* 1e-3` scaling**, not in the
-  force law; or
+  - a **17x error in the value this crate ends up with**, not in the force law; or
 - `Engine.accelcap` is *negative* for Assegai/Venom and the cap arm binds after
   all.
 
-Both are questions about `crates/physics/src/params.rs` and the handling-XML
-reader, not about `Ship_UpdateEngine`. The discriminating check is to read the
-two loaded floats at `craft+0x70 + 0x28` (`amount`) and `+0x30` (`accelcap`) for
-Assegai/Venom and compare them against what this crate loads.
+#### The second branch is refuted by the force law itself
+
+**A negative `accelcap` cannot be what ships**, and the argument needs no data.
+The cap is `0.5 * |forwardSpeed| + accelcap` and the selection is a plain `min`,
+confirmed in the disassembly at `0x0884c7f4`:
+
+```
+0884c7f0: lwc1 f15,0x0(sp)      # T
+0884c7f4: c.lt.s f12,f15        # cap < T ?
+0884c7fc: bc1f 0x0884c808
+0884c804: _swc1 f12,0x0(sp)     # T = cap
+```
+
+There is no clamp at zero anywhere between that `min` and the accumulate. So
+with `accelcap = -9.2`, a ship at a standstill on full throttle gets
+`cap = -9.2`, `min` selects it over any non-negative `throttle * amount`, and the
+accumulated thrust is `-18.4` - **the engine pushes the craft backwards off the
+start line, and keeps doing so until the forward speed passes 18.4 units/s**,
+which it cannot reach because nothing is pushing it forwards. The `throttle >
+100` rescale does not rescue it either: it multiplies the cap by a factor above
+one, which makes a negative cap more negative, not less.
+
+That leaves **one surviving hypothesis**: the engine `amount` this crate ends up
+using is about 17x larger than the original's.
+
+#### And it is not the load-time scaling
+
+`HandlingXml_ParseEngine` (`0x0883945c`) stores `amount` at
+`class * 0x80 + 0xbc` and then multiplies that word in place by exactly
+`0.001`; `accelcap` (`+0xc4`), `gain`, `falloff` and `turbo` are stored verbatim
+with no scaling at all. `crates/gameplay/src/handling.rs` applies
+`ENGINE_AMOUNT_SCALE = 0.001` to the same field and nothing else, so **the two
+agree exactly** and the scaling is not the 17x. Confidence **90**.
+
+The gap therefore has to be in the *value* - the raw `<Engine amount>` this crate
+reads is about `418` where the original's is about `24.4`. Which means one of:
+a different ship, a different speed-class block, a different file, or a reader
+disagreement on the attribute text itself. That last one is worth checking first
+and is cheap: `Xml_AttributeAsFloat` (`0x0895379c`) **cannot read exponent
+notation** (see [xml-reader.md](xml-reader.md)), while `crates/formats`'s parser
+uses an ordinary float parse, so any shipped value written in exponent form is
+read differently by the two - a reader-level mechanism that needs only the
+extracted XML text to confirm or kill.
+
+**The discriminating check needs the disc**, which is why it is recorded here
+rather than settled: extract `Data\Ships\Assegai\handlingstats.xml`, read the raw
+`<Engine amount accelcap/>` attribute strings for the Venom class, and compare
+against what `crates/formats::handling` returns for the same field. Failing that,
+read the two loaded floats at `craft+0x70 + 0x28` (`amount`) and `+0x30`
+(`accelcap`) in a running race.
 
 ### Engine `gain` and `falloff` are dead
 
