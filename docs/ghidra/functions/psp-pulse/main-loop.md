@@ -66,9 +66,39 @@ The loading screen runs on its own thread and drives its animation from
 | `0x08813244` | `InGame_UpdatePauseInput` | 85 |
 | `0x08818fd8` | `Demo_UpdateAttractMode` | 80 |
 
-The machine is at `0x08b31784`, with the current state's name at `+0x18c`.
-Transition takes a state name as a string; queries are `strcmp` against the
-current name. 31 functions call the transition.
+`0x08b31784` holds a **pointer to** the machine, not the machine itself - the
+static reading said the machine was at that address, and running the game
+corrects it. The machine was at `0x08d0a820` in the session that measured this,
+which is a heap address and so is not itself a constant. The current state's
+name is at `+0x18c` **of the machine**, as an inline character buffer rather than
+a pointer into `.rodata`. Transition takes a state name as a string; queries are
+`strcmp` against the current name. 31 functions call the transition.
+
+The inline buffer is what makes this useful: reading it is a text-mode view of
+where the front end is, which is what
+[the debugger page](../../../reverse-engineering/ppsspp-debugger.md) navigates
+the menus by. It is also how the buffer was shown to be inline rather than a
+pointer - it read `"Show Logo\0election\0"`, a shorter name overwriting
+`"Language Selection"` in place, leaving the tail of the longer one behind.
+Confidence **95**, runtime-observed and reproducible.
+
+Runtime observation also extends the state list below with names that string
+search had not connected to a boot path. In order, from a cold boot of the USA
+disc with an empty memory stick:
+
+```
+LogoFMV -> Show Logo -> RemoveMemoryStickWarning -> NameSetup2FromBoot
+   -> TagSetup2FromBoot -> CreateFromBoot -> Main menu -> Racebox
+   -> Single Player -> Track Creation -> Team Selection
+   -> InGame -> InGameTrackDescriptionScreen -> InGame
+```
+
+Two things there are worth keeping. `Main menu` and `Track Creation` are spelled
+in a different case convention from the rest, and `Track Creation` is the state
+name for what the screen itself calls TRACK SELECT, while `Team Selection` is
+SHIP SELECT - **the state names do not match the screen titles**, so neither can
+be inferred from the other. Confidence **90** for the sequence, which is observed
+rather than derived; it is one path through the machine and not the whole graph.
 
 Confirmed transitions: boot enters `"Language Selection"` or `"Launch Game"`
 depending on `0x08ab07e3`; START/SELECT toggles `"InGame"` and

@@ -36,8 +36,12 @@ ticks and then drifts has a different bug from one that is wrong at tick 1.
 | --- | --- |
 | Save state | A fixed, reproducible starting point. Committed as a reference by name, not content. |
 | Input script | Per-tick controller state. Plain text, committed. |
-| Trace capture | Emulator-side recording of the observed values, per tick. |
+| Trace capture | Emulator-side recording of the observed values, per tick. **Built**: `scripts/psp-trace.py`, on top of [PPSSPP's websocket debugger](ppsspp-debugger.md). |
 | `oag-trace` | Runs our engine on the same input and compares. |
+
+Traces are derived game data and are never committed. They go under
+`data/traces/`, which `.gitignore` covers, and are regenerated from a disc image
+by the recipe on the debugger page.
 
 ## What gets traced
 

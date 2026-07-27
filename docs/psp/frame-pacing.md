@@ -119,6 +119,40 @@ code. The physics integrator was not located. Suggested starting points:
 `"antigrav_height_adjust"` at `0x08a7b1ac`, referenced from `0x08839880`, and
 the handling-parameter loader near `"%s HANDLING STATS"` at `0x08a7b9a0`.
 
-Nothing here was verified at runtime. Breaking on `0x08804a9c` in PPSSPP and
-logging `f20` across a race and a menu would take the frame-pacing findings from
-87-92 to runtime-verified.
+## Verified at runtime
+
+The previous version of this page ended by saying nothing here had been checked
+against the game running, and proposing exactly that check. It has now been done,
+with [PPSSPP's websocket debugger](../reverse-engineering/ppsspp-debugger.md),
+during an actual Time Trial on Talon's Junction. What was sampled is `dt` at
+`craft+0x1c8` - the value this frame hands the craft update - over 120
+consecutive calls of `Ship_UpdateCraft`, rather than `f20` at `0x08804a9c`.
+
+**Delta time really is variable.** Over 120 ticks: minimum `0.016396`, maximum
+`0.016973`, **72 distinct values**. A fixed step would have produced one.
+
+**Its mean is the vblank rate, not 60 Hz.** Mean and median both `0.016683`,
+which is `1/59.94` to five decimal places, against `1/60 = 0.016667`. That is
+this page's "racing presents at one vblank" and "the PSP LCD runs at ~59.94 Hz"
+showing up in the number the simulation is actually fed. Independent confirmation
+of two separate findings from one measurement.
+
+**The three fixed-timestep globals are still zero**, read before and after those
+120 ticks of racing. This closes the hedge this page carried at confidence 88 -
+"a write through an unresolved pointer cannot be excluded" - as far as it can be
+closed: no such write happens during boot, the front end, or a race. Raise to
+**93**. Not 100, because a mode never entered here could still write them.
+
+**`display+0x116c` reads 1 while racing**, which is what this page predicts from
+the `InGame` constructor, and `g_game+0x44` reads `1e-6`, confirming the timer's
+units are microseconds. Both **runtime-verified**.
+
+One caveat that should not be dropped: this is an emulator, and `dt` derives from
+emulated `sceKernelGetSystemTimeWide`. The *jitter* is PPSSPP's timing as much as
+the game's. What carries over to hardware is the shape - variable, not fixed -
+and the mean sitting on the vblank period, since that is imposed by the present
+path rather than by wall-clock noise.
+
+**Still not verified:** whether the craft physics integrator sub-steps at 1/60 or
+integrates raw `dt`, which is the question above and is unaffected by any of
+this.

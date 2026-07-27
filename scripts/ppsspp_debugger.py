@@ -1,0 +1,197 @@
+"""A client for PPSSPP's websocket debugger, for M3's verification harness.
+
+PPSSPP exposes a JSON-over-websocket debugger, enabled with `--debugger=PORT` on
+`PPSSPPHeadless` or `RemoteDebuggerOnStartup` in the config of the SDL build.
+This module wraps the parts the harness needs and encodes the four traps that
+cost a session to find; each is documented in
+`docs/reverse-engineering/ppsspp-debugger.md`.
+
+The one that shapes every caller: **memory reads cost about 520 ms while the CPU
+is running and about 0.3 ms while it is stepping**, and a resume/break cycle
+costs 0.5 ms. Per-tick capture is therefore breakpoint-driven - break, read the
+whole struct in one call, resume - and never polled against a running CPU.
+
+Needs `websocket-client`; run scripts through `uv run --with websocket-client`.
+"""
+
+import base64
+import json
+import struct
+import time
+
+from websocket import create_connection
+
+PSP_CLOCK_HZ = 222_000_000
+
+# Set by `Game_Bootstrap`; see docs/ghidra/functions/psp-pulse/main-loop.md.
+# The address holds a *pointer* to the state machine, not the machine itself.
+G_STATE_MACHINE = 0x08B31784
+STATE_NAME_OFFSET = 0x18C
+
+
+class DebuggerError(RuntimeError):
+    """The debugger answered a command with an error."""
+
+
+class Debugger:
+    """One connection to a running PPSSPP instance."""
+
+    def __init__(self, port=47800, connect_timeout=20.0):
+        self.ws = create_connection(
+            f"ws://127.0.0.1:{port}/debugger", timeout=connect_timeout
+        )
+        self.ws.settimeout(0.05)
+        self.pending = []
+        self._ticket = 0
+
+    def close(self):
+        self.ws.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+    def send(self, event, **kw):
+        self._ticket += 1
+        ticket = str(self._ticket)
+        self.ws.send(json.dumps({"event": event, "ticket": ticket, **kw}))
+        return ticket
+
+    def _recv(self):
+        try:
+            return json.loads(self.ws.recv())
+        except Exception:
+            return None
+
+    def call(self, event, timeout=15.0, **kw):
+        """Send a command and return its reply.
+
+        Most commands answer the ticket they were sent with, but a few
+        (`cpu.resume`) only broadcast an acknowledgement to every connected
+        client, with no ticket at all, so both shapes count as the reply.
+        """
+        ticket = self.send(event, **kw)
+        end = time.time() + timeout
+        while time.time() < end:
+            msg = self._recv()
+            if msg is None:
+                continue
+            if msg.get("ticket") == ticket:
+                if msg.get("event") == "error":
+                    raise DebuggerError(f"{event}: {msg.get('message')}")
+                return msg
+            if "ticket" not in msg and msg.get("event") == event:
+                return msg
+            self.pending.append(msg)
+        raise TimeoutError(f"no reply to {event}")
+
+    def is_stepping(self):
+        return self.call("cpu.status")["stepping"]
+
+    def brk(self):
+        """Stop the CPU, if it is not already stopped."""
+        if not self.is_stepping():
+            self.call("cpu.stepping")
+
+    def resume(self):
+        if self.is_stepping():
+            self.call("cpu.resume")
+
+    def add_breakpoint(self, address):
+        """Arm an execution breakpoint.
+
+        The CPU **must be stepping** for this to take: a breakpoint added while
+        the CPU runs is accepted, appears in `cpu.breakpoint.list`, and never
+        fires. This is true of the JIT and of `--ir` alike.
+        """
+        if not self.is_stepping():
+            raise DebuggerError(
+                "breakpoints only arm while the CPU is stepping; call brk() first"
+            )
+        self.call("cpu.breakpoint.add", address=address, enabled=True)
+
+    def remove_breakpoint(self, address):
+        self.call("cpu.breakpoint.remove", address=address)
+
+    def wait_for_break(self, address, timeout=30.0):
+        """Wait until the CPU stops *at* `address`.
+
+        Changing the breakpoint list makes PPSSPP rebroadcast `cpu.stepping`
+        carrying the pc it was already stopped at, so an event alone does not
+        mean a breakpoint was hit. Only a matching pc does.
+        """
+        end = time.time() + timeout
+        queued, self.pending = self.pending, []
+        for msg in queued:
+            if msg.get("event") == "cpu.stepping" and msg.get("pc") == address:
+                return msg
+        while time.time() < end:
+            msg = self._recv()
+            if msg is None:
+                continue
+            if msg.get("event") == "cpu.stepping" and msg.get("pc") == address:
+                return msg
+            self.pending.append(msg)
+        raise TimeoutError("never stopped at 0x%08x" % address)
+
+    def each_hit(self, address, count, timeout=30.0):
+        """Yield at every one of the next `count` hits of `address`.
+
+        The CPU is stopped inside the loop body, which is where reads are cheap,
+        and resumed on the way to the next hit.
+        """
+        self.brk()
+        self.add_breakpoint(address)
+        try:
+            for index in range(count):
+                self.call("cpu.resume")
+                yield index, self.wait_for_break(address, timeout=timeout)
+        finally:
+            self.brk()
+            self.remove_breakpoint(address)
+
+    def read(self, address, size):
+        reply = self.call("memory.read", address=address, size=size)
+        return base64.b64decode(reply["base64"])
+
+    def read_u32(self, address):
+        return self.call("memory.read_u32", address=address)["value"]
+
+    def read_u8(self, address):
+        return self.read(address, 1)[0]
+
+    def read_f32(self, address):
+        return struct.unpack("<f", self.read(address, 4))[0]
+
+    def read_f32s(self, address, count):
+        return struct.unpack("<%df" % count, self.read(address, count * 4))
+
+    def read_cstring(self, address, limit=64):
+        raw = self.read(address, limit)
+        end = raw.find(b"\0")
+        return raw[: end if end >= 0 else limit].decode("latin-1", "replace")
+
+    def state_name(self):
+        """The front end's current state, e.g. `"LogoFMV"` or `"InGame"`.
+
+        `G_STATE_MACHINE` holds a pointer to the machine; the name is an inline
+        character buffer inside it rather than a pointer to `.rodata`.
+        """
+        machine = self.read_u32(G_STATE_MACHINE)
+        if not 0x08000000 <= machine < 0x0A000000:
+            return None
+        return self.read_cstring(machine + STATE_NAME_OFFSET, 48)
+
+    def press(self, button, duration=8):
+        """Hold a button for `duration` frames. Names are PPSSPP's own:
+        cross, circle, triangle, square, start, select, up, down, left, right."""
+        self.call("input.buttons.press", button=button, duration=duration)
+
+    def hold(self, **buttons):
+        """Set the held state of any number of buttons, e.g. `hold(cross=True)`."""
+        self.call("input.buttons.send", buttons=buttons)
+
+    def analog(self, x, y, stick="left"):
+        self.call("input.analog.send", stick=stick, x=x, y=y)

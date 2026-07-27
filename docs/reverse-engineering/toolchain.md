@@ -92,6 +92,12 @@ frame-step mode.
 
 Enable the debugger under `Tools > Developer tools`.
 
+It also has a **websocket debugger**, which is the one that matters here: it is
+scriptable, it works headless, and it is how the verification harness reads state
+out of the original. See
+[Driving PPSSPP from its websocket debugger](ppsspp-debugger.md) for how to start
+it, what it can do, and the four traps in it.
+
 ### PCSX2 (PS2)
 
 For cross-validation.

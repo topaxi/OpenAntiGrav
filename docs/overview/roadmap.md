@@ -106,14 +106,32 @@ evidence page. The memory map is what remains.
 
 The instrument everything after this is measured with.
 
-- [ ] Scripted input playback into PPSSPP
+- [x] Scripted input playback into PPSSPP: `input.buttons.send`/`press` through
+      the websocket debugger, verified by watching `craft+0x2b8` read 100 while
+      thrust is held
 - [ ] Save-state driven fixed-start scenarios
-- [ ] Trace capture: position, orientation, velocity, timers, per tick
+- [x] Trace capture: `scripts/psp-trace.py` records position, orientation,
+      velocity, dt, groundedness and the whole control block per call of
+      `Ship_UpdateCraft`, breakpoint-driven off the running game
 - [ ] `oag-trace`: compare a Rust run against a captured trace, with tolerances
 - [ ] The same for PCSX2
 
 **Exit criterion:** one command diffs any subsystem against the original and
 reports where and by how much it diverges.
+
+The instrument exists and reads real state out of a real race; the comparison
+does not, so the exit criterion is untouched. What the capture path has already
+produced is four runtime confirmations that were previously static readings -
+see [frame pacing](../psp/frame-pacing.md) and
+[engine](../ghidra/functions/psp-pulse/engine.md).
+
+**The one thing between here and a usable trace** is that the captured ship does
+not move: a false start stalls Pulse's engine, and every capture so far was taken
+from a stalled grid slot. The fix is a clean restart with no input held through
+the countdown, which needs the pause menu, which needs a few more scripted
+presses. It is not a harness problem, and
+[the debugger page](../reverse-engineering/ppsspp-debugger.md) records the
+symptom because it reads exactly like one.
 
 ---
 
@@ -211,6 +229,6 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 | How does the sweep-and-prune packing hold coordinates beyond +/-1024, when real tracks reach 1,554? | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
 | What are the coordinate conventions? Handedness, units, angles. | M4 | [physics](../physics/README.md) |
-| What calls `Ship_UpdateCraft`? Dispatched through a vtable, so the frame's own confidence is capped until the call site is found. | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |
+| ~~What calls `Ship_UpdateCraft`?~~ **Answered**: `0x0884ff70`, a virtual call through slot `0x70` of the vtable at `object+0x38`, inside a per-entity update loop beginning at `0x0884f70c`. | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |
 | Do the angular accumulators hold torque or angular acceleration? | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |
 | Why does the US PSP disc carry a directory named for the *European* serial? | nothing yet | [PSP disc layout](../psp/pulse-disc-layout.md) |

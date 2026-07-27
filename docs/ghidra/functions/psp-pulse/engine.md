@@ -95,8 +95,81 @@ not determined.
 force term below is reached from it. Signature, from register use:
 
 ```c
-void Ship_UpdateCraft(float dt /* f12 */, Craft *craft /* a1 */, RigidBody *body /* a2 */);
+void Ship_UpdateCraft(float dt /* f12 */, Craft *craft /* a0 */, RigidBody *body /* a1 */);
 ```
+
+**The register assignment above is the corrected one.** Reading register use
+statically put the craft in `a1` and the body in `a2`; breaking on the function
+in a running race says otherwise, and says so unambiguously:
+
+| At entry | Value | What settles it |
+| --- | --- | --- |
+| `a0` | `0x09a0dc40` | `+0x1c8` reads `0.0168` (a frame time), `+0x2b0` reads `1.0` (grounded), `+0x2b8` reads `100.0` when and only when thrust is held |
+| `a1` | `0x09a0dfb0` | **`a0+0x1cc` holds exactly this value**, and `craft+0x1cc` is the body pointer per this page's own description of the stash |
+| `a2` | `0x08849618` | the function's own address, left there by the vtable dispatch at the call site |
+| `f12` | `0.016523` | dt, as documented |
+
+The same offsets read off `a1` are nonsense (`+0x1c8` as `-162.689`, `+0x2b8` as
+`9.2e-33`). Confidence **95**: three independent fields agree, and the
+`a0+0x1cc == a1` identity is an equality rather than a plausibility.
+
+### The call site, and what dispatches it
+
+This page previously capped its own confidence at 82 because the call site was
+unknown, and the [roadmap](../../../overview/roadmap.md) tracks that as an open
+question. It is `0x0884ff70`, inside the function beginning at `0x0884f70c`
+(size `0xba8`), recovered by reading `ra` at a breakpoint on entry - stable
+across every hit.
+
+```
+0884ff48  addiu s2,s2,-0x8      ; walk an entity array backwards, stride 8
+0884ff4c  lw    a0,0x3C(s2)
+0884ff54  sw    zero,0x370(a0)  ; clear a field on the entity before updating it
+0884ff58  lw    a0,0x40(s2)     ; the object
+0884ff5c  lw    a1,0x3C(s2)     ; the body
+0884ff60  lw    a2,0x38(a0)     ; its vtable
+0884ff64  addiu a2,a2,0x70      ; slot 0x70
+0884ff68  lh    a3,0x0(a2)      ; this-adjustment, 16-bit
+0884ff6c  lw    a2,0x4(a2)      ; function pointer at +4 of the entry
+0884ff70  jalr  a2
+0884ff74  addu  a0,a0,a3        ; delay slot: apply the adjustment to `this`
+0884ff78  bne   s1,zero,0x0884FF34
+```
+
+So the dispatch is an ordinary C++ virtual call through a vtable at
+`object+0x38`, whose entries are 8 bytes of `{ i16 this-adjust, void *fn }` -
+the layout a compiler emits when a base is at a non-zero offset. The `craft`
+that arrives in `a0` is therefore the *adjusted* pointer, `object + adjustment`,
+which is why it is a craft and not the entity. The loop around it steps an array
+backwards in strides of 8 with the object at `+0x40` and the body at `+0x3c`, so
+`Ship_UpdateCraft` is one entry in a per-entity update pass rather than something
+the race code calls directly.
+
+Confidence **95** for the call site and the dispatch shape, both runtime-observed
+in disassembly. The enclosing function is **not renamed**: what list it walks and
+what else is in that list are not established, and ADR-0005 says a guess dressed
+as a name stops other people from looking.
+
+### The rigid body, measured rather than read
+
+The body's own layout was recovered by dumping `0x400` bytes at each of six
+consecutive frames and keeping the fields that changed. It is what
+[`psp-trace.py`](../../../../scripts/psp-trace.py) records.
+
+| Offset | Field | Why it is that |
+| --- | --- | --- |
+| `+0x00`, `+0x10`, `+0x20` | transform rows: right, up, forward | each is unit length to six digits and the three are mutually orthogonal; the row order matches this page's own right/up/forward convention, established independently from the raycast direction and the grip term |
+| `+0x30` | position | moves smoothly, and its per-frame delta equals velocity times the frame's dt |
+| `+0xc0`, `+0xd0`, `+0xe0` | the same rotation transposed | element for element the transpose of the first three rows |
+| `+0x140` | linear velocity, world | integrates into `+0x30`, as above |
+| `+0x374` | mass | reads `1.0`; this page already says `mass` is read from `body+0x374` |
+
+Confidence **85** for position, velocity and the transform, which agree with each
+other arithmetically; **60** for `+0x398`, which was `|velocity|` to seven digits
+in one sample and disagreed with it in another, so **it is not the speed** and is
+recorded only so the next reader does not repeat the coincidence. `craft+0x2ec`
+does behave as this page describes: at frame *n* it holds the value the body
+carried at frame *n-1*, which is the one-frame staleness already documented.
 
 It stashes `dt` at `craft+0x1c8` and `body` at `craft+0x1cc`, copies the body's
 4x4 transform, linear velocity and position into the craft, zeroes the four

@@ -4,10 +4,16 @@ State that is **not** inferrable from the repository itself. Everything about
 formats, decisions and the plan lives in [`docs/`](docs/README.md); this file
 covers what a fresh reader would otherwise have to rediscover.
 
-Written 2026-07-26. The previous pass covered the interactive orbit camera and
-the `vex::textures` PS2 fix. This pass is much larger: it opened M4, added five
-crates, decoded two formats, and recovered the control force law that M4 was
-actually blocked on.
+Written 2026-07-27. The pass before this one opened M4: five crates, two formats
+decoded, and the control force law recovered. **It was never committed**, and
+this pass starts by committing it as three commits (`be5da47`, `9d14acd`,
+`ce3a958`) before doing anything else. If you are reading this after a session
+that ended abruptly, check `git status` first - a whole milestone's work sat
+uncommitted in the working tree for a day.
+
+This pass then opened **M3**, and that is the news: the original can now be
+driven and read from a script. Four things that were static readings are now
+runtime-verified, and one open question the roadmap tracked is answered.
 
 ## Read this first: the disc images are in place
 
@@ -28,10 +34,73 @@ before concluding a ground-truth test "cannot run". The originals in
 
 ## In flight
 
-Nothing blocked. `just` passes: fmt-check, clippy `-D warnings`, **546 tests**
-(306 at the start of this session), check-docs. `just test-data` runs **568, all
-passing**, which is those plus the 22 `#[ignore]`d ground-truth tests, exercised
-against both Pulse discs and Pure. `just audit-leakage` is clean.
+Nothing blocked. `just` passes: fmt-check, clippy `-D warnings`, **546 tests**,
+check-docs. `just audit-leakage` is clean. The Rust side was not touched this
+pass; everything new is `scripts/` and `docs/`.
+
+`data/cache/pulse-psp-usa.iso` (457 MB) is the raw ISO the emulators want,
+extracted with `just extract-iso`. It is gitignored twice over and it is a real
+4 GB-class copy on `ecryptfs`, so keep it rather than re-extracting.
+
+## The original is now scriptable, and it corrected four things
+
+[`docs/reverse-engineering/ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md)
+is the new load-bearing page. PPSSPP's websocket debugger gives breakpoints,
+memory, registers, disassembly, threads and **scripted input**, and
+`scripts/ppsspp_debugger.py` wraps it with the traps encoded rather than
+described. `scripts/psp-trace.py` captures a per-tick CSV off a running race
+(`just trace --ticks 300 --hold cross --warmup 4`).
+
+**Four traps, each of which cost real time.** They are on that page in full, but
+the two that will bite hardest:
+
+1. **A breakpoint added while the CPU is running never fires.** It is accepted,
+   it appears in `cpu.breakpoint.list`, and nothing happens - under the JIT and
+   under `--ir` alike. Break first, then add, then resume.
+2. **Changing the breakpoint list rebroadcasts `cpu.stepping` with the old pc**,
+   which a naive client reads as an instant hit at 0.00 s. Three rounds of tests
+   reported phantom hits before this was clear. Match on the pc.
+
+And one that decides the architecture: **a memory read costs ~520 ms while the
+CPU runs and ~0.3 ms while it steps.** Per-tick capture must be breakpoint-driven
+with one batched read per hit. Polling a running CPU at 60 Hz is not slow, it is
+impossible.
+
+What that instrument then found:
+
+- **`Ship_UpdateCraft`'s call site**, which engine.md's confidence was capped on
+  and the roadmap listed as open: `0x0884ff70`, a virtual call through slot
+  `0x70` of the vtable at `object+0x38`, inside a per-entity update loop at
+  `0x0884f70c`. The enclosing function is deliberately **not renamed**.
+- **Its register assignment was wrong.** The craft is `a0` and the body is `a1`,
+  not `a1`/`a2`: `a0+0x1cc` holds exactly the value in `a1`, and the craft's `dt`,
+  `grounded` and throttle all read sensibly off `a0` and as garbage off `a1`.
+  Anything written against the old signature reads the wrong structure.
+- **Delta time is variable, and its mean is `1/59.94`.** 72 distinct values over
+  120 ticks, mean and median `0.016683`. That confirms ADR-0007's premise and the
+  vblank-locked presentation finding in one measurement.
+- **The three fixed-timestep globals are still zero after real racing**, closing
+  frame-pacing.md's "a write through an unresolved pointer cannot be excluded"
+  hedge as far as it can be closed. 88 -> 93.
+- **`0x08b31784` is a pointer to the state machine, not the machine.** The state
+  name at `+0x18c` is an inline buffer, proved by catching `"Show Logo\0election"`
+  - a short name overwriting `"Language Selection"` in place. Reading it is a
+  text-mode view of the front end and is how the menus were navigated.
+
+### The trace has no moving ship in it yet, and why
+
+Every capture so far is of a **stalled** ship. Pulse penalises a false start by
+flooding the engine, and holding thrust through the countdown - which is what a
+script does by default - triggers it. The symptom is a beautiful trap: the
+throttle field reads the full 100 you are sending, the cached speed climbs to 10
+and resets, and the ship does not move at all. That reads exactly like a broken
+input path or a wrong position offset, and it is neither.
+
+The fix is a clean restart with nothing held through the countdown, which needs
+the pause menu, which is a few more scripted presses. **Start there**: the
+capture tool, the offsets and the scenario (Time Trial, Venom, Talon's Junction
+White, Assegai) are all in place, and the profile save now persists so the boot
+walk does not have to be repeated.
 
 M4 is open and partly built. What exists now that did not this morning:
 
@@ -303,6 +372,13 @@ LZSS, texture decoding, `.vex` geometry and textures, the `section` count, the
 whole `WO Track` layout, the junction slot ordering, the import stub names, the
 PSP image base.
 
+**Runtime-verified this pass, against the game actually running:** the variable
+timestep and its `1/59.94` mean, the three dead fixed-step globals, the racing
+`display+0x116c` flag, `secondsPerTick = 1e-6`, the `Ship_UpdateCraft` call site
+and register assignment, and the state machine's pointer-and-inline-buffer
+layout. This is the first evidence in the repository that came from execution
+rather than from reading.
+
 **Static reading, never executed:** *all* of the physics. `oag-physics` transcribes
 `docs/physics/README.md` and `engine.md`, asserts structure, and **tunes nothing**.
 The one exception is the two cross-product signs, settled by arithmetic - and even
@@ -401,7 +477,12 @@ PPSSPPHeadless /tmp/pulse-psp-usa.iso -l --timeout=8 > log.txt
 ```
 
 `-l` logs the full HLE trace. `--debugger=PORT` opens a websocket debugger that
-breaks at start - not used yet, and it is the way in for M3's scripted input.
+breaks at start; it **is** now used, and everything about it lives in
+[ppsspp-debugger.md](docs/reverse-engineering/ppsspp-debugger.md). Two things
+that page will save you rediscovering: headless cannot get past Pulse's
+first-boot name entry (no persistent memory stick), so use `PPSSPPSDL` with
+`RemoteDebuggerOnStartup`; and the SDL build throttles to a crawl when its window
+is unfocused, which looks exactly like a hang.
 
 ### Ghidra
 
@@ -416,23 +497,25 @@ closed.
 
 ## Where I would go next
 
-1. **Make the ship fly a lap, and try the two cheap explanations first.** The
+1. **Get a moving ship into a trace.** Everything else in M3 waits on it, and it
+   is now one pause-menu restart away - see the false-start section above. Then
+   `oag-trace`: the comparison side does not exist at all, and the capture format
+   is a CSV whose columns are already the ones
+   [the verification protocol](docs/reverse-engineering/verification-protocol.md)
+   asks for.
+2. **Make the ship fly a lap, and try the two cheap explanations first.** The
    hover target exceeding the probe reach, and the missing inertia tensor, are
    findings 2 and 3 above; both are small, both are testable against
    `just play --race`, and neither needs an emulator. Only if those do not settle
    it is the integrator itself the suspect.
-2. **M3, and start with the two numbers this session produced.** The
+3. **The two numbers that cap confidence across the physics tree.** The
    integrator-stability arithmetic above (`h <= 0.005` vs `1/180`) and the
-   handedness prediction are both falsifiable in minutes with a trace, and both
-   currently cap confidence across the whole physics tree.
-   `PPSSPPHeadless --debugger=PORT` is the way in.
-3. **Test the handedness prediction.** Recover one more cross-product term from
+   handedness prediction are both falsifiable in minutes **once a trace has a
+   moving ship in it**. The instrument is built; the measurement is not taken.
+4. **Test the handedness prediction.** Recover one more cross-product term from
    the craft path. If it needs the same flip, the systematic-handedness
    explanation is confirmed and the coordinate-conventions open question falls out
-   with it. Cheapest high-value RE task available.
-4. **Find the call site of `Ship_UpdateCraft`.** It is vtable-dispatched, and its
-   absence caps that page's confidence at 82. It would also settle the frame
-   ordering that item 4 of the corrections above depends on.
+   with it. Cheapest high-value RE task available, and it needs no emulator.
 5. **Decode PS2 vertex type `0x1b9`**, still M1's exit criterion. `--track` now
    renders on both discs; `--mesh` gets past textures on PS2 and fails on this.
    Comparing the PSP and PS2 batch headers of the same ship is the obvious first

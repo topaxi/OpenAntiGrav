@@ -93,6 +93,16 @@ wad *ARGS:
 mine-names image:
     python3 scripts/mine-names.py {{image}}
 
+# Extract a raw ISO from a CHD, which is what the emulators want
+extract-iso image="data/images/pulse-psp-usa.chd" out="data/cache/pulse-psp-usa.iso":
+    chdman extractdvd -i {{image}} -o {{out}} -f
+
+# Capture a per-tick trace out of the original running in PPSSPP. Needs a PPSSPP
+# with its websocket debugger enabled and the game already in a race; see
+# docs/reverse-engineering/ppsspp-debugger.md.
+trace *ARGS:
+    uv run --with websocket-client python scripts/psp-trace.py {{ARGS}}
+
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
 build-allegrex *ARGS:

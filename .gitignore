@@ -46,3 +46,7 @@
 .idea/
 .vscode/
 !.vscode/extensions.json
+
+# Python bytecode from scripts/
+__pycache__/
+*.pyc
