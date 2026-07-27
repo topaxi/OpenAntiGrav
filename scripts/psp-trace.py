@@ -48,9 +48,16 @@ CRAFT_FIELDS = [
 ]
 
 # Offsets into the rigid body, measured at runtime by diffing successive frames.
-# The three groups agree with each other: rows 0/1/2 are orthonormal and match
-# engine.md's right/up/forward convention, velocity times the frame time
-# reproduces the position delta, and `speed` is the velocity's own length.
+# Rows 0/1/2 are orthonormal, and velocity times the frame time reproduces the
+# position delta to within 0.007 units per tick over a 200-tick capture.
+#
+# **`speed` at +0x398 is not the velocity's own length**, which an earlier pass
+# recorded here and a real capture disproved: over 200 ticks of Talon's Junction
+# it runs a steady 3.67 % high (ratio 1.0367, sd 0.0026), about 0.86 units/s.
+# `speed_cached` on the craft *is* the velocity's length, one tick stale. What
+# +0x398 actually holds is not established, and the capture's own speed range is
+# only 3 %, so a constant offset and a constant factor cannot be told apart from
+# this data. Both columns are recorded; neither is assumed.
 BODY_FIELDS = [
     ("right_x", 0x000), ("right_y", 0x004), ("right_z", 0x008),
     ("up_x", 0x010), ("up_y", 0x014), ("up_z", 0x018),
@@ -73,6 +80,30 @@ def main():
         help="hold a button for the whole capture, e.g. --hold cross (thrust)",
     )
     parser.add_argument("--out", type=Path, help="write here instead of stdout")
+    parser.add_argument(
+        "--ship",
+        type=int,
+        default=0,
+        metavar="N",
+        help="which craft to follow, by order of first appearance within a tick. "
+        "A time trial has one; a race has eight and updates them all from this "
+        "same function, so the others' hits are resumed past rather than recorded.",
+    )
+    parser.add_argument(
+        "--craft",
+        type=lambda v: int(v, 0),
+        metavar="ADDRESS",
+        help="follow this craft address instead of selecting one by --ship. The "
+        "addresses seen are printed to stderr, so a first run identifies them.",
+    )
+    parser.add_argument(
+        "--max-ships",
+        type=int,
+        default=8,
+        metavar="N",
+        help="how many craft a tick may update, which bounds how many breakpoint "
+        "hits one tick of the followed craft is allowed to cost.",
+    )
     parser.add_argument(
         "--warmup",
         type=float,
@@ -97,30 +128,50 @@ def main():
 
         names = [name for name, _ in CRAFT_FIELDS] + [name for name, _ in BODY_FIELDS]
         print("tick," + ",".join(names), file=out)
-        craft_address = None
-        for tick, _ in dbg.each_hit(SHIP_UPDATE_CRAFT, args.ticks, timeout=60):
+
+        # A race updates every craft from the same function, so the breakpoint
+        # fires once per ship per tick and only one of those hits is the ship
+        # being traced. Hits for the others are resumed past rather than
+        # recorded: interleaving eight ships into one file would produce a trace
+        # of nothing in particular, and stopping at the second address - which
+        # this did until a real eight-ship capture met it - makes a trace of a
+        # race impossible to take at all.
+        seen = []
+        follow = args.craft
+        tick = 0
+        hits = 0
+        budget = args.ticks * args.max_ships + args.max_ships
+        # `each_hit` owns the break/arm/resume cycle, including the two traps
+        # around it, so the filter is a `continue` inside its loop rather than a
+        # second copy of that sequence.
+        for _, _ in dbg.each_hit(SHIP_UPDATE_CRAFT, budget, timeout=60):
+            if tick >= args.ticks:
+                break
+            hits += 1
+
             registers = dbg.call("cpu.getAllRegs")
             gpr = next(c for c in registers["categories"] if c["name"] == "GPR")
             craft = dict(zip(gpr["registerNames"], gpr["uintValues"]))[CRAFT_REGISTER]
-            if craft_address is None:
-                craft_address = craft
-                print("craft at 0x%08x" % craft, file=sys.stderr)
-            elif craft != craft_address:
-                # A second ship, or the race was restarted under us. Either way
-                # the trace is no longer of one thing, so say so rather than
-                # silently interleaving two ships into one file.
-                print(
-                    "craft moved from 0x%08x to 0x%08x at tick %d; stopping"
-                    % (craft_address, craft, tick),
-                    file=sys.stderr,
-                )
-                break
+            if craft not in seen:
+                seen.append(craft)
+                print("craft %d at 0x%08x" % (len(seen) - 1, craft), file=sys.stderr)
+            if follow is None and len(seen) > args.ship:
+                follow = seen[args.ship]
+                print("following craft 0x%08x" % follow, file=sys.stderr)
+            if craft != follow:
+                continue
+
             craft_blob = dbg.read(craft, CRAFT_BYTES)
             body = struct.unpack("<I", craft_blob[BODY_POINTER : BODY_POINTER + 4])[0]
             body_blob = dbg.read(body, CRAFT_BYTES)
             values = [struct.unpack("<f", craft_blob[at : at + 4])[0] for _, at in CRAFT_FIELDS]
             values += [struct.unpack("<f", body_blob[at : at + 4])[0] for _, at in BODY_FIELDS]
             print("%d,%s" % (tick, ",".join("%.7g" % v for v in values)), file=out)
+            tick += 1
+        print(
+            "%d tick(s) from %d hit(s) across %d craft" % (tick, hits, len(seen)),
+            file=sys.stderr,
+        )
     finally:
         if args.hold:
             try:

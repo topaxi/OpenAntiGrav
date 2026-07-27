@@ -141,6 +141,50 @@ disc exactly as `oag-game` reads them.
 | `--no-collision` | Ignore the track's geometry: a ship with nothing to hover on |
 | `--out <path>` | Write the simulated trace, in the same columns |
 
+## What the first real comparison found
+
+Run against a real capture - the [reference
+scenario](../reverse-engineering/ppsspp-debugger.md#the-reference-scenario), 200
+ticks of Talon's Junction White in Venom on an Assegai - against our own
+simulation seeded from the same first row and given the same held thrust:
+
+| Field | First tick outside tolerance | Max error | Trend |
+| --- | ---: | ---: | --- |
+| `grounded` | 1 | 1.0 (exact field) | bounded |
+| `velocity` | 1 | 211 units/s | growing |
+| `position` | 3 | 423 units | growing |
+| `orientation.forward` | 1 | 1.52 rad | growing |
+| `throttle`, `brake`, `steer`, airbrakes | - | 0 | exact |
+
+**The ship falls through the floor at the first step.** `grounded` is 1.0 on all
+200 recorded ticks and 0.0 on all but tick 0 of ours - and tick 0 is the seeded
+initial condition, so our hover probes find nothing *on the original's own
+starting position*. Everything below it in the table follows from that: our ship
+free-falls 420 units while the original stays on the track, and its speed grows
+to 211 units/s against a recorded 22.7. The control columns match exactly, so the
+input path and the scaling are right and the divergence is entirely in the force
+law. This is the measurement `docs/physics/README.md`'s hover section was waiting
+for: the probe reach, the ride height, or the target height is wrong, and the
+trace says which tick to look at.
+
+**The handedness question is settled, and not by simulation.** The capture alone
+answers it: the ship travels along **+row 2** (`dot(velocity_hat, fwd) = +0.997`
+on every tick), so row 2 is the nose, and `cross(row0, up) = forward` holds
+200/200. `oag_physics::Body` has `right x up = -forward`, so row 0 cannot be the
+right axis under that convention - it is the **left**. That is an independent
+confirmation of the 84-confidence finding in the roadmap, which came from the
+sign of the yaw response to a held steer rather than from the direction of
+travel. Running the comparison the other way (`--basis right-up-back`) is worse
+on every field - 2.80 rad of orientation error against 1.52, 512 units of
+position against 423 - which is the switch doing its job.
+
+**`speed` at body `+0x398` is not the velocity's length.** It runs a steady 3.67 %
+high (ratio 1.0367, sd 0.0026 over 200 ticks). `speed_cached` on the craft *is*
+the length, one tick stale. Our simulated column writes the length, so a
+comparison shows this as a permanent ~3.7 % divergence on `speed` and near-zero
+on `speed_cached`: that is the recording disagreeing with our model of it, not a
+physics error, and it stays visible rather than being scaled away.
+
 ## Not yet
 
 - No save state and no committed input script, so a scenario is "whatever was

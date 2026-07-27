@@ -25,11 +25,25 @@ Either way the endpoint is `ws://127.0.0.1:PORT/debugger`. Scripts need
 `websocket-client`, so run them as
 `uv run --with websocket-client scripts/psp-trace.py ...`.
 
-**Use the SDL build for anything that has to get into a race.** Headless boots
-and runs, but Pulse's first boot asks for a player name and tag through the
-system save dialog, and headless has no persistent memory stick, so it asks
-again on every run and nothing gets past it. Under the SDL build the same
-sequence is answerable, the profile is written once, and later boots skip it.
+**Both builds can reach the main menu.** The SDL build is still the one to use -
+see below - but the claim that headless "cannot get past" Pulse's first-boot name
+entry is **false, and was tested**: headless answers the same dialog with the
+same key sequence and lands on `Main menu`, in about three minutes of software
+rendering. What it does not do is *persist* the profile, so the walk is needed on
+every headless run, while the SDL build writes it once
+(`~/.config/ppsspp/PSP/SAVEDATA/UCES00465P0000` - note the **EU** save id, which
+is what this USA-serial disc writes) and later boots skip straight to the menu.
+
+**Use the SDL build anyway**, for two reasons that outweigh the profile: it
+renders fast enough to sit through menus at 30-60 fps rather than software
+rendering's crawl, and its window can be **screenshotted through the
+compositor**, which turns blind state-name navigation into sighted navigation.
+Pulse's menus are a hex grid whose state name stays `Cell Selection` across every
+cell, so a screenshot is the difference between navigating and guessing:
+
+```sh
+niri msg action screenshot-window --id N --write-to-disk false && wl-paste -t image/png > /tmp/shot.png
+```
 
 **The SDL build throttles hard when its window is not focused**, which looks
 exactly like the game hanging. Focus it (`niri msg action focus-window --id N`,
@@ -99,6 +113,29 @@ loading screen - cannot be sat through *during* capture.
 `psp-trace.py --warmup SECONDS` exists for this: run free with the buttons held,
 then start capturing. Confidence **85**, from the game clock rather than from
 instrumentation.
+
+### A race updates every craft from the same function
+
+`Ship_UpdateCraft` is the *entity* update, not the player's: in a race the
+breakpoint fires once per ship per tick, with a different craft in `a0` each
+time. `psp-trace.py` used to stop at the second address, on the reasoning that
+interleaving two ships into one file records nothing in particular - which is
+right, but makes a trace of a race impossible to take at all.
+
+It now **follows one craft and resumes past the others**: `--ship N` picks the
+Nth by order of first appearance, `--craft ADDRESS` pins one, and every address
+seen is printed to stderr so a first run enumerates them. Cost is proportional:
+one recorded tick costs one breakpoint round trip per ship on the grid.
+
+Two things a first race capture found:
+
+- **The player's craft is the one whose `throttle` is 0 or 100.** It is a button,
+  so a human input is digital; the AI's is fractional, and read 34 to 51 on the
+  four craft observed in a Single Race. A capture that shows only fractional
+  throttles is not following the player.
+- **Only four craft were updated per tick in that eight-ship race**, over 40
+  consecutive hits. Why is not established. A time trial has exactly one, which
+  is a further reason to prefer it for a first capture.
 
 ## What the API gives you
 
@@ -173,3 +210,33 @@ Confirmed working: 200 ticks, 73.85 world units travelled, speed steady at 21.5
 to 22.7, and a fresh craft address after the restart. The stalled and moving
 cases are told apart in one line - if the distance between the first and last
 position is near zero while the throttle column reads 100, the start was stalled.
+
+## The reference scenario
+
+Reproduced from a cold boot, and worth keeping as *the* scenario so captures
+stay comparable with each other and with `oag-trace`'s runs:
+
+**Time Trial, Venom, Talon's Junction White, Assegai.** One ship, no weapons, no
+AI, 5,178 m. From `Main Menu`: `down`, `cross` (Racebox), `cross` (Custom Race),
+`right` x2 (`SINGLE RACE` -> `TIME TRIAL`), `cross`, `cross` (track 1/3),
+`cross` (ship 1/8), `cross` (track description). The settings persist in the
+profile, so a second run of the same scenario is the same key sequence.
+
+```sh
+just trace --port 47810 --ticks 200 --hold cross --warmup 6 \
+    --out data/traces/talons-junction-venom-assegai.csv
+cargo run -p oag-trace -- run data/traces/talons-junction-venom-assegai.csv \
+    --source data/images/pulse-psp-usa.chd --team Assegai --class venom --hold cross
+```
+
+What that capture reads: 200 ticks, `dt` mean 0.016684 (59.94 Hz, min 0.016316,
+max 0.017029), speed 23.6 to 25.1, 78.0 units travelled, `throttle` a flat 100,
+and `cross(row0, up) = forward` on 200 of 200 ticks.
+
+**One crash worth knowing.** PPSSPP v1.20.4 died twice on the Vulkan backend
+while confirming the track for a Time Trial - process gone, last log line an
+unrelated `sceKernelDeleteSema` warning. A third attempt on the same build and
+the same path worked, and the difference appears to be that the earlier two ran
+while a second instance was still shutting down (`Secondary instance 2 -
+silencing audio` in the log). If it dies there, check nothing else is holding the
+port and start one instance at a time.
