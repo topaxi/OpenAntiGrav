@@ -1884,21 +1884,63 @@ and others, part of the 223/223 total above). Two real example scenarios are
 committed: `verification/scenarios/straight-line.inputs` and
 `verification/scenarios/steer-both-ways.inputs`.
 
-**Not yet checked in this snapshot**: whether `scripts/psp-trace.py` has a
-matching `--script` mode to actually drive PPSSPP with the same file (the
-brief asked for this; confirm it exists before assuming the emulator side is
-done), and whether a real capture-vs-script-replay agreement check was ever
-run (the straight-line script was deliberately written to reproduce the
-existing `--hold cross` capture exactly, specifically so this comparison
-would be the proof - that comparison itself wasn't re-verified this
-session). Worth doing before trusting the new path for anything beyond unit
-tests.
+**The emulator side landed too, after this note was first written** - committed
+separately (docs/README.md-adjacent commit, staged and committed centrally
+since the authoring agent's sandbox can't verify against PPSSPP itself):
+`scripts/input_script.py` is a **second, independent implementation** of the
+same format in Python (necessarily separate - it drives a different
+runtime), with a documented, genuinely clever cross-check for drift between
+the two parsers: `diff <(cargo run -p oag-trace -- script F --expand) <(python3
+scripts/input_script.py F --expand)` should produce nothing, since both dump
+one line per tick in the same shape. I verified the Rust side of that
+directly - `oag-trace script <file> --expand` produces a correct 200-tick CSV
+expansion of `straight-line.inputs`. `scripts/psp-trace.py` gained a
+`--script` mode to actually drive PPSSPP from the same file
+`oag-trace run --script` replays.
 
-### `psp-xml-reader` - determinism gate audit (task #28)
+**Still not done, and this is the part that actually proves the whole thing
+works**: a real capture-vs-script-replay agreement check. `straight-line.inputs`
+was deliberately written to reproduce the existing `--hold cross` capture
+exactly, specifically so that comparison would be the proof - capture it with
+`just trace --script verification/scenarios/straight-line.inputs ...` (or
+however the new flag is actually spelled - confirm from `psp-trace.py --help`),
+replay with `oag-trace run --script`, and check it agrees with
+`data/traces/talons-junction-venom-assegai.csv`. Needs a live PPSSPP session;
+nobody has run it yet.
 
-No visible progress in this final snapshot - `crates/core` is untouched.
-Purely an audit task, safe to resume or reassign cold with no risk of lost
-work.
+### `psp-xml-reader` - the determinism gate does not cover the sim crates, confirmed and left open on purpose
+
+Committed as `be53698`. A real, honest, well-scoped audit result, not a fix:
+**the gate genuinely does not reach `oag-physics`/`oag-gameplay`.**
+`probe::run` (the thing `crates/core/tests/determinism.rs` actually hashes)
+is a hand-built miniature simulation living inside `oag-core`, which is the
+*bottom* of the dependency graph - it structurally cannot reach the
+simulation crates above it, and `StateHasher` has no caller outside
+`oag-core` at all. A second, sharper finding: **the three-OS CI job only
+runs `-p oag-core`** - the cross-platform matrix this project's determinism
+model leans on never executes a single physics or gameplay test on Windows
+or macOS, only on the Linux-only workspace job.
+
+What *is* covered, genuinely: the float pipeline, by a superset of what the
+sim actually uses (the probe calls `sin`; the sim crates call no
+transcendental function at all). What is **not**: order-dependent
+reductions over collections, the fourteen-term accumulation order in
+`forces::evaluate`, and every quaternion operation (`Quat::inverse`,
+quaternion-vector rotation) - none of which the probe has any equivalent
+for. `docs/architecture/determinism.md`'s enforcement table now carries a
+scope column saying exactly this, replacing a line that had quietly been
+carrying an expired premise ("once there is state" - there has been state
+for most of this session).
+
+**No gate was added, deliberately.** Closing this for real needs a
+hash-and-compare over an actual `World` with its own committed reference
+constant, and the agent correctly declined to generate that constant while
+the force law is being actively rewritten in the same session - a reference
+hash committed today would be stale within the hour, and under this
+project's own "never update the constants to make a red test pass" rule,
+that's worse than the gap staying open and documented. Real remaining work,
+not done here: build that hash-and-compare once the engine/thrust
+investigation settles down.
 
 ## Where I would go next
 
