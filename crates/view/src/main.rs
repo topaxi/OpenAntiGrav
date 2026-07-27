@@ -229,29 +229,45 @@ fn main() -> Result<()> {
             if cli.solid { "solid" } else { "outlines" }
         );
 
-        let model = if cli.with_spline {
-            let (ai, _) = track::load(&cli.archive, name)?;
-            let ribbon = track::build_model(&label, &ai);
-            if let (Some(walls), Some(spline)) = (
-                collision::bounds_of(&nodes, |k| k == oag_formats::collision::SurfaceKind::Wall),
+        // A `.vex` can carry collision without a `WO Track` node, in which case
+        // the overlay is unavailable but the collision view itself is fine.
+        // Warn and draw what there is rather than failing the whole command.
+        let ribbon = match (cli.with_spline, track::load(&cli.archive, name)) {
+            (false, _) => None,
+            (true, Ok((ai, _))) => Some(track::build_model(&label, &ai)),
+            (true, Err(e)) => {
+                eprintln!("warning: --with-spline: {e:#}");
+                None
+            }
+        };
+
+        let model = if let Some(ribbon) = ribbon {
+            if let (Some(soup), Some(spline)) = (
+                collision::bounds_of(&nodes, collision::is_collidable),
                 bounds_of_model(&ribbon),
             ) {
-                // The check the view exists for, stated as a number so it can be
-                // read without a screenshot. Slack is generous: the ribbon is
-                // built from the spline's own half-widths, which are not
-                // required to sit inside the collision walls to the millimetre.
-                let enclosed = collision::contains(walls, spline, 1.0);
+                // A sanity check, not a proof of enclosure: on a looping track
+                // both boxes are the whole envelope, so this catches a spline
+                // that lands in a different place or a different scale, and
+                // nothing finer.
+                //
+                // Deliberately against *all* collidable geometry rather than
+                // walls alone, and deliberately loose on y. Walls are vertical
+                // strips whose box is only as tall as the wall, while the ribbon
+                // raises the racing line and corridor by `track::HOVER_LIFT`, so
+                // a wall-only y comparison reports a failure on correct data.
+                let slack = [1.0, oag_formats::track::HOVER_LIFT * 4.0, 1.0];
+                let within = (0..3).all(|i| {
+                    soup.0[i] - slack[i] <= spline.0[i] && spline.1[i] <= soup.1[i] + slack[i]
+                });
                 println!(
-                    "  wall box {:?}..{:?} vs spline box {:?}..{:?}: spline is {}",
-                    walls.0,
-                    walls.1,
+                    "  collidable box {:?}..{:?}\n  spline box     {:?}..{:?}\n  \
+                     spline AABB is {} the collidable AABB (x/z exact, y with hover slack)",
+                    soup.0,
+                    soup.1,
                     spline.0,
                     spline.1,
-                    if enclosed {
-                        "inside the walls"
-                    } else {
-                        "NOT fully inside the walls"
-                    }
+                    if within { "within" } else { "NOT within" }
                 );
             }
             mesh::merge(&label, vec![soup, ribbon])

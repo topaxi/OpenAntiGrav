@@ -169,9 +169,24 @@ oag-view <archive> --collision 'Data\Environments\01_Track\track.vex' \
     --with-spline --screenshot /tmp/enclosure.png
 ```
 
-Overlays the `--track` ribbon on the collision outlines, from the same file, and
-prints whether the wall bounding box contains the ribbon's. The picture and the
-verdict answer the same question; the verdict is the one a script can read.
+Overlays the `--track` ribbon on the collision outlines, from the same file. The
+picture is the real check - the ribbon should run down the middle of the
+corridor the walls make - and the printed line is the part a script can read.
+
+That printed line is a **sanity check, not a proof of enclosure**, and it is
+worded that way on purpose. It compares the ribbon's bounding box against the box
+of all *collidable* geometry, so on a looping track both boxes are the whole
+envelope: it catches a spline that lands somewhere else or at a different scale,
+and nothing finer. Two deliberate choices behind it:
+
+- **All collidable geometry, not walls alone.** A wall-only box is only as tall
+  as the walls.
+- **Loose on y.** The ribbon raises the racing line and corridor strips by
+  `track::HOVER_LIFT`, so an exact vertical comparison would report a failure on
+  correct data.
+
+If the `.vex` carries collision but no `WO Track` node, the overlay is skipped
+with a warning and the collision view still draws.
 
 ### What it prints
 
