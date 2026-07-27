@@ -16,6 +16,7 @@
 pub mod collision;
 pub mod entropy;
 pub mod fexml;
+pub mod fnt;
 pub mod handling;
 pub mod lzss;
 pub mod pmf;
