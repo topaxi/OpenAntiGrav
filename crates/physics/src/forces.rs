@@ -654,4 +654,50 @@ mod tests {
             low_eval.hover.probes[0].force
         );
     }
+
+    /// The end-to-end version of the steering sign fix: holding right must swing
+    /// the nose toward the ship's own right axis over real ticks of `evaluate` and
+    /// `integrate`, not away from it. A unit-level assertion on
+    /// `engine::steering`'s return value alone would not catch a sign error
+    /// introduced anywhere downstream in how the accumulators are drained onto the
+    /// body, which is exactly the layer `docs/ghidra/functions/psp-pulse/engine.md`
+    /// left as an open question until it was traced for this fix.
+    #[test]
+    fn holding_right_turns_the_ship_toward_its_own_right_axis() {
+        let handling = Handling {
+            turning: crate::params::Turning {
+                amount: 0.02,
+                gain: 400.0,
+                falloff: 200.0,
+            },
+            ..Handling::ZERO
+        };
+        let world = flat_floor();
+        // High enough above the floor that no hover probe ever makes contact, so
+        // only steering is in play.
+        let mut state = ship_at(1000.0);
+        let controls = ShipControls {
+            steer_x: 1.0,
+            ..ShipControls::default()
+        };
+        let initial_right = state.body.right();
+
+        let dt = 1.0 / 60.0;
+        for _ in 0..30 {
+            crate::integrate::step(
+                &mut state,
+                &controls,
+                &handling,
+                &Environment::default(),
+                &world,
+                dt,
+            );
+        }
+
+        assert!(
+            state.body.forward().dot(initial_right) > 0.0,
+            "forward was {:?}, expected a component toward the initial right axis {initial_right:?}",
+            state.body.forward()
+        );
+    }
 }

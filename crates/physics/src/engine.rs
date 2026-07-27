@@ -82,8 +82,11 @@ impl EngineForce {
         // The original's row 2 is forward and its accumulator `.z` is "forward",
         // so a positive thrust pushes along the craft's forward axis. This crate's
         // body forward is `-Z` (see `Body::forward`), which is where the negation
-        // comes from; it is a convention difference, not a sign finding, and the
-        // handedness of the original is still open.
+        // comes from; it is a convention difference, not a sign finding. Handedness
+        // itself is no longer open - `docs/ghidra/functions/psp-pulse/engine.md`
+        // measured the original's basis as positively oriented under the ordinary
+        // cross product, the same arithmetic this crate uses - but that measurement
+        // says nothing about this particular row-to-axis mapping.
         Vec3::new(0.0, self.lift, -self.thrust)
     }
 }
@@ -181,6 +184,24 @@ pub fn brakes(state: &ShipState, handling: &Handling) -> Vec3 {
 /// steering authority at a standstill is not zero and any speed dependence comes
 /// from the damping and grip terms instead.
 ///
+/// # Why the literal `steer * Turning.amount` is negated here
+///
+/// `docs/ghidra/functions/psp-pulse/engine.md` ("The basis is positively
+/// oriented, and row 0 points left") measured this off a running race: holding
+/// right yaws at a mean `-1.42 rad/s` about the up axis, holding left `+1.51
+/// rad/s`, mirror-symmetric in both sign and magnitude. The measured law is
+/// **`yaw_rate = -k * steer`**, confidence 90 - a plain literal-transcription
+/// sign, not a handedness flip. The same page rules handedness out as the
+/// explanation here: the original's basis is positively oriented under the
+/// ordinary component-wise cross product, the same arithmetic this crate uses,
+/// so there is no component-level handedness difference to blame. `steer` is
+/// positive to the right by the time it reaches here (see
+/// [`ShipControls::steer_x`]), and this crate's own convention already requires
+/// a negative `local_angular.y` to turn the nose right - see the weathervane
+/// direction test in `crate::passive` for the same identity applied to a
+/// different term. Negating the base `yaw` here, before the reverse-controls
+/// blend, satisfies both.
+///
 /// The reverse-controls blend is applied unconditionally here rather than behind
 /// the original's flag, because it is the identity at zero and continuous through
 /// it: `yaw * (1 - 2 * 0) == yaw`. So a ship with no reverse-controls pickup
@@ -190,7 +211,7 @@ pub fn brakes(state: &ShipState, handling: &Handling) -> Vec3 {
 /// the two `craft+0x2a4` modes that force `steer = 0`. Both need undecoded state.
 #[must_use]
 pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
-    let yaw = state.steer * handling.turning.amount;
+    let yaw = -(state.steer * handling.turning.amount);
 
     if state.reverse_controls > 1.0 {
         -yaw
@@ -215,8 +236,12 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
 /// is not known, so there is no field in [`Handling`] to read it from.
 ///
 /// The sign convention is **not settled**: [`ShipControls::steer_y`] is documented
-/// as positive nose up, the original's axis polarity was not read, and the page
-/// leaves handedness open. Taken as-is, a guess awaiting M3.
+/// as positive nose up, and the original's axis polarity for this specific term was
+/// not read. Handedness itself is settled -
+/// `docs/ghidra/functions/psp-pulse/engine.md` measured the original's basis as
+/// positively oriented under the ordinary cross product - but that measurement was
+/// about steering, not pitch, and does not by itself pin this term's polarity.
+/// Taken as-is, a guess awaiting M3.
 #[must_use]
 pub fn pitch(controls: &ShipControls, handling: &Handling, grounded: bool) -> f32 {
     let gain = if grounded {
@@ -400,8 +425,15 @@ mod tests {
         assert!(brakes(&crawling, &handling).length() < brakes(&fast, &handling).length());
     }
 
+    /// Holding right (`steer > 0`) must turn the ship right, which in this crate's
+    /// convention needs a **negative** `local_angular.y` contribution - see the
+    /// weathervane direction test in `crate::passive` for the same identity
+    /// applied to a different term, and the measured law in
+    /// `docs/ghidra/functions/psp-pulse/engine.md` this pins against. A test that
+    /// only checked `right == -left` would pass whether or not the whole thing
+    /// were inverted, which is exactly the bug this pins.
     #[test]
-    fn steering_yaws_in_the_direction_of_the_stick_and_is_symmetric() {
+    fn steering_right_yaws_negative_and_is_symmetric_with_left() {
         let handling = test_handling();
         let mut state = ShipState {
             steer: 100.0,
@@ -412,7 +444,10 @@ mod tests {
         state.steer = -100.0;
         let left = steering(&state, &handling);
 
-        assert!(right != 0.0);
+        assert!(
+            right < 0.0,
+            "steering right yawed {right}, expected negative"
+        );
         assert_eq!(right, -left);
     }
 
