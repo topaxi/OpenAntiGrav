@@ -547,7 +547,13 @@ base. What that scan cannot see is a store through a rebased pointer, the way
 negative is confidence **80** rather than higher.
 
 Where the 17x has to live instead, by elimination on the force balance already
-recorded in `engine.rs`: a steady 24 units/s needs `T ~= 4.88`, so
+recorded in `engine.rs`. **The three subsections below are the investigation in
+the order it happened, and the last one overturns the premise of the first two**:
+the shipped values turn out to be right, and the error is on the resistance side
+of the balance rather than the thrust side. They are kept because each closes a
+hypothesis that would otherwise be re-opened.
+
+A steady 24 units/s needs `T ~= 4.88`, so
 `min(throttle * Engine.amount, cap) ~= 2.44` before the `* 2.0`. But
 `cap = 0.5 * 23.35 + Engine.accelcap = 11.68 + accelcap`, which cannot be as low
 as `2.44` unless `accelcap` is about `-9.2`. So either
@@ -591,22 +597,62 @@ with no scaling at all. `crates/gameplay/src/handling.rs` applies
 `ENGINE_AMOUNT_SCALE = 0.001` to the same field and nothing else, so **the two
 agree exactly** and the scaling is not the 17x. Confidence **90**.
 
-The gap therefore has to be in the *value* - the raw `<Engine amount>` this crate
-reads is about `418` where the original's is about `24.4`. Which means one of:
-a different ship, a different speed-class block, a different file, or a reader
-disagreement on the attribute text itself. That last one is worth checking first
-and is cheap: `Xml_AttributeAsFloat` (`0x0895379c`) **cannot read exponent
-notation** (see [xml-reader.md](xml-reader.md)), while `crates/formats`'s parser
-uses an ordinary float parse, so any shipped value written in exponent form is
-read differently by the two - a reader-level mechanism that needs only the
-extracted XML text to confirm or kill.
+#### And the shipped values settle it: the thrust path is correct
 
-**The discriminating check needs the disc**, which is why it is recorded here
-rather than settled: extract `Data\Ships\Assegai\handlingstats.xml`, read the raw
-`<Engine amount accelcap/>` attribute strings for the Venom class, and compare
-against what `crates/formats::handling` returns for the same field. Failing that,
-read the two loaded floats at `craft+0x70 + 0x28` (`amount`) and `+0x30`
-(`accelcap`) in a running race.
+The Assegai `Engine` block has since been read off a real disc, in both the PSP
+and the PS2 asset sets, which agree with each other. **The values are not
+recorded here**, per [handling-stats.md](../../../formats/handling-stats.md)'s
+standing decision to keep shipped design data out of this repository, but three
+things follow from them:
+
+- `accelcap` is **positive**, confirming the refutation above empirically as well
+  as structurally.
+- `amount` is written as a **plain integer**, so the exponent-blind
+  `Xml_AttributeAsFloat` has nothing to misread and that mechanism does not apply.
+- `raw * 0.001` reproduces **exactly** what `crates/physics`'s
+  `params::Engine::amount` already holds, so the two loaders agree on the value as
+  well as on the scale.
+
+Substituting the real numbers into the force law: at the recorded speed the **cap
+arm binds**, and the original's own `Ship_UpdateEngine` puts about **58** into the
+local force accumulator - which is the same figure this crate computes.
+
+**That inverts the whole investigation.** The recording is steady or very slightly
+decelerating at that speed, so the original's *total resistance* there is also
+about 58. This crate's resistance is `0.005 * 24^2 + 2.0 = 4.88`. The missing
+factor of about **12 is on the resistance side**, and every term in
+`Ship_UpdateEngine` - the `amount`, the `accelcap`, the `* craft+0x294`, the
+`* 2.0` - is now positively confirmed rather than merely unrefuted.
+
+A precise target: a grounded quadratic coefficient of `0.1` rather than `0.005`
+puts the equilibrium at **23.6 units/s** (`T = 57.60` against `R = 57.70`), the
+exact floor of the recorded band. The coefficient itself is not the answer - it is
+confirmed as `-0.005` grounded in *both* binaries, delay slots included, with
+`-0.1` sitting on the `forwardSpeed < -0.2` reversing branch in both - so what the
+coincidence pins is the *magnitude* to look for: something contributing roughly
+`0.095 * v^2` of opposing force to a grounded craft.
+
+The first place to look is the **track-section force** (`FUN_08848f9c` here,
+`FUN_0015a300` on PS2), the one world-force writer that is both unimplemented in
+`crates/physics` and track-dependent, which the reference capture is. It is a
+per-section timed impulse along the section direction:
+
+```
+on entering a new section:
+    craft+0x298 = g_section_duration[class]     // 0x08b36bd0
+    craft+0x29c = g_section_magnitude[class]    // 0x08b36bc0
+each frame, while craft+0x298 > 0:
+    craft+0x298 -= dt
+    f = (craft+0x298 > 0.1) ? craft+0x29c * 10.0 * craft+0x298 : craft+0x29c
+    if (craft+0x2cc < 1.0)  f *= craft+0x2cc
+    worldForce += sectionDirection(craft+0x1b0) * f
+```
+
+Confidence **75** on that shape; the two per-speed-class tables have **not** been
+read, and their sign decides whether this term drives the craft or opposes it.
+`Ship_InitCraft` zeroes both `+0x298` and `+0x29c`, so the term is inert until a
+section is entered - which is why it never shows up in a static reading of the
+force law.
 
 ### Engine `gain` and `falloff` are dead
 

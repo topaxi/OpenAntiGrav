@@ -79,49 +79,64 @@ use crate::ship::{ShipControls, ShipState};
 /// arms of the "it's a multiplier nobody has read" hypothesis are therefore closed,
 /// and the factor lives somewhere else.
 ///
-/// # Where the 17x has to be instead
+/// # The gap is on the *resistance* side, not the thrust side
 ///
-/// By elimination on the same force balance. A steady 24 units/s needs `T ~= 4.88`,
-/// so `min(throttle * amount, cap) ~= 2.44` before the `* 2.0`. But
-/// `cap = 0.5 * 23.35 + accelcap = 11.68 + accelcap`, which cannot be as low as
-/// `2.44` for any non-negative `accelcap`. So one of exactly two things is true:
+/// The shipped `Engine` block for Assegai/Venom has now been read off a real disc,
+/// in both the PSP and the PS2 asset sets, which agree. The numbers themselves are
+/// not recorded here - see `docs/formats/handling-stats.md`, which deliberately keeps
+/// shipped design values out of this repository - but three things follow from them
+/// and those *are* recorded, because they close three hypotheses:
 ///
-/// - `Engine.amount` as the original loads it is about `0.0244`, against the `0.418`
-///   this crate has; or
-/// - `Engine.accelcap` is *negative* for Assegai/Venom (about `-9.2`), the cap arm
-///   binds after all, and the reasoning above is void.
+/// - **`accelcap` is positive**, so the force-law refutation of a negative one
+///   (below) is confirmed empirically as well as structurally.
+/// - **`amount` is a plain integer with no exponent notation**, so the
+///   exponent-blind-parser hypothesis has nothing to misread here.
+/// - **`raw * 0.001` reproduces exactly what [`crate::params::Engine::amount`]
+///   already holds**, so the load-time scale is not the error either.
 ///
-/// **The second is refuted by the force law itself.** The cap feeds a plain `min`
-/// with no clamp at zero anywhere before the accumulate, so a negative `accelcap`
-/// would make `cap` negative at low speed, `min` would select it over any
-/// non-negative `throttle * amount`, and a ship at full throttle on the start line
-/// would be pushed *backwards* - and could never reach the `-2 * accelcap ~= 18.4`
-/// units/s at which the cap turns positive. See
-/// `docs/ghidra/functions/psp-pulse/engine.md`, "The second branch is refuted by the
-/// force law itself".
+/// Substituting the real values, the **cap arm binds** at the recorded speed and the
+/// original's own engine puts about **58** into the force accumulator there. That is
+/// the same 58 this crate computes. So the thrust path is not wrong at all:
 ///
-/// **Nor is it the load-time scaling.** `HandlingXml_ParseEngine` (`0x0883945c`)
-/// multiplies `amount` in place by exactly `0.001` and stores `accelcap` verbatim;
-/// `oag_gameplay::handling::ENGINE_AMOUNT_SCALE` is `0.001` on the same field and
-/// nothing else. The two agree exactly, at confidence 90.
+/// ```text
+/// original at 24 units/s:  T = 58, and the recording is steady or decelerating
+///                          => the original's total resistance there is ~58
+/// this crate at 24:        drag 0.005 * 24^2 + rolling 2.0 = 4.88
+/// ```
 ///
-/// **Nor is it an asymmetry between the two force accumulators**, the other
-/// attractive explanation: thrust goes through the body-*local* accumulator while
-/// drag and rolling resistance go through the *world* one, but `Body_Integrate`
-/// (`0x0015d088`, PS2) rotates the local one by the basis and then applies the same
-/// `invMass * h` to both, which is exactly what [`crate::forces`]'s `drain` does.
-/// Confidence 85.
+/// **So the missing factor of about 12 is a resistance that this crate does not
+/// have**, and every constant in this module - `ENGINE_OUTPUT_SCALE`,
+/// `ENGINE_OUTPUT_DOUBLE`, `amount`, `accelcap` - is now positively confirmed rather
+/// than merely unrefuted. The 0.084 fitted earlier was fitting the wrong end of the
+/// balance.
 ///
-/// So what is left is the *value*: the raw `<Engine amount>` this crate ends up with
-/// is about `418` where the original's is about `24.4`. Settling it needs the disc -
-/// extract `Data\Ships\Assegai\handlingstats.xml`, read the Venom class's raw
-/// attribute strings, and compare against what [`crate::params::Engine::amount`] gets.
-/// A cheap thing to check first: `Xml_AttributeAsFloat` cannot read exponent notation
-/// and `crates/formats`'s parser can, so a shipped value in exponent form is read
-/// differently by the two. Until that is done, this constant stays at the value that
-/// was actually recovered.
+/// A precise target for whoever picks this up: a grounded quadratic coefficient of
+/// `0.1` rather than `0.005` puts the equilibrium at **23.6 units/s** (`T = 57.60`
+/// against `R = 57.70`), the exact floor of the recorded 23.6-25.1 band. That is
+/// almost certainly a coincidence of magnitude rather than the mechanism - see the
+/// dead end below - but it pins what has to be found: something contributing about
+/// `0.095 * v^2` of opposing force while grounded.
 ///
-/// Two other things narrow where the factor could live, and both are dead ends:
+/// Three hypotheses for *where* were checked and are dead:
+///
+/// - **Not the load-time scaling.** `HandlingXml_ParseEngine` (`0x0883945c`)
+///   multiplies `amount` in place by exactly `0.001` and stores `accelcap` verbatim;
+///   `oag_gameplay::handling::ENGINE_AMOUNT_SCALE` is `0.001` on the same field and
+///   nothing else. Confidence 90, and now confirmed against the shipped value too.
+/// - **Not a negative `accelcap`.** The cap feeds a plain `min` with no clamp at zero
+///   anywhere before the accumulate, so a negative one would make `cap` negative at
+///   low speed, `min` would select it over any non-negative `throttle * amount`, and
+///   a ship at full throttle on the start line would be pushed *backwards* - unable
+///   to reach the speed at which the cap turns positive. The shipped value is
+///   positive, so this is now moot as well as impossible.
+/// - **Not an asymmetry between the two force accumulators**, the most attractive
+///   structural explanation: thrust goes through the body-*local* accumulator while
+///   drag and rolling resistance go through the *world* one, but `Body_Integrate`
+///   (`0x0015d088`, PS2) rotates the local one by the basis and then applies the same
+///   `invMass * h` to both, which is exactly what [`crate::forces`]'s `drain` does.
+///   Confidence 85.
+///
+/// Two further dead ends, both on the resistance side and both worth not re-testing:
 ///
 /// - **Not the drag coefficients.** `-0.005` grounded, `-0.002` airborne and `-0.1`
 ///   reversing are confirmed at instruction level in the PS2 build as well
@@ -132,9 +147,22 @@ use crate::ship::{ShipControls, ShipState};
 /// - **Not the mass.** The two masses cancel out of a force balance entirely, and the
 ///   ratio between them is independently pinned near 1 by the hover height: the same
 ///   capture rests 4.002 above the surface against the 3.978 the spring predicts when
-///   `Body::mass == Physical::mass`, and a body mass 17x the parameter one would put
-///   that at 1.6.
+///   `Body::mass == Physical::mass`, and a body mass an order of magnitude above the
+///   parameter one would put that at 1.6.
 ///
+/// # Where to look next
+///
+/// The world force accumulator (`craft+0x330`) has writers this crate does not
+/// implement, and one of them has to be carrying the missing `~0.095 * v^2`. Per
+/// `docs/ghidra/functions/psp-pulse/engine.md`'s enumeration, the full list is the
+/// brakes, the airbrake lateral and slide terms, gravity, quadratic drag, rolling
+/// resistance, the hover spring epilogue's downforce, the vertical-damping term and
+/// the **track-section force** (`FUN_08848f9c` on PSP, `FUN_0015a300` on PS2). The
+/// last of those is the least examined: it is a per-section timed impulse along the
+/// section direction, scaled by two per-speed-class tables at `0x08b36bc0` and
+/// `0x08b36bd0`, and neither table has been read. It is the first thing to check,
+/// because it is the only term in the list that is both unimplemented here and
+/// track-dependent - which the reference capture is.
 pub const ENGINE_OUTPUT_SCALE: f32 = 1.0;
 
 /// The flag-gated engine multiplier: the speed-up pickup, a flat +20 % on thrust.
