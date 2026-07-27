@@ -297,6 +297,40 @@ mod tests {
         assert_ne!(body.torque, Vec3::ZERO);
     }
 
+    /// The torque is `r x F`, and **that sign is load-bearing across the whole crate**.
+    ///
+    /// The original computes this cross product the other way round, as `F x r`, in
+    /// both binaries. That is not a bug in either: the engine integrates its basis as
+    /// `e' = e x w` rather than the textbook `e' = w x e`, so its angular velocity is
+    /// the negation of the textbook one and `F x r` there means `r x F` here.
+    /// [`crate::integrate`] uses the textbook form, so every torque expression taken
+    /// from the disassembly is negated exactly once on the way in - here, in
+    /// [`crate::hover::ALIGNMENT_GAIN`] (`+400` against a read `-400`) and in
+    /// [`crate::passive::WEATHERVANE_GROUND`] (`+0.1` against a read `-0.1`).
+    ///
+    /// **Flipping any one of those three without the others is unconditional
+    /// divergence**, not a subtle drift, which is why this is asserted on the direction
+    /// and not merely on being non-zero: `a_force_off_axis_makes_torque` above passes
+    /// either way round, so it cannot catch a "correction" back to the literal reading.
+    ///
+    /// Angular damping is deliberately **not** in that list: `tau = -c * w` is a
+    /// negative multiple of `w` in either convention, so it is already right and must
+    /// not be flipped with the others.
+    #[test]
+    fn a_force_at_a_point_makes_torque_the_textbook_way_round() {
+        let mut body = Body::default();
+        // r = +X, F = +Y. Textbook `r x F` is +Z; the original's `F x r` would be -Z.
+        body.add_force_at_point(Vec3::Y, Vec3::X);
+        assert_eq!(
+            body.torque,
+            Vec3::Z,
+            "torque came out {:?}; a flip to the original's own `F x r` convention \
+             without also flipping the alignment and weathervane gains diverges \
+             unconditionally",
+            body.torque
+        );
+    }
+
     /// The frame axis points **down** in `.vex` data and this one does not, so
     /// the difference is pinned rather than left to be rediscovered.
     #[test]

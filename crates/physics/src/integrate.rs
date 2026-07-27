@@ -74,6 +74,50 @@ pub fn clamp_dt(measured_dt: f32) -> f32 {
 /// it is what one writes by reflex, and it is not what the page specifies.
 /// Reproducing "explicit Euler" literally is the choice here.
 ///
+/// # The angular-velocity sign convention, which is a whole-crate contract
+///
+/// This uses the **textbook** derivative, `q' = (omega as a pure quaternion) * q / 2`,
+/// which is `e' = omega x e` on the basis rows. **The original does not.**
+/// `Body_Integrate`'s skew matrix, read with its base constants confirmed zero,
+/// builds `d(row0) = h * (-z * row1 + y * row2)`, which is `e' = e x omega` - the
+/// opposite sign. So the engine's angular velocity is the negation of this one,
+/// `w_game = -w_physics`, consistently and everywhere.
+///
+/// That single substitution explains two things that read as errors and are not:
+/// `Body_AddForceAtPoint` computing torque as `F x r`, and the surface alignment being
+/// `-400 * cross(up, avgNormal)`. Under `w_game = -w_physics` both are exactly what
+/// the textbook `r x F` and `+400 * cross(up, n)` give. Nothing in the original is
+/// inverted and nothing there needs compensating; the two candidates that were being
+/// hunted for - a pre-negated force at the call site, and the matrix at `body+0xc0` -
+/// are both ruled out, the latter because it is the basis's rotation inverse and a
+/// determinant of `+1` cannot flip a sign.
+///
+/// **This is not the handedness question**, which is separately settled and fine:
+/// `cross(row0, row1) = row2` on the PSP measurement, and the PS2's orthonormaliser
+/// rebuilds `row0 = row1 x row2`, which is the same statement. The two were being
+/// conflated and are independent.
+///
+/// # The rule, and what breaks if it is half-applied
+///
+/// Exactly **one** flip, applied consistently. This crate takes the textbook
+/// integration above, so every torque expression inherited from the disassembly is
+/// negated once on the way in. Today that is three places:
+///
+/// - [`crate::ship::Body::add_force_at_point`], `r x F` against a read `F x r`.
+/// - [`crate::hover::ALIGNMENT_GAIN`], `+400` against a read `-400`.
+/// - [`crate::passive::WEATHERVANE_GROUND`], `+0.1` against a read `-0.1`.
+///
+/// Each of those three carries its own local argument about which direction aligns, and
+/// each argument is sound - but they are **one convention**, not three coincidences, and
+/// "correcting" any single one back to its literal reading gives **unconditional
+/// divergence** rather than the mild instability a mistuned magnitude produces.
+/// `crate::ship::tests::a_force_at_a_point_makes_torque_the_textbook_way_round` pins the
+/// first of them, which was previously asserted only as being non-zero.
+///
+/// Angular damping is deliberately excluded: `tau = -c * w` is a negative multiple of
+/// `w` under either convention, so [`crate::passive::angular_damping`] is already right
+/// and must not be flipped with the rest.
+///
 /// # Angular integration
 ///
 /// Torque is world space and the inertia tensor is a body-space diagonal, so the
