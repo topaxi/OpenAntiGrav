@@ -179,28 +179,52 @@ for (i = 0; i < substeps; i++) {
 `Ship_UpdateCraft` fills them once per frame; every sub-step then applies the
 same frozen values.
 
-That has a consequence the physics page's arithmetic does not currently account
-for. With the torque frozen at its frame-start value, the velocity change over a
-whole frame is
+That changes the stability arithmetic. Write the roll oscillator as
+`a = −k·x₀ − c·ω₀`, frozen for the frame, and note the loop updates position
+*before* velocity. Over `n` sub-steps of `h = H/n`:
 
 ```text
-Δv = (−k·x₀ − c·v₀) · n·h = (−k·x₀ − c·v₀) · H
+ω_n = ω₀ + a·H                                  (independent of n)
+x_n = x₀ + ω₀·H + a·H²·(n−1)/(2n)
 ```
 
-which is **one explicit-Euler step at the full frame step `H`, whatever `n`
-is**. So the stability condition is `H <= c/k`, not `H/n <= c/k`. At `k = 400`
-and `c = 2` that needs `H <= 0.005` against an actual `H = 1/60 = 0.0167`: a
-factor of about **3.3**, not the 1.11 the page computes, and **raising the
-sub-step count cannot fix it**, because it does not enter.
+The determinant of that map - which is `|λ|²` while the eigenvalues are complex -
+is
 
-This does not resolve the instability - it makes it larger. It does eliminate
-one of the three explanations that page offers ("the sub-step count is not
-three"), which leaves a wrong magnitude or a genuinely marginal original.
-Confidence **88**: the loop structure is unambiguous, and the arithmetic follows
+```text
+det = 1 − c·H + k·H²·(n+1)/(2n)
+```
+
+so stability needs `c >= k·H·(n+1)/(2n)`. At `k = 400` and `H = 1/60`:
+
+| Sub-steps | `c` required | Against the actual `c = 2` |
+| ---: | ---: | ---: |
+| 1 | 6.67 | 3.33x short |
+| 3 | **4.44** | **2.22x short** |
+| infinite | 3.33 | 1.67x short |
+
+Two things follow, and the second is the useful one.
+
+**Raising the sub-step count cannot fix it.** The requirement does not fall
+below `k·H/2 = 3.33` however finely the frame is divided, because the velocity
+update is a full-`H` Euler step whatever `n` is. That retires one of the three
+explanations [docs/physics/README.md](../../../physics/README.md) offers - "the
+sub-step count is not three" - and leaves a wrong magnitude or a genuinely
+marginal original.
+
+**This confirms the model `crates/physics/src/hover.rs` already uses, and dates
+the physics page.** That file's stability note computes `c >= 4.444` at three
+sub-steps, which is exactly the `n = 3` row above; the physics page's
+`h <= c/k` with `h = 1/180` gives 1.11x and assumes the forces are re-evaluated
+per sub-step, which the original does not do. **The page is the thing that needs
+correcting, not the crate.** No Rust was touched from here.
+
+Confidence **88**: the loop structure is unambiguous and the arithmetic follows
 from it. Not higher because it is decompilation without a trace, and because the
 inertia handling between `body+0x130` and `body+0x160` was not read - if the
-rotation at `+0xc0` is not orthonormal, the effective `k` and `c` both scale and
-the *ratio* still does not move, but the argument deserves that caveat stated.
+rotation at `+0xc0` is not orthonormal the effective `k` and `c` both scale, and
+the *ratio* that drives this still does not move, but the argument deserves the
+caveat stated.
 
 **The sub-step count itself was not located.** `World_StepBodies` threads it
 through from its own caller as a parameter, and that function has neither a
