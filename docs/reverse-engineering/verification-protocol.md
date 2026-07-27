@@ -34,14 +34,21 @@ ticks and then drifts has a different bug from one that is wrong at tick 1.
 
 | Piece | Purpose |
 | --- | --- |
-| Save state | A fixed, reproducible starting point. Committed as a reference by name, not content. |
-| Input script | Per-tick controller state. Plain text, committed. |
+| Save state | A fixed, reproducible starting point. Committed as a reference by name, not content. **Not built.** The starting point is still reached by the documented menu walk in [the debugger page](ppsspp-debugger.md#the-reference-scenario), which is reproducible but slow. |
+| Input script | Per-tick controller state. Plain text, committed. **Built**: `verification/scenarios/*.inputs`, read by `scripts/input_script.py` on the capture side and `oag_trace::script` on ours. |
 | Trace capture | Emulator-side recording of the observed values, per tick. **Built**: `scripts/psp-trace.py`, on top of [PPSSPP's websocket debugger](ppsspp-debugger.md). |
-| `oag-trace` | Runs our engine on the same input and compares. |
+| `oag-trace` | Runs our engine on the same input and compares. **Built**: [`docs/tools/oag-trace.md`](../tools/oag-trace.md). |
 
 Traces are derived game data and are never committed. They go under
 `data/traces/`, which `.gitignore` covers, and are regenerated from a disc image
 by the recipe on the debugger page.
+
+**Input scripts are the opposite and are committed.** Nothing in one comes off a
+disc: it is a list of button names somebody chose, in a format
+[`oag-trace`'s page describes](../tools/oag-trace.md#input-scripts). That is what
+makes the loop above closed rather than circular - without a script the only
+inputs available are "one constant button" and "whatever the recording happened
+to hold", and the second compares a run against itself.
 
 ## What gets traced
 

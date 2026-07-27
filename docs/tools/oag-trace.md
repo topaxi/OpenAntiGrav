@@ -10,6 +10,7 @@ two are for is [the verification protocol](../reverse-engineering/verification-p
 oag-trace show    <trace.csv>                      what is in a capture
 oag-trace run     <trace.csv> [--source <image>]   replay it and compare
 oag-trace compare <recorded.csv> <simulated.csv>   diff two traces
+oag-trace script  <script.inputs> [--expand]       validate an input script
 ```
 
 Traces are **derived game data**. They live under `data/traces/`, which
@@ -20,12 +21,18 @@ every test in the crate works from a hand-authored fixture instead.
 
 ```sh
 # 1. capture, out of a race already running in PPSSPP
-just trace --ticks 300 --hold cross --warmup 4 --out data/traces/venom-straight.csv
+just trace --script verification/scenarios/steer-both-ways.inputs \
+    --warmup 25 --out data/traces/venom-steer.csv
 
-# 2. replay and compare
-cargo run -p oag-trace -- run data/traces/venom-straight.csv \
-    --source data/images/pulse-psp-usa.chd --hold cross --out data/traces/ours.csv
+# 2. replay the same script and compare
+cargo run -p oag-trace -- run data/traces/venom-steer.csv \
+    --source data/images/pulse-psp-usa.chd \
+    --script verification/scenarios/steer-both-ways.inputs \
+    --out data/traces/ours.csv
 ```
+
+`--hold cross` on both sides is the older, simpler form and still works; it is
+the right thing for a straight line and cannot express anything else.
 
 The capture side's traps - a breakpoint added while the CPU runs never fires, a
 memory read costs 520 ms running and 0.3 ms stepping, and holding thrust through
@@ -57,6 +64,125 @@ first quarter's mean error against the last quarter's.
 
 Fields that go on the same tick as the leader are listed with it. One term wrong
 usually shows up in one field; a wrong initial condition shows up in all of them.
+
+## Input scripts
+
+A capture and a replay have to be driven by the *same* input or the comparison is
+between two different experiments. Until this existed there were only two ways to
+arrange that, and both are limited:
+
+- `--hold cross`, one constant input for the whole run. Fine for a straight line,
+  and unable to express anything else.
+- `FromTrace`, the fallback, which rebuilds each tick's input from that tick's
+  recorded control states. Those are the original's *already-ramped output*, so
+  feeding them back in ramps them twice, and it is not reusable: it describes one
+  particular capture rather than an experiment.
+
+An **input script** is the third mode, and the one the protocol's Components table
+always called for. It is a plain-text file, committed, read identically by
+`scripts/psp-trace.py --script` on the emulator side and `oag-trace run --script`
+on ours. Committed scripts live in `verification/scenarios/`.
+
+```
+# verification/scenarios/steer-both-ways.inputs
+60 cross
+30 cross left
+30 cross
+30 cross right
+50 cross
+```
+
+The first field on a line is how many consecutive ticks the state lasts; the rest
+are tokens in any order. Run-length encoded rather than one line per tick because
+what is interesting about a script is where the state *changes* - and `1 cross` is
+a one-tick press, so nothing is lost.
+
+| Token | Meaning |
+| --- | --- |
+| `cross`, `circle`, `square`, `triangle` | Face buttons |
+| `up`, `down`, `left`, `right` | D-pad |
+| `l`, `r` | Shoulders |
+| `start`, `select` | For menu work |
+| `stick_x=`, `stick_y=` | Analog stick, `-1..=1` |
+| `airbrake_left=`, `airbrake_right=` | Airbrakes, `0..=1` |
+| `none`, `-` | Nothing held; the only token on its line |
+| `#` | Comment, to end of line |
+
+An out-of-range axis is **rejected, not clamped**. A pad gets clamped because a
+miscalibration is not the player's fault; a script is a specification, and one
+that says `stick_x=2` is wrong rather than saturated.
+
+**A script shorter than the recording holds its last state**, and both sides say
+so on stderr when it happens, because that is nearly always an over-short script
+rather than an intent.
+
+### Why the axes have defaults rather than being required
+
+A script names buttons because that is what the emulator can be sent: PSP hardware
+has a d-pad and two shoulder buttons. Our side consumes an `InputSnapshot`, which
+has axes. The translation is not invented for scripts - it is exactly what
+`oag_input::Input::snapshot` does for a keyboard, which is what makes a scripted
+run the same experiment as a played one: `stick_x` is `right - left`, `stick_y` is
+`up - down`, and the shoulders are the airbrakes. An explicit assignment overrides
+the derived value, which is how a script asks for something a pad cannot produce -
+a half-deflected stick. Those go to the emulator through `input.analog.send`; a
+*fractional airbrake* has no hardware equivalent at all, and `psp-trace.py`
+refuses the script rather than quietly rounding it.
+
+### Two parsers, and what stops them drifting
+
+The capture side is Python and our side is Rust, so the format is implemented
+twice. Both can dump one line per tick, in the same shape, and the dumps must be
+byte-identical:
+
+```sh
+diff <(cargo run -q -p oag-trace -- script F --expand) \
+     <(uv run scripts/input_script.py F --expand)
+```
+
+`uv run scripts/input_script.py --self-test` checks the Python half's invariants
+without needing a Rust toolchain or an emulator, and `oag-trace`'s own tests parse
+every committed scenario.
+
+### The committed scenarios
+
+| File | What it is |
+| --- | --- |
+| `straight-line.inputs` | 200 ticks of thrust. Protocol scenario 1, and deliberately the same input as the `--hold cross` reference capture, so the scripted path can be checked against a result measured before scripts existed |
+| `steer-both-ways.inputs` | Thrust throughout, half a second of full left, a straight, then half a second of full right. A variant of protocol scenario 2 |
+
+`steer-both-ways` turns both ways on purpose. The sign of the yaw response is one
+of the things this harness exists to settle - row 0 of the recorded basis being
+the ship's *left* is an 84-confidence finding, and `--basis` exists because of it -
+and a run that is symmetric about a straight shows a sign error as the two halves
+swapping rather than as a plausible-looking curve. A single constant turn cannot
+distinguish those. The half-second segments are short enough that at the reference
+scenario's ~24 units/s the ship should still be on Talon's Junction's first
+straight rather than scraping a wall, which would confound steering with collision
+response.
+
+### What is confirmed, and what is not
+
+**Confirmed.** `--script straight-line.inputs` and `--hold cross`, run against the
+real reference capture with the same track, team and class, produce **byte-identical**
+simulated traces. The scripted replay path is therefore the same code path as the
+mode that was already validated, exercised through a file. The two parsers'
+expansions are byte-identical on both committed scenarios.
+
+**Not confirmed.** No capture has yet been taken *through* `psp-trace.py --script`.
+Two things wait on one:
+
+- **The input phase.** The breakpoint is inside the frame, so whether a controller
+  state set there is seen by that frame or the next depends on where the game
+  polls input, which has not been read out of the binary. `--script-lead N` shifts
+  the send by whole ticks and defaults to 0. A capture of `steer-both-ways`
+  measures it in one line: the recorded `steer` column is flat until the tick the
+  game first saw `left`, and the gap between that and the script's own tick 60 is
+  the lead to use. This is a switch rather than a constant for the same reason
+  `--basis` is.
+- **PPSSPP's analog sign.** `input.analog.send`'s y is assumed to be positive-up,
+  matching `InputSnapshot::stick_y`. Nothing has tested it. The committed scenarios
+  use only the d-pad, so neither depends on it yet.
 
 ## Tolerances
 
@@ -118,10 +244,10 @@ replayed, rather than being invented:
   window with no leap in progress.
 - **Raw stick positions.** `steer`, `brake` and both airbrakes are recorded
   *after* the original's own ramps, so replaying them as inputs ramps them twice.
-  Use `--hold cross` (and `--steer`, `--airbrake-left`, `--airbrake-right`) to
-  drive the run with the constant input the capture was actually taken with;
-  without any of those the run falls back to deriving input from the recorded
-  states, which is general but approximate.
+  Use `--script` with the file the capture was taken with, or `--hold cross` (and
+  `--steer`, `--airbrake-left`, `--airbrake-right`) for a constant input; without
+  any of those the run falls back to deriving input from the recorded states,
+  which is general but approximate.
 
 Without `--source` there are no handling parameters and no track: the run is a
 coast, useful for checking the harness and useless for checking the force law.
@@ -134,6 +260,7 @@ disc exactly as `oag-game` reads them.
 | --- | --- |
 | `--source <image>` | Disc image or an `oag-unpack` extraction, for handling and collision |
 | `--track`, `--team`, `--class` | Which track, team and speed class the capture was taken in |
+| `--script <file>` | Drive the run from the same input script the capture was taken with. Excludes the four held options below |
 | `--hold <button>` | Hold a button for the whole run, as `psp-trace.py --hold` did. Repeatable |
 | `--steer`, `--airbrake-left`, `--airbrake-right` | Hold an axis for the whole run |
 | `--fixed-dt` | Step at our own 60 Hz instead of the recording's own frame times |
@@ -247,8 +374,13 @@ about the force law.
 
 ## Not yet
 
-- No save state and no committed input script, so a scenario is "whatever was
-  captured" rather than one of the protocol's seven named ones.
+- **No save state.** The starting point is still the documented menu walk from a
+  cold boot: reproducible, and slow enough that redoing it is the main cost of
+  taking a capture. Input scripts now exist (above), so a scenario is a named,
+  committed thing rather than "whatever was captured"; the save state is the other
+  half of the protocol's fixed starting point and is not built.
+- **No capture taken through `--script` yet**, so the input phase
+  (`--script-lead`) is unmeasured. See "What is confirmed, and what is not".
 - **No cornering capture.** The reference scenario is a straight, where the
   forward projection and the velocity's magnitude agree to 0.3 %. Everything the
   speed columns above claim is therefore confirmed only in the regime where the

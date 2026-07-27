@@ -229,6 +229,38 @@ cargo run -p oag-trace -- run data/traces/talons-junction-venom-assegai.csv \
     --source data/images/pulse-psp-usa.chd --team Assegai --class venom --hold cross
 ```
 
+The same scenario driven by a **committed input script** instead, which is what
+makes it more than a straight line - see
+[`oag-trace`'s page](../tools/oag-trace.md#input-scripts) for the format:
+
+```sh
+just trace --port 47810 --script verification/scenarios/steer-both-ways.inputs \
+    --warmup-hold cross --warmup 6 \
+    --out data/traces/talons-junction-steer.csv
+cargo run -p oag-trace -- run data/traces/talons-junction-steer.csv \
+    --source data/images/pulse-psp-usa.chd --team Assegai --class venom \
+    --script verification/scenarios/steer-both-ways.inputs
+```
+
+Three things about the scripted form specifically:
+
+- **A scripted capture warms up holding nothing.** `--hold` holds through the
+  warmup, which is right for it and wrong here - the false-start trap above is
+  what a scripted capture would walk into if its first line held thrust through a
+  countdown. `--warmup-hold cross` is the opt-in for the other case, reaching the
+  script's starting speed before tick 0 so a scenario begins the way the `--hold`
+  reference capture did rather than from a standstill.
+- **`--ticks` defaults to the script's own length**, so the two cannot disagree by
+  accident. Asking for more than the script covers holds its last state, and says
+  so on stderr.
+- **`--script-lead` is unmeasured and defaults to 0.** The breakpoint is inside
+  the frame, so whether a controller state set there is seen by that frame or the
+  next depends on where the game polls input, which has not been read out of the
+  binary. `steer-both-ways` measures it in one line once captured: its `steer`
+  column is flat until the tick the game first saw `left`, and the gap between
+  that and the script's own tick 60 is the lead. Do not assume 0 is right just
+  because it is the default.
+
 What that capture reads: 200 ticks, `dt` mean 0.016684 (59.94 Hz, min 0.016316,
 max 0.017029), speed 23.6 to 25.1, 78.0 units travelled, `throttle` a flat 100,
 and `cross(row0, up) = forward` on 200 of 200 ticks.
