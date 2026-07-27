@@ -723,11 +723,13 @@ stored**. Same conclusion, now with the location.
 
 ## Not determined
 
-- **Nothing on this page is runtime-verified.** Per the
-  [rubric](../../../reverse-engineering/confidence-rubric.md), decompilation
-  alone caps at 84, and no claim about the force law here exceeds that. Only the
-  parameter block layout scores higher, because it has a second source (the XML
-  schema) and an exact arithmetic invariant.
+- **Almost nothing on this page is runtime-verified**, and the 84 cap for
+  decompilation alone applied to every force-law claim in the first edition.
+  Eight of those terms now have a second binary agreeing - see
+  [the cross-platform section](#the-force-law-now-has-a-second-binary-leg) for
+  which, and for the four places the two builds differ. The terms not on that
+  list (brakes, airbrakes, rolling resistance, vertical damping, the dead
+  roll-levelling branch) are still single-source and still capped at 84.
 - **The call site of `Ship_UpdateCraft`.** No direct caller exists; the dispatch
   is presumably a vtable. Until it is found, "once per frame per craft, before
   integration" is structural inference.
@@ -854,6 +856,76 @@ Part of the craft path has now been read in the PS2 build; see
   written. The PSP integrator has never been located, so this transfers at
   confidence **80** rather than the 88 it carries on the PS2 page.
 
+### The force law now has a second-binary leg
+
+The line below - "The force law below is untouched by it: no PS2 `Ship_Update*`
+function has been located" - **is out of date.** Nine of the PS2
+`Ship_UpdateCraft`'s sixteen callees have since been identified by constant
+fingerprint and checked term by term. Six of this page's sections reproduce in
+full:
+
+| This page's term | PS2 | Result |
+| --- | --- | --- |
+| Engine | `0x0015c448` | Every element, **including the dead `gain`/`falloff` ramp** |
+| Steering | `0x0015bf30` | Every element, including the reverse-controls blend |
+| Pitch | `0x0015c2d8` | Every element; the gate is undecoded in both builds |
+| Lateral grip | `0x0015c7c0` | Every element, and `(0.01 - slidegrip)` **as a literal expression** |
+| Weathervane torque | `0x0015a290` | Both coefficients and the grounded selector |
+| Track-section force | `FUN_0015a300` | Structure and the two per-class tables; still unnamed in both |
+| Quadratic drag | `0x0015c3a0` | Three of four coefficients (see below) |
+| Gravity | `0x0015a1d0` | Structure; two details differ (see below) |
+
+**This is the second source the "decompilation alone caps at 84" note asks for**,
+and it is a strong one: a different compiler targeting a different ISA. The
+sections above should be read at **88** rather than 84, except where noted. Two
+of this page's own weaker claims are specifically lifted:
+
+- **The dead `Engine.gain`/`falloff` ramp**, scored 85 here from one binary and
+  flagged as something an obvious reimplementation gets wrong. The PS2 emits the
+  same dead store: it ramps `craft+0x2e8`, clamps it, then overwrites it with
+  `controls->thrust` and computes the thrust from the input. **90.**
+- **`slidegrip` as "percent of grip retained"**, scored 90 here as an
+  interpretation derived from the load-time `1e-4` factor. The PS2 grip term is
+  literally `airbrake * (0.01 - slidegrip) - 1.0`, with both endpoints falling
+  out arithmetically. A derived reading reproduced as an explicit expression.
+  **93.**
+- **The `S221` register-carry oddity**, scored 65 here with a recommendation to
+  write `accumulator.y = lift`. The PS2 builds an ordinary two-lane vector for
+  thrust and lift. That does not explain the PSP's codegen, but it does confirm
+  the intended semantics, so **the recommendation is right**. Raise the
+  recommendation to 85; the explanation of the PSP's register use stays at 65.
+
+Four differences, none of them corrections to this page - each needs the PSP
+side re-read before anyone decides which build is the odd one:
+
+- **Drag has no `-0.9` branch on the PS2.** Nothing there tests a mode enum. The
+  other three coefficients and the `-0.2` threshold are identical. Whether the
+  PS2 hoisted the case to its call site was not checked; confidence **55** that
+  the PS2 genuinely drops it.
+- **Gravity's per-class scale sits on `flight_gravity` on the PS2**, not on
+  `normal_gravity` as this page states. One of the two pages is wrong.
+- **PS2 gravity is scaled by `(1 - magLockBlend)`**, which this page records for
+  vertical damping and bank-to-yaw but not for gravity. A fully mag-locked ship
+  would then have no gravity at all.
+- **PS2 lateral grip multiplies both grip coefficients by `1.5` under flag bit
+  10** - the same bit that gates the turbo add. Not recorded here.
+
+Two structural differences worth knowing before carrying any layout across:
+
+- **The controls pointer is `craft+0x98` on the PS2**, against `craft+0x78`
+  here. The member offsets inside it are unchanged: `+0x00` steer, `+0x04`
+  thrust, `+0x10` pitch, `+0x44` buttons. **The struct moved; its contents did
+  not.**
+- **The PS2 has no craft-side accumulators.** `Body_ClearAccumulators`
+  (`0x0015ca48`) zeroes `body+0x100`/`+0x110`/`+0x120`/`+0x130` directly and
+  every term writes the body, so this page's `craft+0x320`/`+0x330`/`+0x340`/
+  `+0x350` have no PS2 counterpart. Same four accumulators, one less copy.
+
+**The ordering table is still not corroborated.** Every PS2 identification above
+came from the callee list rather than from reading the call sequence, so the
+fifteen-term order - and the stale-groundedness consequence that follows from it
+- remains single-source. That is now the cheapest thing that would raise it.
+
 Two things it does **not** corroborate, both recorded on that page: the ordering
 of the fifteen force terms (the PS2 `Ship_UpdateCraft` was read only far enough
 to find the hover and damping calls), and the bank-to-yaw coefficient, which is
@@ -863,8 +935,8 @@ The `0x80` stride, all 32 field offsets, and all four load-time scale factors
 reproduce **exactly** in the PS2 loader, from parsers built by a different
 compiler for a different ISA. That is the second-binary leg this page's own
 Cross-platform note asked for, so the parameter-block layout should be read as
-corroborated rather than merely self-consistent. The force law below is
-untouched by it: no PS2 `Ship_Update*` function has been located.
+corroborated rather than merely self-consistent. The force law has since gained
+the same kind of leg - see below.
 
 **The PS2 build answers this page's `stats_base + 0x90` question.** It has a
 `<Misc>` element - not mentioned anywhere on this page - whose parser writes
@@ -878,3 +950,8 @@ here and `docs/formats/handling-stats.md` needs to say which is which.
 
 - 2026-07-26: first pass. Parameter block layout 90 from the XML loader; force
   law 74-85 from decompilation; nothing runtime-verified.
+- 2026-07-27: the angular sign convention resolved from the PS2 integrator, with
+  this page's steering measurement as one of its two legs; the handedness
+  question separated from it. Later the same day, eight force-law terms gained a
+  second-binary leg from the PS2 build, lifting most of them off the 84 cap and
+  turning up four cross-platform differences.
