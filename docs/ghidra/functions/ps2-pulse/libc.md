@@ -21,6 +21,12 @@ their real library names rather than the project's `Subsystem_VerbNoun` scheme.
 | `0x00115540` | `tolower` | 90 |
 | `0x0029f8c0` | `_ctype_` | 88 |
 
+Six more are documented on [xml-reader.md](xml-reader.md), because they were
+identified while reading that family and the evidence for each is its use
+there: `strncpy` (`0x0010efc0`), `strcpy` (`0x0010ed60`), `memset`
+(`0x0010eb78`), `strrchr` (`0x0025c528`), `atoi` (`0x00110028`) and `atof`
+(`0x0025b9b0`).
+
 `strlen` and `strcmp` are the Emotion Engine's SIMD versions: they check
 alignment, then scan eight or sixteen bytes at a time with `psubb` / `pand`
 against the `0x0101...` and `0x8080...` word constants - the classic
@@ -57,7 +63,9 @@ was to keep it from being mistaken for the WAD name hash.
   matching or otherwise) has been attempted on this binary, and it would be
   worth doing before much more of the executable is read: 5,234 functions were
   found by auto-analysis and an unknown but large fraction of them are libc,
-  libstdc++ and Sony middleware rather than game code.
+  libstdc++ and Sony middleware rather than game code. The eleven symbols named
+  across this page and [xml-reader.md](xml-reader.md) were each identified
+  because something being read needed them, which is not a strategy that scales.
 
 ## Cross-platform
 

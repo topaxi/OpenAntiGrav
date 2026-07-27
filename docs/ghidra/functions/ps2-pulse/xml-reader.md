@@ -295,6 +295,15 @@ parser is a trap worth knowing about before comparing two subsystems' values.
   and otherwise falls back to `atoi`.
 - `Xml_AttributeAsString` (`0x00203a58`) is `strncpy(dst, value, n - 1)` into a
   caller buffer.
+- `Xml_ParseIntHexOrDecimal` (`0x002030e0`) keeps its `Xml_` prefix on evidence
+  rather than by association: all three of its callers are XML value parsers.
+  Besides `Xml_AttributeAsIntHex`, `0x0017c630` reads an attribute as a string
+  and then resolves it as either a literal number or an `FEGlobals>` /
+  `FEConst>` indirection, and `0x0017c9f8` resolves the constant that lookup
+  returns. So the front end can write `value="FEGlobals>Something"` where a
+  number is expected - a schema feature [fexml.md](../../../formats/fexml.md)
+  does not mention. Those two are **not renamed**: the indirection is clear but
+  what the two tables at `0x00301988` hold was not read.
 - `Xml_AttributeAsOwnedString` (`0x00203a80`) copies the value into an
   allocation owned by the document (`Xml_InternString`) and hands back a pointer
   that stays valid until `Xml_CloseDocument`. Callers store it as a plain
@@ -316,12 +325,22 @@ same way. Noted there.
 
 ## Not determined
 
-- **The PSP equivalent.** No PSP XML reader is documented in
-  [psp-pulse/](../psp-pulse/), so every Cross-platform row below is "not
-  located". Finding it is now cheap - look for the `"code"` literal and for a
-  160-byte stack cursor - and it would tell us whether the PSP's
-  `Handling_ParseStats` shares the exponent-blind float parser. Until then, the
-  claim above about handling parameters applies to the PS2 build only.
+- **The PSP equivalent.** The generic reader is not documented on the PSP side,
+  so every Cross-platform row below is "not located". What *is* documented is a
+  **consumer**: `Movie_ParseAttributes` (`0x088ba284`, confidence 95, on
+  [frontend-video.md](../psp-pulse/frontend-video.md)), which reads the `<Movie>`
+  widget's nine attributes. That makes finding the PSP reader cheap - its
+  callees are the attribute accessors - and the `"code"` literal plus a
+  160-byte stack cursor are the other two anchors.
+
+  Worth doing, for two reasons. It would say whether the PSP's
+  `Handling_ParseStats` shares the exponent-blind float parser, so **the claim
+  above about handling parameters applies to the PS2 build only** until then.
+  And `frontend-video.md` records that `<Movie>`'s booleans are true for
+  `"true"` or `"1"`, where `Xml_AttributeAsBool` here accepts five spellings -
+  which is either a difference between the builds, a difference between a
+  widget's own comparison and the shared accessor, or simply the two spellings
+  that page happened to record. Nothing here distinguishes those.
 - **Whether `Xml_AttributeAsFloatLibc`'s callee is really `strtod`.** `atof`
   (`0x0025b9b0`) is named from its `(string, NULL)` call shape and from its
   result being consumed as a float. The implementation behind it was not read,
@@ -343,6 +362,7 @@ same way. Noted there.
 | `Xml_NextAttribute` | `0x00203610` | not located |
 | `Xml_AttributeNameIs` | `0x00203808` | not located |
 | `Xml_AttributeAsFloat` | `0x00203868` | not located |
+| the reader's consumers | many | nearest documented is `Movie_ParseAttributes` `0x088ba284` |
 | `Resource_Load` | `0x001fd6b8` | closest is `Resource_LoadFile` `0x08943330` |
 | `strncpy` / `strcpy` / `memset` | `0x0010efc0` / `0x0010ed60` / `0x0010eb78` | not located |
 | `strrchr` / `atoi` / `atof` | `0x0025c528` / `0x00110028` / `0x0025b9b0` | not located |
