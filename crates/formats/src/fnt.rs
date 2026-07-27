@@ -48,12 +48,13 @@
 //!
 //! # The texels are stored already swizzled
 //!
-//! Unusually: every other texture on the disc is stored linearly and swizzled
-//! at load. `Texture_SwizzleForGe` (`0x08926da8` in the PSP executable) converts
-//! linear to swizzled in 16-byte by 8-row blocks, and `Texture_BindEmbeddedData`
-//! calls it **only when bit 0 of `flags` is clear**, setting the bit afterwards.
-//! Every font atlas ships with that bit already set, so the game skips the
-//! conversion: the file holds swizzled data and a reader has to undo it.
+//! `Texture_SwizzleForGe` (`0x08926da8` in the PSP executable) converts a linear
+//! image into the GE's 16-byte by 8-row block layout, and
+//! `Texture_BindEmbeddedData` calls it **only when bit 0 of `flags` is clear**,
+//! setting the bit afterwards. Every font atlas ships with that bit already set,
+//! so the game skips the conversion: the file holds swizzled data and a reader
+//! has to undo it. The same bit lives at `+0x07` of a standalone
+//! [`.mip`](crate::texture) header, where it is set on 6 of the 13 in `FE.wad`.
 //!
 //! # 4bpp packs the left pixel in the low nibble
 //!

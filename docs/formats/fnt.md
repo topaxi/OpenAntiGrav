@@ -90,9 +90,10 @@ structure but not glyphs" and stalled there for several passes.
 
 ## The texels are stored already swizzled
 
-Unusually. Every other texture on the disc is stored **linearly** and swizzled by
-the game at load time; the `.fnt` atlas is the exception, and the file itself
-says so.
+Most textures on the disc are stored **linearly** and swizzled by the game at
+load time. The `.fnt` atlas is not, and the file itself says so - as do 6 of the
+13 standalone [`.mip`](psp-texture.md) textures in the same archive, which is a
+bug this work turned up rather than a font-specific quirk.
 
 `Texture_SwizzleForGe` at `0x08926da8` converts a linear image into the GE's
 layout in place: 16-byte by 8-row blocks, emitted block-row major, then block
@@ -144,9 +145,9 @@ both edge columns have to be inked. Across 823 glyphs at least 3x3:
 | `PulseHud` | 123 | **1.000** |
 | `small` | 118 | **1.000** |
 
-The same measurement on the old reading gives 0.44 overall. The handful of
-misses are glyphs whose outermost antialiasing step quantises to the fully
-transparent palette entry.
+The same measurement on the old reading gives 0.42 overall - 0.399 on left
+edges and 0.441 on right. The handful of misses here are glyphs whose outermost
+antialiasing step quantises to the fully transparent palette entry.
 
 `v0`/`v1` are deliberately **not** tested the same way: they are shared by every
 glyph on an atlas row rather than tight to the ink, so a lowercase letter
@@ -201,10 +202,12 @@ alpha levels {16: 5}
   affect decoding.
 - The five bytes at `+0x0d` of a glyph record. Mostly `0xff`; the space glyph has
   one `0x00`. Kerning is the guess.
-- **Why the atlas ships swizzled when nothing else does.** The `flags` bit is a
-  general mechanism, not a font-specific one, so this is an asset-pipeline choice
-  rather than a format rule. No other blob on the disc has been found with the
-  bit set.
+- **Why some assets ship swizzled and others do not.** The `flags` bit is a
+  general mechanism, and chasing it turned up a decoder bug: 6 of `FE.wad`'s 13
+  standalone [`.mip`](psp-texture.md) textures set the same flag in their own
+  header at `+0x07`, and were being decoded as noise. So the atlas is not the
+  exception it first looked like. Which assets the pipeline swizzles ahead of
+  time, and why, is still an open question.
 - The `+0x18` field of the atlas header and the 40 zero bytes after the two
   pointers. Reserved, on the evidence of being zero in all five.
 

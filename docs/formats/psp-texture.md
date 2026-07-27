@@ -99,15 +99,31 @@ edge into one-pixel teeth. The [`.fnt`](fnt.md) atlas is a second, much larger
 
 ## Open questions
 
-### ~~Is the pixel data swizzled?~~ No
+### ~~Is the pixel data swizzled?~~ Sometimes, and `+0x07` says which
 
-Answered by looking. Decoding linearly and writing PNG produces the **Wipeout
-Pulse logo** at 512x128 8bpp, and a coherent icon sheet at 256x256. Swizzled
-data decoded linearly would be scrambled into 16-byte-wide blocks; these are
-pixel-perfect.
+The earlier answer here - "no, and `unk_0x07` is therefore *not* a swizzle flag"
+- was **wrong**, and it was wrong in the way a negative result reached by
+sampling usually is: the textures that were looked at were the ones that decode
+linearly.
 
-So the textures are stored linearly and the PSP swizzles at upload time, if at
-all. `unk_0x07` and `unk_0x08` are therefore *not* swizzle flags.
+`FUN_08928980` in the PSP executable builds a texture node from this header and
+copies **bit 0 of `+0x07`** into the node's own flags byte. That is exactly the
+bit `Texture_BindEmbeddedData` tests to decide whether to run
+`Texture_SwizzleForGe` (`0x08926da8`, documented on [`.fnt`](fnt.md)), which
+converts a linear image into the GE's 16-byte by 8-row block layout. A texture
+that already has the bit set is **stored swizzled** and the game leaves it alone.
+
+`+0x07` is 2 or 3 across `FE.wad`, so bit 0 is set on **6 of the 13** textures,
+and five of those are wide enough for it to matter. They were decoding as noise.
+`00006_cee1c5a4` at 256x128 is the clearest: horizontal streaks read linearly,
+and the Japanese Wipeout logotype - katakana, `V5.0 //2197` and the mark - once
+unswizzled.
+
+The rest, including the 512x128 Pulse logo and the 256x256 icon sheet, have bit
+0 clear and are genuinely linear, which is why decoding them literally worked.
+
+`+0x08` is the complement of bit 0 of `+0x07` on every texture, so it is one
+flag stated twice rather than two.
 
 ```sh
 oag-wad extract data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad -o /tmp/fe --png
@@ -116,18 +132,23 @@ oag-wad extract data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad -o /tmp/fe 
 `Texture::looks_swizzled` remains as a triage heuristic for other archives, but
 it reports nothing in `FE.wad`.
 
-The **why** is now read out of the executable rather than assumed.
-`Texture_SwizzleForGe` (`0x08926da8`, documented on [`.fnt`](fnt.md)) converts a
-linear image into the GE's 16-byte by 8-row block layout in place, and
-`Texture_BindEmbeddedData` runs it on any texture whose `flags` bit 0 is clear,
-setting the bit afterwards. Linear on disc is therefore the rule, and the only
-exception found so far is the `.fnt` glyph atlas, which ships with that bit
-already set and so is stored swizzled.
+It is a heuristic, and a weak one on this corpus: it is tuned for the PSP's
+16-byte-wide banding and does not fire on several textures that really are
+swizzled. The **flag** is the reliable answer, not the statistic.
 
-### `unk_0x05` to `unk_0x08`
+A better statistic, and the one the ground-truth test uses, is the **seam
+ratio**: the mean pixel step across a 16-byte block boundary over the mean step
+elsewhere. A correct decode has nothing special happening at those boundaries;
+a wrong one splices unrelated pixels together there. Across the 12 textures wide
+enough to discriminate, the reading `+0x07` selects is the seam-free one on 11,
+and the exception is a 32x16 blob that is four blocks in total.
 
-`+0x05` is 0 and `+0x06` is 1 throughout; `+0x07` is 2 or 3 and `+0x08` is 0 or
-1, inversely correlated and split by texture size.
+### ~~`unk_0x05` to `unk_0x08`~~ mostly answered
+
+`+0x05` is 0 throughout. `+0x06` is 1 throughout and is the **mip count**:
+`FUN_08928980` reads it into the texture node's mip-count field. `+0x07` bit 0
+is the **swizzle flag**, above, and `+0x08` is its complement. What the other
+bits of `+0x07` mean, and what `+0x05` is, is still open.
 
 The [embedded texture node in `.vex`](vex.md#embedded-textures) has a
 **`mip_count`** byte at the corresponding offset, which suggests `+0x05` or
