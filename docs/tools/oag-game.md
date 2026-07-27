@@ -274,10 +274,59 @@ floor is bit-identical with and without a distant wall - and, against real track
 geometry, by
 [`wall_collision_ground_truth.rs`](../../crates/game/tests/wall_collision_ground_truth.rs).
 That last one is the only test that sees a shipped wall's own winding, scale and
-triangle density; the synthetic ones author all three.
+triangle density; the synthetic ones author all three. **It passes against the
+real disc**: on `16_Track` the hull measures 5.5 x 3.5 x 13.0 from the ship's own
+`<Misc>`, and a ship fired at a real wall triangle stops 6.5 units past the plane
+- half the hull length, which is exactly where a box that size comes to rest -
+and turns round.
 
-Collision *response* beyond this - damage, the shield pool, the `Reset` respawn -
-is not implemented.
+Collision *response* beyond this - damage and the shield pool - is not
+implemented.
+
+### Reset zones respawn the ship
+
+`Reset Collision` geometry is a trigger, not a surface: touching it puts the ship
+back on the track.
+[collision.md](../ghidra/functions/psp-pulse/collision.md#surface-types-in-practice)
+records that at confidence **86**, and that is the whole of what is recovered -
+**where** the ship respawns to is not recorded anywhere.
+
+So the two halves are split by how well evidenced they are:
+
+- **Detection** (`oag_physics::reset`) follows the evidence. It reuses the hull
+  probes and the swept ray from the wall constraint, and requires no penetration
+  depth, because a trigger volume is touched rather than pushed against.
+- **Recovery** (`race.rs`) is a **guess, scored 40**. The ship goes back to the
+  racing line at spawn height on the spline sample nearest where it was *before*
+  the tick that triggered - the same code path the race start uses. The likelier
+  real mechanism is a last-passed checkpoint or track section; `Ship::segment` is
+  the field that would hold one and nothing populates it meaningfully yet.
+  Velocity, orientation and every control state go to zero, because
+  `Ship::place_at` resets the whole physics state. Whether the original preserves
+  any speed through a respawn is also unrecorded.
+
+**Reset detection deliberately does not go through the `Raycaster` trait.** That
+returns the nearest hit across every collider, and `include_reset` only makes
+`Reset` a *candidate* - so a reset volume below the track is always masked by the
+floor in front of it and the trigger would essentially never fire. `reset::contact`
+walks the collider list itself and queries only the `Reset` ones.
+
+Two guards, because a respawn loop is indistinguishable from a hang: a 30-tick
+cooldown, and a give-up after five consecutive respawns that prints a complaint
+instead of freezing the race.
+
+**The default track has no reset zones.** Measured on the USA PSP disc,
+`16_Track` carries 66 wall, 123 floor, 7 mag-floor and **zero** reset colliders.
+Of the tracks checked, `01`, `03`, `04`, `05`, `07`, `09`, `10` and `13` have
+them and `02`, `06`, `14` and `16` do not, which matches
+[collision.md](../formats/collision.md)'s census of 26 reset nodes across 40
+tracks. To see one in `just play`, pass `--track` for one of the tracks that has
+them; `oag-view --collision` prints the per-class census for any track.
+
+**Confirmed against real disc data**, not only synthetically: flown into a real
+reset triangle on `03_Track`, the ship respawns 4.0 units from the nearest spline
+sample. See
+[`reset_zone_ground_truth.rs`](../../crates/game/tests/reset_zone_ground_truth.rs).
 
 ### The suspension was never the problem: the default track was
 
