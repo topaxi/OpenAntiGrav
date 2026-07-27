@@ -24,10 +24,12 @@
 //!
 //! Signed 16-bit little-endian, two channels interleaved left first, 48,000 Hz.
 //! None of that is stated in the file. The frame size follows from the entry
-//! sizes - all divisible by 4, only 6 of 16 by 8 - and the rate from the PSP
-//! disc, whose ATRAC3plus copies of the same sixteen tracks declare 44,100 Hz
-//! and run to durations that match the PS2 byte counts at 48 kHz to within 10
-//! milliseconds each. `docs/formats/ps2-audio.md` has the table.
+//! sizes - all divisible by 4, only 6 of 16 by 8 - and both the rate and the
+//! channel order from the PSP disc, which carries the same sixteen tracks as
+//! ATRAC3plus: their durations match the PS2 byte counts at 48 kHz to within 10
+//! milliseconds each, and correlating the two discs' *side* signals - the one
+//! statistic that changes sign when the channels swap - comes out at +0.98.
+//! `docs/formats/ps2-audio.md` has both tables.
 
 /// Bytes before the first entry.
 pub const HEADER_LEN: usize = 4;

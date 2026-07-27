@@ -58,7 +58,7 @@ by 8, and only 2 by 16, so the alignment is exactly 4 and not more. Sixteen
 independent sizes all landing on a 4-byte boundary while behaving randomly at 8
 is not something an arbitrary blob does; 16-bit samples times 2 channels is.
 
-### It is interleaved stereo, not mono
+### It is interleaved stereo, not mono, and channel 0 is the left one
 
 Two statistics over a 4 MB slice of each track, both computed on the same
 samples:
@@ -75,6 +75,21 @@ That last one is worth recording because it happened: probing at `size/3`, which
 is not a multiple of 4 for 7 of the 16 tracks, made those 7 look like white
 noise - `lag2/lag1` of 1.00 and a correlation of 0.00 - and they read as a
 different format entirely until the probe was frame-aligned.
+
+Neither statistic can tell **which** channel comes first: both are symmetric
+under swapping them. The PSP disc settles that too. Aligning a PS2 track against
+its ATRAC3plus counterpart on the mid signal (`ch0 + ch1`, correlation +0.98 at a
+lag of -2,495 samples) and then correlating the **side** signal (`ch0 - ch1`),
+which *is* antisymmetric under a swap, gives:
+
+| PS2 track vs PSP master | Mid | Side |
+| --- | ---: | ---: |
+| 187.59 s | +0.984 | **+0.980** |
+| 194.01 s | +0.981 | **+0.930** |
+| 188.74 s | +0.993 | **+0.963** |
+
+A swapped channel order would put those three side figures at about -0.98, not
++0.98. Channel 0 is left.
 
 ### The sample rate is 48 kHz, cross-checked against the PSP disc
 

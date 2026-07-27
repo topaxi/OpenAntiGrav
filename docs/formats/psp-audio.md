@@ -74,9 +74,10 @@ as Wipeout Pulse content: `FRNTEND`, `HUD`, `SHIP`, `SHIP_ZM`, `SPEECH`,
 `moather`, `techder`, `dekonst`, `vertica`, `outpost`, `amphise`, `arcprim`,
 `platinu`, `fortcle`, `talonsj`.
 
-Those are truncated. Four banks have a name short enough to be stored whole, and
-for **all four**, `Data\Sound\<name>.bnk` hashes to that bank's own WAD entry
-hash: `HUD` twice, `SHIP`, `SPEECH`. That is the check that says the field is a
+Those are truncated. Four banks have a name short enough to be stored whole -
+three distinct names, since `HUD` ships in both `FE.wad` and `Data.wad` - and
+for every one of them, `Data\Sound\<name>.bnk` hashes to that bank's own WAD
+entry hash: `HUD` twice, `SHIP`, `SPEECH`. That is the check that says the field is a
 name rather than a label, and it makes the field a
 [name-mining](wad.md#the-name-hash) source: recovering the full track names
 would resolve a dozen more archive entries.
@@ -180,6 +181,14 @@ roughness      mean 0.220, worst 0.408 (white noise is ~1.41)
   exactly `waveform_count` = 7 distinct spans. The race banks do not have a
   record array of that shape at that offset, so the same reading does not
   generalise and is not implemented.
+  One encoding has been **ruled out** rather than merely not found: every bank's
+  waveform section is under 340 KB, so a block index fits a `u16`, and a `u16`
+  table was the obvious thing the byte-offset searches would structurally miss.
+  Searching `frontend.bnk` - the one bank whose answer is known - for its seven
+  boundaries as `u16` block indices (0, 17, 74, 127, 258, 378, 885) finds two of
+  seven, which is chance; as `u32` block indices, one of seven. They appear only
+  as `u32` **byte** offsets, and only inside those 24-byte parameter records. So
+  the general table, if there is one, is not a block-index array.
 - **The command opcodes.** Nine distinct values seen. Nothing has been traced to
   them.
 - **`+0x24` = 20544 and `+0x08` = 772/260.** The second correlates exactly with
