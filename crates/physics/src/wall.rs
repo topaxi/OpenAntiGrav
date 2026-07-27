@@ -203,6 +203,7 @@ pub fn resolve<R: Raycaster + ?Sized>(
     // branch rather than being compared into silence.
     let usable = largest > MIN_HULL_EXTENT;
     if !usable {
+        state.wall_contact_prev = false;
         return WallResponse {
             hull_degenerate: true,
             ..WallResponse::default()
@@ -224,6 +225,8 @@ pub fn resolve<R: Raycaster + ?Sized>(
         });
 
     let Some(contact) = resolved else {
+        // No wall this frame, so the next impact is a fresh one.
+        state.wall_contact_prev = false;
         return response;
     };
 
@@ -248,13 +251,25 @@ pub fn resolve<R: Raycaster + ?Sized>(
     };
 
     // Arm the collision stun, the other half of the contact response: for the next
-    // half second the engine produces nothing and the ship has no lateral grip. Only
-    // when the hull was actually moving into the surface - a ship sliding along a
-    // wall is already being pushed out every frame by the escape above, and stunning
-    // it for that would cut the engine for the whole length of the wall.
-    if velocity_delta != Vec3::ZERO {
+    // half second the engine produces nothing and the ship has no lateral grip.
+    //
+    // Two conditions, and the second one is load-bearing:
+    //
+    // - The hull must actually have been moving *into* the surface. A ship already
+    //   leaving one is only being position-corrected, and that is not an impact.
+    // - It must be the **first** such frame. `Ship_ApplyCollisionImpulse`
+    //   (`0x0883f274`) is gated on a pending impulse vector at
+    //   `entity->0x4c + 0x110` and zeroes that vector on its way out on every path,
+    //   so the original's `craft+0x290 += 0.5` fires once per impact posted by the
+    //   collision system - not once per frame of contact.
+    //
+    // Without the edge test this runs away: `0.5 s` armed per frame against a `dt`
+    // decay is 30:1 at 60 Hz, so leaning on a wall for a second cuts the engine for
+    // half a minute. See `ShipState::wall_contact_prev`.
+    if velocity_delta != Vec3::ZERO && !state.wall_contact_prev {
         state.stun_timer += STUN_PER_CONTACT;
     }
+    state.wall_contact_prev = velocity_delta != Vec3::ZERO;
 
     WallResponse {
         resolved: Some(contact),
@@ -557,6 +572,9 @@ mod tests {
     }
 
     /// It accumulates rather than refreshing - `craft+0x290 += 0.5`, not `= 0.5`.
+    ///
+    /// Separate impacts, with the ship clear of the wall in between, which is what
+    /// makes each one a fresh event rather than a continuation.
     #[test]
     fn repeated_impacts_accumulate_stun() {
         let mut state = ship_at(1.0, 10.0);
@@ -571,7 +589,50 @@ mod tests {
                 Vec3::new(1.0, 0.0, 0.0),
             );
             assert_eq!(state.stun_timer, STUN_PER_CONTACT * hit as f32);
+
+            // Clear of the wall, so the next one is a new impact.
+            state.body.position = Vec3::new(-50.0, 0.0, 0.0);
+            state.body.linear_velocity = Vec3::ZERO;
+            resolve(
+                &mut state,
+                &handling(),
+                &Environment::default(),
+                &wall(1.6, Surface::Wall),
+                Vec3::new(-50.0, 0.0, 0.0),
+            );
         }
+    }
+
+    /// Held against a wall, the stun arms **once**, not once per frame.
+    ///
+    /// The regression this exists for was reported from play as "at some point the
+    /// racer completely stopped accelerating". `Ship_ApplyCollisionImpulse`
+    /// (`0x0883f274`) consumes a pending impulse vector and zeroes it on the way
+    /// out, so its `+= 0.5` is per impact; arming per *frame* instead accumulates
+    /// `0.5 s` against a `dt` decay - 30:1 at 60 Hz - and a one-second lean on a
+    /// wall leaves the engine dead for half a minute.
+    #[test]
+    fn a_sustained_scrape_arms_the_stun_once() {
+        let mut state = ship_at(1.0, 10.0);
+
+        for _ in 0..60 {
+            // Re-seeded each frame so the hull is always moving into the surface,
+            // which is the worst case: the old code armed on every one of these.
+            state.body.position = Vec3::new(1.0, 0.0, 0.0);
+            state.body.linear_velocity = Vec3::new(10.0, 0.0, 0.0);
+            resolve(
+                &mut state,
+                &handling(),
+                &Environment::default(),
+                &wall(1.6, Surface::Wall),
+                Vec3::new(1.0, 0.0, 0.0),
+            );
+        }
+
+        assert_eq!(
+            state.stun_timer, STUN_PER_CONTACT,
+            "a sustained contact is one impact, not sixty"
+        );
     }
 
     /// A ship sliding along a wall is pushed out every frame without ever moving

@@ -32,6 +32,215 @@ cost that session the ability to verify anything; check they are still there
 before concluding a ground-truth test "cannot run". The originals in
 `~/Downloads` were copied, not moved, and are untouched.
 
+## The movie cache is lossless AV1 now, and two of its traps fail silently
+
+The cache holds lossless AV1 in IVF instead of raw `yuv420p`, decoded in process
+by `re_rav1d`; see [ADR-0008](docs/architecture/adr/0008-av1-movie-cache.md) for
+why and for the measurements. The intro's default extent went from 48.8 MiB to
+1.17 MiB, and the decoded picture is **bit-identical** to what the raw cache held
+- verified by decoding the shipped code's own cache file and comparing md5 with
+the `.raw` it replaced.
+
+Two traps cost a cycle each here, and both produce plausible wrong output rather
+than an error:
+
+1. **`ffmpeg -lossless 1` on its own is silently ignored.** It yields a
+   ~200 kbit/s *lossy* encode - 141 KB for 261 frames, which looks like a
+   spectacular compression win and is not lossless at all. The quantiser has to
+   be pinned and rate control disabled too:
+   `-b:v 0 -crf 0 -qmin 0 -qmax 0 -aom-params lossless=1`. Worse, with lossless
+   correctly forced, **`-cpu-used 4` and `-cpu-used 2` are still not bit-exact**
+   (PSNR y 116 dB - a handful of samples differ), reproducibly. `-cpu-used 6`
+   and `8` are exact, and faster. No cause established; just don't go below 6,
+   and verify the round-trip rather than trusting the flag.
+2. **`re_rav1d`'s `Picture::plane_data_geometry` returns `(stride, height)`, not
+   `(width, height)`** - its doc comment says so, the name does not. Copying
+   stride-wide rows pads every frame invisibly: 480x272 came out as 512 wide,
+   and the only symptom was a byte count that was 6.7% too large. Use `width()`
+   and `height()` for the extent and `stride()` only as the row pitch.
+
+Also worth knowing: `re_rav1d`'s **default features need `nasm`**, which is not
+installed here. The dependency sets `default-features = false`, and decode still
+runs at ~900 fps for a 480x272 clip - thirty times playback. Don't "fix" a build
+by adding the `asm` feature.
+
+The 4 KB fixture at `crates/formats/tests/data/testsrc-64x64.ivf` is generated
+from `ffmpeg`'s `testsrc`, carries no game content, and is what lets the decoder
+and the rewind path be tested in CI with no disc image.
+
+## The intro was playing the wrong reel - the counters were always right
+
+Reported from playing it: the intro's pauses looked correct but the video looked
+wrong, and it did - the pauses were landing on the FX400 Racing League card and
+on "ENGINE CORE ENABLED", mid-motion inside the 40-second team showcase.
+
+`Data\Movies\Intro.PMF` was the default because it was the only intro-shaped
+movie whose *name* had been resolved, and that was recorded as a known divergence
+rather than chased. Chasing it took an afternoon and settled three things:
+
+- **The reel is identified.** `Data.wad` has exactly three 260-frame movies, at
+  indices 440/441/442 right after `Intro.PMF` at 439. All three are static at
+  frames 144 and 231 and moving either side; decoded, 144 is
+  `SONY COMPUTER ENTERTAINMENT <region> PRESENTS` and 231 is
+  `A STUDIO LIVERPOOL GAME`. They are regional cuts - `b1ba72c3` Europe,
+  `41fbd22f` Inc., `3d2c85f8` America - and `b1ba72c3` is now the `--movie`
+  default. `Intro.PMF` at those same frames is moving (mean interframe delta 5.57
+  against 0.15), which is the negative control.
+- **The cut is European, not American, and the image's `UCUS-98712` serial is a
+  red herring.** All three cuts ship on every disc - *Pure*'s USA disc carries the
+  same three hashes at the same three sizes - so the disc's region cannot be what
+  picks one, and the pick is at runtime. The executable here is the EU build
+  throughout: 18 `UCES00465` strings in `BOOT.BIN` and **zero** `UCUS`, an ISO
+  volume id and publisher of `SCEE`, and a `PSP_GAME/USRDIR/UCES00465/` tree with
+  its own `SYSDIR/BOOT.BIN` on the disc. Confidence 75; the selection mechanism
+  itself is unread.
+- **`frontend-video.md`'s 82-confidence "these are logo cards" inference is now
+  95**, from the picture rather than from the constants.
+- **The name is still not recovered, and the cheap paths are exhausted.** No
+  `Data\Movies\` string in `BOOT.BIN` beyond the four save-data icons; every
+  fexml blob in all four WADs expanded, and `Movie` widgets exist in exactly one
+  file naming only `Intro` and `Backdrop`; `Intro Screen->IntroMovie1` is in no
+  XML at all, so that state is code-side; 27,328 assembled candidates hash to
+  none of the three. Entries are addressed by hash instead - `--movie
+  hash:3d2c85f8` - which is what the WAD directory stores anyway.
+
+**Two things this got wrong on the way, both corrected in the docs.** Do not
+re-derive them from the old wording:
+
+- *The American cut was the first pick and it was wrong.* It rested on the
+  `UCUS-98712` serial alone; everything the running code touches says EU. See
+  above. If a future session sees `hash:3d2c85f8` referenced anywhere, that is
+  stale.
+- *The disc does not show a dev/pub leg at boot.* Cold boot under PPSSPP with
+  `MoviePlayer_Open`, `0x088d7d80` and `0x088e3938` armed from reset, over ten
+  minutes: only `Intro.PMF` (at `Language Selection`) and `Backdrop.PMF` (at
+  `LogoFMV`) are ever opened, and `IntroMovie1`'s `OnEnter` never fires. So the
+  260-frame reels are never played during boot, the old "logos, then picker, then
+  intro" guess is **dead**, and the reel is matched to the state by its contents
+  fitting the constants rather than by observation. Where those reels *are*
+  played is now an open question worth someone's time.
+
+**Traps worth carrying forward:**
+
+- Breaking on `Wad_HashName` (`0x08940d0c`) under PPSSPP does recover real entry
+  names live - 32 of them, correct - but arming it from reset runs the emulator
+  so far below real time that 25 minutes of wall clock did not reach the movie
+  load. Arm it *late*, after a rare breakpoint has got you where you want to be.
+- Piping a probe's stdout through `tail` buffers the whole run, so a background
+  capture looks like it produced nothing until it exits. Redirect to a file.
+
+## The engine died on wall contact: the collision stun was frame-triggered
+
+Reported from play as "at some point the racer completely stopped accelerating".
+Not the engine force law - the **collision stun gate**, and the bug was a 30:1
+runaway.
+
+`ShipState::stun_timer` (`craft+0x290`) cuts thrust to exactly zero and suppresses
+lateral grip while it runs. `wall::resolve` armed it with `+= 0.5` on **every
+frame** the hull moved into a surface, while `forces::evaluate` decays it by `dt`.
+At 60 Hz that is **30 seconds of dead engine per second of wall contact**, and it
+is unrecoverable in practice.
+
+`Ship_ApplyCollisionImpulse` (`0x0883f274`) was read to settle it, and it is
+unambiguous:
+
+```c
+if (entity->0x4c+0x110 != 0) {          // a *pending impulse vector*
+    if ((pickupFlags & 0x10) == 0) {
+        ... project onto forward, apply via FUN_0884d64c ...
+        craft+0x290 += 0.5;
+    }
+    entity->0x4c+0x110 = (0,0,0);       // cleared on every path
+}
+```
+
+**The `+= 0.5` fires once per impulse the collision system posts, and the impulse
+is consumed immediately.** It is an edge, not a level. So the accumulation the
+previous note recorded (`+=`, not `=`) is right, and it is per *impact* - separate
+hits still stack, a sustained scrape does not.
+
+The fix is `ShipState::wall_contact_prev`, an edge test on the arming site, with
+the flag cleared on both of `resolve`'s no-contact returns. Pinned by
+`a_sustained_scrape_arms_the_stun_once`, which is not vacuous: on the old code it
+reports `30.0` against an expected `0.5`.
+
+Worth knowing for whoever models the collision system properly: our `resolve` runs
+every frame and has no impulse queue, so the edge test is standing in for the
+original's "consume the pending impulse". If a real contact-event queue is ever
+built, that is where this belongs.
+
+## Steering was 22x too strong, and fixing it left a real open question behind
+
+Reported as "left and right turn the racer super strong" in `just play`. It was
+real and it was large. What matters for whoever picks this up is that **the fix
+is a calibration, not a recovered value, and the RE question underneath is still
+open.**
+
+The whole steering path has now been read at instruction level, and it is
+*correct as this crate transcribes it*:
+
+| Site | Reading |
+| --- | --- |
+| `HandlingXml_ParseTurning` `0x088398e0` | `swc1 f0,0xd0(a0)` - `amount` stored **verbatim**, no scale |
+| `Xml_AttributeAsFloat` `0x0895379c` | plain decimal reader, no exponent |
+| `Ship_UpdateSteering` `0x08848788` | `yaw = steer * amount`, `+=` into `craft+0x340` |
+| `Ship_ApplyAngularDamping` `0x08848ed0` | `-5 * angularVelocity.y` into the **same** accumulator |
+| `Body_AddTorqueLocal` `0x0884d5bc` | forwards `craft+0x340` to `body+0x120`, unscaled |
+| PS2 `Body_Integrate` `0x0015d088` | `angularVelocity += inverseInertia * torque * h` |
+
+Because steering and damping share one accumulator, **every common factor - the
+inertia tensor included - cancels at equilibrium**, leaving
+`omega = steer * amount / 5` unconditionally. That is about **22x** the
+`1.5 rad/s` the hardware turns at, which is measured two independent ways (this
+repo's own confidence-90 runtime capture, and both `data/traces/` captures
+re-differentiated as `dot(cross(fwd_t, fwd_t+1), up)/dt`).
+
+So a **yaw-opposing term in `Ship_UpdateCraft` is missing from `engine.md`**. Note
+the precedent: the longitudinal axis had the identical shape of gap ("resistance
+is 12x short") and it turned out not to be resistance at all but *thrust the
+original does not apply*, gated on the collision-stun timer `craft+0x290`.
+`Ship_ApplyLateralGrip` (`0x08848b78`) returns early on that same timer - that is
+where to look first.
+
+Meanwhile `oag_physics::forces::YAW_DRIVE_CALIBRATION = 0.0452` stands in,
+fitted **separately** to each capture (`0.0454` left, `0.0450` right; RMS error
+`0.10` and `0.04 rad/s` against a signal of `1.5`). It is applied to the summed
+body-local yaw **drive** in `forces::evaluate`, after all three contributors and
+before the damping.
+
+**Do not narrow it back to the steering term.** That was the first attempt and it
+was reported from play within minutes: "on slightly tilted tracks I'm not able to
+steer in the opposite direction". `hover::BANK_TO_YAW_GAIN`'s `30 * right.y`
+writes to the same accumulator, so scaling steering alone leaves the camber 22x
+too strong relative to the player's input and the break-even bank falls to about
+14 degrees. Pinned now by
+`full_lock_out_yaws_the_bank_on_a_steeply_cambered_track`. Scaling the axis
+instead also made the full-step replay *symmetric* - `+1.28` / `-1.28 rad/s`
+against the original's `+1.52` / `-1.47`, where scaling steering alone gave a
+lopsided `+1.22` / `-1.34`.
+`crates/trace/tests/yaw_authority_ground_truth.rs` re-runs that fit under
+`just test-data`, and it is not a vacuous test - at `1.0` it fails with RMS
+`28.3`. Through the full `oag_physics::step` on the real disc the replay now
+yaws `+1.22` / `-1.34 rad/s` against the original's `+1.52` / `-1.47`.
+
+Two traps worth writing down:
+
+- **It is applied to the input, not the damping, and that was measured rather
+  than chosen.** Raising `YAW_DAMPING` to about `107` hits the same equilibrium
+  but collapses the time constant from `0.2 s` to `0.009 s`. The captures rule it
+  out: `steer` chatters +/-8 % at ~20 Hz (the authentic non-clamping ramp) and the
+  recorded yaw rate does *not* follow it.
+- **The input layer was not the bug and must not be "fixed".** The keyboard's hard
+  +/-1.0 step is correct - the original's d-pad does the same and smooths in the
+  sim via `ramp_steering`, which the captures confirm to under 1 % (`gain` and
+  `falloff` reproduce the recorded 498/s rise and 924/s fall). A deadzone or
+  filter in `oag-input` would diverge from the original *and* hide this.
+
+Also settled in passing: the camera is **not** implicated - the disc gives
+`spring_horiz`/`spring_vert` of 11, and `lag(11, 1/60) = 0.183` is nowhere near
+saturating, so the eye does lag. And `engine::pitch` reads the raw `-1..1` axis,
+not the ramped `+/-100` state, so pitch does **not** share this bug.
+
 ## In flight
 
 A new pass started same day: **both binaries are now in one Ghidra project.**
@@ -41,6 +250,54 @@ confirmed live via `list_instances`/`list_open_programs` - it is the *current*
 program; `BOOT.BIN` is in the project but closed. Roadmap M2's "Load
 `SCES_547.48` into Ghidra" checkbox was stale (unchecked despite being done) and
 is now fixed.
+
+**That import did not survive, and was rebuilt from scratch on 2026-07-27.** A
+later session found `list_instances` reporting `BOOT.BIN` as the project's only
+program, `data/extracted/ps2/` empty, and - the actual cause - **no
+EmotionEngine extension installed at all**, so `r5900:LE:32:default` was not
+even an available language. Why the program and the extension both went missing
+is not established; no evidence either way was found, so no guess is recorded
+here.
+
+As of that rebuild the bridge reports **both programs open**, `SCES_547.48`
+current and `BOOT.BIN` no longer closed - so the paragraph above is stale on
+that detail. Keep passing `program=` explicitly on every Ghidra MCP call: with
+two programs open, omitting it silently targets whichever is active.
+
+Do not read that as the original numbers being invented. **The rebuild
+reproduces them exactly**: same language, same `0x00100000` base, same 28
+overlay spaces, same 5,234 functions, and all 135 rows of
+`docs/ghidra/functions/ps2-pulse/names.tsv` resolve to live addresses under
+`apply-ghidra-names.py --dry-run` (0 skipped, 0 failed). Auto-analysis is
+deterministic given the same Ghidra and extension version, so the figures
+matching to the function is strong evidence the `ps2-pulse` pages were written
+against this binary, and they are now independently re-verified against a
+second, clean import.
+
+**The database itself is unnamed, though** - that check was a `--dry-run`, so
+every one of those 135 symbols is still `FUN_*`/`DAT_*` in Ghidra. To restore
+them:
+
+```sh
+python3 scripts/apply-ghidra-names.py --program SCES_547.48 \
+    docs/ghidra/functions/ps2-pulse/names.tsv
+```
+
+Two traps in redoing it, both of which cost this session time:
+
+- `just build-allegrex` has a script; the EE extension does not, and
+  `toolchain.md`'s recipe assumed a system `gradle` that **is not installed on
+  this machine**. What works is driving it with the Allegrex checkout's
+  wrapper - see [toolchain.md](docs/reverse-engineering/toolchain.md), now
+  updated with the exact command. JDK 21 is required there too, because that
+  wrapper is Gradle 8.10.2 and the system JDK is 26.
+- `import_file` returns `auto_analyzed: true` **immediately**, and
+  `analysis_status` then reports `analyzed: true, function_count: 1` - which is
+  exactly the signature the docs give for a wrong-language import. It is not;
+  analysis simply had not run. Call `reanalyze` (it times out, which is normal
+  for a 1.9 MiB binary - it means analysis started) and poll `analysis_status`
+  until `analyzing` goes false. Judge the import on the function count *after*
+  that, never on the count the import call leaves behind.
 
 Two background agents were launched to work this concurrently, kept to two
 rather than the allowed three to avoid Ghidra/build contention:
@@ -1732,6 +1989,7 @@ exactly the RNG mistake this file already records.
 | Sideshift | Recovered as a mechanism, but **which buttons fire it is not known**, so `oag_gameplay::controls` returns `Sideshift::None` always and a test pins the gap. |
 | The game's own font | Unchanged: `.fnt` metrics decode, the atlas's pixel layout does not. |
 | Front-end widget offsets, audio, batch list B, transparency sorting, mip levels, `section` payloads, the 29 unresolved import stubs | Unchanged from the previous handover. |
+| **The Memory Stick and profile system** | **Scope decision, 2026-07-27, not a gap.** One automatic save slot, the way a modern PC game does it. The disc's boot chain between `Language Selection` and `Main Menu` is eight screens and all but two exist to serve Memory Stick mechanics: `RemoveMemoryStickWarning`, `MemoryStickWarning`, `NoStickAtBootScreen`, `DisplayInsufficientSpace`, `LoadProfileDialog`, `AutoLoadProfileCheckScreen`, `AutoLoadingProfileScreen`, the `LoadProfileFailed`/`LoadProfileDataCorrupt` arms, and the first-boot `NameSetup2FromBoot` -> `TagSetup2FromBoot` -> `CreateFromBoot` chain. None of it is to be built. When M6 opens, model `LogoFMV`, `LogoFMVRedirectScreen` and `Show Logo`, then go straight to `Main Menu`. Do not read the omitted screens as unimplemented work. |
 
 ## Method that is not obvious
 

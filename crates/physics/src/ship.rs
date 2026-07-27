@@ -206,14 +206,32 @@ pub struct ShipState {
     ///
     /// Armed by [`crate::wall::resolve`] with [`crate::wall::STUN_PER_CONTACT`], the
     /// original's `craft+0x290 += 0.5` in `Ship_ApplyCollisionImpulse`. It is
-    /// **added, not assigned**, so sustained contact accumulates rather than
-    /// refreshing to a fixed value.
+    /// **added, not assigned**, so successive impacts accumulate rather than
+    /// refreshing to a fixed value - but only once per impact, see
+    /// [`Self::wall_contact_prev`].
     ///
     /// Decremented in [`crate::forces::evaluate`] at the lateral-grip step rather
     /// than with the control ramps, because that is where the original decrements it
     /// and it is what makes the engine see the *pre*-decrement value in the same
     /// frame.
     pub stun_timer: f32,
+    /// Whether last frame's [`crate::wall::resolve`] pushed the hull out of a wall.
+    ///
+    /// Exists to make the collision stun **edge-triggered**, which is what the
+    /// original is and what a naive port is not.
+    /// `Ship_ApplyCollisionImpulse` (`0x0883f274`) is gated on a *pending impulse
+    /// vector* at `entity->0x4c + 0x110`, and it zeroes that vector on the way out
+    /// on every path - so `craft+0x290 += 0.5` fires once per impact the collision
+    /// system posts, not once per frame the hull happens to be touching something.
+    ///
+    /// The distinction is the difference between a playable game and a dead one.
+    /// The stun accumulates at `0.5 s` a go and decays at `dt`, so at 60 Hz the
+    /// ratio is **30:1**: arming it every frame of a one-second wall scrape buys
+    /// about thirty seconds during which the engine produces nothing at all. That
+    /// was reported from play as "at some point the racer completely stopped
+    /// accelerating", and `crates/physics/tests/yaw_authority.rs` is not where it is
+    /// pinned - see `a_sustained_scrape_arms_the_stun_once` in [`crate::wall`].
+    pub wall_contact_prev: bool,
     /// Seconds left on the timer at `craft+0x2e0`.
     ///
     /// While it runs, the hover target height is reduced by `min(timer, 4.0)` and
@@ -255,6 +273,7 @@ impl Default for ShipState {
             steer: 0.0,
             reverse_controls: 0.0,
             stun_timer: 0.0,
+            wall_contact_prev: false,
             leap_timer: 0.0,
             grounded: 0.0,
             grounded_prev: 0.0,
