@@ -1,0 +1,634 @@
+//! PS2 palette-indexed textures: a Graphics Synthesizer upload packet.
+//!
+//! Where the PSP stores a texture as a header, a palette and pixels
+//! ([`crate::texture`]), the PS2 stores the **DMA packet that uploads it**. The
+//! blob is a 13-byte header followed by GIF packets that transfer the texels
+//! and then the palette into GS local memory, so the pixel data is in whatever
+//! layout the GS writes it in rather than in raster order.
+//!
+//! ```text
+//! +0x00  u8    log2 dimensions, high nibble log2(height), low nibble log2(width)
+//! +0x01  u8    bits_per_pixel      4 or 8
+//! +0x02  u16   flags               0x2000 or 0x2040
+//! +0x04  u16   height
+//! +0x06  u16   width
+//! +0x08  u32   unknown, correlates with +0x0c
+//! +0x0c  u8    unknown
+//! +0x0d  qword[8]   GS state, not decoded
+//! +0x8d  qword      A+D write, TRXPOS  (0x51)
+//! +0x9d  qword      A+D write, TRXREG  (0x52)
+//! +0xad  qword      A+D write, TRXDIR  (0x53)
+//! +0xbd  qword      GIFtag, FLG=IMAGE, NLOOP*16 == texel bytes
+//! +0xcd  texels, width * height * bpp / 8 bytes
+//!        qword      A+D write, TRXPOS
+//!        qword      A+D write, TRXREG
+//!        qword      A+D write, TRXDIR
+//!        qword      GIFtag, FLG=IMAGE, EOP, NLOOP*16 == palette bytes
+//!        palette, (1 << bpp) * 4 bytes, RGBA8888
+//!        padding
+//! ```
+//!
+//! Each transfer block is *budgeted* 256 bytes even when it needs fewer, so the
+//! total is `205 + max(texels, 256) + 64 + max(palette, 256)`, but the blocks
+//! themselves sit back to back and the slack lands at the end of the file. A
+//! 4x4 texture is 1,549 bytes with 240 of them trailing padding.
+//!
+//! See `docs/formats/ps2-texture.md` for the evidence.
+//!
+//! # The dimensions are stored height first
+//!
+//! Reading `+0x04` as the width decodes every square texture perfectly and
+//! scrambles every other one, which is exactly the kind of half-right that
+//! survives a spot check. `TRXREG` settles it: it is `(width/2, height/2)` in
+//! that order for the 32-bit transfer path, so the pair at `+0x04` is
+//! `(height, width)`.
+//!
+//! # Three transfer shapes, and the file says which
+//!
+//! `TRXREG` gives the destination rectangle, and dividing the texel byte count
+//! by its area gives the bytes per destination pixel, which identifies the
+//! transfer format without guessing:
+//!
+//! - `(width/2, height/2)` at 4 bytes each: 8-bit texels blitted as **PSMCT32**,
+//!   the usual PS2 trick for uploading indexed textures. The stored bytes are
+//!   pre-swizzled into GS `PSMT8` order and have to be permuted back.
+//! - `(width, height)` at 1 byte each: a direct `PSMT8` transfer, so the stored
+//!   bytes are already in raster order. The game uses this whenever the width is
+//!   8 or less, where the halving above cannot produce a valid rectangle.
+//! - `(width/2, height/4)` at 4 bytes each: the same trick for 4-bit texels
+//!   (`PSMT4`). Five blobs on the disc; the permutation is not implemented.
+//!
+//! # Alpha is 0-128, not 0-255
+//!
+//! The GS treats 128 as full intensity through the texture-modulate path, the
+//! same convention [`crate::vex`] documents for vertex colour. [`Ps2Texture`]
+//! keeps the palette exactly as stored and [`Ps2Texture::to_rgba`] doubles it,
+//! so a caller that wants the raw bytes still has them.
+
+/// Bytes of header before the GS state block.
+pub const HEADER_LEN: usize = 13;
+
+/// Quadwords of GS setup between the header and the texel data.
+pub const SETUP_QWORDS: usize = 12;
+
+/// Offset of the texel data.
+pub const TEXEL_OFFSET: usize = HEADER_LEN + SETUP_QWORDS * 16;
+
+/// Offset of the `TRXREG` write, whose data word gives the transfer rectangle.
+pub const TRXREG_OFFSET: usize = HEADER_LEN + 9 * 16;
+
+/// Offset of the texel `GIFtag`.
+pub const TEXEL_GIFTAG_OFFSET: usize = HEADER_LEN + 11 * 16;
+
+/// Quadwords of GS setup between the texels and the palette.
+pub const CLUT_SETUP_QWORDS: usize = 4;
+
+/// Smallest block the game transfers, in bytes.
+///
+/// Both the texel and the palette block are padded up to this, which is why a
+/// 4x4 texture is not 16 bytes of pixels but 256.
+pub const MIN_TRANSFER_BYTES: usize = 256;
+
+/// `GIFtag` `FLG` value for an image-mode transfer.
+const GIF_FLG_IMAGE: u64 = 2;
+
+/// Something wrong with a PS2 texture blob.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Error {
+    /// Fewer bytes than the header and setup block need.
+    TooShort {
+        /// Bytes supplied.
+        got: usize,
+    },
+    /// `bits_per_pixel` was not 4 or 8.
+    UnsupportedDepth {
+        /// The value found.
+        bits_per_pixel: u8,
+    },
+    /// The log2 byte at `+0x00` disagrees with the dimensions at `+0x04`.
+    ///
+    /// The two encode the same thing, so a disagreement means this is not a
+    /// texture rather than that it is a damaged one.
+    DimensionMismatch {
+        /// The packed log2 byte.
+        packed: u8,
+        /// Width read from `+0x06`.
+        width: u16,
+        /// Height read from `+0x04`.
+        height: u16,
+    },
+    /// A `GIFtag` was not an image-mode transfer of the expected length.
+    BadGifTag {
+        /// Offset of the tag.
+        offset: usize,
+        /// Bytes the tag declares.
+        declared: usize,
+        /// Bytes the header implies.
+        expected: usize,
+    },
+    /// `TRXREG` did not match any known transfer shape.
+    UnknownTransfer {
+        /// Transfer width.
+        rrw: u32,
+        /// Transfer height.
+        rrh: u32,
+    },
+    /// The blob is not the size the header implies.
+    SizeMismatch {
+        /// Size the header implies.
+        expected: usize,
+        /// Size supplied.
+        got: usize,
+    },
+    /// A layout that is recognised but not decoded.
+    UnsupportedLayout(Layout),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooShort { got } => write!(f, "need at least {TEXEL_OFFSET} bytes, got {got}"),
+            Self::UnsupportedDepth { bits_per_pixel } => {
+                write!(
+                    f,
+                    "unsupported depth {bits_per_pixel} bpp (expected 4 or 8)"
+                )
+            }
+            Self::DimensionMismatch {
+                packed,
+                width,
+                height,
+            } => write!(
+                f,
+                "packed dimensions {packed:#04x} disagree with {width}x{height}"
+            ),
+            Self::BadGifTag {
+                offset,
+                declared,
+                expected,
+            } => write!(
+                f,
+                "GIFtag at {offset:#x} declares {declared} bytes, header implies {expected}"
+            ),
+            Self::UnknownTransfer { rrw, rrh } => {
+                write!(f, "unrecognised transfer rectangle {rrw}x{rrh}")
+            }
+            Self::SizeMismatch { expected, got } => {
+                write!(f, "header implies {expected} bytes, blob is {got}")
+            }
+            Self::UnsupportedLayout(layout) => write!(f, "{layout:?} is not decoded"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+/// Result alias for this module.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// How the texels sit in the blob, as identified by `TRXREG`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Layout {
+    /// Raster order, uploaded by a direct `PSMT8` transfer.
+    Linear,
+    /// `PSMT8` swizzle, uploaded as a `PSMCT32` blit of half the dimensions.
+    Psmt8,
+    /// `PSMT4` swizzle, uploaded as a `PSMCT32` blit. Not decoded.
+    Psmt4,
+}
+
+/// A decoded PS2 texture.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ps2Texture {
+    /// Width in pixels.
+    pub width: u16,
+    /// Height in pixels.
+    pub height: u16,
+    /// 4 or 8.
+    pub bits_per_pixel: u8,
+    /// The flag word at `+0x02`, 0x2000 or 0x2040 on this disc.
+    pub flags: u16,
+    /// How the texels were stored before this decode unpicked it.
+    pub layout: Layout,
+    /// Palette as stored: RGBA8888 with alpha on the GS's 0-128 scale.
+    pub palette: Vec<[u8; 4]>,
+    /// One palette index per pixel, in raster order from the top left.
+    pub indices: Vec<u8>,
+}
+
+/// Just enough of the header to classify a blob, without decoding it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Header {
+    /// Width in pixels.
+    pub width: u16,
+    /// Height in pixels.
+    pub height: u16,
+    /// 4 or 8.
+    pub bits_per_pixel: u8,
+    /// The flag word at `+0x02`.
+    pub flags: u16,
+    /// How the texels are stored.
+    pub layout: Layout,
+    /// Bytes of texel data the header implies, before padding.
+    pub texel_bytes: usize,
+    /// Bytes of palette the header implies, before padding.
+    pub palette_bytes: usize,
+    /// The size the whole blob must be.
+    pub total_bytes: usize,
+}
+
+fn read_u16(data: &[u8], at: usize) -> u16 {
+    u16::from_le_bytes([data[at], data[at + 1]])
+}
+
+fn read_u64(data: &[u8], at: usize) -> u64 {
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&data[at..at + 8]);
+    u64::from_le_bytes(bytes)
+}
+
+/// Rounds a transfer block up to the minimum the game uses.
+fn padded(bytes: usize) -> usize {
+    bytes.max(MIN_TRANSFER_BYTES)
+}
+
+/// Reads and checks the header without touching the pixel data.
+///
+/// Every field here is cross-checked against another one, which is what makes
+/// this safe to run over a whole archive as a classifier: the packed log2 byte
+/// must agree with the dimension words, both `GIFtag`s must declare exactly the
+/// byte counts the dimensions imply, and the total must come out at the blob's
+/// actual length.
+pub fn header(data: &[u8]) -> Result<Header> {
+    if data.len() < TEXEL_OFFSET {
+        return Err(Error::TooShort { got: data.len() });
+    }
+
+    let packed = data[0];
+    let bits_per_pixel = data[1];
+    let flags = read_u16(data, 2);
+    let height = read_u16(data, 4);
+    let width = read_u16(data, 6);
+
+    if !matches!(bits_per_pixel, 4 | 8) {
+        return Err(Error::UnsupportedDepth { bits_per_pixel });
+    }
+    // Both nibbles are a shift count, so anything above 15 would overflow; the
+    // largest texture on either disc is 512x512, which is a shift of 9.
+    let log_height = u32::from(packed >> 4);
+    let log_width = u32::from(packed & 0x0f);
+    if 1u32.checked_shl(log_height) != Some(u32::from(height))
+        || 1u32.checked_shl(log_width) != Some(u32::from(width))
+    {
+        return Err(Error::DimensionMismatch {
+            packed,
+            width,
+            height,
+        });
+    }
+
+    let pixels = usize::from(width) * usize::from(height);
+    let texel_bytes = pixels * usize::from(bits_per_pixel) / 8;
+    let palette_bytes = (1usize << bits_per_pixel) * 4;
+
+    check_giftag(data, TEXEL_GIFTAG_OFFSET, texel_bytes)?;
+
+    // The palette packet follows the texels **unpadded**; the padding that
+    // brings each transfer up to its 256-byte minimum lands at the end of the
+    // file instead. Both blocks are at or above the minimum on all but 70 of
+    // the disc's textures, which is why padding the offset here reads correctly
+    // almost everywhere and then falls apart on the small ones.
+    let clut_setup = TEXEL_OFFSET + texel_bytes;
+    let total_bytes =
+        TEXEL_OFFSET + padded(texel_bytes) + CLUT_SETUP_QWORDS * 16 + padded(palette_bytes);
+    if data.len() != total_bytes {
+        return Err(Error::SizeMismatch {
+            expected: total_bytes,
+            got: data.len(),
+        });
+    }
+    check_giftag(data, clut_setup + 3 * 16, palette_bytes)?;
+
+    let trxreg = read_u64(data, TRXREG_OFFSET);
+    // Masked to the GS field width, so both fit a u32 with room to spare.
+    let rrw = u32::try_from(trxreg & 0xfff).unwrap_or(u32::MAX);
+    let rrh = u32::try_from((trxreg >> 32) & 0xfff).unwrap_or(u32::MAX);
+    let (w32, h32) = (u32::from(width), u32::from(height));
+    let layout = if bits_per_pixel == 8 && rrw == w32 / 2 && rrh == h32 / 2 {
+        Layout::Psmt8
+    } else if bits_per_pixel == 8 && rrw == w32 && rrh == h32 {
+        Layout::Linear
+    } else if bits_per_pixel == 4 && rrw == w32 / 2 && rrh == h32 / 4 {
+        Layout::Psmt4
+    } else {
+        return Err(Error::UnknownTransfer { rrw, rrh });
+    };
+
+    Ok(Header {
+        width,
+        height,
+        bits_per_pixel,
+        flags,
+        layout,
+        texel_bytes,
+        palette_bytes,
+        total_bytes,
+    })
+}
+
+fn check_giftag(data: &[u8], offset: usize, expected: usize) -> Result<()> {
+    if data.len() < offset + 16 {
+        return Err(Error::TooShort { got: data.len() });
+    }
+    let tag = read_u64(data, offset);
+    let declared = (tag & 0x7fff) as usize * 16;
+    let flg = (tag >> 58) & 3;
+    if flg != GIF_FLG_IMAGE || declared != expected {
+        return Err(Error::BadGifTag {
+            offset,
+            declared,
+            expected,
+        });
+    }
+    Ok(())
+}
+
+/// Whether `data` is a PS2 texture.
+///
+/// Cheaper than [`parse`] and just as strict: [`header`] already checks every
+/// declared size against every other one.
+#[must_use]
+pub fn looks_like_ps2_texture(data: &[u8]) -> bool {
+    header(data).is_ok()
+}
+
+/// Parses a PS2 texture blob.
+///
+/// # Errors
+///
+/// Returns [`Error::UnsupportedLayout`] for the five `PSMT4` blobs on the disc,
+/// whose swizzle is not implemented.
+pub fn parse(data: &[u8]) -> Result<Ps2Texture> {
+    let head = header(data)?;
+    if head.layout == Layout::Psmt4 {
+        return Err(Error::UnsupportedLayout(head.layout));
+    }
+
+    let texels = &data[TEXEL_OFFSET..TEXEL_OFFSET + head.texel_bytes];
+    let clut_at = TEXEL_OFFSET + head.texel_bytes + CLUT_SETUP_QWORDS * 16;
+    let stored_palette = &data[clut_at..clut_at + head.palette_bytes];
+
+    let width = usize::from(head.width);
+    let height = usize::from(head.height);
+
+    let indices = match head.layout {
+        Layout::Linear => texels.to_vec(),
+        Layout::Psmt8 => {
+            let mut out = vec![0u8; width * height];
+            for y in 0..height {
+                for x in 0..width {
+                    out[y * width + x] = texels[psmt8_offset(x, y, width)];
+                }
+            }
+            out
+        }
+        Layout::Psmt4 => unreachable!("refused above"),
+    };
+
+    let palette = unswizzle_clut(stored_palette, head.bits_per_pixel);
+
+    Ok(Ps2Texture {
+        width: head.width,
+        height: head.height,
+        bits_per_pixel: head.bits_per_pixel,
+        flags: head.flags,
+        layout: head.layout,
+        palette,
+        indices,
+    })
+}
+
+/// Byte offset of texel `(x, y)` inside a `PSMT8`-swizzled block.
+///
+/// The GS lays 8-bit textures out in 16x16 blocks of 16x4 columns with a
+/// two-of-four row swap, which is what the `swap` and `byte_select` terms are.
+/// This is a permutation of `0..width * height` for every power-of-two width of
+/// 16 or more, which the tests assert; the narrower textures on the disc are
+/// stored [`Layout::Linear`] precisely because it is not one below that.
+#[must_use]
+pub fn psmt8_offset(x: usize, y: usize, width: usize) -> usize {
+    let block = (y & !0xf) * width + (x & !0xf) * 2;
+    let swap = (((y + 2) >> 2) & 1) * 4;
+    let row = ((((y & !3) >> 1) + (y & 1)) & 0x7) * width * 2;
+    let column = ((x + swap) & 0x7) * 4;
+    let byte_select = ((y >> 1) & 1) + ((x >> 2) & 2);
+    block + row + column + byte_select
+}
+
+/// Reorders a 256-entry palette out of the GS's `CSM1` layout.
+///
+/// A 256-entry CLUT is uploaded as a 16x16 `PSMCT32` rectangle, which puts
+/// entries 8-15 and 16-23 of each 32 the other way round. Getting this wrong
+/// leaves the shapes intact and bands the colours every eight indices, so it is
+/// worth knowing what the failure looks like. A 16-entry CLUT is a plain 8x2
+/// rectangle and needs no reordering.
+#[must_use]
+pub fn unswizzle_clut(stored: &[u8], bits_per_pixel: u8) -> Vec<[u8; 4]> {
+    let entries: Vec<[u8; 4]> = stored
+        .chunks_exact(4)
+        .map(|c| [c[0], c[1], c[2], c[3]])
+        .collect();
+    if bits_per_pixel != 8 {
+        return entries;
+    }
+    (0..entries.len())
+        .map(|i| entries[(i & 0xe7) | ((i & 0x08) << 1) | ((i & 0x10) >> 1)])
+        .collect()
+}
+
+impl Ps2Texture {
+    /// Expands to RGBA8888, row-major from the top left.
+    ///
+    /// Alpha is doubled and saturated, taking the GS's 128 to 255.
+    #[must_use]
+    pub fn to_rgba(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.indices.len() * 4);
+        for &index in &self.indices {
+            let colour = self
+                .palette
+                .get(index as usize)
+                .copied()
+                // Cannot happen for 8bpp with a 256-entry palette, but magenta
+                // is a louder failure than a silent black.
+                .unwrap_or([255, 0, 255, 128]);
+            out.extend_from_slice(&[colour[0], colour[1], colour[2], colour[3].saturating_mul(2)]);
+        }
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Builds a blob in the shape the disc uses, so the tests need no game data.
+    fn blob(width: u16, height: u16, bits_per_pixel: u8, rrw: u32, rrh: u32) -> Vec<u8> {
+        let pixels = usize::from(width) * usize::from(height);
+        let texel_bytes = pixels * usize::from(bits_per_pixel) / 8;
+        let palette_bytes = (1usize << bits_per_pixel) * 4;
+
+        let packed = ((height.trailing_zeros() as u8) << 4) | width.trailing_zeros() as u8;
+        let mut out = vec![packed, bits_per_pixel, 0x00, 0x20];
+        out.extend_from_slice(&height.to_le_bytes());
+        out.extend_from_slice(&width.to_le_bytes());
+        out.extend_from_slice(&[0u8; 5]);
+        assert_eq!(out.len(), HEADER_LEN);
+
+        out.extend(std::iter::repeat_n(0u8, 8 * 16));
+        let reg = |data: u64, addr: u64, out: &mut Vec<u8>| {
+            out.extend_from_slice(&data.to_le_bytes());
+            out.extend_from_slice(&addr.to_le_bytes());
+        };
+        reg(0, 0x51, &mut out);
+        reg(u64::from(rrw) | (u64::from(rrh) << 32), 0x52, &mut out);
+        reg(0, 0x53, &mut out);
+        let tag = (texel_bytes as u64 / 16) | (GIF_FLG_IMAGE << 58);
+        out.extend_from_slice(&tag.to_le_bytes());
+        out.extend_from_slice(&[0u8; 8]);
+        assert_eq!(out.len(), TEXEL_OFFSET);
+
+        out.extend((0..texel_bytes).map(|i| (i % 251) as u8));
+
+        reg(0, 0x51, &mut out);
+        reg(16 | (16 << 32), 0x52, &mut out);
+        reg(0, 0x53, &mut out);
+        let tag = (palette_bytes as u64 / 16) | (1 << 15) | (GIF_FLG_IMAGE << 58);
+        out.extend_from_slice(&tag.to_le_bytes());
+        out.extend_from_slice(&[0u8; 8]);
+
+        out.extend((0..palette_bytes).map(|i| (i % 253) as u8));
+        out.extend(std::iter::repeat_n(
+            0u8,
+            padded(palette_bytes) - palette_bytes,
+        ));
+        out
+    }
+
+    #[test]
+    fn a_swizzled_blob_decodes_to_every_texel_exactly_once() {
+        let data = blob(64, 64, 8, 32, 32);
+        let texture = parse(&data).expect("parse");
+        assert_eq!(texture.layout, Layout::Psmt8);
+        assert_eq!(texture.indices.len(), 64 * 64);
+
+        // The permutation must be a permutation: every source byte lands once.
+        let mut seen = vec![false; 64 * 64];
+        for y in 0..64 {
+            for x in 0..64 {
+                let at = psmt8_offset(x, y, 64);
+                assert!(!std::mem::replace(&mut seen[at], true), "{at} twice");
+            }
+        }
+    }
+
+    #[test]
+    fn psmt8_offsets_are_a_permutation_for_every_shipped_shape() {
+        // Every (width, height) the PS2 disc stores swizzled, widths 16 and up.
+        for width in [16usize, 32, 64, 128, 256, 512] {
+            for height in [4usize, 8, 16, 32, 64, 128, 256, 512] {
+                let mut seen = vec![false; width * height];
+                for y in 0..height {
+                    for x in 0..width {
+                        let at = psmt8_offset(x, y, width);
+                        assert!(at < width * height, "{width}x{height}: {at} out of range");
+                        assert!(
+                            !std::mem::replace(&mut seen[at], true),
+                            "{width}x{height}: {at} twice"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_narrow_blob_is_linear_and_decodes_in_raster_order() {
+        let data = blob(8, 32, 8, 8, 32);
+        let texture = parse(&data).expect("parse");
+        assert_eq!(texture.layout, Layout::Linear);
+        assert_eq!(
+            texture.indices,
+            (0..8 * 32).map(|i| (i % 251) as u8).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn the_palette_reordering_is_its_own_inverse() {
+        let stored: Vec<u8> = (0..1024).map(|i| (i % 256) as u8).collect();
+        let once = unswizzle_clut(&stored, 8);
+        let flat: Vec<u8> = once.iter().flatten().copied().collect();
+        let twice = unswizzle_clut(&flat, 8);
+        assert_eq!(
+            twice,
+            stored
+                .chunks_exact(4)
+                .map(|c| [c[0], c[1], c[2], c[3]])
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_four_bit_blob_is_recognised_but_refused() {
+        let data = blob(256, 512, 4, 128, 128);
+        let head = header(&data).expect("header");
+        assert_eq!(head.layout, Layout::Psmt4);
+        assert_eq!(parse(&data), Err(Error::UnsupportedLayout(Layout::Psmt4)));
+    }
+
+    #[test]
+    fn a_truncated_blob_is_refused() {
+        let data = blob(64, 64, 8, 32, 32);
+        assert!(!looks_like_ps2_texture(&data[..data.len() - 1]));
+        assert!(!looks_like_ps2_texture(&data[..10]));
+    }
+
+    #[test]
+    fn disagreeing_dimensions_are_refused() {
+        let mut data = blob(64, 64, 8, 32, 32);
+        data[0] = 0x77;
+        assert!(matches!(
+            header(&data),
+            Err(Error::DimensionMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn a_giftag_that_does_not_match_the_dimensions_is_refused() {
+        let mut data = blob(64, 64, 8, 32, 32);
+        data[TEXEL_GIFTAG_OFFSET] = 0x01;
+        assert!(matches!(header(&data), Err(Error::BadGifTag { .. })));
+    }
+
+    #[test]
+    fn an_unrecognised_transfer_rectangle_is_refused() {
+        let data = blob(64, 64, 8, 7, 9);
+        assert!(matches!(header(&data), Err(Error::UnknownTransfer { .. })));
+    }
+
+    #[test]
+    fn alpha_is_doubled_out_of_the_gs_scale() {
+        let mut data = blob(64, 64, 8, 32, 32);
+        let clut = TEXEL_OFFSET + 64 * 64 + CLUT_SETUP_QWORDS * 16;
+        data[clut..clut + 8].copy_from_slice(&[1, 2, 3, 128, 4, 5, 6, 64]);
+        let texture = parse(&data).expect("parse");
+        assert_eq!(texture.palette[0], [1, 2, 3, 128]);
+        let rgba = texture.to_rgba();
+        // Index 0 appears wherever the source byte was 0.
+        let first = texture
+            .indices
+            .iter()
+            .position(|&i| i == 0)
+            .expect("index 0");
+        assert_eq!(&rgba[first * 4..first * 4 + 4], &[1, 2, 3, 255]);
+    }
+}

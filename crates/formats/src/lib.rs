@@ -20,6 +20,7 @@ pub mod handling;
 pub mod lzss;
 pub mod pmf;
 pub mod png;
+pub mod ps2_texture;
 pub mod signature;
 pub mod texture;
 pub mod track;

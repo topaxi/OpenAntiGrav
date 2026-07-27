@@ -29,6 +29,9 @@ below 70.
 | `0x001596f8` | `Ship_UpdateCraft` | 88 |
 | `0x0015c448` | `Ship_UpdateEngine` | 90 |
 | `0x0015c2d8` | `Ship_UpdatePitch` | 90 |
+| `0x0015bf30` | `Ship_UpdateSteering` | 90 |
+| `0x0015c7c0` | `Ship_ApplyLateralGrip` | 90 |
+| `0x0015ca48` | `Body_ClearAccumulators` | 88 |
 | `0x0015a290` | `Ship_ApplyWeathervaneTorque` | 88 |
 | `0x0015c3a0` | `Ship_ApplyQuadraticDrag` | 88 |
 | `0x0015b978` | `Ship_HoverTwoPoint` | 85 |
@@ -684,6 +687,98 @@ Two plumbing differences, neither of which changes the physics:
   recommendation**: the intended semantics really are "thrust in one lane, lift
   in the other", not an accident of register allocation.
 
+### Steering - identical, including the reverse-controls blend
+
+`Ship_UpdateSteering` (`0x0015bf30`), reading `Turning` at block-relative
+`0x38`/`0x3c`/`0x40` - absolute `0xcc`/`0xd0`/`0xd4`, i.e.
+`gain`/`amount`/`falloff`:
+
+```c
+target = controls->steerX;
+if (target > 0)  steer += (steer < target) ?  Turning.gain * dt : -Turning.falloff * dt;
+else if (target < 0) steer += (steer > target) ? -Turning.gain * dt :  Turning.falloff * dt;
+else { /* decay toward centre by Turning.falloff * dt, clamped to exactly 0 */ }
+if (craft+0x2d4 == 5 || craft+0x2d4 == 6)  steer = 0;   /* `mode - 5 < 2` */
+
+yaw = steer * Turning.amount;
+if ((flags & 0x20) && *(craft+0x1e4) + 0x3f8 == 0)
+    yaw = (steer + craft+0x318) * Turning.amount;       /* steering bias */
+if ((flags & 0x40) && *(craft+0x1e4) + 0x3f8 == 0)
+    yaw = (craft+0x31c > 1.0) ? -yaw : yaw * (1.0 - 2.0 * craft+0x31c);
+
+Body_AddTorqueLocal(body, (0, yaw, 0));
+```
+
+**Every element of [engine.md](../psp-pulse/engine.md)'s Steering section
+reproduces**, including the asymmetric gain/falloff on both sides of zero, the
+exact-zero clamp, the mode 5/6 lockout, the additive steering bias, and the
+0-to-1 reverse-controls blend with its `> 1.0` full-inversion case. The
+decompiler's lane extraction confirms the write lands on `.y`. Confidence
+**90**.
+
+Worth noting for [the sign convention](#the-angular-sign-convention-w_game---w_physics):
+**there is no negation at the use site in either build.** `yaw = steer *
+Turning.amount` is written straight into the local angular accumulator. So the
+runtime measurement's `w_game = -w_physics` reading still rests on
+`Turning.amount > 0`, and this second binary neither strengthens nor weakens
+that - it rules out a hidden negation in the code, which is the part that could
+have been checked statically.
+
+### Lateral grip - identical, and it pins down `slidegrip`
+
+`Ship_ApplyLateralGrip` (`0x0015c7c0`):
+
+```c
+if (craft+0x2c0 > 0) { craft+0x2c0 -= dt; return; }     /* timer gate */
+
+gg = grip_ground; ga = grip_air;                        /* block-rel 0x10, 0x14 */
+if (flags & 0x400) { gg *= 1.5f; ga *= 1.5f; }
+airbrake = max(craft+0x2d8, craft+0x2dc);               /* max(L, R) */
+lateral  = dot(velocity, craft+0x190);                  /* row 0 */
+k        = airbrake * (0.01f - slidegrip) - 1.0f;       /* block-rel 0x58 */
+
+body->localForce += lateral * gg * k * grounded;
+body->localForce += lateral * ga * k * (1 - grounded);
+```
+
+`grip_ground` and `grip_air` sit at block-relative `0x10`/`0x14`, absolute
+`0xa4`/`0xa8`; `slidegrip` at `0x58`, absolute `0xec`. All three are where
+[engine.md](../psp-pulse/engine.md)'s parser table puts them.
+
+**This is the strongest single corroboration on the page.** engine.md derives
+`(0.01 - slidegrip)` and the `-1` floor from the load-time `1e-4` scaling and
+scores the interpretation at 90, arguing the coefficient "reaches exactly 0 at
+full airbrake and `slidegrip = 0`, and stays at `-1` for `slidegrip = 100`."
+The PS2 expression is literally `airbrake * (0.01 - slidegrip) - 1.0`, and both
+endpoints fall out arithmetically: `100 * 0.01 - 1 = 0` and `100 * 0 - 1 = -1`.
+**A derived interpretation reproduced as an explicit expression in a second
+binary.** The `max(L, R)` factor, the two grounded/airborne terms, the write
+straight to `body+0x110` rather than through a craft accumulator, and the timer
+gate are all there too. Confidence **90**.
+
+`craft+0x190` is therefore row 0, the axis engine.md's runtime measurement
+identifies as pointing **left** rather than right.
+
+One term engine.md does not record: **flag bit 10 multiplies both grip
+coefficients by `1.5`.** The same bit gates the turbo add in
+`Ship_UpdateEngine`, so it plausibly marks a boost or pickup state, but that is
+a guess at confidence 40 and the bit is left unnamed.
+
+### The accumulators are cleared on the body, not the craft
+
+`Body_ClearAccumulators` (`0x0015ca48`) zeroes `body+0x100`, `+0x110`, `+0x120`
+and `+0x130`, writing `1.0` into each `w` lane. Together with
+`Ship_UpdateEngine` and `Ship_ApplyLateralGrip` writing `body+0x110` directly,
+this says the PS2 **drops the four craft-side mirror accumulators entirely** and
+has every term accumulate onto the body. [engine.md](../psp-pulse/engine.md)
+describes the PSP zeroing `craft+0x320`/`+0x330`/`+0x340`/`+0x350` at the top of
+`Ship_UpdateCraft` and draining them at the bottom.
+
+**Same four accumulators, same four body offsets, one less copy.** That is a
+plumbing difference, not a physics one - but it does mean the PSP's four craft
+offsets have no PS2 counterpart, which is worth knowing before trying to carry a
+craft-struct layout across. Confidence **88**.
+
 ## Cross-platform
 
 | Function | PS2 (`SCES_547.48`) | PSP (`BOOT.BIN`) |
@@ -713,10 +808,23 @@ Two plumbing differences, neither of which changes the physics:
   inverse, which for the orthonormal basis is the transpose - exactly what
   [engine.md](../psp-pulse/engine.md)'s runtime dump measured element for
   element. A rotation inverse has determinant `+1` and cannot flip a sign.
-- **The remaining `Ship_Update*` control terms** - engine, brakes, steering,
-  pitch, airbrakes, drag, weathervane. `Ship_UpdateCraft` was read only far
-  enough to find the hover and damping calls; the ordering table on
-  [engine.md](../psp-pulse/engine.md) is **not** corroborated here.
+- **Brakes, airbrakes, rolling resistance and vertical damping.** Nine of
+  `Ship_UpdateCraft`'s sixteen callees are now identified; these four terms are
+  among the seven that are not. `FUN_00159e78` carries the only other `-0.25`
+  immediate in the craft path and is the obvious vertical-damping candidate,
+  unchecked. The remaining unidentified callees are `FUN_00159e78`,
+  `FUN_00159f10`, `FUN_00159fe0`, `FUN_0015a058`, `FUN_0015a550`,
+  `FUN_0015ca78` and `FUN_0015cea0`.
+- **The order the fifteen terms run in.** Every term above was identified by
+  content, from `Ship_UpdateCraft`'s callee list - the call *sequence* was not
+  read, so [engine.md](../psp-pulse/engine.md)'s ordering table and its
+  consequence (groundedness being one frame stale for six of the terms) are
+  still **not** corroborated here. That is now the cheapest remaining item on
+  this page: the functions are named, so the order falls out of one read of
+  `Ship_UpdateCraft`'s body.
+- **Whether the PS2 has the PSP's dead in-air roll-levelling branch**, and
+  whether `Ship_UpdateMagLock` writes an angular Z component. Both are open on
+  [engine.md](../psp-pulse/engine.md) too.
 - **Whether the angular accumulators hold torque or angular acceleration.**
   `Body_Integrate` divides the force accumulator by a mass term at
   `body+0x370+8` but applies the angular accumulator through the `+0xc0` matrix
@@ -747,6 +855,14 @@ Two plumbing differences, neither of which changes the physics:
   `h`, so the requirement is `c >= k*H*(n+1)/(2n)` - 4.44 at three sub-steps.
   The conclusion that raising the sub-step count cannot fix the instability is
   unaffected.
+- 2026-07-27, fourth pass: nine of `Ship_UpdateCraft`'s sixteen callees
+  identified by constant fingerprint and checked term by term against
+  [engine.md](../psp-pulse/engine.md). Engine, pitch, steering, lateral grip,
+  weathervane and the track-section force corroborate that page **completely**,
+  including its dead-`Engine.gain`/`falloff` finding and its derived
+  `(0.01 - slidegrip)` grip coefficient. Drag matches on three of four
+  coefficients and gravity differs in two details, both recorded as differences
+  rather than corrections. The call *order* is still not read.
 - 2026-07-27, third pass: **the sign question is closed.** The two remaining
   explanations were checked and both are dead - the hover force is a positive
   multiple of `up` at the call site, and the `+0xc0` matrix is a plain rotation
