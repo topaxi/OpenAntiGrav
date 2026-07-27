@@ -388,23 +388,27 @@ original, including the user's stated goal of eventually racing a full race on
 both the original and the reimplementation on the same track.
 
 **The first real trace-vs-simulation comparison found the ship falls through
-the floor at the very first tick, at the original's own recorded starting
+the floor at the first step, at the original's own recorded starting
 position** - not after driving for a while. `grounded` reads `1.0` on all 200
 real ticks; the simulation's reads `0.0` on every tick but the seeded first
-one. Everything downstream follows from that single fact: the simulated ship
-free-falls to 211 units/s against a recorded 22.7, and position diverges by
-423 units by tick 3. The control columns (throttle/brake/steer/airbrakes) all
-match exactly, so input and scaling are not the problem - **the entire
-divergence is the force law failing to find ground contact where the original
-does, immediately.** This is a different, and likely more primary, symptom
-than the roll-oscillator instability the physics investigation elsewhere in
-this file has been focused on - that was about a ship that eventually tumbles
-once already grounded; this is about a ship never grounding at all from a
-correctly-seeded position. It also gives the earlier "hover target height
-exceeds probe cast length" hypothesis its first real numeric backing, rather
-than a static reading. Relayed directly to the physics investigation.
+one. Everything downstream follows from that single fact: velocity is out at
+tick 1 (max 211 units/s against a recorded 22.7), orientation.forward at tick
+1 (max 1.52 rad), and position at tick 3, whose error keeps growing to a max
+of 424 units by the last recorded tick (199) - not 423 units by tick 3, which
+conflates when the field first crosses tolerance with its eventual maximum
+and overstates the symptom's early severity. The control columns
+(throttle/brake/steer/airbrakes) all match exactly, so input and scaling are
+not the problem - **the entire divergence is the force law failing to find
+ground contact where the original does, immediately.** This is a different,
+and likely more primary, symptom than the roll-oscillator instability the
+physics investigation elsewhere in this file has been focused on - that was
+about a ship that eventually tumbles once already grounded; this is about a
+ship never grounding at all from a correctly-seeded position. It also gives
+the earlier "hover target height exceeds probe cast length" hypothesis its
+first real numeric backing, rather than a static reading. Relayed directly to
+the physics investigation.
 
-**Two free findings from the same capture:**
+**Two free findings from the same capture, one of which needed a correction:**
 
 - **Handedness settled independently, by a method that needs no simulation at
   all.** The recorded ship travels along `+row 2`
@@ -415,10 +419,28 @@ than a static reading. Relayed directly to the physics investigation.
   completely independent route. Running the comparison the other way
   (`--basis right-up-back`) is worse on every field, which is the switch
   doing its job.
-- **The craft's `speed` field is not the velocity's length** - it runs a
-  steady 3.67% high against it; `speed_cached` (one tick stale) is the
-  length. A recording-model mismatch, not a physics bug, and worth knowing
-  before trusting `speed` directly in any future comparison.
+- **`speed_cached` is not the velocity's length - it is the previous tick's
+  forward-projected speed, `dot(velocity, forward)`.** An earlier draft of
+  this section called it "the length, one tick stale"; that was wrong, and
+  worse, not even a new finding: `docs/ghidra/functions/psp-pulse/engine.md`
+  already established the projection at confidence 95, and the error was a
+  transcription slip into `psp-trace.py`'s own comment that briefly
+  contradicted the project's own page. The capture corroborates `engine.md`
+  rather than adding to it - residual mean `3.3e-6` against a speed of 24,
+  indistinguishable from exact rather than merely inside tolerance - and
+  further pins that the cache is written from **both** vectors' previous-tick
+  values (not a mid-update mix): `dot(vel(t-1), fwd(t-1))` matches to `3.3e-6`
+  against `1.3e-3`/`1.6e-2` for the two mixed-tick combinations. Scored **90**,
+  not 95: the reference scenario is a straight, where the projection and the
+  raw magnitude differ by only the 0.3% a `0.997` heading cosine allows, so a
+  cornering capture (now on `oag-trace.md`'s "not yet" list) is what would
+  separate the two readings for real. The live `speed` field (`+0x398`,
+  distinct from `speed_cached`) still matches neither reading exactly (3.67%
+  above the length, 4.02% above the projection) and stays an open,
+  low-priority recording-model mismatch - not a physics bug, and **it now
+  leads the comparison's first-divergence line at tick 0** purely because
+  it's compared against the seeded row; read past that line to the tick-1
+  group above for the actual physics finding.
 
 Also landed in the same commit: `scripts/psp-trace.py` gained `--ship`/`--craft`
 selection, because a race breakpoints on `Ship_UpdateCraft` once per ship per
