@@ -645,7 +645,33 @@ pub struct Race {
     chase_params: ChaseParams,
     camera: Chase,
     dt: f32,
+    /// Ticks left before a `Reset` contact can respawn again.
+    ///
+    /// See [`RESPAWN_COOLDOWN_TICKS`].
+    respawn_cooldown: u32,
+    /// How many respawns have happened back to back, for [`RESPAWN_GIVE_UP`].
+    respawns_in_a_row: u32,
+    /// Set once respawning has given up, so the complaint is printed once.
+    respawn_disabled: bool,
+    /// How many times the ship has been respawned this race, for tests and for
+    /// the load report.
+    respawns: u32,
 }
+
+/// Ticks a `Reset` contact is ignored for after a respawn.
+///
+/// Half a second at 60 Hz. The recovery pose puts the ship on the racing line at
+/// hover height, so it should be clear of any trigger immediately - this exists
+/// because "should" is an assumption about shipped data, not a property of the
+/// code, and the failure it guards is a race that freezes in a respawn loop with
+/// no symptom.
+pub const RESPAWN_COOLDOWN_TICKS: u32 = 30;
+
+/// Consecutive respawns after which respawning stops and says so.
+///
+/// A ship that needs five recoveries without ever getting clear is not being
+/// recovered, and a visible complaint beats an invisible freeze.
+pub const RESPAWN_GIVE_UP: u32 = 5;
 
 impl Race {
     /// Starts a race: one ship, on the racing line, at the start of the spline.
@@ -693,7 +719,17 @@ impl Race {
             // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
             // is one place the rate is decided.
             dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
+            respawn_cooldown: 0,
+            respawns_in_a_row: 0,
+            respawn_disabled: false,
+            respawns: 0,
         }
+    }
+
+    /// How many times a `Reset` contact has respawned the ship this race.
+    #[must_use]
+    pub fn respawns(&self) -> u32 {
+        self.respawns
     }
 
     /// The fixed timestep, from [`TickRate::DEFAULT`].
@@ -747,6 +783,7 @@ impl Race {
             track_up,
             ..Environment::default()
         };
+        let before = ship.physics.body.position;
         let evaluated = oag_physics::step(
             &mut ship.physics,
             &controls,
@@ -756,10 +793,85 @@ impl Race {
             self.dt,
         );
 
+        self.respawn_cooldown = self.respawn_cooldown.saturating_sub(1);
+        if self.reset_zone_touched(&env, before) {
+            // `index` is where the ship was *before* this tick moved it, which is
+            // as close to "last known good" as this loop can cheaply get.
+            self.respawn(index);
+        } else if self.respawn_cooldown == 0 {
+            // Clear of the trigger with the cooldown expired: whatever run of
+            // back-to-back respawns was happening is over.
+            self.respawns_in_a_row = 0;
+        }
+
         self.world.tick += 1;
         let target = target_of(&self.world.ships[0]);
         self.camera.advance(target, &self.chase_params, self.dt);
         evaluated
+    }
+
+    /// Whether this tick ended in contact with `Reset` geometry.
+    ///
+    /// Suppressed while the cooldown runs and once respawning has given up, so
+    /// the two guards live in one place rather than at the call site.
+    fn reset_zone_touched(&self, env: &Environment, before: Vec3) -> bool {
+        if self.respawn_disabled || self.respawn_cooldown > 0 {
+            return false;
+        }
+        let ship = &self.world.ships[0];
+        // The same `env` the force law just ran with, so the self-collider
+        // exclusion cannot differ between the two.
+        oag_physics::reset::contact(&ship.physics, &ship.handling, env, &self.collision, before)
+            .is_some()
+    }
+
+    /// Puts the ship back on the track after a `Reset` contact.
+    ///
+    /// # This pose is a guess, not a reading
+    ///
+    /// `docs/ghidra/functions/psp-pulse/collision.md` records **that** a `Reset`
+    /// contact respawns the ship, at confidence 86. **Where it respawns it is not
+    /// recorded anywhere**, and searching the RE tree for it found nothing - which
+    /// is itself the finding. So this reuses the initial spawn: the racing line at
+    /// [`spawn_height`], on the spline sample nearest where the ship was before
+    /// the tick that triggered the reset.
+    ///
+    /// Confidence **40**. That is deliberately low, and the number matters: this
+    /// is a placeholder chosen because it reuses code that is already correct for
+    /// the race start, not because anything says the original does it. The likelier
+    /// real mechanism is a last-passed checkpoint or track section - [`Ship::segment`]
+    /// is the field that would hold it, and nothing populates it meaningfully today.
+    /// Whoever recovers that should replace this outright rather than tune it.
+    ///
+    /// The velocity, orientation and every control state go to zero, because
+    /// [`Ship::place_at`] resets the whole physics state and keeps only mass and
+    /// inertia. Whether the original preserves any speed through a respawn is also
+    /// unrecorded.
+    fn respawn(&mut self, sample_index: Option<usize>) {
+        let sample = sample_index
+            .and_then(|index| self.spline.sample(index))
+            .or_else(|| self.spline.start());
+        let Some(sample) = sample.copied() else {
+            return;
+        };
+
+        let ship = &mut self.world.ships[0];
+        let height = spawn_height(&ship.handling);
+        ship.place_at(Pose::from_sample(&sample, sample.racing_line, height));
+
+        self.respawns += 1;
+        self.respawns_in_a_row += 1;
+        self.respawn_cooldown = RESPAWN_COOLDOWN_TICKS;
+
+        if self.respawns_in_a_row >= RESPAWN_GIVE_UP {
+            self.respawn_disabled = true;
+            eprintln!(
+                "reset: {} respawns in a row without getting clear, giving up. \
+                 The recovery pose is probably inside a Reset volume; see \
+                 Race::respawn.",
+                self.respawns_in_a_row
+            );
+        }
     }
 
     /// What the ship did, as of the last tick.
@@ -1446,6 +1558,180 @@ mod tests {
     fn the_widest_half_width_comes_from_the_track() {
         let spline = Spline::from_track(&straight_track());
         assert!((spline.max_half_width() - 12.0).abs() < 1e-3);
+    }
+
+    /// A parameter set with a real hull, so the reset probes have something to
+    /// probe with, and no gravity, so a ship only moves when a test moves it.
+    fn hulled_handling() -> Handling {
+        Handling {
+            physical: oag_physics::params::Physical {
+                mass: 1.0,
+                ..Default::default()
+            },
+            antigrav: oag_physics::params::Antigrav {
+                ride_height: 8.0,
+                ..Default::default()
+            },
+            dimensions: oag_physics::params::Dimensions {
+                width: 2.0,
+                height: 1.0,
+                length: 4.0,
+                ..Default::default()
+            },
+            ..Handling::ZERO
+        }
+    }
+
+    /// A large quad, as a collider of one class.
+    ///
+    /// `axis` picks the plane: 1 is horizontal at height `at`, 0 is vertical at
+    /// `x = at`.
+    fn plane(
+        axis: usize,
+        at: f32,
+        surface: oag_physics::Surface,
+        collider: u32,
+    ) -> oag_physics::TriangleSoup {
+        let corner = |u: f32, v: f32| {
+            let mut p = [0.0f32; 3];
+            p[axis] = at;
+            let others: Vec<usize> = (0..3).filter(|&k| k != axis).collect();
+            p[others[0]] = u;
+            p[others[1]] = v;
+            p
+        };
+        oag_physics::TriangleSoup::new(
+            vec![
+                corner(-500.0, -500.0),
+                corner(500.0, -500.0),
+                corner(500.0, 500.0),
+                corner(-500.0, 500.0),
+            ],
+            vec![[0, 1, 2], [0, 2, 3]],
+            Vec::new(),
+            surface,
+            collider,
+        )
+    }
+
+    fn setup_with(handling: Handling, colliders: Vec<oag_physics::TriangleSoup>) -> Setup {
+        let mut setup = setup(handling);
+        for c in colliders {
+            setup.collision.push(c);
+        }
+        setup
+    }
+
+    /// The feature, end to end: a ship that leaves the track and crosses `Reset`
+    /// geometry is put back on the spline.
+    ///
+    /// The reset plane is **horizontal and below**, which is where a real one
+    /// sits, and the hull probes are horizontal - so only the swept ray can find
+    /// it. That is deliberate: it is the path a falling ship actually takes.
+    #[test]
+    fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
+        let handling = hulled_handling();
+        let setup = setup_with(
+            handling,
+            vec![plane(1, -40.0, oag_physics::Surface::Reset, 0)],
+        );
+        let mut race = Race::start(setup);
+        assert_eq!(race.respawns(), 0);
+
+        // Throw it off the track. No gravity in this fixture, so nothing else can
+        // move it and the only thing under test is the reset path.
+        {
+            let body = &mut race.world.ships[0].physics.body;
+            body.position = Vec3::new(20.0, -20.0, 0.0);
+            body.linear_velocity = Vec3::new(0.0, -600.0, 0.0);
+        }
+
+        for _ in 0..10 {
+            race.tick(&InputSnapshot::default());
+        }
+
+        assert_eq!(race.respawns(), 1, "the reset plane never triggered");
+
+        let body = race.world.ships[0].physics.body;
+        // Back on the track: near a spline sample, above it, and stopped.
+        let distance = race.spline().distance_to(body.position).expect("a sample");
+        assert!(distance < 20.0, "respawned {distance} from the spline");
+        assert!(body.position.y > 0.0, "respawned at {:?}", body.position);
+        assert_eq!(body.linear_velocity, Vec3::ZERO);
+    }
+
+    /// Nothing but `Reset` geometry may respawn a ship. The same plane in the same
+    /// place under a different class must leave the ship where it fell.
+    #[test]
+    fn falling_through_any_other_class_does_not_respawn() {
+        for surface in [
+            oag_physics::Surface::Wall,
+            oag_physics::Surface::Floor,
+            oag_physics::Surface::MagFloor,
+        ] {
+            let setup = setup_with(hulled_handling(), vec![plane(1, -40.0, surface, 0)]);
+            let mut race = Race::start(setup);
+            {
+                let body = &mut race.world.ships[0].physics.body;
+                body.position = Vec3::new(20.0, -20.0, 0.0);
+                body.linear_velocity = Vec3::new(0.0, -600.0, 0.0);
+            }
+            for _ in 0..10 {
+                race.tick(&InputSnapshot::default());
+            }
+            assert_eq!(race.respawns(), 0, "{surface:?} respawned the ship");
+        }
+    }
+
+    /// The guard against the failure that would otherwise look like a hang: a
+    /// recovery pose that is itself inside a reset volume respawns forever.
+    ///
+    /// Here the trigger is a vertical plane half a unit from the spawn, inside the
+    /// hull's own half-width, so every recovery lands straight back in it.
+    /// Respawning must stop rather than freeze the race.
+    #[test]
+    fn a_recovery_pose_inside_a_reset_volume_gives_up_instead_of_looping() {
+        let handling = hulled_handling();
+        let start = *setup(handling).spline.start().expect("a first sample");
+        // Half a unit to the side of wherever the ship is placed, well inside the
+        // one-unit hull half-width.
+        let beside = Vec3::from_array(start.pos).x + 0.5;
+        let setup = setup_with(
+            handling,
+            vec![plane(0, beside, oag_physics::Surface::Reset, 0)],
+        );
+
+        let mut race = Race::start(setup);
+        for _ in 0..(RESPAWN_COOLDOWN_TICKS * (RESPAWN_GIVE_UP + 3)) {
+            race.tick(&InputSnapshot::default());
+        }
+
+        assert_eq!(
+            race.respawns(),
+            RESPAWN_GIVE_UP,
+            "respawning did not stop after {RESPAWN_GIVE_UP} tries"
+        );
+    }
+
+    /// The cooldown is what stops one contact from respawning on every tick while
+    /// the ship is still overlapping the trigger.
+    #[test]
+    fn a_respawn_is_not_repeated_on_the_very_next_tick() {
+        let handling = hulled_handling();
+        let start = *setup(handling).spline.start().expect("a first sample");
+        let beside = Vec3::from_array(start.pos).x + 0.5;
+        let setup = setup_with(
+            handling,
+            vec![plane(0, beside, oag_physics::Surface::Reset, 0)],
+        );
+
+        let mut race = Race::start(setup);
+        race.tick(&InputSnapshot::default());
+        assert_eq!(race.respawns(), 1);
+        for _ in 0..(RESPAWN_COOLDOWN_TICKS - 1) {
+            race.tick(&InputSnapshot::default());
+            assert_eq!(race.respawns(), 1, "respawned again inside the cooldown");
+        }
     }
 
     /// A ship must arrive on the track with its mass in the body, or the hover
