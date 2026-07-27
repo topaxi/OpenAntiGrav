@@ -58,6 +58,14 @@ Decode the containers, then the assets inside them.
 **Exit criterion:** a Pulse track and a ship model render in `oag-view` from an
 unmodified disc image, on both the PSP and PS2 asset paths.
 
+**Met.** PS2 mesh batches were the last gap: their vertex type is a VIF/GS
+packet, not the PSP's GU vertex array, and decoding it closed on an exact
+arithmetic invariant across all 757 PS2 `.vex` files (98,243 batches, 11.8
+million vertices, confidence 94). See
+[PS2 vertex decoding](../formats/vex.md#ps2-the-vertex-type-still-names-the-attributes-but-the-data-is-a-vif-packet).
+`--mesh` now renders on both asset paths; PS2 models are untextured pending the
+embedded-texture-block question, unchanged from before.
+
 **Where to start:** containers are done. `oag-wad` reads every archive on every
 disc, decompresses, resolves names by hash and renders textures to PNG. What
 remains is geometry: decoding `.vex` mesh batches into portable vertex buffers,

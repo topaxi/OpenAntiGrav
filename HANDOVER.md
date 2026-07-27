@@ -200,6 +200,93 @@ reader family (confidence 60, would unlock every XML-driven subsystem at once)
 was flagged but deliberately not started, in favour of handing off one clean,
 finished deliverable rather than a partial one.
 
+## M1 is done: PS2 mesh batches decode too, and it's a different GPU's format
+
+The last M1 gap - `oag-view --mesh` failing on PS2 vertex type `0x1b9` - is
+closed. **The reason it looked unrecognisable is that it is a different
+platform's format wearing the same bit fields.** PS2 has no GU: the vertex-type
+word's position bits say `f32` instead of the PSP's hard-coded three-`s16`, and
+that's not a wider PSP vertex format, it's a marker that the whole payload is a
+**VIF command stream** (the PS2's DMA-driven equivalent of a GE display list) -
+implemented in the new `oag_formats::vif` module and the PS2 path of
+`vex::mesh_batches`, committed as `d9f14bb`.
+
+**Confidence 94**, on invariants that can't come out by accident, checked over
+**every PS2 `.vex` file**: 757 models, 98,243 batches, 11,767,670 vertices.
+Three independent framing lengths (region header, DMA tag quadword count, and
+where the command walk actually ends) all close exactly; every one of the 11.8
+million decoded positions falls inside its own batch's bounding box with zero
+slack; normals come out unit-length to `1.2e-7`; and the same model renders the
+same size through both asset paths (PS2 `01_Track` radius 831.02 against the
+PSP's 830.92; the Feisar ship at 6.45 on both).
+
+Three things worth knowing before touching this code:
+
+- **A strip split across VU1 memory repeats two vertices at the seam on
+  purpose** - 44,967 of 89,302 strip batches split this way, and the repeat is
+  what keeps winding parity, not a bug to dedupe.
+- **Colour is a 0-128 range, not 0-255** (the GS's own convention for "full
+  intensity" through the modulate path) - reading it as a normal 0-255 byte
+  makes every PS2 model exactly half as bright, which reads as a lighting bug
+  rather than a decode one. Confidence only 70 on this specific point, since
+  nothing in the executable was actually read for it.
+- **PS2 models still render untextured** - decoding the vertex/geometry format
+  didn't touch the separate open question of where PS2 textures live (the
+  embedded block is empty). Unchanged from before this session.
+
+`docs/overview/roadmap.md`'s M1 exit criterion is updated to record this as
+met.
+
+## The PS2 XML reader is confirmed, and it answers two things from unrelated pages
+
+The same agent that did the LZSS work went on to confirm the whole XML reader
+family (`0x00202d48`-`0x00203a80`) - **35 more symbols, none below 70**, taking
+`SCES_547.48` to 93 documented symbols total. It's a scanning parser with no
+tree: a 160-byte cursor holds a begin/end pair into the loaded file buffer and
+re-scans on every step, closing tags are found with a depth counter, and -
+worth knowing before reimplementing anything against this data - **it edits
+the buffer in place** (NUL over each closing quote, so attribute values are
+bare pointers into the file) and **compares every name case-insensitively**.
+Committed as `96a658a` and a follow-up correction `0cca5af`.
+
+**Two findings land on pages this agent didn't write:**
+
+1. **`docs/formats/fexml.md`'s 18-code attribute dictionary is now read
+   straight off the parser, not inferred from data.** `Xml_OpenFile` stores a
+   `code`-tagged element's attributes into an 18-slot table keyed by
+   `name[0] - 'a'`, and two independent constants (`c - 'a' < 0x12` at both
+   expansion sites, and `0x258 - 0x210 = 72 = 18 * 4` from the constructor)
+   confirm the count the format page had only ever gotten by counting codes
+   across `FEData.wad`. Also answers one of that page's open questions: PS2
+   uses the same schema.
+2. **The default float accessor is exponent-blind, and every handling
+   parameter goes through it.** `Xml_AttributeAsFloat` skips any character
+   that isn't a digit, `.` or `-` rather than stopping at it, so `1e-5` parses
+   as `-15`. No shipped value uses exponent notation, so nothing is wrong
+   today - but a tool that regenerates `HandlingStats.xml` must never emit
+   one. Flagged on both `handling-xml.md` and `fexml.md`. This is PS2-only
+   evidence; the PSP reader isn't located yet, so it doesn't transfer without
+   checking.
+
+Also fixed, from the same agent's own earlier work: `handling-xml.md` had
+called two of `HandlingXml_ParseGlobal`'s five arrays "per-class scalars" when
+they're actually `char*` strings. And it caught its own slip - it first wrote
+"no PSP XML reader is documented" from a case-sensitivity mistake in its own
+grep; `psp-pulse/frontend-video.md` already documents `Movie_ParseAttributes`
+as a *consumer* of that reader (not the generic parser itself), which is now
+the obvious anchor for locating the real one.
+
+**Next targets it flagged itself, in the order it would pick them:** the PSP
+XML reader (cheap now, and settles whether the exponent-blindness finding
+applies to both builds); an `<FEGlobals>`/`<FEConst>` indirection at
+`0x0017c630` that lets front-end XML reference a symbolic name where a number
+is expected, not in `fexml.md` at all yet; and **the PS2 `Ship_Update*` force
+terms** - directly relevant to the physics investigation elsewhere in this
+file, since the handling *parameter block* is now confirmed identical in
+layout, so a second reading of the force law could settle open questions
+there (the roll-oscillator constants among them) the same way LZSS and the
+handling loader just got settled.
+
 ## `oag-trace` exists now: M3's missing comparison side is built
 
 A new crate, `crates/trace` (`oag-trace`, lib + bin, added to the workspace),
