@@ -776,6 +776,39 @@ stored**. Same conclusion, now with the location.
 | `HandlingXml_ParsePitch` | `0x0883977c` | `0x0014d9d8` |
 | `HandlingXml_ParseAirbrakeGraphics` | `0x08839c68` | `0x0014de78` |
 | `g_handling_parse_class` | `0x08b36bfc` | `0x002da920` |
+| `Ship_UpdateCraft` | `0x08849618` | `0x001596f8` |
+| `Ship_UpdateHover` | `0x0884870c` | `0x0015aff0` |
+| `Ship_HoverFourCorner` | `0x0884ae90` | `0x0015a940` |
+| `Ship_HoverTwoPoint` | `0x0884a658` | `0x0015b978` |
+| `Ship_UpdateMagLock` | `0x0884ba0c` | `0x0015b070` |
+| `Ship_ApplyAngularDamping` | `0x08848ed0` | `0x0015c1b0` |
+| `Body_AddForceWorld` | `0x0884d4c8` | `0x0015dac8` |
+| `Body_AddTorqueLocal` | `0x0884d5bc` | `0x0015dda0` |
+| `Body_AddTorqueWorld` | `0x0884d604` | `0x0015ddb8` |
+| the enclosing per-entity update | `0x0884f70c`, not renamed | `World_StepBodies` `0x0015ded8` |
+
+Part of the craft path has now been read in the PS2 build; see
+[ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md). What it corroborates:
+
+- **The angular damping triple.** `(-pitch_damping, -5.0, k)` with `k = -5.0` in
+  mode 0 and `-2.0` otherwise, reading `pitch_damping` from the same
+  block-relative offset. Identical.
+- **The four-corner selector**, including both globals and the magic value `6`,
+  and `Ship_UpdateHover`'s three-line body. This page scores that at 84; a second
+  binary agreeing raises it.
+- **The four accumulators.** `body+0x100`, `+0x120`, `+0x130` are the same three
+  offsets with the same world/local split, and the one-line helpers are the same
+  one line.
+- **The call-site shape.** The PS2 walks its body array and virtual-calls the
+  craft update through a `{i16 this-adjust, void *fn}` vtable pair at
+  `object+0x38`, clearing `*(object + 0x370)` immediately before - the same
+  offset this page's disassembly shows. Different enclosing function, same
+  dispatch idiom.
+
+Two things it does **not** corroborate, both recorded on that page: the ordering
+of the fifteen force terms (the PS2 `Ship_UpdateCraft` was read only far enough
+to find the hover and damping calls), and the bank-to-yaw coefficient, which is
+`50.0` there against `30` here.
 
 The `0x80` stride, all 32 field offsets, and all four load-time scale factors
 reproduce **exactly** in the PS2 loader, from parsers built by a different

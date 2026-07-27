@@ -18,13 +18,14 @@ form, and Ghidra's string search will return all three.
 | [LZSS decoder](lzss.md) | The decompressing stream: bit reader, ring, match encoding, and a dead encoder workspace |
 | [XML reader](xml-reader.md) | The parser every data-driven subsystem goes through, and the `<code>` short-name dictionary |
 | [Handling stats loader](handling-xml.md) | All 32 handling parameters, all 27 camera parameters, the five load-time scale factors |
+| [Craft update and rigid body](craft-update.md) | The surface-alignment gain, angular damping, the integrator and its sub-step loop |
 | [Input](input.md) | The abstract button layer, the four edge masks, per-player pad blocks |
 | [Camera views](camera.md) | The player-selectable in-race views and the SELECT cycle |
 | [Recovered C library](libc.md) | `strlen`, `strcmp`, `strcasecmp`, `tolower`, `_ctype_` |
 
 ## Renames
 
-**Applied.** 93 symbols, collected in [names.tsv](names.tsv). There is no
+**Applied.** 106 symbols, collected in [names.tsv](names.tsv). There is no
 `just` recipe for this set yet; run the script directly against a bridge with
 `SCES_547.48` open:
 
@@ -57,6 +58,8 @@ names but the agreements and the disagreements.
 | The 8-byte WAD header and 16-byte entries, `{hash, offset, size_out, size_in}` | [formats/wad.md](../../../formats/wad.md) | `Wad_MountArchive` reads exactly that shape |
 | The whole LZSS bit layout: 13-bit absolute position, 4-bit length, `+3` bias, 8192-byte ring, cursor at 1, MSB first | [formats/lzss.md](../../../formats/lzss.md) | `Lzss_Decode` reads the same fields in the same order; an independent transcription of it agrees byte for byte with ours. See [lzss.md](lzss.md) |
 | The `<code>` short-name dictionary: per file, 18 codes, keyed on the first letter | [formats/fexml.md](../../../formats/fexml.md) | `Xml_OpenFile` builds an 18-slot table on the document from a `code` element, keyed by `name[0] - 'a'`. Inferred from data there, read off the parser here. See [xml-reader.md](xml-reader.md) |
+| The surface-alignment gain `-400` and the angular damping triple `(-pitch_damping, -5, k)` | [physics/README.md](../../../physics/README.md), [engine.md](../psp-pulse/engine.md) | Both appear verbatim in the PS2 build, so `-400` is **not** a transcription error. See [craft-update.md](craft-update.md) |
+| The four-corner hover selector, the body accumulator offsets, and the craft update's vtable dispatch shape | [engine.md](../psp-pulse/engine.md) | Same globals, same magic value 6, same `+0x100`/`+0x120`/`+0x130`, same `{i16 adjust, fn}` pair with `+0x370` cleared before the call |
 | The abstract button layer and its four edge masks | [input.md](../psp-pulse/input.md) | Same raw masks, same indices, same `pressed = held & ~last` derivation |
 | Three player camera views cycling `OPT_INT` -> `OPT_CLOSE` -> `OPT_FAR` on SELECT | [camera.md](../psp-pulse/camera.md) | Same three literals, same rotation, same hide-own-ship flag pattern |
 
@@ -66,6 +69,7 @@ These are findings, not noise, and none of them has been reconciled.
 
 | Difference | Detail |
 | --- | --- |
+| Bank-to-yaw coupling | PSP's hover epilogue uses `30 * right.y`; the PS2 four-corner path uses `50.0`. Neither is runtime-verified. See [craft-update.md](craft-update.md) |
 | WAD lookup scan | PSP rotates the scan start from the last hit; PS2 restarts at the beginning every time. See [wad-subsystem.md](wad-subsystem.md) |
 | `cancel` and `backward` | PSP binds them to `circle` (index 4); PS2 binds them to `triangle` (index 6). `activate`/`forward` are `cross` on both. See [input.md](input.md) |
 | `Input_ConsumePress` | PS2 clears the entire pressed mask and ignores the button index it is handed; the PSP page describes clearing one bit, at confidence 70. See [input.md](input.md) |

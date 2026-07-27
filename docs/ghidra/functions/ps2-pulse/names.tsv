@@ -67,6 +67,20 @@
 0x0014df58	function	HandlingXml_ParseGlobal	82	handling-xml.md
 0x002da920	data	g_handling_parse_class	90	handling-xml.md
 
+0x0015c1b0	function	Ship_ApplyAngularDamping	92	craft-update.md
+0x0015aff0	function	Ship_UpdateHover	90	craft-update.md
+0x0015a940	function	Ship_HoverFourCorner	90	craft-update.md
+0x0015dac8	function	Body_AddForceWorld	90	craft-update.md
+0x0015da60	function	Body_AddForceAtPoint	90	craft-update.md
+0x0015ddb8	function	Body_AddTorqueWorld	88	craft-update.md
+0x0015dda0	function	Body_AddTorqueLocal	88	craft-update.md
+0x0015d088	function	Body_Integrate	88	craft-update.md
+0x001596f8	function	Ship_UpdateCraft	88	craft-update.md
+0x0015b978	function	Ship_HoverTwoPoint	85	craft-update.md
+0x0015ded8	function	World_StepBodies	80	craft-update.md
+0x0015b070	function	Ship_UpdateMagLock	78	craft-update.md
+0x0019f020	function	Handling_LoadForTeam	78	craft-update.md
+
 0x00202f10	function	Xml_OpenFile	92	xml-reader.md
 0x00203208	function	Xml_NextElement	92	xml-reader.md
 0x00203538	function	Xml_ElementNameIs	92	xml-reader.md
