@@ -197,11 +197,15 @@ direction for both terms, carries the derivation at each constant, and pins each
 direction with a test asserting it on the torque itself rather than through a simulation,
 so that neither the integrator nor an invented inertia tensor can mask a regression.
 
-### A numeric prerequisite for M3, found while implementing this
+### A numeric prerequisite for M3, found while implementing this - and since resolved
 
-The alignment gain and the roll damping are **just outside the stability limit of the
-integrator this page specifies**, and the arithmetic is worth having on record because it
-turns a vague "the ship wobbles" into a number.
+This section used to derive the stability limit wrong, in a way that made the problem
+look nearly twice as mild as it is, and then asked M3 to settle three open questions with
+a trace. A trace has since answered two of them, and the third turned out to need a
+different kind of evidence than a trace at all. What follows is corrected; see
+[oag_physics::hover::ALIGNMENT_GAIN](../../crates/physics/src/hover.rs) and
+[docs/ghidra/functions/ps2-pulse/craft-update.md](../ghidra/functions/ps2-pulse/craft-update.md)
+for the full evidence trail.
 
 First, this **closes an earlier observation**, made while implementing from this page
 alone, that there is no angular damping anywhere in the model. That was true of what this
@@ -209,32 +213,60 @@ page recorded and false of the game: `pitch_damping` is consumed by
 `Ship_ApplyAngularDamping` rather than by the pitch term, and that function damps all
 three axes at `(-pitch_damping, -5.0, -2.0)` times the body-local angular velocity. Only
 the pitch axis is per ship; yaw and roll damping are the same for every craft in the game.
+**Both binaries now confirm this at instruction level**: the PS2 build's
+`Ship_ApplyAngularDamping` uses the identical triple, with roll damping at `-5.0` rather
+than `-2.0` in what the PS2 code calls "mode 0" - so `c = 2` is specifically the
+non-zero-mode value.
 
-`Ship_ApplyAngularDamping` damps roll at a hard `-2.0`, so roll is a damped oscillator
-with stiffness `k = 400` and damping `c = 2.0`. Explicit Euler on `x'' = -k x - c x'` has
-amplification `|lambda|^2 = 1 - h c + h^2 k`, so it is stable exactly while
+`Ship_ApplyAngularDamping` damps roll at a hard `-2.0` outside mode 0, so roll is a damped
+oscillator with stiffness `k = 400` and damping `c = 2.0` - both now confirmed as literal
+immediates in the PS2 binary too (`0xC3C80000` and the damping triple), not a PSP
+transcription error. **The derivation this page previously gave, `h <= c/k` against the
+sub-step `h = 1/180`, is wrong**, because it assumes the acceleration is recomputed every
+sub-step. The integrator does not do that - `oag_physics::integrate` computes the
+acceleration once from the frame's starting state and holds it across all three sub-steps,
+and the PS2's own `Body_Integrate` does the identical thing at instruction level. That
+changes the governing step from the sub-step to the **frame**, and the correct condition,
+accounting for the real position/velocity update across `n` sub-steps of `h = H/n`, is
 
 ```text
-h <= c / k = 2.0 / 400.0 = 0.005
+c >= k * H * (n + 1) / (2n)
 ```
 
-and the specified sub-step is `h = 1/180 = 0.00556`, about **11 % too large**. A ship
-sitting still on flat ground with a small roll therefore grows its oscillation by roughly
-a third per period and tumbles within a few seconds, which `oag-physics` reproduces.
+which at `k = 400`, `H = 1/60` and `n = 3` needs `c >= 4.44` against the actual `c = 2` -
+a **2.22x** shortfall, not the 11 % this page previously computed. Raising the sub-step
+count cannot fix it: the requirement floors at `k*H/2 = 3.33` as `n -> infinity`, still
+above 2. A ship sitting still on flat ground with a small roll grows its oscillation and
+tumbles within a few seconds under this reading, which `oag-physics` used to reproduce.
 
-Three properties make this a useful measurement rather than a curiosity:
+Two properties still make this a useful measurement:
 
-- It is **independent of the inertia tensor**, since `k` and `c` scale together, so no
-  plausible inertia tunes it away.
 - It is **independent of whether the angular accumulators hold torque or angular
-  acceleration**, for the same reason - which matters, because that question is open.
-- It would be stable at `h < 0.005`, which is **four** sub-steps of a 60 Hz frame rather
-  than three.
+  acceleration**, since `k` and `c` scale together - which mattered, because that question
+  was open.
+- It is now **confirmed in a second binary at instruction level**, closing the
+  "is a magnitude just wrong" question definitively: it isn't. `-400` and `-2.0` are both
+  exactly what the PS2 build uses too.
 
-So one of the following is true, and a trace distinguishes them in minutes: a magnitude
-is wrong, the sub-step count is not three, or the original really is marginally unstable
-in that state and gets away with it because a racing ship is never in it - the weathervane
-and the grip terms dominate whenever the ship is moving.
+**What this page asked M3 to settle with a trace has been settled, and the answer is a
+third thing neither "a transcription error" nor "the sub-step count is wrong" covers.** A
+step response on the running PSP game - roll the ship `0.25 rad` via the debugger, trace
+the recovery - measured the *closed-loop* stiffness at about **20.2**, not 400, while the
+damping came out near the transcribed `2.0`. Both readings are correct at once because
+something divides the `400` torque by about **20** before it reaches the body as angular
+acceleration - most likely a roll moment of inertia this crate's accumulators currently
+bypass (`oag_physics::forces::drain` multiplies by the inertia tensor that
+`oag_physics::integrate` then divides back out, so the term never actually sees it). See
+`ALIGNMENT_GAIN`/`ALIGNMENT_INERTIA` in `crates/physics/src/hover.rs` for the measurement,
+the fit, and the honestly-unresolved mechanism: the crate now uses `400 / 19.8` and states
+plainly that the `19.8` is a stand-in for a real inertia term, not a settled reading.
+
+The remaining open question is not this stability arithmetic - it's the separate,
+still-unresolved torque-sign anomaly (`Body_AddForceAtPoint` computes `F x r`, not the
+physically-correct `r x F`, confirmed in both binaries' raw assembly and ruled out as an
+operand-convention misreading against the vendor VU manual). Whatever compensates that is
+not this section's concern, since the measured behaviour above is convergent (aligning),
+not divergent - see `craft-update.md` for where that question currently stands.
 
 ## Airbrakes
 

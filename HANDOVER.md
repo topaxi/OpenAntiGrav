@@ -358,13 +358,19 @@ Three things settled, one deepened:
    standing "the sign lives downstream" hypothesis over "someone mistyped it"
    - but where it's compensated is still unlocated: `Body_AddTorqueWorld` and
    `Body_Integrate`'s rotation update are both plain `+=` with no negation on
-   the path read so far. Three explanations are on the table and none is
-   picked: the compensation is in the unread inertia/rotation-matrix path at
-   `body+0xc0`; the force is already pre-negated before this call, uninspected
-   component-by-component; or the EE's `vopmsub` operand convention is the
-   reverse of what was assumed here, which would flip all three terms at once
-   and make everything consistent with "it aligns, it doesn't diverge" after
-   all. The last is flagged as cheapest to settle and highest-value.
+   the path read so far. **A follow-up pass has since settled the operand
+   convention against the Sony *VU User's Manual* v6.0 and a raw-encoding
+   decode of the four instructions in question, confirming Ghidra prints them
+   in the manual's mnemonic order rather than reversed** - so "maybe
+   `vopmsub`'s convention is simply the reverse of what was assumed, and all
+   three terms flip together" is **refuted**, not a live explanation. Two
+   candidates remain, and this page picks neither: the compensation is in the
+   unread inertia/rotation-matrix path at `body+0xc0`..`+0xf0`, or the force
+   is already pre-negated before this call, uninspected component-by-component.
+   See `docs/ghidra/functions/ps2-pulse/craft-update.md`'s "cross-product
+   convention" section for the manual citation and the encoding table - a
+   fresh agent picking this up should start from the `+0xc0` matrix rather
+   than re-checking the operand convention.
 
 One more unresolved difference, not yet chased: the PS2's four-corner
 bank-to-yaw term uses `50.0` where the PSP uses `30`; neither value is
