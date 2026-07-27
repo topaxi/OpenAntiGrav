@@ -25,6 +25,7 @@ use std::sync::Arc;
 // The mesh loader, the track-ribbon builder and the pipeline that draws them
 // live in `oag-render`, so the game draws through the same code. What is left
 // here is the viewer: the CLI, the window and the texture browser.
+use oag_assets::Archive;
 use oag_render::{mesh, mesh_render, track};
 
 use winit::application::ApplicationHandler;
@@ -63,6 +64,16 @@ struct Cli {
     #[arg(long)]
     mesh: Option<String>,
 
+    /// Skin a `--mesh` from an external texture set, by entry index or
+    /// `0x`-prefixed name hash.
+    ///
+    /// PS2 models carry no textures of their own: their texture set is a
+    /// separate archive entry, a nested WAD of Graphics Synthesizer upload
+    /// packets. Which entry belongs to which model is not resolved yet, so it
+    /// is named here rather than found.
+    #[arg(long)]
+    textures: Option<String>,
+
     /// Camera yaw in radians, for `--mesh` and `--track`.
     #[arg(long, default_value_t = 0.9)]
     yaw: f32,
@@ -80,6 +91,25 @@ struct Cli {
     /// above it.
     #[arg(long)]
     track: Option<String>,
+}
+
+/// Reads and decodes an external texture set out of the same archive.
+fn load_texture_set(spec: &str, entry: &str) -> Result<Vec<Option<mesh::ModelTexture>>> {
+    let mut archive = Archive::open(spec)?;
+    let index = if let Some(hex) = entry.strip_prefix("0x") {
+        let hash = u32::from_str_radix(hex, 16).context("parsing the entry hash")?;
+        archive
+            .index_of_hash(hash)
+            .with_context(|| format!("{hex} is not in {}", archive.label()))?
+    } else if let Ok(index) = entry.parse::<usize>() {
+        index
+    } else {
+        archive
+            .index_of_name(entry)
+            .with_context(|| format!("{entry} is not in {}", archive.label()))?
+    };
+    let blob = archive.read(index)?;
+    mesh::ps2_texture_set(&blob).with_context(|| format!("entry {index} is not a texture set"))
 }
 
 fn main() -> Result<()> {
@@ -117,7 +147,20 @@ fn main() -> Result<()> {
     }
 
     if let Some(name) = &cli.mesh {
-        let model = mesh::load(&cli.archive, name)?;
+        let external = cli
+            .textures
+            .as_deref()
+            .map(|entry| load_texture_set(&cli.archive, entry))
+            .transpose()?;
+        if let Some(set) = &external {
+            println!(
+                "texture set: {} of {} entries decoded",
+                set.iter().filter(|slot| slot.is_some()).count(),
+                set.len()
+            );
+        }
+        let data = mesh::read_blob(&cli.archive, name)?;
+        let model = mesh::build_with_textures(name, &data, external)?;
         println!(
             "{}: {} meshes, {} vertices, {} triangles, radius {:.2}",
             model.label,

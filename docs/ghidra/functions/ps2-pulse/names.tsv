@@ -68,12 +68,16 @@
 0x002da920	data	g_handling_parse_class	90	handling-xml.md
 
 0x0015c1b0	function	Ship_ApplyAngularDamping	92	craft-update.md
+0x0015a058	function	Ship_UpdateBrakes	90	craft-update.md
+0x00159e78	function	Ship_ApplyVerticalDamping	85	craft-update.md
+0x0015a550	function	Ship_UpdateAirbrakes_q	78	craft-update.md
 0x0015bf30	function	Ship_UpdateSteering	90	craft-update.md
 0x0015c7c0	function	Ship_ApplyLateralGrip	90	craft-update.md
 0x0015ca48	function	Body_ClearAccumulators	88	craft-update.md
 0x0015c448	function	Ship_UpdateEngine	90	craft-update.md
 0x0015c2d8	function	Ship_UpdatePitch	90	craft-update.md
 0x0015a290	function	Ship_ApplyWeathervaneTorque	88	craft-update.md
+0x00159f10	function	Ship_ApplyRollingResistance	88	craft-update.md
 0x0015c3a0	function	Ship_ApplyQuadraticDrag	88	craft-update.md
 0x0015a1d0	function	Ship_ApplyGravity	85	craft-update.md
 0x0015aff0	function	Ship_UpdateHover	90	craft-update.md

@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 use oag_assets::Archive;
-use oag_formats::vex;
+use oag_formats::{ps2_texture, vex, wad};
 
 /// A vertex as the mesh shader expects it.
 #[repr(C)]
@@ -80,16 +80,34 @@ pub fn load(spec: &str, name: &str) -> Result<Model> {
 
 /// Flattens every mesh in a `.vex` into one buffer pair.
 pub fn build(label: &str, data: &[u8]) -> Result<Model> {
+    build_with_textures(label, data, None)
+}
+
+/// As [`build`], with an external texture set replacing the embedded one.
+///
+/// PS2 models need this: their embedded texture block is empty by design, so
+/// there is nothing for a material to resolve to unless the set is supplied
+/// from outside. Passing `None` uses whatever the file embeds, which is what
+/// every PSP model wants.
+pub fn build_with_textures(
+    label: &str,
+    data: &[u8],
+    external: Option<Vec<Option<ModelTexture>>>,
+) -> Result<Model> {
     if !vex::has_magic(data) {
         bail!("{label} is not a .vex file (no VEXX magic)");
     }
 
     let nodes = vex::nodes(data).context("walking the node tree")?;
+    let slots = nodes
+        .iter()
+        .filter(|n| n.class_id == vex::CLASS_TEXTURE)
+        .count();
 
     // Positional: materials name a texture by its ordinal among the `Texture`
     // nodes, so an entry this build cannot decode has to stay in place as `None`
     // rather than shift every later index.
-    let textures: Vec<Option<ModelTexture>> = vex::textures(data)
+    let embedded: Vec<Option<ModelTexture>> = vex::textures(data)
         .context("extracting textures")?
         .into_iter()
         .map(|slot| {
@@ -106,6 +124,12 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
             })
         })
         .collect();
+    // A short external set leaves the tail untextured rather than misaligning
+    // the ordinals a material indexes with.
+    let textures = external.map_or(embedded, |mut set| {
+        set.resize_with(set.len().max(slots), || None);
+        set
+    });
 
     // Mesh vertices are in the local space of whichever transform encloses them,
     // nested up to 25 deep on a track, so a model is only assembled once these
@@ -211,4 +235,59 @@ pub fn build(label: &str, data: &[u8]) -> Result<Model> {
         radius,
         mesh_count,
     })
+}
+
+/// Decodes a PS2 texture set into slots a model can be re-skinned with.
+///
+/// PS2 `.vex` files declare a texture block of zero length: their textures are
+/// separate archive entries, and a model's set is gathered into a **nested WAD**
+/// of its own, one entry per `Texture` node and in the same order. Each entry is
+/// a Graphics Synthesizer upload packet, see
+/// [`oag_formats::ps2_texture`].
+///
+/// Slots are positional for the same reason [`build`] keeps them positional: a
+/// material names a texture by its ordinal, so an entry this build cannot decode
+/// stays `None` in place rather than shifting every later one.
+pub fn ps2_texture_set(blob: &[u8]) -> Result<Vec<Option<ModelTexture>>> {
+    let count = wad::Directory::peek_entry_count(blob).context("not a nested WAD")?;
+    let directory = wad::Directory::parse(blob, Some(blob.len() as u64))
+        .map_err(|e| anyhow::anyhow!("{e}"))
+        .context("parsing the texture set directory")?;
+
+    let mut out = Vec::with_capacity(count as usize);
+    for (index, entry) in directory.entries.iter().enumerate() {
+        let start = entry.offset as usize;
+        let end = start + entry.size as usize;
+        let Some(stored) = blob.get(start..end) else {
+            out.push(None);
+            continue;
+        };
+        let decompressed = match entry.compression {
+            wad::Compression::None => stored.to_vec(),
+            wad::Compression::Lzss => {
+                match oag_formats::lzss::decompress(stored, entry.size_uncompressed as usize) {
+                    Ok(bytes) => bytes,
+                    Err(_) => {
+                        out.push(None);
+                        continue;
+                    }
+                }
+            }
+            wad::Compression::Zlib => {
+                out.push(None);
+                continue;
+            }
+        };
+        out.push(
+            ps2_texture::parse(&decompressed)
+                .ok()
+                .map(|texture| ModelTexture {
+                    label: format!("#{index} {:08x}", entry.name_hash),
+                    width: u32::from(texture.width),
+                    height: u32::from(texture.height),
+                    rgba: texture.to_rgba(),
+                }),
+        );
+    }
+    Ok(out)
 }

@@ -14,7 +14,8 @@ apparent inversion is
 an error, and nothing compensates it because nothing needs to.
 
 **The names below are applied**, from [names.tsv](names.tsv). Nothing scores
-below 70.
+below 70; the one name under 80 carries the `_q` suffix per
+[ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md).
 
 | Address | Name | Conf |
 | --- | --- | ---: |
@@ -29,16 +30,20 @@ below 70.
 | `0x001596f8` | `Ship_UpdateCraft` | 88 |
 | `0x0015c448` | `Ship_UpdateEngine` | 90 |
 | `0x0015c2d8` | `Ship_UpdatePitch` | 90 |
+| `0x0015a058` | `Ship_UpdateBrakes` | 90 |
 | `0x0015bf30` | `Ship_UpdateSteering` | 90 |
 | `0x0015c7c0` | `Ship_ApplyLateralGrip` | 90 |
 | `0x0015ca48` | `Body_ClearAccumulators` | 88 |
 | `0x0015a290` | `Ship_ApplyWeathervaneTorque` | 88 |
 | `0x0015c3a0` | `Ship_ApplyQuadraticDrag` | 88 |
+| `0x00159f10` | `Ship_ApplyRollingResistance` | 88 |
 | `0x0015b978` | `Ship_HoverTwoPoint` | 85 |
 | `0x0015a1d0` | `Ship_ApplyGravity` | 85 |
+| `0x00159e78` | `Ship_ApplyVerticalDamping` | 85 |
 | `0x0015ded8` | `World_StepBodies` | 80 |
 | `0x0015b070` | `Ship_UpdateMagLock` | 78 |
 | `0x0019f020` | `Handling_LoadForTeam` | 78 |
+| `0x0015a550` | `Ship_UpdateAirbrakes_q` | 78 |
 
 ## The dispatch, and why the names above are trustworthy
 
@@ -779,6 +784,116 @@ plumbing difference, not a physics one - but it does mean the PSP's four craft
 offsets have no PS2 counterpart, which is worth knowing before trying to carry a
 craft-struct layout across. Confidence **88**.
 
+## The call order matches the PSP's, all fifteen terms
+
+`Ship_UpdateCraft` makes eighteen calls. Sixteen of them are the force pass, and
+listing them in program order against
+[engine.md](../psp-pulse/engine.md)'s ordering table gives an **exact,
+in-sequence match on every one of the fifteen terms**:
+
+| # | PSP term | PS2 call site | PS2 target |
+| ---: | --- | --- | --- |
+| 1 | `Ship_UpdateEngine` | `0x00159bac` | `Ship_UpdateEngine` |
+| 2 | `Ship_UpdateBrakes` | `0x00159be8` | `Ship_UpdateBrakes` |
+| 3 | `Ship_UpdateAirbrakes` | `0x00159bf4` | `Ship_UpdateAirbrakes_q` |
+| 4 | `Ship_UpdateSteering` | `0x00159c00` | `Ship_UpdateSteering` |
+| 5 | `Ship_UpdatePitch` | `0x00159c0c` | `Ship_UpdatePitch` |
+| 6 | `Ship_ApplyQuadraticDrag` | `0x00159c2c` | `Ship_ApplyQuadraticDrag` |
+| 7 | inline gravity | `0x00159c38` | `Ship_ApplyGravity` |
+| 8 | `Ship_UpdateHover` | `0x00159c44` | `Ship_UpdateHover` |
+| 9 | `Ship_ApplyLateralGrip` | `0x00159c60` | `Ship_ApplyLateralGrip` |
+| 10 | inline dead branch | `0x00159c78` | `FUN_00159fe0` |
+| 11 | `Ship_ApplyWeathervaneTorque` | `0x00159c80` | `Ship_ApplyWeathervaneTorque` |
+| 12 | `Ship_ApplyAngularDamping` | `0x00159c8c` | `Ship_ApplyAngularDamping` |
+| 13 | `Ship_ApplyRollingResistance` | `0x00159c94` | `Ship_ApplyRollingResistance` |
+| 14 | inline vertical damping | `0x00159c9c` | `Ship_ApplyVerticalDamping` |
+| 15 | track-section force | `0x00159ca8` | `FUN_0015a300` |
+
+**This is the strongest result on the page.** Ten of those fifteen were
+identified by *content* before the order was read - independently, from
+constants and parameter-block offsets - so the sequence is not a circular fit.
+The five that were not are pinned by position between content-identified
+neighbours in a sequence where every other slot lands exactly.
+
+Two consequences:
+
+- **[engine.md](../psp-pulse/engine.md)'s ordering table is corroborated**, and
+  with it the consequence that page draws from it: groundedness is one frame
+  stale for the engine, brakes, drag, gravity and pitch, because hover is step 8
+  and those five run before it. That was the single most behaviourally
+  consequential claim on that page and it was single-source. It no longer is.
+- **The PS2 outlines four terms the PSP has inline** - gravity, the dead branch,
+  vertical damping, and the accumulator clear. Same fifteen steps, different
+  inlining. The four PSP call sites named "inline" above are real calls here.
+
+`Ship_ApplyVerticalDamping` (`0x00159e78`) is confirmed twice over: it is slot 14
+positionally, **and** it holds the only other `-0.25` immediate
+(`lui at,0xbe80`) in the craft path, which is the coefficient
+[engine.md](../psp-pulse/engine.md) gives for that term. Confidence **85**.
+
+`Ship_UpdateAirbrakes_q` (`0x0015a550`) carries the `_q` suffix per
+[ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md): it is
+**positional only, at confidence 78, and its body was not read.** It is the one
+name on this page not backed by content.
+
+### Brakes - identical, and it settles a confidence-55 claim
+
+`Ship_UpdateBrakes` (`0x0015a058`), reading `Brakes` at block-relative
+`0x18`/`0x1c`/`0x20` - absolute `0xac`/`0xb0`/`0xb4`, i.e.
+`gain`/`amount`/`falloff`:
+
+```c
+if (controls[0x08] > 0 && controls[0x0c] > 0)
+     brake = min(brake + Brakes.gain    * dt, 100.0);
+else brake = max(brake - Brakes.falloff * dt,   0.0);
+
+if (brake > 0) {
+    speed = |velocity|;
+    dir   = (speed != 0) ? velocity / speed : velocity;
+    if (speed < 10.0)  dir *= speed * 0.1;
+    force = dir * brake * Brakes.amount;
+    force.<one lane> = 0;                    /* explicitly zeroed */
+    Body_AddForceWorld(body, force);
+}
+```
+
+Every element of [engine.md](../psp-pulse/engine.md)'s Brakes section
+reproduces, including the both-airbrakes-at-once trigger, the `100.0` clamp and
+the `speed < 10` fade. It also fixes `controls+0x08` and `+0x0c` as the two
+airbrake axes. Confidence **90**.
+
+**It corroborates that page's weakest claim.** engine.md reads a VFPU target
+prefix as zeroing lanes of the brake force and scores it **55**, explicitly
+flagged as "a caution rather than a claim" because the prefix encoding was never
+confirmed. The PS2 zeroes a lane of the brake force with an ordinary explicit
+instruction. That does not prove *which* lane - the decompiler does not say -
+but it confirms the prefix was doing what that page guessed rather than nothing.
+**Raise it to 78**: the behaviour is confirmed, the specific lane is not.
+
+### Rolling resistance - matches, with one refinement
+
+`Ship_ApplyRollingResistance` (`0x00159f10`):
+
+```c
+if (forwardSpeed > 0) {
+    speed = |velocity|;
+    d = (speed > 2.0) ? normalize(velocity) * 2.0 : velocity;
+    Body_AddForceWorld(body, -d);
+}
+```
+
+The `2.0` magnitude, the `forwardSpeed > 0` gate and the negation all match
+[engine.md](../psp-pulse/engine.md). **The negation is explicit here** - a
+`0 - v` subtraction rather than a source prefix - which is a second-binary leg
+for the other half of that page's confidence-55 prefix concern.
+
+One refinement to that page's "a constant-magnitude opposing force, independent
+of speed": **that holds only above 2 units/s.** Below it the raw velocity vector
+is used instead of a normalised one, so the force tapers to zero at a standstill
+rather than staying at magnitude 2. A reimplementation using a flat `-2 *
+unit(v)` would apply a 2-unit shove to a nearly stationary ship. Confidence
+**88**.
+
 ## Cross-platform
 
 | Function | PS2 (`SCES_547.48`) | PSP (`BOOT.BIN`) |
@@ -808,20 +923,19 @@ craft-struct layout across. Confidence **88**.
   inverse, which for the orthonormal basis is the transpose - exactly what
   [engine.md](../psp-pulse/engine.md)'s runtime dump measured element for
   element. A rotation inverse has determinant `+1` and cannot flip a sign.
-- **Brakes, airbrakes, rolling resistance and vertical damping.** Nine of
-  `Ship_UpdateCraft`'s sixteen callees are now identified; these four terms are
-  among the seven that are not. `FUN_00159e78` carries the only other `-0.25`
-  immediate in the craft path and is the obvious vertical-damping candidate,
-  unchecked. The remaining unidentified callees are `FUN_00159e78`,
-  `FUN_00159f10`, `FUN_00159fe0`, `FUN_0015a058`, `FUN_0015a550`,
-  `FUN_0015ca78` and `FUN_0015cea0`.
-- **The order the fifteen terms run in.** Every term above was identified by
-  content, from `Ship_UpdateCraft`'s callee list - the call *sequence* was not
-  read, so [engine.md](../psp-pulse/engine.md)'s ordering table and its
-  consequence (groundedness being one frame stale for six of the terms) are
-  still **not** corroborated here. That is now the cheapest remaining item on
-  this page: the functions are named, so the order falls out of one read of
-  `Ship_UpdateCraft`'s body.
+- **`Ship_UpdateAirbrakes_q`'s body was never read.** It is slot 3 of fifteen
+  and nothing else fits there, but it is the one name on this page resting on
+  position alone. [engine.md](../psp-pulse/engine.md) makes substantive claims
+  about that term - the `sideshift` write straight to the body, the airbrake
+  `turn` and `drag` contributions - and **none of them are corroborated here.**
+  This is the cheapest remaining item on the page.
+- **`FUN_00159fe0`**, slot 10, which is [engine.md](../psp-pulse/engine.md)'s
+  "inline dead branch". It is a real call on the PS2, so **it may not be dead
+  here**; that page's finding that the in-air roll-levelling term computes a
+  value and never stores it needs re-checking against this build rather than
+  assuming it carries over.
+- **`FUN_0015cea0`, `FUN_0015ca78`** - the two calls outside the fifteen-term
+  sequence, one before it and one after the accumulator clear. Not examined.
 - **Whether the PS2 has the PSP's dead in-air roll-levelling branch**, and
   whether `Ship_UpdateMagLock` writes an angular Z component. Both are open on
   [engine.md](../psp-pulse/engine.md) too.
@@ -862,7 +976,14 @@ craft-struct layout across. Confidence **88**.
   including its dead-`Engine.gain`/`falloff` finding and its derived
   `(0.01 - slidegrip)` grip coefficient. Drag matches on three of four
   coefficients and gravity differs in two details, both recorded as differences
-  rather than corrections. The call *order* is still not read.
+  rather than corrections.
+- 2026-07-27, fifth pass: the call order read, and **all fifteen terms match
+  [engine.md](../psp-pulse/engine.md)'s ordering table exactly and in
+  sequence**, which corroborates that page's stale-groundedness consequence.
+  Brakes and rolling resistance confirmed by content, settling both halves of
+  that page's confidence-55 VFPU-prefix concern; vertical damping confirmed by
+  content and position together. Fourteen of the fifteen terms are now named,
+  the fifteenth (`Ship_UpdateAirbrakes_q`) positionally only.
 - 2026-07-27, third pass: **the sign question is closed.** The two remaining
   explanations were checked and both are dead - the hover force is a positive
   multiple of `up` at the call site, and the `+0xc0` matrix is a plain rotation

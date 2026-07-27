@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result, bail};
 use oag_assets::Archive;
+use oag_formats::ps2_texture;
 use oag_formats::texture::Texture;
 use oag_formats::wad;
 
@@ -39,7 +40,18 @@ pub fn load(spec: &str, names: Option<&std::path::Path>) -> Result<Vec<Asset>> {
             continue;
         };
 
-        let Ok(texture) = Texture::parse(&data) else {
+        // Two unrelated texture formats live on these discs, and the check for
+        // each is the blob's own size arithmetic, so trying both cannot
+        // misclassify: a PSP `.mip` is never the size a GS upload packet is.
+        let decoded = Texture::parse(&data)
+            .map(|t| (u32::from(t.width), u32::from(t.height), t.to_rgba()))
+            .ok()
+            .or_else(|| {
+                ps2_texture::parse(&data)
+                    .map(|t| (u32::from(t.width), u32::from(t.height), t.to_rgba()))
+                    .ok()
+            });
+        let Some((width, height, rgba)) = decoded else {
             continue;
         };
 
@@ -48,9 +60,9 @@ pub fn load(spec: &str, names: Option<&std::path::Path>) -> Result<Vec<Asset>> {
                 .get(&wad_entry.name_hash)
                 .cloned()
                 .unwrap_or_else(|| format!("#{index} {:08x}", wad_entry.name_hash)),
-            width: u32::from(texture.width),
-            height: u32::from(texture.height),
-            rgba: texture.to_rgba(),
+            width,
+            height,
+            rgba,
         });
     }
 
