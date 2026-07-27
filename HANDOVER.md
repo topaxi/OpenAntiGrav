@@ -511,6 +511,65 @@ the physics investigation.
   it's compared against the seeded row; read past that line to the tick-1
   group above for the actual physics finding.
 
+## Eight of engine.md's force-law terms now have a second binary, before the agent stalled
+
+Before going quiet without sending its own final report (stopped after
+repeated idle checks with no reply - not a context-overflow crash like its
+predecessors, just silence), the same agent that resolved the torque-sign
+question kept going and identified **9 of `Ship_UpdateCraft`'s 16 PS2
+callees**, checking each against `docs/ghidra/functions/psp-pulse/engine.md`
+term by term. All the substance is already committed (`14f895d`, `5b3230b`,
+`8596e07`, `8590e43`); this is recording it since the agent itself didn't get
+to.
+
+**Six terms reproduce in full** - engine, steering, pitch, lateral grip,
+weathervane torque, and the still-unnamed track-section force - and two more
+mostly do (quadratic drag, three of four coefficients; gravity, structure
+only, two details differ). Each of these moves from the decompilation-only
+84 cap to **88**, per the rubric's "second binary" leg. Three specific weak
+points on `engine.md` got stronger evidence, not just corroboration:
+
+- **The dead `Engine.gain`/`falloff` ramp** - flagged as the kind of thing an
+  obvious reimplementation gets wrong - reproduces exactly: the PS2 also ramps,
+  clamps, then throws the result away and recomputes thrust straight from the
+  input. `85 -> 90`.
+- **`slidegrip` as "percent of grip retained"** - previously an interpretation
+  of a load-time scale factor - is a **literal expression** in the PS2 build:
+  `airbrake * (0.01 - slidegrip) - 1.0`. `90 -> 93`.
+- **The PSP's odd `S221` register-carry pattern**, previously scored 65 with a
+  recommendation to read it as `accumulator.y = lift`: the PS2 builds an
+  ordinary two-lane thrust/lift vector, which doesn't explain the PSP's
+  codegen but does confirm the intended semantics. The recommendation moves to
+  85; the PSP-specific explanation stays at 65.
+
+**Four real cross-platform differences, none of them corrections to
+`engine.md` - each needs the PSP side re-read before anyone decides which
+build is the odd one out:**
+
+- The PS2's drag term has **no `-0.9` mode-enum branch** at all.
+- The PS2's gravity scale sits on **`flight_gravity`**, not `normal_gravity`
+  as `engine.md` currently states for that term.
+- **PS2 gravity is scaled by `(1 - magLockBlend)`** - `engine.md` records that
+  factor for vertical damping and bank-to-yaw but not for gravity. Taken
+  literally, a fully mag-locked PS2 ship has no gravity at all.
+- **PS2 lateral grip multiplies both grip coefficients by `1.5`** under the
+  same flag bit that gates the turbo add - not recorded on the PSP side.
+
+Two structural notes worth knowing before porting any layout: the PS2's
+controls pointer lives at `craft+0x98`, not `+0x78` - same member offsets
+inside it, the struct just moved - and **the PS2 has no craft-side force
+accumulators at all**: `Body_ClearAccumulators` zeroes the body's four
+accumulators directly and every term writes the body, where the PSP keeps a
+separate craft-side copy. Same four accumulators, one less layer of
+indirection.
+
+**Still not corroborated, and the concrete next step for whoever picks this
+back up**: brakes, airbrakes, rolling resistance, and vertical damping remain
+single-source at 84; and the fifteen-term *ordering* itself - which is what
+the frame-stale-groundedness finding depends on - was never checked, since
+every PS2 identification above came from matching callees rather than reading
+the call sequence.
+
 ## PS2 textures found, decoded, and rendering - M1's last real gap is closed
 
 A fresh agent (replacing the one that decoded PS2 mesh geometry, after it hit
