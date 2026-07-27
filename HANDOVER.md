@@ -797,6 +797,21 @@ one command away from being checked **per track** rather than only as a
 whole-disc maximum - nobody has run it across every track yet, but the
 instrument now exists.
 
+**Caveat the authoring agent flagged and I verified directly**: its own
+sandbox has no access to `data/images/` (only `data/README.md`), so it could
+not run its own tool against a real `.vex` - `collision::load`,
+`report_collision`, `--with-spline` and the ±1024 warning were all untested
+against real data when it reported. Run directly against the real disc from
+outside that sandbox: `oag-view 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad'
+--collision 'Data\Environments\16_Track\track.vex' --with-spline --screenshot ...`
+works cleanly - correct per-class colouring, the spline-enclosure check
+passes, and it gives the first real data point for the ±1024 question:
+**`16_Track`'s own collidable extent is 856.2 units from the origin**,
+comfortably inside the bound, so the reference track is not one of the ones
+that trips the contradiction. Whichever track(s) reach the recorded 1,335.8/
+1,554.1-unit extents are still unidentified - this is one data point, not a
+survey.
+
 ## PS2 textures found, decoded, and rendering - M1's last real gap is closed
 
 A fresh agent (replacing the one that decoded PS2 mesh geometry, after it hit

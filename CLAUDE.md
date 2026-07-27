@@ -48,6 +48,18 @@ just mine-names <image> # recovers WAD entry-name candidates
 patterns, CI's `leakage` job, and `just audit-leakage`. See
 [`docs/overview/legal.md`](docs/overview/legal.md).
 
+**If you are a spawned agent and `data/images/` looks empty or holds only
+`README.md`, that is a sandbox limitation, not a sign the images don't
+exist.** Being gitignored, `data/` does not travel into an isolated worktree
+or a restricted execution sandbox the way tracked files do, even though it is
+fully populated in the orchestrating session. Check with `ls -la
+data/images/` before assuming any real-data path (a ground-truth test, a
+disc-backed CLI run, `just test-data`) is exercisable. If it is empty:
+**say so explicitly in your report rather than silently skipping the
+real-data check or reporting untested code as verified.** Give the
+orchestrating session the exact command to run - it has the images and can
+verify directly, the way a human maintainer would from their own checkout.
+
 ## Architecture
 
 **Core principle: the simulation must not know a renderer exists.** It takes an input
