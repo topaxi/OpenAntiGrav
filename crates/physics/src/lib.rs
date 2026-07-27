@@ -71,10 +71,13 @@ pub mod integrate;
 pub mod params;
 pub mod passive;
 pub mod ship;
+pub mod wall;
 
 pub use collide::{
-    Aabb, CollisionWorld, Ray, RaycastHit, Raycaster, Surface, TriangleSoup, segment_triangle,
+    Aabb, CollisionWorld, Ray, RaycastHit, Raycaster, Surface, TriangleSoup, WALL_RESTITUTION,
+    combine_restitution, segment_triangle,
 };
+pub use wall::{WallContact, WallResponse};
 pub use forces::{Accumulators, Environment, Evaluated};
 pub use integrate::{clamp_dt, integrate, step};
 pub use params::{Handling, SpeedClass};

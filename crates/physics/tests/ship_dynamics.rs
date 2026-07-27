@@ -156,25 +156,22 @@ impl Raycaster for CountingRaycaster {
 
 /// The counter-intuitive half of the specified integrator: forces are evaluated
 /// **once per frame at full `dt`**, and the three sub-steps reuse that one
-/// evaluation. Two probes therefore mean two raycasts per tick, not six.
+/// evaluation. Two probes therefore mean two raycasts per force evaluation, not
+/// six.
+///
+/// Asserted against `forces::evaluate` rather than `step`, because `step` also
+/// runs the wall constraint after integrating and that has probes of its own.
+/// Counting `step`'s total would measure both and pin neither; the claim here is
+/// about the force law.
 #[test]
 fn forces_are_evaluated_once_per_frame_and_not_once_per_sub_step() {
     let handling = fixture();
     let raycaster = CountingRaycaster::new(flat_floor(Surface::Floor));
     let mut state = ship_at(4.0, &handling);
 
-    step(
-        &mut state,
-        &ShipControls::default(),
-        &handling,
-        &Environment::default(),
-        &raycaster,
-        TICK,
-    );
-    assert_eq!(raycaster.casts.get(), 2);
-
-    for _ in 0..9 {
-        step(
+    for _ in 0..10 {
+        state.body.clear_accumulators();
+        oag_physics::forces::evaluate(
             &mut state,
             &ShipControls::default(),
             &handling,
@@ -182,8 +179,46 @@ fn forces_are_evaluated_once_per_frame_and_not_once_per_sub_step() {
             &raycaster,
             TICK,
         );
+        oag_physics::integrate(&mut state.body, TICK);
     }
     assert_eq!(raycaster.casts.get(), 20);
+}
+
+/// The whole per-frame query cost is the same every tick.
+///
+/// The companion to the test above, and what it used to assert before the wall
+/// constraint existed: whatever `step` costs in raycasts, it must not grow with
+/// the sub-step count or drift between ticks. Ten ticks cost ten times one tick,
+/// where a force evaluated per sub-step would cost three times that.
+#[test]
+fn the_query_cost_of_a_tick_does_not_grow_with_the_sub_steps() {
+    let handling = fixture();
+    let raycaster = CountingRaycaster::new(flat_floor(Surface::Floor));
+    let mut state = ship_at(4.0, &handling);
+
+    let tick = |state: &mut _, raycaster: &CountingRaycaster| {
+        step(
+            state,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            raycaster,
+            TICK,
+        );
+    };
+
+    // One warm-up tick, so the ship is moving and the swept query is live in
+    // both the measurement and the ten that follow.
+    tick(&mut state, &raycaster);
+    let before = raycaster.casts.get();
+    tick(&mut state, &raycaster);
+    let per_tick = raycaster.casts.get() - before;
+    assert!(per_tick >= 2, "the two hover probes at least, got {per_tick}");
+
+    for _ in 0..9 {
+        tick(&mut state, &raycaster);
+    }
+    assert_eq!(raycaster.casts.get() - before, per_tick * 10);
 }
 
 /// A ship let go above a floor settles at *some* finite height. Which height is

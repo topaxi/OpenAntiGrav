@@ -162,6 +162,13 @@ pub struct Evaluated {
     pub control_grounded: f32,
     /// The groundedness lateral grip and the weathervane saw: this frame's.
     pub contact_grounded: f32,
+    /// What the wall constraint did, **after** the integrator ran.
+    ///
+    /// Left at its default by [`evaluate`], which runs before the body has moved
+    /// and so cannot know: [`crate::integrate::step`] fills it in. A caller that
+    /// drives `evaluate` directly therefore sees "no wall response", which is the
+    /// truth for that caller rather than a missing value.
+    pub wall: crate::wall::WallResponse,
 }
 
 /// Evaluates every force for one frame, at full `dt`, exactly once.
@@ -313,6 +320,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         forward_speed,
         control_grounded,
         contact_grounded,
+        wall: crate::wall::WallResponse::default(),
     }
 }
 

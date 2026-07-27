@@ -48,6 +48,7 @@ use crate::collide::Raycaster;
 use crate::forces::{self, Environment, Evaluated};
 use crate::params::Handling;
 use crate::ship::{Body, MAX_DT, SUBSTEPS, ShipControls, ShipState};
+use crate::wall;
 
 /// Clamps a measured frame delta to what the original will integrate.
 ///
@@ -213,6 +214,18 @@ fn normalise_or_identity(q: Quat) -> Quat {
 /// integration layer in `oag-gameplay` sets both from the parameter set. This
 /// function does not silently copy one over the other, because a mismatch is a
 /// bug worth seeing rather than papering over.
+///
+/// # The wall constraint runs last
+///
+/// After the body has moved, [`crate::wall::resolve`] pushes the hull back out of
+/// any non-hoverable surface it ended up inside and removes the inward velocity.
+/// It is a projection rather than a force term for the stability reason above: a
+/// contact spring stiff enough to stop a ship within one frame is precisely the
+/// stiffness a force evaluated once and held across three sub-steps cannot carry.
+///
+/// The sweep it does starts from the position **after** force evaluation, not
+/// before, because the hover path's penetration escape is a deliberate teleport
+/// and sweeping across it would invent a contact out of it.
 pub fn step<R: Raycaster + ?Sized>(
     state: &mut ShipState,
     controls: &ShipControls,
@@ -224,8 +237,11 @@ pub fn step<R: Raycaster + ?Sized>(
     let dt = clamp_dt(measured_dt);
 
     state.body.clear_accumulators();
-    let evaluated = forces::evaluate(state, controls, handling, env, raycaster, dt);
+    let mut evaluated = forces::evaluate(state, controls, handling, env, raycaster, dt);
+
+    let before_integration = state.body.position;
     integrate(&mut state.body, dt);
+    evaluated.wall = wall::resolve(state, handling, env, raycaster, before_integration);
 
     evaluated
 }

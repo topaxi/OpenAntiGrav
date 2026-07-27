@@ -50,6 +50,45 @@ impl Surface {
     pub fn is_skipped_by_default(self) -> bool {
         matches!(self, Self::Reset)
     }
+
+    /// Restitution, where `None` means **never bounce**.
+    ///
+    /// The class ID selects a surface type and a restitution constant and nothing
+    /// else. The file's value for floors is `-1.0`, and that is a **sentinel, not
+    /// a coefficient**: a negative restitution adds energy on every contact
+    /// instead of removing it, so implementing the literal would make a ship
+    /// accelerate off the ground. `None` makes that distinction impossible to
+    /// lose. See `docs/formats/collision.md`.
+    ///
+    /// This deliberately duplicates `oag_formats::collision::SurfaceKind::
+    /// restitution`, because this crate must not depend on `oag-formats` - the
+    /// same reason [`Surface`] itself is duplicated.
+    /// `oag_gameplay::collision` owns the test that the two agree.
+    #[must_use]
+    pub fn restitution(self) -> Option<f32> {
+        match self {
+            Self::Wall => Some(WALL_RESTITUTION),
+            Self::Floor | Self::Reset | Self::MagFloor => None,
+        }
+    }
+}
+
+/// Restitution of a [`Surface::Wall`].
+///
+/// The only non-sentinel value in the file.
+pub const WALL_RESTITUTION: f32 = 0.05;
+
+/// Restitution of a contact between two surfaces.
+///
+/// The original averages the two values but forces zero if **either** is
+/// negative, so one non-bouncing surface makes the whole contact non-bouncing. A
+/// floor against a wall is therefore `0.0`, not the average of `-1.0` and `0.05`.
+#[must_use]
+pub fn combine_restitution(a: Option<f32>, b: Option<f32>) -> f32 {
+    match (a, b) {
+        (Some(a), Some(b)) => (a + b) * 0.5,
+        _ => 0.0,
+    }
 }
 
 /// What a segment query found.
