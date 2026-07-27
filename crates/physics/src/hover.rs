@@ -26,6 +26,32 @@
 //! and the surface-alignment torque explicitly projects its pitch component out.
 //! Adding an explicit pitch-to-track term would change the character of the whole
 //! model.
+//!
+//! # The suspension has almost no travel, and that is the open question here
+//!
+//! Because the target equals the reach, a probe in contact reports a height in
+//! `0..=ride_height`, and the spring rests where its force carries the ship's weight:
+//!
+//! ```text
+//! sag = normal_gravity / (0.3 * HOVER_K * (normal_gravity + track_gravity))
+//! ```
+//!
+//! `mass` cancels. On the observed data that is **0.147 units against a 5.5 reach** -
+//! the spring calibrates against `normal_gravity + track_gravity` (85) while the load
+//! it actually carries is `normal_gravity` alone (5), so it holds the ship 2.7 % of the
+//! way down its own range, hard against the top. A disturbance past that drops both
+//! probes, and gravity's grounded-to-airborne step - `normal_gravity` to
+//! `flight_gravity`, 5 to 95 on the same data, and **one frame stale** - turns the
+//! overshoot into a larger one. Measured at rest with no input: on a flat floor the
+//! ship holds; on a real track, whose surface varies about 0.04 either side, the
+//! residual bob reaches roughly 0.19 and the cycle escapes.
+//!
+//! **Three readings could each give the probes headroom, and presumably exactly one is
+//! right**; none is decidable without a trace. `craft+0x74` is negative (what
+//! `docs/physics/README.md` predicts), [`TARGET_GLOBAL_SCALE`] is below one, or the
+//! raycast length is not `ride_height`. Nothing here picks one. Making grounded gravity
+//! `normal + track` was tried and is **falsified**: it moves the calibration and the
+//! load together, leaves the ratio unchanged, and throws the ship sooner.
 
 use oag_core::math::Vec3;
 
@@ -83,16 +109,45 @@ pub const LEAP_ADJUST_MAX: f32 = 4.0;
 /// cannot probe further than the height it is trying to hold, and the two uses are
 /// deliberately kept as one field rather than split.
 ///
-/// **The additive `offset` is a guess.** The slot is `craft+0x74` and **nothing was
-/// found that writes it**. [`crate::params::Pitch::antigrav_height_adjust`] is the
-/// obvious candidate by name and is what is passed here, but a search for readers of
-/// that field in the craft path found none - a weak negative, at confidence 50 for
-/// "parsed but never consumed". If it turns out to be something else, this is the
-/// one line to change. A guess awaiting M3.
+/// **The additive `offset` is taken as zero, and that is a change from the first
+/// reading.** The slot is `craft+0x74` and **nothing was found that writes it**.
+/// [`crate::params::Pitch::antigrav_height_adjust`] was the obvious candidate by name
+/// and was passed here originally, but a search for readers of that field in the craft
+/// path found none - a weak negative, at confidence 50 for "parsed but never
+/// consumed". It is no longer read here, for a reason that is arithmetic rather than
+/// a re-reading of the binary:
+///
+/// **A positive offset leaves the model with no fixed point.** `ride_height` is also
+/// the raycast length ([`probe`]), so the probes see ground only within `ride_height`
+/// of the hull. With any `offset > 0` the target exceeds that reach, the spring is
+/// pushing *up* at every height a probe can report, and there is no height at which
+/// the ship rests while still in contact. Measured on the observed data - `ride_height`
+/// 5.5 against an offset of 1.0, so a target of 6.5 - the ship at rest with no input
+/// leaves the probe range every cycle, and the gravity term's grounded-to-airborne
+/// step then pumps the bounce until it is thrown clear.
+///
+/// `docs/physics/README.md` records the same conclusion in its open-questions list
+/// ("with the offset at zero the target equals the raycast length ... a negative offset
+/// would give the probes headroom"). Zero is where that leaves it: **an unverified
+/// guess is removed rather than a value invented**, and a negative offset is not
+/// substituted for it, because nothing recovered says what one would be.
+///
+/// What this does *not* fix is recorded with it: at zero the target equals the reach
+/// exactly, so the usable spring travel is only the sag needed to carry the ship's
+/// weight,
+///
+/// ```text
+/// sag = normal_gravity / (0.3 * HOVER_K * (normal_gravity + track_gravity))
+/// ```
+///
+/// which on the observed data is **0.147 units, 2.7 % of `ride_height`** - because the
+/// spring calibrates against `normal_gravity + track_gravity` while carrying only
+/// `normal_gravity`. A disturbance larger than that still drops the probes. See
+/// `crate::hover`'s module documentation and the M3 notes.
 #[must_use]
 pub fn target_height(handling: &Handling, mag_lock_blend: f32, leap_timer: f32) -> f32 {
     let leap_adjust = leap_timer.clamp(0.0, LEAP_ADJUST_MAX);
-    let base = handling.antigrav.ride_height + handling.pitch.antigrav_height_adjust - leap_adjust;
+    let base = handling.antigrav.ride_height - leap_adjust;
 
     base * (1.0 + TARGET_MAG_LOCK_GAIN * mag_lock_blend) * TARGET_GLOBAL_SCALE
 }
@@ -875,7 +930,13 @@ mod tests {
     }
 
     /// `ride_height` is the primary term of the hover target, which is the correction
-    /// `docs/ghidra/functions/psp-pulse/engine.md` made to `docs/physics/README.md`.
+    /// `docs/ghidra/functions/psp-pulse/engine.md` made to `docs/physics/README.md` -
+    /// and, since the `craft+0x74` offset was dropped, the *only* term.
+    ///
+    /// `antigrav_height_adjust` is left set in the fixture deliberately: the assertion
+    /// is that it does **not** contribute, which pins the removal rather than erasing
+    /// the question. See [`target_height`] for why a positive offset leaves the model
+    /// with no height at which the ship rests while the probes still see ground.
     #[test]
     fn the_hover_target_is_built_from_ride_height() {
         let handling = Handling {
@@ -890,7 +951,44 @@ mod tests {
             ..Handling::ZERO
         };
 
-        assert_eq!(target_height(&handling, 0.0, 0.0), 15.0);
+        assert_eq!(target_height(&handling, 0.0, 0.0), 12.0);
+    }
+
+    /// The target must never exceed the raycast length, because they are the same
+    /// field and a target beyond the reach has no fixed point: every height a probe can
+    /// report is below the target, so the spring only ever pushes up.
+    ///
+    /// Asserted across the leap timer, which is the only other term that moves the
+    /// target while a ship is under ordinary suspension.
+    ///
+    /// **Not asserted across `mag_lock_blend`**, and the exception is the interesting
+    /// part: a full magstrip lock scales the target by 1.2, which *does* put it beyond
+    /// the reach. That is harmless only because the same blend multiplies the probe
+    /// force by `1 - mag_lock_blend` and so cancels the suspension outright - see
+    /// [`probe`]. Nothing in this crate drives `mag_lock_blend` today, and whatever
+    /// implements the magnetic hold has to resolve that interaction rather than inherit
+    /// this assertion.
+    #[test]
+    fn the_hover_target_never_exceeds_the_probes_reach() {
+        let handling = Handling {
+            antigrav: crate::params::Antigrav {
+                ride_height: 5.5,
+                ..crate::params::Antigrav::default()
+            },
+            pitch: crate::params::Pitch {
+                antigrav_height_adjust: 1.0,
+                ..crate::params::Pitch::default()
+            },
+            ..Handling::ZERO
+        };
+
+        for timer in [0.0f32, 1.5, 100.0] {
+            let target = target_height(&handling, 0.0, timer);
+            assert!(
+                target <= handling.antigrav.ride_height,
+                "target {target} exceeded the reach at leap timer {timer}"
+            );
+        }
     }
 
     /// A magstrip lock raises the target by a fifth, and the leap timer lowers it by up

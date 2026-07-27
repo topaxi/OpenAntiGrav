@@ -23,14 +23,14 @@
 //!
 //! # Three things are not recovered, and none is papered over here
 //!
-//! - **There is no inertia tensor in the ship data.** `<Misc>` carries hull
-//!   dimensions, but nothing observed says how the original builds a tensor from
-//!   them, so [`oag_physics::Body::inertia`] stays at its default of `(1, 1, 1)`.
-//!   The hover probes apply their force away from the centre of mass, so the torque
-//!   they generate is divided by 1 rather than by a real moment: expect a ship far
-//!   more willing to pitch and roll than the original's. Deriving a box inertia
-//!   from the hull would be an invented constant, which is worse than a visible
-//!   oddity.
+//! - **There is no inertia tensor in the ship data**, and this module now builds one
+//!   from `<Misc>` rather than leaving [`oag_physics::Body::inertia`] at its `(1, 1, 1)`
+//!   default. That reverses an earlier decision here, which called a derived tensor "an
+//!   invented constant, worse than a visible oddity". Two measurements changed it, and
+//!   both are in [`box_inertia`]: the default is not a recovered value but an admitted
+//!   placeholder, and it is consumed by exactly one force path - the one where a real
+//!   moment of inertia is physically compulsory. A unit tensor there says the hull has
+//!   the rotational inertia of a point mass, and a 13-unit hull does not.
 //! - **The magnetic hold is not implemented**, so an inverted ship falls off. That
 //!   is expected and documented in `docs/physics/README.md`.
 //! - **The camera's `fov` unit is unrecovered.** It is read as degrees and
@@ -326,7 +326,8 @@ fn chase_pos_length(from_disc: f32) -> f32 {
     -from_disc
 }
 
-/// How far above the track's surface line a ship starts: `<Antigrav ride_height>`.
+/// How far above the track's surface line a ship starts: the height its own
+/// suspension holds it at.
 ///
 /// Three candidate heights exist and they are three different quantities. Which one
 /// a ship starts at changes the first second of every race, so the choice is written
@@ -337,31 +338,115 @@ fn chase_pos_length(from_disc: f32) -> f32 {
 ///   about ships. Starting there leaves the suspension compressed by the difference,
 ///   and on the observed data one frame of the spring at that compression throws the
 ///   ship clear of the track. Measured, not predicted, which is why this is not it.
-/// - [`oag_physics::hover::target_height`] is the height the spring **holds**. On the
-///   observed data it comes out *greater* than `ride_height`, which is also the
-///   length of the probe raycast, so a ship starting at its own target height cannot
-///   see the ground at all and begins in free fall. That the target can exceed the
-///   reach is a property of the recovered reading - `target_height` records its
-///   additive `antigrav_height_adjust` term as a guess at confidence 50 - and not of
-///   this choice.
-/// - `ride_height` is the furthest the suspension can see the ground and the primary
-///   term of the height it holds. A ship starting there is in contact on its first
-///   frame, which is the one thing all three readings agree a ship on a grid is.
+/// - `<Antigrav ride_height>` is what this used to return, and it is **wrong for a
+///   reason worth keeping**: it is simultaneously the spring's target and the length
+///   of the probe raycast, so a ship starting there sits at exactly the limit of its
+///   own reach. Measured against the real collision mesh at the spawn, the surface is
+///   between **5.468 and 5.542** below the probes while the cast is **5.500** - so
+///   whether a probe reports contact is decided by the fourth decimal place of the
+///   track geometry, and it flickers from the first tick. That flicker is an
+///   off-centre force every tick and a gravity term stepping between its grounded and
+///   airborne values every tick, which is what threw the ship clear.
+/// - [`oag_physics::hover::target_height`] is where the spring pulls, but not where it
+///   rests: it has to carry the ship, so it settles a little below its target. That
+///   settled height is what this returns, and it is the only one of the three at which
+///   both probes are in contact with margin on the first frame.
 ///
-/// A ship starting at `ride_height` is in contact on **one** probe, not two: the two
-/// probes sit fore and aft along the hull, so at exactly the cast length they
-/// straddle the limit and one of them drops out. Measured over the first two seconds
-/// of a real race, one probe is in contact on about seven ticks in ten and both on
-/// about one in twenty. A single probe is an off-centre force, so it is a pitch
-/// torque applied every tick; that is recorded rather than corrected, because which
-/// of the reading, the probe placement or the missing inertia tensor is wrong is
-/// exactly what M3's trace comparison is for.
+/// # The derivation, which is the force law's and not a number picked here
+///
+/// A probe in contact contributes `mass * 0.3 * (target - h) * HOVER_K * load *
+/// (normal_gravity + track_gravity)` along the ship's up axis, and grounded gravity
+/// pulls with `normal_gravity * mass`. Setting them equal at `load = 1` - a grounded
+/// ship, which is what a ship on a grid is - and solving for `h` gives
+///
+/// ```text
+/// rest = target - normal_gravity / (0.3 * HOVER_K * (normal_gravity + track_gravity))
+/// ```
+///
+/// `mass` cancels, which is why none appears. Every term is read off the disc or is
+/// [`oag_physics::hover::HOVER_K`]; nothing here is tuned, and the expression follows
+/// from `oag_physics::hover::probe` rather than from a fit.
+///
+/// **The sag it computes is small, and that is a finding rather than a detail.** On
+/// the observed data it is 0.147 units against a 5.5 reach, because the spring is
+/// calibrated against `normal_gravity + track_gravity` while carrying `normal_gravity`
+/// alone. So this places the ship correctly and still leaves it only 2.7 % of its
+/// range to play with; why that number is so small is an open reading recorded in
+/// `oag_physics::hover`, not something this function can fix.
 ///
 /// This is only where a ship *starts*: the height it settles at is emergent from the
-/// force law, as `oag_gameplay::spawn::Pose::from_sample` says.
+/// force law, as `oag_gameplay::spawn::Pose::from_sample` says. The two now agree,
+/// which is the point.
 #[must_use]
 pub fn spawn_height(handling: &Handling) -> f32 {
-    handling.antigrav.ride_height
+    let target = oag_physics::hover::target_height(handling, 0.0, 0.0);
+    let gradient = 0.3
+        * oag_physics::hover::HOVER_K
+        * (handling.physical.normal_gravity + handling.physical.track_gravity);
+
+    if gradient > 0.0 {
+        target - handling.physical.normal_gravity / gradient
+    } else {
+        // A parameter set with no gravity has no spring either, so there is no rest
+        // height to compute; the target is the honest answer, and `Handling::ZERO`
+        // still gives zero.
+        target
+    }
+}
+
+/// The ship's rotational inertia, as a body-space diagonal, from `<Misc>`.
+///
+/// A solid rectangular box of mass `m` and extents `(w, h, l)` about its centre:
+/// `I = m * (b^2 + c^2) / 12` per axis, over the two extents perpendicular to it.
+/// Body axes are `x` right, `y` up, `z` forward, and `<Misc width/height/length>` maps
+/// onto them in that order.
+///
+/// # Why this is a correction and not an invented constant
+///
+/// [`oag_physics::Body::inertia`] defaults to `(1, 1, 1)`, and that default is an
+/// admitted placeholder rather than anything read out of the game - `oag_physics`
+/// documents it as the value that makes a zeroed parameter set safe to integrate. Two
+/// things make replacing it a correction:
+///
+/// - **It reaches exactly one force path.** `oag_physics::forces::drain` multiplies the
+///   angular accumulators by the inertia and `oag_physics::integrate` divides the torque
+///   by it again, so every accumulator term - the surface alignment, angular damping,
+///   steering, pitch, the weathervane, bank-to-yaw - is inertia-independent by
+///   construction; those terms are angular *accelerations* and the round trip is how
+///   they are routed onto a torque-based body. What is left is the hover probes'
+///   `add_force_at_point`, which is a genuine force at a genuine lever arm and whose
+///   `r x F` genuinely must be divided by a real moment of inertia. Verified rather than
+///   argued: the same state stepped with `(1,1,1)`, `(100,100,100)` and this tensor
+///   gives a bit-identical angular velocity when no probe is in contact.
+/// - **`(1, 1, 1)` is not neutral, it is a specific wrong answer.** The probes sit half
+///   a hull length apart, 6.5 units on the observed data, and the spring's gradient is
+///   about 34 per unit, so one probe alone is a rotational stiffness near `6.5^2 * 34`.
+///   Divided by a unit inertia that is a 38 rad/s oscillator, and at the specified 1/180
+///   sub-step explicit Euler grows it about 5 % per tick. Measured at rest with no input,
+///   roll grew from 0.026 to 0.570 rad over 51 ticks - a factor of 22 against a predicted
+///   12 - and the ship inverted and fell through the floor by tick 250. With this tensor
+///   the same run holds level.
+///
+/// The formula is textbook and its inputs are read off the disc, so nothing here is
+/// fitted. What is **not** claimed is that the original computes it this way: how it
+/// builds a tensor, or whether it uses one at all, was not recovered, and
+/// `<Misc weight_distribution>` is a fore/aft mass bias this ignores. A trace settles
+/// it; until then a physically sane tensor beats a placeholder that reads as a physics
+/// bug.
+#[must_use]
+pub fn box_inertia(handling: &Handling) -> Vec3 {
+    let mass = handling.physical.mass;
+    let (w, h, l) = (
+        handling.dimensions.width,
+        handling.dimensions.height,
+        handling.dimensions.length,
+    );
+
+    Vec3::new(
+        mass * (h * h + l * l) / 12.0,
+        mass * (w * w + l * l) / 12.0,
+        mass * (w * w + h * h) / 12.0,
+    )
 }
 
 /// The spline resampled into a flat table, for locating a ship on the track.
@@ -516,8 +601,8 @@ impl Race {
     /// quantity stored twice and keeping them equal is this layer's job -
     /// `oag_physics` deliberately does not do it, so that a mismatch stays visible.
     ///
-    /// The inertia is left at its default; see the module documentation for why that
-    /// is a known limitation rather than an oversight.
+    /// The inertia comes from [`box_inertia`]; see the module documentation and that
+    /// function for why a derived tensor replaced the `(1, 1, 1)` placeholder.
     #[must_use]
     pub fn start(setup: Setup) -> Self {
         let Setup {
@@ -533,6 +618,7 @@ impl Race {
         ship.active = true;
         ship.handling = handling;
         ship.physics.body.mass = handling.physical.mass;
+        ship.physics.body.inertia = box_inertia(&handling);
         if let Some(sample) = spline.start() {
             ship.place_at(Pose::from_sample(
                 sample,
@@ -1320,8 +1406,11 @@ mod tests {
         assert_eq!(race.ship().handling.physical.mass, 7.5);
         assert_eq!(race.dt(), 1.0 / 60.0);
 
-        // Lifted off the surface line by the probe's own reach, which is not
-        // `track::HOVER_LIFT`; see `spawn_height`.
+        // Lifted off the surface line by the height its own suspension holds it at,
+        // which is neither `track::HOVER_LIFT` nor the probe's full reach; see
+        // `spawn_height`. This fixture has no gravity, so the sag is zero and the rest
+        // height is the target - and the target is `ride_height` alone, because the
+        // `antigrav_height_adjust` of 0.5 no longer contributes.
         assert_eq!(spawn_height(&handling), 4.0);
         assert_ne!(spawn_height(&handling), track::HOVER_LIFT);
         let up = (-Vec3::from_array(start.down)).normalize();
@@ -1329,6 +1418,192 @@ mod tests {
         assert!(
             (offset.dot(up) - spawn_height(&handling)).abs() < 1e-4,
             "{offset}"
+        );
+    }
+
+    /// The spawn height is the spring's rest height, not its target and not the
+    /// probe's reach.
+    ///
+    /// Round numbers chosen so the sag is checkable by hand, and **not** a ship's:
+    /// with `normal_gravity` 5 and `track_gravity` 80 the gradient is
+    /// `0.3 * HOVER_K * 85`, so the sag is `5` over that. `mass` is deliberately not
+    /// 1, to pin that it cancels.
+    #[test]
+    fn a_ship_spawns_at_the_height_its_own_suspension_holds_it_at() {
+        let handling = Handling {
+            physical: oag_physics::params::Physical {
+                mass: 3.0,
+                normal_gravity: 5.0,
+                track_gravity: 80.0,
+                flight_gravity: 95.0,
+            },
+            antigrav: oag_physics::params::Antigrav {
+                ride_height: 5.5,
+                ..Default::default()
+            },
+            ..Handling::ZERO
+        };
+
+        let gradient = 0.3 * oag_physics::hover::HOVER_K * 85.0;
+        let expected = 5.5 - 5.0 / gradient;
+        assert!(
+            (spawn_height(&handling) - expected).abs() < 1e-5,
+            "{} was not {expected}",
+            spawn_height(&handling)
+        );
+
+        // Strictly below the reach - which is the whole point - and by a margin that is
+        // small, which is the recorded open reading rather than a defect here.
+        assert!(spawn_height(&handling) < handling.antigrav.ride_height);
+        assert!(handling.antigrav.ride_height - spawn_height(&handling) < 0.2);
+
+        // And mass really does cancel.
+        let heavier = Handling {
+            physical: oag_physics::params::Physical {
+                mass: 50.0,
+                ..handling.physical
+            },
+            ..handling
+        };
+        assert_eq!(spawn_height(&heavier), spawn_height(&handling));
+    }
+
+    /// The tensor is the textbook box, and the long axis must be the cheapest to
+    /// rotate about - a 13-unit hull resists pitch and yaw far more than roll.
+    #[test]
+    fn the_inertia_tensor_is_a_box_built_from_the_hull() {
+        let handling = Handling {
+            physical: oag_physics::params::Physical {
+                mass: 2.0,
+                ..Default::default()
+            },
+            dimensions: oag_physics::params::Dimensions {
+                width: 5.0,
+                height: 3.5,
+                length: 13.0,
+                ..Default::default()
+            },
+            ..Handling::ZERO
+        };
+
+        let inertia = box_inertia(&handling);
+        assert!((inertia.x - 2.0 * (3.5 * 3.5 + 169.0) / 12.0).abs() < 1e-4);
+        assert!((inertia.y - 2.0 * (25.0 + 169.0) / 12.0).abs() < 1e-4);
+        assert!((inertia.z - 2.0 * (25.0 + 12.25) / 12.0).abs() < 1e-4);
+
+        // Roll, about the long axis, is the cheapest rotation.
+        assert!(inertia.z < inertia.x && inertia.z < inertia.y);
+        // And nothing is the placeholder any more.
+        assert_ne!(inertia, Vec3::ONE);
+    }
+
+    /// A ship at rest on flat ground stays at rest.
+    ///
+    /// This is the assertion whose absence let a ship fall through the floor with no
+    /// input held: on the shipped parameters the placeholder inertia tensor turned
+    /// single-probe contact into a 38 rad/s pitch oscillator that explicit Euler grew
+    /// about 5 % a tick, and the ship inverted and left the world by tick 250 while the
+    /// player was not touching the controls. Reverting either the tensor or the spawn
+    /// height fails this within two seconds of simulated time.
+    ///
+    /// A flat floor and no track, deliberately: the same failure reproduced with no
+    /// spline, no collision soup and no camera, so this pins the force law rather than
+    /// the composition. Ten seconds is long enough that 5 %-per-tick growth would be
+    /// astronomically visible.
+    #[test]
+    fn a_ship_at_rest_on_flat_ground_stays_at_rest() {
+        use oag_physics::{Body, ShipControls, ShipState, Surface, TriangleSoup};
+
+        // The shape of the observed parameters. Round numbers, and not a ship's.
+        let handling = Handling {
+            physical: oag_physics::params::Physical {
+                mass: 1.0,
+                normal_gravity: 5.0,
+                track_gravity: 80.0,
+                flight_gravity: 95.0,
+            },
+            antigrav: oag_physics::params::Antigrav {
+                ride_height: 5.5,
+                rebound: 0.6,
+                landing_rebound: 0.5,
+                ..Default::default()
+            },
+            dimensions: oag_physics::params::Dimensions {
+                width: 5.0,
+                height: 3.5,
+                length: 13.0,
+                ..Default::default()
+            },
+            pitch: oag_physics::params::Pitch {
+                pitch_damping: 3.0,
+                // Set, and required not to matter: see `hover::target_height`.
+                antigrav_height_adjust: 1.0,
+                ..Default::default()
+            },
+            ..Handling::ZERO
+        };
+
+        let mut floor = CollisionWorld::new();
+        floor.push(TriangleSoup::new(
+            vec![
+                [-5000.0, 0.0, -5000.0],
+                [-5000.0, 0.0, 5000.0],
+                [5000.0, 0.0, 5000.0],
+                [5000.0, 0.0, -5000.0],
+            ],
+            vec![[0, 1, 2], [0, 2, 3]],
+            Vec::new(),
+            Surface::Floor,
+            0,
+        ));
+
+        let start = spawn_height(&handling);
+        let mut state = ShipState {
+            body: Body {
+                position: Vec3::new(0.0, start, 0.0),
+                mass: handling.physical.mass,
+                inertia: box_inertia(&handling),
+                ..Body::default()
+            },
+            grounded: 1.0,
+            ..ShipState::default()
+        };
+
+        let mut worst_tilt = 0.0f32;
+        let mut airborne = 0u32;
+        for _ in 0..600 {
+            let evaluated = oag_physics::step(
+                &mut state,
+                &ShipControls::default(),
+                &handling,
+                &Environment::default(),
+                &floor,
+                1.0 / 60.0,
+            );
+            if evaluated.hover.contacts == 0 {
+                airborne += 1;
+            }
+            let tilt = state.body.up().dot(Vec3::Y).clamp(-1.0, 1.0).acos();
+            worst_tilt = worst_tilt.max(tilt);
+        }
+
+        assert_eq!(
+            airborne, 0,
+            "the ship left the ground on {airborne} tick(s)"
+        );
+        assert!(
+            worst_tilt < 0.01,
+            "the ship tilted to {worst_tilt} rad with no input held"
+        );
+        assert!(
+            (state.body.position.y - start).abs() < 0.5,
+            "the ship drifted from {start} to {} with no input held",
+            state.body.position.y
+        );
+        assert!(
+            state.body.linear_velocity.length() < 1.0,
+            "the ship was moving at {} with no input held",
+            state.body.linear_velocity.length()
         );
     }
 
