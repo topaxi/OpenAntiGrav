@@ -729,6 +729,74 @@ boundaries and the command opcodes for `.bnk`; track names and whether the
 game streams PS2 music directly, for the music archive. `docs/overview/roadmap.md`'s
 M1 audio checklist item is now checked.
 
+## The `.fnt`/`.mip` atlas mystery is solved - reading the code beat guessing the bytes
+
+Exactly the untried avenue paid off: rather than another blind statistical
+transform, the agent went and read `Texture_SwizzleForGe` (`0x08926da8`,
+confidence 90) in Ghidra and got the real algorithm directly. **The dozens of
+prior rejected transforms were all solving the wrong problem** - the header
+itself was misread (palette is at `+0x40`, texels at `+0x80` of a 64-byte
+header, not the offsets earlier attempts assumed), and whether a texture is
+swizzled **at all** is a flag bit, not a fixed transform to find. Confidence
+**94**, on all five `.fnt` files: edge-ink (are both declared-tight edge
+columns of a glyph box actually inked) jumps from 0.42 under the old reading
+to 0.97-1.00 under the new one, and all five fonts now render as legible,
+previously-unseen artwork - digits, the alphabet, accented capitals, and the
+PSP's own L/R/START/SELECT/HOME/face-button glyphs.
+
+**One thing that should have been the tell sooner**: reading the palette 48
+bytes early (the old, wrong offset) gave only 4-5 distinct alpha levels with a
+dozen dead entries, and `small.fnt`'s brightest visible entry came out as
+alpha 26 of 255 - not enough to draw anything legible with, on any pixel
+layout. The right offset gives all five fonts a clean 16-level antialiasing
+ramp.
+
+**This wasn't just a font bug.** Chasing the swizzle flag found that **6 of
+`FE.wad`'s 13 standalone `.mip` textures set the identical flag in their own
+header** and were being silently decoded as noise - the atlas was never a
+special case, it was the general mechanism showing up first. Both `fnt.rs`
+and `texture.rs` now share one unswizzling routine, with a ground-truth test
+verifying seam-free decodes.
+
+**Still open, and none of it blocks rendering**: the `+0x14` field (0 in
+three fonts, 4 in two, correlating with which are missing a codepoint-table
+terminator and which use a black rather than white palette - a version
+marker is the best guess); the five mostly-`0xff` bytes at `+0x0d` of a
+glyph record (kerning, guessed); and **why some assets ship pre-swizzled and
+others don't**, which is now the interesting remaining question rather than
+"what does the swizzle look like." Wiring the real atlas into the front end
+(currently `crates/game/src/font.rs`'s own 5x7 fallback) is noted as a
+separate, not-yet-done change from decoding it.
+
+## Track walls render now, as a debug view - and it caught its own bug
+
+`oag-view --collision <track.vex>` draws the collision triangle soup (Wall,
+Floor, Reset, Mag Floor - Cage excluded, matching the PSP loader's own
+branch-past behaviour) in wireframe or solid, coloured by surface class, with
+a `--with-spline` overlay to check it against the driveable ribbon. No new
+decoding was needed - the geometry was already loaded into the live
+`CollisionWorld` at runtime; this is purely a render-side addition, kept
+deliberately out of `crates/physics`/`crates/gameplay`/`crates/game` to avoid
+the active physics investigation elsewhere in this file.
+
+**It corrected itself once, honestly, which is worth recording as a method
+note.** The first version of `--with-spline` compared the racing line's
+bounding box against the *wall* geometry's box alone; walls are vertical
+strips no taller than the walls themselves, while the spline sits
+`track::HOVER_LIFT` above the floor, so a **correct** track would have
+printed "NOT fully inside the walls" and read as a decode bug. Caught and
+fixed in a follow-up commit: the check now compares against all collidable
+geometry with hover-height slack, and is honestly worded as a coarse
+sanity check rather than a proof of enclosure.
+
+**One genuine, if modest, contribution to the standing sweep-and-prune
+puzzle**: the tool prints each track's furthest reach from the origin and
+flags anything past ±1024 explicitly, so the ±1024-packing-vs-1554-unit
+contradiction collision.md has recorded since earlier this session is now
+one command away from being checked **per track** rather than only as a
+whole-disc maximum - nobody has run it across every track yet, but the
+instrument now exists.
+
 ## PS2 textures found, decoded, and rendering - M1's last real gap is closed
 
 A fresh agent (replacing the one that decoded PS2 mesh geometry, after it hit
