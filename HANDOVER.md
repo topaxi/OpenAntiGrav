@@ -792,6 +792,20 @@ others don't**, which is now the interesting remaining question rather than
 (currently `crates/game/src/font.rs`'s own 5x7 fallback) is noted as a
 separate, not-yet-done change from decoding it.
 
+## Walls also render in `just play` itself now, not only in `oag-view`
+
+A correction to how the debug view above was first described: `oag-view
+--collision` is a separate tool from `oag-game`, and `just play`/`just play
+--race` did not draw collision geometry at all - only the driveable ribbon or
+the art meshes. Wired directly (by the orchestrating session, not an agent):
+`oag-game --collision` now overlays the same collision soup on top of a live
+race, reusing `oag_render::collision::build_model` with no new rendering
+code. `Options`/`Loaded`/`Scene` all gained a plain `Option<T>` field each;
+nothing existing changed shape. Verified with a real screenshot against the
+`16_Track`/Assegai/venom reference scenario - walls, floor and the mag-floor
+patch all render correctly alongside the ship, and all 83 `oag-game` tests
+still pass.
+
 ## Track walls render now, as a debug view - and it caught its own bug
 
 `oag-view --collision <track.vex>` draws the collision triangle soup (Wall,
