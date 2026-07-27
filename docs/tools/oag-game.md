@@ -24,8 +24,9 @@ just play           # intro, menu, then a race
 just play --race    # the race on its own
 ```
 
-Arrow keys steer, X or Return thrusts, Q and E are the left and right airbrakes,
-Escape quits. The keys are the same
+WASD steers (arrow keys also work), X or Return thrusts, Q and E are the left
+and right airbrakes, C and V are square and triangle, Escape quits. The keys
+are the same
 [abstract button layer](../ghidra/functions/psp-pulse/input.md) the front end uses;
 there is one mapping from a keyboard to a snapshot and both halves go through it,
 one `Keyboard` for the whole session, so a key held across the handoff stays held.
