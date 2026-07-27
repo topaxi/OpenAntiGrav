@@ -186,14 +186,34 @@ on every field - 2.80 rad of orientation error against 1.52, 512 units of
 position against 423 - which is the switch doing its job.
 
 **Neither speed column is the velocity's length.** `speed_cached` on the craft is
-**the previous tick's `dot(velocity, forward)`** - the forward-projected speed.
-Over the 200 ticks it matches that to a mean of 3.3e-6 and a max of 9.7e-6, which
-at a speed of 24 is the capture's own `%.7g` rounding and therefore an exact
-identity; against a stale *magnitude*, which an earlier and shorter pass recorded
-and this supersedes, it is out by a mean of 0.077. The two readings only separate
-when the ship is not travelling straight ahead - through a corner they differ by
-the cosine of the slip angle - which is why a straight-line capture could be read
-either way.
+**the previous tick's `dot(velocity, forward)`** - the forward-projected speed -
+which is what
+[`engine.md`](../ghidra/functions/psp-pulse/engine.md#the-cached-speed-and-its-staleness-measured)
+already had at confidence 95 and what a shorter pass here wrongly recorded as a
+stale magnitude. This capture corroborates the page and tightens it: over 200
+ticks the residual is a mean of 3.3e-6 and a max of 9.7e-6, which at a speed of
+24 is the capture's own `%.7g` print rounding, so it is indistinguishable from
+exact rather than merely inside a 0.01 tolerance. The stale magnitude is out by a
+mean of 0.077.
+
+It also pins *which* vectors are stale, which the tolerance test could not:
+
+| Candidate | Mean residual |
+| --- | ---: |
+| `dot(velocity(t-1), forward(t-1))` | 3.3e-6 |
+| `dot(velocity(t-1), forward(t))` | 1.3e-3 |
+| `dot(velocity(t), forward(t-1))` | 1.6e-2 |
+
+Both vectors are the previous tick's, by a factor of 400 over the mixed reading -
+so the cache is written from a coherent pre-integration state, not part-way
+through the update.
+
+Confidence **90**: one binary, one capture, and a residual four orders of
+magnitude below the competing reading - but a *straight* run, where the
+projection and the magnitude differ by only the 0.3 % that a `+0.997` heading
+cosine allows. The two readings separate properly only under slip, and nothing
+real has been captured there yet; the crate's own across-the-nose test is
+synthetic. That is what holds this below `engine.md`'s 95 rather than above it.
 
 `speed` at body `+0x398` is neither: it runs 3.67 % above the length (ratio
 1.0367, sd 0.0026) and 4.02 % above the forward projection (1.0402, sd 0.0028),
@@ -212,6 +232,11 @@ about the force law.
 
 - No save state and no committed input script, so a scenario is "whatever was
   captured" rather than one of the protocol's seven named ones.
+- **No cornering capture.** The reference scenario is a straight, where the
+  forward projection and the velocity's magnitude agree to 0.3 %. Everything the
+  speed columns above claim is therefore confirmed only in the regime where the
+  candidate readings nearly coincide; a capture through a corner, at real slip,
+  is what would settle them.
 - Nothing compares a PSP capture against a PS2 one.
 - Shield, weapons, lap and race-position state are in the protocol's list of what
   gets traced and in neither the capture nor this tool: nothing downstream of the

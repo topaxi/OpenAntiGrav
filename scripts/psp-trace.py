@@ -60,13 +60,16 @@ CRAFT_FIELDS = [
 # 3 %, so a constant offset and a constant factor cannot be separated either.
 #
 # `speed_cached` on the craft **is** the previous tick's `dot(velocity, forward)`
-# - the forward-projected speed, not the velocity's magnitude. Over the same 200
-# ticks it matches that to a mean 3.3e-6 and a max 9.7e-6, which is the CSV's own
-# `%.7g` rounding at a speed of 24 and therefore an exact identity; against the
-# stale magnitude it is out by a mean 0.077. A shorter pass recorded the
-# magnitude reading here, and this supersedes it. The distinction matters as soon
-# as the ship is not travelling straight ahead: sliding through a corner, the two
-# differ by the cosine of the slip angle.
+# - the forward-projected speed, not the velocity's magnitude. That is what
+# engine.md says at confidence 95, and a shorter pass wrote the magnitude reading
+# here in contradiction of it; this supersedes that. The same 200 ticks put the
+# residual at a mean 3.3e-6 and a max 9.7e-6 - the `%.7g` below at a speed of 24,
+# so indistinguishable from exact - against a mean 0.077 for the stale magnitude,
+# and 1.3e-3 for `dot(velocity(t-1), forward(t))`, which says both vectors are the
+# previous tick's rather than only one. The distinction matters as soon as the
+# ship is not travelling straight ahead: sliding through a corner, the two
+# readings differ by the cosine of the slip angle, and no capture has been taken
+# there yet.
 #
 # Both columns are recorded; neither is assumed.
 BODY_FIELDS = [
