@@ -154,8 +154,15 @@ no shipped archive can.
 
 **A dead encoder workspace is still allocated.** `Lzss_AllocBuffers` also
 allocates `0x1800c` bytes into `g_lzss_encoder_tree`, and `Lzss_FreeBuffers`
-frees it. Nothing in the binary ever reads or writes it - those two sites are
-its only cross-references.
+frees it. Nothing in the binary ever reads or writes it.
+
+That negative is checked two ways, because a cross-reference query returning
+nothing is not by itself evidence - `get_xrefs_to` under-reported on `.rodata`
+strings elsewhere in this session. An instruction-operand scan over all 361,812
+instructions finds **exactly two** references to `0x4fc4`, the store in
+`Lzss_AllocBuffers` and the load in `Lzss_FreeBuffers`. The same scan for
+`0x4fc0`, the ring beside it, returns six, three of them inside `Lzss_Decode` -
+so the method does find real uses when they exist.
 
 `0x1800c` is 98,316, which is exactly `3 * (8192 + 1) * 4`: three `int` arrays
 of `N + 1` entries for a window of `N = 8192`. That is Okumura's `lson`, `rson`
@@ -221,6 +228,14 @@ platform. What it is: two transcriptions, from two different binaries built by
 two different compilers for two different instruction sets, producing identical
 output on arbitrary input. See [formats/lzss.md](../../../formats/lzss.md) for
 what that does and does not do to the format's score.
+
+**The two transcriptions are not blind to each other**, and that limits how far
+the word "independent" stretches. The reference was written after reading
+`oag_formats::lzss`, by the same author, in the same session. What the mutation
+sweep demonstrates is that the *comparison* discriminates - eight wrong readings
+of the PS2 code all fail it - not that the second reading was arrived at without
+knowledge of the first. A genuinely blind transcription, or an emulator trace,
+would close the remaining gap; this narrows it.
 
 ## Cross-platform
 

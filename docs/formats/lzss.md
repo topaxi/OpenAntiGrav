@@ -155,6 +155,13 @@ order within a field, field order, mask reset point, cursor start, absolute
 versus relative positions, window size), so it is a real check and not a pair of
 implementations agreeing by construction.
 
+One caveat on the word "independent", since closing an independence gap is this
+section's whole job. The reference was written after reading
+`oag_formats::lzss`, by the same author, in the same session. The mutation sweep
+shows the comparison discriminates - eight wrong readings of the PS2 code all
+fail it - not that the second transcription was arrived at blind. A blind
+transcription, or a trace, would close what is left.
+
 Confidence: **94**, unchanged, but resting on two legs instead of one.
 
 The number does not move, and that is deliberate. The
