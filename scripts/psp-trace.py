@@ -14,8 +14,19 @@ while the CPU is running and about 0.3 ms while it is stepping. So this breaks i
 
     uv run --with websocket-client scripts/psp-trace.py --ticks 600 --hold cross
 
+There are two ways to drive the capture. `--hold` holds one input for the whole
+run, which is enough for a straight line and nothing else. `--script` reads a
+committed input script - `verification/scenarios/*.inputs`, see
+`scripts/input_script.py` - and sends a fresh controller state on every tick, so
+the capture and `oag-trace run --script <the same file>` are driven by the same
+authored intent rather than by each other:
+
+    uv run --with websocket-client scripts/psp-trace.py \\
+        --script verification/scenarios/steer-both-ways.inputs --warmup 25
+
 The output is CSV on stdout, one row per tick. It records **derived game data**
-and must never be committed; write it under `data/traces/`.
+and must never be committed; write it under `data/traces/`. The *script* is not
+derived data - it is a list of button names somebody chose - and is committed.
 """
 
 import argparse
@@ -25,6 +36,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import input_script
 from ppsspp_debugger import Debugger
 
 # Ship_UpdateCraft, docs/ghidra/functions/psp-pulse/engine.md. **The craft is a0
@@ -85,13 +97,55 @@ BODY_FIELDS = [
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=47810)
-    parser.add_argument("--ticks", type=int, default=300)
+    parser.add_argument(
+        "--ticks",
+        type=int,
+        metavar="N",
+        help="how many ticks to record. Defaults to the script's own length with "
+        "--script, and to 300 without one.",
+    )
     parser.add_argument(
         "--hold",
         action="append",
         default=[],
         metavar="BUTTON",
         help="hold a button for the whole capture, e.g. --hold cross (thrust)",
+    )
+    parser.add_argument(
+        "--script",
+        type=Path,
+        metavar="FILE",
+        help="drive the capture from a committed input script, e.g. "
+        "verification/scenarios/steer-both-ways.inputs. The same file drives "
+        "`oag-trace run --script`, which is the point: it is the only input mode "
+        "that is authored rather than inferred, so a varying input is known on "
+        "both sides. See scripts/input_script.py for the format.",
+    )
+    parser.add_argument(
+        "--script-lead",
+        type=int,
+        default=0,
+        metavar="N",
+        help="send the script's tick k+N at the breakpoint for tick k. "
+        "**Unverified, and here to be measured rather than assumed**: the "
+        "breakpoint is inside the frame, so whether a state set there is seen by "
+        "that frame or the next depends on where the game polls input, which has "
+        "not been read out of the binary. A capture of steer-both-ways settles it "
+        "in one line - the recorded `steer` column is flat until the tick the "
+        "game first saw `left`, so the gap between that and the script's own tick "
+        "60 is the lead to use.",
+    )
+    parser.add_argument(
+        "--warmup-hold",
+        action="append",
+        default=[],
+        metavar="BUTTON",
+        help="hold a button during --warmup only, then hand over to --script. A "
+        "scripted capture warms up holding *nothing* by default, which is what "
+        "sitting through a countdown needs (thrust through it is a false start). "
+        "This is for the other case: reaching the script's starting speed first, "
+        "so that a scenario begins the way the reference capture did rather than "
+        "from a standstill.",
     )
     parser.add_argument("--out", type=Path, help="write here instead of stdout")
     parser.add_argument(
@@ -130,15 +184,70 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.script and args.hold:
+        parser.error(
+            "--hold holds one input for the whole capture and --script sends a "
+            "fresh one every tick, so they cannot both drive it. --warmup-hold is "
+            "what holds something during the warmup of a scripted capture."
+        )
+    if args.warmup_hold and not args.script:
+        parser.error("--warmup-hold is for scripted captures; without --script, --hold covers it")
+
+    states = []
+    if args.script:
+        try:
+            states = input_script.load(args.script)
+        except input_script.ScriptError as error:
+            parser.error(str(error))
+        if not states:
+            parser.error("%s: the script has no ticks in it" % args.script)
+        for reason in input_script.unrepresentable(states):
+            parser.error("%s cannot be sent to a PSP - %s" % (args.script, reason))
+    ticks = args.ticks if args.ticks is not None else (len(states) or 300)
+    if states and ticks > len(states):
+        print(
+            "note: %s covers %d tick(s) and --ticks asks for %d, so its last state "
+            "is held for the remaining %d"
+            % (args.script, len(states), ticks, ticks - len(states)),
+            file=sys.stderr,
+        )
+
     dbg = Debugger(args.port)
     out = args.out.open("w") if args.out else sys.stdout
+    # What the pad was last told, so a tick that changes nothing costs no
+    # traffic. `None` means "nothing has been sent yet", which is not the same as
+    # "nothing is held" - the first tick must always send.
+    sent = {"state": None, "analog": None}
+
+    def send(state):
+        """Push one tick of scripted state at the emulator, if it changed."""
+        if sent["state"] is not None and state == sent["state"]:
+            return
+        sent["state"] = state
+        dbg.hold(**input_script.button_payload(state))
+        analog = input_script.analog_payload(state)
+        if analog is None and sent["analog"] not in (None, (0.0, 0.0)):
+            # A script that stops asking for analog must recentre the stick, or
+            # the last explicit deflection would silently outlive its own line.
+            analog = (0.0, 0.0)
+        if analog is not None:
+            dbg.analog(*analog)
+            sent["analog"] = analog
+
     try:
         if args.hold:
             dbg.resume()
             dbg.hold(**{button: True for button in args.hold})
+        if args.warmup_hold:
+            dbg.resume()
+            dbg.hold(**{button: True for button in args.warmup_hold})
         if args.warmup:
             dbg.resume()
             time.sleep(args.warmup)
+        if args.warmup_hold:
+            # The script owns the input from here; anything the warmup held that
+            # the script's first tick does not is released by the first send().
+            dbg.hold(**{button: False for button in args.warmup_hold})
 
         names = [name for name, _ in CRAFT_FIELDS] + [name for name, _ in BODY_FIELDS]
         print("tick," + ",".join(names), file=out)
@@ -154,12 +263,12 @@ def main():
         follow = args.craft
         tick = 0
         hits = 0
-        budget = args.ticks * args.max_ships + args.max_ships
+        budget = ticks * args.max_ships + args.max_ships
         # `each_hit` owns the break/arm/resume cycle, including the two traps
         # around it, so the filter is a `continue` inside its loop rather than a
         # second copy of that sequence.
         for _, _ in dbg.each_hit(SHIP_UPDATE_CRAFT, budget, timeout=60):
-            if tick >= args.ticks:
+            if tick >= ticks:
                 break
             hits += 1
 
@@ -181,18 +290,34 @@ def main():
             values = [struct.unpack("<f", craft_blob[at : at + 4])[0] for _, at in CRAFT_FIELDS]
             values += [struct.unpack("<f", body_blob[at : at + 4])[0] for _, at in BODY_FIELDS]
             print("%d,%s" % (tick, ",".join("%.7g" % v for v in values)), file=out)
+
+            # The row above is the craft as this frame's update *found* it, and
+            # the input set here is what drives the frame that produces the next
+            # row - which is exactly `oag-trace`'s alignment, where a row is
+            # emitted before its own step. Whether the emulator's own input poll
+            # has already run by the time the breakpoint is reached is not
+            # established, so `--script-lead` exists to shift this by whole ticks
+            # once a capture has measured it.
+            if states:
+                send(input_script.at(states, tick + args.script_lead))
             tick += 1
         print(
             "%d tick(s) from %d hit(s) across %d craft" % (tick, hits, len(seen)),
             file=sys.stderr,
         )
     finally:
-        if args.hold:
-            try:
+        try:
+            if args.hold:
                 dbg.resume()
                 dbg.hold(**{button: False for button in args.hold})
-            except Exception:
-                pass
+            elif states or args.warmup_hold:
+                # Leave the pad the way it was found, or the next capture starts
+                # with whatever the last line of this script happened to hold.
+                dbg.resume()
+                dbg.hold(**input_script.button_payload(input_script.State()))
+                dbg.analog(0.0, 0.0)
+        except Exception:
+            pass
         if args.out:
             out.close()
         dbg.close()
