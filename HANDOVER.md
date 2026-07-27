@@ -1874,39 +1874,61 @@ the question of why that enumeration didn't turn up a resistance term big
 enough - or whether the "58 units of thrust" recomputation itself has an
 error nobody's caught yet.
 
-### `verification-script` - the input-script format works end to end, on its own terms
+### `verification-script` - built, then actually run end to end against real PPSSPP, twice
 
-Committed as `ca6323c`. `crates/trace/src/script.rs` (the plain-text,
-run-length-encoded format - `60 cross` / `30 cross left` style lines) and an
-`oag-trace script`/`Inputs::Scripted` path in `replay.rs`/`main.rs` all
-compile and pass (`the_committed_scenarios_parse_and_are_two_hundred_ticks`
-and others, part of the 223/223 total above). Two real example scenarios are
-committed: `verification/scenarios/straight-line.inputs` and
-`verification/scenarios/steer-both-ways.inputs`.
+Committed as `ca6323c` plus five follow-ups. `crates/trace/src/script.rs` (the
+plain-text, run-length-encoded format - `60 cross` / `30 cross left` style
+lines), `scripts/input_script.py` (a second, independent Python
+implementation for the emulator side, with a documented cross-check for
+drift: `diff <(oag-trace script F --expand) <(python3 input_script.py F
+--expand)` should be empty), and an `Inputs::Scripted` path through
+`replay.rs`/`main.rs` all compile and pass.
 
-**The emulator side landed too, after this note was first written** - committed
-separately (docs/README.md-adjacent commit, staged and committed centrally
-since the authoring agent's sandbox can't verify against PPSSPP itself):
-`scripts/input_script.py` is a **second, independent implementation** of the
-same format in Python (necessarily separate - it drives a different
-runtime), with a documented, genuinely clever cross-check for drift between
-the two parsers: `diff <(cargo run -p oag-trace -- script F --expand) <(python3
-scripts/input_script.py F --expand)` should produce nothing, since both dump
-one line per tick in the same shape. I verified the Rust side of that
-directly - `oag-trace script <file> --expand` produces a correct 200-tick CSV
-expansion of `straight-line.inputs`. `scripts/psp-trace.py` gained a
-`--script` mode to actually drive PPSSPP from the same file
-`oag-trace run --script` replays.
+**This is not the important part. What matters is that this agent got real
+PPSSPP access and actually ran the whole pipeline, twice, finding two real
+bugs no amount of reading would have caught:**
 
-**Still not done, and this is the part that actually proves the whole thing
-works**: a real capture-vs-script-replay agreement check. `straight-line.inputs`
-was deliberately written to reproduce the existing `--hold cross` capture
-exactly, specifically so that comparison would be the proof - capture it with
-`just trace --script verification/scenarios/straight-line.inputs ...` (or
-however the new flag is actually spelled - confirm from `psp-trace.py --help`),
-replay with `oag-trace run --script`, and check it agrees with
-`data/traces/talons-junction-venom-assegai.csv`. Needs a live PPSSPP session;
-nobody has run it yet.
+1. **The debugger API table was wrong, taken on trust from the PSP's own
+   naming rather than tested.** The first live capture died immediately:
+   `input.buttons.send: Unsupported 'buttons' object key 'l'`. Probing every
+   candidate against real PPSSPP v1.20.4 found `ltrigger`/`rtrigger` are what
+   it actually accepts - `l`, `r`, `L`, `R`, `trigger.left`, `lt`, `rt`,
+   `shoulder.left` are all refused. Fixed in `input_script.py`; the API
+   reference table in `ppsspp-debugger.md` was wrong and needed the same
+   correction. This is exactly the class of bug a documentation page
+   copied from an assumption, rather than tested against the tool, produces.
+2. **A real, measured input latency**: a button set at a breakpoint doesn't
+   take effect until **three frames later**, which is two ticks off
+   `oag-trace`'s own tick-numbering convention. Measured on all four
+   transitions of the `steer-both-ways` scenario and confirmed by a second
+   capture at the corrected offset. `--script-lead 2` now exists to account
+   for it.
+
+**With both fixed, the first-ever comparison against *varying* steering
+input** (every earlier comparison this whole session used a centred stick,
+so `steer` always read "exact" while testing nothing about steering at all)
+came back **bounded: max error 2.6e-1, 1.1e-2 relative, over 200 ticks
+including four full-deflection transitions.** The lateral/steering force law
+holds up well against the real game under an actual varying input, which is
+new, real, positive evidence this session didn't have before.
+
+**One more finding, and it independently corroborates the collision-stun
+gate from earlier this session without anyone planning for it to.** The
+scenario's turns were originally 30 ticks; that put the real ship into a
+wall, visible directly in the capture as `speed_cached` falling from 22.2 to
+4.06 - a real ship, in a real recording, taking real collision damage to its
+speed. Shortened to 12 ticks to keep the scenario clean, but the drop itself
+is independent field evidence that the stun mechanism `engine-scale-re`
+found by reading disassembly is a real, observable behaviour, not just a
+plausible reading of code.
+
+**Also explored and recorded, not resolved**: no PPSSPP save-state API exists
+for this purpose (`savestate.save/.load`, `game.savestate`, `state.save` are
+all unknown events; even an OS-level `xdotool F1` at the SDL window writes
+nothing) - the menu walk remains the only fixed starting point. But
+`replay.begin/.flush/.execute/.status` all answer, which is a real route to
+recording a human-driven session and converting it into a committed script -
+noted as a future capability, not built.
 
 ### `psp-xml-reader` - the determinism gate does not cover the sim crates, confirmed and left open on purpose
 
