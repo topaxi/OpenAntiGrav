@@ -114,6 +114,55 @@ loading screen - cannot be sat through *during* capture.
 then start capturing. Confidence **85**, from the game clock rather than from
 instrumentation.
 
+### The shoulder buttons are `ltrigger` and `rtrigger`, not `l` and `r`
+
+`input.buttons.send` answers `{"l": true}` with
+
+```
+input.buttons.send: Unsupported 'buttons' object key 'l'
+```
+
+and the first real scripted capture died on it. Probed against v1.20.4 by sending
+each candidate and reading the reply: **`ltrigger` and `rtrigger` are accepted**,
+while `l`, `r`, `L`, `R`, `trigger.left`, `lt`, `rt` and `shoulder.left` are all
+refused. The API table above said `l` and `r`, which had been taken from the PSP's
+own naming rather than tested.
+
+`scripts/input_script.py`'s `PPSSPP_NAME` is the one place this mapping lives, so
+a future rename is a one-line fix rather than a silent mis-send.
+
+Confidence **95**: probed directly, and the accepted pair drives a working
+capture.
+
+### Input set at a breakpoint lands three frames later
+
+A controller state set while stopped in `Ship_UpdateCraft` is **not** seen by the
+frame the breakpoint is in, nor by the next one. Measured with
+`verification/scenarios/steer-both-ways.inputs`, whose whole purpose is that the
+recorded `steer` column dates its own transitions: at `--script-lead 0` the script
+asked for `left` at tick 60 and `steer` first moved at row **63**, and the same +3
+held on all four of that capture's transitions (release at 90 seen at 93, right at
+120 seen at 123, release at 150 seen at 153).
+
+`oag-trace`'s replay shows a change at row `T+1`, since input `T` drives the step
+from row `T` to row `T+1`. So the emulator is **two ticks behind our own
+convention** and `--script-lead 2` closes it; re-captured at that lead, `steer`
+moves at row 61 for the script's tick 60 and at row 109 for its tick 108.
+
+Two consequences worth knowing:
+
+- **A `--warmup-hold` handover costs the same three frames.** Releasing the
+  warmup's thrust just before the loop and letting the script's first `cross`
+  arrive normally leaves two ticks of zero throttle at rows 1 and 2 that the
+  script never asked for. Warm up holding the button the script's first line
+  holds, and it is harmless.
+- The mechanism is not established. It is consistent with the game latching input
+  before `Ship_UpdateCraft` runs, but that has not been read out of the binary,
+  which is why this is a switch and not a constant.
+
+Confidence **90**: four transitions in one capture, confirmed by a second capture
+taken at the corrected lead - but one binary and one emulator version.
+
 ### A race updates every craft from the same function
 
 `Ship_UpdateCraft` is the *entity* update, not the player's: in a race the
@@ -150,7 +199,7 @@ Two things a first race capture found:
 | `hle.thread.list` | Thread names, pcs and wait states. `Main thread`'s entry is `Game_Bootstrap`. |
 | `hle.func.list` | Every function PPSSPP's analysis found, with address and size. Useful for finding which function contains an address. |
 | `hle.module.list` | Confirms the module base: `WO_Game` at `0x08804000`, size `0x391800`. |
-| `input.buttons.send` / `.press` / `input.analog.send` | Scripted input. `press` takes a duration in frames; `send` sets held state. Names are `cross`, `circle`, `square`, `triangle`, `start`, `select`, `up`, `down`, `left`, `right`, `l`, `r`. |
+| `input.buttons.send` / `.press` / `input.analog.send` | Scripted input. `press` takes a duration in frames; `send` sets held state. Names are `cross`, `circle`, `square`, `triangle`, `start`, `select`, `up`, `down`, `left`, `right`, **`ltrigger`, `rtrigger`** - *not* `l` and `r`, see below. |
 | `gpu.stats.get` | Actual and target fps, vblank rate. |
 
 `gpu.buffer.screenshot` **does not work** on either path tried here: it needs the
@@ -235,14 +284,16 @@ makes it more than a straight line - see
 
 ```sh
 just trace --port 47810 --script verification/scenarios/steer-both-ways.inputs \
-    --warmup-hold cross --warmup 6 \
+    --script-lead 2 --warmup-hold cross --warmup 6 \
     --out data/traces/talons-junction-steer.csv
 cargo run -p oag-trace -- run data/traces/talons-junction-steer.csv \
     --source data/images/pulse-psp-usa.chd --team Assegai --class venom \
     --script verification/scenarios/steer-both-ways.inputs
 ```
 
-Three things about the scripted form specifically:
+#### The scripted form
+
+Three things about it specifically:
 
 - **A scripted capture warms up holding nothing.** `--hold` holds through the
   warmup, which is right for it and wrong here - the false-start trap above is
@@ -253,13 +304,11 @@ Three things about the scripted form specifically:
 - **`--ticks` defaults to the script's own length**, so the two cannot disagree by
   accident. Asking for more than the script covers holds its last state, and says
   so on stderr.
-- **`--script-lead` is unmeasured and defaults to 0.** The breakpoint is inside
-  the frame, so whether a controller state set there is seen by that frame or the
-  next depends on where the game polls input, which has not been read out of the
-  binary. `steer-both-ways` measures it in one line once captured: its `steer`
-  column is flat until the tick the game first saw `left`, and the gap between
-  that and the script's own tick 60 is the lead. Do not assume 0 is right just
-  because it is the default.
+- **`--script-lead 2` is the measured value and the default is 0.** Input set at a
+  breakpoint lands three frames later, which is two ticks behind `oag-trace`'s own
+  convention; see [the trap above](#input-set-at-a-breakpoint-lands-three-frames-later).
+  Pass it, or every comparison carries a two-tick phase error that reads as a lag
+  in the physics.
 
 What that capture reads: 200 ticks, `dt` mean 0.016684 (59.94 Hz, min 0.016316,
 max 0.017029), speed 23.6 to 25.1, 78.0 units travelled, `throttle` a flat 100,

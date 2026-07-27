@@ -161,28 +161,80 @@ scenario's ~24 units/s the ship should still be on Talon's Junction's first
 straight rather than scraping a wall, which would confound steering with collision
 response.
 
-### What is confirmed, and what is not
+### What a real scripted run found
 
-**Confirmed.** `--script straight-line.inputs` and `--hold cross`, run against the
-real reference capture with the same track, team and class, produce **byte-identical**
-simulated traces. The scripted replay path is therefore the same code path as the
-mode that was already validated, exercised through a file. The two parsers'
-expansions are byte-identical on both committed scenarios.
+**The whole loop has been run end to end**, on the reference scenario - Time
+Trial, Venom, Talon's Junction White, Assegai - with `steer-both-ways.inputs`
+driving both the capture and the replay.
 
-**Not confirmed.** No capture has yet been taken *through* `psp-trace.py --script`.
-Two things wait on one:
+Two things had to be fixed to get there, and both were found by the run rather
+than by reading:
 
-- **The input phase.** The breakpoint is inside the frame, so whether a controller
-  state set there is seen by that frame or the next depends on where the game
-  polls input, which has not been read out of the binary. `--script-lead N` shifts
-  the send by whole ticks and defaults to 0. A capture of `steer-both-ways`
-  measures it in one line: the recorded `steer` column is flat until the tick the
-  game first saw `left`, and the gap between that and the script's own tick 60 is
-  the lead to use. This is a switch rather than a constant for the same reason
-  `--basis` is.
+- **PPSSPP calls the shoulders `ltrigger` and `rtrigger`.** The first capture died
+  on `input.buttons.send: Unsupported 'buttons' object key 'l'`. The debugger
+  page's API table below had taken the PSP's own naming on trust. `l`, `r`, `L`,
+  `R`, `trigger.left`, `lt`, `rt` and `shoulder.left` are all refused; only
+  `ltrigger` and `rtrigger` are accepted. Confidence **95**: probed directly
+  against v1.20.4, and the accepted pair works in a real capture.
+- **The input phase is three rows, so `--script-lead 2` is right.** At lead 0, the
+  recorded `steer` column first moved at row 63 for a script that asked for `left`
+  at tick 60, and the same +3 held on all four transitions of that capture -
+  release at 90 seen at 93, right at 120 seen at 123, release at 150 seen at 153.
+  Our own replay shows a change at row `T+1`, because input `T` drives the step
+  from row `T` to row `T+1`, so the emulator is two ticks behind us and `--script-lead 2`
+  closes it. Re-captured at lead 2, `steer` moves at row 61 for the script's tick
+  60 and at 109 for its tick 108: aligned. Confidence **90**: four transitions in
+  one capture, then confirmed by the corrected capture, but one binary and one
+  emulator version.
+
+The comparison that came out of the aligned capture, 200 ticks:
+
+| Field | First tick outside tolerance | Max error | Trend |
+| --- | ---: | ---: | --- |
+| `speed` | 0 | 30.7 units/s | growing |
+| `velocity` | 1 | 41.7 units/s | growing |
+| `position` | 1 | 38.4 units | growing |
+| `orientation.forward` | 1 | 3.11 rad | growing |
+| `grounded` | - | 1.0, 37 of 200 ticks | growing |
+| **`steer`** | 121 | **2.62e-1 (1.06e-2 relative)** | **bounded** |
+| `throttle` | 2 | 100 | shrinking |
+| `brake`, airbrakes | - | 0 | exact |
+
+**`steer` is the row that only exists because scripts do.** Every previous
+comparison ran with the stick centred on both sides, so `steer` read "exact" while
+saying nothing. Here it is a real measurement: our steer ramp tracks the
+original's to about 1 % and the error is **bounded**, not growing, over 200 ticks
+that include two full-deflection transitions in each direction. That is the first
+independent evidence that the recovered steering ramp is right, and it is
+unaffected by the over-acceleration that dominates every other row - see
+[`oag-game`'s "no speed equilibrium"](oag-game.md#what-does-not-work-there-is-no-speed-equilibrium).
+
+**The `throttle` divergence at tick 2 is a capture artefact, not a physics one.**
+`--warmup-hold cross` releases the warmup's thrust just before the loop starts,
+and the script's own first `cross` takes the same three frames to arrive, so the
+recording has two ticks of zero throttle at rows 1 and 2 that the script never
+asked for. It is `shrinking` and gone by row 3. Warming up with the same button
+the script's first line holds is what makes it harmless.
+
+### What is still not confirmed
+
 - **PPSSPP's analog sign.** `input.analog.send`'s y is assumed to be positive-up,
-  matching `InputSnapshot::stick_y`. Nothing has tested it. The committed scenarios
-  use only the d-pad, so neither depends on it yet.
+  matching `InputSnapshot::stick_y`. Nothing has tested it. Both committed
+  scenarios use only the d-pad, so neither depends on it yet.
+- **The lead on anything but this build.** `--script-lead` is a switch rather than
+  a constant precisely because 2 is a measurement of one emulator version, and
+  re-measuring it is one capture of `steer-both-ways` and one look at the `steer`
+  column.
+
+### One thing a capture found about the original
+
+At lead 0 the first version of this scenario held each turn for **30** ticks, and
+the capture showed `speed_cached` falling from 22.2 to 4.06 - the ship hit a wall
+rather than turning. The arithmetic that said 43 degrees would fit Talon's
+Junction's first straight was simply wrong, and the turns are now 12 ticks. Worth
+recording because it is the sort of thing a scenario file's comment will otherwise
+keep asserting: **a scenario's claim about where the ship ends up is a hypothesis
+until a capture checks it.**
 
 ## Tolerances
 

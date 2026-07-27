@@ -1,8 +1,9 @@
 # A variant of scenario 2 of docs/reverse-engineering/verification-protocol.md:
 # steering response, taken both ways in one run.
 #
-# Thrust throughout, with a half-second of full left, a straight, and then a
-# half-second of full right. 200 ticks, matching the reference capture's length.
+# Thrust throughout, with a fifth of a second of full left, a straight, and then
+# a fifth of a second of full right. 200 ticks, matching the reference capture's
+# length.
 #
 # Why both ways rather than the protocol's single constant turn: the sign of the
 # yaw response is one of the things this harness exists to settle - row 0 of the
@@ -12,12 +13,15 @@
 # as the two halves swapping rather than as a plausible-looking curve. A single
 # constant turn cannot distinguish those.
 #
-# Why half a second and not longer: at the reference scenario's ~24 units/s and
-# the ~1.5 rad/s yaw rate measured for a held steer, 30 ticks is about 43
-# degrees. Long enough to be far outside any tolerance if the steering model is
-# wrong, short enough that the ship should still be on Talon's Junction's first
-# straight rather than in a wall - a scrape would confound the steering
-# measurement with the collision response, which is scenario 4's job.
+# Why twelve ticks and not longer: **thirty was tried and put the ship into a
+# wall.** The first version of this file held each turn for 30 ticks, on the
+# arithmetic that at ~24 units/s and the ~1.5 rad/s yaw rate measured for a held
+# steer that is about 43 degrees, which "should" still fit Talon's Junction's
+# first straight. The capture said otherwise: `speed_cached` fell from 22.2 at
+# the start of the left turn to 4.06 by tick 123, which is a ship that hit
+# something, not one that turned. A scrape confounds the steering measurement
+# with the collision response, which is scenario 4's job, so the turns are now 12
+# ticks - about 17 degrees each.
 #
 # The straight in the middle is not padding. It is where the ship's own damping
 # is the only thing acting on the yaw, which is the part of the steering model a
@@ -29,11 +33,13 @@
 # Reading a capture of this back tells you the input phase for free: the
 # recorded `steer` column is flat until the tick the game first saw `left`, so
 # the offset between "tick 60 of the script" and "the tick steer moves" is the
-# emulator's input latency, measured rather than assumed. See
-# `psp-trace.py --script-lead`.
+# emulator's input latency, measured rather than assumed. **It has now been
+# measured**: three rows, on all four transitions of the first capture, which is
+# `psp-trace.py --script-lead 2`. See
+# docs/reverse-engineering/ppsspp-debugger.md#the-scripted-form.
 
 60 cross
-30 cross left
-30 cross
-30 cross right
-50 cross
+12 cross left
+36 cross
+12 cross right
+80 cross
