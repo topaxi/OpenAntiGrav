@@ -308,11 +308,9 @@ fn deepest_hull_contact<R: Raycaster + ?Sized>(
         if !probeable {
             return;
         }
-        let Some(hit) = raycaster.raycast(
-            Ray::new(origin, direction, reach),
-            env.self_collider,
-            false,
-        ) else {
+        let Some(hit) =
+            raycaster.raycast(Ray::new(origin, direction, reach), env.self_collider, false)
+        else {
             return;
         };
         if !responds(hit.surface) {
@@ -430,7 +428,11 @@ mod tests {
         // Normal points back at the ship, i.e. along -x.
         assert!(contact.normal.x < -0.9, "{contact:?}");
 
-        assert!((state.body.position.x - 0.6).abs() < 1e-4, "{:?}", state.body);
+        assert!(
+            (state.body.position.x - 0.6).abs() < 1e-4,
+            "{:?}",
+            state.body
+        );
         // Restitution 0.05: 10 in becomes 0.5 out.
         assert!(
             (state.body.linear_velocity.x + 0.5).abs() < 1e-3,
@@ -456,7 +458,11 @@ mod tests {
 
         assert!(response.swept, "{response:?}");
         // Pushed back to one half-width in front of the wall.
-        assert!((state.body.position.x - 4.0).abs() < 1e-3, "{:?}", state.body);
+        assert!(
+            (state.body.position.x - 4.0).abs() < 1e-3,
+            "{:?}",
+            state.body
+        );
         assert!(state.body.linear_velocity.x < 0.0);
     }
 

@@ -327,7 +327,8 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         let texture_base = out.textures.len();
 
         out.vertices.extend(model.vertices);
-        out.indices.extend(model.indices.iter().map(|i| i + vertex_base));
+        out.indices
+            .extend(model.indices.iter().map(|i| i + vertex_base));
         out.draws.extend(model.draws.into_iter().map(|d| DrawCall {
             range: (d.range.start + index_base)..(d.range.end + index_base),
             texture: d.texture.map(|t| t + texture_base),

@@ -213,7 +213,10 @@ fn the_query_cost_of_a_tick_does_not_grow_with_the_sub_steps() {
     let before = raycaster.casts.get();
     tick(&mut state, &raycaster);
     let per_tick = raycaster.casts.get() - before;
-    assert!(per_tick >= 2, "the two hover probes at least, got {per_tick}");
+    assert!(
+        per_tick >= 2,
+        "the two hover probes at least, got {per_tick}"
+    );
 
     for _ in 0..9 {
         tick(&mut state, &raycaster);
@@ -887,4 +890,98 @@ fn a_ship_under_a_ceiling_probes_along_its_own_up_axis() {
         force.cross(up).length() < 1e-3,
         "force {force:?} was not along the ship's up axis {up:?}"
     );
+}
+
+/// A vertical wall in the plane `x = at`, tall and wide enough that a ship
+/// cannot go round it.
+fn wall_at(at: f32) -> TriangleSoup {
+    TriangleSoup::new(
+        vec![
+            [at, -500.0, -500.0],
+            [at, 500.0, -500.0],
+            [at, 500.0, 500.0],
+            [at, -500.0, 500.0],
+        ],
+        vec![[0, 1, 2], [0, 2, 3]],
+        Vec::new(),
+        Surface::Wall,
+        1,
+    )
+}
+
+/// The behaviour this whole constraint exists for, through the real entry point.
+///
+/// A ship flown at a wall must end up on the near side of it and turn round. The
+/// unit tests in `oag_physics::wall` pin one call to `resolve`; this pins that
+/// `step` actually invokes it, which is the wiring a caller depends on and the
+/// thing a refactor would silently drop.
+///
+/// No speed or rebound magnitude is asserted, only the sign and the side, for the
+/// reason in this file's header: the response law is an implementation choice
+/// awaiting M3, and pinning its numbers here would pin this crate's own
+/// arithmetic and call it a measurement.
+#[test]
+fn a_ship_flown_at_a_wall_ends_up_on_the_near_side_of_it_and_turns_round() {
+    const WALL_X: f32 = 60.0;
+
+    let handling = fixture();
+    let mut world = flat_floor(Surface::Floor);
+    world.push(wall_at(WALL_X));
+
+    let mut state = ship_at(4.0, &handling);
+    state.body.linear_velocity = Vec3::new(120.0, 0.0, 0.0);
+
+    let mut reversed = false;
+    for tick in 0..600 {
+        step(
+            &mut state,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            TICK,
+        );
+
+        // Half the hull width is 1.0, so the centre may never pass the wall.
+        assert!(
+            state.body.position.x <= WALL_X,
+            "tick {tick}: the ship went through the wall, x = {}",
+            state.body.position.x
+        );
+        assert!(state.body.position.is_finite(), "tick {tick}");
+        reversed |= state.body.linear_velocity.x < 0.0;
+    }
+
+    assert!(reversed, "the ship never bounced back off the wall");
+}
+
+/// The same flight without a wall must be unaffected, or the constraint is
+/// firing on geometry it has no business touching. Pins the `is_hoverable` gate
+/// end to end: the floor underneath is present in both runs.
+#[test]
+fn a_flight_over_open_floor_is_identical_with_and_without_the_wall_behind_it() {
+    let handling = fixture();
+
+    let run = |wall: Option<f32>| {
+        let mut world = flat_floor(Surface::Floor);
+        if let Some(at) = wall {
+            world.push(wall_at(at));
+        }
+        let mut state = ship_at(4.0, &handling);
+        state.body.linear_velocity = Vec3::new(40.0, 0.0, 0.0);
+        for _ in 0..120 {
+            step(
+                &mut state,
+                &ShipControls::default(),
+                &handling,
+                &Environment::default(),
+                &world,
+                TICK,
+            );
+        }
+        state.body
+    };
+
+    // The wall is far beyond anything 120 ticks at 40 units/s can reach.
+    assert_eq!(run(None), run(Some(10_000.0)));
 }

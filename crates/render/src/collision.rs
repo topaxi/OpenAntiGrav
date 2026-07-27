@@ -214,14 +214,7 @@ pub fn build_model(
                         emit_face(&mut vertices, &mut indices, &corners, normal, colour);
                     }
                     Style::Wireframe => {
-                        emit_outline(
-                            &mut vertices,
-                            &mut indices,
-                            &corners,
-                            normal,
-                            colour,
-                            inset,
-                        );
+                        emit_outline(&mut vertices, &mut indices, &corners, normal, colour, inset);
                     }
                 }
             }
@@ -290,7 +283,10 @@ fn indices_len(indices: &[u32]) -> u32 {
 /// all 1.78 million of them - so this only ever skips on a corrupt file, and it
 /// skips rather than panicking because a viewer that dies on one bad triangle
 /// cannot show you the bad triangle.
-fn corners_of(mesh: &oag_formats::collision::CollisionMesh, tri: [u16; 3]) -> Option<[[f32; 3]; 3]> {
+fn corners_of(
+    mesh: &oag_formats::collision::CollisionMesh,
+    tri: [u16; 3],
+) -> Option<[[f32; 3]; 3]> {
     Some([
         *mesh.vertices.get(usize::from(tri[0]))?,
         *mesh.vertices.get(usize::from(tri[1]))?,
@@ -379,11 +375,7 @@ fn emit_outline(
 
     let base = vertices.len() as u32;
     for c in corners {
-        let to_centre = [
-            centroid[0] - c[0],
-            centroid[1] - c[1],
-            centroid[2] - c[2],
-        ];
+        let to_centre = [centroid[0] - c[0], centroid[1] - c[1], centroid[2] - c[2]];
         let len = (to_centre[0] * to_centre[0]
             + to_centre[1] * to_centre[1]
             + to_centre[2] * to_centre[2])
@@ -509,7 +501,12 @@ mod tests {
         big.geometry.meshes[0].vertices =
             vec![[0.0, 0.0, 0.0], [1000.0, 0.0, 0.0], [0.0, 0.0, 1000.0]];
         let model = build_model("t", &[tiny, big], Style::Wireframe, false);
-        assert!(model.vertices.iter().all(|v| v.position.iter().all(|c| c.is_finite())));
+        assert!(
+            model
+                .vertices
+                .iter()
+                .all(|v| v.position.iter().all(|c| c.is_finite()))
+        );
         // The tiny triangle's inner ring must still be inside its outer ring.
         let centroid = 1e-3 / 3.0;
         for pair in model.vertices[..6].chunks(2) {
@@ -525,9 +522,15 @@ mod tests {
     fn stats_report_every_class_even_when_empty() {
         let s = stats(&[node(SurfaceKind::Wall, 2)]);
         assert_eq!(s.len(), SurfaceKind::ALL.len());
-        let wall = s.iter().find(|k| k.kind == SurfaceKind::Wall).expect("wall");
+        let wall = s
+            .iter()
+            .find(|k| k.kind == SurfaceKind::Wall)
+            .expect("wall");
         assert_eq!((wall.nodes, wall.meshes, wall.triangles), (1, 2, 2));
-        let floor = s.iter().find(|k| k.kind == SurfaceKind::Floor).expect("floor");
+        let floor = s
+            .iter()
+            .find(|k| k.kind == SurfaceKind::Floor)
+            .expect("floor");
         assert_eq!(floor.nodes, 0);
         assert!(floor.bounds.is_none());
     }

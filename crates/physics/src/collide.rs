@@ -391,6 +391,22 @@ impl TriangleSoup {
         self.triangles.len()
     }
 
+    /// One triangle's three world-space corners, or `None` if out of range.
+    ///
+    /// Mirrors `oag_formats::collision::CollisionMesh::triangle`. Exists so a
+    /// test can aim a ship at a *real* piece of track geometry rather than at a
+    /// hand-written plane - which is the only way to find out whether a shipped
+    /// wall's winding, scale and normal survive the response law.
+    #[must_use]
+    pub fn triangle(&self, triangle: usize) -> Option<[Vec3; 3]> {
+        let [a, b, c] = *self.triangles.get(triangle)?;
+        Some([
+            *self.vertices.get(a as usize)?,
+            *self.vertices.get(b as usize)?,
+            *self.vertices.get(c as usize)?,
+        ])
+    }
+
     /// The box around every vertex, or [`Aabb::EMPTY`] when there are none.
     #[must_use]
     pub fn bounds(&self) -> Aabb {
