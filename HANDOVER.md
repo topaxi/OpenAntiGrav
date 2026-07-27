@@ -1071,6 +1071,29 @@ variants (forward/reversed/zone/zone-reversed) all share one collision set
 pair's 1129.2, worth knowing before assuming the variants are always
 interchangeable.
 
+**The same agent then went back and found its own survey undercounted, before
+letting the conclusion stand.** The 16-track table above was built by probing
+known track *names*, which found 40 PSP and 55 PS2 files against a census of
+40 and 59 `Floor Collision` nodes - four PS2 collision-bearing files had no
+recovered name and were silently missing from the table, which is exactly the
+kind of gap that would later get treated as "measured everything" when it
+hadn't been. Fixed by walking every `.vex` entry of both discs **by index**
+instead of by name - genuinely exhaustive, no name recovery required. Across
+**1,038 PS2 files and 340 PSP ones**, every collision node either disc ships:
+the widest span anywhere is **2026.6057**, on both discs, and it's the same
+track (`10_Track`) the named survey already found. The conclusion holds under
+full coverage, not just under the sample. Three things in the original
+write-up were quietly overstating and got walked back to match the actual
+evidence: "the broadphase does not pack world space" narrowed to "*if* the
+packing reading is right, its input cannot be raw world space" (a
+conditional, not a determination); a clarification that both figures are the
+*world*-level broadphase's input specifically, not the per-mesh level, which
+nothing here speaks to; and the load-bearing number stated to full precision
+(2026.6057 of 2048, 98.96%, clearing by 21.4 units). Also turned up a fifth,
+previously unlisted track variant name in the process:
+`11_Track\track_zone.vex`, found by hashing candidates against the directory
+rather than assumed.
+
 ## Track walls render now, as a debug view - and it caught its own bug
 
 `oag-view --collision <track.vex>` draws the collision triangle soup (Wall,
