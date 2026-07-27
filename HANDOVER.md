@@ -34,9 +34,181 @@ before concluding a ground-truth test "cannot run". The originals in
 
 ## In flight
 
-Nothing blocked. `just` passes: fmt-check, clippy `-D warnings`, **546 tests**,
-check-docs. `just audit-leakage` is clean. The Rust side was not touched this
-pass; everything new is `scripts/` and `docs/`.
+A new pass started same day: **both binaries are now in one Ghidra project.**
+`SCES_547.48` (PS2, `r5900:LE:32:default`, image base `0x00100000`, 28 overlay
+spaces, 5,234 auto-analysed functions) is imported alongside `BOOT.BIN` and was
+confirmed live via `list_instances`/`list_open_programs` - it is the *current*
+program; `BOOT.BIN` is in the project but closed. Roadmap M2's "Load
+`SCES_547.48` into Ghidra" checkbox was stale (unchecked despite being done) and
+is now fixed.
+
+Two background agents were launched to work this concurrently, kept to two
+rather than the allowed three to avoid Ghidra/build contention:
+
+1. **PS2 Ghidra names catch-up** - cross-reference the PSP's 120 documented,
+   evidence-backed symbols (`docs/ghidra/functions/psp-pulse/names.tsv` and the
+   pages under that directory) against `SCES_547.48` by string/constant/
+   call-graph correlation rather than address (addresses don't correspond
+   across the two images), following ADR-0005 exactly: same base name across
+   platforms, `_q` under confidence 70, no rename at all under 50. Scoped to
+   `docs/ghidra/functions/ps2-pulse/**` plus "Cross-platform" table edits on the
+   existing PSP pages, and told to always pass `program="SCES_547.48"`
+   explicitly on every Ghidra MCP call so it can't collide with concurrent work
+   against `BOOT.BIN`.
+2. **Fall-through-floor / jittery-camera bug** - a user report against
+   `just play --race`: the ship falls through the floor and the chase camera
+   jumps up and down even at rest with no input held. This may be the same
+   roll-oscillator instability already on record below (`h <= c/k = 0.005` vs
+   the specified `1/180` sub-step, ~11% too large - which by construction should
+   show up at rest too, not only while driving), one of the two "cheap to test"
+   M4 explanations (hover target exceeding probe reach; missing inertia tensor),
+   a regression since `19611e0`/`5ad69f3`, or a camera-side bug reading stale
+   ship state independent of the ship actually moving. Scoped to
+   `crates/physics`/`crates/gameplay`/`crates/render`, told explicitly not to
+   tune a magnitude to hide the known oscillator instability without evidence.
+
+Both report back before editing `HANDOVER.md` further; findings get folded in
+here once they land, not written concurrently by the agents themselves.
+
+`just` last passed on this branch: fmt-check, clippy `-D warnings`, **546
+tests**, check-docs. `just audit-leakage` is clean.
+
+## The PS2 binary just gave the whole tree its second-binary leg
+
+`docs/ghidra/functions/ps2-pulse/` went from a stub to five subsystem pages -
+**48 symbols named in `SCES_547.48`** (20 at 90-95, 22 at 80-89, 6 at 78-79,
+nothing below 70) - correlated against the PSP's 120 by string/constant/
+call-graph shape, never by address, since the two images share no address
+space. `docs/ghidra/functions/README.md` now indexes both binaries side by
+side, and each PSP page that gained a PS2 counterpart
+(`wad-subsystem.md`, `engine.md`, `input.md`, `camera.md`) got a
+**Cross-platform** section rather than a silent update.
+
+Per the [confidence rubric](docs/reverse-engineering/confidence-rubric.md), a
+second binary is worth more than a second reading of the first, and this is
+the first time this project has had one for the physics-adjacent claims that
+matter most:
+
+- **The 32-field handling block (`0x94`-`0x114`, stride `0x80`) and its four
+  load-time scale factors are exact matches**, from independent PS2 parsers,
+  under a different compiler and a different ISA (Allegrex vs Emotion Engine).
+  Same for the 27-float camera block, the `pi/180` `AirbrakeGraphics`
+  conversion, and the WAD name hash (CRC-32, reflected, seeded to 0, `\`->`/`,
+  uppercase-folded, `#`-hex escape) - two independent PS2 implementations,
+  both matching the PSP reading.
+- **`stats_base + 0x90` is answered**: `<Misc weight_distribution>`. The PSP
+  `engine.md` page recorded that offset as an unidentified per-team scalar; the
+  PS2 binary has a `<Misc>` XML element the PSP page never mentions, and its
+  parser writes `0x90` directly.
+- **Five deliberate, unreconciled divergences**, recorded as findings rather
+  than papered over: PS2's WAD lookup restarts its scan every time instead of
+  rotating from the last hit; `cancel`/`backward` bind to `triangle` on PS2
+  where PSP uses `circle`; PS2's `Input_ConsumePress` clears the *entire*
+  pressed mask and ignores the index argument, contradicting the PSP page's
+  confidence-70 "clears one bit" reading; **the chase camera's unexplained 3/4
+  factor from this session's PSP camera work does not exist on the PS2 path**,
+  which computes its distance a visibly different way; and PS2 builds three
+  separate lazily-constructed CRC tables plus a fourth static one, where PSP
+  builds one.
+- **`0x00213e58`, the PS2 LZSS stream constructor, is now the single
+  highest-value RE target left** (confidence 55, decode loop not yet read) -
+  the PS2 archives are the only corpus that exercises this project's LZSS
+  reader at all, and it has so far only ever been validated against its own
+  inverse.
+- **Not yet attempted on PS2**: the collision walk, the front-end video/Movie
+  widget, the main loop, and - most relevant to the M4 physics work happening
+  elsewhere this pass - the `Ship_Update*` force terms themselves. Since the
+  handling *parameter block* is now confirmed byte-identical in layout, its
+  consumers reading those same offsets is the obvious next step, and would pull
+  `engine.md`'s force law out of its current decompilation-only confidence cap.
+
+One tooling fix landed alongside the docs: `apply-ghidra-names.py`'s evidence
+check hardcoded `psp-pulse` as every row's base directory, which would have
+silently failed every PS2 row. Evidence paths now resolve relative to the TSV
+that carries them. Verified both ways: PSP's default set still applies clean
+(433 applied, 0 failed), and a dry run of the new
+[`ps2-pulse/names.tsv`](docs/ghidra/functions/ps2-pulse/names.tsv) applies all
+48 with nothing failing. There is no `just` recipe for the PS2 set yet; see
+`ps2-pulse/README.md` for the direct invocation.
+
+**Left for later, out of this pass's scope:** `docs/formats/wad.md` should
+record that its header/entry layout is now confirmed in a second binary, and
+`docs/formats/handling-stats.md` should gain the `<Misc>` element.
+
+## `oag-trace` exists now: M3's missing comparison side is built
+
+A new crate, `crates/trace` (`oag-trace`, lib + bin, added to the workspace),
+closes the gap [the roadmap](docs/overview/roadmap.md) and this file both
+flagged as the top priority: **the instrument that reads a trace and a
+simulation run and reports where they diverge, not whether they match.** 38
+tests, all against hand-authored fixtures (real traces are derived game data
+under `data/traces/`, gitignored, so nothing here can run in CI - see
+[the tool's page](docs/tools/oag-trace.md) for why). Clippy, fmt, rustdoc and
+`just check-docs` all clean; the full workspace gate was not run, deliberately,
+per this pass's rule about not running `just` while other agents have crates
+open.
+
+`oag-trace show|run|compare`: `show` summarises a capture (tick count, dt
+distribution in Hz, distance travelled - which is exactly the false-start
+stall trap from earlier this session - and how well `cross(row0, up) == forward`
+holds); `run` seeds a `World`/`Ship` from a recording's first row and replays it
+through `oag_physics::step`/`oag_gameplay::ship_controls`, sampling **before**
+each step to match where `psp-trace.py`'s breakpoint actually sits (craft
+entry); `compare` diffs two traces on the 13 fields
+[the protocol](docs/reverse-engineering/verification-protocol.md) specifies,
+with the right tolerance per field (position 0.01 abs OR 1e-4 rel, orientation
+1e-4 rad, velocity 1e-3 rel, `grounded` exact), and reports **the first
+divergent tick, the field, the magnitude, everything else that moved on that
+same tick, and a trend** - `exact`/`bounded`/`growing`/`shrinking` from a
+least-squares slope plus a first-quarter-vs-last-quarter mean comparison - so a
+bug that is small-but-growing doesn't hide behind a tolerance that only checks
+magnitude.
+
+**One thing worth knowing before trusting a `compare` run: a naive
+tolerance check would have called a `NaN` a perfect match on every field**,
+since every comparison against a non-finite value would read as "within
+tolerance" by omission. The advisor that reviewed this crate's design caught
+it; non-finite is now always reported as a divergence, never silently accepted.
+
+**A sharper version of the handedness finding**, tightened while building the
+replay path: the recording's own right/up/forward rows are a positively
+oriented basis, while `Body`'s convention is not (`forward` is `-Z`), so the
+mapping between them needs an **odd** number of sign flips, not one chosen
+arbitrarily - flipping only row 0, as a naive port might, is a reflection that
+`Quat::from_mat3` will silently turn into nonsense rather than error on.
+`oag-trace run --basis left-up-forward` (measured, and the default) versus
+`--basis right-up-back` exist as two concrete, opposing hypotheses; running
+both against a real capture is a one-command way to settle
+[the 84-confidence cross-product claim](docs/ghidra/functions/psp-pulse/engine.md)
+that this session's earlier physics work left open. Nobody has run that
+comparison yet - it needs a real capture, see below.
+
+**No real emulator capture was attempted, on purpose, not because of a missing
+piece.** `PPSSPPSDL`, a live display, and `data/images/pulse-psp-usa.chd` are
+all present and usable; capturing one needs an interactive GUI session driving
+Pulse's own menus on the user's actual desktop mid-race (and the SDL build
+throttles when its window loses focus), which is a different kind of task from
+everything else this pass did unattended. Doing that capture and then running
+`oag-trace run`/`compare` against it is now genuinely one session's work away,
+and it is the highest-leverage thing to do next: it would settle the handedness
+question above and give the M4 physics work (see the fall-through-floor
+investigation elsewhere in this file) its first real measurement instead of a
+static reading.
+
+**What the capture format still can't see, documented rather than faked**:
+angular velocity, pitch, the landing/leap timer, and raw stick position aren't
+columns `psp-trace.py` records, so `compare` can't diff them; a dropped tick is
+invisible too, because the capture numbers rows by counting breakpoint hits,
+not by reading a tick counter. There's no committed input script or save state
+yet either, so every scenario run so far has been ad hoc rather than one of
+[the protocol's seven](docs/reverse-engineering/verification-protocol.md).
+
+**One coupling to know about before changing force-law code elsewhere**: the
+crate's own coast-down self-test assumes rolling resistance and quadratic drag
+are *forces*, using a large test mass to divide their contribution down to
+near-zero. If a future physics change turns either term into an acceleration
+instead, that test will start failing - correctly, as a signal that the
+contract changed, not as a harness bug to silence.
 
 `data/cache/pulse-psp-usa.iso` (457 MB) is the raw ISO the emulators want,
 extracted with `just extract-iso`. It is gitignored twice over and it is a real
