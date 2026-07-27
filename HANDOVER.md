@@ -376,6 +376,69 @@ One more unresolved difference, not yet chased: the PS2's four-corner
 bank-to-yaw term uses `50.0` where the PSP uses `30`; neither value is
 runtime-verified yet.
 
+## The torque-sign mystery is closed: nothing was ever inverted
+
+A fresh PS2 Ghidra agent (the previous instance died from context overflow
+right after resolving the operand-convention question above) took the two
+remaining candidates for where the `F x r`/`-400 * (up x n)` sign anomaly gets
+compensated, and **both are dead, because there is nothing to compensate.**
+
+**The engine integrates its rigid-body basis as `e' = e x w`, not the textbook
+`e' = w x e`.** Read directly out of `Body_Integrate`'s skew-matrix
+construction, whose three base constants were confirmed all-zero by reading
+them out of memory: the built update gives
+`d(row0) = h * (-z*row1 + y*row2)`, the negative of what `w x e0` would
+produce. That means **`w_game = -w_physics`** - the engine's angular velocity
+is the negative of the textbook pseudovector, consistently, throughout the
+whole rigid-body formulation. Substitute that in and every apparent inversion
+disappears: `tau = F x r` becomes exactly the textbook `r x F`, and
+`-400 * (up x avgNormal)` becomes exactly the aligning `+400 * (up x n)` the
+prose always said it was. **`docs/physics/README.md`'s prose and the
+arithmetic agree after all - what was missing was the convention, not a
+sign.**
+
+Both remaining candidates from before are directly ruled out, not just
+deprioritised: the hover spring's force argument at its call site is a plain
+**positive** multiple of `up`, no negation anywhere in it; and the matrix at
+`body+0xc0`..`+0xf0` is the basis's rotation inverse (built as the adjugate
+scaled by `1/det`), which for an orthonormal basis is just the transpose -
+determinant `+1`, structurally incapable of flipping a sign.
+
+**This is explicitly not the handedness question**, and is independent of it.
+The PS2's own basis orthonormaliser rebuilds `row0 = row1 x row2`, which is
+the same statement as `engine.md`'s runtime-measured
+`cross(row0, row1) = row2` on 200/200 PSP ticks - both agree the basis is
+positively oriented under ordinary component-wise cross products. Handedness
+was never the variable; the sign of `w` was, and the two had been conflated.
+
+**Two independent legs support this**, one of which needs no assumption from
+the other at all: the instruction-level integrator read, and separately,
+`engine.md`'s own runtime steering measurement (accumulator sign in, observed
+rotation sign out, bypassing every intermediate transform) and its weathervane
+term (`cross(forward, velocity) * -0.1`, stated as turning the nose toward
+travel - backwards under the textbook convention, correct under this one).
+Confidence **88** in the PS2 build (raw disassembly, a vendor ISA manual,
+memory-read constants, corroborated by a measurement on the *other* binary);
+confidence **80** that the PSP build shares the convention, since the PSP's
+own integrator has never been located.
+
+**The actionable rule for a reimplementation, stated plainly by the finding
+itself: apply exactly one flip, consistently.** Either keep the textbook
+`e' = w x e` and negate every torque source read from the disassembly, or keep
+the disassembly's torque expressions verbatim and integrate with `e' = e x w`.
+**Doing both, or neither, is not a tuning problem - it's unconditional
+divergence for the terms affected**, a different and much worse failure mode
+than the mild growth-type instability the physics investigation elsewhere in
+this file has been measuring. Since that investigation's own repro shows
+growth rather than immediate blow-up, that's independent evidence its current
+sign convention is already internally consistent - flagged to it as
+reassuring context rather than a required change. Two things to note
+regardless: **angular damping (`tau = -c*w`) is invariant under either
+convention** and must not be "corrected"; and `Body_AddForceAtPoint`'s actual
+argument order is `(body, force, point)` - its prologue's register shuffle
+disguises this, and an earlier reading had force and point's roles described
+backwards (never a behavioural bug, just a documentation one).
+
 ## `oag-trace` got its first real comparison, and it changes where the floor-bug fix should look
 
 The agent that built `oag-trace` circled back to attempt a real capture, as
