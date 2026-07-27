@@ -31,7 +31,7 @@ These are the project's actual work.
 | Sound bank | `.bnk` | PSP | unknown | `03000000` blobs. |
 | Particle system | `.pob` | PSP | unknown | Magic `SYSP`. |
 | Ship data | `.dat` | PSP | unknown | Paired with ships; likely handling or collision. |
-| PS2 music archive | `.wad` | PS2 | unknown | `PS2MUSIC.WAD`. Header `10 00 00 00`, **not** the WAD container. |
+| [PS2 music archive](ps2-audio.md) | `.wad` | PS2 | **understood** | `PS2MUSIC.WAD`, **not** the WAD container: a 12-byte-entry directory over 48 kHz 16-bit stereo PCM, uncompressed. Implemented; the chain closes to the byte and the sample rate is pinned against the PSP's ATRAC3plus copies of the same sixteen tracks. |
 | PS2 prerace archive | `.wad` | PS2 | unknown | `PRERACE.WAD`. Header `20 00 00 00`, entropy 0.08. Mostly empty. |
 | IPU video | `.IPF` | PS2 | unknown | Magic `IPUF`. Targets the PS2 Image Processing Unit. |
 
