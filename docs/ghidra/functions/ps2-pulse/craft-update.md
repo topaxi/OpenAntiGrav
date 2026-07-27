@@ -88,9 +88,74 @@ levels the ship. A different compiler on a different ISA producing the same
 expression retires that explanation. Confidence **92**, from an unambiguous
 instruction-level read of two functions.
 
-The operand order is not in doubt either. The EE computes a cross product as
-`vopmula.xyz ACC, A, B` followed by `vopmsub.xyz D, B, A`, giving `D = A x B`;
-here `A` is the up axis (`craft+0x180`) and `B` is the averaged contact normal.
+The operand order is not in doubt either, and it has since been settled against
+the vendor ISA reference rather than from memory - see
+[the cross-product convention](#the-cross-product-convention-settled-against-the-isa-manual)
+below. `A` is the up axis (`craft+0x180`) and `B` is the averaged contact
+normal, so the term is `-400 * (up x avgNormal)`.
+
+## The cross-product convention, settled against the ISA manual
+
+Every sign question on this page rests on one thing: what
+`vopmula`/`vopmsub` actually compute. Ghidra models both as opaque
+`CALLOTHER` userops (`0xc5` and `0xc6`), so the decompiler supplies **no**
+semantics for them and cannot be appealed to here.
+
+The *VU User's Manual* version 6.0 (SCEI) defines the micro-mode pair on
+p.116-117, and `VOPMULA`/`VOPMSUB` on p.305-306 as "same as the micro
+instruction":
+
+```text
+OPMULA.xyz ACCxyz, VF[fs]xyz, VF[ft]xyz
+    ACCx = VF[fs]y * VF[ft]z
+    ACCy = VF[fs]z * VF[ft]x
+    ACCz = VF[fs]x * VF[ft]y
+
+OPMSUB.xyz VF[fd]xyz, VF[fs]xyz, VF[ft]xyz
+    VF[fd]x = ACCx - VF[fs]y * VF[ft]z
+    VF[fd]y = ACCy - VF[fs]z * VF[ft]x
+    VF[fd]z = ACCz - VF[fs]x * VF[ft]y
+```
+
+The manual's own worked example - which carries the parenthetical "*Be careful
+to the description order*" - is exactly the idiom this binary uses:
+
+```text
+OPMULA.xyz ACCxyz, VF20xyz, VF30xyz
+OPMSUB.xyz VF10xyz, VF30xyz, VF20xyz     =>  VF10 = VF20 x VF30
+```
+
+So `vopmula(ACC, A, B)` followed by `vopmsub(D, B, A)` gives **`D = A x B`**,
+where `A` is the *first* source operand of the `vopmula`.
+
+**Ghidra's operand printing was verified, not assumed.** The encoding places
+`ft` at bits 20-16, `fs` at 15-11 and `fd` at 10-6 - `ft` *before* `fs` - so a
+disassembler printing in encoding order would render these instructions
+reversed and silently invert every conclusion below. Decoding the four raw
+words settles it:
+
+| Address | Word | dest | ft | fs | fd | Ghidra prints |
+| --- | --- | --- | --- | --- | --- | --- |
+| `0x0015ae10` | `0x4bc112fe` | `1110` | `vf1` | `vf2` | - | `vopmula.xyz vf2,vf1` |
+| `0x0015ae14` | `0x4bc208ae` | `1110` | `vf2` | `vf1` | `vf2` | `vopmsub.xyz vf2,vf1,vf2` |
+| `0x0015da9c` | `0x4bc20afe` | `1110` | `vf2` | `vf1` | - | `vopmula.xyz ACC,vf1,vf2` |
+| `0x0015daa0` | `0x4bc1106e` | `1110` | `vf1` | `vf2` | `vf1` | `vopmsub.xyz vf1,vf2,vf1` |
+
+Ghidra prints `(fs, ft)` and `(fd, fs, ft)` - mnemonic order, matching the
+manual. Applying the definitions:
+
+- **`Ship_HoverFourCorner`**: `fs = vf2 = up`, `ft = vf1 = avgNormal`, then
+  `fd.x = up.y*n.z - n.y*up.z`, which is `(up x avgNormal).x`. The `-400`
+  broadcast in `vf3` multiplies that. **The term is anti-aligning as written.**
+- **`Body_AddForceAtPoint`**: `fs = vf1 = force`, `ft = vf2 = r`, then
+  `fd.x = F.y*r.z - r.y*F.z`, which is `(F x r).x`, the negative of the
+  physical `r x F`.
+
+Confidence **95** on the operand semantics specifically. That is higher than
+this page's decompilation-only ceiling because it is not a behavioural claim
+about the game: it is a vendor-documented instruction definition, cross-checked
+against the raw encoding of the four instructions in question. It says what the
+arithmetic is, not what the game does with it.
 
 ## `Body_AddForceAtPoint` computes `F x r`, and that is the useful clue
 
@@ -123,21 +188,33 @@ it.** `Body_AddTorqueWorld` (`0x0015ddb8`) is a plain `+=` into `body+0x130`.
 `+0xc0`..`+0xf0` and adds it to the angular velocity at `+0x160`, also with a
 plain `+=` and no negation. So on the path actually read, nothing flips it.
 
-Since the retail PS2 game demonstrably does not spin its ships inside-out, one of
-these is true and this page cannot yet say which:
+Since the retail PS2 game demonstrably does not spin its ships inside-out, the
+compensation is somewhere. This page originally offered three candidates.
+**One of them is now refuted.**
 
-- the compensation is in the `+0xc0` matrix or the inertia handling, neither of
-  which was read;
+> ~~the EE's `vopmsub` operand convention is the reverse of the one used here,
+> in which case all three terms flip together and everything is consistent with
+> the prose.~~
+>
+> **Dead.** The convention was checked against the *VU User's Manual* v6.0 and
+> against the raw instruction encodings; it is the one used here. See
+> [the section above](#the-cross-product-convention-settled-against-the-isa-manual).
+> This was the cheap explanation that would have made the whole question go
+> away, and it does not hold.
+
+Two candidates remain, and this page cannot say which:
+
+- the compensation is in the `+0xc0` matrix or the inertia handling, **neither
+  of which has been read** - this is the concrete next step, since
+  `Body_Integrate` rotates `body+0x130` through that matrix before it reaches
+  the angular velocity and nothing else on the path touches the sign;
 - `Ship_HoverFourCorner` passes an already-negated force to
-  `Body_AddForceAtPoint`, which was not checked component by component;
-- the EE's `vopmsub` operand convention is the reverse of the one used here,
-  in which case **all three terms flip together** and everything is consistent
-  with the prose.
+  `Body_AddForceAtPoint`, which was not checked component by component.
 
-The third is worth stating plainly because it is the cheapest to settle and it
-would resolve the whole question at once. Confidence **85** that the anomaly is
-systematic rather than three independent errors; confidence **0** on which of
-the three explanations is right.
+Confidence **85** that the anomaly is systematic rather than independent errors,
+unchanged - eliminating one explanation narrows where the resolution lives
+without making the observation itself any stronger. Confidence **0** on which of
+the two remaining explanations is right.
 
 ## Angular damping, confirmed exactly
 
@@ -285,9 +362,14 @@ Read while looking for the above; recorded because it corroborates
 ## Not determined
 
 - **The sub-step count.** See above.
-- **Where the torque sign is compensated.** See above. This is the highest-value
-  thing left, and confirming the `vopmsub` operand convention against a
-  reference would settle it in minutes.
+- **Where the torque sign is compensated.** Still the highest-value thing left.
+  The previous edition of this page expected the `vopmsub` convention check to
+  settle it; that check has been done and it **eliminated one branch rather than
+  answering the question**. The concrete next step is now the matrix at
+  `body+0xc0`..`+0xf0` and the inertia handling around it - read what builds it
+  and whether it is a plain rotation or carries a sign or an inverse-inertia
+  term. Failing that, `Ship_HoverFourCorner`'s force argument component by
+  component.
 - **The remaining `Ship_Update*` control terms** - engine, brakes, steering,
   pitch, airbrakes, drag, weathervane. `Ship_UpdateCraft` was read only far
   enough to find the hover and damping calls; the ordering table on
@@ -305,3 +387,14 @@ Read while looking for the above; recorded because it corroborates
   question. `-400` and the damping triple confirmed at 92 in a second binary;
   the frozen-accumulator sub-step finding at 88; the `F x r` observation
   recorded as a systematic-sign clue at 85 without a claimed resolution.
+- 2026-07-27, second pass: the `vopmula`/`vopmsub` operand convention settled at
+  95 against the *VU User's Manual* v6.0 plus a decode of the four raw
+  encodings, after confirming Ghidra models both as semantics-free
+  `CALLOTHER`s and prints them in mnemonic rather than encoding order. This
+  **refutes** the reversed-convention explanation for the sign anomaly and
+  leaves two candidates. Also corrected the sub-step stability derivation: the
+  earlier edition wrongly froze the position update at the full frame step as
+  well, giving `c >= 6.67`; the position update does advance by the per-sub-step
+  `h`, so the requirement is `c >= k*H*(n+1)/(2n)` - 4.44 at three sub-steps.
+  The conclusion that raising the sub-step count cannot fix the instability is
+  unaffected.
