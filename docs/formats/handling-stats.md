@@ -80,9 +80,9 @@ attribute the table lists has a typed field:
 | Element | Type | Confidence |
 | --- | --- | --- |
 | `Stats` | `handling::Stats`, one per team | 90 |
-| `InternalCamera`, `BackwardCamera` | `Camera` | 60 |
-| `BonnetCamera` | `BonnetCamera` | 60 |
-| `ExternalCameraFar`, `ExternalCameraClose` | `ExternalCamera` | 60 |
+| `InternalCamera`, `BackwardCamera` | `Camera` | 85 |
+| `BonnetCamera` | `BonnetCamera` | 85 |
+| `ExternalCameraFar`, `ExternalCameraClose` | `ExternalCamera` | 90 |
 | `AirbrakeGraphics` | `AirbrakeGraphics` | 55 |
 | `Misc` | `Misc` | 80 |
 | `FE` | `Fe` | 75 |
@@ -92,6 +92,14 @@ attribute the table lists has a typed field:
 | `Antigrav` | `Antigrav` | 85 |
 | `Physical` | `Physical` | 90 |
 | `pitch` | `Pitch` | 80 |
+
+The camera rows were 60 until the five blocks were traced through the loader and
+read back out of a running race; what they mean, which of them a player can
+select, and the sign convention of the two `ExternalCamera` blocks are all in
+[camera.md](../ghidra/functions/psp-pulse/camera.md). Note the finding there that
+`<BackwardCamera headtilt>` is parsed by the file's own schema and then **not
+stored**, and that `<AirbrakeGraphics amount>` is converted to radians at load,
+which the Units section below does not yet cover.
 
 The entry point is `handling::from_blob`, which takes an archive blob and does
 whatever that blob needs: PSP's is [shortened](fexml.md) and gets expanded, PS2's

@@ -163,6 +163,26 @@ open:
    confidence 80. The convention probably belongs in `oag-render`. This is exactly
    the "cheap to check once there is a ship to look at" test that module wrote
    down for itself.
+
+   **Settled since, against the original running** - see
+   [camera.md](docs/ghidra/functions/psp-pulse/camera.md). The disc's
+   `pos_length` is a **signed offset along the ship's forward axis** (negative =
+   behind), on the same convention as `pos_height` and `lookat_length`, so
+   `eye = position + forward * pos_length + up * pos_height` uses the file's
+   value unchanged. Measured off a breakpoint in `Camera_UpdatePlayerView`:
+   the eye's projection on the ship's forward row is **negative** for both
+   external views and **positive** for the internal one, matching
+   `<InternalCamera length>` exactly. So the current behaviour is right and the
+   two negations must not both be removed; what is wrong is only `chase.rs`'s
+   prose. **The Rust was deliberately not changed.** The minimal tidy-up is one
+   sign flip in `oag_render::camera::chase::anchor` plus deleting
+   `race::chase_pos_length`, with no behavioural difference; do it as one commit
+   and check a screenshot is byte-identical across it.
+
+   One new open question came out of the same measurement: the original puts the
+   eye at exactly **3/4** of the authored external offset, at rest and at speed
+   alike (seven samples over 541 world units, ratio `0.7500` every time), and
+   **where that factor comes from was not found**. Do not hardcode it.
 2. **`hover::target_height` exceeds `<Antigrav ride_height>`, which is also the
    probe cast length.** So there is no height at which the spring rests *and* the
    probes still see ground, and the oscillation is structural under the current

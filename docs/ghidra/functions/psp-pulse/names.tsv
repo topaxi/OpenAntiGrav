@@ -140,6 +140,15 @@
 0x08b36bfc	data	g_handling_parse_class	85	engine.md
 0x08ab0dcc	data	g_class_gravity_scale	78	engine.md
 
+# Camera: the player-selectable in-race views and the on-disc parameter blocks.
+0x0883c0cc	function	Camera_UpdatePlayerView	88	camera.md
+0x08838820	function	HandlingXml_ParseInternalCamera	92	camera.md
+0x08838978	function	HandlingXml_ParseBonnetCamera	92	camera.md
+0x08838aa0	function	HandlingXml_ParseBackwardCamera	92	camera.md
+0x08838bc8	function	HandlingXml_ParseExternalCameraFar	92	camera.md
+0x08838d8c	function	HandlingXml_ParseExternalCameraClose	92	camera.md
+0x08880724	function	Camera_SetMode	82	camera.md
+
 # Import stubs are not listed here. They are derived from the binary's own NID
 # tables by scripts/resolve-psp-imports.py, which verifies every name against
 # the NID it must hash to; see imports.md.

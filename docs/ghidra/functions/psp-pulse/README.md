@@ -13,6 +13,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Main loop](main-loop.md) | Frame pacing, timestep, state machine |
 | [Input](input.md) | Pad polling, the abstract button layer, deadzone and gain |
 | [Collision](collision.md) | Triangle soup, sweep and prune, surface types |
+| [Camera views](camera.md) | The player-selectable in-race views and how SELECT cycles them |
 | [Engine, brakes, steering, pitch](engine.md) | The craft update frame, every control force term, and the complete handling parameter block |
 | [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
@@ -48,3 +49,4 @@ Nothing in this set scored below 70, so no `_q` names exist yet.
 | `0x088ba284` | `Movie_ParseAttributes` | 95 | The front end is XML-driven |
 | `0x0883a2f0` | `Handling_ParseStats` | 88 | Placed all 32 handling parameters and found four are pre-scaled at load |
 | `0x08849618` | `Ship_UpdateCraft` | 82 | The craft frame: what order the force terms run in, and which read stale groundedness |
+| `0x0883c0cc` | `Camera_UpdatePlayerView` | 88 | The three player views, the SELECT cycle, and the sign convention of the on-disc camera offsets |
