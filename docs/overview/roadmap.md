@@ -74,7 +74,9 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] `BOOT.BIN` (PSP) loaded at base `0x08804000`, analysed: 10,683 functions
 - [x] Confirm the image base against PPSSPP's module load address. See
       [Allegrex and the VFPU](../psp/allegrex-vfpu.md#on-the-value)
-- [ ] Load `SCES_547.48` (PS2) into Ghidra
+- [x] Load `SCES_547.48` (PS2) into Ghidra: 5,234 functions, `r5900:LE:32:default`,
+      image base `0x00100000`, 28 overlay spaces. See
+      [`docs/ghidra/functions/ps2-pulse/`](../ghidra/functions/ps2-pulse/README.md)
 - [x] [Main loop and frame pacing](../psp/frame-pacing.md); state machine outline
 - [x] Simulation timestep resolved: the original uses **variable** delta, not a
       fixed step. See [ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)

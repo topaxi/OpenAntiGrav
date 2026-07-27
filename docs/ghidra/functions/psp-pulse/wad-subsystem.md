@@ -182,6 +182,36 @@ sits at 95 rather than 85.
 flags, `+0x4c` resident buffer. Fields `+0x28`, `+0x54`, `+0x58` are only ever
 zeroed in the code read so far, confidence 50.
 
+## Cross-platform
+
+The PS2 build has been read against this page; see
+[ps2-pulse/wad-subsystem.md](../ps2-pulse/wad-subsystem.md) for the evidence.
+
+| Function | PSP | PS2 (`SCES_547.48`) |
+| --- | --- | --- |
+| `Wad_HashName` | `0x08940d0c` | `0x0020c638` (a second, identical-arithmetic copy serves the resource registry at `0x00203b78`) |
+| `Wad_BuildCrcTable` | `0x08940cb0` | `0x0020c480` (second copy `0x00203b18`) |
+| `g_wad_crc_table` | `0x08afbffc` | `0x00303618` (second copy `0x00303160`) |
+| `Wad_MountArchive` | `0x08941e70` | `0x00213058` |
+| `Wad_Open` | `0x089411e8` | `0x002132c0` |
+| `Wad_Unmount` | `0x089410d4` | `0x002131e8` |
+| `g_wad_device_vtable` | `0x08ad3314` | `0x0029c620` |
+| `strlen` | `0x0897349c` | `0x0010ee78` |
+| `_ctype_` | `0x08a90d20` | `0x0029f8c0` |
+
+**Confirmed by the second binary:** the zero initial value and the final
+complement, both normalisation rules, the `#` plus eight uppercase hex digits
+escape hatch, the 8-byte header and 16-byte entry layout, the
+`{name_hash, offset, size_out, size_in}` field order, and - most usefully - that
+**`size_in == size_out` is the outer question**, since it is the only test the
+PS2 `Wad_Open` makes when choosing between a stored and a decompressing stream.
+
+**Contradicted by the second binary:** the *rotating* scan start. The PS2
+`Wad_Open` restarts its linear scan at the beginning of the entry array every
+time and keeps no last-hit cursor. First match still wins in both, so no
+lookup resolves differently; only the cost does. The PSP reading is not
+re-checked here and stands.
+
 ## Not determined
 
 - **No dispatch on a 4-byte blob magic was found.** Asset type appears to be

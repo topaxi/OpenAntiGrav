@@ -79,6 +79,43 @@ inferred from call position rather than decompiled.
 | `0x08b059f0` | `g_pad_buffer` | 90 |
 | `0x08b31780` | `g_input` | 85 |
 
+## Cross-platform
+
+The PS2 build has been read against this page; see
+[ps2-pulse/input.md](../ps2-pulse/input.md).
+
+| Function | PSP | PS2 (`SCES_547.48`) |
+| --- | --- | --- |
+| `Input_BuildState` | `0x0894eec4` | `0x00202100` |
+| `Input_IsPressed` | `0x0894f1cc` | `0x00202500` |
+| `Input_ConsumePress` | `0x0894f22c` | `0x00202560` |
+| `Input_ParseButtonName` | `0x0894f2a0` | `0x002025d8` |
+| `g_input` | `0x08b31780` | `0x00302ec0` |
+
+**Confirmed by the second binary:** every raw-mask-to-abstract-bit row in the
+table above, for all ten buttons the two machines share, plus the four-mask
+block (held, held-last, released, pressed) and its
+`pressed = held & ~heldLastFrame` derivation - shifted by 8 bytes on PS2 to
+make room for a connected/connected-last pair. Index `0x14` still means "any
+button" and `-1` still means "none". `activate` and `forward` are still `cross`.
+
+**Contradicted by the second binary, twice:**
+
+- **`cancel` and `backward` are `triangle` (index 6) on PS2**, not `circle`
+  (index 4). Read off the disassembly, not the decompiler, because a shared
+  return block was the obvious way to be fooled. The PSP side is not re-checked
+  here and stands as written.
+- **PS2's `Input_ConsumePress` clears the entire pressed mask** and ignores the
+  button index its callers pass. This page's one-bit description is scored 70
+  and "inferred from call position rather than decompiled", so the cheapest
+  thing that would settle it is re-reading `0x0894f22c` properly. If the PSP
+  does the same, the description above is wrong; if it does not, a
+  reimplementation cannot share one routine across the two.
+
+PS2 also adds indices 10 to 13 (`l2`, `r2`, `l3`, `r3`) from pad bits the PSP
+does not produce, and its `Input_GetAxis` applies **no deadzone and no gain** -
+this page's 0.25 and 1.25 were not found anywhere on the PS2 path.
+
 ## For reimplementation
 
 The abstract layer is worth copying rather than flattening. Keeping

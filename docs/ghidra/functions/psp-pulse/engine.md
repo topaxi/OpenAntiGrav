@@ -761,8 +761,36 @@ stored**. Same conclusion, now with the location.
 | Platform | Notes |
 | --- | --- |
 | PSP (Pulse) | This page |
-| PS2 (Pulse) | Not located. Comparing `HandlingXml_ParseEngine`'s equivalent would confirm the `0x80` stride and the four load-time scale factors in a second binary, which is the cheapest available route from 90 to the mid-90s |
+| PS2 (Pulse) | **Located, and it agrees.** See [ps2-pulse/handling-xml.md](../ps2-pulse/handling-xml.md) |
 | PSP (Pure) | Not located |
+
+| Function | PSP | PS2 (`SCES_547.48`) |
+| --- | --- | --- |
+| `Handling_ParseStats` | `0x0883a2f0` | `0x0014e6f0` |
+| `HandlingXml_ParseEngine` | `0x0883945c` | `0x0014d638` |
+| `HandlingXml_ParseBrakes` | `0x0883962c` | `0x0014d7c0` |
+| `HandlingXml_ParseTurning` | `0x088398e0` | `0x0014d8e0` |
+| `HandlingXml_ParseAirbrake` | `0x08839a04` | `0x0014dc90` |
+| `HandlingXml_ParseAntigrav` | `0x08839278` | `0x0014d4a0` |
+| `HandlingXml_ParsePhysical` | `0x08838f50` | `0x0014d230` |
+| `HandlingXml_ParsePitch` | `0x0883977c` | `0x0014d9d8` |
+| `HandlingXml_ParseAirbrakeGraphics` | `0x08839c68` | `0x0014de78` |
+| `g_handling_parse_class` | `0x08b36bfc` | `0x002da920` |
+
+The `0x80` stride, all 32 field offsets, and all four load-time scale factors
+reproduce **exactly** in the PS2 loader, from parsers built by a different
+compiler for a different ISA. That is the second-binary leg this page's own
+Cross-platform note asked for, so the parameter-block layout should be read as
+corroborated rather than merely self-consistent. The force law below is
+untouched by it: no PS2 `Ship_Update*` function has been located.
+
+**The PS2 build answers this page's `stats_base + 0x90` question.** It has a
+`<Misc>` element - not mentioned anywhere on this page - whose parser writes
+`width 0x78`, `length 0x7c`, `height 0x80`, `easyshield 0x84`,
+`mediumshield 0x88`, `hardshield 0x8c` and **`weight_distribution 0x90`**. That
+identifies the per-team scalar `Ship_UpdatePitch` reads. Whether the PSP build
+has the same element was not checked; if it does not, the two builds diverge
+here and `docs/formats/handling-stats.md` needs to say which is which.
 
 ## History
 

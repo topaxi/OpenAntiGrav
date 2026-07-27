@@ -1,0 +1,76 @@
+# Applied symbol names for pulse-ps2 SCES_547.48 (image base 0x00100000).
+#
+# The evidence lives in the page named in the last column; this file exists so
+# the names can be re-applied to a fresh Ghidra database without hand-editing.
+# See ADR-0005: the pages are the record of truth, and
+# scripts/apply-ghidra-names.py checks that every row here still appears in its
+# evidence page before it renames anything.
+#
+# There is no `just` recipe for this set yet; run the script directly, with the
+# program name and this file both given explicitly, against a bridge that has
+# SCES_547.48 open:
+#
+#   scripts/apply-ghidra-names.py --program SCES_547.48 \
+#       docs/ghidra/functions/ps2-pulse/names.tsv
+#
+# kind is `function` or `data`. Confidence below 70 gets a `_q` suffix applied,
+# below 50 is skipped. Recovered library symbols keep their real names rather
+# than the project's Subsystem_VerbNoun scheme.
+#
+# Addresses are the canonical cached-mirror form. .data and .rodata are also
+# mapped at 0x202xxxxx and 0x303xxxxx; do not use those.
+#
+# address	kind	name	confidence	evidence
+
+0x0020c638	function	Wad_HashName	95	wad-subsystem.md
+0x0020c480	function	Wad_BuildCrcTable	93	wad-subsystem.md
+0x00303618	data	g_wad_crc_table	93	wad-subsystem.md
+0x00203b78	function	Resource_HashName	92	wad-subsystem.md
+0x00203b18	function	Resource_BuildCrcTable	90	wad-subsystem.md
+0x00303160	data	g_resource_crc_table	90	wad-subsystem.md
+0x0020c4e0	function	Wad_ParseLiteralHash	90	wad-subsystem.md
+0x002c6d98	data	g_tolower_table	90	wad-subsystem.md
+0x00213058	function	Wad_MountArchive	88	wad-subsystem.md
+0x002132c0	function	Wad_Open	88	wad-subsystem.md
+0x002134c8	function	Wad_EntryExists	85	wad-subsystem.md
+0x002131e8	function	Wad_Unmount	82	wad-subsystem.md
+0x0029c620	data	g_wad_device_vtable	80	wad-subsystem.md
+0x002068c8	function	crc32	85	wad-subsystem.md
+0x002849e8	data	g_crc32_table	90	wad-subsystem.md
+
+0x0014d638	function	HandlingXml_ParseEngine	93	handling-xml.md
+0x0014d7c0	function	HandlingXml_ParseBrakes	93	handling-xml.md
+0x0014dc90	function	HandlingXml_ParseAirbrake	93	handling-xml.md
+0x0014d4a0	function	HandlingXml_ParseAntigrav	93	handling-xml.md
+0x0014d230	function	HandlingXml_ParsePhysical	93	handling-xml.md
+0x0014d8e0	function	HandlingXml_ParseTurning	92	handling-xml.md
+0x0014d9d8	function	HandlingXml_ParsePitch	92	handling-xml.md
+0x0014de78	function	HandlingXml_ParseAirbrakeGraphics	92	handling-xml.md
+0x0014cc98	function	HandlingXml_ParseInternalCamera	92	handling-xml.md
+0x0014ce90	function	HandlingXml_ParseBonnetCamera	92	handling-xml.md
+0x0014cda0	function	HandlingXml_ParseBackwardCamera	92	handling-xml.md
+0x0014cf80	function	HandlingXml_ParseExternalCameraFar	92	handling-xml.md
+0x0014d0d8	function	HandlingXml_ParseExternalCameraClose	92	handling-xml.md
+0x0014e6f0	function	Handling_ParseStats	90	handling-xml.md
+0x0014db08	function	HandlingXml_ParseMisc	88	handling-xml.md
+0x0014df58	function	HandlingXml_ParseGlobal	82	handling-xml.md
+0x002da920	data	g_handling_parse_class	90	handling-xml.md
+
+0x002025d8	function	Input_ParseButtonName	92	input.md
+0x00202100	function	Input_BuildState	90	input.md
+0x00202500	function	Input_IsPressed	90	input.md
+0x00202448	function	Input_IsHeld	85	input.md
+0x00202580	function	Input_IsReleased	85	input.md
+0x002025a8	function	Input_ConsumeRelease	82	input.md
+0x00302ec0	data	g_input	82	input.md
+0x00202560	function	Input_ConsumePress	80	input.md
+0x00202480	function	Input_GetAxis	80	input.md
+
+0x0014f208	function	Camera_UpdatePlayerView	88	camera.md
+0x002db350	data	g_settings	78	camera.md
+
+0x0010ee78	function	strlen	92	libc.md
+0x0011568c	function	strcmp	90	libc.md
+0x00115540	function	tolower	90	libc.md
+0x00111740	function	strcasecmp	88	libc.md
+0x0029f8c0	data	_ctype_	88	libc.md

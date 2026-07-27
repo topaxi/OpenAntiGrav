@@ -345,6 +345,38 @@ cycle - the *direction* each one moves is a guess, and a name that got it
 backwards would be worse than no name), and `FUN_08814014`, whose photo-mode
 body is only skimmed here.
 
+## Cross-platform
+
+The PS2 build has been read against this page; see
+[ps2-pulse/camera.md](../ps2-pulse/camera.md) and, for the parameter blocks,
+[ps2-pulse/handling-xml.md](../ps2-pulse/handling-xml.md).
+
+| Function | PSP | PS2 (`SCES_547.48`) |
+| --- | --- | --- |
+| `Camera_UpdatePlayerView` | `0x0883c0cc` | `0x0014f208` |
+| `HandlingXml_ParseInternalCamera` | `0x08838820` | `0x0014cc98` |
+| `HandlingXml_ParseBonnetCamera` | `0x08838978` | `0x0014ce90` |
+| `HandlingXml_ParseBackwardCamera` | `0x08838aa0` | `0x0014cda0` |
+| `HandlingXml_ParseExternalCameraFar` | `0x08838bc8` | `0x0014cf80` |
+| `HandlingXml_ParseExternalCameraClose` | `0x08838d8c` | `0x0014d0d8` |
+| `HandlingXml_ParseAirbrakeGraphics` | `0x08839c68` | `0x0014de78` |
+| `Camera_SetMode` | `0x08880724` | not located |
+
+**Confirmed by the second binary:** all 27 camera floats at the same offsets in
+the same order; `<BackwardCamera headtilt>` parsed and discarded there too;
+`<AirbrakeGraphics amount>`'s degrees-to-radians `0.017453` scale at `+0x6c`
+with `up_speed`/`down_speed` raw beside it; the three-view SELECT cycle in the
+same wrapping order with the same three string literals; and the hide-own-ship
+flag written then mirrored to a neighbouring byte, which strengthens the
+confidence-70 reading of `craft+0x6d` above.
+
+**The 3/4 factor is not shared.** The PS2 `Camera_UpdatePlayerView` computes its
+chase distance inline - `min(length - 1, 3)`, a geometry probe, a per-frame
+half-step low-pass, and a vertical lift below 7.5 - and no multiply by three
+quarters appears anywhere in it. So whatever produces the PSP's constant 0.75 is
+not a constant both builds share, and the PS2 path should be treated as a
+different algorithm rather than as a second copy to read the answer off.
+
 ## For reimplementation
 
 - Three views, one setting, wrapping in the order `OPT_INT`, `OPT_CLOSE`,

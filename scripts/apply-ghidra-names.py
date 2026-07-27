@@ -97,15 +97,16 @@ class Bridge:
 
 
 class Row:
-    __slots__ = ("address", "kind", "name", "confidence", "evidence", "source")
+    __slots__ = ("address", "kind", "name", "confidence", "evidence", "source", "base_dir")
 
-    def __init__(self, address, kind, name, confidence, evidence, source):
+    def __init__(self, address, kind, name, confidence, evidence, source, base_dir):
         self.address = address
         self.kind = kind
         self.name = name
         self.confidence = confidence
         self.evidence = evidence
         self.source = source
+        self.base_dir = base_dir
 
     @property
     def symbol(self) -> str:
@@ -127,22 +128,35 @@ def read_rows(path: Path) -> list[Row]:
             raise SystemExit(f"{path}:{lineno}: kind must be `function` or `data`, got `{kind}`")
         if not confidence.isdigit():
             raise SystemExit(f"{path}:{lineno}: confidence must be a number, got `{confidence}`")
-        rows.append(Row(address, kind, name, int(confidence), evidence, f"{path.name}:{lineno}"))
+        rows.append(
+            Row(
+                address,
+                kind,
+                name,
+                int(confidence),
+                evidence,
+                f"{path.name}:{lineno}",
+                path.parent,
+            )
+        )
     return rows
 
 
-def check_evidence(rows: list[Row], base_dir: Path) -> list[str]:
+def check_evidence(rows: list[Row]) -> list[str]:
     """Refuse any row whose evidence page no longer mentions it.
 
     The pages are the record of truth, so a disagreement means the row is stale,
     not that the page is.
+
+    Evidence paths are relative to the TSV that carries the row, not to one
+    fixed directory: psp-pulse and ps2-pulse each own their own names.tsv.
     """
     complaints = []
     cache: dict[Path, str] = {}
     for row in rows:
         if row.evidence == "-":
             continue
-        page = (base_dir / row.evidence).resolve()
+        page = (row.base_dir / row.evidence).resolve()
         if page not in cache:
             if not page.is_file():
                 complaints.append(f"{row.source}: evidence page {row.evidence} not found")
@@ -193,7 +207,7 @@ def main() -> int:
             return 1
         seen[row.address] = row
 
-    complaints = check_evidence(rows, DEFAULT_INPUTS[0].parent)
+    complaints = check_evidence(rows)
     if complaints:
         print("\nevidence check failed:", file=sys.stderr)
         for c in complaints:
