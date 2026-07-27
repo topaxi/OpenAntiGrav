@@ -792,6 +792,78 @@ others don't**, which is now the interesting remaining question rather than
 (currently `crates/game/src/font.rs`'s own 5x7 fallback) is noted as a
 separate, not-yet-done change from decoding it.
 
+## The real font atlas is wired into `just play` - text finally looks like the game
+
+Following straight on from the `.fnt` swizzle solve, the same agent replaced
+the front end's 5x7 placeholder glyphs with the real decoded atlas. Verified
+visually: the Language Selection screen now renders `Français` and `Español`
+with their actual accents, in the disc's own proportional typeface, not blocky
+5x7 pixel text. Three implementation details worth knowing:
+
+- **The atlas stores coverage, not colour** - a 16-level alpha ramp over one
+  flat RGB (white for the menu fonts, black for the two HUD ones) - so it's
+  uploaded as a single `R8` channel into the existing pipeline rather than
+  needing a new bind group.
+- **It's padded with a deliberate 2x2 opaque patch** in two extra rows beyond
+  the font's own pixels, because the UI pipeline draws solid fills by
+  sampling an opaque texel from the same texture the glyphs come from - a
+  single-texel patch would bleed under the linear filtering a real
+  antialiased font needs (the built-in 5x7 fallback still samples nearest,
+  correctly, since smoothing hard-edged pixel art turns it to mush).
+- **The fallback is preserved, not replaced** - `boot::load` still drops to
+  the 5x7 set (with a line in the boot report saying so) if the real font is
+  missing or fails to decode, so a rendering bug stays distinguishable from a
+  loading one. The accent-fold logic (case fold across Latin-1, then base
+  letter, so `Français` degrades to `Francais` rather than the letter-dropping
+  `FRANAIS`) now only runs as a second-choice path, since a real disc font
+  usually already has the accented glyph directly.
+
+## Wall collision response is real and validated - and it surfaced exactly why the ship still can't fly a lap
+
+A genuine new physics subsystem, not a bugfix: ships now generate contacts
+against `Wall`-class geometry (previously only the vertical hover probes ever
+queried the collision world at all) and respond with a real restitution-based
+projection, resolved after integration with swept-ray detection so a
+fast-moving hull can't tunnel through the zero-thickness wall shells. The
+`-1.0` "never bounce" sentinel is handled correctly rather than as a literal
+negative restitution. Validated with a dedicated ground-truth test
+(`a_ship_thrown_at_a_real_track_wall_does_not_pass_through_it`) against real
+disc geometry, plus unit tests pinning the force-law evaluation cost and
+constant per-tick cost. All 308 tests across `oag-physics`/`oag-gameplay`/
+`oag-game`/`oag-render` pass; clippy is clean.
+
+**It also did something nobody could have predicted from inside a sandbox
+with no disc access: it made the standing `the_ship_does_not_stay_on_the_track_yet`
+ground-truth test start failing** - which, per that test's own comment, is
+supposed to mean "the physics improved, delete this test." **Read the actual
+result before believing that literally, which is exactly what happened here.**
+Checked directly (this agent couldn't check it itself - no real disc in its
+sandbox, see the CLAUDE.md note added earlier this session):
+
+```
+tick  30  speed  19.88   tick  90  speed  79.62   tick 150  speed 111.72
+tick 180  speed  84.16   tick 210  speed  32.20   tick 240  speed   4.76
+tick 300  speed   2.37   position barely moving from tick 210 onward
+```
+
+**The ship is not flying a lap. It slams into a wall at roughly 4x the
+recording's real steady speed (still the ~12x-too-much-thrust bug from
+earlier this pass, unresolved) and gets stuck there, nose-first, at a
+near-standstill.** A screenshot at tick 300 shows it exactly that way. The
+test's formal check - stays inside the envelope, stays finite - is
+technically satisfied, because a ship wedged into a wall neither leaves the
+track nor blows up. That is not what the test or its surrounding
+documentation mean by "the physics improved," so **the test and the
+known-limitations section in `docs/tools/oag-game.md` are deliberately left
+in place, not deleted**, even though a literal reading of the test's own
+"when this fails, delete it" comment would say otherwise. The honest
+one-line status: the suspension is fixed (confirmed twice now, independently),
+wall collision is now real and correct, and the ship still cannot complete a
+lap, for a third, already-identified and separately-being-chased reason
+(the engine thrust magnitude bug). Whoever resolves that bug should re-run
+this exact test and this exact screenshot before deciding the module
+documentation's "it cannot fly a lap" framing is actually retired.
+
 ## Walls also render in `just play` itself now, not only in `oag-view`
 
 A correction to how the debug view above was first described: `oag-view
