@@ -27,6 +27,8 @@ below 70.
 | `0x0015dda0` | `Body_AddTorqueLocal` | 88 |
 | `0x0015d088` | `Body_Integrate` | 88 |
 | `0x001596f8` | `Ship_UpdateCraft` | 88 |
+| `0x0015c448` | `Ship_UpdateEngine` | 90 |
+| `0x0015c2d8` | `Ship_UpdatePitch` | 90 |
 | `0x0015a290` | `Ship_ApplyWeathervaneTorque` | 88 |
 | `0x0015c3a0` | `Ship_ApplyQuadraticDrag` | 88 |
 | `0x0015b978` | `Ship_HoverTwoPoint` | 85 |
@@ -594,6 +596,93 @@ One mechanism engine.md does not record: **the force fades**. The timer counts
 down by `dt`, and while it is above `0.1` the magnitude is scaled by
 `timer * 10`, dropping to the raw magnitude below that. So it is a decaying
 impulse re-armed every frame, not a flat continuous push.
+
+## The control terms
+
+### The controls pointer is `craft+0x98`
+
+Every control term reaches its input through `*(craft+0x98)`, with the same
+member offsets [engine.md](../psp-pulse/engine.md) records for the PSP's
+`craft+0x78`: `+0x00` steering, `+0x04` thrust, `+0x10` pitch, `+0x44` buttons.
+**The struct pointer moved between builds; the struct did not.**
+
+### Pitch - identical, term for term
+
+`Ship_UpdatePitch` (`0x0015c2d8`):
+
+```c
+p = 0;
+if (FUN_0015c270(craft))                            /* the gate, not decoded */
+    p = controls->pitch * (grounded ? pitch_ground : pitch_air);
+if (!grounded)
+    p += *(craft+0x8c) + 0x90;                      /* weight_distribution */
+Body_AddTorqueLocal(body, (p, 0, 0));               /* angularLocal.x += p */
+```
+
+`pitch_air` and `pitch_ground` are read at block-relative `0x70` and `0x74`,
+absolute `0x104` and `0x108` - exactly
+[engine.md](../psp-pulse/engine.md)'s parser table, and the grounded branch
+picks `pitch_ground` as that page says. The in-air bias is read from
+`stats_base + 0x90`, which the same page identifies as `weight_distribution`
+from the PS2 `<Misc>` element.
+
+The gate has a PS2 counterpart too, `FUN_0015c270`, and it is **not decoded
+here either** - the same open question in both builds. Confidence **90**: every
+element matches and two independent offset chains land on the documented
+fields.
+
+### Engine - identical, including the dead ramp
+
+`Ship_UpdateEngine` (`0x0015c448`), found by the `1e10` immediate
+(`lui at,0x5015`), which is unique in the executable. Every element of
+[engine.md](../psp-pulse/engine.md)'s pseudocode reproduces, with the parameter
+block read at block-relative `0x24`/`0x28`/`0x2c`/`0x30`/`0x34` - absolute
+`0xb8`/`0xbc`/`0xc0`/`0xc4`/`0xc8`, i.e. `gain`/`amount`/`falloff`/`accelcap`/
+`turbo`, in the order that table gives them.
+
+Confirmed against that page item by item: the `0.2` in-air thrust fraction and
+the `grounded` blend; the four-corner auto-speed law
+`base + step * (uint)craft+0x2bc` under the same
+`DAT_0027a7a8 == 0 && DAT_002dabd0 == 6` selector; the cap
+`0.5 * forwardSpeed + accelcap`; the `throttle > 100` rescale by `0.01`; the
+`1e10` uncapping under flag bit 3; the `min`; the flag-bit-2 multiplier; the
+turbo add under bits 9/10 with the mode `== 1` guard and the button-gated boost
+lift; the `* craft+0x2c4 * 2.0` tail; the one-shot sub-1.0 scale that resets
+itself to `1.0`; and the flag-bit-13 kill.
+
+**The dead `gain`/`falloff` ramp reproduces exactly.** The function computes the
+ramp into `craft+0x2e8`, clamps it at zero, and then overwrites it with the raw
+input two statements later, so the thrust is computed from the input and not
+from the ramped state:
+
+```c
+state = craft+0x2e8;
+state += (state < controls->thrust) ?  Engine.gain    * dt
+                                    : -Engine.falloff * dt;
+craft+0x2e8 = state;
+if (craft+0x2e8 < 0) craft+0x2e8 = 0;
+craft+0x2e8 = controls->thrust;                 /* <- the ramp is discarded */
+T = controls->thrust * Engine.amount;           /* <- and this uses the input */
+```
+
+engine.md scores that finding at 85 from one binary and flags it as the kind of
+thing an obvious reimplementation gets wrong. **A different compiler on a
+different ISA emitting the same dead store is about as strong as a second leg
+gets**, and it should be read as corroborated rather than single-source.
+
+Confidence **90** for the term as a whole.
+
+Two plumbing differences, neither of which changes the physics:
+
+- **The PS2 writes `body+0x110` directly** rather than accumulating into a craft
+  member and draining it later. The value is the same.
+- **It builds a genuine two-lane vector** for thrust and lift before the add.
+  That is worth recording because engine.md carries a confidence-65 note about
+  the PSP's `S221` being used without ever being loaded, and recommends a
+  reimplementation write `accumulator.y = lift` rather than reproduce the
+  register carry. The PS2 doing an ordinary two-lane add **supports that
+  recommendation**: the intended semantics really are "thrust in one lane, lift
+  in the other", not an accident of register allocation.
 
 ## Cross-platform
 
