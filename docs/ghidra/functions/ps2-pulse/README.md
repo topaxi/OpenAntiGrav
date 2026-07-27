@@ -15,6 +15,7 @@ form, and Ghidra's string search will return all three.
 | Page | Covers |
 | --- | --- |
 | [WAD subsystem](wad-subsystem.md) | Two copies of the name hash, mount, lookup, and the entry layout |
+| [LZSS decoder](lzss.md) | The decompressing stream: bit reader, ring, match encoding, and a dead encoder workspace |
 | [Handling stats loader](handling-xml.md) | All 32 handling parameters, all 27 camera parameters, the five load-time scale factors |
 | [Input](input.md) | The abstract button layer, the four edge masks, per-player pad blocks |
 | [Camera views](camera.md) | The player-selectable in-race views and the SELECT cycle |
@@ -22,7 +23,7 @@ form, and Ghidra's string search will return all three.
 
 ## Renames
 
-**Applied.** 48 symbols, collected in [names.tsv](names.tsv). There is no
+**Applied.** 58 symbols, collected in [names.tsv](names.tsv). There is no
 `just` recipe for this set yet; run the script directly against a bridge with
 `SCES_547.48` open:
 
@@ -31,7 +32,8 @@ scripts/apply-ghidra-names.py --program SCES_547.48 \
     docs/ghidra/functions/ps2-pulse/names.tsv
 ```
 
-Nothing in this set scored below 70, so no `_q` names exist yet.
+One symbol scores below 70 and carries a `_q`: `g_lzss_encoder_tree`
+(`0x00284fc4`, 68). Everything else is applied as written.
 
 ## Why this binary matters
 
@@ -52,6 +54,7 @@ names but the agreements and the disagreements.
 | The WAD name hash: CRC-32 reflected, **initialised to 0**, `\`-to-`/`, uppercase folded, `#`-hex escape hatch | [wad-subsystem.md](../psp-pulse/wad-subsystem.md) | Two independent implementations in this binary, both matching |
 | `size_in == size_out` is the outer test, not the compression flag | [wad-subsystem.md](../psp-pulse/wad-subsystem.md) | It is the only test `Wad_Open` makes when choosing a stream |
 | The 8-byte WAD header and 16-byte entries, `{hash, offset, size_out, size_in}` | [formats/wad.md](../../../formats/wad.md) | `Wad_MountArchive` reads exactly that shape |
+| The whole LZSS bit layout: 13-bit absolute position, 4-bit length, `+3` bias, 8192-byte ring, cursor at 1, MSB first | [formats/lzss.md](../../../formats/lzss.md) | `Lzss_Decode` reads the same fields in the same order; an independent transcription of it agrees byte for byte with ours. See [lzss.md](lzss.md) |
 | The abstract button layer and its four edge masks | [input.md](../psp-pulse/input.md) | Same raw masks, same indices, same `pressed = held & ~last` derivation |
 | Three player camera views cycling `OPT_INT` -> `OPT_CLOSE` -> `OPT_FAR` on SELECT | [camera.md](../psp-pulse/camera.md) | Same three literals, same rotation, same hide-own-ship flag pattern |
 
@@ -84,7 +87,6 @@ rule or because the hypothesis is untested.
 | Address | Hypothesis | Conf |
 | --- | --- | ---: |
 | `0x00202d48`..`0x00203a80` | The XML reader family: document open, first/next child, element-name compare, first/next attribute, attribute-name compare, attribute as float / int / string. Obvious from use in `Handling_ParseStats`, individually unverified. Naming these would unlock every XML-driven subsystem at once | 60 |
-| `0x00213e58` | The decompressing WAD stream constructor. `0x400`-byte staging buffer, a bit accumulator seeded to `0x80`: the shape of an MSB-first flag-bit LZSS reader, but the decode loop was not read. **The PS2 archives are the only corpus that exercises LZSS**, so this is the highest-value target left | 55 |
 | `0x00257740` | The stored (uncompressed) WAD stream constructor | 55 |
 | `0x001fd618` / `0x001fd6b8` / `0x001fd8c0` | A name-hashed resource registry: find-by-hash, load-file-and-register, register-from-memory, over a singly linked list rooted at `0x00284840`. It is what calls `Resource_HashName`; it is not the WAD directory, so mapping these three onto PSP `Wad_*` names would be wrong | 60 |
 | `0x001fed88` / `0x001fede8` / `0x001fee90` / `0x001fef20` | A third CRC-32 family with its own table at `0x003025e0`: an **uppercase**-folding string hash, a raw string hash, and a two-word hash. Not the WAD hash (wrong fold direction); what uses it was not traced | 55 |

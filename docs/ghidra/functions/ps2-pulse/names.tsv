@@ -38,6 +38,17 @@
 0x002068c8	function	crc32	85	wad-subsystem.md
 0x002849e8	data	g_crc32_table	90	wad-subsystem.md
 
+0x00214080	function	Lzss_Decode	92	lzss.md
+0x00213f70	function	Lzss_ReadBits	92	lzss.md
+0x00284fc0	data	g_lzss_ring	92	lzss.md
+0x00284fcc	data	g_lzss_input_buffer	90	lzss.md
+0x00213e58	function	Lzss_InitFromFile	88	lzss.md
+0x00213dc0	function	Lzss_AllocBuffers	85	lzss.md
+0x00213e08	function	Lzss_FreeBuffers	85	lzss.md
+0x00214318	function	Lzss_CloseStream	82	lzss.md
+0x00214270	function	Lzss_SkipForward	80	lzss.md
+0x00284fc4	data	g_lzss_encoder_tree	68	lzss.md
+
 0x0014d638	function	HandlingXml_ParseEngine	93	handling-xml.md
 0x0014d7c0	function	HandlingXml_ParseBrakes	93	handling-xml.md
 0x0014dc90	function	HandlingXml_ParseAirbrake	93	handling-xml.md

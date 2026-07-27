@@ -24,10 +24,23 @@
 //! continuous bit stream instead.
 //!
 //! Absolute positions rather than back-distances mean a match can read ring
-//! bytes that have not been written during this stream, which read as zero. The
-//! ring's initial contents are therefore part of the format, and the cursor
-//! starting at 1 rather than 0 is load-bearing: starting at 0 corrupts roughly
-//! 1300 of 1500 bytes on the first entry tested.
+//! bytes that have not been written during this stream. We return zero for
+//! those. The PS2 does not: its ring is a fresh heap allocation that is never
+//! cleared, so the original reads whatever was there. No shipped stream tells
+//! the two apart, because the encoder never emits such a match, but a
+//! hand-built one can - see `docs/formats/lzss.md`.
+//!
+//! The cursor starting at 1 rather than 0 is load-bearing: starting at 0
+//! corrupts roughly 1300 of 1500 bytes on the first entry tested.
+//!
+//! # Checked against the other binary
+//!
+//! `tests/lzss_ps2_reference.rs` holds a second decoder transcribed from
+//! `Lzss_Decode` at `0x00214080` in the PS2 `SCES_547.48`, and the two agree on
+//! every byte of 40,000 random streams. Changing any parameter in this file
+//! without changing that one will fail the comparison, which is the point: the
+//! unit tests below share this module's assumptions and cannot catch a
+//! misreading of the format.
 
 /// Size of the sliding-window ring buffer.
 const RING_SIZE: usize = 8192;

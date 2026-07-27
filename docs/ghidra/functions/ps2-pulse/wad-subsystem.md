@@ -174,14 +174,11 @@ file, release the lock, free the entry vector.
 
 ## Not determined
 
-- **The decompressor itself.** `Wad_Open`'s unequal-sizes branch builds a
-  `0x48`-byte stream at `0x00213e58` with a `0x400`-byte staging buffer and a
-  bit accumulator seeded to `0x80` - the shape of an MSB-first flag-bit reader,
-  consistent with the PSP LZSS decoder, but the decode loop was not read. The
-  PSP page notes the **PS2 archives are the only corpus that exercises LZSS**
-  (192 of 193 entries in `WADSP.WAD`), so this is the highest-value thing left
-  on this page. Deliberately unnamed.
-- **The stored-blob stream** at `0x00257740` (`0x24` bytes), likewise.
+- **The stored-blob stream** at `0x00257740` (`0x24` bytes). Deliberately
+  unnamed; only its size and construction site are known.
+
+`Wad_Open`'s unequal-sizes branch builds the `0x48`-byte decompressing stream at
+`0x00213e58`, which **is** now read and documented: see [lzss.md](lzss.md).
 - **Mount points.** The PS2 build has no `wad:` / `fe:` / `fedata:` /
   `bedata:` table like the PSP's five call sites; `fedata:` and `bedata:` do
   exist as strings but reach a different lookup. The archives referenced by name
