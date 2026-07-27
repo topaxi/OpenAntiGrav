@@ -87,20 +87,22 @@ What that instrument then found:
   - a short name overwriting `"Language Selection"` in place. Reading it is a
   text-mode view of the front end and is how the menus were navigated.
 
-### The trace has no moving ship in it yet, and why
+### The false start, which reads exactly like a bug and is not
 
-Every capture so far is of a **stalled** ship. Pulse penalises a false start by
-flooding the engine, and holding thrust through the countdown - which is what a
-script does by default - triggers it. The symptom is a beautiful trap: the
-throttle field reads the full 100 you are sending, the cached speed climbs to 10
-and resets, and the ship does not move at all. That reads exactly like a broken
-input path or a wrong position offset, and it is neither.
+Most of the captures this pass were of a **stalled** ship, and the trap is worth
+knowing before it costs someone else an hour. Pulse penalises a false start by
+flooding the engine, and holding thrust through the countdown is what a script
+does by default. The symptom: the throttle field reads the full 100 you are
+sending, the cached speed climbs to 10 and resets, and the ship does not move at
+all. That reads like a broken input path or a wrong position offset. It is
+neither.
 
-The fix is a clean restart with nothing held through the countdown, which needs
-the pause menu, which is a few more scripted presses. **Start there**: the
-capture tool, the offsets and the scenario (Time Trial, Venom, Talon's Junction
-White, Assegai) are all in place, and the profile save now persists so the boot
-walk does not have to be repeated.
+The cure is a restart with nothing held: `start`, `down` x4, `cross` for RESTART
+RACE, then ~25 seconds of no input at all, then capture with thrust. That
+produced the trace this pass measured from - 200 ticks, 73.85 units travelled,
+speed steady around 22 - and it is what settled the cached-speed staleness
+199/199. The scenario is Time Trial, Venom, Talon's Junction White, Assegai, and
+the profile save now persists, so the first-boot walk never has to be repeated.
 
 M4 is open and partly built. What exists now that did not this morning:
 
@@ -497,12 +499,13 @@ closed.
 
 ## Where I would go next
 
-1. **Get a moving ship into a trace.** Everything else in M3 waits on it, and it
-   is now one pause-menu restart away - see the false-start section above. Then
-   `oag-trace`: the comparison side does not exist at all, and the capture format
-   is a CSV whose columns are already the ones
+1. **`oag-trace`, the comparison side, which does not exist at all.** Capture
+   works and records a moving ship; nothing reads a trace back and diffs it
+   against a Rust run. The CSV's columns are already the ones
    [the verification protocol](docs/reverse-engineering/verification-protocol.md)
-   asks for.
+   asks for, and the output that matters is the first divergent tick and by how
+   much, not a pass or fail. Note traces are derived game data: they live in
+   `data/traces/` and are never committed, so this cannot be a CI test.
 2. **Make the ship fly a lap, and try the two cheap explanations first.** The
    hover target exceeding the probe reach, and the missing inertia tensor, are
    findings 2 and 3 above; both are small, both are testable against

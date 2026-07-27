@@ -160,4 +160,16 @@ stalling the engine, and the symptom through the debugger is unmistakable and
 easy to misread: `craft+0x2b8` shows the full throttle you are sending, the
 craft's cached speed climbs to 10 and resets, and the ship does not move at all.
 That is a stalled start, not a broken input path and not a wrong position offset.
-Let the countdown finish with no buttons held, then apply thrust.
+
+Recovering from one needs the pause menu: `start`, then `down` x4 and `cross` for
+RESTART RACE. Then hold **nothing** for about 25 seconds while the countdown
+runs, and only then start the capture with thrust held:
+
+```sh
+just trace --ticks 200 --hold cross --warmup 6 --out data/traces/talons-junction.csv
+```
+
+Confirmed working: 200 ticks, 73.85 world units travelled, speed steady at 21.5
+to 22.7, and a fresh craft address after the restart. The stalled and moving
+cases are told apart in one line - if the distance between the first and last
+position is near zero while the throttle column reads 100, the start was stalled.

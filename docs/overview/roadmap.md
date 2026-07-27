@@ -119,19 +119,16 @@ The instrument everything after this is measured with.
 **Exit criterion:** one command diffs any subsystem against the original and
 reports where and by how much it diverges.
 
-The instrument exists and reads real state out of a real race; the comparison
-does not, so the exit criterion is untouched. What the capture path has already
-produced is four runtime confirmations that were previously static readings -
-see [frame pacing](../psp/frame-pacing.md) and
-[engine](../ghidra/functions/psp-pulse/engine.md).
+The instrument exists and records a moving ship - 200 ticks of a Time Trial at
+about 22 units/s, position, orientation, velocity, dt and the whole control block
+per tick. The comparison does not exist, so the exit criterion is untouched.
 
-**The one thing between here and a usable trace** is that the captured ship does
-not move: a false start stalls Pulse's engine, and every capture so far was taken
-from a stalled grid slot. The fix is a clean restart with no input held through
-the countdown, which needs the pause menu, which needs a few more scripted
-presses. It is not a harness problem, and
-[the debugger page](../reverse-engineering/ppsspp-debugger.md) records the
-symptom because it reads exactly like one.
+What the capture path has already produced is five runtime confirmations that
+were previously static readings, including one that settles a claim by counting:
+`craft+0x2ec` matches the **previous** frame's `|dot(velocity, forward)|` on
+199 of 199 samples and the current frame's on 137, which is the one-frame
+staleness [engine](../ghidra/functions/psp-pulse/engine.md) derived from the
+frame ordering. See also [frame pacing](../psp/frame-pacing.md).
 
 ---
 

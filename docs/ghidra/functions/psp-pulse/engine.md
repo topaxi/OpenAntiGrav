@@ -166,10 +166,30 @@ consecutive frames and keeping the fields that changed. It is what
 
 Confidence **85** for position, velocity and the transform, which agree with each
 other arithmetically; **60** for `+0x398`, which was `|velocity|` to seven digits
-in one sample and disagreed with it in another, so **it is not the speed** and is
-recorded only so the next reader does not repeat the coincidence. `craft+0x2ec`
-does behave as this page describes: at frame *n* it holds the value the body
-carried at frame *n-1*, which is the one-frame staleness already documented.
+in one sample and ran about 4 % above it across a 200-tick trace, so **it is not
+the speed** and is recorded only so the next reader does not repeat the
+coincidence.
+
+### The cached speed, and its staleness, measured
+
+Over 200 ticks of a moving ship at about 22 units/s, holding thrust:
+
+| Claim | Test | Result |
+| --- | --- | --- |
+| `craft+0x2ec` is `\|dot(velocity, forward)\|` **of the previous frame** | compare against both frames, tolerance 0.01 | previous frame **199/199**, current frame 137/199 |
+| the transform rows are orthonormal | row lengths over all 600 rows | `1.000000 .. 1.000001` |
+| position integrates velocity | `\|Δposition\| / (\|velocity\| · dt)` | mean `1.012`, range `0.965 .. 1.039` |
+| controls are on a 0..100 scale | throttle while thrust is held | `100.0`, every tick |
+
+The first row is the interesting one. 199 of 199 against 137 of 199 is not a
+tolerance question: the cached speed **is** the forward speed, and it **is** one
+frame behind, which is exactly what this page derived from the frame ordering and
+what makes a reimplementation that resolves contacts first diverge on every
+takeoff and landing frame. Confidence **95**, runtime-measured.
+
+The position-integration row is included because it is *not* exact: velocity
+sampled at function entry is last frame's, so 1.012 rather than 1.000 is the
+expected residue of the same staleness, not an error bar on the offsets.
 
 It stashes `dt` at `craft+0x1c8` and `body` at `craft+0x1cc`, copies the body's
 4x4 transform, linear velocity and position into the craft, zeroes the four
