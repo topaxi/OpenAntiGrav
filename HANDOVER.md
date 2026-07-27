@@ -370,6 +370,65 @@ One more unresolved difference, not yet chased: the PS2's four-corner
 bank-to-yaw term uses `50.0` where the PSP uses `30`; neither value is
 runtime-verified yet.
 
+## `oag-trace` got its first real comparison, and it changes where the floor-bug fix should look
+
+The agent that built `oag-trace` circled back to attempt a real capture, as
+suggested once niri floated PPSSPP's window and the save profile was confirmed
+present. **It got one, and it also hit a context limit ("Prompt is too long")
+right after committing its work** - same failure mode as the PS2 Ghidra agent
+above, and again the work itself landed cleanly (`75fc4dc`) before the process
+died; there was nothing left uncommitted to recover this time.
+
+**There is now a documented, reusable reference scenario**: Time Trial, Venom,
+Talon's Junction White, Assegai - one ship, no weapons, no AI, 5,178 m, with the
+exact menu key sequence from a cold boot recorded in
+[`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md#the-reference-scenario).
+This is the scenario to reuse for anything that needs to compare against the
+original, including the user's stated goal of eventually racing a full race on
+both the original and the reimplementation on the same track.
+
+**The first real trace-vs-simulation comparison found the ship falls through
+the floor at the very first tick, at the original's own recorded starting
+position** - not after driving for a while. `grounded` reads `1.0` on all 200
+real ticks; the simulation's reads `0.0` on every tick but the seeded first
+one. Everything downstream follows from that single fact: the simulated ship
+free-falls to 211 units/s against a recorded 22.7, and position diverges by
+423 units by tick 3. The control columns (throttle/brake/steer/airbrakes) all
+match exactly, so input and scaling are not the problem - **the entire
+divergence is the force law failing to find ground contact where the original
+does, immediately.** This is a different, and likely more primary, symptom
+than the roll-oscillator instability the physics investigation elsewhere in
+this file has been focused on - that was about a ship that eventually tumbles
+once already grounded; this is about a ship never grounding at all from a
+correctly-seeded position. It also gives the earlier "hover target height
+exceeds probe cast length" hypothesis its first real numeric backing, rather
+than a static reading. Relayed directly to the physics investigation.
+
+**Two free findings from the same capture:**
+
+- **Handedness settled independently, by a method that needs no simulation at
+  all.** The recorded ship travels along `+row 2`
+  (`dot(velocity_hat, forward) = +0.997` every tick) and
+  `cross(row0, up) = forward` holds 200/200 - so row 0 is confirmed as the
+  **left** axis, corroborating the existing 84-confidence roadmap finding
+  (which came from the sign of the yaw response to a held steer) by a
+  completely independent route. Running the comparison the other way
+  (`--basis right-up-back`) is worse on every field, which is the switch
+  doing its job.
+- **The craft's `speed` field is not the velocity's length** - it runs a
+  steady 3.67% high against it; `speed_cached` (one tick stale) is the
+  length. A recording-model mismatch, not a physics bug, and worth knowing
+  before trusting `speed` directly in any future comparison.
+
+Also landed in the same commit: `scripts/psp-trace.py` gained `--ship`/`--craft`
+selection, because a race breakpoints on `Ship_UpdateCraft` once per ship per
+tick with a different craft each time - the previous capture logic stopped at
+the second address, which is fine for a one-ship Time Trial but makes a race
+capture meaningless without picking one craft to follow. Found in the process:
+**the player's craft is the one whose throttle is exactly 0 or 100** (digital
+input), where AI craft read fractional throttles; and only four of eight craft
+were updated per tick in one race capture, for a reason not yet established.
+
 ## `oag-trace` exists now: M3's missing comparison side is built
 
 A new crate, `crates/trace` (`oag-trace`, lib + bin, added to the workspace),
