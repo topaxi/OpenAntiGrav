@@ -15,11 +15,14 @@
 //!
 //! - [`mesh`] decodes a `.vex` model into one portable vertex and index buffer.
 //! - [`track`] builds the driveable ribbon from a decoded track spline.
+//! - [`collision`] builds a debug view of the collision soup the physics world
+//!   is made of.
 //! - [`mesh_render`] is the pipeline that draws either of those, offscreen or
 //!   into a surface.
 //! - [`camera`] is the camera maths: orbit, free and the chase spring.
 
 pub mod camera;
+pub mod collision;
 pub mod mesh;
 pub mod mesh_render;
 pub mod track;

@@ -26,7 +26,27 @@ use std::sync::Arc;
 // live in `oag-render`, so the game draws through the same code. What is left
 // here is the viewer: the CLI, the window and the texture browser.
 use oag_assets::Archive;
-use oag_render::{mesh, mesh_render, track};
+use oag_render::{collision, mesh, mesh_render, track};
+
+/// The box enclosing a built model's vertices.
+///
+/// The collision side has [`collision::bounds_of`] over decoded nodes; the
+/// ribbon only exists as a model, so it is measured after the fact.
+fn bounds_of_model(model: &mesh::Model) -> Option<collision::Aabb> {
+    let mut out: Option<collision::Aabb> = None;
+    for v in &model.vertices {
+        match &mut out {
+            None => out = Some((v.position, v.position)),
+            Some((lo, hi)) => {
+                for i in 0..3 {
+                    lo[i] = lo[i].min(v.position[i]);
+                    hi[i] = hi[i].max(v.position[i]);
+                }
+            }
+        }
+    }
+    out
+}
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -91,6 +111,83 @@ struct Cli {
     /// above it.
     #[arg(long)]
     track: Option<String>,
+
+    /// Render a track's collision soup - the geometry the physics world is
+    /// actually made of - by the `.vex` name in the archive.
+    ///
+    /// Triangle outlines by default, coloured per collision class, so geometry
+    /// behind a wall stays visible. Per-class counts and extents are printed,
+    /// which is what makes this checkable without looking at the picture.
+    #[arg(long)]
+    collision: Option<String>,
+
+    /// Draw `--collision` filled instead of as outlines.
+    ///
+    /// Reads better for a single surface, and hides everything inside a closed
+    /// wall: the pipeline is opaque and depth-tested, so there is no seeing
+    /// through it.
+    #[arg(long)]
+    solid: bool,
+
+    /// Include `Cage` nodes in `--collision`.
+    ///
+    /// Off by default because a cage is not collidable - the original parses
+    /// cage nodes and branches past them - so the default picture is what the
+    /// physics world contains rather than what the file holds.
+    #[arg(long)]
+    cage: bool,
+
+    /// Overlay the driveable ribbon on `--collision`, from the same file.
+    ///
+    /// The point of the collision view: the walls should enclose the ribbon.
+    #[arg(long)]
+    with_spline: bool,
+}
+
+/// Prints the per-class breakdown of a track's collision soup.
+///
+/// Extents are the interesting part, not the counts: `docs/formats/collision.md`
+/// records an unresolved contradiction between the sweep-and-prune reading's
+/// -1024..+1023 packed ids and world extents of around 1,554 units, and this is
+/// the cheapest place to measure the shipped geometry against it.
+fn report_collision(nodes: &[oag_formats::collision::CollisionNode]) {
+    for k in collision::stats(nodes) {
+        let collidable = if collision::is_collidable(k.kind) {
+            ""
+        } else {
+            " (not collidable)"
+        };
+        match k.bounds {
+            None => println!("  {:<9} -{collidable}", k.kind.node_name()),
+            Some((lo, hi)) => println!(
+                "  {:<9} {:>3} node(s), {:>4} mesh(es), {:>7} tri, \
+                 x {:>9.1}..{:<9.1} y {:>9.1}..{:<9.1} z {:>9.1}..{:<9.1}{collidable}",
+                k.kind.node_name(),
+                k.nodes,
+                k.meshes,
+                k.triangles,
+                lo[0],
+                hi[0],
+                lo[1],
+                hi[1],
+                lo[2],
+                hi[2],
+            ),
+        }
+    }
+
+    if let Some((lo, hi)) = collision::bounds_of(nodes, collision::is_collidable) {
+        let reach = (0..3).fold(0.0f32, |m, i| m.max(lo[i].abs().max(hi[i].abs())));
+        println!("  collidable extent: {reach:.1} units from the origin at furthest");
+        // Not a rendering concern, but this is the only place the number gets
+        // measured, so say so rather than leaving it in a screenshot.
+        if reach > 1024.0 {
+            println!(
+                "  NOTE: past +/-1024, which the sweep-and-prune reading in \
+                 docs/formats/collision.md says packed ids cannot express."
+            );
+        }
+    }
 }
 
 /// Reads and decodes an external texture set out of the same archive.
@@ -114,6 +211,65 @@ fn load_texture_set(spec: &str, entry: &str) -> Result<Vec<Option<mesh::ModelTex
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Some(name) = &cli.collision {
+        let (nodes, label) = collision::load(&cli.archive, name)?;
+        println!("{label}: {} collision node(s)", nodes.len());
+        report_collision(&nodes);
+
+        let style = if cli.solid {
+            collision::Style::Solid
+        } else {
+            collision::Style::Wireframe
+        };
+        let soup = collision::build_model(&label, &nodes, style, cli.cage);
+        println!(
+            "  drawing {} triangle(s) as {}",
+            soup.indices.len() / 3,
+            if cli.solid { "solid" } else { "outlines" }
+        );
+
+        let model = if cli.with_spline {
+            let (ai, _) = track::load(&cli.archive, name)?;
+            let ribbon = track::build_model(&label, &ai);
+            if let (Some(walls), Some(spline)) = (
+                collision::bounds_of(&nodes, |k| k == oag_formats::collision::SurfaceKind::Wall),
+                bounds_of_model(&ribbon),
+            ) {
+                // The check the view exists for, stated as a number so it can be
+                // read without a screenshot. Slack is generous: the ribbon is
+                // built from the spline's own half-widths, which are not
+                // required to sit inside the collision walls to the millimetre.
+                let enclosed = collision::contains(walls, spline, 1.0);
+                println!(
+                    "  wall box {:?}..{:?} vs spline box {:?}..{:?}: spline is {}",
+                    walls.0,
+                    walls.1,
+                    spline.0,
+                    spline.1,
+                    if enclosed {
+                        "inside the walls"
+                    } else {
+                        "NOT fully inside the walls"
+                    }
+                );
+            }
+            mesh::merge(&label, vec![soup, ribbon])
+        } else {
+            soup
+        };
+
+        // Tracks are flat and wide, so look down at them rather than along.
+        let pitch = cli.pitch.unwrap_or(1.15);
+        if let Some(path) = &cli.screenshot {
+            mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch)?;
+            println!("wrote {}", path.display());
+            return Ok(());
+        }
+        println!("arrows orbit, +/- (or PageUp/PageDown) zoom, escape quits");
+        orbit::run(model, cli.yaw, pitch)?;
+        return Ok(());
+    }
 
     if let Some(name) = &cli.track {
         let (ai, label) = track::load(&cli.archive, name)?;
