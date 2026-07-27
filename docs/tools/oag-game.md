@@ -275,10 +275,11 @@ geometry, by
 [`wall_collision_ground_truth.rs`](../../crates/game/tests/wall_collision_ground_truth.rs).
 That last one is the only test that sees a shipped wall's own winding, scale and
 triangle density; the synthetic ones author all three. **It passes against the
-real disc**: on `16_Track` the hull measures 5.5 x 3.5 x 13.0 from the ship's own
-`<Misc>`, and a ship fired at a real wall triangle stops 6.5 units past the plane
-- half the hull length, which is exactly where a box that size comes to rest -
-and turns round.
+real disc**: the hull measures 5.5 x 3.5 x 13.0, read from the **ship's** own
+`<Misc>` (Assegai in the Venom class - nothing about the hull comes from the
+track), and a ship fired at a real wall triangle on `16_Track` stops 6.5 units
+past the plane. That is exactly half the hull length, which is where a box that
+size comes to rest, and it turns round.
 
 Collision *response* beyond this - damage and the shield pool - is not
 implemented.
