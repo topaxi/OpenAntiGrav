@@ -315,10 +315,17 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// live elsewhere. That is the next measurement, and it is the last thing between the
 /// simulation and a ship that stays on a track.
 ///
-/// # The magnitude is now measured, and it is not 400
+/// # The literal is 400 and confirmed twice; the behaviour it produces is not
 ///
 /// `docs/physics/README.md` transcribes this gain as `400`, and everything above
-/// settles only its **sign**. The magnitude has now been measured directly, by
+/// settles only its **sign**. The magnitude is now confirmed as well, at instruction
+/// level and in a **second binary**: the PS2 build materialises `0xC3C80000`, exactly
+/// `-400.0f`, as an immediate in both `Ship_HoverFourCorner` (`0x0015a940`) and
+/// `Ship_HoverTwoPoint` (`0x0015b978`), with the same sign and operand order the PSP
+/// reading has. **So `400` is not a transcription error and this constant keeps it.**
+///
+/// What is wrong is the behaviour `400` produces when it reaches the body as a bare
+/// angular acceleration, and that was measured directly, by
 /// perturbing the original and watching it recover - a step response, which is the
 /// standard way to identify a second-order system and needs no disassembly at all.
 ///
@@ -346,32 +353,80 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// ```
 ///
 /// Two things fall out. The damping is **about 1.6 against the transcribed `2.0`** in
-/// [`crate::passive::ROLL_DAMPING`], so that constant is roughly right. The stiffness
-/// is **about 20 against a transcribed 400**, a factor of twenty, and that single
-/// number is what made this crate's ship tumble: at `400` the oscillator runs at
-/// `sqrt(400) = 20 rad/s`, and the stability bound below is violated 2.22-fold. At the
-/// measured `20.2` it runs at 4.49 rad/s, `det = 0.9704`, and roll **decays** about
-/// 1.5 % a tick instead of growing 2 %.
+/// [`crate::passive::ROLL_DAMPING`] - itself confirmed at `-2.0` in the PS2 build's
+/// `Ship_ApplyAngularDamping` (`0x0015c1b0`) for racing modes - so that constant is
+/// right and is kept. The closed-loop stiffness is **about 20 against a literal 400**,
+/// a factor of twenty, and that factor is what made this crate's ship tumble: at `400`
+/// the oscillator runs at `sqrt(400) = 20 rad/s` and the stability bound below is
+/// violated 2.22-fold, while at `20.2` it runs at 4.49 rad/s, `det = 0.9704`, and roll
+/// **decays** about 1.5 % a tick instead of growing 2 %. The factor is carried by
+/// [`ALIGNMENT_INERTIA`], which exists precisely so the literal and the measurement can
+/// both be stated without either being edited to suit the other.
 ///
-/// **What the factor of twenty actually is remains open, and that matters.** The most
-/// likely reading is that the recovered `400` is a genuine torque which the original
-/// divides by a roll moment of inertia of about 20, while this crate routes the term
-/// through [`crate::forces::drain`] as an angular *acceleration* that never sees the
-/// inertia tensor - `400 / 20.2 = 19.8` is suspiciously close to a real moment for a
-/// hull this size. If that is right, the correct fix is structural and this constant
-/// goes back to `400` once the accumulator semantics are settled. Until then the value
-/// here is **the measured behaviour**, which is the thing a trace comparison checks,
-/// rather than a transcription that is known to reproduce the wrong motion.
+/// **What the factor of twenty actually is remains open**; see [`ALIGNMENT_INERTIA`]
+/// for the hypothesis, the candidate mechanism and what would retire it.
 ///
-/// Confidence **80** on the magnitude: the step response is unambiguous and
-/// reproducible, but it was taken on one ship on one track, the fit is by hand from a
-/// quarter period and one overshoot, and the decomposition into gain-over-inertia is
-/// explicitly not resolved. Confidence **84** on the direction, unchanged:
+/// One thing the measurement does settle, and it is worth stating because a second
+/// sign anomaly has since been found in `Body_AddForceAtPoint` (torque as `F x r`
+/// rather than `r x F`, in both binaries): **this crate's failure mode is growth, not
+/// anti-alignment.** A term with the wrong sign diverges from the first tick; what was
+/// measured here is a ship holding still for about three hundred ticks and then
+/// growing an oscillation exponentially from numerical noise, and
+/// `the_alignment_torque_points_from_the_ships_up_axis_toward_the_surface_normal`
+/// pins the direction as aligning independently of any simulation. So whatever the
+/// `F x r` anomaly turns out to be, it is not what threw the ship off this track.
+///
+/// Confidence **80** on the step response: it is unambiguous and reproducible, but was
+/// taken on one ship on one track and fitted by hand from a quarter period and one
+/// overshoot. Confidence **84** on the direction, unchanged:
 /// the arithmetic is compulsory, but the decompilation as recorded is
 /// self-contradictory, no call site was re-read, and nothing is runtime-verified.
 /// See the resolved-contradiction note in `docs/physics/README.md` for what would
 /// raise it.
-pub const ALIGNMENT_GAIN: f32 = 20.2;
+pub const ALIGNMENT_GAIN: f32 = 400.0;
+
+/// What the alignment torque is divided by before it becomes angular acceleration.
+///
+/// **This constant exists because two solid pieces of evidence disagree, and neither
+/// is wrong.** [`ALIGNMENT_GAIN`] is `400`, and that is now confirmed at instruction
+/// level in *both* binaries - the PS2 build materialises `0xC3C80000`, `-400.0f`, as an
+/// immediate in `Ship_HoverFourCorner` (`0x0015a940`) and `Ship_HoverTwoPoint`
+/// (`0x0015b978`), same magnitude, sign and operand order as the PSP reading. So the
+/// literal is not a transcription error and must stay `400`.
+///
+/// But the *behaviour* that literal produces in this crate is wrong, and that is also
+/// measured: a step response on the running PSP game (see [`ALIGNMENT_GAIN`]) puts the
+/// closed-loop roll stiffness at about **20.2**, not 400. A gain of 400 reaching the
+/// body as a bare angular acceleration gives `sqrt(400) = 20 rad/s`; the original
+/// answers at `4.49 rad/s`.
+///
+/// Both readings hold if roughly **twenty** divides the gain somewhere between the
+/// constant and the angular acceleration, and there is an obvious candidate: the
+/// alignment term is a **torque**, and a torque is divided by a moment of inertia.
+/// `400 / 20.2 = 19.8`, which is a plausible roll moment for a hull this size - and
+/// note it is close to this crate's own *pitch and yaw* box moments (15.1 and 16.2 for
+/// the observed hull) rather than its much smaller roll moment of 3.1, so the axis
+/// mapping is part of the open question rather than a detail.
+///
+/// **It is deliberately not folded into [`ALIGNMENT_GAIN`].** Doing that would replace
+/// a constant both binaries agree on with a number neither contains, and would hide the
+/// discrepancy instead of naming it. This is the discrepancy, named, with the measured
+/// value in it.
+///
+/// # What would retire this
+///
+/// `Body_AddForceAtPoint` and the craft's inertia and rotation-matrix path at
+/// `craft/body +0xc0..+0x160` are recorded as unread. If the original divides this
+/// torque by a real inertia tensor, this constant is that tensor's roll component and
+/// should be replaced by [`crate::ship::Body::inertia`] - which today it cannot be,
+/// because [`crate::forces::drain`] multiplies the angular accumulators by the inertia
+/// that [`crate::integrate`] then divides out, so the term never sees it. That round
+/// trip is the thing to change, and this constant disappears when somebody does.
+///
+/// Confidence **75**: the measurement is unambiguous and reproducible, but the value is
+/// a single fitted number from one ship on one track, and the mechanism behind it is a
+/// hypothesis rather than a reading.
+pub const ALIGNMENT_INERTIA: f32 = 19.8;
 
 /// The bank-to-yaw coupling gain, grounded only.
 ///
@@ -614,7 +669,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
     let average_normal = (normal_sum / (contacts as f32)).normalize_or_zero();
 
-    let mut alignment_torque = up.cross(average_normal) * ALIGNMENT_GAIN;
+    let mut alignment_torque = up.cross(average_normal) * (ALIGNMENT_GAIN / ALIGNMENT_INERTIA);
     // Project the right-axis component out, which is what removes pitch and
     // leaves roll and yaw. Written as a subtraction of the projection rather
     // than as a basis change, so there is one operation to check.
@@ -1101,7 +1156,7 @@ mod tests {
     /// [`crate::ship::SUBSTEPS`] moves this number, which is the point of pinning it.
     #[test]
     fn the_roll_oscillator_is_stable_by_the_margin_that_was_measured() {
-        let k = ALIGNMENT_GAIN;
+        let k = ALIGNMENT_GAIN / ALIGNMENT_INERTIA;
         let c = -crate::passive::ROLL_DAMPING;
         let h = 1.0f32 / 60.0;
 
