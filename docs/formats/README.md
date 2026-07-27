@@ -20,7 +20,7 @@ These are the project's actual work.
 | [WAD container](wad.md) | `.wad` | PSP, PS2 | **understood** | Implemented and validated against all nine archives. Entry names are stored as a CRC-32 variant, [recovered and reimplemented](wad.md#the-name-hash); most names still have to be mined rather than read. |
 | [PSP indexed texture](psp-texture.md) | `.mip` | PSP | **understood** | Implemented; renders correctly. Not swizzled. |
 | [LZSS](lzss.md) | - | PS2 | **understood** | Implemented and verified against all 6,053 compressed entries. |
-| [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | **partial** | **The** 3D format. Node tree, geometry and embedded textures implemented; `Transform` nodes and the scene hierarchy are not, so a whole track cannot be assembled yet. |
+| [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | **partial** | **The** 3D format. Node tree, scene hierarchy, geometry and embedded textures implemented on both platforms - PS2 batches are VIF packets rather than vertex arrays, validated over 11.8M vertices. PS2 textures are not in the file and have not been found. |
 | [Track data](track.md) | - | PSP | **understood** | The `WO Track` spline graph, racing line and AI corridor. Implemented, and validated against all 40 track files with nothing left over. The `section` PVS payload is documented but not implemented. |
 | [Collision geometry](collision.md) | - | PSP, PS2 | **understood** | An indexed triangle soup in `.vex` nodes under five collision class IDs, separate from the render mesh. Implemented and validated on both discs: 319 of 319 nodes close exactly over 602,086 vertices. |
 | [Front-end XML](fexml.md) | `.xml` | PSP, PS2 | **understood** | Name-shortened XML. Screens, widgets, handling stats. |

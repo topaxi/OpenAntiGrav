@@ -119,9 +119,13 @@ been run under an emulator.
 
 ## Vertex format
 
-The GU vertex type at batch `+0x0a` selects the layout. **Position is always
-three `s16`**, because the game's own stride calculator hard-codes a `+ 6`, so
-only twelve combinations are reachable:
+The GU vertex type at batch `+0x0a` selects the layout. On **PSP**, position is
+always three `s16`, because the game's own stride calculator hard-codes a `+ 6`,
+so only twelve combinations are reachable. On **PS2** the same word's position
+field says `f32` instead and the payload is a VIF packet rather than a vertex
+array; that is a separate layout and
+[its own section](#ps2-the-vertex-type-still-names-the-attributes-but-the-data-is-a-vif-packet)
+below.
 
 | vtype | texcoord | colour | normal | stride | position at |
 | --- | --- | --- | --- | ---: | ---: |
@@ -146,6 +150,130 @@ batches use `0x139` and `0x13b`, which have both, so whatever selects lighting i
 GE state we have not recovered. `oag-view` treats vertex colour as prelit and
 skips its own light rig for those batches, which is the viewer's choice and not a
 claim about the game.
+
+### PS2: the vertex type still names the attributes, but the data is a VIF packet
+
+**Status: decoded.** Implemented in
+[`oag-formats::vif`](../../crates/formats/src/vif.rs) and the PS2 path of
+`vex::mesh_batches`; validated by
+`crates/formats/tests/vex_ps2_ground_truth.rs`.
+
+The PS2 build declares vertex types **outside** the twelve GU combinations
+above - `0x1b9` is the one that first refused to decode - and the reason is one
+bit field: bits 7-8, which say how a position is stored, are `3` rather than `2`.
+That is **32-bit float** positions, which the PSP builds can never use because
+their stride calculator hard-codes a `+ 6` for three `s16`. So the whole
+"position at, stride" table above is inapplicable, and the value of the position
+bits is what selects the decoder:
+
+```text
+vertex_type & 0x0180 == 0x0180   ->  PS2 VIF packet
+```
+
+Eight types appear, and they are the same GU bit fields as the PSP's with the
+position field changed:
+
+| vtype | texcoord bits | colour bits | normal bit | batches |
+| --- | --- | --- | --- | ---: |
+| `0x181` | u8 | - | - | 254 |
+| `0x183` | f32 | - | - | 149 |
+| `0x199` | u8 | ABGR4444 | - | 34,350 |
+| `0x19b` | f32 | ABGR4444 | - | 53,202 |
+| `0x1a1` | u8 | - | s8 | 495 |
+| `0x1a3` | f32 | - | s8 | 32 |
+| `0x1b9` | u8 | ABGR4444 | s8 | 9,022 |
+| `0x1bb` | f32 | ABGR4444 | s8 | 739 |
+
+**Only the normal bit survives the port.** A normal array is present exactly when
+bits 5-6 say `s8 normal`, on all 98,243 batches; but *every* PS2 chunk carries
+colour and texture coordinates, including the 930 batches whose type declares no
+colour at all, and the coordinates are always two floats whatever the
+texture-coordinate bits say. The decoder therefore enforces the normal
+correspondence and takes colour and texture coordinates as it finds them.
+
+#### The batch payload
+
+Where a PSP batch's payload is an interleaved vertex array, a PS2 batch's is a
+**DMA packet of VIF commands** - the PS2's equivalent of the GE display lists the
+PSP batches are compiled from, and just as unportable:
+
+```text
++0x00  u32   bytes of DMA packet that follow this header
++0x04  u32   vertex type again, matching the batch header's +0x0a
++0x08  u32   pass mask again, matching +0x00
++0x0c  u32   zero
++0x10  DMA tag quadword: qwc in the low 16 bits, then two VIF command words
++0x20  VIF command stream, to the end of the payload
+```
+
+The command stream is a run of **chunks**, each ending in `MSCNT`, each holding
+one `UNPACK` per attribute at a fixed VU1 address:
+
+| VU address | Attribute | Unpack |
+| ---: | --- | --- |
+| 0 | One quadword of GS setup. Its low 15 bits are the chunk's vertex count. | `V4_32`, one element |
+| 4 | Position, three floats | `V3_32` masked, or `V4_32` |
+| 5 | Colour, four bytes | `V4_8` unsigned |
+| 6 | Texture coordinates, two floats | `V2_32` masked |
+| 7 | Normal, three floats | `V3_32` masked |
+
+`STCYCL cl=4 wl=1` before the attribute unpacks is what interleaves them into one
+quadword-per-attribute vertex in VU memory, which is why the four addresses are
+consecutive.
+
+Three consequences worth knowing:
+
+- **A chunk is one draw.** A strip longer than VU1 memory allows is split across
+  several, and the split **repeats two vertices** - which continues the strip and
+  keeps its winding parity even. 44,967 of the 89,302 strip batches are split, so
+  their decoded vertex count exceeds the batch header's by two per boundary. That
+  is not an error, and concatenating the chunks is correct: the repeats become
+  zero-area triangles at the seams.
+- **Triangle lists use `V4_32` positions**, and the fourth float is a per-vertex
+  flag in a repeating `1,1,0` pattern - the ADC/kick convention for drawing a
+  list through strip hardware, suppressing the first two vertices of each
+  triangle. Nothing here depends on that reading: the batch header's primitive
+  type already says list, and the two agree. Confidence **75**, on the pattern
+  alone.
+- **The batch's bounding box is elsewhere and is `f32`.** On PS2 it is at `+0x20`
+  and `+0x30`, in the space the positions are already in; the PSP's `s16` box at
+  `+0x18`/`+0x20` and the per-batch `scale` at `+0x10`, which is always exactly
+  1.0 here, do not apply.
+
+#### Colour is 0 to 128, not 0 to 255
+
+The GS treats 128 as full intensity through the texture-modulate path, so the
+bytes are widened by `v * 255 / 128`. Every colour byte in both discs' models is
+0 to 127, so nothing saturates - and reading them as 0-255 makes every PS2 model
+exactly half as bright, which looks like a lighting problem rather than a
+decoding one. Confidence **70**: the 0-128 convention is the platform's, and the
+data is consistent with it, but nothing in the executable has been read and
+0-127 as a plain range would fit the same bytes.
+
+#### Confidence: 94
+
+The reading rests on invariants that cannot come out even by accident, checked
+over **every `.vex` file on the PS2 disc**: 757 models, 98,243 batches, 11,767,670
+vertices.
+
+- **Three framing lengths close exactly.** The region header's declared size plus
+  its own 16 bytes is the batch's payload size; the DMA tag's quadword count
+  spans the packet; and the command walk lands exactly on the end. A wrong
+  command length desynchronises the walk and fails one of the three.
+- **Every decoded position falls inside its batch's own bounding box**, with *no
+  slack at all* - 11.8 million of them. A wrong attribute address or element
+  width leaves the box immediately.
+- **The vertex counts reconcile**: a list unpacks exactly the declared count and
+  a multiple of three; a strip unpacks two extra per split.
+- **Normals are unit length** to 1.2e-7, which an accidentally-correct address
+  would not produce.
+- **The same model comes out the same size through both paths.** `oag-view
+  --mesh` reports a radius of 831.02 for the PS2 `01_Track` against 830.92 for
+  the PSP one, and 6.45 for the Feisar ship on both.
+
+Capped at 94 by the [rubric](../reverse-engineering/confidence-rubric.md): an
+exact arithmetic invariant across many real files, with nothing verified against
+a runtime trace.
 
 ### 16-bit colour, which only the tracks use
 
@@ -408,16 +536,22 @@ Applied, from
   display list, `0xc0` relates to alpha, `0x2000` to an extra pass.
 - Whether the 16-byte file header carries anything beyond the version.
 - The `.dat` format paired with ships.
-- **PS2 mesh batches use a vertex type this decoder does not recognise.**
-  `Data\Ships\Feisar\Ship.vex` from the PS2 disc (`WADS2.WAD`) has a batch
-  declaring vertex type `0x1b9`, outside the twelve GU combinations in the
-  [vertex format table](#vertex-format) above. PS2 has no GU: the value is
-  presumably a Graphics Synthesizer-native encoding, not a corrupt read of the
-  same scheme, but that is a guess, not a finding. The [orbit camera
-  window](../tools/oag-view.md#models) surfaces this cleanly as an error
-  (`unsupported GU vertex type 0x01b9`) rather than misdecoding, which is why it
-  was noticed at all: `--track`, which does not read vertex colour/normal
-  layout at all, renders the PS2 track spline correctly with no changes.
+- ~~**PS2 mesh batches use a vertex type this decoder does not recognise.**~~ -
+  decoded, see [PS2: the vertex type still names the attributes, but the data is
+  a VIF packet](#ps2-the-vertex-type-still-names-the-attributes-but-the-data-is-a-vif-packet).
+  The guess recorded here was that `0x1b9` was "presumably a Graphics
+  Synthesizer-native encoding, not a corrupt read of the same scheme". Half
+  right: the *encoding* is the same GU bit fields, and it is the **data** that is
+  GS-native. What still is not determined about the PS2 packets:
+  - **What the microprogram does with the setup quadword at VU address 0.** Its
+    low 15 bits are the chunk's vertex count and bit 15 is always set; the other
+    three words are unread.
+  - **The `STMASK` values and the fill registers behind them.** Masked unpacks
+    take `w` from `STROW`/`STCOL`, and no `STROW` or `STCOL` appears in a model
+    packet, so those registers are set elsewhere. Nothing geometric depends on
+    it: `w` is not a position component.
+  - **Where PS2 textures live**, unchanged from the note above - the embedded
+    block is empty, so PS2 models render untextured.
 
 ## Other extensions found
 

@@ -124,6 +124,25 @@ pub enum Error {
         /// The value found.
         vertex_type: u16,
     },
+    /// A PS2 batch's VIF command stream did not walk.
+    Vif {
+        /// Offset of the batch header in the mesh payload.
+        at: usize,
+        /// What the walker said. Boxed to keep this enum small.
+        error: Box<crate::vif::Error>,
+    },
+    /// A PS2 batch's packet framing did not add up.
+    ///
+    /// Separate from [`Self::Vif`] because these are the checks that decide
+    /// whether the packet was read as the right *kind* of thing at all: the
+    /// three lengths that have to close, and the attribute set having to agree
+    /// with the vertex type.
+    Packet {
+        /// Which check failed.
+        what: &'static str,
+        /// Offset of the batch header in the mesh payload.
+        at: usize,
+    },
 }
 
 impl fmt::Display for Error {
@@ -138,6 +157,8 @@ impl fmt::Display for Error {
             Self::UnsupportedVertexType { vertex_type } => {
                 write!(f, "unsupported GU vertex type {vertex_type:#06x}")
             }
+            Self::Vif { at, error } => write!(f, "batch at {at}: {error}"),
+            Self::Packet { what, at } => write!(f, "batch at {at}: {what}"),
         }
     }
 }
@@ -355,12 +376,24 @@ pub struct Batch {
     pub scale: f32,
     /// Decoded vertices.
     pub vertices: Vec<Vertex>,
-    /// The batch's own bounding box in model units, from `+0x18` and `+0x20`.
+    /// The vertex count the batch header declares, at `+0x04`.
     ///
-    /// Stored as `s16` in vertex space and scaled here the same way positions
-    /// are, so every decoded vertex must fall inside it. That is the standing
-    /// check on the vertex layout and the scale factor: get either wrong and the
-    /// positions leave the box at once.
+    /// The same as `vertices.len()` on PSP. On PS2 it is the count of the draw
+    /// the batch *describes*, while `vertices` holds what its VIF packet
+    /// actually unpacks, and a strip split across chunks unpacks two extra per
+    /// boundary to continue itself. Kept because the relationship between the two
+    /// is an invariant worth being able to check from outside; see
+    /// [`vif_vertices`].
+    pub declared_vertex_count: u16,
+    /// The batch's own bounding box in model units.
+    ///
+    /// Every decoded vertex must fall inside it, which is the standing check on
+    /// the vertex layout and the scale factor: get either wrong and the positions
+    /// leave the box at once.
+    ///
+    /// On PSP it is stored as `s16` at `+0x18` and `+0x20`, in vertex space, and
+    /// is scaled here the same way positions are. On PS2 it is `f32` at `+0x20`
+    /// and `+0x30`, already in the space the positions are in.
     pub bounds: ([f32; 3], [f32; 3]),
 }
 
@@ -888,36 +921,61 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
         let alternate_offset = usize::from(u16_at(payload, at + 0x0e));
         let scale = f32_at(payload, at + 0x10);
 
-        let layout = VertexLayout::from_vertex_type(vertex_type)?;
-
-        let base = at + header_size + if use_alternate { alternate_offset } else { 0 };
-        let end = base + vertex_count * layout.stride;
-        if end > payload.len() {
-            return Err(Error::OutOfBounds {
-                what: "batch vertices",
-                end,
-                len: payload.len(),
-            });
-        }
-
-        let mut vertices = Vec::with_capacity(vertex_count);
-        for i in 0..vertex_count {
-            vertices.push(decode_vertex(
-                payload,
-                base + i * layout.stride,
-                &layout,
-                scale,
-            ));
-        }
-
-        let corner = |off: usize| {
-            let mut v = [0.0f32; 3];
-            for (i, c) in v.iter_mut().enumerate() {
-                let raw =
-                    i16::from_le_bytes([payload[at + off + i * 2], payload[at + off + i * 2 + 1]]);
-                *c = f32::from(raw) / POSITION_DIVISOR * scale;
+        // A PS2 batch's payload is a VIF packet rather than an interleaved
+        // vertex array, and carries its bounding box as floats in the space the
+        // positions are already in. See `is_vif_batch`.
+        let (vertices, bounds) = if is_vif_batch(vertex_type) {
+            if at + 0x3c > payload.len() {
+                return Err(Error::OutOfBounds {
+                    what: "batch bounds",
+                    end: at + 0x3c,
+                    len: payload.len(),
+                });
             }
-            v
+            let corner = |off: usize| {
+                [
+                    f32_at(payload, at + off),
+                    f32_at(payload, at + off + 4),
+                    f32_at(payload, at + off + 8),
+                ]
+            };
+            let vertices = vif_vertices(payload, at + header_size, payload_size, vertex_type)?;
+            (vertices, (corner(0x20), corner(0x30)))
+        } else {
+            let layout = VertexLayout::from_vertex_type(vertex_type)?;
+
+            let base = at + header_size + if use_alternate { alternate_offset } else { 0 };
+            let end = base + vertex_count * layout.stride;
+            if end > payload.len() {
+                return Err(Error::OutOfBounds {
+                    what: "batch vertices",
+                    end,
+                    len: payload.len(),
+                });
+            }
+
+            let mut vertices = Vec::with_capacity(vertex_count);
+            for i in 0..vertex_count {
+                vertices.push(decode_vertex(
+                    payload,
+                    base + i * layout.stride,
+                    &layout,
+                    scale,
+                ));
+            }
+
+            let corner = |off: usize| {
+                let mut v = [0.0f32; 3];
+                for (i, c) in v.iter_mut().enumerate() {
+                    let raw = i16::from_le_bytes([
+                        payload[at + off + i * 2],
+                        payload[at + off + i * 2 + 1],
+                    ]);
+                    *c = f32::from(raw) / POSITION_DIVISOR * scale;
+                }
+                v
+            };
+            (vertices, (corner(0x18), corner(0x20)))
         };
 
         out.push(Batch {
@@ -927,7 +985,8 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             vertex_type,
             scale,
             vertices,
-            bounds: (corner(0x18), corner(0x20)),
+            declared_vertex_count: u16_at(payload, at + 4),
+            bounds,
         });
 
         // `payload_size` covers the vertex data only, so a batch is its header
@@ -979,6 +1038,269 @@ fn decode_vertex(data: &[u8], at: usize, layout: &VertexLayout, scale: f32) -> V
         texcoord,
         colour,
     }
+}
+
+/// Bits 7-8 of a vertex type, which say how a position is stored.
+pub const POSITION_BITS: u16 = 0x0180;
+
+/// Bits 7-8 set to `3`: positions are 32-bit floats.
+///
+/// Unreachable on PSP, where the game's own stride calculator hard-codes a `+ 6`
+/// for three `s16`, and universal on PS2, where the VU works in floats.
+pub const POSITION_F32: u16 = 0x0180;
+
+/// Whether a batch's vertices are a PS2 VIF packet rather than a PSP vertex
+/// array.
+///
+/// The discriminator is the position width, and it is not a heuristic: every PS2
+/// batch observed declares 32-bit float positions and no PSP batch can, because
+/// the PSP loader's stride calculator adds a hard-coded 6 bytes for three `s16`.
+/// The reading is then confirmed structurally by the packet itself - see
+/// [`vif_vertices`] for the three framing checks it has to pass.
+#[must_use]
+pub fn is_vif_batch(vertex_type: u16) -> bool {
+    vertex_type & POSITION_BITS == POSITION_F32
+}
+
+/// Bytes of framing before a PS2 batch's DMA packet.
+const VIF_REGION_HEADER: usize = 16;
+
+/// Bytes of DMA tag at the head of the packet, which is one quadword: 8 bytes of
+/// tag and two VIF command words in the upper half.
+const VIF_TAG_LEN: usize = 16;
+
+/// VU1 address of the position array, in quadwords.
+const VU_POSITION: u16 = 4;
+
+/// VU1 address of the colour array.
+const VU_COLOUR: u16 = 5;
+
+/// VU1 address of the texture-coordinate array.
+const VU_TEXCOORD: u16 = 6;
+
+/// VU1 address of the normal array.
+const VU_NORMAL: u16 = 7;
+
+/// The colour value the GS treats as full intensity.
+///
+/// PS2 vertex colours are 0 to 128, not 0 to 255: 128 is 1.0 through the
+/// texture-modulate path. Every colour byte in the two models measured is 0 to
+/// 127, so nothing here saturates in practice, and reading them as 0-255 would
+/// make every model exactly half as bright - which reads as a lighting problem
+/// rather than a decoding one. See `docs/formats/vex.md`.
+const PS2_COLOUR_ONE: u16 = 128;
+
+/// Decodes the vertices of one PS2 batch, whose payload is a VIF packet.
+///
+/// `at` is the batch header's offset in the mesh payload and `payload_size` its
+/// declared vertex-data length, both as [`mesh_batches`] reads them.
+///
+/// # What the packet looks like
+///
+/// ```text
+/// +0x00  u32   bytes of DMA packet that follow this header
+/// +0x04  u32   vertex type again, matching the batch header's
+/// +0x08  u32   pass mask again
+/// +0x0c  u32   zero
+/// +0x10  DMA tag quadword: qwc in the low 16 bits, then two VIF command words
+/// +0x20  VIF command stream
+/// ```
+///
+/// The stream is a run of chunks, each ending in `MSCNT`, and each holding one
+/// `UNPACK` per attribute at a fixed VU address: position at 4, colour at 5,
+/// texture coordinates at 6, normals at 7. A chunk is one draw, so a strip
+/// longer than VU1 memory allows is split across several - by **repeating two
+/// vertices**, which both continues the strip and keeps its winding parity, and
+/// which is why the decoded vertex count exceeds the batch header's by two per
+/// extra chunk.
+///
+/// # Errors
+///
+/// [`Error::Vif`] if the command stream does not walk, and [`Error::Packet`] if
+/// the framing does not close, an attribute array is missing or has the wrong
+/// shape, or the attributes present disagree with the vertex type.
+pub fn vif_vertices(
+    payload: &[u8],
+    at: usize,
+    payload_size: usize,
+    vertex_type: u16,
+) -> Result<Vec<Vertex>> {
+    let base = at;
+    let packet = |what: &'static str| Error::Packet { what, at: base };
+
+    if base + VIF_REGION_HEADER + VIF_TAG_LEN > payload.len() {
+        return Err(packet("region header runs past the payload"));
+    }
+    let size = u32_at(payload, base) as usize;
+    // Three independent framing checks, and all three are exact: the region
+    // header's length plus its own 16 bytes is the batch's declared payload, the
+    // DMA tag's quadword count spans the packet, and the vertex type is repeated.
+    if size + VIF_REGION_HEADER != payload_size {
+        return Err(packet("packet length disagrees with the batch header"));
+    }
+    if u32_at(payload, base + 4) != u32::from(vertex_type) {
+        return Err(packet("packet vertex type disagrees with the batch header"));
+    }
+    let qwc = (u32_at(payload, base + VIF_REGION_HEADER) & 0xffff) as usize;
+    if VIF_TAG_LEN + qwc * 16 != size {
+        return Err(packet("DMA tag quadword count disagrees with the packet"));
+    }
+
+    // The command stream starts at the tag quadword's upper half, which holds
+    // the first two VIF commands, and runs to the end of the packet.
+    let start = base + VIF_REGION_HEADER + 8;
+    let end = base + VIF_REGION_HEADER + size;
+    if end > payload.len() {
+        return Err(packet("packet runs past the payload"));
+    }
+    let codes = crate::vif::walk(&payload[start..end]).map_err(|error| Error::Vif {
+        at: base,
+        error: Box::new(error),
+    })?;
+
+    let want_normal = vertex_type & 0x60 == 0x20;
+
+    let mut out = Vec::new();
+    let mut chunk: [Option<crate::vif::Unpack>; 4] = [None, None, None, None];
+    let slot = |address: u16| match address {
+        VU_POSITION => Some(0usize),
+        VU_COLOUR => Some(1),
+        VU_TEXCOORD => Some(2),
+        VU_NORMAL => Some(3),
+        _ => None,
+    };
+
+    for code in codes {
+        match code {
+            crate::vif::Code::Unpack(unpack) => {
+                if let Some(index) = slot(unpack.address) {
+                    chunk[index] = Some(unpack);
+                }
+            }
+            // A microprogram call is one draw, so it is the boundary the
+            // attribute arrays gathered so far belong to.
+            crate::vif::Code::Mscnt | crate::vif::Code::Mscal(_)
+                if chunk.iter().any(Option::is_some) =>
+            {
+                emit_vif_chunk(payload, start, &chunk, want_normal, &mut out, &packet)?;
+                chunk = [None, None, None, None];
+            }
+            _ => {}
+        }
+    }
+    if chunk.iter().any(Option::is_some) {
+        emit_vif_chunk(payload, start, &chunk, want_normal, &mut out, &packet)?;
+    }
+
+    Ok(out)
+}
+
+/// Turns one chunk's attribute arrays into vertices.
+fn emit_vif_chunk(
+    payload: &[u8],
+    start: usize,
+    chunk: &[Option<crate::vif::Unpack>; 4],
+    want_normal: bool,
+    out: &mut Vec<Vertex>,
+    packet: &impl Fn(&'static str) -> Error,
+) -> Result<()> {
+    use crate::vif::Format;
+
+    let position = chunk[0]
+        .as_ref()
+        .ok_or_else(|| packet("a chunk with no position array"))?;
+    if position.format != Format::Bits32 || !(3..=4).contains(&position.components) {
+        return Err(packet("position array is not three or four floats"));
+    }
+    // **Only the normal bit carries over from the vertex type.** Across all 1,038
+    // `.vex` files on the PS2 disc, a normal array is present exactly when bits
+    // 5-6 say `s8 normal` and absent otherwise, so a disagreement there means the
+    // packet was misread and is an error. Colour and texture coordinates are a
+    // different matter: **every** PS2 chunk carries both, including the 4,378
+    // batches whose type declares no colour at all, and the coordinates are
+    // always two floats whatever the type's texture-coordinate bits say. See
+    // `docs/formats/vex.md`.
+    if chunk[3].is_some() != want_normal {
+        return Err(packet("normal array disagrees with the vertex type"));
+    }
+
+    let count = position.count;
+    let check = |slot: &Option<crate::vif::Unpack>,
+                 components: usize,
+                 format: Format,
+                 what: &'static str|
+     -> Result<Option<usize>> {
+        match slot {
+            None => Ok(None),
+            Some(unpack) => {
+                if unpack.count != count
+                    || unpack.components != components
+                    || unpack.format != format
+                {
+                    return Err(packet(what));
+                }
+                Ok(Some(start + unpack.data.start))
+            }
+        }
+    };
+
+    let colour = check(
+        &chunk[1],
+        4,
+        Format::Bits8,
+        "colour array has the wrong shape",
+    )?;
+    let texcoord = check(
+        &chunk[2],
+        2,
+        Format::Bits32,
+        "texture-coordinate array has the wrong shape",
+    )?;
+    let normal = check(
+        &chunk[3],
+        3,
+        Format::Bits32,
+        "normal array has the wrong shape",
+    )?;
+    let positions = start + position.data.start;
+    let position_stride = 4 * position.components;
+
+    for i in 0..count {
+        let p = positions + i * position_stride;
+        out.push(Vertex {
+            position: [
+                f32_at(payload, p),
+                f32_at(payload, p + 4),
+                f32_at(payload, p + 8),
+            ],
+            normal: normal.map(|o| {
+                let n = o + i * 12;
+                [
+                    f32_at(payload, n),
+                    f32_at(payload, n + 4),
+                    f32_at(payload, n + 8),
+                ]
+            }),
+            texcoord: texcoord.map(|o| {
+                let t = o + i * 8;
+                [f32_at(payload, t), f32_at(payload, t + 4)]
+            }),
+            colour: colour.map(|o| {
+                let c = o + i * 4;
+                let widen = |v: u8| -> u8 {
+                    u8::try_from(u16::from(v) * 255 / PS2_COLOUR_ONE).unwrap_or(u8::MAX)
+                };
+                [
+                    widen(payload[c]),
+                    widen(payload[c + 1]),
+                    widen(payload[c + 2]),
+                    widen(payload[c + 3]),
+                ]
+            }),
+        });
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1427,6 +1749,223 @@ mod tests {
         assert!((scaled.position[0] - 125.0).abs() < 0.001);
     }
 
+    /// Builds a PS2 batch: a 0x40 header, then the region header, DMA tag and
+    /// VIF command stream a real one carries.
+    ///
+    /// Hand-built rather than captured, because a real batch is game data and
+    /// cannot be committed. The shape is the one
+    /// `crates/formats/tests/vex_ps2_ground_truth.rs` checks against every model
+    /// on the disc; this is what keeps the same paths covered in CI, where there
+    /// is no disc.
+    fn ps2_batch(
+        vertex_type: u16,
+        primitive_type: u8,
+        chunks: &[Vec<[f32; 3]>],
+        with_normal: bool,
+    ) -> Vec<u8> {
+        let code = |command: u8, num: u8, immediate: u16| -> [u8; 4] {
+            (u32::from(command) << 24 | u32::from(num) << 16 | u32::from(immediate)).to_le_bytes()
+        };
+
+        let mut stream = Vec::new();
+        for positions in chunks {
+            let count = u8::try_from(positions.len()).expect("fixture chunk fits in NUM");
+            // The setup quadword, whose low 15 bits are the chunk's count.
+            stream.extend(code(0x01, 0, 0x0101));
+            stream.extend(code(0x6c, 1, 0xc000));
+            stream.extend(u32::from(0x8000 | u16::from(count)).to_le_bytes());
+            stream.extend([0u8; 12]);
+            stream.extend(code(0x01, 0, 0x0104));
+            // Colour, then texture coordinates, then position, then normal:
+            // the order a real packet uses.
+            stream.extend(code(0x6e, count, 0xc005));
+            for i in 0..positions.len() {
+                stream.extend([64, 64, 64, u8::try_from(i % 128).unwrap()]);
+            }
+            stream.extend(code(0x74, count, 0xc006));
+            for (i, _) in positions.iter().enumerate() {
+                stream.extend((i as f32).to_le_bytes());
+                stream.extend((-(i as f32)).to_le_bytes());
+            }
+            stream.extend(code(0x78, count, 0xc004));
+            for p in positions {
+                for c in p {
+                    stream.extend(c.to_le_bytes());
+                }
+            }
+            if with_normal {
+                stream.extend(code(0x78, count, 0xc007));
+                for _ in positions {
+                    stream.extend(0.0f32.to_le_bytes());
+                    stream.extend(1.0f32.to_le_bytes());
+                    stream.extend(0.0f32.to_le_bytes());
+                }
+            }
+            stream.extend(code(0x17, 0, 0));
+        }
+        // The packet is the tag quadword plus the stream, which the tag's two
+        // command words are already part of.
+        while (stream.len() + 8) % 16 != 0 {
+            stream.extend(code(0x00, 0, 0));
+        }
+        let packet_len = 16 + stream.len() - 8;
+        let qwc = (packet_len - 16) / 16;
+
+        let declared: usize = chunks.iter().map(Vec::len).sum::<usize>()
+            - 2 * chunks.len().saturating_sub(1)
+                * usize::from(primitive_type == PRIM_TRIANGLE_STRIP);
+
+        let mut header = vec![0u8; 0x40];
+        header[0..2].copy_from_slice(&1u16.to_le_bytes()); // pass_mask, list A
+        header[4..6].copy_from_slice(&(declared as u16).to_le_bytes());
+        header[8] = primitive_type;
+        header[0x0a..0x0c].copy_from_slice(&vertex_type.to_le_bytes());
+        header[0x0c..0x0e].copy_from_slice(&((16 + packet_len) as u16).to_le_bytes());
+        header[0x10..0x14].copy_from_slice(&1.0f32.to_le_bytes());
+        // The f32 bounding box, wide enough for the fixture's positions.
+        for i in 0..3 {
+            header[0x20 + i * 4..0x24 + i * 4].copy_from_slice(&(-1000.0f32).to_le_bytes());
+            header[0x30 + i * 4..0x34 + i * 4].copy_from_slice(&1000.0f32.to_le_bytes());
+        }
+
+        let mut out = header;
+        out.extend((packet_len as u32).to_le_bytes());
+        out.extend(u32::from(vertex_type).to_le_bytes());
+        out.extend(1u32.to_le_bytes()); // pass mask again
+        out.extend(0u32.to_le_bytes());
+        out.extend((0x6000_0000u32 | qwc as u32).to_le_bytes()); // DMA tag
+        out.extend(0u32.to_le_bytes());
+        out.extend(stream);
+        out
+    }
+
+    /// Wraps batches into a mesh payload: the header, then batch list A.
+    fn ps2_mesh(batches: &[Vec<u8>]) -> Vec<u8> {
+        let mut payload = vec![0u8; 0x30];
+        payload[4..8].copy_from_slice(&0x30u32.to_le_bytes()); // list A offset
+        payload[8..12].copy_from_slice(&0x30u32.to_le_bytes());
+        for batch in batches {
+            payload.extend(batch);
+        }
+        // A terminator: a batch header whose pass mask has neither list bit.
+        payload.extend(vec![0u8; 0x40]);
+        payload
+    }
+
+    #[test]
+    fn a_vif_batch_is_selected_by_its_position_width() {
+        // The PSP's twelve types are not VIF batches; the PS2's eight are.
+        for psp in [0x100u16, 0x121, 0x139, 0x13d, 0x13f] {
+            assert!(!is_vif_batch(psp), "{psp:#06x}");
+        }
+        for ps2 in [0x181u16, 0x183, 0x199, 0x19b, 0x1a1, 0x1a3, 0x1b9, 0x1bb] {
+            assert!(is_vif_batch(ps2), "{ps2:#06x}");
+        }
+    }
+
+    #[test]
+    fn decodes_a_ps2_batch_into_vertices() {
+        let positions = vec![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+        let payload = ps2_mesh(&[ps2_batch(
+            0x1b9,
+            PRIM_TRIANGLES,
+            std::slice::from_ref(&positions),
+            true,
+        )]);
+        let batches = mesh_batches(&payload, 0).expect("decodes");
+        assert_eq!(batches.len(), 1);
+        let batch = &batches[0];
+
+        assert_eq!(batch.vertex_type, 0x1b9);
+        assert_eq!(batch.vertices.len(), 3);
+        assert_eq!(batch.declared_vertex_count, 3);
+        for (vertex, expected) in batch.vertices.iter().zip(&positions) {
+            assert_eq!(vertex.position, *expected);
+        }
+        // The bounding box is the f32 pair at +0x20 and +0x30, not the PSP's
+        // s16 pair scaled: reading the wrong one gives zeros here.
+        assert_eq!(batch.bounds, ([-1000.0; 3], [1000.0; 3]));
+        assert_eq!(batch.vertices[1].texcoord, Some([1.0, -1.0]));
+        assert_eq!(batch.vertices[0].normal, Some([0.0, 1.0, 0.0]));
+        // 64 of 128 is half intensity, which widens to half of 255.
+        assert_eq!(batch.vertices[0].colour, Some([127, 127, 127, 0]));
+    }
+
+    /// A strip split across chunks repeats two vertices, so the decoded count
+    /// exceeds the declared one. Concatenating them is what makes the repeats
+    /// zero-area triangles rather than a hole.
+    #[test]
+    fn a_split_strip_keeps_both_chunks() {
+        let first: Vec<[f32; 3]> = (0..6).map(|i| [i as f32, 0.0, 0.0]).collect();
+        let second: Vec<[f32; 3]> = (4..9).map(|i| [i as f32, 0.0, 0.0]).collect();
+        let payload = ps2_mesh(&[ps2_batch(
+            0x199,
+            PRIM_TRIANGLE_STRIP,
+            &[first.clone(), second.clone()],
+            false,
+        )]);
+        let batch = &mesh_batches(&payload, 0).expect("decodes")[0];
+
+        assert_eq!(batch.vertices.len(), first.len() + second.len());
+        assert_eq!(
+            usize::from(batch.declared_vertex_count),
+            first.len() + second.len() - 2,
+            "the header counts the strip, not the repeats"
+        );
+        assert_eq!(batch.vertices[6].position, [4.0, 0.0, 0.0]);
+        assert!(
+            batch.vertices[0].normal.is_none(),
+            "0x199 declares no normal, so none may be decoded"
+        );
+    }
+
+    #[test]
+    fn a_packet_whose_length_disagrees_with_the_batch_is_refused() {
+        let mut payload = ps2_mesh(&[ps2_batch(
+            0x1b9,
+            PRIM_TRIANGLES,
+            &[vec![[0.0, 0.0, 0.0]; 3]],
+            true,
+        )]);
+        // Shorten the packet's own declared length by one quadword.
+        let size = u32_at(&payload, 0x30 + 0x40) - 16;
+        payload[0x30 + 0x40..0x30 + 0x44].copy_from_slice(&size.to_le_bytes());
+        assert!(matches!(
+            mesh_batches(&payload, 0),
+            Err(Error::Packet { .. })
+        ));
+    }
+
+    #[test]
+    fn a_missing_normal_array_is_refused_when_the_type_declares_one() {
+        // The one attribute whose presence the vertex type really does predict.
+        let payload = ps2_mesh(&[ps2_batch(
+            0x1b9,
+            PRIM_TRIANGLES,
+            &[vec![[0.0, 0.0, 0.0]; 3]],
+            false,
+        )]);
+        assert!(matches!(
+            mesh_batches(&payload, 0),
+            Err(Error::Packet { .. })
+        ));
+    }
+
+    #[test]
+    fn colour_and_texcoords_are_taken_as_found_whatever_the_type_says() {
+        // 0x181 declares no colour at all, and every real PS2 chunk carries one
+        // anyway. Refusing it here would reject 930 batches on the disc.
+        let payload = ps2_mesh(&[ps2_batch(
+            0x181,
+            PRIM_TRIANGLES,
+            &[vec![[0.0, 0.0, 0.0]; 3]],
+            false,
+        )]);
+        let batch = &mesh_batches(&payload, 0).expect("decodes")[0];
+        assert!(batch.vertices[0].colour.is_some());
+        assert!(batch.vertices[0].texcoord.is_some());
+    }
+
     #[test]
     fn rejects_a_short_file() {
         assert_eq!(version(&[0u8; 4]), Err(Error::TooShort { got: 4 }));
@@ -1449,6 +1988,7 @@ mod tests {
                 };
                 vertex_count
             ],
+            declared_vertex_count: u16::try_from(vertex_count).unwrap_or(u16::MAX),
             bounds: ([0.0; 3], [0.0; 3]),
         }
     }
@@ -1494,6 +2034,7 @@ mod tests {
             vertex_type: 0x100,
             scale: 1.0,
             vertices: Vec::new(),
+            declared_vertex_count: 0,
             bounds: ([0.0; 3], [0.0; 3]),
         };
         assert!(batch(0x0101).is_transparent());

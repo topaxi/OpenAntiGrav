@@ -24,6 +24,7 @@ pub mod signature;
 pub mod texture;
 pub mod track;
 pub mod vex;
+pub mod vif;
 pub mod wad;
 
 pub use signature::{Signature, identify};
