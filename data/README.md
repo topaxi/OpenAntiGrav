@@ -39,6 +39,7 @@ Tooling looks for these names. Copy your own images here and rename:
 | `pulse-psp-usa.chd` | Wipeout Pulse | PSP | USA |
 | `pulse-ps2-eu.chd` | Wipeout Pulse | PS2 | Europe |
 | `pure-psp-usa.chd` | Wipeout Pure | PSP | USA |
+| `hdfury-ps3-eu.iso` | WipEout HD / Fury | PS3 | Europe |
 
 `.iso` works anywhere `.chd` does; the tools sniff the container.
 

@@ -13,6 +13,7 @@ against exactly the same data.
 | `pulse-psp-usa.chd` | `65d8c19edaa4a65025a18346a2ccfe212a88053a5737a95d78c406efb69d02a9` | PSP | `UCUS-98712` | 2008-01-04 09:58:46 |
 | `pulse-ps2-eu.chd` | `9b352295d4e35e3a4275ad2c1167aa3c2ab8bb7eb4b3abc877fd4b936b39e2fe` | PS2 | `SCES-54748` | 2009-05-15 17:11:10 |
 | `pure-psp-usa.chd` | `851075e2a894524bd89703f2f930098c99302a488424328cf77ec33da325a3f1` | PSP | `UCUS-98612` | 2005-06-02 14:29:23 |
+| `hdfury-ps3-eu.iso` | `6702a1b064c966e30ad878f7dded9a787bbab459ed4a7232007f6f1e7870f987` | PS3 | unknown | 2009-08-28 10:02:56 |
 
 Reproduce with `just hash-images`.
 
@@ -75,6 +76,19 @@ Not a target in its own right yet. It is here as the **format ancestor**: it
 uses the same `Data.wad` / `FE.wad` / `FEData.wad` structure as Pulse, with the
 same container header shape. Where a Pulse format is ambiguous, Pure's simpler
 version of it is often the faster way to understand it.
+
+### `hdfury-ps3-eu.iso` - Wipeout HD / Fury, PS3
+
+```
+container      raw ISO, 1103104 sectors (2.1 GiB capacity)
+platform       unknown (no PS3 identification yet)
+volume id      PS3VOLUME
+contents       22 files in 5 directories, 2.1 GiB
+```
+
+Later target per [scope](../overview/goals.md#scope). `oag-disc` has no PS3
+serial/publisher identification yet, so `platform`/`serial` read `unknown` -
+that's expected, not a bug. Not otherwise explored yet.
 
 ## Region asymmetry
 
