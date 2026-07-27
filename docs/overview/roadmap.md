@@ -144,22 +144,38 @@ The instrument everything after this is measured with.
 - [x] Trace capture: `scripts/psp-trace.py` records position, orientation,
       velocity, dt, groundedness and the whole control block per call of
       `Ship_UpdateCraft`, breakpoint-driven off the running game
-- [ ] `oag-trace`: compare a Rust run against a captured trace, with tolerances
+- [x] `oag-trace`: compares a Rust run against a captured trace, with
+      tolerances from [the protocol](../reverse-engineering/verification-protocol.md).
+      `oag-trace show|run|compare`; reports the first divergent tick, field,
+      magnitude and a bounded/growing/shrinking trend. See
+      [oag-trace](../tools/oag-trace.md).
 - [ ] The same for PCSX2
 
 **Exit criterion:** one command diffs any subsystem against the original and
-reports where and by how much it diverges.
+reports where and by how much it diverges. **Substantially met** - `oag-trace`
+does exactly this for PPSSPP, on the reference scenario
+(`docs/reverse-engineering/ppsspp-debugger.md#the-reference-scenario`). Not
+fully met until the same exists for PCSX2/the PS2 asset path.
 
-The instrument exists and records a moving ship - 200 ticks of a Time Trial at
-about 22 units/s, position, orientation, velocity, dt and the whole control block
-per tick. The comparison does not exist, so the exit criterion is untouched.
+Its first real run **found and fixed a bug in the harness itself worth
+learning from**: the reference scenario's track was misidentified (`01_Track`
+assumed by directory-numbering convention; it is actually `16_Track`, settled
+decisively by casting the recording's own 200 positions against every track's
+collision geometry on the disc and finding only one where all 200 land). Run
+against the wrong track, `compare` reported a confident, clean, entirely
+wrong finding - "the ship falls through the floor at tick 0" - because it
+correctly diffs whatever two runs it's given without checking they describe
+the same world. See [oag-game](../tools/oag-game.md#the-suspension-was-never-the-problem-the-default-track-was)
+for the full account. With the right track, the tool immediately produced a
+real, correctly-isolated finding instead: see M4.
 
-What the capture path has already produced is five runtime confirmations that
-were previously static readings, including one that settles a claim by counting:
-`craft+0x2ec` matches the **previous** frame's `|dot(velocity, forward)|` on
-199 of 199 samples and the current frame's on 137, which is the one-frame
-staleness [engine](../ghidra/functions/psp-pulse/engine.md) derived from the
-frame ordering. See also [frame pacing](../psp/frame-pacing.md).
+What the capture path has already produced, independent of the above: five
+runtime confirmations that were previously static readings, including one
+that settles a claim by counting: `craft+0x2ec` matches the **previous**
+frame's `|dot(velocity, forward)|` on 199 of 199 samples and the current
+frame's on 137, which is the one-frame staleness
+[engine](../ghidra/functions/psp-pulse/engine.md) derived from the frame
+ordering. See also [frame pacing](../psp/frame-pacing.md).
 
 ---
 
@@ -188,20 +204,36 @@ frame ordering. See also [frame pacing](../psp/frame-pacing.md).
 **Exit criterion:** a single-ship time trial that passes trace comparison for
 the full lap, and that feels right to someone who knows the original.
 
-**Nothing here is close to that exit criterion**, and the ticks above say only
-that code exists. There is no trace comparison, because that is M3 and M3 has not
-started.
+**Closer than it was, and the remaining gap is now one clean, isolated
+question instead of three tangled ones.** Trace comparison exists (M3) and has
+been run against the real reference scenario. Three things that looked like
+separate physics bugs earlier this session turned out to be one measurement
+artifact (see M3 above): the suspension, the roll oscillator's stability
+margin, and the hover target height were all real physics questions worth the
+work put into them, but the specific symptom that motivated chasing them - the
+ship losing probe contact and being thrown off within ~166 ticks - was a ship
+being flown over the *wrong track's* collision geometry. With the correct
+track (`16_Track`, not `01_Track`), the ship **holds both hover probes in
+contact for the full 120-tick well-behaved window**, at a steady height
+matching what the (independently corrected) spring math predicts to within
+0.6%.
 
-Concretely: **the ship cannot yet fly a lap.** It spawns on the racing line,
-hovers, and drives forward, and then loses probe contact after about 100 ticks and
-is thrown off the track by 166. That is recorded as a failing-on-purpose test,
-`the_ship_does_not_stay_on_the_track_yet`, whose message says to delete it when it
-starts passing. Three measurements produced while implementing this say the model
-as transcribed is not yet right: the roll oscillator is
-[11 % outside the specified integrator's stability limit](../physics/README.md),
-the hover target exceeds the probe cast length so no resting height exists, and
-two cross-product terms had to be flipped to produce the behaviour their own
-evidence pages describe.
+**What's left, cleanly isolated: there is no speed equilibrium.** A real
+capture of the reference scenario holds 23.6-25.1 units/s at full throttle,
+essentially flat. This simulation passes 99.9 units/s by tick 120 and keeps
+climbing past 115, and *that* is what eventually throws it off - not falling
+off the surface, but going four times too fast to follow a turn. The
+arithmetic from the recording: a steady 24 units/s needs about 4.9 units of
+net thrust against drag and rolling resistance; `oag_physics::engine::engine`
+produces about 83.6, a factor of roughly **17**. Candidates, all recorded
+gaps rather than new guesses: `Engine.amount`'s load-time scale, the
+unrecovered `craft+0x294` multiplier, the two drag coefficients, or an
+untraced relationship between `<Physical mass>` and the rigid body's own
+mass. See [oag-game](../tools/oag-game.md#what-does-not-work-there-is-no-speed-equilibrium)
+for the full arithmetic.
+
+`the_ship_does_not_stay_on_the_track_yet` still fails-on-purpose, now for
+this one reason instead of three.
 
 ---
 

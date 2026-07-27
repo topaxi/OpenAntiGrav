@@ -570,6 +570,96 @@ the frame-stale-groundedness finding depends on - was never checked, since
 every PS2 identification above came from matching callees rather than reading
 the call sequence.
 
+## Correction: the floor-fallthrough bug was a wrong track, not a physics bug
+
+**Read this before trusting the roll-oscillator/hover-target sections above at
+face value for "why does the ship fall through the floor."** Every fix
+recorded in those sections (`TARGET_GLOBAL_SCALE = 0.75`, `ALIGNMENT_GAIN`/
+`ALIGNMENT_INERTIA`, the angular sign convention) is real, well-evidenced, and
+correct - none of it is retracted. What's wrong is the specific claim, made
+earlier in this file, that the tick-0 grounding failure in the `oag-trace`
+comparison ("the ship falls through the floor at the very first tick... the
+entire divergence is the force law failing to find ground contact") was a
+physics finding. **It wasn't. It was `race::DEFAULT_TRACK` pointing at the
+wrong track.**
+
+`01_Track` was assumed to be Talon's Junction White - the reference
+scenario's track - by directory-numbering convention ("track directories are
+numbered" was true, but the number in the directory name is not the same
+thing as the front end's own registration order). It is not.
+**`16_Track` is**, settled two ways: `Data\Plugins\PI001\Definition.xml`
+lists `<PI_Track name="16_Track">` first, at `soundregister="1"`
+(`01_Track` is `soundregister="18"`); and decisively, the reference capture's
+own 200 recorded positions were cast against *every* track's collision
+geometry on the disc - `16_Track` is the only one where all 200 of 200 find
+ground, at a mean height of **4.002**, against the **3.978** this project's
+own (corrected) hover spring predicts for a resting ship. Every other track,
+including `01_Track`, misses outright or lands tens of units off.
+
+**With the right track, the story completely changes.** The ship holds
+*both* hover probes in contact for the entire 120-tick well-behaved window
+(previously 6 of 120 with both, 83 of 120 with at least one), hover height
+steady between 3.8 and 4.4 against a 4.125 target, and the envelope-leaving
+tick moves from ~166 to ~257. `grounded` now agrees with the real capture
+exactly for the first 29 ticks, where it previously disagreed from tick 1.
+**The suspension was never broken. It was being measured on the wrong
+ground.**
+
+This is exactly why `craft-update.md`'s roll-oscillator work and the
+`TARGET_GLOBAL_SCALE` measurement should still be trusted: they were derived
+from direct PPSSPP memory reads and PS2 disassembly, independent of which
+track anything was flown on, and the corrected track's measured resting
+height (4.002) matching the spring math's predicted height (3.978) to within
+0.6% is these fixes being *corroborated*, not undone.
+
+**What's left is real, and now cleanly isolated: the ship has no speed
+equilibrium.** The real capture holds 23.6-25.1 units/s at full throttle,
+essentially flat or very slightly decelerating. This simulation passes 99.9
+by tick 120 and keeps climbing past 115 - it now leaves the track by
+outrunning what a turn can hold, not by falling through the floor. From the
+recording's own numbers: a steady 24 units/s needs about 4.9 units of net
+thrust against drag and rolling resistance; `oag_physics::engine::engine`
+produces about **83.6**, roughly **17x** too much. Nobody has determined
+where that factor lives - candidates are `Engine.amount`'s load-time scale,
+the unrecovered `craft+0x294` multiplier (`ENGINE_OUTPUT_SCALE`, currently
+guessed at `1.0`), the two drag coefficients, or an untraced mass mismatch -
+and nothing has been tuned to close it, per this project's own standing rule
+against fitting a value to one capture.
+
+**The methodological lesson, worth keeping**: `oag-trace compare` is built to
+say *where* two runs diverge, and it did that correctly both times. What it
+cannot do is notice its two inputs describe different worlds. A wrong
+`--track` produces a clean, confident, entirely misleading physics report,
+and three separate force-law explanations got built on top of this one
+before anybody thought to cast the recording's own positions at the
+candidate geometries and check which one it was actually standing on - a
+check that needs no disassembly and takes a minute. `race::DEFAULT_TRACK`
+and `crates/trace/src/main.rs`'s `DEFAULT_TRACK` are both now `16_Track`;
+`docs/tools/oag-game.md` and `docs/tools/oag-trace.md` are rewritten to
+match, and `docs/overview/roadmap.md`'s M3/M4 sections are corrected
+accordingly. `the_ship_does_not_stay_on_the_track_yet` still fails on
+purpose, for this one remaining reason rather than the three tangled ones it
+used to record.
+
+## The FEGlobals/FEConst indirection is read, and it retires a loose end
+
+The agent that resolved the PSP XML reader question went on to read the
+`0x0017c630` indirection the PS2 XML reader work had flagged but not chased.
+**`FEConst->` and `FEGlobals->` are the same registry** (`g_fe_globals`,
+`0x00301988`), differing only in *when* the referenced name resolves:
+`FEConst->` bakes it in at parse time, `FEGlobals->` stores the name's hash
+in the value field and sets a per-attribute flag bit so it re-resolves on
+every read - a live global versus a parse-time snapshot of one. Registry
+values are stored as strings and re-parsed per read, so the same global can
+come out as an int to one attribute and a float to another. Two small
+corrections along the way: **the sigil is an arrow**, not `>` as both XML
+reader pages previously transcribed it (checked against the literal bytes in
+each binary separately); and this indirection's float path uses `strtod`, so
+unlike the ordinary `Xml_AttributeAsFloat`, **it is exponent-correct**. It
+also retires a standing PS2 loose end: the third, previously-unidentified
+CRC-32 family the `ps2-pulse` README carried at confidence 55 is this
+registry's own string hash.
+
 ## The PSP has the same exponent-blind float parser - confirmed, not assumed
 
 A fresh agent located the PSP's generic XML reader (`docs/ghidra/functions/psp-pulse/xml-reader.md`,
