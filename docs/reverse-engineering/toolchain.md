@@ -45,13 +45,35 @@ release:
 ```sh
 git clone https://github.com/chaoticgd/ghidra-emotionengine-reloaded.git \
     data/tools/ghidra-emotionengine-reloaded
-gradle -PGHIDRA_INSTALL_DIR=/opt/ghidra --no-daemon \
-    --project-dir data/tools/ghidra-emotionengine-reloaded buildExtension
+# Optional, and irrelevant for SCES_547.48, which is stripped: fetches the
+# stdump helpers the extension uses to import MIPS .mdebug symbols.
+bash data/tools/ghidra-emotionengine-reloaded/os/download.sh
+
+# No system gradle needed - Allegrex's wrapper drives any project via
+# --project-dir, and its distribution is already cached from that build.
+env -u JAVA_TOOL_OPTIONS \
+    JAVA_HOME=/usr/lib/jvm/java-21-openjdk \
+    GHIDRA_INSTALL_DIR=/opt/ghidra \
+    data/tools/ghidra-allegrex/gradlew \
+        --project-dir data/tools/ghidra-emotionengine-reloaded \
+        --no-daemon buildExtension
 # zip lands in data/tools/ghidra-emotionengine-reloaded/dist/
 ```
 
-No JDK 21 pin here: this project has no Gradle wrapper and no Kotlin
-toolchain declaration, so the system JDK works (confirmed against JDK 25).
+This project has no Gradle wrapper of its own and no Kotlin toolchain
+declaration, so it builds under any JDK Gradle itself supports. The pin above
+is the *wrapper's* constraint, not the project's: Allegrex ships Gradle 8.10.2,
+which refuses JDK 23+, and this machine's system JDK is 26. Ghidra wants Gradle
+8.5 or newer (`application.gradle.min`), so 8.10.2 satisfies both ends.
+
+Verify the zip before installing it - a version mismatch is not reported as an
+error, Ghidra just never loads the extension:
+
+```sh
+unzip -p data/tools/ghidra-emotionengine-reloaded/dist/*.zip '*/extension.properties' \
+    | grep '^version='
+grep '^application.version=' /opt/ghidra/Ghidra/application.properties
+```
 
 Then `File > Install Extensions > +`, restart Ghidra, and re-import. Unlike
 Allegrex, no manual language selection is needed afterward: the extension

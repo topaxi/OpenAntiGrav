@@ -228,6 +228,30 @@ fn a_two_hundred_and_sixty_frame_reel_exists() {
         lengths.iter().map(|(i, f, _)| (*i, *f)).collect::<Vec<_>>()
     );
 
+    // And they are these three. The reel the intro state plays is addressed by
+    // hash because no name for it has been recovered, so a hash that quietly
+    // stopped matching would leave `--movie`'s default pointing at nothing.
+    let mut hashes: Vec<u32> = matching
+        .iter()
+        .map(|&index| data.directory().entries[index].name_hash)
+        .collect();
+    hashes.sort_unstable();
+    let mut expected = vec![
+        pulse::hashes::DEVPUB_REEL_SCEE,
+        pulse::hashes::DEVPUB_REEL_SCEI,
+        pulse::hashes::DEVPUB_REEL_SCEA,
+    ];
+    expected.sort_unstable();
+    assert_eq!(
+        hashes,
+        expected,
+        "the 260-frame reels are the three dev/pub cuts; got {:?}",
+        hashes
+            .iter()
+            .map(|h| format!("{h:08x}"))
+            .collect::<Vec<_>>()
+    );
+
     for index in matching {
         let header = &lengths
             .iter()

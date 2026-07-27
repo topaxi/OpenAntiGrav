@@ -50,17 +50,133 @@ redirect target at startup, and
 it so [a test](../../crates/game/tests/boot_ground_truth.rs) asserts it is
 `LogoFMV`.
 
-`IntroMovie1` plays `Data\Movies\Intro.PMF` here because that is the movie whose
-name is resolved. The reel the original's intro state actually plays is one of
-the three 260-frame movies, whose names are **not** recovered. `--movie` takes any
-entry name, and the frame counters fire at 144, 231 and 260 whichever reel is
-loaded, so pointing it at the right one is a one-line change once it is named.
+`IntroMovie1` used to play `Data\Movies\Intro.PMF` here, because that was the
+movie whose *name* was resolved - and it was the wrong reel. That movie is 1200
+frames of the long intro, so the intro state's holds at 144 and 231 landed
+mid-motion inside it. See [the dev/pub reel](#the-devpub-reel) below for what
+plays now.
 
-The dev/pub reel that `IntroMovie1` plays is a *different, earlier* movie from
-the one `LogoFMV` plays, which reconciles the two orderings: the full boot on
-hardware is almost certainly dev/pub logos, then the picker, then the long intro.
-That reading is an **inference**, confidence 75; the pieces are all evidenced but
-nothing has been run under an emulator.
+An earlier version of this page guessed that the full boot on hardware is dev/pub
+logos, then the picker, then the long intro, at confidence 75. **That is wrong,
+and running it settled it** - see [what the disc actually
+does](#what-the-disc-actually-does-at-boot).
+
+## The dev/pub reel
+
+`Data.wad` holds exactly three 260-frame movies, at entry indices 440, 441 and
+442, immediately after `Data\Movies\Intro.PMF` at 439. All three are 480x272,
+8.68 s, `PSMF0012`, with 2-channel ATRAC3+ audio, and none of their names is
+recovered.
+
+Decoding them settles what the intro state's frame counters mean. Measured as the
+mean absolute luma difference between consecutive frames, all three are **exactly
+static** across frames 144 and 231 - the two the state pauses at - and moving on
+either side of them. Rendering those frames shows why:
+
+| Frame | What is on screen |
+| ---: | --- |
+| 144 | `SONY COMPUTER ENTERTAINMENT <region> PRESENTS` |
+| 231 | `A STUDIO LIVERPOOL GAME`, with the Studio Liverpool mark and an "A-G RACING //2197" plate |
+| 260 | The reel ends |
+
+So the two-second holds are the publisher card and the developer card, held in
+turn. That reading was an inference at confidence **82** in
+[frontend video](../ghidra/functions/psp-pulse/frontend-video.md); it is now
+**95**, from the picture itself. `Data\Movies\Intro.PMF` is the negative control
+and it fails cleanly: it is moving at all three frames, with a mean interframe
+luma delta of 5.57 against the reels' 0.15.
+
+The three differ only in the publisher line, which makes them regional cuts:
+
+| Name hash | Frame 144 reads |
+| --- | --- |
+| `b1ba72c3` | Sony Computer Entertainment **Europe** presents |
+| `41fbd22f` | Sony Computer Entertainment **Inc.** presents |
+| `3d2c85f8` | Sony Computer Entertainment **America** presents |
+
+The three are otherwise indistinguishable: their per-frame luma deltas are
+identical to two decimals, so nothing but that one line of text separates them.
+
+**The set is region-invariant, so the disc's region does not choose the cut.**
+*Wipeout Pure*'s USA disc carries these same three hashes at the same three sizes
+(`b1ba72c3` 266,240, `3d2c85f8` 268,288, `41fbd22f` 264,192) in its own
+`Data.wad`. Two different games, one shipped set. Whatever picks between them
+does so at runtime, and that mechanism has not been read out of the binary.
+
+`b1ba72c3`, the European cut, is what `--movie` defaults to, via
+`oag_assets::pulse::hashes::DEVPUB_REEL_SCEE`. Confidence **75**. The disc this
+project reads has a `UCUS-98712` serial in its `PARAM.SFO` and that is the *only*
+American thing about it:
+
+| Signal | Says |
+| --- | --- |
+| `PARAM.SFO` serial | `UCUS-98712` - USA |
+| `BOOT.BIN` strings | 18 `UCES00465`, **zero** `UCUS` |
+| Save-data id it writes | `UCES00465P0000` |
+| ISO volume id, publisher | `SCEE`, `SCEE` |
+| Directory on the disc | `PSP_GAME/USRDIR/UCES00465/`, with its own `SYSDIR/BOOT.BIN` |
+
+The executable is the EU build. `--movie hash:3d2c85f8` and
+`--movie hash:41fbd22f` select the other two.
+
+### What the disc actually does at boot
+
+Run under PPSSPP from a cold boot, with breakpoints on `MoviePlayer_Open`
+(`0x089138bc`), the intro state's `OnEnter` (`0x088d7d80`) and the profile-movie
+state (`0x088e3938`), armed from reset:
+
+```text
+     1s MoviePlayer_Open 'Data\Movies\Intro.PMF'      state='Language Selection'
+    15s MoviePlayer_Open 'Data\Movies\Backdrop.PMF'   state='LogoFMV'
+no further hit after 615s
+```
+
+Two things follow, and both matter more than they look:
+
+1. **The disc's boot never enters `Intro Screen->IntroMovie1`.** Its `OnEnter`
+   did not fire once in ten minutes. The order is the picker, then `LogoFMV`
+   playing the long intro - which is what the XML said, and there is no dev/pub
+   leg in front of it.
+2. **The three 260-frame reels are never opened at boot at all.** Only `Intro.PMF`
+   and `Backdrop.PMF` are. Where they *are* played is not established; they are
+   on the disc, in three regional cuts, and something reaches them.
+
+So the reel is paired with the state by its **contents matching that state's
+constants**, not by having been watched playing. That pairing is strong - 260
+frames, static at exactly 144 and 231, publisher card then developer card, and a
+redirect literally named `DevPubRedirect` - but it is inference, and the state it
+belongs to is not on this disc's boot path.
+
+This build still runs `IntroMovie1` at boot, because that is the order asked for
+(above). Given that it does, the reel whose frames those counters describe is the
+right thing to put under them: with `Intro.PMF` the holds landed on the FX400
+Racing League card and on "ENGINE CORE ENABLED", mid-motion. What is *not* claimed
+is that a real PSP shows this at power-on. It does not.
+
+### Why a hash and not a name
+
+The filename is not recovered and the search for it has been run to the end:
+
+- No `Data\Movies\` string in `BOOT.BIN` names anything but the four
+  `Data\FE\Profile\*_movie.pmf` save-data icons.
+- Expanding all 178 `Data.wad` XML blobs, plus every blob in `FE.wad`,
+  `FEData.wad` and `BEData.wad`, finds `Movie` widgets in **one** file, with
+  `src` values `Data\Movies\Intro` and `Data\Movies\Backdrop` and nothing else.
+  `Intro Screen->IntroMovie1` appears in no XML at all, so that state is code-side
+  and its reel is not XML-named.
+- 27,328 assembled candidates (`Data\Movies\` and three sibling directories,
+  crossed with logo/dev/pub/legal/region stems and three separators) hash to none
+  of the three.
+- A live capture under PPSSPP, breaking on `Wad_HashName` (`0x08940d0c`) and
+  reading its argument, recovers real entry names - 32 of them in 25 minutes -
+  but breaking on every hash call runs the emulator far below real time, and it
+  reached no movie load. It would not have helped anyway: the reels are not
+  opened at boot at all (above), so the name has to be caught wherever they *are*
+  played, and that place is unknown.
+
+Per the naming rules, a name nobody has evidence for does not get invented, so
+the reel is addressed by the hash the WAD directory actually stores. `--movie`
+takes `hash:XXXXXXXX` for exactly this.
 
 Selecting a language fires `Launch Game` and logs it. In the original that is the
 state boot goes to *instead of* the picker when a language is already saved, so
@@ -79,11 +195,15 @@ for the mechanics and
 [`race_ground_truth.rs`](../../crates/game/tests/race_ground_truth.rs) for the test
 that boots to `Launch Game` off a real disc and flies what it hands off to.
 
-## Finding the intro movie
+## Finding the long intro movie
 
-The filename is not in the executable. `Movie_ParseAttributes` (`0x088ba284`)
-builds it from the widget's `src` attribute plus `.PMF`, or `_US.PMF` when
-`localised` is set, so it only exists in the front-end XML.
+This is the `LogoFMV` reel - the 40-second one that plays *after* the picker -
+not the dev/pub reel above.
+
+Its filename is not in the executable either. `Movie_ParseAttributes`
+(`0x088ba284`) builds it from the widget's `src` attribute plus `.PMF`, or
+`_US.PMF` when `localised` is set, so it only exists in the front-end XML. Unlike
+the dev/pub reel, this one *is* XML-driven, which is why it resolved.
 
 The chain that resolves it, all against a real disc:
 

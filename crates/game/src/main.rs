@@ -31,7 +31,6 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use oag_assets::pulse;
 use oag_core::{TickClock, TickRate};
 
 use oag_game::frontend::{self, Frontend};
@@ -58,8 +57,11 @@ struct Cli {
     #[arg(default_value = "data/images/pulse-psp-usa.chd")]
     source: String,
 
-    /// Archive entry name of the movie the intro plays.
-    #[arg(long, default_value = pulse::names::INTRO_MOVIE)]
+    /// Which movie the intro plays: an archive entry name, or `hash:XXXXXXXX`
+    /// for one of the reels whose name is not recovered. Defaults to the
+    /// European cut of the dev/pub reel; `Data\Movies\Intro.PMF` is the long
+    /// intro the LogoFMV screen plays later.
+    #[arg(long, default_value = boot::DEFAULT_INTRO_REEL)]
     movie: String,
 
     /// Convert every frame of the movie, not just the ones the intro shows.

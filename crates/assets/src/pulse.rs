@@ -70,6 +70,48 @@ pub mod names {
     }
 }
 
+/// Name hashes for `Data.wad` entries whose names are not recovered.
+///
+/// A WAD directory stores only the hash of each name, so an entry nobody has
+/// named is still perfectly addressable. Recording the hash is what keeps such
+/// an entry usable without inventing a name for it - which the naming rules in
+/// `CLAUDE.md` forbid below 50 confidence, and a movie filename that no string
+/// search, no XML and no runtime trace has produced is well below that.
+pub mod hashes {
+    /// The dev/pub reel the intro state plays, in its three regional cuts.
+    ///
+    /// Each is 480x272, 260 frames, 8.68 s, `PSMF0012` - a different container
+    /// version from the `PSMF0014` of [`names::INTRO_MOVIE`], which is a second
+    /// sign the two came off different pipelines - with ATRAC3+ audio. All three
+    /// are static across frames 144 and 231, the two the intro state holds for
+    /// two seconds, and moving on either side. Decoded, all three show the same
+    /// pair of cards, and only the publisher line differs:
+    ///
+    /// | Constant | Frame 144 | Frame 231 |
+    /// | --- | --- | --- |
+    /// | [`DEVPUB_REEL_SCEE`] | Sony Computer Entertainment *Europe* presents | A Studio Liverpool game |
+    /// | [`DEVPUB_REEL_SCEI`] | Sony Computer Entertainment *Inc.* presents | A Studio Liverpool game |
+    /// | [`DEVPUB_REEL_SCEA`] | Sony Computer Entertainment *America* presents | A Studio Liverpool game |
+    ///
+    /// See `docs/architecture/frontend-boot.md`.
+    /// All three ship on every disc regardless of that disc's own region -
+    /// *Pure*'s USA disc carries these same three hashes at the same three
+    /// sizes - so the set is region-invariant content and the cut must be picked
+    /// at runtime. Which mechanism picks it has not been read out of the binary.
+    ///
+    /// This one is `oag-game`'s default, because the executable on the image
+    /// this project reads is the EU build throughout despite its `UCUS-98712`
+    /// serial: 18 `UCES00465` strings in `BOOT.BIN` and no `UCUS` string at all,
+    /// an ISO volume id and publisher of `SCEE`, and a whole
+    /// `PSP_GAME/USRDIR/UCES00465/` tree on the disc.
+    pub const DEVPUB_REEL_SCEE: u32 = 0xb1ba_72c3;
+    /// The Japanese cut. See [`DEVPUB_REEL_SCEE`].
+    pub const DEVPUB_REEL_SCEI: u32 = 0x41fb_d22f;
+    /// The American cut, which the disc's `UCUS-98712` serial argues for and
+    /// nothing else does. See [`DEVPUB_REEL_SCEE`].
+    pub const DEVPUB_REEL_SCEA: u32 = 0x3d2c_85f8;
+}
+
 /// The plugins that carry a language, in the order the disc lists them.
 ///
 /// The plugin id is the only stable handle: the language's own name is inside

@@ -43,7 +43,11 @@ impl std::fmt::Debug for Boot {
 pub struct Options {
     /// A disc image, or a directory extracted with `oag-unpack`.
     pub source: String,
-    /// Archive entry name of the movie to play.
+    /// Which `Data.wad` entry the intro plays, as a name or a name hash.
+    ///
+    /// Three of the disc's movies have no recovered name, and one of them is
+    /// the reel the original's intro state actually plays, so a name is not
+    /// enough to address every candidate. See [`EntryRef`].
     pub movie: String,
     /// Where converted frames are cached.
     pub cache: std::path::PathBuf,
@@ -220,16 +224,87 @@ fn load_strings(
     }
 }
 
+/// What `--movie` defaults to: the European cut of the dev/pub reel.
+///
+/// Spelled as a hash because the reel has no recovered name. It is the reel
+/// whose contents fit the intro state's constants - 260 frames, static at 144
+/// and 231, which is exactly where that state pauses for two seconds.
+/// `Data\Movies\Intro.PMF` is a different, 1200-frame movie that the `LogoFMV`
+/// screen plays, and pointing the intro at it made the holds land mid-motion.
+///
+/// European rather than American despite the disc's `UCUS-98712` serial: the
+/// executable on this image is the EU build throughout - 18 `UCES00465` strings
+/// and no `UCUS` string at all - and the ISO's volume id and publisher are both
+/// `SCEE`. Confidence 75; the selection itself has not been read out of the
+/// binary. `--movie hash:3d2c85f8` is the American cut.
+///
+/// See `docs/architecture/frontend-boot.md`.
+pub const DEFAULT_INTRO_REEL: &str = "hash:b1ba72c3";
+
+/// How an archive entry was asked for.
+///
+/// A WAD directory stores only the hash of each name, and three of the disc's
+/// movies - including the 260-frame reel the intro state really plays - have no
+/// name anyone has recovered. Addressing one by hash is the only way to name it
+/// at all, so `hash:3d2c85f8` is accepted anywhere an entry name is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EntryRef {
+    /// A real name, which is hashed to find the entry.
+    Name(String),
+    /// A name hash, for an entry whose name is not known.
+    Hash(u32),
+}
+
+impl EntryRef {
+    /// Reads the `hash:` prefix, and treats anything else as a name.
+    #[must_use]
+    pub fn parse(spec: &str) -> Self {
+        match spec.strip_prefix("hash:") {
+            Some(digits) => match u32::from_str_radix(digits.trim_start_matches("0x"), 16) {
+                Ok(hash) => Self::Hash(hash),
+                // Not a hash after all. Falling through to a name keeps a
+                // mistyped digit an honest "not in Data.wad" rather than a
+                // silent match on something else.
+                Err(_) => Self::Name(spec.to_string()),
+            },
+            None => Self::Name(spec.to_string()),
+        }
+    }
+
+    /// The hash this reference resolves to.
+    #[must_use]
+    pub fn hash(&self) -> u32 {
+        match self {
+            Self::Name(name) => oag_formats::wad::hash_name(name),
+            Self::Hash(hash) => *hash,
+        }
+    }
+}
+
+impl std::fmt::Display for EntryRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Name(name) => write!(f, "{name}"),
+            Self::Hash(hash) => write!(f, "hash:{hash:08x}"),
+        }
+    }
+}
+
 fn load_movie(
     data: &mut oag_assets::Archive,
     options: &Options,
     report: &mut Vec<String>,
 ) -> Result<Movie> {
+    let entry = EntryRef::parse(&options.movie);
+    let hash = entry.hash();
     let index = data
-        .index_of_name(&options.movie)
-        .with_context(|| format!("{} is not in {}", options.movie, data.label()))?;
+        .index_of_hash(hash)
+        .with_context(|| format!("{entry} is not in {}", data.label()))?;
     let size = data.entry_len(index)?;
-    let hash = oag_formats::wad::hash_name(&options.movie);
+    let options = &Options {
+        movie: entry.to_string(),
+        ..options.clone()
+    };
 
     if options.no_video {
         // The header alone is 2048 bytes, so this reads kilobytes rather than
@@ -304,4 +379,50 @@ fn expand(blob: &[u8]) -> Result<String> {
 #[must_use]
 pub fn default_cache_dir() -> std::path::PathBuf {
     Path::new("data/cache/movies").to_path_buf()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EntryRef, pulse};
+
+    #[test]
+    fn a_name_resolves_through_the_wad_hash() {
+        let entry = EntryRef::parse(pulse::names::INTRO_MOVIE);
+        assert_eq!(entry, EntryRef::Name(pulse::names::INTRO_MOVIE.to_string()));
+        assert_eq!(entry.hash(), 0x71d3_c1ec);
+    }
+
+    #[test]
+    fn the_default_reel_is_the_european_cut() {
+        assert_eq!(
+            super::EntryRef::parse(super::DEFAULT_INTRO_REEL).hash(),
+            pulse::hashes::DEVPUB_REEL_SCEE
+        );
+    }
+
+    #[test]
+    fn a_hash_addresses_an_entry_with_no_recovered_name() {
+        // The SCEA dev/pub reel, which has no name to ask for.
+        let entry = EntryRef::parse("hash:3d2c85f8");
+        assert_eq!(entry, EntryRef::Hash(0x3d2c_85f8));
+        assert_eq!(entry.hash(), 0x3d2c_85f8);
+        assert_eq!(entry.to_string(), "hash:3d2c85f8");
+        assert_eq!(EntryRef::parse("hash:0x3d2c85f8").hash(), 0x3d2c_85f8);
+    }
+
+    #[test]
+    fn a_mistyped_hash_stays_a_name_rather_than_matching_something_else() {
+        let entry = EntryRef::parse("hash:zzz");
+        assert_eq!(entry, EntryRef::Name("hash:zzz".to_string()));
+    }
+
+    #[test]
+    fn a_name_that_looks_like_a_hash_is_still_a_name() {
+        // No prefix, so no hash. Names are never bare hex on these discs, but
+        // the rule has to be the prefix rather than the shape.
+        assert_eq!(
+            EntryRef::parse("3d2c85f8"),
+            EntryRef::Name("3d2c85f8".to_string())
+        );
+    }
 }

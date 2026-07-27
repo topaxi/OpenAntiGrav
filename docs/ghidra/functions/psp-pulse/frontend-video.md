@@ -154,8 +154,21 @@ Playback is then paced against the movie's own frame counter:
 
 A pause is released once **2 seconds** have elapsed, and the finish flag fires
 `DevPubRedirect`. Reading this as the developer and publisher logo cards being
-held for two seconds each is an inference; the numbers are certain, the
-interpretation is **82**.
+held for two seconds each was an inference at **82**. It is now **95**: the three
+260-frame reels in `Data.wad` are exactly static at frames 144 and 231 and moving
+either side of them, and decoded, frame 144 reads
+`SONY COMPUTER ENTERTAINMENT <region> PRESENTS` and frame 231
+`A STUDIO LIVERPOOL GAME`. Publisher first, then developer - the order the state
+name already implied. See
+[frontend boot](../../../architecture/frontend-boot.md#the-devpub-reel).
+
+**But this state is not on the disc's boot path.** Run under PPSSPP from a cold
+boot with `0x088d7d80` armed from reset, `IntroMovie1`'s `OnEnter` does not fire
+in ten minutes, and the only movies `MoviePlayer_Open` is called for are
+`Data\Movies\Intro.PMF` (at `Language Selection`) and `Data\Movies\Backdrop.PMF`
+(at `LogoFMV`). The 260-frame reels are never opened at boot. So the reel is
+matched to this state by its contents fitting these constants, not by observation,
+and where the state is entered on real hardware is **not determined**.
 
 Skipping does **not** stop the player directly. Firing `DevPubRedirect`
 transitions the state, and the widget's exit path
@@ -168,8 +181,14 @@ state (`0x088e3938`), which starts playback immediately on entry.
 
 ## Not determined
 
-- **The actual intro movie filename**, which is built from XML at runtime.
-  Extracting and reading the front-end XML would settle it.
+- **The dev/pub reel's filename.** The reel itself is identified - three regional
+  cuts, hashes `b1ba72c3`, `41fbd22f` and `3d2c85f8` - but no name produces those
+  hashes, and `Intro Screen->IntroMovie1` appears in no XML on the disc, so this
+  one is not built by `Movie_ParseAttributes` from a `src` attribute the way the
+  `LogoFMV` reel is. Where the state gets its filename is unread. See
+  [frontend boot](../../../architecture/frontend-boot.md#why-a-hash-and-not-a-name).
+- **How the regional cut is selected** at runtime, and **where the reel is played
+  at all** - it is not opened during boot.
 - Whether the profile movies can be skipped; only the `IntroMovie1` state's
   update was decompiled.
 - Where `libmp3.prx` is loaded. The string at `0x08a8b200` is referenced only

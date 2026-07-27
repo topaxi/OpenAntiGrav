@@ -53,6 +53,7 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 
 | Flag | What it does |
 | --- | --- |
+| `--movie <entry>` | Which reel the intro plays: a `Data.wad` entry name, or `hash:XXXXXXXX` for one of the reels whose name is not recovered. Defaults to `hash:b1ba72c3`, the European cut of the dev/pub reel - see [frontend boot](../architecture/frontend-boot.md#the-devpub-reel). `--movie 'Data\Movies\Intro.PMF'` plays the 40-second reel the `LogoFMV` screen shows later instead. |
 | `--race` | Go straight to the race. Checked before the front end loads anything, so it never parses the menus or transcodes the intro. |
 | `--track <name>` | The track's `.vex` entry in `Data.wad`. |
 | `--team <name>` | Which team's `handlingstats.xml` and model to fly. |
