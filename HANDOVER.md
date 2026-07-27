@@ -230,12 +230,27 @@ Three things worth knowing before touching this code:
   makes every PS2 model exactly half as bright, which reads as a lighting bug
   rather than a decode one. Confidence only 70 on this specific point, since
   nothing in the executable was actually read for it.
-- **PS2 models still render untextured** - decoding the vertex/geometry format
-  didn't touch the separate open question of where PS2 textures live (the
-  embedded block is empty). Unchanged from before this session.
+- **PS2 models still render untextured, and unlit too** - decoding the
+  vertex/geometry format didn't touch the separate open question of where PS2
+  textures live (the embedded block is empty, unchanged from before this
+  session). Compounding it: every PS2 chunk happens to carry vertex colour,
+  which `oag-view` already treats as "prelit, skip the light rig" for the PSP
+  side - so a PS2 model comes out as a featureless white silhouette, geometry
+  correct but with no visual parity to the PSP screenshot at all. **Say this
+  precisely**: M1's exit criterion is met on geometry, not on appearance.
+- **The PS2 disc also carries 6,080 ordinary PSP-format batches** alongside
+  the VIF ones, so the PSP-vs-PS2 discriminator has to be per-batch (which it
+  is), never per-disc.
+- **The advisor caught a real gap before it shipped**: concatenating a split
+  strip's chunks is only winding-correct if every non-final chunk has an
+  *even* vertex count; the decoder now refuses odd ones outright rather than
+  silently producing a wrong triangle. The disc-wide validation run (all
+  98,243 batches) confirms no real file ever triggers the rejection - but the
+  check stays, since nothing rules it out for a hypothetical or fuzzed file.
 
 `docs/overview/roadmap.md`'s M1 exit criterion is updated to record this as
-met.
+met on geometry, with the visual-parity gap stated explicitly rather than
+implied.
 
 ## The PS2 XML reader is confirmed, and it answers two things from unrelated pages
 

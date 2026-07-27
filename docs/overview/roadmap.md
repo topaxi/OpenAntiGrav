@@ -58,13 +58,19 @@ Decode the containers, then the assets inside them.
 **Exit criterion:** a Pulse track and a ship model render in `oag-view` from an
 unmodified disc image, on both the PSP and PS2 asset paths.
 
-**Met.** PS2 mesh batches were the last gap: their vertex type is a VIF/GS
-packet, not the PSP's GU vertex array, and decoding it closed on an exact
-arithmetic invariant across all 757 PS2 `.vex` files (98,243 batches, 11.8
-million vertices, confidence 94). See
+**Met, on geometry.** PS2 mesh batches were the last gap: their vertex type is
+a VIF/GS packet, not the PSP's GU vertex array, and decoding it closed on an
+exact arithmetic invariant across all 757 PS2 `.vex` files (98,243 batches,
+11.8 million vertices, confidence 94) - the PS2 `01_Track` and Feisar ship
+come out the same size as their PSP counterparts (radius 831.02 vs 830.92,
+and 6.45 on both, respectively). See
 [PS2 vertex decoding](../formats/vex.md#ps2-the-vertex-type-still-names-the-attributes-but-the-data-is-a-vif-packet).
-`--mesh` now renders on both asset paths; PS2 models are untextured pending the
-embedded-texture-block question, unchanged from before.
+`--mesh` renders both asset paths' geometry correctly now, but **not with
+visual parity**: PS2 models come out as featureless white silhouettes, both
+because PS2 textures still aren't located (unchanged open question) and
+because every PS2 chunk happens to carry vertex colour, which `oag-view`
+already treats as "prelit, skip the light rig" - so PS2 models are simply
+unlit rather than merely untextured.
 
 **Where to start:** containers are done. `oag-wad` reads every archive on every
 disc, decompresses, resolves names by hash and renders textures to PNG. What
