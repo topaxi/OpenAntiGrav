@@ -277,19 +277,25 @@ fn swept_contact<R: Raycaster + ?Sized>(
     })
 }
 
-/// The deepest of the hull probes, and how many found something.
+/// How many hull probes [`hull_probes`] returns.
+pub const HULL_PROBES: usize = 8;
+
+/// The hull's own probe set: `(origin, direction, reach)`, in world space.
 ///
 /// Eight probes: sideways from the nose, the centre and the tail, and forwards
 /// and backwards from the centre. That is a coarser sampling than the original's
 /// ten box points against every candidate triangle, and it is chosen to cover the
 /// hull's length rather than to match a count nobody can check.
-fn deepest_hull_contact<R: Raycaster + ?Sized>(
-    state: &ShipState,
-    handling: &Handling,
-    env: &Environment,
-    raycaster: &R,
-) -> (Option<WallContact>, u32) {
-    let body = &state.body;
+///
+/// Shared with [`crate::reset`], which asks the same question of different
+/// geometry. One definition rather than two, because two would drift and the
+/// difference would show up as a trigger volume that fires for the hull's left
+/// side but not its right.
+///
+/// A probe whose reach is degenerate is still returned, with its reach as
+/// computed; callers skip those with [`MIN_HULL_EXTENT`].
+#[must_use]
+pub fn hull_probes(body: &Body, handling: &Handling) -> [(Vec3, Vec3, f32); HULL_PROBES] {
     let dimensions = &handling.dimensions;
     let right = body.right();
     let forward = body.forward();
@@ -297,29 +303,50 @@ fn deepest_hull_contact<R: Raycaster + ?Sized>(
     // Reuse the hover probes' own fore and aft placement rather than deriving a
     // second one, so the two cannot drift apart.
     let [fore, aft] = hover::probe_offsets(handling);
-    let along_hull = [Vec3::ZERO, fore, aft];
+    let nose = body.position + body.orientation * fore;
+    let tail = body.position + body.orientation * aft;
+    let centre = body.position;
 
+    let reach = |direction: Vec3| hull_extent(body, dimensions, direction);
+    [
+        (nose, right, reach(right)),
+        (nose, -right, reach(-right)),
+        (centre, right, reach(right)),
+        (centre, -right, reach(-right)),
+        (tail, right, reach(right)),
+        (tail, -right, reach(-right)),
+        (centre, forward, reach(forward)),
+        (centre, -forward, reach(-forward)),
+    ]
+}
+
+/// The deepest of the hull probes, and how many found something.
+fn deepest_hull_contact<R: Raycaster + ?Sized>(
+    state: &ShipState,
+    handling: &Handling,
+    env: &Environment,
+    raycaster: &R,
+) -> (Option<WallContact>, u32) {
     let mut deepest: Option<WallContact> = None;
     let mut contacts = 0;
 
-    let mut consider = |origin: Vec3, direction: Vec3| {
-        let reach = hull_extent(body, dimensions, direction);
+    for (origin, direction, reach) in hull_probes(&state.body, handling) {
         let probeable = reach > MIN_HULL_EXTENT;
         if !probeable {
-            return;
+            continue;
         }
         let Some(hit) =
             raycaster.raycast(Ray::new(origin, direction, reach), env.self_collider, false)
         else {
-            return;
+            continue;
         };
         if !responds(hit.surface) {
-            return;
+            continue;
         }
         let depth = reach - hit.distance;
         let penetrating = depth > 0.0;
         if !penetrating {
-            return;
+            continue;
         }
         contacts += 1;
         let contact = WallContact {
@@ -332,15 +359,7 @@ fn deepest_hull_contact<R: Raycaster + ?Sized>(
         if deepest.is_none_or(|d| contact.depth > d.depth) {
             deepest = Some(contact);
         }
-    };
-
-    for offset in along_hull {
-        let origin = body.position + body.orientation * offset;
-        consider(origin, right);
-        consider(origin, -right);
     }
-    consider(body.position, forward);
-    consider(body.position, -forward);
 
     (deepest, contacts)
 }
@@ -350,7 +369,7 @@ fn deepest_hull_contact<R: Raycaster + ?Sized>(
 /// Collision winding is not guaranteed to face the ship - the same fact the
 /// collision debug view shades two-sided for - so the raw triangle normal is only
 /// an axis, not an orientation.
-fn facing(normal: Vec3, direction: Vec3) -> Vec3 {
+pub(crate) fn facing(normal: Vec3, direction: Vec3) -> Vec3 {
     let n = normal.normalize_or_zero();
     if n.dot(direction) > 0.0 { -n } else { n }
 }

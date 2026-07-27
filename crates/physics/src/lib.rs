@@ -45,6 +45,8 @@
 //! | [`hover`] | The two-probe air cushion and the grounded-only terms | `physics/README.md` |
 //! | [`airbrake`] | Airbrakes, lateral grip, sideshift | both |
 //! | [`collide`] | The segment queries the probes ask | `collision.md` |
+//! | [`wall`] | Hull-versus-wall contact and its response | `collision.md` |
+//! | [`reset`] | Contact with `Reset` trigger geometry | `collision.md` |
 //! | [`forces`] | Assembly, and the four accumulators | `engine.md` |
 //!
 //! `engine.md` is `docs/ghidra/functions/psp-pulse/engine.md` and is the authority
@@ -70,6 +72,7 @@ pub mod hover;
 pub mod integrate;
 pub mod params;
 pub mod passive;
+pub mod reset;
 pub mod ship;
 pub mod wall;
 
@@ -80,5 +83,6 @@ pub use collide::{
 pub use forces::{Accumulators, Environment, Evaluated};
 pub use integrate::{clamp_dt, integrate, step};
 pub use params::{Handling, SpeedClass};
+pub use reset::ResetContact;
 pub use ship::{Body, MAX_DT, SUBSTEPS, ShipControls, ShipState, Sideshift};
 pub use wall::{WallContact, WallResponse};
