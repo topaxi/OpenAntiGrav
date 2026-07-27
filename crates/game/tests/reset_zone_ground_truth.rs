@@ -20,10 +20,10 @@
 //!
 //! - **Whether the track has one at all.** The census in
 //!   `docs/formats/collision.md` counts 26 `Reset Collision` nodes across 40 PSP
-//!   tracks, so **not every track has one**, and `01_Track`'s is 160 bytes -
-//!   a handful of triangles. This test therefore has to establish reachability
-//!   before it can assert anything, and skips loudly rather than failing when the
-//!   track has none.
+//!   tracks, so **not every track has one** - and the default race track,
+//!   `16_Track`, is one of the ones that does not. Measured here: 66 wall, 123
+//!   floor, 7 mag-floor and **zero** reset colliders. So this test picks its own
+//!   track from [`CANDIDATES`] rather than using the default, and says which.
 //! - **Whether a reset volume is masked by other geometry.** It is what
 //!   `oag_physics::reset` bypasses the nearest-hit query for; a real track is
 //!   where that bypass either matters or does not.
@@ -52,27 +52,71 @@ fn image() -> Option<PathBuf> {
     None
 }
 
-fn load() -> Option<race::Loaded> {
+/// Tracks to try, in order, until one has `Reset` geometry.
+///
+/// **The default race track has none.** Measured on the USA PSP disc:
+/// `16_Track` carries 66 wall, 123 floor and 7 mag-floor colliders and *zero*
+/// reset ones, so the feature cannot be exercised there at all. The rest of this
+/// list is tracks measured to have some, so the test has something to fly into.
+/// It is a list rather than one name because a different region's disc need not
+/// agree, and a test that hard-codes one track fails as "the respawn is broken".
+const CANDIDATES: &[&str] = &[
+    race::DEFAULT_TRACK,
+    r"Data\Environments\03_Track\track.vex",
+    r"Data\Environments\05_Track\track.vex",
+    r"Data\Environments\10_Track\track.vex",
+];
+
+fn load(track: &str) -> Option<race::Loaded> {
     let image = image()?;
-    let loaded = race::load(&race::Options {
+    race::load(&race::Options {
         source: image.display().to_string(),
         class: SpeedClass::Venom,
+        track: track.to_string(),
         ..race::Options::default()
     })
-    .expect("loading the race");
-    Some(loaded)
+    .ok()
+}
+
+fn reset_colliders(world: &oag_physics::CollisionWorld) -> usize {
+    world
+        .colliders()
+        .iter()
+        .filter(|c| c.surface() == Surface::Reset && c.triangle_count() > 0)
+        .count()
 }
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn touching_a_real_reset_volume_respawns_the_ship() {
-    let Some(loaded) = load() else {
+    if image().is_none() {
         return;
+    }
+
+    let mut chosen = None;
+    for track in CANDIDATES {
+        let Some(loaded) = load(track) else {
+            continue;
+        };
+        let count = reset_colliders(&loaded.setup.collision);
+        println!("{track}: {count} reset collider(s)");
+        if count > 0 {
+            chosen = Some((*track, loaded));
+            break;
+        }
+    }
+
+    let Some((track, loaded)) = chosen else {
+        panic!(
+            "none of the candidate tracks has Reset geometry, so the respawn \
+             could not be exercised. Candidates: {CANDIDATES:?}"
+        );
     };
+    println!("flying into {track}");
     let setup = loaded.setup;
 
-    // The census first, because it is the finding either way: how much of each
-    // class this track actually carries.
+    // The census, because it is the finding either way: how much of each class
+    // this track actually carries.
     for surface in [
         Surface::Wall,
         Surface::Floor,
@@ -103,14 +147,7 @@ fn touching_a_real_reset_volume_respawns_the_ship() {
         .map(|c| (c.collider(), c.triangle(0)));
 
     let Some((collider, Some([a, b, c]))) = reset else {
-        // Not a failure: some tracks ship none. Say so plainly, because a silent
-        // pass here would read as "the respawn works on this track".
-        println!(
-            "SKIPPED: this track has no usable Reset collider, so the respawn \
-             could not be exercised against real geometry. Try another track \
-             with --track."
-        );
-        return;
+        panic!("the chosen track lost its reset collider between the two passes");
     };
 
     let centroid = (a + b + c) / 3.0;
