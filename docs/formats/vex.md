@@ -436,30 +436,28 @@ This also answers an open question from the
 **mip count**, so the `.mip` size arithmetic holds only when it is 1, which is
 true of every standalone texture examined but not of these.
 
-### PS2: the texture block is empty
+### PS2: the texture block is empty, because the textures are elsewhere
 
-**Confidence: 90.** On the PS2 disc, `Data\Ships\Feisar\Ship.vex` (from
+**Confidence: 94.** On the PS2 disc, `Data\Ships\Feisar\Ship.vex` (from
 `WADS2.WAD`) declares a texture block length of **0** at header `+0x08`, and
 `16 + tree_len + 0` equals the file's actual decompressed size (250,416 bytes)
-exactly — the same invariant that confirms the PSP packing above, just with a
-zero on the other side of it. Its `Texture` nodes are still present, with
-plausible non-zero `clut_size`/`texel_size` fields, so reading them as if PSP's
-packing applied walks off the end of the file. `01_Track\track.vex` shows the
-same pattern.
+exactly - the same invariant that confirms the PSP packing above, just with a
+zero on the other side of it. `01_Track\track.vex` shows the same pattern.
 
-An exact arithmetic invariant (`16 + tree_len + texture_len == file size`, with
-`texture_len` zero) checked against two real PS2 files, not runtime-verified —
-capped at 94 by the rubric regardless, and short of that here on file count.
-`oag_formats::vex::textures`
-now checks the header's declared length before touching a node's fields for
-exactly this reason, with a synthetic-fixture test
-(`a_zero_length_texture_block_returns_none_for_every_slot`) rather than a
-second real disc image, per [the legal policy](../overview/legal.md) on test
-fixtures.
+The textures are **separate WAD entries**, and a model's set is gathered into a
+nested WAD with one entry per `Texture` node, in node order. Each entry is a
+Graphics Synthesizer upload packet rather than a texture file. That is a format
+of its own: see [PS2 texture](ps2-texture.md), decoded and rendering.
 
-**Not determined:** where PS2 textures actually live. `WADSP.WAD` (193
-entries, separate from the compressed `WADS2.WAD`) is a plausible candidate —
-untested guess, not a finding, hence no confidence score.
+The `Texture` nodes that remain in a PS2 `.vex` are **stale**. They still carry
+PSP-shaped `clut_size`/`texel_size` fields including mip chains, and they
+disagree with the texture the game actually loads - the Feisar ship's node 0
+says 512x512 8bpp with 6 mips against a 256x256 single-level entry. Reading them
+as if PSP's packing applied walks off the end of the file, so
+`oag_formats::vex::textures` checks the header's declared length before touching
+a node's fields, with a synthetic-fixture test
+(`a_zero_length_texture_block_returns_none_for_every_slot`) rather than a second
+real disc image, per [the legal policy](../overview/legal.md) on test fixtures.
 
 ## Materials
 
@@ -558,8 +556,11 @@ Applied, from
     take `w` from `STROW`/`STCOL`, and no `STROW` or `STCOL` appears in a model
     packet, so those registers are set elsewhere. Nothing geometric depends on
     it: `w` is not a position component.
-  - **Where PS2 textures live**, unchanged from the note above - the embedded
-    block is empty, so PS2 models render untextured.
+  - ~~**Where PS2 textures live.**~~ - found and decoded, see
+    [PS2 texture](ps2-texture.md). They are standalone archive entries holding a
+    GS upload packet, gathered per model into a nested WAD. What is still open
+    is **which** entry belongs to which model: the set is found by name hash at
+    runtime and the name is not recovered, so `oag-view` is told the entry.
 
 ## Other extensions found
 
