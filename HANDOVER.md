@@ -665,6 +665,48 @@ accordingly. `the_ship_does_not_stay_on_the_track_yet` still fails on
 purpose, for this one remaining reason rather than the three tangled ones it
 used to record.
 
+## The thrust-gap diagnosis just inverted: it was never too much thrust
+
+With the real disc values in hand (previous section), the agent redid the
+force balance and found the sign of its own investigation was backwards.
+**The engine is not producing too much thrust. It is producing exactly the
+right amount, and the original agrees.**
+
+At the reference scenario's steady 24 units/s, the thrust cap arm binds and
+both this crate and (recomputed from the real, disc-confirmed `Engine`
+values) the original's own engine put almost exactly **58 units** into the
+force accumulator. Since the recording holds that speed steady, the
+*original's* total resistance at 24 units/s must also be about 58. This
+crate's implemented resistance there - quadratic drag plus rolling
+resistance - comes to **4.88**. **The gap is on the resistance side, by a
+factor of about 12, not on the thrust side at all.** Every engine constant
+this session has been suspicious of - `ENGINE_OUTPUT_SCALE`, the doubling,
+`amount`, `accelcap` - is now positively confirmed rather than merely
+unrefuted; the `0.084` fitted a few commits ago was fitting the wrong end of
+a balance that was never broken.
+
+**A precise, if probably coincidental, number worth recording**: a grounded
+quadratic drag coefficient of `0.1` instead of the current `0.005` would put
+equilibrium at 23.6 units/s - the exact floor of the recorded 23.6-25.1 band.
+Flagged explicitly as likely a coincidence of magnitude rather than the real
+mechanism (the drag coefficients are independently confirmed exact in the
+PS2 binary, so simply enlarging one without evidence would repeat the
+"tuned to hide it" mistake this project has avoided everywhere else) - but
+it pins the actual size of what's missing: something contributing roughly
+`0.095 * v^2` of opposing force while grounded.
+
+**A specific, well-motivated next target, not yet checked**: the world force
+accumulator has several writers this crate doesn't implement (brakes,
+airbrake lateral/slide, gravity, the hover spring epilogue's downforce,
+vertical damping) but the **track-section force** (`FUN_08848f9c` on PSP,
+`FUN_0015a300` on PS2 - already known to have matching *structure* in both
+binaries, per the earlier force-law corroboration pass) is the only one of
+them that is both unimplemented and *track-dependent* - which matches this
+being a per-scenario discrepancy rather than a universal one. It's a
+per-section timed impulse scaled by two never-read per-speed-class tables
+(`0x08b36bc0`, `0x08b36bd0` on PSP). Reading those tables is the concrete
+next step, and it's Ghidra work, not further physics-crate tuning.
+
 ## The FEGlobals/FEConst indirection is read, and it retires a loose end
 
 The agent that resolved the PSP XML reader question went on to read the
@@ -863,6 +905,25 @@ lap, for a third, already-identified and separately-being-chased reason
 (the engine thrust magnitude bug). Whoever resolves that bug should re-run
 this exact test and this exact screenshot before deciding the module
 documentation's "it cannot fly a lap" framing is actually retired.
+
+## Reset zones now respawn the ship, a genuinely new feature
+
+Continuing straight on from wall collision, the same agent implemented the
+other collision-response gap: touching `Reset`-class geometry now respawns
+the ship, rather than doing nothing (Reset was already excluded from ordinary
+raycasts, per `collision.md`'s confidence-86 reading, but nothing consumed a
+contact against it). Detection queries the `Reset` `TriangleSoup` directly
+rather than through the ordinary hover-probe path, specifically so it isn't
+masked by a floor collider sitting in the same place. The respawn logic
+itself has real safety margins that weren't strictly necessary for a debug
+feature but are the right call for a live one: a 30-tick cooldown between
+respawns, and a hard stop after 5 consecutive failed respawns rather than an
+infinite loop. A ground-truth test
+(`touching_a_real_reset_volume_respawns_the_ship`) was written alongside the
+code but not committed - the agent can't run tests needing real disc data in
+its own sandbox - so it sat uncommitted until verified and committed
+centrally. It passes against the real PSP disc. 319 tests across
+`oag-physics`/`oag-gameplay`/`oag-game`/`oag-render` pass, clippy clean.
 
 ## Walls also render in `just play` itself now, not only in `oag-view`
 
@@ -1612,41 +1673,53 @@ closed.
 
 ## Where I would go next
 
-1. **`oag-trace`, the comparison side, which does not exist at all.** Capture
-   works and records a moving ship; nothing reads a trace back and diffs it
-   against a Rust run. The CSV's columns are already the ones
-   [the verification protocol](docs/reverse-engineering/verification-protocol.md)
-   asks for, and the output that matters is the first divergent tick and by how
-   much, not a pass or fail. Note traces are derived game data: they live in
-   `data/traces/` and are never committed, so this cannot be a CI test.
-2. **Make the ship fly a lap, and try the two cheap explanations first.** The
-   hover target exceeding the probe reach, and the missing inertia tensor, are
-   findings 2 and 3 above; both are small, both are testable against
-   `just play --race`, and neither needs an emulator. Only if those do not settle
-   it is the integrator itself the suspect.
-3. **The two numbers that cap confidence across the physics tree.** The
-   integrator-stability arithmetic above (`h <= 0.005` vs `1/180`) and the
-   handedness prediction are both falsifiable in minutes **once a trace has a
-   moving ship in it**. The instrument is built; the measurement is not taken.
-4. **Test the handedness prediction.** Recover one more cross-product term from
-   the craft path. If it needs the same flip, the systematic-handedness
-   explanation is confirmed and the coordinate-conventions open question falls out
-   with it. Cheapest high-value RE task available, and it needs no emulator.
-5. **Decode PS2 vertex type `0x1b9`**, still M1's exit criterion. `--track` now
-   renders on both discs; `--mesh` gets past textures on PS2 and fails on this.
-   Comparing the PSP and PS2 batch headers of the same ship is the obvious first
-   move and needs no emulator.
-6. **The `.fnt` atlas layout.** Unchanged and still the last thing between the
-   front end and Pulse's own type. Four more transform families were ruled out two
-   sessions ago; see [fnt.md](docs/formats/fnt.md) for what has been tried.
-7. **LZSS is still tested only by its own inverse.** The stream-consumption check
-   is the only independent oracle and it constrains the layout without pinning it.
-   Untouched again this session.
-8. **Check whether the determinism gate actually covers the new simulation.**
+**Everything numbered 1-7 in the previous edition of this list is done**, this
+same pass: `oag-trace` exists and works; the ship's suspension is fixed and
+independently corroborated twice; the integrator-stability and handedness
+questions are both settled at instruction level in a second binary; PS2
+vertex type `0x1b9` is decoded (it was a VIF packet, not a GU variant); the
+`.fnt`/`.mip` atlas is fully solved by reading `Texture_SwizzleForGe` instead
+of more blind transform-guessing. Item 8 (the determinism gate) was not
+checked this pass and is carried forward below. What's actually left:
+
+1. **The engine resistance gap, ~12x short, now precisely diagnosed rather
+   than merely observed.** See "The thrust-gap diagnosis just inverted"
+   above: it's not thrust, it's missing resistance, and the concrete next
+   step is reading two never-read per-speed-class tables
+   (`0x08b36bc0`/`0x08b36bd0`) behind the unimplemented **track-section
+   force** (`FUN_08848f9c` PSP / `FUN_0015a300` PS2). This is the one thing
+   standing between the current build and a ship that can actually complete
+   a lap - the suspension and wall collision are both already fixed and
+   waiting on this.
+2. **Make `oag-game` platform-generic.** Right now `oag-game`/`just play`
+   hardcodes the PSP's archive layout (`PSP_GAME/USRDIR/Data.wad`) and
+   flatly errors if pointed at the PS2 disc - confirmed directly this pass.
+   `oag-view` (the separate asset viewer) already loads both platforms'
+   assets correctly, including the PS2 mesh/texture/audio work landed this
+   session, so the decoders are not the gap - only the game's own archive
+   path resolution is. This is the prerequisite for ever running the actual
+   *game* (not just the viewer) against the PS2 disc, or for any future
+   "best of both" asset mixing the user has asked about.
+3. **Check whether the determinism gate actually covers the new simulation.**
+   Carried over, unchanged, from the previous edition of this list:
    `crates/core/tests/determinism.rs` compares a hash against a committed
-   reference, and `CLAUDE.md` calls that gate load-bearing. It was written before
-   `oag-physics` and `oag-gameplay` existed, and nobody checked this session
-   whether any of their state feeds it. If it does not, the two crates that most
-   need the guarantee are outside the gate. Worth an hour, and note the standing
-   rule: **when that test fails, find the bug - never update the reference
-   constants to make it pass.**
+   reference and predates `oag-physics`/`oag-gameplay`; nobody has checked
+   whether either crate's state actually feeds it. Standing rule if it
+   doesn't hold: **when that test fails, find the bug - never update the
+   reference constants to make it pass.**
+4. **LZSS is validated in a second binary now (self-consistency plus an
+   independently-transcribed reference decoder), but still never against a
+   runtime trace.** Lower priority than it once was, since the second-binary
+   leg was this session's main gap for it.
+5. **Two smaller open RE threads, both already scoped by name**: the
+   torque-sign compensation site is fully resolved (it was never
+   compensated, see "The torque-sign mystery is closed"), but the PS2
+   `Ship_Update*` terms not yet corroborated (brakes, airbrakes, rolling
+   resistance, vertical damping, and the fifteen-term ordering itself) are
+   still single-source at confidence 84 - see "Eight of engine.md's
+   force-law terms" above for exactly what's covered and what isn't.
+6. **The sweep-and-prune ±1024 contradiction has a working instrument now
+   and one data point** (`16_Track` itself is fine, at 856.2 units) **but no
+   survey.** `oag-view --collision` prints the per-track reach; nobody has
+   run it across every track on the disc to find which one(s) actually
+   exceed the bound.
