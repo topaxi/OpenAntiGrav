@@ -177,6 +177,63 @@ open:
 Findings 2 and 3 together are probably the whole of why it cannot fly a lap, and
 both are cheap to test. Start there before touching the integrator.
 
+## `just play` now ends in a race, and getting there settled three conventions
+
+The front end and the race were two disjoint entry paths chosen by `--race`, each
+with its own window, event loop and wgpu device. They are one now: `oag-game` opens
+one window, and the front end reaching **`Launch Game`** - the state picking a
+language already fired - loads the track and hands the window over. `--race` is the
+same race entered without booting the front end. There is no menu in between,
+because there is no menu: the root XML's `MainMenu_Definition.xml` is unbuilt, so
+`Launch Game` starts one race on whatever `--track/--team/--class` name.
+
+Verified end to end three ways: a headless capture that follows the handoff
+(`just play --screenshot ... --until "Launch Game" --press start,cross --ticks 60`),
+a `#[ignore]`d ground-truth test that boots off the disc and flies what `Launch Game`
+starts, and the real window driven by a synthetic keyboard through `/dev/uinput`
+under niri, with the injection guarded on the compositor reporting the game window
+focused. That last technique is worth keeping: it is the only way anything in
+`main.rs` has ever been exercised.
+
+**Three conventions were settled at the boundary, and one hypothesis was closed.**
+
+1. **A `.vex` ship is authored nose along `+Z`** while `Body::forward` is `-Z`, so
+   the ship was drawn facing backwards and the chase camera - correctly behind the
+   body - showed it head-on. `race::MODEL_YAW` composes the half turn in
+   `ship_model_matrix`, at the body-to-model boundary and **not** in
+   `oag_render::mesh`, so `oag-view --mesh` still shows an asset in its own space.
+   Confidence 85, measured: sliced along `z`, the hull is 5.3 units across at `-Z`
+   with the model's full height and 1,175 of its 1,334 vertices, and tapers to 0.9
+   across at `+Z`.
+2. **The hypothesis that follows from it is false, and this is the useful part.**
+   If any body-space offset from disc data were signed along `z`, the same flip
+   would apply to it - which would have been a candidate explanation for finding 3
+   above, single-probe contact. It is not: `oag_physics::hover::probe_offsets` is
+   `[-half, +half]` about the centre from an **unsigned** `<Misc length>`, and a
+   symmetric pair is invariant under a half turn. Grepping `oag-physics` and
+   `oag-gameplay` for any other body-space offset built from handling data finds
+   none. So the `+Z` finding has no consumer in the simulation today and explains
+   nothing about the wobble. **Do not go looking for one.**
+3. **The field of view is authored for one viewport shape and only one.** The PSP
+   renders 480x272 and nothing else, so what a differently shaped window should show
+   is a presentation choice, made in `oag_render::camera::fit_vertical_fov`: at the
+   authored aspect and wider, the value is used unchanged; narrower, the vertical
+   field opens up to hold the authored horizontal field. Without it a tiling
+   compositor's portrait slot crops the track edges away and the camera reads as
+   broken when the data is fine. It carries no confidence score because it is not a
+   reading of the game, and it is constrained by a check rather than by trust: a
+   capture at 1440x816 is **byte-identical** across the change. The window also asks
+   for a fixed size now, which is what makes niri float it rather than tile it.
+
+`--size WxH` renders a capture at any shape, which is how the above is checked with
+no compositor involved.
+
+**Still not wired.** No menu, no HUD, no lap counting, no restart and no pause: the
+only way out of a race is Escape. The player route still draws the **diagnostic
+ribbon** by default rather than the track's art meshes, and `--art` is
+transformatively better to look at - that is a deliberate default from when `--race`
+was a developer tool, and it is worth reconsidering now that `just play` leads here.
+
 ## The engine force law is recovered, and it corrected four things
 
 M4 was blocked on something nobody had written down:

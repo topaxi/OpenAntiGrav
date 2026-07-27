@@ -9,12 +9,14 @@ just play
 
 That reads `data/images/pulse-psp-usa.chd`, plays the intro reel with the
 original's frame-counted pauses, and lands on a Language Selection screen built
-from the disc's own XML. START, or space, skips the intro.
+from the disc's own XML. START, or space, skips the intro. Picking a language
+fires `Launch Game`, and `Launch Game` starts [a race](../tools/oag-game.md) in
+the same window.
 
 ```sh
 # No display needed.
 just play --screenshot /tmp/menu.png --until "Language Selection" --hold start
-just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross
+just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross --ticks 60
 ```
 
 ## The sequence
@@ -25,7 +27,7 @@ just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross
 | `Intro Screen->IntroMovie1` | The reel plays. Pause at frame 144, pause at 231, finish flag at 260, each held two seconds. START fires the redirect. |
 | `DevPubRedirect` | A one-shot redirect state. Its only job is to leave. |
 | `Language Selection` | The disc's own picker. Up and down move, cross selects. |
-| `Launch Game` | End of this slice. |
+| `Launch Game` | End of the front end. The composition root loads a track and a ship and hands the window to a race. |
 
 Every one of those names is a **string literal from the original**, not one we
 invented. `"Intro Screen->IntroMovie1"` and `"DevPubRedirect"` are cached by name
@@ -63,6 +65,19 @@ nothing has been run under an emulator.
 Selecting a language fires `Launch Game` and logs it. In the original that is the
 state boot goes to *instead of* the picker when a language is already saved, so
 using it as the picker's exit is our shortcut, not the original's edge.
+
+**And `Launch Game` starts a race directly.** The original has its menus in
+between: the root XML's `LoadXML` list pulls in `MainMenu_Definition.xml`, and
+none of it is built, so there is nothing to put there. What happens instead is
+that the composition root loads the track and the ship named on the command line
+and hands the window over - one window, one GPU device, the state machine's own
+transition as the trigger. The front-end model does not know about it:
+[`frontend.rs`](../../crates/game/src/frontend.rs) fires the transition the
+original's own string literal names and stops, and `oag-game`'s main loop decides
+what that means. See [`oag-game`](../tools/oag-game.md#how-the-front-end-hands-over)
+for the mechanics and
+[`race_ground_truth.rs`](../../crates/game/tests/race_ground_truth.rs) for the test
+that boots to `Launch Game` off a real disc and flies what it hands off to.
 
 ## Finding the intro movie
 

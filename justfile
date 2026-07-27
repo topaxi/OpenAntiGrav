@@ -67,19 +67,22 @@ hash-images:
 # always safe to delete. Without ffmpeg the sequence still plays, without a
 # picture. See docs/architecture/frontend-boot.md.
 
-# Run the game: intro video, then the Language Selection menu
+# Run the game: intro video, the Language Selection menu, then a race
 play *ARGS:
     cargo run -q --release -p oag-game -- {{ARGS}}
 
-# Capture the boot sequence and the menu without a display
+# Capture the boot sequence, the menu and the race it launches, without a display
 play-screenshots out="/tmp":
     #!/usr/bin/env bash
     set -euo pipefail
     cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-intro.png" --ticks 400
     cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-language.png" \
         --until "Language Selection" --hold start
+    # Launch Game hands off to a race, so this one is a ship on a track that was
+    # reached through the menus. `--press` pulses cross on alternating ticks, which
+    # is what picks the language and then leaves the throttle on half of them.
     cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-launch.png" \
-        --until "Launch Game" --press start,cross
+        --until "Launch Game" --press start,cross --ticks 60
 
 # View assets straight from a disc image
 view *ARGS:

@@ -9,8 +9,9 @@
 use anyhow::{Context, Result};
 
 use crate::boot::Boot;
-use crate::frontend::{Draw, SCREEN};
+use crate::frontend::Draw;
 use crate::input::Input;
+use crate::race;
 use crate::render::{Renderer, VideoFormat};
 
 /// What to capture.
@@ -21,6 +22,9 @@ pub struct Options {
     /// Run until this state is current, then capture.
     pub until: Option<String>,
     /// Run at least this many ticks first.
+    ///
+    /// A run that reaches `Launch Game` with a race to hand off to spends what is
+    /// left of them on the race instead.
     pub ticks: u32,
     /// Buttons held on every tick.
     pub held: u32,
@@ -32,6 +36,16 @@ pub struct Options {
     pub pressed: u32,
     /// Print exits as well as entries.
     pub trace: bool,
+    /// The race `Launch Game` hands off to, if this capture should follow it
+    /// there.
+    ///
+    /// `None` captures the front end and nothing else, which is what a run that
+    /// never reaches `Launch Game` does anyway.
+    pub race: Option<race::Options>,
+    /// With that handoff, print a telemetry line every this many ticks.
+    pub log_every: u32,
+    /// Image size.
+    pub size: (u32, u32),
 }
 
 /// How many ticks the runner will take before giving up on `until`.
@@ -39,9 +53,6 @@ pub struct Options {
 /// The intro is eight seconds plus three two-second holds, so a minute of
 /// simulated time is generous and still bounded.
 const MAX_TICKS: u32 = 60 * 60;
-
-/// Width of the captured image. Three times the PSP's, so 5x7 glyphs are legible.
-const SCALE: u32 = 3;
 
 /// Runs the sequence and writes one frame.
 pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -> Result<()> {
@@ -56,6 +67,13 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     let mut ticks = 0u32;
 
     loop {
+        // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
+        // so the ticks they asked for are spent on the race rather than on a state
+        // whose whole content is the word LAUNCH GAME.
+        if options.race.is_some() && frontend.is_finished() {
+            break;
+        }
+
         let reached = options
             .until
             .as_deref()
@@ -87,13 +105,36 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     }
 
     println!(
-        "captured after {ticks} tick(s) in state {:?}",
+        "after {ticks} tick(s), state {:?}",
         frontend.machine().current().unwrap_or("nothing")
     );
 
+    let (width, height) = options.size;
+
+    // The handoff, and the only place a capture leaves the front end. What it
+    // writes is a race frame drawn through the same scene the window draws, for
+    // the same reason the rest of this file goes through the front end's own
+    // renderer.
+    if frontend.is_finished()
+        && let Some(race_options) = &options.race
+    {
+        let loaded = race::load(race_options)?;
+        for line in &loaded.report {
+            println!("{line}");
+        }
+        return race::capture(
+            loaded,
+            &race::CaptureOptions {
+                path: options.path.clone(),
+                ticks: options.ticks.saturating_sub(ticks),
+                held: options.held,
+                size: (width, height),
+                log_every: options.log_every,
+            },
+        );
+    }
+
     let list = frontend.draw_list();
-    let width = (SCREEN.0 as u32) * SCALE;
-    let height = (SCREEN.1 as u32) * SCALE;
 
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {

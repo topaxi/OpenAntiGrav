@@ -8,11 +8,13 @@
 //! and two-second holds, START to skip, then the Language Selection screen driven
 //! by the disc's own front-end XML.
 //!
-//! [`race`] is the other mode: a track and a ship loaded off the same disc, the
-//! simulation stepped at a fixed 60 Hz from the keyboard, drawn from the chase
-//! camera the ship's own data describes. It shares the disc access, the timestep
-//! and the headless-capture shape with the front end and shares no code with its
-//! renderer, because a ribbon and a menu have nothing in common but a surface.
+//! Picking a language fires `Launch Game`, and `Launch Game` starts a [`race`]: a
+//! track and a ship loaded off the same disc, the simulation stepped at a fixed
+//! 60 Hz from the keyboard, drawn from the chase camera the ship's own data
+//! describes. The two share the disc access, the timestep, the keyboard and - in
+//! the binary - one window and one GPU device; they share no drawing code, because
+//! a ribbon and a menu have nothing in common but a surface. `--race` is the same
+//! race entered without booting the front end first.
 //!
 //! Nothing is written to the disc image, and the only thing written anywhere is
 //! the movie cache under `data/cache/`; see

@@ -1,14 +1,18 @@
 # `oag-game`
 
 The composition root, and the only binary that is the game rather than a tool for
-looking at it. It has two modes.
+looking at it. It has two halves, and one leads into the other.
 
-- **The front end**, which is the default: the intro reel and the Language Selection
-  screen, both driven by the disc's own data. Everything about it is on
+- **The front end**, which is where it boots: the intro reel and the Language
+  Selection screen, both driven by the disc's own data. Everything about it is on
   [front-end boot](../architecture/frontend-boot.md).
-- **A race**, behind `--race`: a track and a ship loaded off the same disc, the
-  simulation stepped at a fixed 60 Hz from the keyboard, drawn from behind the ship
-  by the chase camera the ship's own data describes.
+- **A race**, which is what picking a language starts: a track and a ship loaded off
+  the same disc, the simulation stepped at a fixed 60 Hz from the keyboard, drawn
+  from behind the ship by the chase camera the ship's own data describes.
+
+`--race` skips the front end and goes straight to the second. It is the same race by
+the same route through the same code; what it saves is parsing the menus and
+transcoding the intro.
 
 This page is about the race. Nothing is written anywhere and the disc image is opened
 read-only.
@@ -16,17 +20,22 @@ read-only.
 ## Running it
 
 ```sh
-just play --race
+just play           # intro, menu, then a race
+just play --race    # the race on its own
 ```
 
 Arrow keys steer, X or Return thrusts, Q and E are the left and right airbrakes,
 Escape quits. The keys are the same
 [abstract button layer](../ghidra/functions/psp-pulse/input.md) the front end uses;
-there is one mapping from a keyboard to a snapshot and both modes go through it.
+there is one mapping from a keyboard to a snapshot and both halves go through it,
+one `Keyboard` for the whole session, so a key held across the handoff stays held.
 
 ```sh
 # No display needed: run the simulation for 45 ticks and write one frame.
 just play --race --screenshot /tmp/race.png --ticks 45 --hold cross
+
+# Or through the menus, which is the same picture reached the way a player does.
+just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross --ticks 60
 ```
 
 `--screenshot` renders through the same scene the window draws, so what it captures
@@ -34,19 +43,78 @@ is what a player would have seen. `--ticks` advances the simulation first and
 `--hold` holds abstract buttons - `cross` for thrust, `left`, `right`, `l`, `r` -
 on every one of those ticks, the same spelling both flags have in the front end.
 
+A capture that reaches `Launch Game` follows the handoff: the front end's leg ends
+there whatever `--until` says, and what is left of `--ticks` is spent on the race.
+Note that `--press` **pulses** its buttons on alternating ticks, because two rising
+edges are what it takes to skip the intro and then pick a language - so the same
+`--press start,cross` that gets there leaves the throttle on only half of the race's
+ticks, and the ship is correspondingly slower than under `--hold cross`.
+
 | Flag | What it does |
 | --- | --- |
-| `--race` | Race instead of the front end. Checked before the front end loads anything, so a race never parses the menus or transcodes the intro. |
+| `--race` | Go straight to the race. Checked before the front end loads anything, so it never parses the menus or transcodes the intro. |
 | `--track <name>` | The track's `.vex` entry in `Data.wad`. |
 | `--team <name>` | Which team's `handlingstats.xml` and model to fly. |
 | `--class <name>` | `venom`, `flash`, `rapier` or `phantom`. |
 | `--art` | Draw the track's art meshes instead of its driveable ribbon. |
 | `--log-every <n>` | Print a telemetry line every `n` ticks. `0` for none. |
+| `--size <WxH>` | With `--screenshot`, the image's size. Default `1440x816`. |
 | `--dry-run` | Report what was loaded and exit. |
+
+All of them apply to a race started from the front end as well, since it is the same
+race. `--class` in particular is parsed before anything is loaded, so a misspelling
+is not discovered eight seconds of intro later.
 
 `--dry-run` is worth knowing about on its own: it prints what came off the disc,
 including the values this mode has to make an assumption about, so the assumptions
 can be checked against the numbers rather than taken on trust.
+
+## How the front end hands over
+
+The window, the GPU device and the surface are created once and both halves draw
+through them; what changes at `Launch Game` is only which stage owns the frame. The
+front end reaching that state is the whole of the trigger - `Frontend::is_finished`,
+which the state machine sets on entering it - and the load happens on the frame
+*after* the one that drew it, so the last front-end frame is on screen while the
+track is read.
+
+There is no menu between the picker and the grid, because there is no menu: the
+original's `MainMenu_Definition.xml` is in the root XML's `LoadXML` list and none of
+it is built. So `Launch Game` starts one race, on the track and in the ship the
+command line names, which is [documented as a
+divergence](../architecture/frontend-boot.md#where-we-knowingly-differ) rather than
+presented as the original's flow. Nothing about a race is chosen from a menu yet.
+
+A load that fails - a missing track, a model that will not decode - is reported and
+the front end stays on screen, rather than the window vanishing.
+
+## The window, and the shape it is given
+
+The window asks for 1440x816, three times the PSP's own 480x272, and it asks as a
+**fixed** size: that sets its minimum and maximum to the same value, which is the
+signal a tiling compositor floats a window on instead of squeezing it into whatever
+column its layout has. Measured under niri, which tiles the window to a 948x1152
+portrait slot without it. It is an early-stages default, not a claim that a game
+window should never resize.
+
+The renderer does not rely on it. A field of view in a data file is only defined at
+the shape it was authored for, and the original renders into 480x272 and nothing
+else, so any other window shape needs a choice. The choice, in
+`oag_render::camera::fit_vertical_fov`: at the PSP's aspect and anything wider the
+authored value is used unchanged, and below it the vertical field opens up by
+exactly enough to hold the horizontal field the authored shape would have had.
+Without it a portrait window crops the sides away - the track edges leave the frame
+and the ship fills a slot - which reads as a broken camera when the camera and its
+data are both fine. It is a presentation choice and not a reading of the game, so it
+carries no confidence score; what it is *not* allowed to do is change the picture at
+the authored aspect, and a capture at 1440x816 is byte-identical across the change.
+
+`--size` renders a capture at any shape, which is how that is checked without a
+compositor:
+
+```sh
+just play --race --art --size 948x1152 --screenshot /tmp/tall.png
+```
 
 ## What is drawn
 
@@ -79,7 +147,7 @@ The four pre-scaled handling fields are scaled exactly once, inside
 `oag_gameplay::handling_for`; see the
 [handling-stats page](../formats/handling-stats.md).
 
-### Three readings this mode had to make
+### Four readings this mode had to make
 
 Each is a decision the data forced and none of them was recoverable from the
 executable, so each is recorded here with a
@@ -118,6 +186,21 @@ candidate heights exist and they are three different quantities:
 The third is what is used, and the second is a finding in its own right; see below.
 Note that "in contact" means one of the two probes: they sit fore and aft along the
 hull, so at exactly the cast length they straddle the limit and one drops out.
+
+**A `.vex` ship is authored nose along `+Z`** (confidence 85), while
+`oag_physics::Body::forward` is `-Z`. Drawn straight from the body's orientation the
+ship therefore faces *backwards*, and since the chase camera sits behind the body -
+which is the model's nose side - what you get is a head-on view of a ship that is
+driving away from you. `race.rs` composes a half turn about the model's up axis,
+`MODEL_YAW`, at the boundary between the body and the drawn model; `oag-view --mesh`
+is untouched, because a viewer shows a model in its own space.
+
+That is measured, not assumed. Sliced along `z`, the default team's hull is 5.3 units
+across at the `-Z` end, carries the model's full height there and 1,175 of its 1,334
+vertices, and tapers to 0.9 across at the `+Z` end. The wide, detailed,
+full-height end of a racing ship is its engine block; the narrow tapering end is its
+nose. It is 85 rather than higher because it is an inference from the shape of one
+team's hull - nothing in the executable has been read that states the convention.
 
 ## What it actually does, and what it does not
 

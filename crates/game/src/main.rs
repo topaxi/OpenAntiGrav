@@ -7,7 +7,8 @@
 //! Boots the way the original does: the intro reel with its frame-counted pauses
 //! and two-second holds, START to skip, then the Language Selection screen driven
 //! by the disc's own front-end XML. Arrow keys move, Return or X selects, which
-//! fires `Launch Game`.
+//! fires `Launch Game` - and `Launch Game` loads a track and a ship and hands the
+//! window over to a race, in the same window and on the same GPU device.
 //!
 //! ```sh
 //! # No display needed. Runs the sequence headless and writes one frame.
@@ -15,8 +16,8 @@
 //!     --until "Language Selection" --hold start
 //! ```
 //!
-//! `--race` is the other mode: a ship on a real track, arrow keys to steer, X to
-//! thrust, Q and E for the airbrakes.
+//! `--race` is the shortcut into the second half: the same race, without booting
+//! the front end first.
 //!
 //! ```sh
 //! oag-game --race
@@ -34,8 +35,7 @@ use oag_assets::pulse;
 use oag_core::{TickClock, TickRate};
 
 use oag_game::frontend::{self, Frontend};
-use oag_game::input::{self, Input};
-use oag_game::keys::map_key;
+use oag_game::input;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{INTRO_FRAMES_NEEDED, boot, capture, movie, race, report};
 use oag_input::Keyboard;
@@ -79,11 +79,23 @@ struct Cli {
     #[arg(long)]
     screenshot: Option<std::path::PathBuf>,
 
+    /// With `--screenshot`, the image's size as `WIDTHxHEIGHT`.
+    ///
+    /// A window is not always given the size it asks for - a tiling compositor
+    /// hands out whatever its layout has - and the field of view is derived from
+    /// the viewport, so this is how a capture can show what a differently shaped
+    /// window would have drawn.
+    #[arg(long, default_value = DEFAULT_SIZE)]
+    size: String,
+
     /// With `--screenshot`, run until this state is current before capturing.
     #[arg(long)]
     until: Option<String>,
 
     /// With `--screenshot`, run this many ticks before capturing.
+    ///
+    /// A capture that reaches `Launch Game` spends what is left of them on the
+    /// race the front end hands off to.
     #[arg(long, default_value_t = 0)]
     ticks: u32,
 
@@ -118,33 +130,33 @@ struct Cli {
     #[arg(long)]
     dry_run: bool,
 
-    /// Fly a ship on a real track instead of booting the front end.
+    /// Skip the front end and go straight to a ship on a track.
     ///
-    /// Arrow keys steer, X or Return thrusts, Q and E are the airbrakes.
+    /// Arrow keys steer, X or Return thrusts, Q and E are the airbrakes. The
+    /// same race the front end's `Launch Game` starts.
     #[arg(long)]
     race: bool,
 
-    /// With `--race`, the track's `.vex` entry name in `Data.wad`.
+    /// The track's `.vex` entry name in `Data.wad`, for either way into a race.
     #[arg(long, default_value = race::DEFAULT_TRACK)]
     track: String,
 
-    /// With `--race`, the team, which selects both the handling stats and the
-    /// model.
+    /// The team, which selects both the handling stats and the model.
     #[arg(long, default_value = race::DEFAULT_TEAM)]
     team: String,
 
-    /// With `--race`, the speed class: venom, flash, rapier or phantom.
+    /// The speed class: venom, flash, rapier or phantom.
     #[arg(long, default_value = "venom")]
     class: String,
 
-    /// With `--race`, draw the track's art meshes instead of its driveable ribbon.
+    /// Draw the track's art meshes instead of its driveable ribbon.
     ///
     /// The ribbon is the default because it is the geometry the simulation spawns
     /// on, so it shows whether the ship is where the physics thinks it is.
     #[arg(long)]
     art: bool,
 
-    /// With `--race`, print a telemetry line every this many ticks. Zero prints
+    /// In a race, print a telemetry line every this many ticks. Zero prints
     /// none.
     #[arg(long, default_value_t = 60)]
     log_every: u32,
@@ -153,11 +165,28 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Parsed before anything is loaded, and for both ways in: the front end can
+    // hand off to a race, so a misspelled class must not be discovered eight
+    // seconds of intro later.
+    let class = SpeedClass::from_name(&cli.class).with_context(|| {
+        format!(
+            "{:?} is not a speed class; try venom, flash, rapier or phantom",
+            cli.class
+        )
+    })?;
+    let race_options = race::Options {
+        source: cli.source.clone(),
+        track: cli.track.clone(),
+        team: cli.team.clone(),
+        class,
+        art: cli.art,
+    };
+
     // Before `boot::load`, deliberately: the front end's load parses the front-end
     // XML, every language plugin and a string table, and may shell out to `ffmpeg`
-    // to transcode the intro. A race needs none of it.
+    // to transcode the intro. Going straight to a race needs none of it.
     if cli.race {
-        return run_race(&cli);
+        return run_race(&cli, race_options);
     }
 
     let options = boot::Options {
@@ -202,6 +231,9 @@ fn main() -> Result<()> {
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
                 trace: cli.trace,
+                race: Some(race_options),
+                log_every: cli.log_every,
+                size: parse_size(&cli.size)?,
             },
         );
     }
@@ -214,8 +246,11 @@ fn main() -> Result<()> {
 
     let mut app = App {
         boot: Some(loaded),
+        race: None,
         video_format,
+        race_options,
         trace: cli.trace,
+        log_every: cli.log_every,
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -234,28 +269,40 @@ fn button_mask(names: Option<&str>) -> u32 {
     })
 }
 
-/// The race view's size, windowed and captured alike.
+/// The window's size, and a capture's default, front end and race alike.
 ///
-/// Three times the PSP's screen, the same as the front end's window, so a
-/// screenshot frames exactly what the window would have shown.
-const RACE_SIZE: (u32, u32) = (1440, 816);
+/// Three times the PSP's screen, so the 5x7 glyphs stay legible and a screenshot
+/// frames exactly what the window would have shown.
+const WINDOW_SIZE: (u32, u32) = (1440, 816);
+
+/// [`WINDOW_SIZE`] as `--size` spells it.
+const DEFAULT_SIZE: &str = "1440x816";
+
+/// Parses `WIDTHxHEIGHT`.
+fn parse_size(text: &str) -> Result<(u32, u32)> {
+    let bad = || anyhow::anyhow!("{text:?} is not a size; write it as WIDTHxHEIGHT, e.g. 1440x816");
+    let (width, height) = text.split_once(['x', 'X']).ok_or_else(bad)?;
+    let width: u32 = width.trim().parse().map_err(|_| bad())?;
+    let height: u32 = height.trim().parse().map_err(|_| bad())?;
+    if width == 0 || height == 0 {
+        return Err(bad());
+    }
+    Ok((width, height))
+}
+
+/// The window's title while the front end is on screen.
+const TITLE: &str = "OpenAntiGrav";
+
+/// And once a race has taken it over.
+const RACE_TITLE: &str = "OpenAntiGrav - race";
+
+/// Printed whenever a race takes the window, by either route.
+const RACE_KEYS: &str =
+    "arrow keys steer, X or return thrusts, Q and E are the airbrakes, escape quits";
 
 /// Loads a track and a ship and either captures one frame or opens a window.
-fn run_race(cli: &Cli) -> Result<()> {
-    let class = SpeedClass::from_name(&cli.class).with_context(|| {
-        format!(
-            "{:?} is not a speed class; try venom, flash, rapier or phantom",
-            cli.class
-        )
-    })?;
-
-    let loaded = race::load(&race::Options {
-        source: cli.source.clone(),
-        track: cli.track.clone(),
-        team: cli.team.clone(),
-        class,
-        art: cli.art,
-    })?;
+fn run_race(cli: &Cli, options: race::Options) -> Result<()> {
+    let loaded = race::load(&options)?;
     for line in &loaded.report {
         println!("{line}");
     }
@@ -271,19 +318,23 @@ fn run_race(cli: &Cli) -> Result<()> {
                 path,
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
-                size: RACE_SIZE,
+                size: parse_size(&cli.size)?,
                 log_every: cli.log_every,
             },
         );
     }
 
-    println!("\narrow keys steer, X or return thrusts, Q and E are the airbrakes, escape quits");
+    println!("\n{RACE_KEYS}");
 
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the simulation runs whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
-    let mut app = RaceApp {
-        loaded: Some(loaded),
+    let mut app = App {
+        boot: None,
+        race: Some(loaded),
+        video_format: None,
+        race_options: options,
+        trace: cli.trace,
         log_every: cli.log_every,
         state: None,
     };
@@ -291,38 +342,57 @@ fn run_race(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-struct RaceApp {
-    loaded: Option<race::Loaded>,
+/// One application handler for both ways in, because there is one window.
+struct App {
+    /// The boot sequence, when the game boots into the front end.
+    boot: Option<boot::Boot>,
+    /// A race loaded before the window opened, which is what `--race` does.
+    race: Option<race::Loaded>,
+    video_format: Option<VideoFormat>,
+    /// What a race started from `Launch Game` is flown on.
+    race_options: race::Options,
+    trace: bool,
     log_every: u32,
-    state: Option<RaceSession>,
+    state: Option<Session>,
 }
 
-/// Everything a race needs that only exists once there is a window.
-struct RaceSession {
-    window: Arc<Window>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    surface: wgpu::Surface<'static>,
-    config: wgpu::SurfaceConfiguration,
-    scene: race::Scene,
-    race: race::Race,
-    keyboard: Keyboard,
-    clock: TickClock,
-    last: std::time::Instant,
-    log_every: u32,
+impl App {
+    /// Opens the window and builds whichever stage the command line asked for.
+    ///
+    /// `Ok(None)` means there was nothing to show, which only happens if the event
+    /// loop resumes twice after the loaded state has been taken.
+    fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Session>> {
+        let gpu = Gpu::new(event_loop)?;
+        let stage = if let Some(loaded) = self.race.take() {
+            gpu.window.set_title(RACE_TITLE);
+            Stage::race(&gpu, loaded)?
+        } else if let Some(loaded) = self.boot.take() {
+            Stage::frontend(&gpu, loaded, self.video_format, self.trace)?
+        } else {
+            return Ok(None);
+        };
+
+        Ok(Some(Session {
+            gpu,
+            stage,
+            keyboard: Keyboard::new(),
+            clock: TickClock::new(TickRate::DEFAULT),
+            last: std::time::Instant::now(),
+            race_options: self.race_options.clone(),
+            log_every: self.log_every,
+            launched: false,
+        }))
+    }
 }
 
-impl ApplicationHandler for RaceApp {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
             return;
         }
-        let Some(loaded) = self.loaded.take() else {
-            event_loop.exit();
-            return;
-        };
-        match RaceSession::new(event_loop, loaded, self.log_every) {
-            Ok(session) => self.state = Some(session),
+        match self.open(event_loop) {
+            Ok(Some(session)) => self.state = Some(session),
+            Ok(None) => event_loop.exit(),
             Err(e) => {
                 eprintln!("error: {e:#}");
                 event_loop.exit();
@@ -369,233 +439,37 @@ impl ApplicationHandler for RaceApp {
 
     fn about_to_wait(&mut self, _: &ActiveEventLoop) {
         if let Some(session) = &self.state {
-            session.window.request_redraw();
+            session.gpu.window.request_redraw();
         }
     }
 }
 
-impl RaceSession {
-    fn new(
-        event_loop: &ActiveEventLoop,
-        loaded: race::Loaded,
-        log_every: u32,
-    ) -> Result<RaceSession> {
-        let attributes = Window::default_attributes()
-            .with_title("OpenAntiGrav - race")
-            .with_inner_size(winit::dpi::LogicalSize::new(RACE_SIZE.0, RACE_SIZE.1));
-        let window = Arc::new(
-            event_loop
-                .create_window(attributes)
-                .context("creating the window")?,
-        );
-
-        let instance = wgpu::Instance::default();
-        let surface = instance
-            .create_surface(window.clone())
-            .context("creating the surface")?;
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            compatible_surface: Some(&surface),
-            ..Default::default()
-        }))
-        .context("no suitable GPU adapter (is a Vulkan driver installed?)")?;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("oag-game race"),
-            ..Default::default()
-        }))
-        .context("requesting the device")?;
-
-        let size = window.inner_size();
-        let config = surface
-            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
-            .context("surface is not supported by this adapter")?;
-        surface.configure(&device, &config);
-
-        let race::Loaded {
-            setup,
-            track_model,
-            ship_model,
-            ..
-        } = loaded;
-        let scene = race::Scene::new(
-            &device,
-            &queue,
-            track_model,
-            ship_model,
-            config.format,
-            (config.width, config.height),
-        )?;
-
-        Ok(RaceSession {
-            window,
-            device,
-            queue,
-            surface,
-            config,
-            scene,
-            race: race::Race::start(setup),
-            keyboard: Keyboard::new(),
-            clock: TickClock::new(TickRate::DEFAULT),
-            last: std::time::Instant::now(),
-            log_every,
-        })
-    }
-
-    fn resize(&mut self, width: u32, height: u32) {
-        if width == 0 || height == 0 {
-            return;
-        }
-        self.config.width = width;
-        self.config.height = height;
-        self.surface.configure(&self.device, &self.config);
-        // The depth attachment has to match the colour one, or the next pass is a
-        // validation error.
-        self.scene.resize(&self.device, (width, height));
-    }
-
-    fn frame(&mut self) -> Result<()> {
-        // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
-        // whatever the window is doing.
-        let now = std::time::Instant::now();
-        let elapsed = now.duration_since(self.last);
-        self.last = now;
-        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
-
-        for _ in 0..self.clock.advance(nanos) {
-            let snapshot = self.keyboard.snapshot();
-            self.race.tick(&snapshot);
-            if self.log_every > 0 && self.race.world.tick % u64::from(self.log_every) == 0 {
-                println!("{}", race::describe(&self.race.telemetry()));
-            }
-        }
-
-        let frame = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                self.surface.configure(&self.device, &self.config);
-                return Ok(());
-            }
-            other => {
-                eprintln!("skipping frame: {other:?}");
-                return Ok(());
-            }
-        };
-
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("race frame"),
-            });
-        self.scene.render(
-            &self.queue,
-            &mut encoder,
-            &view,
-            &self.race,
-            (self.config.width, self.config.height),
-        );
-        self.queue.submit(Some(encoder.finish()));
-        self.queue.present(frame);
-        Ok(())
-    }
-}
-
-struct App {
-    boot: Option<boot::Boot>,
-    video_format: Option<VideoFormat>,
-    trace: bool,
-    state: Option<Session>,
-}
-
-/// Everything that only exists once there is a window.
-struct Session {
+/// The window and the GPU objects, which both stages draw through.
+///
+/// One window and one device for the whole process: the front end reaching
+/// `Launch Game` swaps what is drawn, not what it is drawn with.
+struct Gpu {
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
-    renderer: Renderer,
-    frontend: Frontend,
-    movie: movie::Movie,
-    clock: TickClock,
-    last: std::time::Instant,
-    input: Input,
-    held: u32,
-    frame_bytes: Vec<u8>,
-    uploaded: Option<usize>,
-    trace: bool,
 }
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.state.is_some() {
-            return;
-        }
-        let Some(loaded) = self.boot.take() else {
-            event_loop.exit();
-            return;
-        };
-
-        match Session::new(event_loop, loaded, self.video_format, self.trace) {
-            Ok(session) => self.state = Some(session),
-            Err(e) => {
-                eprintln!("error: {e:#}");
-                event_loop.exit();
-            }
-        }
-    }
-
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        let Some(session) = self.state.as_mut() else {
-            return;
-        };
-
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-
-            WindowEvent::Resized(size) => session.resize(size.width, size.height),
-
-            WindowEvent::KeyboardInput { event, .. } => {
-                if event.logical_key == Key::Named(NamedKey::Escape)
-                    && event.state == ElementState::Pressed
-                {
-                    event_loop.exit();
-                    return;
-                }
-                session.key(&event.logical_key, event.state == ElementState::Pressed);
-            }
-
-            WindowEvent::RedrawRequested => {
-                if let Err(e) = session.frame() {
-                    eprintln!("frame error: {e:#}");
-                    event_loop.exit();
-                }
-            }
-
-            _ => {}
-        }
-    }
-
-    fn about_to_wait(&mut self, _: &ActiveEventLoop) {
-        if let Some(session) = &self.state {
-            session.window.request_redraw();
-        }
-    }
-}
-
-impl Session {
-    fn new(
-        event_loop: &ActiveEventLoop,
-        loaded: boot::Boot,
-        video_format: Option<VideoFormat>,
-        trace: bool,
-    ) -> Result<Self> {
+impl Gpu {
+    fn new(event_loop: &ActiveEventLoop) -> Result<Self> {
+        // Fixed size on purpose, for now. It sets the window's minimum and maximum
+        // to the same thing, which is the signal a tiling compositor floats a
+        // window on rather than squeezing it into a column - measured under niri,
+        // which tiles it to a portrait slot without this and honours 1440x816 with
+        // it. The renderer does not depend on it: `Race::projection` fits the field
+        // of view to whatever viewport it is given, so a tiled or fullscreen window
+        // still frames the track correctly. This is the early-stages default, not a
+        // decision that a game window should never resize.
         let attributes = Window::default_attributes()
-            .with_title("OpenAntiGrav")
-            // Three times the PSP's screen, so the 5x7 glyphs stay legible.
-            .with_inner_size(winit::dpi::LogicalSize::new(1440, 816));
+            .with_title(TITLE)
+            .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_SIZE.0, WINDOW_SIZE.1))
+            .with_resizable(false);
         let window = Arc::new(
             event_loop
                 .create_window(attributes)
@@ -623,104 +497,98 @@ impl Session {
             .context("surface is not supported by this adapter")?;
         surface.configure(&device, &config);
 
-        let renderer = Renderer::new(&device, &queue, config.format, video_format)?;
-
         Ok(Self {
             window,
             device,
             queue,
             surface,
             config,
-            renderer,
-            frontend: loaded.frontend,
-            movie: loaded.movie,
-            clock: TickClock::new(TickRate::DEFAULT),
-            last: std::time::Instant::now(),
-            input: Input::new(),
-            held: 0,
-            frame_bytes: Vec::new(),
-            uploaded: None,
-            trace,
         })
     }
 
-    fn resize(&mut self, width: u32, height: u32) {
-        if width == 0 || height == 0 {
-            return;
-        }
-        self.config.width = width;
-        self.config.height = height;
-        self.surface.configure(&self.device, &self.config);
+    /// The viewport, which every stage draws into.
+    fn size(&self) -> (u32, u32) {
+        (self.config.width, self.config.height)
+    }
+}
+
+/// What the window is showing.
+///
+/// Both variants are boxed: a race carries the whole `World`, eight ship slots
+/// wide, and an enum is as large as its largest variant wherever it is stored.
+enum Stage {
+    /// The boot sequence: the intro reel, then the language picker.
+    Frontend(Box<FrontendStage>),
+    /// A ship on a track.
+    Race(Box<RaceStage>),
+}
+
+impl Stage {
+    fn frontend(
+        gpu: &Gpu,
+        loaded: boot::Boot,
+        video_format: Option<VideoFormat>,
+        trace: bool,
+    ) -> Result<Self> {
+        let renderer = Renderer::new(&gpu.device, &gpu.queue, gpu.config.format, video_format)?;
+        Ok(Self::Frontend(Box::new(FrontendStage {
+            renderer,
+            frontend: loaded.frontend,
+            movie: loaded.movie,
+            frame_bytes: Vec::new(),
+            uploaded: None,
+            trace,
+        })))
     }
 
-    fn key(&mut self, key: &Key, down: bool) {
-        let Some(index) = map_key(key) else { return };
-        let mask = 1u32 << index;
-        if down {
-            self.held |= mask;
-        } else {
-            self.held &= !mask;
-        }
+    fn race(gpu: &Gpu, loaded: race::Loaded) -> Result<Self> {
+        let race::Loaded {
+            setup,
+            track_model,
+            ship_model,
+            ..
+        } = loaded;
+        let scene = race::Scene::new(
+            &gpu.device,
+            &gpu.queue,
+            track_model,
+            ship_model,
+            gpu.config.format,
+            gpu.size(),
+        )?;
+        Ok(Self::Race(Box::new(RaceStage {
+            scene,
+            race: race::Race::start(setup),
+        })))
     }
+}
 
-    fn frame(&mut self) -> Result<()> {
-        // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
-        // whatever the window is doing.
-        let now = std::time::Instant::now();
-        let elapsed = now.duration_since(self.last);
-        self.last = now;
-        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
-        let steps = self.clock.advance(nanos);
-        let dt = f64::from(self.clock.rate().dt());
+/// The front end, and everything only it needs.
+struct FrontendStage {
+    renderer: Renderer,
+    frontend: Frontend,
+    movie: movie::Movie,
+    frame_bytes: Vec<u8>,
+    uploaded: Option<usize>,
+    trace: bool,
+}
 
-        for _ in 0..steps {
-            self.input.begin_frame(self.held);
-            let events = self.frontend.update(dt, &mut self.input);
-            report(&events, self.trace);
-            for note in self.frontend.take_notes() {
-                println!("{note}");
-            }
-        }
-
+impl FrontendStage {
+    fn render(
+        &mut self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+    ) -> Result<()> {
         let list = self.frontend.draw_list();
-        self.sync_video(&list)?;
-
-        let frame = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                self.surface.configure(&self.device, &self.config);
-                return Ok(());
-            }
-            other => {
-                eprintln!("skipping frame: {other:?}");
-                return Ok(());
-            }
-        };
-
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("frame"),
-            });
-        self.renderer.render(
-            &self.device,
-            &self.queue,
-            &mut encoder,
-            &view,
-            &list,
-            (self.config.width, self.config.height),
-        );
-        self.queue.submit(Some(encoder.finish()));
-        self.queue.present(frame);
+        self.sync_video(&gpu.queue, &list)?;
+        self.renderer
+            .render(&gpu.device, &gpu.queue, encoder, view, &list, gpu.size());
         Ok(())
     }
 
     /// Uploads the movie frame the draw list asks for, if it changed.
-    fn sync_video(&mut self, list: &[frontend::Draw]) -> Result<()> {
+    fn sync_video(&mut self, queue: &wgpu::Queue, list: &[frontend::Draw]) -> Result<()> {
         let Some(wanted) = list.iter().find_map(|draw| match draw {
             frontend::Draw::Video { frame, .. } => Some(*frame),
             _ => None,
@@ -734,8 +602,156 @@ impl Session {
             return Ok(());
         };
         frames.read_frame(wanted.min(frames.len - 1), &mut self.frame_bytes)?;
-        self.renderer.upload_frame(&self.queue, &self.frame_bytes)?;
+        self.renderer.upload_frame(queue, &self.frame_bytes)?;
         self.uploaded = Some(wanted);
+        Ok(())
+    }
+}
+
+/// A race, and everything only it needs.
+struct RaceStage {
+    scene: race::Scene,
+    race: race::Race,
+}
+
+impl RaceStage {
+    fn render(&self, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        self.scene
+            .render(&gpu.queue, encoder, view, &self.race, gpu.size());
+    }
+}
+
+/// Everything that only exists once there is a window.
+struct Session {
+    gpu: Gpu,
+    stage: Stage,
+    /// One keyboard for both stages: a device belongs to the window rather than
+    /// to what is on screen, so key state carries across the handoff and a focus
+    /// loss releases everything whichever stage is running.
+    keyboard: Keyboard,
+    clock: TickClock,
+    last: std::time::Instant,
+    /// What `Launch Game` starts, kept because the front end is loaded long
+    /// before anyone knows whether a race will be asked for.
+    race_options: race::Options,
+    log_every: u32,
+    /// Set the first time `Launch Game` starts a race, so a load that fails is
+    /// reported once rather than on every frame.
+    launched: bool,
+}
+
+impl Session {
+    fn resize(&mut self, width: u32, height: u32) {
+        if width == 0 || height == 0 {
+            return;
+        }
+        self.gpu.config.width = width;
+        self.gpu.config.height = height;
+        self.gpu
+            .surface
+            .configure(&self.gpu.device, &self.gpu.config);
+        // The depth attachment has to match the colour one, or the next pass is a
+        // validation error.
+        if let Stage::Race(stage) = &mut self.stage {
+            stage.scene.resize(&self.gpu.device, (width, height));
+        }
+    }
+
+    fn frame(&mut self) -> Result<()> {
+        // Checked before this frame's ticks rather than after them, so the frame
+        // that entered `Launch Game` is drawn once before the load stalls the
+        // window.
+        if !self.launched
+            && matches!(&self.stage, Stage::Frontend(stage) if stage.frontend.is_finished())
+        {
+            self.launched = true;
+            println!("\n{}: loading a race", frontend::states::LAUNCH_GAME);
+            match self.launch_race() {
+                Ok(()) => println!("\n{RACE_KEYS}"),
+                // Reported rather than fatal: leaving the front end on screen is
+                // more use than a window that vanishes.
+                Err(e) => eprintln!("cannot start a race: {e:#}"),
+            }
+        }
+
+        // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
+        // whatever the window is doing. The clock's own catch-up cap is what keeps
+        // the race load above from being paid back as a burst of ticks.
+        let now = std::time::Instant::now();
+        let elapsed = now.duration_since(self.last);
+        self.last = now;
+        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+        let steps = self.clock.advance(nanos);
+        let dt = f64::from(self.clock.rate().dt());
+
+        for _ in 0..steps {
+            // Ends the keyboard's tick for both stages. A race reads the snapshot's
+            // axes; the front end reads the button edges the same call computed,
+            // through `buttons_mut`, because it needs `consume_press` and a
+            // snapshot is a value.
+            let snapshot = self.keyboard.snapshot();
+            match &mut self.stage {
+                Stage::Frontend(stage) => {
+                    let events = stage.frontend.update(dt, self.keyboard.buttons_mut());
+                    report(&events, stage.trace);
+                    for note in stage.frontend.take_notes() {
+                        println!("{note}");
+                    }
+                }
+                Stage::Race(stage) => {
+                    stage.race.tick(&snapshot);
+                    if self.log_every > 0 && stage.race.world.tick % u64::from(self.log_every) == 0
+                    {
+                        println!("{}", race::describe(&stage.race.telemetry()));
+                    }
+                }
+            }
+        }
+
+        let frame = match self.gpu.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                self.gpu
+                    .surface
+                    .configure(&self.gpu.device, &self.gpu.config);
+                return Ok(());
+            }
+            other => {
+                eprintln!("skipping frame: {other:?}");
+                return Ok(());
+            }
+        };
+
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("frame"),
+            });
+        match &mut self.stage {
+            Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, &view)?,
+            Stage::Race(stage) => stage.render(&self.gpu, &mut encoder, &view),
+        }
+        self.gpu.queue.submit(Some(encoder.finish()));
+        self.gpu.queue.present(frame);
+        Ok(())
+    }
+
+    /// Replaces the front end with the race its `Launch Game` asks for.
+    ///
+    /// The window, the device and the surface are the ones already open, so the
+    /// handoff costs a load and not a second window.
+    fn launch_race(&mut self) -> Result<()> {
+        let loaded = race::load(&self.race_options)?;
+        for line in &loaded.report {
+            println!("{line}");
+        }
+        self.stage = Stage::race(&self.gpu, loaded)?;
+        self.gpu.window.set_title(RACE_TITLE);
         Ok(())
     }
 }

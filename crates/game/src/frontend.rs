@@ -26,6 +26,13 @@
 //! that is the order asked for; the XML's own order is recorded in
 //! [`Frontend::language_auto_redirect`] and reported at startup so the
 //! difference is visible rather than buried.
+//!
+//! And [`states::LAUNCH_GAME`] goes straight into a race. The original has a main
+//! menu in between - the root XML's `LoadXML` list pulls in
+//! `MainMenu_Definition.xml` - and none of it is built, so a state whose whole
+//! content was the words LAUNCH GAME is used as the way in instead. This module
+//! does not know that: it fires the transition the original's own literal names
+//! and stops, and what happens next is the composition root's business.
 
 use crate::input::{Input, button};
 use crate::language::{Language, StringTable};
@@ -49,7 +56,7 @@ pub mod states {
     pub const DEV_PUB_REDIRECT: &str = "DevPubRedirect";
     /// The language picker.
     pub const LANGUAGE_SELECTION: &str = "Language Selection";
-    /// Where picking a language goes.
+    /// Where picking a language goes, and where a race starts.
     pub const LAUNCH_GAME: &str = "Launch Game";
 }
 

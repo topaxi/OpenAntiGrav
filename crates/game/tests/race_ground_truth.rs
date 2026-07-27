@@ -16,7 +16,10 @@
 //! geometry a ship hovers on is the same geometry the spline runs along, whether the
 //! handling parameters arrive scaled exactly once, whether a spawn pose built from a
 //! `.vex` frame puts a ship the right way up. Those only fail on real data, so this
-//! is the only place they can be asserted.
+//! is the only place they can be asserted. The same goes for the two halves of the
+//! binary: [`the_front_end_hands_off_into_a_driveable_race`] boots the front end off
+//! the disc, picks a language and flies what `Launch Game` starts, which is the
+//! whole of what a player does and needs no GPU to check.
 //!
 //! Everything asserted is structural: something is finite, something is bounded by a
 //! number the *track itself* supplies, something changed. Nothing here asserts a
@@ -36,9 +39,11 @@
 
 use std::path::{Path, PathBuf};
 
+use oag_assets::pulse;
 use oag_core::math::Vec3;
-use oag_game::race;
-use oag_gameplay::input::button;
+use oag_game::frontend::states;
+use oag_game::{boot, movie, race};
+use oag_gameplay::input::{Input, button};
 use oag_physics::{Raycaster, SpeedClass};
 
 /// Ticks the well-behaved assertions cover: two seconds at the fixed 60 Hz.
@@ -186,6 +191,96 @@ fn a_ship_spawns_on_the_spline_and_flies_along_it() {
         "thrust drove the ship backwards along its own forward axis: {along:.2}"
     );
     assert_eq!(race.world.tick, u64::from(TICKS));
+}
+
+/// Ticks the handoff test flies. Half of [`TICKS`], and for the same reason: the
+/// question is whether `Launch Game` produces a driveable ship at all, not how long
+/// one stays driveable.
+const HANDOFF_TICKS: u32 = 60;
+
+/// `Launch Game` is what puts a player in a ship, so the two halves have to
+/// compose: the boot sequence has to reach that state off a real disc, and what it
+/// hands off to has to be a race that spawns, hovers and drives.
+///
+/// The window does exactly this, in this order, with a GPU in the middle. Nothing
+/// here needs one, which is the point: if this passes and the window does not, the
+/// fault is in the window.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_front_end_hands_off_into_a_driveable_race() {
+    let Some(image) = image() else { return };
+
+    // The same load the binary does, without the transcode: what is under test is
+    // the sequencing and the handoff, not the picture.
+    let boot = boot::load(&boot::Options {
+        source: image.display().to_string(),
+        movie: pulse::names::INTRO_MOVIE.to_string(),
+        cache: std::env::temp_dir().join("oag-race-handoff"),
+        extent: movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+        no_video: true,
+    })
+    .expect("loading the boot sequence");
+
+    let mut frontend = boot.frontend;
+    let mut input = Input::new();
+    let dt = 1.0 / 60.0;
+
+    // START skips the intro, and cross picks a language, which fires `Launch Game`.
+    input.begin_frame(1 << button::START);
+    frontend.update(dt, &mut input);
+    input.begin_frame(0);
+    frontend.update(dt, &mut input);
+    assert!(
+        frontend.machine().is(states::LANGUAGE_SELECTION),
+        "got as far as {:?}",
+        frontend.machine().current()
+    );
+
+    input.begin_frame(1 << button::CROSS);
+    frontend.update(dt, &mut input);
+    assert!(frontend.machine().is(states::LAUNCH_GAME));
+    assert!(
+        frontend.is_finished(),
+        "reaching Launch Game is what starts a race"
+    );
+
+    // And this is what the window does next.
+    let Some(loaded) = load() else { return };
+    let bound = envelope(&loaded);
+    let mut race = race::Race::start(loaded.setup);
+    let mut held = race::HeldButtons::new(1 << button::CROSS);
+    let mut grounded_ticks = 0u32;
+
+    for tick in 0..HANDOFF_TICKS {
+        let snapshot = held.snapshot();
+        race.tick(&snapshot);
+        let telemetry = race.telemetry();
+        assert!(
+            telemetry.position.is_finite(),
+            "tick {tick}: {}",
+            race::describe(&telemetry)
+        );
+        assert!(
+            telemetry.spline_distance < bound,
+            "tick {tick}: {bound:.1} units off the spline is off the track: {}",
+            race::describe(&telemetry)
+        );
+        if race.ship().physics.grounded > 0.0 {
+            grounded_ticks += 1;
+        }
+    }
+
+    println!("{}", race::describe(&race.telemetry()));
+    assert!(
+        grounded_ticks > 0,
+        "no hover probe reached the track in {HANDOFF_TICKS} ticks"
+    );
+    let forward = race.ship().physics.body.forward();
+    let along = race.ship().physics.body.linear_velocity.dot(forward);
+    assert!(
+        along > 0.0,
+        "the ship the front end handed off to does not drive forwards: {along:.2}"
+    );
 }
 
 /// The recorded negative result: a ship cannot yet be flown for ten seconds.

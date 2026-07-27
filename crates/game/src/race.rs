@@ -42,6 +42,12 @@
 //! [`oag_gameplay::handling_for`], and grid-slot assignment - which
 //! `oag_gameplay::spawn` records as an open question - is not guessed at: one ship
 //! starts on the racing line at the beginning of the first path.
+//!
+//! Two conventions *are* reconciled here, both at the boundary and both scored:
+//! [`chase_pos_length`], because the disc's camera offset is signed the other way
+//! from the renderer's, and [`MODEL_YAW`], because a `.vex` ship is authored nose
+//! along `+Z` while the simulation's forward is `-Z`. Each is one expression with
+//! its evidence written next to it.
 
 use anyhow::{Context, Result};
 use oag_assets::{Archive, pulse};
@@ -66,6 +72,38 @@ pub const DEFAULT_TRACK: &str = r"Data\Environments\01_Track\track.vex";
 
 /// The team whose `handlingstats.xml` and model a race uses by default.
 pub const DEFAULT_TEAM: &str = "Feisar";
+
+/// Turns the ship model's own facing into the body's.
+///
+/// **A `.vex` ship is authored nose along `+Z`**, and
+/// [`oag_physics::Body::forward`] is `-Z`, so a model drawn straight from the body's
+/// orientation faces backwards: the chase camera sits behind the body, which is the
+/// model's *nose* side, and draws the ship head-on. A half turn about the model's up
+/// axis reconciles them.
+///
+/// Measured rather than assumed, on the default team's `Ship.vex`. Sliced along `z`,
+/// the hull is 5.3 units across at the `-Z` end with the full height of the model and
+/// 1,175 of its 1,334 vertices, and tapers to 0.9 across at the `+Z` end. The wide,
+/// detailed, full-height end of a racing ship is its engine block and the narrow
+/// tapering end is its nose; there is no reading of those numbers in which `+Z` is
+/// the tail.
+///
+/// Confidence **85**. The measurement admits one reading and is reproducible from the
+/// asset, but it is an inference from the hull's shape: nothing in the executable has
+/// been read that states the convention, and only one team's model was measured.
+/// Applied here, at the boundary between a gameplay body and a drawn model, and
+/// deliberately **not** in `oag_render::mesh` - `oag-view --mesh` shows a model in its
+/// own space and must keep doing so.
+pub const MODEL_YAW: f32 = std::f32::consts::PI;
+
+/// The viewport shape every camera value on the disc was authored for.
+///
+/// The PSP renders into 480x272 and nothing else, so an authored field of view is
+/// only defined at this aspect ratio. [`Race::projection`] is where that matters.
+/// Taken from [`crate::frontend::SCREEN`] rather than written again, because it is
+/// the same screen: the front end lays its widgets out in it and the camera was
+/// framed for it.
+pub const AUTHORED_ASPECT: f32 = crate::frontend::SCREEN.0 / crate::frontend::SCREEN.1;
 
 /// The world's generator seed.
 ///
@@ -621,25 +659,38 @@ impl Race {
     /// site rather than assumed in a library. The value read from the disc is
     /// printed in the load report, so the assumption is checkable by whoever looks.
     ///
+    /// The value is also authored for **one** viewport shape, the PSP's own, which
+    /// is the only one the original ever renders into. A window narrower than that
+    /// goes through [`oag_render::camera::fit_vertical_fov`], which holds the
+    /// horizontal field the authored shape would have had instead of cropping the
+    /// sides away; at the PSP's aspect and anything wider it is the authored value
+    /// unchanged. That is a presentation choice and is documented as one.
+    ///
     /// `near` is 1.0 rather than something tiny: track half-widths are tens of
     /// units, so a near plane at 0.01 spends the depth range on nothing and
     /// z-fights in the distance.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32) -> Mat4 {
-        oag_render::camera::projection(self.chase_params.fov.to_radians(), aspect, 1.0, far)
+        let fov = oag_render::camera::fit_vertical_fov(
+            self.chase_params.fov.to_radians(),
+            AUTHORED_ASPECT,
+            aspect,
+        );
+        oag_render::camera::projection(fov, aspect, 1.0, far)
     }
 
     /// Where the ship is and how it is oriented, as the mesh shader's model matrix.
     ///
     /// Rotation and translation only, so the shader's assumption of uniform scale -
     /// which is what lets it rotate normals without an inverse transpose - holds.
-    /// **The model's own origin is used as it is**: no recentring and no corrective
-    /// rotation. If the ship draws offset from where the physics has it, that is a
-    /// finding about the `.vex`, not something to quietly fix here.
+    /// The model's own origin is used as it is: no recentring, and the only rotation
+    /// composed in is [`MODEL_YAW`], which is a stated finding about the `.vex` and
+    /// not a nudge to make the picture look right.
     #[must_use]
     pub fn ship_model_matrix(&self) -> Mat4 {
         let body = &self.ship().physics.body;
         Mat4::from_rotation_translation(body.orientation, body.position)
+            * Mat4::from_rotation_y(MODEL_YAW)
     }
 }
 

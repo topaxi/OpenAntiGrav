@@ -71,7 +71,8 @@ pub fn load(options: &Options) -> Result<Boot> {
 
     if let Some(goto) = frontend.language_auto_redirect() {
         report.push(format!(
-            "the disc's Language Selection redirects to {goto}; this build ends at Launch Game"
+            "the disc's Language Selection redirects to {goto}; this build goes to Launch Game, \
+             which starts a race"
         ));
     }
 

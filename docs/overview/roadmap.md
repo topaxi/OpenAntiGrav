@@ -135,8 +135,9 @@ frame ordering. See also [frame pacing](../psp/frame-pacing.md).
 ## M4 - Playable core
 
 - [x] wgpu renderer MVP: `oag-render` draws track geometry and ships, and
-      `oag-game --race` puts a ship on a real track with a chase camera, headless
-      or in a window. See [oag-game](../tools/oag-game.md).
+      `oag-game` puts a ship on a real track with a chase camera, headless or in a
+      window - reached from the front end's `Launch Game` in the same window, or
+      directly with `--race`. See [oag-game](../tools/oag-game.md).
 - [x] Input: `oag-input` maps devices onto the abstract button layer and produces
       the `InputSnapshot` the simulation consumes
 - [x] Chase camera: `oag_render::camera::chase`, its seven parameters taken from
