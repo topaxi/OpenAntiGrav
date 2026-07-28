@@ -502,11 +502,12 @@ weakly corroborates the `1e-5` drag term and cannot do better - it is
 wall-contaminated for its whole useful length.** Method and numbers, so
 nobody re-derives them: per-tick forward-projected acceleration minus the
 confirmed engine law minus the *measured* post-integrate contact loss
-(`(speed - |v|)/dt`), on ticks 20-47, Assegai Venom values off the disc
-(`Airbrake.drag = 2`, `accelcap 17`, `amount 418`, `normal_gravity 5`;
-`Data\Ships\Assegai\handlingstats.xml`, code-shortened - `<m l k j i>` is
-`<Physical flight_gravity mass normal_gravity track_gravity>`, mass `1`
-again). Findings:
+(`(speed - |v|)/dt`), on ticks 20-47, Assegai Venom handling values read off
+the disc at analysis time and deliberately not recorded here (per ADR-0006 /
+handling-stats.md, a tuning table is content; what IS format documentation
+and stays: `Data\Ships\Assegai\handlingstats.xml` is code-shortened, and
+`<m l k j i>` expands to
+`<Physical flight_gravity mass normal_gravity track_gravity>`). Findings:
 
 - `speed/|v|` reads `~1.038` from tick 0: the ship is **already in wall
   contact before the airbrakes ever engage**, so the friction background
@@ -586,6 +587,88 @@ known-limitation is formally retired, and the whole workspace including
   and separates the two genuinely open questions (which cut is picked at
   runtime - the set is region-invariant, so the disc's region cannot be
   the picker - and what plays the reels at all).
+
+**`physics-2` (Tasks #13 and #16, commits `b0fbe57`, `8794b0f`, `6d3b3db`):
+the last fitted physics constant is retired - the inverse inertia tensor is
+recovered at conf 92 - and Task #13's premise was wrong.** Gate green at 817
+tests; `just test-data` 861/861 with 0 skipped.
+
+- **#13: the airbrake drag term was ALREADY implemented, correctly, with the
+  full `1e-5`** - `airbrake.rs` has carried it since the crate was written.
+  Three separate prose claims said otherwise (passive.rs's header,
+  force-balance-ground-truth.md's section title, and airbrake.rs's *own*
+  module header a hundred lines above the code); all three corrected.
+  **Methodology note worth keeping: a claim that the crate is missing a term
+  is a claim about the crate, and none of the three had checked the crate.**
+  Reading the whole force block anyway settled the sign (it accelerates -
+  fresh write, non-negative factors, `vadd.t`; conf 90, was "a guess
+  awaiting M3"), corrected the gate (it tests `craft+0x2ec`, the *absolute*
+  dot - a reversing ship is not excluded and gets the same `+forward` push),
+  pinned raw-`steerX`-vs-ramped-brakes with a test, and upgraded "airbrakes
+  produce no direct roll torque" from survey to instruction level.
+- **#16: `Body_SetBoxInertia` (`0x0884e1ac`, conf 92) is a textbook
+  solid-box tensor** (`I_xx = m(y^2+z^2)/12`), called once from the ship
+  ctor with the **code-literal box `(12, 8, 12)`** and, two calls earlier,
+  `World_SetBodyMass(body, 0.9)`. So `I = (15.6, 21.6, 15.6)` on (right,
+  up, forward) and `I^-1_yy = 0.046296` - against the independent trace
+  fit's `~(15, 21.2, 15)`, same x==z symmetry, 1.9 % on the yaw entry, and
+  the agreement *discriminates the mass* (`m=1.0` would give 24.0, 13 %
+  off). **Two masses, both correct**: the tensor is frozen at construction
+  with `0.9`, while `Ship_UpdateCraft` re-sets the translational
+  `Physical.mass` every frame - rotational inertia is decoupled from
+  translational mass for the whole race. **The tensor is the same for every
+  craft** (code literal, single call site) - Misc width/length/height go to
+  the *collider*, not the inertia, so the "per-ship inertia" worry is
+  refuted and no second-team capture is needed.
+- **The companion finding that makes it cohere: `Ship_ApplyAngularDamping`
+  damps `body+0x160` - angular MOMENTUM - not angular velocity.** The
+  "drive and damping share one accumulator so the inertia cancels" argument
+  is retired: it cancels only if the damping reads omega, and it does not.
+  That is exactly why the 22x survives to the observable.
+- `YAW_DRIVE_CALIBRATION = 0.0452` **retired**; `YAW_INVERSE_INERTIA`
+  derived from the named constants (`12/(0.9 * (12^2 + 12^2)) = 0.046296`)
+  replaces it, and applying it on an acceleration accumulator is
+  **algebraically exact** (`dL/dt = drive - 5L` with `omega = cL` is
+  `domega/dt = c*drive - 5*omega`). Validation run and reported, not tuned
+  to: RMS 0.1430/0.1808 (left/right) vs the fit's 0.1208/0.1995 - within
+  each other's noise, recorded as "not a regression".
+- **Deferred deliberately, and now *named* discrepancies where the fitted
+  constant used to absorb them invisibly**: (1) pitch and roll are ~15.6x
+  too strong (crate computes `omega = drive/damping`, original is
+  `drive/(damping * I)`); (2) the world-angular terms - weathervane,
+  surface alignment - bypass `I^-1` entirely (they are torques too), so
+  the crate's weathervane yaw authority is ~21.6x too strong relative to
+  steering. Neither guarding test can see (2). Not applied because a
+  partial application of the momentum model is the known failure mode, and
+  **no captured pitch/roll input exists to validate against** - Task #17
+  (held-pitch capture) then #18 (apply the model coherently) are queued.
+  `Body::inertia` is deliberately left at `Vec3::ONE` with a doc saying
+  why: setting it today is a no-op that *looks* like an implementation.
+- New names saved: `Body_SetBoxInertia` 92, `World_SetBodyBoxInertia` 88,
+  `World_SetBodyMass` 88. `FUN_0884e694` (collider setup) left unnamed,
+  unread.
+
+**Two process traps from this task, both live:**
+
+- **`git-commit` does NOT isolate a pathspec - it commits everything
+  staged.** In a shared tree, `git add <paths> && git-commit` silently
+  sweeps whatever another agent staged in between; it happened twice this
+  pass (both caught, split via `reset --soft`, and the other agent's index
+  restored). Until the wrapper grows an atomic pathspec mode, check
+  `git diff --cached --name-only` immediately before every commit in a
+  multi-agent tree.
+- **Shipped design data in tracked docs.** handling-stats.md's own rule
+  ("a field name is a description of the format, a tuning table is the
+  content itself", per ADR-0006) is violated in places:
+  `angular-velocity-column.md` printed the shipped `Turning.amount` (now
+  redacted - the measured runtime columns stay, the design value does
+  not), and this file plus force-balance-ground-truth.md carry scattered
+  XML-side values from earlier passes (`accelcap 17.03`, `amount`-derived
+  `41.8`, `ride_height 5.5`, `Physical.mass 1`). Some are load-bearing in
+  the force-law derivations. **Whether to sweep those historically is a
+  maintainer decision, not an agent's** - flagged here rather than
+  unilaterally rewritten; git history retains everything regardless, so
+  the sweep would clean the distributable snapshot, not the past.
 
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 

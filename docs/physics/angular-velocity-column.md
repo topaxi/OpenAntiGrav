@@ -120,9 +120,12 @@ land in **one** accumulator (`craft+0x340` -> `body+0x120`), so any common facto
 omega_y = steer * Turning.amount / 5
 ```
 
-unconditionally. Against the shipped Assegai `Turning.amount = 1.68` and a
-`steer` column that saturates near `100`, that is `33.6` - and the craft
-observably yaws at about `1.5` rad/s, 22x less. That gap is what
+unconditionally. Against the shipped Assegai `Turning.amount` (a design value,
+read off the user's own disc and not recorded here per
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) and
+[handling-stats.md](../formats/handling-stats.md)'s schema-not-values rule) and
+a `steer` column that saturates near `100`, that predicts a value around `33` -
+and the craft observably yaws at about `1.5` rad/s, 22x less. That gap is what
 `YAW_DRIVE_CALIBRATION` exists to paper over.
 
 **The law is right. It predicts the stored column, not the rotation.** Held full
@@ -135,9 +138,11 @@ lock, `data/traces/talons-junction-steer-right.csv`:
 | 60 | 104.1 | 32.84 | -1.535 | -21.40 |
 | 65 | 98.2 | **32.92** | -1.546 | -21.30 |
 
-`steer * 1.68 / 5` at that plateau is **32.27**, against a stored `32.92` still
-settling onto it - agreement to about **2 %**. The mirrored left capture climbs
-the same curve with the sign flipped.
+`steer * amount / 5` evaluated with the disc's own `amount` at that plateau
+lands within about **2 %** of the stored `32.92` still settling onto it. The
+mirrored left capture climbs the same curve with the sign flipped. (The stored
+and observed columns above are runtime measurements; the design value itself is
+recoverable from any of them and deliberately not printed.)
 
 So the cancellation argument is **correct about the accumulator** and the
 equilibrium it derives is now confirmed by measurement. What it cannot do is
