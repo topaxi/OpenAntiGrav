@@ -1,4 +1,4 @@
-//! The boot sequence: intro movie, then the language picker.
+//! The boot sequence: the intro movie, then the language picker.
 //!
 //! This is the part worth testing, so it holds no GPU handles, opens no files
 //! and reads no clock. It takes a delta and an input snapshot and emits a draw
@@ -6,26 +6,48 @@
 //!
 //! # What it reproduces
 //!
-//! The intro is `0x088d7e1c`, whose `OnEnter` caches two transition targets by
-//! name, `"DevPubRedirect"` and `"Intro Screen->IntroMovie1"`. Playback is paced
-//! against the movie's own frame counter: pause at 144 and at 231, set the
-//! finish flag at 260, each pause released after two seconds, and the finish flag
-//! fires `DevPubRedirect`. START skips by firing that same redirect rather than
-//! by stopping the player, so the teardown is a consequence of the transition.
-//! See `docs/ghidra/functions/psp-pulse/frontend-video.md`.
+//! There are **two** movie legs here, and only one of them is on the disc's own
+//! boot path.
 //!
-//! The 260 is not arbitrary and it is not ours: three movies in `Data.wad` are
-//! exactly 260 frames long, which is what confirms those counters are frame
-//! numbers of a real reel. See `docs/architecture/frontend-boot.md`.
+//! [`Leg::LogoFmv`] is the one that is, and it is the default. `LogoFMV` is a
+//! screen in the disc's front-end XML: a black `Image`, a `Movie` widget with
+//! `src="Data\Movies\Intro"`, `autostart`, `repeat="false"` and `autoredirect`,
+//! an `AutoRedirect` to its own `Show Logo` child, and five more redirects -
+//! start, circle, square, triangle and cross - all going to
+//! `LogoFMVRedirectScreen`. So the movie plays straight through and any of five
+//! buttons skips it. **There are no frame holds on this leg**, because the
+//! widget has no frame counters: it plays a 1200-frame movie to its end.
+//!
+//! [`Leg::DevPubReel`] is `Intro Screen->IntroMovie1` at `0x088d7e1c`, whose
+//! `OnEnter` caches two transition targets by name, `"DevPubRedirect"` and
+//! `"Intro Screen->IntroMovie1"`. That state paces playback against the movie's
+//! own frame counter: pause at 144 and at 231, set the finish flag at 260, each
+//! pause released after two seconds, and the finish flag fires
+//! `DevPubRedirect`. START skips by firing that same redirect rather than by
+//! stopping the player, so the teardown is a consequence of the transition. The
+//! 260 is not arbitrary and it is not ours: three movies in `Data.wad` are
+//! exactly 260 frames long and are static at exactly 144 and 231.
+//!
+//! **The disc's own boot never enters that state.** Run under PPSSPP from a cold
+//! boot with `0x088d7d80` armed from reset, `IntroMovie1`'s `OnEnter` does not
+//! fire in ten minutes; the only movies opened are `Data\Movies\Intro.PMF` and
+//! `Data\Movies\Backdrop.PMF`. So the reel leg is real, evidenced code whose
+//! trigger is simply unknown, and it is reachable here through `--reel` rather
+//! than at boot. See `docs/ghidra/functions/psp-pulse/frontend-video.md` and
+//! `docs/architecture/frontend-boot.md`.
 //!
 //! # Where it knowingly differs
 //!
-//! The front-end XML runs `Language Selection` **first** and its
-//! `LanguageAutoRedirect` goes on to `LogoFMV`, which is where the named intro
-//! movie plays. This build boots into the intro and lands on the picker, because
-//! that is the order asked for; the XML's own order is recorded in
-//! [`Frontend::language_auto_redirect`] and reported at startup so the
-//! difference is visible rather than buried.
+//! The front-end XML runs `Language Selection` **first**, and its
+//! `LanguageAutoRedirect` goes on to `LogoFMV`. This build boots into `LogoFMV`
+//! and lands on the picker, because that is the order asked for; the XML's own
+//! order is recorded in [`Frontend::language_auto_redirect`] and reported at
+//! startup so the difference is visible rather than buried.
+//!
+//! `LogoFMV`'s own exits also differ. On the disc the movie finishing fires
+//! `AutoRedirect` to `LogoFMV->Show Logo` - the Pulse logo and PRESS START - and
+//! a button fires `LogoFMVRedirectScreen`, which goes to the same place. Here
+//! both go to the picker, because the picker is what this build has next.
 //!
 //! And [`states::LAUNCH_GAME`] goes straight into a race. The original has a main
 //! menu in between - the root XML's `LoadXML` list pulls in
@@ -39,25 +61,56 @@ use crate::language::{Language, StringTable};
 use crate::screen::{Screen, Screens, argb_to_rgba};
 use crate::state_machine::{Event, StateMachine};
 
-/// Frame counts at which the intro state acts, from `0x088d7e1c`.
+/// Frame counts at which the dev/pub reel state acts, from `0x088d7e1c`.
 pub const PAUSE_FRAMES: [usize; 2] = [144, 231];
-/// The frame at which the intro sets its finish flag.
+/// The frame at which the dev/pub reel state sets its finish flag.
 pub const FINISH_FRAME: usize = 260;
 /// How long a pause is held, in seconds.
 pub const HOLD_SECONDS: f64 = 2.0;
 
-/// State names this build drives. Every one is a literal from the original.
+/// State names this build drives. Every one is a literal from the original -
+/// from its executable, or from the front-end XML on the disc.
 pub mod states {
-    /// The intro's parent state.
+    /// The screen that plays `Data\Movies\Intro.PMF`, named by the front-end
+    /// XML. This is the leg the disc's own boot runs.
+    pub const LOGO_FMV: &str = "LogoFMV";
+    /// The dev/pub reel's parent state.
     pub const INTRO: &str = "Intro Screen";
-    /// The intro movie, spelled the way the original's own string literal is.
+    /// The dev/pub reel state, spelled the way the original's own string
+    /// literal is. Not on the disc's boot path; see the module docs.
     pub const INTRO_MOVIE: &str = "Intro Screen->IntroMovie1";
-    /// The one-shot redirect the intro fires when it finishes or is skipped.
+    /// The one-shot redirect the reel state fires when it finishes or is
+    /// skipped.
     pub const DEV_PUB_REDIRECT: &str = "DevPubRedirect";
     /// The language picker.
     pub const LANGUAGE_SELECTION: &str = "Language Selection";
     /// Where picking a language goes, and where a race starts.
     pub const LAUNCH_GAME: &str = "Launch Game";
+}
+
+/// Which movie leg the sequence boots into.
+///
+/// See the module docs: one of these is on the disc's boot path and the other
+/// is a state whose trigger nobody has found.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Leg {
+    /// `LogoFMV`, playing `Data\Movies\Intro.PMF` straight through.
+    #[default]
+    LogoFmv,
+    /// `Intro Screen->IntroMovie1`, with the frame-counted holds at 144, 231
+    /// and 260. Reached through `--reel`.
+    DevPubReel,
+}
+
+impl Leg {
+    /// The state this leg starts in.
+    #[must_use]
+    pub fn state(self) -> &'static str {
+        match self {
+            Self::LogoFmv => states::LOGO_FMV,
+            Self::DevPubReel => states::INTRO_MOVIE,
+        }
+    }
 }
 
 /// Horizontal alignment, as the XML spells it.
@@ -177,11 +230,10 @@ pub struct Frontend {
 }
 
 impl Frontend {
-    /// Builds the boot sequence.
+    /// Builds the boot sequence on the disc's own movie leg.
     ///
-    /// `movie_frames` is how many frames of the intro reel are actually
-    /// available. Zero is legal and means no picture, which still plays out the
-    /// full sequence over the movie's real duration.
+    /// `movie_frames` is how many frames the movie has. Zero is legal and means
+    /// there is no movie at all, which still plays out a sequence.
     #[must_use]
     pub fn new(
         screens: Screens,
@@ -191,8 +243,31 @@ impl Frontend {
         movie_frames: usize,
         has_picture: bool,
     ) -> Self {
+        Self::booting(
+            Leg::default(),
+            screens,
+            strings,
+            languages,
+            placements,
+            movie_frames,
+            has_picture,
+        )
+    }
+
+    /// Builds the boot sequence on a named [`Leg`].
+    #[must_use]
+    pub fn booting(
+        leg: Leg,
+        screens: Screens,
+        strings: StringTable,
+        languages: Vec<Language>,
+        placements: Vec<(String, crate::sprite::Placed)>,
+        movie_frames: usize,
+        has_picture: bool,
+    ) -> Self {
         let mut machine = StateMachine::new();
         machine.register_all([
+            states::LOGO_FMV,
             states::INTRO,
             states::INTRO_MOVIE,
             states::DEV_PUB_REDIRECT,
@@ -204,8 +279,9 @@ impl Frontend {
         let paths: Vec<String> = screens.screens.iter().map(|s| s.path.clone()).collect();
         machine.register_all(paths.iter().map(String::as_str));
 
-        // The intro's pacing needs frames up to FINISH_FRAME; a shorter reel
-        // finishes early rather than stalling.
+        // With no movie at all - every PS2 source, which ships no `.PMF` - the
+        // sequence still has to run and end. FINISH_FRAME is the reel's own
+        // length, which is as good a stand-in as any and is bounded.
         let frames = if movie_frames == 0 {
             FINISH_FRAME
         } else {
@@ -233,7 +309,7 @@ impl Frontend {
             notes: Vec::new(),
             finished: false,
         };
-        frontend.machine.transition_to(states::INTRO_MOVIE);
+        frontend.machine.transition_to(leg.state());
         frontend
     }
 
@@ -307,7 +383,9 @@ impl Frontend {
     /// Returns the transitions that happened, in order, so a caller can log them
     /// or a test can assert on them.
     pub fn update(&mut self, dt: f64, input: &mut Input) -> Vec<Event> {
-        if self.machine.is(states::INTRO_MOVIE) {
+        if self.machine.is(states::LOGO_FMV) {
+            self.update_logo_fmv(dt, input);
+        } else if self.machine.is(states::INTRO_MOVIE) {
             self.update_intro(dt, input);
         } else if self.machine.is(states::DEV_PUB_REDIRECT) {
             // A redirect state's whole job is to leave. The front-end XML does
@@ -326,6 +404,39 @@ impl Frontend {
             }
         }
         events
+    }
+
+    /// The disc's own movie leg: play `Data\Movies\Intro.PMF` to its end, or
+    /// until a button skips it.
+    ///
+    /// No frame counters and no holds. The `Movie` widget carries none: it is
+    /// `autostart`, `repeat="false"`, `autoredirect`, and the screen's five
+    /// skip redirects - start, circle, square, triangle, cross - all go to
+    /// `LogoFMVRedirectScreen`. Only the buttons the abstract layer carries are
+    /// read here, which is start and cross.
+    fn update_logo_fmv(&mut self, dt: f64, input: &mut Input) {
+        for button in [button::START, button::CROSS] {
+            if input.is_pressed(button) {
+                input.consume_press(button);
+                self.notes.push(format!(
+                    "the movie was skipped, firing {}",
+                    states::LANGUAGE_SELECTION
+                ));
+                self.machine.fire(states::LANGUAGE_SELECTION);
+                return;
+            }
+        }
+
+        self.player.update(dt);
+        if self.player.is_finished() {
+            // The disc's `AutoRedirect` goes to `LogoFMV->Show Logo` here. This
+            // build has the picker next instead; see the module docs.
+            self.notes.push(format!(
+                "the movie ended, firing {}",
+                states::LANGUAGE_SELECTION
+            ));
+            self.machine.fire(states::LANGUAGE_SELECTION);
+        }
     }
 
     fn update_intro(&mut self, dt: f64, input: &mut Input) {
@@ -434,7 +545,7 @@ impl Frontend {
             color: [0.0, 0.0, 0.0, 1.0],
         }];
 
-        if self.machine.is_in(states::INTRO) {
+        if self.machine.is_in(states::INTRO) || self.machine.is(states::LOGO_FMV) {
             if self.has_picture {
                 out.push(Draw::Video {
                     rect: [0.0, 0.0, width, height],
@@ -697,8 +808,22 @@ mod tests {
         .collect()
     }
 
+    /// The default leg: `LogoFMV`, playing the movie the disc plays.
     fn frontend(frames: usize) -> Frontend {
         Frontend::new(
+            Screens::from_xml(XML),
+            StringTable::default(),
+            languages(),
+            Vec::new(),
+            frames,
+            false,
+        )
+    }
+
+    /// The `--reel` leg: `Intro Screen->IntroMovie1`, with the frame holds.
+    fn reel(frames: usize) -> Frontend {
+        Frontend::booting(
+            Leg::DevPubReel,
             Screens::from_xml(XML),
             StringTable::default(),
             languages(),
@@ -726,15 +851,60 @@ mod tests {
     }
 
     #[test]
-    fn boots_into_the_intro_movie() {
+    fn boots_into_the_screen_the_disc_boots_into() {
         let frontend = frontend(300);
-        assert_eq!(frontend.machine().current(), Some(states::INTRO_MOVIE));
-        assert!(frontend.machine().is_in(states::INTRO));
+        assert_eq!(frontend.machine().current(), Some(states::LOGO_FMV));
+        assert!(
+            !frontend.machine().is_in(states::INTRO),
+            "the dev/pub reel state is not on the boot path"
+        );
+    }
+
+    #[test]
+    fn the_logo_fmv_leg_plays_straight_through_with_no_holds() {
+        let mut frontend = frontend(300);
+        let mut input = Input::new();
+
+        // Past both of the reel state's pause frames, and still playing: those
+        // counters belong to the other leg.
+        for _ in 0..250 {
+            input.begin_frame(0);
+            frontend.update(FRAME, &mut input);
+        }
+        assert!(!frontend.player().is_paused(), "LogoFMV has no frame holds");
+        assert_eq!(frontend.player().frames_produced(), 251);
+        assert!(frontend.machine().is(states::LOGO_FMV));
+
+        assert!(
+            run_until(&mut frontend, &mut input, 400, |f| f
+                .machine()
+                .is(states::LANGUAGE_SELECTION)),
+            "the movie ending must go on to the picker"
+        );
+        assert_eq!(
+            frontend.machine().history(),
+            [states::LOGO_FMV, states::LANGUAGE_SELECTION],
+            "and not through DevPubRedirect, which is the other leg's"
+        );
+    }
+
+    #[test]
+    fn either_skip_button_leaves_the_logo_fmv_leg() {
+        for skip in [button::START, button::CROSS] {
+            let mut frontend = frontend(300);
+            let mut input = Input::new();
+            input.begin_frame(1 << skip);
+            frontend.update(FRAME, &mut input);
+            assert!(
+                frontend.machine().is(states::LANGUAGE_SELECTION),
+                "button {skip} must skip the movie"
+            );
+        }
     }
 
     #[test]
     fn pauses_at_144_then_231_then_finishes_at_260() {
-        let mut frontend = frontend(300);
+        let mut frontend = reel(300);
         let mut input = Input::new();
 
         // Frame 144 is reached after 143 steps from frame 1.
@@ -784,7 +954,7 @@ mod tests {
 
     #[test]
     fn start_skips_the_intro_by_firing_the_redirect() {
-        let mut frontend = frontend(300);
+        let mut frontend = reel(300);
         let mut input = Input::new();
 
         input.begin_frame(1 << button::START);
@@ -804,7 +974,7 @@ mod tests {
 
     #[test]
     fn the_redirect_target_is_cleared_so_it_cannot_fire_twice() {
-        let mut frontend = frontend(300);
+        let mut frontend = reel(300);
         let mut input = Input::new();
 
         input.begin_frame(1 << button::START);
@@ -829,7 +999,7 @@ mod tests {
 
     #[test]
     fn a_reel_shorter_than_260_frames_still_ends() {
-        let mut frontend = frontend(30);
+        let mut frontend = reel(30);
         let mut input = Input::new();
         assert!(
             run_until(&mut frontend, &mut input, 500, |f| f

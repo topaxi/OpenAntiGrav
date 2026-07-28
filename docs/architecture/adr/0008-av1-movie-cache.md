@@ -30,7 +30,7 @@ raw frames it replaces:
 | Clip | Frames | raw `yuv420p` | lossless AV1 | ratio | encode |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Intro, default extent | 261 | 48.8 MiB | 1.17 MiB | 41.6x | 8 s |
-| Intro, `--full-movie` | 1200 | 224 MiB | 33.0 MiB | 6.8x | 81 s |
+| Intro, all 1200 frames | 1200 | 224 MiB | 33.0 MiB | 6.8x | 81 s |
 | Dev/pub reel | 260 | 48.6 MiB | 173 KiB | 287x | 3 s |
 
 The spread is content, not luck: the first 261 frames are logo cards, the rest of
@@ -91,7 +91,7 @@ ship any video of our own, and once it exists, 41x is free.
 **Compress the raw frames** with `zstd` or `lz4`. Genuinely competitive at the
 default extent - `zstd -9` gives 1.66 MiB against AV1's 1.17 MiB, in under a
 second, with no codec and per-frame indexing preserved. Rejected because it loses
-badly at `--full-movie` (53.6 MiB against 33.0 MiB), and because it is a third
+badly on the whole intro (53.6 MiB against 33.0 MiB), and because it is a third
 format that does nothing for authored content.
 
 **FFV1.** Lossless, fast, and already in `ffmpeg`: 2.6 MiB for the default

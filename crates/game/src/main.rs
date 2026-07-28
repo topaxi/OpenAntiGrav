@@ -4,8 +4,9 @@
 //! oag-game data/images/pulse-psp-usa.chd
 //! ```
 //!
-//! Boots the way the original does: the intro reel with its frame-counted pauses
-//! and two-second holds, START to skip, then the Language Selection screen driven
+//! Boots into `LogoFMV`, the screen the disc's own boot reaches: it plays
+//! `Data\Movies\Intro.PMF` straight through, START or X skips it, and then the
+//! Language Selection screen driven
 //! by the disc's own front-end XML. Arrow keys move, Return or X selects, which
 //! fires `Launch Game` - and `Launch Game` loads a track and a ship and hands the
 //! window over to a race, in the same window and on the same GPU device.
@@ -36,7 +37,7 @@ use oag_core::{TickClock, TickRate};
 use oag_game::frontend::{self, Frontend};
 use oag_game::input;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{INTRO_FRAMES_NEEDED, boot, capture, movie, race, report, settings};
+use oag_game::{boot, capture, movie, race, report, settings};
 use oag_input::Keyboard;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
@@ -62,16 +63,31 @@ struct Cli {
     #[arg(default_value = "data/images/pulse-psp-usa.chd")]
     source: String,
 
-    /// Which movie the intro plays: an archive entry name, or `hash:XXXXXXXX`
-    /// for one of the reels whose name is not recovered. Defaults to the
-    /// European cut of the dev/pub reel; `Data\Movies\Intro.PMF` is the long
-    /// intro the LogoFMV screen plays later.
-    #[arg(long, default_value = boot::DEFAULT_INTRO_REEL)]
-    movie: String,
-
-    /// Convert every frame of the movie, not just the ones the intro shows.
+    /// Which movie to play: an archive entry name, or `hash:XXXXXXXX` for one of
+    /// the reels whose name is not recovered.
+    ///
+    /// Defaults to `Data\Movies\Intro.PMF`, which is what the `LogoFMV` screen
+    /// plays and the only movie the disc's own boot opens, or to the European
+    /// cut of the dev/pub reel under `--reel`.
     #[arg(long)]
-    full_movie: bool,
+    movie: Option<String>,
+
+    /// Boot into `Intro Screen->IntroMovie1` instead of `LogoFMV`.
+    ///
+    /// The code-side state with the frame-counted holds at 144, 231 and 260,
+    /// playing the 260-frame dev/pub reel those counters describe. The disc's
+    /// own boot never enters it - see `docs/architecture/frontend-boot.md` - so
+    /// this is a way to watch a real, evidenced code path, not the boot order.
+    #[arg(long)]
+    reel: bool,
+
+    /// Convert only the first this many frames of the movie, rather than all of
+    /// them.
+    ///
+    /// The whole 40-second intro is 33 MiB of cache and about 80 seconds of
+    /// `ffmpeg`, once. `--movie-frames 261` is enough for the reel leg.
+    #[arg(long)]
+    movie_frames: Option<usize>,
 
     /// Do not convert the movie at all. The sequence still plays, without a
     /// picture.
@@ -227,15 +243,28 @@ fn main() -> Result<()> {
         return run_race(&cli, race_options, anisotropy);
     }
 
+    let leg = if cli.reel {
+        frontend::Leg::DevPubReel
+    } else {
+        frontend::Leg::LogoFmv
+    };
     let options = boot::Options {
         source: cli.source.clone(),
-        movie: cli.movie.clone(),
+        leg,
+        movie: cli.movie.clone().unwrap_or_else(|| {
+            match leg {
+                frontend::Leg::LogoFmv => boot::DEFAULT_BOOT_MOVIE,
+                frontend::Leg::DevPubReel => boot::DEVPUB_REEL,
+            }
+            .to_string()
+        }),
         cache: cli.cache.clone().unwrap_or_else(boot::default_cache_dir),
-        extent: if cli.full_movie {
-            movie::Extent::Whole
-        } else {
-            movie::Extent::Frames(INTRO_FRAMES_NEEDED)
-        },
+        // Every frame by default: the movie the disc plays is 1200 frames long
+        // and its last one is the Wipeout Pulse logo, so a cap would stop the
+        // sequence before the thing it exists to show.
+        extent: cli
+            .movie_frames
+            .map_or(movie::Extent::Whole, movie::Extent::Frames),
         no_video: cli.no_video,
     };
 

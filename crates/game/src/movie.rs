@@ -260,6 +260,13 @@ fn transcode(
 }
 
 fn run_ffmpeg(input: &Path, output: &Path, frames: usize) -> Result<()> {
+    // Said before rather than after, because the whole 1200-frame intro takes
+    // about 80 seconds and silence for that long reads as a hang. It happens
+    // once per movie: the result is cached.
+    eprintln!(
+        "transcoding {frames} frame(s) into {} (once; cached after this)",
+        output.display()
+    );
     let status = std::process::Command::new("ffmpeg")
         .arg("-hide_banner")
         .args(["-loglevel", "error"])

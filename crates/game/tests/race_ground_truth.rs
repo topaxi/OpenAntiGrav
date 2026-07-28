@@ -52,7 +52,6 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::pulse;
 use oag_core::math::Vec3;
 use oag_game::frontend::states;
 use oag_game::{boot, movie, race};
@@ -238,7 +237,8 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     // the sequencing and the handoff, not the picture.
     let boot = boot::load(&boot::Options {
         source: image.display().to_string(),
-        movie: pulse::names::INTRO_MOVIE.to_string(),
+        leg: oag_game::frontend::Leg::LogoFmv,
+        movie: boot::DEFAULT_BOOT_MOVIE.to_string(),
         cache: std::env::temp_dir().join("oag-race-handoff"),
         extent: movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,

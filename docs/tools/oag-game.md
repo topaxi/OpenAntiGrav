@@ -3,7 +3,8 @@
 The composition root, and the only binary that is the game rather than a tool for
 looking at it. It has two halves, and one leads into the other.
 
-- **The front end**, which is where it boots: the intro reel and the Language
+- **The front end**, which is where it boots: `LogoFMV` playing the disc's own
+  40-second intro, then the Language
   Selection screen, both driven by the disc's own data. Everything about it is on
   [front-end boot](../architecture/frontend-boot.md).
 - **A race**, which is what picking a language starts: a track and a ship loaded off
@@ -53,7 +54,9 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 
 | Flag | What it does |
 | --- | --- |
-| `--movie <entry>` | Which reel the intro plays: a `Data.wad` entry name, or `hash:XXXXXXXX` for one of the reels whose name is not recovered. Defaults to `hash:b1ba72c3`, the European cut of the dev/pub reel - see [frontend boot](../architecture/frontend-boot.md#the-devpub-reel). `--movie 'Data\Movies\Intro.PMF'` plays the 40-second reel the `LogoFMV` screen shows later instead. |
+| `--movie <entry>` | Which movie to play: a `Data.wad` entry name, or `hash:XXXXXXXX` for one of the reels whose name is not recovered. Defaults to `Data\Movies\Intro.PMF`, which is what the `LogoFMV` screen plays and the only movie the disc's own boot ever opens - see [frontend boot](../architecture/frontend-boot.md#what-the-disc-actually-does-at-boot). |
+| `--reel` | Boot `Intro Screen->IntroMovie1` instead of `LogoFMV`: the code-side state with the frame-counted holds at 144, 231 and 260, playing the 260-frame dev/pub reel those counters describe. **Not the boot order** - the disc never enters that state at boot, and the reels carry no Pulse branding. See [the dev/pub reel](../architecture/frontend-boot.md#the-devpub-reel). Implies `--movie hash:b1ba72c3` unless `--movie` is given. |
+| `--movie-frames <n>` | Convert only the first `n` frames. All of them by default, which for the 1200-frame intro is 33 MiB of cache and about 80 seconds of `ffmpeg`, once. |
 | `--screen <name>` | With `--screenshot`, draw one named screen straight out of the front-end XML and stop, instead of running the sequence. A debugging view of the screens the boot order does not reach - `--screen "Show Logo"` is the Pulse logo and "Press START button". Names are the XML's own; a `Parent->Child` path works too. |
 | `--race` | Go straight to the race. Checked before the front end loads anything, so it never parses the menus or transcodes the intro. |
 | `--track <name>` | The track's `.vex` entry in `Data.wad`. |
@@ -117,14 +120,14 @@ distinction matters: the driveable ribbon is generated geometry that declares no
 slots at all on either disc, so reporting it would blame a PS2 texture gap for a
 mesh that was never textured and never came off a `.vex`.
 
-**The intro reel has no picture.** The PS2 ships no `.PMF` in any archive at all;
+**The boot movie has no picture.** The PS2 ships no `.PMF` in any archive at all;
 its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream loose in the ISO
 filesystem, with `.IPF` beside it for the Image Processing Unit. Neither is
 decoded and neither is addressable as an archive entry, so there is nothing for
-the intro to play and the front end runs without a picture, the same path
-`--no-video` already took. A reel **named** with `--movie` and not found is still
-an error: the default is this project's guess at which cut the intro state plays,
-and a source that lacks it is answering the guess, where `--movie` is a request.
+the movie leg to play and the front end runs without a picture, the same path
+`--no-video` already took. A movie **named** with `--movie` and not found is still
+an error: the defaults are defaults, and a source that lacks one is answering a
+default, where `--movie` is a request.
 
 The rest of the PS2 front end gets **further than expected**, and this was measured
 rather than assumed: `WADS2.WAD` carries `Data\Plugins\PI001\GUI\Skin.xml` under

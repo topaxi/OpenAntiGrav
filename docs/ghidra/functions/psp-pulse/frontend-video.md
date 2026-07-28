@@ -165,10 +165,21 @@ name already implied. See
 **But this state is not on the disc's boot path.** Run under PPSSPP from a cold
 boot with `0x088d7d80` armed from reset, `IntroMovie1`'s `OnEnter` does not fire
 in ten minutes, and the only movies `MoviePlayer_Open` is called for are
-`Data\Movies\Intro.PMF` (at `Language Selection`) and `Data\Movies\Backdrop.PMF`
-(at `LogoFMV`). The 260-frame reels are never opened at boot. So the reel is
-matched to this state by its contents fitting these constants, not by observation,
-and where the state is entered on real hardware is **not determined**.
+`Data\Movies\Intro.PMF` (current state `Language Selection`) and
+`Data\Movies\Backdrop.PMF` (current state `LogoFMV`). The 260-frame reels are
+never opened at boot. So the reel is matched to this state by its contents
+fitting these constants, not by observation, and where the state is entered on
+real hardware is **not determined**.
+
+**The state named against each open is the state at the moment of the call, not
+the screen that shows the movie** - the open runs a screen ahead of the play. The
+front-end XML is unambiguous about which is which: `Language Selection` has no
+`Movie` widget at all, `LogoFMV`'s is `src="Data\Movies\Intro"`, and the only
+widget naming `Data\Movies\Backdrop` is `FE Screen`'s, with `repeat="true"` and
+`sound="false"`. So `Intro.PMF` is armed while the picker is still up and shown
+by `LogoFMV`, and `Backdrop.PMF` is armed while `LogoFMV` is still current and
+loops behind the menus afterwards. Reading the labels the other way would put a
+silent looping backdrop on the logo screen.
 
 Skipping does **not** stop the player directly. Firing `DevPubRedirect`
 transitions the state, and the widget's exit path

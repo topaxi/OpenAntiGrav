@@ -4,9 +4,12 @@
 //! and the event loop lives here, so the boot sequence, the state machine, the
 //! screen model and the headless capture can all be exercised from tests.
 //!
-//! Boots the way the original does: the intro reel with its frame-counted pauses
-//! and two-second holds, START to skip, then the Language Selection screen driven
-//! by the disc's own front-end XML.
+//! Boots into `LogoFMV`, which is what the disc's own boot reaches and what
+//! plays `Data\Movies\Intro.PMF`: the movie runs straight through, START or X
+//! skips it, and then comes the Language Selection screen driven by the disc's
+//! own front-end XML. `--reel` boots the other movie state instead - the
+//! code-side `Intro Screen->IntroMovie1` with its frame-counted holds, which the
+//! disc's boot never enters.
 //!
 //! Picking a language fires `Launch Game`, and `Launch Game` starts a [`race`]: a
 //! track and a ship loaded off the same disc, the simulation stepped at a fixed
@@ -42,11 +45,12 @@ pub mod settings;
 pub mod sprite;
 pub mod state_machine;
 
-/// Frames of the reel the intro state can possibly show, plus one.
+/// Frames of the reel `Intro Screen->IntroMovie1` can possibly show, plus one.
 ///
-/// The intro stops at frame 260 whatever the movie's length, so converting the
-/// whole 40-second intro would spend 235 MiB of cache on eight seconds of screen
-/// time. `--full-movie` overrides it.
+/// That state stops at frame 260 whatever the movie's length, so the reel leg
+/// never needs more than this however long the entry it is pointed at. The
+/// `LogoFMV` leg has no such cap and converts everything; `--movie-frames` sets
+/// one by hand.
 pub const INTRO_FRAMES_NEEDED: usize = frontend::FINISH_FRAME + 1;
 
 /// Prints transitions, always for entries and only under `trace` for exits.

@@ -48,16 +48,89 @@ fn image() -> Option<PathBuf> {
 }
 
 fn load() -> Option<boot::Boot> {
+    load_leg(oag_game::frontend::Leg::LogoFmv, boot::DEFAULT_BOOT_MOVIE)
+}
+
+fn load_leg(leg: oag_game::frontend::Leg, movie: &str) -> Option<boot::Boot> {
     let image = image()?;
     let options = boot::Options {
         source: image.display().to_string(),
-        movie: pulse::names::INTRO_MOVIE.to_string(),
+        leg,
+        movie: movie.to_string(),
         // Nothing is written and ffmpeg is never run.
         cache: std::env::temp_dir().join("oag-boot-ground-truth"),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
     };
     Some(boot::load(&options).expect("loading the boot sequence"))
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_default_boot_opens_the_movie_the_disc_opens() {
+    // The regression guard for "launching the game plays what looks like Wipeout
+    // Pure": the boot used to default to one of the three 260-frame dev/pub
+    // reels, which carry no Pulse branding and ship byte-identically on Pure's
+    // own disc. What the disc opens - and all it opens, over ten minutes of a
+    // cold boot with `MoviePlayer_Open` armed - is this.
+    let Some(loaded) = load() else { return };
+
+    let named = loaded
+        .report
+        .iter()
+        .any(|line| line.starts_with(&format!("{}: ", pulse::names::INTRO_MOVIE)));
+    assert!(
+        named,
+        "the boot report must say it opened {}; got {:#?}",
+        pulse::names::INTRO_MOVIE,
+        loaded.report
+    );
+
+    let movie = loaded.movie.expect("the PSP disc has the movie");
+    assert_eq!(movie.frame_count, 1200, "the 40-second Pulse showcase");
+    assert_eq!((movie.width, movie.height), (480, 272));
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_reel_leg_still_runs_its_frame_holds() {
+    // `--reel`. The state is real and evidenced - its `OnEnter` caches
+    // `"DevPubRedirect"` at `0x088d7d80` - but the disc's boot never enters it,
+    // so this is the only thing keeping the path from rotting.
+    let Some(loaded) = load_leg(oag_game::frontend::Leg::DevPubReel, boot::DEVPUB_REEL) else {
+        return;
+    };
+    let mut frontend = loaded.frontend;
+    let mut input = Input::new();
+    let dt = 1.0 / 60.0;
+
+    assert_eq!(frontend.machine().current(), Some(states::INTRO_MOVIE));
+
+    let mut held_at = Vec::new();
+    for _ in 0..3600 {
+        if frontend.machine().is(states::LANGUAGE_SELECTION) {
+            break;
+        }
+        input.begin_frame(0);
+        frontend.update(dt, &mut input);
+        if frontend.player().is_paused() {
+            let frame = frontend.player().frames_produced();
+            if !held_at.contains(&frame) {
+                held_at.push(frame);
+            }
+        }
+    }
+
+    assert_eq!(held_at, [144, 231, 260], "the holds at 0x088d7e1c");
+    assert_eq!(
+        frontend.machine().history(),
+        [
+            states::INTRO,
+            states::INTRO_MOVIE,
+            states::DEV_PUB_REDIRECT,
+            states::LANGUAGE_SELECTION,
+        ]
+    );
 }
 
 #[test]
@@ -151,11 +224,11 @@ fn the_sequence_runs_from_boot_to_launch_game() {
     let mut input = Input::new();
     let dt = 1.0 / 60.0;
 
-    assert_eq!(frontend.machine().current(), Some(states::INTRO_MOVIE));
+    assert_eq!(frontend.machine().current(), Some(states::LOGO_FMV));
 
-    // Let the intro play itself out: two pauses, a finish hold, then the
-    // redirect. Sixty seconds of simulated time is well past the eight seconds
-    // of reel plus six of holds.
+    // Let the movie play itself out. Sixty seconds of simulated time is well
+    // past the forty the intro runs for; `LogoFMV` has no frame holds, because
+    // its `Movie` widget has no frame counters.
     for _ in 0..3600 {
         if frontend.machine().is(states::LANGUAGE_SELECTION) {
             break;
@@ -171,12 +244,9 @@ fn the_sequence_runs_from_boot_to_launch_game() {
 
     assert_eq!(
         frontend.machine().history(),
-        [
-            states::INTRO,
-            states::INTRO_MOVIE,
-            states::DEV_PUB_REDIRECT,
-            states::LANGUAGE_SELECTION,
-        ]
+        [states::LOGO_FMV, states::LANGUAGE_SELECTION],
+        "no DevPubRedirect on this leg: it belongs to Intro Screen->IntroMovie1, \
+         which the disc's own boot never enters"
     );
 
     // Move to English, the last of the five, and pick it.

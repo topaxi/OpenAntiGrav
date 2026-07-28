@@ -52,11 +52,13 @@ impl std::fmt::Debug for Boot {
 pub struct Options {
     /// A disc image, or a directory extracted with `oag-unpack`.
     pub source: String,
-    /// Which `Data.wad` entry the intro plays, as a name or a name hash.
+    /// Which movie leg the sequence boots into.
+    pub leg: crate::frontend::Leg,
+    /// Which `Data.wad` entry that leg plays, as a name or a name hash.
     ///
     /// Three of the disc's movies have no recovered name, and one of them is
-    /// the reel the original's intro state actually plays, so a name is not
-    /// enough to address every candidate. See [`EntryRef`].
+    /// the reel `Intro Screen->IntroMovie1`'s frame counters describe, so a name
+    /// is not enough to address every candidate. See [`EntryRef`].
     pub movie: String,
     /// Where converted frames are cached.
     pub cache: std::path::PathBuf,
@@ -92,17 +94,20 @@ pub fn load(options: &Options) -> Result<Boot> {
     let movie = load_movie(&mut archives, options, &mut report)?;
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
-    let frames = movie
-        .as_ref()
-        .and_then(|movie| movie.frames.as_ref())
-        .map_or(0, |f| f.len);
+    // The cached frames when there are any, and the demuxed count when there
+    // are not: `--no-video` and a missing `ffmpeg` still have to play the
+    // sequence out over the movie's real duration rather than the reel's.
+    let frames = movie.as_ref().map_or(0, |movie| {
+        movie.frames.as_ref().map_or(movie.frame_count, |f| f.len)
+    });
     let placements = screens
         .screens
         .iter()
         .flat_map(|s| s.images.iter())
         .filter_map(|image| sprites.get(&image.src).map(|p| (image.src.clone(), p)))
         .collect();
-    let frontend = Frontend::new(
+    let frontend = Frontend::booting(
+        options.leg,
         screens,
         strings,
         languages,
@@ -343,13 +348,31 @@ fn load_strings(
     }
 }
 
-/// What `--movie` defaults to: the European cut of the dev/pub reel.
+/// What `--movie` defaults to: the movie the disc's own boot plays.
+///
+/// `Data\Movies\Intro.PMF` is the 1200-frame, 40-second Pulse showcase, and it
+/// is what the `LogoFMV` screen's `Movie` widget names - `src="Data\Movies\Intro"`,
+/// `autostart`, `repeat="false"`, `autoredirect` - in the front-end XML on the
+/// disc. A cold boot under PPSSPP with `MoviePlayer_Open` armed from reset opens
+/// exactly two movies in ten minutes, this one and `Data\Movies\Backdrop.PMF`,
+/// the latter being the looping backdrop of the `FE Screen` that comes after.
+///
+/// See `docs/architecture/frontend-boot.md` and
+/// `docs/ghidra/functions/psp-pulse/frontend-video.md`.
+pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
+
+/// What `--reel` defaults to: the European cut of the dev/pub reel.
 ///
 /// Spelled as a hash because the reel has no recovered name. It is the reel
-/// whose contents fit the intro state's constants - 260 frames, static at 144
-/// and 231, which is exactly where that state pauses for two seconds.
-/// `Data\Movies\Intro.PMF` is a different, 1200-frame movie that the `LogoFMV`
-/// screen plays, and pointing the intro at it made the holds land mid-motion.
+/// whose contents fit `Intro Screen->IntroMovie1`'s constants - 260 frames,
+/// static at 144 and 231, which is exactly where that state pauses for two
+/// seconds, and those frames read `SONY COMPUTER ENTERTAINMENT EUROPE PRESENTS`
+/// and `A STUDIO LIVERPOOL GAME`.
+///
+/// **It is not a boot movie.** The disc never opens it during boot, and it
+/// carries no Pulse branding: the same three cuts ship byte-identically on
+/// *Wipeout Pure*'s USA disc, which is why booting into it looked like the wrong
+/// game. Where the reels *are* played is an open question.
 ///
 /// European rather than American despite the disc's `UCUS-98712` serial: the
 /// executable on this image is the EU build throughout - 18 `UCES00465` strings
@@ -358,14 +381,15 @@ fn load_strings(
 /// binary. `--movie hash:3d2c85f8` is the American cut.
 ///
 /// See `docs/architecture/frontend-boot.md`.
-pub const DEFAULT_INTRO_REEL: &str = "hash:b1ba72c3";
+pub const DEVPUB_REEL: &str = "hash:b1ba72c3";
 
 /// How an archive entry was asked for.
 ///
 /// A WAD directory stores only the hash of each name, and three of the disc's
-/// movies - including the 260-frame reel the intro state really plays - have no
-/// name anyone has recovered. Addressing one by hash is the only way to name it
-/// at all, so `hash:3d2c85f8` is accepted anywhere an entry name is.
+/// movies - including the 260-frame reel `Intro Screen->IntroMovie1`'s counters
+/// describe - have no name anyone has recovered. Addressing one by hash is the
+/// only way to name it at all, so `hash:3d2c85f8` is accepted anywhere an entry
+/// name is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryRef {
     /// A real name, which is hashed to find the entry.
@@ -409,7 +433,7 @@ impl std::fmt::Display for EntryRef {
     }
 }
 
-/// Reads the intro reel, or reports why there is none.
+/// Reads the boot movie, or reports why there is none.
 ///
 /// **A source with no reel of its own is not an error.** The PS2 release ships no
 /// `.PMF` in any archive: its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2
@@ -420,11 +444,11 @@ impl std::fmt::Display for EntryRef {
 /// genuinely absent, so this says so and the sequence runs without a picture -
 /// the same path `--no-video` already takes.
 ///
-/// **A reel the caller actually named is still an error**, and the discriminator
-/// is that rather than the platform: [`DEFAULT_INTRO_REEL`] is this project's own
-/// guess at which cut the intro state plays, so a source that does not have it is
-/// answering the guess, while `--movie` is a request and a request that cannot be
-/// met should say so instead of quietly drawing nothing.
+/// **A movie the caller actually named is still an error**, and the
+/// discriminator is that rather than the platform: [`DEFAULT_BOOT_MOVIE`] and
+/// [`DEVPUB_REEL`] are defaults, so a source that does not have one is answering
+/// a default, while `--movie` is a request and a request that cannot be met
+/// should say so instead of quietly drawing nothing.
 ///
 /// See `docs/ps2/pulse-disc-layout.md`.
 fn load_movie(
@@ -437,10 +461,10 @@ fn load_movie(
     let data = &mut archives.data;
     let index = match data.index_of_hash(hash) {
         Some(index) => index,
-        None if options.movie == DEFAULT_INTRO_REEL => {
+        None if options.movie == DEFAULT_BOOT_MOVIE || options.movie == DEVPUB_REEL => {
             report.push(format!(
-                "{entry} is not in {}, so the intro plays with no picture. A PS2 \
-                 source has no reel to find: its intro is DATA/MOVIES/INTRO512.PSS, \
+                "{entry} is not in {}, so the sequence plays with no picture. A PS2 \
+                 source has no movie to find: its intro is DATA/MOVIES/INTRO512.PSS, \
                  an MPEG-2 program stream outside the archives, which this build \
                  does not decode",
                 data.label()
@@ -542,9 +566,21 @@ mod tests {
     }
 
     #[test]
-    fn the_default_reel_is_the_european_cut() {
+    fn the_default_boot_movie_is_the_one_the_disc_opens() {
+        // The regression guard for the reported bug: booting into the dev/pub
+        // reel showed Pure-era logo cards, because those three reels ship
+        // byte-identically on Wipeout Pure's disc. What LogoFMV names is this.
+        assert_eq!(super::DEFAULT_BOOT_MOVIE, r"Data\Movies\Intro.PMF");
         assert_eq!(
-            super::EntryRef::parse(super::DEFAULT_INTRO_REEL).hash(),
+            EntryRef::parse(super::DEFAULT_BOOT_MOVIE).hash(),
+            0x71d3_c1ec
+        );
+    }
+
+    #[test]
+    fn the_reel_default_is_the_european_cut() {
+        assert_eq!(
+            EntryRef::parse(super::DEVPUB_REEL).hash(),
             pulse::hashes::DEVPUB_REEL_SCEE
         );
     }

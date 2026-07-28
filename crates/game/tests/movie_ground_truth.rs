@@ -76,6 +76,7 @@ fn load() -> Option<boot::Boot> {
     }
     let options = boot::Options {
         source: image.display().to_string(),
+        leg: oag_game::frontend::Leg::LogoFmv,
         movie: pulse::names::INTRO_MOVIE.to_string(),
         cache: cache_dir(),
         extent: movie::Extent::Frames(FRAMES),

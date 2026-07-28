@@ -7,11 +7,11 @@ it is the original's behaviour rather than ours.
 just play
 ```
 
-That reads `data/images/pulse-psp-usa.chd`, plays the intro reel with the
-original's frame-counted pauses, and lands on a Language Selection screen built
-from the disc's own XML. START, or space, skips the intro. Picking a language
-fires `Launch Game`, and `Launch Game` starts [a race](../tools/oag-game.md) in
-the same window.
+That reads `data/images/pulse-psp-usa.chd`, plays `Data\Movies\Intro.PMF` - the
+40-second Pulse intro, and the only movie the disc's own boot ever opens - and
+lands on a Language Selection screen built from the disc's own XML. START, or
+space, skips it. Picking a language fires `Launch Game`, and `Launch Game`
+starts [a race](../tools/oag-game.md) in the same window.
 
 ```sh
 # No display needed.
@@ -23,42 +23,63 @@ just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross
 
 | State | What happens |
 | --- | --- |
-| `Intro Screen` | Parent state. Entered at boot. |
-| `Intro Screen->IntroMovie1` | The reel plays. Pause at frame 144, pause at 231, finish flag at 260, each held two seconds. START fires the redirect. |
-| `DevPubRedirect` | A one-shot redirect state. Its only job is to leave. |
+| `LogoFMV` | Entered at boot. `Data\Movies\Intro.PMF` plays straight through, 1200 frames of it. START or cross skips it. |
 | `Language Selection` | The disc's own picker. Up and down move, cross selects. |
 | `Launch Game` | End of the front end. The composition root loads a track and a ship and hands the window to a race. |
 
 Every one of those names is a **string literal from the original**, not one we
-invented. `"Intro Screen->IntroMovie1"` and `"DevPubRedirect"` are cached by name
-in the intro state's `OnEnter` at `0x088d7d80`; `"Language Selection"` and
-`"Launch Game"` are the two states boot chooses between depending on
-`0x08ab07e3`. See [main loop](../ghidra/functions/psp-pulse/main-loop.md) and
+invented. `"LogoFMV"` is a screen in the disc's front-end XML, and so is its
+`Movie` widget's `src`; `"Language Selection"` and `"Launch Game"` are the two
+states boot chooses between depending on `0x08ab07e3`. See
+[main loop](../ghidra/functions/psp-pulse/main-loop.md) and
 [frontend video](../ghidra/functions/psp-pulse/frontend-video.md).
+
+`--reel` boots a second, **off-path** leg instead:
+
+| State | What happens |
+| --- | --- |
+| `Intro Screen` | Parent state. |
+| `Intro Screen->IntroMovie1` | The 260-frame dev/pub reel plays. Pause at frame 144, pause at 231, finish flag at 260, each held two seconds. START fires the redirect. |
+| `DevPubRedirect` | A one-shot redirect state. Its only job is to leave. |
+
+Those names are literals too - `"Intro Screen->IntroMovie1"` and
+`"DevPubRedirect"` are cached by name in that state's `OnEnter` at `0x088d7d80` -
+and the code is real and evidenced. What is **not** established is what triggers
+it: the disc's own boot never enters it, so it is behind a flag rather than in
+the boot order. See [what the disc actually does](#what-the-disc-actually-does-at-boot).
 
 ### Where we knowingly differ
 
-**The original runs the picker first and the intro second.** The front-end XML's
+**The original runs the picker first and `LogoFMV` second.** The front-end XML's
 `Language Selection` screen has a `LanguageAutoRedirect` whose `Default goto` is
-`LogoFMV`, and `LogoFMV` is the screen that plays `Data\Movies\Intro.PMF`. So the
-disc's order is: pick a language, watch the intro, land on "press START".
+`LogoFMV`. So the disc's order is: pick a language, watch the intro, land on
+"press START".
 
-This build boots into the intro and ends at the picker, because that was the
+This build boots into `LogoFMV` and ends at the picker, because that was the
 order asked for. The divergence is not hidden: `oag-game` prints the disc's own
 redirect target at startup, and
 [`Frontend::language_auto_redirect`](../../crates/game/src/frontend.rs) exposes
 it so [a test](../../crates/game/tests/boot_ground_truth.rs) asserts it is
 `LogoFMV`.
 
-`IntroMovie1` used to play `Data\Movies\Intro.PMF` here, because that was the
-movie whose *name* was resolved - and it was the wrong reel. That movie is 1200
-frames of the long intro, so the intro state's holds at 144 and 231 landed
-mid-motion inside it. See [the dev/pub reel](#the-devpub-reel) below for what
-plays now.
+**`LogoFMV`'s own exits differ too.** On the disc the movie finishing fires
+`AutoRedirect` to `LogoFMV->Show Logo` - the Pulse logo and PRESS START - and any
+of start, circle, square, triangle or cross fires `LogoFMVRedirectScreen`, which
+goes to the same place. Here both go to the picker, because the picker is what
+this build has next; and only start and cross are read, because those are the
+buttons the abstract layer carries.
 
-An earlier version of this page guessed that the full boot on hardware is dev/pub
-logos, then the picker, then the long intro, at confidence 75. **That is wrong,
-and running it settled it** - see [what the disc actually
+**This build booted the dev/pub reel for a while, and that was wrong.** The reel
+is the one whose contents fit `IntroMovie1`'s frame counters, and pointing the
+boot at it was reasoned from those constants rather than from what the disc does.
+The consequence was visible: the three reels are Pure-era shared assets, so
+launching Wipeout Pulse showed eight seconds of white-and-cyan Sony/Studio
+Liverpool cards with no Pulse branding anywhere, and the machine's own intro
+never played. `--reel` is where that leg lives now.
+
+An earlier version of this page also guessed that the full boot on hardware is
+dev/pub logos, then the picker, then the long intro, at confidence 75. **That is
+wrong, and running it settled it** - see [what the disc actually
 does](#what-the-disc-actually-does-at-boot).
 
 ## The dev/pub reel
@@ -100,10 +121,19 @@ identical to two decimals, so nothing but that one line of text separates them.
 **The set is region-invariant, so the disc's region does not choose the cut.**
 *Wipeout Pure*'s USA disc carries these same three hashes at the same three sizes
 (`b1ba72c3` 266,240, `3d2c85f8` 268,288, `41fbd22f` 264,192) in its own
-`Data.wad`. Two different games, one shipped set. Whatever picks between them
-does so at runtime, and that mechanism has not been read out of the binary.
+`Data.wad`, at entry indices 243, 244 and 245. Two different games, one shipped
+set. Whatever picks between them does so at runtime, and that mechanism has not
+been read out of the binary.
 
-`b1ba72c3`, the European cut, is what `--movie` defaults to, via
+**That shared-asset fact is also why these are not boot movies.** Nothing in the
+three reels is Pulse: the frames are the Pure-era white background with thin cyan
+wireframe, a publisher line, a developer line, and no game title at any point.
+Booting into one made a launch of Wipeout Pulse look like a launch of Wipeout
+Pure, which is exactly how it was reported. `Data\Movies\Intro.PMF` and
+`Data\Movies\Backdrop.PMF`, by contrast, are Pulse's own and are on neither
+Pure disc: `71d3c1ec` and `18c51e58` are absent from Pure's `Data.wad`.
+
+`b1ba72c3`, the European cut, is what `--reel` defaults to, via
 `oag_assets::pulse::hashes::DEVPUB_REEL_SCEE`. Confidence **75**. The disc this
 project reads has a `UCUS-98712` serial in its `PARAM.SFO` and that is the *only*
 American thing about it:
@@ -193,11 +223,24 @@ frames, static at exactly 144 and 231, publisher card then developer card, and a
 redirect literally named `DevPubRedirect` - but it is inference, and the state it
 belongs to is not on this disc's boot path.
 
-This build still runs `IntroMovie1` at boot, because that is the order asked for
-(above). Given that it does, the reel whose frames those counters describe is the
-right thing to put under them: with `Intro.PMF` the holds landed on the FX400
-Racing League card and on "ENGINE CORE ENABLED", mid-motion. What is *not* claimed
-is that a real PSP shows this at power-on. It does not.
+**The state named in each line is the state at the moment `MoviePlayer_Open` was
+called, which is one ahead of the screen that shows the movie.** The XML settles
+which is which and there is no ambiguity in it: `Language Selection` has no
+`Movie` widget at all, so it cannot be playing anything; `LogoFMV`'s widget is
+`src="Data\Movies\Intro"`; and the only widget naming `Data\Movies\Backdrop`
+is on `FE Screen`, with `repeat="true"` and `sound="false"`, which is the looping
+backdrop behind the menus. So `Intro.PMF` is armed while the picker is still up
+and shown by `LogoFMV`, and `Backdrop.PMF` is armed while `LogoFMV` is still
+current and shown by `FE Screen` after it. Reading the labels as "the state that
+plays it" would put the silent looping backdrop on the logo screen, which is both
+XML-contradicted and audibly wrong.
+
+`LogoFMV` is therefore what this build boots into, playing `Data\Movies\Intro.PMF`
+whole and with no frame holds - the widget has no frame counters. The reel leg is
+kept, because it is real code with real constants, and is reached with `--reel`;
+[a ground-truth test](../../crates/game/tests/boot_ground_truth.rs) still drives
+its holds at 144, 231 and 260 so the path cannot rot. What is *not* claimed is
+that a real PSP shows the reel at power-on. It does not.
 
 ### Why a hash and not a name
 
@@ -302,7 +345,7 @@ name hash and size so a different disc image cannot collide:
 
 ```text
 71d3c1ec-5736448.h264                        the demuxed elementary stream
-71d3c1ec-5736448-480x272-av1ll-261.ivf       261 frames, 1.17 MiB
+71d3c1ec-5736448-480x272-av1ll-1200.ivf      1200 frames, 33 MiB
 ```
 
 `av1ll` in the name is the encoding, and it is in the **filename** so that
@@ -310,9 +353,12 @@ changing the encoder invalidates by name rather than silently reusing an older
 file. That matters because `ffmpeg`'s `-lossless 1` on its own is ignored and
 produces a lossy encode - see the trap in [`HANDOVER.md`](../../HANDOVER.md).
 
-**Only 261 frames are converted**, because the intro state stops at frame 260
-whatever the reel's length. `--full-movie` converts everything, which is 33 MiB
-rather than 1.17 MiB, and takes about 80 seconds instead of 8.
+**Every frame is converted**, because `LogoFMV` plays the movie to its end and
+its last frame is the Wipeout Pulse logo - a cap would stop the sequence before
+the thing it exists to show. That is 33 MiB and about 80 seconds of `ffmpeg`,
+once, and a line on stderr says so while it happens rather than after.
+`--movie-frames <n>` caps it by hand; the `--reel` leg needs only 261, because
+`IntroMovie1` stops at frame 260 whatever the reel's length.
 
 `yuv420p` was chosen over RGBA for two reasons: it is what both decoders produce
 natively, so nothing in the chain converts colour, and it is 1.5 bytes per pixel
@@ -394,14 +440,15 @@ Three behaviours were copied deliberately rather than tidied:
    update, so transitioning immediately would tear down the code that fired.
 2. **A transition only unwinds to the common ancestor.** Swapping a child leaves
    its parent entered, and exits are emitted innermost-first.
-3. **The intro's redirect target is cleared once fired.** The original zeroes
-   `state->devPubRedirect` after firing, so a second START does nothing. Without
-   that, the intro's own frame counters would fire the redirect again and bounce
-   out of the picker.
+3. **The reel state's redirect target is cleared once fired.** The original
+   zeroes `state->devPubRedirect` after firing, so a second START does nothing.
+   Without that, `IntroMovie1`'s own frame counters would fire the redirect again
+   and bounce out of the picker.
 
-Skipping the intro **fires the redirect rather than stopping the player**. The
-teardown is a consequence of the transition, not a peer of it, which is the
-ordering the original's exit path has.
+Skipping on the reel leg **fires the redirect rather than stopping the player**.
+The teardown is a consequence of the transition, not a peer of it, which is the
+ordering the original's exit path has. `LogoFMV` has no such indirection: the
+disc gives it five plain `Redirect` widgets, one per button.
 
 Input is the [abstract button layer](../ghidra/functions/psp-pulse/input.md)
 reproduced as-is: bit indices, not masks, with `activate` mapped to cross and
@@ -449,8 +496,9 @@ sequence can be tested. Nothing depends on it.
 | `render`, `font`, `keys` | wgpu, glyphs, keyboard |
 | `capture` | Headless screenshot, through the same renderer |
 
-`frontend` holding no I/O is what makes the sequencing testable: 21 unit tests
-cover the pauses, the holds, the skip, the redirect clearing and the picker.
+`frontend` holding no I/O is what makes the sequencing testable: its unit tests
+cover both movie legs - `LogoFMV` playing through and being skipped, and the
+reel's pauses, holds and redirect clearing - as well as the picker.
 
 ## Verified, inferred, guessed
 
@@ -470,8 +518,9 @@ cover the pauses, the holds, the skip, the redirect clearing and the picker.
 
 **Inferred, plausible, not run:**
 
-- that the 260-frame reels are the dev/pub cards, hence the boot order above
-  (75);
+- that the 260-frame reels are the dev/pub cards (95, from the picture) but
+  **not** that anything at boot plays them: the state whose counters they fit is
+  never entered at boot, so what triggers them is unestablished;
 - that the three 260-frame reels are regional variants (40; it is a guess);
 - that the video is BT.601 limited range (70; it looks right);
 - that a two-second hold at frame 260 precedes the redirect, rather than the
@@ -479,5 +528,6 @@ cover the pauses, the holds, the skip, the redirect clearing and the picker.
   set and the time stamped, and that pauses release after two seconds; treating
   the flag as released by the same timer is a reading (70).
 
-**Not established at all:** the names of eight movies, whether the picker's real
-layout matches ours, and anything about audio.
+**Not established at all:** the names of eight movies, **what plays the three
+dev/pub reels**, whether the picker's real layout matches ours, and anything
+about audio.

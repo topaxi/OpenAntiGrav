@@ -301,7 +301,8 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
 
     let options = oag_game::boot::Options {
         source: image.display().to_string(),
-        movie: oag_game::boot::DEFAULT_INTRO_REEL.to_string(),
+        leg: oag_game::frontend::Leg::LogoFmv,
+        movie: oag_game::boot::DEFAULT_BOOT_MOVIE.to_string(),
         cache: oag_game::boot::default_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         // No transcode: this is about what is found, not about ffmpeg.
