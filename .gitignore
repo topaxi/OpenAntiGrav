@@ -25,6 +25,11 @@
 *.img
 *.gcm
 
+# Packaged builds and the packaging tool. `just appimage` writes into
+# data/appimage/, which /data/* already covers; this catches an AppImage built
+# with --out somewhere else, since no binary is ever committed either.
+*.AppImage
+
 # Ghidra. Note: deliberately NOT `*.lock`, which would swallow Cargo.lock.
 # This workspace commits Cargo.lock. A project opened in the repository root
 # leaves its lock beside the `.gpr`, not inside `*.rep/`, and that lock records
