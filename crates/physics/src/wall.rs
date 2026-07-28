@@ -117,6 +117,12 @@ pub const SHIP_FRICTION: Option<f32> = Some(0.02);
 /// The `0.05` this constant used to be came from `collider+0x64`, which
 /// [`WALL_FRICTION`] now correctly names: the resolver never reads that field as
 /// a restitution.
+///
+/// **The PS2 build says `0.1`, and this crate deliberately does not follow it.**
+/// `Body_ResolveContactPair` (`0x0015e600`) hardcodes a `-1.1` numerator rather
+/// than reading a per-body field. PSP is the target, so `0.4` it is; see the
+/// divergence table in
+/// `docs/ghidra/functions/psp-pulse/contact-response.md`.
 pub const BODY_RESTITUTION: f32 = 0.4;
 
 /// Below this hull extent the box is treated as degenerate and nothing responds.
@@ -297,6 +303,11 @@ pub fn resolve<R: Raycaster + ?Sized>(
     // hundred and thirty ticks later, never returning to zero. A one-sided push
     // cannot produce that.
     //
+    // **The PS2 build does gate it**, returning early from
+    // `Body_ResolveContactPair` (`0x0015e600`) when `vn > 0`. PSP is what this
+    // crate targets, so the gate stays out; see the divergence table in
+    // `docs/ghidra/functions/psp-pulse/contact-response.md`.
+    //
     // With the contact at the centre of mass the original's denominator is just
     // `invMass`, which cancels against the `impulse * invMass` on application, so
     // mass does not appear here at all.
@@ -308,6 +319,12 @@ pub fn resolve<R: Raycaster + ?Sized>(
     // `friction` of itself every frame the contact exists. Against a wall that is
     // `3.5 %` per frame - `2.2 * |v|` of equivalent force at 60 Hz, which is what
     // the force balance was chasing as a missing drag term.
+    //
+    // Applied **once**, inline, as the PSP does. The PS2 defers its tangential
+    // impulse into an 8-entry queue instead; the PSP has the structural twin of
+    // that queue but consumes it from the ship entity for the gameplay reaction,
+    // not to apply a second impulse. Two applications would cost `6.88 %` per
+    // frame, which the capture refuses.
     //
     // Unlike the normal term this one *is* divided by mass, because it is an
     // impulse the denominator never touches.

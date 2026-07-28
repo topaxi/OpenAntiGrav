@@ -127,9 +127,20 @@ with the count at `body+0x370` and a hard `n < 8` reject. `Body_StepWorld`
 (`0x0884f70c`) zeroes `body+0x370` once per frame at `0x0884ff54`, before the
 per-body update callback runs.
 
-So it is an **observation buffer** the rest of the engine reads contacts out of -
-which is what `Ship_ApplyCollisionImpulse` (`0x0883f274`) and the damage and audio
-paths need - and nothing in it feeds back into the integrator. Confidence **85**.
+**The consumer is the ship entity, not the physics step.** `FUN_088418e0` loads
+`body+0x370` at `0x088423ac` as a loop bound and walks `body + 0x170 + n*0x40`
+from `0x0884242c`, taking `vdot.t S220,C200,C200` on the impulse slot at `+0x20`
+of each record - a squared-magnitude test against literals `0.7`, `0.0125` and
+`10000.0`. That is the gameplay reaction to a hit (which is where
+`Ship_ApplyCollisionImpulse`'s pending vector at `entity->0x4c + 0x110` comes
+from, and what the damage and audio paths need), and **nothing in the loop writes
+a velocity back**.
+
+So the ring is an **observation buffer**, and the friction impulse is applied
+exactly once - inline, in `Body_ResolveContact`. Confidence **85** on the
+structure, and the measurement forbids the alternative independently: a second
+application would make the per-frame loss `1 - 0.965² = 6.88 %`, where the
+capture never exceeds `5.21 %` and settles at `3.56 %`.
 
 ## Frame order, from `Body_StepWorld` (`0x0884f70c`)
 
@@ -189,6 +200,39 @@ and it was read out of two literals before the trace was consulted.
 Confidence **90** for the whole chain: the combination rule is nine plain
 instructions, the two constants are single literals on branch-free paths, the
 resolver is read at 88, and the measurement is one-sided rather than a best fit.
+
+## Where the PS2 build diverges, and why this crate follows the PSP
+
+The PS2 twin was read independently, and
+[ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md) records it: six passes
+per frame in `World_StepBodies` (`0x0015ded8`), with contact collection and
+`Body_ResolveContactPair` (`0x0015e600`) in pass 6, after `Body_Integrate` and
+before the next frame's `Ship_UpdateCraft`. **That is instruction-level
+corroboration of the post-integrate velocity window from a different ISA and
+compiler**, and it is the part that matters most, because the whole force-balance
+investigation turned on it.
+
+Three things differ, and `crates/physics` implements the **PSP** reading in each,
+per the project's PSP-over-PS2 policy. Recorded here so the divergence is a
+finding rather than a discrepancy someone rediscovers:
+
+| | PSP (implemented) | PS2 (recorded) |
+| --- | --- | --- |
+| Restitution | `body+0x388`, a per-body field the ship ctor sets to **`0.4`** | a hardcoded `-1.1` numerator, i.e. **`e = 0.1`** |
+| Separating contacts | **no test** - `Body_ResolveContact` applies the normal impulse whatever the sign of `vn`, so the contact is two-sided | **early return when `vn > 0`**, a one-sided push |
+| Friction | folded **inline** into the same impulse, `j*n - f*vt`, applied once by `Body_ApplyImpulseAtPoint` | **deferred** through `Body_QueueDeferredImpulse` (`0x0015ce28`) into the 8-entry queue |
+
+The PSP's queue - `Body_RecordContact` above - is the structural twin of the PS2's
+deferred queue (same `body+0x370` index, same 8-entry cap, same `0x40` stride),
+but it is a consumer-side record on this build rather than a work list, as the
+loop in `FUN_088418e0` shows. **The `0.4`-versus-`0.1` restitution split is the
+one a reader is most likely to trip on**: both are real, and only the PSP's is
+what a Pulse-PSP reimplementation should carry.
+
+The PSP's `Body_ResolveContact` is the single-body variant - its denominator is
+`invMass + angularTerm`, where the PS2's pair resolver has
+`invMassA + invMassB + angularTerm`. `0x0884ef30` is the PSP's pair twin and is
+unread; a craft against track geometry takes the single-body path.
 
 ## This corrects two things on other pages
 
