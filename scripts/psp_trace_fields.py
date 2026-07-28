@@ -77,6 +77,17 @@ CRAFT_FIELDS = [
 # See `docs/physics/angular-velocity-column.md` and rigid-body.md. Nothing is
 # negated or rotated on the way out of memory; `oag_trace::trace::AngularReading`
 # is where the readings are enumerated.
+#
+# `omega_*` at +0x150 is the other half of that pair and is recorded because
+# `avel = -I * omega` is a *kinematic identity* that a capture can check without
+# any force law entering: `Body_Integrate` advances the basis by `+0x150`, so
+# recording it says directly whether the basis advance is `I^-1 * (+0x160)` or
+# something else. `docs/physics/cornering-ground-truth.md` names this column as
+# the one measurement that settles whether the momentum column is the *only*
+# input to the attitude - its lap fit finds pitch and roll rotating more than
+# `+0x160` accounts for, while the low-speed pitch captures find the identity
+# holding to a fraction of a percent, and only this column can tell a second
+# rotation source from a wrong tensor.
 BODY_FIELDS = [
     ("right_x", 0x000), ("right_y", 0x004), ("right_z", 0x008),
     ("up_x", 0x010), ("up_y", 0x014), ("up_z", 0x018),
@@ -85,4 +96,5 @@ BODY_FIELDS = [
     ("vel_x", 0x140), ("vel_y", 0x144), ("vel_z", 0x148),
     ("speed", 0x398),
     ("avel_x", 0x160), ("avel_y", 0x164), ("avel_z", 0x168),
+    ("omega_x", 0x150), ("omega_y", 0x154), ("omega_z", 0x158),
 ]

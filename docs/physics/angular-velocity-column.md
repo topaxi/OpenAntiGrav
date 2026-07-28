@@ -101,6 +101,10 @@ roll and pitch axes are only 36 % and 29 % explained by their own constants,
 against 98 % for yaw, because those components are small and the captures barely
 excite them. `k_x` and `k_z` scatter from `-14` to `-24` across the five files;
 `k_y` scatters from `-21.16` to `-22.19`. Only the yaw number is determined.
+(**Superseded for these five captures only** - the warning is about *them*, and
+it stands for them. Two captures taken later with a real pitch input determine
+`k_x` to `0.13 %` and `k_z` to `2 %`; see
+[the pitch section](#the-pitch-axis-measured-directly---and-the-tensor-confirmed-on-all-three).)
 
 A direct probe for the constant came back **negative**: nothing in
 `body+0x000..0x400` or `craft+0x000..0x400` holds a float near `21.2` or
@@ -249,6 +253,127 @@ not account for - and the excess is `91 %` confined to the plane that tilts
 bullet ("local beats world") is unaffected; what is now open is whether
 `body+0x160` is the *only* input to the basis advance. See
 [cornering-ground-truth.md](cornering-ground-truth.md#pitch-and-roll-the-momentum-column-does-not-explain-the-rotation).
+
+## The pitch axis, measured directly - and the tensor confirmed on all three
+
+Everything above rests on captures that **never touched the pitch axis**: the
+column's `x` and `z` entries were excited only incidentally, by the track pushing
+the ship around, and this page's own warning was "do not read a diagonal inertia
+tensor into the per-axis fits". Two scenarios close that gap, and they are the
+first captures in this repository taken with a pitch input at all:
+
+| scenario | what it is |
+| --- | --- |
+| `verification/scenarios/pitch-both-ways.inputs` | 360 ticks, stationary on the start line, **no thrust**: nose down held, released, nose up held, released |
+| `verification/scenarios/pitch-hold-thrust.inputs` | 300 ticks, thrust and a held nose-up off the line, clean to tick 128 at 84 units/s |
+
+`pitch-both-ways` is the cleanest capture in `data/traces/`: `speed/|velocity|`
+reads **`1.0000` on 360 of 360 ticks**, `grounded` is `1.0` throughout, and the
+stun timer never arms. Without thrust the craft never reaches a wall, so nothing
+in it is contaminated by the contact response - which matters, because every
+earlier capture's pitch and roll entries are measured through exactly that.
+
+Fitted per axis against the rotation the recorded basis performs, and pooled
+over both captures (658 ticks):
+
+| axis | fitted `k` | `-I` from `Body_SetBoxInertia` | apart | explained |
+| --- | ---: | ---: | ---: | ---: |
+| pitch (right) | **`-15.620`** | `-15.6` | **`0.13 %`** | 94.4 % |
+| yaw (up) | `-21.770` | `-21.6` | `0.8 %` | 93.1 % |
+| roll (forward) | `-15.289` | `-15.6` | `2.0 %` | 94.0 % |
+
+The pitch entry alone moves from "29 % explained, scattering from `-14` to
+`-24`" to `94 %` explained on a signal that is now the *dominant* axis
+(`2.12` rms against yaw's `0.11`), and it lands on the code literal to a
+fraction of a percent. The clean prefix of the thrust capture reads
+`-15.620` on pitch (94.7 %) and `-15.582` on roll (98.2 %).
+
+One thing falls out for free: **these captures separate the frame far more
+sharply than any earlier one.** Fitted as a world-frame quantity the column
+explains `0.4 %` of itself, against `92.5 %` local - a factor of 200 rather than
+the 3.6 the pooled straight-line captures gave. A ship that is pitching has body
+axes far from the world ones on two axes at once, which is precisely the case
+the frame question could not be decided on before.
+
+### The input, measured rather than assumed
+
+`Ship_UpdatePitch` reads the pitch axis at `*(craft+0x78) + 0x10`, and what
+fills it was read at runtime by probing that field while cycling the pad:
+
+- **`up` on the d-pad writes `-100`, and the nose goes DOWN.** `down` writes
+  `+100` and the nose rises. So the axis is negative-nose-up, which is the
+  opposite of `oag_physics::ShipControls::steer_y`'s documented "positive nose
+  up".
+- **The scale is `+/-100`, the same in-memory range the steering axis uses**
+  (`oag_physics::controls::CONTROL_RANGE`), not a normalised `-1..1`. The
+  analog stick reads `98.2`-`98.8` at full deflection, which is the PSP's own
+  byte quantisation.
+- **The analog stick's `y` feeds the same field with the same sign**:
+  `stick_y=+1` reads `-100`, exactly like `up`. That settles
+  [`oag-trace`'s open question](../tools/oag-trace.md#what-is-still-not-confirmed)
+  about PPSSPP's analog polarity - it is positive-up, matching
+  `InputSnapshot::stick_y` - as a side effect rather than by a separate test.
+
+Confidence **90**: one binary, one emulator version, but the field is read
+directly and all three inputs agree on it.
+
+The response is a damped second-order one rather than a sustained rate - the
+hover spring and the surface-alignment torque pull the attitude back within
+about a second - so the fit is over a transient, an overshoot and a settle in
+each direction, not over a plateau.
+
+## `body+0x150` is recorded now, and it closes the chain
+
+[cornering-ground-truth.md](cornering-ground-truth.md#what-to-do-next) asks for
+one column above all others: `body+0x150`, which `Body_Integrate` advances the
+basis by and which is therefore the angular velocity *by definition*. It is in
+`scripts/psp_trace_fields.py` now, as `omega_x/y/z`, and both pitch captures
+carry it. Two identities become directly measurable, with no force law and no
+simulation in either:
+
+| identity | pitch | yaw | roll |
+| --- | ---: | ---: | ---: |
+| `body+0x160 = k * body+0x150` | `15.601` (**100.0 %**) | `21.14` (86.2 %) | `15.689` (96.7 %) |
+| `body+0x150 = k * omega(basis)` | `-1.0011` (94.5 %) | `-0.9999` (98.7 %) | `-0.9993` (97.4 %) |
+
+on `pitch-both-ways`; the thrust capture reads `15.6055` / `-1.0011` on pitch
+over its whole length. So, stated plainly and measured on all three axes:
+
+```text
+body+0x160 = I * body+0x150,   body+0x150 = -omega_physical
+```
+
+with `I` the code-literal `(15.6, 21.6, 15.6)`. The first row is the tensor,
+recovered to `0.01 %` on the axis with the signal; the second is where the
+`w_game = -w_physics` convention lives - **the negation is between `+0x150` and
+the world, not between the two stored columns**, which no earlier capture could
+have told apart. The residual on the second row is finite-difference noise from
+the capture's seven significant digits, not a missing term.
+
+Confidence **90** on both identities: two captures, three axes, one binary.
+
+### What this does *not* do is overturn the racing-speed negative
+
+The section above this one reports `avel / omega` fitting at `0.231x` and
+`0.647x` of the tensor on pitch and roll over a completed lap, and attributes
+the excess to attitude alignment slaved to a curving surface. **Nothing here
+contradicts that, and the two together narrow it.** Broken out by speed band,
+these captures hold the identity at every band they reach:
+
+| band | `avel = k*omega`, pitch | `omega = k*basis`, pitch |
+| --- | ---: | ---: |
+| 0-20 u/s | `15.603` (100.0 %) | `-1.0006` (94.4 %) |
+| 20-40 u/s | `15.629` (99.6 %) | `-0.9929` (91.2 %) |
+| 40-60 u/s | `15.601` (100.0 %) | `-0.9975` (93.8 %) |
+| 60-80 u/s | `15.605` (100.0 %) | `-1.0211` (95.3 %) |
+
+So the excess is **not** a property of the mechanism, of the tensor, or of
+speed alone up to `84` units/s - it is absent on a flat straight and present on
+a lap of crests and banking, which is what that page's own tilt-plane signature
+already said. The consequence for
+[Task #18](../../HANDOVER.md) is the useful one: the momentum model **can** be
+validated on pitch, on these captures, and the axis to validate it on is the one
+where the identity is exact.
 
 ## Reproducing it
 

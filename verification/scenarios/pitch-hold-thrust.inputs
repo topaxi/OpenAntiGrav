@@ -1,0 +1,20 @@
+# Thrust and a held nose-up pitch, off the start line.
+#
+# The companion to `pitch-both-ways.inputs`, which is stationary and clean. This
+# one is the moving case the pitch axis exists for: a craft under power with the
+# nose held up, which is what a player does approaching a jump.
+#
+# `down` on the d-pad is nose **up** - see `pitch-both-ways.inputs` for the
+# measurement. Nose up rather than nose down deliberately: a nose-down craft
+# under thrust drives itself into the surface, and the resulting hover-probe
+# fight is a worse thing to be measuring than the pitch term.
+#
+# **This capture is only clean while it is on the straight.** The reference
+# scenario's craft, given full thrust and no steering, reaches the first wall at
+# about tick 60 (`docs/reverse-engineering/ppsspp-debugger.md`), so treat
+# `speed/|velocity| == 1.0000` as the usable extent rather than assuming the
+# whole file is. The first 20 ticks are held with nothing so the capture records
+# the craft's resting attitude before the pitch input arrives, which is what
+# dates the response.
+20 -
+280 cross down

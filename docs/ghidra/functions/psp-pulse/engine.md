@@ -1282,7 +1282,37 @@ axis, not rates: there is no ramp and no state. `pitch_damping` is consumed
 elsewhere, by `Ship_ApplyAngularDamping`.
 
 The gate at `0x088492bc` was not decoded; without it, pitch input would apply
-unconditionally.
+unconditionally. **Measured at runtime, it does not block a grounded craft
+standing still**: holding the pitch axis on the start line rotates the craft
+immediately, so whatever the gate tests, it is open in the ordinary case.
+
+### The pitch axis, read at runtime
+
+`*(craft+0x78) + 0x10` was probed in PPSSPP while cycling the pad, which settles
+two things the static read could not (confidence **90**, one binary, one
+emulator version):
+
+| Input | `*(craft+0x78) + 0x10` | What the craft does |
+| --- | ---: | --- |
+| `up` on the d-pad | `-100` | nose **down** |
+| `down` on the d-pad | `+100` | nose **up** |
+| analog `y = +1` | `-100` | nose down, i.e. the same field and the same sign |
+| analog `y = -1` | `+98.8` | nose up |
+
+- **The scale is `+/-100`, not a normalised `-1..1`** - the same in-memory range
+  the steering axis at `+0x00` uses, which
+  [Steering](#steering) established from the ramp rates. The `98.2`-`98.8` the
+  analog stick reads is the PSP's own byte quantisation of a full deflection.
+  So `p = axis * pitch_ground` is evaluated with `axis` at `100`, and any
+  reimplementation feeding it a `1.0` is **100x** weak on this term.
+- **The axis is negative-nose-up.** `oag_physics::ShipControls::steer_y` is
+  documented "positive nose up", so the two disagree by a sign, and the
+  polarity that `crates/physics/src/engine.rs` recorded as "a guess awaiting M3"
+  is now measured.
+
+Both are visible in `data/traces/talons-junction-pitch-both-ways.csv`; the
+scenario is `verification/scenarios/pitch-both-ways.inputs` and the analysis is
+in [angular-velocity-column.md](../../../physics/angular-velocity-column.md#the-input-measured-rather-than-assumed).
 
 ## The passive terms
 

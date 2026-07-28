@@ -1,0 +1,33 @@
+# Pitch, both ways, from a standing craft on the start line.
+#
+# The scenario that was missing: every capture before this one held the pitch
+# axis at zero, so `avel_x` - the pitch entry of the recorded angular column -
+# was excited only incidentally, by the track pushing the ship around. See
+# `docs/physics/angular-velocity-column.md`.
+#
+# **Nothing is held but the pitch axis.** No thrust, so the craft never leaves
+# the start line, never reaches a wall, and `speed/|velocity|` reads 1.0000 on
+# every tick - the cheap cleanliness test from
+# `docs/physics/force-balance-ground-truth.md`. That is worth more here than
+# realism: a pitch measurement taken while the contact response is eating
+# velocity is a measurement of two things.
+#
+# **`up` on the d-pad pitches the nose DOWN**, measured rather than assumed: it
+# writes `-100` to the pitch axis at `*(craft+0x78)+0x10` and the body's forward
+# row drops. `down` writes `+100` and the nose rises. Both are the same +/-100
+# in-memory scale the steering axis uses, and the analog stick's y feeds the
+# same field with the same sign (`stick_y=+1` reads `-100`, like `up`), which
+# also settles `oag-trace`'s open question about PPSSPP's analog polarity.
+#
+# The response is a damped second-order one rather than a sustained rate - the
+# hover spring and the surface-alignment torque pull the attitude back - so each
+# hold is long enough to see the transient, the overshoot and the settle, and
+# each release is long enough for the craft to return to its resting attitude
+# before the other direction starts. Turning both ways is the `steer-both-ways`
+# lesson applied to this axis: a sign error shows up as the two halves swapping
+# rather than as a plausible-looking curve.
+40 -
+120 up
+50 -
+120 down
+30 -
