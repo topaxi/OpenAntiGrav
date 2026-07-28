@@ -1,7 +1,7 @@
 # The along-track force balance, measured against the original
 
-**Status: resolved. The force law is correct; the discrepancy was the wall.** Jump
-to [the resolution](#resolved-the-force-law-was-right-and-both-reference-captures-were-taken-in-a-wall)
+**Status: resolved. The force law is correct; the discrepancy was contact.** Jump
+to [the resolution](#resolved-the-force-law-was-right-and-both-reference-captures-were-in-sustained-contact)
 for the standing-start capture that settles it, and read the sections before it
 as the investigation that got there - they are kept because each closes a
 hypothesis, and because the measurement technique is reusable.
@@ -97,10 +97,19 @@ still net-decelerating, so the conclusion drawn from monotonicity survives, but
 the premise as stated is wrong.
 
 The `speed` column is also **not** `|velocity|` - it is a consistent
-`1.0367 +/- 0.0002` multiple of it across every row of both captures, so it is a
-display or HUD speed. `speed_cached` (`craft+0x2ec`) *is* `dot(velocity,
-forward)` to four figures. Anything computing a force balance must use the
-velocity columns, not `speed`.
+`1.0367 +/- 0.0002` multiple of it across every row of both captures.
+
+> **That "display or HUD speed" guess was wrong, and the discrepancy it names is
+> the answer to this whole page.** `speed` is `body+0x398`, which `Body_Integrate`
+> writes as `sqrt(dot(v, v))` from the same register it stores as the velocity -
+> so it *is* `|velocity|`, and the `3.67 %` gap means something shrinks the
+> velocity after the integrator runs. See
+> [the resolution](#resolved-the-force-law-was-right-and-both-reference-captures-were-in-sustained-contact).
+> The operational advice below is still right, for a different reason: a force
+> balance must use the velocity columns.
+
+`speed_cached` (`craft+0x2ec`) is `|dot(velocity, forward)|` - the absolute value
+is now read at instruction level, `vabs.s` at `0x08849930`.
 
 **Tick 8 is a real one-frame impulse, not a glitch and not a dropped frame**:
 `|velocity|` jumps `23.355 -> 24.191` in a single 16.5 ms step (`a_fwd` `+52.1`,
@@ -203,7 +212,7 @@ range.
 > when you insist on reading it as a force: `0.0367 / 0.0165 = 2.22`. Both
 > captures used here were recorded with the craft in sustained wall contact for
 > their whole length, so `K` is a property of the collision response, not of the
-> force law. See [the resolution](#resolved-the-force-law-was-right-and-both-reference-captures-were-taken-in-a-wall).
+> force law. See [the resolution](#resolved-the-force-law-was-right-and-both-reference-captures-were-in-sustained-contact).
 > The instruction to not implement `K` as a constant stands, and now has a
 > reason rather than a caution.
 
@@ -362,7 +371,7 @@ delay slot; the `min` at `0x0884c7f4` and the always-landing `* 2.0` at
 **That leaves only the measurement's own premises, and the standing start is what
 falsifies them.**
 
-# Resolved: the force law was right, and both reference captures were taken in a wall
+# Resolved: the force law was right, and both reference captures were in sustained contact
 
 `data/traces/talons-junction-standing-start.csv` - 300 ticks, full throttle from
 a standstill, with the `stun_timer` and `timer_2e0` columns the earlier captures
@@ -380,9 +389,19 @@ net = fs + 2 * accelcap - 2.0 - 0.005 * fs^2
 fits it with **rms `0.127` and residuals bounded by `-0.267 .. +0.181`**, at a
 best-fit `accelcap = 16.89`. That is a 47-unit speed range, an 80-fold change in
 `fs`, and a two-decade change in the quadratic term, reproduced by a
-**one-parameter** fit whose single parameter is a handling value read off the
-disc. A missing `2.28 * fs` would have to subtract `109` at the top of that
-segment; the whole residual is a quarter of a unit.
+one-parameter fit. A missing `2.28 * fs` would have to subtract `109` at the top
+of that segment; the whole residual is a quarter of a unit.
+
+**The one parameter is not free, which is what makes this a prediction rather
+than a fit.** `accelcap` is a shipped handling value, and `crates/physics` loads
+it off the disc: replaying the same capture with `oag-trace` accelerates the
+craft from rest at `34.07` units/s^2 with the rolling resistance gated off,
+i.e. `2 * accelcap` for `accelcap = 17.03`. Pinning the law to *that* value
+instead of the fitted one gives **rms `0.252`, residuals `-0.487 .. -0.039`** -
+a uniform quarter-unit offset rather than any speed dependence. So the free fit
+and the disc agree to `0.8 %`, and the law reproduces the launch either way.
+Neighbouring values do not: `16.5` and `17.5` give rms `0.79` and `1.22`, and
+the residual stops being flat.
 
 So `mass = 1`, the `* 2.0`, the `min`, `cap = 0.5 * fs + accelcap`, the `-2.0`
 rolling resistance and the `-0.005` grounded drag are **all confirmed
@@ -404,6 +423,23 @@ chain. At `fs = 0.56` the measured acceleration is `32.52` against a predicted
 `stun_timer` and `timer_2e0` are `0.0` on every one of the 300 ticks** - so the
 engine's early return, which the handover kept open as a possibility, is
 directly ruled out by the columns rather than argued away from a force balance.
+`oag-trace show` reports the same thing independently ("stun timer: never armed;
+`craft+0x2e0` never above zero").
+
+**That the contact is a wall is an inference, and this is the evidence for it.**
+`dot(velocity, right)` is `-0.01` for the whole launch, jumps to `-13.2` on tick
+62 alongside the `4.9`-unit speed drop, decays to `-7.1` by tick 65, is knocked
+back to `-11.5` on tick 66, and then **never returns to zero** - it is still
+`-2.2` at tick 295, 230 ticks later. `dot(velocity, up)` stays under `0.14`
+throughout, so it is not a floor or ceiling interaction. A sustained lateral
+velocity that the lateral grip cannot null is what a craft pressed against a wall
+looks like. Confidence **75**: the signature fits and nothing else in the capture
+explains it, but the contact itself is not in the trace, and the stun timer
+staying at zero across the impact is unexplained (`Ship_ApplyCollisionImpulse`
+arms `craft+0x290` only when flag `0x10` of the pickup word is clear, and that
+flag has not been read). **Nothing below depends on the attribution** - the
+physics conclusion needs only that the velocity is being reduced outside the
+accumulators.
 
 ## The deficit is a velocity scale, not a force, and the trace already recorded it
 
@@ -433,6 +469,20 @@ The two columns agree to a couple of units everywhere, including through the
 steer capture's slow-down and recovery, where both wander together. **The
 `1.0367` ratio this page recorded as an unexplained curiosity of the `speed`
 column is the missing force.**
+
+`body+0x398` having exactly one per-frame writer is what licenses that reading,
+and it was checked rather than assumed: `search_instructions` over the `0x398(`
+displacement finds only `Body_Init` (a zero) and `Body_Integrate` on a body base,
+and an `addiu`-based scan - the one that catches VFPU accesses through a rebased
+pointer, which the displacement scan misses - finds **no** `0x398` rebase
+anywhere in the image.
+
+**The loss is multiplicative, not a constant impulse, and the ratio's flatness is
+what proves it.** From tick 80 to tick 200 of the standing start `|v|` falls from
+`33.1` to `21.2`, a 36 % drop, while the ratio moves only from `1.0400` to
+`1.0371`. A fixed per-frame velocity *decrement* would have driven the ratio from
+`1.0400` to `1.0625` over that range. So the per-frame loss scales with speed,
+which is exactly why it reads as a force linear in `fs`.
 
 It also explains why the deficit looked linear in speed. A *multiplicative* loss
 of `3.67 %` per `16.5 ms` frame is `0.0367 * |v| / 0.0165 = 2.22 * |v|` of
