@@ -1531,6 +1531,43 @@ fix.**
   (Task #36). The asymmetric capture can only speak to direction, not
   magnitude (different start speed, wall contact from ~tick 95).
 
+**`ipf` (Task #35, commit `2da0c2f`): the PS2 IPF movie format is decoded,
+documented at 92, and rendering - and `just test-data` was not actually
+green on main.**
+
+- **The format** (`docs/formats/ipf.md`): `IPUF` 32-byte header, fixed
+  stride slots, payload = raw IPU (intra-only MPEG-2 for the PS2's IPU).
+  Four checks over every frame of both shipped files (there are exactly
+  two - `BG512.IPF`/`BG640.IPF`; **there is no `Backdrop.ipf` on disc**,
+  the widget name is rewritten at runtime), the strongest being ffmpeg's
+  own IPU demuxer cutting the concatenated payload at exactly the 495
+  boundaries the slots declare - two independent readings agreeing 495
+  times.
+- **Ghidra gold standard**: `Movie_ResolveSourcePath` (`0x0019b168`, 90,
+  new `ps2-pulse/movie-paths.md`) rewrites both the intro AND the
+  backdrop on the same PAL/NTSC global - which hands the IPF its frame
+  rate (it declares none): 225/25 and 270/29.97 are the same nine-second
+  loop (85, inherited). Bridge quirk noted: the rename endpoint rejected
+  a `g_`-style data label that matches existing names.tsv rows - linter
+  inconsistency, global left unnamed rather than convention broken.
+- **Decode**: through the ADR-0008 pipeline unchanged (`movie::open`
+  dispatches on `IPUF`), 225/225 + 270/270 frames, PAL cache 3.34 MiB
+  lossless AV1. New trap recorded: **ffmpeg's `ipum` header puts
+  width/height at +0x08, not +0x04** - the obvious wrapper decodes 0x0
+  and dies; found by brute-forcing candidate layouts.
+- **Display**: `just play <ps2 disc> --movie 'Data\Movies\Backdrop.ipf'
+  --screenshot ...` renders the green warp-streak menu backdrop
+  pillarboxed through the real pipeline. PS2 `src` extensions no longer
+  get `.PMF` appended (PSP rule guarded by test + boot smoke re-run).
+  `boot::LOOSE_MOVIES` is now the original's own name table. **Not wired
+  as a looping FE Screen backdrop** - boot never reaches FE Screen;
+  front-end work, Task #37.
+- **Pre-existing failure fixed on the way**: a `test-data` assertion
+  (`loaded.movie.is_none()` for PS2) had been stale since the loose-PSS
+  landing and was failing on main (verified by stashing) - so the
+  "test-data green" claims between those passes were narrower than they
+  read. Now asserts the PS2 answers with a non-PSMF loose movie.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
