@@ -132,11 +132,14 @@ pub fn load(options: &Options) -> Result<Boot> {
 /// The names come from the screens rather than from a list here, so a screen
 /// that gains an `Image` gains its texture without this function changing.
 ///
-/// **Every archive the source has is searched, and they all have to be.**
-/// `pulse_logo.mip` is in `FE.wad` *and* `Data.wad` at the same size, which
-/// makes `FE.wad` look sufficient; `gameshare_backdrop.mip` is in `Data.wad`
-/// only, which proves it is not. `oag_assets::pulse::Archives::read_name` is
-/// where that search lives now, so it is one rule rather than one per caller.
+/// **Every archive the source has is searched, `FE.wad` first, and both parts of
+/// that matter.** `pulse_logo.mip` is in `FE.wad` *and* `Data.wad` at the same
+/// size, which makes `FE.wad` look sufficient; `gameshare_backdrop.mip` is in
+/// `Data.wad` only, which proves it is not. The order is deliberate and is
+/// therefore written here rather than taken from
+/// [`oag_assets::pulse::Archives::read_name`], which searches the *bulk* archive
+/// first because that is the right default for a race: same size is not same
+/// bytes, and a front-end image should come off the front end's own archive.
 fn load_sprites(
     archives: &mut oag_assets::pulse::Archives,
     screens: &Screens,
@@ -157,7 +160,7 @@ fn load_sprites(
 
     let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
     for src in &srcs {
-        match archives.read_name(src) {
+        match read_front_end_first(archives, src) {
             Ok(blob) => blobs.push((src.clone(), blob)),
             Err(e) => report.push(format!("image {src}: {e}")),
         }
@@ -174,6 +177,23 @@ fn load_sprites(
     sheet
 }
 
+/// Reads a front-end asset, preferring the companion archive over the bulk one.
+///
+/// The mirror image of [`oag_assets::pulse::Archives::read_name`]'s order, for the
+/// callers that want a front-end asset specifically. See [`load_sprites`] for the
+/// two entries that decide it.
+fn read_front_end_first(
+    archives: &mut oag_assets::pulse::Archives,
+    name: &str,
+) -> oag_assets::Result<Vec<u8>> {
+    if let Some(fe) = archives.fe.as_mut()
+        && let Ok(blob) = fe.read_name(name)
+    {
+        return Ok(blob);
+    }
+    archives.data.read_name(name)
+}
+
 /// Reads the front end's own font, falling back to the built-in glyphs.
 ///
 /// A missing or undecodable font is not fatal: the menu still draws, in the 5x7
@@ -185,8 +205,7 @@ fn load_font(
     report: &mut Vec<String>,
 ) -> crate::font::Atlas {
     let name = oag_assets::pulse::names::DEFAULT_FONT;
-    match archives
-        .read_name(name)
+    match read_front_end_first(archives, name)
         .map_err(|e| e.to_string())
         .and_then(|blob| oag_formats::fnt::Font::parse(&blob).map_err(|e| e.to_string()))
     {
@@ -392,7 +411,7 @@ impl std::fmt::Display for EntryRef {
 
 /// Reads the intro reel, or reports why there is none.
 ///
-/// **A source with no such entry is not an error.** The PS2 release ships no
+/// **A source with no reel of its own is not an error.** The PS2 release ships no
 /// `.PMF` in any archive: its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2
 /// program stream loose in the ISO filesystem, with `.IPF` beside it for the
 /// PS2's Image Processing Unit. Neither container is decoded, and neither is
@@ -400,6 +419,12 @@ impl std::fmt::Display for EntryRef {
 /// Failing here would stop the whole front end over the one piece of it that is
 /// genuinely absent, so this says so and the sequence runs without a picture -
 /// the same path `--no-video` already takes.
+///
+/// **A reel the caller actually named is still an error**, and the discriminator
+/// is that rather than the platform: [`DEFAULT_INTRO_REEL`] is this project's own
+/// guess at which cut the intro state plays, so a source that does not have it is
+/// answering the guess, while `--movie` is a request and a request that cannot be
+/// met should say so instead of quietly drawing nothing.
 ///
 /// See `docs/ps2/pulse-disc-layout.md`.
 fn load_movie(
@@ -410,14 +435,19 @@ fn load_movie(
     let entry = EntryRef::parse(&options.movie);
     let hash = entry.hash();
     let data = &mut archives.data;
-    let Some(index) = data.index_of_hash(hash) else {
-        report.push(format!(
-            "{entry} is not in {}, so the intro plays with no picture. A PS2 source \
-             has none to find: its intro is DATA/MOVIES/INTRO512.PSS, an MPEG-2 \
-             program stream outside the archives, which this build does not decode",
-            data.label()
-        ));
-        return Ok(None);
+    let index = match data.index_of_hash(hash) {
+        Some(index) => index,
+        None if options.movie == DEFAULT_INTRO_REEL => {
+            report.push(format!(
+                "{entry} is not in {}, so the intro plays with no picture. A PS2 \
+                 source has no reel to find: its intro is DATA/MOVIES/INTRO512.PSS, \
+                 an MPEG-2 program stream outside the archives, which this build \
+                 does not decode",
+                data.label()
+            ));
+            return Ok(None);
+        }
+        None => anyhow::bail!("{entry} is not in {}", data.label()),
     };
     let size = data.entry_len(index)?;
     let options = &Options {

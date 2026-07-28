@@ -112,11 +112,14 @@ nothing guesses at a set to avoid printing that line.
 **The intro reel has no picture.** The PS2 ships no `.PMF` in any archive at all;
 its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream loose in the ISO
 filesystem, with `.IPF` beside it for the Image Processing Unit. Neither is
-decoded and neither is addressable as an archive entry, so `--movie` has nothing
-to name and the front end runs without a picture, the same path `--no-video`
-already took. Whether the front end gets further than that depends on whether the
-front-end root XML is in `WADS2.WAD` under the name the PSP uses, which has not
-been checked; if it is not, the failure names the archive it searched.
+decoded and neither is addressable as an archive entry, so there is nothing for
+the intro to play and the front end runs without a picture, the same path
+`--no-video` already took. A reel **named** with `--movie` and not found is still
+an error: the default is this project's guess at which cut the intro state plays,
+and a source that lacks it is answering the guess, where `--movie` is a request.
+Whether the front end gets further than that depends on whether the front-end root
+XML is in `WADS2.WAD` under the name the PSP uses, which has not been checked; if
+it is not, the failure names the archive it searched.
 
 Expect a race to load more slowly off the PS2 disc. 5,861 of `WADS2.WAD`'s 7,200
 entries are [LZSS](../formats/lzss.md) where no PSP archive compresses anything,
