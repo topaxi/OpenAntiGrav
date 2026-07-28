@@ -13,6 +13,14 @@ that look wrong. See [what is implemented](#what-is-implemented) for the split,
 for the contradiction on this page that arithmetic could settle, and
 [still open](#still-open) for the readings the evidence leaves undetermined.
 
+**One part of this model is measured against the original rather than read.**
+[The along-track force balance](force-balance-ground-truth.md) reconstructs, from
+captured traces, what force the original actually applies along a craft's forward
+axis. It confirms the engine's thrust law at instruction level and shows that the
+crate applies about **53 units of net force too much** there, in a term that is
+**linear in speed**. That page is the authority on the longitudinal balance and
+on which candidate terms are already eliminated.
+
 **This page no longer covers the whole force law.**
 [Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse/engine.md) was read
 out of `BOOT.BIN` afterwards, and it is the authority wherever the two disagree: it was
