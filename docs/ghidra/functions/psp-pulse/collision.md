@@ -71,6 +71,67 @@ Both levels use the same structure, with 22-bit packed endpoints:
 That quantises coordinates to **1 unit over roughly ±1024**, and caps ids at
 1024 per list. Worth noting as a hard limit inherited from the data.
 
+### The packing subtracts no base, and the range is enforced by a clamp
+
+`SapAxis_Update` (`0x08833cc8`) is where an endpoint is packed, and the
+arithmetic is bare:
+
+```text
+08833d58  sub.s  f13,f13,f15      ; min -= 1.0   (a one-unit skin)
+08833d74  trunc.w.s f13,f13       ; (int)min
+08833db4  addiu  t2,t2,0x400      ; + 1024
+08833dbc  sll    t2,t2,0x1        ; * 2
+08833dc8  or     t2,t2,t0         ; | (objectId << 12)
+08833dd4  and    t2,t2,a3         ; & 0x3fffff
+```
+
+with the max endpoint taking `add.s f12,f12,f15` and an extra `addiu t1,t1,0x1`
+at `0x08833e78`. **There is no base, no per-level offset, and no per-track
+origin** - the float that reaches `trunc.w.s` is the world coordinate. Confidence
+**92**.
+
+`Sap_Init` (`0x0882f8f4`) does not establish one either: it allocates the three
+0xa4-byte axis structures, zeroes `sap+0x10`, and passes its fourth argument
+through to each axis. The only coordinate state an axis keeps is `+0x9c` and
+`+0xa0`, a running min and max that `SapAxis_Update` *records* and never
+subtracts.
+
+**What actually bounds the input is a clamp, applied identically at all three
+entry points** - `Sap_Insert` (`0x0882fb20`), `Sap_Update` (`0x088301e0`) and
+`Sap_QueryAabb` (`0x088304d4`) each run the same eight instructions before
+packing anything:
+
+```text
+lui   a0,0x8ab
+addiu a0,a0,0xc50
+lv.q  C720,0x0(a0)        ; g_sap_clamp_min
+lv.q  C730,0x10(a0)       ; g_sap_clamp_max
+vmax.t C700,C700,C720     ; both corners raised to the min
+vmax.t C710,C710,C720
+vmin.t C700,C700,C730     ; both corners lowered to the max
+vmin.t C710,C710,C730
+```
+
+So a coordinate outside the window **saturates onto the boundary rather than
+wrapping**, and because the query clamps the same way as the insert, the result
+is still conservative: the broadphase over-reports and the narrowphase filters.
+Confidence **90** for the clamp itself.
+
+**The two globals are all zero in shipped `.data`, and nothing in the image
+writes them.** `0x08ab0c50` and `0x08ab0c60` have three read references each -
+the three functions above - and no write, by both `get_xrefs_to` and a scan for
+the `0xc50`/`0xc60` operand forms; `Sap_Init`, the single `.ctors` entry's
+region, and the surrounding 80 bytes are all clear. Taken literally that makes
+the clamp degenerate, collapsing every endpoint onto one cell, which is
+functionally correct but would leave the broadphase returning everything. That
+reading sits badly with the game's frame rate, so **the constant is recorded as
+unresolved at confidence 45** rather than asserted either way.
+
+Nothing a reimplementation needs turns on it. Both readings make the packing a
+*conservative accelerator*: it never drops a genuinely overlapping pair, so exact
+AABB overlap is a legal substitute and the bit packing does not have to be
+reproduced at all.
+
 - **World broadphase**: 1024 slots, 8 cursors per axis, returns collider indices.
 - **Per-mesh**: one entry per triangle AABB, where the **bit index is the
   triangle index directly**.
@@ -120,6 +181,9 @@ respawn. Confidence **86**.
 | `0x088183e8` | `CollisionMesh_Init` | 85 |
 | `0x0881835c` | `CollisionMesh_AvgVertexScalar` | 84 |
 | `0x0882f8f4` | `Sap_Init` | 82 |
+| `0x0882fb20` | `Sap_Insert` | 80 |
+| `0x088301e0` | `Sap_Update` | 82 |
+| `0x08833cc8` | `SapAxis_Update` | 82 |
 | `0x0884ae90` | `Ship_HoverFourCorner` | 80 |
 | `0x0884a658` | `Ship_HoverTwoPoint` | 80 |
 | `0x0884ba0c` | `Ship_UpdateMagLock` | 78 |

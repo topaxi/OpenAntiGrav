@@ -225,7 +225,7 @@ outright that a failure there is a **finding**, not a bug.
 
 ## Open questions
 
-### The broadphase does not pack world space: a survey of all 16 tracks
+### Resolved: the broadphase clamps world space rather than rebasing it
 
 Collision vertices are world space: every node sits at depth 1 with an identity
 world transform, on both discs.
@@ -293,13 +293,36 @@ packing being right and the *input* to it not being world space:
 > minimum, or a per-level offset - before packing. Every shipped track fits the
 > 2048-unit window; not one of them fits it *centred on the world origin*.
 
-That is a **falsifiable prediction, not a determination**: nothing here has read
-the code. What it does is turn "both cannot be right" into a specific thing to
-look for. Re-reading `Sap_Init` (`0x0882f8f4`) should show a base subtracted
-before the `+ 0x400`, or a coordinate that arrives already relative. If it shows a
-raw world coordinate with no base, then the *packing* reading is what is wrong,
-because the data above rules out the geometry being at fault. Confidence **75**
-in the prediction; the measurements themselves are direct.
+That was a **falsifiable prediction**, and reading the code has now falsified it.
+
+> **There is no base.** `SapAxis_Update` (`0x08833cc8`) packs a bare world
+> coordinate - `trunc.w.s`, `+ 0x400`, `* 2`, or in the object id - with nothing
+> subtracted, and `Sap_Init` (`0x0882f8f4`) establishes no origin. The prediction
+> above is wrong, and so is its alternative: **the packing reading is right too.**
+
+What the survey did not anticipate is the third possibility. `Sap_Insert`,
+`Sap_Update` and `Sap_QueryAabb` all **clamp** both AABB corners into a fixed
+window before packing, with the same eight `vmax.t`/`vmin.t` instructions. A
+coordinate beyond the window saturates onto the boundary instead of wrapping,
+and because queries clamp exactly as inserts do, the broadphase stays
+conservative - it over-reports and the narrowphase filters. So the original never
+needed a track to fit the window: **it clips, and accepts the lost selectivity.**
+
+That resolves the conflict without disturbing anything measured here. The
+geometry is world space, seven tracks really do exceed ±1024, the packing really
+does cover 2048 units, and the original simply does not care.
+
+**Consequence for this project: the packing does not have to be reimplemented.**
+It is an accelerator that never drops a genuinely overlapping pair, so exact AABB
+overlap is a legal - and strictly better - substitute. The 1-unit quantisation
+and the 1024-id cap are properties of the original's index, not of the format.
+
+One loose end is recorded rather than resolved: the two clamp bounds are globals
+at `0x08ab0c50`/`0x08ab0c60` that are **all zero in shipped `.data`, with no
+writer anywhere in the image**. See
+[collision.md](../ghidra/functions/psp-pulse/collision.md#the-packing-subtracts-no-base-and-the-range-is-enforced-by-a-clamp)
+for what was checked; confidence **45** on the constant, **90** on the clamp
+being there. Nothing above depends on which value it holds.
 
 Two smaller findings from the same survey:
 
