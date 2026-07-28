@@ -32,6 +32,118 @@ cost that session the ability to verify anything; check they are still there
 before concluding a ground-truth test "cannot run". The originals in
 `~/Downloads` were copied, not moved, and are untouched.
 
+## 2026-07-28, second pass: the M4 resistance blocker is resolved - there was never a missing force
+
+A second three-agent team ran the "next steps" the morning pass left behind:
+`hover-re` (the VFPU hover/damping/grip reading, now that the Ghidra bridge is
+back up), `captures` (the standing-start and steering captures), and
+`mechanical` (collision survey, docs debt, trace migration). `hover-re` and
+`mechanical` are done and folded in below; `captures` is still in flight on the
+steering side, though its committed groundwork (`7738bf4`) already carries a
+finding. `just` passes at **788 tests** after all of it; `audit-leakage` clean.
+
+**The headline (`d7fea3a`, `ef110d8`, `2f26453`, `07411ad`): the force law was
+right all along, and both old reference captures were recorded scraping a
+wall.** `docs/physics/force-balance-ground-truth.md` now opens with the
+resolution; the short version, because it inverts the standing diagnosis:
+
+- All three VFPU candidates for the missing linear resistance are **refuted at
+  instruction level** with the Allegrex module: `Ship_UpdateHover`
+  (`0x0884870c`) is a twenty-instruction *dispatcher*, and the real spring in
+  `Ship_HoverTwoPoint` damps via a multiplier on the spring magnitude along the
+  ship's **up** axis, with the normal projection present at `0x0884aa28`
+  (conf 90); the inline vertical damping is `up * dot(up, v) * -0.25 *
+  (1 - grounded)` - normal-projected AND zero while grounded (conf 92); and
+  `Ship_ApplyLateralGrip` writes only body-local `X` (conf 90). With those
+  gone, the force-path enumeration is complete and contains **no
+  linear-in-velocity term at all**.
+- **The deficit is a velocity-space scale, not a force.** `speed` is
+  `body+0x398`, which `Body_Integrate` writes as `sqrt(dot(v,v))` from the same
+  register it stores as velocity - so the trace's unexplained `1.0367x`
+  `speed`-vs-`|velocity|` ratio means something shrinks `body+0x140` *after*
+  the integrator, invisible to any force accumulator. A multiplicative
+  `3.67 %`-per-frame loss is `2.22 * |v|` of equivalent force; the fitted
+  constant was `2.28`. **Right shape, right size, wrong kind of thing.** Both
+  old captures sit in that regime for their entire length (`speed/|v|` never
+  reads `1.0000`); they were recordings of the collision response, not the
+  force law. Conf 90 on three agreeing legs.
+- **The standing-start capture proves the law end to end**
+  (`data/traces/talons-junction-standing-start.csv`, 300 ticks; produced by
+  `captures`, consumed by `hover-re`): `net = fs + 2*accelcap - 2.0 -
+  0.005*fs^2` fits the launch from `fs = 0.56` to `47.67` with **rms 0.127**
+  on a one-parameter fit, and launch acceleration reads `32.52` against the
+  predicted `31.8`. `stun_timer` and `timer_2e0` are `0.0` on every tick, so
+  the engine-gate escape hatch is closed by columns, not argument.
+- **Standing, not retracted**: `mass = 1`, the tick-8 speed pad, the stun-gate
+  negative, every thrust-side confirmation. **Retracted**: implementing
+  `2.28 * fs` as a force, ever.
+- Crate corrections that fell out (`ef110d8`): vertical damping now scales by
+  `1 - grounded` (was wrongly `1 - magLockBlend`); `craft+0x2ec` is
+  `|dot(v, fwd)|` - the `vabs.s` at `0x08849930` is its only writer (conf
+  90/88) - so quadratic drag is dissipative in both directions and the
+  reversing branch (`-0.1`) is unreachable in the original; the airbrake drag
+  scale is `1e-5`, not `0.01` - two literals, the capstone pass had stopped at
+  the first (conf 88); rolling resistance magnitude is exactly `2` via a
+  `vadd.t` self-add, conf 80 -> 92.
+- New evidence page `docs/ghidra/functions/psp-pulse/rigid-body.md`
+  (`Body_AddForceAtPoint`, `Body_Init`, `Body_Integrate`; linear damping
+  confirmed `0.01`; `body+0x398` identified).
+- **Where this sends the next session**: compare `crates/physics/src/wall.rs`
+  against the now-concrete target - sustained contact loses ~`3.6 %` of speed
+  per frame, decaying from `4.2 %` post-impact toward `3.67 %`. The live lead
+  for the writer is `FUN_0884e968` (tangential relative velocity scaled by a
+  friction field at `contact+0x34`, applied through `FUN_0884d64c`);
+  `Ship_UpdateMagLock` is ruled out (renormalises to the original magnitude).
+  Any future reference capture should first pass the cheap cleanliness test
+  `speed/|velocity| == 1.0000`. `the_ship_does_not_stay_on_the_track_yet`
+  still fails and is now expected to hinge on the wall response.
+
+**`captures` (in flight): the angular column is not angular velocity in
+matching units, and that un-ties `oag-trace show`'s four-way scoring.**
+`scripts/trace-angular-fit.py` (`7738bf4`) exists because the four
+`AngularReading`s come back *undecided* on real data - all four residuals land
+within a few percent of the column's own rms. The script's fit says why: the
+recorded `body+0x160` column is proportional to the **body-local** angular
+velocity with three distinct negative per-axis constants near `-15, -21, -15` -
+i.e. it reads like a body-frame angular *momentum* `I * w` with a diagonal
+inertia tensor, and `1/|k_y| ~= 1/21` is suspiciously close to the `1/22.1`
+that `YAW_DRIVE_CALIBRATION` stands in for. If that holds it would revise this
+file's earlier "the yaw equilibrium is provably inertia-independent" note -
+treat as preliminary until the agent's final report and steering captures land.
+It also committed scripted scenarios (`verification/scenarios/steer-left`,
+`steer-right`, `airbrake-asymmetric.inputs`) and a division-by-zero fix in
+`trace-force-balance.py` for stationary data.
+
+**`mechanical` (done): the SAP +/-1024 contradiction is dissolved into a
+narrower question, the docs debt is paid, and `oag-trace` reads both discs.**
+
+- **Collision survey (`ead464a`)**: walking every `.vex` entry on both discs
+  (all 130 PSP + 189 PS2 collision nodes), **seven of sixteen environments
+  reach past +/-1024, but nothing spans more than 2,048** - the widest
+  collidable span is `2026.6057` (`10_Track`, 98.96 % of the window). So every
+  shipped track fits the packing window and none fits it centred on the world
+  origin: the packing must subtract a per-track base (prediction conf 75).
+  The survey table lives in `docs/formats/collision.md`; the next step is
+  reading `Sap_Init` (`0x0882f8f4`) / `Sap_QueryAabb` (`0x088304d4`) for that
+  base. A straight transcription packing raw world coordinates would silently
+  drop geometry on seven of sixteen tracks.
+- **Docs debt (`52f40ed`, `aa5a7db`)**: `wad.md` records the second-binary
+  confirmation; `handling-stats.md` gains the `<Misc>` element (offsets
+  `0x78..0x90`, `weight_distribution` at `0x90`). One deliberate demotion: the
+  "PSP build has an equivalent `<Misc>` parser, conf 80" claim is now an open
+  question with **no confidence score** - it was a hypothesis from the
+  consumer (`Ship_UpdatePitch` reads `0x90`), not an observation of a parser,
+  and no PSP parser was ever searched for.
+- **Trace migration (`b19bcee`)**: `crates/trace` now resolves archives via
+  `oag_assets::pulse::Archives` name-based lookup, so **PS2 discs are valid
+  `--source` arguments to `oag-trace`** - the PCSX2 leg of M3 just got its
+  asset path for free.
+
+Both finished agents went idle without delivering final reports (their
+commits and doc edits carried the substance instead); everything above is
+folded from the diffs directly. Task #2 (PS2 force-term corroboration) is
+still unclaimed.
+
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
 A new session spawned three concurrent background agents in this working tree,
