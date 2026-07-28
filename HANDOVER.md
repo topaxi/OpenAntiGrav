@@ -986,6 +986,19 @@ the wins and the one regression.** Gate 824 tests; `just test-data`
   assert the two columns agree on the same physical rotation - the old
   version passed with the bug live because it only asked whether the nose
   had moved.
+- **The 6.41x prediction is confirmed as a prediction**: `100/15.6` has no
+  free parameter in either factor, and applying both corrections lands the
+  pitch leading edge at 0.991x/0.986x the original's own step response on
+  two captures. Nothing could have been tuned to reach it. Checking it
+  also surfaced a hidden second result: **the old crate pitch-oscillated
+  AT REST with no input held** (rms 0.0655 rad/s over 38 input-free ticks
+  against an original at exactly 0.0000) - most of the scary-looking
+  "before" number was self-excitation, not response. **The momentum model
+  settles a resting craft 65x quieter** (0.0010) - a stability property
+  nothing was watching, and plausibly the mechanism behind old
+  at-rest-jitter reports. Also verified, not assumed: the ramped-column
+  one-tick lag reaches none of this validation (only basis rows, dt and
+  the two angular columns are read).
 - Open after this: the pitch restoring path (Task #26), the 13 % roll
   stiffness, Task #25 (lap re-capture with `omega_*`), nothing airborne
   captured yet, and contact generation remains the M4 trace-convergence
