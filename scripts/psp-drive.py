@@ -33,6 +33,10 @@ explicitly not a trace.
 
 Subcommands:
 
+    preflight is there an emulator to talk to, and if not, what to start.
+    menu      walk the front end from wherever it is into a live Time Trial, so a
+              scripted run is autonomous from a cold boot rather than from
+              "somebody already navigated the menus".
     restart   pause -> RESTART RACE -> dismiss the track description -> sit out
               the countdown, ending with the craft stationary on the start line.
               The reproducible starting point, since the debugger has no
@@ -84,6 +88,13 @@ CYCLES_PER_FRAME = PSP_CLOCK_HZ / VBLANK_HZ
 # padded well past what was observed.
 RESTART_TO_DESCRIPTION = 20.0
 DESCRIPTION_TO_GREEN = 24.0
+
+# Where a craft comes up on Talon's Junction White after the countdown, and how
+# far off that still counts as the same track. Measured on three separate
+# restarts on 2026-07-28, which agreed to every digit printed - the *heading*
+# does not repeat that well, but the position does, and that is all this is for.
+TALONS_JUNCTION_START = (6.07, -50.07, -196.10)
+TALONS_JUNCTION_TOLERANCE = 40.0
 
 
 def frame_of(dbg):
@@ -294,6 +305,174 @@ def drive(args):
         dbg.close()
 
 
+# How many times a `left` is sent to drive an option selector onto its first
+# entry. The Custom Race selectors **clamp** rather than wrap - measured on RACE
+# TYPE, which sat on TOURNAMENT and read SINGLE RACE after eight - so saturating
+# is a way to reach a known entry without being able to read the label. Eight is
+# comfortably past the longest of them.
+SATURATE = 8
+
+# `right` presses from the saturated first entry to TIME TRIAL: the list runs
+# SINGLE RACE, TOURNAMENT, TIME TRIAL. Screenshot-verified 2026-07-28, and
+# selecting it also flips WEAPONS to OFF and AI DIFFICULTY to N/A on its own,
+# which is the reference scenario's configuration.
+RACE_TYPE_TIME_TRIAL = 2
+
+# Front-end states, from `0x08b31784+0x18c`. The menu tree announces itself; the
+# hex-grid cells do not, which is why the walk below verifies at these points and
+# counts presses in between.
+MAIN_MENU = "Main Menu"
+RACEBOX = "Racebox"
+CUSTOM_RACE = "Single Player"
+TRACK_SELECT = "Track Creation"
+IN_GAME = "InGame"
+
+# First-boot dialogs, in the order they appear. Answering them is a one-time cost
+# per memory stick - the SDL build persists the profile - but a walk that cannot
+# get past them is a walk that needs a human on a fresh install.
+FIRST_BOOT = [
+    ("RemoveMemoryStickWarning", [("cross", 1)]),
+    ("NameSetup2FromBoot", [("right", 10), ("cross", 1)]),
+    ("TagSetup2FromBoot", [("right", 3), ("cross", 1)]),
+    ("CreateFromBoot", [("cross", 1), ("circle", 1)]),
+    ("Show Logo", [("start", 1)]),
+    ("LogoFMV", [("start", 1)]),
+    ("Language Selection", [("cross", 1)]),
+]
+
+
+def tap(dbg, button, times=1, wait=0.45):
+    for _ in range(times):
+        dbg.press(button, duration=6)
+        time.sleep(wait)
+
+
+def expect(dbg, wanted, what, timeout=15.0):
+    """Wait for a named front-end state, or say which one turned up instead."""
+    end = time.time() + timeout
+    seen = None
+    while time.time() < end:
+        seen = dbg.state_name()
+        if seen == wanted:
+            return
+        time.sleep(0.4)
+    print(
+        "the front end is in %r, not %r, after %s. The menu walk is in "
+        "docs/reverse-engineering/ppsspp-debugger.md; if the layout has changed, "
+        "that page and this function are what need updating." % (seen, wanted, what),
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+def settle_into_race(dbg, describe=True):
+    """From the ship-select confirmation to a stationary craft on the start line.
+
+    Sleeps rather than state polls, because the front end reads `InGame` for the
+    loading screen, the track description and the countdown alike - there is
+    nothing to poll. Nothing is held through any of it: thrust through a
+    countdown is a false start, and Pulse answers one by stalling the engine.
+    """
+    time.sleep(RESTART_TO_DESCRIPTION)
+    if describe:
+        dbg.press("cross", duration=6)
+        print("dismissed the track description, sitting out the countdown", file=sys.stderr)
+    time.sleep(DESCRIPTION_TO_GREEN)
+    craft = find_craft(dbg)
+    sample = read_progress(dbg, craft)
+    print(
+        "craft 0x%08x at (%.2f, %.2f, %.2f), speed %.3f, throttle %.0f"
+        % (craft, *sample["pos"], sample["speed"], sample["throttle"])
+    )
+    return craft, sample
+
+
+def menu(args):
+    """Walk the front end from wherever it is into a live Time Trial.
+
+    Idempotent: already in a race, this returns straight away, so
+    `just scripted-emu` can call it unconditionally.
+
+    **What it pins and what it cannot.** RACE TYPE and SPEED CLASS are pinned by
+    saturating their selectors, which clamp. The *track* is not: Track Select is a
+    single wrapping list of three, its index is on screen and nowhere this can
+    read, and there is no key sequence that reaches entry 1 from an unknown one in
+    a wrapping list. So the walk leaves the track selector alone - the profile
+    persists it, and nothing in this repository moves it - and **checks afterwards**
+    that the craft came up on Talon's Junction, which is a real check rather than
+    a hope. `--any-track` turns the check into a warning.
+    """
+    dbg = Debugger(args.port)
+    dbg.resume()
+    dbg.hold(**input_script.button_payload(input_script.State()))
+    dbg.analog(0.0, 0.0)
+
+    state = dbg.state_name()
+    if state and IN_GAME in state:
+        print("already in a race (%r)" % state)
+        dbg.close()
+        return
+
+    # First boot, if this memory stick has never run the game.
+    for _ in range(len(FIRST_BOOT) * 2):
+        state = dbg.state_name()
+        match = next((keys for name, keys in FIRST_BOOT if state == name), None)
+        if match is None:
+            break
+        print("first boot: answering %r" % state, file=sys.stderr)
+        for button, times in match:
+            tap(dbg, button, times)
+        time.sleep(1.5)
+
+    # Back out of wherever the menus are. `circle` is Back on every screen of the
+    # tree, and `Main Menu` is the one state name that cannot be mistaken.
+    for _ in range(12):
+        if dbg.state_name() == MAIN_MENU:
+            break
+        tap(dbg, "circle", 1, wait=1.5)
+    expect(dbg, MAIN_MENU, "backing out with circle")
+    print("at %r" % MAIN_MENU, file=sys.stderr)
+
+    tap(dbg, "down")  # RACE CAMPAIGN -> RACEBOX
+    tap(dbg, "cross", 1, wait=2.5)
+    expect(dbg, RACEBOX, "entering Racebox")
+
+    tap(dbg, "cross", 1, wait=3.0)  # CUSTOM RACE, the first entry
+    expect(dbg, CUSTOM_RACE, "entering Custom Race")
+
+    tap(dbg, "left", SATURATE, wait=0.3)  # RACE TYPE -> SINGLE RACE
+    tap(dbg, "right", RACE_TYPE_TIME_TRIAL, wait=0.4)  # -> TIME TRIAL
+    tap(dbg, "down")  # SPEED CLASS
+    tap(dbg, "left", SATURATE, wait=0.3)  # -> VENOM
+    tap(dbg, "up")
+    print("set TIME TRIAL / VENOM", file=sys.stderr)
+
+    tap(dbg, "cross", 1, wait=3.0)
+    expect(dbg, TRACK_SELECT, "confirming the race settings")
+    tap(dbg, "cross", 1, wait=3.0)  # the track, whichever is selected
+    tap(dbg, "cross", 1, wait=3.0)  # the ship
+    expect(dbg, IN_GAME, "confirming the ship", timeout=30.0)
+    print("loading the race", file=sys.stderr)
+
+    _, sample = settle_into_race(dbg)
+    off = sum((a - b) ** 2 for a, b in zip(sample["pos"], TALONS_JUNCTION_START)) ** 0.5
+    if off > TALONS_JUNCTION_TOLERANCE:
+        message = (
+            "the craft came up %.1f units from Talon's Junction's start line, so "
+            "this is a different track. Track Select is a wrapping list this cannot "
+            "read; choose Talon's Junction White once by hand and the profile keeps "
+            "it." % off
+        )
+        if args.any_track:
+            print("warning: " + message, file=sys.stderr)
+        else:
+            print(message, file=sys.stderr)
+            raise SystemExit(1)
+    else:
+        print("on Talon's Junction, %.2f units from the recorded start line" % off)
+    dbg.close()
+
+
 def restart(args):
     """Back to a stationary craft on the start line, past the countdown.
 
@@ -328,17 +507,7 @@ def restart(args):
         raise SystemExit(1)
     print("restarting (%d confirm(s))" % (attempt + 1), file=sys.stderr)
 
-    time.sleep(RESTART_TO_DESCRIPTION)
-    dbg.press("cross", duration=6)  # dismiss the track description
-    print("dismissed the track description, sitting out the countdown", file=sys.stderr)
-    time.sleep(DESCRIPTION_TO_GREEN)
-
-    craft = find_craft(dbg)
-    sample = read_progress(dbg, craft)
-    print(
-        "craft 0x%08x at (%.2f, %.2f, %.2f), speed %.3f, throttle %.0f"
-        % (craft, *sample["pos"], sample["speed"], sample["throttle"])
-    )
+    _, sample = settle_into_race(dbg)
     if sample["speed"] > 1.0:
         print(
             "note: the craft is already moving, so the countdown is not over or "
@@ -346,6 +515,50 @@ def restart(args):
             file=sys.stderr,
         )
     dbg.close()
+
+
+def preflight(args):
+    """Say whether the original is ready to be scripted, and what to do if not.
+
+    `just scripted-emu` runs this first so that the one failure it cannot fix -
+    no emulator at all - comes out as a paragraph somebody can act on rather than
+    as a websocket traceback from four frames deep in a capture. Everything past
+    that point `menu` handles.
+    """
+    try:
+        dbg = Debugger(args.port, connect_timeout=3.0)
+    except Exception:  # noqa: BLE001 - the diagnosis is the whole point here
+        image = Path(args.image)
+        iso = Path(args.iso)
+        print("no PPSSPP debugger answering on ws://127.0.0.1:%d/debugger" % args.port,
+              file=sys.stderr)
+        print(file=sys.stderr)
+        if not image.exists():
+            print("...and %s is missing too. data/ is gitignored and holds only "
+                  "user-supplied images; see data/README.md." % image, file=sys.stderr)
+        print("Start one (docs/reverse-engineering/ppsspp-debugger.md):", file=sys.stderr)
+        print(file=sys.stderr)
+        if not iso.exists():
+            print("    just extract-iso %s %s" % (image, iso), file=sys.stderr)
+        print(r"    printf '[General]\nRemoteDebuggerOnStartup = True\n"
+              r"RemoteDebuggerLocal = True\nRemoteISOPort = %d\n' > /tmp/debugger.ini"
+              % args.port, file=sys.stderr)
+        print("    SDL_VIDEODRIVER=wayland %s --appendconfig=/tmp/debugger.ini "
+              "--windowed %s" % (args.emulator, iso), file=sys.stderr)
+        print(file=sys.stderr)
+        print("SDL_VIDEODRIVER=wayland is not optional on a Wayland session, and the "
+              "window must be focused or the build throttles hard. The menus from "
+              "there are `psp-drive.py menu`'s job, not yours.", file=sys.stderr)
+        raise SystemExit(1)
+
+    try:
+        name = dbg.state_name()
+        print("PPSSPP on port %d, front end in %r" % (args.port, name))
+        if not name or IN_GAME not in name:
+            print("not in a race - `psp-drive.py menu` will walk there", file=sys.stderr)
+        print("ready")
+    finally:
+        dbg.close()
 
 
 def state(args):
@@ -368,6 +581,25 @@ def main():
     )
     parser.add_argument("--port", type=int, default=47810)
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser(
+        "preflight", help="is the original ready to be scripted, and if not, why"
+    )
+    p.add_argument("--image", default="data/images/pulse-psp-usa.chd")
+    p.add_argument("--iso", default="data/cache/pulse-psp-usa.iso")
+    p.add_argument("--emulator", default="PPSSPPSDL")
+    p.set_defaults(run=preflight)
+
+    p = sub.add_parser(
+        "menu", help="walk the front end from wherever it is into a live Time Trial"
+    )
+    p.add_argument(
+        "--any-track",
+        action="store_true",
+        help="warn instead of failing when the race did not come up on Talon's "
+        "Junction. Track Select is a wrapping list this cannot read.",
+    )
+    p.set_defaults(run=menu)
 
     p = sub.add_parser("restart", help="back to a stationary craft on the start line")
     p.set_defaults(run=restart)

@@ -246,7 +246,59 @@ which is what makes blind navigation practical. See
 [main-loop.md](../ghidra/functions/psp-pulse/main-loop.md) for the corrected
 layout and the state names observed at runtime.
 
+## Walking the menus without a human
+
+`scripts/psp-drive.py menu` gets the front end from wherever it is into a live
+Time Trial, and `just scripted-emu` calls it, so a scripted run needs a booted
+emulator and nothing else. It is idempotent: already in a race, it returns.
+
+What makes it possible is that **the menu tree announces itself** through
+`0x08b31784+0x18c` even though the hex-grid cells do not. The walk verifies at
+every state that has a name and counts presses only in between:
+
+| Step | Keys | State afterwards |
+| --- | --- | --- |
+| Back out of anywhere | `circle` until it lands | `Main Menu` |
+| Racebox | `down`, `cross` | `Racebox` |
+| Custom Race | `cross` | `Single Player` |
+| Race type | `left` x8, `right` x2 | still `Single Player` |
+| Speed class | `down`, `left` x8, `up` | still `Single Player` |
+| Confirm | `cross` | `Track Creation` |
+| Track, ship | `cross`, `cross` | `InGame` |
+| Description, countdown | `cross`, then wait | racing |
+
+Three things that were measured rather than assumed, each of which broke a
+version of this walk first:
+
+- **The Custom Race option selectors clamp, they do not wrap.** RACE TYPE sitting
+  on `TOURNAMENT` reads `SINGLE RACE` after eight `left`s and stays there. That is
+  what makes a blind walk possible at all: saturate, then count. From `SINGLE
+  RACE`, `right` x2 is `TIME TRIAL`, and selecting it flips `WEAPONS` to `OFF` and
+  `AI DIFFICULTY` to `N/A` on its own - the reference scenario's configuration
+  falls out of the mode rather than needing to be set.
+- **Track Select is a *wrapping* list of three, on the up/down axis.** Left and
+  right do nothing there. A wrapping list has no reachable anchor when its index
+  can only be read off the screen, so **the walk does not touch the track
+  selector at all**: the profile persists it and nothing in this repository moves
+  it. What it does instead is **check afterwards** - the craft's start position on
+  Talon's Junction is `(6.07, -50.07, -196.10)` to every digit printed, on three
+  separate restarts, so a race that comes up anywhere else is a different track
+  and the walk says so and stops. `--any-track` downgrades that to a warning.
+  (This is also how the earlier "`right` x2 from the docs' walk" went wrong: from
+  `Racebox` it selected a *tournament*, and the run that followed was on a track
+  nobody chose.)
+- **`QUIT RACE` lands directly on `Main Menu`**, which is why backing out with
+  `circle` is the walk's first move rather than a special case.
+
+The first-boot dialogs are handled too, from the sequence below, so a fresh
+memory stick needs no hand-holding either - though the SDL build persists the
+profile, so that path runs once per install.
+
 ## Getting into a race, once
+
+**Automated now** - see the section above; what follows is the underlying
+sequence, kept because it is what the walk encodes and what to fall back on when
+a layout changes.
 
 The first boot needs answering, and only once, because the profile it writes
 persists in PPSSPP's memory stick:
