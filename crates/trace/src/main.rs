@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use oag_assets::{Archive, pulse};
+use oag_assets::pulse;
 use oag_formats::{collision, handling};
 use oag_gameplay::input::button_from_name;
 use oag_gameplay::{collision_world, handling_for};
@@ -470,18 +470,25 @@ fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
 /// The same two reads `oag_game::race::load` does, without the spline, the models
 /// or the camera: a comparison run is seeded from the recording rather than from
 /// a grid slot, so it needs nothing that decides where a ship starts.
+///
+/// **Which archives the source has, not which archives a PSP disc has.** Both
+/// entry names below are spelled the same on both releases, so the layout is the
+/// whole of the difference - [`pulse::Archives`] finds `Data.wad` or `WADS2.WAD`
+/// by name and searches the companion archive too. This deliberately prints
+/// nothing extra: `run` output is compared byte-for-byte against earlier
+/// captures, so the layout appears only in an error's context.
 fn load(
     source: &str,
     track: &str,
     team: &str,
     class: SpeedClass,
 ) -> Result<(Handling, CollisionWorld)> {
-    let spec = pulse::archive_spec(source, pulse::archives::DATA);
-    let mut archive = Archive::open(&spec)?;
+    let mut archives = pulse::Archives::open(source)?;
+    let where_from = archives.layout.describe();
 
-    let track_blob = archive
+    let track_blob = archives
         .read_name(track)
-        .with_context(|| format!("reading {track} out of {spec}"))?;
+        .with_context(|| format!("reading {track} out of {where_from}"))?;
     let nodes = collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{track}: {e}"))?;
     let collision = collision_world(&nodes);
     eprintln!(
@@ -491,9 +498,9 @@ fn load(
     );
 
     let stats_name = handling::entry_name(team);
-    let stats_blob = archive
+    let stats_blob = archives
         .read_name(&stats_name)
-        .with_context(|| format!("reading {stats_name} out of {spec}"))?;
+        .with_context(|| format!("reading {stats_name} out of {where_from}"))?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
     let handling = handling_for(&stats, class);

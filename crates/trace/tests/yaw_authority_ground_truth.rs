@@ -15,7 +15,7 @@
 //! disc at run time is also what keeps it out of the repository - see
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 
-use oag_assets::{Archive, pulse};
+use oag_assets::pulse;
 use oag_core::math::Vec3;
 use oag_formats::handling;
 use oag_gameplay::handling_for;
@@ -84,11 +84,13 @@ fn advance_yaw(omega: f32, steer: f32, handling: &Handling, dt: f32) -> f32 {
 }
 
 fn shipped_handling() -> Handling {
-    let spec = pulse::archive_spec(&workspace(IMAGE).to_string_lossy(), pulse::archives::DATA);
-    let mut archive = Archive::open(&spec).expect("open Data.wad");
+    // Resolved by name, the way `oag-trace run` and `oag-game` do, so this reads
+    // the same file off a PS2 pressing without knowing where the PS2 puts it.
+    let mut archives =
+        pulse::Archives::open(&workspace(IMAGE).to_string_lossy()).expect("open the source");
 
     let name = handling::entry_name(TEAM);
-    let blob = archive.read_name(&name).expect("read handlingstats.xml");
+    let blob = archives.read_name(&name).expect("read handlingstats.xml");
     let stats = handling::from_blob(&blob).expect("parse handlingstats.xml");
 
     handling_for(&stats, CLASS)

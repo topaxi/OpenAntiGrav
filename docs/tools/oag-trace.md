@@ -405,7 +405,12 @@ replayed, rather than being invented:
 Without `--source` there are no handling parameters and no track: the run is a
 coast, useful for checking the harness and useless for checking the force law.
 With one, the handling stats and the track's collision geometry are read off the
-disc exactly as `oag-game` reads them.
+disc exactly as `oag-game` reads them - through
+[`oag_assets::pulse::Archives`](../architecture/frontend-boot.md), which finds
+the bulk archive **by name** rather than assuming the PSP's path. So a PS2
+pressing works as a `--source` too: both entry names are spelled the same on
+both releases, and a run off `pulse-ps2-eu.chd` loads the same 196 colliders and
+the same Assegai Venom handling as one off `pulse-psp-usa.chd`.
 
 ## Options
 
