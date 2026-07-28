@@ -90,6 +90,61 @@ What exists now:
   maps `+0x160` onto `+0x150`, so a `0x150` twin column would settle
   local-vs-world directly if the basis-derivative check comes back ambiguous.
 
+**`ps2-game-path` is done and verified on both real discs, centrally
+re-checked.** Commits `fde5297`, `7e6bc71`, `b652e3a`, `5f2ad20` (which also
+carries the trace agent's first chunk, see above), `00dd670`, `5f32c30`.
+`just play data/images/pulse-ps2-eu.chd --race` loads a driveable race off
+the PS2 disc: same 16_Track spline (2 paths, 862 control points), 196
+colliders/6,227 triangles, Assegai Venom handling - and the PS2 front end
+boots too (11 screens, 1,724 English strings from `WADS2.WAD`'s
+`Data\Plugins\PI001\GUI\Skin.xml`), which had been written off as probably
+unreachable. What to know:
+
+- **Archives are found by name, not derived from the platform.**
+  `oag_assets::pulse::Layout::resolve`/`Archives::open` match trailing path
+  components case-insensitively (`PSP_GAME/USRDIR/Data.wad` then
+  `WADS2.WAD`; `FE.wad` then `WADSP.WAD`) against the source's own file
+  list, because the PS2 archives sit in a directory named after the disc
+  serial (`54748/` on SCES-54748) - a path constant would be right for one
+  pressing and wrong for the next. Nothing branches on
+  `oag_disc::Platform` in any decode path (the PS2 disc carries PSP-format
+  batches, so per-disc discrimination would be wrong). `Boot.movie` is now
+  `Option` - the PS2 ships no PMF in any archive.
+- **Telemetry after 60 ticks is identical on both discs** (speed 49.60,
+  grounded 1.0, spline 3.90, height 3.89, same position). Deliberately kept
+  out of `docs/comparisons/pulse-psp-vs-ps2.md`, which holds the
+  same-values question open on purpose - but it is a strong data point for
+  ADR-0004's "gameplay is identical across asset sets".
+- **Two real-data corrections**: the untextured-model report had been keyed
+  on an empty texture list and wrongly fired on the PSP disc (the ribbon
+  declares no slots on either disc); now keyed on *unfilled* slots with
+  counts, plus a regression test. And PS2 movie names carry their own
+  extensions (`Intro.pss`, `Backdrop.ipf`), so the Movie widget's
+  `src + ".PMF"` rule yields `Intro.pss.PMF` on PS2 - documented, nothing
+  acts on it yet since neither container is decoded.
+- **Degradations are explicit, not silent**: no PMF intro, a zero-byte
+  `.fnt` entry (5x7 fallback), and front-end images under unrecovered names
+  (empty sprite sheet) each get a report line. The PS2 ship renders white -
+  the model-to-texture-set lookup is still unrecovered (the decoder itself
+  exists, `oag_render::mesh::ps2_texture_set`).
+- **The one failing test in its full run
+  (`the_ship_does_not_stay_on_the_track_yet`) is pre-existing and stays.**
+  The agent verified it fails identically at `27b2587` (before any of this
+  pass's work) and recommended deletion per the test's own comment - but
+  the wall-collision section elsewhere in this file already deliberated
+  exactly this: the ship satisfies the formal check by wedging into a wall
+  at 4x the real speed, which is not what "the physics improved" means. The
+  test stays until the resistance gap is resolved; its recommendation is
+  declined, not missed.
+- Optional follow-ups it named: recover the PS2 model-to-texture-set
+  lookup; find the PS2 front-end image/font entry names; migrate
+  `crates/trace` off the old `pulse::archive_spec` PSP path onto `Layout`
+  (left alone because another agent owned that crate at the time).
+- Its sandbox note, worth keeping: its first `ls` of `data/images/`
+  returned nothing because **the sandbox silently blocks `ls` on some
+  paths** ("permission denied" even on `crates/disc/src`) - `find` works.
+  A third distinct way real data can look absent when it isn't.
+
 ## The movie cache is lossless AV1 now, and two of its traps fail silently
 
 The cache holds lossless AV1 in IVF instead of raw `yuv420p`, decoded in process
