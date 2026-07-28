@@ -1134,6 +1134,40 @@ angular-velocity-column.md's new sections.
   `+0xc0`; the rotated-and-translated world point (the real lever arm) is
   `craft+0xe0`. `apply-ghidra-names.py --dry-run`: 505/0/0.
 
+**`alignment`, follow-on (commit `bfd60ef`): the basis-rotating mechanism
+IS `Ship_UpdateMagLock` - attribution 45 -> 90, and the crate's gap is now
+a named, implementable design.** Evidence: engine.md's new section.
+
+- **The last ~80 instructions of `Ship_UpdateMagLock` - unread for three
+  passes - rewrite the basis directly**: `forward`/`right` skewed toward a
+  track-derived axis scaled by `craft+0x280`, `up = cross`, explicit
+  Gram-Schmidt re-orthonormalisation, three `sv.q` straight into the basis
+  rows. No accumulator touched - **invisible to the momentum column by
+  construction**, exactly the shape-(B) break the lap fit demanded.
+- **The match is specific**: the axis blends between neighbouring track
+  sections' `+0xB10` vectors by path distance (so it turns continuously
+  along the track - the quantity the 0.906x slaving was regressed
+  against; `+0xB10` = surface normal is inference-from-use, conf 70, a
+  track-format question); it is gated on the magstrip blend (0.2/frame
+  ramp from a third raycast accepting only surface type 3 - full slaving
+  in five frames on a strip, nothing anywhere else, agreeing with the
+  inverted-section localisation from the opposite end); and the same
+  blend fades the suspension (`1 - craft+0x280` on every probe force) -
+  one design: the spring hands attitude to a kinematic hold. Also read in
+  the same tail: a reposition (`0.8 * craft+0x2f0` along the axis) and
+  the already-known velocity projection (that earlier ruling stands).
+- **Implementation warning, load-bearing**: do NOT model this as a torque
+  - through the accumulators it would reappear in the momentum column and
+  re-break the identity the lap capture just scoped. Task #30.
+- **Trap worth naming: "read far enough to rule X out" left 80
+  instructions of a different mechanism unread for three passes.** The
+  function had been opened twice before, each time only to the depth the
+  question of the day needed.
+- Reconciliation: the pitch captures are level-ground (`craft+0x280` zero
+  throughout), so this mechanism reaches none of the #26 numbers - and it
+  is thereby also EXCLUDED as a candidate for #29's missing ~4.9 pitch
+  damping. The two are independent mechanisms on independent evidence.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
