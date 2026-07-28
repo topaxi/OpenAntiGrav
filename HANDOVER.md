@@ -768,6 +768,58 @@ green at 819 tests.
   the emulator, and not blocking (`--laps 1.02` stops the autopilot one
   lap in).
 
+**`timetrial`, second increment (`e5a40bf`, `3da2860`): both `just` recipes
+exist, the emulator side is fully autonomous, and re-running the lap script
+from the canonical spawn REFRAMES the divergence finding.**
+
+- **`just scripted-sim <scenario>`** (defaults to the whole-lap scenario):
+  a new `oag-trace drive <script> --source <image>` starts the ship on the
+  track's own start line the way a race does - no capture needed, which
+  was a real gap (`run` takes length, dt AND initial condition from a
+  capture). Prints a run report whose key column is **off-spline distance**
+  (answers "is it still on the circuit", which a grounded count cannot).
+  `spawn_height`/`box_inertia` moved from `oag_game::race` into
+  `oag_gameplay::spawn` (a harness may not depend on the composition
+  root; race.rs re-exports, all call sites unchanged). A test pins that
+  `drive` and `replay` agree tick-for-tick given the same seed/delta/
+  length - otherwise scenario runs and comparison runs would quietly be
+  two different simulations.
+- **THE FINDING: started from the canonical spawn instead of the emulator
+  capture's first row, the same 3,146-tick lap script keeps our ship ON
+  the track the whole way** - grounded 3,145/3,146, 4,151 units travelled,
+  never leaves the surface. Seeded from the emulator's own start-line row
+  it leaves at tick 313 and free-falls. The two starts are ~50 units apart
+  on the track, so this is NOT yet a claim about which seeding is better -
+  but "our physics cannot hold a lap" was too strong a reading of the
+  earlier comparison. The tick-313 departure is a property of that
+  specific approach line, not of the physics generally.
+- **`just scripted-emu`** chains preflight -> menu -> restart -> capture
+  and was run end to end from the Main Menu untouched: walked into a Time
+  Trial, craft on the line, 200 ticks captured, exit 0. Menu behaviours
+  measured, each having broken a version first: **Custom Race selectors
+  clamp, they do not wrap** (saturate-then-count is what makes a blind
+  walk possible; selecting TIME TRIAL flips WEAPONS OFF / AI N/A by
+  itself); **Track Select is a wrapping list** (no reachable anchor
+  blind), so the walk verifies the start position after the fact instead
+  - Talon's Junction's start is `(6.07, -50.07, -196.10)` to every digit
+  across three restarts, and a wrong track is a stop, not a surprise
+  (`--any-track` downgrades); **QUIT RACE lands directly on Main Menu**.
+  The docs' old "right x2" Racebox walk actually started a *tournament*
+  on an unchosen track - hit and corrected. `preflight` turns a missing
+  emulator into exact setup commands rather than a websocket traceback.
+- **Justfile trap for everyone: backticks in a justfile are command
+  substitution at parse time**, even inside an `@echo` string - an echoed
+  example command ran a full trace-compare on every `just` invocation
+  including `just --list`. Caught and fixed.
+- Housekeeping: Task #24's two stale anchors fixed (the file was the
+  agent's own); `check-docs` fully green again. And a stale trap from an
+  earlier session is retired: **`sd` is installed and works now** - the
+  "exits 0 while doing nothing" warning in an older section below no
+  longer reproduces.
+- One more instance for the flagged shipped-design-data pile (maintainer
+  decision pending): `angular-velocity-column.md` also quotes the Assegai
+  `Misc` hull dimensions in its box-tensor refutation argument.
+
 **`chores` (Tasks #22 and #23, commits `e8b2bee`, `ca6b014`): the doc-link
 checker now validates anchors, and the archive_spec removal premise was
 wrong.**
