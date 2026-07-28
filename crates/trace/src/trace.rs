@@ -908,7 +908,7 @@ pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed
 
     #[test]
     fn the_fixture_header_is_the_capture_script_s_header() {
-        // If `scripts/psp-trace.py` grows a column, this is what fails first.
+        // If `scripts/psp_trace_fields.py` grows a column, this is what fails first.
         let header = FIXTURE.lines().next().unwrap();
         assert_eq!(header, COLUMNS.join(","));
     }
@@ -916,18 +916,21 @@ pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed
     /// The header this crate expects, read out of the capture script itself.
     ///
     /// The doc comment on [`COLUMNS`] says the list is a transcription of
-    /// `scripts/psp-trace.py`'s `CRAFT_FIELDS` and `BODY_FIELDS`. A transcription
-    /// that nothing checks is a copy waiting to drift, and the failure mode is
-    /// quiet: a column added on one side only makes every trace unreadable, or
-    /// worse, shifts what a name means. So the script is the source of truth and
-    /// this reads it.
+    /// `scripts/psp_trace_fields.py`'s `CRAFT_FIELDS` and `BODY_FIELDS`. A
+    /// transcription that nothing checks is a copy waiting to drift, and the
+    /// failure mode is quiet: a column added on one side only makes every trace
+    /// unreadable, or worse, shifts what a name means. So the script is the
+    /// source of truth and this reads it.
+    ///
+    /// The tables moved out of `psp-trace.py` itself when `psp-autopilot.py`
+    /// started writing the same columns; this test is what noticed.
     fn header_the_capture_script_writes() -> Vec<String> {
-        const SCRIPT: &str = include_str!("../../../scripts/psp-trace.py");
+        const SCRIPT: &str = include_str!("../../../scripts/psp_trace_fields.py");
         let mut columns = vec!["tick".to_owned()];
         for list in ["CRAFT_FIELDS = [", "BODY_FIELDS = ["] {
             let start = SCRIPT
                 .find(list)
-                .unwrap_or_else(|| panic!("{list} is not in scripts/psp-trace.py"))
+                .unwrap_or_else(|| panic!("{list} is not in scripts/psp_trace_fields.py"))
                 + list.len();
             let body = &SCRIPT[start..];
             let end = body.find("\n]").expect("an unterminated field list");

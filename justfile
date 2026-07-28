@@ -154,6 +154,18 @@ launch-hdfury-ps3 image="data/images/hdfury-ps3-eu.iso" *ARGS:
 trace *ARGS:
     uv run --with websocket-client python scripts/psp-trace.py {{ARGS}}
 
+# Put the original back on the start line, or send an input script at a
+# free-running emulator in real time. `just drive restart`, `just drive drive
+# --script F`; see docs/reverse-engineering/ppsspp-debugger.md.
+drive *ARGS:
+    uv run --with websocket-client python scripts/psp-drive.py {{ARGS}}
+
+# Fly the original round a lap, steering off the track's own spline, and write
+# down what it pressed. Needs `oag-trace track` output; see
+# docs/tools/oag-trace.md#a-whole-lap-and-where-it-came-from.
+autopilot *ARGS:
+    uv run --with websocket-client python scripts/psp-autopilot.py {{ARGS}}
+
 # Compare our simulation against a captured trace: first divergent tick, and by
 # how much. See docs/tools/oag-trace.md.
 trace-compare *ARGS:

@@ -633,6 +633,60 @@ mod tests {
         }
     }
 
+    /// Every committed scenario parses, whatever it is for.
+    ///
+    /// The named check above is about the two 200-tick protocol scenarios
+    /// specifically. This one is the guard that matters as the directory grows:
+    /// a scenario that does not parse is a scenario nobody can replay, and the
+    /// whole-lap recording is 3,146 ticks of run-length lines that no human
+    /// proof-read.
+    #[test]
+    fn every_committed_scenario_parses() {
+        let root = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../verification/scenarios/"
+        ));
+        let mut seen = 0;
+        for entry in std::fs::read_dir(root).expect("the scenarios directory is committed") {
+            let path = entry.expect("a readable entry").path();
+            if path.extension().is_none_or(|e| e != "inputs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).expect("a readable scenario");
+            let script = Script::parse(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            assert!(!script.is_empty(), "{}: no ticks", path.display());
+            seen += 1;
+        }
+        assert!(seen >= 6, "only {seen} scenario(s) found");
+    }
+
+    /// The whole-lap recording, which is a different kind of artefact from the
+    /// hand-authored scenarios: it is what a closed-loop autopilot actually sent
+    /// the emulator over a lap the game itself timed. Length and thrust are
+    /// asserted because both are load-bearing - a truncated recording would
+    /// still parse, and a recording that had stopped holding thrust would be a
+    /// coast rather than a lap.
+    #[test]
+    fn the_whole_lap_scenario_is_a_lap_of_thrust() {
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../verification/scenarios/talons-junction-time-trial-lap.inputs"
+        ))
+        .expect("the lap scenario is committed");
+        let script = Script::parse(&text).expect("parses");
+        assert_eq!(script.len(), 3146);
+        let thrusting = script
+            .states
+            .iter()
+            .filter(|s| s.is_held(button::CROSS))
+            .count();
+        assert!(
+            thrusting * 20 > script.len() * 19,
+            "{thrusting} of {} tick(s) hold thrust",
+            script.len()
+        );
+    }
+
     /// A script's whole reason to exist is that the emulator and our replay read
     /// the *same* file, so the two parsers must agree tick for tick. This is the
     /// Rust half of that; `scripts/input_script.py`'s self-test is the other.

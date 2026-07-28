@@ -1,0 +1,266 @@
+# One completed lap of Talon's Junction White, Time Trial, Venom, Assegai.
+#
+# Recorded by `scripts/psp-autopilot.py` steering the original along the disc's
+# own spline (`oag-trace track`), one closed-loop decision per tick at a
+# `Ship_UpdateCraft` breakpoint. Every line below is exactly what the emulator
+# was sent, shifted two ticks later so the file reads in `oag-trace`'s
+# convention rather than the breakpoint's - so replay it into the emulator with
+# `psp-trace.py --script-lead 2` and into our own physics with
+# `oag-trace run --script` unshifted. See docs/tools/oag-trace.md.
+#
+# The run this came off finished the lap: the game's own HUD read `Lap 2 of 3`
+# with `best 1.11.08` at tick 3087, which is the game timing the lap rather than
+# this file's author claiming one. 3,146 ticks, 5,169 units travelled, peak
+# 164 units/s.
+
+25 cross right r
+10 cross right
+3 cross
+11 cross left
+21 cross left l
+13 cross left
+3 cross
+12 cross right
+18 cross right r
+12 cross right
+3 cross
+13 cross left
+14 cross left l
+10 cross left
+3 cross
+9 cross right
+27 cross right r
+8 cross right
+3 cross
+9 cross left
+25 cross left l
+9 cross left
+3 cross
+10 cross right
+24 cross right r
+10 cross right
+2 cross
+10 cross left
+24 cross left l
+9 cross left
+2 cross
+7 cross right
+43 cross right r
+10 cross right
+4 cross
+14 cross left
+8 cross left l
+13 cross left
+2 cross
+8 cross right
+44 cross right r
+9 cross right
+3 cross
+9 cross left
+21 cross left l
+9 cross left
+3 cross
+7 cross right
+39 cross right r
+9 cross right
+2 cross
+9 cross left
+26 cross left l
+9 cross left
+2 cross
+9 cross right
+30 cross right r
+8 cross right
+4 cross
+11 cross left
+16 cross left l
+11 cross left
+3 cross
+10 cross right
+21 cross right r
+10 cross right
+3 cross
+9 cross left
+25 cross left l
+10 cross left
+3 cross
+9 cross right
+24 cross right r
+9 cross right
+3 cross
+9 cross left
+25 cross left l
+10 cross left
+3 cross
+11 cross right
+18 cross right r
+11 cross right
+2 cross
+9 cross left
+31 cross left l
+10 cross left
+3 cross
+14 cross right
+14 cross right r
+13 cross right
+4 cross
+12 cross left
+12 cross left l
+10 cross left
+2 cross
+9 cross right
+28 cross right r
+9 cross right
+3 cross
+8 cross left
+39 cross left l
+9 cross left
+2 cross
+8 cross right
+32 cross right r
+7 cross right
+2 cross
+7 cross left
+34 cross left l
+7 cross left
+2 cross
+8 cross right
+38 cross right r
+8 cross right
+3 cross
+10 cross left
+24 cross left l
+10 cross left
+3 cross
+8 cross right
+26 cross right r
+8 cross right
+3 cross
+9 cross left
+25 cross left l
+9 cross left
+3 cross
+8 cross right
+34 cross right r
+13 cross right
+4 cross
+34 cross left
+3 cross
+8 cross right
+41 cross right r
+10 cross right
+3 cross
+35 cross left
+2 cross
+10 cross right
+27 cross right r
+11 cross right
+3 cross
+10 cross left
+27 cross left l
+11 cross left
+3 cross
+11 cross right
+16 cross right r
+9 cross right
+3 cross
+9 cross left
+30 cross left l
+10 cross left
+3 cross
+10 cross right
+20 cross right r
+10 cross right
+2 cross
+9 cross left
+33 cross left l
+8 cross left
+3 cross
+9 cross right
+32 cross right r
+11 cross right
+3 cross
+13 cross left
+10 cross left l
+12 cross left
+2 cross
+8 cross right
+42 cross right r
+10 cross right
+3 cross
+11 cross left
+20 cross left l
+11 cross left
+3 cross
+12 cross right
+15 cross right r
+10 cross right
+2 cross
+7 cross left
+38 cross left l
+9 cross left
+2 cross
+9 cross right
+30 cross right r
+10 cross right
+3 cross
+32 cross left
+3 cross
+7 cross right
+72 cross right r
+9 cross right
+3 cross
+12 cross left
+12 cross left l
+11 cross left
+3 cross
+9 cross right
+24 cross right r
+8 cross right
+3 cross
+10 cross left
+20 cross left l
+11 cross left
+3 cross
+9 cross right
+26 cross right r
+9 cross right
+3 cross
+9 cross left
+26 cross left l
+12 cross left
+4 cross
+32 cross right
+4 cross
+10 cross left
+32 cross left l
+13 cross left
+4 cross
+27 cross right
+2 cross
+8 cross left
+44 cross left l
+10 cross left
+4 cross
+15 cross right
+6 cross right r
+15 cross right
+3 cross
+11 cross left
+20 cross left l
+8 cross left
+3 cross
+8 cross right
+27 cross right r
+10 cross right
+2 cross
+9 cross left
+31 cross left l
+9 cross left
+2 cross
+10 cross right
+27 cross right r
+10 cross right
+3 cross
+9 cross left
+21 cross left l

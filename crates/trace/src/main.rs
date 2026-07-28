@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use oag_assets::pulse;
-use oag_formats::{collision, handling};
+use oag_formats::{collision, handling, track};
 use oag_gameplay::input::button_from_name;
 use oag_gameplay::{collision_world, handling_for};
 use oag_physics::{CollisionWorld, Environment, Handling, SpeedClass};
@@ -43,6 +43,20 @@ const DEFAULT_TEAM: &str = "Assegai";
 
 /// Our own fixed timestep, for `--fixed-dt`. ADR-0007.
 const FIXED_DT: f32 = 1.0 / 60.0;
+
+/// Class ID of a `.vex` node whose payload is a `WO Track` spline graph.
+///
+/// The same constant `oag_render::track` reads it with, restated rather than
+/// imported: no crate here may depend on the renderer, and a class ID is a fact
+/// about the file format.
+const CLASS_WO_TRACK: u32 = 0x3bb;
+
+/// Curve samples per control-point interval, for `oag-trace track`.
+///
+/// The same four `oag_render::track` draws the ribbon with and
+/// `oag_game::race::Spline` locates a ship with, so a dumped line and a drawn one
+/// are the same set of points.
+const STEPS_PER_SEGMENT: usize = 4;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -141,6 +155,24 @@ enum Command {
         /// Write one line per tick instead of a summary.
         #[arg(long)]
         expand: bool,
+    },
+    /// Dump a track's driveable spline as CSV, one row per resampled point.
+    ///
+    /// The autopilot in `scripts/psp-autopilot.py` steers the original along
+    /// this: a scripted lap has to be *authored* from somewhere, and the
+    /// authored racing line is already on the disc. Nothing here simulates
+    /// anything - it is the spline the track file carries, resampled and lifted
+    /// to hover height, in the same world coordinates a capture records.
+    Track {
+        /// A disc image, or a directory extracted with `oag-unpack`.
+        #[arg(long)]
+        source: String,
+        /// Archive entry name of the track's `.vex`.
+        #[arg(long, default_value = DEFAULT_TRACK)]
+        track: String,
+        /// Curve samples per control-point interval.
+        #[arg(long, default_value_t = STEPS_PER_SEGMENT)]
+        steps: usize,
     },
     /// Compare two traces that already exist.
     Compare {
@@ -278,6 +310,11 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Track {
+            source,
+            track,
+            steps,
+        } => dump_track(&source, &track, steps),
         Command::Compare {
             recorded,
             simulated,
@@ -324,6 +361,92 @@ fn main() -> Result<()> {
             tolerances,
         }),
     }
+}
+
+/// Writes a track's resampled spline to stdout as CSV.
+///
+/// One row per sample, in the order the curve runs, carrying the frame
+/// (`tangent`, `lateral`, `down`), both half-widths, the AI corridor and the
+/// authored `racing_line` offset. Two derived columns come along because every
+/// consumer computes them the same way and one of them is easy to get backwards:
+///
+/// - `lift_*` is the sample lifted off the surface by
+///   [`oag_formats::track::HOVER_LIFT`], which is where ships actually fly.
+/// - `line_*` is that point moved across the track by `racing_line` along
+///   `lateral`, which is the authored line itself.
+///
+/// Nothing is renormalised: the interpolated axes are neither unit length nor
+/// exactly perpendicular, and that is the original's behaviour rather than a
+/// decode error - `oag_gameplay::spawn` says so at length.
+fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
+    if steps == 0 {
+        bail!("--steps must be at least 1");
+    }
+    let mut archives = pulse::Archives::open(source)?;
+    let blob = archives
+        .read_name(name)
+        .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))?;
+    let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
+    let node = nodes
+        .iter()
+        .find(|n| n.class_id == CLASS_WO_TRACK)
+        .with_context(|| format!("{name} has no WO Track node"))?;
+    let payload = blob
+        .get(node.payload())
+        .context("the WO Track payload runs past the end of the file")?;
+    let ai = track::parse(payload).map_err(|e| anyhow::anyhow!("{name}: {e}"))?;
+    eprintln!(
+        "{name}: {} path(s), {} junction(s), {} control point(s)",
+        ai.paths.len(),
+        ai.junctions.len(),
+        ai.point_count()
+    );
+
+    println!(
+        "index,path,pos_x,pos_y,pos_z,lift_x,lift_y,lift_z,line_x,line_y,line_z,\
+         tan_x,tan_y,tan_z,lat_x,lat_y,lat_z,down_x,down_y,down_z,\
+         half_left,half_right,ai_left,ai_right,racing_line,section,flags"
+    );
+    let mut index = 0usize;
+    for (path_index, path) in ai.paths.iter().enumerate() {
+        for segment in 0..path.points.len() {
+            for step in 0..steps {
+                let t = step as f32 / steps as f32;
+                let Some(s) = path.sample(segment, t) else {
+                    continue;
+                };
+                let lift = [
+                    s.pos[0] - track::HOVER_LIFT * s.down[0],
+                    s.pos[1] - track::HOVER_LIFT * s.down[1],
+                    s.pos[2] - track::HOVER_LIFT * s.down[2],
+                ];
+                let line = [
+                    lift[0] + s.racing_line * s.lateral[0],
+                    lift[1] + s.racing_line * s.lateral[1],
+                    lift[2] + s.racing_line * s.lateral[2],
+                ];
+                let mut row = vec![index.to_string(), path_index.to_string()];
+                for v in [s.pos, lift, line, s.tangent, s.lateral, s.down] {
+                    row.extend(v.iter().map(|c| format!("{c:.7}")));
+                }
+                for v in [
+                    s.half_width_left,
+                    s.half_width_right,
+                    s.ai_bound_left,
+                    s.ai_bound_right,
+                    s.racing_line,
+                ] {
+                    row.push(format!("{v:.7}"));
+                }
+                row.push(s.section_id.to_string());
+                row.push(s.flags.to_string());
+                println!("{}", row.join(","));
+                index += 1;
+            }
+        }
+    }
+    eprintln!("{index} sample(s) at {steps} per segment");
+    Ok(())
 }
 
 fn show(path: &Path) -> Result<()> {

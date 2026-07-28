@@ -11,7 +11,15 @@ oag-trace show    <trace.csv>                      what is in a capture
 oag-trace run     <trace.csv> [--source <image>]   replay it and compare
 oag-trace compare <recorded.csv> <simulated.csv>   diff two traces
 oag-trace script  <script.inputs> [--expand]       validate an input script
+oag-trace track   --source <image> [--track <e>]   dump a track's spline as CSV
 ```
+
+`track` is the odd one out: it simulates nothing and compares nothing. It reads
+the `WO Track` node out of a track's `.vex` and writes the resampled spline -
+frame, half-widths, AI corridor, authored racing line, and the lifted and
+racing-line points already computed - one row per sample. It is here because
+[the whole-lap scenario](#a-whole-lap-and-where-it-came-from) is steered along it
+and a comparison tool is where the track already gets loaded.
 
 Traces are **derived game data**. They live under `data/traces/`, which
 `.gitignore` covers, and are never committed - so nothing here runs in CI, and
@@ -33,6 +41,16 @@ cargo run -p oag-trace -- run data/traces/venom-steer.csv \
 
 `--hold cross` on both sides is the older, simpler form and still works; it is
 the right thing for a straight line and cannot express anything else.
+
+A **whole lap** is the same two commands with a longer file, and it exists now -
+see [the lap scenario](#a-whole-lap-and-where-it-came-from):
+
+```sh
+cargo run -p oag-trace -- run data/traces/talons-junction-time-trial-lap.csv \
+    --source data/images/pulse-psp-usa.chd \
+    --script verification/scenarios/talons-junction-time-trial-lap.inputs \
+    --out /tmp/ours-lap.csv
+```
 
 The capture side's traps - a breakpoint added while the CPU runs never fires, a
 memory read costs 520 ms running and 0.3 ms stepping, and holding thrust through
@@ -150,6 +168,9 @@ every committed scenario.
 | --- | --- |
 | `straight-line.inputs` | 200 ticks of thrust. Protocol scenario 1, and deliberately the same input as the `--hold cross` reference capture, so the scripted path can be checked against a result measured before scripts existed |
 | `steer-both-ways.inputs` | Thrust throughout, half a second of full left, a straight, then half a second of full right. A variant of protocol scenario 2 |
+| `steer-left.inputs`, `steer-right.inputs` | One constant turn each, for the yaw ground-truth tests |
+| `airbrake-asymmetric.inputs` | Thrust and steer with one airbrake, the only scenario that exercises the `1e-5` airbrake drag term |
+| `talons-junction-time-trial-lap.inputs` | **3,146 ticks: one completed lap of Talon's Junction White.** Not hand-authored - see below |
 
 `steer-both-ways` turns both ways on purpose. The sign of the yaw response is one
 of the things this harness exists to settle - row 0 of the recorded basis being
@@ -160,6 +181,58 @@ distinguish those. The half-second segments are short enough that at the referen
 scenario's ~24 units/s the ship should still be on Talon's Junction's first
 straight rather than scraping a wall, which would confound steering with collision
 response.
+
+### A whole lap, and where it came from
+
+Every scenario above this one is a few hundred ticks somebody wrote by hand.
+`talons-junction-time-trial-lap.inputs` is 3,146 ticks and nobody wrote it: it
+was **recorded off a closed-loop autopilot flying the original**, and the file is
+the log of what that autopilot pressed.
+
+`scripts/psp-autopilot.py` breaks in `Ship_UpdateCraft` once per tick exactly the
+way `psp-trace.py` does, reads the craft, and steers it with a pure-pursuit
+controller aimed at the track's own spline - which comes off the disc through the
+new `oag-trace track` subcommand, so the line being chased is authored data and
+not a guess:
+
+```sh
+cargo run -p oag-trace -- track --source data/images/pulse-psp-usa.chd > /tmp/spline.csv
+uv run --with websocket-client scripts/psp-drive.py restart
+uv run --with websocket-client scripts/psp-autopilot.py --spline /tmp/spline.csv \
+    --laps 1.02 --shot-dir /tmp/shots \
+    --script-out verification/scenarios/talons-junction-time-trial-lap.inputs \
+    --trace-out data/traces/talons-junction-time-trial-lap.csv
+```
+
+Three things about it are worth knowing before using the file.
+
+- **The controller is not a claim about anything.** It is bang-bang steering with
+  a speed-scaled lookahead; nothing in `docs/` cites it and nothing should. What
+  *is* evidence is the recording, which is byte for byte what the emulator was
+  sent, and the trace, which is what the original then did.
+- **The file is shifted two ticks later than it was sent**, so it reads in this
+  tool's convention rather than the breakpoint's. Input set at a breakpoint lands
+  three frames later and a replay's row `k` is driven by input `k-1`, so the
+  emulator is two ticks behind us. `--emit-lead 2` (the default) undoes that once,
+  here; `psp-trace.py --script-lead 2` puts it back when the file is replayed
+  into the emulator. Replaying it at lead 0 would be a *different* run.
+- **Because it is breakpoint-driven, the capture and the finished lap are the
+  same run.** There is no second run to hope agrees with the first, which is the
+  usual way a "capture of the run that worked" goes wrong.
+
+**What the game itself said**, which is the point of the whole exercise and the
+only thing here that is not this repository marking its own homework: at tick
+3,087 the HUD read **`Lap 2 of 3`** with **`best 1.11.08`** - the game's own lap
+counter had advanced and the game had timed the lap. A longer run of the same
+autopilot took the 3-lap Time Trial to its end and the game started a fresh
+attempt behind it (`Lap 1 of 3`, `best` cleared), which is also how a capture
+tool sees a finished race: `Ship_UpdateCraft` simply stops being called.
+
+**The lap is 95.2 % wall-free** (`speed/|velocity|` reads `1.0000` on 2,996 of
+3,146 ticks) with a longest clean run of **314 consecutive ticks**. That retires
+the standing complaint in [`oag-game.md`](oag-game.md) that no capture has more
+than 60 consecutive wall-free ticks: the force law now has a clean, *cornering*
+straight to be measured on, which no previous capture provided.
 
 ### What a real scripted run found
 
@@ -531,6 +604,37 @@ rather than a physics error, and it is left visible rather than scaled away -
 but it does mean `speed` heads the first-divergence line while saying nothing
 about the force law.
 
+## What the whole-lap comparison found
+
+Both sides driven by `talons-junction-time-trial-lap.inputs`, 3,146 ticks, the
+recording seeding tick 0. Measured 2026-07-28; nothing here was tuned to.
+
+| Ticks | What ours does |
+| --- | --- |
+| 0-75 | **Tracks the original.** Gap under 1 unit at tick 75; speeds 60.2 against 65.4 |
+| 75-123 | Gap opens to 20 units - one narrow half-width. Ours reads `grounded = 0.5` where the original holds `1.0`, and its speed falls behind (74 against 83 at tick 100) |
+| 123-313 | Gap grows to ~100 units. Ours is airborne for part of every crest |
+| 313 | **Leaves the surface for good** at `y = -44.7`, and never regains it |
+| 313-3145 | Free fall. `y` reaches `-10,794` against the original's `-48.9`; speed saturates at 234 units/s, which is nothing but terminal velocity |
+
+So the divergence is not the force law running out of accuracy: for the first
+75 ticks the two agree to a unit, and what fails afterwards is **staying on the
+track**. `grounded` dropping to `0.5` and then to `0` while the original never
+leaves `1.0` dates it precisely, and points at hover-probe contact generation -
+the gap [HANDOVER](../../HANDOVER.md) already names: eight probes taking only the
+deepest hit, and no `cross(r, impulse)` angular response. This run is the first
+measurement that says *when* that gap bites, rather than that it exists.
+
+Two smaller readings from the same run:
+
+- The recorded lap's angular column scores `negated-local` best (31.98 rms
+  against the basis derivative, ahead of `negated-world`'s 32.24), the same order
+  every earlier capture gives, now over a whole lap with real cornering rather
+  than over a straight.
+- The original's stun timer never armed across the entire lap, and `craft+0x2e0`
+  never rose above zero - on a lap that is 95.2 % wall-free, which is what makes
+  that a statement about the lap rather than about the gate.
+
 ## Not yet
 
 - **No save state.** The starting point is still the documented menu walk from a
@@ -538,13 +642,16 @@ about the force law.
   taking a capture. Input scripts now exist (above), so a scenario is a named,
   committed thing rather than "whatever was captured"; the save state is the other
   half of the protocol's fixed starting point and is not built.
-- **No capture taken through `--script` yet**, so the input phase
-  (`--script-lead`) is unmeasured. See "What is confirmed, and what is not".
-- **No cornering capture.** The reference scenario is a straight, where the
-  forward projection and the velocity's magnitude agree to 0.3 %. Everything the
-  speed columns above claim is therefore confirmed only in the regime where the
-  candidate readings nearly coincide; a capture through a corner, at real slip,
-  is what would settle them.
+- ~~**No cornering capture.**~~ Retired by the whole-lap capture above, which is
+  3,146 ticks of a real circuit at 90-164 units/s. The speed columns can now be
+  separated at real slip angles, which the reference straight could not do; that
+  analysis has **not been run**, and is the obvious next use of the file.
+- **The lap has not been replayed open-loop into the emulator.** The recording
+  and the capture are the same run by construction, which is a strength for the
+  comparison and leaves one thing unmeasured: whether feeding the committed file
+  back through `psp-trace.py --script --script-lead 2` from a fresh
+  `psp-drive.py restart` reproduces the same lap. It should - the restart puts
+  the craft on the same start position to seven digits - but it is untested.
 - Nothing compares a PSP capture against a PS2 one.
 - Shield, weapons, lap and race-position state are in the protocol's list of what
   gets traced and in neither the capture nor this tool: nothing downstream of the

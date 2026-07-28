@@ -290,6 +290,19 @@ either - `xdotool key F1` at the window produced no file under
 `~/.config/ppsspp/PSP/PPSSPP_STATE`. So the starting point is still the menu walk,
 and a capture still costs a countdown.
 
+**A reproducible starting point exists anyway, and it is not a save state.**
+`scripts/psp-drive.py restart` runs the pause-menu sequence below end to end -
+`start`, `down` x4, `cross` until the state actually leaves the pause menu, a
+sleep, `cross` to dismiss the track description, a sleep through the countdown -
+and hands back a stationary craft on the start line. Run three times on
+2026-07-28 it produced position `(6.07, -50.07, -196.10)` **every time, to every
+digit printed**, which is a fixed starting point in the only sense a scenario
+needs. What it is not is *fast*: it costs the 44 seconds of loading, description
+and countdown that a save state would skip. The two sleeps are sleeps rather than
+state polls because the front end's state name reads `InGame` for all of it -
+loading, description and countdown are not distinguishable through `0x08b31784`,
+so there is nothing to poll.
+
 What the API *does* have, and what is probably the better answer, is **input
 recording**:
 
@@ -310,6 +323,62 @@ breakpoint is unknown.
 For the record, since it is the obvious other idea: **there is no published
 Wipeout Pulse TAS** to borrow inputs from. PSP TASing through libtas exists and
 Wipeout *Pure* is mentioned as working, but no Pulse run was found.
+
+## Driving a whole race, and the three numbers that make it possible
+
+The "nobody wants to write 6,000 ticks of input by hand" problem above is solved,
+and not by input recording. There are now three ways to put input into a running
+Pulse, and picking the wrong one is what makes a lap look impossible:
+
+| Tool | How it drives | Emulator speed | Records |
+| --- | --- | --- | --- |
+| `psp-trace.py` | breaks every tick, sends at the breakpoint | ~0.37x | a full per-tick trace |
+| `psp-drive.py drive` | free-running, paced by the emulator's own clock | **1.00x** | a coarse progress log only |
+| `psp-autopilot.py` | breaks every tick, steers closed-loop off the spline | ~0.37x | a trace **and** the input it chose |
+
+Three measurements, all taken on PPSSPP v1.20.4 with `UCUS98712` on 2026-07-28:
+
+- **A breakpoint-driven tick costs about 45 ms**, so a capture runs at **18-22
+  ticks/s**, or 0.37x real time. That is the number the earlier "far below real
+  time" warning was pointing at, and stated as a rate it is far less alarming
+  than it sounds: a 200-tick reference capture takes 9 seconds, and **a whole lap
+  of Talon's Junction - 3,146 ticks - takes 2 minutes 22**. A three-lap Time
+  Trial is under eight minutes. Nothing about a lap needs a save state or an
+  overnight run.
+- **`cpu.status` is answered by the debugger's own thread and costs 0.1 ms
+  whether the CPU is running or not**, and its `ticks` field is the PSP cycle
+  counter. Dividing by `222e6 / 59.94` turns it into an emulated frame index, and
+  that is a *free* frame clock for a running emulator - which is what lets
+  `psp-drive.py` send a run-length script at 1.00x real time without ever
+  stopping the CPU. Measured: 900 ticks driven in 15.0 s with **zero** sends
+  landing late.
+- **A craft's address is not stable across a restart.** Two restarts gave
+  `0x09a0c270` and one gave `0x09a0c9c0`, from identical starting positions. Learn
+  it from one breakpoint hit per run and never cache it across one.
+
+### What tells you the race finished
+
+**`Ship_UpdateCraft` stops being called.** The breakpoint simply never fires
+again and the capture times out; that is a finished race rather than a hang, and
+`psp-autopilot.py` treats it as one.
+
+Everything else has to be read off the HUD, because `gpu.buffer.screenshot` does
+not work (above) and no lap counter has been located in memory. Screenshotting
+the window through the compositor at each lap boundary is what
+`psp-autopilot.py --shot-dir` does, and it is the only evidence in this tree that
+the *game* agrees a lap happened rather than the spline arithmetic agreeing with
+itself. On the committed lap it read **`Lap 2 of 3`, `best 1.11.08`** at tick
+3,087.
+
+**The game's own race clock does not run on emulated frames.** Two laps of nearly
+identical length - 3,069 and 3,087 ticks, both 51.2 s at 59.94 Hz - were timed by
+the game at `0.50.25` and `1.11.08`. Whatever it counts, it is not the frames the
+capture counts, and **no timing read off the HUD during a breakpoint-driven run
+means anything**. The lap *counter* is unaffected and is what to use.
+
+**A Time Trial that reaches its third lap starts a fresh attempt behind you**:
+the counter goes back to `Lap 1 of 3` and `best` clears. A run that keeps driving
+past the finish is therefore recording a second race, not more of the first.
 
 ## The reference scenario
 
