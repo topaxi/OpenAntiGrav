@@ -402,6 +402,46 @@ it is worth keeping: it is the crate reproducing none of the pitch response at
 all, which is what a coherent half-change looks like. The bottom row is with
 `engine::pitch` on the `+/-100` axis scale measured above.
 
+### The prediction, written down before the measurement
+
+Two corrections act on this term in opposite directions, and their product was
+predicted from the two readings alone before any replay was run: the axis scale
+makes the crate **100x weak**, the missing inertia makes it `15.6x` **strong**,
+so the drive should come out `100 / 15.6 = 6.41x` weak, and applying both should
+multiply the crate's pitch authority by exactly that. It is a property of the
+diff rather than of a fit - `steer_y * gain` reaching `omega` undivided, against
+`steer_y * 100 * gain` divided by `I_xx` - and the leading edge then lands at
+`0.991` and `0.986` times the original's own step response on two captures.
+**The correction was `6.41x` and the corrected term is right to `1 %`.** Nothing
+was tuned to reach it, and nothing could have been: neither factor has a free
+parameter.
+
+A reader comparing that against the top row of the table will notice it does not
+reconcile - the crate's pitch rate *before* reads `64x` the original's, not
+`6.4x` below it. **That number is not the drive**, and the scenario's own first
+38 ticks prove it rather than argue it, because they hold no input at all:
+
+| over the 38 input-free ticks | pitch rate rms | peak |
+| --- | ---: | ---: |
+| the original | `0.0000` | `0.0000` |
+| ours, before | `0.0655` | `0.2225` |
+| ours, after | `0.0010` | `0.0016` |
+
+The old crate **pitch-oscillated at rest with nothing held**, and that
+self-excitation is what the `8.68` rms is mostly made of. So the prediction is
+untouched by it, and there is a second result here that the pitch comparison was
+hiding: the momentum model also settles a resting craft, `65x` quieter against an
+original that is exactly still. The mechanism is the same one
+`oag_gameplay::spawn::box_inertia` documented for the unit tensor - a probe
+stiffness divided by too small a roll and pitch inertia, at a sub-step that
+explicit Euler grows - and the `<Misc>`-derived tensor it used instead was still
+`4.4x` light on roll.
+
+None of the fits on this page pair a *ramped* control column with a frame, so the
+one-tick lag [cornering-ground-truth.md](cornering-ground-truth.md) measures does
+not reach them: every number here is built from the basis rows, `dt`, and the two
+angular columns.
+
 **The drive magnitude is right to 1 %, and what is wrong is the return.** Over
 the twelve ticks of the leading edge of each step - before the attitude starts
 coming back - the recorded rate is `0.991` and `0.986` times ours on the two
