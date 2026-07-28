@@ -1198,6 +1198,27 @@ measured dead end.**
   kills the calling shell; a `memory.write` with an empty base64 payload
   kills the emulator outright.
 
+**`emu-harness`, probe-read addendum (live, Talon's Junction start line):
+the two "refuted" hover-geometry readings were RIGHT - the refutations were
+an arithmetic artifact.** Three words read at both `Ship_UpdateCraft` entry
+and `Ship_CastHoverProbes` entry on the same craft:
+
+- `craft+0x2f0 = 4.1250000` at both points - the spring target, stable,
+  not a stage of an in-place computation.
+- `craft+0xc0 = (0, -1.1250, +4.5)` and `craft+0xd0 = (0, -1.1250, -4.5)`
+  at cast time - **the vertical drop is stored in the field**, and the
+  front/rear pair confirms the recovered spacing.
+- `craft+0x308 = 2.8878` live - agreeing with `4.009 - 1.125 = 2.884` to
+  0.004. **The probes rest 1.237 COMPRESSED below the 4.125 target**, so
+  grounded==1.0 throughout needs no explaining; the "0.116 headroom" was
+  computed against a probe missing its drop, and an implementation that
+  collapses grounded is one that dropped the -1.125 or conflated the
+  ~4.0 *centre-height* resting reads with *probe distance*. Task #29's
+  brief carries the resolved geometry.
+- Also mapped in passing: the ~2.888 cluster (`+0x2f8`/`+0x308`/`+0x30c`,
+  with `+0x2fc = 1.0`) reads as the two probes' measured distances plus a
+  derived value; `craft+0xb0` is a scratch/output slot the cast fills.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
