@@ -5,6 +5,12 @@ Documentation is a deliverable here, and a docs tree quietly rots into broken
 cross-references faster than code does, because nothing compiles it. This runs
 in CI for the same reason clippy does.
 
+Both halves of a link are checked: the file path, and the `#fragment` after it.
+A fragment has to name a heading that actually exists in the target file, which
+is the half that used to rot silently - a heading gets reworded, every link into
+it keeps pointing at a slug nothing generates any more, and the build stays
+green.
+
 Links inside fenced code blocks are skipped: those are examples, not
 navigation.
 """
@@ -17,7 +23,20 @@ from pathlib import Path
 
 LINK = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 FENCE = re.compile(r"^\s*(```|~~~)")
+HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 SKIP_DIRS = {"target", ".git", "data"}
+
+MD_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+MD_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+CODE_SPAN = re.compile(r"(`+)(.+?)\1")
+HTML_TAG = re.compile(r"<[^>]+>")
+HTML_ID = re.compile(r"""<[^>]*\b(?:id|name)\s*=\s*["']([^"']+)["'][^>]*>""")
+TRAILING_HASHES = re.compile(r"\s+#+$")
+# What GitHub's slugger keeps: letters, digits, `_` (all of `\w`), plus `-` and
+# the spaces it is about to turn into hyphens. Everything else - `+`, `:`, `=`,
+# backticks, commas, brackets - is dropped, not replaced, so `body+0x160`
+# slugs to `body0x160` rather than `body-0x160`.
+SLUG_DROP = re.compile(r"[^\w\- ]", re.UNICODE)
 
 
 def strip_code_fences(text: str) -> list[tuple[int, str]]:
@@ -33,16 +52,85 @@ def strip_code_fences(text: str) -> list[tuple[int, str]]:
     return out
 
 
+def render(heading: str) -> str:
+    """The text a heading displays, with its inline markup resolved.
+
+    An image becomes its alt text, a link becomes its label, and inline HTML
+    contributes nothing. A code span is the exception on both counts: its
+    contents are literal, so `` `<Misc>` `` displays the angle brackets rather
+    than being mistaken for a tag and dropped.
+    """
+    out = []
+    position = 0
+
+    for span in CODE_SPAN.finditer(heading):
+        out.append(_render_markup(heading[position : span.start()]))
+        out.append(span.group(2))
+        position = span.end()
+
+    out.append(_render_markup(heading[position:]))
+    return "".join(out)
+
+
+def _render_markup(text: str) -> str:
+    text = MD_IMAGE.sub(r"\1", text)
+    text = MD_LINK.sub(r"\1", text)
+    return HTML_TAG.sub("", text)
+
+
+def slug(heading: str) -> str:
+    """The anchor GitHub generates for a heading, before de-duplication."""
+    return SLUG_DROP.sub("", render(heading).lower()).replace(" ", "-")
+
+
+def anchors(text: str) -> set[str]:
+    """Every fragment the given Markdown file can be linked to.
+
+    Two sources: the slug of each heading, and any explicit `id=`/`name=` on
+    inline HTML, which docs use to keep a short stable anchor across rewordings.
+    Repeated heading slugs get GitHub's `-1`, `-2`, ... suffixes, in document
+    order.
+    """
+    found: set[str] = set()
+    seen: dict[str, int] = {}
+
+    for _, line in strip_code_fences(text):
+        for match in HTML_ID.finditer(line):
+            found.add(match.group(1))
+
+        heading = HEADING.match(line)
+        if not heading:
+            continue
+
+        base = slug(TRAILING_HASHES.sub("", heading.group(2)))
+        if not base:
+            continue
+
+        count = seen.get(base, 0)
+        seen[base] = count + 1
+        found.add(base if count == 0 else f"{base}-{count}")
+
+    return found
+
+
 def is_external(link: str) -> bool:
-    return link.startswith(("http://", "https://", "mailto:", "#"))
+    return link.startswith(("http://", "https://", "mailto:"))
 
 
 def check(root: Path) -> list[str]:
     problems = []
+    anchor_cache: dict[Path, set[str]] = {}
+
+    def anchors_of(path: Path) -> set[str]:
+        if path not in anchor_cache:
+            anchor_cache[path] = anchors(path.read_text(encoding="utf-8"))
+        return anchor_cache[path]
 
     for md in sorted(root.rglob("*.md")):
         if SKIP_DIRS & set(md.parts):
             continue
+
+        rel = md.relative_to(root)
 
         for number, line in strip_code_fences(md.read_text(encoding="utf-8")):
             for match in LINK.finditer(line):
@@ -50,10 +138,20 @@ def check(root: Path) -> list[str]:
                 if is_external(raw):
                     continue
 
-                target = (md.parent / raw.split("#", 1)[0]).resolve()
+                path, _, fragment = raw.partition("#")
+                target = md if path == "" else (md.parent / path).resolve()
+
                 if not target.exists():
-                    rel = md.relative_to(root)
                     problems.append(f"{rel}:{number}: broken link -> {raw}")
+                    continue
+
+                # Only Markdown has headings to point at; a link into an image
+                # or a source file carries no fragment this can resolve.
+                if not fragment or target.suffix != ".md":
+                    continue
+
+                if fragment not in anchors_of(target):
+                    problems.append(f"{rel}:{number}: broken anchor -> {raw}")
 
     return problems
 

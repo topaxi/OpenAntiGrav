@@ -210,7 +210,7 @@ a contradiction that needs resolving here.
 packing documented above covers a 2,048-unit window, while collision vertices
 reach 1,335.8 on PSP and 1,554.1 on PS2 in world space. That was recorded here as
 "both readings cannot be right". It has since been measured exhaustively - see
-[the survey of all 16 tracks](../../../formats/collision.md#the-broadphase-does-not-pack-world-space-a-survey-of-all-16-tracks),
+[the survey of all 16 tracks](../../../formats/collision.md#resolved-the-broadphase-clamps-world-space-rather-than-rebasing-it),
 which holds the per-track table and the evidence - and the measurement says the
 *geometry* is not at fault:
 

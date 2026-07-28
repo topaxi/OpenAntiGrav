@@ -245,7 +245,7 @@ wrong inference.** `Body_Integrate` (`0x0884e230`) ends with
 
 so `+0x398` **is** the speed, by construction, from the same vector it stores as
 the velocity. Confidence **90**; see
-[rigid-body.md](rigid-body.md#bodyx398-is-linear-velocity). The 4 % is therefore
+[rigid-body.md](rigid-body.md#body0x398-is-linear-velocity). The 4 % is therefore
 not evidence against the identity - it means something changes the velocity
 between the integrator's last store and the point a trace samples it, which is
 the same `1.0367` factor

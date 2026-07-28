@@ -337,7 +337,7 @@ Three parts of it are read off the original, and the rest is not:
   **sentinel meaning "never bounce"**, not a coefficient - implementing the
   literal would add energy on every contact - so it is carried as `Option<f32>`
   and combined by a rule that forces zero when either side is a sentinel. See
-  [collision.md](../formats/collision.md#surface-types-and-the-restitution-sentinel).
+  [collision.md](../formats/collision.md#surface-types-and-the-friction-sentinel).
 - **Contact generation is box-against-triangle**, as
   [the RE page](../ghidra/functions/psp-pulse/collision.md#raycasts) records.
 

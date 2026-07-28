@@ -192,7 +192,7 @@ with a warning and the collision view still draws.
 
 Per class: node, mesh and triangle counts, and the extent on each axis. The
 extents are the interesting part, and they are what produced
-[the survey of all 16 tracks](../formats/collision.md#the-broadphase-does-not-pack-world-space-a-survey-of-all-16-tracks):
+[the survey of all 16 tracks](../formats/collision.md#resolved-the-broadphase-clamps-world-space-rather-than-rebasing-it):
 the sweep-and-prune reading packs a 2,048-unit window, and this tool measures the
 shipped geometry against it. It prints two numbers per file, and flags each
 against its own bound:

@@ -457,7 +457,7 @@ plausible-looking number would be indistinguishable from a recovered one later.
   the resulting equilibrium whichever quantity the accumulator turns out to hold.
 - **The alignment gain and the roll damping are marginally unstable together**, by 11 % at
   the specified sub-step; see
-  [the arithmetic above](#a-numeric-prerequisite-for-m3-found-while-implementing-this).
+  [the arithmetic above](#a-numeric-prerequisite-for-m3-found-while-implementing-this---and-since-resolved).
 - **Nothing recovered can hold an inverted ship.** Gravity writes world `.y` only,
   `track_gravity` reaches the force law solely through the hover spring's *magnitude*, and
   the hover spring always pushes the ship *away* from the surface it found. So the

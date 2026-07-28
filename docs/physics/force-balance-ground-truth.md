@@ -475,7 +475,7 @@ This is the finding, and it is why enumerating the force path could never have
 found the mechanism.
 
 `speed` is `body+0x398`, which
-[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#bodyx398-is-linear-velocity)
+[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#body0x398-is-linear-velocity)
 shows `Body_Integrate` writes as `sqrt(dot(v, v))` **from the same register it
 stores as the velocity**, four instructions apart. The two are the same number by
 construction. So whenever a trace samples `speed` above `|velocity|`, something

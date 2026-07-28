@@ -197,7 +197,7 @@ So the per-axis factor this page fitted is the diagonal of `I`, the negative sig
 is the `w_game = -w_physics` convention, and the roadmap's "do the angular
 accumulators hold torque or angular acceleration" is answered: **torque**.
 Confidence **88**; evidence in
-[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#bodyx160-is-angular-momentum-bodyx40-is-the-inverse-inertia-tensor).
+[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#body0x160-is-angular-momentum-body0x40-is-the-inverse-inertia-tensor).
 
 ## The tensor's writer is now read, and the constant is retired
 
