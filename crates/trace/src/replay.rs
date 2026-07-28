@@ -16,10 +16,16 @@
 //!
 //! # What cannot be replayed, and is not faked
 //!
-//! - **Angular velocity is not in the capture.** A run therefore starts with the
-//!   ship's rotation at rest, whatever the original was doing. On a capture that
-//!   begins in a corner this alone will diverge the orientation, so start captures
-//!   on a straight.
+//! - **Angular velocity is in the capture only if the capture is a recent one.**
+//!   A trace with the `avel_*` columns seeds the body's rotation from its first
+//!   row like every other initial condition; one taken before those columns
+//!   existed starts the ship's rotation at rest, whatever the original was doing,
+//!   and on a capture that begins in a corner that alone will diverge the
+//!   orientation. Nothing is faked in for the older case - see
+//!   [`crate::trace::REQUIRED_COLUMNS`] - so a capture that begins in a corner
+//!   still wants re-taking rather than a zero.
+//!   **Which reading of the column is right is open**, so it is an option:
+//!   [`crate::trace::AngularReading`].
 //! - **Pitch is not in the capture** either: the craft's control block holds
 //!   `steer` but no second axis, so [`oag_physics::ShipControls::steer_y`] is
 //!   always zero here.
@@ -44,7 +50,7 @@ use oag_gameplay::{InputSnapshot, Ship, World, ship_controls};
 use oag_physics::controls::CONTROL_RANGE;
 use oag_physics::{Environment, Handling, Raycaster, ShipState};
 
-use crate::trace::{Frame, Trace};
+use crate::trace::{AngularReading, Frame, Trace};
 
 /// The world's generator seed.
 ///
@@ -151,6 +157,9 @@ pub struct Options {
     pub dt: DeltaSource,
     /// How the recorded basis maps onto the body's axes.
     pub basis: Basis,
+    /// What the recorded angular-velocity column means, which decides both how
+    /// the body's rotation is seeded and how ours is written back out.
+    pub angular: AngularReading,
 }
 
 /// The ship state a recording's first row describes.
@@ -161,8 +170,17 @@ pub struct Options {
 /// job, which here is this function. The inertia is left at its default, which is
 /// the same known gap `oag_game::race` records - nothing in the ship data says
 /// how the original builds a tensor.
+///
+/// The body's rotation is seeded too, when the recording carries one: a capture
+/// without the `avel_*` columns leaves it at rest, which is what every run did
+/// before those columns existed.
 #[must_use]
-pub fn initial_state(frame: &Frame, handling: &Handling, basis: Basis) -> ShipState {
+pub fn initial_state(
+    frame: &Frame,
+    handling: &Handling,
+    basis: Basis,
+    angular: AngularReading,
+) -> ShipState {
     let mut state = ShipState {
         thrust: frame.throttle,
         brake: frame.brake,
@@ -177,6 +195,9 @@ pub fn initial_state(frame: &Frame, handling: &Handling, basis: Basis) -> ShipSt
     state.body.position = frame.position;
     state.body.linear_velocity = frame.velocity;
     state.body.orientation = orientation_of(frame, basis);
+    if let Some(recorded) = frame.angular_velocity {
+        state.body.angular_velocity = angular.to_world(recorded, frame.rows());
+    }
     state
 }
 
@@ -241,7 +262,7 @@ pub fn replay<R: Raycaster + ?Sized>(
 
     let mut world = World::new(SEED);
     world.ships[0] = Ship {
-        physics: initial_state(first, handling, options.basis),
+        physics: initial_state(first, handling, options.basis, options.angular),
         handling: *handling,
         segment: 0,
         active: true,
@@ -271,7 +292,7 @@ pub fn replay<R: Raycaster + ?Sized>(
             first.tick + index as u64,
             dt,
             speed_cached,
-            options.basis,
+            options,
         ));
         speed_cached = state.body.linear_velocity.dot(state.body.forward());
 
@@ -293,10 +314,26 @@ pub fn replay<R: Raycaster + ?Sized>(
 }
 
 /// One tick of our state, in the recording's columns.
-fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, basis: Basis) -> Frame {
+///
+/// The angular velocity is written back in the recording's own convention rather
+/// than ours, so the comparison happens in the recorded column's space and no
+/// recorded number is reinterpreted on the way in. `timer_2e0` is `None` because
+/// nothing in [`ShipState`] models that gate - it is captured so a recording can
+/// say which of the two engine gates fired, and a field we do not simulate is
+/// reported as not compared rather than as agreement.
+fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &Options) -> Frame {
     let body = &state.body;
-    let (row0, up, forward) = basis.to_rows(body.right(), body.up(), body.forward());
+    let (row0, up, forward) = options
+        .basis
+        .to_rows(body.right(), body.up(), body.forward());
     Frame {
+        angular_velocity: Some(
+            options
+                .angular
+                .to_recorded(body.angular_velocity, (row0, up, forward)),
+        ),
+        stun_timer: Some(state.stun_timer),
+        timer_2e0: None,
         tick,
         dt,
         grounded: state.grounded,

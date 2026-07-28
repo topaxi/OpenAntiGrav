@@ -27,6 +27,7 @@ use oag_gameplay::{collision_world, handling_for};
 use oag_physics::{CollisionWorld, Environment, Handling, SpeedClass};
 use oag_trace::compare::Tolerances;
 use oag_trace::replay::{Basis, DeltaSource, Held, Inputs, Options};
+use oag_trace::trace::AngularReading;
 use oag_trace::{Script, Trace, compare, replay};
 
 /// The track a recording is assumed to have been taken on unless another is
@@ -114,6 +115,14 @@ enum Command {
         /// How the recorded basis maps onto the body's axes.
         #[arg(long, value_enum, default_value_t = BasisArg::LeftUpForward)]
         basis: BasisArg,
+        /// What the recorded angular-velocity column means.
+        ///
+        /// Both the sign and the frame are open questions - see
+        /// `oag_trace::trace::AngularReading` - so this is a switch, and
+        /// `oag-trace show` scores all four readings against the recording's own
+        /// basis derivative without needing a run at all.
+        #[arg(long, value_enum, default_value_t = AngularArg::NegatedLocal)]
+        angular: AngularArg,
         /// Ignore the track's collision geometry: a ship with nothing to hover on.
         #[arg(long)]
         no_collision: bool,
@@ -161,6 +170,32 @@ impl From<BasisArg> for Basis {
         match value {
             BasisArg::LeftUpForward => Self::LeftUpForward,
             BasisArg::RightUpBack => Self::RightUpBack,
+        }
+    }
+}
+
+/// What the recorded angular-velocity column holds: a sign and a frame, both
+/// open. See `oag_trace::trace::AngularReading`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum AngularArg {
+    /// Body-local components, negated. The default, from the PS2 sign result and
+    /// the PS2 page's name for the field.
+    NegatedLocal,
+    /// Body-local components, in the physical sign.
+    Local,
+    /// World space, negated.
+    NegatedWorld,
+    /// World space, in the physical sign.
+    World,
+}
+
+impl From<AngularArg> for AngularReading {
+    fn from(value: AngularArg) -> Self {
+        match value {
+            AngularArg::NegatedLocal => Self::NegatedLocal,
+            AngularArg::Local => Self::Local,
+            AngularArg::NegatedWorld => Self::NegatedWorld,
+            AngularArg::World => Self::World,
         }
     }
 }
@@ -249,6 +284,7 @@ fn main() -> Result<()> {
             airbrake_right,
             fixed_dt,
             basis,
+            angular,
             no_collision,
             tolerances,
         } => run(RunArgs {
@@ -265,6 +301,7 @@ fn main() -> Result<()> {
             airbrake_right,
             fixed_dt,
             basis,
+            angular,
             no_collision,
             tolerances,
         }),
@@ -293,6 +330,7 @@ struct RunArgs {
     airbrake_right: Option<f32>,
     fixed_dt: bool,
     basis: BasisArg,
+    angular: AngularArg,
     no_collision: bool,
     tolerances: ToleranceArgs,
 }
@@ -335,6 +373,7 @@ fn run(args: RunArgs) -> Result<()> {
             DeltaSource::Trace
         },
         basis: args.basis.into(),
+        angular: args.angular.into(),
     };
     if args.fixed_dt {
         eprintln!(

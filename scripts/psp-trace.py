@@ -51,12 +51,29 @@ CRAFT_BYTES = 0x400
 BODY_POINTER = 0x1CC
 
 # Offsets into the craft, from engine.md.
+#
+# `stun_timer` and `timer_2e0` are the two gates on `Ship_UpdateEngine`'s early
+# return (`0x0884c634`, confidence 88): with flag `0x200` clear, either one above
+# zero means **no thrust and a zeroed throttle state** for that frame.
+# `craft+0x290` is the collision stun timer - `Ship_ApplyCollisionImpulse`
+# (`0x0883f274`) arms it with `+= 0.5` on a hit and `Ship_ApplyLateralGrip`
+# (`0x08848b78`) returns early while it runs, so a stunned craft also slides
+# (confidence 85). `craft+0x2e0`'s arming condition has never been read, so it
+# keeps its offset for a name rather than a guess dressed as one - engine.md's
+# own suggestion is that it fits a capture taken near a race start.
+#
+# engine.md asks for exactly these two columns by name: without them a capture
+# cannot say whether the gate fired at all, and the force-balance argument that
+# the missing "12x of resistance" is really thrust the original never applied
+# stays an inference. They are also the cheapest wall-contact indicator the
+# already-documented fields offer.
 CRAFT_FIELDS = [
     ("dt", 0x1C8),
     ("grounded", 0x2B0),
     ("throttle", 0x2B8), ("brake", 0x2BC), ("steer", 0x2C0),
     ("airbrake_l", 0x2C4), ("airbrake_r", 0x2C8),
     ("speed_cached", 0x2EC),
+    ("stun_timer", 0x290), ("timer_2e0", 0x2E0),
 ]
 
 # Offsets into the rigid body, measured at runtime by diffing successive frames.
@@ -84,6 +101,23 @@ CRAFT_FIELDS = [
 # there yet.
 #
 # Both columns are recorded; neither is assumed.
+#
+# `avel_*` at +0x160 is the **angular velocity**, on two independent legs, one per
+# binary. PSP: `Body_ClearVelocity` (`0x0884da5c`) zeroes `body+0x140` and
+# `body+0x160` and nothing else, and `+0x140` is the linear velocity already
+# verified here - velocity times the frame time reproduces the position delta to
+# 0.007 units per tick. PS2: `Ship_ApplyAngularDamping` (`0x0015c1b0`) reads
+# `body+0x160` as the angular velocity it damps, per
+# `docs/ghidra/functions/ps2-pulse/craft-update.md`.
+#
+# **Its sign and its frame are both open, and the raw value is what is recorded.**
+# The PS2 page names it `angularVelocityLocal` but lists "which frame `body+0x150`
+# and `body+0x160` are each expressed in" as unresolved, and the same page's
+# `w_game = -w_physics` result says the engine's angular velocity is the negative
+# of the physical one. Nothing is negated or rotated on the way out of memory;
+# `oag_trace::trace::AngularReading` is where the four readings are enumerated,
+# and a capture's own basis rows settle which one it is - see
+# `Summary::angular_readings`, which needs no simulation to run.
 BODY_FIELDS = [
     ("right_x", 0x000), ("right_y", 0x004), ("right_z", 0x008),
     ("up_x", 0x010), ("up_y", 0x014), ("up_z", 0x018),
@@ -91,6 +125,7 @@ BODY_FIELDS = [
     ("pos_x", 0x030), ("pos_y", 0x034), ("pos_z", 0x038),
     ("vel_x", 0x140), ("vel_y", 0x144), ("vel_z", 0x148),
     ("speed", 0x398),
+    ("avel_x", 0x160), ("avel_y", 0x164), ("avel_z", 0x168),
 ]
 
 

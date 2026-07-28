@@ -69,6 +69,59 @@ All of them apply to a race started from the front end as well, since it is the 
 race. `--class` in particular is parsed before anything is loaded, so a misspelling
 is not discovered eight seconds of intro later.
 
+## Either disc
+
+The first positional argument is any Pulse source, and that now includes the PS2
+release:
+
+```sh
+just play data/images/pulse-ps2-eu.chd --race
+just play data/images/pulse-ps2-eu.chd --race --screenshot /tmp/ps2.png --ticks 60 --hold cross
+```
+
+Nothing else about the command changes, and that is the finding rather than a
+convenience: **the archive layout was the whole of the difference.** The entry
+names are not per-platform - the PS2 disc carries
+`Data\Ships\<Team>\handlingstats.xml` and `Data\Environments\<n>_Track\track.vex`
+under the names the PSP uses - the [handling schema is the same one](../formats/handling-stats.md#the-ps2-release-ships-the-same-schema),
+and the mesh and collision decoders already read both. So `--track` and `--team`
+mean the same thing on either source, and no flag selects a platform.
+
+What the game used to do instead was spell the PSP's layout out:
+`PSP_GAME/USRDIR/Data.wad`, hardcoded, so the PS2 disc failed at the first read.
+`oag_assets::pulse::Layout` replaced that. It looks at the source's own file list
+and takes the first archive it recognises, `Data.wad` or `WADS2.WAD`, plus the
+companion beside it, `FE.wad` or `WADSP.WAD`. **Found by name, not derived from
+the platform**, which matters because the PS2 archives sit in a directory named
+after the disc's serial - `54748/` on SCES-54748 - so a path constant would be
+right for one pressing and wrong for the next. The reported platform comes from
+[`oag-disc`'s identification](../ps2/pulse-disc-layout.md) and is used for the
+report line and the error text, never to choose a decoder.
+
+Two things are genuinely worse on the PS2 source, and both say so rather than
+being papered over.
+
+**Models draw untextured.** A PS2 `.vex` declares a texture block of length zero:
+its textures are separate archive entries gathered into a nested WAD of Graphics
+Synthesizer upload packets, and which entry belongs to which model is not
+recovered. The decoder exists - `oag-view --mesh ... --textures <entry>` skins one
+by hand, see [ps2-texture](../formats/ps2-texture.md) - so what is missing is the
+lookup. The load report names each model that arrived with no textures, and
+nothing guesses at a set to avoid printing that line.
+
+**The intro reel has no picture.** The PS2 ships no `.PMF` in any archive at all;
+its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream loose in the ISO
+filesystem, with `.IPF` beside it for the Image Processing Unit. Neither is
+decoded and neither is addressable as an archive entry, so `--movie` has nothing
+to name and the front end runs without a picture, the same path `--no-video`
+already took. Whether the front end gets further than that depends on whether the
+front-end root XML is in `WADS2.WAD` under the name the PSP uses, which has not
+been checked; if it is not, the failure names the archive it searched.
+
+Expect a race to load more slowly off the PS2 disc. 5,861 of `WADS2.WAD`'s 7,200
+entries are [LZSS](../formats/lzss.md) where no PSP archive compresses anything,
+and the track blob is still decompressed twice (see [below](#two-things-oag-render-could-grow)).
+
 `--dry-run` is worth knowing about on its own: it prints what came off the disc,
 including the values this mode has to make an assumption about, so the assumptions
 can be checked against the numbers rather than taken on trust.

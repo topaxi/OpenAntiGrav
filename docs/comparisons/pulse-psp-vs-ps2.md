@@ -53,6 +53,15 @@ header shape, so the container survived the port.
 `PS2MUSIC.WAD` and `PRERACE.WAD` do not. Different headers, and in
 `PRERACE.WAD`'s case an entropy of 0.084, meaning 85 MiB of near-uniform bytes.
 
+**The archive layout is the only difference `oag-game` had to be taught.** It now
+finds a source's bulk archive by name - `Data.wad` or `WADS2.WAD` - and runs the
+same race off either disc with the same `--track` and `--team`, because the entry
+names, the handling schema and the mesh and collision decoders are already shared.
+`oag_assets::pulse::Layout` is where that lives, and the PS2 archives are found by
+name rather than by path because they sit in a directory named after the disc's
+serial. See [oag-game](../tools/oag-game.md#either-disc) for what is still worse on
+the PS2 source - untextured models, and no intro picture.
+
 Whether these are new formats or the same data reorganised is unknown.
 
 ## Questions to resolve

@@ -54,6 +54,10 @@ use winit::window::{Window, WindowId};
 )]
 struct Cli {
     /// A disc image, or a directory extracted with `oag-unpack`.
+    ///
+    /// Either release: the archives are found by name, so
+    /// `data/images/pulse-ps2-eu.chd` works as well as the PSP default. See
+    /// `oag_assets::pulse::Layout`.
     #[arg(default_value = "data/images/pulse-psp-usa.chd")]
     source: String,
 
@@ -148,7 +152,8 @@ struct Cli {
     #[arg(long)]
     race: bool,
 
-    /// The track's `.vex` entry name in `Data.wad`, for either way into a race.
+    /// The track's `.vex` entry name, for either way into a race. The same name
+    /// on both releases.
     #[arg(long, default_value = race::DEFAULT_TRACK)]
     track: String,
 
