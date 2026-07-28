@@ -1168,6 +1168,36 @@ a named, implementable design.** Evidence: engine.md's new section.
   is thereby also EXCLUDED as a candidate for #29's missing ~4.9 pitch
   damping. The two are independent mechanisms on independent evidence.
 
+**`emu-harness`, second task (Task #21, commit "psp-trace: implement
+self-anchoring pose trigger for consistent starts"): the start pose is
+pinned - heading spread 4.35 deg -> 0.0001 deg - and the replay API is a
+measured dead end.**
+
+- **The premise was wrong, and that was the fix**: the craft on the start
+  line is not settling - it yaws at a constant `0.3109 deg/s` (identical
+  to four digits across three restarts), so the old 2.51-degree spread was
+  ~8 s of wall-clock jitter in the process handover, and waiting longer
+  makes it worse (why settle-detection would have failed).
+  `psp-trace.py --start-heading DEGREES` self-anchors: discard breakpoint
+  ticks until `atan2(fwd.x, fwd.z)` passes the target, record tick 0
+  there. No shared frame counter, no save state, no memory write, no game
+  behaviour claimed. Measured with deliberate 0/6/14 s jitter: heading
+  spread 0.0001 deg, position spread 0.0022 units (one tick of the
+  craft's own creep). Passes through `just scripted-emu` unchanged.
+  **Stated scope: a necessary condition demonstrated, not sufficient for
+  a 3,146-tick open-loop lap - that re-run has not been done.**
+- **PPSSPP's replay API is closed as an option, with the crash signature
+  recorded**: `replay.begin`/`.status` answer and short flushes return a
+  real 17-byte-per-item stream, but **`replay.flush` crashes PPSSPP
+  v1.20.4 whenever the recording spans a screen transition**
+  (`stl_vector.h:1272` assertion, three reproductions) - so the record
+  half cannot produce an executable blob. Upstream bug, not fixable here.
+- New traps: `psp-drive.py restart` fails ~1 in 3 with a transient
+  `Invalid address` (craft read while the race loads - retry); `pkill -f
+  PPSSPPSDL` inside a shell command whose own text contains that string
+  kills the calling shell; a `memory.write` with an empty base64 payload
+  kills the emulator outright.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
