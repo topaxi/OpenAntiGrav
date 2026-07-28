@@ -1260,6 +1260,53 @@ claim rests on added across nine format pages.
   tool bug**: `oag-view --collision` panics on an empty vertex buffer for
   any file with no recognised collision class (Task #31).
 
+**`maglock` (Task #30, commit `f4cc73d`): the mag-lock attitude hold is
+implemented kinematically, the axis source is settled at 90, and the
+validation independently re-locates the magstrip from pure geometry.**
+
+- **`section+0xB10` is `SplinePt.down`** - the unit vector INTO the
+  surface, so the hold's axis is the track's surface normal (70 -> 90 on
+  five independent legs, engine.md's new subsection). What it is a field
+  OF also changed: `entity+0xaf0`/`+0xb60` are two `SplinePt`-shaped
+  records filled per tick by `AiTrack_LocatePosition`. **Two load-bearing
+  corrections to the earlier reading**: the blend weights are HEIGHT
+  agreement (`1 - |d_i - h|` against the mag ray's own hit), not path
+  distance; and there is an unrecorded fallback - `|h - d| > 5.0`
+  abandons the spline for the ray's own normal and hit point.
+- Implemented in new `crates/physics/src/maglock.rs`, kinematic
+  throughout: the surface-type-3 probe, the 0.2/frame ramp (per frame, no
+  dt - confirmed), the two-sample height-weighted axis blend with its
+  fallback, the reposition, the velocity projection, and the basis
+  rewrite in the binary's operation order with the row-0-is-left sign
+  carried through. **No accumulator touched - pinned by a test asserting
+  force/torque/angular_velocity byte-identical across a hold that visibly
+  rotates the basis.** `Environment` gains `track_sample`/`_next` and
+  loses `track_up`.
+- **Validation (`maglock_ground_truth.rs`, one-tick seeded over the omega
+  lap's inverted stretch)**: 91 % of inverted poses have `Mag Floor`
+  under them vs 0.3 % of upright ones - **the probe re-finds the magstrip
+  from geometry that knows nothing about the capture**, the strongest
+  single result. The residual reproduces cornering-ground-truth's number
+  independently (1.254 vs 1.186 rad/s), and the hold explains
+  **0 % -> 49.5 %** of it with nothing fitted. The remaining magnitude
+  (fitted scale 0.383) points at the LOCATOR, not the hold: full blend
+  snaps in one tick while the original sits 2.07 deg off its axis -
+  either blend < 1 there, or our 4-per-segment resampled spline is not
+  the original's evaluated curve. Not tuned, deliberately.
+- **Caveat that cost real time: the recorded basis columns must be read
+  as Left-Up-Forward** - taken at their column names the recorded basis
+  is a reflection and the residual reads 32 rad/s instead of 1.25.
+- **`oag-trace` cannot exercise the hold yet** - replay/drive take one
+  `Environment` per run and the samples change per tick, so a replay's
+  blend is 0 by construction (which is also why the seeded lap comparison
+  is provably unchanged by this commit). Task #33 carries the per-tick
+  locator plumbing plus the locator-fidelity lead above.
+- Docs: engine.md (axis subsection, corrections, measurement table),
+  track.md (`SplinePt` confirmed from the consumer side; the `+0x18`
+  header word now carries the Pure divergence - 1 in Pulse, 0 on all 16
+  Pure tracks), physics/README.md (the hold moves to implemented;
+  "nothing can hold an inverted ship" now says why there is no force).
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything

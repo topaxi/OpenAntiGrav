@@ -115,7 +115,7 @@ struct AiTrackHeader {      // 0x20 bytes
     u32       junction_count;
     Path     *paths;        // zero on disc, patched at load
     Junction *junctions;    // zero on disc, patched at load
-    u32       always_1;
+    u32       always_1;     // +0x18: 1 in Pulse, 0 on all 16 Pure tracks
     u32       always_0;
 };
 ```
@@ -137,6 +137,18 @@ arrays are positioned by a rule, and the rule is:
 junctions, then points — is right about the *order* and wrong by 32 bytes,
 because for version `0x101` and up the loader claims a second `0x20`-byte block
 and hands its address to the track object before it reads the paths.
+
+**A third corpus closes under the same layout: Wipeout Pure.** The
+[Pure smoke probe](pure-status.md#reported-elsewhere) found `WO Track` nodes in
+**16** Pure `.vex` files - under class ID `0x36d`, because Pure renumbers the
+whole class table, at version `0x103` against Pulse's `0x105` - and
+`encoded_len() == payload.len()` holds **exactly 16 of 16**, the same closure
+that settled the layout on Pulse's 40. Both versions take the `>= 0x101` reserved
+block, so the one structural trap on this page is exercised by two titles rather
+than inferred from one. **One divergence, in the header**: the `+0x18` word
+recorded above as always `1` reads `0` on all 16 Pure tracks (re-checked against
+a Pulse track, which reads `1`), so it is "1 in Pulse, 0 in Pure" - a title- or
+version-dependent flag rather than a constant of the format.
 
 Reading the paths at `+0x20` on a `0x105` file lands one field early. It does not
 look like an offset error: it looks like a subtly wrong struct, putting plausible
