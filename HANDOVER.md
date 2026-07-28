@@ -1004,6 +1004,61 @@ the wins and the one regression.** Gate 824 tests; `just test-data`
   captured yet, and contact generation remains the M4 trace-convergence
   gap.
 
+**`contact-gen` (Task #27, commit `919526d`): contact generation is
+recovered and implemented - the seeded lap error drops 75 % and the
+open-loop lap is back on the track for its whole length.** Gate 826 tests;
+`just test-data` 870/870; determinism reference untouched and passing.
+
+- **What becomes a contact, read end to end (conf 85-90)**: the HULL BOX,
+  not the hover probes. `Collision_BoxAgainstMesh` casts a **ten-ray star
+  from the box centre** - the 8 corners plus a left/right pair `length/8`
+  ahead at full half-width (wall-scrape probes) - through
+  `Collision_SegmentHitsTriangle`, gated `dot(centre - sample, n) > 0`
+  (**walls are single-sided**; a back-facing winding is rejected, not
+  flipped). `contact+0x00` is the SAMPLE point, not the intersection (a
+  penetration depth apart - load-bearing now there is a lever arm); a
+  contact exists only while `-2.0 < depth < 0`; contacts resolve in
+  ascending array order against the live body (capacity 128, no dedup);
+  the measured scrape bound says one contact per frame on a wall rub.
+- **Two resolution quirks found and implemented literally**:
+  `body+0x394 = 0.1` scales only the angular *application* while the
+  denominator carries full angular compliance (soft in translation, stiff
+  in rotation - applying either half without the other is worse than
+  neither), and the denominator applies the BODY-space inverse tensor to a
+  WORLD-space `cross(r, n)` - a real original quirk (up to 38 % different
+  from the textbook form on a pitched craft), conf 90 both.
+- **Validation**: seeded lap position max err `4.045e3 -> 1.012e3` (rate
+  of growth 1.028 -> 0.209/tick), velocity/speed/angular all now BOUNDED,
+  `stun_timer` exact on all 3,146 ticks; `just scripted-sim` restored to
+  **3145/3146 grounded, worst off-spline 43.9** (the tick-742 crest
+  departure fixed; the tick-75-313 grounded-drop window closed). oag-physics
+  177 tests.
+- **One behaviour corrected beyond the brief, evidence first**: `wall.rs`
+  armed the collision stun from TRACK contacts; the original does not -
+  `Ship_ApplyCollisionImpulse` is gated on a pending impulse vector the
+  contact path never writes (`Body_RecordContact`'s ring feeds only
+  camera/audio amplitude code), and `stun_timer` reads 0.0 on all 3,446
+  recorded ticks across both captures. Arming removed; the timer, the
+  constant and the engine gate stay (nothing arms them yet, like
+  `leap_timer`); three old tests replaced by one, deletions named in its
+  doc comment. This is what un-collapsed open-loop progress (the first
+  implementation had the engine dead 65 % of the race).
+- **Still open and stated**: open-loop progress is 2,792 units vs the
+  known-healthy 4,151 - the craft stays on but rubs walls and tops out at
+  119.8 vs the original's 171.6 u/s; read as the open-loop scenario's own
+  limitation (Task #21's territory) compounding with real contact
+  friction, and the *seeded* comparison improved on every field.
+  Deliberate divergences documented: `facing()` still flips back-facing
+  normals; the swept pass still applies an impulse where the original only
+  repositions; floors generate no contacts. Unread: `0x0884ef30`
+  (two-body resolver), the `+0xb8 == 6` zero-friction class, and the
+  writer of the pending impulse at `entity->0x4c + 0x110` - the next step
+  for wiring the stun back up for ship-to-ship.
+- Bookkeeping: 10 new names applied and saved;
+  `names.tsv`'s pre-existing `Body_SetOrientation` row lacked its evidence
+  line on rigid-body.md (the naming agent had shut down) - added
+  centrally; `apply-ghidra-names.py --dry-run` is 198/0/0.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything

@@ -314,6 +314,11 @@ not obvious and both matter:
   `Body_SetMass` is six instructions that touch only `+0x374`/`+0x378`. Nothing
   recomputes `+0x40`. So the craft's rotational inertia is decoupled from its
   translational mass for the whole race.
+- **`Body_SetOrientation` (`0x0884d868`, confidence 88)** was read while
+  excluding candidate tensor writers: it stores the basis and refreshes the
+  cached transpose, and touches nothing else - in particular not `+0x40`.
+  Named during that exclusion sweep; recorded here so the rename carries its
+  evidence.
 
 #### It agrees with the captures, and the agreement picks out the mass
 
