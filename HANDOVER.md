@@ -219,10 +219,12 @@ narrower question, the docs debt is paid, and `oag-trace` reads both discs.**
   output, and the PS2 disc genuinely loads (same 196 colliders, same Assegai
   Venom handling). Deliberate choice recorded in the code: the layout string
   goes only into error context, never stdout, because `run`'s output is
-  compared byte-for-byte. Two follow-ons: `oag_assets::pulse::archive_spec`
-  is now **dead public API** (zero external callers - schedule removal in a
-  quiet moment), and `yaw_authority_ground_truth.rs` is compile-verified
-  only until the steer captures exist - run `just test-data` once they do.
+  compared byte-for-byte. Two follow-ons, both since resolved:
+  `oag_assets::pulse::archive_spec` looked like dead public API but was NOT
+  dead - the private `pick()` behind `Layout::resolve` still calls it; it
+  is demoted to private in `e8b2bee` rather than removed. And
+  `yaw_authority_ground_truth.rs` now runs for real under `just test-data`
+  (the steer captures exist and it passes).
 
 Reports from both agents arrived after their commits (delayed, not missing);
 everything above is reconciled against them.
@@ -765,6 +767,33 @@ green at 819 tests.
   Lap mode that would be a cleaner single-lap target - not verified in
   the emulator, and not blocking (`--laps 1.02` stops the autopilot one
   lap in).
+
+**`chores` (Tasks #22 and #23, commits `e8b2bee`, `ca6b014`): the doc-link
+checker now validates anchors, and the archive_spec removal premise was
+wrong.**
+
+- `archive_spec` was demoted to private, not deleted: it looked dead from
+  the outside but `pulse.rs`'s private `pick()` - the thing
+  `Layout::resolve` uses to find `Data.wad`/`WADS2.WAD` - still calls it.
+  Its two unit tests remain as the only coverage of the
+  disc-image-vs-directory joining rule.
+- `check-doc-links.py` resolves `#fragment`s now. The slug rules were
+  **derived from the 118 existing anchor links, not assumed** (108
+  validated first run): lowercase; punctuation dropped not replaced
+  (`body+0x160` -> `body0x160`); `-`/`_` kept; spaces to hyphens with no
+  collapsing; duplicate headings suffixed `-1`; explicit `<a id=...>`
+  anchors honoured; same-file `#foo` links no longer skipped as external.
+  Trap recorded: resolve code spans BEFORE stripping HTML tags, or a
+  literal `` `<Misc>` `` in a heading gets eaten and a correct link reports
+  broken - every "failure" was checked against the real heading before
+  being trusted.
+- 9 stale anchors found; 7 fixed with `git log -S`-confirmed repointings;
+  2 deferred because they live in `docs/tools/oag-trace.md`, which the
+  timetrial agent owns - Task #24 (owner timetrial) carries the one-line
+  fix, and **`just check-docs` is red on exactly those two lines until it
+  lands**. `cargo fmt --check` is also transiently red on two other
+  agents' uncommitted in-flight files; neither failure is in committed
+  work.
 
 **Two process traps from this task, both live:**
 
