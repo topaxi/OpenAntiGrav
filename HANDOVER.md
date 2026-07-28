@@ -32,6 +32,64 @@ cost that session the ability to verify anything; check they are still there
 before concluding a ground-truth test "cannot run". The originals in
 `~/Downloads` were copied, not moved, and are untouched.
 
+## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
+
+A new session spawned three concurrent background agents in this working tree,
+per the previous pass's "Where I would go next" list: `resistance-gap` (the
+~12x missing-resistance investigation, the M4 blocker), `ps2-game-path`
+(platform-generic `oag-game`), and `angvel-capture` (the trace harness's
+angular-velocity column). Findings are folded in here centrally as each
+reports; sections below this one predate the pass.
+
+**`angvel-capture` is done and verified.** Commits `79deaa5`, `bb312c5`,
+`40c7d3b`, `96815f2`, `b4c5a01` - plus its first chunk (`scripts/psp-trace.py`
+and `crates/trace/src/{trace,replay,main}.rs`) which landed inside `5f2ad20`,
+a commit whose message says "game: support PS2 source..." because a concurrent
+agent's commit swept up these staged files. **Do not conclude from `git log`
+that the first chunk of the trace work is missing - it is in `5f2ad20`.**
+
+What exists now:
+
+- `scripts/psp-trace.py` records three new per-tick fields with no extra
+  read round trip: `avel_x/y/z` from `body+0x160` (justified two ways from
+  already-documented pages: PSP `Body_ClearVelocity` `0x0884da5c` zeroes
+  `+0x140`/`+0x160` together, and PS2 `Ship_ApplyAngularDamping` `0x0015c1b0`
+  reads `+0x160` as the angular velocity it damps), `stun_timer`
+  (`craft+0x290`, doubling as the wall-contact indicator the resistance
+  investigation wants), and `timer_2e0` (`craft+0x2e0`, kept offset-named per
+  ADR-0005 since its arming condition has never been read). Values recorded
+  raw - nothing negated or rotated on the way out of memory.
+- `oag_trace::Frame` carries them as `Option`s. Backwards compatibility is
+  hard-tested: a frozen 25-column `LEGACY_FIXTURE`, absent columns are `None`
+  never `Some(ZERO)`, `compare` reports missing fields as `not compared` with
+  `compared_ticks: 0` rather than a perfect-looking zero error, and `COLUMNS`
+  is cross-checked against `psp-trace.py` via `include_str!` so the two
+  cannot drift. `replay` seeds `body.angular_velocity` from the first row
+  when present.
+- **The first real capture with the new column settles two open questions at
+  once, with no simulation involved**: `AngularReading` enumerates the four
+  readings of the recorded column (sign x local/world frame - both open:
+  `craft-update.md`'s `w_game = -w_physics` leaves the frame unresolved, and
+  `engine.md` caps local-vs-world at 74), and `oag-trace show` scores all
+  four against the recording's own basis derivative
+  (`sum cross(row_i, row_i') = 2 n sin(t)`), printing them best first.
+- 86/86 tests pass (re-verified centrally); `compare` and a disc-backed `run`
+  are byte-identical to the pre-change baseline on all five real captures in
+  `data/traces/`. **Not yet done: the live capture itself** - needs an
+  interactive PPSSPP session. The exact commands (scripted steer-both-ways
+  form to separate all four readings; straight-line form to check whether the
+  stun gate fired during the reference capture) are in the agent's report and
+  in the updated capture docs (`40c7d3b`); the steering scenario is the
+  discriminating one, since a level ship yawing about world `+y` reads the
+  same in local and world frames.
+- Two `#[ignore]`d ground-truth tests fail on *missing input*, pre-existing:
+  they want `data/traces/talons-junction-steer-left.csv`/`-right.csv`, which
+  are not in `data/traces/`. Not a regression from this work.
+- A lead deliberately not followed (would need a new-address hunt, out of the
+  harness task's scope): `craft-update.md` says the matrix at `body+0x80`
+  maps `+0x160` onto `+0x150`, so a `0x150` twin column would settle
+  local-vs-world directly if the basis-derivative check comes back ambiguous.
+
 ## The movie cache is lossless AV1 now, and two of its traps fail silently
 
 The cache holds lossless AV1 in IVF instead of raw `yuv420p`, decoded in process
