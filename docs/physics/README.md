@@ -21,6 +21,13 @@ crate applies about **53 units of net force too much** there, in a term that is
 **linear in speed**. That page is the authority on the longitudinal balance and
 on which candidate terms are already eliminated.
 
+**A second part is measured rather than read**, and it is the rotational half of
+the same story. [What `body+0x160` holds](angular-velocity-column.md) settles the
+sign and the frame of the recorded angular-velocity column against five captures'
+own basis derivatives, and finds the yaw axis carrying a factor of `21.2` -
+`YAW_DRIVE_CALIBRATION`'s reciprocal, arrived at with no simulation and no fit
+against our own physics.
+
 **This page no longer covers the whole force law.**
 [Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse/engine.md) was read
 out of `BOOT.BIN` afterwards, and it is the authority wherever the two disagree: it was

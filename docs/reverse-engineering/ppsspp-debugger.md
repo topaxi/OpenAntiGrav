@@ -13,13 +13,27 @@ Everything here was measured against PPSSPP **v1.20.4** and Pulse PSP
 ## Getting a debugger you can connect to
 
 ```sh
+# the image PPSSPP wants is an ISO; data/images/ holds CHDs, so extract one once
+chdman extractdvd -i data/images/pulse-psp-usa.chd -o data/cache/pulse-psp-usa.iso
+
 # headless: no window, no dialogs, and it breaks at start
 PPSSPPHeadless data/cache/pulse-psp-usa.iso --debugger=47800 --graphics=software --timeout=1800
 
 # the SDL build: a real GPU backend, working system dialogs, save states
 printf '[General]\nRemoteDebuggerOnStartup = True\nRemoteDebuggerLocal = True\nRemoteISOPort = 47810\n' > /tmp/debugger.ini
-PPSSPPSDL --appendconfig=/tmp/debugger.ini --windowed data/cache/pulse-psp-usa.iso
+SDL_VIDEODRIVER=wayland PPSSPPSDL --appendconfig=/tmp/debugger.ini --windowed data/cache/pulse-psp-usa.iso
 ```
+
+Two things about that last line that each cost a restart to find:
+
+- **`SDL_VIDEODRIVER=wayland` is not optional on a Wayland session.** SDL2 picks
+  X11 first, and with no `DISPLAY` the build dies on
+  `Unable to initialize SDL: x11 not available` after printing a full page of
+  successful Vulkan probing - so the failure reads like a graphics problem and is
+  not one.
+- **Launch it detached** (`setsid ... < /dev/null &`), or the process can be
+  reaped along with the shell that started it, leaving a log file whose last line
+  is from the *previous* attempt. That looks exactly like a hang.
 
 Either way the endpoint is `ws://127.0.0.1:PORT/debugger`. Scripts need
 `websocket-client`, so run them as
@@ -248,8 +262,13 @@ craft's cached speed climbs to 10 and resets, and the ship does not move at all.
 That is a stalled start, not a broken input path and not a wrong position offset.
 
 Recovering from one needs the pause menu: `start`, then `down` x4 and `cross` for
-RESTART RACE. Then hold **nothing** for about 25 seconds while the countdown
-runs, and only then start the capture with thrust held:
+RESTART RACE. **The confirm on RESTART RACE is routinely swallowed**: the item
+highlights, the `cross` is accepted, and the state name stays
+`InGame Pause SP Time Trial`. Press it again - a restart loop should press until
+the state actually leaves the pause menu rather than assume one press took, or
+the "capture" that follows records a paused game. Then hold **nothing** for about
+25 seconds while the countdown runs, and only then start the capture with thrust
+held:
 
 ```sh
 just trace --ticks 200 --hold cross --warmup 6 --out data/traces/talons-junction.csv
@@ -346,6 +365,44 @@ What that capture reads: 200 ticks, `dt` mean 0.016684 (59.94 Hz, min 0.016316,
 max 0.017029), speed 23.6 to 25.1, 78.0 units travelled, `throttle` a flat 100,
 and `cross(row0, up) = forward` on 200 of 200 ticks.
 
+#### The reference scenario is not a free-running ship, and this matters
+
+**A `--warmup 6 --hold cross` capture is taken from a craft that has already hit
+something**, and every number the scenario is quoted for - "speed steady at 21.5
+to 22.7", "23.6 to 25.1" - is a *post-impact* speed rather than the craft's own.
+Measured 2026-07-28 against a standing start on the same configuration
+(`data/traces/talons-junction-standing-start.csv`): a craft launched from rest
+with thrust reaches **49.9 units/s in 61 ticks** and is still gaining 68
+units/s^2 when, at tick 61, one frame of `-790` units/s^2 along its own right
+axis ends the run - it drives itself into the first wall, because nothing is
+steering. From there it settles at 21-22 units/s and stays there, which is the
+regime the six-second warmup hands to `--script`.
+
+Free running it does not stop at 22. A capture that survived longer
+(`--warmup 2`, saved as `talons-junction-free-run-118.csv`) reads **118 units/s**
+with the engine pinned at its documented cap. So the reference scenario cruises
+at about a *sixth* of the craft's own speed, and any measurement that treats it
+as an equilibrium of the force law is measuring the impact instead. See
+[the force-balance page](../physics/force-balance-ground-truth.md).
+
+Keep taking the reference scenario - it is the only capture two years of numbers
+are quoted against, and comparability is worth more than realism. But take the
+standing start too, and take it *first* when the question is about forces:
+
+```sh
+# from InGame, having sat out the countdown holding NOTHING (~25 s), so that the
+# craft is stationary, past the start-line boost window and not false-started
+just trace --port 47810 --ticks 300 --hold cross \
+    --out data/traces/talons-junction-standing-start.csv
+```
+
+`--hold` sets the pad before the breakpoint loop arms rather than at a
+breakpoint, so it does **not** pay the three-frame latency the scripted path
+does: `throttle` reads 0 on rows 0 and 1 and 100 from row 2. Those two rows are a
+feature - they are the only rows in any capture where the craft is at rest under
+its own hover, and `trace-force-balance.py` drops the first of them because
+rolling resistance normalises a velocity that is exactly zero there.
+
 **Every capture taken before 2026-07-28 predates five columns** - the angular
 velocity at `body+0x160` (`avel_x/y/z`) and the two engine-gate timers
 `craft+0x290` and `craft+0x2e0` - and none of them can be backfilled, because a
@@ -353,7 +410,10 @@ capture is a hand-driven session rather than a reproducible build step.
 `oag-trace` reads those columns when they are there and reports them as *not
 compared* when they are not, so the old files stay usable; but the questions they
 were added for - what the yaw rate actually does frame by frame, and whether the
-engine gate fired at all - need the scenario re-taken. Re-taking it is the two
+engine gate fired at all - need the scenario re-taken. Both were re-taken on
+2026-07-28 and both are answered: the engine gate never armed in any of the six
+captures, and the angular column turns out to be
+[negated body-local, scaled by 21.2](../physics/angular-velocity-column.md). Re-taking it is the two
 commands above, unchanged: the columns come along on their own.
 
 **One crash worth knowing.** PPSSPP v1.20.4 died twice on the Vulkan backend
