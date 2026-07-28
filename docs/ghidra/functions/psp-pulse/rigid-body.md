@@ -362,12 +362,23 @@ It cancels only if the damping reads `omega`, and it does not.
 
 On the yaw axis, `dL/dt = drive - 5L` with `omega = c L` differentiates to
 `domega/dt = c * drive - 5 * omega`, so scaling the yaw drive by `c` on an
-acceleration accumulator is exactly equivalent. On pitch and roll the same
-reading predicts `omega = drive / (damping * I)` where `oag-physics` computes
-`omega = drive / damping`, i.e. **the crate applies about `15.6x` too much pitch
-and roll authority**. That is not applied yet: it needs the whole crate on the
-momentum model, and there is no captured pitch or roll input to validate it
-against. A held-pitch capture on the reference scenario is what would settle it.
+acceleration accumulator is exactly equivalent. Two things are left over:
+
+- **Pitch and roll.** The same reading predicts `omega = drive / (damping * I)`
+  where `oag-physics` computes `omega = drive / damping`, i.e. **the crate
+  applies about `15.6x` too much pitch and roll authority**.
+- **The world-angular terms.** `oag-physics` scales only its body-local yaw
+  accumulator, but the weathervane and the surface-alignment torque go into the
+  world one, which `craft+0x350` -> `body+0x130` -> `basis^T * worldTorque`
+  (`0x0884e35c`) integrates into `L` exactly like the local drives. So they carry
+  `I^-1` in the original and do not in the crate - **about `21.6x` too much
+  weathervane yaw relative to steering.** This was invisible while the constant
+  was fitted, because the fit absorbed it.
+
+Neither is applied yet: both need the whole crate on the momentum model, doing
+one alone is a half-application, and there is no captured pitch or roll input to
+validate against. A held-pitch capture on the reference scenario is what would
+settle it.
 
 ## The contact response, and the friction law the force balance was missing
 

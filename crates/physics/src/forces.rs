@@ -177,7 +177,33 @@ pub const INERTIA_MASS: f32 = 0.9;
 /// angular *velocity*. It reads the momentum, and that is exactly why the
 /// inertia survives.
 ///
-/// # What this does **not** yet fix: pitch and roll
+/// # What this does **not** yet fix
+///
+/// Two things, and they share a root cause: this constant is applied at the one
+/// place the captures measure, and the full reading says the inertia belongs
+/// everywhere the angular accumulators are drained.
+///
+/// ## The world-angular terms bypass it
+///
+/// [`evaluate`] scales `acc.local_angular.y` and nothing else, but the
+/// weathervane torque and hover's surface-alignment torque land in
+/// `acc.world_angular`, which [`drain`] folds into the body-local axis
+/// *afterwards*. By the same reading those are torques too - `craft+0x350` goes
+/// to `body+0x130` and integrates into `L` through `basis^T * worldTorque` at
+/// `0x0884e35c`, exactly like the local drives - so their contribution to the
+/// yaw rate carries `I^-1` in the original and does not here. **The crate's
+/// weathervane yaw authority is therefore about `21.6x` too strong relative to
+/// its steering.**
+///
+/// It is worth being clear that this is *pre-existing and was invisible*: while
+/// the constant was fitted, the fit absorbed it. Recovering the constant is what
+/// turns it into a named discrepancy. Neither test that guards this axis can see
+/// it - `yaw_authority_ground_truth`'s `advance_yaw` is an isolated two-line ODE
+/// with steering and damping only, and
+/// `full_lock_out_yaws_the_bank_on_a_steeply_cambered_track` pins a *ratio*
+/// between two body-local terms, which the scale leaves invariant.
+///
+/// ## Pitch and roll
 ///
 /// The equivalence above is specific to the yaw axis, because that is the only
 /// axis this crate scales. On pitch and roll the same reading predicts
@@ -185,13 +211,17 @@ pub const INERTIA_MASS: f32 = 0.9;
 /// damping` - so **the crate applies about `15.6x` more pitch and roll authority
 /// than the original**, from `I_xx = I_zz = 15.6`.
 ///
-/// That is deliberately not applied here. Landing it means moving the whole
-/// crate onto the momentum model - accumulators as torque, damping on `L`,
-/// [`crate::ship::Body::inertia`] carrying the real tensor - and half-applying
-/// that is the same failure mode `crate::integrate`'s docs warn about for the
-/// handedness flip. There is also **no capture of a pitch or roll input** to
-/// validate it against; the yaw axis has two. A held-pitch capture on the same
-/// scenario is what would settle it, and it is the obvious next task.
+/// Neither is applied here, and the reason is the same for both: landing them
+/// means moving the whole crate onto the momentum model - accumulators as
+/// torque, damping on `L`, [`crate::ship::Body::inertia`] carrying the real
+/// tensor - and half-applying that is the same failure mode
+/// `crate::integrate`'s docs warn about for the handedness flip. Scaling the
+/// world-angular yaw *alone* would be exactly such a half-application.
+///
+/// There is also **no capture of a pitch or roll input** to validate the move
+/// against; the yaw axis has two, and the weathervane's contribution sits inside
+/// their RMS band. A held-pitch capture on the reference scenario is what would
+/// settle it, and it is the obvious next task.
 ///
 /// # Confidence
 ///
