@@ -1871,13 +1871,16 @@ mod tests {
         );
     }
 
-    /// The spawn height is the spring's rest height, not its target and not the
-    /// probe's reach.
+    /// The spawn height is the spring's rest height plus the probes' own drop,
+    /// not the spring's target and not the probe's reach.
     ///
     /// Round numbers chosen so the sag is checkable by hand, and **not** a ship's:
-    /// with `normal_gravity` 5 and `track_gravity` 80 the gradient is
-    /// `0.3 * HOVER_K * 85`, so the sag is `5` over that. `mass` is deliberately not
-    /// 1, to pin that it cancels.
+    /// two probes give a gradient of `2 * 0.3 * HOVER_K * (normal_gravity +
+    /// track_gravity)`, and a grounded craft carries `normal_gravity +
+    /// track_gravity` (gravity plus `oag_physics::hover::DOWNFORCE_SCALE`'s
+    /// downforce), so the sag is exactly `1.25` whatever the two gravities are.
+    /// The centre of mass then sits a probe drop above that. `mass` is
+    /// deliberately not 1, to pin that it cancels.
     #[test]
     fn a_ship_spawns_at_the_height_its_own_suspension_holds_it_at() {
         let handling = Handling {
@@ -1894,24 +1897,27 @@ mod tests {
             ..Handling::ZERO
         };
 
-        let gradient = 0.3 * oag_physics::hover::HOVER_K * 85.0;
+        let gradient = 2.0 * 0.3 * oag_physics::hover::HOVER_K * 85.0;
         let target = 5.5 * oag_physics::hover::TARGET_GLOBAL_SCALE;
-        let expected = target - 5.0 / gradient;
+        let drop = oag_physics::hover::PROBE_DROP_RAW * oag_physics::hover::TARGET_GLOBAL_SCALE;
+        let expected = target - 85.0 / gradient + drop;
         assert!(
             (spawn_height(&handling) - expected).abs() < 1e-5,
             "{} was not {expected}",
             spawn_height(&handling)
         );
 
-        // Strictly below the reach, with real headroom above it. The margin used to be
-        // the spring's sag alone, 0.147 units, because the target was read as equal to
-        // the cast length; `TARGET_GLOBAL_SCALE` is measured at 0.75 now, so a resting
-        // ship sits about 1.5 units below the height at which it loses the ground.
-        let headroom = handling.antigrav.ride_height - spawn_height(&handling);
-        assert!(spawn_height(&handling) < handling.antigrav.ride_height);
+        // Real travel in **both** directions, which is the property that matters
+        // and the one the old geometry could not have. A probe reaches exactly as
+        // far as the target (`oag_physics::hover::probe`), so its travel is the
+        // whole `target`: the resting probe sits `1.25` up from full compression
+        // and `1.25` short of losing the ground. That symmetry is the recovered
+        // model's, not a tuning: both numbers are the same sag.
+        let probe_rest = spawn_height(&handling) - drop;
+        assert!(probe_rest > 0.0 && probe_rest < target);
         assert!(
-            headroom > 1.0,
-            "only {headroom} of probe headroom; the suspension has no travel again"
+            (probe_rest - (target - 1.25)).abs() < 1e-5,
+            "the probe rests at {probe_rest}, not 1.25 below its {target} target"
         );
 
         // And mass really does cancel.

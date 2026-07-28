@@ -126,25 +126,33 @@ impl Ship {
 ///
 /// # The derivation, which is the force law's and not a number picked here
 ///
-/// A probe in contact contributes `mass * 0.3 * (target - h) * HOVER_K * load *
-/// (normal_gravity + track_gravity)` along the ship's up axis, and grounded gravity
-/// pulls with `normal_gravity * mass`. Setting them equal at `load = 1` - a grounded
-/// ship, which is what a ship on a grid is - and solving for `h` gives
+/// Each of the **two** probes contributes `mass * 0.3 * (target - h) * HOVER_K *
+/// load * (normal_gravity + track_gravity)` along the ship's up axis, and a
+/// grounded ship is pulled down by gravity, `normal_gravity * mass`, **plus the
+/// hover downforce, `track_gravity * mass`** ([`oag_physics::hover::DOWNFORCE_SCALE`]).
+/// Setting them equal at `load = 1` - a grounded ship, which is what a ship on a
+/// grid is - and solving for the probe height gives
 ///
 /// ```text
-/// rest = target - normal_gravity / (0.3 * HOVER_K * (normal_gravity + track_gravity))
+/// rest = target - (normal_gravity + track_gravity)
+///                 / (2 * 0.3 * HOVER_K * (normal_gravity + track_gravity))
+///      = target - 1.25          whenever both gravities are non-zero
 /// ```
 ///
-/// `mass` cancels, which is why none appears. Every term is read off the disc or is
-/// [`oag_physics::hover::HOVER_K`]; nothing here is tuned, and the expression follows
-/// from `oag_physics::hover::probe` rather than from a fit.
+/// and the ship's *centre* sits [`oag_physics::hover::PROBE_DROP_RAW`] *
+/// [`oag_physics::hover::TARGET_GLOBAL_SCALE`] above that, because the probes hang
+/// below it. `mass` cancels, which is why none appears; the per-class gravity
+/// scale is `1.0` for all four classes (`0x08ab0dcc`, read), which is why it does
+/// not appear either.
 ///
-/// **The sag it computes is small, and that is a finding rather than a detail.** On
-/// the observed data it is 0.147 units against a 5.5 reach, because the spring is
-/// calibrated against `normal_gravity + track_gravity` while carrying `normal_gravity`
-/// alone. So this places the ship correctly and still leaves it only 2.7 % of its
-/// range to play with; why that number is so small is an open reading recorded in
-/// `oag_physics::hover`, not something this function can fix.
+/// **Two corrections landed here together, and the second is what makes the
+/// number check out.** The old expression divided by *one* probe's gradient and
+/// omitted the downforce, so it computed a sag of `0.147` units - `2.7 %` of the
+/// reach - and its own documentation flagged that as an open reading. With both
+/// halves right the sag is `1.25` of a `4.125` reach, and the resulting spawn
+/// height on the shipped values is **`4.0`** against the original's own resting
+/// craft height, read live on the start line at **`4.002`-`4.009`**. Nothing in
+/// the expression is fitted; that agreement is the check.
 ///
 /// This is only where a ship *starts*: the height it settles at is emergent from the
 /// force law, as `oag_gameplay::spawn::Pose::from_sample` says. The two now agree,
@@ -152,12 +160,12 @@ impl Ship {
 #[must_use]
 pub fn spawn_height(handling: &Handling) -> f32 {
     let target = oag_physics::hover::target_height(handling, 0.0, 0.0);
-    let gradient = 0.3
-        * oag_physics::hover::HOVER_K
-        * (handling.physical.normal_gravity + handling.physical.track_gravity);
+    let load = handling.physical.normal_gravity + handling.physical.track_gravity;
+    let gradient = 2.0 * 0.3 * oag_physics::hover::HOVER_K * load;
+    let drop = oag_physics::hover::PROBE_DROP_RAW * oag_physics::hover::TARGET_GLOBAL_SCALE;
 
     if gradient > 0.0 {
-        target - handling.physical.normal_gravity / gradient
+        target - load / gradient + drop
     } else {
         // A parameter set with no gravity has no spring either, so there is no rest
         // height to compute; the target is the honest answer, and `Handling::ZERO`

@@ -289,8 +289,10 @@ pub struct WallResponse {
 /// an oriented box along an axis. Along a body axis it degenerates to that axis's
 /// own half-extent, which is why the probes below can use it uniformly.
 ///
-/// Half-extents, following [`hover::probe_offsets`], which places the two hover
-/// probes at `length * 0.5` fore and aft: `<Misc>` gives full hull dimensions.
+/// Half-extents: `<Misc>` gives full hull dimensions, and the hull box is what
+/// the collider is built from. The hover probes are **not** placed from these -
+/// `oag_physics::hover::probe_offsets` is a code literal, as is the inertia
+/// tensor - so this is the one place the shipped dimensions still act.
 #[must_use]
 pub fn hull_extent(body: &Body, dimensions: &Dimensions, direction: Vec3) -> f32 {
     let half_width = dimensions.width * 0.5;

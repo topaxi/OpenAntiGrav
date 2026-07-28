@@ -163,7 +163,12 @@ Grounded-only terms from the same function: a surface-alignment torque of
 magnitude `400` along `cross(up, avgNormal)` with the right-axis component
 projected out, which levels roll and yaw but deliberately **not** pitch; a
 bank-to-yaw coupling of `+30 * right.y`; and a downforce along the ground normal
-opposing the hover spring.
+opposing the hover spring, whose magnitude is
+`track_gravity * mass * grounded * (1 - magLockBlend)` - read at instruction
+level in
+[engine.md](../ghidra/functions/psp-pulse/engine.md#the-grounded-downforce-read-instruction-by-instruction),
+where the coefficient is `1` and the term turns out to be what the spring's
+`normal_gravity + track_gravity` calibration is calibrated *for*.
 
 Confidence **91** for the force law.
 
@@ -421,7 +426,7 @@ tuning, per the [roadmap](../overview/roadmap.md).
 | --- | --- | --- |
 | Clamped delta, forces evaluated once, three explicit Euler sub-steps of `dt/3` | [`integrate.rs`](../../crates/physics/src/integrate.rs) | this page |
 | Two-probe air cushion: spring, damping multiplier, rebound and landing blend, magstrip blend consumption, target height from `ride_height` | [`hover.rs`](../../crates/physics/src/hover.rs) | both |
-| Penetration escape at `h < 1.0`, surface alignment, bank-to-yaw, downforce shape | [`hover.rs`](../../crates/physics/src/hover.rs) | this page |
+| Penetration escape at `h < 1.0`, surface alignment, bank-to-yaw, the downforce **and its magnitude**, the code-literal probe offsets and the target-length reach | [`hover.rs`](../../crates/physics/src/hover.rs) | this page, engine.md |
 | Engine thrust and its cap, the brake and its ramp, steering and its asymmetric ramp, the pitch axis | [`engine.rs`](../../crates/physics/src/engine.rs) | engine.md |
 | The five control states and their ramps, on the original's `0..=100` scale | [`controls.rs`](../../crates/physics/src/controls.rs) | engine.md |
 | Quadratic drag with all four coefficients, rolling resistance, weathervane, angular damping, vertical damping, gravity | [`passive.rs`](../../crates/physics/src/passive.rs) | engine.md |
@@ -434,11 +439,17 @@ tuning, per the [roadmap](../overview/roadmap.md).
 evidence records that the term exists and not how large it is. That is deliberate: a
 plausible-looking number would be indistinguishable from a recovered one later.
 
-- The grounded **downforce** magnitude (zero).
-- `K2`, the global scale on the hover target height (identity).
 - The engine's `craft+0x294` output multiplier (identity).
 - The per-class gravity scale from the table at `0x08ab0dcc` (identity, and an input
-  rather than a constant, since it belongs to the speed class).
+  rather than a constant, since it belongs to the speed class - the shipped table
+  reads `1.0` for all four, so the identity is also the value).
+
+Two names have left this list. `K2`, the hover target's global scale, was read at
+`0.75`. The grounded **downforce** was read at `track_gravity * mass * grounded`,
+and it was carrying more than its own weight: because the spring's damper is a
+multiplier on the spring magnitude, the missing downforce was also the missing
+pitch damping - see
+[angular-velocity-column.md](angular-velocity-column.md#resolved-the-missing-49-is-the-hover-downforce).
 
 **Deliberately not implemented, and why:**
 

@@ -23,9 +23,11 @@
 //!
 //! Where the evidence records that a term exists without recording its magnitude, the
 //! shape is implemented and the coefficient is deliberately the identity or zero rather
-//! than an invented number: [`hover::DOWNFORCE_SCALE`], [`hover::TARGET_GLOBAL_SCALE`],
-//! [`engine::ENGINE_OUTPUT_SCALE`] and
-//! [`forces::Environment::class_gravity_scale`]. Everything else is read from
+//! than an invented number: [`engine::ENGINE_OUTPUT_SCALE`] and
+//! [`forces::Environment::class_gravity_scale`]. Two constants have left that list
+//! since it was written - [`hover::TARGET_GLOBAL_SCALE`] and
+//! [`hover::DOWNFORCE_SCALE`] are both read now, and the second of them turned out
+//! to be the crate's missing pitch damping as well as its missing force. Everything else is read from
 //! [`Handling`], which holds
 //! the **already-scaled in-memory form** of the parameter set - see [`params`], and do
 //! not apply the loader's scale factors twice.

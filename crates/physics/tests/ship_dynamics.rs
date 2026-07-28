@@ -356,11 +356,21 @@ fn groundedness_only_ever_holds_one_of_three_values() {
 
 /// A ship spawned inside the floor is pushed back out by the penetration-escape
 /// constraint and stays out, without a velocity change doing the work.
+///
+/// **The spawn height moved with the recovered probe geometry, and the assertion
+/// did not.** The probes hang `1.125` below the centre of mass
+/// (`oag_physics::hover::probe_offsets`), so a body centre `0.1` above the floor
+/// puts both probes a unit *underneath* it, where they find nothing to escape
+/// from - in the original as much as here, since the ray starts at the probe and
+/// points down. What this test is about is the escape constraint, so the ship is
+/// placed where the constraint applies: probes `0.1` into the floor, which is a
+/// centre `0.1 + 1.125` above it.
 #[test]
 fn a_ship_pressed_into_the_floor_never_ends_up_below_it() {
     let handling = fixture();
     let world = flat_floor(Surface::Floor);
-    let mut state = ship_at(0.1, &handling);
+    let probe_drop = oag_physics::hover::PROBE_DROP_RAW * oag_physics::hover::TARGET_GLOBAL_SCALE;
+    let mut state = ship_at(0.1 + probe_drop, &handling);
     state.body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
 
     for tick in 0..600 {
@@ -373,9 +383,9 @@ fn a_ship_pressed_into_the_floor_never_ends_up_below_it() {
             TICK,
         );
         assert!(
-            state.body.position.y > 0.0,
-            "ended up at {} on tick {tick}",
-            state.body.position.y
+            state.body.position.y > probe_drop,
+            "a probe ended up at {} on tick {tick}",
+            state.body.position.y - probe_drop
         );
     }
 }
@@ -631,7 +641,13 @@ fn a_level_ship_over_a_level_floor_never_rolls() {
 fn a_ship_rolled_off_level_is_pulled_back_toward_level() {
     let handling = fixture();
     let world = flat_floor(Surface::Floor);
-    let mut state = ship_at(19.0, &handling);
+    // Resting height, recomputed for the recovered geometry rather than nudged:
+    // the probes hang `1.125` below the centre and the spring rests where it
+    // carries the load, `normal_gravity / (0.8 * (normal_gravity +
+    // track_gravity))` below the `0.75 * ride_height` target - `1.25` on this
+    // fixture. A ship at the old `19.0` has both probes above their own reach
+    // now (the reach is the target, not `ride_height`) and simply falls.
+    let mut state = ship_at(15.0 - 1.25 + 1.125, &handling);
     state.body.orientation = oag_core::math::Quat::from_rotation_z(0.02);
 
     let initial_roll = state.body.up().x.abs();
@@ -894,10 +910,12 @@ fn a_ship_under_a_ceiling_probes_along_its_own_up_axis() {
         TICK,
     );
 
-    // Both probes found the ceiling, 12 units away along the ship's own up axis, and
-    // a world-up probe would have found nothing at all.
+    // Both probes found the ceiling along the ship's own up axis, where a world-up
+    // probe would have found nothing at all. The distance is `12` from the centre
+    // of mass minus the `1.125` the probes hang toward it - the recovered offset,
+    // which on an inverted ship points at the surface rather than away from it.
     assert_eq!(evaluated.hover.contacts, 2);
-    assert!((evaluated.hover.probes[0].height - 12.0).abs() < 1e-4);
+    assert!((evaluated.hover.probes[0].height - (12.0 - 1.125)).abs() < 1e-4);
 
     // And the force they produce lies along that axis rather than along world up.
     let force = evaluated.hover.probes[0].force;
@@ -1106,4 +1124,124 @@ fn a_hoverable_surface_within_reach_of_a_lateral_probe_is_still_ignored() {
     // And the control: the identical quad tagged `Wall` *must* change the run,
     // or the assertions above are passing because nothing is in reach at all.
     assert_ne!(alone, run(Some(Surface::Wall)));
+}
+
+/// The suspension carries `normal_gravity + track_gravity`, not `normal_gravity`.
+///
+/// The hover downforce (`oag_physics::hover::DOWNFORCE_SCALE`) presses the craft
+/// onto the surface with `track_gravity * mass * grounded`, and the spring is
+/// calibrated against the *sum* of the two gravities - so the equilibrium
+/// compression is
+///
+/// ```text
+/// (normal_gravity + track_gravity) / (2 * 0.3 * HOVER_K * (normal_gravity + track_gravity)) = 1.25
+/// ```
+///
+/// **whatever the split between them is**, which is why this fixture can use
+/// round numbers of its own and still pin the recovered behaviour. Carrying
+/// gravity alone - the crate's state before the downforce was read - would rest
+/// this ship at `10 / 32 = 0.3125` instead, four times shallower, and that is
+/// the number this test exists to keep out. The load matters far beyond the
+/// height: the spring's damper is a *multiplier* on the spring magnitude, so the
+/// craft's whole attitude damping scales with what the suspension carries.
+#[test]
+fn a_settled_ship_rests_1_25_below_its_target_because_of_the_downforce() {
+    let handling = Handling {
+        physical: Physical {
+            normal_gravity: 10.0,
+            track_gravity: 30.0,
+            ..fixture().physical
+        },
+        ..fixture()
+    };
+    let world = flat_floor(Surface::Floor);
+    let target = oag_physics::hover::target_height(&handling, 0.0, 0.0);
+    let drop = oag_physics::hover::PROBE_DROP_RAW * oag_physics::hover::TARGET_GLOBAL_SCALE;
+
+    let mut state = ship_at(target - 1.25 + drop, &handling);
+    let mut last = None;
+    for _ in 0..240 {
+        let evaluated = step(
+            &mut state,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            TICK,
+        );
+        last = Some(evaluated);
+    }
+
+    let height = last.unwrap().hover.probes[0].height;
+    assert!(
+        (height - (target - 1.25)).abs() < 1e-2,
+        "the probe settled at {height}, not 1.25 below its {target} target"
+    );
+    assert_eq!(state.grounded, 1.0);
+}
+
+/// A pitched craft comes back **without ringing**, which is the property the
+/// downforce restored.
+///
+/// `docs/physics/angular-velocity-column.md` measures the original answering a
+/// held pitch input with extrema of `+0.397 -0.080 +0.017 -0.007` rad/s - each
+/// about a fifth of the one before - while this crate used to produce
+/// `+0.431 -0.353 +0.287 -0.234`, losing only a fifth of its amplitude per cycle.
+/// The difference was never a damping term of its own: the hover damper is a
+/// multiplier on the spring magnitude, so it was 17x too weak while the
+/// suspension carried `normal_gravity` alone.
+///
+/// This asserts the *shape* - successive pitch-rate extrema each at most a third
+/// of the one before - on a fixture whose numbers are its own. It fails on the
+/// pre-downforce crate, where the ratio is about `0.8`.
+#[test]
+fn a_pitched_craft_stops_ringing_within_two_swings() {
+    let handling = Handling {
+        physical: Physical {
+            normal_gravity: 10.0,
+            track_gravity: 30.0,
+            ..fixture().physical
+        },
+        ..fixture()
+    };
+    let world = flat_floor(Surface::Floor);
+    let target = oag_physics::hover::target_height(&handling, 0.0, 0.0);
+    let drop = oag_physics::hover::PROBE_DROP_RAW * oag_physics::hover::TARGET_GLOBAL_SCALE;
+    let mut state = ship_at(target - 1.25 + drop, &handling);
+    state.body.angular_velocity = Vec3::new(0.4, 0.0, 0.0);
+
+    let mut rates = Vec::new();
+    for _ in 0..120 {
+        step(
+            &mut state,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            TICK,
+        );
+        let local = state.body.orientation.inverse() * state.body.angular_velocity;
+        rates.push(local.x);
+    }
+
+    let mut extrema = Vec::new();
+    for window in rates.windows(3) {
+        let (before, here, after) = (window[0], window[1], window[2]);
+        if (here > before && here >= after) || (here < before && here <= after) {
+            extrema.push(here);
+        }
+    }
+    assert!(
+        extrema.len() >= 3,
+        "only {} extrema in 120 ticks: {extrema:?}",
+        extrema.len()
+    );
+    for pair in extrema.windows(2).take(2) {
+        assert!(
+            pair[1].abs() < pair[0].abs() * 0.34,
+            "pitch rate went {} -> {}, which is a ring rather than a decay: {extrema:?}",
+            pair[0],
+            pair[1]
+        );
+    }
 }

@@ -572,10 +572,111 @@ full), not the weathervane (`cross(forward, velocity)` with the craft stationary
 is zero), and not `Body_Integrate`'s `body+0x380`, which the ship-entity
 constructor sets to `0.01`.
 
-That is the open question this analysis leaves, and it is a much sharper one than
+That was the open question this analysis left, and it is a much sharper one than
 "the pitch rings": a single missing term, on one axis, with a magnitude measured
 to within the fit's own noise, and every already-recovered candidate excluded by
-name.
+name. **It is answered in the section below, and the answer is not a damping
+term at all.**
+
+## Resolved: the missing `4.9` is the hover downforce
+
+The search was for a rate-feedback term nobody had found. There is none. What was
+missing is a **static** force - the grounded downforce, `-track_gravity * mass *
+grounded * (1 - magLockBlend)` along the averaged contact normal, read
+instruction by instruction at
+[engine.md](../ghidra/functions/psp-pulse/engine.md#the-grounded-downforce-read-instruction-by-instruction)
+(confidence 92, two binaries) and implemented in this crate as a shape with a
+**deliberately zero** coefficient because an earlier pass recorded its magnitude
+as unrecovered. It was recorded, in two places, all along.
+
+**Why a static force is a damping term here.** The hover damper is a *multiplier*
+on the spring magnitude, not a summand:
+
+```text
+force_i = S_i * (1 + rebound * clamp(-0.1 * vn_i, -1, 2)) * up
+```
+
+so the rate feedback it produces is `0.1 * rebound * S`, proportional to the
+spring force the craft is **already carrying**. Two probes at `+/-d` therefore
+give a pitch equation
+
+```text
+k = 2 * C * d^2                    C = mass * 0.3 * HOVER_K * (normal_gravity + track_gravity)
+c = 0.2 * rebound * C * z * d^2    z = the resting compression
+2*zeta*omega_n = c / I_xx          I_xx = 15.6
+```
+
+and `z` is the whole question. Carrying gravity alone the craft rests `0.0735`
+into its travel; carrying gravity **plus** the downforce it rests
+
+```text
+z = (normal_gravity * classScale + track_gravity)
+    / (2 * 0.3 * HOVER_K * (normal_gravity + track_gravity)) = 1.25
+```
+
+(the per-class scale at `0x08ab0dcc` is `1.0` for all four classes), which is
+**17x** more. The damping that was `0.40` at the recovered spacing becomes `6.6`,
+and the `4.9` this page went looking for is the difference. Nothing was fitted:
+`0.1`, `rebound`, `0.3`, `HOVER_K`, `+/-4.5` and the two gravities are all read
+values, and `1.25` follows from them.
+
+**The live probe read is the independent check.** `craft+0x308` measured `2.8878`
+on the start line against a `craft+0x2f0` of `4.125` - `1.237` compressed, `1 %`
+from the `1.25` this model predicts, on a number taken before the model existed.
+The same read is what dissolves the two "refuted" geometry readings: see
+engine.md's section above.
+
+### The measured before and after
+
+Both sides fitted the same way, by
+`scripts/trace-pitch-response.py` (a least-squares
+`A e^{-sigma t} cos(omega_d t + phi)` over the first hold, so the two are
+identified by one method rather than by two hand readings). Its fit reproduces
+the hand-read extrema exactly and puts the original's `2*zeta*omega_n` at `8.85`
+where the hand method read `6.31` - the *ratio* between the two sides is what
+either method measures, and it is `5.1x` before and `1.006x` after.
+
+| `pitch-both-ways`, ticks 40-160 | first four extrema, rad/s | `omega_n` | `2*zeta*omega_n` |
+| --- | --- | ---: | ---: |
+| the original | `-0.398 +0.080 -0.017 +0.007` | `9.72` | `8.85` |
+| ours, before | `-0.429 +0.353 -0.288 +0.236` | `13.68` | `1.75` |
+| **ours, after** | `-0.397 +0.079 -0.017 +0.007` | `9.73` | `8.90` |
+
+`pitch-hold-thrust` (noisier - the craft is under power) agrees: original
+`9.44`/`8.80`, ours `13.87`/`1.50` before and `9.35`/`8.00` after.
+
+The whole-run comparison against the same capture, which no fit enters:
+
+| `oag-trace run`, max error | before | after |
+| --- | ---: | ---: |
+| position | `1.570e1` | `5.452e-1` |
+| velocity | `7.759e0` | `2.062e-1` |
+| `orientation.up` | `7.691e-2` | `7.874e-4` |
+| angular velocity | `6.837e0` | `4.858e-2` |
+| angular rate | `4.382e-1` | `3.296e-3` |
+| `grounded` | exact | exact |
+
+`grounded` is exact on all 360 ticks **with the recovered reach and drop in
+place**, which is the property the geometry was previously thought to break.
+
+### What did not change, and one thing that got quieter
+
+- **The resting-quietness property survives and improves.** Over the 38
+  input-free ticks at the head of the capture the pitch rate's rms is `0.00000`
+  where it was `0.00096`, against an original at `0.00000`. The full `|omega|`
+  rms reads `0.00540` against the original's `0.00539` - that residual is the
+  craft's own `0.31 deg/s` yaw creep, which both sides have.
+- **Roll is untouched, by construction**: both probes sit on the centreline, so
+  the suspension produces no roll torque at all and the `13 %` roll-stiffness gap
+  (`5.06` predicted against `4.49` measured) is exactly where it was. It is now
+  the *only* gap of its kind left on the attitude axes.
+- The seeded whole-lap comparison is unchanged within its own noise (position max
+  error `1.172e3 -> 1.169e3`); that run diverges for reasons this term does not
+  reach. The open-loop `just scripted-sim` lap moves `659 -> 618` units travelled
+  with the same `3145/3146` grounded and the same worst off-spline `20.4` - also
+  unchanged, and worth flagging separately that `659` is itself far below the
+  `2,792` the contact-generation pass recorded, so something between those two
+  passes regressed that scenario and it is **not** this change.
 
 ### What was deliberately not landed
 
@@ -585,7 +686,7 @@ above, but landing it alone regresses every measured number, and
 half-landed force term is worse than none. The vertical drop and the shortened
 raycast that come with it in the binary are, separately, **refuted by the
 captures** - see
-[engine.md](../ghidra/functions/psp-pulse/engine.md#two-of-these-readings-are-refuted-at-runtime-and-that-is-left-open).
+[engine.md](../ghidra/functions/psp-pulse/engine.md#resolved-neither-reading-was-refuted-the-load-was).
 The order that makes sense is to find the missing damping first, then land the
 geometry into a model that can hold it.
 

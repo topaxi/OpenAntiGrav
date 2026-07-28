@@ -15,11 +15,20 @@
 //! - **`rebound` and `landing_rebound` scale damping only**, never the spring.
 //!   Damping is a *multiplier* on the spring term rather than a summand, so at
 //!   the height where the spring is zero the damping is zero too.
-//! - **`ride_height` is both the raycast length and the spring's target.** This
-//!   corrects `docs/physics/README.md`, which said it "never appears in the force
-//!   law": `docs/ghidra/functions/psp-pulse/engine.md` traced the offset chain from
-//!   the parser through `craft+0x70` and `craft+0x2f0` into the spring, at
-//!   confidence 88. See [`target_height`].
+//! - **The reach is the spring's own target, and the target comes from
+//!   `ride_height`.** `docs/physics/README.md` said `ride_height` "never appears
+//!   in the force law"; `docs/ghidra/functions/psp-pulse/engine.md` traced the
+//!   offset chain from the parser through `craft+0x70` and `craft+0x2f0` into the
+//!   spring, and `Ship_CastHoverProbes` ends its ray at
+//!   `probe - up * craft+0x2f0`. So the probes reach exactly as far as the height
+//!   they hold and the suspension is **compression-only**. See [`target_height`]
+//!   and [`probe`].
+//! - **The suspension carries two gravities, not one.** [`DOWNFORCE_SCALE`]
+//!   presses the craft onto the surface with `track_gravity * mass * grounded`,
+//!   which is exactly what the spring's `normal_gravity + track_gravity`
+//!   calibration is calibrated for. Removing it does not merely lift the craft:
+//!   because the damper multiplies the spring magnitude, it removes most of the
+//!   craft's attitude damping with it.
 //!
 //! And one absence: **nothing here pitches the ship to the track**, and on a
 //! magstrip that is [`crate::maglock`]'s job rather than a gap. Pitch and
@@ -30,29 +39,29 @@
 //!
 //! # How much travel the suspension has, which used to be an open question
 //!
-//! A probe in contact reports a height in `0..=ride_height`, and the spring rests
-//! where its force carries the ship's weight:
+//! A probe in contact reports a height in `0..=target`, and the craft rests where
+//! the two springs carry the load - gravity **plus** the downforce:
 //!
 //! ```text
-//! sag = normal_gravity / (0.3 * HOVER_K * (normal_gravity + track_gravity))
+//! 2 * 0.3 * HOVER_K * (normal_gravity + track_gravity) * compression
+//!     = normal_gravity * classScale + track_gravity
+//! compression = 1.25                          ; classScale is 1.0 for every class
 //! ```
 //!
-//! `mass` cancels, and on the observed data the sag is 0.147 units. What used to make
-//! that fatal was reading the target as *equal* to the reach, which left a resting ship
-//! 2.7 % of the way down its own range, hard against the top: any disturbance past
-//! 0.147 units dropped both probes, and gravity's grounded-to-airborne step -
-//! `normal_gravity` to `flight_gravity`, 5 to 95, and **one frame stale** - turned the
-//! overshoot into a larger one until the ship was thrown clear.
+//! `mass` cancels and so do the gravities, so **every craft in the game rests
+//! `1.25` units into its travel**, with as much again above it before a probe
+//! loses the ground. That symmetry is what makes the recovered geometry work, and
+//! it is measured rather than argued: the original's live `craft+0x308` reads
+//! `2.8878` against a `4.125` target.
 //!
-//! **That is settled, and the answer was [`TARGET_GLOBAL_SCALE`].** It is `0.75`, read
-//! off the running game rather than guessed, so the target is `4.125` against a `5.5`
-//! reach and a resting ship sits about **1.5 units** below the height at which it loses
-//! the ground - ten times the old margin. The other two candidates are **falsified**:
-//! `craft+0x74` measures `0.0` in a live race, and lengthening the raycast makes the
-//! ship's behaviour measurably worse rather than better. Making grounded gravity
-//! `normal + track` was also tried and is falsified: it moves the calibration and the
-//! load together, leaves the ratio unchanged, and throws the ship sooner.
-
+//! Two earlier readings of this same question are kept as recorded history,
+//! because both were wrong in instructive ways. The first had the target equal to
+//! the reach *and* `TARGET_GLOBAL_SCALE` at the identity, which left a resting
+//! ship hard against the top of its range; that was settled by reading the scale
+//! at `0.75`. The second computed the sag from `normal_gravity` alone - one probe
+//! at that - and got `0.147` units, which made the recovered probe geometry look
+//! refuted by the captures. It was the load that was wrong, not the geometry.
+//!
 use oag_core::math::Vec3;
 
 use crate::collide::{Ray, Raycaster};
@@ -434,14 +443,64 @@ pub const ALIGNMENT_GAIN: f32 = 400.0;
 /// the hover epilogue's writes; `docs/physics/README.md` records the term without it.
 pub const BANK_TO_YAW_GAIN: f32 = 30.0;
 
-/// How strongly the grounded downforce opposes the hover spring.
+/// The grounded downforce, `-track_gravity * mass * grounded * (1 - magLockBlend)`
+/// along the averaged contact normal.
 ///
-/// `docs/physics/README.md` records a downforce "along the ground normal opposing
-/// the hover spring" and **does not record its magnitude**. The shape is
-/// therefore implemented and the coefficient is **deliberately zero**: this crate
-/// ships no invented constant, because a plausible-looking `0.05` here would be
-/// indistinguishable from a recovered value six months from now. M3 fills it in.
-pub const DOWNFORCE_SCALE: f32 = 0.0;
+/// # This used to be a shape with a deliberately zero coefficient, and the
+/// magnitude was recorded all along
+///
+/// The old text here said `docs/physics/README.md` "does not record its
+/// magnitude", so the term was implemented as `spring_along_up * 0.0` - a shape
+/// that scaled with the spring rather than with the load, multiplied by nothing.
+/// **Both halves were wrong**, and the correction is a read, not a fit.
+/// `Ship_HoverTwoPoint`'s epilogue, `0x0884ad78`-`0x0884ae18`:
+///
+/// ```text
+/// 0884ad78  a0 = craft+0x1cc                 ; the rigid body
+/// 0884ad7c  f12 = body+0x374                 ; mass, the field gravity also reads
+/// 0884ad80  a0 = craft+0x70                  ; the handling block
+/// 0884ad84  f13 = [a0+0x6c]                  ; track_gravity
+/// 0884ad88  mul.s f12,f13,f12                ; track_gravity * mass
+/// 0884ad8c  f14 = craft+0x2b0                ; THIS frame's grounded fraction
+/// 0884ad90  mul.s f12,f12,f14
+/// 0884ad94  neg.s f12,f12                    ; the sign is here, not at the use site
+/// 0884ada4  C500 = craft+0x140               ; the averaged contact normal
+/// 0884ada8  vscl.q C300,C500,S400            ; * that scalar
+/// 0884add0  f12 = craft+0x280                ; the magstrip blend
+/// 0884add4  sub.s f12,f20,f12                ; 1 - blend
+/// 0884adec  vscl.q C300,C500,S400            ; * (1 - blend)
+/// 0884ae08  a1 = craft+0x330                 ; the WORLD force accumulator
+/// 0884ae14  vadd.t C300,C300,C600            ; += it
+/// ```
+///
+/// Confidence **92** on the PSP instructions, and it has a second binary: the PS2
+/// build's four-corner twin computes `-track_gravity * mass` along the same
+/// averaged normal through a different base pointer
+/// ([ps2-pulse/craft-update.md](../../../docs/ghidra/functions/ps2-pulse/craft-update.md)).
+/// So the coefficient is `1.0` - there is no scale - and this constant exists
+/// only to keep the name the rest of the tree refers to.
+///
+/// # It is the missing pitch damping, and that is arithmetic rather than a hope
+///
+/// The spring's damper is a **multiplier on the spring magnitude**
+/// (`1 + rebound * clamp(-0.1 * vn, -1, 2)`), so the rate feedback it produces is
+/// `0.1 * rebound * S`, proportional to the spring force `S` the craft is
+/// *already* carrying. Without this downforce the two probes carry only
+/// `normal_gravity * mass`; with it they carry `(normal_gravity + track_gravity) *
+/// mass`, and on the shipped values that is a factor of **17**. The resting
+/// compression the spring settles at,
+///
+/// ```text
+/// compression = (normal_gravity + track_gravity) / (0.8 * (normal_gravity + track_gravity)) = 1.25
+/// ```
+///
+/// (`0.8` is two probes times `0.3 * HOVER_K`, and the class gravity scale at
+/// `0x08ab0dcc` reads `1.0` for all four classes), is what the live probe read on
+/// the start line measured at **1.237** - a number that made no sense while the
+/// downforce was zero, and which is why the recovered probe geometry looked
+/// refuted. See [`probe_offsets`] and
+/// `docs/physics/angular-velocity-column.md`.
+pub const DOWNFORCE_SCALE: f32 = 1.0;
 
 /// What one probe found and what it contributed.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -520,47 +579,65 @@ impl Hover {
     }
 }
 
-/// Where the two probes sit in body space.
+/// How far below the centre of mass the two probes hang, before
+/// [`TARGET_GLOBAL_SCALE`].
 ///
-/// Half a hull length fore and aft of the centre of mass, from
-/// `<Misc length/>`. The page says the hull length sets where the probes sit and
-/// does not say with what factor, so the symmetric half-length placement is a
-/// **guess awaiting M3**; it is at least symmetric, which is the property the
-/// tests depend on. The front probe is first.
-///
-/// # The original's placement is recovered, and is deliberately not used yet
-///
-/// `Ship_InitCraft` (`0x08849354`) writes both offsets as immediates,
-/// `(0, -1.5, +/-6)`, and scales each by the same `0.75` global that
-/// [`TARGET_GLOBAL_SCALE`] is - so the original's probes sit at
-/// `(0, -1.125, +/-4.5)`, a **code literal identical for every craft**, with no
-/// handling parameter in it at all. Confidence 92; see
-/// `docs/ghidra/functions/psp-pulse/engine.md`, "The probe geometry is a code
-/// literal, like the inertia tensor".
-///
-/// The `+/-4.5` half-spacing has a second, independent leg: the pitch
-/// oscillator's frequency in `data/traces/talons-junction-pitch-both-ways.csv`
-/// measures a stiffness ratio of `2.26` against this function's `+/-6.5`, where
-/// the recovered spacing predicts `(6.5/4.5)^2 = 2.09`. Agreement to 8 %, from a
-/// capture that knows nothing about the binary.
-///
-/// **It is still not landed, for a measured reason rather than a doubt.** Pitch
-/// damping through this suspension falls linearly with the spacing, and
-/// `oag-physics` is already `3.4x` short of the original's pitch damping, so
-/// shortening the arm on its own moves the pitch-rate error from `134 %` to
-/// `1005 %` of signal and drops `grounded` off `1.0` on 166 of 360 ticks where
-/// the original never leaves it. The `-1.125` vertical drop that comes with it
-/// is separately **refuted** by the same capture's resting pose. The missing
-/// damping term is the thing to find first; the arithmetic, the exclusions and
-/// what was tried are in
-/// `docs/physics/angular-velocity-column.md`, "The pitch response rings, and the
-/// alignment torque is not why".
-#[must_use]
-pub fn probe_offsets(handling: &Handling) -> [Vec3; 2] {
-    let half = handling.dimensions.length * 0.5;
+/// `Ship_InitCraft` (`0x08849354`) writes the immediate `0xbfc00000` into the `y`
+/// lane of both offsets at `0x08849480`-`0x088494b4`.
+pub const PROBE_DROP_RAW: f32 = 1.5;
 
-    // Body forward is -Z; see `Body::forward`.
-    [Vec3::new(0.0, 0.0, -half), Vec3::new(0.0, 0.0, half)]
+/// How far fore and aft the two probes sit, before [`TARGET_GLOBAL_SCALE`].
+///
+/// The `z` immediates from the same two writes, `0x40c00000` and `0xc0c00000`.
+pub const PROBE_HALF_SPACING_RAW: f32 = 6.0;
+
+/// Where the two probes sit in body space, `(0, -1.125, -/+4.5)`, front first.
+///
+/// **A code literal, identical for every craft in the game.** `Ship_InitCraft`
+/// (`0x08849354`) writes `(0, -1.5, +/-6)` as immediates and scales both by the
+/// same `0.75` global that [`TARGET_GLOBAL_SCALE`] is, in the ship-entity
+/// constructor that calls it. Confidence 92; see
+/// `docs/ghidra/functions/psp-pulse/engine.md`, "The probe geometry is a code
+/// literal, like the inertia tensor". No handling parameter enters it, so the
+/// old `<Misc length>`-derived `+/-6.5` was deriving the spacing from the wrong
+/// thing whatever factor it picked - the hull dimensions go to the *collider*,
+/// exactly as they do for the inertia tensor.
+///
+/// # Why this could not be landed before the downforce, and why it can now
+///
+/// Two separate refutations used to stand against this placement, and
+/// [`DOWNFORCE_SCALE`] dissolved both at once rather than either being wrong on
+/// its own terms:
+///
+/// - **"Landing the spacing makes pitch worse."** True while the suspension
+///   carried only `normal_gravity`: damping through the probes falls with `d^2`
+///   and the crate was already `3.4x` short, so shortening the arm took the
+///   pitch-rate error from `134 %` to `1005 %`. With the downforce the spring
+///   carries seventeen times the load and the damper - a *multiplier* on the
+///   spring - scales with it, so the shorter arm now lands on the original's own
+///   step response instead of under it.
+/// - **"The `-1.125` drop and a reach equal to the target are refuted by the
+///   capture, which holds `grounded` at 1.0."** That refutation computed the
+///   resting probe height with the load wrong: a craft carrying `normal_gravity`
+///   alone rests `0.147` into a `4.125` reach and any disturbance drops it,
+///   while a craft carrying `normal_gravity + track_gravity` rests **`1.25`**
+///   into it and has that much travel in both directions. The live read on the
+///   start line measured the probe distance at `2.888` against a `4.125` target -
+///   `1.237` compressed, agreeing with the equilibrium this model now has to
+///   `1 %`.
+///
+/// The `+/-4.5` half-spacing also has an independent runtime leg that never
+/// depended on either: the pitch oscillator's own frequency. The original's
+/// `omega_n` measures `9.32-9.72` rad/s and two probes at `+/-4.5` on the
+/// recovered tensor predict `sqrt(2 * 0.4 * (ng + tg) * 4.5^2 / 15.6)`, which is
+/// `9.4`. Nothing in that prediction was fitted.
+#[must_use]
+pub fn probe_offsets() -> [Vec3; 2] {
+    let drop = PROBE_DROP_RAW * TARGET_GLOBAL_SCALE;
+    let half = PROBE_HALF_SPACING_RAW * TARGET_GLOBAL_SCALE;
+
+    // Body forward is -Z; see `Body::forward`. The front probe is first.
+    [Vec3::new(0.0, -drop, -half), Vec3::new(0.0, -drop, half)]
 }
 
 /// The damping multiplier's rebound coefficient for this frame.
@@ -612,7 +689,15 @@ pub fn probe<R: Raycaster + ?Sized>(
 
     // Cast along the ship's **own** up axis rather than world gravity. This is
     // the whole reason magstrips and inversions work at all.
-    let ray = Ray::new(point, -up, handling.antigrav.ride_height);
+    //
+    // The reach is the spring's own target, not `ride_height`:
+    // `Ship_CastHoverProbes` builds the ray's far end at `0x0884a0b4` as
+    // `probe - up * craft+0x2f0`, the same field `Ship_HoverTwoPoint` springs
+    // against. A probe therefore reaches exactly as far as the height it holds,
+    // so the spring is compression-only - which is consistent with the capture
+    // precisely because [`DOWNFORCE_SCALE`] rests the craft `1.25` units into
+    // that reach rather than `0.147`.
+    let ray = Ray::new(point, -up, target_height);
 
     let Some(hit) = raycaster.raycast(ray, env.self_collider, false) else {
         return HoverProbe::miss(point);
@@ -678,7 +763,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     raycaster: &R,
     target_height: f32,
 ) -> Hover {
-    let offsets = probe_offsets(handling);
+    let offsets = probe_offsets();
     let probes = [
         probe(state, handling, env, raycaster, offsets[0], target_height),
         probe(state, handling, env, raycaster, offsets[1], target_height),
@@ -690,12 +775,10 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
 
     let mut normal_sum = Vec3::ZERO;
-    let mut spring_along_up = 0.0f32;
     let up = state.body.up();
     for probe in &probes {
         if probe.contact {
             normal_sum += probe.normal;
-            spring_along_up += probe.force.dot(up);
         }
     }
     let average_normal = (normal_sum / (contacts as f32)).normalize_or_zero();
@@ -707,7 +790,19 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let right = state.body.right();
     alignment_torque -= right * alignment_torque.dot(right);
 
-    let downforce = -average_normal * spring_along_up * DOWNFORCE_SCALE;
+    // The load the spring is calibrated to carry, pressing the craft onto the
+    // surface: `-track_gravity * mass * grounded * (1 - magLockBlend)` along the
+    // averaged normal, with **this** frame's groundedness (the original
+    // accumulates `craft+0x2b0` inside this same function, half per contacting
+    // probe, before the epilogue reads it). `mass` is the body's, which is the
+    // field `Ship_HoverTwoPoint` and the gravity term both read.
+    let grounded = crate::ship::ShipState::quantise_grounded(contacts);
+    let downforce = -average_normal
+        * (handling.physical.track_gravity
+            * state.body.mass
+            * grounded
+            * (1.0 - state.mag_lock_blend)
+            * DOWNFORCE_SCALE);
 
     // Bank-to-yaw: a body-local yaw term proportional to how far the right axis
     // has tipped out of the world horizontal, and cancelled by a magstrip lock
@@ -797,15 +892,30 @@ mod tests {
         }
     }
 
+    /// The spring vanishes at the target, approached from below.
+    ///
+    /// It used to be asserted *at* the target with the probe still in contact,
+    /// which the recovered reach makes impossible: `Ship_CastHoverProbes` ends
+    /// the ray at `probe - up * craft+0x2f0`, so the target is exactly where a
+    /// probe stops finding anything (see [`probe`]). The property being pinned is
+    /// unchanged - the force is proportional to `target - height` and goes to
+    /// zero with it - so it is asserted as a limit instead of at the boundary.
     #[test]
-    fn a_probe_at_the_target_height_produces_no_force() {
+    fn the_spring_vanishes_as_a_probe_approaches_the_target_height() {
         let world = flat_floor();
         let handling = test_handling();
         let target = 5.0;
-        let state = state_at(target);
 
-        let probe = probe(
-            &state,
+        let near = probe(
+            &state_at(target - 0.001),
+            &handling,
+            &Environment::default(),
+            &world,
+            Vec3::ZERO,
+            target,
+        );
+        let far = probe(
+            &state_at(target - 0.01),
             &handling,
             &Environment::default(),
             &world,
@@ -813,20 +923,22 @@ mod tests {
             target,
         );
 
-        assert!(probe.contact);
-        assert_eq!(probe.height, target);
-        assert_eq!(probe.force, Vec3::ZERO);
+        assert!(near.contact && far.contact);
+        assert!(near.force.y > 0.0);
+        // Ten times closer to the target, ten times less force: linear in the
+        // compression, with nothing else in the term.
+        assert!((near.force.y * 10.0 - far.force.y).abs() < 1e-4);
     }
 
-    /// The damping is a multiplier on the spring rather than a summand, so at the
-    /// height where the spring vanishes no amount of vertical velocity produces a
-    /// force. Counter-intuitive, and exactly what the page specifies.
+    /// The damping is a multiplier on the spring rather than a summand, so where
+    /// the spring is vanishing no amount of vertical velocity produces a force.
+    /// Counter-intuitive, and exactly what the binary does.
     #[test]
     fn damping_cannot_produce_a_force_where_the_spring_is_zero() {
         let world = flat_floor();
         let handling = test_handling();
         let target = 5.0;
-        let mut state = state_at(target);
+        let mut state = state_at(target - 0.001);
         state.body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
 
         let probe = probe(
@@ -837,7 +949,12 @@ mod tests {
             Vec3::ZERO,
             target,
         );
-        assert_eq!(probe.force, Vec3::ZERO);
+        // The damper multiplies by at most `1 + rebound * 2`, which on this
+        // fixture is three times a spring of `mass * 0.3 * 0.001 * K * gravity`
+        // = `0.004`. So even a 50 unit/s closing speed cannot lever a vanishing
+        // spring into a real force: the bound is `0.012`, not the `2.0` a
+        // summed `-c * v` damper would have produced here.
+        assert!(probe.force.length() < 0.02, "force was {:?}", probe.force);
     }
 
     #[test]
@@ -857,8 +974,18 @@ mod tests {
         assert_eq!(probe.force.z, 0.0);
     }
 
+    /// **The suspension is compression-only, and this replaces a test that
+    /// asserted the opposite.**
+    ///
+    /// `a_probe_above_the_target_height_is_pulled_back_down` pinned a spring that
+    /// pulled a too-high ship back down, which was a consequence of casting
+    /// `ride_height` while springing against a `0.75 * ride_height` target - a
+    /// combination the binary does not have. The ray's far end is the target
+    /// itself (`0x0884a0b4`), so above it there is no contact, no force and no
+    /// pull: the craft is simply airborne on that probe. The deleted assertion is
+    /// named here so nobody re-derives it from the old prose.
     #[test]
-    fn a_probe_above_the_target_height_is_pulled_back_down() {
+    fn a_probe_above_the_target_height_finds_nothing_at_all() {
         let world = flat_floor();
         let handling = test_handling();
         let probe = probe(
@@ -869,11 +996,14 @@ mod tests {
             Vec3::ZERO,
             5.0,
         );
-        assert!(probe.force.y < 0.0);
+        assert!(!probe.contact);
+        assert_eq!(probe.force, Vec3::ZERO);
     }
 
-    /// `ride_height` is the raycast length and nothing else, so a probe further
-    /// above the floor than `ride_height` simply finds nothing.
+    /// The target height is the raycast length, so a probe further above the
+    /// floor than the height it is holding simply finds nothing. (The name still
+    /// says `ride_height` because the fixture's target is derived from it; the
+    /// reach itself is the target - see [`probe`].)
     #[test]
     fn a_probe_beyond_ride_height_finds_no_surface() {
         let world = flat_floor();
@@ -1155,8 +1285,12 @@ mod tests {
         ));
 
         let handling = test_handling();
+        // The probes hang [`PROBE_DROP_RAW`] * [`TARGET_GLOBAL_SCALE`] below the
+        // centre of mass now, so the body sits that much higher to put the front
+        // probe 0.2 above its floor. Same geometry as before at the probes, which
+        // is where this test's numbers live.
         let hover = evaluate(
-            &state_at(0.2),
+            &state_at(0.2 + PROBE_DROP_RAW * TARGET_GLOBAL_SCALE),
             &handling,
             &Environment::default(),
             &world,
@@ -1165,9 +1299,12 @@ mod tests {
 
         assert_eq!(hover.contacts, 2);
         // Front probe 0.2 above its floor, rear probe 0.7 above its own.
-        assert_eq!(hover.probes[0].escape, Vec3::new(0.0, 0.8, 0.0));
-        assert_eq!(hover.probes[1].escape, Vec3::new(0.0, 0.3, 0.0));
-        assert_eq!(hover.escape, Vec3::new(0.0, 0.8, 0.0));
+        // Approximate rather than exact: the probe offset now carries a
+        // `1.125` drop, so the heights come out of one more subtraction than
+        // they used to and land a single ulp off the round numbers.
+        assert!((hover.probes[0].escape - Vec3::new(0.0, 0.8, 0.0)).length() < 1e-6);
+        assert!((hover.probes[1].escape - Vec3::new(0.0, 0.3, 0.0)).length() < 1e-6);
+        assert!((hover.escape - Vec3::new(0.0, 0.8, 0.0)).length() < 1e-6);
     }
 
     /// The roll oscillator is stable, and the margin is pinned so it cannot drift back.

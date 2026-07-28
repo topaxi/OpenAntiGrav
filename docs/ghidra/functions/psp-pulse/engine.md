@@ -1563,46 +1563,94 @@ convention this engine uses throughout, so `basis * (r x -omega)` is
 recorded sign and the recorded frame were both right, and they cancel.
 Confidence **88**. The crate's note can be closed rather than carried.
 
-### Two of these readings are refuted at runtime, and that is left open
+### Resolved: neither reading was refuted, the load was
 
-The instructions above are unambiguous, but two of them cannot be reconciled with
-`data/traces/talons-junction-pitch-both-ways.csv`, which is the cleanest capture
-in the tree (360 wall-free ticks, no thrust, `speed/|velocity|` at `1.0000`).
-Both refutations are recorded rather than resolved, and **neither is
-implemented**, because a reading the capture contradicts is not a reading to
-build on:
+The two readings this section used to record as contradicted by
+`data/traces/talons-junction-pitch-both-ways.csv` - the reach equalling the
+target, and the `-1.125` vertical drop - are **both correct as read**, and the
+refutations were arithmetic performed with the wrong load. What was missing was
+the downforce below; the whole story is one term.
 
-- **The reach cannot equal the target height.** The capture holds `grounded` at
-  exactly `1.0` - both probes in contact - on all 360 ticks, while the recorded
-  basis and position put each probe **`0.46` units above its resting height** at
-  the peak of the pitch input. Raycasting the real track at the capture's own
-  first pose gives a probe height of `4.009` against a `craft+0x2f0` of `4.125`,
-  so a reach equal to the target leaves `0.116` of extension headroom, four times
-  less than the probes demonstrably travel. Replaying with the reach shortened to
-  the target confirms it directly: `grounded` collapses to `1.0` on 160 of 360
-  ticks and the pitch-rate error grows from 134 % to 414 % of signal.
-- **The `-1.125` vertical drop cannot be there either**, by the same first pose.
-  A resting craft's probe sits at `target - sag`; the capture's own pose puts a
-  probe with **no** vertical offset at `4.009`, and the earlier live read of the
-  original's resting probe height is `4.002`. With the probes `1.125` lower the
-  same pose reads `2.888`, and the ship is then a unit and a bit out of
-  equilibrium at the instant the replay starts.
+The refutations were, in their own words, that a reach equal to the target leaves
+only `0.116` of extension headroom while the capture holds `grounded` at exactly
+`1.0`, and that a probe `1.125` lower than the centre would sit `2.888` above the
+track where the capture's own pose reads `4.009`. Both computed the resting probe
+height as `target - sag` with `sag` derived from the craft carrying
+`normal_gravity` alone, which gives `0.147`. The craft does not carry
+`normal_gravity` alone:
 
-The `+/-4.5` half-spacing, by contrast, is **corroborated** at runtime rather than
-refuted - the pitch oscillator's frequency measures it independently, to 8 %. See
-[angular-velocity-column.md](../../../physics/angular-velocity-column.md#the-pitch-response-rings-and-the-alignment-torque-is-not-why).
+```text
+2 * 0.3 * K * (normal_gravity + track_gravity) * compression
+    = normal_gravity * classScale + track_gravity        ; gravity + the downforce
+compression = 1.25                                       ; classScale == 1.0
+```
 
-So the honest state is: three literals read at 92, one confirmed by an
-independent runtime measurement and two contradicted by one. The likeliest
-explanations, none of them checked, are that `craft+0x2f0` holds a different
-stage of its own in-place computation when the cast runs, and that some second
-term (the grounded downforce this page's
-[contradictions](#contradictions-with-docsphysicsreadmemd) section already
-records as unimplemented) moves the resting equilibrium far enough down the
-reach to make both consistent. Whoever picks that up should start by breaking on
-`Ship_CastHoverProbes` in PPSSPP and reading `craft+0x2f0`, `craft+0xc0` and
-`craft+0x308` live - all three are single words and the question is decided by
-their values, not by more disassembly.
+so a resting probe sits `4.125 - 1.25 = 2.875` above the surface with `1.25` of
+travel in *each* direction - and the live read on the start line measures
+`craft+0x308 = 2.8878`, and the resting centre height `4.002`-`4.009` is that
+probe height plus the `1.125` drop. Every number the refutations quoted is
+reproduced by the corrected model; `4.009` was the *centre*, not the probe.
+
+Three independent legs now agree on the geometry:
+
+| Leg | Predicts | Measured |
+| --- | ---: | ---: |
+| The literals plus the corrected load | probe rest `2.875`, centre `4.000` | `2.8878`, `4.002`-`4.009` |
+| Two probes at `+/-4.5` on the recovered tensor | pitch `omega_n` `9.4` rad/s | `9.32`-`9.72` |
+| The damper at that load through those arms | `2*zeta*omega_n` `6.6` | `8.85` fitted, `8.90` reproduced |
+
+**Landed**: `crates/physics/src/hover.rs` implements the offsets, the
+target-length reach and the downforce together, and the pitch step response goes
+from ringing at `2*zeta*omega_n = 1.75` to reproducing the original's extrema to
+the third decimal. See
+[angular-velocity-column.md](../../../physics/angular-velocity-column.md#resolved-the-missing-49-is-the-hover-downforce).
+
+### The grounded downforce, read instruction by instruction
+
+`Ship_HoverTwoPoint`'s epilogue, `0x0884ad78`-`0x0884ae18`, after the alignment
+torque and the bank-to-yaw term:
+
+```text
+0884ad78  a0 = craft+0x1cc                 ; the rigid body
+0884ad7c  lwc1 f12,0x374(a0)               ; mass - the same field gravity reads
+0884ad80  a0 = craft+0x70                  ; the handling block
+0884ad84  lwc1 f13,0x6c(a0)                ; track_gravity
+0884ad88  mul.s f12,f13,f12                ; track_gravity * mass
+0884ad8c  lwc1 f14,0x2b0(s0)               ; THIS frame's grounded fraction
+0884ad90  mul.s f12,f12,f14
+0884ad94  neg.s f12,f12                    ; the sign is in the code, not the data
+0884ada4  lv.q C500,0x0(a1)                ; a1 == craft+0x140, the averaged normal
+0884ada8  vscl.q C300,C500,S400            ; * the scalar above
+0884adc4  a0 = craft+0x150                 ; (the averaged normal is also cached here)
+0884add0  lwc1 f12,0x280(s0)               ; the magstrip blend
+0884add4  sub.s f12,f20,f12                ; 1 - blend
+0884adec  vscl.q C300,C500,S400            ; * that
+0884ae08  a1 = craft+0x330                 ; the WORLD force accumulator
+0884ae14  vadd.t C300,C300,C600            ; += it
+```
+
+`-track_gravity * mass * grounded * (1 - magLockBlend) * avgNormal`, with **no
+scale of any kind** - the coefficient is `1`. Confidence **92**: every
+instruction is in address order with nothing elided, and the PS2 four-corner
+twin computes the same product through a different base pointer
+([craft-update.md](../ps2-pulse/craft-update.md#the-rest-of-the-four-corner-path)).
+
+Two things fall out that had been open on this page for three passes:
+
+- **The spring's calibration is not a curiosity.** It multiplies by
+  `normal_gravity + track_gravity` because that is exactly the load it carries -
+  gravity plus this term - which is why the resting compression is `1.25`
+  whatever the two gravities are and whatever the craft weighs.
+- **This is the missing pitch damping.** The damper is a multiplier on the
+  spring magnitude, so its rate feedback is `0.1 * rebound * S` with `S` the
+  spring force actually being carried. Without the downforce a reimplementation
+  carries `normal_gravity` alone - `1/17` of the load on the shipped values -
+  and gets `1/17` of the damping. Nothing else was ever missing.
+
+The per-class gravity scale this interacts with is worth recording while it is
+cheap: the table at `0x08ab0dcc` reads `1.0, 1.0, 1.0, 1.0` in the shipped image,
+so the class never changes the load. Confidence **90** (a static read of four
+words; no runtime check).
 
 ## `Ship_UpdateMagLock` rewrites the basis directly, and that is the missing mechanism
 
