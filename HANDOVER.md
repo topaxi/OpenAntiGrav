@@ -897,6 +897,45 @@ intervals with pads excluded.
   below their read values - small terms, recorded open at conf 50/45, not
   "corrected".
 
+**`momentum` (Task #17, commit `17d82d9`): the inertia tensor is confirmed
+on ALL THREE axes - pitch to 0.13 % - the cornering refutation is scoped
+rather than contradicted, and the pitch input axis was mismeasured in the
+crate by 100x.** Two scenarios committed (`pitch-both-ways.inputs` - the
+cleanest capture in the tree, 360/360 wall-free ticks, stationary pitch
+with no thrust - and `pitch-hold-thrust.inputs`).
+
+- Per-axis fits, pooled 658 ticks: pitch **-15.620** vs the code literal
+  -15.6 (**0.13 %**, 94.4 % explained - was 29 % and scattering); yaw
+  -21.770 (0.8 %); roll -15.289 (2.0 %). These captures also separate
+  local-vs-world by a factor of 200 rather than the old 3.6x.
+- **`body+0x150` is now a capture column (`omega_x/y/z`)**, and it makes
+  two identities directly measurable with no force law involved:
+  `body+0x160 = I * body+0x150` (pitch k = 15.601, **100.0 % explained** -
+  the tensor recovered to 0.01 %), and `body+0x150 = -omega(basis)` -
+  so the `w_game = -w_physics` negation sits **between `+0x150` and the
+  world**, not between the two stored columns, which no earlier capture
+  could distinguish.
+- **The cornering pitch/roll refutation is scoped, not contradicted**: the
+  identity holds at every speed band up to 84 u/s (99.6-100 % explained);
+  the 0.231x/0.647x excess is specific to curving geometry at 90-164 u/s -
+  a second rotation source, not a wrong tensor. The lap re-capture with
+  the `omega_*` columns (Task #25) would settle that outright; the old lap
+  capture predates the column and cannot be backfilled.
+- **New named discrepancy, measured at runtime (conf 90): the pitch input
+  axis is +/-100** (`CONTROL_RANGE`, same as steering), not the crate's
+  assumed -1..1 - so the crate's pitch term is **100x too weak**
+  independently of the inertia question - **and the sign is
+  negative-nose-up**, refuting `ShipControls::steer_y`'s documented
+  "positive nose up" (was flagged "a guess awaiting M3"; now measured).
+  Side effect: PPSSPP's analog `stick_y` sign is settled (positive-up).
+  Net #18 expectation, written down BEFORE measuring: 100x weak from the
+  axis, 15.6x strong from the missing inertia, ~6.4x weak overall.
+- Also: the undecoded gate `FUN_088492bc` does not block a grounded
+  stationary craft - pitch responds on the start line. Nothing airborne
+  captured; `grip_air` and the airborne pitch gain remain untested.
+- Verdict: **the momentum model is validated and Task #18 can land.** The
+  agent proceeded to #18 with the ~6.4x prediction on record.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
