@@ -1567,6 +1567,85 @@ reach to make both consistent. Whoever picks that up should start by breaking on
 `craft+0x308` live - all three are single words and the question is decided by
 their values, not by more disassembly.
 
+## `Ship_UpdateMagLock` rewrites the basis directly, and that is the missing mechanism
+
+[cornering-ground-truth.md](../../../physics/cornering-ground-truth.md#the-refutation-is-scoped-the-inverted-section-was-carrying-it)
+measures, from a whole lap, that something rotates the ship's basis **outside
+`Body_Integrate`**, concentrated in Talon's Junction's inverted section, slaving
+the ship's `up` to the track's own surface normal at `0.906x` the rate that
+normal turns. It names `Ship_UpdateMagLock` (`0x0884ba0c`) as the suspect and
+scores the attribution **45**, explicitly because "no instruction has been read
+writing the basis outside the integrator".
+
+**Those instructions are read here.** The function's last eighty instructions do
+nothing else. With `a0 = body` (`craft+0x1cc`, reloaded at `0x0884c190`):
+
+```text
+0884c314  a1 = body+0x20                          ; row 2, forward
+0884c32c  vdot.t   d = dot(forward, axis)
+0884c394  vscl.q   (axis * d) * craft+0x280        ; * the mag-lock blend
+0884c3d4  vsub.q   forward -= that
+0884c3f4  sv.q     body+0x20 := forward            ; THE BASIS IS WRITTEN
+0884c404  a0 = body+0x00                          ; row 0, right
+0884c4b8  vsub.q   right -= axis * dot(right, axis) * craft+0x280
+0884c4d8  sv.q     body+0x00 := right              ; AND AGAIN
+0884c4f8  vcrsp.t  cross(forward, right)
+0884c514  sv.q     body+0x10 := that               ; up := completion of the pair
+0884c51c-0884c5ac                                  ; Gram-Schmidt, forward primary:
+          forward := unit(forward)
+          up      := unit(up - forward * dot(forward, up))
+          right   := cross(up, forward)
+```
+
+Confidence **90** on the writes themselves - `sv.q` into `body+0x00`, `+0x10`
+and `+0x20`, the three basis rows [`Body_Init` sets to
+identity](rigid-body.md#body_init-0x0884de5c), followed by an explicit
+re-orthonormalisation, which is what a function that has just skewed a rotation
+matrix has to do. **It is not a torque, it never touches an accumulator, and it
+therefore cannot appear in the momentum column** - which is exactly the shape
+the lap measurement asked for. The attribution can go from **45** to **90**.
+
+Three details make the match specific rather than merely available:
+
+- **The axis is track-derived and interpolated along the path.** `sp+0x10` is
+  built at `0x0884ba9c`-`0x0884bafc` as `unit(-(section+0xB10))` off
+  `craft+0x1c4 + 0x900`, and a second candidate off the neighbouring section is
+  built the same way at `0x0884bcc0`-`0x0884bd18`. The two are then blended by
+  normalised distance weights (`0x0884be2c`-`0x0884bea8`, each `1 - |d_i - d|`
+  clamped at zero, divided by their sum) before either is used. So the axis the
+  attitude is slaved to **turns continuously as the craft drives along the
+  track**, which is the quantity the lap fit regressed against. Identifying
+  `section+0xB10` as the surface normal specifically is inference from use:
+  confidence **70**.
+- **It is gated on exactly the field that fades the suspension out.**
+  `craft+0x280` is the mag-lock blend; `0x0884ba84` returns immediately when it
+  is zero, so on ordinary track this function does nothing at all. It ramps by
+  `0.2` per frame (`DAT_08a7bd44`), clamped to `0..1`, driven by `craft+0x240` -
+  which `Ship_CastHoverProbes` sets from a third raycast that accepts only
+  surface type **3**, the mag floor. Ordinary track is untouched; a magstrip
+  section gets full slaving in five frames. That is the localisation the lap
+  measured, arrived at independently.
+- **The same blend scales the hover spring to zero.** `Ship_HoverTwoPoint`
+  multiplies every probe force by `1 - craft+0x280` (`0x0884ab48`). So the two
+  are one design: on a magstrip the suspension hands the attitude over to a
+  kinematic hold rather than competing with it. `crates/physics/src/hover.rs`
+  implements the fade and documents the hold as unimplemented, which is now a
+  named gap rather than an open question.
+
+It also **repositions** the body: `0x0884c0dc`-`0x0884c18c` computes
+`(0.8 * craft+0x2f0 - d)` along the blended axis, scales it by the blend and
+passes it to `Body_Translate`, so the craft is held at four fifths of its hover
+target height off the strip by direct displacement. And `0x0884c19c`-`0x0884c310`
+projects the velocity off the axis and renormalises it to its original
+magnitude - the one part of this function
+[rigid-body.md](rigid-body.md#why-this-is-the-missing-228--fs) had already read,
+in order to rule it out as the speed loss. That ruling stands; nobody had read
+past it.
+
+**A reimplementation must not model this as a torque.** Doing so puts it through
+the momentum column, which is precisely the thing the lap capture proves the
+original does *not* do.
+
 ## Contradictions with `docs/physics/README.md`
 
 **`ride_height` does appear in the force law.** That page states it "never

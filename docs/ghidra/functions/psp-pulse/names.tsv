@@ -82,7 +82,7 @@
 0x0882f8f4	function	Sap_Init	82	collision.md
 0x0884ae90	function	Ship_HoverFourCorner	80	collision.md
 0x0884a658	function	Ship_HoverTwoPoint	80	collision.md
-0x0884ba0c	function	Ship_UpdateMagLock	78	collision.md
+0x0884ba0c	function	Ship_UpdateMagLock	88	engine.md
 
 0x08914858	function	MoviePlayer_Create	90	frontend-video.md
 0x089138bc	function	MoviePlayer_Open	88	frontend-video.md
