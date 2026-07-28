@@ -1093,6 +1093,47 @@ the pitch/roll "refutation" collapses to the track's INVERTED SECTION.**
   "verification" shot came out as a menu from an earlier session; check
   the image is what it claims before citing it.
 
+**`alignment` (Task #26, commit `b48e57b`): a validated negative that
+sharpens the ringing into one missing term with a measured magnitude.**
+Nothing landed in the force law; evidence in engine.md and
+angular-velocity-column.md's new sections.
+
+- **The projection is real and the transcription was right** (conf 92,
+  instruction-by-instruction): `cross(up, avgNormal) * -400`, right-axis
+  component Gram-Schmidt-projected out, into the world accumulator. A
+  torque about right IS pitch, so the term levels roll/yaw and contributes
+  nothing to pitch - **no pitch-restoring component is lost there, and no
+  change to that term can be the fix**.
+- **The ringing is a missing DAMPING term, now measured**: fitting both
+  sides' pitch step response from their own extrema, the original carries
+  `2*zeta*omega_n = 6.31` against our `1.83` (and a faithful crate with
+  the recovered probe geometry would carry ~1.4). **A pitch damping
+  contribution of ~4.9 exists that no recovered term supplies** - the
+  alignment torque, `Ship_UpdatePitch` (read in full: pure torque, no rate
+  feedback), the weathervane, and the integrator's 0.01 are all excluded
+  by name. Task #29. The 13 % roll-stiffness gap rides with it.
+- **The probe geometry is a code literal**: `(0, -1.125, +/-4.5)` after
+  the 0.75 global, identical for every craft, no handling parameter in it
+  (conf 92) - deriving from `<Misc length>` was deriving from the wrong
+  thing. The +/-4.5 half-spacing has an independent runtime leg (measured
+  stiffness ratio 2.26 vs predicted 2.09). **Deliberately not landed**:
+  damping falls linearly with the spacing, so shortening the arm while
+  3.4x under-damped makes pitch far worse - the same precedent as the
+  first hover-geometry attempt in the older section below.
+- **Two readings refuted at runtime, flagged with a cheap decider**: the
+  raycast reach reading (`probe - up*craft+0x2f0` with reach == spring
+  target) and the `-1.125` drop both contradict the pitch capture's
+  grounded==1.0-throughout. The decider is a live three-word read at
+  `Ship_CastHoverProbes` (`0x08849ed4`, newly named) - handed to the
+  emulator agent; **do not implement hover-geometry changes before it
+  reports.**
+- Closed on the way: the hover damper's flagged sign question (the
+  original's `cross(r_local, w)` rotated to world IS the crate's
+  `omega x r` under the negation convention, 88); and a correction to the
+  older hover section below - `craft+0x120` is an *unrotated copy* of
+  `+0xc0`; the rotated-and-translated world point (the real lever arm) is
+  `craft+0xe0`. `apply-ghidra-names.py --dry-run`: 505/0/0.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
