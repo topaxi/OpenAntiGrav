@@ -146,10 +146,12 @@ struct Cli {
 
 /// Prints the per-class breakdown of a track's collision soup.
 ///
-/// Extents are the interesting part, not the counts: `docs/formats/collision.md`
-/// records an unresolved contradiction between the sweep-and-prune reading's
-/// -1024..+1023 packed ids and world extents of around 1,554 units, and this is
-/// the cheapest place to measure the shipped geometry against it.
+/// Extents are the interesting part, not the counts: the sweep-and-prune reading
+/// in `docs/formats/collision.md` packs a 2,048-unit window, and this is the
+/// cheapest place to measure the shipped geometry against it. The survey it
+/// produced found seven of sixteen tracks reaching past ±1024 but not one
+/// spanning more than 2,048, so a flagged reach is a finding about the packing's
+/// origin, not about the file.
 fn report_collision(nodes: &[oag_formats::collision::CollisionNode]) {
     for k in collision::stats(nodes) {
         let collidable = if collision::is_collidable(k.kind) {

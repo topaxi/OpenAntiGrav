@@ -134,14 +134,34 @@ a contradiction that needs resolving here.
   branches past them. That retires the "dead content, or another SKU"
   disjunction at confidence **90**.
 
-**And one live contradiction.** Collision vertices reach world-space extents of
-1,335.8 on PSP and 1,554.1 on PS2, but the sweep-and-prune packing documented
-above, `((int)coord + 0x400) * 2` into 11 bits, covers only about +/-1024. Both
-readings cannot be right. Either the packing is per-axis relative to something
-rather than absolute, or the quantisation is not what it appears to be, or the
-broadphase is fed transformed coordinates. Unresolved, and worth knowing before
-anyone implements the SAP: a straight transcription would silently drop geometry
-at the far end of a large track.
+**And what used to be a live contradiction is now a narrowed question.** The
+packing documented above covers a 2,048-unit window, while collision vertices
+reach 1,335.8 on PSP and 1,554.1 on PS2 in world space. That was recorded here as
+"both readings cannot be right". It has since been measured exhaustively - see
+[the survey of all 16 tracks](../../../formats/collision.md#the-broadphase-does-not-pack-world-space-a-survey-of-all-16-tracks),
+which holds the per-track table and the evidence - and the measurement says the
+*geometry* is not at fault:
+
+- **Seven of the sixteen environments reach past ±1024**, so this was never one
+  outlier file. The two numbers above are just `07_Track` (PSP) and `08_Track`
+  (PS2).
+- **Nothing on either disc spans more than 2,048.** The widest collidable span of
+  any single file is **2026.6057** (`10_Track`, present on both discs), 98.96% of
+  the packing's window. Established by walking every `.vex` entry of both
+  archives by index, so it covers all 130 PSP and 189 PS2 collision nodes, not
+  only the named track files.
+
+So every shipped track fits the window, and not one fits it *centred on the world
+origin*. The remaining question is where the offset comes from, and it is a
+question about **this code**, not the data: re-read `Sap_Init` (`0x0882f8f4`) and
+`Sap_QueryAabb` (`0x088304d4`) for a base subtracted before the `+ 0x400`, or a
+coordinate that arrives already relative to one. If neither shows a base, the
+packing reading above is what is wrong. The prediction that a base exists is
+confidence **75** (see the survey page); the measurements behind it are direct.
+
+Still worth knowing before anyone implements the SAP: a transcription that packs
+raw world coordinates would silently drop geometry at the far end of seven of the
+sixteen tracks.
 
 ## Not determined
 
@@ -151,8 +171,10 @@ at the far end of a large track.
   unanswerable from the assets**: all 602,086 scalars on both discs are exactly
   `1.0`, so the field is authored and unused, and only its consumer can say what
   it was for.
-- How the sweep-and-prune packing accommodates coordinates outside +/-1024. See
-  above.
+- **Where the sweep-and-prune packing's origin comes from.** Narrowed, not
+  answered: the survey above rules out the geometry being at fault (every shipped
+  track fits a 2,048-unit window, none fits it centred on the world origin), which
+  leaves reading `Sap_Init` for the base it must subtract. See above.
 - The magnetic-hold block's physics.
 - Whether the 1024-id limit is enforced for meshes with more than 1024
   triangles; the count field is a `u16`, so the format permits more.

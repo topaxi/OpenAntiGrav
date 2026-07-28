@@ -198,8 +198,9 @@ ordering. See also [frame pacing](../psp/frame-pacing.md).
 - [x] Collision against track and walls: the [triangle soup](../formats/collision.md)
       decoded and validated on both discs, queried by a segment-triangle
       narrowphase behind an AABB reject. The sweep-and-prune broadphase is not
-      implemented, and [an unresolved contradiction](../ghidra/functions/psp-pulse/collision.md)
-      in its coordinate packing should be settled before it is.
+      implemented, and [the origin its coordinate packing subtracts](../ghidra/functions/psp-pulse/collision.md)
+      should be settled before it is - measurement has ruled out the geometry, so
+      what is left is a code read.
 
 **Exit criterion:** a single-ship time trial that passes trace comparison for
 the full lap, and that feels right to someone who knows the original.
@@ -291,7 +292,7 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 | Where is lap counting? `gate` has no runtime class at all. | M5 | [track data](../formats/track.md) |
 | How is a ship assigned a grid slot? | M5 | [track data](../formats/track.md) |
 | What does the per-vertex collision scalar mean? **Not answerable from assets**: all 602,086 are exactly `1.0`, so only the consumer can say. | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
-| How does the sweep-and-prune packing hold coordinates beyond +/-1024, when real tracks reach 1,554? | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
+| How does the sweep-and-prune packing hold coordinates beyond +/-1024, when real tracks reach 1,554? **Narrowed by survey**: all 16 environments measured; 7 reach past ±1024, but nothing on either disc *spans* more than 2,048 (widest 2026.6057, `10_Track`, 98.96% of the window). So the geometry is not at fault and the packed input cannot be raw world space - the open part is reading `Sap_Init` (`0x0882f8f4`) for the base it must subtract. | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
 | What are the coordinate conventions? **Handedness answered**: `cross(row0, row1) = row2` exactly on 200/200 ticks, so the basis is positively oriented under ordinary component arithmetic - and turning left rotates forward toward `+row0`, so **row 0 is left, not right**. Units and angles still open. | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |
 | ~~What calls `Ship_UpdateCraft`?~~ **Answered**: `0x0884ff70`, a virtual call through slot `0x70` of the vtable at `object+0x38`, inside a per-entity update loop beginning at `0x0884f70c`. | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |

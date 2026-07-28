@@ -191,19 +191,24 @@ with a warning and the collision view still draws.
 ### What it prints
 
 Per class: node, mesh and triangle counts, and the extent on each axis. The
-extents are the interesting part.
-[collision.md](../formats/collision.md#the-world-space-extent-contradicts-the-documented-broadphase-packing)
-records an unresolved
-contradiction between the sweep-and-prune reading, whose packed ids only span
--1024..+1023, and world extents already measured at 1,335.8 on PSP and 1,554.1 on
-PS2. The tool prints the furthest reach from the origin and says so explicitly
-when it exceeds ±1024, so the contradiction is visible **per track** rather than
-only as a whole-disc maximum - which is what would say whether it is one outlier
-track or all of them.
+extents are the interesting part, and they are what produced
+[the survey of all 16 tracks](../formats/collision.md#the-broadphase-does-not-pack-world-space-a-survey-of-all-16-tracks):
+the sweep-and-prune reading packs a 2,048-unit window, and this tool measures the
+shipped geometry against it. It prints two numbers per file, and flags each
+against its own bound:
 
-That output is a finding, not a rendering bug. If a track's collision runs past
-±1024, the packing reading is wrong or describes a different coordinate space;
-nothing about the picture is affected either way.
+- **reach** - the furthest any collidable vertex sits from the origin on any axis,
+  flagged when it exceeds ±1024. Seven of the sixteen environments trip this.
+- **span** - the longest axis of the collidable bounding box, flagged when it
+  exceeds 2,048. **Nothing on either disc trips this**; the widest is `10_Track`
+  at 2026.6.
+
+Because the numbers are per file rather than a whole-disc maximum, that
+distinction is visible at all - which is what turned a flat contradiction into a
+question about where the packing's origin comes from.
+
+That output is a finding, not a rendering bug. A reach past ±1024 says the packed
+input cannot be raw world space; nothing about the picture is affected either way.
 
 ### Not collision response
 

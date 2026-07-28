@@ -48,10 +48,12 @@ const PS2_NODES: usize = 189;
 /// A coordinate larger than this is a misdecode, not a big track.
 ///
 /// The largest seen is 1,335.8 on PSP and 1,554.1 on PS2, both printed by the
-/// tests. Note that those exceed the roughly +/-1024 window the sweep-and-prune
-/// packing quantises into, and that collision nodes carry an identity world
-/// transform, so the coordinates really are world space. That is an open question
-/// in `docs/formats/collision.md`, not something these tests judge.
+/// tests. Note that those exceed the roughly +/-1024 the sweep-and-prune packing
+/// reaches from the origin, and that collision nodes carry an identity world
+/// transform, so the coordinates really are world space - while `max_span` below
+/// stays under the packing's 2,048-unit window everywhere. Where the packing's
+/// origin comes from is an open question in `docs/formats/collision.md`, not
+/// something these tests judge.
 const COORD_LIMIT: f32 = 1.0e5;
 
 fn image(name: &str) -> Option<PathBuf> {
