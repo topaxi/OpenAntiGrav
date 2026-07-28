@@ -241,8 +241,17 @@ resolver after the integrator with restitution `0.1` and a deferred
 per-contact friction queue. `crates/physics/src/wall.rs` must reproduce that
 response, from the recovered law rather than the fitted number.
 
-`the_ship_does_not_stay_on_the_track_yet` still fails-on-purpose, now
-expected to hinge on the wall response alone.
+**The ship now stays on the track.** With the recovered contact response
+implemented (friction `0.035` from `(0.05 + 0.02)/2`, both literals;
+restitution `0.4`; the tangential term `-friction * v_t`),
+`the_ship_does_not_stay_on_the_track_yet` fails *inverted*: the ship holds
+the track for the full 600 ticks, finite throughout - the test's own panic
+message asks for its retirement. What still separates M4 from its exit
+criterion is **trace-comparison convergence over a full lap**: the replay of
+the wall-scraping reference capture diverges because contact *generation*
+differs (single deepest-probe contact, no angular response at the contact),
+not because any recovered law is wrong. See
+[contact-response](../ghidra/functions/psp-pulse/contact-response.md).
 
 ---
 

@@ -304,7 +304,10 @@ and `3.67 %` is the friction coefficient itself.** Full evidence in
   frame - matching the measurement in every respect. The `4.2 % -> 3.67 %`
   decay is the normal component dying as the motion becomes purely
   tangential (conf 80), so **the settled `3.67 %` is the friction
-  coefficient of that surface**. `Body_Translate` (`0x0884d9f8`, 92) also
+  coefficient of that surface** *(superseded by wall-re below: the
+  coefficient is `0.035`, read from literals; `3.67 %` was still the
+  transient, and the decay direction here is backwards)*.
+  `Body_Translate` (`0x0884d9f8`, 92) also
   named; `Ship_HoverTwoPoint` uses it for probe push-out, a second agreeing
   use site.
 - **`wall.rs` implements only the normal impulse - it has no tangential term
@@ -327,7 +330,10 @@ and `3.67 %` is the friction coefficient itself.** Full evidence in
   does, and validate with `speed/|velocity|` (reads `1.0000` free, settles
   at the surface friction while scraping - sharper than any position
   comparison). `the_ship_does_not_stay_on_the_track_yet` re-checked this
-  pass: still fails, 117/118, unchanged - it is the headline to watch.
+  pass: still fails, 117/118, unchanged - it is the headline to watch
+  *(superseded by wall-re below: the red FAIL was already the INVERTED
+  success message - the ship stays on the track; read the panic text, not
+  the pass/fail bit)*.
 - Cross-checked on both binaries: the PS2 twin has the same construction and
   the same friction-at-`contact+0x34`, deferred into the 8-entry queue
   instead of folded inline.
@@ -336,6 +342,86 @@ and `3.67 %` is the friction coefficient itself.** Full evidence in
   FPU-to-VU transfers); `97599eb` replaced it with the full 37-instruction
   listing in address order with nothing elided. Teammate reports go to the
   orchestrating session by name, not "main" - "main" bounces for teammates.
+
+**`wall-re` (Task #11 done, commits "correct collision and contact response
+calculations" / "implement recovered contact response in wall" / "Implement
+PSP/PS2 contact path divergences" - subjects, not hashes, post-rebase): the
+contact response is implemented from recovered literals, and it corrects two
+claims the paragraph above carried.** Full evidence in the new
+`docs/ghidra/functions/psp-pulse/contact-response.md`:
+
+- **The coefficient is `0.035`, and `3.67 %` was still a transient.**
+  `Collision_AddContact` (`0x08816a14`-`0x08816a70`, conf 90) computes
+  `(A->0x64 + B->0x64) * 0.5`, forced to `0.0` if either side is negative.
+  The two inputs are literals read before any trace was consulted: wall
+  `0.05` (`CollisionNode_ParseChunks`), the craft's own box collider `0.02`
+  (`Ship_SetColliderFriction` `0x0884da7c` from the ship ctor) - so
+  craft-vs-wall friction is `(0.05 + 0.02)/2 = 0.035`. The validation is a
+  **one-sided bound**: `|v'|^2 = vn'^2 + (1-f)^2 |vt|^2` means the normal
+  impulse only *adds* loss, so `0.035` is a hard floor approached from above
+  - and the standing-start contact ticks read
+  `5.21, 4.03, 3.885, ..., 3.560 %`, monotone, never below `3.5 %`; `0.036`
+  is refused by tick 295 alone. rigid-body.md's decay direction was
+  backwards (the loss *falls* to the coefficient, not rises) and is fixed.
+- **`collider+0x64` is FRICTION, not restitution** - collision.md had the
+  values and the negative-sentinel combination rule right since the capstone
+  pass, but the field name wrong. Restitution is `body+0x388`, and it is
+  **`0.4`, not `Body_Init`'s `0.5` default** - the ship ctor overwrites it
+  unconditionally (conf 88, up from 55). `contact+0x10` confirmed
+  unit-length, which `j`, the denominator and the tangential split all
+  silently assumed.
+- **The `vertex_scalar` hypothesis is refuted, not merely unconfirmed** -
+  friction is per-collider, averaged; the per-vertex scalar is unrelated.
+  collision.md's conf-40 guess is now a recorded negative.
+- **Three PSP/PS2 divergences, PSP implemented per the directive, PS2
+  recorded in a table**: restitution per-body `0.4` (PSP) vs hardcoded
+  `e = 0.1` (PS2); no separating-contact test - two-sided (PSP) vs early
+  return on `vn > 0` (PS2); friction folded inline (PSP) vs deferred via the
+  8-entry queue (PS2). **The PSP twin of the queue is `Body_RecordContact`
+  (`0x0884dbf4`) and on PSP it is a gameplay-reaction record, not a physics
+  work list** - `FUN_088418e0` walks it with magnitude tests against
+  `0.7`/`0.0125`/`10000.0` literals and writes no velocity back; a second
+  friction application would cost `6.88 %`/frame, which the capture forbids.
+  This is also where `Ship_ApplyCollisionImpulse`'s pending vector comes
+  from. Pickup flag `0x10` narrowed to `*(entity+0x4c)+0x1b8` (setter
+  unread; the conf-75 wall attribution stays capped).
+- Crate changes: `restitution` -> `friction` rename across
+  formats/physics/gameplay/render; `SHIP_FRICTION = 0.02` (read, conf 88,
+  replacing an assumed 0.05 at 70); `BODY_RESTITUTION = 0.4`; tangential
+  term `-friction * v_t / mass`; the `vn < 0` gate removed (the PSP
+  reading). Pinned by
+  `a_pure_scrape_costs_exactly_the_contact_friction_per_frame` (asserts a
+  `0.965x` *scale*, not a decrement). 498/498 on its crates; four new BOOT.BIN
+  names applied and saved (`Body_StepWorld`, `Body_SetPosition`,
+  `Ship_SetColliderFriction`, `Body_RecordContact`);
+  `apply-ghidra-names.py` applied 485/0 failed on PSP.
+- **Remaining, stated precisely**: the venom-assegai trace replay still
+  diverges (24 vs ~55 by tick 199) and that is a *contact-generation* gap,
+  not the law - 8 probes taking only the deepest, no angular response
+  (contacts resolve at the centre of mass; `cross(r, impulse)` and its
+  denominator share are absent - the largest remaining gap). The swept
+  path's unconditional normal impulse is reasoned-about but unreachable.
+  Unread: the entity-class `+0xb8 == 6` zero-friction branch, `body+0x394`,
+  `0x0884ef30`.
+
+**And the buried headline, verified twice (wall-re's bisect, then centrally
+re-run): `the_ship_does_not_stay_on_the_track_yet` has been failing
+INVERTED - the ship STAYS on the track for 600 ticks** (`left the envelope
+at tick None, went non-finite at tick None`; the panic message itself says
+"the physics improved, so delete this test"). It was already inverted at the
+first commits of this pass, and at least two reports this day (including an
+earlier paragraph of this section) misread the red FAIL as the old failure
+without reading the message. **M4's core symptom - the ship being thrown off
+the track - is gone.** The test's retirement is Task #15, deferred only
+because `crates/game` is mid-edit by the boot-movies agent. Trace-comparison
+convergence for a full lap (the actual M4 exit criterion) still requires the
+contact-generation work above.
+
+Process notes from this task: wall-re ran `git checkout <commit>` three
+times in the shared tree for its bisect - verified harmless, but a worktree
+is the right tool and the next bisect should use one. And `just` being red
+on another agent's mid-refactor WIP is expected during concurrent passes -
+gate your own crates and say so, as both agents did.
 
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
