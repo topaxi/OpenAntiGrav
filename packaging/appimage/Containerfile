@@ -38,10 +38,19 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# `--profile minimal`: no docs, no clippy, no rustfmt. The gate that needs those
-# runs on the host; this image only ever produces a release binary.
+# The channel is deliberately not pinned here: the repository's own
+# rust-toolchain.toml is authoritative, rustup reads it from the mounted source
+# and would override anything chosen here anyway. Pinning in this file would only
+# create a way for the container build to use a different compiler from the host
+# one without anyone noticing - which, in a project whose numerical output is a
+# committed invariant, is exactly the divergence to avoid.
+#
+# `--profile minimal` plus the two components rust-toolchain.toml asks for: with
+# them missing, rustup re-downloads them on every single run, because the
+# toolchain directory lives in the image rather than in a mount.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path
+        | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path \
+            --component rustfmt --component clippy
 
 # The registry and the build directory are bind-mounted from the host by
 # scripts/build-appimage.sh, so a rebuild is incremental rather than a fresh

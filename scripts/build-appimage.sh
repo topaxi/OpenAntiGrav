@@ -35,7 +35,12 @@ project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tools_dir="$project_root/data/tools"
 work_dir="$project_root/data/appimage"
 app_dir="$work_dir/AppDir"
-out="$work_dir/OpenAntiGrav-x86_64.AppImage"
+# Empty until the build mode is known: a --container build gets its own name, so
+# the two never overwrite each other and the file says which it is. The whole
+# point of the container build is that the native one does not start on an older
+# glibc, and a directory holding one unlabelled AppImage cannot answer which one
+# is sitting there.
+out=""
 
 # The glibc a --container build is expected to produce, and the version this
 # script stops warning about. Debian bookworm's.
@@ -118,6 +123,11 @@ else
 fi
 
 [[ -x $binary ]] || die "$binary not found; run without --skip-build"
+
+if [[ -z $out ]]; then
+    (( container )) && suffix="-portable" || suffix=""
+    out="$work_dir/OpenAntiGrav-x86_64${suffix}.AppImage"
+fi
 
 step "Assembling the AppDir"
 
@@ -220,5 +230,6 @@ step "Done"
 
 printf '%s\n' "$out"
 du -h "$out" | cut -f1 | sed 's/^/  size: /'
+echo "  glibc floor: $floor"
 echo "  run it from anywhere; put a disc image beside it, or name one:"
 echo "    $out path/to/pulse-psp-usa.chd"

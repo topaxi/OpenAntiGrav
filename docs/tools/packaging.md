@@ -142,11 +142,38 @@ Measured on 2026-07, building the same commit both ways:
 2.34, not 2.36: bookworm's libm does not *have* the newer symbol versions, so the
 linker binds to the oldest ones that satisfy each reference, and 2.34 is where
 glibc last versioned the maths functions this code reaches. glibc 2.34 is
-August 2021, which is older than the Steam Deck itself. Verified by `objdump -T`
-and `readelf -V` on the produced binary, and the portable AppImage was run
-out-of-repo through the same boot-to-race smoke test as the native one - it
-reached `Launch Game`, loaded the track and produced an identical telemetry line
-at tick 57.
+August 2021, which is older than the Steam Deck itself.
+
+How that was checked, because a different glibc can mean a different *libm
+implementation* and every symbol that forced the 2.44 floor was a transcendental
+(`cosh`, `sinh`, `acosf`, `asinf`, `atan2f`) - which the simulation does reach:
+
+- the floor itself, by both `objdump -T` and `readelf -V` on the produced binary;
+- **the determinism test, run inside the container against the bookworm build**:
+  `determinism_matches_the_committed_reference` passes, so the state hashes are
+  the ones committed in `crates/core/src/hash.rs` and the two builds are
+  interchangeable for the simulation, not merely both runnable. This is the check
+  that matters; a matching telemetry line would only have agreed to two decimals.
+
+  ```sh
+  podman run --rm -v "$PWD:/src" -w /src \
+      -e CARGO_HOME=/src/data/appimage/container/cargo \
+      -e CARGO_TARGET_DIR=/src/data/appimage/container/target \
+      oag-appimage-build:bookworm \
+      cargo test --release -p oag-core --test determinism
+  ```
+
+  (`cargo test`, not `cargo nextest`: the image has no nextest, and this is the
+  one place in the project that runs the plain harness.)
+- the packaged file itself, run out-of-repo through the same boot-to-race smoke
+  test as the native one: it reached `Launch Game`, loaded track and ship, and
+  wrote a rendered frame.
+
+The container build is named `OpenAntiGrav-x86_64-portable.AppImage`, the native
+one `OpenAntiGrav-x86_64.AppImage`, so a directory holding both says which is
+which - the failure this whole section exists to prevent is a cryptic
+`GLIBC_2.44' not found` on the Deck from having copied the wrong file. Both
+recipes also print the floor next to the filename they produced.
 
 The image is about 1 GB and takes a couple of minutes to build, once. The
 container's registry and target directory are bind-mounted into
