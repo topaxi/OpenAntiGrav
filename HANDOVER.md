@@ -692,6 +692,27 @@ reversible packaging choice, nothing in the engine depends on it).
   Caveat: gilrs lists some keyboard HID interfaces as gamepads, so the
   startup `gamepad:` line is not proof a real pad was found. The exact
   on-Deck test steps are in packaging.md and in the agent's report.
+- **Follow-up (`e8ffc53`, `2932c3b`): the container build works and the
+  floor is `GLIBC_2.34`, not the predicted 2.36** - bookworm's libm lacks
+  the newer symbol versions, so the linker binds to the oldest satisfying
+  version, and 2.34 (August 2021, older than the Deck hardware) is where
+  the maths functions this code reaches were last versioned. Confirmed by
+  both `objdump -T` and `readelf -V`. **The real risk was checked, not
+  assumed: the determinism test was run inside the container** - every
+  symbol forcing the 2.44 floor was a libm transcendental the simulation
+  reaches, and a different glibc can mean a different implementation -
+  and it **passes against the committed reference constants**, so the two
+  builds are interchangeable for the simulation. `just appimage-portable`
+  produces `OpenAntiGrav-x86_64-portable.AppImage` (distinct filename, so
+  an unlabelled directory can never hide which build it holds; both
+  recipes print their floor); `--binary <path>` packages a binary built
+  elsewhere. Containerfile traps documented in-file: `CARGO_HOME=... curl
+  | sh` sets the var for curl not the installing sh (rustup lands off
+  PATH), and the toolchain channel is deliberately NOT pinned in the
+  image - `rust-toolchain.toml` is authoritative via the mount. **On the
+  Deck: copy the `-portable` one.** The only thing still unverified is
+  SteamOS's own glibc number; if a `GLIBC_...' not found` ever appears
+  there, the version it names is the missing datum.
 
 **Two process traps from this task, both live:**
 
