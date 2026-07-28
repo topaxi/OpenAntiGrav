@@ -9,6 +9,31 @@ throttle and the shoulder buttons become force. It also fixes the handling
 parameter block's field layout to the byte, read out of the XML loader rather
 than inferred from consumers.
 
+> **Correction, from measurement rather than reading.** Three conclusions below
+> have since been refuted against captured traces; see
+> [the along-track force balance](../../../physics/force-balance-ground-truth.md),
+> which is the authority on the longitudinal balance.
+>
+> 1. **"a craft mass near 23" is wrong, and the argument was circular.** The
+>    integrator mass is `1`: `Ship_InitCraft` calls `Body_SetMass` at
+>    `0x0884985c` with `class+0x60` (the XML `mass` at `+0xf4`) in the delay
+>    slot, and `Body_SetMass` (`0x0884d850`) stores it unscaled. Confidence 92.
+> 2. **The collision-stun gate does not explain the reference capture.** The
+>    finding itself stands - the early return is real - but the gate provably
+>    never fires in that capture, checked by comparing implied thrust across its
+>    tick bands. A gate also predicts a *constant* deficit, and the measured one
+>    is speed-proportional.
+> 3. **The `0.095 * v^2` target shape is wrong.** The missing resistance scales
+>    as `fs^1.09` between two operating points three units/s apart; a quadratic
+>    misses by 12 %, a constant by 16 %.
+>
+> What is **confirmed** by that page, at instruction level: the `0.001` load
+> scale on `Engine.amount`, `cap = 0.5 * speed + accelcap` (`add.s` at
+> `0x0884c7b0`, so no sign error), the `min`, and the final `* 2.0`. **The `T ~=
+> 58` recomputation is correct.** The error is on the resistance side, exactly as
+> the "thrust-gap inverted" section concluded - just not in the shape it
+> proposed.
+
 ## The parameter block, read from the loader
 
 `Handling_ParseStats` (`0x0883a2f0`) walks `handlingstats.xml` and dispatches one

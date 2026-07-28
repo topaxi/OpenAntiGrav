@@ -25,13 +25,39 @@ python3 scripts/trace-force-balance.py \
 Three facts make this measurement unusually clean, and they are worth stating
 because each one removes an entire class of confounder:
 
-1. **`<Physical mass>` is `1` for every shipped class of every team.** Measured
-   acceleration therefore *is* net force, with no mass estimate anywhere in the
-   chain. This matters directly: engine.md's stun-gate argument cites the
+1. **The mass the integrator divides by is `1`.** Measured acceleration therefore
+   *is* net force, with no mass estimate anywhere in the chain.
+
+   This is the load-bearing premise of the whole page, so it is verified rather
+   than assumed. engine.md records "`mass` is read from `body+0x374`, not from
+   the XML `mass` at `+0xf4`; how the two relate is not determined" - **the
+   relation is now determined, and it is the identity**:
+
+   ```text
+   08849854  lw   $a0, 0x1cc($s0)     ; craft->body
+   08849858  lw   $a1, 0x70($s0)      ; craft->class block
+   0884985c  jal  Body_SetMass        ; 0x0884d850
+   08849860  lwc1 $f12, 0x60($a1)     ; delay slot: class+0x60 == XML mass (0x94+0x60 == 0xf4)
+   ```
+
+   and `Body_SetMass` (`0x0884d850`) is four instructions: `body+0x374 = m`,
+   `body+0x378 = 1/m`, with no scaling. `<Physical mass>` is `1` for every
+   shipped class of every team, so `body+0x374 == 1`. Confidence **92**.
+
+   Getting this wrong would invert the page's conclusion, which is why it is
+   spelled out: at an integrator mass of `2` the missing force's scaling exponent
+   comes out at `1.94` instead of `1.09`, i.e. the quadratic shape this page
+   refutes. The refutation is only as good as this reading.
+
+   It also retires a corroboration: engine.md's stun-gate argument cites the
    capture's `-0.21` units/s^2 as implying "a craft mass near 23", and derives
-   that 23 from the very balance it was trying to check. **With `mass = 1` that
-   corroboration is retired** - it was circular, and it is also simply wrong
-   about the number.
+   that 23 from the very balance it was trying to check. **It was circular, and
+   the number is wrong by a factor of 23.**
+
+   *A trap worth recording*: `jal` targets in `BOOT.BIN` encode the **ELF**
+   vaddr (base `0`), not the Ghidra image base `0x08804000`. Scanning for a call
+   to `0x0884d850` as `0x0E213614` finds nothing; the encoded word is
+   `0x0C012614`. Subtract the image base before building a `jal` pattern.
 2. **Every force that acts along the surface normal cancels.** The hover spring,
    the disputed hover-epilogue downforce, and the vertical damping all act along
    `averageNormal`; the surface-alignment torque holds the ship's `up` on that
@@ -71,6 +97,16 @@ ratio stays at `1.025`, inside the `0.98-1.03` band of every other row. That
 shape - a forward-and-lateral kick along a section direction - matches
 `Ship_ApplySpeedupPad`. **So this capture is not pad-free**, which anyone reusing
 it as a clean straight-line reference needs to know. It is excluded from the fit.
+
+The `+18.0` lateral component also reads like a collision, which would arm
+`craft+0x290` for 0.5 s - about 30 ticks of *zero* thrust. **Checked directly,
+and it did not happen**: median implied thrust over ticks 9-38 is `4.154`,
+against `4.619` over ticks 40-199 and `4.659` over ticks 0-7. The small gap is
+fully explained by those ticks sitting at a higher speed (median `fs` `23.85`
+against `22.92`, on a slope of about `-0.54`); a fired stun would have driven the
+figure to `0`, not moved it by `0.4`. **The stun gate does not fire anywhere in
+this capture**, which is the direct confirmation the handover asked for and
+independently closes commit `21798c6`'s open question.
 
 ## The measurement
 

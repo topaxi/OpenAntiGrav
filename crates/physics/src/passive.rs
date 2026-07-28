@@ -30,7 +30,18 @@
 //!
 //! From `docs/ghidra/functions/psp-pulse/engine.md`, "The passive terms" and the
 //! gravity paragraph. Confidence 74 to 80, decompilation only, nothing
-//! runtime-verified.
+//! runtime-verified - **except the four drag coefficients**, which have since
+//! been read straight out of the PSP `BOOT.BIN` instruction stream in
+//! `Ship_ApplyQuadraticDrag` (`0x08848e28`) as the immediates `0xbf666666`
+//! (`-0.9`, the `craft+0x2a4 == 0` branch), `0xbdcccccd` ([`DRAG_REVERSING`]),
+//! `0xbba3d70a` ([`DRAG_GROUND`]) and `0xbb03126f` ([`DRAG_AIR`]), against the
+//! `0xbe4ccccd` (`-0.2`) threshold. Those four are confidence **95**.
+//!
+//! [`ROLLING_RESISTANCE`]'s *shape* is likewise confirmed - the VFPU body of
+//! `Ship_ApplyRollingResistance` (`0x08848f4c`) runs `vdot`, `vrsq`, `vscl`, so
+//! it really does normalise and really is constant in magnitude - but its
+//! magnitude comes from a VFPU source prefix rather than a literal, and was not
+//! decoded. That one stays where it was.
 
 use oag_core::math::Vec3;
 
