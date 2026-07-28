@@ -1219,6 +1219,47 @@ and `Ship_CastHoverProbes` entry on the same craft:
   with `+0x2fc = 1.0`) reads as the two probes' measured distances plus a
   derived value; `craft+0xb0` is a scratch/output slot the cast fills.
 
+**`pure-smoke` (Task #28, commit `41613f4`): the ADR-0009 probe ran, the
+premise holds, and every break is countable.** Full table in the new
+`docs/formats/pure-status.md`; validation notes naming which discs each
+claim rests on added across nine format pages.
+
+- **What reads on Pure, with exact-closure evidence**: ISO/CHD, the WAD
+  container (1,229/1,229 entries verify), the name hash (Pulse-shaped
+  paths hit directly - no seed change), `.mip` textures (346 decode),
+  the `.vex` header/node tree (171/171 exact), **v4 mesh batches
+  (20,832 batches, 2.1 M vertices, every vertex inside its declared
+  box)**, the `.vex` texture block, `WO Track` payloads (16/16 closure),
+  `.fnt` (6/6), `.PMF` (14/14), plain front-end XML.
+- **The one thing stopping Pure rendering is the `.vex` class-ID table,
+  renumbered wholesale** - IDs are table indices, not an enum. Four pinned
+  by invariants (Transform 0x6d, Mesh 0x11e, Texture 0x373, WO Track
+  0x36d). Per the ADR, NOT patched: the blast radius is five constants,
+  but the right shape (a per-title table keyed off the version word) is a
+  design call. Second render blocker found behind it: **Pure's embedded
+  model textures ship pre-swizzled** (flag byte `+0x06` that
+  `vex::textures` never reads).
+- **Three Pulse-era additions identified by absence**: the `<code>` XML
+  shortening (zero shortened entries in 291), `SBlk` sound banks (absent;
+  Pure uses RIFF/WAVE), and the three handling attributes Pure lacks
+  (`sideshift`, `easyshield`, `weight_distribution`) plus a **fifth speed
+  class** below Pulse's four - the "nothing defaults" parser refusing is
+  the design working on a file it was not designed for.
+- **Name recovery transfers intact** (same path templates in Pure's own
+  BOOT.BIN; a scratch miner resolved ~40 % of Data.wad in an afternoon;
+  `mine-names.py` itself hard-codes Pulse and was deliberately not
+  touched).
+- **Cost estimate for a real Pure asset milestone**: ~1 day models+
+  textures, ~1 day tracks, collision is the first genuine research
+  (loader must be read from Pure's executable; three candidate classes),
+  handling needs a schema-version split, audio is a new format.
+  Recommendation, agreeing with ADR-0009: none of it before M4's exit.
+- Handed off: the `WO Track` third-corpus notes to the agent owning
+  track.md (including a real divergence - header `+0x18` reads 0 on all
+  16 Pure tracks vs Pulse's documented "always 1"), and **a real shipped
+  tool bug**: `oag-view --collision` panics on an empty vertex buffer for
+  any file with no recognised collision class (Task #31).
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
