@@ -233,7 +233,7 @@ fn main() -> Result<()> {
     // Resolved once, before anything opens it: both ways in need a source, and
     // "no disc image found" is a message about the command line, not something to
     // discover eight seconds of intro later.
-    let source = source::resolve(cli.source.as_deref())?;
+    let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
 
     let race_options = race::Options {
         source: source.clone(),

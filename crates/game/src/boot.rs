@@ -106,6 +106,16 @@ pub fn load(options: &Options) -> Result<Boot> {
         .flat_map(|s| s.images.iter())
         .filter_map(|image| sprites.get(&image.src).map(|p| (image.src.clone(), p)))
         .collect();
+    let frame_rate = movie
+        .as_ref()
+        .map_or(movie::FRAME_RATE, |movie| movie.frame_rate);
+    let video_aspect = movie.as_ref().map_or(
+        (
+            crate::frontend::SCREEN.0 as u32,
+            crate::frontend::SCREEN.1 as u32,
+        ),
+        |movie| movie.display_aspect,
+    );
     let frontend = Frontend::booting(
         options.leg,
         screens,
@@ -113,6 +123,8 @@ pub fn load(options: &Options) -> Result<Boot> {
         languages,
         placements,
         frames,
+        frame_rate,
+        video_aspect,
         movie.as_ref().is_some_and(|movie| movie.frames.is_some()),
     );
 
@@ -461,12 +473,24 @@ fn load_movie(
     let data = &mut archives.data;
     let index = match data.index_of_hash(hash) {
         Some(index) => index,
-        None if options.movie == DEFAULT_BOOT_MOVIE || options.movie == DEVPUB_REEL => {
+        // Only the default boot movie has a loose-file fallback worth trying:
+        // it is the PS2's own intro, a plain file outside every WAD. See
+        // `load_loose_intro`.
+        None if options.movie == DEFAULT_BOOT_MOVIE => {
+            if let Some(movie) = load_loose_intro(options, report)? {
+                return Ok(Some(movie));
+            }
             report.push(format!(
-                "{entry} is not in {}, so the sequence plays with no picture. A PS2 \
-                 source has no movie to find: its intro is DATA/MOVIES/INTRO512.PSS, \
-                 an MPEG-2 program stream outside the archives, which this build \
-                 does not decode",
+                "{entry} is not in {}, and the source has no loose intro movie either, \
+                 so the sequence plays with no picture",
+                data.label()
+            ));
+            return Ok(None);
+        }
+        None if options.movie == DEVPUB_REEL => {
+            report.push(format!(
+                "{entry} is not in {}, so the sequence plays with no picture. The dev/pub \
+                 reel has no PS2 equivalent",
                 data.label()
             ));
             return Ok(None);
@@ -497,7 +521,9 @@ fn load_movie(
             frame_count: header.expected_frame_count() as usize,
             width: u32::from(video.width),
             height: u32::from(video.height),
-            header,
+            frame_rate: movie::FRAME_RATE,
+            display_aspect: (u32::from(video.width), u32::from(video.height)),
+            header: Some(header),
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
         }));
@@ -507,27 +533,73 @@ fn load_movie(
         .read(index)
         .with_context(|| format!("reading {} out of {}", options.movie, data.label()))?;
     let key = format!("{hash:08x}-{size}");
-    let movie = movie::open(&blob, &key, &options.cache, options.extent)?;
+    let movie = movie::open(&blob, &key, &options.cache, options.extent, false)?;
+
+    if let Some(header) = &movie.header {
+        report.push(format!(
+            "{}: {}x{}, {:.2}s, {} frames, PSMF{}",
+            options.movie,
+            movie.width,
+            movie.height,
+            header.duration_seconds(),
+            movie.frame_count,
+            String::from_utf8_lossy(&header.version)
+        ));
+        if let Some(audio) = header.audio {
+            report.push(format!(
+                "  audio: {} channel(s) at {}, ATRAC3+, not decoded",
+                audio.channels,
+                audio.frequency_hz().map_or_else(
+                    || format!("code {}", audio.frequency_code),
+                    |hz| format!("{hz} Hz")
+                )
+            ));
+        }
+    }
+    match (&movie.frames, &movie.no_picture_reason) {
+        (Some(frames), _) => report.push(format!(
+            "  {} frame(s) cached in {}",
+            frames.len,
+            frames.path().display()
+        )),
+        (None, Some(reason)) => report.push(format!("  no picture: {reason}")),
+        (None, None) => {}
+    }
+    Ok(Some(movie))
+}
+
+/// Tries the PS2's own intro: a raw MPEG-2 program stream loose on the disc's
+/// filesystem under `DATA/MOVIES/`, in two variants that measure as PAL
+/// (`INTRO512.PSS`, 512x512, 25 fps) and NTSC (`INTRO640.PSS`, 640x448,
+/// 29.97 fps). `Data\Movies\Intro.PMF` not being in any WAD is not itself
+/// evidence of which variant is right, so 512 is tried first: this disc is
+/// EU/PAL, and `SCES_547.48`'s selector between the two (global `0x0027a85c`,
+/// set from a PAL/NTSC-looking video-mode call) is not fully traced to its
+/// ultimate trigger. See `docs/ps2/pulse-disc-layout.md`.
+///
+/// `Ok(None)` when the source has neither file - a PSP source, or a PS2 one
+/// missing both, which is not expected but is not this function's problem to
+/// diagnose.
+fn load_loose_intro(options: &Options, report: &mut Vec<String>) -> Result<Option<Movie>> {
+    const CANDIDATES: [&str; 2] = ["DATA/MOVIES/INTRO512.PSS", "DATA/MOVIES/INTRO640.PSS"];
+
+    let Some((path, blob)) = pulse::read_loose_file(&options.source, &CANDIDATES)? else {
+        return Ok(None);
+    };
+
+    let key = format!("{}-{}", path.replace(['/', '\\'], "_"), blob.len());
+    let movie = movie::open(
+        &blob,
+        &key,
+        &options.cache,
+        options.extent,
+        options.no_video,
+    )?;
 
     report.push(format!(
-        "{}: {}x{}, {:.2}s, {} frames, PSMF{}",
-        options.movie,
-        movie.width,
-        movie.height,
-        movie.header.duration_seconds(),
-        movie.frame_count,
-        String::from_utf8_lossy(&movie.header.version)
+        "{path}: {}x{}, {}/{} fps, {} frames, MPEG-2 program stream",
+        movie.width, movie.height, movie.frame_rate.0, movie.frame_rate.1, movie.frame_count
     ));
-    if let Some(audio) = movie.header.audio {
-        report.push(format!(
-            "  audio: {} channel(s) at {}, ATRAC3+, not decoded",
-            audio.channels,
-            audio.frequency_hz().map_or_else(
-                || format!("code {}", audio.frequency_code),
-                |hz| format!("{hz} Hz")
-            )
-        ));
-    }
     match (&movie.frames, &movie.no_picture_reason) {
         (Some(frames), _) => report.push(format!(
             "  {} frame(s) cached in {}",

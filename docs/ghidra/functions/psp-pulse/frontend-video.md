@@ -54,6 +54,7 @@ than allocated separately.
 | `0x08913e88` | `MoviePlayer_GetCurrentTexture` | 82 |
 | `0x08914c78` | `MoviePlayer_ReadThreadMain` | 85 |
 | `0x08914fd8` | `MoviePlayer_SoundThreadMain` | 82 |
+| `0x08913bb0` | `MoviePlayer_Pause` | 95 |
 
 `Create` runs `sceMpegInit`, sizes and allocates the ring buffer and MPEG
 context, constructs the ring buffer with callback `0x08913730`, creates the MPEG
@@ -153,7 +154,19 @@ Playback is then paced against the movie's own frame counter:
 | 260 (`0x104`) | Set the finish flag, stamp the time |
 
 A pause is released once **2 seconds** have elapsed, and the finish flag fires
-`DevPubRedirect`. Reading this as the developer and publisher logo cards being
+`DevPubRedirect`.
+
+`MoviePlayer_Pause` (`0x08913bb0`) is the function that actually writes the
+player's `paused` field (`+0x1d0`, alongside `+0x15c` and `+0x190`). It has
+**exactly one caller in the whole binary**: the one-line widget wrapper
+`0x088ba22c`, which itself has exactly one caller: this state's own
+`0x088d7e1c`, at both the 144 and 231 branches. Confidence **95**, from
+exhaustively enumerating both call chains rather than sampling them - there is
+no second pause site anywhere in `BOOT.BIN`, so `Data\Movies\Intro.PMF`
+(`LogoFMV`/`Play Intro`) is never paused by any code path, matching the
+`Movie` widget having no frame-counter attributes to begin with.
+
+Reading this as the developer and publisher logo cards being
 held for two seconds each was an inference at **82**. It is now **95**: the three
 260-frame reels in `Data.wad` are exactly static at frames 144 and 231 and moving
 either side of them, and decoded, frame 144 reads

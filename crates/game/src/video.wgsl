@@ -14,6 +14,10 @@ struct Uniforms {
     screen: vec2<f32>,
     atlas: vec2<f32>,
     padding: vec2<f32>,
+    // Where the movie sits in screen space: [x, y, width, height]. Not always
+    // all of `screen` - a PS2 source's own display aspect pillarboxes rather
+    // than filling it, unlike a `.PMF`, which always has.
+    video_rect: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -38,8 +42,10 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOut {
         vec2<f32>(1.0, 1.0),
     );
     let corner = corners[index];
+    let pixels = uniforms.video_rect.xy + corner * uniforms.video_rect.zw;
+    let normalised = pixels / uniforms.screen;
+    let clip = vec2<f32>(normalised.x * 2.0 - 1.0, 1.0 - normalised.y * 2.0);
     var out: VertexOut;
-    let clip = vec2<f32>(corner.x * 2.0 - 1.0, 1.0 - corner.y * 2.0);
     out.position = vec4<f32>(clip * uniforms.viewport, 0.0, 1.0);
     out.uv = corner;
     return out;

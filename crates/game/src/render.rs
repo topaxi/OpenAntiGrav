@@ -25,6 +25,10 @@ struct Uniforms {
     /// The sprite sheet's size, for normalising its pixel-space UVs. This took
     /// the slot a padding pair held, so the struct is still 32 bytes.
     sprites: [f32; 2],
+    /// Where the movie sits in screen space: `[x, y, width, height]`. Only
+    /// `video.wgsl` reads this; `ui.wgsl` still declares the field so the two
+    /// shaders agree on the buffer's layout.
+    video_rect: [f32; 4],
 }
 
 /// One quad.
@@ -346,27 +350,24 @@ impl Renderer {
         list: &[Draw],
         target: (u32, u32),
     ) {
-        queue.write_buffer(
-            &self.uniform_buffer,
-            0,
-            bytemuck::bytes_of(&Uniforms {
-                viewport: letterbox(target),
-                screen: [SCREEN.0, SCREEN.1],
-                atlas: [self.atlas.width as f32, self.atlas.height as f32],
-                sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
-            }),
-        );
-
         self.quads.clear();
         // Where the movie sits in the quad order. The list is painted back to
         // front, and the `LogoFMV` screen puts a black `Image` *behind* its
         // `Movie`, so drawing the movie first unconditionally would let that
         // black backdrop paint straight over the picture.
         let mut video_at = None;
+        // Where the movie sits in screen space - not always all of it, since a
+        // PS2 `.PSS`'s own display aspect pillarboxes inside [`SCREEN`] rather
+        // than filling it the way a `.PMF` always has. See
+        // `crate::frontend::pillarbox`.
+        let mut video_rect = [0.0, 0.0, SCREEN.0, SCREEN.1];
         for draw in list {
             match draw {
                 Draw::Fill { rect, color } => self.push_solid(*rect, *color),
-                Draw::Video { .. } => video_at = Some(self.quads.len() as u32),
+                Draw::Video { rect, .. } => {
+                    video_at = Some(self.quads.len() as u32);
+                    video_rect = *rect;
+                }
                 Draw::Sprite { rect, uv, color } => self.quads.push(Quad {
                     rect: *rect,
                     uv: *uv,
@@ -383,6 +384,18 @@ impl Renderer {
                 } => self.push_text(*x, *y, *scale, *color, *align, text),
             }
         }
+
+        queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::bytes_of(&Uniforms {
+                viewport: letterbox(target),
+                screen: [SCREEN.0, SCREEN.1],
+                atlas: [self.atlas.width as f32, self.atlas.height as f32],
+                sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
+                video_rect,
+            }),
+        );
 
         if self.quads.len() > self.quad_capacity {
             self.quad_capacity = self.quads.len().next_power_of_two();

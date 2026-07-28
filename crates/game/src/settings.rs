@@ -35,6 +35,20 @@ enum AnisotropyDef {
 pub struct Settings {
     #[serde(default)]
     pub graphics: Graphics,
+    #[serde(default)]
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Source {
+    /// A disc image, or a directory extracted with `oag-unpack`, opened when
+    /// neither the command line nor `$OAG_IMAGE` name one.
+    ///
+    /// Persisted so a player who always plays off one disc - the PS2 release,
+    /// say - does not have to spell it out on every run. The command line
+    /// still wins over this for that one run; see `source::resolve`.
+    #[serde(default)]
+    pub image: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

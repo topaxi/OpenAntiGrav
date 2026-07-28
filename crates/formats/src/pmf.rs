@@ -30,6 +30,9 @@
 //! units, which is enough to pace playback against the original's own frame
 //! counters without decoding a single macroblock.
 
+/// The four bytes a PSMF header begins with.
+pub const MAGIC: &[u8; 4] = b"PSMF";
+
 /// Bytes of PSMF header before the program stream. Also the observed value of
 /// [`Header::stream_offset`] in every shipped file.
 pub const HEADER_LEN: usize = 0x800;
@@ -164,7 +167,7 @@ impl Header {
             .get(..HEADER_LEN)
             .ok_or(Error::TooShort { got: data.len() })?;
 
-        if &head[..4] != b"PSMF" {
+        if &head[..4] != MAGIC {
             return Err(Error::NotPsmf);
         }
 

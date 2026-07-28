@@ -180,6 +180,29 @@ pub enum Draw {
 /// The PSP's screen, which the XML's coordinates are in.
 pub const SCREEN: (f32, f32) = (480.0, 272.0);
 
+/// Fits `aspect` inside `screen` without distorting it, centred on whichever
+/// axis is left over.
+///
+/// A `.PMF`'s `aspect` is its own decoded size, which is [`SCREEN`]'s own
+/// ratio, so this returns `[0, 0, screen.0, screen.1]` unchanged - the video
+/// quad this always drew. A PS2 `.PSS`'s `aspect` is not: `INTRO512.PSS`
+/// decodes to a square 512x512 but its own display aspect is 4:3, narrower
+/// than `SCREEN`'s ~16:9, so this pillarboxes it rather than stretching it
+/// wide. See `crate::movie::Movie::display_aspect`.
+fn pillarbox(screen: (f32, f32), aspect: (u32, u32)) -> [f32; 4] {
+    let (screen_w, screen_h) = screen;
+    let content = aspect.0 as f32 / aspect.1 as f32;
+    let frame = screen_w / screen_h;
+
+    if content >= frame {
+        let height = screen_w / content;
+        [0.0, (screen_h - height) / 2.0, screen_w, height]
+    } else {
+        let width = screen_h * content;
+        [(screen_w - width) / 2.0, 0.0, width, screen_h]
+    }
+}
+
 /// How the intro state is getting on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Hold {
@@ -213,6 +236,12 @@ pub struct Frontend {
     /// a rectangle. A `Vec` keeps the order the screens declared.
     placements: Vec<(String, crate::sprite::Placed)>,
     player: crate::movie::Player,
+    /// The movie's own display aspect ratio, as `(width, height)`. A `.PMF` is
+    /// square-pixelled, so this is its decoded size and the video quad fills
+    /// [`SCREEN`] exactly, as it always did; a PS2 `.PSS` is not, and this is
+    /// what keeps its picture from being stretched into the wrong aspect. See
+    /// `crate::movie::Movie::display_aspect`.
+    video_aspect: (u32, u32),
     /// Whether a picture is available at all.
     has_picture: bool,
     /// Whether to draw the frame counter over the intro.
@@ -250,12 +279,15 @@ impl Frontend {
             languages,
             placements,
             movie_frames,
+            crate::movie::FRAME_RATE,
+            (SCREEN.0 as u32, SCREEN.1 as u32),
             has_picture,
         )
     }
 
     /// Builds the boot sequence on a named [`Leg`].
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn booting(
         leg: Leg,
         screens: Screens,
@@ -263,6 +295,8 @@ impl Frontend {
         languages: Vec<Language>,
         placements: Vec<(String, crate::sprite::Placed)>,
         movie_frames: usize,
+        movie_frame_rate: (u64, u64),
+        video_aspect: (u32, u32),
         has_picture: bool,
     ) -> Self {
         let mut machine = StateMachine::new();
@@ -279,9 +313,10 @@ impl Frontend {
         let paths: Vec<String> = screens.screens.iter().map(|s| s.path.clone()).collect();
         machine.register_all(paths.iter().map(String::as_str));
 
-        // With no movie at all - every PS2 source, which ships no `.PMF` - the
-        // sequence still has to run and end. FINISH_FRAME is the reel's own
-        // length, which is as good a stand-in as any and is bounded.
+        // With no movie at all - a source with nothing this build can read a
+        // picture out of - the sequence still has to run and end. FINISH_FRAME
+        // is the reel's own length, which is as good a stand-in as any and is
+        // bounded.
         let frames = if movie_frames == 0 {
             FINISH_FRAME
         } else {
@@ -296,7 +331,8 @@ impl Frontend {
             selected: 0,
             chosen: None,
             placements,
-            player: crate::movie::Player::new(frames, false),
+            player: crate::movie::Player::new(frames, false, movie_frame_rate),
+            video_aspect,
             has_picture,
             // Without a picture the movie is a black screen for as long as it
             // runs - forty seconds for the disc's own intro - so the counter is
@@ -549,7 +585,7 @@ impl Frontend {
         if self.machine.is_in(states::INTRO) || self.machine.is(states::LOGO_FMV) {
             if self.has_picture {
                 out.push(Draw::Video {
-                    rect: [0.0, 0.0, width, height],
+                    rect: pillarbox(SCREEN, self.video_aspect),
                     frame: self.player.frame(),
                 });
             }
@@ -830,6 +866,8 @@ mod tests {
             languages(),
             Vec::new(),
             frames,
+            crate::movie::FRAME_RATE,
+            (SCREEN.0 as u32, SCREEN.1 as u32),
             false,
         )
     }

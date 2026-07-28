@@ -13,6 +13,10 @@ struct Uniforms {
     atlas: vec2<f32>,
     // Sprite sheet size in pixels, for the same reason.
     sprites: vec2<f32>,
+    // Where the movie sits in screen space. Unused here - only video.wgsl
+    // reads it - but both shaders bind the same buffer, so its layout must
+    // agree.
+    video_rect: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;

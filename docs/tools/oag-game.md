@@ -137,14 +137,38 @@ distinction matters: the driveable ribbon is generated geometry that declares no
 slots at all on either disc, so reporting it would blame a PS2 texture gap for a
 mesh that was never textured and never came off a `.vex`.
 
-**The boot movie has no picture.** The PS2 ships no `.PMF` in any archive at all;
-its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream loose in the ISO
-filesystem, with `.IPF` beside it for the Image Processing Unit. Neither is
-decoded and neither is addressable as an archive entry, so there is nothing for
-the movie leg to play and the front end runs without a picture, the same path
-`--no-video` already took. A movie **named** with `--movie` and not found is still
-an error: the defaults are defaults, and a source that lacks one is answering a
-default, where `--movie` is a request.
+**The boot movie now has a picture.** The PS2 ships no `.PMF` in any archive at
+all; its intro is a raw MPEG-2 program stream loose in the ISO filesystem -
+`DATA/MOVIES/INTRO512.PSS` (512x512, 25 fps) or `INTRO640.PSS` (640x448,
+29.97 fps), which measure as the PAL and NTSC cuts respectively. `.IPF` sits
+beside them for the looping menu backdrop, and *that* container is still not
+decoded - it carries no MPEG program stream at all (`BG512.IPF`/`BG640.IPF`
+have no `.PSS` counterpart the way `Intro` does), so the backdrop still runs
+without a picture.
+
+[`oag_assets::pulse::read_loose_file`](../../crates/assets/src/pulse.rs) finds
+either `.PSS` on the disc's own filesystem the same way an archive is found by
+name - trailing path components, case-insensitively - rather than by hash, and
+[`movie::open`](../../crates/game/src/movie.rs) dispatches on the blob's own
+magic (`PSMF` vs. the MPEG program stream's `00 00 01 BA` start code) rather
+than on which platform it came from. `512` is tried first for the disc this
+project reads (EU/PAL); see [pulse-disc-layout.md](../ps2/pulse-disc-layout.md)
+for the selection mechanism this was checked against. A movie **named** with
+`--movie` and not found is still an error: the defaults are defaults, and a
+source that lacks one is answering a default, where `--movie` is a request.
+
+**The picture was stretched at first, and that was this build's bug, not the
+original's.** `INTRO512.PSS`/`INTRO640.PSS` both declare a 4:3 display aspect
+(non-square pixels), and the front end's video quad always filled
+[`SCREEN`](../../crates/game/src/frontend.rs) (480x272, ~16:9) exactly, which
+was right for a `.PMF`'s square pixels and wrong for this. Checked against the
+PS2's own `Skin.xml`: its `Movie` widget declares no `width`/`height` at all,
+unlike the PSP's, and the black `Image` behind it is `640x448` - the NTSC
+cut's own decoded resolution exactly. So the original's front end and the
+video shared one native buffer with nothing to stretch; the squash was this
+build treating every source as PSP-shaped regardless of what it opened. Now
+pillarboxed to the movie's own aspect - see `Movie::display_aspect` and
+`frontend::pillarbox`.
 
 The rest of the PS2 front end gets **further than expected**, and this was measured
 rather than assumed: `WADS2.WAD` carries `Data\Plugins\PI001\GUI\Skin.xml` under
@@ -159,9 +183,8 @@ One finding worth recording separately, because it is about the *original* rathe
 than about this build: the PS2 screens name their movies `Intro.pss` and
 `Backdrop.ipf`, so the `Movie` widget's PSP rule of `src` **plus `.PMF`** produces
 `Data\Movies\Intro.pss.PMF`. The `src` already carries its extension on this
-release, so that name-building rule is PSP-specific. Nothing acts on it yet -
-neither container is decoded - but it is the kind of assumption that would
-otherwise be discovered much later.
+release, so that name-building rule is PSP-specific - `movie::open`'s magic
+dispatch is what actually opens the file now, not this name.
 
 Expect a race to load more slowly off the PS2 disc. 5,861 of `WADS2.WAD`'s 7,200
 entries are [LZSS](../formats/lzss.md) where no PSP archive compresses anything,

@@ -307,6 +307,54 @@ impl Archives {
     }
 }
 
+/// Reads a file that sits loose on `source`'s own filesystem - not inside any
+/// WAD - trying each of `candidates` in order and matching the same way
+/// [`Layout::resolve`] matches an archive: by trailing path components,
+/// case-insensitively, so a disc's serial-named directory does not need to be
+/// spelled out.
+///
+/// This is for containers no archive addresses by hash: the PS2's movies are
+/// plain files under `DATA/MOVIES/`, unlike the PSP's, which are `Data.wad`
+/// entries. See `docs/ps2/pulse-disc-layout.md`.
+///
+/// `Ok(None)` when nothing in the source matches any candidate. Not an error:
+/// a caller answering a default treats "not present" as "this source has
+/// none," the same distinction [`Archives`]'s own callers make for a WAD
+/// entry. A name the caller actually asked for should still be an error, at
+/// the call site rather than here.
+///
+/// # Errors
+///
+/// Propagates a source that will not open at all.
+pub fn read_loose_file(source: &str, candidates: &[&str]) -> Result<Option<(String, Vec<u8>)>> {
+    let path = std::path::Path::new(source);
+
+    if path.is_dir() {
+        let mut files = Vec::new();
+        collect(path, "", &mut files);
+        let Some(file) = files
+            .iter()
+            .find(|f| candidates.iter().any(|c| names(f, c)))
+        else {
+            return Ok(None);
+        };
+        let data = std::fs::read(path.join(file))?;
+        return Ok(Some((file.clone(), data)));
+    }
+
+    let mut disc = DiscImage::open(source)?;
+    let found = disc
+        .entries()?
+        .iter()
+        .find(|entry| !entry.is_directory && candidates.iter().any(|c| names(&entry.path, c)))
+        .cloned();
+    let Some(entry) = found else {
+        return Ok(None);
+    };
+    let data = disc.read_entry(&entry)?;
+    Ok(Some((entry.path, data)))
+}
+
 /// Every file in `source`, and what `source` says it is.
 ///
 /// A disc is asked directly; a directory is walked, and identified from the

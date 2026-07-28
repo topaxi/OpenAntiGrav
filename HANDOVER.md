@@ -43,6 +43,117 @@ as a second task). A fourth agent (`wall-re`) is on the wall-contact response,
 the successor question the resolution below opened. `just` passes at **788
 tests**; `audit-leakage` clean.
 
+## 2026-07-28, third pass: the PS2 intro now decodes and plays, and it was never stretched
+
+Started from a user question about the PSP intro's pausing (settled: the
+original never pauses `Intro.PMF` at all - see `MoviePlayer_Pause`,
+`0x08913bb0`, below - and the "pause" memory was almost certainly the old,
+removed dev/pub-reel-constants-on-the-wrong-movie bug). That turned into
+getting `just play pulse-ps2` to actually show a picture, which it had never
+done before this pass.
+
+**What now works:** `oag_game::movie::open` dispatches on the blob's own
+magic (`PSMF` vs. a raw MPEG-2 program stream's `00 00 01 BA` start code)
+rather than on platform, per the standing rule at `pulse.rs`'s
+`Layout::resolve` doc comment. `oag_assets::pulse::read_loose_file` finds a
+file that sits loose on a disc's own filesystem - not inside any WAD - the
+same way an archive is found, by trailing path components. `Movie`, `Player`
+and the render pipeline all carry per-movie frame rate and display aspect now
+instead of the PSP's constants; see `docs/tools/oag-game.md` and
+`docs/ps2/pulse-disc-layout.md` for the details and the evidence.
+`settings.toml` gained a `[source] image` key (tried between `$OAG_IMAGE` and
+the search directories), and `just play pulse-ps2` (or `ps2`) swaps in the PS2
+disc without needing the full path typed out.
+
+**The video was stretched at first, and untangling why it, was and wasn't,
+whose bug it was, is worth remembering in full:**
+
+1. The PS2's two `.PSS` cuts (`INTRO512.PSS` 512x512@25fps,
+   `INTRO640.PSS` 640x448@29.97fps - PAL and NTSC respectively, confirmed by
+   frame rate alone before any Ghidra was involved) both declare a 4:3 display
+   aspect over a non-square-pixel decode. Decoded at native resolution with no
+   correction, the picture is visibly pinched.
+2. That is **not** a sign the source was naively stretched. Checked directly:
+   a regular, symmetric UI icon (present in both the PSP and PS2 cuts) decodes
+   at native square pixels as a tall hourglass and only becomes a proportioned
+   symmetric star once scaled to the declared 4:3 aspect - the opposite of
+   what a mislabelled square-pixel source would show. So `512`/`640` are a
+   deliberate space-saving anamorphic encode, same trick as widescreen DVD,
+   not a mistake to route around.
+3. The original's own front end doesn't stretch it either: its `Movie` widget
+   declares no `width`/`height` in `Skin.xml` at all (unlike the PSP's), and
+   the black `Image` behind it is `640x448` - the NTSC cut's own resolution,
+   exactly. The console's native buffer and the video's own frame were the
+   same size; there was never anything to stretch on real hardware.
+4. So the actual bug was entirely this build's: `oag-game`'s front end always
+   filled a fixed, PSP-shaped 480x272 virtual screen with the video quad
+   regardless of source platform, right for a `.PMF`'s square pixels and wrong
+   for this. Fixed by threading `Movie::display_aspect` through `Frontend`
+   into a new `frontend::pillarbox`, and - this is the part that cost a
+   cycle - the video **shader** had to change too: `Draw::Video`'s `rect` field
+   already existed and looked like it should have been enough, but
+   `video.wgsl`'s vertex shader ignored it completely and always drew a fixed
+   full-viewport quad from `corners[index]` directly. Threading a
+   `video_rect` uniform through and having the vertex shader place the quad by
+   it (mirroring `ui.wgsl`'s `to_clip`) is what actually made the pillarbox
+   visible - the first attempt at this fix compiled clean and produced a
+   pixel-identical screenshot to the unfixed version, silently doing nothing.
+
+**Ghidra findings from this pass, both against `SCES_547.48`:**
+
+- **The 512-vs-640 selector, confidence 85.** `Data\Movies\Intro512.pss` and
+  `Data\Movies\Intro640.pss` are both literal strings, picked between in
+  `FUN_0019b168` by global `0x0027a85c` (nonzero -> 512, zero -> 640). Its
+  sole writer, `FUN_0010b030`, sets PAL-shaped pixel-aspect correction
+  constants and a GS mode call when passed `1`, NTSC/no-correction when passed
+  `0` - matching the measured PAL/NTSC split exactly. Not traced further: what
+  ultimately decides which value is passed (a numbered case in the dispatcher
+  `FUN_00186ed8`) - time-boxed deliberately, per the working style below.
+- **`MoviePlayer_Pause`, `0x08913bb0` in `BOOT.BIN` (PSP), confidence 95.**
+  Writes the player's `+0x1d0` `paused` flag. Enumerated both call chains
+  exhaustively rather than sampling: its only caller is the widget wrapper
+  `0x088ba22c`, whose only caller is the dev/pub reel's own state
+  `0x088d7e1c`. No second pause site exists anywhere in the binary, so
+  `Intro.PMF`/`LogoFMV` is never paused by any code path - settling that the
+  "pause" question opened with was a misremembering of the old, removed bug
+  described at "The intro was playing the wrong reel" above, not a missing
+  feature. Documented in `docs/ghidra/functions/psp-pulse/frontend-video.md`.
+
+**Time-boxing paid off twice here**, worth naming as a pattern: the 512/640
+selector's ultimate trigger and the `IPF` backdrop container were both left
+unread rather than chased, and the video got playing anyway because the
+*measured* facts (frame rate splits the PAL/NTSC question; the widget's own
+XML settles the stretch question) didn't need them.
+
+**Traps for a future session:**
+
+- **`ffprobe`'s `-show_entries` does not print fields in the order
+  requested.** Asking for `width,height,r_frame_rate,display_aspect_ratio`
+  with `-of default=noprint_wrappers=1:nokey=1` printed `display_aspect_ratio`
+  *before* `r_frame_rate` - ffprobe's own internal field order, not the
+  caller's. Positional parsing silently reads the wrong field; `movie::field`
+  parses `key=value` pairs by name instead (`-of default=noprint_wrappers=1`,
+  keys kept), which is what should be used for any future ffprobe field.
+- **The `.IPF` backdrop is still not decoded.** `BG512.IPF`/`BG640.IPF` carry
+  an `IPUF` magic and no MPEG program stream at all - unlike `Intro`, there is
+  no free ride through `ffmpeg` here. A real, separate RE project.
+- **A shader uniform field existing is not the same as a shader reading it.**
+  `Draw::Video`'s `rect` looked load-bearing before this pass and was
+  computed but discarded on the way to the GPU. Diffing the actual output
+  (`ps2-test3.png` vs `ps2-test2.png` came back pixel-identical) is what
+  caught it - trust the screenshot over the compile.
+
+## Reference: a real-hardware(ish) capture of the Pulse intro on YouTube
+
+The user pointed to <https://www.youtube.com/watch?v=lGAWYHmgo7o> as a
+somewhat high quality capture of Wipeout Pulse, useful for checking a reading
+against the real thing without setting up an emulator capture. Whether Wipeout
+Pure has an equivalent worth the same use is **not checked** - the user said
+"maybe," and that has not been verified either way. Do not treat this as an
+authority over the disc images and Ghidra: a YouTube capture is a recording of
+someone else's playthrough, subject to its own encode and possibly the wrong
+regional cut, not primary evidence the way the disc data is.
+
 Two mid-pass events that affect how to read this section:
 
 - **A `git pull --rebase` ran in the tree mid-pass.** `origin/main` exists and

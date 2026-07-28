@@ -13,12 +13,15 @@
 //!    extracted with `oag-unpack`, or an `image:path` archive spec - whatever
 //!    `oag_assets::pulse::Archives::open` accepts.
 //! 2. **`$OAG_IMAGE`**, the same three things.
-//! 3. **`data/images/`** relative to the current directory, which is what a
+//! 3. **`settings.toml`'s `[source] image`**, the same three things again,
+//!    persisted so a player who always plays off one disc does not have to
+//!    repeat it on every run. See `crate::settings::Source`.
+//! 4. **`data/images/`** relative to the current directory, which is what a
 //!    repository checkout has and what keeps `just play` working.
-//! 4. **Beside the AppImage**: `$APPIMAGE`'s own directory, and an `images/`
+//! 5. **Beside the AppImage**: `$APPIMAGE`'s own directory, and an `images/`
 //!    directory in it. This is portable mode - copy the AppImage and an image
 //!    into the same folder on a Steam Deck and run it.
-//! 5. **`<data dir>/oag/images/`**, i.e. `~/.local/share/oag/images` on Linux.
+//! 6. **`<data dir>/oag/images/`**, i.e. `~/.local/share/oag/images` on Linux.
 //!    The stable place to keep an image that is not next to the AppImage.
 //!
 //! `$APPDIR` is deliberately **not** searched. That is the mounted AppImage
@@ -46,10 +49,12 @@ pub const IMAGE_ENV: &str = "OAG_IMAGE";
 
 /// Resolves the source the game should open.
 ///
-/// `given` is the command line's, if it named one. The error names every path
-/// searched: for a "copy the AppImage and an image into one folder" workflow,
-/// that message is the entire user interface.
-pub fn resolve(given: Option<&str>) -> Result<String> {
+/// `given` is the command line's, if it named one. `from_settings` is
+/// `settings.toml`'s `[source] image`, if set - tried after `$OAG_IMAGE` and
+/// before the directories below, the same three forms as `given`. The error
+/// names every path searched: for a "copy the AppImage and an image into one
+/// folder" workflow, that message is the entire user interface.
+pub fn resolve(given: Option<&str>, from_settings: Option<&str>) -> Result<String> {
     if let Some(source) = given {
         return Ok(source.to_string());
     }
@@ -66,6 +71,10 @@ pub fn resolve(given: Option<&str>) -> Result<String> {
             "{IMAGE_ENV} is set to {}, which is not a disc image and holds none",
             path.display()
         ));
+    }
+
+    if let Some(source) = from_settings {
+        return Ok(source.to_string());
     }
 
     let searched = search_path();
@@ -173,8 +182,27 @@ mod tests {
     fn a_named_source_is_used_verbatim() {
         // Including an archive spec, which is not a path at all.
         let spec = "data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad";
-        assert_eq!(resolve(Some(spec)).unwrap(), spec);
-        assert_eq!(resolve(Some("nonexistent.chd")).unwrap(), "nonexistent.chd");
+        assert_eq!(resolve(Some(spec), None).unwrap(), spec);
+        assert_eq!(
+            resolve(Some("nonexistent.chd"), None).unwrap(),
+            "nonexistent.chd"
+        );
+    }
+
+    #[test]
+    fn a_settings_file_source_is_tried_before_the_search_path() {
+        assert_eq!(
+            resolve(None, Some("from-settings.chd")).unwrap(),
+            "from-settings.chd"
+        );
+    }
+
+    #[test]
+    fn the_command_line_wins_over_the_settings_file() {
+        assert_eq!(
+            resolve(Some("from-cli.chd"), Some("from-settings.chd")).unwrap(),
+            "from-cli.chd"
+        );
     }
 
     #[test]

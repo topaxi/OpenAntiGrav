@@ -149,13 +149,55 @@ something bespoke.
 
 ### Video
 
-Two resolutions of each, 512 and 640 wide, presumably for different display
-modes:
+Two resolutions of each, 512 and 640 wide:
 
 - `.PSS` files are MPEG-2 program streams, confirmed by the `00 00 01 BA` pack
-  header. `ffmpeg` reads them.
+  header. `ffmpeg` reads them directly - no separate demux step the way a
+  `.PMF`'s H.264 elementary stream needs, since a program stream carries its
+  own container. `oag_game::movie::open_mpeg2_ps` decodes them. There is no
+  `.PSS` counterpart for the backdrop (`BG512.IPF`/`BG640.IPF` are `.IPF`
+  only), so that loop is still not decoded; the intro is.
 - `.IPF` files carry an `IPUF` magic and target the PS2's Image Processing Unit.
-  A bespoke container.
+  A bespoke container, not yet decoded.
+
+**512 is PAL, 640 is NTSC - measured, not presumed.** `ffprobe`:
+`INTRO512.PSS` is 512x512 at 25 fps; `INTRO640.PSS` is 640x448 at 29.97 fps
+(`30000/1001`). Both declare a 4:3 display aspect (`INTRO512.PSS`'s pixels are
+non-square: `SAR 4:3` on a square 512x512 decode). Confirmed against
+`SCES_547.48` in Ghidra, confidence **85**: `Data\Movies\Intro512.pss` and
+`Data\Movies\Intro640.pss` are both literal strings, selected in
+`FUN_0019b168` by a global (`0x0027a85c`) - nonzero picks `512`, zero picks
+`640`. That global's sole writer, `FUN_0010b030`, sets a PAL-shaped
+non-square pixel-aspect correction (`0.8`/`1.1428`) and issues a GS mode-setup
+call when passed `1`, and a `1.0`/no-correction set when passed `0` - matching
+the measured PAL/NTSC split exactly. Not fully traced: the ultimate trigger
+that decides which value `FUN_0010b030` is called with (a numbered
+event-dispatcher case in `FUN_00186ed8`, itself not read further). For the
+EU/PAL disc this project reads, `512` is what `oag-game` tries first.
+
+**The encode itself is not stretched footage - it is genuinely anamorphic, and
+that is confidence 95, not an assumption from the SAR tag alone.** A regular,
+symmetric UI icon (a four-point rotation/compass mark, also in the PSP cut)
+decodes at native square-pixel 512x512 as a tall, pinched hourglass; scaled to
+the declared 4:3 display aspect it becomes a well-proportioned symmetric
+star. That is the tell that distinguishes real anamorphic storage from a
+mislabelled square-pixel source: a mislabelled source looks *right* undone
+and *wrong* corrected, and this is the other way round. So `512`/`640` are a
+deliberate space-saving encode (a smaller pixel grid holding a full 4:3
+picture, the same trick anamorphic widescreen DVD uses), not a naive stretch
+anyone should undo differently.
+
+**The original's front end does not stretch it either, and that settled a
+rendering bug in this build, not in the original.** Checked against
+`Skin.xml`: the PS2's `Movie` widget declares no `width`/`height` at all
+(unlike the PSP's, which does), and the black `Image` behind it in
+`LogoFMV`/`Play Intro` is `640x448` - the NTSC cut's own decoded resolution,
+exactly. So the original's front end and its video shared one native buffer,
+with nothing to stretch. `oag-game`'s own front end always filled a fixed,
+PSP-shaped 480x272 virtual screen regardless of source platform, which
+squashed the video's real 4:3 picture into that box; see
+`docs/tools/oag-game.md` for the fix (`Movie::display_aspect`,
+`frontend::pillarbox`).
 
 ## Comparison with the PSP release
 

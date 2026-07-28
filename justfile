@@ -82,9 +82,19 @@ hash-images:
 # always safe to delete. Without ffmpeg the sequence still plays, without a
 # picture. See docs/architecture/frontend-boot.md.
 
-# Run the game: intro video, the Language Selection menu, then a race
+# Run the game: intro video, the Language Selection menu, then a race.
+# Boots the PSP disc by default (oag-game's own search order - see
+# `oag_game::source`). A first argument of `pulse-ps2` or `ps2` swaps in the
+# PS2 disc instead; anything else is passed straight through, so
+# `just play data/images/foo.chd --ticks 5` still works unchanged.
 play *ARGS:
-    cargo run -q --release -p oag-game -- {{ARGS}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=({{ARGS}})
+    if [ "${args:-}" = "pulse-ps2" ] || [ "${args:-}" = "ps2" ]; then
+        args=("data/images/pulse-ps2-eu.chd" "${args[@]:1}")
+    fi
+    cargo run -q --release -p oag-game -- "${args[@]}"
 
 # Capture the boot sequence, the menu and the race it launches, without a display
 play-screenshots out="/tmp":
