@@ -239,12 +239,8 @@ PS2-only. On the data side that is settled: all eight PSP team files carry
 `<Misc>` with all six attributes, because `oag_formats::handling` requires the
 element and every attribute with no defaults, and
 `crates/formats/tests/handling_ground_truth.rs` parses all eight - re-run this
-session, 8 teams and 32 parameter sets on each disc. So the open part is only
-*which PSP function* writes `0x78`..`0x90`, not whether the data is there. Since
-`Ship_UpdatePitch` reads `0x90` on PSP too, something must fill it; the parser was
-simply not located. Confidence **80** that the PSP build has an equivalent parser,
-from that argument rather than from finding it. Locating the PSP writer of `0x78`
-would close it.
+session, 8 teams and 32 parameter sets on each disc. What is still open is *which
+PSP function* writes `0x78`..`0x90`; see the question added below.
 
 ## The self-check: completeness
 
@@ -354,4 +350,13 @@ Located alongside, same naming pattern, not yet decoded:
   would settle whether [ADR-0004](../architecture/adr/0004-asset-pipeline.md)'s
   "gameplay is identical across asset sets" holds, and needs a home outside the
   repository to do it in.
+- **Which PSP function writes `0x78`..`0x90`**, the range the PS2's
+  `HandlingXml_ParseMisc` fills. The data side is not in doubt - all eight PSP
+  team files carry `<Misc>` with every attribute - and `Ship_UpdatePitch` reads
+  `stats_base + 0x90` on the PSP, so something there must fill it. But no PSP
+  `<Misc>` parser has been located, and none was searched for: the PSP binary was
+  not reopened when the PS2 side was read. Deliberately carries **no confidence
+  score**, because it is a hypothesis from the consumer rather than an observation
+  of a parser. Finding the PSP writer of `0x78` settles it, and finding that there
+  is none would be a genuine divergence between the builds.
 - Whether tracks carry handling modifiers of their own.
