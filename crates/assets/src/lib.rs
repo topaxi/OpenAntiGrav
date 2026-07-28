@@ -48,6 +48,24 @@ pub enum Error {
         path: String,
     },
 
+    /// Nothing in the source is an archive any known layout names.
+    ///
+    /// Lists every candidate rather than only the platform's own, because the
+    /// commonest cause is a source that is not a Pulse disc at all, and a
+    /// message naming one file makes that look like a missing file instead.
+    #[error("{looked_in} ({platform}) holds none of: {}", looked_for.join(", "))]
+    NoArchive {
+        /// The disc image or directory looked in.
+        ///
+        /// Not called `source`: `thiserror` reserves that name for a nested
+        /// error, and this is a path.
+        looked_in: String,
+        /// What the source identified itself as.
+        platform: String,
+        /// Every archive name tried.
+        looked_for: Vec<String>,
+    },
+
     /// No entry in the archive has that name hash.
     #[error("{archive} has no entry hashing to {hash:08x}{}", name.as_deref().map(|n| format!(" ({n})")).unwrap_or_default())]
     NoSuchEntry {

@@ -5,7 +5,9 @@
 //! `docs/architecture/frontend-boot.md` for how each one was found and what it
 //! contains.
 
-use crate::{Archive, Result};
+use oag_disc::{DiscImage, Platform};
+
+use crate::{Archive, Error, Result};
 
 /// The four archives a PSP Pulse disc ships, relative to the image root.
 pub mod archives {
@@ -17,6 +19,28 @@ pub mod archives {
     pub const DATA: &str = "PSP_GAME/USRDIR/Data.wad";
     /// Back-end data.
     pub const BEDATA: &str = "PSP_GAME/USRDIR/BEData.wad";
+
+    /// The four archives a PS2 Pulse disc ships.
+    ///
+    /// **File names only, and deliberately so.** The directory holding them is
+    /// derived from the disc's own serial - `54748/` on SCES-54748 - so a path
+    /// constant would be right for one pressing and wrong for the next.
+    /// [`super::Layout::resolve`] finds them by name instead, which needs no
+    /// assumption about how a serial becomes a directory.
+    ///
+    /// See `docs/ps2/pulse-disc-layout.md`.
+    pub mod ps2 {
+        /// Tracks, ships and handling: the [`super::DATA`] analogue, 7,200
+        /// entries in the same WAD container the PSP uses.
+        pub const DATA: &str = "WADS2.WAD";
+        /// The 193-entry companion archive. Also carries models, which is why
+        /// it is searched rather than assumed redundant.
+        pub const FE: &str = "WADSP.WAD";
+        /// Music, in a container with a different header. Not parsed.
+        pub const MUSIC: &str = "PS2MUSIC.WAD";
+        /// 85 MiB at entropy 0.084, header unread. Not parsed.
+        pub const PRERACE: &str = "PRERACE.WAD";
+    }
 }
 
 /// Entry names inside `Data.wad`.
@@ -119,30 +143,257 @@ pub mod hashes {
 /// back from the archive rather than trusted.
 pub const LANGUAGE_PLUGINS: &[&str] = &["PI008", "PI009", "PI010", "PI011", "PI012"];
 
-/// The archives the front end reads from, all backed by one disc image.
+/// Where one source keeps its archives.
 ///
-/// Each holds its own handle on the image. That costs a little memory and
-/// nothing else, and it keeps every archive independently seekable.
-#[derive(Debug)]
-pub struct Frontend {
-    /// `Data.wad`: movies, screens, string tables.
-    pub data: Archive,
-    /// `FE.wad`: fonts and shared front-end images.
-    pub fe: Archive,
+/// The two releases name their archives differently and put them in different
+/// places, so nothing above this layer should spell either layout out. A caller
+/// asks for the bulk archive and gets whichever of `Data.wad` and `WADS2.WAD`
+/// the source actually carries.
+///
+/// **Found by name, not derived from the platform.** The candidates are tried in
+/// order against the source's own file list, so a disc that identifies as
+/// neither console still opens if it holds an archive one of them would
+/// recognise, and a PS2 pressing whose serial directory is not `54748/` needs no
+/// change here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Layout {
+    /// What the source says it is, or what its archives imply when it says
+    /// nothing. Carried for reports and error messages; nothing branches on it,
+    /// because every decode this project has is chosen by the *data* rather than
+    /// by the disc it came off.
+    pub platform: Platform,
+    /// The bulk archive: tracks, ships, handling, and on the PSP the movies,
+    /// screens and string tables too.
+    pub data: String,
+    /// The companion archive, when the source has one.
+    pub fe: Option<String>,
 }
 
-impl Frontend {
-    /// Opens the archives the boot sequence needs.
+/// The bulk archive's candidates, in the order they are tried.
+const DATA_CANDIDATES: [(&str, Platform); 2] = [
+    (archives::DATA, Platform::Psp),
+    (archives::ps2::DATA, Platform::Ps2),
+];
+
+/// The companion archive's candidates, in the order they are tried.
+const FE_CANDIDATES: [(&str, Platform); 2] = [
+    (archives::FE, Platform::Psp),
+    (archives::ps2::FE, Platform::Ps2),
+];
+
+impl Layout {
+    /// Works out which archives `source` carries and how to open them.
     ///
     /// `source` is either a disc image or a directory previously extracted with
     /// `oag-unpack`, which is what ADR-0004 means by "load from the user's own
     /// originals".
-    pub fn open(source: &str) -> Result<Self> {
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoArchive`] when nothing in the source matches any candidate,
+    /// naming every candidate looked for. Reading the source itself propagates.
+    pub fn resolve(source: &str) -> Result<Self> {
+        let (mut platform, files) = survey(source)?;
+
+        let data = pick(source, &files, &DATA_CANDIDATES).ok_or_else(|| Error::NoArchive {
+            looked_in: source.to_string(),
+            platform: platform.to_string(),
+            looked_for: DATA_CANDIDATES
+                .iter()
+                .map(|(name, _)| (*name).to_string())
+                .collect(),
+        })?;
+        let fe = pick(source, &files, &FE_CANDIDATES);
+
+        // An extracted directory that holds only `USRDIR` has no `UMD_DATA.BIN`
+        // and no `SYSTEM.CNF` to identify it, so the archive that matched is the
+        // only thing left that knows. Never the other way round: a disc that
+        // says what it is is believed.
+        if platform == Platform::Unknown {
+            platform = data.1;
+        }
+
         Ok(Self {
-            data: Archive::open(&archive_spec(source, archives::DATA))?,
-            fe: Archive::open(&archive_spec(source, archives::FE))?,
+            platform,
+            data: data.0,
+            fe: fe.map(|(spec, _)| spec),
         })
     }
+
+    /// One line for a load report: what was found and what it was found on.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        match &self.fe {
+            Some(fe) => format!("{} source: {} and {}", self.platform, self.data, fe),
+            None => format!(
+                "{} source: {}, with no companion archive",
+                self.platform, self.data
+            ),
+        }
+    }
+}
+
+/// The archives one source carries, opened.
+///
+/// Each holds its own handle on the image. That costs a little memory and
+/// nothing else, and it keeps every archive independently seekable.
+#[derive(Debug)]
+pub struct Archives {
+    /// Which archives these are and where they came from.
+    pub layout: Layout,
+    /// The bulk archive: `Data.wad` on the PSP, `WADS2.WAD` on the PS2.
+    pub data: Archive,
+    /// The companion archive: `FE.wad` on the PSP, `WADSP.WAD` on the PS2.
+    pub fe: Option<Archive>,
+}
+
+impl Archives {
+    /// Resolves the layout of `source` and opens what it names.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Layout::resolve`], and a directory or blob that will not
+    /// open or parse.
+    pub fn open(source: &str) -> Result<Self> {
+        let layout = Layout::resolve(source)?;
+        let data = Archive::open(&layout.data)?;
+        let fe = layout.fe.as_deref().map(Archive::open).transpose()?;
+        Ok(Self { layout, data, fe })
+    }
+
+    /// The specifier of the archive holding `name`, searching the bulk archive
+    /// first.
+    ///
+    /// **Both are searched, and they have to be.** On the PSP `pulse_logo.mip`
+    /// is in `FE.wad` *and* `Data.wad` at the same size, which makes one look
+    /// sufficient; `gameshare_backdrop.mip` is in `Data.wad` only, which proves
+    /// it is not. On the PS2 both `WADS2.WAD` and `WADSP.WAD` carry models.
+    #[must_use]
+    pub fn locate(&self, name: &str) -> Option<&str> {
+        let hash = oag_formats::wad::hash_name(name);
+        if self.data.index_of_hash(hash).is_some() {
+            return Some(self.data.label());
+        }
+        self.fe
+            .as_ref()
+            .filter(|fe| fe.index_of_hash(hash).is_some())
+            .map(Archive::label)
+    }
+
+    /// Reads and decompresses `name` out of whichever archive holds it.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoSuchEntry`] against the bulk archive when neither has it, so
+    /// the message names the archive a reader would look in first.
+    pub fn read_name(&mut self, name: &str) -> Result<Vec<u8>> {
+        let hash = oag_formats::wad::hash_name(name);
+        if let Some(fe) = self.fe.as_mut()
+            && self.data.index_of_hash(hash).is_none()
+            && fe.index_of_hash(hash).is_some()
+        {
+            return fe.read_name(name);
+        }
+        self.data.read_name(name)
+    }
+}
+
+/// Every file in `source`, and what `source` says it is.
+///
+/// A disc is asked directly; a directory is walked, and identified from the
+/// files it turned out to hold.
+fn survey(source: &str) -> Result<(Platform, Vec<String>)> {
+    let path = std::path::Path::new(source);
+    if path.is_dir() {
+        let mut files = Vec::new();
+        collect(path, "", &mut files);
+        // Sorted so that two candidates matching the same role resolve the same
+        // way on every filesystem, rather than in readdir order.
+        files.sort();
+        let platform = platform_of(&files);
+        return Ok((platform, files));
+    }
+
+    let mut disc = DiscImage::open(source)?;
+    let platform = disc.identify()?.platform;
+    let files = disc
+        .entries()?
+        .iter()
+        .filter(|entry| !entry.is_directory)
+        .map(|entry| entry.path.clone())
+        .collect();
+    Ok((platform, files))
+}
+
+/// Every file under `dir`, as paths relative to the walk's root.
+///
+/// Errors are swallowed rather than propagated: an unreadable subdirectory of an
+/// extract is a reason to not find an archive there, and the caller's
+/// "nothing matched, here is what I looked for" says more than an `io::Error`
+/// about one directory would.
+fn collect(dir: &std::path::Path, prefix: &str, into: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let relative = if prefix.is_empty() {
+            name
+        } else {
+            format!("{prefix}/{name}")
+        };
+        match entry.file_type() {
+            Ok(kind) if kind.is_dir() => collect(&entry.path(), &relative, into),
+            Ok(_) => into.push(relative),
+            Err(_) => {}
+        }
+    }
+}
+
+/// Which console a file list belongs to, by the file each one identifies itself
+/// with. The same two files [`oag_disc::platform`] reads.
+fn platform_of(files: &[String]) -> Platform {
+    if files.iter().any(|f| names(f, "UMD_DATA.BIN")) {
+        Platform::Psp
+    } else if files.iter().any(|f| names(f, "SYSTEM.CNF")) {
+        Platform::Ps2
+    } else {
+        Platform::Unknown
+    }
+}
+
+/// The first candidate present in `files`, as an openable specifier.
+fn pick(
+    source: &str,
+    files: &[String],
+    candidates: &[(&str, Platform)],
+) -> Option<(String, Platform)> {
+    candidates.iter().find_map(|(candidate, platform)| {
+        files
+            .iter()
+            .find(|file| names(file, candidate))
+            .map(|file| (archive_spec(source, file), *platform))
+    })
+}
+
+/// Whether `path` names `candidate`: the same trailing path components,
+/// case-insensitively.
+///
+/// Matching a tail rather than a whole path is what lets one candidate list hold
+/// both `PSP_GAME/USRDIR/Data.wad`, which is a fixed location, and `WADS2.WAD`,
+/// which sits in a directory named after the disc's serial.
+fn names(path: &str, candidate: &str) -> bool {
+    let path = path.replace('\\', "/");
+    let candidate = candidate.replace('\\', "/");
+    let (path, candidate) = (path.as_bytes(), candidate.as_bytes());
+
+    let Some(start) = path.len().checked_sub(candidate.len()) else {
+        return false;
+    };
+    if !path[start..].eq_ignore_ascii_case(candidate) {
+        return false;
+    }
+    start == 0 || path[start - 1] == b'/'
 }
 
 /// Builds the specifier for one archive inside `source`.
@@ -176,6 +427,117 @@ mod tests {
         // The current directory always exists, so it stands in for an extract.
         let spec = archive_spec(".", archives::DATA);
         assert_eq!(spec, "./PSP_GAME/USRDIR/Data.wad");
+    }
+
+    /// A directory shaped like an extract, under a name of its own so two tests
+    /// never collide.
+    fn extract(name: &str, files: &[&str]) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("oag-assets-layout-{name}"));
+        std::fs::remove_dir_all(&root).ok();
+        for file in files {
+            let path = root.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            // Never opened: resolving a layout is a question about paths, so
+            // these do not have to be WADs to answer it.
+            std::fs::write(&path, b"").unwrap();
+        }
+        root
+    }
+
+    #[test]
+    fn a_psp_extract_resolves_to_the_psp_archives() {
+        let root = extract(
+            "psp",
+            &[
+                "UMD_DATA.BIN",
+                "PSP_GAME/USRDIR/Data.wad",
+                "PSP_GAME/USRDIR/FE.wad",
+                "PSP_GAME/USRDIR/BEData.wad",
+            ],
+        );
+        let source = root.to_str().unwrap();
+
+        let layout = Layout::resolve(source).unwrap();
+        assert_eq!(layout.platform, Platform::Psp);
+        assert_eq!(layout.data, format!("{source}/PSP_GAME/USRDIR/Data.wad"));
+        assert_eq!(
+            layout.fe.as_deref(),
+            Some(format!("{source}/PSP_GAME/USRDIR/FE.wad").as_str())
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_ps2_extract_resolves_through_its_serial_directory() {
+        // The directory is named after the disc's serial, so nothing may depend
+        // on `54748` in particular: the archive is found by its own name.
+        let root = extract(
+            "ps2",
+            &[
+                "SYSTEM.CNF",
+                "12345/WADS2.WAD",
+                "12345/WADSP.WAD",
+                "12345/PS2MUSIC.WAD",
+            ],
+        );
+        let source = root.to_str().unwrap();
+
+        let layout = Layout::resolve(source).unwrap();
+        assert_eq!(layout.platform, Platform::Ps2);
+        assert_eq!(layout.data, format!("{source}/12345/WADS2.WAD"));
+        assert_eq!(
+            layout.fe.as_deref(),
+            Some(format!("{source}/12345/WADSP.WAD").as_str())
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_archive_alone_identifies_a_partial_extract() {
+        // `oag-unpack` can be pointed at one directory, so the file that names
+        // the console is often absent. The archive that matched is then the only
+        // thing that knows which one it is.
+        let root = extract("partial", &["WADS2.WAD"]);
+        let source = root.to_str().unwrap();
+
+        let layout = Layout::resolve(source).unwrap();
+        assert_eq!(layout.platform, Platform::Ps2);
+        assert_eq!(layout.data, format!("{source}/WADS2.WAD"));
+        assert_eq!(layout.fe, None);
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_source_with_no_archive_says_what_it_looked_for() {
+        let root = extract("empty", &["SYSTEM.CNF", "IOP/LIBSD.IRX"]);
+        let source = root.to_str().unwrap();
+
+        let error = Layout::resolve(source).unwrap_err().to_string();
+        assert!(error.contains("PS2"), "{error}");
+        assert!(error.contains(archives::DATA), "{error}");
+        assert!(error.contains(archives::ps2::DATA), "{error}");
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_archive_name_is_matched_on_a_component_boundary() {
+        assert!(names("54748/WADS2.WAD", archives::ps2::DATA));
+        assert!(names("54748/wads2.wad", archives::ps2::DATA));
+        assert!(names("WADS2.WAD", archives::ps2::DATA));
+        assert!(names(r"54748\WADS2.WAD", archives::ps2::DATA));
+        assert!(names("PSP_GAME/USRDIR/Data.wad", archives::DATA));
+
+        // A name that merely ends with the candidate's characters is not that
+        // candidate, which is the whole reason this is not `ends_with`.
+        assert!(!names("54748/NOTWADS2.WAD", archives::ps2::DATA));
+        assert!(!names("WADS2.WADX", archives::ps2::DATA));
+        // The PSP candidate is a path, so a bare file of the same name in some
+        // other directory does not answer for it.
+        assert!(!names("elsewhere/Data.wad", archives::DATA));
     }
 
     #[test]
