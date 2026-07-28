@@ -510,26 +510,62 @@ one-parameter fit at rms `0.13` over a 47-unit speed range, a recorded column
 whose derivative matches the residual on three captures, and an instruction-level
 reading of where that column comes from.
 
+# Closed: the mechanism is contact friction, and the coefficient is `0.035`
+
+The two steps this page left open - find the writer, then match `wall.rs` to it -
+are both done, and the answer is a number read out of the binary rather than
+fitted to this page.
+
+`Body_ResolveContact` (`0x0884e968`) applies, per contact, an impulse
+
+```text
+j * n  -  contact->friction * (v_point - n * dot(v_point, n))
+```
+
+and `Body_ApplyImpulseAtPoint` (`0x0884d64c`) turns that into `velocity +=
+impulse * invMass` with `invMass == 1`. The tangential half is therefore a flat
+multiplicative loss on the tangential velocity, once per frame per contact, in
+velocity space - **exactly the shape this page measured and could not attribute**.
+`contact->friction` is `contact+0x34`, filled by `Collision_AddContact`
+(`0x08816864`) as the average of the two colliders' `collider+0x64`, forced to
+zero if either is negative. A wall's is `0.05`; the craft's own box collider is
+given `0.02` by the ship-entity constructor. **So a craft scraping a wall loses
+`(0.05 + 0.02) / 2 = 3.5 %` of its tangential speed every frame.** Full evidence
+in
+[contact-response.md](../ghidra/functions/psp-pulse/contact-response.md).
+
+**The measurement is a one-sided test of that prediction, which is stronger than
+the asymptote match it looks like.** The normal impulse can only *add* loss on top
+of the tangential one, so `3.5 %` is a floor the data must approach from above
+and never cross. The standing start's contact ticks read `5.21`, `4.03`, `3.885`,
+`3.797`, `3.636`, `3.577`, `3.560 %` - monotone, converging, and above `3.5 %` on
+every one of its 230 contact ticks. A coefficient of `0.036` is refused by tick
+295 alone.
+
+So the `3.67 %` this page quotes as the settled value is not the coefficient; it
+is the transient still an eighth of the way from the impact. The coefficient is
+`0.035`, and `crates/physics/src/wall.rs` now implements the law rather than the
+number: a unit test pins a pure scrape at `0.965 x` per frame, and the constants
+it multiplies are the two disc literals.
+
 ## What to do next
 
-1. **Compare `crates/physics/src/wall.rs` against the original's wall response.**
-   The target is now concrete and measurable rather than a fitted constant: a
-   craft in sustained contact loses about `3.6 %` of its speed per frame, decaying
-   slowly from `4.2 %` just after the impact toward `3.67 %`. That number, not a
-   drag coefficient, is what a reimplementation has to reproduce.
-2. **Locate the writer.** The candidates, both read far enough this pass to be
-   named but not far enough to be attributed: the contact resolver
-   `FUN_0884e968` (which computes a tangential relative velocity and scales it by
-   a friction field at `contact+0x34`, then applies the result through
-   `FUN_0884d64c`, an apply-impulse-at-point), and `Ship_UpdateMagLock`
-   (`0x0884ba0c`), which does rewrite `body+0x140` directly but renormalises to
-   the original magnitude and so cannot be it. `FUN_0884e968` is the live lead.
-3. **Recapture a clean straight.** No existing trace in `data/traces/` contains
+1. **Recapture a clean straight.** No existing trace in `data/traces/` contains
    more than 60 consecutive wall-free ticks. `speed / |velocity| == 1.0000` is now
    a cheap, exact test for whether a capture is clean, and any future capture
-   should be checked with it before being used as a reference.
-4. `the_ship_does_not_stay_on_the_track_yet` in `crates/game` is still a real
-   failure, and the wall response is now the reason to expect it to be.
+   should be checked with it before being used as a reference. It is also a
+   *positive* test now: a capture in wall contact should read the surface's
+   friction, so the ratio identifies which regime a capture is in rather than
+   only flagging that it is not clean.
+2. **Close the `0x10` pickup flag.** The wall attribution above is capped at
+   confidence 75 because the stun timer stays at `0` across the tick-62 impact.
+   The gate is narrowed but not closed: the flag word is `*(entity+0x4c) + 0x1b8`
+   and bit `0x10` suppresses both the impulse and the `+= 0.5`; what sets it is
+   unread.
+3. **Angular response.** `crates/physics` resolves contacts at the centre of mass,
+   so the original's `cross(r, impulse)` torque and its contribution to the
+   resolver's denominator are both absent. That is the largest remaining gap
+   between this crate's contact response and the original's.
 
 ## What not to do
 

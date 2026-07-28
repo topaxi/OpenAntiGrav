@@ -7,7 +7,7 @@ Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse PSP, UCUS-98712), image base
 
 `Collision_RegisterNodeClasses` (`0x08934d44`) registers all five with the same
 vtable (`0x08ad2aac`). The class ID only selects a surface-type enum and a
-restitution constant.
+friction constant.
 
 | Node type | Class ID | Surface type |
 | --- | --- | ---: |
@@ -44,15 +44,23 @@ it by a triangle's three vertex indices and averaging, returning 1.0 when
 absent. Confidence **88**.
 
 The collider object is 0xa0 bytes: bounding box at `+0x00`/`+0x10`, owner id
-`+0x60`, restitution `+0x64`, surface type `+0x6c`, broadphase `+0x80`,
+`+0x60`, friction `+0x64`, surface type `+0x6c`, broadphase `+0x80`,
 vertices `+0x84`, per-vertex scalars `+0x88`, indices `+0x8c`, counts `+0x90`
 and `+0x94`.
 
-Restitution is **-1.0** for Floor, Mag Floor and Reset, and **0.05** for Wall.
-Contact combination averages the two but forces zero if either is negative, so
-the -1.0 is a **sentinel meaning "never bounce"** rather than a value.
-Confidence **88**. Implementing it as a literal -1.0 restitution would produce
-energy-adding collisions.
+`collider+0x64` is **-1.0** for Floor, Mag Floor and Reset, and **0.05** for
+Wall. `Collision_AddContact` averages the two colliders' values but forces zero
+if either is negative, so the -1.0 is a **sentinel** rather than a value.
+Confidence **88**.
+
+**This field is friction, not restitution.** It was recorded as restitution here
+until `Body_ResolveContact` (`0x0884e968`) was read: the resolver takes its
+restitution from `body+0x388` and uses the combined `collider+0x64` - which
+becomes `contact+0x34` - only to scale the contact's *tangential* relative
+velocity. So the sentinel means "frictionless", the `0.05` is what makes a wall
+scrape cost a craft `3.5 %` of its speed per frame once averaged against the
+ship's own `0.02`, and nothing about the combination rule changes. See
+[contact-response.md](contact-response.md).
 
 ## Two-level sweep and prune
 

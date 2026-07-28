@@ -188,7 +188,9 @@ denom   = body->invMass(+0x378) + angularTerm;           /* 0884ecb4 */
 if (denom == 0.0f)  return;                              /* 0884ecb8/0884ecc0 */
 j       = num / denom;                                   /* 0884ecc8 */
 
-impulse = -(n * j);                                      /* 0884ed0c, -1.0f   */
+impulse = n * j;                                         /* 0884ecec, sp+0xc0 */
+/* the -1.0f scale at 0884ed0c writes sp+0x110 and sp+0x150, which nothing
+   reads; the impulse handed to Body_ApplyImpulseAtPoint is sp+0xc0 (s3). */
 
 if (c->friction(+0x34) > 0.0f) {                         /* 0884ed4c-0884ed58 */
     vt = vPoint - n * dot(vPoint, n);                    /* 0884ede4 vsub.q   */
@@ -198,7 +200,7 @@ if (c->friction(+0x34) > 0.0f) {                         /* 0884ed4c-0884ed58 */
 
 Body_ApplyImpulseAtPoint(body, c, impulse);              /* 0884eea8 */
 Body_Translate(body, n * c->depth(+0x30));               /* 0884eecc */
-FUN_0884dbf4(body, c, impulse, c->flags(+0x20));         /* 0884eee4, not read */
+Body_RecordContact(body, c, impulse, c->flags(+0x20));   /* 0884eee4 */
 ```
 
 Confidence **88**. Every line is a decoded VFPU instruction or a short run of
@@ -237,13 +239,17 @@ is a **multiplicative** `friction`. That is:
   `Ship_UpdateCraft` could not find it;
 - **once per frame per contact**, matching the observed per-frame cadence.
 
-It also explains the decay the capture records. The measured loss runs `4.2 %`
-just after the impact and settles toward `3.67 %`; the loss ratio is
-`friction * |vt| / |v|`, which is below `friction` while a normal component
-survives and rises to it as the velocity becomes purely tangential. **So the
-settled `3.67 %` is the friction coefficient itself, and the early `4.2 %` is
-that plus the tail of the normal impulse.** Confidence **80** on that reading of
-the decay - the shape is right and no arithmetic was done on the transient.
+It also explains the decay the capture records - though **the direction of that
+argument was wrong the first time this page was written, and it is corrected
+here**. The loss runs `5.2 %` on the impact frame and falls monotonically toward
+an asymptote. It falls rather than rises: the normal impulse *adds* loss on top
+of the tangential one for any plausible denominator, so the observed per-frame
+loss has the friction coefficient as a **floor**, approached from above as the
+motion becomes purely tangential. The asymptote, and therefore the coefficient,
+is `3.5 %` - not `3.67 %`, which is the transient still an eighth of the way
+from the impact. `3.5 %` is `(0.05 + 0.02) / 2`, both literals in the binary;
+[contact-response.md](contact-response.md) reads them and works the bound
+through. The confidence-80 note that used to be here is superseded.
 
 ### `Body_ApplyImpulseAtPoint` (`0x0884d64c`) and `Body_Translate` (`0x0884d9f8`)
 
@@ -266,9 +272,17 @@ line is the `+0x160`-to-`+0x150` mapping again.
 `0x0884a86c` to push a craft out of a penetrating hover probe, which is a second
 use site agreeing with the name.
 
-### Why this is **not** implemented in `crates/physics` yet
+### Where the coefficient comes from
 
-The *shape* is recovered at 88, but the coefficient is **per-contact data, not a
+**Answered, in [contact-response.md](contact-response.md)**, and implemented in
+`crates/physics/src/wall.rs`. `contact+0x34` is filled by `Collision_AddContact`
+(`0x08816864`) as the average of the two colliders' `+0x64` fields, forced to
+zero if either is negative; a wall's is `0.05` and the craft's box collider's is
+`0.02`, so a wall scrape is `0.035` per frame. The paragraphs below are the
+reasoning that was correct to stop at before that was read, and the units check
+in the second one still stands: the per-vertex scalar is **not** the friction.
+
+The *shape* was recovered at 88, but the coefficient is **per-contact data, not a
 constant in the binary** - `c->friction` is read from `contact+0x34`, and nothing
 on this page shows what fills it. Implementing the term with a coefficient chosen
 to reproduce `3.67 %` would be exactly the "tune a constant to fit the traces"
@@ -285,13 +299,17 @@ no chunk 3, and a friction of `1.0` in the law above removes the craft's entire
 tangential velocity in one frame. The measured value is `0.0367`. Either there is
 a scale between them or the field is not the friction; a naive identification
 would stop the ship dead. Confidence that the two are related at all: **50** -
-deliberately not renamed and not implemented.
+deliberately not renamed and not implemented. **Settled since**: the friction is
+`collider+0x64` averaged over the two colliders, not the per-vertex scalar, so
+the two are unrelated and the scalar's confidence-40 guess is refuted rather
+than merely unconfirmed.
 
-What a reimplementation needs, in order: the writer of `contact+0x34` (start from
+What a reimplementation needed, in order: the writer of `contact+0x34` (start from
 the contact-generation side, `Collision_AddContact` `0x08816864`), then the
 tangential term, then a re-run of the standing-start capture with
 `speed / |velocity|` as the check - it should read `1.0000` while free and settle
-at the surface's friction while scraping.
+at the surface's friction while scraping. All three were done; the capture does
+exactly that, and the settling value is the predicted `0.035`.
 
 ## Not determined
 
@@ -300,11 +318,12 @@ at the surface's friction while scraping.
   front end. Nothing on this page depends on it - see the damping argument above,
   which is sub-step invariant - but a reimplementation that wants bit-comparable
   intermediate state does.
-- **`body+0x388` (`0.5`) and `body+0x38c` (`1.0`).** `+0x388` is read by the
-  contact resolver `FUN_0884e968` at `0x0884eb28` and added to `1.0` before
-  scaling a normal-direction relative velocity, which reads exactly like a
-  restitution coefficient - but that function is not otherwise documented, so
-  the field stays offset-named at confidence **55**.
-- **What fills `contact+0x34`, the friction coefficient**, and `FUN_0884dbf4`,
-  the third call `Body_ResolveContact` makes. Both are on the critical path for
-  implementing the contact response; see the section above.
+- **`body+0x38c` (`1.0`).** Still offset-named. `+0x388` is now settled: it is the
+  **restitution**, read by `Body_ResolveContact` at `0x0884eb28` and added to
+  `1.0` before scaling the normal-direction relative velocity. `Body_Init`
+  defaults it to `0.5` and the ship-entity constructor (`0x08840c74`) overwrites
+  it with `0.4` (`0x3ecccccd`, loaded at `0x08841424`, stored at `0x088414b8`,
+  with no jump target in between so the path is unconditional). Confidence
+  **88**, up from 55.
+- **`body+0x394`**, the scale `Body_ApplyImpulseAtPoint` applies to the angular
+  half of an impulse. Still unread.

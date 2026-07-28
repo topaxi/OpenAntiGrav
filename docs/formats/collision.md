@@ -150,23 +150,35 @@ That the PS2 loader also drops them, or that the attribute is what gates them, i
 **not** established - the loader was only read for the PSP build, and nothing was
 traced. Confidence **70** for the explanation, as distinct from the counts.
 
-## Surface types and the restitution sentinel
+## Surface types and the friction sentinel
 
 All five classes are registered with one vtable and share one parser. The class
-ID selects a surface type and a restitution constant, nothing else.
+ID selects a surface type and one `f32` at `collider+0x64`, nothing else.
 
-Restitution is `0.05` for `Wall` and **`-1.0` for `Floor`, `Mag Floor` and
-`Reset`**, and the negative value is a **sentinel, not a coefficient**: contact
-combination averages the two surfaces but forces zero if either side is negative.
-So a floor contact never bounces, and a floor-against-wall contact is `0.0`
-rather than the average `-0.475`. Implementing the `-1.0` literally would add
-energy on every contact instead of removing it - a negative restitution is not a
-soft surface, it is an accelerating one.
+That float is `0.05` for `Wall` and **`-1.0` for `Floor`, `Mag Floor` and
+`Reset`**, and the negative value is a **sentinel, not a coefficient**:
+`Collision_AddContact` (`0x08816864`) averages the two colliders but forces zero
+if either side is negative. So a floor-against-wall contact is `0.0` rather than
+the average `-0.475`, and a negative never reaches the response - which matters,
+because a negative coefficient in that response would *add* velocity instead of
+removing it.
 
 `oag_formats::collision` therefore models it as `Option<f32>`, where `None` means
-"never bounce", and `combine_restitution` is the rule rather than a comment.
+"no effect", and `combine_friction` is the rule rather than a comment.
 Confidence **88**, unchanged from the Ghidra reading: this is decompilation
 evidence, and no shipped byte bears on it.
+
+**It is friction, and this page called it restitution until 2026-07-28.**
+`Body_ResolveContact` (`0x0884e968`) takes its restitution from `body+0x388`
+(`0.4` for a craft) and uses the combined `collider+0x64` only to scale the
+contact's *tangential* relative velocity, once per frame, with no Coulomb clamp.
+Averaged against the ship collider's own `0.02` that gives `0.035`, and a craft
+scraping a wall loses exactly that fraction of its speed every frame - the
+"missing resistance force" of
+[force-balance-ground-truth.md](../physics/force-balance-ground-truth.md). The
+values and the sentinel rule on this page were right; only the field's name was
+wrong. See
+[contact-response.md](../ghidra/functions/psp-pulse/contact-response.md).
 
 ## The same format is in Wipeout Pure
 

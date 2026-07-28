@@ -203,3 +203,7 @@
 0x0884e968	function	Body_ResolveContact	88	rigid-body.md
 0x0884d64c	function	Body_ApplyImpulseAtPoint	88	rigid-body.md
 0x0884d9f8	function	Body_Translate	92	rigid-body.md
+0x0884f70c	function	Body_StepWorld	85	contact-response.md
+0x0884d840	function	Body_SetPosition	90	contact-response.md
+0x0884da7c	function	Ship_SetColliderFriction	85	contact-response.md
+0x0884dbf4	function	Body_RecordContact	85	contact-response.md
