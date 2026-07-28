@@ -558,13 +558,28 @@ stretch is driven around it.
 
 **So the answer to this page's open question is (B), localised**: something
 rotates the basis directly, outside `Body_Integrate`, and on this circuit it is
-concentrated where the craft is held inverted. `Ship_UpdateMagLock` is the
-obvious suspect and is *not* claimed here - it has been read only far enough to
-know it renormalises a vector to its original magnitude
-([rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md)), and no
-instruction has been read writing the basis outside the integrator.
+concentrated where the craft is held inverted.
+
+**And the instructions that do it have since been read.**
+`Ship_UpdateMagLock` (`0x0884ba0c`) ends in `sv.q` writes straight into the
+three basis rows at `body+0x00`, `+0x10` and `+0x20` - each row projected onto a
+track-derived axis, scaled by the mag-lock blend at `craft+0x280`, followed by an
+explicit Gram-Schmidt re-orthonormalisation. It is not a torque, it touches no
+accumulator, and it therefore **cannot** appear in the momentum column: exactly
+the shape of the (B) break measured above, in exactly the place a mag-strip
+holds a craft inverted. Evidence and listing in
+[engine.md](../ghidra/functions/psp-pulse/engine.md#ship_updatemaglock-rewrites-the-basis-directly-and-that-is-the-missing-mechanism);
+the attribution goes from 45 to **90**, measurement and instruction reading
+arrived at independently and agreeing.
+
 Confidence **88** on the split ((A) holds, (B) breaks), **85** on the scoping to
-the inverted section, **45** on any attribution to a named function.
+the inverted section, **90** on the mechanism being `Ship_UpdateMagLock`.
+
+The implementation consequence, since it is the thing most likely to be got
+wrong: **it must not be modelled as a torque.** A torque would go through
+`I^-1` and appear in `body+0x150`, and this lap measures that it does not - the
+rotation is a kinematic rewrite of the basis. That is queued as a separate
+task rather than done here.
 
 Reproduce all of it with, and note that no handling values are needed - every
 fit here is kinematic:
@@ -611,10 +626,10 @@ uv run scripts/trace-omega-identity.py \
    `craft+0x280` is still not captured, and it remains the only escape the
    bank-to-yaw term has; it is a single entry in
    `scripts/psp_trace_fields.py`'s `CRAFT_FIELDS`.
-   The follow-on the `omega_*` lap opens is an **RE** job rather than a capture
-   one: find what writes the basis outside `Body_Integrate`, starting from
-   `Ship_UpdateMagLock`, since the residual is concentrated in the inverted
-   section a mag-lock would hold the craft through.
+   The follow-on the `omega_*` lap opened - find what writes the basis outside
+   `Body_Integrate` - is **also done**: it is `Ship_UpdateMagLock`, read at
+   instruction level, see the section above. `craft+0x280` is that term's own
+   blend, so capturing it would now serve two questions rather than one.
 2. **Capture an airborne stretch.** `grip_air` and the airborne branches of the
    quadratic drag and vertical damping are all untested by every capture in
    `data/traces/` - this lap has 7 half-grounded ticks and no fully airborne
