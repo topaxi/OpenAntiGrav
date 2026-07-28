@@ -90,14 +90,24 @@ play-screenshots out="/tmp":
     cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-launch.png" \
         --until "Launch Game" --press start,cross --ticks 60
 
-# Package the game as a single-file x86_64 AppImage, for the Steam Deck.
-#
 # The engine only: no game content is ever packaged, and the script refuses to
 # build if any found its way in. The player's own disc image is looked for
 # beside the AppImage at runtime. See docs/tools/packaging.md, which also
 # records why AppImage rather than Flatpak.
+
+# Package the game as one x86_64 AppImage, built against this machine's glibc
 appimage *ARGS:
     ./scripts/build-appimage.sh {{ARGS}}
+
+# The same package built in Debian bookworm, which is what a Steam Deck needs: a
+# native build links libm symbols an older glibc does not have and refuses to
+# start there. Needs podman or docker; the image is built once from
+# packaging/appimage/Containerfile. Slower, so `just appimage` stays the fast
+# path for a local run. See docs/tools/packaging.md#glibc.
+
+# Package the AppImage against an older glibc, so it also runs on a Steam Deck
+appimage-portable *ARGS:
+    ./scripts/build-appimage.sh --container {{ARGS}}
 
 # View assets straight from a disc image
 view *ARGS:

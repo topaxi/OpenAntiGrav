@@ -1,0 +1,49 @@
+# Build environment for a portable AppImage.
+#
+# The point of this image is one number: **glibc 2.36**, which is what Debian
+# bookworm ships. A binary is only loadable on a glibc at least as new as the one
+# it was linked against, and the linker always binds to the newest symbol
+# versions the build host offers - so building on a rolling distribution produces
+# a binary that will not start on anything older. See
+# docs/tools/packaging.md#glibc.
+#
+# Nothing about the engine changes in here. This is the same `cargo build
+# --release -p oag-game` a checkout runs, against an older libc.
+#
+# Built and used by scripts/build-appimage.sh --container.
+
+FROM docker.io/library/debian:bookworm-slim
+
+# gcc is the linker driver rustc invokes; pkg-config and libudev-dev are what
+# `libudev-sys` needs, which is how `gilrs` reads gamepads. No other C
+# dependency exists in the workspace: the CHD reader, the AV1 decoder and wgpu
+# are all Rust.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gcc \
+        libc6-dev \
+        libudev-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# CARGO_HOME has to be an ENV rather than a prefix on the RUN below: prefixing
+# `CARGO_HOME=... curl ... | sh` sets it for `curl`, not for the `sh` that does
+# the installing, and rustup quietly lands in /root/.cargo instead - which is
+# not on PATH, so the build fails with "cargo: command not found".
+# scripts/build-appimage.sh overrides CARGO_HOME at run time to point the
+# registry at a bind mount; the toolchain itself stays here, on PATH.
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# `--profile minimal`: no docs, no clippy, no rustfmt. The gate that needs those
+# runs on the host; this image only ever produces a release binary.
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path
+
+# The registry and the build directory are bind-mounted from the host by
+# scripts/build-appimage.sh, so a rebuild is incremental rather than a fresh
+# download of the whole dependency tree.
+WORKDIR /src

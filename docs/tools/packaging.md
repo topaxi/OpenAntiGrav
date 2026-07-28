@@ -8,9 +8,16 @@ disc image and the game looks for it beside the AppImage.
 
 ```sh
 just appimage                       # release build, then pack
+just appimage-portable              # the same, built against an older glibc
 just appimage --skip-build          # pack whatever is in target/release
 just appimage --out /tmp/oag.AppImage
 ```
+
+**For a Steam Deck, use `just appimage-portable`.** A native build links against
+whatever glibc this machine has, and refuses to start on anything older; the
+portable one is built in a container and loads on glibc 2.34 or newer. That is
+[the glibc floor](#glibc), the one real portability constraint here, and the only
+reason there are two recipes rather than one.
 
 The work happens in [`scripts/build-appimage.sh`](../../scripts/build-appimage.sh),
 which assembles an AppDir from [`packaging/appimage/`](../../packaging/appimage/)
@@ -99,7 +106,7 @@ machine with an older glibc the loader refuses the binary outright:
 ```
 
 `just appimage` therefore prints the floor it produced, computed from the binary
-itself:
+itself, and says so loudly when it is above the portable baseline:
 
 ```sh
 objdump -T target/release/oag-game | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
@@ -111,36 +118,55 @@ Check the target's, on the Deck itself, and compare:
 ldd --version | head -1
 ```
 
-If the Deck's glibc is older than the floor, the fix is to build against an
-older one - the AppImage convention is to build on the oldest base you intend to
-support:
+### The fix: build against an older glibc
+
+`just appimage-portable` does exactly that, and it is **verified, not
+suggested**: `scripts/build-appimage.sh --container` builds the release binary
+inside Debian bookworm - glibc 2.36 - from
+[`packaging/appimage/Containerfile`](../../packaging/appimage/Containerfile),
+then packages it the same way. The AppImage convention is to build on the oldest
+base you intend to support, and this is that.
 
 ```sh
-podman run --rm -v "$PWD:/src" -w /src docker.io/library/debian:bookworm-slim \
-    bash -c 'apt-get update && apt-get install -y curl build-essential pkg-config libudev-dev \
-        && curl --proto "=https" -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal \
-        && . "$HOME/.cargo/env" \
-        && CARGO_TARGET_DIR=/src/data/appimage/target-bookworm cargo build --release -p oag-game'
+just appimage-portable              # podman or docker; the image is built once
+CONTAINER_ENGINE=docker just appimage-portable
 ```
 
-then `just appimage --skip-build` after copying that binary over
-`target/release/oag-game`, or point the script at it. Debian bookworm is glibc
-2.36; **whether 2.36 clears the Deck is exactly the unverified part** - see
-below. `cargo-zigbuild` (`--target x86_64-unknown-linux-gnu.2.36`) does the same
-thing without a container. A third option, if neither is available, is pinning
-the old symbol versions with `.symver` directives - it works, it is fragile, and
-it needs revisiting every time glibc adds a version, so prefer either of the
-above.
+Measured on 2026-07, building the same commit both ways:
 
-**Two things here are written from reasoning rather than from a run.** The
-container command above has never been executed - if it fails, suspect the
-command before suspecting the environment. And the number this all turns on, the
-SteamOS glibc version, was never established: SteamOS is a rolling Arch
-snapshot, the only figure findable was 2.33 from a 2022 discussion, and no
-hardware was available to check. Step 4 of
-[running it on a Steam Deck](#running-it-on-a-steam-deck) is how the number gets
-found: run the AppImage from a terminal, and either it starts or it names the
-version it wanted.
+| Build | Newest GLIBC symbol referenced | Runs on |
+| --- | --- | --- |
+| native (Arch, glibc 2.44) | `GLIBC_2.44` | glibc 2.44 or newer only |
+| `--container` (bookworm, glibc 2.36) | **`GLIBC_2.34`** | glibc 2.34 or newer |
+
+2.34, not 2.36: bookworm's libm does not *have* the newer symbol versions, so the
+linker binds to the oldest ones that satisfy each reference, and 2.34 is where
+glibc last versioned the maths functions this code reaches. glibc 2.34 is
+August 2021, which is older than the Steam Deck itself. Verified by `objdump -T`
+and `readelf -V` on the produced binary, and the portable AppImage was run
+out-of-repo through the same boot-to-race smoke test as the native one - it
+reached `Launch Game`, loaded the track and produced an identical telemetry line
+at tick 57.
+
+The image is about 1 GB and takes a couple of minutes to build, once. The
+container's registry and target directory are bind-mounted into
+`data/appimage/container/`, deliberately separate from the host's `target/`: the
+two builds use different libcs and would otherwise invalidate each other's
+incremental state on every switch. Both are gitignored, and deleting them is
+always safe.
+
+Two alternatives, neither needed now: `cargo-zigbuild`
+(`--target x86_64-unknown-linux-gnu.2.34`) does the same job without a
+container, and pinning old symbol versions with `.symver` directives works but is
+fragile and needs revisiting whenever glibc adds a version.
+
+**What is still unverified is the Deck itself.** The SteamOS glibc version was
+never established - SteamOS is a rolling Arch snapshot, the only figure findable
+was 2.33 from a 2022 discussion, and no hardware was available to check. A 2.34
+floor clears any SteamOS 3.x that has seen an update, but the number gets
+*confirmed* by step 4 of
+[running it on a Steam Deck](#running-it-on-a-steam-deck): run it from a
+terminal, and either it starts or it names the version it wanted.
 
 ## Where the disc image comes from
 
@@ -230,9 +256,10 @@ Not yet verified on real hardware. These are the steps to try, in Desktop Mode:
 2. `chmod +x OpenAntiGrav-x86_64.AppImage`, which `scp` does not preserve.
 3. Run it from a terminal the first time, so its output is visible:
    `./OpenAntiGrav-x86_64.AppImage`. Expect the archive report, then the intro.
-4. If it exits with a `GLIBC_...' not found` message, see
-   [the glibc floor](#glibc) - build against an older glibc, nothing else will
-   help.
+4. If it exits with a `GLIBC_...' not found` message, the AppImage was built
+   natively: rebuild with `just appimage-portable` and copy that one over. See
+   [the glibc floor](#glibc). Whatever version the message names is the Deck's
+   own glibc, so please record it - it is the number that section is missing.
 5. If the intro has no picture, SteamOS has no `ffmpeg` on `$PATH`; everything
    else still works, and `--no-video` skips the transcode attempt.
 6. `--race` goes straight to a ship on a track, which is the fastest way to test

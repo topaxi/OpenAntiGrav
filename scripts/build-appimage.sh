@@ -14,10 +14,18 @@
 # if anything that looks like game content has found its way into the AppDir.
 #
 # Usage:
-#   scripts/build-appimage.sh [--out <file>] [--skip-build] [--no-strip]
+#   scripts/build-appimage.sh [--out <file>] [--container] [--skip-build]
+#                             [--binary <path>] [--no-strip]
+#
+#   --container  Build inside Debian bookworm (glibc 2.36) instead of natively,
+#                so the AppImage also loads on a distribution older than this
+#                one - which is the whole point on a Steam Deck. Needs podman or
+#                docker; see docs/tools/packaging.md#glibc.
+#   --binary     Package a binary built elsewhere. Implies --skip-build.
 #
 # Environment:
-#   APPIMAGETOOL   appimagetool to use. Default: downloaded into data/tools/.
+#   APPIMAGETOOL      appimagetool to use. Default: downloaded into data/tools/.
+#   CONTAINER_ENGINE  podman or docker. Default: whichever is installed.
 
 set -euo pipefail
 
@@ -29,12 +37,23 @@ work_dir="$project_root/data/appimage"
 app_dir="$work_dir/AppDir"
 out="$work_dir/OpenAntiGrav-x86_64.AppImage"
 
+# The glibc a --container build is expected to produce, and the version this
+# script stops warning about. Debian bookworm's.
+PORTABLE_FLOOR="2.36"
+
+# Tag of the image built from packaging/appimage/Containerfile.
+CONTAINER_IMAGE="oag-appimage-build:bookworm"
+
 skip_build=0
 strip_binary=1
+container=0
+binary=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --out)        out="${2:?--out needs a value}"; shift 2 ;;
+        --container)  container=1; shift ;;
+        --binary)     binary="${2:?--binary needs a value}"; skip_build=1; shift 2 ;;
         --skip-build) skip_build=1; shift ;;
         --no-strip)   strip_binary=0; shift ;;
         # Print the header comment block, however long it happens to be.
@@ -50,13 +69,54 @@ warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 
 step "Building oag-game (release)"
 
-if (( skip_build )); then
+if [[ -n $binary ]]; then
+    echo "using $binary"
+elif (( container )); then
+    engine="${CONTAINER_ENGINE:-}"
+    if [[ -z $engine ]]; then
+        for candidate in podman docker; do
+            command -v "$candidate" >/dev/null 2>&1 && { engine="$candidate"; break; }
+        done
+    fi
+    [[ -n $engine ]] \
+        || die "--container needs podman or docker, and neither is installed. \
+Build natively instead and mind the glibc floor this script prints."
+
+    if ! "$engine" image exists "$CONTAINER_IMAGE" 2>/dev/null \
+        && ! "$engine" image inspect "$CONTAINER_IMAGE" >/dev/null 2>&1; then
+        echo "building $CONTAINER_IMAGE (once; ~1 GB, ~2 minutes)"
+        "$engine" build -t "$CONTAINER_IMAGE" \
+            -f "$project_root/packaging/appimage/Containerfile" \
+            "$project_root/packaging/appimage"
+    fi
+
+    # A separate CARGO_HOME and target directory, both under the gitignored
+    # data/, so a container build neither shares nor invalidates the host's
+    # incremental state - the two use different compilers against different
+    # libcs.
+    container_target="$work_dir/container/target"
+    container_cargo="$work_dir/container/cargo"
+    mkdir -p "$container_target" "$container_cargo"
+
+    # Rootless podman already maps the container's root onto this user, so
+    # anything written to the mounts is owned correctly. Docker does not, hence
+    # --user there; without it the mounted directories come back owned by root.
+    engine_args=(--rm -v "$project_root:/src" -w /src
+                 -e CARGO_HOME=/src/data/appimage/container/cargo
+                 -e CARGO_TARGET_DIR=/src/data/appimage/container/target)
+    [[ $engine == docker ]] && engine_args+=(--user "$(id -u):$(id -g)")
+
+    "$engine" run "${engine_args[@]}" "$CONTAINER_IMAGE" \
+        bash -c 'ldd --version | head -1 && cargo build --release -p oag-game'
+    binary="$container_target/release/oag-game"
+elif (( skip_build )); then
     echo "skipped, using whatever is in target/release"
+    binary="$project_root/target/release/oag-game"
 else
     cargo build --release -p oag-game --manifest-path "$project_root/Cargo.toml"
+    binary="$project_root/target/release/oag-game"
 fi
 
-binary="$project_root/target/release/oag-game"
 [[ -x $binary ]] || die "$binary not found; run without --skip-build"
 
 step "Assembling the AppDir"
@@ -118,12 +178,23 @@ floor="$(objdump -T "$app_dir/usr/bin/oag-game" \
     | grep -o 'GLIBC_[0-9.]*' | sort -u -V | tail -1)"
 echo
 echo "glibc floor: $floor"
-warn "this build only runs on a machine whose glibc is at least ${floor#GLIBC_}.
+
+# Only the *newest* symbol version referenced matters, and only if it is newer
+# than what a portable build produces. Below that, saying nothing beats crying
+# wolf on every build.
+newest="$(printf '%s\n%s\n' "$PORTABLE_FLOOR" "${floor#GLIBC_}" | sort -V | tail -1)"
+if [[ $newest == "$PORTABLE_FLOOR" ]]; then
+    echo "  at or below the portable baseline ($PORTABLE_FLOOR, Debian bookworm):"
+    echo "  this runs on anything that new or newer, the Deck included."
+else
+    warn "this build only runs on a machine whose glibc is at least ${floor#GLIBC_}.
   It is the glibc it was *linked against* that sets this, not anything in the
   code: the linker binds each libm symbol to the newest version the build host
   offers. A target with an older glibc fails at load with
-  \"version \`$floor' not found\". docs/tools/packaging.md#glibc has the fix
-  (build in a container with an older glibc) and how to check the Deck's."
+  \"version \`$floor' not found\". Rebuild with --container to bring the floor
+  down to $PORTABLE_FLOOR; docs/tools/packaging.md#glibc has the detail, and how
+  to check the Deck's own version."
+fi
 
 step "Packing"
 
