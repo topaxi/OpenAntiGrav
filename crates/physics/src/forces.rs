@@ -1116,4 +1116,110 @@ mod tests {
             state.body.forward()
         );
     }
+
+    /// The airbrake twin of the test above, and the one that would have caught
+    /// Task #34's bug the day the steering sign was fixed.
+    ///
+    /// **`steer_x` is deliberately zero.** The only committed scenario that
+    /// exercises the airbrake yaw term,
+    /// `verification/scenarios/airbrake-asymmetric.inputs`, holds the brake and
+    /// the steering on the same side, and the steering drive is several times the
+    /// larger, so an inverted airbrake yaw still curves the run the right way and
+    /// shows up only as a wrong rate. Holding one brake alone is what separates
+    /// them: nothing else in the term list can yaw a ship flying level in a
+    /// straight line, so the sign of the result is this term's sign.
+    ///
+    /// The direction asserted is the original's, not a preference:
+    /// `angularLocal.y += fs * Airbrake.turn * (R - L) * 1e-3` about an accumulator
+    /// whose positive sense is nose-right (the `w_game = -w_physics` convention),
+    /// so `L > R` turns the nose left - toward the braked side, which is also what
+    /// the game plays like.
+    #[test]
+    fn braking_the_left_airbrake_alone_turns_the_ship_toward_its_own_left() {
+        let handling = Handling {
+            airbrake: crate::params::Airbrake {
+                turn: 3.0,
+                gain: 800.0,
+                falloff: 400.0,
+                ..crate::params::Airbrake::default()
+            },
+            ..Handling::ZERO
+        };
+        let world = flat_floor();
+        // Far above the floor, so no hover probe, no contact and no alignment
+        // torque: the airbrake yaw is the only thing that can rotate this ship.
+        let mut state = ship_at(1000.0);
+        // The three airbrake terms all carry `craft+0x2ec` as a factor, so a
+        // stationary ship gets nothing at all.
+        state.body.linear_velocity = state.body.forward() * 40.0;
+
+        let controls = ShipControls {
+            airbrake_left: 1.0,
+            steer_x: 0.0,
+            ..ShipControls::default()
+        };
+        let initial_right = state.body.right();
+
+        let dt = 1.0 / 60.0;
+        for _ in 0..30 {
+            crate::integrate::step(
+                &mut state,
+                &controls,
+                &handling,
+                &Environment::default(),
+                &world,
+                dt,
+            );
+        }
+
+        assert!(
+            state.body.forward().dot(initial_right) < 0.0,
+            "forward was {:?}; the left brake must swing it away from the initial \
+             right axis {initial_right:?}, not toward it",
+            state.body.forward()
+        );
+    }
+
+    /// And the mirror, so that a term which somehow yawed left whatever it was
+    /// given could not pass the test above.
+    #[test]
+    fn braking_the_right_airbrake_alone_turns_the_ship_toward_its_own_right() {
+        let handling = Handling {
+            airbrake: crate::params::Airbrake {
+                turn: 3.0,
+                gain: 800.0,
+                falloff: 400.0,
+                ..crate::params::Airbrake::default()
+            },
+            ..Handling::ZERO
+        };
+        let world = flat_floor();
+        let mut state = ship_at(1000.0);
+        state.body.linear_velocity = state.body.forward() * 40.0;
+
+        let controls = ShipControls {
+            airbrake_right: 1.0,
+            ..ShipControls::default()
+        };
+        let initial_right = state.body.right();
+
+        let dt = 1.0 / 60.0;
+        for _ in 0..30 {
+            crate::integrate::step(
+                &mut state,
+                &controls,
+                &handling,
+                &Environment::default(),
+                &world,
+                dt,
+            );
+        }
+
+        assert!(
+            state.body.forward().dot(initial_right) > 0.0,
+            "forward was {:?}, expected a component toward the initial right axis \
+             {initial_right:?}",
+            state.body.forward()
+        );
+    }
 }

@@ -561,6 +561,43 @@ angularLocal.y += speed * Airbrake.turn * (R - L) * 0.001
 Confidence **88** on the whole block, raised from the 84 the function carried
 on decompilation alone.
 
+**Both `(R - L)` terms change sign on the way into a reimplementation, and the
+literal transcription is a bug.** The two conversions this page establishes
+above both apply to this block, and both are a single negation:
+
+- `right` here is `craft+0x170`, which is `body+0x00`, which is **row 0**, which
+  ["points left"](#the-basis-is-positively-oriented-and-row-0-points-left). A
+  crate whose own `+x` is a genuine right must write `-right * ...`.
+- `angularLocal` carries the negated physical rotation (`e' = e x w`), so a
+  positive `.y` here turns the nose **right**, where a right-handed
+  `(right, up, forward)` frame turns it left under a positive yaw. This is the
+  same conversion `Ship_UpdateSteering`'s `yaw = steer * Turning.amount` needs,
+  and the measured law `yaw_rate = -k * steer` is what pins it.
+
+So in a right-handed `(right, up, forward)` frame, **braking the left side turns
+the nose left, toward the braked side, and pushes the body to the right** - the
+craft rotates into the corner while its mass runs wide, which is what
+`Airbrake.slidegrip` cutting lateral grip at the same time is for.
+
+Now also measured directly rather than derived, because the derivation runs
+through two conventions and either could have been misapplied:
+`verification/scenarios/airbrake-left-only.inputs` holds `ltrigger` alone with
+`steer == 0` for 90 ticks, so the yaw term above is the only drive in the whole
+force list that can rotate the craft. `forward` rotates toward `+row0` at
+`+0.36 rad/s`, **33 of 33 wall-free ticks positive** (`speed/|velocity|` reads
+`1.0000` to tick 147), against `+0.005` on the pre-brake straight and `-0.07`
+after the release. Confidence **90**.
+
+`crates/physics/src/airbrake.rs` had transcribed `(R - L)` literally and so ran
+both terms backwards from `5ad69f3`, where the steering sign was fixed in
+`Ship_UpdateSteering`'s counterpart alone, until Task #34. The reason it
+survived a scenario written to exercise the term is worth having here: the
+committed `airbrake-asymmetric.inputs` holds brake and steering on the *same*
+side by design, and the steering drive is several times the larger, so an
+inverted airbrake yaw still curves the run the way the stick asks and shows up
+only as a wrong rate. **A scenario that mirrors two inputs to cancel a sign
+convention cannot then be used to check one.**
+
 > **All three terms are now runtime-confirmed**, on the Time Trial lap's
 > wall-free intervals, against the values read above and with no fitting on the
 > instruction side: the forward `drag` term at `1.03`-`1.07`, the lateral

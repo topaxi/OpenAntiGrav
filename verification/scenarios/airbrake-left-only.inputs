@@ -1,0 +1,40 @@
+# One airbrake, no steering: the scenario that can see the airbrake yaw term's
+# SIGN.
+#
+# `airbrake-asymmetric.inputs` exists to measure the term's *magnitude*, and it
+# deliberately mirrors brake and steering onto the same side so that
+# `|airbrake_l - airbrake_r|` can be read independently of any sign convention.
+# That is exactly what makes it blind to the sign: the steering drive is several
+# times the larger of the two, so a run with the airbrake yaw inverted still
+# curves the way the stick asks and differs only in rate. A reimplementation can
+# have the term backwards and reproduce that capture's direction on both halves.
+#
+# This scenario holds `steer == 0` for its whole length, so nothing else in the
+# force list can yaw the craft:
+#
+#     angularLocal.y += fs * Airbrake.turn * (R - L) * 0.001
+#
+# is the only drive, and the sign of the resulting rotation is the sign of that
+# term. `L` alone must turn the nose **toward** the braked side, which in the
+# recorded basis (whose row 0 is the ship's left - see engine.md, "The basis is
+# positively oriented, and row 0 points left") means `forward` rotating toward
+# `+row0`.
+#
+# It is deliberately single-sided rather than a left/right sweep: a mirrored pair
+# in one run shares a start pose and a stretch of track, so an asymmetry in the
+# geometry reads as an asymmetry in the law. Capture `r` in a second run from the
+# same restart if the mirror is wanted.
+#
+# The first 60 ticks are thrust alone, because all three airbrake terms carry the
+# cached speed `craft+0x2ec` as a factor and a standing craft gets nothing from
+# any of them. The last 50 are the release, which is also the within-capture
+# control: the same speed, the same stretch, no brake.
+#
+#     just scripted-emu verification/scenarios/airbrake-left-only.inputs \
+#         data/traces/talons-junction-airbrake-left-only.csv
+#
+# Reference scenario: Time Trial, Venom, Talon's Junction White, Assegai.
+
+60 cross
+90 cross l
+50 cross

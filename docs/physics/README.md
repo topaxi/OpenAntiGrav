@@ -326,6 +326,15 @@ angAccelLocal.y += speed * turn * (R - L) * 0.001
 
 - `amount` is a **lateral force gain**, not a drag.
 - `turn` feeds body-local angular acceleration directly.
+- **Both `(R - L)` terms are written in the original's frame and change sign on
+  the way into this crate.** `right` above is row 0, which points *left*, and a
+  positive `angAccelLocal.y` there turns the nose *right*. In a right-handed
+  `(right, up, forward)` frame the pair becomes `(L - R)`, so braking one side
+  turns the nose toward that side and pushes the body the other way. Transcribed
+  literally, both terms run backwards; see
+  [engine.md](../ghidra/functions/psp-pulse/engine.md#ship_updateairbrakes-force-block-read-end-to-end)
+  for the measurement (`airbrake-left-only`, 33/33 wall-free ticks) and
+  `crates/physics/src/airbrake.rs` for where the negation lives.
 - **Airbrakes produce no direct roll torque.** Confidence **85** on this negative,
   established by checking every write to the angular accumulators. Visible roll must come
   from the surface-alignment and bank-coupling terms, or from graphics-only state.

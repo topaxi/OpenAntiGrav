@@ -159,6 +159,44 @@ pub fn lateral_grip_coefficient(handling: &Handling, left: f32, right: f32) -> f
 /// the `talons-junction-airbrake-asymmetric` capture (consistent within a
 /// factor of 2, conf ~55, wall-contaminated throughout). **The implementation
 /// follows the read values and is not tuned to that capture.**
+///
+/// # Why `(R - L)` is negated here
+///
+/// The transcription above is in the original's frame, and **two conversions
+/// separate that frame from this crate's**, both settled in
+/// `docs/ghidra/functions/psp-pulse/engine.md` ("The basis is positively
+/// oriented, and row 0 points left"):
+///
+/// - **The lateral axis.** `craft+0x170` is `body+0x00`, row 0, and row 0 is the
+///   ship's **left**: the original's own recordings rotate `forward` toward
+///   `+row0` on a left turn, and `cross(row0, row1) = +row2` where this crate's
+///   `cross(right, up) = -forward`. So the original's `right * ...` is
+///   `-Body::right() * ...` here.
+/// - **The yaw sign.** The original's angular accumulators carry the negated
+///   physical rotation (`e' = e x w`, the `w_game = -w_physics` convention), so
+///   a positive `angularLocal.y` there turns the nose **right**, while a
+///   positive `local_angular.y` here turns it **left**.
+///   [`crate::engine::steering`] negates the literal law for exactly this reason
+///   and documents it at length.
+///
+/// Both terms below consume `(R - L)` exactly once, and both conversions are a
+/// single sign flip, so negating the factor once - rather than negating two
+/// expressions, or worse, one - is the whole conversion. The forward `drag` term
+/// takes `|L - R|` and is untouched by it.
+///
+/// **This was a real bug, found after a user reported that the airbrakes felt
+/// reversed.** The steering sign was fixed
+/// in `5ad69f3` ("physics: refine yaw calculations"), in `engine::steering` and
+/// nowhere else; the airbrake path shares the convention and was missed, so from
+/// that commit until this one **braking one side turned the nose away from it**.
+/// The reason it survived is worth recording: the only committed scenario that
+/// exercises the term,
+/// `verification/scenarios/airbrake-asymmetric.inputs`, holds the brake and the
+/// steering on the *same* side, and the steering drive is much the larger of the
+/// two, so the run still curved the right way and only the *rate* was wrong. It
+/// takes an airbrake held with `steer == 0` to see it, which
+/// [`crate::forces`]'s `braking_the_left_airbrake_alone_turns_the_ship_toward_its_own_left`
+/// now does on every run.
 #[must_use]
 pub fn evaluate(
     state: &ShipState,
@@ -169,7 +207,12 @@ pub fn evaluate(
     let body = &state.body;
     let left = state.airbrake_left;
     let right_brake = state.airbrake_right;
-    let imbalance = right_brake - left;
+    // `(R - L)` in the original, negated once here, for this crate's frame. See
+    // "Why `(R - L)` is negated here" in this function's header: the original's
+    // row 0 is the ship's **left** and its angular `.y` is the negated physical
+    // one, and both terms below consume this factor exactly once, so a single
+    // negation carries both conversions rather than two compensating signs.
+    let imbalance = left - right_brake;
 
     let forward = body.forward();
     let right = body.right();
@@ -204,10 +247,16 @@ pub fn evaluate(
     world += forward * speed * slide * 0.001;
 
     // `amount` is a lateral force gain. Braking harder on one side pushes the ship
-    // sideways; it does not slow it down directly.
+    // sideways; it does not slow it down directly. The original writes it along
+    // `craft+0x170`, which is row 0 and so the ship's **left**; `imbalance`
+    // carries that sign flip, so braking left pushes the body to the right - the
+    // craft rotates into the corner while the body runs wide, which is what
+    // `slidegrip` cutting lateral grip at the same time is for.
     world += right * speed * handling.airbrake.amount * imbalance;
 
     // Yaw only. The X and Z components are never written - see the module docs.
+    // Positive is nose-left in this crate's frame, so braking the left side turns
+    // the nose toward the braked side.
     let local_angular = Vec3::new(0.0, speed * handling.airbrake.turn * imbalance * 0.001, 0.0);
 
     AirbrakeForces {
@@ -309,6 +358,56 @@ mod tests {
             },
             ..ShipState::default()
         }
+    }
+
+    /// Braking one side must turn the nose **toward** that side, and in this
+    /// crate's frame that is a **positive** `local_angular.y` for the left
+    /// brake. It is the same convention [`crate::engine::steering`] satisfies by
+    /// negating its own literal law, and the same identity `crate::forces`'s
+    /// `holding_right_turns_the_ship_toward_its_own_right_axis` checks end to
+    /// end for steering.
+    ///
+    /// A test that only asserted `left == -right` would pass with the whole term
+    /// inverted, which is exactly the bug this pins: from `5ad69f3` until Task
+    /// #34 the airbrake yaw ran the other way, because the steering fix was
+    /// applied in `engine::steering` alone and this module shares the
+    /// convention.
+    #[test]
+    fn braking_the_left_side_yaws_the_nose_left_and_pushes_the_body_right() {
+        let handling = test_handling();
+        let mut state = moving_ship();
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, -40.0);
+        let input = ShipControls::default();
+
+        state.airbrake_left = 100.0;
+        state.airbrake_right = 0.0;
+        let left_brake = evaluate(&state, &input, &handling, 40.0);
+
+        state.airbrake_left = 0.0;
+        state.airbrake_right = 100.0;
+        let right_brake = evaluate(&state, &input, &handling, 40.0);
+
+        assert!(
+            left_brake.local_angular.y > 0.0,
+            "the left brake yawed {}, and nose-left is positive here",
+            left_brake.local_angular.y
+        );
+        assert!(
+            right_brake.local_angular.y < 0.0,
+            "the right brake yawed {}, and nose-right is negative here",
+            right_brake.local_angular.y
+        );
+
+        // The original writes the lateral term along `craft+0x170`, which is the
+        // ship's left, so braking left pushes the body to the right: the craft
+        // rotates into the corner while its mass runs wide. `+X` is right here,
+        // and the ship is aimed along `-Z`, so `.x` isolates it.
+        assert!(
+            left_brake.world_force.x > 0.0,
+            "the left brake pushed {} laterally, expected +X (right)",
+            left_brake.world_force.x
+        );
+        assert!(right_brake.world_force.x < 0.0);
     }
 
     /// The confidence-85 negative, pinned as a test because it is the exact thing a
