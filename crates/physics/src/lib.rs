@@ -43,6 +43,7 @@
 //! | [`engine`] | Engine, brakes, steering, pitch | `engine.md` |
 //! | [`passive`] | Drag, rolling resistance, weathervane, angular and vertical damping, gravity | `engine.md` |
 //! | [`hover`] | The two-probe air cushion and the grounded-only terms | `physics/README.md` |
+//! | [`maglock`] | The magstrip hold: a kinematic basis rewrite, not a force | `engine.md` |
 //! | [`airbrake`] | Airbrakes, lateral grip, sideshift | both |
 //! | [`collide`] | The segment queries the probes ask | `collision.md` |
 //! | [`wall`] | Hull-versus-wall contact and its response | `collision.md` |
@@ -57,8 +58,8 @@
 //! # What is not here
 //!
 //! Everything that would need a trigger nobody has decoded: turbo and the boost lift,
-//! the four-corner hover variant and the auto-speed law behind its selector, the
-//! magnetic hold, the track-section force, and the flag-gated engine and steering
+//! the four-corner hover variant and the auto-speed law behind its selector,
+//! the track-section force, and the flag-gated engine and steering
 //! variants. `docs/physics/README.md`'s "what is implemented" section is the full
 //! list, and the still-open section is where each sign and reading that had to be
 //! picked is recorded.
@@ -70,6 +71,7 @@ pub mod engine;
 pub mod forces;
 pub mod hover;
 pub mod integrate;
+pub mod maglock;
 pub mod params;
 pub mod passive;
 pub mod reset;
@@ -82,6 +84,7 @@ pub use collide::{
 };
 pub use forces::{Accumulators, Environment, Evaluated};
 pub use integrate::{clamp_dt, integrate, step};
+pub use maglock::{Hold, MagContact, TrackSample};
 pub use params::{Handling, SpeedClass};
 pub use reset::ResetContact;
 pub use ship::{Body, MAX_DT, SUBSTEPS, ShipControls, ShipState, Sideshift};

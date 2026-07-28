@@ -845,6 +845,12 @@ fn a_sideshift_is_a_one_shot_change_in_velocity() {
 /// magstrips, and the magnetic hold that would do the holding is **not implemented**
 /// because its force law was not decoded. This test therefore pins the part that is
 /// recovered - the probe direction and the force axis - and deliberately stops there.
+///
+/// **The hold is implemented now** ([`oag_physics::maglock`]), and this test is
+/// unchanged by it on purpose: the ceiling here is tagged [`Surface::Floor`], the
+/// mag probe accepts only [`Surface::MagFloor`], so the blend stays at zero and an
+/// inverted ship on ordinary geometry still falls off exactly as before. The
+/// companion test below is the same ship under a *mag* ceiling.
 #[test]
 fn a_ship_under_a_ceiling_probes_along_its_own_up_axis() {
     let handling = fixture();
@@ -866,8 +872,13 @@ fn a_ship_under_a_ceiling_probes_along_its_own_up_axis() {
 
     let mut state = ship_at(-12.0, &handling);
     state.body.orientation = oag_core::math::Quat::from_rotation_z(core::f32::consts::PI);
+    // A ceiling section: `down` points up, out of the surface the ship hangs
+    // under. The mag probe needs it to have a direction to cast along at all.
     let env = Environment {
-        track_up: Vec3::NEG_Y,
+        track_sample: Some(oag_physics::TrackSample {
+            position: Vec3::new(0.0, -oag_physics::maglock::SPLINE_LIFT, 0.0),
+            down: Vec3::Y,
+        }),
         ..Environment::default()
     };
 
@@ -894,6 +905,91 @@ fn a_ship_under_a_ceiling_probes_along_its_own_up_axis() {
     assert!(
         force.cross(up).length() < 1e-3,
         "force {force:?} was not along the ship's up axis {up:?}"
+    );
+}
+
+/// The other half of the test above: under a **mag** ceiling the ship stays.
+///
+/// The same geometry, the same inverted pose, the same entry point - one tag
+/// changed. This is what the magstrip hold buys and it is asserted through
+/// [`step`] rather than on `maglock` directly, because the thing that could break
+/// it is the wiring: the hold is not a force, so nothing in the accumulators would
+/// miss it if the call disappeared.
+///
+/// It also pins the property the whole mechanism exists for, and the one a torque
+/// implementation would fail: the ship's attitude is slaved to the surface while
+/// its **angular velocity stays whatever it was**. See
+/// `docs/physics/cornering-ground-truth.md` for the lap that measured that.
+#[test]
+fn a_ship_under_a_mag_ceiling_is_held_there_without_any_angular_velocity() {
+    // A shorter ride height than the shared fixture's, because the mag probe's
+    // reach is a fixed ~10 units (`5 * |up - down|`) while the hover probes' is
+    // `ride_height`. At the fixture's 20 the hold would park the ship four units
+    // beyond its own probe's reach and chatter; the original's real ride heights
+    // are around 5.5, where the two are consistent.
+    let handling = Handling {
+        antigrav: Antigrav {
+            ride_height: 5.0,
+            ..fixture().antigrav
+        },
+        ..fixture()
+    };
+
+    let mut world = CollisionWorld::new();
+    world.push(TriangleSoup::new(
+        vec![
+            [-2000.0, 0.0, 2000.0],
+            [-2000.0, 0.0, -2000.0],
+            [2000.0, 0.0, 0.0],
+        ],
+        vec![[0, 1, 2]],
+        Vec::new(),
+        Surface::MagFloor,
+        0,
+    ));
+
+    let mut state = ship_at(-4.0, &handling);
+    // Inverted, but a fifth of a radian out of true, so the hold has something to
+    // correct and a "does nothing" implementation cannot pass.
+    state.body.orientation = oag_core::math::Quat::from_rotation_z(core::f32::consts::PI - 0.2);
+    let env = Environment {
+        track_sample: Some(oag_physics::TrackSample {
+            position: Vec3::new(0.0, -oag_physics::maglock::SPLINE_LIFT, 0.0),
+            down: Vec3::Y,
+        }),
+        ..Environment::default()
+    };
+
+    for _ in 0..30 {
+        step(
+            &mut state,
+            &ShipControls::default(),
+            &handling,
+            &env,
+            &world,
+            TICK,
+        );
+    }
+
+    assert_eq!(state.mag_lock_blend, 1.0, "the strip never locked");
+    // Not exact, and the residue is the mechanism rather than slack: the hold runs
+    // inside the force evaluation and the integrator then rotates the basis by
+    // whatever angular velocity the frame's torques left behind, so the ship sits a
+    // milliradian off the axis rather than on it. A hold that ran after the
+    // integrator would read exactly `NEG_Y` and would be in the wrong place.
+    let up = state.body.up();
+    assert!(
+        (up - Vec3::NEG_Y).length() < 1e-2,
+        "the hold left up at {up:?}, not slaved to the ceiling's normal"
+    );
+    // Held near the strip rather than falling away from it: `0.8 * target`, and
+    // the ship hangs *below* a ceiling at y = 0.
+    let target = oag_physics::hover::target_height(&handling, state.mag_lock_blend, 0.0);
+    assert!(
+        (state.body.position.y + 0.8 * target).abs() < 0.5,
+        "the ship sits at y = {}, not {} below the strip",
+        state.body.position.y,
+        0.8 * target
     );
 }
 

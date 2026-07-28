@@ -43,10 +43,13 @@
 //! the passive terms), the two-probe air cushion from `docs/physics/README.md`, and
 //! the airbrakes with lateral grip and the sideshift.
 //!
+//! Present too, and not a force: the magstrip hold ([`crate::maglock`]), which
+//! runs inside step 8 and writes the body directly.
+//!
 //! **Absent**, each because implementing it would mean inventing a trigger nobody
 //! has decoded: the track-section force (`FUN_08848f9c`, a guess at confidence 45),
 //! the four-corner hover variant and the auto-speed law behind its selector, turbo,
-//! the magnetic hold, and every flag-gated engine and steering variant. See
+//! and every flag-gated engine and steering variant. See
 //! `docs/physics/README.md`'s "what is implemented" section for the full list.
 
 use oag_core::math::Vec3;
@@ -54,6 +57,7 @@ use oag_core::math::Vec3;
 use crate::airbrake::{self, AirbrakeForces};
 use crate::collide::Raycaster;
 use crate::hover::{self, Hover};
+use crate::maglock;
 use crate::params::Handling;
 use crate::ship::{ShipControls, ShipState};
 use crate::{controls, engine, passive};
@@ -278,14 +282,27 @@ pub fn ship_inertia() -> Vec3 {
 /// The world outside the ship, as the force law sees it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Environment {
-    /// The track's own up axis at the ship.
+    /// The track spline sample nearest the ship, and the one after it.
     ///
-    /// **Consumed by nothing yet.** Gravity acts on world `.y` only, and
-    /// `track_gravity` reaches the force law solely through the hover spring's
-    /// calibration, so this is not the gravity direction. It is kept because the
-    /// magstrip probe casts along `-5 * (shipUp - trackGravityUp)` and will need it
-    /// when the magnetic hold is implemented.
-    pub track_up: Vec3,
+    /// These are what the original's `AiTrack_LocatePosition` (`0x0887ce78`)
+    /// writes into the ship entity at `+0xaf0` and `+0xb60`, and the only consumer
+    /// is [`crate::maglock`]: the magstrip hold slaves the ship's attitude to
+    /// `unit(-down)` blended between the two, and the mag-floor probe casts along
+    /// a direction built from the first one's `down` axis. Off a magstrip nothing
+    /// reads them, so a caller with no track data loses nothing else.
+    ///
+    /// **This replaces the old `track_up` field**, which held the same axis in a
+    /// form the hold cannot use: the surface *point* is needed as well, and the
+    /// second sample is what makes the axis turn continuously along the track
+    /// rather than stepping between sections. Gravity still acts on world `.y`
+    /// only and neither of these is a gravity direction.
+    pub track_sample: Option<crate::maglock::TrackSample>,
+    /// The spline sample after [`Self::track_sample`], when there is one.
+    ///
+    /// `None` is the original's `-1024.0` sentinel at the second record's `+0x40`,
+    /// which its entity constructor writes and which means "this ship is not
+    /// between two sections".
+    pub track_sample_next: Option<crate::maglock::TrackSample>,
     /// The per-speed-class scale on `normal_gravity`, from the table at
     /// `0x08ab0dcc`.
     ///
@@ -301,7 +318,8 @@ pub struct Environment {
 impl Default for Environment {
     fn default() -> Self {
         Self {
-            track_up: Vec3::Y,
+            track_sample: None,
+            track_sample_next: None,
             class_gravity_scale: 1.0,
             self_collider: None,
         }
@@ -370,6 +388,12 @@ pub struct Evaluated {
     pub accumulators: Accumulators,
     /// The air cushion's output.
     pub hover: Hover,
+    /// What the magstrip hold did, or `None` on ordinary track.
+    ///
+    /// Not a force and not in the accumulators: it is a kinematic rewrite of the
+    /// body, reported here so a caller can see it happened. See
+    /// [`crate::maglock`].
+    pub mag_lock: Option<maglock::Hold>,
     /// The airbrake path's output, excluding lateral grip and the sideshift.
     pub airbrake: AirbrakeForces,
     /// The engine's body-local contribution.
@@ -492,13 +516,14 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     // 8. Hover. Its load factor reads last frame's groundedness through
     //    `grounded_prev`, and it is what produces this frame's contact count.
-    let hover = hover::evaluate(
-        state,
-        handling,
-        env,
-        raycaster,
-        hover::target_height(handling, state.mag_lock_blend, state.leap_timer),
-    );
+    //
+    //    The target height is bound *before* the hover call and reused by the mag
+    //    lock below, because the original builds `craft+0x2f0` once at the top of
+    //    `Ship_UpdateCraft` from the previous frame's blend and both consumers read
+    //    that one value. Recomputing it after the ramp would give the reposition a
+    //    target the spring never saw.
+    let target_height = hover::target_height(handling, state.mag_lock_blend, state.leap_timer);
+    let hover = hover::evaluate(state, handling, env, raycaster, target_height);
     for probe in &hover.probes {
         if probe.contact {
             state.body.add_force_at_point(probe.force, probe.point);
@@ -517,6 +542,14 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
     let contact_grounded = state.grounded;
     let contact = contact_grounded > 0.0;
+
+    // Still step 8: `Ship_UpdateHover` runs one of the two hover models and then
+    // `Ship_UpdateMagLock` unconditionally. It is **not** a force term - it writes
+    // the body's position, velocity and basis directly and touches no accumulator,
+    // which is why it appears here as a statement rather than as a summand. See
+    // `crate::maglock` for why routing it through a torque would be wrong.
+    let mag_contact = maglock::probe(state, env, raycaster);
+    let mag_lock = maglock::update(state, env, mag_contact, target_height);
 
     // 9. Lateral grip, into the *local* force accumulator, and only once both the
     //    collision stun and the leap timer have expired.
@@ -566,6 +599,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     Evaluated {
         accumulators: acc,
         hover,
+        mag_lock,
         airbrake,
         engine: engine_force,
         brakes,

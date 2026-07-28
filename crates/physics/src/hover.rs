@@ -21,7 +21,8 @@
 //!   the parser through `craft+0x70` and `craft+0x2f0` into the spring, at
 //!   confidence 88. See [`target_height`].
 //!
-//! And one absence: **nothing here pitches the ship to the track**. Pitch and
+//! And one absence: **nothing here pitches the ship to the track**, and on a
+//! magstrip that is [`crate::maglock`]'s job rather than a gap. Pitch and
 //! roll response is entirely emergent from applying two forces at two points,
 //! and the surface-alignment torque explicitly projects its pitch component out.
 //! Adding an explicit pitch-to-track term would change the character of the whole
@@ -645,12 +646,11 @@ pub fn probe<R: Raycaster + ?Sized>(
     let damping = (-0.1 * normal_velocity).clamp(-1.0, 2.0);
     let rebound = rebound_coefficient(handling, state.time_since_landing);
 
-    // The magstrip blend fades the ordinary suspension out entirely; the magnetic
-    // hold that is meant to replace it is **not implemented**, because its force
-    // law was not decoded (confidence 82 on the blend alone). So `mag_lock_blend`
-    // is consumed here and never driven by this crate: a caller that sets it to
-    // 1.0 gets a ship with no suspension, which is the honest behaviour until the
-    // hold block is read.
+    // The magstrip blend fades the ordinary suspension out entirely, and what
+    // replaces it is `crate::maglock`: a kinematic hold rather than a force, which
+    // is why nothing here has to make up for the spring it cancels. The two halves
+    // are gated on one field (`craft+0x280`) and drive each other - the blend is
+    // ramped by `maglock::ramp` from the mag-floor probe, and read here.
     let force = up * spring * (1.0 + rebound * damping) * (1.0 - state.mag_lock_blend);
 
     let escape = if height < PENETRATION_LIMIT {
@@ -1281,11 +1281,10 @@ mod tests {
     ///
     /// **Not asserted across `mag_lock_blend`**, and the exception is the interesting
     /// part: a full magstrip lock scales the target by 1.2, which *does* put it beyond
-    /// the reach. That is harmless only because the same blend multiplies the probe
-    /// force by `1 - mag_lock_blend` and so cancels the suspension outright - see
-    /// [`probe`]. Nothing in this crate drives `mag_lock_blend` today, and whatever
-    /// implements the magnetic hold has to resolve that interaction rather than inherit
-    /// this assertion.
+    /// the reach. That is harmless because the same blend multiplies the probe force by
+    /// `1 - mag_lock_blend` and so cancels the suspension outright - see [`probe`] - and
+    /// because on a strip it is [`crate::maglock`] rather than the spring that decides
+    /// the height, by displacement, at `0.8` of this same target.
     #[test]
     fn the_hover_target_never_exceeds_the_probes_reach() {
         let handling = Handling {

@@ -520,6 +520,29 @@ impl Spline {
         self.samples.first()
     }
 
+    /// The sample as [`oag_physics::maglock`] wants it: **lifted**, with its axis.
+    ///
+    /// Two conversions happen here and both are the format side's business rather
+    /// than the simulation's:
+    ///
+    /// - `Sample::pos` is the *unlifted* disc value and the running game holds the
+    ///   lifted one, because `AiTrack_LoadPathPoints` does `pos -= 3.0 * down` at
+    ///   load. The hold subtracts that same lift back off to recover the surface
+    ///   point, so it has to be handed the lifted form or it lands three units low.
+    ///   Blending is linear, so lifting an interpolated sample and interpolating
+    ///   lifted points are the same thing.
+    /// - `down` is passed **raw**. The hold normalises it where it needs an axis
+    ///   and reads it unnormalised where the original does, which is the mag
+    ///   probe's direction.
+    #[must_use]
+    pub fn track_sample(sample: &Sample) -> oag_physics::TrackSample {
+        let down = Vec3::from_array(sample.down);
+        oag_physics::TrackSample {
+            position: Vec3::from_array(sample.pos) - down * oag_formats::track::HOVER_LIFT,
+            down,
+        }
+    }
+
     /// The nearest sample to `position`: its index, itself, and its distance.
     #[must_use]
     pub fn nearest(&self, position: Vec3) -> Option<(usize, &Sample, f32)> {
@@ -713,16 +736,24 @@ impl Race {
     pub fn tick(&mut self, snapshot: &InputSnapshot) -> Evaluated {
         let controls = ship_controls(snapshot);
 
-        // `track_up` is the *track's* own up at the ship, not the ship's. Nothing in
-        // the recovered force law consumes it yet - it is there for the magnetic
-        // hold - so this cannot perturb the simulation today.
+        // The two spline samples the magstrip hold reads. In the original these are
+        // `AiTrack_LocatePosition`'s two output records on the ship entity; here
+        // they are the nearest table entry and the one after it, which is the same
+        // "where am I and what is next" pair at this crate's resolution. Off a
+        // magstrip nothing consumes them, so a track without one is unaffected.
         let nearest = self
             .spline
             .nearest(self.world.ships[0].physics.body.position);
-        let track_up = nearest
-            .and_then(|(_, sample, _)| (-Vec3::from_array(sample.down)).try_normalize())
-            .unwrap_or(Vec3::Y);
         let index = nearest.map(|(index, _, _)| index);
+        let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
+        // The neighbour is the next entry in table order, which at the end of a
+        // path is the *next path's* first sample rather than the geometric
+        // successor through a junction. The original follows the junction graph;
+        // this is one sample out of 34,000 per lap and is recorded rather than
+        // pretended away.
+        let track_sample_next = index
+            .and_then(|index| self.spline.sample(index + 1))
+            .map(Spline::track_sample);
 
         let ship = &mut self.world.ships[0];
         if let Some(index) = index {
@@ -736,7 +767,8 @@ impl Race {
         }
 
         let env = Environment {
-            track_up,
+            track_sample,
+            track_sample_next,
             ..Environment::default()
         };
         let before = ship.physics.body.position;

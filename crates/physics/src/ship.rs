@@ -291,7 +291,17 @@ pub struct ShipState {
     pub time_since_landing: f32,
     /// The 0-to-1 magstrip blend. At 1.0 the ordinary suspension is fully
     /// cancelled and the magnetic hold has taken over.
+    ///
+    /// Driven by [`crate::maglock::ramp`], `0.2` a frame in either direction.
     pub mag_lock_blend: f32,
+    /// The **last** mag-floor hit the probe found, `craft+0x250` and `+0x260`.
+    ///
+    /// Carried between frames rather than recomputed, because the original does:
+    /// those two fields are a raycast's out-parameter, only a hit overwrites them,
+    /// and [`mag_lock_blend`](Self::mag_lock_blend) takes five frames to decay
+    /// after the strip ends - so the hold's last five frames read a stale contact
+    /// in the original too. `None` is a ship that has never touched a magstrip.
+    pub mag_contact: Option<crate::maglock::MagContact>,
 }
 
 impl Default for ShipState {
@@ -313,6 +323,7 @@ impl Default for ShipState {
             // landing window, so it starts outside it.
             time_since_landing: 1.0,
             mag_lock_blend: 0.0,
+            mag_contact: None,
         }
     }
 }

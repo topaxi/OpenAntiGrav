@@ -419,6 +419,7 @@ tuning, per the [roadmap](../overview/roadmap.md).
 | Airbrake ramps, slide, lateral force, yaw, sideshift impulse, lateral grip | [`airbrake.rs`](../../crates/physics/src/airbrake.rs) | both |
 | Four accumulators, the fifteen-step term order, and the stale/fresh groundedness split | [`forces.rs`](../../crates/physics/src/forces.rs) | engine.md |
 | Segment-triangle narrowphase as a plane sign change plus three edge half-space tests | [`collide.rs`](../../crates/physics/src/collide.rs) | [collision](../ghidra/functions/psp-pulse/collision.md) |
+| The magstrip hold: blend ramp, mag-floor probe, two-sample axis blend, reposition, velocity projection and the **kinematic basis rewrite** | [`maglock.rs`](../../crates/physics/src/maglock.rs) | engine.md |
 
 **Implemented as a shape with the coefficient left at the identity or zero**, because the
 evidence records that the term exists and not how large it is. That is deliberate: a
@@ -442,10 +443,6 @@ plausible-looking number would be indistinguishable from a recovered one later.
 - **The four-corner hover variant and its auto-speed law.** The selector is now *known* -
   `DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, confidence 84 - and the same condition gates
   the brakes off, but what the mode *is* sits at confidence 50.
-- **The magnetic hold.** The 0-to-1 blend that cancels the ordinary suspension is
-  implemented and consumed, and nothing drives it, because the hold block's own physics
-  was not decoded. Detecting a magstrip without the hold would cancel the suspension and
-  drop the ship.
 - **The track-section force** (`FUN_08848f9c`), a guess at confidence 45 as to what it
   even is.
 - **The per-team in-air pitch bias** at `stats_base + 0x90`, which is outside every class
@@ -505,12 +502,15 @@ plausible-looking number would be indistinguishable from a recovered one later.
 - **The alignment gain and the roll damping are marginally unstable together**, by 11 % at
   the specified sub-step; see
   [the arithmetic above](#a-numeric-prerequisite-for-m3-found-while-implementing-this---and-since-resolved).
-- **Nothing recovered can hold an inverted ship.** Gravity writes world `.y` only,
-  `track_gravity` reaches the force law solely through the hover spring's *magnitude*, and
-  the hover spring always pushes the ship *away* from the surface it found. So the
-  magnetic hold must be what holds a ship to a ceiling, and it is exactly the block that
-  was not decoded. Consistent, but it means inverted sections cannot be tested at all
-  until that block is read.
+- **Nothing in the *force law* can hold an inverted ship, and nothing was ever going to.**
+  Gravity writes world `.y` only, `track_gravity` reaches the force law solely through the
+  hover spring's *magnitude*, and the hover spring always pushes the ship *away* from the
+  surface it found. This used to end "so the magnetic hold must be what holds a ship to a
+  ceiling, and it is exactly the block that was not decoded". That block is read now, and
+  the reason no force could be found is that **there is no force**: `Ship_UpdateMagLock`
+  writes the body's position, velocity and basis directly and never touches an
+  accumulator. See [`maglock.rs`](../../crates/physics/src/maglock.rs) and
+  [engine.md](../ghidra/functions/psp-pulse/engine.md#ship_updatemaglock-rewrites-the-basis-directly-and-that-is-the-missing-mechanism).
 - **The hover target's additive offset**, `craft+0x74`. Nothing was found that writes it,
   and `antigrav_height_adjust` is only a suspect (a search for readers of that field found
   none, a weak negative at confidence 50). It matters more than it looks: with the offset

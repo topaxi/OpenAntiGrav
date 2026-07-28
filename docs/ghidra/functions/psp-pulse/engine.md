@@ -1608,15 +1608,14 @@ the lap measurement asked for. The attribution can go from **45** to **90**.
 Three details make the match specific rather than merely available:
 
 - **The axis is track-derived and interpolated along the path.** `sp+0x10` is
-  built at `0x0884ba9c`-`0x0884bafc` as `unit(-(section+0xB10))` off
-  `craft+0x1c4 + 0x900`, and a second candidate off the neighbouring section is
-  built the same way at `0x0884bcc0`-`0x0884bd18`. The two are then blended by
-  normalised distance weights (`0x0884be2c`-`0x0884bea8`, each `1 - |d_i - d|`
-  clamped at zero, divided by their sum) before either is used. So the axis the
-  attitude is slaved to **turns continuously as the craft drives along the
-  track**, which is the quantity the lap fit regressed against. Identifying
-  `section+0xB10` as the surface normal specifically is inference from use:
-  confidence **70**.
+  built at `0x0884ba9c`-`0x0884bafc` as `unit(-(sample+0xB10))` off the object at
+  `craft+0x1c4`, and a second candidate off the neighbouring sample is built the
+  same way at `0x0884bcc0`-`0x0884bd18`. The two are then blended by normalised
+  weights (`0x0884be2c`-`0x0884bea8`, each `1 - |d_i - h|` clamped at zero,
+  divided by their sum) before either is used. So the axis the attitude is slaved
+  to **turns continuously as the craft drives along the track**, which is the
+  quantity the lap fit regressed against. **`+0xB10` is now identified rather than
+  inferred - see the next subsection - and the weights are not distance weights.**
 - **It is gated on exactly the field that fades the suspension out.**
   `craft+0x280` is the mag-lock blend; `0x0884ba84` returns immediately when it
   is zero, so on ordinary track this function does nothing at all. It ramps by
@@ -1629,8 +1628,8 @@ Three details make the match specific rather than merely available:
   multiplies every probe force by `1 - craft+0x280` (`0x0884ab48`). So the two
   are one design: on a magstrip the suspension hands the attitude over to a
   kinematic hold rather than competing with it. `crates/physics/src/hover.rs`
-  implements the fade and documents the hold as unimplemented, which is now a
-  named gap rather than an open question.
+  implements the fade; the hold is `crates/physics/src/maglock.rs`, and the two
+  halves are now both in the crate.
 
 It also **repositions** the body: `0x0884c0dc`-`0x0884c18c` computes
 `(0.8 * craft+0x2f0 - d)` along the blended axis, scales it by the blend and
@@ -1645,6 +1644,75 @@ past it.
 **A reimplementation must not model this as a torque.** Doing so puts it through
 the momentum column, which is precisely the thing the lap capture proves the
 original does *not* do.
+
+### `+0xB10` is `SplinePt.down`, and the whole record is a located spline sample
+
+The section above scored "`section+0xB10` is the surface normal" at **70**,
+inference from use, and flagged it as a track-format question. It is settled at
+**90**, and the answer is more specific than the guess: `craft+0x1c4` is the ship
+**entity**, and `entity+0xaf0` and `entity+0xb60` are two `0x70`-byte
+[`SplinePt`](../../../formats/track.md#control-points) records that
+`AiTrack_LocatePosition` (`0x0887ce78`) fills in. `+0xB10` is `+0xaf0 + 0x20`,
+which in that struct is **`down`: the unit vector *into* the track surface**. So
+`unit(-(+0xB10))` is the surface normal, exactly as assumed, and the whole record
+is available rather than one field.
+
+Five legs, no one of which is decisive and which do not share an assumption:
+
+| Leg | Where | What it shows |
+| --- | --- | --- |
+| The writer | `0x08842ae8`-`0x08842b00` in `FUN_08842a18` | calls `AiTrack_LocatePosition` with `a1 = entity+0xaf0` **and** `t1 = entity+0xb60`: both records are its output, and the second is the neighbour argument |
+| A second writer | `0x0883ffe4`-`0x08840040` in `FUN_0883ff6c` | same call with `a1 = entity+0xaf0`, then copies `0x00`-`0x60` straight back out - the `SplinePt` stride, read as one object |
+| The constructor | `0x08840dc0`-`0x08840e3c` in `FUN_08840c74` | initialises both records field by field in the `SplinePt` layout: four `vec4` at `+0x00/+0x10/+0x20/+0x30`, six floats at `+0x40`-`+0x54`, two bytes at `+0x60/+0x61` |
+| The lift, undone | `0x0884bae0` area | the hold forms `sample+0x00 - 3.0 * unit(-(sample+0x20))`, and `AiTrack_LoadPathPoints` (`0x0887eba8`) lifted every control point by `pos -= 3.0 * down`. The two are inverses **only if `+0x20` is `down`** |
+| The probe direction | `0x08849f..` tail of `Ship_CastHoverProbes` | the mag ray runs from `craft+0x1a0` to `craft+0x1a0 - 5 * (up - sample+0x20)`, which for an aligned ship is about ten units **into** the surface. With `+0x20` pointing out of it the ray would go nowhere |
+
+Two corrections to the section above fall out of the same reading, and both
+matter to a reimplementation:
+
+- **The weights are height agreement, not path distance.** `h` is
+  `dot(n1, craft+0x1a0 - craft+0x250)` - the craft's height above the *mag ray's
+  own hit point*, along the first sample's normal - and `d_i` is its height above
+  section `i`'s surface. Each weight is `1 - |d_i - h|` clamped at zero, both
+  zero becomes `0.5/0.5`, and the pair is then normalised. The section whose
+  surface best predicts the measured height wins.
+- **There is a fallback branch nobody had recorded.** When
+  `|h - d| > DAT_08a7bd48` (`5.0`, `0x40a00000`) the spline is abandoned outright
+  and the axis becomes `craft+0x260` with `d = dot(craft+0x1a0 - craft+0x250,
+  axis)` - the mag ray's own normal and hit. The second sample is skipped
+  entirely when `sample2+0x40` reads `-1024.0`, a sentinel the entity constructor
+  writes into both records at `0x08840dc0` and `0x08840e0c`; `+0x40` is
+  `SplinePt`'s `unk_0x40`, which that page lists as undetermined.
+
+`DAT_08a7bd44` is `0.2` (`0x3e4ccccd`) and is added or subtracted **per frame**,
+with no `dt` anywhere near it.
+
+### It is implemented, and measured against the lap it was predicted from
+
+`crates/physics/src/maglock.rs` implements this, kinematically: the ramp, the
+mag-floor probe, the two-sample axis blend with its fallback, the reposition, the
+velocity projection and the basis rewrite in the binary's own operation order.
+Nothing goes through an accumulator.
+
+`crates/game/tests/maglock_ground_truth.rs` then measures it against
+`data/traces/talons-junction-time-trial-lap-omega.csv`, one tick at a time from
+each recorded pose, over the inverted stretch. On the USA PSP disc:
+
+| | |
+| --- | ---: |
+| inverted poses (`up.y < 0.85`) with `Mag Floor` under them | **258 of 283** |
+| upright poses (`up.y > 0.99`) with `Mag Floor` under them | **5 of 1,959** |
+| residual `omega(basis) + body+0x150`, rms | `1.25` rad/s |
+| what the hold produces from the same poses, rms | `2.30` rad/s |
+| fraction of the residual it explains, nothing fitted | **`49.5 %`** |
+| this crate's axis versus the recorded `up`, mean | `2.07` degrees |
+
+The first two rows are the substantive new evidence: the probe finds a magstrip
+where and only where the lap found the identity broken, and the two measurements
+share no input. The last two are the open part - a full-blend hold snaps the ship
+onto the axis in one tick and the original visibly does not sit exactly on it, so
+either the blend is not `1.0` there or this crate's resampled spline is not quite
+the original's evaluated one. **Neither is tuned away**; see the test.
 
 ## Contradictions with `docs/physics/README.md`
 
@@ -1944,3 +2012,9 @@ here and `docs/formats/handling-stats.md` needs to say which is which.
   question separated from it. Later the same day, eight force-law terms gained a
   second-binary leg from the PS2 build, lifting most of them off the 84 cap and
   turning up four cross-platform differences.
+- 2026-07-28: `Ship_UpdateMagLock`'s last eighty instructions read - the basis
+  rewrite, attribution 45 -> 90. Later the same day its axis source was settled
+  from the format side (`+0xB10` is `SplinePt.down`, 70 -> 90), two details of
+  the blend corrected (height-agreement weights, and a raycast fallback branch),
+  and the mechanism implemented and measured against the inverted stretch of the
+  `omega_*` lap.

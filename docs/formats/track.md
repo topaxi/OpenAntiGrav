@@ -234,7 +234,7 @@ struct SplinePt {             // 0x70 bytes
     float tangent[4];         // +0x10 unit, along the path
     float down[4];            // +0x20 unit, into the surface
     float lateral[4];         // +0x30 unit, across the path
-    float unk_0x40;
+    float unk_0x40;          // +0x40 also a "no sample here" sentinel at runtime
     float half_width_left;    // +0x44
     float half_width_right;   // +0x48
     float ai_bound_left;      // +0x4c clamped to <= racing_line - 0.1
@@ -349,6 +349,32 @@ Confidence **90**.
 
 **Sections are attached to the spline.** There is no point-in-volume test.
 
+### A located sample is a `SplinePt`, and the physics reads one
+
+`AiTrack_LocatePosition` does not return an index. It fills in a **`0x70`-byte
+record in the caller's memory, in this same layout**, and a ship keeps two of
+them: `entity+0xaf0` for where it is and `entity+0xb60` for the neighbour. That
+is worth stating here because it is the only place the struct above is confirmed
+from the *consumer* side rather than from the loader, and because one physics
+mechanism depends on the `+0x20` axis being what this page says it is.
+
+- The writers are `FUN_08842a18` (`0x08842ae8`-`0x08842b00`, `a1 = entity+0xaf0`
+  and `t1 = entity+0xb60`) and `FUN_0883ff6c` (`0x0883ffe4`), which then reads
+  `+0x00` through `+0x60` back out of its own buffer in `lv.q` steps.
+- The ship-entity constructor `FUN_08840c74` initialises both records
+  (`0x08840dc0`-`0x08840e3c`) field by field in exactly this layout: four `vec4`,
+  six floats at `+0x40`-`+0x54`, two bytes at `+0x60`/`+0x61`.
+- **`+0x40` doubles as a sentinel.** The constructor writes `-1024.0` there, and
+  `Ship_UpdateMagLock` skips the second sample when it still reads `-1024.0`. So
+  the field is a slot the runtime reuses, whatever the exporter meant by it; the
+  open question below stands for the *file*, not for the running game.
+- The consumer that pins `+0x20`'s direction is the magstrip attitude hold, which
+  slaves the ship's up axis to `unit(-(sample+0x20))` and recovers the surface
+  point with `sample+0x00 - 3.0 * that` - the exact inverse of this page's
+  `pos -= 3.0 * down` lift, which only closes if `+0x20` points into the surface.
+  See
+  [engine.md](../ghidra/functions/psp-pulse/engine.md#0xb10-is-splineptdown-and-the-whole-record-is-a-located-spline-sample).
+
 ## `Start Position`
 
 Grid slots are **named resources**, not an array. The bind formats
@@ -395,8 +421,9 @@ until something proves otherwise.
 
 - The `section` payload's `pad[6]` and its trailing variable-length data.
 - What reads the reserved block, and what `Path.max_spacing` is used for.
-- `SplinePt` `+0x40`, `+0x58` (always `0x10`), `+0x5c`-`+0x5f`, `+0x62`-`+0x66`,
-  `+0x68`-`+0x6f`.
+- `SplinePt` `+0x40` (what the *file* means by it - the runtime reuses the slot
+  as a sentinel, see above), `+0x58` (always `0x10`), `+0x5c`-`+0x5f`,
+  `+0x62`-`+0x66`, `+0x68`-`+0x6f`.
 - Which lateral direction is "left". The widths are clamped as
   `[-half_width_left, +half_width_right]`, so the sign convention is internally
   consistent, but nothing here proves the negative side is the driver's left.
