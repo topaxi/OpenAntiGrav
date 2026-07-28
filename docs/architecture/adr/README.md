@@ -19,6 +19,7 @@ out to be wrong.
 | [0006](0006-no-copyrighted-content.md) | No copyrighted content in the repository | Accepted |
 | [0007](0007-fixed-timestep-vs-original.md) | Keep a fixed timestep, and diverge from the original | Accepted |
 | [0008](0008-av1-movie-cache.md) | Cache movies as lossless AV1, and decode them in process | Accepted |
+| [0009](0009-multi-game-fanout.md) | Fan out to other games by verified layer, not by date | Accepted |
 
 ## Format
 
