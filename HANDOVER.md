@@ -66,7 +66,14 @@ resolution; the short version, because it inverts the standing diagnosis:
   constant was `2.28`. **Right shape, right size, wrong kind of thing.** Both
   old captures sit in that regime for their entire length (`speed/|v|` never
   reads `1.0000`); they were recordings of the collision response, not the
-  force law. Conf 90 on three agreeing legs.
+  force law. Conf 90 on three agreeing legs - but note **the "it's a wall"
+  attribution specifically is capped at 75 and stated as an inference**: the
+  contact itself is not in the trace, and the stun timer staying at 0 across
+  the tick-62 impact is unexplained (`Ship_ApplyCollisionImpulse` arms only
+  when pickup-flag `0x10` is clear, and that flag has not been read). Nothing
+  in the physics conclusion depends on the attribution. The loss is
+  multiplicative, not a constant impulse (|v| falls 36 % while the ratio moves
+  only 1.0400 -> 1.0371; a fixed decrement would have driven it to 1.0625).
 - **The standing-start capture proves the law end to end**
   (`data/traces/talons-junction-standing-start.csv`, 300 ticks; produced by
   `captures`, consumed by `hover-re`): `net = fs + 2*accelcap - 2.0 -
@@ -86,8 +93,26 @@ resolution; the short version, because it inverts the standing diagnosis:
   the first (conf 88); rolling resistance magnitude is exactly `2` via a
   `vadd.t` self-add, conf 80 -> 92.
 - New evidence page `docs/ghidra/functions/psp-pulse/rigid-body.md`
-  (`Body_AddForceAtPoint`, `Body_Init`, `Body_Integrate`; linear damping
-  confirmed `0.01`; `body+0x398` identified).
+  (`Body_AddForceAtPoint` 88, `Body_Init` 85, `Body_Integrate` 88; linear
+  damping confirmed `0.01`; `body+0x398` identified; renames applied and
+  saved in the Ghidra DB). Two details worth carrying: `Body_AddForceAtPoint`
+  forms `cross(force, r)`, not `cross(r, force)` - **a second, independent
+  PSP witness for the `w_game = -w_physics` convention** craft-update.md
+  derives on PS2. And the launch fit is a *prediction*, not a fit: pinning
+  `accelcap` to the disc's own `17.03` gives rms `0.252` with a uniform
+  quarter-unit offset and **no speed dependence**, while neighbours fail
+  (16.5 -> 0.79, 17.5 -> 1.22).
+- **Provenance caveat, open until `captures` confirms**: the standing-start
+  CSV is untracked (data/ is gitignored) and Task #3 was still in flight when
+  `hover-re` consumed it. It looks like the real capture (30 columns matching
+  `COLUMNS`, smooth launch, consistent dt) but the producing agent has not
+  yet confirmed it as final rather than a scratch file. The resolution's
+  leg (a) does not depend on it alone - legs (b)/(c) rest on the two old
+  captures and the instruction reading - but confirm before treating the rms
+  numbers as canonical.
+- The launch-fit analysis itself was inline Python, not committed;
+  `scripts/trace-force-balance.py` could grow a `--standing-start` mode
+  (deliberately not added while `captures` had the file modified in-tree).
 - **Where this sends the next session**: compare `crates/physics/src/wall.rs`
   against the now-concrete target - sustained contact loses ~`3.6 %` of speed
   per frame, decaying from `4.2 %` post-impact toward `3.67 %`. The live lead
@@ -117,16 +142,27 @@ It also committed scripted scenarios (`verification/scenarios/steer-left`,
 **`mechanical` (done): the SAP +/-1024 contradiction is dissolved into a
 narrower question, the docs debt is paid, and `oag-trace` reads both discs.**
 
-- **Collision survey (`ead464a`)**: walking every `.vex` entry on both discs
-  (all 130 PSP + 189 PS2 collision nodes), **seven of sixteen environments
-  reach past +/-1024, but nothing spans more than 2,048** - the widest
-  collidable span is `2026.6057` (`10_Track`, 98.96 % of the window). So every
-  shipped track fits the packing window and none fits it centred on the world
-  origin: the packing must subtract a per-track base (prediction conf 75).
-  The survey table lives in `docs/formats/collision.md`; the next step is
-  reading `Sap_Init` (`0x0882f8f4`) / `Sap_QueryAabb` (`0x088304d4`) for that
-  base. A straight transcription packing raw world coordinates would silently
-  drop geometry on seven of sixteen tracks.
+- **Collision survey (`ead464a`) - a correction to this task's own premise:
+  the survey already existed.** It landed 2026-07-27 in `b838457`/`e9e642f`
+  (`docs/formats/collision.md`, "The broadphase does not pack world space");
+  do not credit this pass with producing it. What this pass did: re-ran the
+  exhaustive ground-truth tests against both real discs (2/2 pass, numbers
+  reproduce to the decimal - largest coordinate 1335.8 PSP / 1554.1 PS2,
+  widest span `2026.6057` on both), and fixed the four docs plus two code
+  comments that still described the result as an unresolved contradiction
+  (`psp-pulse/collision.md`, `roadmap.md`, `oag-view.md`, `report_collision`
+  and `COORD_LIMIT` comments). The survey's content, for anyone who missed
+  the day-old commits: **seven of sixteen environments (`06 07 08 10 11 13
+  15`) reach past +/-1024, nothing spans more than 2,048** (widest fills
+  98.96 % of the window), so the packing must subtract a per-track base
+  (prediction conf 75) - next step `Sap_Init` (`0x0882f8f4`) /
+  `Sap_QueryAabb` (`0x088304d4`). A straight transcription packing raw world
+  coordinates would silently drop geometry on seven of sixteen tracks.
+- **A project-wide tooling gap found on the way: `scripts/check-doc-links.py`
+  does not validate anchor fragments** - it splits on `#` and checks only the
+  file path, so any heading rename silently orphans every link into it (one
+  such stale anchor in `oag-view.md` had survived green CI since `b838457`).
+  Worth a fix; until then, hand-check anchors.
 - **Docs debt (`52f40ed`, `aa5a7db`)**: `wad.md` records the second-binary
   confirmation; `handling-stats.md` gains the `<Misc>` element (offsets
   `0x78..0x90`, `weight_distribution` at `0x90`). One deliberate demotion: the
@@ -137,12 +173,19 @@ narrower question, the docs debt is paid, and `oag-trace` reads both discs.**
 - **Trace migration (`b19bcee`)**: `crates/trace` now resolves archives via
   `oag_assets::pulse::Archives` name-based lookup, so **PS2 discs are valid
   `--source` arguments to `oag-trace`** - the PCSX2 leg of M3 just got its
-  asset path for free.
+  asset path for free. Verified with a disc-backed before/after diff of the
+  reference `oag-trace run`, byte-identical across three captures of the
+  output, and the PS2 disc genuinely loads (same 196 colliders, same Assegai
+  Venom handling). Deliberate choice recorded in the code: the layout string
+  goes only into error context, never stdout, because `run`'s output is
+  compared byte-for-byte. Two follow-ons: `oag_assets::pulse::archive_spec`
+  is now **dead public API** (zero external callers - schedule removal in a
+  quiet moment), and `yaw_authority_ground_truth.rs` is compile-verified
+  only until the steer captures exist - run `just test-data` once they do.
 
-Both finished agents went idle without delivering final reports (their
-commits and doc edits carried the substance instead); everything above is
-folded from the diffs directly. Task #2 (PS2 force-term corroboration) is
-still unclaimed.
+Reports from both agents arrived after their commits (delayed, not missing);
+everything above is reconciled against them. Task #2 (PS2 force-term
+corroboration) is claimed and in flight.
 
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
