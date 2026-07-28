@@ -236,11 +236,17 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
     );
 }
 
-/// The PS2 models arrive with no textures, and the load report has to say so.
+/// The PS2 ship declares texture slots that do not fill, and the report says so.
 ///
 /// This asserts the *gap is reported*, not that it is closed. Closing it means
 /// recovering the model-to-texture-set lookup, at which point this test should be
 /// replaced by one that asserts a skin.
+///
+/// Measured when this was written: the PS2 `Assegai\Ship.vex` fills **0 of 5**
+/// slots and `16_Track\track.vex` 0 of 140, where the PSP's fill 8 of 8 and 135 of
+/// 135. The slots exist on both - the PS2 file still declares one `Texture` node
+/// per texture - so "does it have slots" and "did they decode" are the two
+/// different questions, and only the second one is the gap.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_ps2_texture_gap_is_reported_rather_than_guessed_at() {
@@ -248,14 +254,23 @@ fn the_ps2_texture_gap_is_reported_rather_than_guessed_at() {
         return;
     };
 
-    if !loaded.ship_model.textures.is_empty() {
+    let ship = &loaded.ship_model;
+    let decoded = ship.textures.iter().filter(|t| t.is_some()).count();
+    println!(
+        "the PS2 ship model filled {decoded} of {} texture slot(s)",
+        ship.textures.len()
+    );
+
+    assert!(
+        !ship.textures.is_empty(),
+        "the PS2 ship model declares no texture slots at all, which contradicts \
+         docs/formats/ps2-texture.md's one-entry-per-Texture-node reading"
+    );
+
+    if decoded == ship.textures.len() {
         // Not a failure: it would mean the lookup has been recovered since this
         // was written, and the assertion below is then the wrong one to make.
-        println!(
-            "the PS2 ship model arrived with {} texture(s); the texture-set lookup \
-             appears to be recovered, so this test is out of date",
-            loaded.ship_model.textures.len()
-        );
+        println!("every slot filled; the texture-set lookup appears to be recovered");
         return;
     }
 
@@ -263,8 +278,8 @@ fn the_ps2_texture_gap_is_reported_rather_than_guessed_at() {
         loaded
             .report
             .iter()
-            .any(|line| line.contains("no textures in the model")),
-        "the untextured PS2 model was not reported; the report was:\n{}",
+            .any(|line| line.contains("texture slot(s) decoded")),
+        "the PS2 model's unfilled texture slots were not reported; the report was:\n{}",
         loaded.report.join("\n")
     );
 }

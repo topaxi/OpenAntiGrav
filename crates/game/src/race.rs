@@ -377,34 +377,48 @@ pub fn load(options: &Options) -> Result<Loaded> {
     })
 }
 
-/// Says so when a model has arrived with no textures, and why.
+/// Says so when a model's texture slots did not all fill, and why.
+///
+/// **Keyed on empty slots, not on an empty list, and the difference is the whole
+/// point.** A model that declares no texture slots at all wanted none - the
+/// driveable ribbon `oag_render::track::build_model` generates is one, on either
+/// disc - and saying "untextured" about it would blame a decode for geometry that
+/// was never textured. What is worth reporting is a model that asked for `n`
+/// textures and got fewer, because that is a picture missing something it was
+/// authored with.
 ///
 /// **This is the one place a PS2 race is knowingly worse than a PSP one, and it
-/// is reported rather than papered over.** A PS2 `.vex` declares a texture block
-/// of length zero: its textures are separate archive entries, gathered into a
-/// nested WAD of Graphics Synthesizer upload packets, and *which* entry belongs
-/// to *which* model is not recovered. `oag_render::mesh::ps2_texture_set` decodes
-/// such a set once something names it - `oag-view --mesh ... --textures <entry>`
-/// is where that is done by hand - so what is missing is the lookup, not the
-/// decoder. See `docs/formats/ps2-texture.md` and `docs/formats/vex.md`.
+/// is reported rather than papered over.** Measured on the real discs: the PSP's
+/// `Assegai\Ship.vex` fills 8 of 8 slots and `16_Track\track.vex` 135 of 135,
+/// while the PS2's fill **0 of 5** and **0 of 140**. The slots are there because
+/// the file still declares one `Texture` node each; the pixels are not, because a
+/// PS2 model's textures are separate archive entries gathered into a nested WAD of
+/// Graphics Synthesizer upload packets, and *which* entry belongs to *which* model
+/// is not recovered. `oag_render::mesh::ps2_texture_set` decodes such a set once
+/// something names it - `oag-view --mesh ... --textures <entry>` is where that is
+/// done by hand - so what is missing is the lookup, not the decoder. See
+/// `docs/formats/ps2-texture.md`.
 ///
 /// The model still draws: `Drawable::draw` binds the white fallback for a draw
 /// with no texture slot. So a PS2 race is a correctly-shaped untextured one, and
 /// nothing here guesses at a texture set to avoid saying that.
 ///
-/// Deliberately keyed on the model rather than on the platform. A PSP model that
-/// somehow arrives empty deserves the same line, and the PS2 disc carries
-/// PSP-format batches too - so "which disc is this" is never the right question
-/// to ask about one mesh.
+/// Deliberately keyed on the model rather than on the platform. A PSP model with a
+/// slot that will not decode deserves the same line, and the PS2 disc carries
+/// PSP-format batches too - so "which disc is this" is never the right question to
+/// ask about one mesh.
 #[must_use]
 fn untextured_note(model: &Model) -> Option<String> {
-    if !model.textures.is_empty() || model.indices.is_empty() {
+    let slots = model.textures.len();
+    let decoded = model.textures.iter().filter(|t| t.is_some()).count();
+    if slots == 0 || decoded == slots {
         return None;
     }
     Some(format!(
-        "{}: no textures in the model, drawing untextured. PS2 models keep their \
-         textures in separate archive entries and the model-to-texture-set lookup \
-         is not recovered; see docs/formats/ps2-texture.md",
+        "{}: {decoded} of {slots} texture slot(s) decoded, drawing the rest \
+         untextured. PS2 models keep their textures in separate archive entries \
+         and the model-to-texture-set lookup is not recovered; see \
+         docs/formats/ps2-texture.md",
         model.label
     ))
 }
@@ -1476,16 +1490,16 @@ mod tests {
     use oag_gameplay::input::button;
     use oag_input::keys::map_key;
 
-    /// A model with geometry and no textures, which is what a PS2 `.vex` builds to.
-    fn model(triangles: usize, textures: usize) -> Model {
+    /// A model declaring `slots` texture slots of which the first `decoded` filled.
+    fn model(slots: usize, decoded: usize) -> Model {
         Model {
             label: "Ship.vex".to_string(),
             vertices: Vec::new(),
-            indices: vec![0; triangles * 3],
+            indices: vec![0; 6],
             draws: Vec::new(),
-            textures: (0..textures)
+            textures: (0..slots)
                 .map(|index| {
-                    Some(mesh::ModelTexture {
+                    (index < decoded).then(|| mesh::ModelTexture {
                         label: format!("#{index}"),
                         width: 1,
                         height: 1,
@@ -1499,26 +1513,36 @@ mod tests {
         }
     }
 
+    /// The PS2 shape, measured: five slots declared and none of them filled.
     #[test]
-    fn a_model_with_no_textures_says_so_and_says_why() {
-        let note = untextured_note(&model(2, 0)).expect("an untextured model is reported");
+    fn slots_that_all_failed_to_decode_are_reported_with_the_count() {
+        let note = untextured_note(&model(5, 0)).expect("an untextured model is reported");
         assert!(note.contains("Ship.vex"), "{note}");
-        assert!(note.contains("drawing untextured"), "{note}");
+        assert!(note.contains("0 of 5 texture slot(s)"), "{note}");
         // The reader has to be able to get from the line to the finding, because
         // the line on its own reads like a decode failure and it is not one.
         assert!(note.contains("ps2-texture.md"), "{note}");
     }
 
+    /// A model that got everything it asked for is silent, which is every PSP
+    /// model measured: 8 of 8 on the ship, 135 of 135 on the track.
     #[test]
-    fn a_textured_model_is_not_reported() {
-        assert_eq!(untextured_note(&model(2, 1)), None);
+    fn a_fully_textured_model_is_not_reported() {
+        assert_eq!(untextured_note(&model(8, 8)), None);
     }
 
-    /// An empty model is somebody else's problem: it has no textures because it
-    /// has nothing to put them on, and saying "drawing untextured" about it would
-    /// point at the wrong thing.
     #[test]
-    fn an_empty_model_is_not_reported_as_untextured() {
+    fn a_partly_textured_model_is_reported_too() {
+        let note = untextured_note(&model(8, 3)).expect("a partial decode is worth saying");
+        assert!(note.contains("3 of 8 texture slot(s)"), "{note}");
+    }
+
+    /// **The regression this rule exists for.** The driveable ribbon is generated
+    /// geometry with no texture slots at all, on either disc, and the earlier
+    /// "no textures" test reported it on the *PSP* disc - blaming a PS2 texture-set
+    /// gap for a mesh that was never textured and never came off a `.vex`.
+    #[test]
+    fn a_model_that_declares_no_slots_wanted_none_and_is_not_reported() {
         assert_eq!(untextured_note(&model(0, 0)), None);
     }
 

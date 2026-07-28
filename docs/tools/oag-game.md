@@ -101,13 +101,21 @@ report line and the error text, never to choose a decoder.
 Two things are genuinely worse on the PS2 source, and both say so rather than
 being papered over.
 
-**Models draw untextured.** A PS2 `.vex` declares a texture block of length zero:
-its textures are separate archive entries gathered into a nested WAD of Graphics
+**Models draw untextured.** Measured on both discs: `Assegai\Ship.vex` fills
+**8 of 8** texture slots on the PSP and **0 of 5** on the PS2, and
+`16_Track\track.vex` 135 of 135 against 0 of 140. The slots exist on both - a PS2
+`.vex` still declares one `Texture` node per texture - but the pixels are not in
+the file. They are separate archive entries gathered into a nested WAD of Graphics
 Synthesizer upload packets, and which entry belongs to which model is not
 recovered. The decoder exists - `oag-view --mesh ... --textures <entry>` skins one
 by hand, see [ps2-texture](../formats/ps2-texture.md) - so what is missing is the
-lookup. The load report names each model that arrived with no textures, and
-nothing guesses at a set to avoid printing that line.
+lookup. The load report names each model whose slots did not all fill, giving the
+two counts, and nothing guesses at a set to avoid printing that line.
+
+The report is keyed on **unfilled slots, not on an absent texture list**, and the
+distinction matters: the driveable ribbon is generated geometry that declares no
+slots at all on either disc, so reporting it would blame a PS2 texture gap for a
+mesh that was never textured and never came off a `.vex`.
 
 **The intro reel has no picture.** The PS2 ships no `.PMF` in any archive at all;
 its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream loose in the ISO
@@ -117,9 +125,23 @@ the intro to play and the front end runs without a picture, the same path
 `--no-video` already took. A reel **named** with `--movie` and not found is still
 an error: the default is this project's guess at which cut the intro state plays,
 and a source that lacks it is answering the guess, where `--movie` is a request.
-Whether the front end gets further than that depends on whether the front-end root
-XML is in `WADS2.WAD` under the name the PSP uses, which has not been checked; if
-it is not, the failure names the archive it searched.
+
+The rest of the PS2 front end gets **further than expected**, and this was measured
+rather than assumed: `WADS2.WAD` carries `Data\Plugins\PI001\GUI\Skin.xml` under
+the PSP's own name, and it boots to 11 screens, 56 globals, five language plugins
+and a 1,724-string English table. Two things there do not resolve, both
+degrading to a report line: the `.fnt` font entry exists but is zero bytes, so the
+menu draws in the built-in 5x7, and the front-end images are under neither
+`Data\FE\Images\pulse_logo.mip` nor `gameshare_backdrop.mip`, so the sprite sheet
+is empty.
+
+One finding worth recording separately, because it is about the *original* rather
+than about this build: the PS2 screens name their movies `Intro.pss` and
+`Backdrop.ipf`, so the `Movie` widget's PSP rule of `src` **plus `.PMF`** produces
+`Data\Movies\Intro.pss.PMF`. The `src` already carries its extension on this
+release, so that name-building rule is PSP-specific. Nothing acts on it yet -
+neither container is decoded - but it is the kind of assumption that would
+otherwise be discovered much later.
 
 Expect a race to load more slowly off the PS2 disc. 5,861 of `WADS2.WAD`'s 7,200
 entries are [LZSS](../formats/lzss.md) where no PSP archive compresses anything,
