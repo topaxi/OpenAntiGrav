@@ -435,8 +435,8 @@ pub struct Evaluated {
 /// Evaluates every force for one frame, at full `dt`, exactly once.
 ///
 /// Mutates `state`: the control states, the contact bookkeeping, the accumulators on
-/// the body, and the two things the original applies outside the accumulators
-/// entirely - the sideshift's velocity change and the penetration-escape teleport.
+/// the body, and the one thing the original applies outside the accumulators
+/// entirely - the penetration-escape teleport.
 ///
 /// The body's accumulators are **not** cleared here. [`crate::integrate::step`]
 /// clears them at the top of the frame, so that after a step they still hold what was
@@ -490,11 +490,17 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     };
     acc.world_force += brakes;
 
-    // 3. Airbrakes. The sideshift they can also produce goes straight to the body,
-    //    below, rather than through any accumulator.
+    // 3. Airbrakes, and the sideshift in the same function's tail. The sideshift
+    //    calls `Body_AddForceWorld` directly rather than going through the craft
+    //    accumulator, which lands in the same place; it is gated on the contact
+    //    flag, and hover has not run yet, so that flag is **last** frame's.
     let airbrake = airbrake::evaluate(state, input, handling, cached_speed);
     acc.world_force += airbrake.world_force;
     acc.local_angular += airbrake.local_angular;
+
+    airbrake::advance_sideshift(state, input, dt);
+    let sideshift = airbrake::sideshift_force(state, handling, control_grounded);
+    acc.world_force += sideshift;
 
     // 4. Steering and 5. pitch, both body-local angular.
     let steering = engine::steering(state, handling);
@@ -591,8 +597,8 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     drain(state, &acc);
 
-    // Outside the accumulators, both of them deliberately.
-    state.body.linear_velocity += airbrake::sideshift_velocity_delta(state, input, handling);
+    // Outside the accumulators, deliberately: the penetration-escape teleport,
+    // which moves the body without touching its velocity.
     state.body.position += hover.escape;
 
     Evaluated {

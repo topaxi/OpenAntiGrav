@@ -807,13 +807,29 @@ fn an_overlong_frame_is_clamped_rather_than_integrated() {
     assert_eq!(huge.body, clamped.body);
 }
 
-/// A sideshift bypasses the force accumulators entirely and changes velocity
-/// directly, and it is one-shot: the frame after, nothing more is added.
+/// A sideshift is a **force**, it lasts its own timer, and it is grounded-only.
+///
+/// **This replaces `a_sideshift_is_a_one_shot_change_in_velocity`**, which pinned
+/// the crate's old guess: a velocity change applied once, on the frame the input
+/// arrived, bypassing the accumulators. `Ship_UpdateAirbrakes`' tail calls
+/// `Body_AddForceWorld` while a per-side timer runs, so it is an ordinary world
+/// force for `oag_physics::airbrake::SIDESHIFT_DURATION` and the integrator
+/// divides it by mass like everything else. See
+/// `oag_physics::airbrake::sideshift_force` for the listing and the direction.
+///
+/// What survives from the old test, because it is still true and still worth
+/// pinning: it is not in `Evaluated::airbrake`'s own force (that struct is the
+/// airbrake block, and the sideshift is a separate call in the same function),
+/// and it does not keep pushing for ever.
 #[test]
-fn a_sideshift_is_a_one_shot_change_in_velocity() {
+fn a_sideshift_is_a_grounded_force_that_lasts_its_own_timer() {
     let handling = fixture();
     let world = flat_floor(Surface::Floor);
-    let mut state = ship_at(4.0, &handling);
+    let target = oag_physics::hover::target_height(&handling, 0.0, 0.0);
+    let drop = oag_physics::hover::PROBE_DROP_RAW * oag_physics::hover::TARGET_GLOBAL_SCALE;
+    let mut state = ship_at(target - 1.25 + drop, &handling);
+    // A grounded craft: the sideshift reads last frame's contact flag.
+    state.grounded = 1.0;
 
     let shifted = step(
         &mut state,
@@ -826,11 +842,12 @@ fn a_sideshift_is_a_one_shot_change_in_velocity() {
         &world,
         TICK,
     );
-    // The impulse is not visible in the accumulated forces, by design.
+    // Not part of the airbrake block's own force, by design.
     assert_eq!(shifted.airbrake.world_force, Vec3::ZERO);
     assert!(state.body.linear_velocity.x > 0.0);
 
-    let after = state.body.linear_velocity.x;
+    // It keeps pushing after the input has gone, which the one-shot shape did not.
+    let after_one = state.body.linear_velocity.x;
     step(
         &mut state,
         &ShipControls::default(),
@@ -839,8 +856,29 @@ fn a_sideshift_is_a_one_shot_change_in_velocity() {
         &world,
         TICK,
     );
-    // Lateral grip is now working against it, so it must not have grown.
-    assert!(state.body.linear_velocity.x <= after);
+    assert!(state.body.linear_velocity.x > after_one);
+
+    // And it stops: the push lasts 0.2 s, so the lateral speed peaks inside that
+    // window and is lower afterwards rather than growing without bound.
+    let mut peak: f32 = 0.0;
+    let mut samples = Vec::new();
+    for _ in 0..60 {
+        step(
+            &mut state,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            TICK,
+        );
+        let lateral = state.body.linear_velocity.dot(state.body.right());
+        peak = peak.max(lateral);
+        samples.push(lateral);
+    }
+    assert!(
+        samples.last().copied().unwrap() < peak,
+        "lateral speed never came off its peak {peak}: {samples:?}"
+    );
 }
 
 /// Under a ceiling, the probes still find the surface, because they cast along the

@@ -293,29 +293,94 @@ pub fn lateral_grip(state: &ShipState, handling: &Handling, grounded: f32) -> Ve
     Vec3::new(lateral, 0.0, 0.0)
 }
 
-/// The one-shot sideshift, as a change in world-space velocity.
+/// How long one sideshift pushes for, in seconds.
 ///
-/// A sideshift is "a one-shot lateral impulse applied straight to the body, bypassing
-/// the craft accumulator", so it is deliberately not part of [`AirbrakeForces`] and
-/// does not pass through any accumulator at all.
-///
-/// **Whether `sideshift` is an impulse or a velocity** is not recorded: an impulse
-/// would be divided by mass and a velocity would not. It is applied as a velocity
-/// change here, which keeps it finite for a zero-mass parameter set and is a **guess
-/// awaiting M3**.
-#[must_use]
-pub fn sideshift_velocity_delta(
-    state: &ShipState,
-    input: &ShipControls,
-    handling: &Handling,
-) -> Vec3 {
-    let direction = match input.sideshift {
-        Sideshift::None => return Vec3::ZERO,
-        Sideshift::Left => -1.0,
-        Sideshift::Right => 1.0,
-    };
+/// The literal `0.2` (`0x3e4ccccd`) that `Ship_UpdateSideshiftInput_q`
+/// (`0x08846a54`) writes into whichever of its two per-side timers fired. The
+/// timers count down by `dt` and the craft flag - and therefore the force - lasts
+/// exactly as long as the timer does. Confidence **80**; see
+/// `docs/ghidra/functions/psp-pulse/engine.md`.
+pub const SIDESHIFT_DURATION: f32 = 0.2;
 
-    state.body.right() * handling.airbrake.sideshift * direction
+/// The sideshift, as a **world-space force** while its timer runs.
+///
+/// # It was a one-shot velocity change, and that was the wrong shape
+///
+/// `docs/physics/README.md` recorded a sideshift as "a one-shot lateral impulse
+/// applied straight to the body", with a flagged open question - impulse or
+/// velocity, which decides whether mass divides it - and this function used to
+/// answer it by applying a velocity change once, on the frame the input arrived.
+///
+/// It is neither. `Ship_UpdateAirbrakes`' tail (`0x0884c9a4`, the block after the
+/// airbrake force block) is
+///
+/// ```text
+/// if (craft+0x1c0 & 1) {                          // last frame's contact flag
+///     if (craft+0x1c0 & 0x800)                    // the LEFT flick's timer is running
+///         Body_AddForceWorld(body, craft+0x170 *  handling.sideshift);
+///     if (craft+0x1c0 & 0x1000)                   // the RIGHT flick's timer
+///         Body_AddForceWorld(body, craft+0x170 * -handling.sideshift);
+/// }
+/// ```
+///
+/// so it is an ordinary force, added every frame for the
+/// [`SIDESHIFT_DURATION`] its timer runs, divided by mass by the integrator like
+/// any other, and **switched off in the air**. Confidence **85**.
+///
+/// # The direction, which was an unevidenced coin flip
+///
+/// `craft+0x170` is the basis's **row 0**, which is the ship's *left*
+/// (`docs/ghidra/functions/psp-pulse/engine.md`, measured - the same convention
+/// that inverted the airbrakes). So the `0x800` branch pushes left and the
+/// `0x1000` branch pushes right, and which flick sets which is read in
+/// `Ship_UpdateSideshiftInput_q`: the steering axis crossing `+10` arms
+/// `0x1000` and crossing `-10` arms `0x800`, on the same `+/-100` axis whose sign
+/// the `steer-left`/`steer-right` captures measure as **positive-right**.
+///
+/// **A craft therefore shifts toward the side it was flicked**, which is what
+/// [`Sideshift::Right`] to `+`[`crate::ship::Body::right`] already meant. The
+/// coin flip lands on the side the crate had guessed - a confirmation rather than
+/// a fix, and now it is evidence instead of a guess.
+///
+/// # What is still not implemented
+///
+/// The *trigger*. The original arms a sideshift from a stick flick - the axis has
+/// to return inside `+/-10` to re-arm - or from a tap pattern in a three-entry
+/// history, and it is `oag-input`'s business rather than this crate's. Here the
+/// [`Sideshift`] input stays the "fire now" edge, and firing refreshes the timer.
+#[must_use]
+pub fn sideshift_force(state: &ShipState, handling: &Handling, grounded: f32) -> Vec3 {
+    if grounded <= 0.0 {
+        return Vec3::ZERO;
+    }
+
+    let right = state.body.right();
+    let mut force = Vec3::ZERO;
+    // Left first, matching the field's own order. Both can run at once, and the
+    // original lets the two forces cancel rather than picking a winner.
+    if state.sideshift_timers[0] > 0.0 {
+        force -= right * handling.airbrake.sideshift;
+    }
+    if state.sideshift_timers[1] > 0.0 {
+        force += right * handling.airbrake.sideshift;
+    }
+    force
+}
+
+/// Arms the timer a fired sideshift runs on, and counts both down by `dt`.
+///
+/// The countdown is the original's, in `Ship_UpdateSideshiftInput_q`; the arming
+/// is this crate's stand-in for a trigger that lives in the input layer. Firing
+/// while a timer runs refreshes it, as a second flick does there.
+pub fn advance_sideshift(state: &mut ShipState, input: &ShipControls, dt: f32) {
+    for timer in &mut state.sideshift_timers {
+        *timer = (*timer - dt).max(0.0);
+    }
+    match input.sideshift {
+        Sideshift::None => {}
+        Sideshift::Left => state.sideshift_timers[0] = SIDESHIFT_DURATION,
+        Sideshift::Right => state.sideshift_timers[1] = SIDESHIFT_DURATION,
+    }
 }
 
 #[cfg(test)]
@@ -725,37 +790,78 @@ mod tests {
         assert!(half < air && half > ground);
     }
 
+    /// A sideshift pushes toward the side it was fired at, for as long as its
+    /// timer runs, and only while the craft is on the ground.
+    ///
+    /// The direction is the recovered one rather than the guessed one - see
+    /// [`sideshift_force`] - and it is asserted both ways round so an
+    /// unconditional push cannot pass.
     #[test]
-    fn a_sideshift_is_lateral_and_one_shot() {
+    fn a_sideshift_pushes_toward_the_side_it_was_fired_at_while_grounded() {
         let handling = test_handling();
-        let state = ShipState::default();
+        let mut state = ShipState::default();
 
+        // Nothing fired: no force, and the timers stay down.
+        advance_sideshift(&mut state, &ShipControls::default(), 1.0 / 60.0);
+        assert_eq!(sideshift_force(&state, &handling, 1.0), Vec3::ZERO);
+
+        let fire = |side| ShipControls {
+            sideshift: side,
+            ..ShipControls::default()
+        };
+
+        let mut right = ShipState::default();
+        advance_sideshift(&mut right, &fire(Sideshift::Right), 1.0 / 60.0);
         assert_eq!(
-            sideshift_velocity_delta(&state, &ShipControls::default(), &handling),
-            Vec3::ZERO
-        );
-        assert_eq!(
-            sideshift_velocity_delta(
-                &state,
-                &ShipControls {
-                    sideshift: Sideshift::Right,
-                    ..ShipControls::default()
-                },
-                &handling
-            ),
+            sideshift_force(&right, &handling, 1.0),
             Vec3::new(6.0, 0.0, 0.0)
         );
+        // Switched off in the air, which the old velocity-change shape was not.
+        assert_eq!(sideshift_force(&right, &handling, 0.0), Vec3::ZERO);
+
+        let mut left = ShipState::default();
+        advance_sideshift(&mut left, &fire(Sideshift::Left), 1.0 / 60.0);
         assert_eq!(
-            sideshift_velocity_delta(
-                &state,
-                &ShipControls {
-                    sideshift: Sideshift::Left,
-                    ..ShipControls::default()
-                },
-                &handling
-            ),
+            sideshift_force(&left, &handling, 1.0),
             Vec3::new(-6.0, 0.0, 0.0)
         );
+
+        // Both at once cancel, as the original's two flags do.
+        let mut both = ShipState::default();
+        advance_sideshift(&mut both, &fire(Sideshift::Left), 1.0 / 60.0);
+        advance_sideshift(&mut both, &fire(Sideshift::Right), 1.0 / 60.0);
+        assert_eq!(sideshift_force(&both, &handling, 1.0), Vec3::ZERO);
+    }
+
+    /// It lasts [`SIDESHIFT_DURATION`] and then stops - it is not one frame, and
+    /// it is not forever.
+    #[test]
+    fn a_sideshift_pushes_for_its_whole_timer_and_then_stops() {
+        let handling = test_handling();
+        let mut state = ShipState::default();
+        let dt = 1.0 / 60.0;
+
+        advance_sideshift(
+            &mut state,
+            &ShipControls {
+                sideshift: Sideshift::Right,
+                ..ShipControls::default()
+            },
+            dt,
+        );
+
+        let mut pushing = 0;
+        for _ in 0..60 {
+            if sideshift_force(&state, &handling, 1.0) != Vec3::ZERO {
+                pushing += 1;
+            }
+            advance_sideshift(&mut state, &ShipControls::default(), dt);
+        }
+
+        // 0.2 s at 60 Hz, plus the frame it fired on: the original arms the timer
+        // after the countdown, in the same order this does, so a fired sideshift
+        // always gets its whole duration and never a partial first frame.
+        assert_eq!(pushing, (SIDESHIFT_DURATION / dt).round() as u32 + 1);
     }
 
     #[test]
@@ -773,9 +879,8 @@ mod tests {
         assert_eq!(forces.world_force, Vec3::ZERO);
         assert_eq!(forces.local_angular, Vec3::ZERO);
         assert_eq!(lateral_grip(&state, &Handling::ZERO, 1.0), Vec3::ZERO);
-        assert_eq!(
-            sideshift_velocity_delta(&state, &input, &Handling::ZERO),
-            Vec3::ZERO
-        );
+        let mut fired = state;
+        advance_sideshift(&mut fired, &input, 1.0 / 60.0);
+        assert_eq!(sideshift_force(&fired, &Handling::ZERO, 1.0), Vec3::ZERO);
     }
 }

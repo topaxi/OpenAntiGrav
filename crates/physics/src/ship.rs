@@ -285,6 +285,15 @@ pub struct ShipState {
     /// resolving contacts and then applying forces, gets a different answer on
     /// every takeoff and landing frame in five terms at once.
     pub grounded_prev: f32,
+    /// Seconds left on each sideshift, left then right.
+    ///
+    /// The original keeps one timer per side (`entity+0x8a4` and `entity+0x8a8`),
+    /// sets the fired one to [`crate::airbrake::SIDESHIFT_DURATION`], counts both
+    /// down by `dt`, and drives one craft flag from each - so both can run at once
+    /// and the two forces then cancel. Recovered from
+    /// `Ship_UpdateSideshiftInput_q` (`0x08846a54`); see
+    /// `docs/ghidra/functions/psp-pulse/engine.md`.
+    pub sideshift_timers: [f32; 2],
     /// Seconds since the ship last touched down, in seconds.
     ///
     /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
@@ -319,6 +328,7 @@ impl Default for ShipState {
             leap_timer: 0.0,
             grounded: 0.0,
             grounded_prev: 0.0,
+            sideshift_timers: [0.0, 0.0],
             // Starting at zero would put a freshly spawned ship inside the
             // landing window, so it starts outside it.
             time_since_landing: 1.0,

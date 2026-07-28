@@ -350,8 +350,12 @@ angAccelLocal.y += speed * turn * (R - L) * 0.001
   written in exactly two places and both are passive - `Ship_ApplyAngularDamping` and the
   surface-alignment torque. Confidence **80** on the narrowed version, which is lower
   because `Ship_UpdateMagLock` was not scanned and a Z write there would have been missed.
-- `sideshift` is a one-shot lateral impulse applied straight to the body,
-  bypassing the craft accumulator.
+- `sideshift` is a **world-space force** applied straight to the body, bypassing
+  the craft accumulator, for the `0.2 s` its per-side timer runs and **only while
+  the craft is in contact**. Read at instruction level in
+  [engine.md](../ghidra/functions/psp-pulse/engine.md#the-sideshift-is-a-force-and-its-direction-is-read-rather-than-guessed),
+  which also settles the direction: a craft shifts toward the side it was
+  flicked.
 
 Lateral grip:
 
@@ -557,10 +561,13 @@ pitch damping - see
   `bodyLinearVel + M * cross(probeLocal, angularVel)`, the negation of the conventional
   rigid-body point velocity. The crate uses the conventional `omega x r`, since that is
   what damps a descending nose rather than pumping it.
-- **Where the two probes sit.** `<Misc length/>` sets it, with what factor is not
-  recorded; the crate places them symmetrically at half a hull length.
-- **Whether `sideshift` is an impulse or a velocity**, which decides whether it is divided
-  by mass. Applied as a velocity change.
+- ~~**Where the two probes sit.**~~ - **closed**: a code literal,
+  `(0, -1.125, +/-4.5)` after the `0.75` global, identical for every craft, and
+  landed. `<Misc>` reaches the collider, not the probes.
+- ~~**Whether `sideshift` is an impulse or a velocity**~~ - **closed**: it is
+  neither, it is a force for `0.2 s`, so mass does divide it. What is still open
+  is the *trigger*: the stick-flick path is read, the tap-history path above it
+  is not, and `oag-input` produces no sideshift at all.
 - **Which speed the airbrake terms use.** This page writes only "speed"; the craft caches
   `|dot(velocity, forward)|` and the engine reads it from there, so that is what the crate
   uses, rather than `|velocity|` as the brake does.

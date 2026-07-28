@@ -1351,6 +1351,73 @@ Both are visible in `data/traces/talons-junction-pitch-both-ways.csv`; the
 scenario is `verification/scenarios/pitch-both-ways.inputs` and the analysis is
 in [angular-velocity-column.md](../../../physics/angular-velocity-column.md#the-input-measured-rather-than-assumed).
 
+## The sideshift is a force, and its direction is read rather than guessed
+
+Two questions closed together: what a sideshift *is* (this page and
+[physics/README.md](../../../physics/README.md) both said "a one-shot lateral
+impulse applied straight to the body", with impulse-versus-velocity open), and
+which way it goes.
+
+**The application**, in `Ship_UpdateAirbrakes` (`0x0884c9a4`), after the airbrake
+force block and gated on the craft's contact flag:
+
+```text
+if (craft+0x1c0 & 1) {                           ; the contact bit
+    if (craft+0x1c0 & 0x800)
+        Body_AddForceWorld(body, craft+0x170 *  handling+0x5c);
+    if (craft+0x1c0 & 0x1000)
+        Body_AddForceWorld(body, craft+0x170 * -handling+0x5c);
+}
+```
+
+`handling+0x5c` is block-relative for absolute `0xf0`, which the parser table
+above assigns to `Airbrake.sideshift`. So a sideshift is an **ordinary world
+force**, added every frame that its flag is set - divided by mass by the
+integrator like every other force - and **switched off in the air**. It is not an
+impulse and not a velocity change. Confidence **85**.
+
+Note the ordering consequence: `Ship_UpdateAirbrakes` is step 3 and
+`Ship_UpdateHover` (which clears and rebuilds the contact bit) is step 8, so the
+flag read here is **last** frame's contact, like the other pre-hover terms.
+
+**The two flags and their timers**, in `Ship_UpdateSideshiftInput_q`
+(`0x08846a54`, named here, confidence 72 - the sideshift half is unambiguous, the
+tap-history half above it is only partly read):
+
+```text
+0884759c  if (entity+0x8a4 > 0)  craft+0x1c0 |= 0x800   else craft+0x1c0 &= ~0x800
+088475ec  if (entity+0x8a8 > 0)  craft+0x1c0 |= 0x1000  else craft+0x1c0 &= ~0x1000
+```
+
+Both timers are decremented by `dt` earlier in the same function
+(`0x0884729c`/`0x088472b4`) and are set to the literal `0.2`
+(`0x3e4ccccd`) when a shift fires, so **one sideshift pushes for 0.2 s**. Both can
+run at once, in which case the two forces cancel; nothing picks a winner.
+
+**What fires them** is a stick flick, read at `0x08847470`-`0x08847598`: with an
+"armed" flag (`entity+0x860 & 0x400`, set whenever the axis is inside `+/-10`),
+the steering axis at `*(craft+0x78)+0x00` crossing
+
+| Axis | Sets | Flag | Force |
+| --- | --- | --- | --- |
+| `> +10` | `entity+0x8a8` | `0x1000` | `-row0 * sideshift` |
+| `< -10` | `entity+0x8a4` | `0x800` | `+row0 * sideshift` |
+
+and `row0` is the ship's **left** ([the basis section](#the-basis-is-positively-oriented-and-row-0-points-left)),
+while the same `+/-100` axis is measured **positive-right** by the
+`steer-left`/`steer-right` captures (the `steer` column runs `0 .. -108` holding
+left). **So a craft shifts toward the side it was flicked**, which is what
+`oag_physics::ship::Sideshift::Right` mapping to `+Body::right()` already meant -
+a confirmation of an unevidenced guess rather than a correction, and the mirror
+image of the airbrake polarity bug that motivated the check.
+
+A second trigger path above this one - a three-entry tap history
+(`entity+0x88c`/`+0x890`/`+0x894`) fed by d-pad bits and by the axis crossing
+`+/-90`, matching the patterns `2,1,2` and `1,2,1` - sets two other flags
+(`entity+0x860 & 0x100`/`0x80`) that drive a separate `entity+0x87c` charge. That
+is **not** read far enough to say what it is, and it is deliberately left alone
+rather than guessed at; it is the reason the function's name carries `_q`.
+
 ## The passive terms
 
 Each of these is small, always on, and easy to overlook. All carry confidence
