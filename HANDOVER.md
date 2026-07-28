@@ -497,6 +497,42 @@ gate green at 792 tests).
   only their own paths. `docs/formats/pmf.md`'s stale "only a guess" line
   is queued as a follow-up.
 
+**Task #13, analysis half (done centrally): the airbrake-asymmetric capture
+weakly corroborates the `1e-5` drag term and cannot do better - it is
+wall-contaminated for its whole useful length.** Method and numbers, so
+nobody re-derives them: per-tick forward-projected acceleration minus the
+confirmed engine law minus the *measured* post-integrate contact loss
+(`(speed - |v|)/dt`), on ticks 20-47, Assegai Venom values off the disc
+(`Airbrake.drag = 2`, `accelcap 17`, `amount 418`, `normal_gravity 5`;
+`Data\Ships\Assegai\handlingstats.xml`, code-shortened - `<m l k j i>` is
+`<Physical flight_gravity mass normal_gravity track_gravity>`, mass `1`
+again). Findings:
+
+- `speed/|v|` reads `~1.038` from tick 0: the ship is **already in wall
+  contact before the airbrakes ever engage**, so the friction background
+  (~50 units force-equivalent) dwarfs the ~5-unit term under test.
+- Even with the contact loss subtracted there is a **~4.8-unit systematic
+  baseline deficit in the pre-airbrake straight** (ticks 20-29, steer 0,
+  airbrakes 0) that neither the law, the contact column, gravity's forward
+  projection (~0.6 on this heading), nor the integrator damping (~0.25)
+  explains. Unresolved; it may be a second contact effect the speed column
+  under-samples on this geometry. Anyone re-running the standing-start
+  numbers should not expect this capture to close to `0.13` the way that
+  one does.
+- Above that baseline, the excess during the ramp (ticks 32-42) **grows
+  with `|abL-abR| * |steer| * fs` as the term predicts and lands at the
+  same order** (e.g. +6.4 observed vs 4.2 predicted at tick 40); past tick
+  43 hard cornering contaminates the projection entirely.
+- **Verdict: consistent-with, roughly factor <= 2, confidence ~55 as a
+  magnitude check.** The term's real evidence remains the two-binary
+  instruction reading (conf 88). Implementation in `passive.rs` is the
+  remaining half of #13 - implement from the read values, not from this
+  capture. A genuinely clean magnitude check would need a scenario that
+  somehow holds `|steer| > 0` with asymmetric brakes *without* wall
+  contact - possibly early ticks of a gentle S on a wide track, checked
+  clean with `speed/|v| == 1.0000` first. Analysis script:
+  scratchpad `airbrake_check.py` (session-local, method recorded here).
+
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
 A new session spawned three concurrent background agents in this working tree,
