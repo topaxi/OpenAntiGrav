@@ -409,8 +409,7 @@ fn names(path: &str, candidate: &str) -> bool {
 ///
 /// A directory is joined with a separator; anything else is treated as a disc
 /// image and joined with a colon, which is the form [`Archive::open`] takes.
-#[must_use]
-pub fn archive_spec(source: &str, relative: &str) -> String {
+fn archive_spec(source: &str, relative: &str) -> String {
     if std::path::Path::new(source).is_dir() {
         let trimmed = source.trim_end_matches(['/', '\\']);
         format!("{trimmed}/{relative}")
