@@ -30,7 +30,20 @@ use crate::input::{InputSnapshot, button};
 pub fn ship_controls(snapshot: &InputSnapshot) -> ShipControls {
     ShipControls {
         steer_x: snapshot.stick_x,
-        steer_y: snapshot.stick_y,
+        // Up on the stick pitches the nose DOWN, which is a binding and not a
+        // physics sign: `ShipControls::steer_y` is positive nose up, and the
+        // original's pitch axis at `*(craft+0x78) + 0x10` is negative nose up.
+        // Measured in PPSSPP, both directions held for 120 ticks - `up` on the
+        // d-pad writes `-100` there and the craft's forward row drops, `down`
+        // writes `+100` and the nose rises - and the analog stick's `y` feeds the
+        // same field with the same sign. See `oag_physics::engine::pitch`.
+        //
+        // Inverting here rather than inside the force term is deliberate: the
+        // term keeps the shape `Ship_UpdatePitch` has, and the fact that a
+        // Wipeout pushes the nose down when the player pushes up stays at the
+        // input boundary, which is where a player would also expect to find it if
+        // it ever becomes an option.
+        steer_y: -snapshot.stick_y,
         thrust: f32::from(u8::from(snapshot.buttons.is_held(button::CROSS))),
         airbrake_left: snapshot.airbrake_left,
         airbrake_right: snapshot.airbrake_right,
@@ -69,8 +82,14 @@ mod tests {
         assert_eq!(ship_controls(&snapshot).thrust, 0.0);
     }
 
+    /// Three of the four axes pass through, and the fourth is inverted.
+    ///
+    /// `stick_y` is the only one that is not a pass-through, and it is the whole
+    /// point of this test: pushing the stick up pitches the nose down, measured
+    /// off the original in PPSSPP. This test asserted a pass-through until that
+    /// measurement existed.
     #[test]
-    fn the_axes_pass_through_unchanged() {
+    fn the_axes_pass_through_except_the_inverted_pitch() {
         let snapshot = InputSnapshot {
             stick_x: -0.5,
             stick_y: 0.25,
@@ -80,7 +99,7 @@ mod tests {
         };
         let controls = ship_controls(&snapshot);
         assert_eq!(controls.steer_x, -0.5);
-        assert_eq!(controls.steer_y, 0.25);
+        assert_eq!(controls.steer_y, -0.25, "stick up is nose down");
         assert_eq!(controls.airbrake_left, 1.0);
         assert_eq!(controls.airbrake_right, 0.5);
     }

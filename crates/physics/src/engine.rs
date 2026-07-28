@@ -474,7 +474,7 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
     }
 }
 
-/// The pitch axis, as a body-local pitch contribution.
+/// The pitch axis, as a body-local pitch torque.
 ///
 /// ```text
 /// p = controls.pitch * (grounded ? pitch_ground : pitch_air)
@@ -484,18 +484,38 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
 /// there is no ramp and no state. The `grounded` test here is the **boolean**
 /// contact flag rather than the 0/0.5/1 fraction, and it is the previous frame's.
 ///
-/// **Not implemented:** the gate at `FUN_088492bc`, which was not decoded, so pitch
-/// input applies unconditionally; and the per-team in-air pitch bias at
-/// `stats_base + 0x90`, which sits outside every class block and whose XML element
-/// is not known, so there is no field in [`Handling`] to read it from.
+/// **Not implemented:** the per-team in-air pitch bias at `stats_base + 0x90`,
+/// which sits outside every class block and whose XML element is not known, so
+/// there is no field in [`Handling`] to read it from. The gate at `FUN_088492bc`
+/// is also not implemented and was never decoded, but it has now been *observed*
+/// not to fire in the ordinary case: a grounded craft standing still on the start
+/// line pitches the moment the axis is held, in
+/// `data/traces/talons-junction-pitch-both-ways.csv`.
 ///
-/// The sign convention is **not settled**: [`ShipControls::steer_y`] is documented
-/// as positive nose up, and the original's axis polarity for this specific term was
-/// not read. Handedness itself is settled -
-/// `docs/ghidra/functions/psp-pulse/engine.md` measured the original's basis as
-/// positively oriented under the ordinary cross product - but that measurement was
-/// about steering, not pitch, and does not by itself pin this term's polarity.
-/// Taken as-is, a guess awaiting M3.
+/// # The scale and the sign, both measured
+///
+/// Two things this used to get wrong, each recorded at the time as a guess
+/// awaiting M3 and each now read out of the running game by probing the control
+/// block the original's own `Ship_UpdatePitch` reads, `*(craft+0x78) + 0x10`:
+///
+/// - **The axis is on the `0..=100` control scale, not `-1..=1`.** `up` on the
+///   d-pad writes exactly `-100` there and the analog stick's full deflection
+///   writes `98.2`-`98.8`, which is the PSP's own byte quantisation of the same
+///   thing. That is the same [`crate::controls::CONTROL_RANGE`] the steering axis
+///   is on - steering reaches it through its ramp, and pitch, having no ramp,
+///   has to be scaled here. Without it this term was **100x** weak.
+/// - **The axis is negative-nose-up.** `up` on the d-pad writes `-100` and the
+///   recorded forward row goes **down**; `down` writes `+100` and the nose
+///   rises, each held for 120 ticks. That inversion is a *control binding*, not
+///   a property of this term, so it lives in `oag_gameplay::ship_controls`
+///   where the stick is mapped: [`ShipControls::steer_y`] stays
+///   positive-nose-up and this expression stays the shape the original has.
+///
+/// The old note here said the handedness measurement "was about steering, not
+/// pitch, and does not by itself pin this term's polarity", which was right - so
+/// the polarity was measured on its own rather than inferred from it. Confidence
+/// **90**: one binary and one emulator version, but the field is read directly
+/// and the d-pad and the analog stick agree on it.
 #[must_use]
 pub fn pitch(controls: &ShipControls, handling: &Handling, grounded: bool) -> f32 {
     let gain = if grounded {
@@ -504,7 +524,7 @@ pub fn pitch(controls: &ShipControls, handling: &Handling, grounded: bool) -> f3
         handling.pitch.pitch_air
     };
 
-    controls.steer_y * gain
+    controls.steer_y * crate::controls::CONTROL_RANGE * gain
 }
 
 #[cfg(test)]
@@ -790,19 +810,55 @@ mod tests {
         assert_eq!(steering(&state, &handling), -normal);
     }
 
+    /// The gains, on the control scale the axis was measured to be on.
+    ///
+    /// The expected value carries [`crate::controls::CONTROL_RANGE`] and a
+    /// The expected value carries [`crate::controls::CONTROL_RANGE`], which is a
+    /// measurement rather than bookkeeping: the original's pitch axis reads
+    /// `+/-100`, not `-1..=1`. See [`pitch`]. This test previously asserted the
+    /// bare gain and passed while the term was 100x weak.
     #[test]
     fn the_pitch_axis_uses_a_different_gain_on_the_ground_than_in_the_air() {
         let handling = test_handling();
-        let controls = ShipControls {
+        let nose_up = ShipControls {
+            steer_y: 1.0,
+            ..ShipControls::default()
+        };
+        let scale = crate::controls::CONTROL_RANGE;
+
+        assert_eq!(
+            pitch(&nose_up, &handling, true),
+            scale * handling.pitch.pitch_ground
+        );
+        assert_eq!(
+            pitch(&nose_up, &handling, false),
+            scale * handling.pitch.pitch_air
+        );
+    }
+
+    /// A nose-up request must produce a positive body-local pitch torque.
+    ///
+    /// `oag_physics`' body frame is right-handed on `(x right, y up, z back)` and
+    /// forward is `-Z`, so `omega = +k * x` swings the nose toward `+up`. The
+    /// original's own chain agrees through a different convention: `down` on the
+    /// d-pad writes `+100` to the pitch axis, that lands in the game-side
+    /// accumulator, and the game's basis advance (`e' = e x omega`) tips its
+    /// forward row up. Both routes say the sign of this term is the sign of "nose
+    /// up", which is what the assertion below is.
+    #[test]
+    fn a_nose_up_request_pitches_the_nose_up() {
+        let handling = test_handling();
+        let nose_up = ShipControls {
             steer_y: 1.0,
             ..ShipControls::default()
         };
 
-        assert_eq!(
-            pitch(&controls, &handling, true),
-            handling.pitch.pitch_ground
+        assert!(
+            pitch(&nose_up, &handling, false) > 0.0,
+            "steer_y is documented positive nose up, so this must be a positive \
+             body-local pitch torque; got {}",
+            pitch(&nose_up, &handling, false)
         );
-        assert_eq!(pitch(&controls, &handling, false), handling.pitch.pitch_air);
     }
 
     #[test]
