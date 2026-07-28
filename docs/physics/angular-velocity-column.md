@@ -375,6 +375,35 @@ already said. The consequence for
 validated on pitch, on these captures, and the axis to validate it on is the one
 where the identity is exact.
 
+### The lap re-flown with the column: it is not speed, it is one stretch of track
+
+`data/traces/talons-junction-time-trial-lap-omega.csv` is the completed lap
+re-taken with `omega_*` present (3,140 ticks, 2,969 clean intervals, 0-157
+units/s), and it settles the question this section could only narrow. Both
+identities, pooled over that lap:
+
+| identity | pitch | yaw | roll |
+| --- | ---: | ---: | ---: |
+| `body+0x160 = I * body+0x150` | `1.192x` (83.1 %) | `0.970x` (99.5 %) | `0.931x` (87.7 %) |
+| `body+0x150 = -omega(basis)` | `0.200x` (21.3 %) | `0.9994x` (99.9 %) | `0.642x` (61.9 %) |
+
+**The first row is the one that survives, so the excess is between `+0x150` and
+the basis** - a rotation the integrator did not perform, not a second writer of
+the momentum column. And it is localised, not general: dropping the intervals
+where the craft is banked past `up.y = 0.85` - Talon's Junction has an
+**inverted section**, ticks 1,072-1,329, `up.y` reaching `-0.99994` - the second
+row reads `0.761x` / `0.9996x` / `0.924x` and the composite
+`avel = -I * omega(basis)` reads `0.926x` / `0.992x` / `0.918x`. Inside that
+stretch, `99.9 %` of the tilt rotation never touches either column.
+
+Two consequences for this page. The identities above are **not** overturned -
+they hold on ordinary track at racing speed, not only at the 84 units/s these
+captures reach. And the tensor gets a third independent confirmation of its yaw
+entry (`0.992x`, 99.9 % explained, on 2,693 intervals at a median 110 units/s),
+while the two attitude entries are confirmed to `8 %` rather than refuted.
+Numbers, method and the three refuted alternatives are in
+[cornering-ground-truth.md](cornering-ground-truth.md#the-refutation-is-scoped-the-inverted-section-was-carrying-it).
+
 ## The crate is on this model now, and what that measured
 
 `oag-physics` used to route the angular accumulators as angular *accelerations*

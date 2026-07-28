@@ -460,6 +460,18 @@ the *game* agrees a lap happened rather than the spline arithmetic agreeing with
 itself. On the committed lap it read **`Lap 2 of 3`, `best 1.11.08`** at tick
 3,087.
 
+**A compositor screenshot can hand you the PREVIOUS one.** `niri msg action
+screenshot-window --write-to-disk false` puts the image on the Wayland
+clipboard and the `wl-paste` that follows reads whatever is there *now*: if the
+copy has not landed yet, the file written is the last thing that was copied,
+with no error anywhere. Measured on the `omega_*` lap - the shot labelled
+`lap1-tick03084.png` came out as a **`TRACK SELECT` menu** from a previous
+session, and the one labelled `end-tick03140.png` held the lap-boundary frame.
+So the whole `--shot-dir` series can be one grab behind and one of them can be
+arbitrarily stale. When a shot is the evidence, take it deliberately -
+`wl-copy --clear`, screenshot, sleep, `wl-paste` - and sanity-check that the
+image is even in-game before reading a lap counter off it.
+
 **The game's own race clock does not run on emulated frames.** Two laps of nearly
 identical length - 3,069 and 3,087 ticks, both 51.2 s at 59.94 Hz - were timed by
 the game at `0.50.25` and `1.11.08`. Whatever it counts, it is not the frames the
@@ -561,6 +573,17 @@ does: `throttle` reads 0 on rows 0 and 1 and 100 from row 2. Those two rows are 
 feature - they are the only rows in any capture where the craft is at rest under
 its own hover, and `trace-force-balance.py` drops the first of them because
 rolling resistance normalises a velocity that is exactly zero there.
+
+**The column set has grown twice since, and the same rule bit twice.** The
+angular *velocity* `body+0x150` (`omega_x/y/z`) was added after the first
+completed lap was captured, so that lap could not tell a wrong inertia tensor
+from a second rotation source and the lap had to be **re-flown**, which cost
+2 minutes 21 of capture and answered the question outright (see
+[cornering-ground-truth.md](../physics/cornering-ground-truth.md#the-refutation-is-scoped-the-inverted-section-was-carrying-it)).
+The lesson is cheap to act on: adding a column to
+`scripts/psp_trace_fields.py` costs nothing at capture time, so add the one you
+might want rather than the one you need. `craft+0x280` is the next such column
+and is still not recorded.
 
 **Every capture taken before 2026-07-28 predates five columns** - the angular
 velocity at `body+0x160` (`avel_x/y/z`) and the two engine-gate timers

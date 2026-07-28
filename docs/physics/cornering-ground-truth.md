@@ -1,7 +1,10 @@
 # Cornering, measured against the original
 
 **Status: the lateral axis is resolved and the yaw accumulator is closed
-term by term. Pitch and roll are refuted and open.**
+term by term. The pitch/roll refutation is
+[scoped to one stretch of track](#the-refutation-is-scoped-the-inverted-section-was-carrying-it)
+by a second lap that records `body+0x150`, and what is left of it is localised
+rather than general.**
 
 [force-balance-ground-truth.md](force-balance-ground-truth.md) settled the
 forward axis on straight-line captures and closed on a wall-friction
@@ -473,6 +476,108 @@ coherently" cannot be validated on pitch and roll from any existing capture. The
 capture that would settle it in one run is described under
 [what to do next](#what-to-do-next).
 
+## The refutation is scoped: the inverted section was carrying it
+
+That capture was taken. `data/traces/talons-junction-time-trial-lap-omega.csv`
+is the same scenario re-flown by `scripts/psp-autopilot.py` with `body+0x150`
+in the column set - 3,140 ticks, 2,969 clean intervals (94.6 %), 0 to 157
+units/s, the game's own HUD reading `Lap 2 of 3` afterwards. The first thing it
+does is **reproduce the table above**, which is what makes the rest of it
+comparable: `0.2313` / `0.9692` / `0.6543` against the old lap's `0.231` /
+`0.970` / `0.647`, on a different run of the same circuit.
+
+With `body+0x150` recorded, that one composite splits into two identities that
+can be measured separately, and they answer the question this page left open:
+
+| | identity | what a failure means |
+| --- | --- | --- |
+| (A) | `body+0x160 = I * body+0x150` | a second writer of the momentum column |
+| (B) | `body+0x150 = -omega(basis)` | the basis is rotated outside the integrator |
+| (C) | `body+0x160 = -I * omega(basis)` | (A) times (B) - all the old lap could see |
+
+Pooled over the whole lap, **(A) roughly holds and (B) is what breaks**: pitch
+`1.192` / yaw `0.970` / roll `0.931` on (A), against pitch `0.200` / yaw
+`0.9994` / roll `0.642` on (B). So the excess rotation is **not** in the angular
+velocity column - it is between that column and the basis.
+
+**But the pooled number is the wrong instrument, and this is the correction.**
+Partitioning by `up.y` - a recorded column, independent of everything being
+fitted, so this is not "sort by residual and find the residual" - the failure is
+not spread across the lap at all:
+
+| `up.y` | n | (A) pitch, yaw, roll | (B) pitch, yaw, roll |
+| ---: | ---: | --- | --- |
+| 0.99-1.01 | 1,879 | `1.036` `0.998` `0.991` | `0.892` `1.000` `1.005` |
+| 0.97-0.99 | 436 | `1.077` `0.989` `0.914` | `0.812` `0.999` `0.980` |
+| 0.93-0.97 | 202 | `1.237` `0.978` `0.951` | `0.706` `1.001` `0.869` |
+| 0.85-0.93 | 176 | `1.551` `0.965` `1.065` | `0.687` `0.998` `0.767` |
+| below 0.85 | 119 | `0.291` `0.804` `0.555` | `0.032` `0.999` `0.034` |
+
+**Talon's Junction has an inverted section**, and the lap goes through it: ticks
+1,072-1,329 hold `up.y` down to `-0.99994` while `pos_y` climbs. Drop the
+intervals below `up.y = 0.85` - 276 of 2,969, under a tenth of the lap - and the
+composite identity this page reported as *refuted* reads
+
+| axis | (C) `avel / -I*omega(basis)` | % explained |
+| --- | ---: | ---: |
+| pitch (right) | `0.926` | 66.4 |
+| yaw (up) | `0.992` | 99.9 |
+| roll (forward) | `0.918` | 91.2 |
+
+- within `8 %` on both attitude axes, against `0.231` and `0.647` pooled. A
+least-squares fit weights by amplitude, and the inverted stretch rotates at
+`1.21` rad/s of tilt against `0.29` on the rest of the lap, so a tenth of the
+samples carried the whole result.
+
+**Inside that stretch the basis rotation is essentially unrecorded**: (B) reads
+`0.023` on pitch and `0.110` on roll while yaw still reads `0.998`, and the
+residual `omega(basis) + body+0x150` is `1.186` rad/s rms against a measured
+tilt of `1.209` - **99.9 % of the tilt rotation there passes the angular
+velocity column by**, with the yaw component untouched.
+
+Three alternative explanations were tested and refuted rather than argued away:
+
+1. **A frame confusion.** Fitting `body+0x150` against the *world*-frame
+   rotation instead of the body-frame one explains `0.1 %` on pitch and `0.9 %`
+   on roll, against `21 %` and `62 %` for body-frame - the columns are
+   body-local, including through the inverted section.
+2. **A one-tick pairing error.** `omega` at tick `i`, at `i + 1`, or their mean
+   move the (B) pitch ratio by `0.198` / `0.197` / `0.198` - under 1 %.
+3. **A restoring spring.** If the extra rotation were proportional to the
+   misalignment `cross(up, normal)` it would explain the residual; it explains
+   `1.9 %`. The ship's `up` sits a median `1.6` degrees off the track's own
+   surface normal (max `9.6`), so there is barely any misalignment to restore.
+
+What does fit is **slaving**: over the whole lap the ship's `up` tilts at
+`0.906x` the rate the *track's own surface normal* turns as the craft drives
+along it (72.1 % explained), and the unaccounted residual is `0.713x` that same
+rate (70.2 %). Outside the inverted section the residual falls to `0.206x`
+(20.9 %) - i.e. on ordinary track most of the surface-following rotation *does*
+go through the momentum column, as a hover torque should, and only the inverted
+stretch is driven around it.
+
+**So the answer to this page's open question is (B), localised**: something
+rotates the basis directly, outside `Body_Integrate`, and on this circuit it is
+concentrated where the craft is held inverted. `Ship_UpdateMagLock` is the
+obvious suspect and is *not* claimed here - it has been read only far enough to
+know it renormalises a vector to its original magnitude
+([rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md)), and no
+instruction has been read writing the basis outside the integrator.
+Confidence **88** on the split ((A) holds, (B) breaks), **85** on the scoping to
+the inverted section, **45** on any attribution to a named function.
+
+Reproduce all of it with, and note that no handling values are needed - every
+fit here is kinematic:
+
+```sh
+cargo run -q -p oag-trace -- track --source data/images/pulse-psp-usa.chd > /tmp/spline.csv
+uv run scripts/trace-omega-identity.py \
+    data/traces/talons-junction-time-trial-lap-omega.csv --spline /tmp/spline.csv
+uv run scripts/trace-omega-identity.py \
+    data/traces/talons-junction-time-trial-lap-omega.csv --spline /tmp/spline.csv \
+    --min-up-y 0.85          # the same lap without the inverted section
+```
+
 ## What this page confirms, refutes and leaves open
 
 | Claim | Verdict | Confidence |
@@ -488,8 +593,11 @@ capture that would settle it in one run is described under
 | airbrake forward drag `fs * \|L-R\| * drag * \|steerX\| * 1e-5` | confirmed at `1.03`-`1.07`, up from a ~55 magnitude check | 88 |
 | airbrake lateral `fs * Airbrake.amount * (R-L)` | confirmed at `0.9565 +/- 0.009` | 85 |
 | `I_yy = 21.6` from `Body_SetBoxInertia` | confirmed at racing speed, `0.970x` | 90 |
-| `avel = -I * omega` on pitch and roll | **refuted**, `0.231x` and `0.647x` | 85 |
-| the excess pitch/roll rotation is attitude alignment | open, signature fits | 70 |
+| `avel = -I * omega` on pitch and roll, pooled over a whole lap | **refuted**, `0.231x` and `0.647x` - reproduced on a second lap at `0.231x` / `0.654x` | 88 |
+| ...but the refutation is general rather than localised | **refuted** by the `body+0x150` lap: outside the inverted section it reads `0.926x` and `0.918x` | 85 |
+| the break is between `body+0x150` and the basis, not in the momentum column | confirmed: (A) `1.19`/`0.97`/`0.93`, (B) `0.20`/`0.9994`/`0.64` | 88 |
+| the excess pitch/roll rotation is attitude alignment | open, and now measured against the track's own normal: `0.713x` its turn rate, 70 % explained; a misalignment spring explains 1.9 % | 75 |
+| the excess is a wrong frame, a pairing error, or noise | **refuted**: world-frame explains 0.1-0.9 %, pairing moves it under 1 % | 90 |
 | the weathervane coefficient is `-0.1` | open, fits at `0.40 +/- 0.14`, term too small to pin | 50 |
 | the bank-to-yaw coefficient is `30` | open, fits at `0.60`, `magLockBlend` not captured | 45 |
 | speed pads are a sustained force, not an impulse | confirmed, 5 windows of 19-22 ticks at ratio `1.0000` | 80 |
@@ -498,15 +606,15 @@ capture that would settle it in one run is described under
 
 ## What to do next
 
-1. **Capture `body+0x150` and `craft+0x280`.** One added column each settles the
-   two open questions on this page outright: `body+0x150` *is* the angular
-   velocity by definition, so recording it says immediately whether the basis
-   advance uses `I^-1 * body+0x160` or something else, and `craft+0x280` is the
-   only escape the bank-to-yaw term has. Both are single entries in
-   `scripts/psp_trace_fields.py`'s `BODY_FIELDS`/`CRAFT_FIELDS`. This is the
-   cheapest high-value capture change available, and it is a prerequisite for
-   [Task #18](../../HANDOVER.md), not a nice-to-have: the momentum model cannot
-   be validated on pitch and roll until it is done.
+1. ~~**Capture `body+0x150`.**~~ **Done** - see
+   [the scoping above](#the-refutation-is-scoped-the-inverted-section-was-carrying-it).
+   `craft+0x280` is still not captured, and it remains the only escape the
+   bank-to-yaw term has; it is a single entry in
+   `scripts/psp_trace_fields.py`'s `CRAFT_FIELDS`.
+   The follow-on the `omega_*` lap opens is an **RE** job rather than a capture
+   one: find what writes the basis outside `Body_Integrate`, starting from
+   `Ship_UpdateMagLock`, since the residual is concentrated in the inverted
+   section a mag-lock would hold the craft through.
 2. **Capture an airborne stretch.** `grip_air` and the airborne branches of the
    quadratic drag and vertical damping are all untested by every capture in
    `data/traces/` - this lap has 7 half-grounded ticks and no fully airborne

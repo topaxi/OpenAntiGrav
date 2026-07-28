@@ -301,6 +301,35 @@ the standing complaint in [`oag-game.md`](oag-game.md) that no capture has more
 than 60 consecutive wall-free ticks: the force law now has a clean, *cornering*
 straight to be measured on, which no previous capture provided.
 
+### The second lap, taken for one column
+
+`data/traces/talons-junction-time-trial-lap-omega.csv` is the same scenario
+flown again on 2026-07-28, by the same command, for one reason: the file above
+predates the `omega_*` (`body+0x150`) columns and **a capture cannot be
+backfilled** - it is a driven session, not a build step. The old lap is kept;
+the two are independent runs of one circuit and the overlap between them is the
+provenance check that made the re-capture worth doing.
+
+| | first lap | with `omega_*` |
+| --- | ---: | ---: |
+| ticks | 3,146 | 3,140 |
+| clean intervals | 2,996 (95.2 %) | 2,969 (94.6 %) |
+| speed range | 90-164 u/s | 0-157 u/s, median 110 |
+| the game's own HUD afterwards | `Lap 2 of 3` | `Lap 2 of 3` |
+| `avel = -I * omega(basis)`, pitch/yaw/roll | `0.231` `0.970` `0.647` | `0.231` `0.969` `0.654` |
+
+That last row is the point: two separate laps, flown an unknown number of hours
+apart from different craft addresses, agree on a kinematic fit to the third
+decimal. The new lap's own finding - the identity breaks between `body+0x150`
+and the basis, and does so almost entirely in the track's **inverted section** -
+is in
+[cornering-ground-truth.md](../physics/cornering-ground-truth.md#the-refutation-is-scoped-the-inverted-section-was-carrying-it).
+
+Its input script was **not** committed. The one in `verification/scenarios/` is
+the first lap's, it is what every existing comparison is quoted against, and a
+second bang-bang recording of the same circuit adds nothing a scenario file is
+for. The trace is the artefact here.
+
 ### The lap does not replay into the emulator, and why
 
 The obvious follow-up was run, and it failed, which is worth more than not
