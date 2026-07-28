@@ -346,6 +346,16 @@ What that capture reads: 200 ticks, `dt` mean 0.016684 (59.94 Hz, min 0.016316,
 max 0.017029), speed 23.6 to 25.1, 78.0 units travelled, `throttle` a flat 100,
 and `cross(row0, up) = forward` on 200 of 200 ticks.
 
+**Every capture taken before 2026-07-28 predates five columns** - the angular
+velocity at `body+0x160` (`avel_x/y/z`) and the two engine-gate timers
+`craft+0x290` and `craft+0x2e0` - and none of them can be backfilled, because a
+capture is a hand-driven session rather than a reproducible build step.
+`oag-trace` reads those columns when they are there and reports them as *not
+compared* when they are not, so the old files stay usable; but the questions they
+were added for - what the yaw rate actually does frame by frame, and whether the
+engine gate fired at all - need the scenario re-taken. Re-taking it is the two
+commands above, unchanged: the columns come along on their own.
+
 **One crash worth knowing.** PPSSPP v1.20.4 died twice on the Vulkan backend
 while confirming the track for a Time Trial - process gone, last log line an
 unrelated `sceKernelDeleteSema` warning. A third attempt on the same build and

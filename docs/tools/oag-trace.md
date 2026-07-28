@@ -249,16 +249,114 @@ can be made to pass.
 | Orientation | 1e-4 rad, as the angle between the axes | `orientation.row0`, `.up`, `.forward` |
 | Velocity | 1e-3 relative | `velocity`, `speed`, `speed_cached` |
 | Control states | 1e-3 relative | `throttle`, `brake`, `steer`, `airbrake_l`, `airbrake_r` |
+| Angular velocity | 1e-4 rad/s absolute **and** 1e-3 relative | `angular_velocity` |
+| Timers | 1e-3 s absolute | `stun_timer` |
 | Discrete | **exact** | `grounded` |
 
-Control states are not in the protocol's table, which predates the capture
-format; comparing them at the velocity tolerance is a provisional choice.
+Control states, angular velocity and timers are not in the protocol's table,
+which predates the capture format; each row above records the choice rather than
+hiding it in a constant. Angular velocity is relative for the same reason linear
+velocity is - it integrates into the attitude. Timers are compared absolutely
+because they are floats decremented by a variable `dt`, so the protocol's
+"timers, counters: exact" row, which is about integers, cannot apply; `1e-3` s is
+about a sixteenth of a frame, so a timer running a whole frame long is a
+divergence.
 
 Two absolute floors exist and are **off by default**: `--velocity-absolute` and
 `--control-absolute`. A purely relative test has no meaning when both sides are
 near zero - on a standing start a simulated `1e-9` against a recorded `0` is a
 relative error of 1 - so raising them is a deliberate widening of the protocol
 and should be said out loud wherever the result is quoted.
+
+**`--angular-velocity-absolute` is the exception and defaults to `1e-4` rad/s**,
+because that degenerate case is not an edge for this field but its normal state:
+a straight-line capture records an angular velocity of *exactly* zero on every
+tick, and a purely relative test would report tick 0 of every straight capture as
+the divergence and bury the real one. At 60 Hz, `1e-4` rad/s integrates to
+`1.7e-6` rad of attitude per tick - a sixtieth of the orientation tolerance - so
+the floor cannot hide an orientation divergence behind an angular-velocity one.
+
+### A field that is not in the trace is *not compared*
+
+Captures cannot be re-taken: each one is a hand-driven PPSSPP session, so a
+column added today can never be backfilled into a file recorded last week. The
+columns below are therefore read when present and left **absent** when not, and a
+field that either side is missing is reported as `not compared` rather than
+compared against a zero:
+
+```
+angular_velocity                -         -            -         -  not compared (no column in one or both traces)
+```
+
+Absent is not zero. A zero angular velocity is a claim that the ship was not
+rotating, and a comparison that passes because it never looked is the one thing
+this tool must never do.
+
+| Column | Read from | Present since |
+| --- | --- | --- |
+| `avel_x`, `avel_y`, `avel_z` | `body+0x160` | the angular-velocity pass |
+| `stun_timer` | `craft+0x290` | the same |
+| `timer_2e0` | `craft+0x2e0` | the same; captured, never compared - nothing on our side models it |
+
+## The angular velocity, and the four readings of it
+
+`body+0x160` rests on two legs, one per binary: PSP `Body_ClearVelocity`
+(`0x0884da5c`) zeroes `body+0x140` and `body+0x160` and nothing else, and
+`+0x140` is the linear velocity the capture already verifies against the position
+delta; PS2 `Ship_ApplyAngularDamping` (`0x0015c1b0`) reads `body+0x160` as the
+angular velocity it damps.
+
+**Its sign and its frame are both open**, and the raw value is what is recorded:
+
+- *Sign.* [`craft-update.md`](../ghidra/functions/ps2-pulse/craft-update.md)
+  derives `w_game = -w_physics` on three independent legs. That is a result about
+  the accumulators; that the stored velocity carries the same convention is the
+  obvious reading and not a measured one.
+- *Frame.* The same page names the field `angularVelocityLocal` and then lists
+  which frame it is expressed in as unresolved;
+  [`engine.md`](../ghidra/functions/psp-pulse/engine.md) caps the local/world
+  split of the angular accumulators at confidence 74.
+
+Two binary questions, so `--angular` takes four values: `negated-local` (the
+default), `local`, `negated-world`, `world`.
+
+**`oag-trace show` settles it, without a simulation.** An orthonormal basis
+recorded on two consecutive ticks determines the rotation between them - for a
+rotation of angle `t` about `n`, `sum cross(row_i, row_i')` is exactly
+`2 n sin(t)` - so the column can be checked against the rows sitting beside it in
+the same file. `show` scores all four readings against that derivative and prints
+them best first:
+
+```
+angular velocity: 200/200 tick(s), rms 1.5103 rad/s
+  against the basis derivative, best first: negated-local 0.0021, local 3.0204, ...
+```
+
+One reading an order of magnitude below the other three has answered both
+questions at once. A level ship separates only the sign - a rotation about the
+world `+y` axis with the body's up along `+y` reads the same local or world - so
+the reading is best taken from a capture with some roll or pitch in it.
+
+## The stun timer, and why it is in the capture
+
+`craft+0x290` above zero means the frame produced **no thrust and no lateral
+grip**: `Ship_UpdateEngine`'s prologue returns having zeroed the throttle state
+(`0x0884c634`, confidence 88) and `Ship_ApplyLateralGrip` returns early
+(`0x08848b78`). `Ship_ApplyCollisionImpulse` (`0x0883f274`) arms it with `+= 0.5`
+on a hit, so it is also the cheapest wall-contact indicator the documented craft
+fields offer.
+
+That matters for the force balance: a straight-line capture with a nonzero count
+here is a *stunned* ship coasting, and its speed is not an equilibrium of the
+engine force law at all. `show` reports the count:
+
+```
+stun timer: armed on 34/200 tick(s) - the original produced no thrust and no lateral grip there
+```
+
+`craft+0x2e0` is the second gate on the same early return and is captured
+alongside it, because the arithmetic can say the return was taken and not which
+arm fired. What arms it has never been read, so it keeps its offset for a name.
 
 ## The two conventions that have to be reconciled
 
@@ -288,8 +386,11 @@ A run starts from the recording's first row: position, basis, velocity and the
 five control states. Four things are not in the capture and are therefore not
 replayed, rather than being invented:
 
-- **Angular velocity.** A run starts with the rotation at rest, so capture on a
-  straight, not in a corner.
+- **Angular velocity**, *for a capture taken before the `avel_*` columns
+  existed*. Those runs start with the rotation at rest, so capture on a straight,
+  not in a corner. A capture that has the columns seeds the body's rotation from
+  its first row like every other initial condition, under whichever `--angular`
+  reading is chosen - and nothing is filled in for the older files.
 - **Pitch.** The craft's control block holds `steer` and no second axis, so
   `steer_y` is always zero.
 - **`time_since_landing` and the leap timer.** A run starts outside the landing
@@ -317,6 +418,7 @@ disc exactly as `oag-game` reads them.
 | `--steer`, `--airbrake-left`, `--airbrake-right` | Hold an axis for the whole run |
 | `--fixed-dt` | Step at our own 60 Hz instead of the recording's own frame times |
 | `--basis` | `left-up-forward` (default) or `right-up-back` |
+| `--angular` | What the recorded angular velocity means: `negated-local` (default), `local`, `negated-world`, `world` |
 | `--no-collision` | Ignore the track's geometry: a ship with nothing to hover on |
 | `--out <path>` | Write the simulated trace, in the same columns |
 

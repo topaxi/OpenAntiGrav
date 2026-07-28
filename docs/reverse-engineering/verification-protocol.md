@@ -55,7 +55,11 @@ to hold", and the second compares a run against itself.
 Per tick, per ship:
 
 - Position, orientation, linear and angular velocity
+  (angular velocity from `body+0x160`, in the original's own sign and frame -
+  both open, see [`oag-trace`'s page](../tools/oag-trace.md))
 - Speed, thrust, airbrake state
+- The two engine gates, `craft+0x290` (collision stun) and `craft+0x2e0`, which
+  between them decide whether the original produced any thrust at all that frame
 - Shield energy, held weapon, weapon timers
 - Current track section, lap and split times
 - Race position
@@ -75,6 +79,8 @@ Provisional tolerances, to be revised once real measurements exist:
 | Position | 0.01 units absolute, or 1e-4 relative | Below perceptibility at track scale |
 | Orientation | 1e-4 radians | Below one pixel of visible rotation |
 | Velocity | 1e-3 relative | Integrates into position, so tighter than position |
+| Angular velocity | 1e-4 rad/s absolute **and** 1e-3 relative | Integrates into orientation. The absolute floor is not optional here the way it is for linear velocity: a straight-line capture records *exactly* zero, and a purely relative test would call every straight capture divergent on tick 0. At 60 Hz the floor is a sixtieth of the orientation tolerance per tick, so it cannot mask one. |
+| Float timers | 1e-3 s absolute | About a sixteenth of a frame. The row below is about *integers*; `craft+0x290` and `craft+0x2e0` are floats decremented by a variable `dt`, so exact agreement is not achievable. |
 | Timers, counters | **exact** | Integers. Any difference is a bug. |
 | PRNG state | **exact** | Integers. Any difference means desync. |
 | Discrete state | **exact** | Race phase, weapon held, lap number. |
