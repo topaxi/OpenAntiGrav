@@ -1059,6 +1059,40 @@ open-loop lap is back on the track for its whole length.** Gate 826 tests;
   line on rigid-body.md (the naming agent had shut down) - added
   centrally; `apply-ghidra-names.py --dry-run` is 198/0/0.
 
+**`emu-harness` (Task #25, commit "physics: update omega identity analysis
+and refine pitch/roll findings"): the lap re-captured with `omega_*`, and
+the pitch/roll "refutation" collapses to the track's INVERTED SECTION.**
+
+- New capture `talons-junction-time-trial-lap-omega.csv` (3,140 ticks,
+  94.6 % clean, lap verified from the HUD; old lap and committed scenario
+  kept - every existing comparison stays quoted against the first lap).
+  **Provenance is now two-run**: the new lap reproduces the old lap's
+  composite fits to the third decimal.
+- **The excess rotation is NOT in the omega column.** Split identities:
+  `avel = I * omega` roughly holds (1.192/0.970/0.931); `omega = -w(basis)`
+  breaks (0.200/0.9994/0.642). Something rotates the basis outside the
+  integrator; there is no second writer of the momentum column.
+- **The pooled number was the wrong instrument.** Partitioned by the
+  recorded `up.y`: Talon's Junction has an inverted section (ticks
+  1,072-1,329, `up.y` to -0.99994) tilting at 1.21 rad/s vs 0.29
+  elsewhere - 9 % of samples carried the whole "0.231x/0.647x" result.
+  **Outside it the identity reads 0.926 pitch / 0.992 yaw / 0.918 roll**
+  at 90-160 u/s - the momentum model's pitch/roll half is right to 8 %
+  on ordinary track. Three alternatives refuted by measurement
+  (world-frame, one-tick pairing, misalignment spring); what fits is
+  **slaving**: the ship's `up` tilts at 0.906x the rate the track's own
+  surface normal turns along the path (72 % explained). The
+  attitude-alignment attribution moves 70 -> 75; `Ship_UpdateMagLock` is
+  the named suspect for the inverted stretch and explicitly NOT claimed
+  (45, no instruction read). **The crate has no equivalent of this
+  basis-rotating mechanism at all** - that, not the tensor, is the
+  remaining attitude gap.
+- New analysis script `scripts/trace-omega-identity.py` (kinematic only).
+  New trap recorded in ppsspp-debugger.md: **a niri screenshot +
+  `wl-paste` can silently return the PREVIOUS clipboard image** - one lap
+  "verification" shot came out as a menu from an earlier session; check
+  the image is what it claims before citing it.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
