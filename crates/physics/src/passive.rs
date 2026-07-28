@@ -12,21 +12,29 @@
 //! in the PSP `BOOT.BIN` and forms, gated on `forwardSpeed > 0`:
 //!
 //! ```text
-//! |airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * forwardSpeed
+//! forward * |airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 1e-5 * forwardSpeed
 //! ```
 //!
-//! at `0x0884ccc8`-`0x0884cd08`. Confidence 85, read from the instruction stream.
+//! at `0x0884ccc8`-`0x0884cdb4`. Confidence 88, read from the instruction stream
+//! with the Allegrex module. **The scale is `1e-5`, not the `0.01` an earlier
+//! capstone reading recorded**: there are two literals, `0x3c23d70a` (`0.01`) at
+//! `0x0884ccf4` and `0x3a83126f` (`0.001`) at `0x0884cd78`, both applied to the
+//! same vector. The direction is `craft+0x180`, the ship's own forward axis.
 //! It belongs in [`crate::airbrake`] rather than here, and it is unimplemented:
 //! it is identically zero in both captured traces (both hold the airbrakes equal
 //! and the steering at zero), so nothing available today can verify it. A capture
 //! with *asymmetric* airbrake input is what would test it.
 //!
-//! Recorded here because this module is where someone would look for it, and
-//! because the term is **speed-proportional** - see
-//! `docs/physics/force-balance-ground-truth.md`, where a missing
-//! speed-proportional resistance is the open blocker. This is not that term (it
-//! is zero in the capture that shows the discrepancy), and conflating the two
-//! would waste the next investigation.
+//! Recorded here because this module is where someone would look for it. It used
+//! to be flagged as a candidate for the missing speed-proportional resistance
+//! `docs/physics/force-balance-ground-truth.md` tracked as the M4 blocker;
+//! **that blocker is resolved and there is no missing resistance**. The force law
+//! in this crate reproduces a real standing-start capture from `fs = 0.56` to
+//! `fs = 47.67` at rms `0.127` units of force, and the `~52`-unit deficit in the
+//! two older captures is a per-frame *velocity* reduction applied by the
+//! collision path, outside every force accumulator. So this term is still worth
+//! implementing for fidelity, and it is still zero in every capture available,
+//! but nothing hangs on it.
 //!
 //! From `docs/ghidra/functions/psp-pulse/engine.md`, "The passive terms" and the
 //! gravity paragraph. Confidence 74 to 80, decompilation only, nothing
@@ -37,11 +45,33 @@
 //! `0xbba3d70a` ([`DRAG_GROUND`]) and `0xbb03126f` ([`DRAG_AIR`]), against the
 //! `0xbe4ccccd` (`-0.2`) threshold. Those four are confidence **95**.
 //!
-//! [`ROLLING_RESISTANCE`]'s *shape* is likewise confirmed - the VFPU body of
-//! `Ship_ApplyRollingResistance` (`0x08848f4c`) runs `vdot`, `vrsq`, `vscl`, so
-//! it really does normalise and really is constant in magnitude - but its
-//! magnitude comes from a VFPU source prefix rather than a literal, and was not
-//! decoded. That one stays where it was.
+//! [`ROLLING_RESISTANCE`] is now confirmed **including its magnitude**, read out
+//! of Ghidra with the Allegrex module rather than by hand:
+//! `Ship_ApplyRollingResistance` (`0x08848f4c`) is nine instructions -
+//! `vmul.t`/`vfad.t`/`vrsq.s` to build `1/|v|`, a `vpfxs [-X,-Y,-Z,0]` on the
+//! `vscl.t` to give `-v/|v|`, and then `vadd.t C610,C610,C610`, a **self-add
+//! that doubles it**. So the magnitude is exactly `2`, with no parameter and no
+//! prefix-encoded literal anywhere. Confidence 92.
+//!
+//! # `craft+0x2ec` is `|dot(velocity, forward)|`, and that makes one branch dead
+//!
+//! `Ship_UpdateCraft` computes the cached speed at `0x0884992c`-`0x08849938` as
+//! `vdot.t` **followed by `vabs.s`**, so the field every passive term reads is
+//! non-negative. `search_instructions` over every `0x2ec(` displacement finds
+//! exactly one writer on a craft base (that store), so nothing else can make it
+//! negative. Two consequences, both implemented here:
+//!
+//! - `Ship_ApplyQuadraticDrag`'s `craft+0x2ec < -0.2` test can never be true, so
+//!   [`DRAG_REVERSING`] is **unreachable in the original**. It is kept as a
+//!   recorded constant rather than deleted, because the same `-0.1` immediate is
+//!   present in the PS2 build too and the branch exists.
+//! - The drag term is therefore `k * |forwardSpeed| * velocity` with `k < 0`, so
+//!   it is dissipative *in both directions of travel*. The worry recorded below
+//!   on [`quadratic_drag`] - that the literal form adds energy while reversing -
+//!   was an artefact of feeding it a signed speed, and is resolved.
+//!
+//! Confidence 90 on the `vabs.s`, 88 on the sole-writer negative (the scan cannot
+//! see a store through a rebased pointer, the same caveat `engine.md` records).
 
 use oag_core::math::Vec3;
 
@@ -127,6 +157,9 @@ pub const YAW_DAMPING: f32 = -5.0;
 pub const ROLL_DAMPING: f32 = -2.0;
 
 /// Vertical damping coefficient, along the ship's own up axis.
+///
+/// **Airborne only** - see [`vertical_damping`], which is scaled by
+/// `1 - grounded` and is therefore identically zero on a fully grounded craft.
 pub const VERTICAL_DAMPING: f32 = -0.25;
 
 /// Quadratic drag, as a world-space force.
@@ -139,16 +172,23 @@ pub const VERTICAL_DAMPING: f32 = -0.25;
 /// `grounded` is the **previous** frame's contact flag, and `forward_speed` is
 /// signed: `dot(velocity, forward)`.
 ///
-/// **The sign of the product is a transcription, and it is dissipative only while
-/// moving forward.** Power delivered is `|v|^2 * forwardSpeed * k`; with `k` always
-/// negative, that is negative - dissipative - exactly while `forwardSpeed > 0`, and
-/// *positive* while reversing, where the term therefore adds energy. The page's
-/// prose says reversing "multiplies drag by 20 to 50 times", which is a statement
-/// about the coefficient's magnitude and does not settle the direction. The literal
-/// form is kept, unlike the surface-alignment torque's sign, because there the page
-/// contradicted itself inside one sentence and here it does not: this is one
-/// expression with no competing description. A guess awaiting M3, and the reason no
-/// test in this crate lets a ship reverse.
+/// **`forward_speed` is the cached `craft+0x2ec`, which is `|dot(velocity,
+/// forward)|`** - see this module's header. That settles what used to be recorded
+/// here as an open sign question: with a non-negative speed and `k < 0` the power
+/// delivered, `|v|^2 * forwardSpeed * k`, is negative in *both* directions of
+/// travel, so the term is dissipative while reversing too and adds energy nowhere.
+///
+/// It also means the `forward_speed < -0.2` arm can never be taken by the
+/// original, so [`DRAG_REVERSING`] is unreachable there. The branch is kept
+/// because the immediate is genuinely in both binaries; a caller that passes a
+/// signed speed will exercise it and diverge.
+///
+/// The exact shape, from `Ship_ApplyQuadraticDrag` (`0x08848e28`): the coefficient
+/// is selected first (a four-way branch, `craft+0x2a4 == 0` taking `-0.9`), then
+/// `vscl.t C600,C200,S310` scales the **whole velocity vector** by the scalar
+/// speed and `vscl.t C600,C600,S610` by the coefficient. So the lateral components
+/// of the velocity are dragged as well; projected onto `forward` it is `k * fs^2`,
+/// which is why the along-track balance sees a quadratic.
 #[must_use]
 pub fn quadratic_drag(velocity: Vec3, forward_speed: f32, grounded: bool) -> Vec3 {
     let k = if forward_speed < DRAG_REVERSE_THRESHOLD {
@@ -229,14 +269,44 @@ pub fn angular_damping(handling: &Handling, local_angular_velocity: Vec3) -> Vec
 /// Vertical damping, as a world-space force.
 ///
 /// ```text
-/// worldForce += up * dot(up, velocity) * -0.25 * (1 - magLockBlend)
+/// worldForce += up * dot(up, velocity) * -0.25 * (1 - grounded)
 /// ```
 ///
-/// Along the ship's own up axis, not world up, and cancelled by a magstrip lock like
-/// the rest of the suspension.
+/// Along the ship's own up axis, not world up.
+///
+/// # The scale is `1 - grounded`, not `1 - magLockBlend`
+///
+/// This term is inlined in `Ship_UpdateCraft` (step 14) rather than living in a
+/// function of its own, and it was previously transcribed with the magstrip
+/// blend. It is not that field. Read at instruction level in the PSP `BOOT.BIN`:
+///
+/// ```text
+/// 08849c60  lwc1   f12,0x2b0(s0)     ; craft+0x2b0 == the 0/0.5/1 grounded fraction
+/// 08849c68  mtc1   a0,f13            ; 1.0f  (0x3f800000)
+/// 08849c6c  sub.s  f12,f13,f12       ; 1 - grounded
+/// 08849c74  mtc1   a0,f14            ; -0.25f (0xbe800000)
+/// 08849c78  mul.s  f12,f12,f14
+/// 08849c94  lv.q   C110,0x10(a1)     ; a1 == craft+0x80, so C110 == craft+0x90 == up
+/// 08849ca0  vdot.t S601,C110,C200    ; dot(up, velocity)
+/// 08849ca4  vscl.t C610,C110,S601
+/// 08849ca8  vscl.t C610,C610,S600    ; * -0.25 * (1 - grounded)
+/// 08849cac  vadd.t C300,C300,C610    ; craft+0x330, the world force accumulator
+/// ```
+///
+/// `craft+0x280` is the magstrip blend (it is what `Ship_UpdateMagLock` ramps and
+/// what the hover spring scales by); `craft+0x2b0` is the grounded fraction the
+/// hover loop rebuilds each frame. The two are distinct fields and this term reads
+/// the second one. Confidence **92**.
+///
+/// So **a grounded craft gets no vertical damping at all**, and the term only ever
+/// acts in the air or on a half-contact. A reimplementation that applied it while
+/// grounded adds an extra suspension damper the original does not have.
+///
+/// `grounded` here is **this** frame's fraction: the term runs at step 14, after
+/// hover has rewritten `craft+0x2b0` at step 8.
 #[must_use]
-pub fn vertical_damping(up: Vec3, velocity: Vec3, mag_lock_blend: f32) -> Vec3 {
-    up * up.dot(velocity) * VERTICAL_DAMPING * (1.0 - mag_lock_blend)
+pub fn vertical_damping(up: Vec3, velocity: Vec3, grounded: f32) -> Vec3 {
+    up * up.dot(velocity) * VERTICAL_DAMPING * (1.0 - grounded)
 }
 
 /// Gravity, as a world-space force.
@@ -432,10 +502,18 @@ mod tests {
         );
     }
 
+    /// `Ship_UpdateCraft`'s inline step 14 scales by `1 - craft+0x2b0`, so a craft
+    /// on both hover points gets nothing from this term at all.
     #[test]
-    fn a_magstrip_lock_cancels_the_vertical_damping() {
-        let damped = vertical_damping(Vec3::Y, Vec3::new(0.0, -10.0, 0.0), 1.0);
-        assert_eq!(damped, Vec3::ZERO);
+    fn a_grounded_craft_gets_no_vertical_damping() {
+        let falling = Vec3::new(0.0, -10.0, 0.0);
+        assert_eq!(vertical_damping(Vec3::Y, falling, 1.0), Vec3::ZERO);
+
+        // A half contact halves it, because the field is the 0/0.5/1 fraction
+        // rather than a flag.
+        let half = vertical_damping(Vec3::Y, falling, 0.5);
+        let airborne = vertical_damping(Vec3::Y, falling, 0.0);
+        assert_eq!(half, airborne * 0.5);
     }
 
     #[test]

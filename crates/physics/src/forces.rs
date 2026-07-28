@@ -311,10 +311,18 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let velocity = state.body.linear_velocity;
     let forward_speed = velocity.dot(forward);
 
+    // `craft+0x2ec`, the cached speed every term below reads, is the **absolute**
+    // value: `Ship_UpdateCraft` runs `vdot.t` at `0x0884992c` and `vabs.s` at
+    // `0x08849930` before storing it, and that store is the field's only writer on
+    // a craft base. Binding it here, once, is what the original does. It is a
+    // no-op for a ship moving forwards; what it changes is that a reversing ship
+    // gets drag and rolling resistance that oppose it rather than assist it.
+    let cached_speed = forward_speed.abs();
+
     let mut acc = Accumulators::default();
 
     // 1. Engine, into the local force accumulator.
-    let engine_force = engine::engine(state, handling, control_grounded, forward_speed);
+    let engine_force = engine::engine(state, handling, control_grounded, cached_speed);
     acc.local_force += engine_force.as_local_force();
 
     // 2. Brakes. Called only while the contact flag is set, so groundedness gates the
@@ -328,7 +336,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     // 3. Airbrakes. The sideshift they can also produce goes straight to the body,
     //    below, rather than through any accumulator.
-    let airbrake = airbrake::evaluate(state, input, handling, forward_speed);
+    let airbrake = airbrake::evaluate(state, input, handling, cached_speed);
     acc.world_force += airbrake.world_force;
     acc.local_angular += airbrake.local_angular;
 
@@ -339,7 +347,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     acc.local_angular.x += pitch;
 
     // 6. Quadratic drag and 7. gravity.
-    let drag = passive::quadratic_drag(velocity, forward_speed, control_contact);
+    let drag = passive::quadratic_drag(velocity, cached_speed, control_contact);
     let gravity = passive::gravity(
         handling,
         state.body.mass,
@@ -402,8 +410,8 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let weathervane = passive::weathervane(forward, velocity, contact);
     let local_angular_velocity = state.body.orientation.inverse() * state.body.angular_velocity;
     let angular_damping = passive::angular_damping(handling, local_angular_velocity);
-    let rolling_resistance = passive::rolling_resistance(velocity, forward_speed);
-    let vertical_damping = passive::vertical_damping(up, velocity, state.mag_lock_blend);
+    let rolling_resistance = passive::rolling_resistance(velocity, cached_speed);
+    let vertical_damping = passive::vertical_damping(up, velocity, contact_grounded);
 
     // Every body-local yaw *drive* has landed by now - the airbrake's at step 3,
     // steering at step 4, bank-to-yaw at step 8 - and the damping has not. Scaling
