@@ -201,6 +201,88 @@ Confidence **90** for the whole chain: the combination rule is nine plain
 instructions, the two constants are single literals on branch-free paths, the
 resolver is read at 88, and the measurement is one-sided rather than a best fit.
 
+## The angular half, read at instruction level
+
+`Body_ResolveContact`'s denominator and `Body_ApplyImpulseAtPoint`'s angular
+term were both named-but-unread until this pass. Written out, with `r` the lever
+arm `contact+0x00 - body+0x30`:
+
+```text
+v_p  = body+0x140 + cross(r, M(body+0x00..0x30) * body+0x150)   ; 0884ea98
+vn   = dot(v_p, n)                                             ; 0884eb50
+D    = body+0x378 + dot(n, cross(M(body+0x40..0x70) * cross(r, n), r))
+j    = -(1 + body+0x388) * vn / D          ; and D == 0 returns, touching nothing
+p    = j*n            unless contact+0x34 > 0 and v_p - n*vn != 0,
+p    = j*n - contact+0x34 * (v_p - n*vn)   in which case
+Body_ApplyImpulseAtPoint(body, contact, p)
+Body_Translate(body, n * contact+0x30)
+Body_RecordContact(body, contact, p, contact+0x20)
+```
+
+and the applier is
+
+```text
+body+0x140 += p * body+0x378                                   ; 0884d6d0
+body+0x160 -= body+0x394 * (M(body+0xc0..0xf0) * cross(r, p))   ; 0884d7c8
+body+0x150  = M(body+0x80..0xb0) * body+0x160                   ; 0884d824
+```
+
+Two things fall out that a textbook solver would not do.
+
+### `body+0x394` is `0.1`, and only the *application* is scaled by it
+
+The field has exactly one writer in the whole image - `0x08841520` in the
+ship-entity constructor `0x08840c74`, storing `0x3dcccccd` - and exactly one
+reader, `0x0884d768` in `Body_ApplyImpulseAtPoint`. Both arms of the
+friction-branch above the store converge on it, so a racing craft always gets it.
+Confidence **90**.
+
+The denominator `D` contains the *full* angular compliance, so `j` is solved as
+though all of the resulting spin were going to be applied, and then a tenth of it
+is. The net effect is a contact that is **soft in translation** (`D` reaches
+three times `invMass` on a corner lever, so `j` is a third of what a point-mass
+solve would give) **and very stiff in rotation**. Applying either half without
+the other is worse than applying neither: the denominator alone under-bounces
+without stabilising, and the angular term alone spins the craft out on contact.
+
+### The denominator applies a body-space tensor to a world-space vector
+
+`0x0884ebc0`-`0x0884ebe8` loads the matrix at `body+0x40..0x70` and transforms
+`cross(r, n)` with it. Both `r` and `n` are world-space, and `body+0x40` is
+unambiguously the **body-space** inverse inertia:
+[rigid-body.md](rigid-body.md#answered-body_setboxinertia-0x0884e1ac-writes-body0x40)
+establishes that `Body_SetBoxInertia` writes it from the hull box's own
+dimensions and that nothing recomputes it, while the *world* copy the integrator
+derives every sub-step lives at `body+0x80` and is exactly what
+`Body_ApplyImpulseAtPoint` reads three instructions from the end. So the rotation
+into the body frame is skipped here and only here.
+
+`I` is `(15.6, 21.6, 15.6)`, so on a pitched or rolled craft the two forms differ
+by up to 38 % - a real difference rather than a rounding one. `crates/physics`
+reproduces the literal reading and says so, because writing the textbook form
+instead would make the crate disagree with the disassembly on no evidence at all.
+Confidence **88** on the field identification, **90** on the instructions.
+
+### Nothing on this path arms the collision stun
+
+`Ship_ApplyCollisionImpulse` (`0x0883f274`) is the only `craft+0x290 += 0.5` in
+the image and it is gated on a **pending impulse vector** at
+`entity->0x4c + 0x110` being non-zero, which it zeroes on the way out. Nothing in
+the contact path writes that vector: `Body_ResolveContact` ends with
+`Body_RecordContact`, and the only consumer of that ring - `FUN_088418e0` -
+computes camera and audio amplitudes (`0.05 * |p| * 0.7`, and
+`min(|p| * 0.0125, 1.0)`, plus a running signed maximum at `craft+0x80` whose
+sign records which side was hit) and writes no impulse anywhere.
+
+The captures agree, and they are the stronger leg:
+`data/traces/talons-junction-time-trial-lap.csv` is a complete lap, 3,146 ticks
+with `4.8 %` of them in wall contact, and `stun_timer` reads `0.0` on **every
+tick**; `data/traces/talons-junction-standing-start.csv` adds 300 more, 230 of
+them one continuous scrape, also `0.0` throughout. So the stun belongs to being
+hit by something - a rival, a weapon - and not to touching the track.
+`crates/physics` used to arm it from the wall constraint and no longer does; see
+`crates/physics/src/wall.rs`'s `STUN_PER_CONTACT`. Confidence **88**.
+
 ## Where the PS2 build diverges, and why this crate follows the PSP
 
 The PS2 twin was read independently, and
@@ -259,3 +341,10 @@ unread; a craft against track geometry takes the single-body path.
   stays capped where it is.
 - **`0x0884ef30`**, the two-body contact resolver. The one-body path above is
   what a craft against track geometry takes; ship-to-ship goes through the other.
+- **What posts the pending impulse at `entity->0x4c + 0x110`.** The consumer is
+  read and the contact path is excluded (above), so the writer is somewhere in
+  the weapon or rival-contact code and is the next step for anyone wiring the
+  stun back up.
+- **`0x08815ccc`** (box against box) and **`0x0881702c`** (mesh against mesh,
+  gated on `world+0x5464`), the two narrowphase pairs `Collision_DispatchPair`
+  can reach that a craft against track geometry does not.

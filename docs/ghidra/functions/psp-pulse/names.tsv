@@ -216,3 +216,13 @@
 0x08ab0c50	data	g_sap_clamp_min	75	collision.md
 0x08ab0c60	data	g_sap_clamp_max	75	collision.md
 0x0884d868	function	Body_SetOrientation	88	rigid-body.md
+0x088159c0	function	Collision_StepNarrowphase	85	collision.md
+0x08815c1c	function	Collision_GetContact	90	collision.md
+0x08816eac	function	Collision_DispatchPair	85	collision.md
+0x08815cd4	function	Collision_BoxAgainstMesh	88	collision.md
+0x08818d58	function	Collision_SegmentHitsTriangle	88	collision.md
+0x08818a00	function	Collider_BoxSamplePoints	90	collision.md
+0x08818964	function	Collider_SetBoxTransform	90	collision.md
+0x08818954	function	Collider_SetBoxDimensions	85	collision.md
+0x0884db20	function	Body_SyncBoxCollider	85	collision.md
+0x0884dccc	function	Body_SetBoxDimensions	80	collision.md
