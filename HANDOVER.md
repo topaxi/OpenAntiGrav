@@ -1307,6 +1307,18 @@ validation independently re-locates the magstrip from pure geometry.**
   Pure tracks), physics/README.md (the hold moves to implemented;
   "nothing can hold an inverted ship" now says why there is no force).
 
+**Postscript on shared-file editing, so the record is accurate**: three
+writers (the orchestrator twice, the maglock agent once, on top of a
+pre-existing section) converged on track.md's Pure block within minutes,
+and a paragraph "disappearing from disk" mid-edit alarmed the agent into
+suspecting lost work. Nothing was lost - the disappearance was the
+orchestrator deduplicating its own earlier paragraph against the
+pre-existing section - but the lesson is real and general: **a doc two
+parties are editing wants committing promptly, not left dirty in a shared
+tree**, because concurrent uncommitted edits are indistinguishable from
+data loss to whoever looks second. The page ended with exactly one
+consolidated block and all links resolving.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
