@@ -443,38 +443,57 @@ Three things follow, and the third matters most:
   cast the recording's own positions at every candidate and see which one the ship is
   actually standing on - needs no disassembly and takes a minute.
 
-### What does not work: there is no speed equilibrium
+### The ship stays on the track now
 
-> **Superseded (2026-07-28).** The diagnosis below was inverted by the
-> standing-start capture: the force law is correct end to end (rms `0.127`
-> over a 47-unit launch), and the "equilibrium" the old captures held was the
-> wall setting their speed - both were recorded in sustained wall contact for
-> their entire length, losing `3.67 %` of their velocity per frame in a
+**It used to be thrown off, and that limitation is retired.** A ship at full throttle
+left the 114-unit envelope at about tick **257** - not by falling off the surface but
+by carrying far more speed into a corner than the corner would take. What fixed it is
+the wall contact response in `oag_physics::wall`, matched to the `3.67 %`-per-frame
+speed loss measured off a real capture.
+
+Measured over ten seconds of the reference scenario, and
+[asserted](../../crates/game/tests/race_ground_truth.rs) rather than remembered:
+
+| | |
+| --- | --- |
+| Worst distance from the spline | **27.2** of a 114.0 envelope, at tick 520 |
+| Grounded | **600 of 600** ticks |
+| Respawns | **0** - it stays on by driving, not by being put back |
+| Non-finite | never |
+
+The test that recorded the old failure said to delete itself once the physics improved.
+It has been replaced rather than deleted, by the same measurement asserted the other
+way round, so a regression that threw the ship off again would be caught.
+
+### What still does not match: the speed, and the trace comparison
+
+**The speed is not the original's.** This run peaks at about **122 units/s**; captures
+of the same scenario hold **23.6 to 25.1**. What that difference means took two wrong
+diagnoses to establish and is worth not re-deriving:
+
+> **Superseded (2026-07-28).** This section used to read "there is no speed
+> equilibrium", with a factor of ~17 attributed to the thrust side. The
+> standing-start capture inverted it: the force law is correct end to end (rms
+> `0.127` over a 47-unit launch), and the "equilibrium" the old captures held was
+> the **wall** setting their speed - both were recorded in sustained wall contact
+> for their entire length, losing `3.67 %` of their velocity per frame in a
 > post-integrate contact pass no force accumulator can see. There is no speed
-> equilibrium on a clean straight, and there should not be one; what is
-> missing is the wall-contact response in `wall.rs`. See
+> equilibrium on a clean straight, and there should not be one. See
 > [force-balance-ground-truth.md](../physics/force-balance-ground-truth.md).
-> The section is kept as the measurement that motivated the investigation.
 
-At full throttle the real capture holds **23.6 to 25.1 units/s** and is very slightly
-*decelerating*. This simulation passes **99.9 by tick 120** and keeps climbing to
-about 115, and it leaves the 114-unit envelope at about tick **257** - not by falling
-off the surface but by being unable to follow a track section at four times the
-intended speed. It stays grounded on both probes until tick 170 while doing 115.
+So a peak of 122 on a mostly wall-free run is not by itself a defect, and **no
+constant is tuned to bring it down**: every constant on the thrust side is confirmed at
+instruction level and the drag coefficients are confirmed in both binaries. What is
+genuinely open is on the contact side, and it is where a trace comparison still
+diverges:
 
-The arithmetic, from the recording rather than from a fit: with quadratic drag at
-`-0.005` while grounded and rolling resistance at `2.0`, a steady 24 units/s needs a
-net thrust of `0.005 * 24^2 + 2 = 4.9` units. `oag_physics::engine::engine` produces
-**83.6** once the `accelcap` stops binding, which is a factor of about **17**.
-
-Where that factor lives is **not determined**, and the candidates are all recorded
-gaps rather than new guesses: `Engine.amount`'s load-time `1e-3` scale, the
-unrecovered `craft+0x294` multiplier that
-`oag_physics::engine::ENGINE_OUTPUT_SCALE` carries as `1.0`, the two drag
-coefficients, or the relationship between `<Physical mass>` and the rigid body's own
-mass that `docs/ghidra/functions/psp-pulse/engine.md` records as untraced. Nothing is
-tuned here to close it: a value fitted to one capture would be indistinguishable from
-a recovered one six months from now.
+- **Contact generation.** No capture in `data/traces/` has more than 60 consecutive
+  wall-free ticks, so there is no clean reference straight to compare a wall-free run
+  against yet.
+- **The angular response.** `crates/physics` resolves contacts at the centre of mass,
+  so the original's `cross(r, impulse)` torque and its contribution to the resolver's
+  denominator are both absent. That is the largest remaining gap between this crate's
+  contact response and the original's.
 
 Two other known gaps, both expected: an **inverted ship falls off**, because the
 magstrip magnetic hold is not decoded and not implemented (see

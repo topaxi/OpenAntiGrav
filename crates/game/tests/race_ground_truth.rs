@@ -29,26 +29,27 @@
 //! calling it a measurement. See `crates/physics/tests/ship_dynamics.rs`, which says
 //! the same thing at its own level.
 //!
-//! # And the ship does not stay on the track
+//! # The ship now stays on the track
 //!
-//! It cannot fly a lap. [`the_ship_does_not_stay_on_the_track_yet`] is the recorded
-//! negative result, with what was measured; the summary is in
-//! `docs/tools/oag-game.md`.
+//! [`a_ship_stays_on_the_track_for_ten_seconds`] is the assertion, and it used to be
+//! the opposite one: `the_ship_does_not_stay_on_the_track_yet` recorded the ship
+//! leaving the envelope at about tick **257** and said to delete itself when that
+//! stopped happening. It stopped. The property is now pinned the right way round, so
+//! the same measurement catches a regression instead of an improvement.
 //!
-//! **What that failure is has changed, and the earlier diagnosis was wrong.** It used
-//! to be a suspension that dropped a probe and threw the ship: on the previous default
-//! track the ship was grounded on 83 of 120 ticks with *both* probes on only 6, and it
-//! left the envelope by tick 166. The default track was the bug - see
-//! [`oag_game::race::DEFAULT_TRACK`] - and with the right one the same run is grounded
-//! on **120 of 120** ticks with both probes on all 120, hover height steady between
-//! 3.8 and 4.4 against a 4.125 target, and the envelope holds to tick **257**.
+//! **Two wrong diagnoses on the way there, both recorded rather than forgotten.** The
+//! first was a suspension that dropped a probe: on the *previous* default track the
+//! ship was grounded on 83 of 120 ticks with both probes on only 6. The default track
+//! was the bug - see [`oag_game::race::DEFAULT_TRACK`] - and the right one is grounded
+//! on 120 of 120 with both probes throughout. The second was a missing speed
+//! equilibrium, inferred from captures that held 23.6-25.1 units/s; the standing-start
+//! capture inverted it. The force law is right, those captures were in sustained wall
+//! contact the whole way, and what was missing was the contact response that reads it.
 //!
-//! What is left is a different failure with a different cause: **the ship has no speed
-//! equilibrium.** A real capture of this exact scenario holds 23.6-25.1 units/s at full
-//! throttle; this simulation passes 99 by tick 120 and keeps climbing, and it leaves
-//! the track because a track section eventually turns faster than a ship at four times
-//! the intended speed can follow. That is an engine/drag magnitude question, not a
-//! suspension one, and nothing here is tuned to hide it.
+//! What is left is **not** on the track-holding axis: the speed is still far above any
+//! capture's, and the trace comparison still diverges on contact generation and on the
+//! angular half of the contact response. See
+//! `docs/physics/force-balance-ground-truth.md`, and nothing here is tuned to hide it.
 
 use std::path::{Path, PathBuf};
 
@@ -58,13 +59,12 @@ use oag_game::{boot, movie, race};
 use oag_gameplay::input::{Input, button};
 use oag_physics::{Raycaster, SpeedClass};
 
-/// Ticks the well-behaved assertions cover: two seconds at the fixed 60 Hz.
+/// Ticks the per-tick suspension assertions cover: two seconds at the fixed 60 Hz.
 ///
-/// Not a chosen-because-it-passes number in the usual sense, and worth being honest
-/// about: the ship holds both probes for all 120 of these and is measurably gone by
-/// about 257, so two seconds is comfortably inside the first and short of the second.
-/// When the physics improves this should grow, and
-/// [`the_ship_does_not_stay_on_the_track_yet`] is what will notice.
+/// Short on purpose, because this is the test that checks *every* tick against a hover
+/// target and a probe count. Ten seconds of the same scenario is covered by
+/// [`a_ship_stays_on_the_track_for_ten_seconds`], which asserts the envelope and
+/// finiteness rather than the suspension.
 const TICKS: u32 = 120;
 
 fn image() -> Option<PathBuf> {
@@ -307,61 +307,75 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     );
 }
 
-/// The recorded negative result: a ship cannot yet be flown for ten seconds.
+/// Ten seconds at full throttle, on the track and finite the whole way.
 ///
-/// **When this test fails, the physics got better and this test should be deleted**,
-/// along with the section it is referenced from in `docs/tools/oag-game.md`. It
-/// exists so the failure is measured rather than remembered, and so nobody
-/// rediscovers it by hand.
+/// **This replaces a recorded negative result.** `the_ship_does_not_stay_on_the_track_yet`
+/// asserted the opposite - that the ship *left* the envelope inside 600 ticks - and
+/// carried an instruction to delete it when it started failing. It did, so the
+/// property is pinned the right way round here rather than dropped: a regression that
+/// threw the ship off the track again would otherwise go unnoticed.
 ///
-/// What is measured, as of the `DEFAULT_TRACK` correction: the suspension is fine -
-/// both probes hold contact for the whole of [`TICKS`] at a steady 3.8 to 4.4 against
-/// a 4.125 target - and the ship leaves the envelope at about tick **257** because it
-/// is going far too fast to follow the track, not because it fell off it.
+/// What changed is the wall contact response in `oag_physics::wall`, matched to the
+/// `3.67 %`-per-frame speed loss measured off a real capture. Before it, the ship left
+/// the envelope at about tick **257**, not by falling off the surface but by carrying
+/// far more speed into a corner than the corner would take.
 ///
-/// **The remaining cause is a missing speed equilibrium.** A real capture of this same
-/// scenario (`data/traces/talons-junction-venom-assegai.csv`) holds 23.6 to 25.1
-/// units/s at throttle 100 and is very slightly *decelerating*; this simulation is at
-/// 99.9 by tick 120 and still climbing. The force balance the recording implies is
-/// `2 * thrust = 0.005 * v^2 + 2` at `v = 24`, so about **4.9 units** of net thrust
-/// against the **83.6** `oag_physics::engine::engine` produces once the accelcap stops
-/// binding - a factor of about 17. Whether that is `Engine.amount`'s load-time scale,
-/// the unrecovered `craft+0x294` multiplier
-/// (`oag_physics::engine::ENGINE_OUTPUT_SCALE`, guessed at `1.0`), the drag
-/// coefficients, or a mass that is not the body's is **not determined**, and nothing
-/// is tuned here to make the number come out.
+/// Measured on the reference scenario - Assegai, Venom, [`race::DEFAULT_TRACK`], thrust
+/// held from the first tick - over the full 600:
+///
+/// | | |
+/// | --- | --- |
+/// | Worst distance from the spline | **27.2** of a 114.0 envelope, at tick 520 |
+/// | Grounded | **600 of 600** ticks |
+/// | Respawns | **0** - it stays on by driving, not by being put back |
+/// | Non-finite | never |
+///
+/// The assertion is the envelope and finiteness only. **The speed is still not the
+/// original's** - this run peaks at 122 against a capture's 23.6-25.1 - and nothing
+/// here asserts it, because a clean straight has no equilibrium to assert and the
+/// captures that looked like one were in sustained wall contact. See
+/// `docs/physics/force-balance-ground-truth.md`, whose remaining gaps - contact
+/// generation and the missing `cross(r, impulse)` angular response - are what a trace
+/// comparison still diverges on.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_ship_does_not_stay_on_the_track_yet() {
+fn a_ship_stays_on_the_track_for_ten_seconds() {
     let Some(loaded) = load() else { return };
     let bound = envelope(&loaded);
     let mut race = race::Race::start(loaded.setup);
     let mut held = race::HeldButtons::new(1 << button::CROSS);
 
-    let mut left_at = None;
-    let mut nonfinite_at = None;
+    let mut worst_distance: f32 = 0.0;
+    let mut worst_at = 0u32;
+    let mut top_speed: f32 = 0.0;
+    let mut grounded_ticks = 0u32;
     for tick in 0..600u32 {
         let snapshot = held.snapshot();
         race.tick(&snapshot);
         let telemetry = race.telemetry();
-
-        if left_at.is_none() && telemetry.spline_distance >= bound {
-            left_at = Some(tick);
+        assert!(
+            telemetry.position.is_finite(),
+            "the ship went non-finite at tick {tick}"
+        );
+        if telemetry.spline_distance > worst_distance {
+            worst_distance = telemetry.spline_distance;
+            worst_at = tick;
         }
-        if !telemetry.position.is_finite() {
-            nonfinite_at = Some(tick);
-            break;
+        top_speed = top_speed.max(telemetry.speed);
+        if telemetry.grounded > 0.0 {
+            grounded_ticks += 1;
         }
     }
 
     println!(
-        "left the {bound:.1}-unit envelope at tick {left_at:?}, went non-finite at \
-         tick {nonfinite_at:?}"
+        "worst spline distance {worst_distance:.1} of {bound:.1} at tick {worst_at}, \
+         top speed {top_speed:.1}, grounded on {grounded_ticks} of 600, \
+         {} respawn(s)",
+        race.respawns()
     );
     assert!(
-        left_at.is_some() || nonfinite_at.is_some(),
-        "the ship stayed on the track for 600 ticks: the physics improved, so delete \
-         this test and the known-limitations section of docs/tools/oag-game.md"
+        worst_distance < bound,
+        "the ship left the {bound:.1}-unit envelope at tick {worst_at}"
     );
 }
 
