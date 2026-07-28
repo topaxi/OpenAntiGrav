@@ -1058,6 +1058,21 @@ mod tests {
         assert_eq!(comparison.field(Field::StunTimer).compared_ticks, 8);
     }
 
+    /// `compare` indexes its per-field accumulators against [`Field::ALL`] by
+    /// position, so a field added to the enum and forgotten there is silently
+    /// never compared - and the report would look complete while missing one.
+    #[test]
+    fn every_field_is_in_the_list_exactly_once() {
+        assert_eq!(Field::ALL.len(), FIELD_COUNT);
+        for (index, field) in Field::ALL.iter().enumerate() {
+            assert_eq!(
+                Field::ALL.iter().position(|f| f == field),
+                Some(index),
+                "{field:?} appears twice"
+            );
+        }
+    }
+
     #[test]
     fn identical_traces_do_not_diverge() {
         let trace = fixture(40, |_, _| {});

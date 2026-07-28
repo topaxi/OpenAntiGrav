@@ -790,12 +790,7 @@ mod tests {
     /// comparison that looks exactly like a physics bug.
     #[test]
     fn a_recorded_rotation_survives_tick_zero_under_every_reading() {
-        for angular in [
-            AngularReading::NegatedLocal,
-            AngularReading::Local,
-            AngularReading::NegatedWorld,
-            AngularReading::World,
-        ] {
+        for angular in AngularReading::ALL {
             let mut recorded = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
             let recorded_rate = Vec3::new(0.1, RECORDED_YAW_RATE, -0.05);
             for frame in &mut recorded.frames {

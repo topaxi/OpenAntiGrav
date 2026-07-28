@@ -1210,6 +1210,30 @@ grounded,dt,tick
         assert_eq!(frame.basis_rotation_rate(&Frame::default()), None);
     }
 
+    /// [`AngularReading::ALL`] is in report order rather than declaration order,
+    /// and [`Trace::angular_readings`] indexes its accumulators against it. A
+    /// variant added to the enum and forgotten in `ALL` would simply never be
+    /// scored, and the report would look complete while missing a candidate.
+    #[test]
+    fn every_reading_is_in_the_list_exactly_once() {
+        for reading in [
+            AngularReading::World,
+            AngularReading::NegatedWorld,
+            AngularReading::Local,
+            AngularReading::NegatedLocal,
+        ] {
+            assert_eq!(
+                AngularReading::ALL
+                    .iter()
+                    .filter(|r| **r == reading)
+                    .count(),
+                1,
+                "{reading:?}"
+            );
+        }
+        assert_eq!(AngularReading::ALL.len(), 4);
+    }
+
     /// Every reading must be invertible, or seeding a run from a recorded column
     /// and writing our own back out would not be the same transformation twice.
     /// The same property [`crate::replay::Basis`] is pinned on.
