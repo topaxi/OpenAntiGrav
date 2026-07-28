@@ -1568,6 +1568,62 @@ green on main.**
   "test-data green" claims between those passes were narrower than they
   read. Now asserts the PS2 answers with a non-PSMF loose movie.
 
+**`pitch-damp` (Tasks #29, #36, #32 - six commits): the missing ~4.9 of
+pitch damping was never a damping term - it is the HOVER DOWNFORCE, and
+landing it resolves the oldest deliberately-blocked item in this file.**
+Gate green at 859; `just test-data` 908/908.
+
+- **The mechanism**: `Ship_HoverTwoPoint`'s epilogue applies
+  `-track_gravity * mass * grounded * (1 - magLockBlend) * avgNormal`,
+  coefficient exactly 1 (conf 92, PS2 twin agrees). The crate had the
+  shape at `DOWNFORCE_SCALE = 0.0` with "magnitude not recorded" - it was
+  recorded all along (the airbrake-drag failure mode again: the claim
+  about the crate was never checked against the crate). **Why a static
+  force is the damping**: the hover damper is a multiplier on the spring
+  LOAD, and without the downforce the probes carried 1/17 of the real
+  load - so 1/17 of the damping. The equilibrium nothing was fitted to:
+  predicted compression `1.25` vs the live `1.237` (1 %), spawn height
+  `4.000` vs the live `4.002-4.009`. **This dissolves the old
+  "resting-height contradiction" that had blocked the downforce in the
+  section further below ("Two changes were written, measured, and
+  deliberately reverted") - the old sag arithmetic used the wrong load;
+  that section is superseded on the downforce half, and the recovered
+  probe geometry landed with it in one commit.**
+- **Validation**: pitch response now **1.006x** of the original
+  (omega_n 9.73 vs 9.72, 2-zeta-omega 8.90 vs 8.85 - the extrema match to
+  the third decimal); trace errors collapse (position max 15.70 -> 0.545,
+  orientation.up 7.7e-2 -> 7.9e-4); resting quietness improves to exactly
+  0; `grounded` exact on all 360 pitch ticks; the seeded lap unchanged
+  within noise. Six tests changed with intent preserved (the spring is
+  compression-only - one test pinned a combination the binary does not
+  have); two new pinning tests fail at scale 0. **The 13 % roll-stiffness
+  gap is untouched by construction (centreline probes) and is now the
+  only gap of its kind.**
+- **Separate finding: `just scripted-sim`'s open-loop distance regressed
+  2,792 -> 659 on main BEFORE this work** - bisected in a worktree to the
+  airbrake polarity fix. A consequence of a correct fix, previously
+  unrecorded. (And see #32 below for why that metric means little.)
+- **#36 (sideshift), no capture needed**: the tail of
+  `Ship_UpdateAirbrakes` shows a sideshift is a **world-space force**
+  (row0-aligned, 0.2 s per-side timer, grounded-gated), closing the
+  impulse-vs-velocity question, and the direction chain (steer axis
+  positive-right, flags 0x800/0x1000, row 0 = left) lands the crate's
+  coin-flip **correct** - now evidence, pinned both ways.
+  `Ship_UpdateSideshiftInput_q` named at 72. Left open: the input-side
+  trigger (tap history unread); the capture recipe is written down.
+- **#32 (open-loop replay), a PERMANENT negative**: with the start pinned
+  to 0.0000 degrees, two emulator runs of the same script diverge from
+  each other (100 units by tick 495) because **`dt` matches on 1 % of
+  ticks** - the original integrates measured frame durations (ADR-0007)
+  and those follow host load. No pose pinning can fix it. Consequence
+  documented: captures stay closed-loop or seeded; short scenarios
+  (200-360 ticks) are repeatable and the pinning is what makes them so;
+  **no open-loop fidelity target is meaningful past a few hundred ticks,
+  since two runs of the original itself disagree by 100 units at tick
+  495.**
+- Noticed, not acted on: the original gates penetration escape on surface
+  type 1 only vs the crate's 1-or-3 (Task #38).
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
