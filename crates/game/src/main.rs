@@ -36,9 +36,10 @@ use oag_core::{TickClock, TickRate};
 use oag_game::frontend::{self, Frontend};
 use oag_game::input;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{INTRO_FRAMES_NEEDED, boot, capture, movie, race, report};
+use oag_game::{INTRO_FRAMES_NEEDED, boot, capture, movie, race, report, settings};
 use oag_input::Keyboard;
 use oag_physics::SpeedClass;
+use oag_render::mesh_render::Anisotropy;
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -182,10 +183,24 @@ struct Cli {
     /// none.
     #[arg(long, default_value_t = 60)]
     log_every: u32,
+
+    /// Anisotropic filtering level for track and ship textures: off, 2x, 4x,
+    /// 8x or 16x.
+    ///
+    /// Overrides `[graphics] anisotropy` in the settings file
+    /// (`settings::path`) for this run only; the file on disk is not changed.
+    #[arg(long)]
+    anisotropy: Option<Anisotropy>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Loaded (and, on first run or a missing key, written back complete) before
+    // anything else: a bad value in the file should fail immediately, not eight
+    // seconds of intro later.
+    let settings = settings::load()?;
+    let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
 
     // Parsed before anything is loaded, and for both ways in: the front end can
     // hand off to a race, so a misspelled class must not be discovered eight
@@ -209,7 +224,7 @@ fn main() -> Result<()> {
     // XML, every language plugin and a string table, and may shell out to `ffmpeg`
     // to transcode the intro. Going straight to a race needs none of it.
     if cli.race {
-        return run_race(&cli, race_options);
+        return run_race(&cli, race_options, anisotropy);
     }
 
     let options = boot::Options {
@@ -263,6 +278,7 @@ fn main() -> Result<()> {
                 log_every: cli.log_every,
                 size: parse_size(&cli.size)?,
                 screen: cli.screen.clone(),
+                anisotropy,
             },
         );
     }
@@ -280,6 +296,7 @@ fn main() -> Result<()> {
         race_options,
         trace: cli.trace,
         log_every: cli.log_every,
+        anisotropy,
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -330,7 +347,7 @@ const RACE_KEYS: &str =
     "arrow keys steer, X or return thrusts, Q and E are the airbrakes, escape quits";
 
 /// Loads a track and a ship and either captures one frame or opens a window.
-fn run_race(cli: &Cli, options: race::Options) -> Result<()> {
+fn run_race(cli: &Cli, options: race::Options, anisotropy: Anisotropy) -> Result<()> {
     let loaded = race::load(&options)?;
     for line in &loaded.report {
         println!("{line}");
@@ -349,6 +366,7 @@ fn run_race(cli: &Cli, options: race::Options) -> Result<()> {
                 held: button_mask(cli.hold.as_deref()),
                 size: parse_size(&cli.size)?,
                 log_every: cli.log_every,
+                anisotropy,
             },
         );
     }
@@ -365,6 +383,7 @@ fn run_race(cli: &Cli, options: race::Options) -> Result<()> {
         race_options: options,
         trace: cli.trace,
         log_every: cli.log_every,
+        anisotropy,
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -382,6 +401,7 @@ struct App {
     race_options: race::Options,
     trace: bool,
     log_every: u32,
+    anisotropy: Anisotropy,
     state: Option<Session>,
 }
 
@@ -394,7 +414,7 @@ impl App {
         let gpu = Gpu::new(event_loop)?;
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
-            Stage::race(&gpu, loaded)?
+            Stage::race(&gpu, loaded, self.anisotropy)?
         } else if let Some(loaded) = self.boot.take() {
             Stage::frontend(&gpu, loaded, self.video_format, self.trace)?
         } else {
@@ -409,6 +429,7 @@ impl App {
             last: std::time::Instant::now(),
             race_options: self.race_options.clone(),
             log_every: self.log_every,
+            anisotropy: self.anisotropy,
             launched: false,
         }))
     }
@@ -577,7 +598,7 @@ impl Stage {
         })))
     }
 
-    fn race(gpu: &Gpu, loaded: race::Loaded) -> Result<Self> {
+    fn race(gpu: &Gpu, loaded: race::Loaded, anisotropy: Anisotropy) -> Result<Self> {
         let race::Loaded {
             setup,
             track_model,
@@ -593,6 +614,7 @@ impl Stage {
             collision_model,
             gpu.config.format,
             gpu.size(),
+            anisotropy,
         )?;
         Ok(Self::Race(Box::new(RaceStage {
             scene,
@@ -673,6 +695,7 @@ struct Session {
     /// before anyone knows whether a race will be asked for.
     race_options: race::Options,
     log_every: u32,
+    anisotropy: Anisotropy,
     /// Set the first time `Launch Game` starts a race, so a load that fails is
     /// reported once rather than on every frame.
     launched: bool,
@@ -788,7 +811,7 @@ impl Session {
         for line in &loaded.report {
             println!("{line}");
         }
-        self.stage = Stage::race(&self.gpu, loaded)?;
+        self.stage = Stage::race(&self.gpu, loaded, self.anisotropy)?;
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())
     }

@@ -75,6 +75,7 @@ pub fn capture_from(
     height: u32,
     yaw: f32,
     pitch: f32,
+    anisotropy: Anisotropy,
 ) -> Result<()> {
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -117,7 +118,7 @@ pub fn capture_from(
     });
 
     let (pipeline, bind_group, vertex_buffer, index_buffer, texture_binds) =
-        build(&device, &queue, model, format)?;
+        build(&device, &queue, model, format, anisotropy)?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniforms"),
@@ -239,6 +240,97 @@ pub fn capture_from(
     Ok(())
 }
 
+/// Anisotropic filtering level: the one texture-filtering knob modern
+/// renderers expose to a user. Mip generation itself always runs (see
+/// [`mip_chain`]) and is not a setting - every renderer just does it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Anisotropy {
+    Off,
+    X2,
+    X4,
+    X8,
+    #[default]
+    X16,
+}
+
+impl Anisotropy {
+    /// The `wgpu::SamplerDescriptor::anisotropy_clamp` value this level maps to.
+    const fn clamp(self) -> u16 {
+        match self {
+            Self::Off => 1,
+            Self::X2 => 2,
+            Self::X4 => 4,
+            Self::X8 => 8,
+            Self::X16 => 16,
+        }
+    }
+}
+
+impl std::str::FromStr for Anisotropy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "off" | "1" | "1x" => Ok(Self::Off),
+            "2" | "2x" => Ok(Self::X2),
+            "4" | "4x" => Ok(Self::X4),
+            "8" | "8x" => Ok(Self::X8),
+            "16" | "16x" => Ok(Self::X16),
+            other => Err(format!(
+                "{other:?} is not an anisotropy level; try off, 2x, 4x, 8x or 16x"
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for Anisotropy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Off => "off",
+            Self::X2 => "2x",
+            Self::X4 => "4x",
+            Self::X8 => "8x",
+            Self::X16 => "16x",
+        })
+    }
+}
+
+/// Downsamples `rgba` into a full mip chain by repeated 2x2 box filtering,
+/// down to a 1x1 level.
+///
+/// Track and ship textures are seen at every distance and grazing angle a
+/// chase camera produces; without mips, minification aliases into shimmer
+/// that a single sample can't fix. Filtering happens on `Rgba8UnormSrgb`
+/// sample data, matching what the sampler itself blends between levels.
+fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
+    let mut levels: Vec<(u32, u32, Vec<u8>)> = vec![(width, height, rgba.to_vec())];
+    loop {
+        let (w, h, data) = levels.last().expect("levels is never empty");
+        let (w, h) = (*w, *h);
+        if w == 1 && h == 1 {
+            break;
+        }
+        let next_width = (w / 2).max(1);
+        let next_height = (h / 2).max(1);
+        let mut next = vec![0u8; (next_width * next_height * 4) as usize];
+        for y in 0..next_height {
+            let y0 = (y * 2).min(h - 1);
+            let y1 = (y * 2 + 1).min(h - 1);
+            for x in 0..next_width {
+                let x0 = (x * 2).min(w - 1);
+                let x1 = (x * 2 + 1).min(w - 1);
+                for c in 0..4usize {
+                    let texel = |sx: u32, sy: u32| data[((sy * w + sx) * 4) as usize + c] as u32;
+                    let sum = texel(x0, y0) + texel(x1, y0) + texel(x0, y1) + texel(x1, y1);
+                    next[((y * next_width + x) * 4) as usize + c] = ((sum + 2) / 4) as u8;
+                }
+            }
+        }
+        levels.push((next_width, next_height, next));
+    }
+    levels
+}
+
 pub type Built = (
     wgpu::RenderPipeline,
     wgpu::BindGroup,
@@ -258,6 +350,7 @@ pub fn build(
     queue: &wgpu::Queue,
     model: &Model,
     format: wgpu::TextureFormat,
+    anisotropy: Anisotropy,
 ) -> Result<Built> {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("mesh"),
@@ -369,10 +462,13 @@ pub fn build(
         address_mode_v: wgpu::AddressMode::Repeat,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        anisotropy_clamp: anisotropy.clamp(),
         ..Default::default()
     });
 
     let make = |width: u32, height: u32, rgba: &[u8], label: &str| {
+        let mips = mip_chain(width, height, rgba);
         let size = wgpu::Extent3d {
             width,
             height,
@@ -381,23 +477,34 @@ pub fn build(
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size,
-            mip_level_count: 1,
+            mip_level_count: mips.len() as u32,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        queue.write_texture(
-            texture.as_image_copy(),
-            rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(width * 4),
-                rows_per_image: Some(height),
-            },
-            size,
-        );
+        for (level, (mip_width, mip_height, mip_rgba)) in mips.iter().enumerate() {
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: level as u32,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                mip_rgba,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(mip_width * 4),
+                    rows_per_image: Some(*mip_height),
+                },
+                wgpu::Extent3d {
+                    width: *mip_width,
+                    height: *mip_height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(label),

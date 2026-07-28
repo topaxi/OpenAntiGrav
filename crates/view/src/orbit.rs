@@ -23,13 +23,13 @@ use winit::window::{Window, WindowId};
 
 use oag_render::camera::orbit::{Held, Orbit, PITCH_LIMIT, advance};
 use oag_render::mesh::Model;
-use oag_render::mesh_render::{self, DEPTH_FORMAT, UNIFORMS_SIZE};
+use oag_render::mesh_render::{self, Anisotropy, DEPTH_FORMAT, UNIFORMS_SIZE};
 
 /// Opens a window and orbits `model` under keyboard control until closed.
 ///
 /// Left/Right rotate, Up/Down pitch, `+`/`-` (or PageUp/PageDown) zoom, Escape
 /// quits.
-pub fn run(model: Model, yaw: f32, pitch: f32) -> Result<()> {
+pub fn run(model: Model, yaw: f32, pitch: f32, anisotropy: Anisotropy) -> Result<()> {
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the camera moves continuously while a key is held.
     event_loop.set_control_flow(ControlFlow::Poll);
@@ -41,6 +41,7 @@ pub fn run(model: Model, yaw: f32, pitch: f32) -> Result<()> {
             pitch: pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT),
             zoom: 1.0,
         },
+        anisotropy,
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -50,6 +51,7 @@ pub fn run(model: Model, yaw: f32, pitch: f32) -> Result<()> {
 struct App {
     model: Option<Model>,
     orbit: Orbit,
+    anisotropy: Anisotropy,
     state: Option<Session>,
 }
 
@@ -63,7 +65,7 @@ impl ApplicationHandler for App {
             return;
         };
 
-        match Session::new(event_loop, model, self.orbit) {
+        match Session::new(event_loop, model, self.orbit, self.anisotropy) {
             Ok(session) => self.state = Some(session),
             Err(e) => {
                 eprintln!("error: {e:#}");
@@ -131,7 +133,12 @@ struct Session {
 }
 
 impl Session {
-    fn new(event_loop: &ActiveEventLoop, model: Model, orbit: Orbit) -> Result<Self> {
+    fn new(
+        event_loop: &ActiveEventLoop,
+        model: Model,
+        orbit: Orbit,
+        anisotropy: Anisotropy,
+    ) -> Result<Self> {
         let attributes = Window::default_attributes()
             .with_title(format!("oag-view - {}", model.label))
             .with_inner_size(winit::dpi::LogicalSize::new(1280, 800));
@@ -163,7 +170,7 @@ impl Session {
         surface.configure(&device, &config);
 
         let (pipeline, placeholder_bind_group, vertex_buffer, index_buffer, texture_binds) =
-            mesh_render::build(&device, &queue, &model, config.format)?;
+            mesh_render::build(&device, &queue, &model, config.format, anisotropy)?;
         let _ = placeholder_bind_group;
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

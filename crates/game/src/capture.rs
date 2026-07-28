@@ -7,6 +7,7 @@
 //! path would prove nothing.
 
 use anyhow::{Context, Result};
+use oag_render::mesh_render::Anisotropy;
 
 use crate::boot::Boot;
 use crate::frontend::Draw;
@@ -53,6 +54,9 @@ pub struct Options {
     /// order does not reach yet - most of them - can still be looked at. See
     /// [`crate::frontend::Frontend::draw_screen`].
     pub screen: Option<String>,
+    /// Anisotropic filtering level, only relevant if the handoff to
+    /// [`Options::race`] happens.
+    pub anisotropy: Anisotropy,
 }
 
 /// How many ticks the runner will take before giving up on `until`.
@@ -168,6 +172,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 held: options.held,
                 size: (width, height),
                 log_every: options.log_every,
+                anisotropy: options.anisotropy,
             },
         );
     }

@@ -96,8 +96,16 @@ fn a_synthetic_corridor_renders_through_the_capture_path() {
             "{}-{suffix}.png",
             stem.file_stem().unwrap_or_default().to_string_lossy()
         ));
-        oag_render::mesh_render::capture_from(&model, &path, 1280, 960, 0.9, 0.85)
-            .expect("capturing the collision view");
+        oag_render::mesh_render::capture_from(
+            &model,
+            &path,
+            1280,
+            960,
+            0.9,
+            0.85,
+            oag_render::mesh_render::Anisotropy::default(),
+        )
+        .expect("capturing the collision view");
 
         let bytes = std::fs::read(&path).expect("reading the capture back");
         assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "not a PNG");

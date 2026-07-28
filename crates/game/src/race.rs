@@ -63,6 +63,7 @@ use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::collision as render_collision;
 use oag_render::mesh::Model;
+use oag_render::mesh_render::Anisotropy;
 use oag_render::{mesh, mesh_render, track as track_render};
 
 /// The track a race is flown on unless another is named.
@@ -1135,9 +1136,10 @@ impl Drawable {
         queue: &wgpu::Queue,
         model: Model,
         format: wgpu::TextureFormat,
+        anisotropy: Anisotropy,
     ) -> Result<Self> {
         let (pipeline, _placeholder, vertices, indices, textures) =
-            mesh_render::build(device, queue, &model, format)?;
+            mesh_render::build(device, queue, &model, format, anisotropy)?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("race uniforms"),
@@ -1210,6 +1212,10 @@ impl Scene {
     /// # Errors
     ///
     /// Propagates a pipeline or geometry upload failure from `oag-render`.
+    // Three models plus how to draw them (surface format, viewport, texture
+    // filtering); a wrapper struct for one call site would name the grouping
+    // without clarifying it.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -1218,15 +1224,16 @@ impl Scene {
         collision_model: Option<Model>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
+        anisotropy: Anisotropy,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
         // waste the depth range on empty space.
         let far = track_model.radius * 4.0;
-        let track = Drawable::new(device, queue, track_model, format)?;
-        let ship = Drawable::new(device, queue, ship_model, format)?;
+        let track = Drawable::new(device, queue, track_model, format, anisotropy)?;
+        let ship = Drawable::new(device, queue, ship_model, format, anisotropy)?;
         let collision = collision_model
-            .map(|model| Drawable::new(device, queue, model, format))
+            .map(|model| Drawable::new(device, queue, model, format, anisotropy))
             .transpose()?;
         Ok(Self {
             track,
@@ -1335,6 +1342,8 @@ pub struct CaptureOptions {
     pub size: (u32, u32),
     /// Print a telemetry line every this many ticks. Zero prints none.
     pub log_every: u32,
+    /// Anisotropic filtering level for the track and ship textures.
+    pub anisotropy: Anisotropy,
 }
 
 /// Runs a race headless and writes one frame to a PNG.
@@ -1395,6 +1404,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         collision_model,
         format,
         (width, height),
+        options.anisotropy,
     )?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {

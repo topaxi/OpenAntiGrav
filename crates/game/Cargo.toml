@@ -31,6 +31,9 @@ bytemuck = { workspace = true, features = ["derive"] }
 wgpu = "30"
 winit = "0.30"
 pollster = "0.4"
+toml = "1"
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
 
 [lints]
 workspace = true

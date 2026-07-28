@@ -26,6 +26,7 @@ use std::sync::Arc;
 // live in `oag-render`, so the game draws through the same code. What is left
 // here is the viewer: the CLI, the window and the texture browser.
 use oag_assets::Archive;
+use oag_render::mesh_render::Anisotropy;
 use oag_render::{collision, mesh, mesh_render, track};
 
 /// The box enclosing a built model's vertices.
@@ -142,6 +143,11 @@ struct Cli {
     /// The point of the collision view: the walls should enclose the ribbon.
     #[arg(long)]
     with_spline: bool,
+
+    /// Anisotropic filtering level for `--mesh` and `--track`: off, 2x, 4x,
+    /// 8x or 16x.
+    #[arg(long, default_value_t = Anisotropy::default())]
+    anisotropy: Anisotropy,
 }
 
 /// Prints the per-class breakdown of a track's collision soup.
@@ -301,12 +307,12 @@ fn main() -> Result<()> {
         // Tracks are flat and wide, so look down at them rather than along.
         let pitch = cli.pitch.unwrap_or(1.15);
         if let Some(path) = &cli.screenshot {
-            mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch)?;
+            mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch, cli.anisotropy)?;
             println!("wrote {}", path.display());
             return Ok(());
         }
         println!("arrows orbit, +/- (or PageUp/PageDown) zoom, escape quits");
-        orbit::run(model, cli.yaw, pitch)?;
+        orbit::run(model, cli.yaw, pitch, cli.anisotropy)?;
         return Ok(());
     }
 
@@ -332,12 +338,12 @@ fn main() -> Result<()> {
         // Tracks are flat and wide, so look down at them rather than along.
         let pitch = cli.pitch.unwrap_or(1.15);
         if let Some(path) = &cli.screenshot {
-            mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch)?;
+            mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch, cli.anisotropy)?;
             println!("wrote {}", path.display());
             return Ok(());
         }
         println!("arrows orbit, +/- (or PageUp/PageDown) zoom, escape quits");
-        orbit::run(model, cli.yaw, pitch)?;
+        orbit::run(model, cli.yaw, pitch, cli.anisotropy)?;
         return Ok(());
     }
 
@@ -366,12 +372,12 @@ fn main() -> Result<()> {
         );
         let pitch = cli.pitch.unwrap_or(0.35);
         if let Some(path) = &cli.screenshot {
-            mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch)?;
+            mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch, cli.anisotropy)?;
             println!("wrote {}", path.display());
             return Ok(());
         }
         println!("arrows orbit, +/- (or PageUp/PageDown) zoom, escape quits");
-        orbit::run(model, cli.yaw, pitch)?;
+        orbit::run(model, cli.yaw, pitch, cli.anisotropy)?;
         return Ok(());
     }
 
