@@ -128,6 +128,9 @@
 0x0884d850	function	Body_SetMass	88	engine.md
 0x0884da24	function	Body_ClearAccumulators	85	engine.md
 0x0884da5c	function	Body_ClearVelocity	80	engine.md
+0x0884d510	function	Body_AddForceAtPoint	88	rigid-body.md
+0x0884de5c	function	Body_Init	85	rigid-body.md
+0x0884e230	function	Body_Integrate	88	rigid-body.md
 0x0883a970	function	Xml_ReadGlobalSettings	85	engine.md
 0x0883fdec	function	Ship_UpdateStartBoost	85	engine.md
 0x088390b4	function	Xml_ReadBoostSettings	88	engine.md
