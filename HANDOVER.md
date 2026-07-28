@@ -1430,6 +1430,41 @@ tree**, because concurrent uncommitted edits are indistinguishable from
 data loss to whoever looks second. The page ended with exactly one
 consolidated block and all links resolving.
 
+**`airbrake-lr` (Task #34, commit "physics: fix reversed airbrake
+polarity"): the user's suspicion was RIGHT - both airbrake terms were
+reversed, by the same convention that bit steering, missed by the same
+fix.**
+
+- **The chain was audited link by link**: trigger -> memory offset
+  confirmed both ways (L trigger -> `airbrake_l` = `craft+0x2c4`); row 0
+  re-measured as the ship's LEFT; and a **new isolated capture**
+  (`airbrake-left-only`, wall-free through the whole window) shows the
+  original turns the nose TOWARD the braked side (+0.36 rad/s on 33/33
+  clean ticks). Input layers (keyboard, pad, gameplay controls) are
+  clean. The bug was in `airbrake.rs`: the original's `(R - L)` terms
+  transcribed literally into a frame where BOTH need negating - two
+  conventions (`craft+0x170` is row 0 = left, and the accumulator carries
+  the negated rotation), one sign flip, so **`imbalance = left - right`
+  is the whole fix**. End to end: -0.55 rad/s (nose right) before, +0.47
+  after, original +0.36.
+- **The history answers the user's memory exactly**: steering was
+  reversed in `5ad69f3` in the PHYSICS layer (`engine.rs`/`forces.rs`
+  only); `airbrake.rs` shares the convention and was never touched. From
+  that commit until now, braking one side turned the nose away from it.
+- **Methodology lesson, recorded in the code docs: a scenario that
+  mirrors two inputs to cancel a sign convention cannot then be used to
+  check one.** The asymmetric scenario holds brake and steer on the same
+  side by design, and the steering drive dominates - an inverted airbrake
+  yaw only showed as a wrong rate, not a wrong direction. The isolated
+  scenario is now committed and three pinning tests (all verified to
+  fail under the old sign, including a left/right mirror pair so an
+  unconditional yaw cannot pass) keep the question answered.
+- Left open, deliberately: **`Sideshift::Right -> +Body::right()` is an
+  unevidenced coin-flip of exactly this shape** - the original's
+  sideshift direction has never been read; a 30-tick capture settles it
+  (Task #36). The asymmetric capture can only speak to direction, not
+  magnitude (different start speed, wall contact from ~tick 95).
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
