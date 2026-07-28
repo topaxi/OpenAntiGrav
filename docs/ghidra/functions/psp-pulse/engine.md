@@ -1680,9 +1680,12 @@ matter to a reimplementation:
   `|h - d| > DAT_08a7bd48` (`5.0`, `0x40a00000`) the spline is abandoned outright
   and the axis becomes `craft+0x260` with `d = dot(craft+0x1a0 - craft+0x250,
   axis)` - the mag ray's own normal and hit. The second sample is skipped
-  entirely when `sample2+0x40` reads `-1024.0`, a sentinel the entity constructor
-  writes into both records at `0x08840dc0` and `0x08840e0c`; `+0x40` is
-  `SplinePt`'s `unk_0x40`, which that page lists as undetermined.
+  entirely when `sample2+0x40` reads `-1024.0`. That sentinel is written by the
+  locator itself - `AiTrack_UpdateCursor` (`0x0887e464`) materialises `0xc4800000`
+  at `0x0887e9d4` and stores it to `+0x40` of the record four instructions later -
+  and **not** by the entity constructor, which zero-fills both records
+  (`mtc1 zero, f20` at `0x08840d38`). `+0x40` is `SplinePt`'s `unk_0x40`, which
+  the format page lists as undetermined.
 
 `DAT_08a7bd44` is `0.2` (`0x3e4ccccd`) and is added or subtracted **per frame**,
 with no `dt` anywhere near it.

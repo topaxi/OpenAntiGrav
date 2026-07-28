@@ -300,8 +300,7 @@ pub struct Environment {
     /// The spline sample after [`Self::track_sample`], when there is one.
     ///
     /// `None` is the original's `-1024.0` sentinel at the second record's `+0x40`,
-    /// which its entity constructor writes and which means "this ship is not
-    /// between two sections".
+    /// which `AiTrack_UpdateCursor` writes when it has no second sample to report.
     pub track_sample_next: Option<crate::maglock::TrackSample>,
     /// The per-speed-class scale on `normal_gravity`, from the table at
     /// `0x08ab0dcc`.

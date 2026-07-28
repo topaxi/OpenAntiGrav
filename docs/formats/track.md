@@ -364,10 +364,12 @@ mechanism depends on the `+0x20` axis being what this page says it is.
 - The ship-entity constructor `FUN_08840c74` initialises both records
   (`0x08840dc0`-`0x08840e3c`) field by field in exactly this layout: four `vec4`,
   six floats at `+0x40`-`+0x54`, two bytes at `+0x60`/`+0x61`.
-- **`+0x40` doubles as a sentinel.** The constructor writes `-1024.0` there, and
-  `Ship_UpdateMagLock` skips the second sample when it still reads `-1024.0`. So
-  the field is a slot the runtime reuses, whatever the exporter meant by it; the
-  open question below stands for the *file*, not for the running game.
+- **`+0x40` doubles as a sentinel.** `AiTrack_UpdateCursor` (`0x0887e464`) writes
+  `-1024.0` into it at `0x0887e9f8`-`0x0887ea00` when it has no sample to report,
+  and `Ship_UpdateMagLock` skips the second record when it reads that. So the
+  field is a slot the runtime reuses, whatever the exporter meant by it; the open
+  question below stands for the *file*, not for the running game. (The entity
+  constructor merely zero-fills both records.)
 - The consumer that pins `+0x20`'s direction is the magstrip attitude hold, which
   slaves the ship's up axis to `unit(-(sample+0x20))` and recovers the surface
   point with `sample+0x00 - 3.0 * that` - the exact inverse of this page's
