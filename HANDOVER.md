@@ -714,6 +714,58 @@ reversible packaging choice, nothing in the engine depends on it).
   SteamOS's own glibc number; if a `GLIBC_...' not found` ever appears
   there, the version it names is the missing datum.
 
+**`timetrial` (Task #19, commits `656fbe0`, `e8ad9cf`): a full Time Trial
+lap was completed in PPSSPP under script, captured at full rate in the same
+run, and the identical input file runs through the reimplementation.** Gate
+green at 819 tests.
+
+- **The lap is real and the game says so**: Talon's Junction White, Time
+  Trial, Assegai Venom - at tick 3,087 the HUD read `Lap 2 of 3`,
+  `best 1.11.08`; a longer run took the 3-lap event to completion. The
+  closed loop that made it possible: `oag-trace track` dumps the disc's own
+  spline as CSV; `scripts/psp-autopilot.py` breaks per tick like
+  psp-trace.py, steers pure-pursuit at that spline, and **records what it
+  pressed - the finished lap and its capture are the same run**, so there
+  is no second run to hope agrees. The controller is explicitly not an RE
+  claim and nothing in docs/ cites it. `scripts/psp-drive.py` gives a
+  reproducible restart and real-time (1.00x, cycle-counter-paced) script
+  playback. `just drive` / `just autopilot` wrap them.
+- Committed scenario:
+  `verification/scenarios/talons-junction-time-trial-lap.inputs`
+  (3,146 ticks, 256 run-length lines); trace at
+  `data/traces/talons-junction-time-trial-lap.csv` (gitignored). **95.2 %
+  wall-free, longest clean stretch 314 consecutive ticks** - retiring
+  oag-game.md's "no capture has more than 60 wall-free ticks" and giving
+  the force law its first clean cornering data at 90-164 u/s. **No
+  analysis has been run on that cornering data yet** - separating `speed`
+  from `|velocity|` at real slip angles is the obvious next use.
+- **The same file through the sim** (`oag-trace run --script`, no new mode
+  needed; parsers diffed byte-identical): tracks the original to under a
+  unit for 75 ticks, then `grounded` drops to 0.5 where the original holds
+  1.0, leaves the surface for good at tick 313 and never returns. **First
+  measurement of when the contact-generation gap bites** - it is not the
+  force law (which agrees to a unit while grounded), it is staying on the
+  track; points straight at the single-deepest-probe / no-`cross(r,
+  impulse)` gap already named.
+- **Honest negative, run rather than assumed: the committed file does NOT
+  reproduce the lap open-loop in the emulator.** `psp-drive.py restart`
+  repeats the start *position* to every digit but the **heading only to
+  2.51 degrees** (a craft on the line is settling on its hover, not at
+  rest). Fine for a player, fatal to an open-loop script. Documented in
+  the scenario header. Pinning the start *pose* is the open follow-up -
+  the debugger's untried `replay.begin`/`replay.execute` API is the
+  candidate.
+- Corrections landed: capture runs at **0.37x real time** (18-22 ticks/s -
+  a whole lap under capture is 2 min 22, cheap), not "far below real
+  time"; **the game's race clock does not count emulated frames** (laps of
+  identical tick counts timed `0.50.25` vs `1.11.08` - never read timing
+  off the HUD under breakpoints; the lap *counter* is unaffected); a
+  craft's address is **not stable across a restart** - learn it per run.
+- Unchecked note: Pulse's Racebox is generally understood to have a Speed
+  Lap mode that would be a cleaner single-lap target - not verified in
+  the emulator, and not blocking (`--laps 1.02` stops the autopilot one
+  lap in).
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
