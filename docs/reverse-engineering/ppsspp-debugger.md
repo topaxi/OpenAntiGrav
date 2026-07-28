@@ -128,6 +128,15 @@ loading screen - cannot be sat through *during* capture.
 then start capturing. Confidence **85**, from the game clock rather than from
 instrumentation.
 
+**Refined 2026-07-28, and the refinement changes what is worth attempting:**
+timed against the wall clock rather than against the game's, a breakpoint-driven
+capture runs at **18-22 ticks/s, or 0.37x real time** - a 200-tick reference
+capture in 9 seconds and a whole lap in under two and a half minutes. The
+"advanced the lap clock by one second" reading is not a contradiction, because
+[the game's own race clock does not count emulated
+frames](#what-tells-you-the-race-finished); it is simply the wrong instrument.
+Sitting out a *countdown* under capture is still not worth it, but a lap is.
+
 ### The shoulder buttons are `ltrigger` and `rtrigger`, not `l` and `r`
 
 `input.buttons.send` answers `{"l": true}` with
@@ -296,8 +305,16 @@ and a capture still costs a countdown.
 sleep, `cross` to dismiss the track description, a sleep through the countdown -
 and hands back a stationary craft on the start line. Run three times on
 2026-07-28 it produced position `(6.07, -50.07, -196.10)` **every time, to every
-digit printed**, which is a fixed starting point in the only sense a scenario
-needs. What it is not is *fast*: it costs the 44 seconds of loading, description
+digit printed**.
+
+**That is not the same as a fixed starting *pose*, and the difference cost a
+whole-lap replay.** Two restarts an hour apart put the craft 0.03 units apart and
+**2.51 degrees apart in heading**: a craft on the start line is sitting on its
+hover rather than at rest, and where its nose has drifted to depends on how many
+frames it has been sitting. That is invisible to a player, harmless to a
+closed-loop run, and fatal to an open-loop script - see
+[`oag-trace`'s page](../tools/oag-trace.md#the-lap-does-not-replay-into-the-emulator-and-why)
+for the run where it produced a wall at tick 150 instead of a lap. What it is not is *fast*: it costs the 44 seconds of loading, description
 and countdown that a save state would skip. The two sleeps are sleeps rather than
 state polls because the front end's state name reads `InGame` for all of it -
 loading, description and countdown are not distinguishable through `0x08b31784`,

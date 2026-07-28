@@ -234,6 +234,51 @@ the standing complaint in [`oag-game.md`](oag-game.md) that no capture has more
 than 60 consecutive wall-free ticks: the force law now has a clean, *cornering*
 straight to be measured on, which no previous capture provided.
 
+### The lap does not replay into the emulator, and why
+
+The obvious follow-up was run, and it failed, which is worth more than not
+running it: feeding the committed file straight back into the original from a
+fresh start.
+
+```sh
+uv run --with websocket-client scripts/psp-drive.py restart
+just trace --script verification/scenarios/talons-junction-time-trial-lap.inputs \
+    --script-lead 2 --out data/traces/talons-junction-lap-replay.csv
+cargo run -p oag-trace -- compare data/traces/talons-junction-time-trial-lap.csv \
+    data/traces/talons-junction-lap-replay.csv
+```
+
+The replay travels **860 units in 3,146 ticks** against the recording's 5,169. It
+is not a lap; it is a ship that hit a wall at about tick 150 and ground to a halt
+(speed 106 -> 77 -> 55 -> 28 -> 14 -> 2.8 over ticks 150 to 600).
+
+The cause is in row 0, before a single input has been sent:
+
+| Tick | Gap | Heading apart | Recorded speed | Replay speed |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 0.03 | **2.51°** | 0.0 | 0.0 |
+| 30 | 0.21 | 2.51° | 19.1 | 19.1 |
+| 60 | 1.22 | 7.29° | 48.3 | 48.1 |
+| 150 | 18.41 | 12.37° | 106.1 | 77.5 |
+| 400 | 384.15 | 25.23° | 119.4 | 14.4 |
+
+**`psp-drive.py restart` reproduces the craft's start *position* to every digit
+it prints and its *heading* only to about two and a half degrees.** A craft
+sitting on its hover at the start line is not at rest; it settles, and where its
+nose has drifted to depends on how many frames it has been sitting. Two and a
+half degrees is nothing to a player and everything to an open-loop script: it is
+a metre of lateral error by the first corner and a wall shortly after.
+
+So, precisely: **the committed file is a faithful record of the inputs of a lap
+that happened; it is not a reproducible emulator lap.** For our own side it is
+fully deterministic, which is what it is committed for - `oag-trace run --script`
+gives the same run every time from the same seed row. Making it replay into the
+emulator too needs the start *pose* pinned, not just the start position, and the
+debugger has no save state (see
+[the debugger page](../reverse-engineering/ppsspp-debugger.md#save-states-and-the-input-recording-api-that-may-replace-them)).
+The likeliest fix is the recording API that page describes, which was never
+tried.
+
 ### What a real scripted run found
 
 **The whole loop has been run end to end**, on the reference scenario - Time
@@ -646,12 +691,9 @@ Two smaller readings from the same run:
   3,146 ticks of a real circuit at 90-164 units/s. The speed columns can now be
   separated at real slip angles, which the reference straight could not do; that
   analysis has **not been run**, and is the obvious next use of the file.
-- **The lap has not been replayed open-loop into the emulator.** The recording
-  and the capture are the same run by construction, which is a strength for the
-  comparison and leaves one thing unmeasured: whether feeding the committed file
-  back through `psp-trace.py --script --script-lead 2` from a fresh
-  `psp-drive.py restart` reproduces the same lap. It should - the restart puts
-  the craft on the same start position to seven digits - but it is untested.
+- **The lap does not replay open-loop into the emulator, and that is measured
+  rather than assumed.** See
+  [below](#the-lap-does-not-replay-into-the-emulator-and-why).
 - Nothing compares a PSP capture against a PS2 one.
 - Shield, weapons, lap and race-position state are in the protocol's list of what
   gets traced and in neither the capture nor this tool: nothing downstream of the

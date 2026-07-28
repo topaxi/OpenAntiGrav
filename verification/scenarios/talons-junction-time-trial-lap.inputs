@@ -12,6 +12,13 @@
 # with `best 1.11.08` at tick 3087, which is the game timing the lap rather than
 # this file's author claiming one. 3,146 ticks, 5,169 units travelled, peak
 # 164 units/s.
+#
+# Read this before assuming what it is: it is a faithful record of the inputs of
+# a lap that happened, and it is NOT a reproducible emulator lap. Sent back into
+# PPSSPP from a fresh restart it travels 860 units and stops against a wall,
+# because `psp-drive.py restart` repeats the craft's start position exactly and
+# its heading only to about 2.5 degrees. On our own side it is fully
+# deterministic. The measurement is in docs/tools/oag-trace.md.
 
 25 cross right r
 10 cross right
