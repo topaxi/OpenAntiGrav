@@ -66,6 +66,10 @@ contain it.
   integration at all: Steam translates the user's controller configuration
   into synthetic gamepad/keyboard input. The explicit API buys action sets,
   per-context rebinding and button glyphs.
+  **That baseline now exists**: `gilrs` feeds a hardcoded mapping in
+  `oag-input`, alongside the keyboard's, and both merge into one abstract
+  button state. See [packaging](../tools/packaging.md#gamepad) for the table.
+  Nothing about Steam Input itself has moved out of planning.
 - **Keep `oag-input`'s abstraction action-shaped**, which it already is: the
   crate exists to map devices onto an abstract button layer producing
   `InputSnapshot`. Steam Input's model is named actions in named action sets

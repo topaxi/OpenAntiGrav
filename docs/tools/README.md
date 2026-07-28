@@ -8,6 +8,10 @@
 | [`oag-trace`](oag-trace.md) | **working** | Compare a simulation run against a trace from the original |
 | [`oag-game`](oag-game.md) | **working** | The engine itself: the front end, and the race its `Launch Game` starts |
 
+[Packaging](packaging.md) covers `just appimage`: the engine as one file that
+runs on a Steam Deck, why AppImage rather than Flatpak, how a packaged build
+finds the player's own disc image, and the gamepad mapping.
+
 All are run through `just` for convenience:
 
 ```sh

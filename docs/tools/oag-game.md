@@ -30,7 +30,24 @@ and right airbrakes, C and V are square and triangle, Escape quits. The keys
 are the same
 [abstract button layer](../ghidra/functions/psp-pulse/input.md) the front end uses;
 there is one mapping from a keyboard to a snapshot and both halves go through it,
-one `Keyboard` for the whole session, so a key held across the handoff stays held.
+one set of devices for the whole session, so a key held across the handoff stays
+held.
+
+**A gamepad works too**, and needs no configuration: left stick or d-pad steers,
+R2 or A thrusts, the shoulder buttons are the airbrakes and L2 is both of them.
+The whole table, and the two bindings that are interpretations rather than
+one-to-one, are in [packaging](packaging.md#gamepad). Keyboard and pad merge into
+one button state before any edge is computed, so a press on either is one press.
+
+## Finding the disc image
+
+The positional argument is optional. Left out, the image is searched for:
+`data/images/` under the current directory first, which is what a checkout has,
+then beside the executable if it is an AppImage, then
+`~/.local/share/oag/images/`; `$OAG_IMAGE` short-circuits the lot. The full order
+is in [packaging](packaging.md#where-the-disc-image-comes-from), and
+`crates/game/src/source.rs` is the code. **No image ships with the engine** and
+none ever will - see [legal](../overview/legal.md).
 
 ```sh
 # No display needed: run the simulation for 45 ticks and write one frame.

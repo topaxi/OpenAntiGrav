@@ -5,15 +5,20 @@
 //! That is rule 1 of `docs/architecture/workspace-layout.md`, and it is what
 //! lets a replay or a test drive the simulation with no device attached at all.
 //!
-//! Only a keyboard is mapped so far. A pad and the PSP's own analog nub are the
-//! obvious next devices, and both produce the same snapshot, which is the point
-//! of the abstract button layer sitting between them and the game.
+//! A keyboard ([`Keyboard`]) and a gamepad ([`pad::Pad`]) are mapped, and
+//! [`Controls`] is both of them as one device, which is what a window has. The
+//! PSP's own analog nub is the obvious next one, and it would produce the same
+//! snapshot, which is the point of the abstract button layer sitting between
+//! any device and the game.
 
 pub mod keys;
+pub mod pad;
 
 use oag_gameplay::InputSnapshot;
 use oag_gameplay::input::{Input, button};
 use winit::keyboard::Key;
+
+pub use pad::Pad;
 
 /// Accumulates key state between ticks and hands out one snapshot per tick.
 ///
@@ -87,6 +92,113 @@ impl Keyboard {
     ///
     /// The front end drives itself off this rather than off a snapshot, because
     /// it needs [`Input::consume_press`] and a snapshot is a value.
+    #[must_use]
+    pub fn buttons(&self) -> &Input {
+        &self.buttons
+    }
+
+    /// Mutable button state, for [`Input::consume_press`].
+    pub fn buttons_mut(&mut self) -> &mut Input {
+        &mut self.buttons
+    }
+
+    /// The keys held right now, as abstract bits.
+    ///
+    /// What [`Controls`] merges with a pad's bits before any edge is computed.
+    #[must_use]
+    pub fn held_mask(&self) -> u32 {
+        self.held
+    }
+}
+
+/// Every device on the window, as the one thing a tick reads.
+///
+/// A window has devices, not a device: a player on a Deck may steer with the
+/// stick and skip the intro with the keyboard in the same second. The merge has
+/// to happen **before** the edges are computed, which is why this owns the
+/// single [`Input`] and neither the keyboard nor the pad computes its own: a
+/// press seen on two devices is one press, and
+/// [`Input::consume_press`] has one place to clear it.
+#[derive(Debug, Default)]
+pub struct Controls {
+    keyboard: Keyboard,
+    pad: Pad,
+    buttons: Input,
+}
+
+impl Controls {
+    /// Opens every device. A machine with no pad is a keyboard-only session
+    /// rather than an error; see [`Pad::new`].
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Every device but the pad, for a run that must not open one. See
+    /// [`Pad::none`].
+    #[must_use]
+    pub fn without_pad() -> Self {
+        // Spelled out rather than `..Self::default()`, which would open the pad
+        // subsystem only to drop it again.
+        Self {
+            keyboard: Keyboard::new(),
+            pad: Pad::none(),
+            buttons: Input::new(),
+        }
+    }
+
+    /// Records a key going down or coming up. See [`Keyboard::set_key`].
+    pub fn set_key(&mut self, key: &Key, pressed: bool) {
+        self.keyboard.set_key(key, pressed);
+    }
+
+    /// Releases every key. Call it on focus loss, as [`Keyboard::release_all`]
+    /// explains.
+    ///
+    /// The pad is deliberately not released: it is read fresh every tick, and a
+    /// pad keeps reporting its own state whether or not the window has focus.
+    pub fn release_all(&mut self) {
+        self.keyboard.release_all();
+    }
+
+    /// Whether a pad subsystem was opened, and what is connected to it.
+    #[must_use]
+    pub fn pad(&self) -> &Pad {
+        &self.pad
+    }
+
+    /// Ends the tick: merges the devices, computes the edges, derives the axes.
+    ///
+    /// An axis a device produces digitally (a key, a d-pad) is -1, 0 or 1; a
+    /// stick produces a continuum. Whichever is further from centre wins, so
+    /// resting on the stick does not veto the d-pad and vice versa.
+    pub fn snapshot(&mut self) -> InputSnapshot {
+        let pad = self.pad.poll();
+        self.buttons
+            .begin_frame(self.keyboard.held_mask() | pad.held);
+
+        let digital_x = axis(
+            self.buttons.is_held(button::RIGHT),
+            self.buttons.is_held(button::LEFT),
+        );
+        let digital_y = axis(
+            self.buttons.is_held(button::UP),
+            self.buttons.is_held(button::DOWN),
+        );
+        let shoulder = |index: u8| f32::from(u8::from(self.buttons.is_held(index)));
+
+        InputSnapshot {
+            buttons: self.buttons,
+            stick_x: pad::larger(digital_x, pad.stick_x),
+            stick_y: pad::larger(digital_y, pad.stick_y),
+            airbrake_left: shoulder(button::L).max(pad.airbrake_left),
+            airbrake_right: shoulder(button::R).max(pad.airbrake_right),
+        }
+        .sanitised()
+    }
+
+    /// The button state as of the last [`Self::snapshot`], which is what the
+    /// front end drives itself off.
     #[must_use]
     pub fn buttons(&self) -> &Input {
         &self.buttons
@@ -173,6 +285,37 @@ mod tests {
         let snapshot = keyboard.snapshot();
         assert_eq!(snapshot.stick_x, 0.0);
         assert!(snapshot.buttons.is_released(button::LEFT));
+    }
+
+    /// The merge has to be one `Input`, or a press on one device would be an
+    /// edge the other device's `consume_press` cannot clear.
+    #[test]
+    fn controls_merge_the_keyboard_into_one_button_state() {
+        let mut controls = Controls::without_pad();
+        controls.set_key(&Key::Named(NamedKey::Space), true);
+        let snapshot = controls.snapshot();
+        assert!(snapshot.buttons.is_pressed(button::START));
+
+        controls.buttons_mut().consume_press(button::START);
+        assert!(!controls.buttons().is_pressed(button::START));
+        assert!(controls.buttons().is_held(button::START));
+    }
+
+    /// A pad is read fresh every tick, so `Controls` still works as a keyboard
+    /// on a machine with none - which is every headless capture and CI run.
+    #[test]
+    fn controls_steer_from_the_keyboard_with_no_pad_attached() {
+        let mut controls = Controls::without_pad();
+        controls.set_key(&Key::Character("a".into()), true);
+        assert_eq!(controls.snapshot().stick_x, -1.0);
+
+        controls.set_key(&Key::Character("q".into()), true);
+        assert_eq!(controls.snapshot().airbrake_left, 1.0);
+
+        controls.release_all();
+        let snapshot = controls.snapshot();
+        assert_eq!(snapshot.stick_x, 0.0);
+        assert_eq!(snapshot.airbrake_left, 0.0);
     }
 
     #[test]

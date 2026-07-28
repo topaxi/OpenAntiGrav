@@ -174,7 +174,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            source: "data/images/pulse-psp-usa.chd".to_string(),
+            source: crate::source::DEFAULT_IMAGE.to_string(),
             track: DEFAULT_TRACK.to_string(),
             team: DEFAULT_TEAM.to_string(),
             class: SpeedClass::Venom,

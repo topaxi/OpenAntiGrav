@@ -548,10 +548,26 @@ fn expand(blob: &[u8]) -> Result<String> {
     }
 }
 
-/// The default cache directory, `data/cache/movies` beside the disc images.
+/// The default cache directory: `data/cache/movies` in a repository checkout,
+/// and `<cache dir>/oag/movies` anywhere else.
+///
+/// A checkout is recognised by having a `data/` directory, which is where
+/// everything user-supplied already lives and what `just` recipes and
+/// `data/README.md` document. A packaged build has no checkout around it, and
+/// writing beside wherever it happens to have been run from would scatter a
+/// cache through a player's folders - or fail outright, if that is a read-only
+/// mount. Deleting either directory is always safe; see
+/// `docs/architecture/adr/0004-asset-pipeline.md`.
 #[must_use]
 pub fn default_cache_dir() -> std::path::PathBuf {
-    Path::new("data/cache/movies").to_path_buf()
+    let checkout = Path::new("data/cache/movies");
+    if Path::new("data").is_dir() {
+        return checkout.to_path_buf();
+    }
+    dirs::cache_dir().map_or_else(
+        || checkout.to_path_buf(),
+        |cache| cache.join("oag").join("movies"),
+    )
 }
 
 #[cfg(test)]

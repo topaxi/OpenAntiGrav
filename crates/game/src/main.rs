@@ -37,8 +37,8 @@ use oag_core::{TickClock, TickRate};
 use oag_game::frontend::{self, Frontend};
 use oag_game::input;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{boot, capture, movie, race, report, settings};
-use oag_input::Keyboard;
+use oag_game::{boot, capture, movie, race, report, settings, source};
+use oag_input::Controls;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
 
@@ -60,8 +60,11 @@ struct Cli {
     /// Either release: the archives are found by name, so
     /// `data/images/pulse-ps2-eu.chd` works as well as the PSP default. See
     /// `oag_assets::pulse::Layout`.
-    #[arg(default_value = "data/images/pulse-psp-usa.chd")]
-    source: String,
+    ///
+    /// Left out, it is searched for: `data/images/` in the current directory,
+    /// then beside the AppImage, then `<data dir>/oag/images`. `oag_game::source`
+    /// documents the whole order, and `$OAG_IMAGE` short-circuits it.
+    source: Option<String>,
 
     /// Which movie to play: an archive entry name, or `hash:XXXXXXXX` for one of
     /// the reels whose name is not recovered.
@@ -227,8 +230,13 @@ fn main() -> Result<()> {
             cli.class
         )
     })?;
+    // Resolved once, before anything opens it: both ways in need a source, and
+    // "no disc image found" is a message about the command line, not something to
+    // discover eight seconds of intro later.
+    let source = source::resolve(cli.source.as_deref())?;
+
     let race_options = race::Options {
-        source: cli.source.clone(),
+        source: source.clone(),
         track: cli.track.clone(),
         team: cli.team.clone(),
         class,
@@ -249,7 +257,7 @@ fn main() -> Result<()> {
         frontend::Leg::LogoFmv
     };
     let options = boot::Options {
-        source: cli.source.clone(),
+        source: source.clone(),
         leg,
         movie: cli.movie.clone().unwrap_or_else(|| {
             match leg {
@@ -312,7 +320,7 @@ fn main() -> Result<()> {
         );
     }
 
-    println!("\narrow keys move, return or X selects, space skips, escape quits");
+    println!("\n{MENU_KEYS}");
 
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the intro is animated whether or not input arrives.
@@ -368,12 +376,16 @@ fn parse_size(text: &str) -> Result<(u32, u32)> {
 /// The window's title while the front end is on screen.
 const TITLE: &str = "OpenAntiGrav";
 
+/// Printed before the front end opens.
+const MENU_KEYS: &str = "arrow keys or the left stick move, return, X or cross \
+     selects, space or start skips, escape quits";
+
 /// And once a race has taken it over.
 const RACE_TITLE: &str = "OpenAntiGrav - race";
 
 /// Printed whenever a race takes the window, by either route.
-const RACE_KEYS: &str =
-    "arrow keys steer, X or return thrusts, Q and E are the airbrakes, escape quits";
+const RACE_KEYS: &str = "arrow keys or the left stick steer, X, return or R2 thrusts, \
+     Q and E or the shoulders are the airbrakes, L2 is both, escape quits";
 
 /// Loads a track and a ship and either captures one frame or opens a window.
 fn run_race(cli: &Cli, options: race::Options, anisotropy: Anisotropy) -> Result<()> {
@@ -450,10 +462,15 @@ impl App {
             return Ok(None);
         };
 
+        let controls = Controls::new();
+        for name in controls.pad().names() {
+            println!("gamepad: {name}");
+        }
+
         Ok(Some(Session {
             gpu,
             stage,
-            keyboard: Keyboard::new(),
+            controls,
             clock: TickClock::new(TickRate::DEFAULT),
             last: std::time::Instant::now(),
             race_options: self.race_options.clone(),
@@ -491,7 +508,7 @@ impl ApplicationHandler for App {
 
             // A key held while the window loses focus is never seen to come up, and
             // the ship would keep turning while the player is elsewhere.
-            WindowEvent::Focused(false) => session.keyboard.release_all(),
+            WindowEvent::Focused(false) => session.controls.release_all(),
 
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.logical_key == Key::Named(NamedKey::Escape)
@@ -501,7 +518,7 @@ impl ApplicationHandler for App {
                     return;
                 }
                 session
-                    .keyboard
+                    .controls
                     .set_key(&event.logical_key, event.state == ElementState::Pressed);
             }
 
@@ -714,10 +731,10 @@ impl RaceStage {
 struct Session {
     gpu: Gpu,
     stage: Stage,
-    /// One keyboard for both stages: a device belongs to the window rather than
+    /// One set of devices for both stages: they belong to the window rather than
     /// to what is on screen, so key state carries across the handoff and a focus
     /// loss releases everything whichever stage is running.
-    keyboard: Keyboard,
+    controls: Controls,
     clock: TickClock,
     last: std::time::Instant,
     /// What `Launch Game` starts, kept because the front end is loaded long
@@ -775,14 +792,14 @@ impl Session {
         let dt = f64::from(self.clock.rate().dt());
 
         for _ in 0..steps {
-            // Ends the keyboard's tick for both stages. A race reads the snapshot's
+            // Ends the devices' tick for both stages. A race reads the snapshot's
             // axes; the front end reads the button edges the same call computed,
             // through `buttons_mut`, because it needs `consume_press` and a
             // snapshot is a value.
-            let snapshot = self.keyboard.snapshot();
+            let snapshot = self.controls.snapshot();
             match &mut self.stage {
                 Stage::Frontend(stage) => {
-                    let events = stage.frontend.update(dt, self.keyboard.buttons_mut());
+                    let events = stage.frontend.update(dt, self.controls.buttons_mut());
                     report(&events, stage.trace);
                     for note in stage.frontend.take_notes() {
                         println!("{note}");

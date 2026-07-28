@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#
+# AppImage entry point.
+#
+# Deliberately does not `cd` anywhere: the process keeps the directory the user
+# ran it from, so a relative `oag-game data/images/pulse-psp-usa.chd` means what
+# it says and the `data/images` leg of the image search still works from a
+# repository checkout. The AppImage runtime exports $APPDIR (the mounted,
+# read-only package) and $APPIMAGE (the path of the file itself); the game reads
+# $APPIMAGE's *directory* to find a disc image the player put beside it. See
+# crates/game/src/source.rs.
+
+set -euo pipefail
+
+here="$(dirname "$(readlink -f "${0}")")"
+
+exec "$here/usr/bin/oag-game" "$@"

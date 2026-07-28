@@ -42,6 +42,7 @@ pub mod race;
 pub mod render;
 pub mod screen;
 pub mod settings;
+pub mod source;
 pub mod sprite;
 pub mod state_machine;
 

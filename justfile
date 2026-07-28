@@ -90,6 +90,15 @@ play-screenshots out="/tmp":
     cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-launch.png" \
         --until "Launch Game" --press start,cross --ticks 60
 
+# Package the game as a single-file x86_64 AppImage, for the Steam Deck.
+#
+# The engine only: no game content is ever packaged, and the script refuses to
+# build if any found its way in. The player's own disc image is looked for
+# beside the AppImage at runtime. See docs/tools/packaging.md, which also
+# records why AppImage rather than Flatpak.
+appimage *ARGS:
+    ./scripts/build-appimage.sh {{ARGS}}
+
 # View assets straight from a disc image
 view *ARGS:
     cargo run -q -p oag-view -- {{ARGS}}
