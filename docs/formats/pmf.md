@@ -119,8 +119,17 @@ those three numbers from constants in a decompiled function into frame numbers o
 a real reel, and it is asserted by
 [a test](../../crates/assets/tests/pmf_ground_truth.rs).
 
-Why there are three of them is not established. Regional publisher cards is the
-obvious guess and it is only a guess.
+Why there are three of them is settled: they are **regional cuts**. Decoded, all
+three show the same two cards and differ in one line - `SONY COMPUTER
+ENTERTAINMENT EUROPE / INC. / AMERICA PRESENTS` at frame 144, then
+`A STUDIO LIVERPOOL GAME` at 231 - which lifted the "these are the dev/pub logo
+cards" reading from **82** to **95**, from the picture rather than from the
+constants. What is *not* settled is which cut runs when: the same three ship
+byte-identically on *Wipeout Pure*'s USA disc, so the disc's region cannot be
+what picks one, and the mechanism is unread. Nor is it settled what plays them
+at all - the state whose counters they fit is never entered during boot. See
+[frontend boot](../architecture/frontend-boot.md#the-devpub-reel) and
+[frontend video](../ghidra/functions/psp-pulse/frontend-video.md).
 
 ## Not determined
 
