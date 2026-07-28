@@ -936,6 +936,61 @@ with no thrust - and `pitch-hold-thrust.inputs`).
 - Verdict: **the momentum model is validated and Task #18 can land.** The
   agent proceeded to #18 with the ~6.4x prediction on record.
 
+**`momentum`, second task (Task #18, commits `7b8415f`, `7e657bd`,
+`f0912d7`): the angular momentum model is LANDED as one coherent change,
+two more fitted constants are retired, and the validation is honest on both
+the wins and the one regression.** Gate 824 tests; `just test-data`
+868/868; determinism green against the committed reference.
+
+- What changed: accumulators hold torque; `angular_damping` takes momentum
+  (`I*omega`); `Body::inertia` carries the real tensor - **including in
+  `Body::default()`, deliberately** (a silent `1` there produces 15.6x
+  pitch authority with nothing in the source to look at); the yaw shortcut
+  is replaced by per-axis inverse-inertia constants in the binary's own
+  `12/(m*(a^2+b^2))` form; the pitch input axis is on its measured +/-100
+  scale with the measured sign.
+- **Fitted constants retired: `ALIGNMENT_INERTIA = 19.8`** (the fitted
+  value sat *between* the two axes the term acts on - roll 15.6, yaw
+  21.6 - which a fit could not have arranged; on roll alone the recovered
+  tensor runs the oscillator 13 % stiff vs measured, pinned with the gap
+  stated, not tuned) **and `spawn::box_inertia`'s `<Misc>` derivation**
+  (refuted outright - the box is a code literal, hull dimensions go to the
+  collider, the old derivation was 4.4x out on roll).
+- **Yaw unchanged exactly as predicted**, and
+  `full_lock_out_yaws_the_bank...` needed no edit - the orchestrator's
+  brief wrongly expected the weathervane change to move it; the test pins
+  a ratio between two *body-local* yaw writes, invariant under the I_yy
+  divide, and the weathervane is world-frame and never enters it.
+- **Pitch: the drive magnitude is right to 1 %** on step leading edges
+  (0.991x / 0.986x on two captures), and the before/after on the pitch
+  capture is night-and-day (orientation.up error 0.667-and-growing ->
+  0.0898-and-bounded; grounded errors 69 -> 0). **But the original's pitch
+  rate decays smoothly where ours RINGS** (134 % of signal over a full
+  hold). Named suspect, rated likely: the alignment torque's right-axis
+  projection in `Ship_HoverTwoPoint` - re-reading it is Task #26.
+- **The seeded lap comparison - the measurement that asks "are we closer
+  to the original" - improves 62 % on position** (max err 1.076e4 ->
+  4.045e3) and 20 % on velocity. **The open-loop `just scripted-sim` lap
+  regressed** (grounded 3145/3146 -> 734/3146, leaves at a crest at tick
+  ~742): characterised, not guessed - the weathervane's in-air authority
+  correctly drops by `I`, and what the old behaviour was masking is the
+  known contact-generation gap at a crest the original never leaves. An
+  open-loop recording of an autopilot driving the *original* is maximally
+  sensitive to any handling change. Worth deciding whether that recipe's
+  headline metric should be the seeded comparison instead.
+- **A real bug found by adding `omega_*` to the compare set: the replay
+  was seeding `Body::angular_velocity` from the MOMENTUM column** - every
+  seeded run started spinning 15.6-21.6x too fast on every axis. Fixed
+  (prefers `omega_*`, divides `avel_*` by the tensor otherwise; simulated
+  `avel_*` written as `I*omega`); the guarding test was rewritten to
+  assert the two columns agree on the same physical rotation - the old
+  version passed with the bug live because it only asked whether the nose
+  had moved.
+- Open after this: the pitch restoring path (Task #26), the 13 % roll
+  stiffness, Task #25 (lap re-capture with `omega_*`), nothing airborne
+  captured yet, and contact generation remains the M4 trace-convergence
+  gap.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
