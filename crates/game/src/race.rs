@@ -1476,6 +1476,52 @@ mod tests {
     use oag_gameplay::input::button;
     use oag_input::keys::map_key;
 
+    /// A model with geometry and no textures, which is what a PS2 `.vex` builds to.
+    fn model(triangles: usize, textures: usize) -> Model {
+        Model {
+            label: "Ship.vex".to_string(),
+            vertices: Vec::new(),
+            indices: vec![0; triangles * 3],
+            draws: Vec::new(),
+            textures: (0..textures)
+                .map(|index| {
+                    Some(mesh::ModelTexture {
+                        label: format!("#{index}"),
+                        width: 1,
+                        height: 1,
+                        rgba: vec![255; 4],
+                    })
+                })
+                .collect(),
+            centre: [0.0; 3],
+            radius: 1.0,
+            mesh_count: 1,
+        }
+    }
+
+    #[test]
+    fn a_model_with_no_textures_says_so_and_says_why() {
+        let note = untextured_note(&model(2, 0)).expect("an untextured model is reported");
+        assert!(note.contains("Ship.vex"), "{note}");
+        assert!(note.contains("drawing untextured"), "{note}");
+        // The reader has to be able to get from the line to the finding, because
+        // the line on its own reads like a decode failure and it is not one.
+        assert!(note.contains("ps2-texture.md"), "{note}");
+    }
+
+    #[test]
+    fn a_textured_model_is_not_reported() {
+        assert_eq!(untextured_note(&model(2, 1)), None);
+    }
+
+    /// An empty model is somebody else's problem: it has no textures because it
+    /// has nothing to put them on, and saying "drawing untextured" about it would
+    /// point at the wrong thing.
+    #[test]
+    fn an_empty_model_is_not_reported_as_untextured() {
+        assert_eq!(untextured_note(&model(0, 0)), None);
+    }
+
     /// The inverse table must really be the inverse, or the headless capture and the
     /// window disagree about what a key means and only one of them is ever tested.
     #[test]

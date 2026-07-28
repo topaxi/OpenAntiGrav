@@ -5,7 +5,11 @@
 //! `docs/architecture/frontend-boot.md` for how each one was found and what it
 //! contains.
 
-use oag_disc::{DiscImage, Platform};
+use oag_disc::DiscImage;
+
+/// Re-exported because [`Layout::platform`] is one, and a caller that reads that
+/// field should not have to depend on `oag-disc` to name what it read.
+pub use oag_disc::Platform;
 
 use crate::{Archive, Error, Result};
 
