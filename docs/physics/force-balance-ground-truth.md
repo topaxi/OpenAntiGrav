@@ -264,17 +264,41 @@ as engine.md states.
   an open sign question `passive.rs` had recorded as "a guess awaiting M3".
   Confidence 90 on the `vabs.s`, 88 on the sole-writer negative.
 
-## A term that exists and this crate does not implement
+## A term that exists, and that this crate implements after all
 
 `passive.rs`'s module doc states "there is no dedicated airbrake drag term".
 **That is wrong.** `Ship_UpdateAirbrakes` reads `Airbrake.drag` (class `+0xe8`,
 reached as `+0x54` through the `craft+0x70` pointer) at `0x0884cce8` and forms
 
 ```text
-forward * |airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * 0.001 * forwardSpeed
+forward * |airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * 0.001 * speed
 ```
 
-at `0x0884ccc8`-`0x0884cdb4`, gated on `forwardSpeed > 0`. Confidence 88.
+at `0x0884ccc8`-`0x0884cdb4`, gated on the cached speed being positive.
+Confidence 88.
+
+**Second correction, to this section itself: "and this crate does not implement
+it" was also wrong.** `crates/physics/src/airbrake.rs`'s `evaluate` has applied
+the term - with both literals, in the binary's association order - since the
+physics crate was written; it was transcribed from `docs/physics/README.md`'s
+pseudocode, and three separate prose claims (this section, `passive.rs`'s
+header, and `airbrake.rs`'s *own* header a hundred lines above the code) said
+otherwise. All three are now corrected. The lesson is cheap and worth keeping:
+a claim that the crate is missing a term is a claim about the crate, and
+nothing here had checked it against the crate.
+
+The force block has since been read end to end (`0x0884ccb4`-`0x0884cf94`, see
+[engine.md](../ghidra/functions/psp-pulse/engine.md)), which settles two things
+this section had left open or stated loosely:
+
+- **The sign. It accelerates.** `sp+0x10` is written fresh at `0x0884cdb8` and
+  the `vadd.t` at `0x0884cf88` adds it to `craft+0x330`, with every factor
+  non-negative. The crate had implemented the literal reading and flagged it
+  "a guess awaiting M3"; the guess was right. Confidence **90**.
+- **The gate is on `craft+0x2ec`, the *absolute* cached speed**, not on a
+  signed forward speed as written above and in earlier revisions of this page.
+  A **reversing** ship therefore still gets the term, pointed along `+forward`,
+  which for it is a deceleration.
 
 **Correction to the first reading of this term: the scale is `1e-5`, not `0.01`.**
 There are two literals, not one - `0x3c23d70a` (`0.01`) at `0x0884ccf4` and then
@@ -286,9 +310,13 @@ projection - it is simply zero in both captures.
 
 It is **speed-proportional**, which is the shape being hunted - but it is
 identically zero in both captures used here, because both hold `airbrake_l ==
-airbrake_r == 0`. So it is a real missing term worth implementing for fidelity,
-and it is **not** this discrepancy. It does mean a capture with asymmetric
-airbrake input would be a good independent test of it.
+airbrake_r == 0`. So it is **not** this discrepancy. A capture with asymmetric
+airbrake input was taken for exactly that reason
+(`data/traces/talons-junction-airbrake-asymmetric.csv`); it corroborates the
+magnitude only weakly - consistent within a factor of two, confidence ~55,
+because the capture is wall-contaminated throughout and carries an unexplained
+~4.8-unit baseline deficit. That is a floor on the evidence, not a target: the
+crate implements the **read** values and is deliberately not fitted to it.
 
 ## Where the mechanism has to be - and where it turns out not to be
 

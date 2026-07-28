@@ -507,6 +507,88 @@ vertical-damping term and the track-section force. All whole-vector `vadd.t`.
 **Angular world `+0x350`:** the surface-alignment torque (hover epilogue) and
 the weathervane torque.
 
+### `Ship_UpdateAirbrakes`' force block, read end to end
+
+`0x0884c9a4`; the force block is `0x0884ccb4`-`0x0884cf94`, read with the
+Allegrex module. Everything before it is the two airbrake ramps and their
+`0..100` clamps. The block produces three terms and adds two vectors:
+
+```text
+0884ccb4  lwc1   f12,0x2ec(s0)    ; the cached speed, |dot(v, forward)|
+0884ccb8  c.le.s f12,f14          ; f14 == 0.0f, set once at 0884c9cc
+0884ccc0  bc1t   0x0884cf98       ; speed <= 0 skips all three terms
+0884ccc8  lwc1   f12,0x2c4(s0)    ; ramped airbrake L
+0884cccc  lwc1   f13,0x2c8(s0)    ; ramped airbrake R
+0884ccd0  sub.s  f12,f12,f13
+0884ccd4  lw     a0,0x78(s0)      ; the input snapshot
+0884ccd8  lwc1   f15,0x0(a0)      ; steerX, raw
+0884ccdc  abs.s  f15,f15
+0884cce0  abs.s  f12,f12
+0884cce4  lw     a0,0x70(s0)
+0884cce8  lwc1   f16,0x54(a0)     ; Airbrake.drag, class +0xe8
+0884ccec  mul.s  f12,f12,f16
+0884ccf0  mul.s  f12,f12,f15
+0884ccf4  lui    a0,0x3c23        ; 0x3c23d70a == 0.01f
+0884cd00  mul.s  f12,f12,f13      ; slide
+0884cd14  addiu  a0,s0,0x180      ; craft+0x180 == forward
+0884cd1c  vscl.q C300,C500,S400   ; forward * speed
+0884cd54  vscl.q C300,C500,S400   ; * slide
+0884cd78  lui    a1,0x3a83        ; 0x3a83126f == 0.001f
+0884cd98  vscl.q C300,C500,S400   ; * 0.001            -> sp+0x10, a fresh write
+0884cdcc  addiu  a1,s0,0x170      ; craft+0x170 == right
+0884cdd4  vscl.q C300,C500,S400   ; right * speed
+0884ce18  vscl.q C300,C500,S400   ; * (L * Airbrake.amount)
+0884ce5c  vsub.q C320,C300,C310   ; sp+0x10 -= that
+0884ce94  vscl.q C300,C500,S400   ; right * speed, again
+0884ced8  vscl.q C300,C500,S400   ; * (R * Airbrake.amount)
+0884cf18  vadd.q C220,C200,C210   ; sp+0x10 += that
+0884cf3c  lwc1   f13,0x2ec(s0)    ; the yaw term: speed * turn * (R - L) * 0.001
+0884cf68  mul.s  f12,f13,f12      ; f12 still holds the 0.001f from 0884cd80
+0884cf6c  swc1   f12,0x4(sp)      ; the .y lane of sp+0x0
+0884cf88  vadd.t C300,C300,C600   ; craft+0x330 += sp+0x10  (world force)
+0884cf8c  vadd.t C230,C230,C610   ; craft+0x340 += sp+0x0   (angular local)
+```
+
+So, with `speed` the cached `craft+0x2ec`:
+
+```text
+slide          = |L - R| * Airbrake.drag * |steerX| * 0.01
+worldForce    += forward * speed * slide * 0.001
+worldForce    += right * speed * Airbrake.amount * (R - L)
+angularLocal.y += speed * Airbrake.turn * (R - L) * 0.001
+```
+
+Confidence **88** on the whole block, raised from the 84 the function carried
+on decompilation alone. Four details are worth having explicitly, each of which
+corrects or settles something written elsewhere:
+
+- **The `drag` term's scale is `1e-5`, from two literals.** `0.01` at
+  `0x0884ccf4` and `0.001` at `0x0884cd78`, applied to the same vector. The
+  capstone pass that first found the term recorded only the first.
+- **The `drag` term accelerates.** `sp+0x10` is a *fresh* write at `0x0884cdb8`
+  - nothing is accumulated into it beforehand - every factor is non-negative,
+  and `0x0884cf88` **adds** it to the world force accumulator. This had been
+  recorded in `crates/physics` as an unresolved sign ("a guess awaiting M3");
+  the literal reading was right. Confidence **90** on the sign specifically,
+  since the chain was read including the accumulate.
+- **The gate is on the absolute cached speed.** `docs/physics/`'s pages wrote
+  it as "gated on `forwardSpeed > 0`", but `craft+0x2ec` is the `vabs.s`-ed dot
+  product, so a **reversing** ship is not excluded: it gets the same
+  `+forward` push, which for it is a deceleration.
+- **`steerX` is the raw input, `L`/`R` are the ramped states.** The term mixes
+  `craft+0x78 + 0x0` (the input snapshot) with `craft+0x2c4`/`+0x2c8` (this
+  function's own ramp output). Unifying the two is a natural-looking tidy-up
+  that would diverge; `crates/physics/src/airbrake.rs` pins it with a test.
+
+Also visible here and consistent with the accumulator survey below: the whole
+block writes `.xyz` of the world force and only `.y` of the angular-local
+accumulator - `0x0884cf6c` stores a single word into the `.y` lane of a quad
+initialised at `0x0884c9b4` from the constant at `0x08a90a00`, which reads
+`00 00 00 00 | 00 00 00 00 | 00 00 00 00 | 00 00 80 3f`, i.e. `(0, 0, 0, 1)`.
+The `vadd.t` at `0x0884cf8c` then takes only `.xyz`, so `.x` and `.z` are
+provably zero rather than merely unwritten. That is the instruction-level form
+of "airbrakes produce no direct roll torque".
+
 ### The roll negative, stated precisely
 
 [physics](../../../physics/README.md) says "airbrakes produce no direct roll
@@ -1357,7 +1439,7 @@ stored**. Same conclusion, now with the location.
 | `0x08849618` | `Ship_UpdateCraft` | 82 |
 | `0x0884c5c8` | `Ship_UpdateEngine` | 84 |
 | `0x08848788` | `Ship_UpdateSteering` | 84 |
-| `0x0884c9a4` | `Ship_UpdateAirbrakes` | 84 |
+| `0x0884c9a4` | `Ship_UpdateAirbrakes` | 88 |
 | `0x088489d8` | `Ship_UpdateBrakes` | 82 |
 | `0x08848d08` | `Ship_UpdatePitch` | 82 |
 | `0x0884870c` | `Ship_UpdateHover` | 82 |

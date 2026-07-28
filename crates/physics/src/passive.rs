@@ -4,7 +4,7 @@
 //! the ship handle at all: there is **no speed-dependent steering**, so the drag,
 //! the weathervane torque and the angular damping in this module carry that load.
 //!
-//! # There *is* a dedicated airbrake drag term, and it is not implemented
+//! # There *is* a dedicated airbrake drag term, and it lives in [`crate::airbrake`]
 //!
 //! An earlier revision of this doc stated "there is no dedicated airbrake drag
 //! term". That is false. `Ship_UpdateAirbrakes` reads `Airbrake.drag` (class
@@ -20,10 +20,15 @@
 //! capstone reading recorded**: there are two literals, `0x3c23d70a` (`0.01`) at
 //! `0x0884ccf4` and `0x3a83126f` (`0.001`) at `0x0884cd78`, both applied to the
 //! same vector. The direction is `craft+0x180`, the ship's own forward axis.
-//! It belongs in [`crate::airbrake`] rather than here, and it is unimplemented:
-//! it is identically zero in both captured traces (both hold the airbrakes equal
-//! and the steering at zero), so nothing available today can verify it. A capture
-//! with *asymmetric* airbrake input is what would test it.
+//!
+//! **It belongs in [`crate::airbrake`] rather than here, and that is where it
+//! is.** This paragraph used to end "and it is unimplemented", which was wrong
+//! on both counts that matter: [`crate::airbrake::evaluate`] has always applied
+//! it, and `Ship_UpdateAirbrakes` has since been read end to end (force block
+//! `0x0884ccb4`-`0x0884cf94`) confirming the crate's form factor for factor -
+//! including that the term **accelerates** along `+forward`, which had been
+//! recorded as an unresolved sign, and that the gate is on the *absolute*
+//! cached speed so a reversing ship is not excluded. See that function's docs.
 //!
 //! Recorded here because this module is where someone would look for it. It used
 //! to be flagged as a candidate for the missing speed-proportional resistance

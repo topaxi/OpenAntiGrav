@@ -5,11 +5,22 @@
 //! `docs/ghidra/functions/psp-pulse/engine.md`. The two things this module exists to
 //! keep honest:
 //!
-//! - **`amount` is a lateral force gain, not a drag**, and **there is no dedicated
-//!   airbrake drag term at all**. Speed loss under braking is indirect: lateral grip
-//!   converting sideways motion into body-frame force, the separate brake that both
-//!   airbrakes together engage (see [`crate::engine::brakes`]), and the always-on
-//!   drag in [`crate::passive`].
+//! - **`amount` is a lateral force gain, not a drag.** An earlier revision of this
+//!   bullet continued "and there is no dedicated airbrake drag term at all", and
+//!   that half was **false** - the code a hundred lines below has always applied
+//!   one, and `crates/physics/src/passive.rs` and
+//!   `docs/physics/force-balance-ground-truth.md` both went on to describe the
+//!   term as *unimplemented*. It is implemented, here, and
+//!   `Ship_UpdateAirbrakes` (`0x0884c9a4`) has now been read end to end to
+//!   confirm the form factor for factor; see [`evaluate`].
+//!
+//!   What the sentence should have said is that the `drag` parameter **does not
+//!   slow the ship down**: the term points along `+forward` with every factor
+//!   non-negative, so for a ship moving forwards it is a (very small)
+//!   *acceleration*. Speed loss under braking is still indirect: lateral grip
+//!   converting sideways motion into body-frame force, the separate brake that
+//!   both airbrakes together engage (see [`crate::engine::brakes`]), and the
+//!   always-on drag in [`crate::passive`].
 //! - **Airbrakes produce no direct roll torque**, and nothing in this module writes an
 //!   angular Z at all. Confidence 85, established by checking every write to the
 //!   original's angular accumulators, and it is a negative rather than an omission:
@@ -85,13 +96,69 @@ pub fn lateral_grip_coefficient(handling: &Handling, left: f32, right: f32) -> f
 /// ```
 ///
 /// `speed` is the craft's cached speed, `|dot(velocity, forward)|`, rather than
-/// `|velocity|`: `docs/physics/README.md` writes only "speed", and
-/// `docs/ghidra/functions/psp-pulse/engine.md` establishes what the craft caches at
-/// `+0x2ec` and that the engine reads its speed from there. A pick awaiting M3, though
-/// a mild one - the two agree closely for a ship pointing where it is going.
+/// `|velocity|`. That used to be a pick; it is now read: every one of the three
+/// terms loads `craft+0x2ec`, which
+/// `docs/ghidra/functions/psp-pulse/engine.md` establishes as the `vabs.s`-ed
+/// dot product.
 ///
 /// Lateral grip is **not** here: it is a separate function in the original, running
 /// after hover and reading a different groundedness. See [`lateral_grip`].
+///
+/// # `Ship_UpdateAirbrakes` read end to end
+///
+/// `0x0884c9a4` in the PSP `BOOT.BIN`, force block `0x0884ccb4`-`0x0884cf94`,
+/// with the Allegrex module. Every factor below is an instruction, not an
+/// inference:
+///
+/// ```text
+/// 0884ccb4  lwc1  f12,0x2ec(s0)   ; the cached speed
+/// 0884ccb8  c.le.s f12,f14        ; f14 == 0.0, set once at 0884c9cc
+/// 0884ccc0  bc1t  0x0884cf98      ; speed <= 0 skips the whole force block
+/// 0884ccc8  lwc1  f12,0x2c4(s0)   ; ramped airbrake L
+/// 0884cccc  lwc1  f13,0x2c8(s0)   ; ramped airbrake R
+/// 0884ccd0  sub.s f12,f12,f13
+/// 0884ccd4  lw    a0,0x78(s0)     ; the *input snapshot*, not the ramped state
+/// 0884ccd8  lwc1  f15,0x0(a0)     ; steerX
+/// 0884ccdc  abs.s f15,f15
+/// 0884cce0  abs.s f12,f12
+/// 0884cce8  lwc1  f16,0x54(a0)    ; Airbrake.drag, class +0xe8
+/// 0884ccec  mul.s f12,f12,f16
+/// 0884ccf0  mul.s f12,f12,f15
+/// 0884ccf4  lui   a0,0x3c23       ; 0x3c23d70a == 0.01
+/// 0884cd00  mul.s f12,f12,f13     ; slide
+/// 0884cd18  lv.q  C500,0x0(a0)    ; a0 == craft+0x180 == forward
+/// 0884cd1c  vscl.q C300,C500,S400 ; forward * speed
+/// 0884cd54  vscl.q C300,C500,S400 ; * slide
+/// 0884cd78  lui   a1,0x3a83       ; 0x3a83126f == 0.001
+/// 0884cd98  vscl.q C300,C500,S400 ; * 0.001
+/// 0884cf88  vadd.t C300,C300,C600 ; craft+0x330, the world force accumulator
+/// ```
+///
+/// Three things that follow, all of which correct something previously written
+/// down:
+///
+/// - **The scale is `1e-5`.** Two literals, `0.01` and `0.001`, applied to the
+///   same vector. A capstone pass recorded only the first. This function's
+///   association order is the binary's, left to right at both levels, which is
+///   what the pinning test asserts against.
+/// - **The sign is settled: it accelerates.** This used to carry a comment
+///   reading "sign unresolved - a guess awaiting M3". `sp+0x10` is written
+///   fresh at `0x0884cdb8` rather than accumulated into, every factor is
+///   non-negative, and the `vadd.t` at `0x0884cf88` *adds* the result to
+///   `craft+0x330`. So a ship moving forwards is pushed forwards. Confidence
+///   **90**: read at instruction level including the accumulate, on one binary.
+/// - **The gate is on the absolute cached speed, not on a signed forward
+///   speed.** `docs/physics/force-balance-ground-truth.md` recorded it as
+///   "gated on `forwardSpeed > 0`"; the instruction loads `craft+0x2ec`, which
+///   is `|dot(v, forward)|`. The consequence is real rather than pedantic: a
+///   **reversing** ship is not excluded, and gets the same `+forward` push,
+///   which for it is a deceleration. Pinned by a test.
+///
+/// Confidence **88** on the formula, the ceiling for a single binary
+/// corroborated by the PS2 shape; the magnitude is only weakly corroborated by
+/// the `talons-junction-airbrake-asymmetric` capture (consistent within a
+/// factor of 2, conf ~55, wall-contaminated throughout). **The implementation
+/// follows the read values and is not tuned to that capture.**
 #[must_use]
 pub fn evaluate(
     state: &ShipState,
@@ -108,19 +175,32 @@ pub fn evaluate(
     let right = body.right();
     let speed = forward_speed.abs();
 
+    // The original's `c.le.s`/`bc1t` at `0x0884ccb8` skips all three terms below
+    // when the cached speed is not positive. Reproduced on the **absolute**
+    // speed, which is what `craft+0x2ec` holds, rather than on the argument:
+    // gating the signed argument would exclude a reversing ship, which the
+    // original does not do.
+    //
+    // Numerically this is a no-op - every term carries `speed` as a factor, so
+    // they are all exactly zero here anyway - and it is written out so that a
+    // reader comparing against the disassembly does not go looking for a branch
+    // that is missing.
+    if speed <= 0.0 {
+        return AirbrakeForces::default();
+    }
+
     let mut world = Vec3::ZERO;
 
     // slide = |L - R| * drag * |steerX| * 0.01
+    //
+    // `steerX` is the **raw input**, `craft+0x78 + 0x0`, while `L` and `R` are
+    // the *ramped* states at `craft+0x2c4`/`+0x2c8`. The asymmetry is the
+    // original's and is exactly the kind of thing a tidying pass unifies by
+    // accident, so it is called out here and pinned by a test.
     let slide = (left - right_brake).abs() * handling.airbrake.drag * input.steer_x.abs() * 0.01;
 
-    // **Sign unresolved.** `docs/physics/README.md` lists "whether the airbrake
-    // `drag` term accelerates or decelerates" as still open, and
-    // `docs/ghidra/functions/psp-pulse/engine.md` does not revisit it. The page writes
-    // this as `world += forward * speed * slide * 0.001` with every factor
-    // non-negative, so taken literally it *accelerates*, and that literal reading is
-    // what is implemented. The parameter being named `drag` argues the other way.
-    // This is a guess awaiting M3, not a finding, and flipping the sign here is a
-    // one-character change once a trace can settle it.
+    // Along `+forward`, and it accelerates. See this function's header for the
+    // instructions that settle the sign.
     world += forward * speed * slide * 0.001;
 
     // `amount` is a lateral force gain. Braking harder on one side pushes the ship
@@ -324,6 +404,135 @@ mod tests {
             40.0,
         );
         assert_ne!(turning.world_force.z, 0.0);
+    }
+
+    /// The `drag` term's exact magnitude, in the binary's own association order.
+    ///
+    /// Asserted against a recomputed product rather than a decimal literal on
+    /// purpose: both `0.01f32` and `0.001f32` are inexact, so the chain does not
+    /// land on the round number the algebra suggests, and a literal would either
+    /// fail or force a tolerance that stops pinning anything.
+    #[test]
+    fn the_airbrake_drag_term_has_the_magnitude_the_instruction_stream_forms() {
+        let handling = test_handling();
+        let mut state = moving_ship();
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, -40.0);
+        state.airbrake_left = 100.0;
+        state.airbrake_right = 0.0;
+        let input = ShipControls {
+            steer_x: 1.0,
+            ..ShipControls::default()
+        };
+
+        let forces = evaluate(&state, &input, &handling, 40.0);
+
+        // `slide` first, then `(forward * speed) * slide * 0.001` - the two
+        // `vscl.q`s and the two literals, in order.
+        let slide = 100.0f32 * handling.airbrake.drag * 1.0 * 0.01;
+        let expected = -(40.0f32 * slide * 0.001);
+
+        // Forward is `-Z`, and the lateral term is along `+X`, so `.z` isolates
+        // the drag term.
+        assert_eq!(forces.world_force.z, expected);
+        assert_eq!(forces.world_force.y, 0.0);
+        assert!(expected < 0.0, "the term must point along +forward");
+    }
+
+    /// Both factors are needed, and "zero" means exactly zero rather than small.
+    #[test]
+    fn the_drag_term_is_exactly_zero_without_both_an_imbalance_and_steering() {
+        let handling = test_handling();
+        let mut state = moving_ship();
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, -40.0);
+
+        // Equal airbrakes, full steering.
+        state.airbrake_left = 70.0;
+        state.airbrake_right = 70.0;
+        let equal = evaluate(
+            &state,
+            &ShipControls {
+                steer_x: 1.0,
+                ..ShipControls::default()
+            },
+            &handling,
+            40.0,
+        );
+        assert_eq!(equal.world_force.z, 0.0);
+
+        // Full imbalance, no steering.
+        state.airbrake_left = 100.0;
+        state.airbrake_right = 0.0;
+        let straight = evaluate(&state, &ShipControls::default(), &handling, 40.0);
+        assert_eq!(straight.world_force.z, 0.0);
+    }
+
+    /// The gate is on `craft+0x2ec`, the **absolute** cached speed, so a
+    /// reversing ship gets the term too - pointed along `+forward`, which for it
+    /// is a deceleration. A gate on a signed forward speed would zero this.
+    #[test]
+    fn the_drag_term_points_along_forward_in_both_directions_of_travel() {
+        let handling = test_handling();
+        let mut state = moving_ship();
+        state.airbrake_left = 100.0;
+        state.airbrake_right = 0.0;
+        let input = ShipControls {
+            steer_x: 1.0,
+            ..ShipControls::default()
+        };
+
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, -40.0);
+        let forwards = evaluate(&state, &input, &handling, 40.0);
+
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, 40.0);
+        let reversing = evaluate(&state, &input, &handling, -40.0);
+
+        assert_eq!(reversing.world_force.z, forwards.world_force.z);
+        assert!(forwards.world_force.z < 0.0);
+    }
+
+    /// The slide term reads the **raw** `steerX` from the input snapshot, while
+    /// the airbrake sides are the ramped states. Pinned because unifying the two
+    /// is a natural-looking tidy-up that would diverge.
+    #[test]
+    fn the_drag_term_reads_the_raw_steering_input_not_a_ramped_state() {
+        let handling = test_handling();
+        let mut state = moving_ship();
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, -40.0);
+        state.airbrake_left = 100.0;
+        state.airbrake_right = 0.0;
+
+        let half = evaluate(
+            &state,
+            &ShipControls {
+                steer_x: 0.5,
+                ..ShipControls::default()
+            },
+            &handling,
+            40.0,
+        );
+        let full = evaluate(
+            &state,
+            &ShipControls {
+                steer_x: 1.0,
+                ..ShipControls::default()
+            },
+            &handling,
+            40.0,
+        );
+
+        // Linear in the raw input, with no ramp state anywhere in between.
+        assert_eq!(half.world_force.z, full.world_force.z * 0.5);
+        // And it is `|steerX|`, so the opposite lock gives the same thing.
+        let mirrored = evaluate(
+            &state,
+            &ShipControls {
+                steer_x: -1.0,
+                ..ShipControls::default()
+            },
+            &handling,
+            40.0,
+        );
+        assert_eq!(mirrored.world_force.z, full.world_force.z);
     }
 
     #[test]
