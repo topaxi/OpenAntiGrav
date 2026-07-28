@@ -194,7 +194,10 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let mut renderer = Renderer::new(&device, &queue, format, video_format, font, &sprites)?;
 
-    if let (Some(frames), Some(wanted)) = (movie.frames.as_mut(), video_frame(&list)) {
+    if let (Some(frames), Some(wanted)) = (
+        movie.as_mut().and_then(|movie| movie.frames.as_mut()),
+        video_frame(&list),
+    ) {
         let mut bytes = Vec::new();
         frames.read_frame(wanted.min(frames.len - 1), &mut bytes)?;
         renderer.upload_frame(&queue, &bytes)?;

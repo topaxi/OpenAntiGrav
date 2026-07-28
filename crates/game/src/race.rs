@@ -50,7 +50,7 @@
 //! its evidence written next to it.
 
 use anyhow::{Context, Result};
-use oag_assets::{Archive, pulse};
+use oag_assets::pulse;
 use oag_core::math::{Mat4, Vec3};
 use oag_core::{TickClock, TickRate};
 use oag_formats::track::{AiTrack, Sample};
@@ -225,7 +225,25 @@ pub struct Loaded {
 /// `handlingstats.xml` with an attribute missing.
 pub fn load(options: &Options) -> Result<Loaded> {
     let mut report = Vec::new();
-    let spec = pulse::archive_spec(&options.source, pulse::archives::DATA);
+
+    // Which archives this source has, rather than which archives a PSP disc has.
+    // Every entry name below is the same on both releases - the PS2 build ships
+    // `Data\Ships\<Team>\handlingstats.xml` and `Data\Environments\<n>_Track\...`
+    // under the names the PSP uses - so the layout is the whole of the
+    // difference. See `docs/formats/handling-stats.md`.
+    let mut archives = pulse::Archives::open(&options.source)?;
+    report.push(archives.layout.describe());
+
+    let spec = archives
+        .locate(&options.track)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "{} is in none of this source's archives ({})",
+                options.track,
+                archives.layout.describe()
+            )
+        })?
+        .to_string();
 
     let (ai, label) = track_render::load(&spec, &options.track)?;
     report.push(format!(
@@ -235,17 +253,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ai.point_count()
     ));
 
-    let mut archive = Archive::open(&spec)?;
-    let read = |archive: &mut Archive, name: &str| -> Result<Vec<u8>> {
-        archive
+    let read = |archives: &mut pulse::Archives, name: &str| -> Result<Vec<u8>> {
+        archives
             .read_name(name)
-            .with_context(|| format!("reading {name} out of {spec}"))
+            .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))
     };
 
     // Read again for the collision nodes: `oag_render::track::load` takes an
     // archive rather than bytes, so this blob is decompressed twice. See the
-    // wanted-change note in `docs/tools/oag-game.md`.
-    let track_blob = read(&mut archive, &options.track)?;
+    // wanted-change note in `docs/tools/oag-game.md`. On the PS2 that costs more
+    // than it does on the PSP, where nothing is compressed at all: 5,861 of
+    // `WADS2.WAD`'s 7,200 entries are LZSS.
+    let track_blob = read(&mut archives, &options.track)?;
     let nodes =
         collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", options.track))?;
     let collision = collision_world(&nodes);
@@ -261,7 +280,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     ));
 
     let stats_name = handling::entry_name(&options.team);
-    let stats_blob = read(&mut archive, &stats_name)?;
+    let stats_blob = read(&mut archives, &stats_name)?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once
@@ -288,7 +307,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     ));
 
     let ship_name = ship_entry_name(&options.team);
-    let ship_blob = read(&mut archive, &ship_name)?;
+    let ship_blob = read(&mut archives, &ship_name)?;
     let ship_model = mesh::build(&ship_name, &ship_blob)?;
     report.push(format!(
         "{ship_name}: {} triangle(s), model centre {:?}, radius {:.2}",
@@ -312,6 +331,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         track_model.indices.len() / 3,
         track_model.radius
     ));
+
+    for model in [&ship_model, &track_model] {
+        if let Some(line) = untextured_note(model) {
+            report.push(line);
+        }
+    }
 
     let spline = Spline::from_track(&ai);
     report.push(format!(
@@ -350,6 +375,38 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ship_model,
         report,
     })
+}
+
+/// Says so when a model has arrived with no textures, and why.
+///
+/// **This is the one place a PS2 race is knowingly worse than a PSP one, and it
+/// is reported rather than papered over.** A PS2 `.vex` declares a texture block
+/// of length zero: its textures are separate archive entries, gathered into a
+/// nested WAD of Graphics Synthesizer upload packets, and *which* entry belongs
+/// to *which* model is not recovered. `oag_render::mesh::ps2_texture_set` decodes
+/// such a set once something names it - `oag-view --mesh ... --textures <entry>`
+/// is where that is done by hand - so what is missing is the lookup, not the
+/// decoder. See `docs/formats/ps2-texture.md` and `docs/formats/vex.md`.
+///
+/// The model still draws: `Drawable::draw` binds the white fallback for a draw
+/// with no texture slot. So a PS2 race is a correctly-shaped untextured one, and
+/// nothing here guesses at a texture set to avoid saying that.
+///
+/// Deliberately keyed on the model rather than on the platform. A PSP model that
+/// somehow arrives empty deserves the same line, and the PS2 disc carries
+/// PSP-format batches too - so "which disc is this" is never the right question
+/// to ask about one mesh.
+#[must_use]
+fn untextured_note(model: &Model) -> Option<String> {
+    if !model.textures.is_empty() || model.indices.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{}: no textures in the model, drawing untextured. PS2 models keep their \
+         textures in separate archive entries and the model-to-texture-set lookup \
+         is not recovered; see docs/formats/ps2-texture.md",
+        model.label
+    ))
 }
 
 /// Converts the disc's `pos_length` into the one

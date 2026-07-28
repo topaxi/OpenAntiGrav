@@ -22,7 +22,14 @@ pub struct Boot {
     /// The sequence itself.
     pub frontend: Frontend,
     /// The intro movie, whether or not it has a picture.
-    pub movie: Movie,
+    ///
+    /// `None` when the source has no such movie **at all**, which is not a PSP
+    /// case: the PS2 release ships no `.PMF` in any archive - its intro is
+    /// `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream sitting loose in the
+    /// filesystem, and `.IPF` beside it. Neither is decoded, so the honest
+    /// answer there is no movie rather than a movie with no picture, which is
+    /// what [`Movie::no_picture_reason`] means and is a different thing.
+    pub movie: Option<Movie>,
     /// Every front-end image the screens reference, in one texture.
     pub sprites: crate::sprite::Sheet,
     /// The text atlas: the disc's own font when it decodes, ours when it does
@@ -62,22 +69,33 @@ pub struct Options {
 /// Loads everything and builds the sequence.
 pub fn load(options: &Options) -> Result<Boot> {
     let mut report = Vec::new();
-    let mut archives = pulse::Frontend::open(&options.source)
+    let mut archives = pulse::Archives::open(&options.source)
         .with_context(|| format!("opening the archives in {}", options.source))?;
+    report.push(archives.layout.describe());
     report.push(format!(
         "{}: {} entries",
         archives.data.label(),
         archives.data.directory().entries.len()
     ));
+    if let Some(fe) = &archives.fe {
+        report.push(format!(
+            "{}: {} entries",
+            fe.label(),
+            fe.directory().entries.len()
+        ));
+    }
 
-    let font = load_font(&mut archives.fe, &mut report);
-    let screens = load_screens(&mut archives.data, &mut report)?;
-    let languages = load_languages(&mut archives.data, &mut report);
-    let strings = load_strings(&mut archives.data, &languages, &mut report);
-    let movie = load_movie(&mut archives.data, options, &mut report)?;
-    let sprites = load_sprites(&mut archives.fe, &mut archives.data, &screens, &mut report);
+    let font = load_font(&mut archives, &mut report);
+    let screens = load_screens(&mut archives, &mut report)?;
+    let languages = load_languages(&mut archives, &mut report);
+    let strings = load_strings(&mut archives, &languages, &mut report);
+    let movie = load_movie(&mut archives, options, &mut report)?;
+    let sprites = load_sprites(&mut archives, &screens, &mut report);
 
-    let frames = movie.frames.as_ref().map_or(0, |f| f.len);
+    let frames = movie
+        .as_ref()
+        .and_then(|movie| movie.frames.as_ref())
+        .map_or(0, |f| f.len);
     let placements = screens
         .screens
         .iter()
@@ -90,7 +108,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         languages,
         placements,
         frames,
-        movie.frames.is_some(),
+        movie.as_ref().is_some_and(|movie| movie.frames.is_some()),
     );
 
     if let Some(goto) = frontend.language_auto_redirect() {
@@ -114,13 +132,13 @@ pub fn load(options: &Options) -> Result<Boot> {
 /// The names come from the screens rather than from a list here, so a screen
 /// that gains an `Image` gains its texture without this function changing.
 ///
-/// **Both archives are searched, in that order, and they have to be.**
+/// **Every archive the source has is searched, and they all have to be.**
 /// `pulse_logo.mip` is in `FE.wad` *and* `Data.wad` at the same size, which
 /// makes `FE.wad` look sufficient; `gameshare_backdrop.mip` is in `Data.wad`
-/// only, which proves it is not.
+/// only, which proves it is not. `oag_assets::pulse::Archives::read_name` is
+/// where that search lives now, so it is one rule rather than one per caller.
 fn load_sprites(
-    fe: &mut oag_assets::Archive,
-    data: &mut oag_assets::Archive,
+    archives: &mut oag_assets::pulse::Archives,
     screens: &Screens,
     report: &mut Vec<String>,
 ) -> crate::sprite::Sheet {
@@ -139,13 +157,9 @@ fn load_sprites(
 
     let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
     for src in &srcs {
-        match fe.read_name(src).or_else(|_| data.read_name(src)) {
+        match archives.read_name(src) {
             Ok(blob) => blobs.push((src.clone(), blob)),
-            Err(e) => report.push(format!(
-                "image {src}: in neither {} nor {}: {e}",
-                fe.label(),
-                data.label()
-            )),
+            Err(e) => report.push(format!("image {src}: {e}")),
         }
     }
 
@@ -166,9 +180,12 @@ fn load_sprites(
 /// approximation, and the report says which one is on screen. That matters more
 /// than it sounds - the two look very different, and a silent fallback would
 /// make a rendering bug indistinguishable from a loading one.
-fn load_font(fe: &mut oag_assets::Archive, report: &mut Vec<String>) -> crate::font::Atlas {
+fn load_font(
+    archives: &mut oag_assets::pulse::Archives,
+    report: &mut Vec<String>,
+) -> crate::font::Atlas {
     let name = oag_assets::pulse::names::DEFAULT_FONT;
-    match fe
+    match archives
         .read_name(name)
         .map_err(|e| e.to_string())
         .and_then(|blob| oag_formats::fnt::Font::parse(&blob).map_err(|e| e.to_string()))
@@ -191,10 +208,22 @@ fn load_font(fe: &mut oag_assets::Archive, report: &mut Vec<String>) -> crate::f
     }
 }
 
-fn load_screens(data: &mut oag_assets::Archive, report: &mut Vec<String>) -> Result<Screens> {
-    let blob = data
+fn load_screens(
+    archives: &mut oag_assets::pulse::Archives,
+    report: &mut Vec<String>,
+) -> Result<Screens> {
+    // The one piece with no degraded form: a front end with no screens is not a
+    // front end. The message names the archives searched, because on a source
+    // whose front-end root has never been located that is the useful half.
+    let blob = archives
         .read_name(pulse::names::FRONTEND_ROOT)
-        .with_context(|| format!("reading {}", pulse::names::FRONTEND_ROOT))?;
+        .with_context(|| {
+            format!(
+                "reading {} out of {}",
+                pulse::names::FRONTEND_ROOT,
+                archives.layout.describe()
+            )
+        })?;
 
     // Front-end XML is stored with its element and attribute names shortened
     // through a per-file dictionary. Files that begin `<?xml` are already plain.
@@ -224,11 +253,14 @@ fn load_screens(data: &mut oag_assets::Archive, report: &mut Vec<String>) -> Res
     Ok(screens)
 }
 
-fn load_languages(data: &mut oag_assets::Archive, report: &mut Vec<String>) -> Vec<Language> {
+fn load_languages(
+    archives: &mut oag_assets::pulse::Archives,
+    report: &mut Vec<String>,
+) -> Vec<Language> {
     let mut out = Vec::new();
     for plugin in pulse::LANGUAGE_PLUGINS {
         let name = pulse::names::language_definition(plugin);
-        let Ok(blob) = data.read_name(&name) else {
+        let Ok(blob) = archives.read_name(&name) else {
             continue;
         };
         let Ok(xml) = expand(&blob) else { continue };
@@ -253,7 +285,7 @@ fn load_languages(data: &mut oag_assets::Archive, report: &mut Vec<String>) -> V
 }
 
 fn load_strings(
-    data: &mut oag_assets::Archive,
+    archives: &mut oag_assets::pulse::Archives,
     languages: &[Language],
     report: &mut Vec<String>,
 ) -> StringTable {
@@ -272,7 +304,7 @@ fn load_strings(
         return StringTable::default();
     };
 
-    match data
+    match archives
         .read_name(entries)
         .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
     {
@@ -358,16 +390,35 @@ impl std::fmt::Display for EntryRef {
     }
 }
 
+/// Reads the intro reel, or reports why there is none.
+///
+/// **A source with no such entry is not an error.** The PS2 release ships no
+/// `.PMF` in any archive: its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2
+/// program stream loose in the ISO filesystem, with `.IPF` beside it for the
+/// PS2's Image Processing Unit. Neither container is decoded, and neither is
+/// addressable as an archive entry, so there is nothing for `--movie` to name.
+/// Failing here would stop the whole front end over the one piece of it that is
+/// genuinely absent, so this says so and the sequence runs without a picture -
+/// the same path `--no-video` already takes.
+///
+/// See `docs/ps2/pulse-disc-layout.md`.
 fn load_movie(
-    data: &mut oag_assets::Archive,
+    archives: &mut oag_assets::pulse::Archives,
     options: &Options,
     report: &mut Vec<String>,
-) -> Result<Movie> {
+) -> Result<Option<Movie>> {
     let entry = EntryRef::parse(&options.movie);
     let hash = entry.hash();
-    let index = data
-        .index_of_hash(hash)
-        .with_context(|| format!("{entry} is not in {}", data.label()))?;
+    let data = &mut archives.data;
+    let Some(index) = data.index_of_hash(hash) else {
+        report.push(format!(
+            "{entry} is not in {}, so the intro plays with no picture. A PS2 source \
+             has none to find: its intro is DATA/MOVIES/INTRO512.PSS, an MPEG-2 \
+             program stream outside the archives, which this build does not decode",
+            data.label()
+        ));
+        return Ok(None);
+    };
     let size = data.entry_len(index)?;
     let options = &Options {
         movie: entry.to_string(),
@@ -388,14 +439,14 @@ fn load_movie(
             video.height,
             header.duration_seconds()
         ));
-        return Ok(Movie {
+        return Ok(Some(Movie {
             frame_count: header.expected_frame_count() as usize,
             width: u32::from(video.width),
             height: u32::from(video.height),
             header,
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
-        });
+        }));
     }
 
     let blob = data
@@ -432,7 +483,7 @@ fn load_movie(
         (None, Some(reason)) => report.push(format!("  no picture: {reason}")),
         (None, None) => {}
     }
-    Ok(movie)
+    Ok(Some(movie))
 }
 
 fn expand(blob: &[u8]) -> Result<String> {

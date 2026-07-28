@@ -231,11 +231,16 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let video_format = loaded.movie.frames.as_ref().map(|frames| VideoFormat {
-        width: loaded.movie.width,
-        height: loaded.movie.height,
-        chroma_width: frames.chroma_width,
-        chroma_height: frames.chroma_height,
+    // A source with no intro reel at all - which is every PS2 source, whose
+    // intro is an MPEG-2 program stream outside the archives - has no video
+    // format either, and the front end draws without one.
+    let video_format = loaded.movie.as_ref().and_then(|movie| {
+        movie.frames.as_ref().map(|frames| VideoFormat {
+            width: movie.width,
+            height: movie.height,
+            chroma_width: frames.chroma_width,
+            chroma_height: frames.chroma_height,
+        })
     });
 
     if let Some(path) = cli.screenshot {
@@ -595,7 +600,7 @@ impl Stage {
 struct FrontendStage {
     renderer: Renderer,
     frontend: Frontend,
-    movie: movie::Movie,
+    movie: Option<movie::Movie>,
     frame_bytes: Vec<u8>,
     uploaded: Option<usize>,
     trace: bool,
@@ -626,7 +631,7 @@ impl FrontendStage {
         if self.uploaded == Some(wanted) {
             return Ok(());
         }
-        let Some(frames) = self.movie.frames.as_mut() else {
+        let Some(frames) = self.movie.as_mut().and_then(|movie| movie.frames.as_mut()) else {
             return Ok(());
         };
         frames.read_frame(wanted.min(frames.len - 1), &mut self.frame_bytes)?;

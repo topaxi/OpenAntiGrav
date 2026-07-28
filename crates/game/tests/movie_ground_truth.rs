@@ -130,7 +130,7 @@ fn reference_frames(key_glob: &str, frame_len: usize) -> Vec<u8> {
 #[ignore = "needs data/images/ and ffmpeg"]
 fn the_cache_is_lossless() {
     let Some(loaded) = load() else { return };
-    let mut movie = loaded.movie;
+    let mut movie = loaded.movie.expect("the PSP disc carries the reel");
     let frames = movie
         .frames
         .as_mut()
@@ -169,7 +169,7 @@ fn the_cache_is_lossless() {
 #[ignore = "needs data/images/ and ffmpeg"]
 fn rewinding_a_real_movie_reproduces_its_frames() {
     let Some(loaded) = load() else { return };
-    let mut movie = loaded.movie;
+    let mut movie = loaded.movie.expect("the PSP disc carries the reel");
     let frames = movie.frames.as_mut().expect("the movie transcoded");
 
     let (mut first, mut again) = (Vec::new(), Vec::new());
@@ -190,7 +190,7 @@ fn rewinding_a_real_movie_reproduces_its_frames() {
 #[ignore = "needs data/images/ and ffmpeg"]
 fn the_cache_geometry_matches_the_psmf_header() {
     let Some(loaded) = load() else { return };
-    let movie = loaded.movie;
+    let movie = loaded.movie.expect("the PSP disc carries the reel");
     let frames = movie.frames.as_ref().expect("the movie transcoded");
 
     assert_eq!((movie.width, movie.height), (480, 272));
