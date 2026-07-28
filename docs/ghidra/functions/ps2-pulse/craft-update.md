@@ -39,8 +39,10 @@ below 70; the one name under 80 carries the `_q` suffix per
 | `0x00159f10` | `Ship_ApplyRollingResistance` | 88 |
 | `0x0015b978` | `Ship_HoverTwoPoint` | 85 |
 | `0x0015a1d0` | `Ship_ApplyGravity` | 85 |
-| `0x00159e78` | `Ship_ApplyVerticalDamping` | 85 |
+| `0x00159e78` | `Ship_ApplyVerticalDamping` | 92 |
 | `0x0015ded8` | `World_StepBodies` | 80 |
+| `0x0015e600` | `Body_ResolveContactPair` | 85 |
+| `0x0015ce28` | `Body_QueueDeferredImpulse` | 82 |
 | `0x0015b070` | `Ship_UpdateMagLock` | 78 |
 | `0x0019f020` | `Handling_LoadForTeam` | 78 |
 | `0x0015a550` | `Ship_UpdateAirbrakes_q` | 78 |
@@ -904,7 +906,105 @@ Two consequences:
 `Ship_ApplyVerticalDamping` (`0x00159e78`) is confirmed twice over: it is slot 14
 positionally, **and** it holds the only other `-0.25` immediate
 (`lui at,0xbe80`) in the craft path, which is the coefficient
-[engine.md](../psp-pulse/engine.md) gives for that term. Confidence **85**.
+[engine.md](../psp-pulse/engine.md) gives for that term.
+
+**Its body has now been read, and it raises the confidence to 92 while settling a
+question the PSP side got wrong.** The whole function is 25 instructions:
+
+```text
+00159e84  lwc1  f3,0x2e0(a0)     ; craft+0x2e0, the grounded fraction
+00159e88  c.eq.S f3,f0           ; == 0 ?
+00159e90  bc1f  0x00159f04       ; NOT zero -> return, having done nothing
+00159e98  lqc2  vf2,0x180(a0)    ; craft+0x180, the up axis
+00159ea0  lqc2  vf1,0x1b0(a0)    ; craft+0x1b0, the linear velocity
+00159ea8  vmul.xyz  vf1,vf2,vf1
+00159eb4  vadday.x  ACC,vf1,vf1
+00159eb8  vmaddz.x  vf1,vf3,vf1  ; dot(up, velocity)
+00159ebc  lui   at,0xbe80        ; -0.25f
+00159eac  lui   at,0x3f80        ; 1.0f
+00159ec8  sub.S f1,f1,f3         ; 1 - grounded
+00159ee4  vmulx.xyzw vf2,vf2,vf1 ; up * dot
+00159ef0  vmulx.xyzw vf2,vf2,vf3 ; * -0.25
+00159ef4  vmulx.xyzw vf2,vf2,vf1 ; * (1 - grounded)
+00159ef8  jal   Body_AddForceWorld
+```
+
+so the term is `up * dot(up, velocity) * -0.25 * (1 - grounded)` - **term for term
+the PSP inline at `0x08849c60`, on a different ISA and a different compiler.**
+Confidence **92**.
+
+**The scale is the grounded fraction, not the magstrip blend.** `crates/physics`
+had it as `1 - magLockBlend`; both binaries say `1 - grounded`, and this page's
+own hover section already establishes `craft+0x2e0` as the fraction that
+accumulates `+0.25` per contacting probe. A grounded craft gets **no vertical
+damping at all** in either build. The crate is corrected.
+
+**One real behavioural difference between the builds, worth recording.** The PS2
+returns early when `grounded != 0`, which makes its own `1 - grounded` factor
+dead - it is always exactly `1.0` on the path that reaches the multiply. The PSP
+has no early return and scales continuously, so a *half* contact
+(`grounded == 0.5`) gets half the damping on PSP and **none** on PS2. The two
+builds therefore differ on a one-probe contact. Confidence **85** on the
+difference: both readings are direct, but nothing has been run to see it.
+
+### The frame ordering, and where the velocity changes after the integrator
+
+`World_StepBodies` is longer than the three lines quoted above; read end to end it
+is six passes over the body array, and the order is what matters:
+
+| Pass | Address | What it does |
+| ---: | --- | --- |
+| 1 | `0x0015df28`-`0x0015e2a8` | swept collision + position correction per body: builds a `10.0`-unit sweep along `normalize(velocity)`, clamps it into a box, sweeps `position + velocity*dt + sweep`, and on a hit backs the body off by `0.9 * length` through `Body_SetPosition` |
+| 2 | `0x0015e2c0`-`0x0015e2ec` | virtual call through vtable slot `0x78`/`0x7c` |
+| 3 | `0x0015e300`-`0x0015e348` | `*(u32 *)(entity + 0x370) = 0`, then slot `0x70`/`0x74` - **this is `Ship_UpdateCraft`** |
+| 4 | `0x0015e360`-`0x0015e390` | `Body_Integrate` (`0x0015d088`), then `0x0015d058`, which zeroes `body+0x100`/`+0x110`/`+0x120`/`+0x130` |
+| 5 | `0x0015e3a8`-`0x0015e3cc` | `0x0015efe8` for bodies with bit 0 of `body+0x3a4` set |
+| 6 | `0x0015e3d8`-`0x0015e5d4` | `0x0012fc60` collects contacts, then per contact either `0x0015ea90` or **`Body_ResolveContactPair`** (`0x0015e600`) |
+
+**Pass 6 runs after the integrator and before the next frame's
+`Ship_UpdateCraft`, and it writes velocities directly.** That is the window
+[force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)
+identifies from the PSP traces as the only place a `3.67 %`-per-frame speed loss
+can be coming from - the deficit that looked like a missing `2.28 * fs` force and
+is not a force at all. **This is the PS2-side corroboration of that finding: the
+engine really does have a post-integrate pass that changes velocity outside every
+accumulator on this page.** Confidence **85** for the ordering, read straight off
+the basic-block sequence.
+
+`Body_ResolveContactPair` (`0x0015e600`) is an ordinary two-body impulse
+resolver. Its shape, with `a0` the contact, `a1` and `a2` the two bodies:
+
+```text
+relative velocity at the contact, from body+0x140 and body+0x150 via vopmula/vopmsub
+vn = dot(relVel, contact+0x10)
+if (vn > 0)  return;                       ; 0015e818, separating contacts are skipped
+j  = (-1.1 * vn) / (a1->invMass + a2->invMass + angularTerm)
+apply +/- j along the normal through 0x0015d980 and 0x0015cfb0 (+/-0.25 * contact+0x30)
+Body_QueueDeferredImpulse(body, contact, contact+0x34)   ; twice, once per body
+```
+
+The `-1.1` is `0xbf8ccccd`, i.e. `-(1 + e)` for a restitution `e = 0.1`.
+Confidence **85**; the `+0.25`/`-0.25` pair at `0x0015e9d0`/`0x0015ea24` and the
+exact angular term were not worked through.
+
+**`body+0x370` is a deferred-impulse queue count, and that closes the `sw zero,
+0x370` both binaries perform.** `Body_QueueDeferredImpulse` (`0x0015ce28`)
+appends a 0x40-byte record - a vector at `+0x190`, a second at `+0x180`, the
+friction scalar `contact+0x34` at `+0x1a0` and a flag at `+0x170` - into an array
+indexed by `body+0x370`, **capped at 8 entries**, then increments the count. Pass
+3 zeroes that count immediately before `Ship_UpdateCraft` runs, which is exactly
+what PSP's `0x0884ff54` does. So the field cleared before every craft update is
+not a generic scratch word: it is the per-frame contact queue. Confidence **82**
+for the queue reading, **75** for `contact+0x34` being friction specifically -
+that comes from the PSP twin `FUN_0884e968` computing a tangential relative
+velocity and scaling it by the same offset, not from a string.
+
+**Not renamed, deliberately.** `0x0015d058` zeroes the same four accumulators as
+`Body_ClearAccumulators` (`0x0015ca48`), so one of the two identifications is
+wrong or they are distinct entry points into the same idea. Naming either without
+resolving that would be a guess, and ADR-0005 says to write the hypothesis down
+instead. Same for `0x0015ea90`, pass 6's other branch, and `0x0015d980` /
+`0x0015cfb0`, the two impulse appliers.
 
 `Ship_UpdateAirbrakes_q` (`0x0015a550`) carries the `_q` suffix per
 [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md): it is

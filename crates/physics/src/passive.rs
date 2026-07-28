@@ -298,6 +298,17 @@ pub fn angular_damping(handling: &Handling, local_angular_velocity: Vec3) -> Vec
 /// hover loop rebuilds each frame. The two are distinct fields and this term reads
 /// the second one. Confidence **92**.
 ///
+/// **Corroborated on the PS2 build**, which outlines this term as
+/// `Ship_ApplyVerticalDamping` (`0x00159e78`) instead of inlining it: same
+/// `-0.25`, same `dot(up, velocity)`, same `1 - grounded` (there
+/// `craft+0x2e0`), on a different ISA and compiler. See
+/// `docs/ghidra/functions/ps2-pulse/craft-update.md`.
+///
+/// One difference between the builds that this crate follows the **PSP** on,
+/// deliberately, since that is what it targets: the PS2 *returns early* when
+/// `grounded != 0`, so a half contact gets nothing there, where the PSP scales
+/// continuously and gets half. Both agree that a fully grounded craft gets zero.
+///
 /// So **a grounded craft gets no vertical damping at all**, and the term only ever
 /// acts in the air or on a half-contact. A reimplementation that applied it while
 /// grounded adds an extra suspension damper the original does not have.

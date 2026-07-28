@@ -69,7 +69,7 @@
 
 0x0015c1b0	function	Ship_ApplyAngularDamping	92	craft-update.md
 0x0015a058	function	Ship_UpdateBrakes	90	craft-update.md
-0x00159e78	function	Ship_ApplyVerticalDamping	85	craft-update.md
+0x00159e78	function	Ship_ApplyVerticalDamping	92	craft-update.md
 0x0015a550	function	Ship_UpdateAirbrakes_q	78	craft-update.md
 0x0015bf30	function	Ship_UpdateSteering	90	craft-update.md
 0x0015c7c0	function	Ship_ApplyLateralGrip	90	craft-update.md
@@ -166,3 +166,5 @@
 0x00301988	data	g_fe_globals	85	fe-globals.md
 0x0025c460	function	strncasecmp	90	fe-globals.md
 0x001fed38	function	Hash_Crc32String	82	fe-globals.md
+0x0015e600	function	Body_ResolveContactPair	85	craft-update.md
+0x0015ce28	function	Body_QueueDeferredImpulse	82	craft-update.md
