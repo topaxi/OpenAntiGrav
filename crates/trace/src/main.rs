@@ -230,6 +230,17 @@ struct ToleranceArgs {
     /// An absolute floor under the control comparison, on the `0..=100` scale.
     #[arg(long)]
     control_absolute: Option<f32>,
+    /// Angular velocity, relative.
+    #[arg(long)]
+    angular_velocity_relative: Option<f32>,
+    /// An absolute floor under the angular-velocity comparison, in rad/s.
+    /// **Nonzero by default**, unlike the other two floors; see the field docs on
+    /// `oag_trace::compare::Tolerances`.
+    #[arg(long)]
+    angular_velocity_absolute: Option<f32>,
+    /// Timers, absolute, in seconds.
+    #[arg(long)]
+    timer_absolute: Option<f32>,
 }
 
 impl From<ToleranceArgs> for Tolerances {
@@ -243,6 +254,13 @@ impl From<ToleranceArgs> for Tolerances {
             velocity_absolute: args.velocity_absolute.unwrap_or(default.velocity_absolute),
             control_relative: args.control_relative.unwrap_or(default.control_relative),
             control_absolute: args.control_absolute.unwrap_or(default.control_absolute),
+            angular_velocity_relative: args
+                .angular_velocity_relative
+                .unwrap_or(default.angular_velocity_relative),
+            angular_velocity_absolute: args
+                .angular_velocity_absolute
+                .unwrap_or(default.angular_velocity_absolute),
+            timer_absolute: args.timer_absolute.unwrap_or(default.timer_absolute),
         }
     }
 }

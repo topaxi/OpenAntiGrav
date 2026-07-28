@@ -33,6 +33,25 @@ pub enum Quantity {
     /// nor velocities. Compared relatively at the velocity tolerance, which is a
     /// provisional choice recorded here rather than hidden in a constant.
     Control,
+    /// An angular velocity, in rad/s.
+    ///
+    /// **Not in the protocol's table either**, for the same reason: there was no
+    /// angular-velocity column when the table was written. Relative like a linear
+    /// velocity, because it integrates into orientation the same way - but with a
+    /// nonzero absolute floor by default, which linear velocity does not have. A
+    /// straight-line capture records an angular velocity of *exactly* zero, and a
+    /// purely relative test against zero calls any simulated `1e-9` a relative
+    /// error of one: every straight capture would report a divergence on tick 0
+    /// and bury the real one. See [`Tolerances::angular_velocity_absolute`].
+    AngularVelocity,
+    /// A timer counting down in seconds.
+    ///
+    /// **Not in the protocol's table**, whose "timers, counters: exact" row is
+    /// about integers. These are floats decremented by a variable `dt`, so exact
+    /// agreement is not achievable; they are compared absolutely, at a tolerance
+    /// far below the frame time so that a timer running a frame long is a
+    /// divergence.
+    Timer,
     /// Anything integral or quantised: compared exactly.
     Discrete,
 }
@@ -66,6 +85,16 @@ pub enum Field {
     AirbrakeLeft,
     /// Right airbrake state.
     AirbrakeRight,
+    /// Angular velocity, as the length of the difference, in the **recorded**
+    /// column's own convention - see [`crate::trace::AngularReading`]. Compared
+    /// there rather than in ours so that nothing reinterprets a recorded number
+    /// on the way in.
+    ///
+    /// Absent from a capture taken before the column existed, and then **not
+    /// compared** rather than compared against a zero.
+    AngularVelocity,
+    /// The collision stun timer, which gates thrust and lateral grip.
+    StunTimer,
 }
 
 impl Field {
@@ -84,6 +113,8 @@ impl Field {
         Self::Steer,
         Self::AirbrakeLeft,
         Self::AirbrakeRight,
+        Self::AngularVelocity,
+        Self::StunTimer,
     ];
 
     /// The field's name in a report.
@@ -103,6 +134,8 @@ impl Field {
             Self::Steer => "steer",
             Self::AirbrakeLeft => "airbrake_l",
             Self::AirbrakeRight => "airbrake_r",
+            Self::AngularVelocity => "angular_velocity",
+            Self::StunTimer => "stun_timer",
         }
     }
 
@@ -119,6 +152,8 @@ impl Field {
             | Self::Steer
             | Self::AirbrakeLeft
             | Self::AirbrakeRight => Quantity::Control,
+            Self::AngularVelocity => Quantity::AngularVelocity,
+            Self::StunTimer => Quantity::Timer,
         }
     }
 
@@ -129,13 +164,19 @@ impl Field {
             Quantity::Position => "units",
             Quantity::Orientation => "rad",
             Quantity::Velocity => "units/s",
+            Quantity::AngularVelocity => "rad/s",
+            Quantity::Timer => "s",
             Quantity::Control | Quantity::Discrete => "",
         }
     }
 }
 
 /// How many fields a tick is compared on.
-pub const FIELD_COUNT: usize = 13;
+///
+/// "Compared on" is the upper bound rather than the count: a field whose column
+/// is missing from either trace is skipped, and [`FieldSummary::compared_ticks`]
+/// is how many ticks it actually got.
+pub const FIELD_COUNT: usize = 15;
 
 /// The tolerance table, from the verification protocol.
 ///
@@ -167,6 +208,25 @@ pub struct Tolerances {
     /// An absolute floor under the control comparison, on the `0..=100` scale.
     /// Zero by default, for the same reason as [`Self::velocity_absolute`].
     pub control_absolute: f32,
+    /// Angular velocity, relative. The same `1e-3` linear velocity gets, for the
+    /// same reason: it integrates into the attitude.
+    pub angular_velocity_relative: f32,
+    /// An absolute floor under the angular-velocity comparison, in rad/s.
+    ///
+    /// **Nonzero by default, unlike the other two floors**, and deliberately so.
+    /// The captures show a yaw rate near `1.5` rad/s in a corner and *exactly*
+    /// zero on a straight - a recorded `0` against a simulated `1e-9` is a
+    /// relative error of one, so a purely relative test would report tick 0 of
+    /// every straight-line capture as the divergence and bury the real one.
+    ///
+    /// `1e-4` rad/s. At the 60 Hz the captures run at that integrates to `1.7e-6`
+    /// rad of attitude per tick, a sixtieth of [`Self::orientation_radians`], so
+    /// it cannot hide an orientation divergence behind an angular-velocity one.
+    pub angular_velocity_absolute: f32,
+    /// A timer, absolute, in seconds. `1e-3`, about a sixteenth of a frame at
+    /// 60 Hz: a timer that runs a whole frame long is a divergence, a timer that
+    /// differs by the capture's own `%.7g` rounding is not.
+    pub timer_absolute: f32,
 }
 
 impl Default for Tolerances {
@@ -179,6 +239,9 @@ impl Default for Tolerances {
             velocity_absolute: 0.0,
             control_relative: 1e-3,
             control_absolute: 0.0,
+            angular_velocity_relative: 1e-3,
+            angular_velocity_absolute: 1e-4,
+            timer_absolute: 1e-3,
         }
     }
 }
@@ -195,6 +258,11 @@ impl Tolerances {
             Quantity::Orientation => format!("{:e} rad", self.orientation_radians),
             Quantity::Velocity => describe_relative(self.velocity_relative, self.velocity_absolute),
             Quantity::Control => describe_relative(self.control_relative, self.control_absolute),
+            Quantity::AngularVelocity => describe_relative(
+                self.angular_velocity_relative,
+                self.angular_velocity_absolute,
+            ),
+            Quantity::Timer => format!("{:e} absolute", self.timer_absolute),
             Quantity::Discrete => "exact".to_owned(),
         }
     }
@@ -209,6 +277,10 @@ impl Tolerances {
                 error > self.velocity_absolute && relative > self.velocity_relative
             }
             Quantity::Control => error > self.control_absolute && relative > self.control_relative,
+            Quantity::AngularVelocity => {
+                error > self.angular_velocity_absolute && relative > self.angular_velocity_relative
+            }
+            Quantity::Timer => error > self.timer_absolute,
             Quantity::Discrete => error != 0.0,
         }
     }
@@ -379,6 +451,13 @@ pub struct Trend {
 pub struct FieldSummary {
     /// Which field.
     pub field: Field,
+    /// How many ticks this field was actually compared on.
+    ///
+    /// Zero when neither trace carries the column - a capture taken before the
+    /// angular-velocity column existed, or a field nothing on our side models.
+    /// **Zero is not agreement**, and the report says "not compared" rather than
+    /// showing a max error of zero, which would read as a perfect match.
+    pub compared_ticks: usize,
     /// The largest error seen.
     pub max_error: f32,
     /// The tick it was seen at.
@@ -441,9 +520,12 @@ pub fn checks(
     recorded: &Frame,
     simulated: &Frame,
     tolerances: &Tolerances,
-) -> [Check; FIELD_COUNT] {
+) -> [Option<Check>; FIELD_COUNT] {
     Field::ALL.map(|field| {
-        let (sampled, error) = measure(field, recorded, simulated);
+        // `None` is "neither trace carries this column", which is not a pass and
+        // not a failure: it is the absence of a measurement, and it stays an
+        // absence all the way into the report. See `FieldSummary::compared_ticks`.
+        let (sampled, error) = measure(field, recorded, simulated)?;
         let relative = match sampled {
             Sampled::Scalar {
                 recorded,
@@ -458,18 +540,24 @@ pub fn checks(
         // is tested before the tolerance rather than through it: see
         // [`Sampled::is_finite`].
         let finite = sampled.is_finite() && error.is_finite();
-        Check {
+        Some(Check {
             field,
             sampled,
             error,
             relative,
             exceeded: !finite || tolerances.exceeded(field.quantity(), error, relative),
-        }
+        })
     })
 }
 
-/// Both sides of a field and the error between them.
-fn measure(field: Field, recorded: &Frame, simulated: &Frame) -> (Sampled, f32) {
+/// Both sides of a field and the error between them, or `None` when either side
+/// does not carry the field at all.
+///
+/// Only the optional columns can answer `None`: a capture taken before the
+/// angular-velocity column existed, or a field like `timer_2e0` that nothing in
+/// `ShipState` models. Defaulting either to zero would compare a measurement
+/// against an invention and could only ever produce a false agreement.
+fn measure(field: Field, recorded: &Frame, simulated: &Frame) -> Option<(Sampled, f32)> {
     let vector = |recorded: Vec3, simulated: Vec3| {
         (
             Sampled::Vector {
@@ -498,7 +586,7 @@ fn measure(field: Field, recorded: &Frame, simulated: &Frame) -> (Sampled, f32) 
         )
     };
 
-    match field {
+    Some(match field {
         Field::Position => vector(recorded.position, simulated.position),
         Field::Velocity => vector(recorded.velocity, simulated.velocity),
         Field::Speed => scalar(recorded.speed, simulated.speed),
@@ -512,7 +600,9 @@ fn measure(field: Field, recorded: &Frame, simulated: &Frame) -> (Sampled, f32) 
         Field::Steer => scalar(recorded.steer, simulated.steer),
         Field::AirbrakeLeft => scalar(recorded.airbrake_left, simulated.airbrake_left),
         Field::AirbrakeRight => scalar(recorded.airbrake_right, simulated.airbrake_right),
-    }
+        Field::AngularVelocity => vector(recorded.angular_velocity?, simulated.angular_velocity?),
+        Field::StunTimer => scalar(recorded.stun_timer?, simulated.stun_timer?),
+    })
 }
 
 /// The angle between two axes, in radians.
@@ -557,6 +647,7 @@ pub fn compare(recorded: &Trace, simulated: &Trace, tolerances: &Tolerances) -> 
     let mut max_error: [(f32, u64); FIELD_COUNT] = [(0.0, 0); FIELD_COUNT];
     let mut max_relative: [f32; FIELD_COUNT] = [0.0; FIELD_COUNT];
     let mut first_exceeded: [Option<u64>; FIELD_COUNT] = [None; FIELD_COUNT];
+    let mut compared_fields: [usize; FIELD_COUNT] = [0; FIELD_COUNT];
 
     for index in 0..compared {
         let recorded_frame = &recorded.frames[index];
@@ -574,6 +665,8 @@ pub fn compare(recorded: &Trace, simulated: &Trace, tolerances: &Tolerances) -> 
             .into_iter()
             .enumerate()
         {
+            let Some(check) = check else { continue };
+            compared_fields[slot] += 1;
             errors[slot].push(f64::from(check.error));
             if exceeds(check.error, max_error[slot].0) {
                 max_error[slot] = (check.error, recorded_frame.tick);
@@ -603,6 +696,7 @@ pub fn compare(recorded: &Trace, simulated: &Trace, tolerances: &Tolerances) -> 
 
     let fields = std::array::from_fn(|slot| FieldSummary {
         field: Field::ALL[slot],
+        compared_ticks: compared_fields[slot],
         max_error: max_error[slot].0,
         max_error_tick: max_error[slot].1,
         max_relative: max_relative[slot],
@@ -757,12 +851,36 @@ impl fmt::Display for Comparison {
             "field", "max error", "at tick", "max rel", "exceeded"
         )?;
         for summary in &self.fields {
+            // A field neither trace carries reads as "not compared", never as a
+            // max error of zero: the second is what a perfect match looks like,
+            // and a comparison that never ran must not be able to claim one.
+            if summary.compared_ticks == 0 {
+                writeln!(
+                    f,
+                    "{:<20} {:>12} {:>9} {:>12} {:>9}  not compared (no column in one \
+                     or both traces)",
+                    summary.field.as_str(),
+                    "-",
+                    "-",
+                    "-",
+                    "-"
+                )?;
+                continue;
+            }
             let exceeded = summary
                 .first_exceeded_tick
                 .map_or_else(|| "-".to_owned(), |tick| tick.to_string());
+            let partial = if summary.compared_ticks == self.compared_ticks {
+                String::new()
+            } else {
+                format!(
+                    " [{}/{} tick(s)]",
+                    summary.compared_ticks, self.compared_ticks
+                )
+            };
             writeln!(
                 f,
-                "{:<20} {:>12.3e} {:>9} {:>12.3e} {:>9}  {} (slope {:.3e}/tick, {:.3e} -> {:.3e})",
+                "{:<20} {:>12.3e} {:>9} {:>12.3e} {:>9}  {} (slope {:.3e}/tick, {:.3e} -> {:.3e}){}",
                 summary.field.as_str(),
                 summary.max_error,
                 summary.max_error_tick,
@@ -771,16 +889,20 @@ impl fmt::Display for Comparison {
                 summary.trend.verdict,
                 summary.trend.slope_per_tick,
                 summary.trend.first_quarter_mean,
-                summary.trend.last_quarter_mean
+                summary.trend.last_quarter_mean,
+                partial
             )?;
         }
         write!(
             f,
-            "\ntolerances: position {}, orientation {}, velocity {}, control {}, discrete {}",
+            "\ntolerances: position {}, orientation {}, velocity {}, angular velocity {}, \
+             control {}, timer {}, discrete {}",
             self.tolerances.describe(Quantity::Position),
             self.tolerances.describe(Quantity::Orientation),
             self.tolerances.describe(Quantity::Velocity),
+            self.tolerances.describe(Quantity::AngularVelocity),
             self.tolerances.describe(Quantity::Control),
+            self.tolerances.describe(Quantity::Timer),
             self.tolerances.describe(Quantity::Discrete)
         )
     }
@@ -810,6 +932,130 @@ mod tests {
             ));
         }
         Trace::parse(&csv).unwrap()
+    }
+
+    /// The recorded yaw rate the captures show when the stick is held over:
+    /// `+1.51 rad/s` about row 1 on 199 of 199 ticks,
+    /// `docs/ghidra/functions/psp-pulse/engine.md`.
+    const RECORDED_YAW_RATE: f32 = 1.51;
+
+    /// What `YAW_DRIVE_CALIBRATION` stands in for: the recovered steering law is
+    /// verified at instruction level and predicts a yaw rate about 22x too high,
+    /// so a run without the calibration turns 22 times too fast. The open
+    /// question this column was added to move, `HANDOVER.md`.
+    const YAW_AUTHORITY_ERROR: f32 = 22.1;
+
+    /// The same fixture with an angular velocity of `rate` about the up axis on
+    /// every tick. Hand-authored like everything else here.
+    fn turning(ticks: usize, rate: f32) -> Trace {
+        let mut trace = fixture(ticks, |_, _| {});
+        for frame in &mut trace.frames {
+            frame.angular_velocity = Some(Vec3::new(0.0, rate, 0.0));
+            frame.stun_timer = Some(0.0);
+        }
+        trace
+    }
+
+    /// **The measurement this column was added for.** A run whose yaw authority is
+    /// 22x off must be reported as a divergence in the angular velocity, on tick
+    /// 0, rather than only showing up ticks later as an accumulated attitude
+    /// error - which is what the harness could see before and why the yaw
+    /// question could not move.
+    #[test]
+    fn a_yaw_rate_the_size_of_the_open_yaw_authority_error_diverges() {
+        let recorded = turning(40, RECORDED_YAW_RATE);
+        let simulated = turning(40, RECORDED_YAW_RATE / YAW_AUTHORITY_ERROR);
+        let comparison = compare(&recorded, &simulated, &Tolerances::default());
+        let divergence = comparison.first_divergence.clone().expect("must diverge");
+        assert_eq!(divergence.tick, 0);
+        let angular = comparison.field(Field::AngularVelocity);
+        assert_eq!(angular.first_exceeded_tick, Some(0));
+        assert_eq!(angular.compared_ticks, 40);
+        assert!(
+            (angular.max_error - RECORDED_YAW_RATE * (1.0 - 1.0 / YAW_AUTHORITY_ERROR)).abs()
+                < 1e-3,
+            "{}",
+            angular.max_error
+        );
+    }
+
+    /// The other half of the tolerance choice: a straight-line capture records an
+    /// angular velocity of *exactly* zero, so a purely relative test would call
+    /// any simulated dust a relative error of one and report tick 0 of every
+    /// straight capture as the divergence. The absolute floor is what stops it.
+    #[test]
+    fn a_straight_line_is_not_diverged_by_dust_around_a_recorded_zero() {
+        let recorded = turning(40, 0.0);
+        let mut simulated = recorded.clone();
+        for frame in &mut simulated.frames {
+            frame.angular_velocity = Some(Vec3::new(1e-9, -2e-9, 1e-9));
+        }
+        let comparison = compare(&recorded, &simulated, &Tolerances::default());
+        assert!(!comparison.diverged(), "{comparison}");
+
+        // And the floor is low enough to still catch a real rotation: a
+        // hundredth of the recorded turn rate is 1.5e-2, well over 1e-4.
+        for frame in &mut simulated.frames {
+            frame.angular_velocity = Some(Vec3::new(0.0, RECORDED_YAW_RATE / 100.0, 0.0));
+        }
+        assert!(compare(&recorded, &simulated, &Tolerances::default()).diverged());
+    }
+
+    /// An absent column is the absence of a measurement. It must not be compared
+    /// against a zero, and it must not be reported as a field that agreed.
+    #[test]
+    fn an_absent_column_is_not_compared_rather_than_agreed() {
+        // The recording predates the column; the simulated run always has one.
+        let recorded = fixture(40, |_, _| {});
+        let simulated = turning(40, RECORDED_YAW_RATE);
+        assert_eq!(recorded.frames[0].angular_velocity, None);
+
+        let comparison = compare(&recorded, &simulated, &Tolerances::default());
+        let angular = comparison.field(Field::AngularVelocity);
+        assert_eq!(angular.compared_ticks, 0);
+        assert_eq!(angular.first_exceeded_tick, None);
+        assert_eq!(angular.max_error, 0.0, "nothing was measured");
+        assert!(!comparison.diverged(), "{comparison}");
+
+        // And the report says so out loud, because a max error of zero on its own
+        // reads exactly like a perfect match.
+        let report = comparison.to_string();
+        assert!(report.contains("angular_velocity"), "{report}");
+        assert!(report.contains("not compared"), "{report}");
+    }
+
+    /// Every field a legacy capture *does* carry is compared exactly as before,
+    /// which is the whole backwards-compatibility claim.
+    #[test]
+    fn a_legacy_capture_still_compares_on_every_field_it_carries() {
+        let recorded = fixture(40, |_, _| {});
+        let comparison = compare(&recorded, &recorded, &Tolerances::default());
+        for summary in &comparison.fields {
+            match summary.field {
+                Field::AngularVelocity | Field::StunTimer => {
+                    assert_eq!(summary.compared_ticks, 0, "{:?}", summary.field);
+                }
+                other => assert_eq!(summary.compared_ticks, 40, "{other:?}"),
+            }
+        }
+        assert!(!comparison.diverged());
+    }
+
+    /// The stun timer gates thrust and lateral grip, so a run that fails to arm
+    /// it is a run producing thrust the original did not - the force-balance
+    /// question in `HANDOVER.md`. Half a second of it is 500x the tolerance.
+    #[test]
+    fn a_stun_the_simulation_missed_is_a_divergence() {
+        let mut recorded = turning(8, 0.0);
+        let simulated = recorded.clone();
+        for frame in &mut recorded.frames[3..] {
+            frame.stun_timer = Some(0.5);
+        }
+        let comparison = compare(&recorded, &simulated, &Tolerances::default());
+        let divergence = comparison.first_divergence.clone().expect("must diverge");
+        assert_eq!(divergence.check.field, Field::StunTimer);
+        assert_eq!(divergence.tick, 3);
+        assert_eq!(comparison.field(Field::StunTimer).compared_ticks, 8);
     }
 
     #[test]
