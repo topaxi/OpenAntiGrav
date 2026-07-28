@@ -148,8 +148,10 @@ Two consequences worth stating outright:
 `up_speed 0x70`, `down_speed 0x74` (`HandlingXml_ParseAirbrakeGraphics`,
 `0x08839c68`), driving the two graphics-only deflection states at `craft+0x2d8`
 and `craft+0x2dc`. Confidence **80**. `Ship_UpdatePitch` also reads
-`stats_base + 0x90`, a per-team scalar outside every class block; its element is
-not determined.
+`stats_base + 0x90`, a per-team scalar outside every class block. **Its element is
+`<Misc weight_distribution>`**, identified from the PS2 build's
+`HandlingXml_ParseMisc` - see the Cross-platform section below and
+[handling-stats.md](../../../formats/handling-stats.md#misc-sits-on-the-stats-base-and-its-offsets-are-ps2-confirmed).
 
 ## The frame: `Ship_UpdateCraft`
 

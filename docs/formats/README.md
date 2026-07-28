@@ -17,7 +17,7 @@ These are the project's actual work.
 
 | Format | Extension | Platforms | Status | Notes |
 | --- | --- | --- | --- | --- |
-| [WAD container](wad.md) | `.wad` | PSP, PS2 | **understood** | Implemented and validated against all nine archives. Entry names are stored as a CRC-32 variant, [recovered and reimplemented](wad.md#the-name-hash); most names still have to be mined rather than read. |
+| [WAD container](wad.md) | `.wad` | PSP, PS2 | **understood** | Implemented and validated against all nine archives, and the header/entry layout is [confirmed in a second binary](wad.md#and-now-a-second-binary-which-reads-the-layout-back-in-one-shot). Entry names are stored as a CRC-32 variant, [recovered and reimplemented](wad.md#the-name-hash); most names still have to be mined rather than read. |
 | [PSP indexed texture](psp-texture.md) | `.mip` | PSP | **understood** | Implemented; renders correctly. Not swizzled. |
 | [PS2 texture](ps2-texture.md) | - | PS2 | **understood** | A GS upload packet, not a texture file: `PSMT8`-swizzled texels and a `CSM1` palette. Implemented and validated over 5,348 blobs; 5,343 decode, the five `PSMT4` ones are refused. The permutation is checked separately from the framing, by a corpus-wide smoothness comparison against the opposite reading. Which set belongs to which model is [not resolved](ps2-texture.md#not-determined). |
 | [LZSS](lzss.md) | - | PS2 | **understood** | Implemented and verified against all 6,053 compressed entries. |

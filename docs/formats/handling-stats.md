@@ -84,7 +84,7 @@ attribute the table lists has a typed field:
 | `BonnetCamera` | `BonnetCamera` | 85 |
 | `ExternalCameraFar`, `ExternalCameraClose` | `ExternalCamera` | 90 |
 | `AirbrakeGraphics` | `AirbrakeGraphics` | 55 |
-| `Misc` | `Misc` | 80 |
+| `Misc` | `Misc` | 88 |
 | `FE` | `Fe` | 75 |
 | `Class` | `Class`, four per team | 90 |
 | `Engine`, `Brakes`, `Turning` | `Engine`, `Brakes`, `Turning` | 85 |
@@ -183,6 +183,68 @@ alone, and it retires three Airbrake names that the static reading had left
 unresolved.
 
 See [physics](../physics/README.md) for how each is consumed.
+
+### `<Misc>` sits on the stats base, and its offsets are PS2-confirmed
+
+`<Misc>` is the one element outside every `<Class>` block whose destination was
+unknown, and the PS2 build settles it. `HandlingXml_ParseMisc` (`0x0014db08` in
+`SCES_547.48`) writes, with the attribute names read out of `.rodata` at
+`0x002a5780`..`0x002a57c0` rather than guessed:
+
+| Attribute | Offset from the stats base |
+| --- | ---: |
+| `width` | `0x78` |
+| `length` | `0x7c` |
+| `height` | `0x80` |
+| `easyshield` | `0x84` |
+| `mediumshield` | `0x88` |
+| `hardshield` | `0x8c` |
+| `shield` | `0x84`, `0x88` **and** `0x8c` at once - a default for all three |
+| `weight_distribution` | `0x90` |
+
+Note that the parser accepts two attributes **no shipped file authors**,
+`mediumshield` and `hardshield`, and that plain `shield` is a bulk default filling
+all three slots. That turns this page's "`easyshield` alongside `shield` implies a
+difficulty-scaled shield pool" from an inference into a reading: there are three
+difficulty slots, the files set the easy one explicitly and let `shield` cover the
+other two.
+
+Three things follow, and they are why this element is worth its own section.
+
+**`weight_distribution` is the scalar the PSP's `Ship_UpdatePitch` reads.**
+[psp-pulse/engine.md](../ghidra/functions/psp-pulse/engine.md) recorded
+`stats_base + 0x90` as "a per-team scalar outside every class block; its element
+is not determined" - it is this one, and it is the only stats-base field that page
+named without an element. The PS2 `Ship_UpdatePitch` reads the same offset through
+the stats pointer at `craft+0x8c`; see
+[ps2-pulse/craft-update.md](../ghidra/functions/ps2-pulse/craft-update.md).
+
+**The stats base is now accounted for with no gap.** `<Misc>` fills `0x78`
+through `0x90`, which is exactly the range between `AirbrakeGraphics`
+(`0x6c`..`0x74`) and the first class block at `0x94`. A contiguous run from `0x6c`
+to `0x114` with nothing unclaimed is the same kind of argument the offset chain
+makes for [the WAD directory](wad.md#the-offset-chain-pins-the-layout): it is not
+proof, but a wrong offset here would have to be wrong in a way that still closes
+the range.
+
+Confidence **88**, up from the 80 this page gave `<Misc>` on the strength of its
+attribute names alone. It is a direct read of the writing parser, corroborated by
+`Ship_UpdatePitch` consuming `0x90` on both platforms, and capped below 95 because
+nothing has been observed loading a file at runtime. Full reading and addresses:
+[ps2-pulse/handling-xml.md](../ghidra/functions/ps2-pulse/handling-xml.md#what-the-ps2-answers-that-the-psp-page-left-open).
+
+**One caveat, narrower than it was.** The PS2 page flags that the *PSP binary*
+was not re-checked for a `<Misc>` parser, leaving open whether the element is
+PS2-only. On the data side that is settled: all eight PSP team files carry
+`<Misc>` with all six attributes, because `oag_formats::handling` requires the
+element and every attribute with no defaults, and
+`crates/formats/tests/handling_ground_truth.rs` parses all eight - re-run this
+session, 8 teams and 32 parameter sets on each disc. So the open part is only
+*which PSP function* writes `0x78`..`0x90`, not whether the data is there. Since
+`Ship_UpdatePitch` reads `0x90` on PSP too, something must fill it; the parser was
+simply not located. Confidence **80** that the PSP build has an equivalent parser,
+from that argument rather than from finding it. Locating the PSP writer of `0x78`
+would close it.
 
 ## The self-check: completeness
 

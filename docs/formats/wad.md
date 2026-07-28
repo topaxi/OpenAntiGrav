@@ -68,6 +68,47 @@ arithmetic invariant (the offset chain) resolved between the two orderings on
 not a runtime trace, so it caps at 94; the earlier 95 predated the rubric
 saying so.
 
+### And now a second binary, which reads the layout back in one shot
+
+The layout above was derived from the PSP `BOOT.BIN` and from the shipped
+archives. The **PS2 `SCES_547.48` implements it independently**, and its loader
+is unusually direct evidence because it does no per-entry parsing at all:
+`Wad_MountArchive` (`0x00213058`) reads **8 bytes** of header into a stack
+buffer, takes the *second* word as the entry count, resizes a vector of
+**16-byte** elements to that count, and reads `count * 16` bytes straight into
+it. A wrong header size or a wrong entry stride cannot survive that; there is no
+loop to absorb the error.
+
+`Wad_Open` (`0x002132c0`) then pins the four fields by use rather than by
+position: `entry[0]` is compared against `Wad_HashName`'s result, `entry[1]` is
+passed to the backing file's seek, and the `entry[3] == entry[2]` test selects a
+passthrough stream over a decompressing one - so `entry[2]`/`entry[3]` are the
+uncompressed and stored sizes, in that order. That is
+`{name_hash, offset, size_uncompressed, size}`, exactly the table above.
+
+It also corroborates the **compression rule's outer test**: the size-equality
+question comes first, and no bit-31 flag test appears at this level at all. See
+[the PS2 WAD subsystem page](../ghidra/functions/ps2-pulse/wad-subsystem.md#mount-lookup-and-the-archive-layout)
+for the full reading; confidence **88** on the lookup and mount functions there.
+
+**One genuine divergence, and it is not in the layout.** The PSP's `Wad_Open`
+scans the entry array from a *rotating* start point (`last_hit + 1`, wrapping);
+the PS2's scans from the beginning every time, with no stored cursor. First match
+wins in both, so the same entry is found either way - only the search cost
+differs. It does mean a reimplementation **cannot cite the PS2 build as evidence
+for the rotating cursor**. Confidence **85** on the difference.
+
+Confidence for the layout: **94**, unchanged, but resting on two legs instead of
+one. The number does not move, and that is deliberate - the
+[rubric](../reverse-engineering/confidence-rubric.md)'s top band needs a runtime
+trace **and** a second binary; this now has the second binary and still has no
+trace. Nothing in this file has ever been executed under an emulator on either
+platform, and a second reader cannot supply that leg. What changed is where the
+remaining doubt lives: not in the field layout, which two independent loaders now
+agree on, but in the surrounding assumptions. This follows
+[LZSS](lzss.md#an-independent-decoder-from-the-other-binary)'s precedent exactly,
+for the same reason.
+
 ### Worked example
 
 `PSP_GAME/USRDIR/FE.wad`, Pulse PSP:
@@ -152,12 +193,31 @@ There is also an escape hatch: a name of exactly `#` plus eight **uppercase** he
 digits is taken as a literal hash. No such string exists in the binary, so it is
 probably tools-only.
 
-Confidence: **94**. Recovered from decompilation (`Wad_HashName`) and checked
-against 176 real entries across four archives, including the mixed-case
-normalisation case above. Per the
-[rubric](../reverse-engineering/confidence-rubric.md), a hash that reproduces
-correctly across many real names is data agreement, not a runtime trace, so it
-caps at 94; the earlier 97 predated the rubric saying so.
+**Three independent implementations agree, across two binaries.** The PS2
+`SCES_547.48` carries *two* copies of this hash in separate translation units,
+each with its own lazily-built CRC table: `Wad_HashName` (`0x0020c638`), the one
+`Wad_Open` actually calls, and `Resource_HashName` (`0x00203b78`), reached only
+from a name-keyed resource cache. Both reproduce every rule above - the running
+value initialised to `0` and complemented at the end, `\` hashed as `/`,
+uppercase folded to lowercase, and the `#` plus eight uppercase hex digits
+literal-hash escape with the same `length == 9` guard. They differ only in
+mechanics: `Resource_HashName` folds through newlib's `_ctype_` table like the
+PSP does, while `Wad_HashName` uses a precomputed 256-byte lowercase table
+(`g_tolower_table`, `0x002c6d98`) and tests for the separator *after* folding,
+which is equivalent because `\` is unaffected by case folding. Details and the
+address correspondence are on
+[the PS2 WAD subsystem page](../ghidra/functions/ps2-pulse/wad-subsystem.md#hashing).
+
+Do not confuse it with `crc32` (`0x002068c8`), an ordinary CRC-32 with initial
+value `0xFFFFFFFF`, no normalisation and a statically initialised table. The zero
+initial value is exactly what separates them.
+
+Confidence: **94**. Recovered from decompilation (`Wad_HashName`), checked against
+176 real entries across four archives including the mixed-case normalisation case
+above, and now corroborated by two further implementations in a second binary.
+Per the [rubric](../reverse-engineering/confidence-rubric.md), data agreement plus
+a second binary is still short of the top band's other leg - a runtime trace - so
+it caps at 94; the earlier 97 predated the rubric saying so.
 
 ```sh
 oag-wad hash 'Data\FE\Images\hex_bg.mip'
