@@ -376,6 +376,21 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// pins the direction as aligning independently of any simulation. So whatever the
 /// `F x r` anomaly turns out to be, it is not what threw the ship off this track.
 ///
+/// # The projection is re-read and confirmed, at 92
+///
+/// The whole term was re-read instruction by instruction to answer whether the
+/// right-axis projection is real or a transcription artefact hiding a
+/// pitch-restoring component: `cross(up, avgNormal)` at `0x0884ac44`, the
+/// literal `-400.0f` materialised at `0x0884ac5c`, a `vdot.t`/`vscl.q`/`vsub.q`
+/// triple against `craft+0x170` (the **right** axis) at
+/// `0x0884acac`-`0x0884acfc`, and `vadd.t` into `craft+0x350`, the world
+/// accumulator, at `0x0884ad24`. **Every element of what this module implements
+/// is what the binary has**, at confidence 92, so the crate's under-damped pitch
+/// is not this term and no change to it can be the fix. See
+/// `docs/ghidra/functions/psp-pulse/engine.md`, "The alignment torque: the
+/// projection is real", and `docs/physics/angular-velocity-column.md` for where
+/// the ringing actually comes from.
+///
 /// Confidence **80** on the step response: it is unambiguous and reproducible, but was
 /// taken on one ship on one track and fitted by hand from a quarter period and one
 /// overshoot. Confidence **84** on the direction, unchanged:
@@ -511,6 +526,34 @@ impl Hover {
 /// does not say with what factor, so the symmetric half-length placement is a
 /// **guess awaiting M3**; it is at least symmetric, which is the property the
 /// tests depend on. The front probe is first.
+///
+/// # The original's placement is recovered, and is deliberately not used yet
+///
+/// `Ship_InitCraft` (`0x08849354`) writes both offsets as immediates,
+/// `(0, -1.5, +/-6)`, and scales each by the same `0.75` global that
+/// [`TARGET_GLOBAL_SCALE`] is - so the original's probes sit at
+/// `(0, -1.125, +/-4.5)`, a **code literal identical for every craft**, with no
+/// handling parameter in it at all. Confidence 92; see
+/// `docs/ghidra/functions/psp-pulse/engine.md`, "The probe geometry is a code
+/// literal, like the inertia tensor".
+///
+/// The `+/-4.5` half-spacing has a second, independent leg: the pitch
+/// oscillator's frequency in `data/traces/talons-junction-pitch-both-ways.csv`
+/// measures a stiffness ratio of `2.26` against this function's `+/-6.5`, where
+/// the recovered spacing predicts `(6.5/4.5)^2 = 2.09`. Agreement to 8 %, from a
+/// capture that knows nothing about the binary.
+///
+/// **It is still not landed, for a measured reason rather than a doubt.** Pitch
+/// damping through this suspension falls linearly with the spacing, and
+/// `oag-physics` is already `3.4x` short of the original's pitch damping, so
+/// shortening the arm on its own moves the pitch-rate error from `134 %` to
+/// `1005 %` of signal and drops `grounded` off `1.0` on 166 of 360 ticks where
+/// the original never leaves it. The `-1.125` vertical drop that comes with it
+/// is separately **refuted** by the same capture's resting pose. The missing
+/// damping term is the thing to find first; the arithmetic, the exclusions and
+/// what was tried are in
+/// `docs/physics/angular-velocity-column.md`, "The pitch response rings, and the
+/// alignment torque is not why".
 #[must_use]
 pub fn probe_offsets(handling: &Handling) -> [Vec3; 2] {
     let half = handling.dimensions.length * 0.5;
@@ -581,10 +624,15 @@ pub fn probe<R: Raycaster + ?Sized>(
     let height = (point - hit.point).dot(up);
 
     // The page writes this as `bodyLinearVel + M * cross(probeLocal, angularVel)`,
-    // which is the negation of the conventional rigid-body point velocity. The
-    // conventional form is used here, because `omega x r` is what makes a
-    // descending nose damp rather than pump; the discrepancy is recorded as an
-    // unresolved sign rather than assumed to be a typo.
+    // which reads like the negation of the conventional rigid-body point
+    // velocity. **It is not, and that is now settled rather than assumed.** The
+    // original's `vcrsp.t` at `0x0884a970` crosses the local probe offset with
+    // `body+0x150`, which is `-omega` under the `w_game = -w_physics`
+    // convention, so `basis * (r x -omega)` is `basis * (omega x r)` - the
+    // conventional form, which is what this line computes. The recorded sign and
+    // the recorded frame cancel. See
+    // `docs/ghidra/functions/psp-pulse/engine.md`, "The damper's point velocity
+    // is the conventional `omega x r`".
     let velocity = body.velocity_at(point);
     let normal_velocity = velocity.dot(hit.normal);
 

@@ -1382,6 +1382,191 @@ ship **up**, so both are positive in the data. A downward gravity force therefor
 requires the sign to be applied here, in the code. The same prefix bit pattern
 appears on the rolling-resistance term, which must also oppose motion.
 
+## The hover geometry and the alignment torque, read instruction by instruction
+
+This section re-reads `Ship_HoverTwoPoint` (`0x0884a658`) and the probe cast that
+feeds it, to answer one question asked by
+[angular-velocity-column.md](../../../physics/angular-velocity-column.md#the-pitch-response-rings-and-the-alignment-torque-is-not-why):
+does the surface-alignment torque really have its right-axis component projected
+out, and if so is a pitch-restoring component being lost in transcription? The
+answer is that the standing transcription is **correct as written**, and the
+reading turned up the probe geometry and the lever arm alongside it.
+
+Everything below decodes with the [Allegrex processor
+module](../../../psp/allegrex-vfpu.md) installed.
+
+### The alignment torque: the projection is real
+
+Twenty-six instructions, `0x0884ac24`-`0x0884ad28`, with the intermediate
+spill-and-reload pairs the compiler leaves everywhere in this function elided:
+
+```text
+0884ac24  a2 = craft+0x140                  ; the averaged contact normal
+0884ac30  a2 = craft+0x160                  ; up   (the sp+0x600 spill of it)
+0884ac44  vcrsp.t C320,C300,C310            ; cross(up, avgNormal)
+0884ac5c  lui a2,0xc3c8                     ; -400.0f
+0884ac78  vscl.q C300,C500,S400             ; torque = cross(up, avgNormal) * -400
+0884ac94  a3 = craft+0x170                  ; right
+0884acac  vdot.t S220,C200,C210             ; d = dot(torque, right)
+0884accc  vscl.q C300,C500,S400             ; right * d
+0884acfc  vsub.q C320,C300,C310             ; torque -= right * d
+0884ad18  a3 = craft+0x350                  ; the WORLD angular accumulator
+0884ad24  vadd.t C210,C210,C600             ; craft+0x350 += torque
+```
+
+Confidence **92**. Every element of the standing transcription holds:
+
+- the operands are `cross(up, avgNormal)`, in that order, both world vectors;
+- the scale is the literal `-400.0f` materialised inline at `0x0884ac5c`,
+  matching the PS2 immediate the roll-oscillator work already recorded;
+- **the projection exists, it is a Gram-Schmidt removal, and its axis is
+  `craft+0x170`**, which this page's "three body-axis copies, settled" table
+  identifies as the ship's **right** axis, corroborated in this same
+  function by the bank-to-yaw term reading `craft+0x174` - the *world y* of that
+  vector, i.e. how far the ship is banked - at `0x0884ad40`;
+- the destination is `craft+0x350`, the world accumulator, added with a
+  three-lane `vadd.t`.
+
+A torque about the right axis is pitch by definition, so the term levels roll and
+yaw and **contributes nothing to pitch at all**. Nothing is lost in
+transcription and there is no hidden pitch-restoring component. `craft+0x140` is
+the running sum of the contacting probes' normals, halved at `0x0884abe0` when
+both probes hit, so "average normal" is exact rather than approximate.
+
+**This is a validated negative**: the term the crate implements is the term the
+binary has, and the pitch ringing has to come from somewhere else. The
+measurement that says where is in
+[angular-velocity-column.md](../../../physics/angular-velocity-column.md#the-pitch-response-rings-and-the-alignment-torque-is-not-why).
+
+### The probe geometry is a code literal, like the inertia tensor
+
+`Ship_InitCraft` (`0x08849354`) writes both probe offsets as immediates and then
+scales each by the global at `0x08ab0e1c`:
+
+| Where | What |
+| --- | --- |
+| `0x08849480`-`0x0884949c` | `craft+0xc0 = (0, -1.5, +6, 0)` - `0xbfc00000`, `0x40c00000` |
+| `0x088494a0`-`0x088494b4` | `craft+0xd0 = (0, -1.5, -6, 0)` - `0xc0c00000` on `z` |
+| `0x088494b8`-`0x08849520` | both scaled by `DAT_08ab0e1c` via `vscl.q` |
+
+`DAT_08ab0e1c` is [`TARGET_GLOBAL_SCALE`](../../../physics/README.md), and it is
+written with the literal `0.75` (`lui 0x3f40`) at `0x08841000` in the ship-entity
+constructor `FUN_08840c74` - **which calls `Ship_InitCraft` afterwards**, at
+`0x088412d4`, so the scale is in place before the offsets are written. The static
+image holds `1.0` there and never uses it. So the offsets are
+
+```text
+front = (0, -1.125, +4.5)      rear = (0, -1.125, -4.5)
+```
+
+Confidence **92** on the instructions and the ordering. Like
+[`Body_SetBoxInertia`'s box](rigid-body.md#the-arguments-are-literals-and-the-mass-is-not-the-flying-mass),
+this is **identical for every craft in the game** - no handling parameter enters
+it, so a reimplementation deriving the spacing from `<Misc length>` is deriving
+it from the wrong thing whatever factor it picks.
+
+### `Ship_CastHoverProbes` (`0x08849ed4`) builds the lever arm
+
+Named here; it has no direct caller (`jal` scan included - the call is through a
+vtable, like `Ship_UpdateCraft` itself), and it owns the craft fields
+`Ship_HoverTwoPoint` then consumes. Per probe `i`, stride `0x10`:
+
+```text
+0884a03c  craft+0x120 := craft+0xc0                 ; a PLAIN COPY of the offset
+0884a060  vtfm4.q C000,E100,C200                    ; basis(craft+0x80..0xb0) * offset
+0884a08c  craft+0xe0  := that + craft+0x1a0         ; + position -> WORLD probe point
+0884a0a0  craft+0xec  := 1.0
+0884a0a4  lwc1 f12,0x2f0(s6)                        ; the hover target height
+0884a0b4  craft+0x100 := craft+0xe0 - up * craft+0x2f0    ; the ray's far end
+          Collision_RaycastWorld(world, craft+0xe0, craft+0x100, craft+0x1e0, ...)
+0884a0..  craft+0x1d8+i := hit
+```
+
+Three things fall out, and each corrects something:
+
+- **`craft+0x120` is the *unrotated* local offset**, a straight `lv.q`/`sv.q`
+  copy of `craft+0xc0`. `HANDOVER.md`'s older hover-probe note calls
+  `craft+0x120`/`+0x130` "the rotated copies"; they are not, and the distinction
+  is load-bearing because `Ship_HoverTwoPoint`'s damper crosses that field with
+  the angular velocity and then rotates the *result* into world space.
+- **The lever arm the spring's torque acts through is `craft+0xe0 -
+  body+0x30`**, i.e. exactly `basis * (0, -1.125, +/-4.5)`.
+  `Ship_HoverTwoPoint` passes `craft+0xe0` as the third argument to
+  `Body_AddForceAtPoint` at `0x0884ab54`-`0x0884ab6c`. The force itself is along
+  `up`, so the offset's *vertical* component contributes nothing to the torque
+  (it is parallel to the force); only the `+/-4.5` does. Confidence **90**.
+- **The raycast's far end is `probe - up * craft+0x2f0`**, the same field
+  `Ship_HoverTwoPoint` springs against at `0x0884aa38`. Read literally, the
+  probes reach exactly as far as the height they are trying to hold, which would
+  make the spring one-sided - compression only, never a pull. **The captures
+  refute that; see the next subsection.**
+
+### The damper's point velocity is the conventional `omega x r`
+
+`crates/physics/src/hover.rs` carries a flagged unresolved sign here - the page
+it was written from records the probe velocity as the *negation* of the textbook
+rigid-body point velocity, and the crate uses the textbook form anyway with the
+discrepancy recorded rather than assumed away. The instructions settle it in the
+crate's favour:
+
+```text
+0884a954  C310 = body+0x150                         ; the angular velocity
+0884a960  C300 = craft+0x120+0x10i                  ; the LOCAL probe offset
+0884a970  vcrsp.t C320,C300,C310                    ; cross(r_local, w)
+0884a9b8  vtfm4.q C000,E100,C200                    ; basis * that  -> world
+0884a9f8  vadd.q C220,C200,C210                     ; + craft+0x190, the velocity
+0884aa28  vdot.t S220,C200,C210                     ; dot(that, probe normal)
+```
+
+The cross product is `r x w`, which looks like the negation - but `body+0x150`
+is `-omega` under the
+[`w_game = -w_physics`](rigid-body.md#body0x160-is-angular-momentum-body0x40-is-the-inverse-inertia-tensor)
+convention this engine uses throughout, so `basis * (r x -omega)` is
+`basis * (omega x r)`: the conventional point velocity, in world space. The
+recorded sign and the recorded frame were both right, and they cancel.
+Confidence **88**. The crate's note can be closed rather than carried.
+
+### Two of these readings are refuted at runtime, and that is left open
+
+The instructions above are unambiguous, but two of them cannot be reconciled with
+`data/traces/talons-junction-pitch-both-ways.csv`, which is the cleanest capture
+in the tree (360 wall-free ticks, no thrust, `speed/|velocity|` at `1.0000`).
+Both refutations are recorded rather than resolved, and **neither is
+implemented**, because a reading the capture contradicts is not a reading to
+build on:
+
+- **The reach cannot equal the target height.** The capture holds `grounded` at
+  exactly `1.0` - both probes in contact - on all 360 ticks, while the recorded
+  basis and position put each probe **`0.46` units above its resting height** at
+  the peak of the pitch input. Raycasting the real track at the capture's own
+  first pose gives a probe height of `4.009` against a `craft+0x2f0` of `4.125`,
+  so a reach equal to the target leaves `0.116` of extension headroom, four times
+  less than the probes demonstrably travel. Replaying with the reach shortened to
+  the target confirms it directly: `grounded` collapses to `1.0` on 160 of 360
+  ticks and the pitch-rate error grows from 134 % to 414 % of signal.
+- **The `-1.125` vertical drop cannot be there either**, by the same first pose.
+  A resting craft's probe sits at `target - sag`; the capture's own pose puts a
+  probe with **no** vertical offset at `4.009`, and the earlier live read of the
+  original's resting probe height is `4.002`. With the probes `1.125` lower the
+  same pose reads `2.888`, and the ship is then a unit and a bit out of
+  equilibrium at the instant the replay starts.
+
+The `+/-4.5` half-spacing, by contrast, is **corroborated** at runtime rather than
+refuted - the pitch oscillator's frequency measures it independently, to 8 %. See
+[angular-velocity-column.md](../../../physics/angular-velocity-column.md#the-pitch-response-rings-and-the-alignment-torque-is-not-why).
+
+So the honest state is: three literals read at 92, one confirmed by an
+independent runtime measurement and two contradicted by one. The likeliest
+explanations, none of them checked, are that `craft+0x2f0` holds a different
+stage of its own in-place computation when the cast runs, and that some second
+term (the grounded downforce this page's
+[contradictions](#contradictions-with-docsphysicsreadmemd) section already
+records as unimplemented) moves the resting equilibrium far enough down the
+reach to make both consistent. Whoever picks that up should start by breaking on
+`Ship_CastHoverProbes` in PPSSPP and reading `craft+0x2f0`, `craft+0xc0` and
+`craft+0x308` live - all three are single words and the question is decided by
+their values, not by more disassembly.
+
 ## Contradictions with `docs/physics/README.md`
 
 **`ride_height` does appear in the force law.** That page states it "never

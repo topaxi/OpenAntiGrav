@@ -487,6 +487,114 @@ through a lever arm whose placement is itself recorded as "a guess awaiting M3".
 Either that projection or that placement would explain an under-damped pitch, and
 re-reading the projection is the cheaper of the two.
 
+## The pitch response rings, and the alignment torque is not why
+
+Both halves of that suspicion were then checked, and the section above is
+superseded by what follows rather than merely extended.
+
+**The projection is real.** `Ship_HoverTwoPoint`'s alignment torque was re-read
+instruction by instruction and every element of the standing transcription
+holds - `cross(up, avgNormal) * -400`, the right-axis component removed by a
+`vdot.t`/`vscl.q`/`vsub.q` triple, into the world accumulator, at confidence
+**92**. See
+[engine.md](../ghidra/functions/psp-pulse/engine.md#the-alignment-torque-the-projection-is-real).
+The term levels roll and yaw and contributes nothing to pitch, exactly as
+implemented. Nothing was lost in transcription, so **the ringing is not this
+term**, and no change to it can be the fix.
+
+### The ringing is a second-order signature, and it separates cleanly
+
+"Decays smoothly versus rings" is not a vague impression once the pitch rate is
+read tick by tick. Both sides answer the same held step with the same leading
+edge and then behave like two different oscillators, so fitting each from its own
+extrema - period from their spacing, damping from the ratio between successive
+ones - identifies both without any model of the force law:
+
+| | first four extrema, rad/s | `omega_n`, rad/s | `zeta` | `2*zeta*omega_n` |
+| --- | --- | ---: | ---: | ---: |
+| the original | `+0.397 -0.080 +0.017 -0.007` | `9.32` | `0.339` | `6.31` |
+| ours | `+0.431 -0.353 +0.287 -0.234` | `13.99` | `0.065` | `1.83` |
+
+The original settles in one and a bit cycles. Ours loses a fifth of its amplitude
+per cycle and is still swinging `+/-0.19` rad/s a hundred ticks later, which is
+where the `134 %` comes from: the response is not wrong, the *envelope* is.
+
+**Ours is 50 % too stiff and 3.4x too lightly damped**, and the two failures have
+different causes.
+
+### The stiffness gap measures the probe spacing, independently
+
+Pitch stiffness through a two-probe suspension goes as the square of the probes'
+half-spacing, and nothing else in the term changes with it. The ratio of the two
+fitted stiffnesses is
+
+```text
+(13.99 / 9.32)^2 = 2.26
+```
+
+against `(6.5 / 4.5)^2 = 2.09` for the crate's `<Misc length>`-derived spacing
+measured against the `+/-4.5` literal
+[engine.md](../ghidra/functions/psp-pulse/engine.md#the-probe-geometry-is-a-code-literal-like-the-inertia-tensor)
+recovers from `Ship_InitCraft`. **Agreement to 8 %, from a capture that knows
+nothing about the binary and a literal that knows nothing about the capture.**
+That is a second, independent leg under the recovered spacing - the same shape of
+argument that confirmed the inertia tensor - and it retires the "guess awaiting
+M3" flag on the placement in the direction of the binary.
+
+### What is actually missing is about `4.9` of pitch damping
+
+The spacing does not fix the ringing, though, and saying so is the point of
+measuring rather than assuming. Damping through the same suspension scales as the
+half-spacing squared as well, so shortening the arm lowers stiffness and damping
+together - and `zeta = c / (2*sqrt(k))` then falls *linearly* with the spacing,
+because the numerator carries `d^2` and the denominator only `d`. Shortening the
+arm therefore makes an already under-damped pitch worse, not better.
+Landing the recovered spacing on its own makes every number worse, measured on
+both captures: pitch-rate error `134 % -> 1005 %`, and `grounded` drops off `1.0`
+on 166 of 360 ticks where the original never leaves it.
+
+Splitting our own damping by zeroing the hover damper for one run says where the
+`1.83` comes from:
+
+| source | contribution to `2*zeta*omega_n` |
+| --- | ---: |
+| `Ship_ApplyAngularDamping`'s pitch axis (`-pitch_damping * L`) | `0.99` |
+| the hover probes' own damper, at the crate's `+/-6.5` | `0.84` |
+| the same damper at the recovered `+/-4.5` | `0.40` |
+| **the original's total, measured** | **`6.31`** |
+
+So a faithful crate - recovered spacing, everything else as read - would carry
+about `1.4` where the original carries `6.3`. **There is a pitch damping term of
+roughly `4.9`, four to five times everything we have, that no recovered term
+supplies.** It is not the alignment torque (projected out, confidence 92), not
+`Ship_UpdatePitch` (`0x08848d08` is a pure torque, no rate feedback, read in
+full), not the weathervane (`cross(forward, velocity)` with the craft stationary
+is zero), and not `Body_Integrate`'s `body+0x380`, which the ship-entity
+constructor sets to `0.01`.
+
+That is the open question this analysis leaves, and it is a much sharper one than
+"the pitch rings": a single missing term, on one axis, with a magnitude measured
+to within the fit's own noise, and every already-recovered candidate excluded by
+name.
+
+### What was deliberately not landed
+
+Neither hover change was landed. The spacing is recovered at 92 and corroborated
+above, but landing it alone regresses every measured number, and
+`HANDOVER.md` has the precedent from the first attempt at this same term: a
+half-landed force term is worse than none. The vertical drop and the shortened
+raycast that come with it in the binary are, separately, **refuted by the
+captures** - see
+[engine.md](../ghidra/functions/psp-pulse/engine.md#two-of-these-readings-are-refuted-at-runtime-and-that-is-left-open).
+The order that makes sense is to find the missing damping first, then land the
+geometry into a model that can hold it.
+
+One thing was closed rather than left open: the unresolved sign the crate carried
+on the hover damper's probe velocity. The original computes `cross(r_local, w)`
+and rotates the result to world, which under `w_game = -w_physics` is the
+conventional `omega x r` the crate already uses. The recorded negation and the
+recorded frame cancel.
+
 **Two other measurements from the same change, both reported rather than tuned
 to:**
 
