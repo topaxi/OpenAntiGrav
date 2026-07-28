@@ -199,6 +199,11 @@ closing exactly with zero false positives elsewhere in the file set - the first
 direct evidence of asset-pipeline reuse for collision specifically, which is the
 premise [future-2048](../future-2048/shared-concepts.md) is built on.
 
+The renumbering is not specific to collision: Pure shifts the **whole** class-ID
+table, and the [Pure probe](pure-status.md#the-class-id-space-is-renumbered)
+pins `Transform`, `Mesh`, `Texture` and `WO Track` there by exact invariants.
+The five collision classes remain the ones it could not place.
+
 **Which of the three is floor, wall or reset is not determined.** The object
 counts look like Pulse's shape - two large classes and one small one - and
 analogy is not evidence. Confidence **45**, so nothing is named and no constants

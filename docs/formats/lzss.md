@@ -8,6 +8,12 @@ Used for [WAD](wad.md) entries whose stored size differs from their uncompressed
 size and whose zlib flag is clear. That is 5,861 of 7,200 entries in
 `WADS2.WAD` and 192 of 193 in `WADSP.WAD`. **No PSP archive uses it.**
 
+**Validated against one disc**, `pulse-ps2-eu`, because it is the only one that
+compresses anything. *Wipeout Pure*'s UMD was checked and stores all 1,229 of
+its entries uncompressed, exactly like Pulse PSP, so Pure adds no validation
+here - a deliberate non-result, recorded in the [Pure probe](pure-status.md) so
+nobody spends the afternoon again.
+
 ## Format
 
 A single MSB-first bit stream. Nothing is byte-aligned.

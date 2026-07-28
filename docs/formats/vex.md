@@ -71,6 +71,21 @@ an exact arithmetic invariant rather than a plausible reading. Per the
 [rubric](../reverse-engineering/confidence-rubric.md), data agreement caps at
 94, even across many real files; the earlier 95 predated the rubric saying so.
 
+**Validated against three discs**: `pulse-psp-usa`, `pulse-ps2-eu` and
+`pure-psp-usa`. Pure's `Data.wad` holds 171 `.vex` files and 23,677 nodes, at
+format version 4 or 3 rather than 6, and **both** header invariants hold on
+171/171 of them - the tree ends exactly at the declared tree length, and the
+`u16` `child_count` sums to `node_count - 1`. Pure's mesh payloads use the same
+batch header, vertex-type encoding and per-batch scale, over 20,832 batches and
+2.1 M vertices.
+
+**What does not carry across is the class-ID table below.** Pure renumbers it
+wholesale - `Transform` is `0x6d` there, `Mesh` is `0x11e`, `Texture` is
+`0x373` - so the IDs on this page are Pulse's, and the constants in
+`oag-formats::vex` are Pulse-only by construction. Full mapping, plus the
+version-3 batch-header difference and Pure's pre-swizzled embedded textures, in
+the [Pure probe](pure-status.md#the-class-id-space-is-renumbered).
+
 ## Node types
 
 Game-specific types, from the class-ID table. This list is effectively a

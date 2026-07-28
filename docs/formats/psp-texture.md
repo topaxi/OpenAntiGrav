@@ -97,6 +97,17 @@ low nibble first gives smooth gradient bands where high nibble first combs every
 edge into one-pixel teeth. The [`.fnt`](fnt.md) atlas is a second, much larger
 4bpp corpus and uses the same order.
 
+**Validated against two discs**: `pulse-psp-usa` and `pure-psp-usa`. Pure's
+three archives hold 346 standalone `.mip` entries, and all 346 decode and write
+as PNG under the same reader, with 5 of them carrying the `+0x07` swizzle flag -
+the same small minority as Pulse. Because identification is by the header's own
+size arithmetic against the stored length, a wrong reading would fail to
+identify rather than mis-decode, which is what makes the count evidence. See the
+[Pure probe](pure-status.md). One caveat that does not apply to standalone
+`.mip` files but does to the same texel format elsewhere: Pure's *embedded*
+model textures ship [pre-swizzled](pure-status.md#pures-model-textures-ship-pre-swizzled)
+where Pulse's do not.
+
 ## Open questions
 
 ### ~~Is the pixel data swizzled?~~ Sometimes, and `+0x07` says which

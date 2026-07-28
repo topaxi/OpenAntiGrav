@@ -58,6 +58,15 @@ oag-wad cat <archive> 'Data\Ships\Feisar\handlingstats.xml' --expand
 Identified by the leading `<code`. Files that begin `<?xml` are plain and need
 no expansion.
 
+**Validated against three discs**: `pulse-psp-usa`, `pulse-ps2-eu` and
+`pure-psp-usa` - and Pure is the one that says something. Of its 291 XML
+entries, **not one begins `<code`**: the name shortening does not exist on Pure
+at all, so it is a Pulse-era size optimisation rather than a lineage-wide
+convention. `--expand` is correctly a no-op on every Pure file, which is the
+cheapest possible confirmation that the identification rule above (leading
+`<code`, else plain) is the right one rather than a heuristic that happened to
+work. See the [Pure probe](pure-status.md).
+
 ## Why it matters beyond the front end
 
 **This is the richest source of real asset names in the game.** Most names are

@@ -21,6 +21,7 @@ Findings specific to the PlayStation Portable releases.
 
 ## Related
 
-- [Pure](../reverse-engineering/source-images.md) uses the same disc structure
-  and the same archive format, and is often the easier place to understand an
-  ambiguous Pulse format.
+- [Pure](../formats/pure-status.md) uses the same disc structure and the same
+  archive format, and is often the easier place to understand an ambiguous
+  Pulse format. That page has its UMD's layout, and measures exactly how much
+  of the Pulse format layer reads it unchanged.

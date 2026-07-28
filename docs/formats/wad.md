@@ -151,6 +151,13 @@ place, while the PS2 reads from a faster DVD with more RAM to spare.
 The same container serves Pure PSP, Pulse PSP and Pulse PS2 unchanged, which is
 the first hard evidence that one asset pipeline can cover the lineage.
 
+**Validated against three discs**: `pulse-psp-usa`, `pulse-ps2-eu` and
+`pure-psp-usa`. `oag-wad verify` decodes every entry of all nine archives to its
+declared size, Pure's 1,229 included. The
+[Pure probe](pure-status.md) found nothing in the container that needed
+changing, and the [name hash](#the-name-hash) below resolves Pulse-shaped paths
+against Pure's directories with no salt or seed change.
+
 ## The name hash
 
 CRC-32 with the standard reflected polynomial `0xEDB88320`, but **initialised to

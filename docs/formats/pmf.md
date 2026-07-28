@@ -91,6 +91,14 @@ Confidence **95**. Everything above is measured against real files. The one
 inference is that the PSP presents at 30000/1001 Hz rather than exactly 30, which
 is what makes check 3 land on 1200 instead of 1198.
 
+**Validated against two discs**: `pulse-psp-usa` and `pure-psp-usa`. Pure's
+archives hold 14 movies, and `stream_offset == 0x800` and
+`stream_offset + stream_size == file length` hold exactly on 14/14, each with
+two streams keyed `0xe0` and `0xbd`. Pure ships version string `"0012"` only,
+where Pulse ships both `"0012"` and `"0014"` - so the version field varies
+within a title, not between titles, and neither reading of it changes the
+layout. See the [Pure probe](pure-status.md).
+
 ## The movies on the PSP Pulse disc
 
 All 17 are entries in `Data.wad`, `PSMF0012` or `PSMF0014`, 480x272 for the

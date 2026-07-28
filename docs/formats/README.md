@@ -79,3 +79,10 @@ The WAD container header appears in the same shape in Pure PSP, Pulse PSP and
 Pulse PS2. That is the first evidence for the premise this project is built on:
 one asset pipeline serving the whole lineage. Tracked in
 [future-2048](../future-2048/shared-concepts.md).
+
+**[Pure status](pure-status.md)** measures how far that goes: what the existing
+tooling reads off *Wipeout Pure*'s UMD unchanged, and every place a parser turns
+out to have overfit to Pulse. It is the
+[ADR-0009](../architecture/adr/0009-multi-game-fanout.md) probe, and it is the
+reason the pages above now say **which discs** a claim is validated against
+rather than just "real data".

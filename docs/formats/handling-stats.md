@@ -277,6 +277,22 @@ not that the engine uses it the way this page says.
 The camera rows in the table above stay at 60 regardless. A second release
 agreeing on the name `headtilt` says nothing about what `headtilt` does.
 
+**Validated against two discs**, both of them Pulse. *Wipeout Pure* was checked
+as a third corpus and is **deliberately not counted**: it carries
+`Data\Ships\<Team>\handlingstats.xml` at the same addresses, in plain
+(unshortened) XML, with the same element names, attribute names and
+`<Stats team>` / `<Class name>` nesting - nine teams rather than eight - but
+`oag_formats::handling::parse` refuses every one of them. Pure has a **fifth
+speed class** below the four Pulse ships, which the fixed-length array indexed
+by `SpeedClass` cannot hold, and it lacks three attributes this parser requires:
+`<Airbrake sideshift>`, `<Misc easyshield>` and `<Misc weight_distribution>`.
+
+All three are Pulse-era *additions*, so the handling model grew between titles
+rather than changing shape - and the parser refusing them is the "nothing
+defaults" rule above working as designed on a file it was not designed for, not
+a bug. Confidence **92**, from a direct schema diff. Details and what a
+two-title parser would cost are in the [Pure probe](pure-status.md#handling-stats-the-schema-holds-the-parser-does-not).
+
 The tests are `#[ignore]`d and never run in CI, because they need game content.
 Run them with `just test-data`, and with `OAG_REQUIRE_GAME_DATA=1` so an absent
 image fails instead of skipping green.

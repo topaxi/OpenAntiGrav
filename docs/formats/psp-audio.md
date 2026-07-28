@@ -145,6 +145,15 @@ an exact identity and nothing has been run under an emulator. Per the
 [rubric](../reverse-engineering/confidence-rubric.md) data agreement caps at 94
 either way.
 
+**Validated against one disc**, `pulse-psp-usa`. *Wipeout Pure*'s UMD was
+checked and **holds no `SBlk` bank at all**: not one entry in any of its three
+archives begins with that magic, even though its executable names
+`Data\Sound\*.bnk` paths. Pure's 25 RIFF entries are `WAVE_FORMAT_EXTENSIBLE`,
+two channels at 44.1 kHz. So `SBlk` looks like a Pulse-era container rather than
+a lineage-wide one, and whatever indexes Pure's streams has not been looked at.
+Confidence **85** on the absence, from a magic scan over all 1,229 entries. See
+the [Pure probe](pure-status.md).
+
 ## Reproducing
 
 ```sh

@@ -33,6 +33,7 @@ See [source images](../reverse-engineering/source-images.md#region-asymmetry).
 | Document | Covers |
 | --- | --- |
 | [Pulse: PSP vs PS2](pulse-psp-vs-ps2.md) | The two Pulse releases |
+| [Pure status](../formats/pure-status.md) | Pure vs Pulse at the asset-format layer |
 
 ## Cross-title
 

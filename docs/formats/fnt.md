@@ -6,6 +6,14 @@ validated across all five fonts: 863 glyphs, and every atlas renders as a
 recognisable character set - digits, upper and lower case, the accented Latin-1
 capitals the five shipped languages need, and the PSP button glyphs.
 
+**Validated against two discs**: `pulse-psp-usa` and `pure-psp-usa`. Pure ships
+six fonts under the same header - version `1` plus `"FNT"`, codepoint table at
+`0x30`, offset table at `0x30 + 2 * count` - and the atlas arithmetic
+`atlas + 0x40 + clut_size + texel_size == file length` closes to the byte on
+6/6, with `texel_size == width * height / 2`. The already-swizzled flag is set
+on all six, as it is on all five of Pulse's. One font even shares a name hash
+across the two titles. See the [Pure probe](pure-status.md).
+
 The atlas resisted several passes of blind structural search. It was not a
 transform that was missing; it was **where the pixels start**.
 
