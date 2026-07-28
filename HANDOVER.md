@@ -143,6 +143,72 @@ XML settles the stretch question) didn't need them.
   (`ps2-test3.png` vs `ps2-test2.png` came back pixel-identical) is what
   caught it - trust the screenshot over the compile.
 
+## Same pass, continued: PS2 ships are textured now, and it turned up a bigger finding than the texture
+
+Prompted by "move towards assets parity, also read ship assets/textures etc."
+The known-recovered example (`Data\Ships\Feisar\Ship.vex`'s texture set is
+`WADS2.WAD` entry `0xfc3f75cf`, `docs/formats/ps2-texture.md`) was wired in
+first, per the advisor's steer: get one ship on screen before chasing the
+general mechanism, since a working example is the harness that validates any
+candidate rule. That worked immediately (`race.rs`, `mesh::build_with_
+textures`, which already had the `external` parameter this needed - nothing
+in the render layer had to change).
+
+**Then the general mechanism fell out in one measurement, not a Ghidra
+session.** A throwaway test (`crates/formats/tests/scratch_ps2_texture_
+lookup.rs`, deleted after) walked `WADS2.WAD`'s directory computing, for
+every `.vex` with `Texture` nodes, its index delta to the nearest texture-set
+entry (tag `01000000` - a nested WAD's own version field). Delta **-1** (the
+texture set sits *directly before* the model) was the dominant signal by a
+wide margin, and checking it against every team on the roster independently -
+not just Feisar - gave 11 for 11 exact hits, both position and `Texture`-node
+count. That is the real evidence, not the one Feisar example: 11 independent
+coincidences at the same exact delta is not a coincidence.
+
+**This one measurement is stronger than a documented earlier attempt, and
+it's worth knowing why.** `ps2-texture.md` already recorded that "pairing by
+directory adjacency is not good enough: the nearest preceding set has the
+right entry count for only 535 of 975 models." That check used *any* nearby
+match; this one is *exactly* delta -1. The wider search's 535/975 and this
+pass's 796/975 (a looser "belongs to the nearest preceding set" grouping,
+tried afterward to see how far it reached) both land well short of all 975 -
+consistent with track/environment models sharing texture sets across several
+meshes (group sizes of 1, 2, 3, 4, 8 and 12 came out of the directory
+structure itself), which ships never do. **Ships are the case that is solved;
+track art is a separate, harder problem, not a smaller version of the same
+one** - do not extend the delta-(-1) rule to track models on the strength of
+the ship result.
+
+Implemented as `oag_assets::pulse::Archives::read_preceding` (reads whichever
+archive holds a name's entry, one position back) plus a gate in `race.rs`:
+the external lookup is **only** attempted when the model's own embedded
+texture slots are all `None` after a first, ordinary build. That gate is
+load-bearing, not defensive boilerplate - it is what keeps a PSP model's
+already-correct embedded textures from ever being at risk of a positional
+heuristic firing on whatever archive entry happens to sit before it.
+
+**Side finding, worth remembering on its own: the PS2 assets are not
+worse.** Same ship, same disc-independent scale (`radius` 6.45 both ways):
+Feisar is 1,056 triangles / 1,354 vertices / 8 meshes on the PSP and **4,207
+triangles / 5,585 vertices / 14 meshes on the PS2** - about 4x. The rendered
+picture confirms it: PS2's texture is visibly crisper (`FEISAR` lettering,
+panel-line decals) where the PSP's reads soft and compressed. So `354 MiB`
+vs `~900 MiB` content volume is not padding - it is (at least partly) a
+straightforwardly higher-detail asset set, consistent with the PS2 release
+shipping 16 months later on a bigger disc. Whatever "the PS2 port was
+generally received as the lesser version" (see the scope note near the top
+of this file) is about, it is very unlikely to be model or texture fidelity -
+performance, load times (PS2 entries are LZSS-compressed and this project's
+loader still decompresses the track blob twice, `docs/tools/oag-game.md`) or
+something else not checked here are all more likely candidates.
+
+New ground-truth test: `crates/game/tests/ps2_source_ground_truth.rs`'s
+`every_ps2_ship_s_texture_set_is_found_by_directory_position` replaces the
+old `the_ps2_texture_gap_is_reported_rather_than_guessed_at`, which had
+anticipated exactly this outcome ("Not a failure: it would mean the lookup
+has been recovered since this was written") and is why it didn't just start
+failing the moment the fix landed.
+
 ## Reference: a real-hardware(ish) capture of the Pulse intro on YouTube
 
 The user pointed to <https://www.youtube.com/watch?v=lGAWYHmgo7o> as a

@@ -1,9 +1,12 @@
 # PS2 texture
 
-**Status: understood.** Located, decoded, implemented in
-[`oag-formats::ps2_texture`](../../crates/formats/src/ps2_texture.rs) and
-rendering: `oag-view --mesh ... --textures ...` draws the PS2 Feisar ship in
-its own livery instead of the white silhouette it was.
+**Status: understood, including the ship lookup.** Located, decoded,
+implemented in
+[`oag-formats::ps2_texture`](../../crates/formats/src/ps2_texture.rs); every
+ship on the roster now draws in its own livery in `just play pulse-ps2`
+itself, not only through `oag-view --mesh ... --textures ...` naming an entry
+by hand. See [how a ship finds its texture set](#how-a-ship-finds-its-texture-set-directory-position-not-a-name)
+below.
 
 Found as standalone entries in the PS2 [WAD](wad.md) archives. Not the same
 format as the [PSP `.mip`](psp-texture.md) at all, and not embedded in the model
@@ -251,16 +254,42 @@ testable     {"linear": 185, "psmt8": 4956}
 smoother     {"linear": 185, "psmt8": 4856}
 ```
 
-## Not determined
+## How a ship finds its texture set: directory position, not a name
 
-- **How the game finds a model's texture set.** The set is a WAD entry like any
-  other, so it is looked up by name hash, and the name is not recovered. It is
-  not `Ship.<anything>` under the ship's own directory: an exhaustive search over
-  extensions up to four characters of `[a-z0-9_]` for eleven plausible stems
-  found nothing, and the hash appears nowhere in the `.vex` or in any other blob
-  on the disc. Until it is known, `oag-view` takes the entry explicitly. Pairing
-  by directory adjacency is **not** good enough: the nearest preceding set has
-  the right entry count for only 535 of the 975 models that have `Texture` nodes.
+**Solved for ships, confidence 90.** A model's texture set is never looked up
+by name or hash at all - it is the archive entry **directly before** the
+model's own entry in the WAD directory. `oag_assets::pulse::Archives::
+read_preceding` implements this, and `oag_game::race::load` uses it: when a
+ship's embedded texture slots are all empty (the PS2 signature), it reads the
+preceding entry and tries it as a texture set.
+
+This was checked independently against **every** team on the roster, not
+inferred from one example: `AG_Systems`, `Assegai`, `Auricom`, `EGX`,
+`Feisar`, `Goteki`, `Harimau`, `Icaras`, `Piranha`, `Qirex` and `Triakis` each
+have the entry immediately before their `Ship.vex` decode as a texture set
+with *exactly* as many entries as the model has `Texture` nodes. Eleven
+independent hits at delta -1 rules out coincidence - a wrong or accidental
+adjacency would show some teams fitting and their neighbours not, not all
+eleven fitting exactly. `Mirage` and `Van_Uber` were not found under those
+names in `WADS2.WAD` and are not covered.
+
+**This is a ship-specific finding, not a general one.** The naive version of
+this rule - pairing by directory adjacency at all - was tried and rejected
+earlier at confidence too low to act on: the nearest preceding texture set
+matched entry counts for only 535 of the 975 models with `Texture` nodes
+disc-wide. What ships get right and the wider search did not: ships are
+`sub_entries == texture_nodes` at delta exactly **-1**; grouping every model
+in a directory by its nearest preceding texture set (the shape the wider
+search implies - a texture set followed by every model that shares it, up to
+the next texture set) covers all 975 with no gaps, in groups of 1, 2, 3, 4, 8
+or 12 models per set, but only 796 of 975 individually fit their group's set
+by entry count. Track and environment models are almost certainly in the
+larger groups (visual environments share atlases across several meshes the
+way a single ship does not), and that grouping rule is not verified against a
+single known-correct picture the way `Ship.vex` is. Left as a real, separate,
+smaller RE task.
+
+## Not determined
 - **The `PSMT4` swizzle**, so five 4-bit textures do not decode. `parse` refuses
   them by name rather than guessing.
 - **`flags` at `+0x02`.** 0x2000 on 3,925 textures and 0x2040 on 1,423. Nothing

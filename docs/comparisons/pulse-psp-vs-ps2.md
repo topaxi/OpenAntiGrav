@@ -29,7 +29,7 @@ absent.
 | Archive names | `Data`, `FE`, `FEData`, `BEData` | `WADS2`, `WADSP`, `PS2MUSIC`, `PRERACE` | Unclassified |
 | Archive format | WAD container | `WADS2`/`WADSP` same container; `PS2MUSIC`/`PRERACE` different | Unclassified |
 | Audio | ATRAC3, `libmp3.prx` | SCREAM engine, `LIBSD.IRX` | Platform limitation |
-| Video | 1 PMF (icon animation) | 2 PSS + 2 IPF, at 512 and 640 wide | Platform limitation |
+| Video | 1 PMF (icon animation) | 2 PSS + 2 IPF, at 512 and 640 wide (PAL/NTSC cuts, both decoded now; `.IPF` backdrop is not) | Platform limitation |
 | Executable size | 3.85 MiB | 1.99 MiB | Unclassified |
 | Network modules | 3 PRX, no network stack | none | Unclassified |
 | Content volume | 354 MiB | ~900 MiB | Platform limitation (likely) |
@@ -60,7 +60,8 @@ names, the handling schema and the mesh and collision decoders are already share
 `oag_assets::pulse::Layout` is where that lives, and the PS2 archives are found by
 name rather than by path because they sit in a directory named after the disc's
 serial. See [oag-game](../tools/oag-game.md#either-disc) for what is still worse on
-the PS2 source - untextured models, and no intro picture.
+the PS2 source - untextured track art (ships now draw correctly), and the
+looping menu backdrop having no picture (the intro itself now does).
 
 Whether these are new formats or the same data reorganised is unknown.
 

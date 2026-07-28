@@ -118,19 +118,23 @@ right for one pressing and wrong for the next. The reported platform comes from
 [`oag-disc`'s identification](../ps2/pulse-disc-layout.md) and is used for the
 report line and the error text, never to choose a decoder.
 
-Two things are genuinely worse on the PS2 source, and both say so rather than
+One thing is genuinely worse on the PS2 source, and it says so rather than
 being papered over.
 
-**Models draw untextured.** Measured on both discs: `Assegai\Ship.vex` fills
-**8 of 8** texture slots on the PSP and **0 of 5** on the PS2, and
-`16_Track\track.vex` 135 of 135 against 0 of 140. The slots exist on both - a PS2
-`.vex` still declares one `Texture` node per texture - but the pixels are not in
-the file. They are separate archive entries gathered into a nested WAD of Graphics
-Synthesizer upload packets, and which entry belongs to which model is not
-recovered. The decoder exists - `oag-view --mesh ... --textures <entry>` skins one
-by hand, see [ps2-texture](../formats/ps2-texture.md) - so what is missing is the
-lookup. The load report names each model whose slots did not all fill, giving the
-two counts, and nothing guesses at a set to avoid printing that line.
+**Track art draws untextured; ships no longer do.** A PS2 `.vex` declares one
+`Texture` node per texture same as the PSP's, but no pixels: they are separate
+archive entries gathered into a nested WAD of Graphics Synthesizer upload
+packets. For ships, the lookup is solved - the texture set is the archive
+entry directly before the model's own entry, checked independently against
+every team on the roster - so `Assegai\Ship.vex` now fills 5 of 5 texture
+slots on the PS2 same as the PSP's 8 of 8 (a *different* model: the PS2 one is
+about 4x the PSP's triangle count, not a downgrade - see
+[ps2-texture](../formats/ps2-texture.md)). `16_Track\track.vex` still draws
+untextured on PS2 (0 of 140): several track models typically share one
+texture set rather than one each, and that grouping is not verified against a
+known-correct picture the way a ship is. The load report names any model
+whose slots did not all fill, and nothing guesses at a set to avoid printing
+that line.
 
 The report is keyed on **unfilled slots, not on an absent texture list**, and the
 distinction matters: the driveable ribbon is generated geometry that declares no

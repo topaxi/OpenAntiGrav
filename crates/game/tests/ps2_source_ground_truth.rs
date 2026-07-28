@@ -242,46 +242,67 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
 /// recovering the model-to-texture-set lookup, at which point this test should be
 /// replaced by one that asserts a skin.
 ///
-/// Measured when this was written: the PS2 `Assegai\Ship.vex` fills **0 of 5**
-/// slots and `16_Track\track.vex` 0 of 140, where the PSP's fill 8 of 8 and 135 of
-/// 135. The slots exist on both - the PS2 file still declares one `Texture` node
-/// per texture - so "does it have slots" and "did they decode" are the two
-/// different questions, and only the second one is the gap.
+/// The PS2 model-to-texture-set lookup, for ships: the archive entry directly
+/// before a `Ship.vex` decodes as its texture set, with exactly as many
+/// entries as the model has `Texture` nodes. See
+/// [`oag_assets::pulse::Archives::read_preceding`] and
+/// `docs/formats/ps2-texture.md`.
+///
+/// Checked against **every** team, not just the default: a wrong or
+/// coincidental adjacency would show up as one team fitting and its neighbour
+/// not, since the rule is purely positional and every ship sits next to a
+/// different texture set. `16_Track\track.vex` is a separate, harder case -
+/// track models group several to one texture set (see the format doc's own
+/// survey) - and is not asserted here.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_ps2_texture_gap_is_reported_rather_than_guessed_at() {
-    let Some(loaded) = load(PS2_IMAGE) else {
+fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
+    let Some(image) = image(PS2_IMAGE) else {
         return;
     };
 
-    let ship = &loaded.ship_model;
-    let decoded = ship.textures.iter().filter(|t| t.is_some()).count();
-    println!(
-        "the PS2 ship model filled {decoded} of {} texture slot(s)",
-        ship.textures.len()
-    );
+    // The full roster, not just `race::DEFAULT_TEAM` - the point of this test
+    // is that the rule holds for each team independently, not for one team by
+    // coincidence.
+    const TEAMS: [&str; 11] = [
+        "AG_Systems",
+        "Assegai",
+        "Auricom",
+        "EGX",
+        "Feisar",
+        "Goteki",
+        "Harimau",
+        "Icaras",
+        "Piranha",
+        "Qirex",
+        "Triakis",
+    ];
 
-    assert!(
-        !ship.textures.is_empty(),
-        "the PS2 ship model declares no texture slots at all, which contradicts \
-         docs/formats/ps2-texture.md's one-entry-per-Texture-node reading"
-    );
+    for team in TEAMS {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            team: team.to_string(),
+            class: SpeedClass::Venom,
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("loading {team} off {PS2_IMAGE}: {e:#}"));
 
-    if decoded == ship.textures.len() {
-        // Not a failure: it would mean the lookup has been recovered since this
-        // was written, and the assertion below is then the wrong one to make.
-        println!("every slot filled; the texture-set lookup appears to be recovered");
-        return;
+        let ship = &loaded.ship_model;
+        let decoded = ship.textures.iter().filter(|t| t.is_some()).count();
+        assert!(
+            !ship.textures.is_empty(),
+            "{team}'s PS2 ship model declares no texture slots at all, which \
+             contradicts docs/formats/ps2-texture.md's one-entry-per-Texture-node \
+             reading"
+        );
+        assert_eq!(
+            decoded,
+            ship.textures.len(),
+            "{team}: only {decoded} of {} texture slot(s) decoded; report was:\n{}",
+            ship.textures.len(),
+            loaded.report.join("\n")
+        );
     }
-
-    assert!(
-        loaded
-            .report
-            .iter()
-            .any(|line| line.contains("texture slot(s) decoded")),
-        "the PS2 model's unfilled texture slots were not reported; the report was:\n{}",
-        loaded.report.join("\n")
-    );
 }
 
 /// Whatever the PS2 front end can do, its failures name the archives searched.
@@ -292,7 +313,8 @@ fn the_ps2_texture_gap_is_reported_rather_than_guessed_at() {
 /// both the intro (`INTRO512.PSS`) and the backdrop (`BG512.IPF`) are loose in
 /// the ISO filesystem and both now decode, so what this checks is that the PS2
 /// answers with a movie that came from *there* rather than from a WAD: no PSMF
-/// header, and the report naming the loose file. See
+/// header, real metadata even under `--no-video` (which does not transcode a
+/// single frame), and the report naming the loose file. See
 /// `docs/formats/ipf.md` and `docs/ps2/pulse-disc-layout.md`.
 ///
 /// Whether it gets that far depends on whether the front-end XML is in
@@ -323,7 +345,7 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
             let movie = loaded
                 .movie
                 .as_ref()
-                .expect("the PS2 disc has a loose intro; boot must find it");
+                .expect("the PS2 disc's loose INTRO512.PSS/INTRO640.PSS was not found");
             assert!(
                 movie.header.is_none(),
                 "the PS2 disc produced a PSMF reel, which contradicts \
@@ -336,6 +358,11 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
                     .any(|line| line.contains("MPEG-2 program stream")),
                 "the report does not name the loose intro it loaded; it was:\n{}",
                 loaded.report.join("\n")
+            );
+            assert_eq!(
+                movie.no_picture_reason.as_deref(),
+                Some("--no-video was given"),
+                "a movie loaded, but not for the reason --no-video should have caused"
             );
         }
         Err(e) => {

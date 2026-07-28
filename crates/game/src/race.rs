@@ -152,6 +152,27 @@ pub fn ship_entry_name(team: &str) -> String {
     format!(r"Data\Ships\{team}\Ship.vex")
 }
 
+/// Reads and decodes a model's external PS2 texture set, from the archive
+/// entry directly before it.
+///
+/// **Only attempted when the model's own embedded textures are all
+/// missing** - a PSP model already has them and this never runs for one; a
+/// PS2 model's texture block is empty by design and this is what replaces
+/// it. That gate matters beyond efficiency: the "entry before this one" rule
+/// is a directory-position heuristic, not a name or a checked format tag, so
+/// it must never have the chance to overwrite a model that already decoded
+/// correctly on its own.
+///
+/// See [`pulse::Archives::read_preceding`] for the rule itself and the
+/// evidence behind it.
+fn ps2_texture_set(
+    archives: &mut pulse::Archives,
+    entry_name: &str,
+) -> Option<Vec<Option<mesh::ModelTexture>>> {
+    let blob = archives.read_preceding(entry_name).ok()?;
+    mesh::ps2_texture_set(&blob).ok()
+}
+
 /// What to load, and which of it to draw.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -309,7 +330,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     let ship_name = ship_entry_name(&options.team);
     let ship_blob = read(&mut archives, &ship_name)?;
-    let ship_model = mesh::build(&ship_name, &ship_blob)?;
+    let mut ship_model = mesh::build(&ship_name, &ship_blob)?;
+    // The PS2 signature: `Texture` nodes exist (the model wants textures) but
+    // every one is missing (its embedded block was empty). Only then is the
+    // directory-position heuristic worth trying - see `ps2_texture_set`.
+    if !ship_model.textures.is_empty()
+        && ship_model.textures.iter().all(Option::is_none)
+        && let Some(external) = ps2_texture_set(&mut archives, &ship_name)
+    {
+        ship_model = mesh::build_with_textures(&ship_name, &ship_blob, Some(external))?;
+    }
     report.push(format!(
         "{ship_name}: {} triangle(s), model centre {:?}, radius {:.2}",
         ship_model.indices.len() / 3,
@@ -388,21 +418,23 @@ pub fn load(options: &Options) -> Result<Loaded> {
 /// textures and got fewer, because that is a picture missing something it was
 /// authored with.
 ///
-/// **This is the one place a PS2 race is knowingly worse than a PSP one, and it
-/// is reported rather than papered over.** Measured on the real discs: the PSP's
-/// `Assegai\Ship.vex` fills 8 of 8 slots and `16_Track\track.vex` 135 of 135,
-/// while the PS2's fill **0 of 5** and **0 of 140**. The slots are there because
-/// the file still declares one `Texture` node each; the pixels are not, because a
-/// PS2 model's textures are separate archive entries gathered into a nested WAD of
-/// Graphics Synthesizer upload packets, and *which* entry belongs to *which* model
-/// is not recovered. `oag_render::mesh::ps2_texture_set` decodes such a set once
-/// something names it - `oag-view --mesh ... --textures <entry>` is where that is
-/// done by hand - so what is missing is the lookup, not the decoder. See
-/// `docs/formats/ps2-texture.md`.
+/// **PS2 ships are textured now; PS2 track art is the one place this still
+/// fires, and it is reported rather than papered over.** A PS2 model's
+/// textures are separate archive entries gathered into a nested WAD of
+/// Graphics Synthesizer upload packets, and a `.vex` declares no texture
+/// pixels of its own to say which. For ships, `ps2_texture_set` below finds
+/// it anyway: the entry directly before a model in the archive's own
+/// directory, checked independently against every team on the roster - see
+/// `docs/formats/ps2-texture.md`. Track models are a separate, harder case:
+/// several typically share one texture set instead of one each, and that
+/// grouping is not verified against a known-correct picture the way a ship
+/// is, so it is not attempted and `16_Track\track.vex` still draws
+/// untextured on PS2.
 ///
 /// The model still draws: `Drawable::draw` binds the white fallback for a draw
-/// with no texture slot. So a PS2 race is a correctly-shaped untextured one, and
-/// nothing here guesses at a texture set to avoid saying that.
+/// with no texture slot. So an unresolved model is a correctly-shaped
+/// untextured one, and nothing here guesses at a texture set to avoid saying
+/// that.
 ///
 /// Deliberately keyed on the model rather than on the platform. A PSP model with a
 /// slot that will not decode deserves the same line, and the PS2 disc carries

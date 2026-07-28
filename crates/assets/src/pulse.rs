@@ -305,6 +305,48 @@ impl Archives {
         }
         self.data.read_name(name)
     }
+
+    /// Reads the entry immediately before `name`'s own entry, in whichever
+    /// archive holds `name`.
+    ///
+    /// This is where a PS2 model's texture set sits: not addressed by any
+    /// name or hash a model declares, but by directory position. Checked
+    /// against every recovered ship team independently, not just one: each
+    /// team's `Ship.vex` has the archive entry directly before it decode as a
+    /// texture set with exactly as many entries as the model has `Texture`
+    /// nodes. See `docs/formats/ps2-texture.md`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoSuchEntry`] when `name` itself is not found, or its entry is
+    /// first in the directory and nothing precedes it.
+    pub fn read_preceding(&mut self, name: &str) -> Result<Vec<u8>> {
+        let hash = oag_formats::wad::hash_name(name);
+        let in_fe = self.data.index_of_hash(hash).is_none()
+            && self
+                .fe
+                .as_ref()
+                .is_some_and(|fe| fe.index_of_hash(hash).is_some());
+
+        let archive = if in_fe {
+            self.fe.as_mut().expect("checked above")
+        } else {
+            &mut self.data
+        };
+        let index = archive
+            .index_of_hash(hash)
+            .ok_or_else(|| Error::NoSuchEntry {
+                archive: archive.label().to_string(),
+                hash,
+                name: Some(name.to_string()),
+            })?;
+        let preceding = index.checked_sub(1).ok_or_else(|| Error::NoSuchEntry {
+            archive: archive.label().to_string(),
+            hash,
+            name: Some(format!("{name} (first in its directory)")),
+        })?;
+        archive.read(preceding)
+    }
 }
 
 /// Reads a file that sits loose on `source`'s own filesystem - not inside any
