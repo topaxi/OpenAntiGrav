@@ -1,5 +1,11 @@
 default: check
 
+# Emulator binaries used by the launch-* recipes below. Override per-invocation with
+# `just --set ppsspp_bin /path/to/PPSSPP launch-pulse-psp`, or export PPSSPP_BIN etc.
+ppsspp_bin := env_var_or_default("PPSSPP_BIN", "PPSSPPSDL")
+pcsx2_bin := env_var_or_default("PCSX2_BIN", "pcsx2")
+rpcs3_bin := env_var_or_default("RPCS3_BIN", "rpcs3")
+
 # fmt + lint + test + docs, the gate every commit must pass
 check: fmt-check lint test check-docs
 
@@ -99,6 +105,29 @@ mine-names image:
 # Extract a raw ISO from a CHD, which is what the emulators want
 extract-iso image="data/images/pulse-psp-usa.chd" out="data/cache/pulse-psp-usa.iso":
     chdman extractdvd -i {{image}} -o {{out}} -f
+
+# Run an original disc image in its platform's emulator, for reference and
+# behavioural ground-truth comparison. One recipe per (to be) supported title, see
+# data/README.md for expected image names. Both PPSSPP and PCSX2 read .chd directly,
+# no extract-iso needed. Override the emulator binary with PPSSPP_BIN / PCSX2_BIN /
+# RPCS3_BIN, e.g. `PPSSPP_BIN=PPSSPP just launch-pulse-psp`.
+
+# Wipeout Pulse (PSP) in PPSSPP
+launch-pulse-psp image="data/images/pulse-psp-usa.chd" *ARGS:
+    {{ppsspp_bin}} {{image}} {{ARGS}}
+
+# Wipeout Pulse (PS2) in PCSX2
+launch-pulse-ps2 image="data/images/pulse-ps2-eu.chd" *ARGS:
+    {{pcsx2_bin}} -fullscreen {{image}} {{ARGS}}
+
+# Wipeout Pure (PSP) in PPSSPP
+launch-pure-psp image="data/images/pure-psp-usa.chd" *ARGS:
+    {{ppsspp_bin}} {{image}} {{ARGS}}
+
+# WipEout HD / Fury (PS3) in RPCS3. PS3 titles usually need installing rather than
+# booting a raw image directly; see RPCS3's own docs if this doesn't boot as-is.
+launch-hdfury-ps3 image="data/images/hdfury-ps3-eu.iso" *ARGS:
+    {{rpcs3_bin}} {{image}} {{ARGS}}
 
 # Capture a per-tick trace out of the original running in PPSSPP. Needs a PPSSPP
 # with its websocket debugger enabled and the game already in a race; see
