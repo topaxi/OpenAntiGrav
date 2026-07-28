@@ -913,6 +913,39 @@ pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed
         assert_eq!(header, COLUMNS.join(","));
     }
 
+    /// The header this crate expects, read out of the capture script itself.
+    ///
+    /// The doc comment on [`COLUMNS`] says the list is a transcription of
+    /// `scripts/psp-trace.py`'s `CRAFT_FIELDS` and `BODY_FIELDS`. A transcription
+    /// that nothing checks is a copy waiting to drift, and the failure mode is
+    /// quiet: a column added on one side only makes every trace unreadable, or
+    /// worse, shifts what a name means. So the script is the source of truth and
+    /// this reads it.
+    fn header_the_capture_script_writes() -> Vec<String> {
+        const SCRIPT: &str = include_str!("../../../scripts/psp-trace.py");
+        let mut columns = vec!["tick".to_owned()];
+        for list in ["CRAFT_FIELDS = [", "BODY_FIELDS = ["] {
+            let start = SCRIPT
+                .find(list)
+                .unwrap_or_else(|| panic!("{list} is not in scripts/psp-trace.py"))
+                + list.len();
+            let body = &SCRIPT[start..];
+            let end = body.find("\n]").expect("an unterminated field list");
+            // Every entry is `("name", 0x...)`, so the names are exactly the
+            // quoted strings inside the list.
+            columns.extend(body[..end].split('"').skip(1).step_by(2).map(str::to_owned));
+        }
+        columns
+    }
+
+    /// The one test that can catch the capture script and this crate drifting
+    /// apart, which no fixture can: a fixture is written by hand to match
+    /// whatever this file already says.
+    #[test]
+    fn the_column_list_is_the_capture_script_s_own() {
+        assert_eq!(header_the_capture_script_writes(), COLUMNS.to_vec());
+    }
+
     #[test]
     fn the_legacy_fixture_is_exactly_the_required_columns() {
         let header = LEGACY_FIXTURE.lines().next().unwrap();
