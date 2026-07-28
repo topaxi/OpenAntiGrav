@@ -847,6 +847,56 @@ wrong.**
   agents' uncommitted in-flight files; neither failure is in committed
   work.
 
+**`cornering` (Task #20, commit `7b38d3e`): the lap's clean data measures
+the cornering laws for the first time - the lateral axis is exactly right,
+the yaw accumulator closes term by term, and `avel = -I*omega` is REFUTED
+on pitch and roll.** Evidence page: `docs/physics/cornering-ground-truth.md`
+(method, ratios, confidences; no shipped design values - every handling
+number is a CLI argument and every comparison a ratio). All on wall-free
+intervals with pads excluded.
+
+- **`Ship_ApplyLateralGrip` is exactly right** (gain `0.9985 +/- 0.0005` of
+  the disc value, 99.95 % explained, and the `k = max(L,R)*(0.01 -
+  slidegrip) - 1` factor is confirmed by measurement - dropping it triples
+  the residual). Linear in `dot(v, right)`, speed-independent, no
+  saturation out to `|v_lat| = 37.5`. Conf 92.
+- **The yaw accumulator closes term by term at racing speed** (`steer *
+  amount` at 0.9998, damping at -5.0387, airbrake yaw at 1.0042; 99.94 %
+  explained). Nothing is missing - **the whole "22x" was the inertia
+  tensor**, now confirmed on the yaw axis at speed (`-20.948` vs `-21.6`,
+  3 %). Conf 92.
+- **Methodological trap that gates any rate-law fit on these captures: the
+  ramped columns (`craft+0x2c0`-`0x2c8`) lag the frame that used them by
+  one tick** (ramp-then-consume in one call; captures sample at entry).
+  Naive pairing multiplies the yaw rms by 5.6.
+- Also settled: the airbrake drag magnitude is clean now (`1.03-1.07x` the
+  read value where it reaches 31.5 units - conf 55 -> **88**); `speed ==
+  |velocity|` at slip angles to 1e-6 (and `speed_cached` is the *previous*
+  tick's `|dot(v,fwd)|`); the forward law needs **no new term while
+  cornering** (a `-0.21 * |v_lat|` residual at 1.8 % of grip is reported,
+  not attributed); **speed pads are a sustained 19-22-tick force peaking
+  ~+250, not an impulse** - a different mechanism from the tick-8 kick.
+- **THE NEGATIVE THAT GATES TASK #18: pitch reads `0.231x` and roll
+  `0.647x` of the tensor** - the basis rotates *more* than `body+0x160`
+  accounts for; timing, basis maps and noise ruled out; 91 % of the excess
+  lies in the plane that tilts `up` and scales with speed - the signature
+  of attitude alignment acting outside the recorded momentum column
+  (conf 70 attribution, 85 negative). Meanwhile the momentum agent's
+  low-speed pitch captures reportedly find the identity holding to a
+  fraction of a percent - if both survive, the discrepancy is speed- or
+  corner-dependent. **`body+0x150` (the angular velocity proper) is the
+  column that settles it** and is being added to the capture harness
+  mid-flight. The momentum model's yaw half is fully corroborated; its
+  pitch/roll half must not be applied until this is reconciled.
+- Six pages corrected in place, including a **fourth** surviving copy of
+  "there is no dedicated airbrake drag term" that the three-place fix
+  missed, and engine.md's retired 16.6 box-tensor lead. Caveats carried:
+  one team/class/track (a second team turns ratios into parameter tests);
+  `grip_air` untestable (no airborne stretch in any capture); the
+  weathervane (0.40 +/- 0.14) and bank-to-yaw (0.60) coefficients come in
+  below their read values - small terms, recorded open at conf 50/45, not
+  "corrected".
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
