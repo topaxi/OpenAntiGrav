@@ -63,6 +63,27 @@ niri msg action screenshot-window --id N --write-to-disk false && wl-paste -t im
 exactly like the game hanging. Focus it (`niri msg action focus-window --id N`,
 or whatever the compositor offers) before timing anything.
 
+**Multiple emulator instances in parallel are a hardware non-issue - the
+bottleneck is harness isolation, not CPU.** A workstation that runs one PPSSPP
+comfortably runs several, so concurrent capture work (two scenarios recorded at
+once, a capture running while another session iterates a menu walk) should not
+be serialised on principle. What actually needs isolating per instance before
+that works:
+
+- **The websocket debugger port.** The scripts under `scripts/` connect to one
+  discovered instance; two emulators need distinct ports and an explicit
+  port/instance selector on the scripts (a small addition, not yet made - check
+  `psp-drive.py`/`psp-trace.py` before assuming it exists).
+- **The PPSSPP config and save profile.** Instances share
+  `~/.config/ppsspp/` by default; concurrent config writes and the
+  focus-throttle interaction are untested. `--config`/separate `PPSSPP_HOME`
+  style isolation is the likely answer, unverified.
+
+Until someone adds the port selector, one instance per machine is a tooling
+limit, not a law. The thing that genuinely cannot be parallelised is a shared
+git working tree - concurrent capture *agents* editing the same checkout have
+bitten repeatedly (see `HANDOVER.md`'s staged-index trap).
+
 ## The four traps
 
 ### Breakpoints only arm while the CPU is stepping
