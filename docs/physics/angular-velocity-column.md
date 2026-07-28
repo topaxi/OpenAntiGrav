@@ -723,6 +723,15 @@ it pins the ratio between two *body-local* yaw writes, and dividing both by
 
 ```sh
 python3 scripts/trace-angular-fit.py data/traces/talons-junction-*.csv --joint
+
+# The pitch step response, both sides through one fit. Add a simulated run as a
+# second argument to get the before/after table above:
+#   cargo run -p oag-trace -- run data/traces/talons-junction-pitch-both-ways.csv \
+#       --source data/images/pulse-psp-usa.chd \
+#       --script verification/scenarios/pitch-both-ways.inputs --out /tmp/ours.csv
+python3 scripts/trace-pitch-response.py \
+    data/traces/talons-junction-pitch-both-ways.csv /tmp/ours.csv \
+    --label original ours
 ```
 
 Captures are derived game data and are not committed; see
