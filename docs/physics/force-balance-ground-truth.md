@@ -103,7 +103,33 @@ This is the substantive new result. Fitting the missing opposing force
 
 The one-parameter linear model is nearly as good as any two-parameter fit
 (`a + k*fs` reaches only 1.066), and both the constant and the quadratic models
-are more than three times worse. **The missing term is linear in speed.**
+are more than three times worse.
+
+**That fit alone would be overclaiming, and the check that matters is this one.**
+The two captures cover disjoint speed bands, so a regression across both mixes a
+between-capture offset into the slope: fitted *within* each capture the slope is
+only about `-0.55` (assegai) and `-0.60` (steer), not the `-1.05` the pooled fit
+reports. The robust statement is therefore a **two-point** one, which needs no
+slope at all - just the size of the discrepancy at two well-separated speeds:
+
+| Capture | median `fs` | median missing force | s.e.m. |
+| --- | --- | --- | --- |
+| assegai | `23.034` | `52.538` | 0.07 |
+| steer recovery | `20.040` | `45.133` | 0.35 |
+
+That is a scaling exponent of **`p = 1.09`**. Anchoring on the assegai point and
+predicting the steer point:
+
+| Assumed shape | Predicted | Measured | Error |
+| --- | --- | --- | --- |
+| **linear, `fs^1`** | `45.71` | `45.13` | **+1.3 %** |
+| quadratic, `fs^2` | `39.77` | `45.13` | -11.9 % |
+| constant, `fs^0` | `52.54` | `45.13` | +16.4 % |
+
+Both alternatives miss by an order of magnitude more than the measurement error.
+**The missing term is linear in speed**, with a hint of a small constant
+component as well (the shallow within-capture slopes are what a `C + K*fs` mix
+would produce).
 
 That refutes engine.md's `0.095 * v^2` target shape, which was inferred from a
 single operating point and so could not distinguish the two. It also refutes the
