@@ -1,7 +1,19 @@
 # The along-track force balance, measured against the original
 
-**Status: the discrepancy is measured, its shape is pinned, its mechanism is not
-found.** This page records a first-principles measurement of what force the
+**Status: resolved. The force law is correct; the discrepancy was the wall.** Jump
+to [the resolution](#resolved-the-force-law-was-right-and-both-reference-captures-were-taken-in-a-wall)
+for the standing-start capture that settles it, and read the sections before it
+as the investigation that got there - they are kept because each closes a
+hypothesis, and because the measurement technique is reusable.
+
+The one-line version: the recovered force law reproduces a real launch from a
+standstill to `fs = 47.7` with **rms `0.127` units of force**, and the `~52`-unit
+deficit seen in the two older captures is a **`3.67 %` per-frame reduction of the
+velocity applied outside the force accumulators**, recorded all along in the
+trace's own `speed` column. `2.28 * fs` was the right shape and the right size
+for the wrong kind of thing.
+
+This page records a first-principles measurement of what force the
 original actually applies along a craft's forward axis, taken from captured
 traces rather than from decompilation. It exists because the same discrepancy has
 now been diagnosed three different ways in
@@ -186,6 +198,15 @@ captures with a 1.5x speed range, but a single track, a single team and a single
 speed class, and the linear/quadratic separation would be firmer over a wider
 range.
 
+> **This section is right about the shape and the size, and wrong about what it
+> is.** `2.28 * fs` is what a `3.67 %`-per-frame *velocity* reduction looks like
+> when you insist on reading it as a force: `0.0367 / 0.0165 = 2.22`. Both
+> captures used here were recorded with the craft in sustained wall contact for
+> their whole length, so `K` is a property of the collision response, not of the
+> force law. See [the resolution](#resolved-the-force-law-was-right-and-both-reference-captures-were-taken-in-a-wall).
+> The instruction to not implement `K` as a constant stands, and now has a
+> reason rather than a caution.
+
 ## The thrust side is correct, and that is now instruction-level
 
 engine.md's `T ~= 58` recomputation had never been audited. It has been now, from
@@ -216,10 +237,23 @@ as engine.md states.
   `craft+0x2a4 == 0` branch (`0xbf666666`, the "about 180x" engine.md
   estimates). Confidence 95.
 - **Rolling resistance really does normalise**, so it is constant-magnitude and
-  cannot be a hidden linear term: `Ship_ApplyRollingResistance` (`0x08848f4c`)
-  runs `vdot` (`0x64088818`) then `vrsq` (`0xd0111918`) then `vscl`
-  (`0x65188819`) on the vector at `craft+0x190`. Confidence 80 - the VFPU
-  opcodes were decoded by hand, without the Allegrex processor module.
+  cannot be a hidden linear term. **Now read with the Allegrex module, magnitude
+  included**: `Ship_ApplyRollingResistance` (`0x08848f4c`) is
+  `vmul.t`/`vfad.t`/`vrsq.s` to form `1/|v|`, a `vpfxs [-X,-Y,-Z,0]` prefix on
+  `vscl.t C610,C200,S600` giving `-v/|v|`, and then `vadd.t C610,C610,C610` - a
+  self-add that doubles it. So the magnitude is exactly `2`, from the
+  instruction rather than from a parameter or a prefix-encoded literal.
+  Confidence raised from 80 to **92**.
+- **The cached speed `craft+0x2ec` is `|dot(velocity, forward)|`.**
+  `Ship_UpdateCraft` runs `vdot.t` at `0x0884992c` and **`vabs.s` at
+  `0x08849930`** before storing it, and a scan over every `0x2ec(` displacement
+  finds that store to be its only writer on a craft base. Two consequences, both
+  now implemented in `crates/physics`: the reversing branch of
+  `Ship_ApplyQuadraticDrag` (`craft+0x2ec < -0.2`, the `-0.1` coefficient) is
+  **unreachable in the original**, and the drag term is dissipative in both
+  directions of travel rather than adding energy while reversing - which settles
+  an open sign question `passive.rs` had recorded as "a guess awaiting M3".
+  Confidence 90 on the `vabs.s`, 88 on the sole-writer negative.
 
 ## A term that exists and this crate does not implement
 
@@ -228,10 +262,18 @@ as engine.md states.
 reached as `+0x54` through the `craft+0x70` pointer) at `0x0884cce8` and forms
 
 ```text
-|airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * forwardSpeed
+forward * |airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * 0.001 * forwardSpeed
 ```
 
-at `0x0884ccc8`-`0x0884cd08`, gated on `forwardSpeed > 0`. Confidence 85.
+at `0x0884ccc8`-`0x0884cdb4`, gated on `forwardSpeed > 0`. Confidence 88.
+
+**Correction to the first reading of this term: the scale is `1e-5`, not `0.01`.**
+There are two literals, not one - `0x3c23d70a` (`0.01`) at `0x0884ccf4` and then
+`0x3a83126f` (`0.001`) at `0x0884cd78`, applied to the same vector by the
+`vscl.q` at `0x0884cd98`. The capstone pass that first found this term stopped at
+the first literal. The direction is `craft+0x180`, the ship's own forward axis,
+so unlike every other passive term this one **does** appear in the forward
+projection - it is simply zero in both captures.
 
 It is **speed-proportional**, which is the shape being hunted - but it is
 identically zero in both captures used here, because both hold `airbrake_l ==
@@ -239,27 +281,205 @@ airbrake_r == 0`. So it is a real missing term worth implementing for fidelity,
 and it is **not** this discrepancy. It does mean a capture with asymmetric
 airbrake input would be a good independent test of it.
 
-## Where the mechanism has to be
+## Where the mechanism has to be - and where it turns out not to be
 
 By elimination, a linear-in-velocity opposing force of roughly `2.28 * fs` is
-applied by something in `Ship_UpdateCraft` that this crate either does not
-implement or implements with the wrong shape. The forward projection proves it is
-*not* along the surface normal, so the remaining candidates are the ones whose
-VFPU bodies have not been read instruction by instruction:
+applied by something this crate either does not implement or implements with the
+wrong shape. The forward projection proves it is *not* along the surface normal.
+An earlier revision of this section named three candidates and called the first
+"the single best-fitting hypothesis". **All three have since been read with the
+Allegrex module installed, and all three are refuted.** Each is recorded with the
+reading that kills it, so nobody re-opens it:
 
-1. **The hover spring's damping** (`Ship_UpdateHover`, `0x0884870c`), if it damps
-   the full velocity vector rather than only its component along the normal. A
-   spring-damper written `-c * velocity` instead of `-c * (v . n) * n` is
-   precisely a linear drag, and it is the single best-fitting hypothesis.
-2. **The inline vertical damping** in `Ship_UpdateCraft` itself, for the same
-   reason - `VERTICAL_DAMPING` is `-0.25` along the ship's own up axis, and if it
-   is actually applied to the whole velocity the shape is right even though
-   `0.25` alone is not the size.
-3. `Ship_ApplyLateralGrip` (`0x08848b78`), if its force is not purely along body
-   `X`.
+1. **The hover spring's damping is a normal projection, and it is not additive at
+   all.** `Ship_UpdateHover` (`0x0884870c`) is not the spring - it is a
+   twenty-instruction dispatcher that calls `Ship_HoverFourCorner` (`0x0884ae90`)
+   or `Ship_HoverTwoPoint` (`0x0884a658`) and then `Ship_UpdateMagLock`
+   (`0x0884ba0c`). The spring lives in `Ship_HoverTwoPoint`, and its damper is a
+   *multiplier on the spring magnitude*, not a `-c * v` term:
 
-All three are VFPU-heavy and need the Allegrex processor module
-(`just build-allegrex`) rather than hand decoding. That is the next step.
+   ```text
+   pointVelocity = craft+0x190 + basis * cross(r_i, body+0x150)   ; 0884a960-0884aa10
+   vn            = dot(pointVelocity, contactNormal_i)             ; 0884aa28 vdot.t
+   damper        = 1 + clamp(-0.1 * vn, -1.0, 2.0) * ...           ; 0884aa88-0884ab20
+   force         = springMagnitude * damper * craft+0x160          ; 0884ab34-0884ab68
+   ```
+
+   `vn` is the component of the contact point's velocity along the *contact
+   normal* - the projection the hypothesis said might be missing is there, at
+   `0x0884aa28`. And the force direction is `craft+0x160`, the ship's own **up**
+   axis (a copy of `body+0x10`, made at `0x08849874`-`0x08849884`), so
+   `dot(force, forward) == 0` exactly by orthonormality whatever the damper does.
+   Confidence **90**.
+2. **The inline vertical damping is a normal projection *and* is switched off
+   while grounded.** Step 14 of `Ship_UpdateCraft`, at `0x08849c60`:
+
+   ```text
+   08849c6c  sub.s  f12,f13,f12    ; 1 - craft+0x2b0, the grounded fraction
+   08849c78  mul.s  f12,f12,f14    ; * -0.25
+   08849ca0  vdot.t S601,C110,C200 ; dot(up, velocity)
+   08849ca4  vscl.t C610,C110,S601 ; * up
+   08849ca8  vscl.t C610,C610,S600
+   ```
+
+   It is `up * dot(up, v) * -0.25 * (1 - grounded)`, so it is both along the ship's
+   up axis - cancelling in the projection - and identically **zero** on the fully
+   grounded craft this capture records. Confidence **92**. It was also a genuine
+   crate bug: `crates/physics` scaled it by `1 - magLockBlend` instead, and that
+   is fixed.
+3. **`Ship_ApplyLateralGrip` writes only body-local `X`.** `0x08848c4c` takes
+   `dot(craft+0x190, craft+0x170)` - velocity against the **right** axis - and
+   `0x08848c6c`/`0x08848cbc` store the result into the `.x` slot of an otherwise
+   zero vector before adding it to `body+0x110`. Two such terms, grounded and
+   airborne, both `.x` only. Confidence **90**.
+
+**With those three gone, the enumeration of the force path is complete and
+contains no linear-in-velocity term at all.** Everything else in it was read in
+the same pass:
+
+| Term | Shape, at instruction level | Forward projection | Conf |
+| --- | --- | --- | ---: |
+| `Ship_ApplyQuadraticDrag` `0x08848e28` | `k * craft+0x2ec * velocity`, `k` from a four-way branch | `k * fs^2` | 92 |
+| `Ship_ApplyRollingResistance` `0x08848f4c` | `-2 * velocity / \|velocity\|`, gated `craft+0x2ec > 0` | `-2` | 92 |
+| `Ship_UpdateAirbrakes` `0x0884c9a4` | `forward * fs * \|abL-abR\| * drag * \|steer\| * 1e-5`, plus `right * fs * amount * (abR-abL)` | zero when the airbrakes are equal | 88 |
+| inline gravity, step 7 | `world.y -= (normal_gravity * gravityMulAirborne * grounded + flight_gravity * (1 - grounded)) * mass` | along world `-y` only | 88 |
+| hover downforce | `-track_gravity * mass * grounded * (1 - magLock) * avgNormal` | zero, along the normal | 88 |
+| `Body_Integrate` `0x0884e230` damping | `velocity -= velocity * h * body+0x384`, `body+0x384 == 0.01` | `-0.01 * fs`, i.e. `0.23` | 88 |
+| `Ship_UpdateMagLock` `0x0884ba0c` | rewrites `body+0x140` to `normalize(v - blend*dot(v,m)*m) * \|v\|` | **speed-preserving by construction**, and gated on `craft+0x280 != 0` | 85 |
+
+The integrator reading is on [rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md);
+the sub-stepping does **not** multiply the `0.01` damping up, because
+`(1 - (dt/N)*c)^N` is `1 - dt*c` to first order.
+
+So the missing `2.28 * fs` **is not a force term in `Ship_UpdateCraft`, and it is
+not the integrator.** The cap's sign, the obvious remaining explanation for a
+thrust that appears to fall with speed, is refuted a second time here in Ghidra
+rather than capstone: `0x0884c780` materialises `0x3f000000` (`+0.5`),
+`0x0884c790` is the `mul.s`, and `0x0884c7b0` is `add.s` in an always-executed
+delay slot; the `min` at `0x0884c7f4` and the always-landing `* 2.0` at
+`0x0884c93c` hold too.
+
+**That leaves only the measurement's own premises, and the standing start is what
+falsifies them.**
+
+# Resolved: the force law was right, and both reference captures were taken in a wall
+
+`data/traces/talons-junction-standing-start.csv` - 300 ticks, full throttle from
+a standstill, with the `stun_timer` and `timer_2e0` columns the earlier captures
+lack - settles the whole blocker, and does it twice over.
+
+## The recovered force law reproduces the launch to `0.13` units of force
+
+Over its first 58 usable ticks the capture accelerates from `fs = 0.56` to
+`fs = 47.67`, and the law this project already implements
+
+```text
+net = fs + 2 * accelcap - 2.0 - 0.005 * fs^2
+```
+
+fits it with **rms `0.127` and residuals bounded by `-0.267 .. +0.181`**, at a
+best-fit `accelcap = 16.89`. That is a 47-unit speed range, an 80-fold change in
+`fs`, and a two-decade change in the quadratic term, reproduced by a
+**one-parameter** fit whose single parameter is a handling value read off the
+disc. A missing `2.28 * fs` would have to subtract `109` at the top of that
+segment; the whole residual is a quarter of a unit.
+
+So `mass = 1`, the `* 2.0`, the `min`, `cap = 0.5 * fs + accelcap`, the `-2.0`
+rolling resistance and the `-0.005` grounded drag are **all confirmed
+simultaneously and end to end**, on real data, with no decompilation in the
+chain. At `fs = 0.56` the measured acceleration is `32.52` against a predicted
+`2 * accelcap - 2 = 31.8`, which is the zero-model-assumption thrust check
+[engine.md](../ghidra/functions/psp-pulse/engine.md) asked for.
+
+## Then the ship hits a wall, and never leaves it
+
+| Tick | `\|v\|` | `speed / \|v\|` | residual vs the law |
+| ---: | ---: | ---: | ---: |
+| 52-61 | `40.0 -> 49.9` | `1.0000` | `~ +0.1` |
+| **62** | `45.03` | `1.1346` | one-frame impulse, `\|v\|` drops `4.9` |
+| 63-65 | `45.5 -> 47.0` | `1.0000` | `~ +0.2` |
+| **66 onwards** | falls to `~21` | `1.0420 -> 1.0367` | `-50` to `-56`, for the remaining 230 ticks |
+
+`grounded` is `1.0`, `steer` is `0.0`, both airbrakes are `0.0` and **both
+`stun_timer` and `timer_2e0` are `0.0` on every one of the 300 ticks** - so the
+engine's early return, which the handover kept open as a possibility, is
+directly ruled out by the columns rather than argued away from a force balance.
+
+## The deficit is a velocity scale, not a force, and the trace already recorded it
+
+This is the finding, and it is why enumerating the force path could never have
+found the mechanism.
+
+`speed` is `body+0x398`, which
+[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#bodyx398-is-linear-velocity)
+shows `Body_Integrate` writes as `sqrt(dot(v, v))` **from the same register it
+stores as the velocity**, four instructions apart. The two are the same number by
+construction. So whenever a trace samples `speed` above `|velocity|`, something
+shrank `body+0x140` after the integrator ran and before the next
+`Ship_UpdateCraft` read it - a change made in *velocity space*, which no force
+accumulator can see and no enumeration of `Ship_UpdateCraft` can find.
+
+Converting that per-frame speed loss into an equivalent force reproduces the
+residual tick by tick, on all three captures:
+
+| Capture | `speed / \|v\|` | `(speed - \|v\|) / dt` | residual vs the law |
+| --- | --- | ---: | ---: |
+| standing start, ticks 0-61 | `1.0000` | `0.00` | `+0.1` |
+| standing start, ticks 90+ | `1.0369` | `47` to `50` | `-50` to `-52` |
+| `talons-junction-venom-assegai` | `1.0367` | `50` to `53` | `-51` to `-55` |
+| `talons-junction-steer` | `1.0334`-`1.0479` | `40` to `50` | `-42` to `-56` |
+
+The two columns agree to a couple of units everywhere, including through the
+steer capture's slow-down and recovery, where both wander together. **The
+`1.0367` ratio this page recorded as an unexplained curiosity of the `speed`
+column is the missing force.**
+
+It also explains why the deficit looked linear in speed. A *multiplicative* loss
+of `3.67 %` per `16.5 ms` frame is `0.0367 * |v| / 0.0165 = 2.22 * |v|` of
+equivalent force - and the fitted coefficient on this page is `2.280`. **The
+linear shape and its magnitude were both correct; only the assumption that it was
+a force was wrong.**
+
+## What this means for the two captures this page was built on
+
+Both of them are in the post-contact regime for **their entire length** - the
+ratio never drops to `1.0000` in either file. They are recordings of a ship
+scraping along a wall at a speed the wall response, not the force law, is
+setting. Everything measured from them about *resistance* is a property of the
+collision path.
+
+That does not retract the parts of this page that do not depend on it: the
+`mass = 1` reading, the tick-8 speed-pad identification, the stun-gate negative,
+and the thrust-side confirmations all stand, and the standing start independently
+confirms the last of those. What is retracted is the conclusion - **there is no
+missing resistance term, the target shape `2.28 * fs` should not be implemented
+as a force, and `crates/physics`'s force law needs no new term at all.**
+
+Confidence **90**. It rests on three independent legs that agree: a
+one-parameter fit at rms `0.13` over a 47-unit speed range, a recorded column
+whose derivative matches the residual on three captures, and an instruction-level
+reading of where that column comes from.
+
+## What to do next
+
+1. **Compare `crates/physics/src/wall.rs` against the original's wall response.**
+   The target is now concrete and measurable rather than a fitted constant: a
+   craft in sustained contact loses about `3.6 %` of its speed per frame, decaying
+   slowly from `4.2 %` just after the impact toward `3.67 %`. That number, not a
+   drag coefficient, is what a reimplementation has to reproduce.
+2. **Locate the writer.** The candidates, both read far enough this pass to be
+   named but not far enough to be attributed: the contact resolver
+   `FUN_0884e968` (which computes a tangential relative velocity and scales it by
+   a friction field at `contact+0x34`, then applies the result through
+   `FUN_0884d64c`, an apply-impulse-at-point), and `Ship_UpdateMagLock`
+   (`0x0884ba0c`), which does rewrite `body+0x140` directly but renormalises to
+   the original magnitude and so cannot be it. `FUN_0884e968` is the live lead.
+3. **Recapture a clean straight.** No existing trace in `data/traces/` contains
+   more than 60 consecutive wall-free ticks. `speed / |velocity| == 1.0000` is now
+   a cheap, exact test for whether a capture is clean, and any future capture
+   should be checked with it before being used as a reference.
+4. `the_ship_does_not_stay_on_the_track_yet` in `crates/game` is still a real
+   failure, and the wall response is now the reason to expect it to be.
 
 ## What not to do
 

@@ -27,6 +27,33 @@ than inferred from consumers.
 >    as `fs^1.09` between two operating points three units/s apart; a quadratic
 >    misses by 12 %, a constant by 16 %.
 >
+> **And the blocker itself is now resolved, which retires the framing of the
+> whole "thrust-gap inverted" investigation below.** A standing-start capture
+> shows this page's own force law - `T = 2 * min(throttle * amount, 0.5 * fs +
+> accelcap)`, against `2.0` of rolling resistance and `0.005 * fs^2` of drag, at
+> `mass = 1` - reproducing the original's forward acceleration from `fs = 0.56`
+> to `fs = 47.67` with **rms `0.127` units of force**. There is no missing
+> resistance of any shape. The `~52`-unit deficit in the older captures is a
+> `3.67 %`-per-frame reduction of the *velocity*, applied by the collision path
+> outside every accumulator on this page, and both of those captures were
+> recorded with the craft in sustained wall contact from end to end. Every
+> subsection below that reasons from "resistance is 12x short" or "`0.095 * v^2`"
+> is superseded; they are kept because each closes a hypothesis.
+>
+> **A second correction, from reading rather than measurement.** That page named
+> three candidate sites for the missing linear resistance - the hover damper, the
+> inline vertical damping, and the lateral grip - and **all three are now refuted
+> at instruction level**, with the Allegrex module installed. The force path is
+> fully enumerated and contains no linear-in-velocity term. Three consequences
+> land on *this* page and are folded in below where they belong:
+>
+> - **`Ship_UpdateHover` (`0x0884870c`) is not a force term.** It is a
+>   twenty-instruction dispatcher. See [step 8](#the-frame-ship_updatecraft).
+> - **The inline vertical damping at step 14 is scaled by `1 - grounded`**, so it
+>   is zero on a grounded craft, and it is a normal projection.
+> - **`craft+0x2ec` is `|dot(velocity, forward)|`** - `vabs.s` at `0x08849930` -
+>   which makes `Ship_ApplyQuadraticDrag`'s reversing branch unreachable.
+>
 > What is **confirmed** by that page, at instruction level: the `0.001` load
 > scale on `Engine.amount`, `cap = 0.5 * speed + accelcap` (`add.s` at
 > `0x0884c7b0`, so no sign error), the `min`, and the final `* 2.0`. **The `T ~=
@@ -200,10 +227,29 @@ consecutive frames and keeping the fields that changed. It is what
 | `+0x374` | mass | reads `1.0`; this page already says `mass` is read from `body+0x374` |
 
 Confidence **85** for position, velocity and the transform, which agree with each
-other arithmetically; **60** for `+0x398`, which was `|velocity|` to seven digits
-in one sample and ran about 4 % above it across a 200-tick trace, so **it is not
-the speed** and is recorded only so the next reader does not repeat the
-coincidence.
+other arithmetically.
+
+`+0x398` was recorded here at confidence **60** as "`|velocity|` to seven digits
+in one sample but about 4 % above it across a 200-tick trace, so **it is not the
+speed**". **The first half of that is now settled and the second half was the
+wrong inference.** `Body_Integrate` (`0x0884e230`) ends with
+
+```text
+0884e450  vmul.t C010,C300,C300
+0884e458  vsqrt.s S000,S010
+0884e460  sw     a1,0x398(a0)      ; |velocity|
+0884e468  sv.q   C300,0x0(t3)      ; t3 == body+0x140, the same register
+```
+
+so `+0x398` **is** the speed, by construction, from the same vector it stores as
+the velocity. Confidence **90**; see
+[rigid-body.md](rigid-body.md#bodyx398-is-linear-velocity). The 4 % is therefore
+not evidence against the identity - it means something changes the velocity
+between the integrator's last store and the point a trace samples it, which is
+the same `1.0367` factor
+[force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)
+reports on the capture's `speed` column. That column is this field. What touches
+the velocity in between is still open.
 
 ### The cached speed, and its staleness, measured
 
@@ -329,14 +375,63 @@ Order of terms, all of which write only accumulators unless noted:
 | 5 | `Ship_UpdatePitch` (`0x08848d08`) | angular-local `.x` |
 | 6 | `Ship_ApplyQuadraticDrag` (`0x08848e28`) | world `.xyz` |
 | 7 | inline gravity | world `.y` |
-| 8 | `Ship_UpdateHover` (`0x0884870c`) | see [physics](../../../physics/README.md) |
-| 9 | `Ship_ApplyLateralGrip` (`0x08848b78`) | body local-force accumulator directly |
+| 8 | `Ship_UpdateHover` (`0x0884870c`) | nothing itself - see below |
+| 9 | `Ship_ApplyLateralGrip` (`0x08848b78`) | body local-force accumulator directly, `.x` only |
 | 10 | inline dead branch | nothing |
 | 11 | `Ship_ApplyWeathervaneTorque` (`0x08848dc4`) | angular-world `.xyz` |
 | 12 | `Ship_ApplyAngularDamping` (`0x08848ed0`) | angular-local `.xyz` |
 | 13 | `Ship_ApplyRollingResistance` (`0x08848f4c`) | world `.xyz` |
-| 14 | inline vertical damping | world `.xyz` |
+| 14 | inline vertical damping | world `.xyz`, and **only while airborne** |
 | 15 | track-section force (`0x08848f9c`) | world `.xyz` |
+
+**Step 8 is a dispatcher, not a force term.** `Ship_UpdateHover` is twenty
+instructions and does nothing but choose a hover model and then run the magstrip:
+
+```text
+0884870c  craft+0x1c0 &= ~1                ; clear the contact flag
+08848758  jal 0x0884ae90                   ; Ship_HoverFourCorner, when the mode says so
+08848768  jal 0x0884a658                   ; Ship_HoverTwoPoint, otherwise
+08848770  jal 0x0884ba0c                   ; Ship_UpdateMagLock, always
+```
+
+so every claim about "the hover spring" belongs to `Ship_HoverTwoPoint`
+(`0x0884a658`), which is where the two-point loop, the spring, the damper and the
+epilogue all live. See [collision.md](collision.md) for the names and
+[force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)
+for the spring's shape read at instruction level. Confidence **92** - the
+dispatcher is short enough to read in full.
+
+**Step 14, written out**, because it is inlined and so has no page of its own:
+
+```text
+08849c60  lwc1   f12,0x2b0(s0)      ; the 0/0.5/1 grounded fraction
+08849c6c  sub.s  f12,f13,f12        ; 1 - grounded
+08849c78  mul.s  f12,f12,f14        ; * -0.25   (0xbe800000)
+08849c94  lv.q   C110,0x10(a1)      ; a1 == craft+0x80, so this is craft+0x90 == up
+08849ca0  vdot.t S601,C110,C200     ; dot(up, velocity)
+08849ca4  vscl.t C610,C110,S601
+08849ca8  vscl.t C610,C610,S600
+08849cac  vadd.t C300,C300,C610     ; craft+0x330
+```
+
+`craft+0x2b0` is the grounded fraction, not `craft+0x280` the magstrip blend -
+the two are distinct fields and this term reads the first. **So a grounded craft
+gets no vertical damping at all.** Confidence **92**.
+
+**The three body-axis copies, settled.** `Ship_UpdateCraft` copies them at
+`0x08849874`-`0x088498a8`, and the mapping is not in row order:
+
+| Craft | From | Axis |
+| --- | --- | --- |
+| `craft+0x160` | `body+0x10` | up (row 1) |
+| `craft+0x170` | `body+0x00` | right (row 0) |
+| `craft+0x180` | `body+0x20` | forward (row 2) |
+
+Every consumer on this page is consistent with it: the hover force is along
+`craft+0x160`, the lateral grip dots against `craft+0x170`, the cached speed and
+the airbrake drag use `craft+0x180`. Confidence **92**. `craft+0x190` is the
+linear velocity and `craft+0x1a0` the position, copied from `body+0x140` and
+`body+0x30` in the same run.
 
 Steps 1 to 6 are skipped entirely when `craft+0x2a4` (a mode or lifecycle enum)
 is 4, 5, 6 or 8, or when the control-input pointer is null. Step 2 is
@@ -812,6 +907,14 @@ the three `Body_Add*` helpers, and three that had no names:
 | `0x0884d850` | `Body_SetMass` | `body+0x374 = m; body+0x378 = 1/m` |
 | `0x0884da24` | `Body_ClearAccumulators` | zeroes `body+0x100/0x110/0x120/0x130` |
 | `0x0884da5c` | `Body_ClearVelocity` | zeroes `body+0x140` and `body+0x160` |
+
+Three more of the body layer have since been read and named, on
+[rigid-body.md](rigid-body.md): `Body_AddForceAtPoint` (`0x0884d510`, what the
+hover spring applies its force through), `Body_Init` (`0x0884de5c`) and
+`Body_Integrate` (`0x0884e230`). **None of them is a force term either**, which
+is what makes the enumeration above complete rather than merely unrefuted: the
+integrator's own linear damping is `velocity -= velocity * h * body+0x384` with
+`body+0x384 == 0.01`, and sub-stepping does not multiply it up.
 
 None of the three is a force term, and gravity and vertical damping are applied
 inline. **There is no unenumerated resistance term**, which is what forced the
