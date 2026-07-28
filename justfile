@@ -6,6 +6,15 @@ ppsspp_bin := env_var_or_default("PPSSPP_BIN", "PPSSPPSDL")
 pcsx2_bin := env_var_or_default("PCSX2_BIN", "pcsx2")
 rpcs3_bin := env_var_or_default("RPCS3_BIN", "rpcs3")
 
+# The PSP disc a scripted run reads its track and handling out of, and the ISO
+# PPSSPP itself wants (it will not open a CHD). Override with OAG_IMAGE / OAG_ISO.
+psp_image := env_var_or_default("OAG_IMAGE", "data/images/pulse-psp-usa.chd")
+psp_iso := env_var_or_default("OAG_ISO", "data/cache/pulse-psp-usa.iso")
+
+# The scenario `just scripted-sim` and `just scripted-emu` run when given none:
+# the recorded whole lap of Talon's Junction. See docs/tools/oag-trace.md.
+default_scenario := "verification/scenarios/talons-junction-time-trial-lap.inputs"
+
 # fmt + lint + test + docs, the gate every commit must pass
 check: fmt-check lint test check-docs
 
@@ -148,6 +157,41 @@ launch-pure-psp image="data/images/pure-psp-usa.chd" *ARGS:
 launch-hdfury-ps3 image="data/images/hdfury-ps3-eu.iso" *ARGS:
     {{rpcs3_bin}} {{image}} {{ARGS}}
 
+# Run a committed scenario through OUR OWN physics and print a run report: where
+# the ship is every N ticks, how fast, whether it is still on the track. Needs a
+# disc image (for the track and the handling stats) and nothing else - no
+# emulator, no capture, no GPU. This is the half that always works.
+#
+#   just scripted-sim                                    # the whole-lap scenario
+#   just scripted-sim verification/scenarios/steer-left.inputs
+#   just scripted-sim verification/scenarios/steer-left.inputs --every 20 --out /tmp/ours.csv
+[doc("Run a committed scenario through our own physics and print a run report")]
+scripted-sim scenario=default_scenario *ARGS:
+    cargo run -q -p oag-trace -- drive {{scenario}} --source {{psp_image}} {{ARGS}}
+
+# Drive the same scenario into the ORIGINAL, running in PPSSPP, and capture a
+# per-tick trace of what it did. Checks its preconditions first and explains them
+# rather than failing deep inside a capture, then puts the craft back on the start
+# line and sends the scenario with the measured three-frame input correction.
+#
+# Fully autonomous from a booted emulator: it walks the front end into a Time
+# Trial itself, whatever screen the game is sitting on. All it needs from you is a
+# PPSSPP with its websocket debugger enabled, and it prints how to start one if
+# there is none. See docs/reverse-engineering/ppsspp-debugger.md.
+#
+#   just scripted-emu                                    # the whole-lap scenario
+#   just scripted-emu verification/scenarios/steer-left.inputs data/traces/left.csv
+[doc("Drive the same scenario into the original in PPSSPP and capture a trace")]
+scripted-emu scenario=default_scenario out="data/traces/scripted-emu.csv" *ARGS:
+    uv run --with websocket-client python scripts/psp-drive.py preflight \
+        --image {{psp_image}} --iso {{psp_iso}} --emulator {{ppsspp_bin}}
+    uv run --with websocket-client python scripts/psp-drive.py menu
+    uv run --with websocket-client python scripts/psp-drive.py restart
+    uv run --with websocket-client python scripts/psp-trace.py \
+        --script {{scenario}} --script-lead 2 --out {{out}} {{ARGS}}
+    @echo "captured {{out}}; compare it with:"
+    @echo "    just trace-compare run {{out}} --source {{psp_image}} --script {{scenario}}"
+
 # Capture a per-tick trace out of the original running in PPSSPP. Needs a PPSSPP
 # with its websocket debugger enabled and the game already in a race; see
 # docs/reverse-engineering/ppsspp-debugger.md.
@@ -157,12 +201,14 @@ trace *ARGS:
 # Put the original back on the start line, or send an input script at a
 # free-running emulator in real time. `just drive restart`, `just drive drive
 # --script F`; see docs/reverse-engineering/ppsspp-debugger.md.
+[doc("Restart a race, or send a script at a free-running emulator in real time")]
 drive *ARGS:
     uv run --with websocket-client python scripts/psp-drive.py {{ARGS}}
 
 # Fly the original round a lap, steering off the track's own spline, and write
 # down what it pressed. Needs `oag-trace track` output; see
 # docs/tools/oag-trace.md#a-whole-lap-and-where-it-came-from.
+[doc("Fly the original round a lap and record the input it took to do it")]
 autopilot *ARGS:
     uv run --with websocket-client python scripts/psp-autopilot.py {{ARGS}}
 

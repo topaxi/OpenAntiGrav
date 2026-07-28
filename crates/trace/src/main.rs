@@ -23,10 +23,11 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use oag_assets::pulse;
 use oag_formats::{collision, handling, track};
 use oag_gameplay::input::button_from_name;
-use oag_gameplay::{collision_world, handling_for};
+use oag_gameplay::spawn::{Pose, box_inertia, spawn_height};
+use oag_gameplay::{Ship, collision_world, handling_for};
 use oag_physics::{CollisionWorld, Environment, Handling, SpeedClass};
 use oag_trace::compare::Tolerances;
-use oag_trace::replay::{Basis, DeltaSource, Held, Inputs, Options};
+use oag_trace::replay::{Basis, DeltaSource, DriveOptions, Held, Inputs, Options};
 use oag_trace::trace::AngularReading;
 use oag_trace::{Script, Trace, compare, replay};
 
@@ -155,6 +156,47 @@ enum Command {
         /// Write one line per tick instead of a summary.
         #[arg(long)]
         expand: bool,
+    },
+    /// Run an input script through our physics, with no capture involved.
+    ///
+    /// `run` needs a recording: it takes the run's length, its per-tick delta and
+    /// its initial condition from one. This needs only the script and a disc -
+    /// the ship starts on the track's own start line the way `oag-game --race`
+    /// puts it there - so a scenario can be exercised against our side before, or
+    /// without, anybody capturing it. `just scripted-sim` is this.
+    Drive {
+        /// The input script, e.g. `verification/scenarios/steer-left.inputs`.
+        script: PathBuf,
+        /// A disc image, or a directory extracted with `oag-unpack`.
+        #[arg(long)]
+        source: String,
+        /// Archive entry name of the track's `.vex`.
+        #[arg(long, default_value = DEFAULT_TRACK)]
+        track: String,
+        /// Team, which selects the handling stats.
+        #[arg(long, default_value = DEFAULT_TEAM)]
+        team: String,
+        /// Speed class to run in.
+        #[arg(long, default_value = "venom")]
+        class: String,
+        /// How many ticks to step. Defaults to the script's own length.
+        #[arg(long)]
+        ticks: Option<usize>,
+        /// How often the report prints a row.
+        #[arg(long, default_value_t = 100)]
+        every: usize,
+        /// Write the run here, in a capture's own columns.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Ignore the track's collision geometry: a ship with nothing to hover on.
+        #[arg(long)]
+        no_collision: bool,
+        /// How our axes are written into the recorded basis columns.
+        #[arg(long, value_enum, default_value_t = BasisArg::LeftUpForward)]
+        basis: BasisArg,
+        /// Which reading the angular-velocity column is written in.
+        #[arg(long, value_enum, default_value_t = AngularArg::NegatedLocal)]
+        angular: AngularArg,
     },
     /// Dump a track's driveable spline as CSV, one row per resampled point.
     ///
@@ -315,6 +357,31 @@ fn main() -> Result<()> {
             track,
             steps,
         } => dump_track(&source, &track, steps),
+        Command::Drive {
+            script,
+            source,
+            track,
+            team,
+            class,
+            ticks,
+            every,
+            out,
+            no_collision,
+            basis,
+            angular,
+        } => drive_scenario(DriveArgs {
+            script,
+            source,
+            track,
+            team,
+            class,
+            ticks,
+            every,
+            out,
+            no_collision,
+            basis,
+            angular,
+        }),
         Command::Compare {
             recorded,
             simulated,
@@ -363,25 +430,194 @@ fn main() -> Result<()> {
     }
 }
 
-/// Writes a track's resampled spline to stdout as CSV.
+/// Everything `drive` was asked for.
+#[derive(Debug)]
+struct DriveArgs {
+    script: PathBuf,
+    source: String,
+    track: String,
+    team: String,
+    class: String,
+    ticks: Option<usize>,
+    every: usize,
+    out: Option<PathBuf>,
+    no_collision: bool,
+    basis: BasisArg,
+    angular: AngularArg,
+}
+
+/// Runs a scenario through our physics from the track's own start line.
 ///
-/// One row per sample, in the order the curve runs, carrying the frame
-/// (`tangent`, `lateral`, `down`), both half-widths, the AI corridor and the
-/// authored `racing_line` offset. Two derived columns come along because every
-/// consumer computes them the same way and one of them is easy to get backwards:
-///
-/// - `lift_*` is the sample lifted off the surface by
-///   [`oag_formats::track::HOVER_LIFT`], which is where ships actually fly.
-/// - `line_*` is that point moved across the track by `racing_line` along
-///   `lateral`, which is the authored line itself.
-///
-/// Nothing is renormalised: the interpolated axes are neither unit length nor
-/// exactly perpendicular, and that is the original's behaviour rather than a
-/// decode error - `oag_gameplay::spawn` says so at length.
-fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
-    if steps == 0 {
-        bail!("--steps must be at least 1");
+/// The report is the deliverable here, not the CSV: what a scenario run answers
+/// is "did the ship go where the script asked, and if not, from which tick", and
+/// a wall of 3,000 rows answers that worse than fifteen. So every `--every`
+/// ticks it prints where the ship is, how fast, whether it is grounded, and **how
+/// far it is from the track's own spline** - the last being the one number that
+/// says whether the run is still on the circuit, and the reason this needs the
+/// spline as well as the collision mesh.
+fn drive_scenario(args: DriveArgs) -> Result<()> {
+    let script = read_script(&args.script)?;
+    if script.is_empty() {
+        bail!("{}: the script has no ticks in it", args.script.display());
     }
+    if args.every == 0 {
+        bail!("--every must be at least 1");
+    }
+    let ticks = args.ticks.unwrap_or(script.len());
+    if ticks > script.len() {
+        eprintln!(
+            "note: {} covers {} tick(s) and --ticks asks for {ticks}, so its last \
+             state is held for the remaining {}",
+            args.script.display(),
+            script.len(),
+            ticks - script.len(),
+        );
+    }
+
+    let class = SpeedClass::from_name(&args.class)
+        .with_context(|| format!("{:?} is not a speed class", args.class))?;
+    let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
+    let samples: Vec<track::Sample> =
+        resample(&load_ai(&args.source, &args.track)?, STEPS_PER_SEGMENT)
+            .into_iter()
+            .map(|(_, sample)| sample)
+            .collect();
+    let start = samples
+        .first()
+        .copied()
+        .context("the track's spline has no samples, so there is nowhere to start")?;
+    let collision = if args.no_collision {
+        eprintln!("note: --no-collision, so the hover probes see nothing");
+        CollisionWorld::new()
+    } else {
+        collision
+    };
+
+    // The same placement `oag_game::race` makes, through the same function: the
+    // first spline sample, offset by its own racing line, at the height the hover
+    // spring rests at. A scenario run that started anywhere else would not be the
+    // scenario.
+    let pose = Pose::from_sample(&start, start.racing_line, spawn_height(&handling));
+    let mut ship = Ship::default();
+    ship.physics.body.mass = handling.physical.mass;
+    ship.physics.body.inertia = box_inertia(&handling);
+    ship.place_at(pose);
+
+    let options = DriveOptions {
+        ticks,
+        dt: FIXED_DT,
+        basis: args.basis.into(),
+        angular: args.angular.into(),
+    };
+    println!(
+        "{}: {} tick(s) at {} Hz, {} on {}, {:?} class",
+        args.script.display(),
+        ticks,
+        (1.0 / FIXED_DT).round(),
+        args.team,
+        args.track,
+        class,
+    );
+    println!(
+        "start: ({:.3}, {:.3}, {:.3}), spawn height {:.3} above the surface line",
+        pose.position.x,
+        pose.position.y,
+        pose.position.z,
+        spawn_height(&handling),
+    );
+    println!();
+
+    let run = replay::drive(
+        ship.physics,
+        &handling,
+        &Environment::default(),
+        &collision,
+        &script.states,
+        &options,
+    );
+
+    report(&run, &samples, args.every);
+
+    if let Some(path) = &args.out {
+        std::fs::write(path, run.to_csv())
+            .with_context(|| format!("writing {}", path.display()))?;
+        eprintln!("wrote {}", path.display());
+    }
+    Ok(())
+}
+
+/// The run report: a row every `every` ticks, then what the whole run did.
+fn report(run: &Trace, samples: &[track::Sample], every: usize) {
+    println!("tick        position                  speed  grounded  off-spline");
+    let mut rows: Vec<usize> = (0..run.len()).step_by(every).collect();
+    if rows.last() != Some(&(run.len() - 1)) {
+        rows.push(run.len() - 1);
+    }
+    for index in rows {
+        let frame = &run.frames[index];
+        println!(
+            "{:>5}  ({:>9.1},{:>8.1},{:>9.1})  {:>6.1}     {:>4.2}  {:>10.1}",
+            frame.tick,
+            frame.position.x,
+            frame.position.y,
+            frame.position.z,
+            frame.velocity.length(),
+            frame.grounded,
+            off_spline(frame.position, samples),
+        );
+    }
+
+    let grounded = run.frames.iter().filter(|f| f.grounded > 0.0).count();
+    let worst = run
+        .frames
+        .iter()
+        .map(|f| off_spline(f.position, samples))
+        .fold(0.0f32, f32::max);
+    // The first tick after which the ship never touches the surface again: a run
+    // that leaves the track and one that scrapes a crest look identical in a
+    // grounded *count* and are not the same failure.
+    let lost = run
+        .frames
+        .iter()
+        .rposition(|f| f.grounded > 0.0)
+        .filter(|last| *last + 1 < run.len())
+        .map(|last| last + 1);
+    let finite = run
+        .frames
+        .iter()
+        .all(|f| f.position.is_finite() && f.velocity.is_finite());
+
+    println!();
+    println!("{}", run.summary());
+    println!(
+        "grounded on {grounded}/{} tick(s); worst distance from the spline {worst:.1}",
+        run.len()
+    );
+    match lost {
+        Some(tick) => println!("left the surface for good at tick {tick} and never regained it"),
+        None => println!("still in contact with the track on the last tick"),
+    }
+    if !finite {
+        println!("WARNING: the run went non-finite - that is a bug, not a divergence");
+    }
+}
+
+/// Distance from a point to the nearest spline sample.
+///
+/// A linear scan, and deliberately: `oag_game::race::Spline` scans too, because
+/// the comparison feeds simulation state and the order it happens in must not
+/// vary between runs. Here it only feeds a report, but the same answer for the
+/// same input is worth more than the microseconds.
+fn off_spline(position: oag_core::math::Vec3, samples: &[track::Sample]) -> f32 {
+    samples
+        .iter()
+        .map(|s| (oag_core::math::Vec3::from_array(s.pos) - position).length())
+        .fold(f32::INFINITY, f32::min)
+}
+
+/// Reads a track's `WO Track` spline graph out of its `.vex`, for `track` and
+/// for `drive`.
+fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
     let mut archives = pulse::Archives::open(source)?;
     let blob = archives
         .read_name(name)
@@ -401,51 +637,84 @@ fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
         ai.junctions.len(),
         ai.point_count()
     );
+    Ok(ai)
+}
+
+/// Every path resampled, with the path each sample came from.
+///
+/// The same `STEPS_PER_SEGMENT` and the same order `oag_game::race::Spline` and
+/// `oag_render::track` use, so a dumped line, a drawn line and the line a
+/// scenario run starts on are one set of points.
+fn resample(ai: &track::AiTrack, steps: usize) -> Vec<(usize, track::Sample)> {
+    let mut samples = Vec::new();
+    for (index, path) in ai.paths.iter().enumerate() {
+        for segment in 0..path.points.len() {
+            for step in 0..steps {
+                if let Some(sample) = path.sample(segment, step as f32 / steps as f32) {
+                    samples.push((index, sample));
+                }
+            }
+        }
+    }
+    samples
+}
+
+/// Writes a track's resampled spline to stdout as CSV.
+///
+/// One row per sample, in the order the curve runs, carrying the frame
+/// (`tangent`, `lateral`, `down`), both half-widths, the AI corridor and the
+/// authored `racing_line` offset. Two derived columns come along because every
+/// consumer computes them the same way and one of them is easy to get backwards:
+///
+/// - `lift_*` is the sample lifted off the surface by
+///   [`oag_formats::track::HOVER_LIFT`], which is where ships actually fly.
+/// - `line_*` is that point moved across the track by `racing_line` along
+///   `lateral`, which is the authored line itself.
+///
+/// Nothing is renormalised: the interpolated axes are neither unit length nor
+/// exactly perpendicular, and that is the original's behaviour rather than a
+/// decode error - `oag_gameplay::spawn` says so at length.
+fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
+    if steps == 0 {
+        bail!("--steps must be at least 1");
+    }
+    let ai = load_ai(source, name)?;
 
     println!(
         "index,path,pos_x,pos_y,pos_z,lift_x,lift_y,lift_z,line_x,line_y,line_z,\
          tan_x,tan_y,tan_z,lat_x,lat_y,lat_z,down_x,down_y,down_z,\
          half_left,half_right,ai_left,ai_right,racing_line,section,flags"
     );
-    let mut index = 0usize;
-    for (path_index, path) in ai.paths.iter().enumerate() {
-        for segment in 0..path.points.len() {
-            for step in 0..steps {
-                let t = step as f32 / steps as f32;
-                let Some(s) = path.sample(segment, t) else {
-                    continue;
-                };
-                let lift = [
-                    s.pos[0] - track::HOVER_LIFT * s.down[0],
-                    s.pos[1] - track::HOVER_LIFT * s.down[1],
-                    s.pos[2] - track::HOVER_LIFT * s.down[2],
-                ];
-                let line = [
-                    lift[0] + s.racing_line * s.lateral[0],
-                    lift[1] + s.racing_line * s.lateral[1],
-                    lift[2] + s.racing_line * s.lateral[2],
-                ];
-                let mut row = vec![index.to_string(), path_index.to_string()];
-                for v in [s.pos, lift, line, s.tangent, s.lateral, s.down] {
-                    row.extend(v.iter().map(|c| format!("{c:.7}")));
-                }
-                for v in [
-                    s.half_width_left,
-                    s.half_width_right,
-                    s.ai_bound_left,
-                    s.ai_bound_right,
-                    s.racing_line,
-                ] {
-                    row.push(format!("{v:.7}"));
-                }
-                row.push(s.section_id.to_string());
-                row.push(s.flags.to_string());
-                println!("{}", row.join(","));
-                index += 1;
-            }
+    let samples = resample(&ai, steps);
+    for (index, (path_index, s)) in samples.iter().enumerate() {
+        let lift = [
+            s.pos[0] - track::HOVER_LIFT * s.down[0],
+            s.pos[1] - track::HOVER_LIFT * s.down[1],
+            s.pos[2] - track::HOVER_LIFT * s.down[2],
+        ];
+        let line = [
+            lift[0] + s.racing_line * s.lateral[0],
+            lift[1] + s.racing_line * s.lateral[1],
+            lift[2] + s.racing_line * s.lateral[2],
+        ];
+        let mut row = vec![index.to_string(), path_index.to_string()];
+        for v in [s.pos, lift, line, s.tangent, s.lateral, s.down] {
+            row.extend(v.iter().map(|c| format!("{c:.7}")));
         }
+        for v in [
+            s.half_width_left,
+            s.half_width_right,
+            s.ai_bound_left,
+            s.ai_bound_right,
+            s.racing_line,
+        ] {
+            row.push(format!("{v:.7}"));
+        }
+        row.push(s.section_id.to_string());
+        row.push(s.flags.to_string());
+        println!("{}", row.join(","));
     }
-    eprintln!("{index} sample(s) at {steps} per segment");
+    eprintln!("{} sample(s) at {steps} per segment", samples.len());
     Ok(())
 }
 

@@ -19,6 +19,7 @@
 
 use oag_core::math::{Mat3, Quat, Vec3};
 use oag_formats::track::Sample;
+use oag_physics::Handling;
 
 use crate::world::Ship;
 
@@ -95,6 +96,129 @@ impl Ship {
         self.physics.body.mass = mass;
         self.physics.body.inertia = inertia;
     }
+}
+
+/// How far above the track's surface line a ship starts: the height its own
+/// suspension holds it at.
+///
+/// Three candidate heights exist and they are three different quantities. Which one
+/// a ship starts at changes the first second of every race, so the choice is written
+/// down here rather than left as a number in a constructor.
+///
+/// - [`oag_formats::track::HOVER_LIFT`] is where the load pass puts the **AI line**,
+///   by lifting each control point three units off the surface. It says nothing
+///   about ships. Starting there leaves the suspension compressed by the difference,
+///   and on the observed data one frame of the spring at that compression throws the
+///   ship clear of the track. Measured, not predicted, which is why this is not it.
+/// - `<Antigrav ride_height>` is what this used to return, and it is **wrong for a
+///   reason worth keeping**: it is simultaneously the spring's target and the length
+///   of the probe raycast, so a ship starting there sits at exactly the limit of its
+///   own reach. Measured against the real collision mesh at the spawn, the surface is
+///   between **5.468 and 5.542** below the probes while the cast is **5.500** - so
+///   whether a probe reports contact is decided by the fourth decimal place of the
+///   track geometry, and it flickers from the first tick. That flicker is an
+///   off-centre force every tick and a gravity term stepping between its grounded and
+///   airborne values every tick, which is what threw the ship clear.
+/// - [`oag_physics::hover::target_height`] is where the spring pulls, but not where it
+///   rests: it has to carry the ship, so it settles a little below its target. That
+///   settled height is what this returns, and it is the only one of the three at which
+///   both probes are in contact with margin on the first frame.
+///
+/// # The derivation, which is the force law's and not a number picked here
+///
+/// A probe in contact contributes `mass * 0.3 * (target - h) * HOVER_K * load *
+/// (normal_gravity + track_gravity)` along the ship's up axis, and grounded gravity
+/// pulls with `normal_gravity * mass`. Setting them equal at `load = 1` - a grounded
+/// ship, which is what a ship on a grid is - and solving for `h` gives
+///
+/// ```text
+/// rest = target - normal_gravity / (0.3 * HOVER_K * (normal_gravity + track_gravity))
+/// ```
+///
+/// `mass` cancels, which is why none appears. Every term is read off the disc or is
+/// [`oag_physics::hover::HOVER_K`]; nothing here is tuned, and the expression follows
+/// from `oag_physics::hover::probe` rather than from a fit.
+///
+/// **The sag it computes is small, and that is a finding rather than a detail.** On
+/// the observed data it is 0.147 units against a 5.5 reach, because the spring is
+/// calibrated against `normal_gravity + track_gravity` while carrying `normal_gravity`
+/// alone. So this places the ship correctly and still leaves it only 2.7 % of its
+/// range to play with; why that number is so small is an open reading recorded in
+/// `oag_physics::hover`, not something this function can fix.
+///
+/// This is only where a ship *starts*: the height it settles at is emergent from the
+/// force law, as `oag_gameplay::spawn::Pose::from_sample` says. The two now agree,
+/// which is the point.
+#[must_use]
+pub fn spawn_height(handling: &Handling) -> f32 {
+    let target = oag_physics::hover::target_height(handling, 0.0, 0.0);
+    let gradient = 0.3
+        * oag_physics::hover::HOVER_K
+        * (handling.physical.normal_gravity + handling.physical.track_gravity);
+
+    if gradient > 0.0 {
+        target - handling.physical.normal_gravity / gradient
+    } else {
+        // A parameter set with no gravity has no spring either, so there is no rest
+        // height to compute; the target is the honest answer, and `Handling::ZERO`
+        // still gives zero.
+        target
+    }
+}
+
+/// The ship's rotational inertia, as a body-space diagonal, from `<Misc>`.
+///
+/// A solid rectangular box of mass `m` and extents `(w, h, l)` about its centre:
+/// `I = m * (b^2 + c^2) / 12` per axis, over the two extents perpendicular to it.
+/// Body axes are `x` right, `y` up, `z` forward, and `<Misc width/height/length>` maps
+/// onto them in that order.
+///
+/// # Why this is a correction and not an invented constant
+///
+/// [`oag_physics::Body::inertia`] defaults to `(1, 1, 1)`, and that default is an
+/// admitted placeholder rather than anything read out of the game - `oag_physics`
+/// documents it as the value that makes a zeroed parameter set safe to integrate. Two
+/// things make replacing it a correction:
+///
+/// - **It reaches exactly one force path.** `oag_physics::forces::drain` multiplies the
+///   angular accumulators by the inertia and `oag_physics::integrate` divides the torque
+///   by it again, so every accumulator term - the surface alignment, angular damping,
+///   steering, pitch, the weathervane, bank-to-yaw - is inertia-independent by
+///   construction; those terms are angular *accelerations* and the round trip is how
+///   they are routed onto a torque-based body. What is left is the hover probes'
+///   `add_force_at_point`, which is a genuine force at a genuine lever arm and whose
+///   `r x F` genuinely must be divided by a real moment of inertia. Verified rather than
+///   argued: the same state stepped with `(1,1,1)`, `(100,100,100)` and this tensor
+///   gives a bit-identical angular velocity when no probe is in contact.
+/// - **`(1, 1, 1)` is not neutral, it is a specific wrong answer.** The probes sit half
+///   a hull length apart, 6.5 units on the observed data, and the spring's gradient is
+///   about 34 per unit, so one probe alone is a rotational stiffness near `6.5^2 * 34`.
+///   Divided by a unit inertia that is a 38 rad/s oscillator, and at the specified 1/180
+///   sub-step explicit Euler grows it about 5 % per tick. Measured at rest with no input,
+///   roll grew from 0.026 to 0.570 rad over 51 ticks - a factor of 22 against a predicted
+///   12 - and the ship inverted and fell through the floor by tick 250. With this tensor
+///   the same run holds level.
+///
+/// The formula is textbook and its inputs are read off the disc, so nothing here is
+/// fitted. What is **not** claimed is that the original computes it this way: how it
+/// builds a tensor, or whether it uses one at all, was not recovered, and
+/// `<Misc weight_distribution>` is a fore/aft mass bias this ignores. A trace settles
+/// it; until then a physically sane tensor beats a placeholder that reads as a physics
+/// bug.
+#[must_use]
+pub fn box_inertia(handling: &Handling) -> Vec3 {
+    let mass = handling.physical.mass;
+    let (w, h, l) = (
+        handling.dimensions.width,
+        handling.dimensions.height,
+        handling.dimensions.length,
+    );
+
+    Vec3::new(
+        mass * (h * h + l * l) / 12.0,
+        mass * (w * w + l * l) / 12.0,
+        mass * (w * w + h * h) / 12.0,
+    )
 }
 
 #[cfg(test)]

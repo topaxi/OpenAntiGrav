@@ -11,8 +11,16 @@ oag-trace show    <trace.csv>                      what is in a capture
 oag-trace run     <trace.csv> [--source <image>]   replay it and compare
 oag-trace compare <recorded.csv> <simulated.csv>   diff two traces
 oag-trace script  <script.inputs> [--expand]       validate an input script
+oag-trace drive   <script.inputs> --source <image>  run a scenario, no capture
 oag-trace track   --source <image> [--track <e>]   dump a track's spline as CSV
 ```
+
+`drive` is `run` without the recording. `run` takes a scenario's length, its
+per-tick delta and its initial condition from a capture; `drive` takes only the
+script and a disc, puts the ship on the track's own start line the way a race
+does, and prints [a run report](#the-run-report). So a scenario can be exercised
+against our side before, or without, anybody capturing it - which is most of the
+time, since a capture costs an emulator session and a script costs a text editor.
 
 `track` is the odd one out: it simulates nothing and compares nothing. It reads
 the `WO Track` node out of a track's `.vex` and writes the resampled spline -
@@ -24,6 +32,36 @@ and a comparison tool is where the track already gets loaded.
 Traces are **derived game data**. They live under `data/traces/`, which
 `.gitignore` covers, and are never committed - so nothing here runs in CI, and
 every test in the crate works from a hand-authored fixture instead.
+
+## Two commands, if you do not want the plumbing
+
+```sh
+just scripted-sim                    # a scenario through OUR physics, with a report
+just scripted-emu                    # the same scenario through the ORIGINAL, captured
+```
+
+Both default to [the whole-lap scenario](#a-whole-lap-and-where-it-came-from) and
+both take one as an argument:
+
+```sh
+just scripted-sim verification/scenarios/steer-left.inputs --every 20 --out /tmp/ours.csv
+just scripted-emu verification/scenarios/steer-left.inputs data/traces/left.csv
+```
+
+`scripted-sim` needs a disc image and nothing else - no emulator, no capture, no
+GPU - so it is the half that always works, and it is deterministic: the same
+scenario gives the same run every time.
+
+`scripted-emu` is **autonomous from a booted emulator**. It checks it has a
+debugger to talk to and prints how to start one if not; walks the front end into
+a Time Trial from whatever screen the game is on; puts the craft back on the
+start line; and sends the scenario with the measured `--script-lead 2`
+correction. The one thing it cannot pin is *which track* - see
+[the menu walk](../reverse-engineering/ppsspp-debugger.md#walking-the-menus-without-a-human)
+for why, and note that it checks afterwards rather than hoping.
+
+Override the disc with `OAG_IMAGE`, the ISO PPSSPP wants with `OAG_ISO`, and the
+emulator binary with `PPSSPP_BIN`.
 
 ## The whole loop
 
@@ -58,6 +96,33 @@ the countdown gets you a false-start penalty that looks exactly like a broken
 input path - are all on
 [the debugger page](../reverse-engineering/ppsspp-debugger.md). Read it before
 capturing.
+
+## The run report
+
+`oag-trace drive` has no recording to diverge from, so what it prints is what the
+ship did:
+
+```
+verification/scenarios/steer-left.inputs: 200 tick(s) at 60 Hz, Assegai on ..., Venom class
+start: (56.487, -49.648, -187.694), spawn height 3.978 above the surface line
+
+tick        position                  speed  grounded  off-spline
+    0  (     56.5,   -49.6,   -187.7)     0.0     0.00         4.0
+  100  (     89.6,   -49.3,   -188.7)    16.1     1.00         3.9
+  199  (     58.0,   -49.7,   -176.0)    64.1     1.00        12.3
+
+200 tick(s)
+...
+grounded on 199/200 tick(s); worst distance from the spline 12.4
+still in contact with the track on the last tick
+```
+
+`off-spline` is the column to read: distance to the nearest point of the track's
+own spline, which is the one number that says whether the run is still on the
+circuit. `--every N` sets the row spacing. The last two lines answer the question
+a `grounded` *count* cannot - a ship that scrapes over every crest and one that
+left the track at tick 313 and never came back have similar counts and are not
+the same failure.
 
 ## What the output says
 
@@ -325,7 +390,7 @@ original's to about 1 % and the error is **bounded**, not growing, over 200 tick
 that include two full-deflection transitions in each direction. That is the first
 independent evidence that the recovered steering ramp is right, and it is
 unaffected by the over-acceleration that dominates every other row - see
-[`oag-game`'s "no speed equilibrium"](oag-game.md#what-does-not-work-there-is-no-speed-equilibrium).
+[`oag-game`'s "no speed equilibrium"](oag-game.md#what-still-does-not-match-the-speed-and-the-trace-comparison).
 
 **The `throttle` divergence at tick 2 is a capture artefact, not a physics one.**
 `--warmup-hold cross` releases the warmup's thrust just before the loop starts,
@@ -592,7 +657,7 @@ at throttle 100 while ours passes 55 by tick 30, 81 by tick 100 and 170 by tick 
 and it starts shedding probe contact as soon as it is going fast enough that the
 surface curves away from under it. The control columns match exactly, so this is a
 force *magnitude* question - see
-[`oag-game`'s "no speed equilibrium"](oag-game.md#what-does-not-work-there-is-no-speed-equilibrium)
+[`oag-game`'s "no speed equilibrium"](oag-game.md#what-still-does-not-match-the-speed-and-the-trace-comparison)
 for the arithmetic and the four candidates.
 
 **The handedness question is settled, and not by simulation.** The capture alone

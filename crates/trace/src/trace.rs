@@ -858,8 +858,12 @@ impl fmt::Display for Summary {
             Some(0) => write!(f, "stun timer: never armed"),
             Some(ticks) => write!(
                 f,
-                "stun timer: armed on {}/{} tick(s) - the original produced no thrust \
-                 and no lateral grip there",
+                // "the run" rather than "the original": a `Summary` is printed
+                // for our own traces too - `oag-trace drive` prints one - and a
+                // report that calls our output the original's is a lie in the
+                // one place a reader is least likely to check.
+                "stun timer: armed on {}/{} tick(s) - no thrust and no lateral \
+                 grip on those",
                 ticks, self.ticks
             ),
         }?;

@@ -313,6 +313,119 @@ pub fn replay<R: Raycaster + ?Sized>(
     out
 }
 
+/// How to drive a run that has no recording behind it.
+///
+/// [`replay`] takes its length, its per-tick delta and its initial condition from
+/// a capture. A scenario run has none of those: it is an input script, a track
+/// and a start line, which is what `oag-trace drive` and therefore
+/// `just scripted-sim` are. So the three come from here instead.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DriveOptions {
+    /// How many ticks to step. A script shorter than this holds its last state,
+    /// exactly as [`Inputs::Scripted`] does.
+    pub ticks: usize,
+    /// The timestep, in seconds. Ours is fixed at 60 Hz - ADR-0007 - and there
+    /// is no recording here to take a variable delta from, so unlike [`replay`]
+    /// this is not a choice between two sources.
+    pub dt: f32,
+    /// How our axes are written into the recorded basis columns.
+    pub basis: Basis,
+    /// Which reading the angular-velocity column is written in.
+    pub angular: AngularReading,
+}
+
+impl Default for DriveOptions {
+    fn default() -> Self {
+        Self {
+            ticks: 0,
+            dt: 1.0 / 60.0,
+            basis: Basis::default(),
+            angular: AngularReading::default(),
+        }
+    }
+}
+
+/// Runs an input script through our physics from a given start state.
+///
+/// The same stepping loop [`replay`] uses - same [`World`], same
+/// [`oag_gameplay::ship_controls`], same sampled-before-the-step convention - with
+/// the capture taken out of it. What comes back is a trace in the capture's own
+/// columns, so everything downstream (`oag-trace show`, `oag-trace compare`, the
+/// CSV writer) works on it unchanged, and a scenario run can be diffed against a
+/// capture of the same scenario the day one exists.
+///
+/// `initial` is a whole [`ShipState`] rather than a pose because that is the only
+/// honest signature: what a ship starts with includes its mass, its inertia and
+/// which way its suspension is loaded, and a function that took a position and
+/// invented the rest would be hiding the interesting half.
+#[must_use]
+pub fn drive<R: Raycaster + ?Sized>(
+    initial: ShipState,
+    handling: &Handling,
+    environment: &Environment,
+    raycaster: &R,
+    script: &[Held],
+    options: &DriveOptions,
+) -> Trace {
+    let mut world = World::new(SEED);
+    world.ships[0] = Ship {
+        physics: initial,
+        handling: *handling,
+        segment: 0,
+        active: true,
+    };
+    world.ship_count = 1;
+
+    let mut buttons = Input::new();
+    let mut speed_cached = {
+        let body = &world.ships[0].physics.body;
+        body.linear_velocity.dot(body.forward())
+    };
+    let mut out = Trace {
+        frames: Vec::with_capacity(options.ticks),
+    };
+    let frame_options = Options {
+        inputs: Inputs::Scripted(script.to_vec()),
+        dt: DeltaSource::Fixed(options.dt),
+        basis: options.basis,
+        angular: options.angular,
+    };
+
+    for index in 0..options.ticks {
+        let state = &world.ships[0].physics;
+        out.frames.push(frame_of(
+            state,
+            index as u64,
+            options.dt,
+            speed_cached,
+            &frame_options,
+        ));
+        speed_cached = state.body.linear_velocity.dot(state.body.forward());
+
+        // `Frame::default()` is only ever read by `Inputs::FromTrace`, which this
+        // is not: the script is the whole of the input here.
+        let snapshot = snapshot_for(
+            &Frame::default(),
+            &mut buttons,
+            &frame_options.inputs,
+            index,
+        );
+        let controls = ship_controls(&snapshot);
+        let ship = &mut world.ships[0];
+        oag_physics::step(
+            &mut ship.physics,
+            &controls,
+            &ship.handling,
+            environment,
+            raycaster,
+            options.dt,
+        );
+        world.tick += 1;
+    }
+
+    out
+}
+
 /// One tick of our state, in the recording's columns.
 ///
 /// The angular velocity is written back in the recording's own convention rather
@@ -881,6 +994,127 @@ mod tests {
         );
         assert_eq!(simulated.frames[0].stun_timer, Some(0.0));
         assert_eq!(simulated.frames[0].timer_2e0, None);
+    }
+
+    /// A driven run has no recording behind it, so nothing can be seeded from
+    /// one: `drive` must produce exactly the ticks it was asked for, from the
+    /// state it was handed.
+    #[test]
+    fn a_driven_run_is_as_long_as_it_was_asked_for_and_starts_where_it_was_put() {
+        let mut initial = ShipState::default();
+        initial.body.mass = TEST_MASS;
+        initial.body.position = Vec3::new(1.0, 2.0, 3.0);
+        let script = crate::script::Script::parse("40 cross\n").expect("parses");
+        let run = drive(
+            initial,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &script.states,
+            &DriveOptions {
+                ticks: 40,
+                ..DriveOptions::default()
+            },
+        );
+        assert_eq!(run.len(), 40);
+        assert_eq!(run.frames[0].position, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(run.frames[0].tick, 0);
+        assert_eq!(run.frames[39].tick, 39);
+    }
+
+    /// A script shorter than the run holds its last state here too, which is the
+    /// same rule [`Script::at`](crate::script::Script::at) argues for and the
+    /// reason `--ticks` may exceed a scenario's own length.
+    #[test]
+    fn a_driven_run_holds_a_short_script_s_last_state() {
+        let mut initial = ShipState::default();
+        initial.body.mass = TEST_MASS;
+        let script = crate::script::Script::parse("2 none\n2 cross\n").expect("parses");
+        let run = drive(
+            initial,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &script.states,
+            &DriveOptions {
+                ticks: 20,
+                ..DriveOptions::default()
+            },
+        );
+        assert_eq!(run.frames[1].throttle, 0.0);
+        assert!(run.frames[19].throttle > 0.0, "the last state is held");
+    }
+
+    /// Driving the same scenario twice must give the same trace, for the same
+    /// reason replaying one twice must: `docs/architecture/determinism.md`. This
+    /// is the property `just scripted-sim` rests on - it is the only side of the
+    /// comparison that *can* be reproduced exactly, the emulator's start pose
+    /// being repeatable only to about 2.5 degrees.
+    #[test]
+    fn a_driven_run_is_reproducible() {
+        let script = crate::script::Script::parse("10 cross\n10 cross left\n").expect("parses");
+        let run = || {
+            let mut initial = ShipState::default();
+            initial.body.mass = TEST_MASS;
+            drive(
+                initial,
+                &inert_handling(),
+                &Environment::default(),
+                &CollisionWorld::new(),
+                &script.states,
+                &DriveOptions {
+                    ticks: 20,
+                    ..DriveOptions::default()
+                },
+            )
+        };
+        assert_eq!(run(), run());
+    }
+
+    /// `drive` and `replay` are the same stepping loop with different sources for
+    /// the length, the delta and the seed. Handed the same three, they must agree
+    /// tick for tick - otherwise a scenario run and a comparison run would be
+    /// measuring two different simulations and nobody would notice.
+    #[test]
+    fn driving_and_replaying_the_same_scenario_agree() {
+        let dt = 1.0 / 60.0;
+        let recorded = coasting(30, dt, Vec3::new(0.0, 0.0, 22.0));
+        let script = crate::script::Script::parse("30 cross\n").expect("parses");
+        let handling = inert_handling();
+        let replayed = replay(
+            &recorded,
+            &handling,
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options {
+                inputs: Inputs::Scripted(script.states.clone()),
+                dt: DeltaSource::Fixed(dt),
+                ..Options::default()
+            },
+        );
+        let driven = drive(
+            initial_state(
+                &recorded.frames[0],
+                &handling,
+                Basis::default(),
+                AngularReading::default(),
+            ),
+            &handling,
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &script.states,
+            &DriveOptions {
+                ticks: 30,
+                dt,
+                ..DriveOptions::default()
+            },
+        );
+        assert_eq!(driven.len(), replayed.len());
+        for (a, b) in driven.frames.iter().zip(replayed.frames.iter()) {
+            assert_eq!(a.position, b.position, "tick {}", a.tick);
+            assert_eq!(a.velocity, b.velocity, "tick {}", a.tick);
+            assert_eq!(a.throttle, b.throttle, "tick {}", a.tick);
+        }
     }
 
     #[test]
