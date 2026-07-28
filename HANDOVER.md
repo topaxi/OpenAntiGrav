@@ -145,6 +145,88 @@ unreachable. What to know:
   paths** ("permission denied" even on `crates/disc/src`) - `find` works.
   A third distinct way real data can look absent when it isn't.
 
+**`resistance-gap` is done, and the blocker's diagnosis was wrong on both
+sides.** Commits `695178a` (scripts/trace-force-balance.py), `aa060b9` +
+`80d1924` + `f436950` (docs/physics/force-balance-ground-truth.md and
+in-place engine.md corrections), `e050e0a` (passive.rs airbrake-drag
+comment correction). Centrally re-verified: the force-balance script
+reproduces every number below against the real traces, and
+`cargo nextest run -p oag-physics` is 168/168. Its method was measurement
+first: reconstruct the original's along-forward force from the traces
+themselves - projecting onto `forward` cancels everything normal-axis
+(hover spring, the disputed downforce, vertical damping) and lateral grip,
+and gravity is removed analytically because **the reference capture climbs
+a sustained ~4.25% grade for its whole 200 ticks - it was never a
+flat-ground equilibrium**.
+
+- **`mass = 1`, not ~23. Confidence 92.** `Ship_InitCraft` calls
+  `Body_SetMass` (`0x0884d850`, four instructions, stores unscaled) at
+  `0x0884985c` with the XML `mass` in the delay slot. This determines the
+  `<Physical mass>`-to-body relation engine.md called "not determined",
+  and retires this file's earlier "craft mass near 23" - that number was
+  derived from the very balance it was offered as corroboration for.
+  Load-bearing for everything below, which is why it was verified first.
+- **The thrust side is fully confirmed at instruction level (92-95).**
+  The `0.001` load scale, `cap = 0.5*speed + accelcap` (the `add.s` at
+  `0x0884c7b0` refutes a sign-error hypothesis), the `min`, and the `*2.0`
+  (whose store always lands - `0x0884c938` is `bc1f`, not branch-likely).
+  `T ~= 58` is right. The `gain`/`falloff` ramp being dead is confirmed in
+  the same pass: `0x0884c728` overwrites the ramped state with raw input.
+- **The missing resistance is LINEAR in speed, not quadratic. Confidence
+  85.** Missing force is `52.5` at `fs = 23.03` and `45.1` at `fs = 20.04`
+  - scaling exponent 1.09; linear predicts the second point to +1.3%,
+  quadratic to -11.9%. This refutes engine.md's earlier `0.095*v^2` target
+  shape, which came from a single operating point. Size roughly
+  `2.28 * fs`, putting equilibrium at 22.94 against the measured
+  zero-crossing 23.07. **The constant is fitted and deliberately NOT
+  implemented** - no recovered source yet.
+- **The stun gate never fires in the reference capture** - answered from
+  the trace itself, no collision geometry needed: median implied thrust is
+  4.15-4.66 across all tick windows (a fired stun forces zero), and the
+  deficit is speed-proportional where a gate predicts constant. Closes
+  `21798c6`'s open question.
+- **The downforce cannot be this gap at any magnitude** - it acts along
+  the surface normal and cancels identically in the projection. The
+  resting-height contradiction stays open but is not load-bearing here.
+- Also found: **`passive.rs`'s "no dedicated airbrake drag term" was
+  false** - `Ship_UpdateAirbrakes` forms
+  `|airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * fs` gated
+  on `fs > 0` (confidence 85; identically zero in every existing capture,
+  so explicitly not this discrepancy). `Body_Integrate`'s linear damping
+  confirmed `0.01` (right shape, 228x too small). Quadratic drag
+  coefficients raised to 95, read as immediates, including the `-0.9`
+  branch value engine.md had only estimated. Rolling resistance really
+  does normalise (constant magnitude, cannot hide a linear term; 80,
+  hand-decoded VFPU). The trace's `speed` column is a consistent 1.0367x
+  multiple of `|velocity|` (still unexplained); `speed_cached` is
+  `dot(velocity, forward)`. **Tick 8 of the reference capture is a genuine
+  speed-pad impulse - the capture is not pad-free**, worth knowing before
+  reusing it as a clean straight-line reference.
+- Trap: `jal` targets in `BOOT.BIN` encode the ELF vaddr (base 0), not
+  the `0x08804000` image base - scan for `0x0C012614`, not `0x0E213614`,
+  to find calls to `0x0884d850`.
+- **The Ghidra bridge was down for this agent** (`list_instances` empty),
+  so all disassembly came from capstone over the extracted `BOOT.BIN`
+  directly. Consequence: the VFPU-heavy function bodies could not be read
+  - and that is exactly where the mechanism must be. **Next RE step, with
+  Ghidra and the Allegrex module up: read the VFPU bodies of
+  `Ship_UpdateHover` (`0x0884870c`), the inline vertical damping in
+  `Ship_UpdateCraft`, and `Ship_ApplyLateralGrip` (`0x08848b78`). Top
+  hypothesis, the only candidate whose shape matches: a hover
+  spring-damper written `-c * velocity` instead of `-c * (v.n) * n`,
+  which is exactly a linear drag.**
+- **The capture it wants next is a STANDING START** on the reference
+  configuration (200+ ticks, the new `stun_timer`/`timer_2e0` columns
+  included): at `fs ~= 5` linear predicts ~11.4 missing force against
+  quadratic's ~2.5 (4x discrimination, versus the current 12% margin),
+  and at `fs ~= 0` the measured forward acceleration IS the thrust with
+  zero model assumptions - the confirmed law predicts exactly
+  `2 * min(41.8, 17) = 34.0`, so a launch showing ~4 instead would invert
+  the whole diagnosis. Avoid the start-line boost window (`craft+0x294`)
+  and the false-start trap. Second priority: a capture with asymmetric
+  airbrakes plus steer, the only way to exercise the new airbrake drag
+  term.
+
 ## The movie cache is lossless AV1 now, and two of its traps fail silently
 
 The cache holds lossless AV1 in IVF instead of raw `yuv420p`, decoded in process
