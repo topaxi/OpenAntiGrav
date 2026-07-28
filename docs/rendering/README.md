@@ -10,7 +10,10 @@
 - Particle effects: thrust, weapons, impacts
 - The HUD
 - Post-processing, and the series' distinctive look
-- Modern display features: ultrawide, HDR, VRR, dynamic resolution
+- Modern display features: ultrawide, HDR, VRR, dynamic resolution, and
+  FSR-class upscaling - see [modern features](../overview/modern-features.md)
+  for the licensing picture and the pipeline prerequisites (motion vectors,
+  depth, camera jitter) to design in from the start
 
 ## Principle
 

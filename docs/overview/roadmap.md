@@ -257,7 +257,11 @@ original to a player, and whose per-tick trace stays within tolerance.
 - [ ] Save data
 - [ ] Replay
 - [ ] PS2 asset path at parity with PSP
-- [ ] Modern features: ultrawide, unlocked frame rate, HDR, VRR, dynamic resolution
+- [ ] Modern features: ultrawide, unlocked frame rate, HDR, VRR, dynamic
+      resolution, upscaling (FSR 3.1, with FSR4 via the driver), Steam Input,
+      optional ahead-of-time FMV upscaling - licensing status and the
+      architectural prerequisites to decide early are recorded in
+      [modern features](modern-features.md)
 
 **Exit criterion:** Pulse is feature complete, start to finish, on both asset
 paths.
