@@ -648,6 +648,51 @@ tests; `just test-data` 861/861 with 0 skipped.
   `World_SetBodyMass` 88. `FUN_0884e694` (collider setup) left unnamed,
   unread.
 
+**`appimage` (Task #9, commits `f191d9f`, `ff4f468`, `41e5c6f`): `just
+appimage` produces a 5 MB single-file x86_64 AppImage that runs out-of-repo,
+and the one thing that can break "copy one file and run" on the Deck is the
+glibc floor.** Full detail in the new `docs/tools/packaging.md` (the
+AppImage-over-Flatpak decision and its rationale live there, not in an ADR -
+reversible packaging choice, nothing in the engine depends on it).
+
+- **The binary requires `GLIBC_2.44`** - Arch links libm to the newest
+  versioned symbols the host offers. On an older glibc the loader refuses
+  outright. `just appimage` prints the floor; first thing to run on a Deck
+  is `ldd --version`. `packaging.md#glibc` carries a podman/debian-bookworm
+  (glibc 2.36) rebuild command and a `cargo-zigbuild` alternative - **both
+  written from reasoning and marked unverified**, and the actual SteamOS
+  glibc version could not be established.
+- **Nothing is bundled** (only excludelist libs are linked; Vulkan/Wayland
+  are dlopen'd from the host as they must be; the AppImage runtime is
+  static, so no libfuse2 - the classic SteamOS failure does not apply).
+  A leakage guard refuses to pack if any game-content extension is in the
+  AppDir. `ffmpeg` is optional (no picture without it; `--no-video`
+  skips).
+- **Disc-image search** (`crates/game/src/source.rs`, positional arg now
+  optional): CLI arg, `$OAG_IMAGE`, `data/images/` under cwd (checkout
+  default unchanged), the AppImage's own directory then `images/` beside
+  it (portable mode), `~/.local/share/oag/images/`. `$APPDIR` is never
+  searched, asserted by a unit test so the search cannot become a reason
+  to bundle content. Behaviour change worth knowing:
+  `boot::default_cache_dir()` falls back to `~/.cache/oag/movies` when no
+  `data/` exists, so a packaged build does not scatter cache next to the
+  player's files.
+- **Hardcoded gamepad mapping** (`crates/input/src/pad.rs`, gilrs, in
+  `oag-input` only - no gameplay crate touched): left stick + d-pad
+  steering with 15 % deadzone, face buttons to cross/circle/square/
+  triangle, L1/R1 airbrakes, Start/Select. Two mappings are
+  **interpretations, flagged as such**: R2 -> cross past 25 % (the
+  snapshot has no analog throttle) and L2 -> both airbrakes analog (no
+  brake action exists). New `oag_input::Controls` ORs keyboard+pad held
+  masks *before* edge computation, so one press on two devices is one
+  press. gilrs failing to open is one printed line, never an error.
+- **Verified locally, not on a Deck** (none available): the AppImage ran
+  from `/tmp` with a disc image beside it and no `data/` dir, resolved via
+  `$APPIMAGE`, booted the front end, loaded a race, rendered a screenshot.
+  Caveat: gilrs lists some keyboard HID interfaces as gamepads, so the
+  startup `gamepad:` line is not proof a real pad was found. The exact
+  on-Deck test steps are in packaging.md and in the agent's report.
+
 **Two process traps from this task, both live:**
 
 - **`git-commit` does NOT isolate a pathspec - it commits everything
