@@ -1394,9 +1394,13 @@ Both timers are decremented by `dt` earlier in the same function
 (`0x3e4ccccd`) when a shift fires, so **one sideshift pushes for 0.2 s**. Both can
 run at once, in which case the two forces cancel; nothing picks a winner.
 
-**What fires them** is a stick flick, read at `0x08847470`-`0x08847598`: with an
-"armed" flag (`entity+0x860 & 0x400`, set whenever the axis is inside `+/-10`),
-the steering axis at `*(craft+0x78)+0x00` crossing
+**What fires them** depends on a control-scheme test (`FUN_08836828`, unread),
+and both branches agree on the direction. The branch this section reads in full
+(`0x08847440`-`0x08847598`) is the **flick**: the button bound to input action
+`7` must be held (`*(craft+0x78)+0x24`, a button mask, tested against
+`1 << FUN_088366bc(7)`), an "armed" flag (`entity+0x860 & 0x400`) must be set -
+which happens whenever the axis is inside `+/-10` - and then the steering axis at
+`*(craft+0x78)+0x00` crossing
 
 | Axis | Sets | Flag | Force |
 | --- | --- | --- | --- |
@@ -1411,7 +1415,20 @@ left). **So a craft shifts toward the side it was flicked**, which is what
 a confirmation of an unevidenced guess rather than a correction, and the mirror
 image of the airbrake polarity bug that motivated the check.
 
-A second trigger path above this one - a three-entry tap history
+The other branch (`0x088472f8`-`0x08847438`) is the **button** scheme: the
+buttons bound to actions `5` and `6`, with a repeat lockout, set `entity+0x8a4`
+and `entity+0x8a8` respectively - so action 5 is a left shift and action 6 a
+right one, the same pairing the flick produces.
+
+**A capture would still be worth taking**, and the recipe is: bind or find the
+physical button behind action `7` (`FUN_088366bc` maps action ids to button ids
+through the options block, unread), hold it, and flick the stick - 30 ticks is
+enough, since the whole event is 12 frames. The direction claim above does not
+rest on it: it has an instruction-level leg plus two *measured* legs (row 0 is
+the ship's left; the steering axis is positive-right in the `steer-left` and
+`steer-right` captures).
+
+A third trigger path above these - a three-entry tap history
 (`entity+0x88c`/`+0x890`/`+0x894`) fed by d-pad bits and by the axis crossing
 `+/-90`, matching the patterns `2,1,2` and `1,2,1` - sets two other flags
 (`entity+0x860 & 0x100`/`0x80`) that drive a separate `entity+0x87c` charge. That

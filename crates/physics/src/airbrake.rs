@@ -344,10 +344,11 @@ pub const SIDESHIFT_DURATION: f32 = 0.2;
 ///
 /// # What is still not implemented
 ///
-/// The *trigger*. The original arms a sideshift from a stick flick - the axis has
-/// to return inside `+/-10` to re-arm - or from a tap pattern in a three-entry
-/// history, and it is `oag-input`'s business rather than this crate's. Here the
-/// [`Sideshift`] input stays the "fire now" edge, and firing refreshes the timer.
+/// The *trigger*. The original fires a sideshift either from a held button plus a
+/// stick flick past `+/-10` (the axis has to return inside `+/-10` to re-arm), or
+/// from the two buttons bound to input actions 5 and 6, and that is `oag-input`'s
+/// business rather than this crate's. Here the [`Sideshift`] input stays the
+/// "fire now" edge, and firing refreshes the timer.
 #[must_use]
 pub fn sideshift_force(state: &ShipState, handling: &Handling, grounded: f32) -> Vec3 {
     if grounded <= 0.0 {
