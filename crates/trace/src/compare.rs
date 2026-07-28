@@ -93,6 +93,13 @@ pub enum Field {
     /// Absent from a capture taken before the column existed, and then **not
     /// compared** rather than compared against a zero.
     AngularVelocity,
+    /// The rotation rate at `body+0x150`, in rad/s.
+    ///
+    /// The only angular quantity a capture holds that is directly comparable with
+    /// our own: [`crate::trace::Frame::angular_velocity`] is the momentum column
+    /// and carries the inertia tensor, this one does not. A capture taken before
+    /// the column existed reports it as not compared.
+    AngularRate,
     /// The collision stun timer, which gates thrust and lateral grip.
     StunTimer,
 }
@@ -114,6 +121,7 @@ impl Field {
         Self::AirbrakeLeft,
         Self::AirbrakeRight,
         Self::AngularVelocity,
+        Self::AngularRate,
         Self::StunTimer,
     ];
 
@@ -135,6 +143,7 @@ impl Field {
             Self::AirbrakeLeft => "airbrake_l",
             Self::AirbrakeRight => "airbrake_r",
             Self::AngularVelocity => "angular_velocity",
+            Self::AngularRate => "angular_rate",
             Self::StunTimer => "stun_timer",
         }
     }
@@ -152,7 +161,7 @@ impl Field {
             | Self::Steer
             | Self::AirbrakeLeft
             | Self::AirbrakeRight => Quantity::Control,
-            Self::AngularVelocity => Quantity::AngularVelocity,
+            Self::AngularVelocity | Self::AngularRate => Quantity::AngularVelocity,
             Self::StunTimer => Quantity::Timer,
         }
     }
@@ -176,7 +185,7 @@ impl Field {
 /// "Compared on" is the upper bound rather than the count: a field whose column
 /// is missing from either trace is skipped, and [`FieldSummary::compared_ticks`]
 /// is how many ticks it actually got.
-pub const FIELD_COUNT: usize = 15;
+pub const FIELD_COUNT: usize = 16;
 
 /// The tolerance table, from the verification protocol.
 ///
@@ -601,6 +610,7 @@ fn measure(field: Field, recorded: &Frame, simulated: &Frame) -> Option<(Sampled
         Field::AirbrakeLeft => scalar(recorded.airbrake_left, simulated.airbrake_left),
         Field::AirbrakeRight => scalar(recorded.airbrake_right, simulated.airbrake_right),
         Field::AngularVelocity => vector(recorded.angular_velocity?, simulated.angular_velocity?),
+        Field::AngularRate => vector(recorded.angular_rate?, simulated.angular_rate?),
         Field::StunTimer => scalar(recorded.stun_timer?, simulated.stun_timer?),
     })
 }
@@ -1032,7 +1042,7 @@ mod tests {
         let comparison = compare(&recorded, &recorded, &Tolerances::default());
         for summary in &comparison.fields {
             match summary.field {
-                Field::AngularVelocity | Field::StunTimer => {
+                Field::AngularVelocity | Field::AngularRate | Field::StunTimer => {
                     assert_eq!(summary.compared_ticks, 0, "{:?}", summary.field);
                 }
                 other => assert_eq!(summary.compared_ticks, 40, "{other:?}"),

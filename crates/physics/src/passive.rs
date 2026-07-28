@@ -254,21 +254,41 @@ pub fn weathervane(forward: Vec3, velocity: Vec3, grounded: bool) -> Vec3 {
     forward.cross(velocity) * k
 }
 
-/// Angular damping, in the body-local angular accumulator.
+/// Angular damping, as a body-local torque.
 ///
 /// ```text
-/// angularLocal += (-pitch_damping, -5.0, -2.0) * bodyAngularVelocityLocal
+/// angularLocal += (-pitch_damping, -5.0, -2.0) * bodyAngularMomentumLocal
 /// ```
 ///
 /// Only the pitch axis is tunable per ship; yaw and roll damping are hard-coded for
 /// every craft in the game. `pitch_damping` is negated here and is expected
 /// positive in the data, which is the same convention `Brakes.amount` does *not*
 /// use - there the sign is in the parameter. Worth keeping straight.
+///
+/// # It reads the momentum, not the velocity, and that is the whole point
+///
+/// `Ship_ApplyAngularDamping` (`0x08848ed0`) loads `body+0x160` at `0x08848f08`,
+/// and that field is angular **momentum** - see
+/// [`crate::forces::Accumulators::local_angular`]. So the argument is `I * omega`
+/// in the body frame and the result is a torque, which is what makes the whole
+/// term dimensionally consistent with the drives it shares an accumulator with.
+///
+/// The version of this function that took the angular *velocity* was not a
+/// rounding difference: it is what let the old "drive and damping land in one
+/// accumulator, so the inertia cancels" argument look sound. Under `-c * L` the
+/// inertia does **not** cancel out of the equilibrium, and that surviving factor
+/// is the `22x` the yaw axis was missing for two passes.
+///
+/// On a constant diagonal tensor the two forms happen to give the same *angular
+/// acceleration* - `I^-1 * (-c * I * omega)` is `-c * omega` - so the observable
+/// damping rate is unchanged by reading it correctly. What changes is that the
+/// drives sharing this accumulator are now divided by `I` and the damping is not,
+/// which is the arrangement the original has.
 #[must_use]
-pub fn angular_damping(handling: &Handling, local_angular_velocity: Vec3) -> Vec3 {
+pub fn angular_damping(handling: &Handling, local_angular_momentum: Vec3) -> Vec3 {
     let coefficients = Vec3::new(-handling.pitch.pitch_damping, YAW_DAMPING, ROLL_DAMPING);
 
-    coefficients * local_angular_velocity
+    coefficients * local_angular_momentum
 }
 
 /// Vertical damping, as a world-space force.

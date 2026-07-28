@@ -166,59 +166,48 @@ pub fn spawn_height(handling: &Handling) -> f32 {
     }
 }
 
-/// The ship's rotational inertia, as a body-space diagonal, from `<Misc>`.
+/// The ship's rotational inertia, as a body-space diagonal.
 ///
-/// A solid rectangular box of mass `m` and extents `(w, h, l)` about its centre:
-/// `I = m * (b^2 + c^2) / 12` per axis, over the two extents perpendicular to it.
-/// Body axes are `x` right, `y` up, `z` forward, and `<Misc width/height/length>` maps
-/// onto them in that order.
+/// `(15.6, 21.6, 15.6)` on `(right, up, forward)`, the same tensor for every craft
+/// in the game. It is [`oag_physics::forces::ship_inertia`] and this function is
+/// here only so the spawn path keeps one name for "the inertia a craft is built
+/// with"; the derivation, the instruction listing and the captures that confirm it
+/// live on that constant.
 ///
-/// # Why this is a correction and not an invented constant
+/// # It used to be derived from `<Misc>`, and that was wrong
 ///
-/// [`oag_physics::Body::inertia`] defaults to `(1, 1, 1)`, and that default is an
-/// admitted placeholder rather than anything read out of the game - `oag_physics`
-/// documents it as the value that makes a zeroed parameter set safe to integrate. Two
-/// things make replacing it a correction:
+/// The previous version of this function built a textbook box tensor from the
+/// ship's hull dimensions - `I = m * (b^2 + c^2) / 12` over
+/// `<Misc width/height/length>` at `<Physical mass>` - and said so honestly: "what
+/// is **not** claimed is that the original computes it this way: how it builds a
+/// tensor, or whether it uses one at all, was not recovered". It has since been
+/// recovered, and it is not this:
 ///
-/// - **It reaches exactly one force path.** `oag_physics::forces::drain` multiplies the
-///   angular accumulators by the inertia and `oag_physics::integrate` divides the torque
-///   by it again, so every accumulator term - the surface alignment, angular damping,
-///   steering, pitch, the weathervane, bank-to-yaw - is inertia-independent by
-///   construction; those terms are angular *accelerations* and the round trip is how
-///   they are routed onto a torque-based body. What is left is the hover probes'
-///   `add_force_at_point`, which is a genuine force at a genuine lever arm and whose
-///   `r x F` genuinely must be divided by a real moment of inertia. Verified rather than
-///   argued: the same state stepped with `(1,1,1)`, `(100,100,100)` and this tensor
-///   gives a bit-identical angular velocity when no probe is in contact.
-/// - **`(1, 1, 1)` is not neutral, it is a specific wrong answer.** The probes sit half
-///   a hull length apart, 6.5 units on the observed data, and the spring's gradient is
-///   about 34 per unit, so one probe alone is a rotational stiffness near `6.5^2 * 34`.
-///   Divided by a unit inertia that is a 38 rad/s oscillator, and at the specified 1/180
-///   sub-step explicit Euler grows it about 5 % per tick. Measured at rest with no input,
-///   roll grew from 0.026 to 0.570 rad over 51 ticks - a factor of 22 against a predicted
-///   12 - and the ship inverted and fell through the floor by tick 250. With this tensor
-///   the same run holds level.
+/// - `Body_SetBoxInertia` (`0x0884e1ac`) is called from the ship-entity
+///   constructor with the **code-literal** box `(12, 8, 12)` at a mass of `0.9`
+///   set two calls earlier, at a single call site. So the tensor is a constant of
+///   the game, not a property of the craft.
+/// - `<Misc>`'s dimensions do reach that same constructor - scaled by `0.75` - but
+///   they go to the **collider**, not to the inertia.
+/// - The old derivation is also `4.4x` out on roll for the observed hull
+///   (`3.5` against `15.6`), which is the axis the surface-alignment torque acts
+///   on, so this is not a cosmetic difference.
 ///
-/// The formula is textbook and its inputs are read off the disc, so nothing here is
-/// fitted. What is **not** claimed is that the original computes it this way: how it
-/// builds a tensor, or whether it uses one at all, was not recovered, and
-/// `<Misc weight_distribution>` is a fore/aft mass bias this ignores. A trace settles
-/// it; until then a physically sane tensor beats a placeholder that reads as a physics
-/// bug.
+/// The argument the old comment made for replacing `(1, 1, 1)` still holds and is
+/// worth keeping, because it is the reason a wrong tensor is worse than a loud
+/// failure: the probes sit half a hull length apart and the spring's gradient is
+/// about 34 per unit, so one probe alone is a rotational stiffness near
+/// `6.5^2 * 34`; divided by a unit inertia that is a 38 rad/s oscillator, and at
+/// the specified `1/180` sub-step explicit Euler grows it about 5 % per tick.
+/// Measured at rest with no input, roll grew from 0.026 to 0.570 rad over 51 ticks
+/// and the ship inverted and fell through the floor by tick 250.
+///
+/// `<Misc weight_distribution>` is a fore/aft mass bias that nothing here models,
+/// and on this reading nothing should: the original's tensor does not vary per
+/// craft at all.
 #[must_use]
-pub fn box_inertia(handling: &Handling) -> Vec3 {
-    let mass = handling.physical.mass;
-    let (w, h, l) = (
-        handling.dimensions.width,
-        handling.dimensions.height,
-        handling.dimensions.length,
-    );
-
-    Vec3::new(
-        mass * (h * h + l * l) / 12.0,
-        mass * (w * w + l * l) / 12.0,
-        mass * (w * w + h * h) / 12.0,
-    )
+pub fn box_inertia() -> Vec3 {
+    oag_physics::forces::ship_inertia()
 }
 
 #[cfg(test)]

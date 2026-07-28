@@ -28,7 +28,7 @@ use oag_core::math::Vec3;
 /// column located in it - so a capture that grows a column stays readable.
 /// [`Trace::columns`] is what [`Trace::to_csv`] writes, which is this list
 /// filtered down to the columns the trace in hand actually carries.
-pub const COLUMNS: [&str; 30] = [
+pub const COLUMNS: [&str; 33] = [
     "tick",
     "dt",
     "grounded",
@@ -59,6 +59,9 @@ pub const COLUMNS: [&str; 30] = [
     "avel_x",
     "avel_y",
     "avel_z",
+    "omega_x",
+    "omega_y",
+    "omega_z",
 ];
 
 /// The columns every trace must carry, which is what the capture wrote before
@@ -100,11 +103,25 @@ pub const REQUIRED_COLUMNS: [&str; 25] = [
 ];
 
 /// The columns a trace may carry and an older one does not.
-pub const OPTIONAL_COLUMNS: [&str; 5] = ["stun_timer", "timer_2e0", "avel_x", "avel_y", "avel_z"];
+pub const OPTIONAL_COLUMNS: [&str; 8] = [
+    "stun_timer",
+    "timer_2e0",
+    "avel_x",
+    "avel_y",
+    "avel_z",
+    "omega_x",
+    "omega_y",
+    "omega_z",
+];
 
-/// The three columns of the angular velocity, which are all present or all
-/// absent: two thirds of a vector is a broken capture, not an old one.
+/// The three columns of the angular **momentum** at `body+0x160`, which are all
+/// present or all absent: two thirds of a vector is a broken capture, not an old
+/// one.
 pub const ANGULAR_COLUMNS: [&str; 3] = ["avel_x", "avel_y", "avel_z"];
+
+/// The three columns of the angular **velocity** at `body+0x150`, all present or
+/// all absent for the same reason as [`ANGULAR_COLUMNS`].
+pub const ANGULAR_RATE_COLUMNS: [&str; 3] = ["omega_x", "omega_y", "omega_z"];
 
 /// One tick of ship state, as the original held it.
 ///
@@ -157,24 +174,47 @@ pub struct Frame {
     pub velocity: Vec3,
     /// The body's own speed field, which is the velocity's length.
     pub speed: f32,
-    /// Angular velocity at `body+0x160`, **raw, in the original's own sign and
-    /// frame**, or `None` for a capture taken before the column existed.
+    /// Angular **momentum** at `body+0x160`, **raw, in the original's own sign
+    /// and frame**, or `None` for a capture taken before the column existed.
+    ///
+    /// The field keeps its name, which is now a misnomer, because it is the
+    /// column every capture in `data/traces/` since the angular pass carries and
+    /// every number quoted against it is quoted under this name. What it holds is
+    /// `I * omega` in body coordinates, negated: `Body_Integrate` integrates
+    /// torque into it with no inertia and no mass divide (confidence 88), and two
+    /// captures with a held pitch input measure `body+0x160 = I * body+0x150`
+    /// directly at `100.0 %` explained on the pitch axis. See
+    /// [`Frame::angular_rate`], which is the plain rotation rate and the one to
+    /// compare against.
     ///
     /// The offset rests on two legs, one per binary: PSP `Body_ClearVelocity`
     /// (`0x0884da5c`) zeroes `body+0x140` and `body+0x160` and nothing else, and
     /// `+0x140` is the linear velocity this capture already verifies against the
     /// position delta; PS2 `Ship_ApplyAngularDamping` (`0x0015c1b0`) reads
-    /// `body+0x160` as the angular velocity it damps.
+    /// `body+0x160` as the quantity it damps.
     ///
-    /// **Its sign and its frame are open**, and nothing here resolves them - see
-    /// [`AngularReading`], and [`Summary::angular_readings`] for the check that
-    /// settles it out of a capture's own basis rows.
+    /// Its sign and frame are **negated body-local**, settled by fit rather than
+    /// by assumption - see [`AngularReading`] and [`Summary::angular_readings`].
     ///
     /// `None` means "this capture did not measure it", which is not
     /// `Some(Vec3::ZERO)`: the second is a claim that the ship was not rotating.
     /// Everything downstream treats the absence as *not compared* rather than as
     /// agreement.
     pub angular_velocity: Option<Vec3>,
+    /// Angular **velocity** at `body+0x150`, raw, or `None` for a capture taken
+    /// before the column existed.
+    ///
+    /// This is the rotation rate by definition - `Body_Integrate` advances the
+    /// basis by `+0x150` - so it is the only angular quantity in a capture that
+    /// is directly comparable with `oag_physics::Body::angular_velocity`, with no
+    /// inertia and no fitted scale in between. Measured against the rotation the
+    /// recorded basis performs it fits at `-1.0011`, `-0.9999` and `-0.9993` on
+    /// the three body axes, so the reading is [`AngularReading::NegatedLocal`]
+    /// like the momentum column and the `w_game = -w_physics` negation lives
+    /// here rather than between the two stored columns.
+    ///
+    /// `None` is "not measured", exactly as above.
+    pub angular_rate: Option<Vec3>,
     /// The collision stun timer at `craft+0x290`, in seconds, or `None` for a
     /// capture taken before the column existed.
     ///
@@ -213,6 +253,7 @@ impl Default for Frame {
             velocity: Vec3::ZERO,
             speed: 0.0,
             angular_velocity: None,
+            angular_rate: None,
             stun_timer: None,
             timer_2e0: None,
         }
@@ -295,6 +336,9 @@ impl Frame {
             "avel_x" => self.angular_velocity?.x,
             "avel_y" => self.angular_velocity?.y,
             "avel_z" => self.angular_velocity?.z,
+            "omega_x" => self.angular_rate?.x,
+            "omega_y" => self.angular_rate?.y,
+            "omega_z" => self.angular_rate?.z,
             "stun_timer" => self.stun_timer?,
             "timer_2e0" => self.timer_2e0?,
             _ => return None,
@@ -307,6 +351,7 @@ impl Frame {
     pub fn has(&self, column: &str) -> bool {
         match column {
             "avel_x" | "avel_y" | "avel_z" => self.angular_velocity.is_some(),
+            "omega_x" | "omega_y" | "omega_z" => self.angular_rate.is_some(),
             "stun_timer" => self.stun_timer.is_some(),
             "timer_2e0" => self.timer_2e0.is_some(),
             other => REQUIRED_COLUMNS.contains(&other),
@@ -346,6 +391,9 @@ impl Frame {
             "avel_x" => self.angular_velocity.get_or_insert(Vec3::ZERO).x = value,
             "avel_y" => self.angular_velocity.get_or_insert(Vec3::ZERO).y = value,
             "avel_z" => self.angular_velocity.get_or_insert(Vec3::ZERO).z = value,
+            "omega_x" => self.angular_rate.get_or_insert(Vec3::ZERO).x = value,
+            "omega_y" => self.angular_rate.get_or_insert(Vec3::ZERO).y = value,
+            "omega_z" => self.angular_rate.get_or_insert(Vec3::ZERO).z = value,
             "stun_timer" => self.stun_timer = Some(value),
             "timer_2e0" => self.timer_2e0 = Some(value),
             _ => {}
@@ -430,10 +478,12 @@ impl Trace {
         // A vector arrives whole or not at all. A header with `avel_x` and no
         // `avel_y` is a truncated or edited file rather than an older capture,
         // and reading it as a rotation about one axis would be an invention.
-        if ANGULAR_COLUMNS.iter().any(|c| header.contains(c)) {
-            for wanted in ANGULAR_COLUMNS {
-                if !header.contains(&wanted) {
-                    return Err(Error::MissingColumn(wanted.to_owned()));
+        for group in [ANGULAR_COLUMNS, ANGULAR_RATE_COLUMNS] {
+            if group.iter().any(|c| header.contains(c)) {
+                for wanted in group {
+                    if !header.contains(&wanted) {
+                        return Err(Error::MissingColumn(wanted.to_owned()));
+                    }
                 }
             }
         }
@@ -890,9 +940,9 @@ mod tests {
 tick,dt,grounded,throttle,brake,steer,airbrake_l,airbrake_r,speed_cached,\
 stun_timer,timer_2e0,\
 right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,\
-pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,avel_x,avel_y,avel_z
-0,0.016683,1,100,0,0,0,0,21.98,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0
-1,0.016683,1,100,0,0,0,0,22,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0
+pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,avel_x,avel_y,avel_z,omega_x,omega_y,omega_z
+0,0.016683,1,100,0,0,0,0,21.98,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0
+1,0.016683,1,100,0,0,0,0,22,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0
 ";
 
     /// The same two ticks as a capture taken **before** the angular-velocity and
@@ -1057,10 +1107,15 @@ grounded,dt,tick
     #[test]
     fn the_new_columns_are_read_when_they_are_there() {
         let text = FIXTURE
-            .replacen(",22,22,0,0,0\n", ",22,22,0.25,-1.5,0.125\n", 1)
+            .replacen(
+                ",22,22,0,0,0,0,0,0\n",
+                ",22,22,0.25,-1.5,0.125,0.0625,-0.5,0.03125\n",
+                1,
+            )
             .replacen("21.98,0,0,", "21.98,0.5,0.75,", 1);
         let frame = Trace::parse(&text).unwrap().frames[0];
         assert_eq!(frame.angular_velocity, Some(Vec3::new(0.25, -1.5, 0.125)));
+        assert_eq!(frame.angular_rate, Some(Vec3::new(0.0625, -0.5, 0.031_25)));
         assert_eq!(frame.stun_timer, Some(0.5));
         assert_eq!(frame.timer_2e0, Some(0.75));
     }
@@ -1070,7 +1125,9 @@ grounded,dt,tick
     /// invention.
     #[test]
     fn a_partial_angular_velocity_is_an_error() {
-        let text = FIXTURE.replace(",avel_z", "").replace(",0,0,0\n", ",0,0\n");
+        let text = FIXTURE
+            .replace(",avel_z", "")
+            .replace(",0,0,0,0,0,0\n", ",0,0,0,0,0\n");
         assert_eq!(
             Trace::parse(&text),
             Err(Error::MissingColumn("avel_z".to_owned()))

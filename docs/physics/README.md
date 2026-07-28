@@ -288,12 +288,21 @@ step response on the running PSP game - roll the ship `0.25 rad` via the debugge
 the recovery - measured the *closed-loop* stiffness at about **20.2**, not 400, while the
 damping came out near the transcribed `2.0`. Both readings are correct at once because
 something divides the `400` torque by about **20** before it reaches the body as angular
-acceleration - most likely a roll moment of inertia this crate's accumulators currently
-bypass (`oag_physics::forces::drain` multiplies by the inertia tensor that
-`oag_physics::integrate` then divides back out, so the term never actually sees it). See
-`ALIGNMENT_GAIN`/`ALIGNMENT_INERTIA` in `crates/physics/src/hover.rs` for the measurement,
-the fit, and the honestly-unresolved mechanism: the crate now uses `400 / 19.8` and states
-plainly that the `19.8` is a stand-in for a real inertia term, not a settled reading.
+acceleration - most likely a roll moment of inertia this crate's accumulators bypassed
+(`oag_physics::forces::drain` multiplied by the inertia tensor that
+`oag_physics::integrate` then divided back out, so the term never actually saw it).
+
+**That guess was right, and the fitted `ALIGNMENT_INERTIA = 19.8` it stood on is now
+retired.** The accumulators hold torque, the round trip is gone, and the divisor is the
+recovered tensor's own entries - `15.6` on roll and `21.6` on yaw, the two axes the term
+acts on once its pitch component is projected out. The fit's `19.8` sits between them,
+which is what a term spread across two axes should look like and is a check the fit could
+not have arranged. On roll alone the recovered value is `400 / 15.6`, a natural frequency
+of `5.06` rad/s against the original's measured `4.49`: **13 % stiff, left standing rather
+than tuned away**, and pinned by
+`hover::tests::the_roll_oscillator_is_stable_by_the_margin_that_was_measured`. See
+`ALIGNMENT_GAIN` in `crates/physics/src/hover.rs` and
+[angular-velocity-column.md](angular-velocity-column.md).
 
 The remaining open question is not this stability arithmetic - it's the separate,
 still-unresolved torque-sign anomaly (`Body_AddForceAtPoint` computes `F x r`, not the

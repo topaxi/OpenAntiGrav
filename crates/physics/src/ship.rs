@@ -54,21 +54,37 @@ pub struct Body {
     pub mass: f32,
     /// Diagonal of the body-space inertia tensor.
     ///
-    /// # Why this is `Vec3::ONE` and not the recovered tensor
+    /// [`crate::forces::ship_inertia`], `(15.6, 21.6, 15.6)` on
+    /// `(right, up, forward)`, and that is also what [`Body::default`] carries.
     ///
-    /// The original's is now read - a solid box, `(15.6, 21.6, 15.6)`, see
-    /// [`crate::forces::YAW_INVERSE_INERTIA`] - and putting it here would be a
-    /// **no-op that looks like an implementation**: `forces::drain` multiplies
-    /// the angular accumulators by this and `integrate` divides by it, so it
-    /// cancels exactly. That cancellation is a consequence of this crate treating
-    /// the accumulators as angular *acceleration*, which the original does not -
-    /// it accumulates torque and damps angular *momentum*.
+    /// **The default is the ship's tensor rather than [`Vec3::ONE`] on purpose,
+    /// and the purpose is a footgun.** Every craft in the game shares this tensor,
+    /// because it is a code literal at a single call site rather than something
+    /// authored per ship, so there is no per-craft value for a spawn path to
+    /// compute - and a body written as
+    /// `Body { position, mass, ..Body::default() }` is overwhelmingly a craft.
+    /// Leaving the default at `1` would make that expression silently produce a
+    /// ship with `15.6x` the pitch authority and an unstable surface-alignment
+    /// oscillator, with nothing in the source to look at. A test that genuinely
+    /// wants a unit inertia says so.
     ///
-    /// Moving the crate onto the momentum model is what would make this field
-    /// mean something, and it is deliberately deferred: it changes pitch and roll
-    /// authority by about `15.6x` and there is no captured pitch or roll input to
-    /// validate that against. Until then the recovered yaw entry is applied at
-    /// the one place it is measured, and this stays the identity.
+    /// # It reaches every angular path, which it did not used to
+    ///
+    /// An earlier revision of this comment explained why setting this field was a
+    /// **no-op that looked like an implementation**: `forces::drain` multiplied
+    /// the angular accumulators by it and [`crate::integrate`] divided by it
+    /// again, so it cancelled exactly on every accumulator term and reached only
+    /// the hover probes' `add_force_at_point`. That was a consequence of the
+    /// crate treating the accumulators as angular *acceleration*, which the
+    /// original does not - it accumulates **torque** and damps angular
+    /// **momentum**.
+    ///
+    /// The crate is on the momentum model now, so the round trip is gone and this
+    /// field divides every angular term: the drives, the weathervane, the surface
+    /// alignment and the probes' lever arms. What it must *not* be applied to is
+    /// the angular damping, which reads `I * omega` and therefore leaves the
+    /// angular acceleration inertia-free by construction - see
+    /// [`crate::passive::angular_damping`].
     pub inertia: Vec3,
 }
 
@@ -82,7 +98,7 @@ impl Default for Body {
             force: Vec3::ZERO,
             torque: Vec3::ZERO,
             mass: 1.0,
-            inertia: Vec3::ONE,
+            inertia: crate::forces::ship_inertia(),
         }
     }
 }

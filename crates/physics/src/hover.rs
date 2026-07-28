@@ -385,48 +385,31 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// raise it.
 pub const ALIGNMENT_GAIN: f32 = 400.0;
 
-/// What the alignment torque is divided by before it becomes angular acceleration.
-///
-/// **This constant exists because two solid pieces of evidence disagree, and neither
-/// is wrong.** [`ALIGNMENT_GAIN`] is `400`, and that is now confirmed at instruction
-/// level in *both* binaries - the PS2 build materialises `0xC3C80000`, `-400.0f`, as an
-/// immediate in `Ship_HoverFourCorner` (`0x0015a940`) and `Ship_HoverTwoPoint`
-/// (`0x0015b978`), same magnitude, sign and operand order as the PSP reading. So the
-/// literal is not a transcription error and must stay `400`.
-///
-/// But the *behaviour* that literal produces in this crate is wrong, and that is also
-/// measured: a step response on the running PSP game (see [`ALIGNMENT_GAIN`]) puts the
-/// closed-loop roll stiffness at about **20.2**, not 400. A gain of 400 reaching the
-/// body as a bare angular acceleration gives `sqrt(400) = 20 rad/s`; the original
-/// answers at `4.49 rad/s`.
-///
-/// Both readings hold if roughly **twenty** divides the gain somewhere between the
-/// constant and the angular acceleration, and there is an obvious candidate: the
-/// alignment term is a **torque**, and a torque is divided by a moment of inertia.
-/// `400 / 20.2 = 19.8`, which is a plausible roll moment for a hull this size - and
-/// note it is close to this crate's own *pitch and yaw* box moments (15.1 and 16.2 for
-/// the observed hull) rather than its much smaller roll moment of 3.1, so the axis
-/// mapping is part of the open question rather than a detail.
-///
-/// **It is deliberately not folded into [`ALIGNMENT_GAIN`].** Doing that would replace
-/// a constant both binaries agree on with a number neither contains, and would hide the
-/// discrepancy instead of naming it. This is the discrepancy, named, with the measured
-/// value in it.
-///
-/// # What would retire this
-///
-/// `Body_AddForceAtPoint` and the craft's inertia and rotation-matrix path at
-/// `craft/body +0xc0..+0x160` are recorded as unread. If the original divides this
-/// torque by a real inertia tensor, this constant is that tensor's roll component and
-/// should be replaced by [`crate::ship::Body::inertia`] - which today it cannot be,
-/// because [`crate::forces::drain`] multiplies the angular accumulators by the inertia
-/// that [`crate::integrate`] then divides out, so the term never sees it. That round
-/// trip is the thing to change, and this constant disappears when somebody does.
-///
-/// Confidence **75**: the measurement is unambiguous and reproducible, but the value is
-/// a single fitted number from one ship on one track, and the mechanism behind it is a
-/// hypothesis rather than a reading.
-pub const ALIGNMENT_INERTIA: f32 = 19.8;
+// `ALIGNMENT_INERTIA`, a fitted `19.8`, used to divide the gain here.
+//
+// Its own documentation named the condition under which it should disappear: "if
+// the original divides this torque by a real inertia tensor, this constant is that
+// tensor's roll component and should be replaced by `Body::inertia` - which today
+// it cannot be, because `forces::drain` multiplies the angular accumulators by the
+// inertia that `integrate` divides out, so the term never sees it. That round trip
+// is the thing to change, and this constant disappears when somebody does."
+//
+// The round trip is gone - the accumulators hold torque now - so the constant is
+// gone with it, and the divisor is the recovered tensor. Two things worth keeping
+// from the arithmetic it recorded, because they are a check on the replacement
+// rather than a repetition of it:
+//
+// - The alignment torque has its pitch component projected out below, so what it
+//   acts on is roll and yaw: `I_zz = 15.6` and `I_yy = 21.6`. The fitted `19.8`
+//   sits **between** them, which is what a term spread across two axes should
+//   look like and is not something the fit could have known.
+// - On the roll axis alone the replacement is `400 / 15.6 = 25.6` against the
+//   measured closed-loop stiffness of `20.2`, i.e. a natural frequency of `5.06`
+//   rad/s against the original's measured `4.49`. **That is a 13 % discrepancy
+//   and it is left standing rather than tuned away**: a recovered tensor that is
+//   13 % out on one axis is worth more than a fitted scalar that is exact on it,
+//   and the residual is a real open question about how the two axes share the
+//   term. See `docs/physics/angular-velocity-column.md`.
 
 /// The bank-to-yaw coupling gain, grounded only.
 ///
@@ -501,7 +484,7 @@ pub struct Hover {
     pub downforce: Vec3,
     /// The grounded-only bank-to-yaw coupling, as a body-local angular
     /// acceleration.
-    pub local_angular_acceleration: Vec3,
+    pub local_angular_torque: Vec3,
     /// The penetration-escape position correction for the whole body.
     pub escape: Vec3,
 }
@@ -515,7 +498,7 @@ impl Hover {
             average_normal: Vec3::ZERO,
             alignment_torque: Vec3::ZERO,
             downforce: Vec3::ZERO,
-            local_angular_acceleration: Vec3::ZERO,
+            local_angular_torque: Vec3::ZERO,
             escape: Vec3::ZERO,
         }
     }
@@ -669,7 +652,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
     let average_normal = (normal_sum / (contacts as f32)).normalize_or_zero();
 
-    let mut alignment_torque = up.cross(average_normal) * (ALIGNMENT_GAIN / ALIGNMENT_INERTIA);
+    let mut alignment_torque = up.cross(average_normal) * ALIGNMENT_GAIN;
     // Project the right-axis component out, which is what removes pitch and
     // leaves roll and yaw. Written as a subtraction of the projection rather
     // than as a basis change, so there is one operation to check.
@@ -681,7 +664,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // Bank-to-yaw: a body-local yaw term proportional to how far the right axis
     // has tipped out of the world horizontal, and cancelled by a magstrip lock
     // like the rest of the suspension.
-    let local_angular_acceleration = Vec3::new(
+    let local_angular_torque = Vec3::new(
         0.0,
         BANK_TO_YAW_GAIN * right.y * (1.0 - state.mag_lock_blend),
         0.0,
@@ -705,7 +688,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         average_normal,
         alignment_torque,
         downforce,
-        local_angular_acceleration,
+        local_angular_torque,
         escape,
     }
 }
@@ -1077,7 +1060,7 @@ mod tests {
         assert_eq!(hover.contacts, 0);
         assert_eq!(hover.alignment_torque, Vec3::ZERO);
         assert_eq!(hover.downforce, Vec3::ZERO);
-        assert_eq!(hover.local_angular_acceleration, Vec3::ZERO);
+        assert_eq!(hover.local_angular_torque, Vec3::ZERO);
         assert_eq!(hover.escape, Vec3::ZERO);
     }
 
@@ -1141,22 +1124,39 @@ mod tests {
 
     /// The roll oscillator is stable, and the margin is pinned so it cannot drift back.
     ///
-    /// This test used to assert the opposite. With the transcribed gain of `400` the
-    /// oscillator ran at 20 rad/s and `det` came out at `1.0402`, growing roll about
-    /// 2 % a tick until the ship inverted; its failure message said to rewrite it if
-    /// the system ever became stable. The step response measured off the original
-    /// (see [`ALIGNMENT_GAIN`]) made that happen, so this is that rewrite.
+    /// This test has been rewritten twice, and both rewrites are the point of it.
+    /// With the transcribed gain of `400` reaching the body as a bare angular
+    /// acceleration the oscillator ran at 20 rad/s and `det` came out at `1.0402`,
+    /// growing roll about 2 % a tick until the ship inverted. A fitted
+    /// `ALIGNMENT_INERTIA = 19.8` then divided it, which made it stable and pinned
+    /// `4.49` rad/s - the frequency measured off a step response on the original.
+    ///
+    /// **The divisor is now the recovered inertia tensor** and the fitted constant
+    /// is gone: the angular accumulators hold torque, so
+    /// [`crate::integrate`] divides this term by
+    /// [`crate::forces::ship_inertia`]'s roll entry, `15.6`, from
+    /// `Body_SetBoxInertia`'s code-literal box. That is the mechanism the old
+    /// constant's own documentation named as the thing that would retire it.
+    ///
+    /// **The numbers below are the NEW measured behaviour and they are not the
+    /// original's `4.49` any more.** `400 / 15.6` runs the oscillator at about
+    /// `5.06` rad/s - 13 % fast. That discrepancy is deliberately pinned rather
+    /// than tuned out: it is what a recovered constant costs against a fitted one,
+    /// and the likeliest explanation is that the term is spread across roll
+    /// (`15.6`) and yaw (`21.6`) - the fit's `19.8` sits between them - which the
+    /// projection below makes possible and nothing has yet measured.
     ///
     /// The arithmetic is still the point, and it is **not** the `h <= c/k` form: the
     /// acceleration is computed once from the frame's starting state and held across
     /// all three sub-steps, so the governing step is the frame `H = 1/60`. See
     /// [`crate::integrate`].
     ///
-    /// Any change to [`ALIGNMENT_GAIN`], [`crate::passive::ROLL_DAMPING`] or
-    /// [`crate::ship::SUBSTEPS`] moves this number, which is the point of pinning it.
+    /// Any change to [`ALIGNMENT_GAIN`], [`crate::forces::ROLL_INVERSE_INERTIA`],
+    /// [`crate::passive::ROLL_DAMPING`] or [`crate::ship::SUBSTEPS`] moves these
+    /// numbers, which is the point of pinning them.
     #[test]
     fn the_roll_oscillator_is_stable_by_the_margin_that_was_measured() {
-        let k = ALIGNMENT_GAIN / ALIGNMENT_INERTIA;
+        let k = ALIGNMENT_GAIN * crate::forces::ROLL_INVERSE_INERTIA;
         let c = -crate::passive::ROLL_DAMPING;
         let h = 1.0f32 / 60.0;
 
@@ -1169,16 +1169,23 @@ mod tests {
              tumble within a few hundred ticks. See ALIGNMENT_GAIN for the measurement."
         );
         assert!(
-            (per_tick - 0.98509).abs() < 1e-3,
-            "roll now decays {per_tick} per tick, not the 0.98509 the measured gain gives"
+            (per_tick - 0.98553).abs() < 1e-3,
+            "roll now decays {per_tick} per tick, not the 0.98553 the recovered \
+             tensor gives"
         );
 
-        // The measured natural frequency, which is what the step response pinned:
-        // a quarter period of 21 frames at 60 Hz.
+        // The frequency the recovered tensor produces, against the original's own
+        // measured 4.49 rad/s. Pinned as what this crate does, with the gap stated.
         let omega = k.sqrt();
         assert!(
-            (omega - 4.49).abs() < 0.05,
-            "the oscillator runs at {omega} rad/s, not the measured 4.49"
+            (omega - 5.06).abs() < 0.05,
+            "the oscillator runs at {omega} rad/s, not the 5.06 that 400/15.6 gives"
+        );
+        assert!(
+            omega > 4.49,
+            "the recovered tensor is stiffer than the original's measured 4.49 \
+             rad/s, not softer; if this ever flips, the 13 % gap has changed sign \
+             and the explanation in this test's docs is wrong"
         );
 
         // And the stability condition in the form the documentation quotes.

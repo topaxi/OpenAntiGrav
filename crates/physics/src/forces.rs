@@ -177,51 +177,38 @@ pub const INERTIA_MASS: f32 = 0.9;
 /// angular *velocity*. It reads the momentum, and that is exactly why the
 /// inertia survives.
 ///
-/// # What this does **not** yet fix
+/// # The whole crate is on the momentum model now, so this is no longer a
+/// special case
 ///
-/// Two things, and they share a root cause: this constant is applied at the one
-/// place the captures measure, and the full reading says the inertia belongs
-/// everywhere the angular accumulators are drained.
+/// An earlier revision of this section listed two things the constant did *not*
+/// fix - the world-angular terms bypassing it, and pitch and roll being about
+/// `15.6x` too strong - and deferred both, because half-applying the momentum
+/// model is the failure mode [`crate::integrate`]'s docs warn about and because
+/// **no capture of a pitch or roll input existed** to validate the move against.
 ///
-/// ## The world-angular terms bypass it
+/// Both blockers are gone. `verification/scenarios/pitch-both-ways.inputs` and
+/// `pitch-hold-thrust.inputs` are captures of a held pitch input, and they put
+/// the pitch entry of the tensor at `-15.620` against this reading's `-15.6` -
+/// `0.13 %`, on a capture that is `speed/|velocity| == 1.0000` on every tick.
+/// The same captures record `body+0x150` alongside `body+0x160` and measure
+/// `body+0x160 = I * body+0x150` directly, at `100.0 %` explained on the pitch
+/// axis. See
+/// [angular-velocity-column.md](../../../docs/physics/angular-velocity-column.md).
 ///
-/// [`evaluate`] scales `acc.local_angular.y` and nothing else, but the
-/// weathervane torque and hover's surface-alignment torque land in
-/// `acc.world_angular`, which [`drain`] folds into the body-local axis
-/// *afterwards*. By the same reading those are torques too - `craft+0x350` goes
-/// to `body+0x130` and integrates into `L` through `basis^T * worldTorque` at
-/// `0x0884e35c`, exactly like the local drives - so their contribution to the
-/// yaw rate carries `I^-1` in the original and does not here. **The crate's
-/// weathervane yaw authority is therefore about `21.6x` too strong relative to
-/// its steering.**
+/// So [`Accumulators`] holds **torque** on both angular axes,
+/// [`crate::ship::Body::inertia`] carries [`ship_inertia`], and
+/// [`crate::integrate`] divides by it - which means every angular path now
+/// carries `I^-1`, including the two that used to bypass it. This constant is
+/// still here, still exact, and no longer *applied* anywhere: it is the yaw
+/// entry of the tensor [`ship_inertia`] builds, and the two must agree.
 ///
-/// It is worth being clear that this is *pre-existing and was invisible*: while
-/// the constant was fitted, the fit absorbed it. Recovering the constant is what
-/// turns it into a named discrepancy. Neither test that guards this axis can see
-/// it - `yaw_authority_ground_truth`'s `advance_yaw` is an isolated two-line ODE
-/// with steering and damping only, and
-/// `full_lock_out_yaws_the_bank_on_a_steeply_cambered_track` pins a *ratio*
-/// between two body-local terms, which the scale leaves invariant.
-///
-/// ## Pitch and roll
-///
-/// The equivalence above is specific to the yaw axis, because that is the only
-/// axis this crate scales. On pitch and roll the same reading predicts
-/// `omega = drive / (damping * I)` where this crate computes `omega = drive /
-/// damping` - so **the crate applies about `15.6x` more pitch and roll authority
-/// than the original**, from `I_xx = I_zz = 15.6`.
-///
-/// Neither is applied here, and the reason is the same for both: landing them
-/// means moving the whole crate onto the momentum model - accumulators as
-/// torque, damping on `L`, [`crate::ship::Body::inertia`] carrying the real
-/// tensor - and half-applying that is the same failure mode
-/// `crate::integrate`'s docs warn about for the handedness flip. Scaling the
-/// world-angular yaw *alone* would be exactly such a half-application.
-///
-/// There is also **no capture of a pitch or roll input** to validate the move
-/// against; the yaw axis has two, and the weathervane's contribution sits inside
-/// their RMS band. A held-pitch capture on the reference scenario is what would
-/// settle it, and it is the obvious next task.
+/// **The yaw axis's observable behaviour is unchanged by that move, and that is
+/// a check rather than a hope.** Scaling the summed yaw drive by `c` and leaving
+/// the damping as an angular acceleration gives `domega/dt = c*drive - 5*omega`;
+/// accumulating torque and damping momentum gives
+/// `dL/dt = drive - 5*L` with `omega = c*L`, and differentiating the second into
+/// the first is the same equation. A yaw regression after this change is a bug in
+/// the change, not physics.
 ///
 /// # Confidence
 ///
@@ -239,6 +226,54 @@ pub const INERTIA_MASS: f32 = 0.9;
 /// not about the shape.
 pub const YAW_INVERSE_INERTIA: f32 =
     12.0 / (INERTIA_MASS * (INERTIA_BOX_X * INERTIA_BOX_X + INERTIA_BOX_Z * INERTIA_BOX_Z));
+
+/// The pitch entry of the ship's body-space inverse inertia tensor, `1 / I_xx`.
+///
+/// The same `Body_SetBoxInertia` computation as [`YAW_INVERSE_INERTIA`], on the
+/// two extents perpendicular to the body's right axis: `12 / (m * (y^2 + z^2))`,
+/// which is `1 / 15.6`. Written in the binary's own form rather than as a
+/// reciprocal so all three entries are the one expression the instructions
+/// perform.
+///
+/// **Measured, not only read.** Two captures of a held pitch input
+/// (`verification/scenarios/pitch-both-ways.inputs` and `pitch-hold-thrust.inputs`)
+/// fit the recorded `body+0x160` column against the rotation the recorded basis
+/// performs at `-15.620` on this axis, `0.13 %` from the `-15.6` the literals
+/// give, with `94 %` of the column explained on a signal that is the dominant
+/// axis of those captures. Everything before them left this entry at `29 %`
+/// explained and scattering from `-14` to `-24`, which is why the crate's own
+/// docs used to warn against reading a tensor into the per-axis fits.
+pub const PITCH_INVERSE_INERTIA: f32 =
+    12.0 / (INERTIA_MASS * (INERTIA_BOX_Y * INERTIA_BOX_Y + INERTIA_BOX_Z * INERTIA_BOX_Z));
+
+/// The roll entry of the ship's body-space inverse inertia tensor, `1 / I_zz`.
+///
+/// `12 / (m * (x^2 + y^2))`. The box is square in plan (`x == z`), so this is
+/// numerically equal to [`PITCH_INVERSE_INERTIA`] - and it is written out rather
+/// than aliased, because the equality is a property of the *box* and would stop
+/// holding the moment anyone revisited the literals. The same captures put the
+/// measured roll entry at `-15.289`, `2 %` away.
+pub const ROLL_INVERSE_INERTIA: f32 =
+    12.0 / (INERTIA_MASS * (INERTIA_BOX_X * INERTIA_BOX_X + INERTIA_BOX_Y * INERTIA_BOX_Y));
+
+/// The ship's body-space inertia tensor, as a diagonal on `(right, up, forward)`.
+///
+/// `(15.6, 21.6, 15.6)`, the reciprocals of the three constants above. This is
+/// what [`crate::ship::Body::inertia`] carries for a craft, and the same tensor
+/// for every craft in the game - the box is a code literal at a single call site,
+/// so `<Misc>`'s hull dimensions do not enter it. They reach the *collider*
+/// instead, scaled by `0.75` a few lines earlier in the same constructor.
+///
+/// A function rather than a constant only because `f32` division is not `const`;
+/// it is a pure expression over three constants and folds away.
+#[must_use]
+pub fn ship_inertia() -> Vec3 {
+    Vec3::new(
+        1.0 / PITCH_INVERSE_INERTIA,
+        1.0 / YAW_INVERSE_INERTIA,
+        1.0 / ROLL_INVERSE_INERTIA,
+    )
+}
 
 /// The world outside the ship, as the force law sees it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -287,20 +322,41 @@ pub struct Accumulators {
     /// World force. Brakes, the airbrake slide and lateral terms, gravity, drag,
     /// rolling resistance, the hover downforce and vertical damping.
     pub world_force: Vec3,
-    /// Body-local angular. Steering yaw, pitch, airbrake yaw, bank-to-yaw and
+    /// Body-local **torque**. Steering yaw, pitch, airbrake yaw, bank-to-yaw and
     /// angular damping.
     ///
-    /// **Whether the angular accumulators hold torque or angular acceleration is not
-    /// determined.** Nothing in any term visibly divides by an inertia,
-    /// `docs/physics/README.md` calls this `angAccelLocal`, and the angular damping
-    /// term's shape - a coefficient times angular velocity - is dimensionally an
-    /// acceleration. So this crate treats both angular accumulators as **angular
-    /// acceleration**, which is a pick awaiting M3. One consequence is worth
-    /// knowing: under that reading the inertia tensor has no effect on any of these
-    /// terms at all, because the drain multiplies by exactly what the integrator
-    /// then divides by.
+    /// **Torque, and that is settled rather than picked.** An earlier revision of
+    /// this crate treated both angular accumulators as angular *acceleration* and
+    /// said so - "a pick awaiting M3" - on the grounds that nothing in any term
+    /// visibly divides by an inertia, that `docs/physics/README.md` calls this
+    /// `angAccelLocal`, and that the damping term's shape is dimensionally an
+    /// acceleration. `Body_Integrate` settles it the other way at confidence 88:
+    /// `craft+0x340` reaches `body+0x120` and integrates into `body+0x160` with
+    /// **no inertia and no mass divide**, four instructions after the linear half
+    /// does scale by `invMass`. That asymmetry is the tell, `body+0x160` is
+    /// angular momentum, and `dL/dt = torque`.
+    ///
+    /// Two consequences worth having in one place, because they are what changes
+    /// when this reading is applied rather than merely recorded:
+    ///
+    /// - The damping term is `(-pitch_damping, -5, -2) * L`, not `* omega` -
+    ///   `Ship_ApplyAngularDamping` loads `body+0x160`. So
+    ///   [`crate::passive::angular_damping`] takes the body-local **momentum**,
+    ///   and the "drive and damping share one accumulator so the inertia
+    ///   cancels" argument is retired: it cancels only if the damping reads
+    ///   `omega`, and it does not.
+    /// - The inertia tensor now reaches every term here, where under the
+    ///   acceleration reading it reached none of them (the drain multiplied by
+    ///   exactly what the integrator divided by).
     pub local_angular: Vec3,
-    /// World angular. The surface-alignment torque and the weathervane torque.
+    /// World-space **torque**. The surface-alignment torque and the weathervane
+    /// torque.
+    ///
+    /// Torque for the same reason [`Accumulators::local_angular`] is: `craft+0x350`
+    /// reaches `body+0x130` and integrates into `body+0x160` through
+    /// `basis^T * worldTorque` at `0x0884e35c`, the same path the local drives
+    /// take with one extra change of basis. [`drain`] folds it into the body frame
+    /// and hands the sum to the body as one torque.
     pub world_angular: Vec3,
 }
 
@@ -449,7 +505,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         }
     }
     acc.world_force += hover.downforce;
-    acc.local_angular += hover.local_angular_acceleration;
+    acc.local_angular += hover.local_angular_torque;
     acc.world_angular += hover.alignment_torque;
 
     // From here on, this frame's contacts.
@@ -485,19 +541,16 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     //     deliberately not ported; step 15 is the track-section force, which is not
     //     implemented.
     let weathervane = passive::weathervane(forward, velocity, contact);
+    // `Ship_ApplyAngularDamping` loads `body+0x160`, which is angular **momentum**,
+    // and multiplies it by `(-pitch_damping, -5, -2)`. So what the damping reads is
+    // `I * omega` in the body frame, not `omega` - and that difference is exactly
+    // why the inertia survives to the observable instead of cancelling against the
+    // drive. See `Accumulators::local_angular`.
     let local_angular_velocity = state.body.orientation.inverse() * state.body.angular_velocity;
-    let angular_damping = passive::angular_damping(handling, local_angular_velocity);
+    let local_angular_momentum = local_angular_velocity * state.body.inertia;
+    let angular_damping = passive::angular_damping(handling, local_angular_momentum);
     let rolling_resistance = passive::rolling_resistance(velocity, cached_speed);
     let vertical_damping = passive::vertical_damping(up, velocity, contact_grounded);
-
-    // Every body-local yaw *drive* has landed by now - the airbrake's at step 3,
-    // steering at step 4, bank-to-yaw at step 8 - and the damping has not. That
-    // ordering is what makes this the right place: the original damps angular
-    // *momentum*, and `domega/dt = c * drive - 5 * omega` is the exact
-    // rearrangement of that onto an acceleration accumulator. The damping must
-    // stay outside the scale for the equivalence to hold. See
-    // `YAW_INVERSE_INERTIA`.
-    acc.local_angular.y *= YAW_INVERSE_INERTIA;
 
     acc.world_angular += weathervane;
     acc.local_angular += angular_damping;
@@ -536,10 +589,17 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 ///
 /// The two force accumulators hold **forces**: gravity carries `mass` explicitly and
 /// no other term does, exactly as in the original, so nothing here multiplies by
-/// mass. The two angular accumulators are treated as angular **accelerations**, so
-/// they are combined in the body frame and multiplied by the inertia tensor once -
-/// see [`Accumulators::local_angular`] for why that reading was chosen and what it
-/// costs.
+/// mass. The two angular accumulators hold **torque** - see
+/// [`Accumulators::local_angular`] - so nothing here multiplies by the inertia
+/// either. The world one is rotated into the body, summed with the local one, and
+/// the total is handed back out as a world-space torque, which is
+/// [`crate::integrate`]'s input.
+///
+/// **The inertia used to be applied here and divided out again by the
+/// integrator.** That round trip is what made [`crate::ship::Body::inertia`] a
+/// no-op for every accumulator term, and removing it is what makes the tensor
+/// mean something on every angular path at once rather than on the one axis a
+/// constant was applied to.
 fn drain(state: &mut ShipState, acc: &Accumulators) {
     let orientation = state.body.orientation;
 
@@ -548,9 +608,7 @@ fn drain(state: &mut ShipState, acc: &Accumulators) {
 
     let mut local_angular = acc.local_angular;
     local_angular += orientation.inverse() * acc.world_angular;
-    state
-        .body
-        .add_torque(orientation * (local_angular * state.body.inertia));
+    state.body.add_torque(orientation * local_angular);
 }
 
 #[cfg(test)]

@@ -195,10 +195,35 @@ pub fn initial_state(
     state.body.position = frame.position;
     state.body.linear_velocity = frame.velocity;
     state.body.orientation = orientation_of(frame, basis);
-    if let Some(recorded) = frame.angular_velocity {
+    // Seed the rotation from whichever angular column the capture has, and take
+    // the *rate* one first: `body+0x150` is the angular velocity by definition,
+    // while `body+0x160` is `I * omega` and seeding a body's angular velocity
+    // from it directly - which this did until the tensor was recovered - starts
+    // the run spinning between 15.6 and 21.6 times too fast on every axis.
+    if let Some(recorded) = frame.angular_rate {
         state.body.angular_velocity = angular.to_world(recorded, frame.rows());
+    } else if let Some(recorded) = frame.angular_velocity {
+        let local_momentum =
+            state.body.orientation.inverse() * angular.to_world(recorded, frame.rows());
+        let inertia = state.body.inertia;
+        let local_rate = Vec3::new(
+            divide_or_zero(local_momentum.x, inertia.x),
+            divide_or_zero(local_momentum.y, inertia.y),
+            divide_or_zero(local_momentum.z, inertia.z),
+        );
+        state.body.angular_velocity = state.body.orientation * local_rate;
     }
     state
+}
+
+/// Component-wise division that treats a zero denominator as a zero result,
+/// matching `oag_physics::integrate`'s own handling of a degenerate tensor.
+fn divide_or_zero(numerator: f32, denominator: f32) -> f32 {
+    if denominator > 0.0 {
+        numerator / denominator
+    } else {
+        0.0
+    }
 }
 
 /// The orientation a recorded basis describes.
@@ -439,8 +464,20 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
     let (row0, up, forward) = options
         .basis
         .to_rows(body.right(), body.up(), body.forward());
+    // Two angular columns, and they are not the same quantity. `body+0x150` is
+    // the rotation rate, so it takes the body's angular velocity unchanged;
+    // `body+0x160` is the angular **momentum**, so what goes there is `I * omega`
+    // expressed in the body frame - built here as a world vector whose projection
+    // onto the (orthonormal) recorded rows is exactly that, because that is what
+    // `AngularReading::to_recorded` then takes.
+    let local_momentum = (body.orientation.inverse() * body.angular_velocity) * body.inertia;
     Frame {
         angular_velocity: Some(
+            options
+                .angular
+                .to_recorded(body.orientation * local_momentum, (row0, up, forward)),
+        ),
+        angular_rate: Some(
             options
                 .angular
                 .to_recorded(body.angular_velocity, (row0, up, forward)),
@@ -947,13 +984,30 @@ mod tests {
 
     /// And the seeding is not decorative: a ship handed the recorded turn rate
     /// must actually be turning, or the column would be read and then ignored.
+    ///
+    /// **Both angular columns seed, and they are not the same quantity.**
+    /// `omega_*` (`body+0x150`) is the rate and seeds it directly; `avel_*`
+    /// (`body+0x160`) is `I * omega` and has to be divided by the tensor on the
+    /// way in. This test drives both and asserts they agree when handed the same
+    /// physical rotation - the version of it that seeded a body's angular
+    /// velocity straight from the momentum column started every run spinning
+    /// `21.6x` too fast about the up axis, and passed, because it only asked
+    /// whether the nose had moved.
     #[test]
     fn a_seeded_rotation_actually_turns_the_ship() {
-        let mut turning = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
-        for frame in &mut turning.frames {
-            frame.angular_velocity = Some(Vec3::new(0.0, RECORDED_YAW_RATE, 0.0));
+        let rate = Vec3::new(0.0, RECORDED_YAW_RATE, 0.0);
+        let momentum = rate * oag_physics::forces::ship_inertia();
+
+        let mut by_rate = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        for frame in &mut by_rate.frames {
+            frame.angular_rate = Some(rate);
+        }
+        let mut by_momentum = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        for frame in &mut by_momentum.frames {
+            frame.angular_velocity = Some(momentum);
         }
         let still = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+
         let run = |recorded| {
             replay(
                 recorded,
@@ -963,20 +1017,28 @@ mod tests {
                 &Options::default(),
             )
         };
-        let (turned, stayed) = (run(&turning), run(&still));
+        let (turned, from_momentum, stayed) = (run(&by_rate), run(&by_momentum), run(&still));
+
+        let sweep = |a: &crate::trace::Frame, b: &crate::trace::Frame| {
+            crate::compare::checks(a, b, &crate::compare::Tolerances::default())
+                .iter()
+                .flatten()
+                .find(|check| check.field == Field::Forward)
+                .expect("the forward axis is always compared")
+                .error
+        };
+
         // A tick of 1.51 rad/s is about 0.025 rad, so tick 1's noses are that far
         // apart; the ship left at rest has not moved its at all.
-        let swept = crate::compare::checks(
-            &turned.frames[1],
-            &stayed.frames[1],
-            &crate::compare::Tolerances::default(),
+        assert!(
+            sweep(&turned.frames[1], &stayed.frames[1]) > 0.01,
+            "the rate column did not turn the ship"
         );
-        let forward = swept
-            .iter()
-            .flatten()
-            .find(|check| check.field == Field::Forward)
-            .expect("the forward axis is always compared");
-        assert!(forward.error > 0.01, "{}", forward.error);
+        // And the momentum column, divided by the tensor, is the same rotation.
+        assert!(
+            sweep(&turned.frames[1], &from_momentum.frames[1]) < 1e-5,
+            "the two columns disagree about the same physical rotation"
+        );
     }
 
     /// The simulated side always carries the timers it models and never the one

@@ -500,7 +500,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
     let pose = Pose::from_sample(&start, start.racing_line, spawn_height(&handling));
     let mut ship = Ship::default();
     ship.physics.body.mass = handling.physical.mass;
-    ship.physics.body.inertia = box_inertia(&handling);
+    ship.physics.body.inertia = box_inertia();
     ship.place_at(pose);
 
     let options = DriveOptions {

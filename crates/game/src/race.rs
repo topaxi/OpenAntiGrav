@@ -23,14 +23,14 @@
 //!
 //! # Three things are not recovered, and none is papered over here
 //!
-//! - **There is no inertia tensor in the ship data**, and this module now builds one
-//!   from `<Misc>` rather than leaving [`oag_physics::Body::inertia`] at its `(1, 1, 1)`
-//!   default. That reverses an earlier decision here, which called a derived tensor "an
-//!   invented constant, worse than a visible oddity". Two measurements changed it, and
-//!   both are in [`box_inertia`]: the default is not a recovered value but an admitted
-//!   placeholder, and it is consumed by exactly one force path - the one where a real
-//!   moment of inertia is physically compulsory. A unit tensor there says the hull has
-//!   the rotational inertia of a point mass, and a 13-unit hull does not.
+//! - ~~**There is no inertia tensor in the ship data**~~, and there is not - but there
+//!   is one in the *code*, and it has been read. [`box_inertia`] is now
+//!   [`oag_physics::forces::ship_inertia`], the code-literal box `(12, 8, 12)` at a
+//!   mass of `0.9` that `Body_SetBoxInertia`'s single call site passes, giving
+//!   `(15.6, 21.6, 15.6)` for every craft in the game. The two earlier positions this
+//!   module held - "a derived tensor is an invented constant, worse than a visible
+//!   oddity", then "build one from `<Misc>`" - are both superseded by a reading, and
+//!   the `<Misc>` derivation was `4.4x` out on roll. See [`box_inertia`].
 //! - **The magnetic hold is not implemented**, so an inverted ship falls off. That
 //!   is expected and documented in `docs/physics/README.md`.
 //! - **The camera's `fov` unit is unrecovered.** It is read as degrees and
@@ -654,7 +654,7 @@ impl Race {
         ship.active = true;
         ship.handling = handling;
         ship.physics.body.mass = handling.physical.mass;
-        ship.physics.body.inertia = box_inertia(&handling);
+        ship.physics.body.inertia = box_inertia();
         if let Some(sample) = spline.start() {
             ship.place_at(Pose::from_sample(
                 sample,
@@ -1861,32 +1861,28 @@ mod tests {
         assert_eq!(spawn_height(&heavier), spawn_height(&handling));
     }
 
-    /// The tensor is the textbook box, and the long axis must be the cheapest to
-    /// rotate about - a 13-unit hull resists pitch and yaw far more than roll.
+    /// The tensor is the recovered box and does **not** depend on the ship.
+    ///
+    /// This test used to assert the opposite: that the tensor was built from
+    /// `<Misc width/height/length>` at `<Physical mass>`, with roll the cheapest
+    /// axis because the hull is long. Both halves are now refuted -
+    /// `Body_SetBoxInertia`'s single call site passes the code literal
+    /// `(12, 8, 12)` at a mass of `0.9`, the hull dimensions go to the collider
+    /// instead, and the box is square in plan so **pitch and roll are equal** and
+    /// yaw is the odd axis out. Kept as a test rather than deleted because "the
+    /// inertia varies per craft" is exactly the assumption that would come back.
     #[test]
-    fn the_inertia_tensor_is_a_box_built_from_the_hull() {
-        let handling = Handling {
-            physical: oag_physics::params::Physical {
-                mass: 2.0,
-                ..Default::default()
-            },
-            dimensions: oag_physics::params::Dimensions {
-                width: 5.0,
-                height: 3.5,
-                length: 13.0,
-                ..Default::default()
-            },
-            ..Handling::ZERO
-        };
+    fn the_inertia_tensor_is_the_recovered_box_and_is_the_same_for_every_ship() {
+        let inertia = box_inertia();
 
-        let inertia = box_inertia(&handling);
-        assert!((inertia.x - 2.0 * (3.5 * 3.5 + 169.0) / 12.0).abs() < 1e-4);
-        assert!((inertia.y - 2.0 * (25.0 + 169.0) / 12.0).abs() < 1e-4);
-        assert!((inertia.z - 2.0 * (25.0 + 12.25) / 12.0).abs() < 1e-4);
+        assert!((inertia.x - 15.6).abs() < 0.01, "pitch was {}", inertia.x);
+        assert!((inertia.y - 21.6).abs() < 0.01, "yaw was {}", inertia.y);
+        assert!((inertia.z - 15.6).abs() < 0.01, "roll was {}", inertia.z);
 
-        // Roll, about the long axis, is the cheapest rotation.
-        assert!(inertia.z < inertia.x && inertia.z < inertia.y);
-        // And nothing is the placeholder any more.
+        // Square in plan, so the two attitude axes cost the same and yaw is the
+        // hardest. A hull-derived tensor could not produce this.
+        assert_eq!(inertia.x, inertia.z);
+        assert!(inertia.y > inertia.x);
         assert_ne!(inertia, Vec3::ONE);
     }
 
@@ -1955,7 +1951,7 @@ mod tests {
             body: Body {
                 position: Vec3::new(0.0, start, 0.0),
                 mass: handling.physical.mass,
-                inertia: box_inertia(&handling),
+                inertia: box_inertia(),
                 ..Body::default()
             },
             grounded: 1.0,
