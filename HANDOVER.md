@@ -423,6 +423,40 @@ is the right tool and the next bisect should use one. And `just` being red
 on another agent's mid-refactor WIP is expected during concurrent passes -
 gate your own crates and say so, as both agents did.
 
+**`wall-re`, second task (Task #10, commit "clarify SAP packing behavior and
+clamp logic"): the SAP +/-1024 question is resolved, and the conf-75
+prediction is falsified along with its named alternative - there is no base,
+and the packing reading was right anyway. The mechanism is a CLAMP.**
+
+- `SapAxis_Update` (`0x08833cc8`, conf 92) packs the **raw world
+  coordinate** - `sub.s` a 1.0 skin, `trunc.w.s`, `addiu 0x400`, shift, id
+  at `<<12`, mask - no base anywhere; `Sap_Init` establishes no origin (the
+  only coordinate state is a recorded, never-subtracted running min/max).
+- `Sap_Insert` / `Sap_Update` / `Sap_QueryAabb` all run the **same eight
+  clamp instructions** first (`vmax.t`/`vmin.t` against two globals at
+  `0x08ab0c50`/`0x08ab0c60`): out-of-range geometry **saturates onto the
+  boundary instead of wrapping**, and because the query clamps identically
+  to the insert, the broadphase stays conservative - it over-reports and the
+  narrowphase filters. **The original never needed a track to fit the
+  window; it clips and accepts the lost selectivity** (conf 90). The
+  survey's measurements all stand.
+- **Crate consequence: the packing does not need reimplementing at all.**
+  It is an accelerator that never drops a genuinely overlapping pair, so
+  exact AABB overlap is a legal and strictly better substitute; the 1-unit
+  quantisation and 1024-id cap are properties of the original's index, not
+  of the format. The broadphase roadmap item is unblocked with no fidelity
+  question hanging over it.
+- Loose end at conf 45, recorded not guessed: **the two clamp globals are
+  all zero in shipped `.data` with no writer anywhere in the image**
+  (xrefs, operand scans over all 635,898 instructions, `.ctors` - all
+  checked). Taken literally the clamp is degenerate (everything collapses
+  onto one cell - functionally correct, conservative, but the broadphase
+  would return everything, which sits badly with the game's frame rate).
+  Nothing above depends on which way this resolves.
+- `collision.md`'s open question is now "Resolved: the broadphase clamps
+  world space rather than rebasing it"; three new names + two data labels
+  applied and saved; `apply-ghidra-names.py` 490/0.
+
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
 A new session spawned three concurrent background agents in this working tree,
