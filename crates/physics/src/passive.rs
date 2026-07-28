@@ -1,9 +1,32 @@
 //! The passive terms: drag, resistance, damping and gravity.
 //!
 //! Each is small, always on, and easy to overlook, and together they are what makes
-//! the ship handle at all: **there is no dedicated airbrake drag term and no
-//! speed-dependent steering**, so the drag, the weathervane torque and the angular
-//! damping in this module carry that load.
+//! the ship handle at all: there is **no speed-dependent steering**, so the drag,
+//! the weathervane torque and the angular damping in this module carry that load.
+//!
+//! # There *is* a dedicated airbrake drag term, and it is not implemented
+//!
+//! An earlier revision of this doc stated "there is no dedicated airbrake drag
+//! term". That is false. `Ship_UpdateAirbrakes` reads `Airbrake.drag` (class
+//! `+0xe8`, reached as `+0x54` through the `craft+0x70` pointer) at `0x0884cce8`
+//! in the PSP `BOOT.BIN` and forms, gated on `forwardSpeed > 0`:
+//!
+//! ```text
+//! |airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * forwardSpeed
+//! ```
+//!
+//! at `0x0884ccc8`-`0x0884cd08`. Confidence 85, read from the instruction stream.
+//! It belongs in [`crate::airbrake`] rather than here, and it is unimplemented:
+//! it is identically zero in both captured traces (both hold the airbrakes equal
+//! and the steering at zero), so nothing available today can verify it. A capture
+//! with *asymmetric* airbrake input is what would test it.
+//!
+//! Recorded here because this module is where someone would look for it, and
+//! because the term is **speed-proportional** - see
+//! `docs/physics/force-balance-ground-truth.md`, where a missing
+//! speed-proportional resistance is the open blocker. This is not that term (it
+//! is zero in the capture that shows the discrepancy), and conflating the two
+//! would waste the next investigation.
 //!
 //! From `docs/ghidra/functions/psp-pulse/engine.md`, "The passive terms" and the
 //! gravity paragraph. Confidence 74 to 80, decompilation only, nothing
