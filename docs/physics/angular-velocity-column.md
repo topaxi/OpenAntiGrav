@@ -375,6 +375,72 @@ already said. The consequence for
 validated on pitch, on these captures, and the axis to validate it on is the one
 where the identity is exact.
 
+## The crate is on this model now, and what that measured
+
+`oag-physics` used to route the angular accumulators as angular *accelerations*
+and apply the recovered yaw entry as a single scalar on the summed yaw drive -
+algebraically exact for that one axis, and nothing else. It now holds torque,
+damps momentum, and carries the tensor on
+[`oag_physics::Body::inertia`](../../crates/physics/src/ship.rs), so every angular
+path is divided by `I`: the drives, the weathervane, the surface alignment and
+the hover probes' lever arms. Three fitted or derived constants came out of the
+crate in the process - `ALIGNMENT_INERTIA = 19.8`, the `<Misc>`-derived inertia
+tensor, and the special-cased yaw scale.
+
+**Validated on the pitch captures rather than asserted.** Both were replayed
+through `oag-trace run --script` and compared axis by axis against the rotation
+the original's own basis performs, so neither side's column conventions enter:
+
+| stage | our pitch rate, rms | error rms | against a recorded `0.1358` |
+| --- | ---: | ---: | ---: |
+| before | `8.6821` | `8.6864` | 6397 % |
+| accumulators as torque, tensor applied | `0.0021` | `0.1369` | 100.8 % |
+| **and the pitch axis on its measured scale** | `0.2060` | `0.1823` | **134.2 %** |
+
+The middle row is the momentum model with the pitch *input* still 100x weak, and
+it is worth keeping: it is the crate reproducing none of the pitch response at
+all, which is what a coherent half-change looks like. The bottom row is with
+`engine::pitch` on the `+/-100` axis scale measured above.
+
+**The drive magnitude is right to 1 %, and what is wrong is the return.** Over
+the twelve ticks of the leading edge of each step - before the attitude starts
+coming back - the recorded rate is `0.991` and `0.986` times ours on the two
+captures, at an error rms of `14.9 %` and `14.2 %` of a signal of `0.32` rad/s.
+Over the whole hold that degrades to `134 %`, and the time series says why: the
+original's pitch rate **decays smoothly** to zero, ours **rings**. Two
+independent captures, one stationary and one accelerating, agree on both halves.
+
+So the pitch term itself is confirmed and the *restoring* path is not. The
+obvious suspect is named rather than guessed at: `Ship_HoverTwoPoint`'s alignment
+torque is read as having its right-axis component projected out, which leaves the
+crate's pitch with no restoring torque except the probes' own differential spring
+through a lever arm whose placement is itself recorded as "a guess awaiting M3".
+Either that projection or that placement would explain an under-damped pitch, and
+re-reading the projection is the cheaper of the two.
+
+**Two other measurements from the same change, both reported rather than tuned
+to:**
+
+- The whole-lap comparison **improves**: seeded from the recording, the position
+  error over 3,146 ticks falls from `1.076e4` to `4.045e3` and velocity from
+  `3.496e2` to `2.788e2`.
+- The whole-lap *scenario*, driven from the canonical spawn, **regresses**: it
+  used to hold the track for all 3,146 ticks (worst off-spline `42.9`) and now
+  leaves the surface at tick 742 over a crest and never returns. The mechanism is
+  measured, not assumed - the craft is level (`4°` of bank) and climbing when it
+  goes airborne at about 60 units/s, so this is not an instability. It is the
+  weathervane's in-air authority dropping by `I_yy`, which is the recovered model
+  doing what it says; what the old behaviour was masking is the
+  contact-generation gap that lets our ship leave a crest the original never
+  leaves. The lap script is an open-loop recording of what an autopilot pressed
+  at the original, so it is sensitive to exactly this.
+
+The yaw axis is unchanged, which is the check that the move was not a
+half-application: `yaw_authority_ground_truth` is 2/2 under `just test-data`, and
+`full_lock_out_yaws_the_bank_on_a_steeply_cambered_track` needed no edit at all -
+it pins the ratio between two *body-local* yaw writes, and dividing both by
+`I_yy` leaves it invariant.
+
 ## Reproducing it
 
 ```sh

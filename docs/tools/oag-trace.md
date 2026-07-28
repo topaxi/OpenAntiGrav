@@ -235,6 +235,8 @@ every committed scenario.
 | `steer-both-ways.inputs` | Thrust throughout, half a second of full left, a straight, then half a second of full right. A variant of protocol scenario 2 |
 | `steer-left.inputs`, `steer-right.inputs` | One constant turn each, for the yaw ground-truth tests |
 | `airbrake-asymmetric.inputs` | Thrust and steer with one airbrake, the only scenario that exercises the `1e-5` airbrake drag term |
+| `pitch-both-ways.inputs` | **360 ticks of pitch, stationary on the start line, no thrust.** The cleanest capture in `data/traces/` - `speed/|velocity|` reads `1.0000` on 360 of 360 ticks - and the first with any pitch input at all |
+| `pitch-hold-thrust.inputs` | Thrust and a held nose-up off the line. Clean to tick 128 at 84 units/s, and dirty after |
 | `talons-junction-time-trial-lap.inputs` | **3,146 ticks: one completed lap of Talon's Junction White.** Not hand-authored - see below |
 
 `steer-both-ways` turns both ways on purpose. The sign of the yaw response is one
@@ -401,9 +403,11 @@ the script's first line holds is what makes it harmless.
 
 ### What is still not confirmed
 
-- **PPSSPP's analog sign.** `input.analog.send`'s y is assumed to be positive-up,
-  matching `InputSnapshot::stick_y`. Nothing has tested it. Both committed
-  scenarios use only the d-pad, so neither depends on it yet.
+- ~~**PPSSPP's analog sign.**~~ Settled, as a side effect of measuring the pitch
+  axis: `input.analog.send`'s y **is** positive-up, matching
+  `InputSnapshot::stick_y`. Probed against the control block the game reads,
+  `stick_y=+1` writes the same `-100` to `*(craft+0x78) + 0x10` that `up` on the
+  d-pad does. Confidence 90, one emulator version.
 - **The lead on anything but this build.** `--script-lead` is a switch rather than
   a constant precisely because 2 is a measurement of one emulator version, and
   re-measuring it is one capture of `steer-both-ways` and one look at the `steer`
@@ -478,8 +482,22 @@ this tool must never do.
 | Column | Read from | Present since |
 | --- | --- | --- |
 | `avel_x`, `avel_y`, `avel_z` | `body+0x160` | the angular-velocity pass |
-| `stun_timer` | `craft+0x290` | the same |
+| `omega_x`, `omega_y`, `omega_z` | `body+0x150` | the pitch-capture pass |
+| `stun_timer` | `craft+0x290` | the angular-velocity pass |
 | `timer_2e0` | `craft+0x2e0` | the same; captured, never compared - nothing on our side models it |
+
+**The two angular columns are not the same quantity, and only one of them is
+directly comparable.** `body+0x160` is angular **momentum** - `I * omega` in body
+coordinates - so comparing it against our own angular velocity carries the
+inertia tensor and cannot separate a wrong rotation from a wrong tensor.
+`body+0x150` is the rotation rate by definition: `Body_Integrate` advances the
+basis by it. Measured on the two pitch captures, `body+0x160 = I * body+0x150`
+holds at `100.0 %` explained on the pitch axis with the code-literal tensor, and
+`body+0x150` is the negated body-local rate at `-1.0011 / -0.9999 / -0.9993` on
+the three axes. So a run compares `angular_rate` in rad/s against rad/s, and
+`angular_velocity` in the recording's own units against a simulated `I * omega`
+built to match. See
+[angular-velocity-column.md](../physics/angular-velocity-column.md).
 
 ## The angular velocity, and the four readings of it
 
@@ -569,11 +587,15 @@ A run starts from the recording's first row: position, basis, velocity and the
 five control states. Four things are not in the capture and are therefore not
 replayed, rather than being invented:
 
-- **Angular velocity**, *for a capture taken before the `avel_*` columns
+- **Angular velocity**, *for a capture taken before the angular columns
   existed*. Those runs start with the rotation at rest, so capture on a straight,
   not in a corner. A capture that has the columns seeds the body's rotation from
   its first row like every other initial condition, under whichever `--angular`
-  reading is chosen - and nothing is filled in for the older files.
+  reading is chosen - and nothing is filled in for the older files. **`omega_*`
+  seeds it directly and `avel_*` is divided by the inertia tensor first**; a run
+  prefers the former when both are there. Seeding a body's angular velocity
+  straight out of the momentum column, which this did until the tensor was
+  recovered, starts every run spinning between `15.6x` and `21.6x` too fast.
 - **Pitch.** The craft's control block holds `steer` and no second axis, so
   `steer_y` is always zero.
 - **`time_since_landing` and the leap timer.** A run starts outside the landing
