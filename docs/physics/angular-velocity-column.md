@@ -163,6 +163,36 @@ across the whole ramp rather than only at the plateau.
   capture a second team, ideally at the far end of the `amount` range, and refit
   `k_y`. If it moves, the constant has to become per-hull.
 
+## Confirmed at instruction level: the factor is the inertia tensor
+
+The `I * w` reading above was an inference from a fit. It is now read out of
+`Body_Integrate` (`0x0884e230`), and it holds:
+
+- **`body+0x160` is angular momentum**, body frame. Torque integrates into it
+  directly - `+0x160 += torque * h` at `0x0884e354`-`0x0884e364` - with no
+  inverse inertia and no mass divide, where the linear half four instructions
+  earlier does scale by `invMass`. That asymmetry only makes sense for `dL/dt`.
+- **`body+0x150` is the angular velocity**, and it is what turns the basis
+  (`0x0884e2f8`-`0x0884e334`).
+- **The map between them is `basis^T * (body+0x40) * basis`**
+  (`0x0884e380`-`0x0884e39c`), a tensor change of basis, so **`body+0x40` is the
+  body-space inverse inertia tensor**.
+
+So the per-axis factor this page fitted is the diagonal of `I`, the negative sign
+is the `w_game = -w_physics` convention, and the roadmap's "do the angular
+accumulators hold torque or angular acceleration" is answered: **torque**.
+Confidence **88**; evidence in
+[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#bodyx160-is-angular-momentum-bodyx40-is-the-inverse-inertia-tensor).
+
+**One thing this does not do is retire the constant.** `Body_Init` leaves
+`body+0x40` as identity, and whatever writes a craft's real tensor has not been
+found. `YAW_DRIVE_CALIBRATION` can now be *described* correctly - it is one entry
+of `I^-1`, which is exactly why a single global works across teams - but its
+**value is still the fit's**, and writing `1/21.2` in as "recovered" would be
+tuning by another name. The bullet above asking that it stop being called a
+fitted stand-in is therefore half granted: the *mechanism* is recovered, the
+*number* is not.
+
 ## Reproducing it
 
 ```sh

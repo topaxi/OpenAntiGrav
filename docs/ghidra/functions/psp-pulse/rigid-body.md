@@ -159,8 +159,110 @@ already settles it as `e x w`, and this page does not disturb that.
 `body+0x150` is written after the loop as `E600 * body+0x160` (`0x0884e39c`),
 i.e. the angular velocity carried through a matrix built from `+0x40` and the
 basis - which is the `+0x160`-to-`+0x150` mapping
-[craft-update.md](../ps2-pulse/craft-update.md) records as a lead. Confirmed to
-exist on PSP; the frame it maps *to* is not established here.
+[craft-update.md](../ps2-pulse/craft-update.md) records as a lead. **What that
+matrix is, and therefore what each field means, is settled below.**
+
+### `body+0x160` is angular momentum, `body+0x40` is the inverse inertia tensor
+
+This closes the `I*w` reading that
+[angular-velocity-column.md](../../../physics/angular-velocity-column.md) could
+only reach by fitting, and it closes the roadmap's "torque or angular
+acceleration" question with it. Four instruction groups carry the whole argument.
+
+**The basis is advanced by `+0x150`, not `+0x160`.** `C310` is loaded from
+`t2 = a0+0x150` at `0x0884e290`, and it is `C310` that gets scaled by `h` and
+scattered into the skew matrix:
+
+```text
+0884e2f8  vscl.t C000,C310,S733     ; (body+0x150) * h
+0884e300  vneg.t C010,C000
+0884e308-0884e31c                   ; scatter +/- into C400/C410/C420
+0884e320  vtfm3.t C000,E200,C400    ; basis * skew
+0884e32c  vadd.t C200,C200,C000     ; basis += that
+```
+
+So **`+0x150` is the angular velocity**: it is the quantity that rotates the
+frame, by definition.
+
+**Torque accumulates straight into `+0x160`, with no inertia anywhere:**
+
+```text
+0884e354  vscl.t C500,C500,S733     ; body+0x120 (local torque) * h
+0884e358  vadd.t C510,C510,C500     ; body+0x160 += that
+0884e35c  vtfm3.t C000,M200,C520    ; basis^T * body+0x130 (world torque)
+0884e360  vscl.t C000,C000,S733
+0884e364  vadd.t C510,C510,C000     ; body+0x160 += that
+```
+
+No multiply by an inverse inertia, and no divide by mass - unlike the linear half
+four instructions earlier, which does scale by `invMass` at `0x0884e33c`. **The
+asymmetry is the tell.** `dL/dt = torque` needs no inertia; `dw/dt = torque`
+would need one. So the accumulators at `+0x120` and `+0x130` hold **torque**, and
+`+0x160` holds **angular momentum in the body frame**.
+
+**The map between them is a similarity transform of the matrix at `+0x40`:**
+
+```text
+0884e380  vtfm3.t C000,E700,C200    ; E700 == matrix at body+0x40
+0884e384  vtfm3.t C010,E700,C210    ;   times each basis row
+0884e388  vtfm3.t C020,E700,C220
+0884e38c  vtfm3.t C600,M200,C000    ; basis^T times the result
+0884e390  vtfm3.t C610,M200,C010
+0884e394  vtfm3.t C620,M200,C020
+0884e398  vzero.s S513              ; w of body+0x160 := 0
+0884e39c  vtfm3.t C310,E600,C510    ; body+0x150 := E600 * body+0x160
+```
+
+`E600 = basis^T * (body+0x40) * basis` is the textbook change of basis for a
+tensor, rebuilt from scratch every sub-step because the basis moves. Therefore
+**`body+0x40..0x70` is the body-space inverse inertia tensor `I^-1`**, and
+`w = I^-1_world * L` is exactly what `0x0884e39c` computes. Confidence **88**.
+
+**And the result is cached where the impulse path expects it.** After the loop
+`E600` is stored to `body+0x80..0xb0` (`0x0884e3f4`-`0x0884e404`) and the basis
+*transpose* to `body+0xc0..0xf0` (`0x0884e430`-`0x0884e440`, via row-wise `R2xx`
+access of the same registers). Those are precisely the two matrices
+`Body_ApplyImpulseAtPoint` uses - `+0xc0` to rotate a world-space torque into the
+body frame, `+0x80` to redo the `+0x160`-to-`+0x150` map without rebuilding
+anything. The four fields are one consistent scheme:
+
+| Offset | Meaning |
+| --- | --- |
+| `+0x40..0x70` | inverse inertia tensor, **body space** |
+| `+0x80..0xb0` | inverse inertia tensor, **world space** (derived, cached per sub-step) |
+| `+0xc0..0xf0` | basis transpose (derived, cached per sub-step) |
+| `+0x150` | angular velocity, the quantity that turns the basis |
+| `+0x160` | **angular momentum**, body frame, what torque integrates into |
+
+**So the trace's fitted per-axis factor is the inertia tensor, and the sign is the
+`w_game = -w_physics` convention.** The recorded `+0x160` column is `I * w`, so
+dividing it by a body-local angular velocity recovers the **diagonal of `I`** -
+the fit's `~(-15, -21..-22, -14..-16)` - and `1 / |k_y| = 0.0452`, the value
+`oag_physics::forces::YAW_DRIVE_CALIBRATION` was fitted to, is the **yaw entry of
+`I^-1`**, i.e. one element of the matrix at `body+0x40`. The "missing 22x yaw
+factor" is not a missing force term or a calibration; it is the tensor this
+engine has had all along.
+
+### What is still open: who writes `body+0x40`
+
+`Body_Init` (`0x0884de5c`) sets `+0x40` to **identity**, and an identity `I^-1`
+would make `+0x150 == +0x160` and leave no per-axis factor at all - which the
+captures rule out. So something writes a non-identity tensor for a craft, exactly
+the way the ship-entity constructor overwrites `+0x388` and `+0x384`, and **that
+writer has not been found**. Checked and excluded: `Body_SetMass` (`0x0884d850`,
+six instructions, mass and invMass only), `Body_SetOrientation` (`0x0884d868`,
+basis and its transpose), `Body_ClearAccumulators` (`0x0884da24`), and
+`Ship_SetColliderFriction` (`0x0884da7c`).
+
+**This is the one step between the reading above and replacing
+`YAW_DRIVE_CALIBRATION` with a recovered constant, and it is deliberately not
+guessed.** The fit says the yaw entry is about `0.0452`; writing that number into
+the crate as "the recovered inertia" would be
+[force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)'s
+forbidden move in a new costume. The mechanism is now known at 88; the *value*
+stays fitted and labelled as fitted until the writer is read. Start from the
+ship-entity constructor `FUN_08840c74`, which is where every other per-craft body
+field is set.
 
 ## The contact response, and the friction law the force balance was missing
 

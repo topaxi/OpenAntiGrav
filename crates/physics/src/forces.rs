@@ -161,6 +161,27 @@ use crate::{controls, engine, passive};
 /// dimensions, so a global constant would leave the largest hulls turning too hard
 /// and the smallest too softly. Capturing a second team, ideally one at the far end
 /// of the `amount` range, is what would tell the two apart.
+/// # What this number actually is, now that the mechanism is read
+///
+/// **It is one entry of the body's inverse inertia tensor**, and the value here
+/// is still the fitted one only because the tensor's *writer* has not been found.
+///
+/// `Body_Integrate` (`0x0884e230`) integrates torque straight into `body+0x160`
+/// with no inertia and no mass divide, then maps it to the angular velocity that
+/// turns the basis as `body+0x150 = basis^T * (body+0x40) * basis * body+0x160`
+/// (`0x0884e380`-`0x0884e39c`). So `body+0x160` is **angular momentum**, the
+/// accumulators hold **torque**, and `body+0x40` is the body-space inverse
+/// inertia tensor. The trace column this constant was fitted against is `I * w`,
+/// which is why dividing it by a body-local angular velocity recovers a per-axis
+/// factor at all, and why `1 / 0.0452` lands on the fit's yaw scale. See
+/// `docs/ghidra/functions/psp-pulse/rigid-body.md`.
+///
+/// `Body_Init` leaves `body+0x40` as identity, so a craft's tensor is written by
+/// something else - the way `body+0x388` and `body+0x384` are - and that writer is
+/// unread. Until it is, **this stays a fitted stand-in and keeps its name**:
+/// substituting the fit's own `0.0452` and calling it recovered would be tuning
+/// wearing a costume. Confidence 88 on the mechanism, 0 on the constant being the
+/// original's.
 pub const YAW_DRIVE_CALIBRATION: f32 = 0.0452;
 
 /// The world outside the ship, as the force law sees it.
