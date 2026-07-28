@@ -219,22 +219,30 @@ contact for the full 120-tick well-behaved window**, at a steady height
 matching what the (independently corrected) spring math predicts to within
 0.6%.
 
-**What's left, cleanly isolated: there is no speed equilibrium.** A real
-capture of the reference scenario holds 23.6-25.1 units/s at full throttle,
-essentially flat. This simulation passes 99.9 units/s by tick 120 and keeps
-climbing past 115, and *that* is what eventually throws it off - not falling
-off the surface, but going four times too fast to follow a turn. The
-arithmetic from the recording: a steady 24 units/s needs about 4.9 units of
-net thrust against drag and rolling resistance; `oag_physics::engine::engine`
-produces about 83.6, a factor of roughly **17**. Candidates, all recorded
-gaps rather than new guesses: `Engine.amount`'s load-time scale, the
-unrecovered `craft+0x294` multiplier, the two drag coefficients, or an
-untraced relationship between `<Physical mass>` and the rigid body's own
-mass. See [oag-game](../tools/oag-game.md#what-does-not-work-there-is-no-speed-equilibrium)
-for the full arithmetic.
+**The speed-equilibrium question is resolved (2026-07-28), and the answer is
+that the force law was never wrong.** The apparent factor-17 thrust surplus,
+later remeasured as a missing linear resistance of `2.28 * fs`, is neither: a
+standing-start capture shows the recovered force law reproducing a real
+launch from `fs = 0.56` to `47.67` at **rms 0.127 units of force** on a
+one-parameter fit, and the deficit in the older captures is a **3.67 %
+per-frame reduction of the velocity applied outside the force accumulators**
+during sustained wall contact - both old reference captures spent their
+entire length scraping a wall, recorded all along in the trace's own `speed`
+column (`speed/|velocity| == 1.0000` is now the cleanliness test for any
+future capture). See
+[the resolution](../physics/force-balance-ground-truth.md) for the
+measurement and the instruction-level readings behind it.
 
-`the_ship_does_not_stay_on_the_track_yet` still fails-on-purpose, now for
-this one reason instead of three.
+**What's left for the exit criterion is the wall-contact response**: a craft
+in sustained contact loses ~3.6 % of its speed per frame (decaying from
+~4.2 % post-impact toward 3.67 %), applied post-integrate in velocity space -
+corroborated on the PS2 build, whose `World_StepBodies` runs its contact
+resolver after the integrator with restitution `0.1` and a deferred
+per-contact friction queue. `crates/physics/src/wall.rs` must reproduce that
+response, from the recovered law rather than the fitted number.
+
+`the_ship_does_not_stay_on_the_track_yet` still fails-on-purpose, now
+expected to hinge on the wall response alone.
 
 ---
 

@@ -442,6 +442,17 @@ Three things follow, and the third matters most:
 
 ### What does not work: there is no speed equilibrium
 
+> **Superseded (2026-07-28).** The diagnosis below was inverted by the
+> standing-start capture: the force law is correct end to end (rms `0.127`
+> over a 47-unit launch), and the "equilibrium" the old captures held was the
+> wall setting their speed - both were recorded in sustained wall contact for
+> their entire length, losing `3.67 %` of their velocity per frame in a
+> post-integrate contact pass no force accumulator can see. There is no speed
+> equilibrium on a clean straight, and there should not be one; what is
+> missing is the wall-contact response in `wall.rs`. See
+> [force-balance-ground-truth.md](../physics/force-balance-ground-truth.md).
+> The section is kept as the measurement that motivated the investigation.
+
 At full throttle the real capture holds **23.6 to 25.1 units/s** and is very slightly
 *decelerating*. This simulation passes **99.9 by tick 120** and keeps climbing to
 about 115, and it leaves the 114-unit envelope at about tick **257** - not by falling

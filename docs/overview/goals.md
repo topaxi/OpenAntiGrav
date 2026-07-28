@@ -69,6 +69,18 @@ notes are written for a stranger rather than for ourselves.
 | Wipeout 2048 | Vita | Long-term goal |
 | Omega Collection | PS4 | If legally and technically feasible |
 
+**When the two Pulse builds genuinely diverge, the PSP build is authoritative
+for gameplay and physics behaviour.** The PS2 port was generally received as
+the lesser version of the game, and the PSP original is the feel this project
+targets. The PS2 binary remains invaluable as a second-binary corroboration
+leg for confidence scoring (see the
+[confidence rubric](../reverse-engineering/confidence-rubric.md)) - but a real
+behavioural divergence is implemented PSP-side and *documented* as a
+divergence, never offered as an alternative or averaged away. Examples on
+record: the vertical-damping half-contact handling
+([craft-update.md](../ghidra/functions/ps2-pulse/craft-update.md)), PS2's
+whole-mask `Input_ConsumePress`, and the non-rotating WAD lookup cursor.
+
 Explicitly **out of scope**: Wipeout (1995), 2097/XL, 64, 3, Fusion. They predate
 Pure and share little with it; including them would widen the problem without
 advancing the goal.

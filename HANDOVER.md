@@ -37,12 +37,26 @@ before concluding a ground-truth test "cannot run". The originals in
 A second three-agent team ran the "next steps" the morning pass left behind:
 `hover-re` (the VFPU hover/damping/grip reading, now that the Ghidra bridge is
 back up), `captures` (the standing-start and steering captures), and
-`mechanical` (collision survey, docs debt, trace migration). `hover-re` and
-`mechanical` are done and folded in below; `captures` is still in flight on the
-steering side, though its committed groundwork (`7738bf4`) already carries a
-finding. `just` passes at **788 tests** after all of it; `audit-leakage` clean.
+`mechanical` (collision survey, docs debt, trace migration). All three are
+done and folded in below, `hover-re` twice over (it took the PS2 corroboration
+as a second task). A fourth agent (`wall-re`) is on the wall-contact response,
+the successor question the resolution below opened. `just` passes at **788
+tests**; `audit-leakage` clean.
 
-**The headline (`d7fea3a`, `ef110d8`, `2f26453`, `07411ad`): the force law was
+Two mid-pass events that affect how to read this section:
+
+- **A `git pull --rebase` ran in the tree mid-pass.** `origin/main` exists and
+  contributed `b7cc635` (justfile `launch-*` recipes for running the original
+  discs in their emulators). Every local commit after `52f40ed` was rewritten;
+  hashes in this section are the post-rebase ones. If a doc page cites a stale
+  pre-rebase hash, map it by commit subject.
+- **User directive (2026-07-28), now also policy in
+  [goals.md](docs/overview/goals.md#scope): when in doubt, prefer PSP over PS2
+  implementation details.** The PS2 port was generally received as the lesser
+  version. PS2 stays as the corroboration leg for confidence scoring; genuine
+  behavioural divergences implement the PSP side and document the PS2 one.
+
+**The headline (`d7fea3a`, `ef110d8`, `2f26453`, `e69c29a`): the force law was
 right all along, and both old reference captures were recorded scraping a
 wall.** `docs/physics/force-balance-ground-truth.md` now opens with the
 resolution; the short version, because it inverts the standing diagnosis:
@@ -138,7 +152,7 @@ from the files themselves**, which is stronger anyway:
   oag-trace --run-ignored all` is **88/88 with 0 skipped** - the
   `steer-left`/`-right` captures satisfy them, and
   `the_calibration_reproduces_the_recorded_yaw_rate` holds on real data.
-- **`scripts/trace-angular-fit.py` (`7738bf4`), re-run centrally on the new
+- **`scripts/trace-angular-fit.py` (`f5346e3`), re-run centrally on the new
   captures**: `oag-trace show`'s four one-to-one `AngularReading`s tie
   because the column is not in matching units. Fitted, the verdict is
   decisive - **local beats world** (91.9 % vs 65.9 % explained on
@@ -159,7 +173,7 @@ from the files themselves**, which is stronger anyway:
   measurement: no instruction has been read showing `body+0x160` multiplied
   by an inertia on its way to the orientation update. Flagged as the obvious
   next RE target for whoever is in `Body_Integrate` next.
-- Also committed (`7738bf4`): scripted scenarios
+- Also committed (`f5346e3`): scripted scenarios
   (`verification/scenarios/steer-left`, `steer-right`,
   `airbrake-asymmetric.inputs`) and a division-by-zero fix in
   `trace-force-balance.py` for stationary data. The airbrake-asymmetric
@@ -190,14 +204,14 @@ narrower question, the docs debt is paid, and `oag-trace` reads both discs.**
   file path, so any heading rename silently orphans every link into it (one
   such stale anchor in `oag-view.md` had survived green CI since `b838457`).
   Worth a fix; until then, hand-check anchors.
-- **Docs debt (`52f40ed`, `aa5a7db`)**: `wad.md` records the second-binary
+- **Docs debt (`52f40ed`, `2680a9a`)**: `wad.md` records the second-binary
   confirmation; `handling-stats.md` gains the `<Misc>` element (offsets
   `0x78..0x90`, `weight_distribution` at `0x90`). One deliberate demotion: the
   "PSP build has an equivalent `<Misc>` parser, conf 80" claim is now an open
   question with **no confidence score** - it was a hypothesis from the
   consumer (`Ship_UpdatePitch` reads `0x90`), not an observation of a parser,
   and no PSP parser was ever searched for.
-- **Trace migration (`b19bcee`)**: `crates/trace` now resolves archives via
+- **Trace migration (`9f52a47`)**: `crates/trace` now resolves archives via
   `oag_assets::pulse::Archives` name-based lookup, so **PS2 discs are valid
   `--source` arguments to `oag-trace`** - the PCSX2 leg of M3 just got its
   asset path for free. Verified with a disc-backed before/after diff of the
@@ -211,8 +225,68 @@ narrower question, the docs debt is paid, and `oag-trace` reads both discs.**
   only until the steer captures exist - run `just test-data` once they do.
 
 Reports from both agents arrived after their commits (delayed, not missing);
-everything above is reconciled against them. Task #2 (PS2 force-term
-corroboration) is claimed and in flight.
+everything above is reconciled against them.
+
+**`hover-re`, second task (`4a9d185`): the PS2 corroborates both Task #1
+results, and hands the wall investigation its structure.** Full evidence in
+`docs/ghidra/functions/ps2-pulse/craft-update.md`:
+
+- **`Ship_ApplyVerticalDamping` (`0x00159e78`) read end to end**: term for
+  term the PSP inline - `up * dot(up, v) * -0.25 * (1 - grounded)` - on a
+  different ISA and compiler. Raised 85 -> 92, and it confirms the crate fix
+  (`1 - grounded`, not `1 - magLockBlend`). One genuine divergence, recorded
+  not smoothed over: PS2 *returns early* when `grounded != 0`, so a half
+  contact gets no damping there where PSP scales continuously and gets half
+  (conf 85). The crate follows PSP - now policy, see the directive above.
+- **The M4 mechanism is corroborated on PS2: `World_StepBodies`
+  (`0x0015ded8`) is six passes, and pass 6 - contact collection
+  (`0x0012fc60`) then per-contact `Body_ResolveContactPair` (`0x0015e600`) or
+  `0x0015ea90` - runs *after* `Body_Integrate` and *before* the next frame's
+  `Ship_UpdateCraft`, writing velocities directly** (conf 85). Exactly the
+  post-integrate velocity window the trace analysis isolated.
+- **Two new names, applied and saved**: `Body_ResolveContactPair` (85) - an
+  ordinary two-body impulse resolver, `j = (-1.1 * vn) / (invMassA + invMassB
+  + angularTerm)` where `-1.1` is `-(1 + e)` for **restitution `e = 0.1`**,
+  separating contacts skipped; and `Body_QueueDeferredImpulse` (`0x0015ce28`,
+  82) - 0x40-byte records into an array indexed by `body+0x370`, **capped at
+  8 entries**. That closes the `sw zero, 0x370` both binaries perform before
+  every craft update: it is the per-frame deferred-impulse queue count, not
+  scratch. `contact+0x34` as friction specifically is conf 75.
+- Deliberately not renamed (ADR-0005): `0x0015d058` zeroes the same four
+  accumulators as the already-named `Body_ClearAccumulators` (`0x0015ca48`) -
+  **one of the two identifications is wrong**; cheap to resolve, flagged in
+  the doc. Also unnamed: `0x0015ea90`, the two impulse appliers, the contact
+  collector.
+- Not reached: the other single-source-84 terms. Mostly already covered by
+  craft-update.md (brakes 90, rolling resistance 88, the fifteen-term slot
+  table); the genuine gap is **`Ship_UpdateAirbrakes_q` (`0x0015a550`), the
+  one name there not backed by a read body** - the obvious next PS2 job,
+  which would also corroborate or refute the `1e-5` airbrake scale for free.
+- **Two stale premises in this file corrected**: the `SCES_547.48` database
+  is **not** unnamed - `get_function_by_address` resolves every probed
+  symbol by name, so the "database itself is unnamed" note in the In-flight
+  section below is stale. And a trap: `scripts/apply-ghidra-names.py`
+  reported "122 failed / No function found" **for functions that exist and
+  are already correctly named** - a bridge-side rename-endpoint quirk, not a
+  script bug and not a real absence. Probe `get_function_by_address` before
+  concluding a database needs restoring; do not trust that script's failure
+  count as evidence.
+
+**`captures`' committed docs (`446eed4`, `4f31669`): the 22x yaw discrepancy
+is resolved - the law was predicting the stored column, not the rotation.**
+`docs/physics/angular-velocity-column.md` (new page): engine.md's equilibrium
+law `omega_y = steer * Turning.amount / 5` is *right about the accumulator*:
+held at full lock it predicts `32.27` against a stored `avel_y` of `32.92`
+(2 % agreement), while the craft observably yaws at `~1.5 rad/s` - a constant
+ratio of `~-21.2`, which is the fitted-per-axis scale from the angular fit
+above. So the inertia cancellation argument applies to the *stored
+accumulator*, and `YAW_DRIVE_CALIBRATION` is the unit conversion between
+stored value and observed rotation (plausibly `1/I_yaw`; Task #12 is the
+instruction read that would settle it). The same commit hardened
+`ppsspp-debugger.md` with the mandatory Wayland env vars, CHD extraction
+steps, and detach/race warnings - read it before the next capture session.
+Its narrative final report never arrived; the committed docs and the
+centrally re-run analyses above carry the substance.
 
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
