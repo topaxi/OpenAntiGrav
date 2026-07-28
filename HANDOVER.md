@@ -533,6 +533,60 @@ again). Findings:
   clean with `speed/|v| == 1.0000` first. Analysis script:
   scratchpad `airbrake_check.py` (session-local, method recorded here).
 
+**`wall-re`, third task (Task #12, commit "physics: clarify angular momentum
+and inertia tensor mappings"): `body+0x160` is body-frame angular MOMENTUM,
+confirmed at instruction level (conf 88) - and the fitted constant was
+deliberately NOT replaced.** Evidence in rigid-body.md's new section:
+
+- Four instruction groups in `Body_Integrate` carry it: the basis is
+  advanced by **`+0x150`** (that is the angular velocity by definition);
+  torque integrates into `+0x160` with **no inertia and no mass divide**
+  (the linear path four instructions earlier *does* scale by `invMass` -
+  the asymmetry is the tell: `dL/dt = torque`); the map between them is a
+  per-sub-step tensor change of basis `omega = (basis^T I^-1 basis) * L`
+  with `body+0x40` the body-space inverse inertia; and the derived
+  matrices are cached exactly where `Body_ApplyImpulseAtPoint` reads them
+  (independent corroboration).
+- **Roadmap's "torque or angular acceleration" is answered: torque**
+  (`+0x120` local, `+0x130` world). Folded into roadmap.md centrally.
+- **The "missing 22x yaw factor" is the inertia tensor** - the trace fit's
+  per-axis constants are the diagonal of `I`, and `1/|k_y| = 0.0452` is
+  the yaw entry of `I^-1`. The sign is the `w_game = -w_physics`
+  convention.
+- **`YAW_DRIVE_CALIBRATION` keeps its value AND its name**: `Body_Init`
+  leaves `body+0x40` as identity, so a per-craft writer exists and is
+  unread (excluded: Body_SetMass, Body_SetOrientation - newly named, 88 -
+  Body_ClearAccumulators, Ship_SetColliderFriction). Writing the fit's
+  `1/21.2` in and calling it recovered would be the forbidden move in a
+  new costume. Its doc comment now states what it is (one entry of
+  `I^-1`, which is why a single global works across teams), confidence 88
+  on the mechanism and **0 on the constant being the original's**.
+  **Task #16 is the single step left**: read the writer of `body+0x40`
+  starting from the ship ctor `FUN_08840c74`.
+
+**`boot-movies`, second task (Task #15, `ec24435` + `50f74a1`): the
+known-limitation is formally retired, and the whole workspace including
+`just test-data` is green - 836/836, no inverted assertions anywhere.**
+
+- `the_ship_does_not_stay_on_the_track_yet` is replaced by
+  **`a_ship_stays_on_the_track_for_ten_seconds`** - same 114.0 envelope
+  asserted the other way, finiteness every tick, and measured rather than
+  asserted prose: worst distance from the spline **27.2** of 114.0 (tick
+  520), grounded **600/600**, **zero respawns** - it stays on by
+  *driving*, not by the reset-zone machinery, which the envelope assertion
+  alone could not have distinguished.
+- `oag-game.md`'s superseded section is split into "the ship stays on the
+  track now" (retired, with the fix and the measurements) and "what still
+  does not match" (kept: no clean reference straight exists - no capture
+  has more than 60 consecutive wall-free ticks - and the contact
+  generation / missing `cross(r, impulse)` angular response gaps). Both
+  wrong diagnoses are carried as recorded history in the test file's
+  module doc so neither gets re-derived.
+- `pmf.md`'s stale "only a guess" line now cites the 95-confidence reading
+  and separates the two genuinely open questions (which cut is picked at
+  runtime - the set is region-invariant, so the disc's region cannot be
+  the picker - and what plays the reels at all).
+
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
 A new session spawned three concurrent background agents in this working tree,
