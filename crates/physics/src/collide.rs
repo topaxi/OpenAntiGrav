@@ -15,7 +15,7 @@ use oag_core::math::Vec3;
 /// What kind of surface a collider is.
 ///
 /// All five collision node classes in the original share one vtable; the class
-/// ID only selects this enum and a restitution constant, which is why a magstrip
+/// ID only selects this enum and a friction constant, which is why a magstrip
 /// is not special geometry but ordinary floor with a different tag. Confidence
 /// 92; see `docs/ghidra/functions/psp-pulse/collision.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -51,40 +51,50 @@ impl Surface {
         matches!(self, Self::Reset)
     }
 
-    /// Restitution, where `None` means **never bounce**.
+    /// Surface friction, where `None` means **frictionless**.
     ///
-    /// The class ID selects a surface type and a restitution constant and nothing
-    /// else. The file's value for floors is `-1.0`, and that is a **sentinel, not
-    /// a coefficient**: a negative restitution adds energy on every contact
-    /// instead of removing it, so implementing the literal would make a ship
-    /// accelerate off the ground. `None` makes that distinction impossible to
-    /// lose. See `docs/formats/collision.md`.
+    /// The class ID selects a surface type and this one float at `collider+0x64`
+    /// and nothing else. The file's value for floors is `-1.0`, and that is a
+    /// **sentinel, not a coefficient**: `Collision_AddContact` (`0x08816864`)
+    /// forces the combined value to zero when either side is negative, so a
+    /// negative never reaches the response. `None` makes that distinction
+    /// impossible to lose. See `docs/formats/collision.md`.
+    ///
+    /// # This field was read as restitution until the contact resolver was
+    ///
+    /// `Body_ResolveContact` (`0x0884e968`) takes its restitution from
+    /// `body+0x388` instead, and uses `contact+0x34` - which is what this value
+    /// becomes - only to scale the *tangential* relative velocity. So the disc's
+    /// `0.05` is a friction coefficient, and it is the whole of the sustained
+    /// speed loss a scraping craft suffers. See
+    /// `docs/ghidra/functions/psp-pulse/contact-response.md`.
     ///
     /// This deliberately duplicates `oag_formats::collision::SurfaceKind::
-    /// restitution`, because this crate must not depend on `oag-formats` - the
+    /// friction`, because this crate must not depend on `oag-formats` - the
     /// same reason [`Surface`] itself is duplicated.
     /// `oag_gameplay::collision` owns the test that the two agree.
     #[must_use]
-    pub fn restitution(self) -> Option<f32> {
+    pub fn friction(self) -> Option<f32> {
         match self {
-            Self::Wall => Some(WALL_RESTITUTION),
+            Self::Wall => Some(WALL_FRICTION),
             Self::Floor | Self::Reset | Self::MagFloor => None,
         }
     }
 }
 
-/// Restitution of a [`Surface::Wall`].
+/// Friction of a [`Surface::Wall`], from `collider+0x64`.
 ///
 /// The only non-sentinel value in the file.
-pub const WALL_RESTITUTION: f32 = 0.05;
+pub const WALL_FRICTION: f32 = 0.05;
 
-/// Restitution of a contact between two surfaces.
+/// Friction of a contact between two colliders.
 ///
-/// The original averages the two values but forces zero if **either** is
-/// negative, so one non-bouncing surface makes the whole contact non-bouncing. A
-/// floor against a wall is therefore `0.0`, not the average of `-1.0` and `0.05`.
+/// `Collision_AddContact` (`0x08816864`) averages the two values but forces zero
+/// if **either** is negative, so one frictionless surface makes the whole contact
+/// frictionless. A floor against a wall is therefore `0.0`, not the average of
+/// `-1.0` and `0.05`.
 #[must_use]
-pub fn combine_restitution(a: Option<f32>, b: Option<f32>) -> f32 {
+pub fn combine_friction(a: Option<f32>, b: Option<f32>) -> f32 {
     match (a, b) {
         (Some(a), Some(b)) => (a + b) * 0.5,
         _ => 0.0,

@@ -1,24 +1,44 @@
 //! Wall contact response: the ship stops passing through walls.
 //!
-//! Everything else in this crate reproduces a force law read out of the
-//! original. **This does not, and says so up front.** What is recovered is the
-//! *shape* of contact generation - `docs/ghidra/functions/psp-pulse/collision.md`
-//! records a per-triangle separating-axis reject against the box axes, then ten
-//! box sample points tested against the triangle, with contacts landing in
-//! 0x40-byte slots, 128 of them - but not the response law that consumes those
-//! contacts. So the contact *inputs* here are evidence-shaped and the *response*
-//! is an ordinary projection: push out, then remove the inward velocity with
-//! restitution. It is labelled an implementation choice everywhere it shows,
-//! and M3's trace comparison is what will replace it.
+//! **The response law here is read out of the original**, from
+//! `Body_ResolveContact` (`0x0884e968`) and `Body_ApplyImpulseAtPoint`
+//! (`0x0884d64c`); see
+//! `docs/ghidra/functions/psp-pulse/contact-response.md`. What the original does
+//! to a body per contact, in one pass, is
 //!
-//! Two things it does reproduce exactly, because both are recovered:
+//! ```text
+//! j        = -(1 + body[0x388]) * dot(v_point, n)
+//!            / (invMass + dot(n, cross(invI * cross(r, n), r)))
+//! impulse  = j * n - contact[0x34] * (v_point - n * dot(v_point, n))
+//! v       += impulse * invMass
+//! position+= n * contact[0x30]
+//! ```
+//!
+//! and this module is that with `r = 0`, which collapses the denominator to
+//! `invMass` and the normal term to `-(1 + e) * dot(v, n) * n`. The tangential
+//! term is carried in full, and it is the one that matters: it is a
+//! **multiplicative per-frame loss on the tangential velocity**, with no Coulomb
+//! clamp against the normal impulse and no dependence on `dt`, which is why the
+//! force-balance work could never find it by enumerating force terms. See
+//! [`WALL_FRICTION`] and `docs/physics/force-balance-ground-truth.md`.
+//!
+//! The contact *inputs* were already evidence-shaped -
+//! `docs/ghidra/functions/psp-pulse/collision.md` records a per-triangle
+//! separating-axis reject against the box axes, then ten box sample points tested
+//! against the triangle, with contacts landing in 0x40-byte slots, 128 of them -
+//! and remain a coarser approximation here; see the known limits below.
+//!
+//! Three things it reproduces exactly, because all three are recovered:
 //!
 //! - The hull is a **box**, and its extents come from `<Misc width height
 //!   length/>` in the ship's own `handlingstats.xml`. Nothing here is an invented
 //!   dimension.
-//! - Restitution is `0.05` for [`Surface::Wall`] and a `-1.0` **sentinel** for
-//!   everything else, combined by [`combine_restitution`], which forces zero when
-//!   either side is a sentinel. See [`Surface::restitution`].
+//! - Friction is `0.05` for [`Surface::Wall`] and a `-1.0` **sentinel** for
+//!   everything else, combined against the ship's own `0.02` by
+//!   [`combine_friction`], which forces zero when either side is a sentinel. See
+//!   [`Surface::friction`] and [`SHIP_FRICTION`].
+//! - Restitution is [`BODY_RESTITUTION`], a property of the *body* rather than of
+//!   either surface.
 //!
 //! # Why this runs after the integrator, not as a force
 //!
@@ -43,40 +63,61 @@
 //! on. [`Surface::Reset`] is skipped one layer down, by [`Raycaster`] itself.
 //!
 //! So **in a real race the only surface that ever responds is `Wall`, and the
-//! contact restitution is therefore always `0.05`**. That is the intended
-//! behaviour, not a coincidence to rely on: [`combine_restitution`] and the
-//! sentinel are kept correct and unit-tested so that whoever enables lateral
+//! contact friction is therefore always `(0.05 + 0.02) / 2 = 0.035`**. That is
+//! the intended behaviour, not a coincidence to rely on: [`combine_friction`] and
+//! the sentinel are kept correct and unit-tested so that whoever enables lateral
 //! floor contacts inherits the right semantics rather than rediscovering them.
 //!
 //! # Known limits
 //!
 //! - **One contact per frame.** The original keeps 128 slots; this takes the
 //!   deepest. A ship wedged into a corner resolves one wall per frame rather than
-//!   both at once.
+//!   both at once. Because friction is multiplicative per contact resolved, a
+//!   ship that the original would scrub twice in one frame is scrubbed once here.
 //! - **No angular response.** Contacts are applied at the centre of mass, so a
 //!   glancing hit slows the ship without yawing it. The original's contacts carry
-//!   a point and would produce torque.
+//!   a point and would produce torque. Two consequences for the law above: the
+//!   denominator collapses to `invMass`, and the tangential velocity is the
+//!   body's rather than the contact point's.
 //! - **A nearer non-wall hit hides a wall behind it.** [`Raycaster::raycast`]
 //!   returns the nearest hit of any surface, so a floor triangle in front of a
 //!   wall along the same probe suppresses that probe.
 
 use oag_core::math::Vec3;
 
-use crate::collide::{Ray, Raycaster, Surface, combine_restitution};
+use crate::collide::{Ray, Raycaster, Surface, combine_friction};
 use crate::forces::Environment;
 use crate::hover;
 use crate::params::{Dimensions, Handling};
 use crate::ship::{Body, ShipState};
 
-/// The ship's own restitution, for [`combine_restitution`].
+/// The ship collider's own friction, for [`combine_friction`].
 ///
-/// **An assumption, not a reading.** The original combines the restitutions of
-/// the two colliders in a contact, and what the ship's own collider declares was
-/// not recovered. Taking it as a wall's makes a ship-versus-wall contact
-/// `(0.05 + 0.05) / 2 = 0.05`, which is the value
-/// `docs/formats/collision.md` names for a wall contact; any other choice would
-/// have to explain why that number is quoted as the wall's own. Confidence 70.
-pub const SHIP_RESTITUTION: Option<f32> = Some(crate::collide::WALL_RESTITUTION);
+/// `0.02`, written to `collider+0x64` by the ship-entity constructor
+/// (`0x08840c74`) through the setter at `0x0884da7c`; the literal is
+/// `0x3ca3d70a` at `0x088414e4`. So a ship against a wall combines to
+/// `(0.05 + 0.02) / 2 = 0.035`, and **that number is the whole of the sustained
+/// speed loss** the force-balance work measured. Confidence 88.
+///
+/// One branch of that constructor passes `0.0` instead, when the entity's class
+/// word at `+0xb8` reads `6` and a global byte at `0x08ab07e3` is clear. Which
+/// entity class that is has not been read, so it is not modelled: a racing craft
+/// is assumed to take the `0.02` branch, which is what the trace shows.
+pub const SHIP_FRICTION: Option<f32> = Some(0.02);
+
+/// Restitution of a contact, from `body+0x388`.
+///
+/// **A property of the body, not of either surface.** `Body_ResolveContact`
+/// (`0x0884e968`) reads `body+0x388` at `0x0884eb28` and adds `1.0` to it before
+/// scaling the normal-direction relative velocity - the textbook `-(1 + e) * vn`.
+/// `Body_Init` (`0x0884de5c`) defaults the field to `0.5`, and the ship-entity
+/// constructor overwrites it with `0.4` (`0x3ecccccd`, loaded at `0x08841424`,
+/// stored at `0x088414b8` with no branch target in between). Confidence 88.
+///
+/// The `0.05` this constant used to be came from `collider+0x64`, which
+/// [`WALL_FRICTION`] now correctly names: the resolver never reads that field as
+/// a restitution.
+pub const BODY_RESTITUTION: f32 = 0.4;
 
 /// Below this hull extent the box is treated as degenerate and nothing responds.
 ///
@@ -140,8 +181,8 @@ pub struct WallResponse {
     pub escape: Vec3,
     /// The velocity change applied to the body.
     pub velocity_delta: Vec3,
-    /// The restitution the resolved contact used.
-    pub restitution: f32,
+    /// The friction the resolved contact used.
+    pub friction: f32,
     /// Set when the swept query, rather than a hull probe, found the contact.
     ///
     /// Worth surfacing: it means the ship crossed the wall entirely within one
@@ -230,25 +271,56 @@ pub fn resolve<R: Raycaster + ?Sized>(
         return response;
     };
 
-    let restitution = combine_restitution(SHIP_RESTITUTION, contact.surface.restitution());
+    let friction = combine_friction(SHIP_FRICTION, contact.surface.friction());
 
     // Push out along the normal, exactly as far as the hull is past the surface.
     // No skin: landing flush leaves the next frame's depth at zero, which is a
     // no-op, where a skin would leave the ship visibly floating off the wall.
+    //
+    // `Body_ResolveContact` does the same, as `position += n * contact[0x30]`
+    // with `contact[0x30]` the sample point's depth behind the triangle plane.
     let escape = contact.normal * contact.depth;
     state.body.position += escape;
 
-    // Remove the inward velocity and give back `restitution` of it. Only when the
-    // ship is actually moving into the surface: a ship sliding *along* a wall, or
-    // already leaving it, must not be shoved.
-    let normal_speed = state.body.linear_velocity.dot(contact.normal);
-    let velocity_delta = if normal_speed < 0.0 {
-        let delta = contact.normal * (-(1.0 + restitution) * normal_speed);
-        state.body.linear_velocity += delta;
-        delta
+    let velocity = state.body.linear_velocity;
+    let normal_speed = velocity.dot(contact.normal);
+
+    // The normal impulse. **Unconditional, exactly as the original is**: there is
+    // no `vn < 0` test in `Body_ResolveContact`, only the test that a contact
+    // exists at all - which is this module's `depth > 0.0`. So a hull still
+    // overlapping the wall but already moving out has that outgoing speed turned
+    // back into `-BODY_RESTITUTION` of itself, and the contact behaves as a
+    // two-sided constraint rather than a one-sided push.
+    //
+    // That is the "sticky wall" the standing-start capture records: `dot(v,
+    // right)` is knocked to `-11.5` on the impact frame and is still `-2.2` two
+    // hundred and thirty ticks later, never returning to zero. A one-sided push
+    // cannot produce that.
+    //
+    // With the contact at the centre of mass the original's denominator is just
+    // `invMass`, which cancels against the `impulse * invMass` on application, so
+    // mass does not appear here at all.
+    let normal_delta = contact.normal * (-(1.0 + BODY_RESTITUTION) * normal_speed);
+
+    // The tangential impulse, and the headline. `-friction * v_t` is a raw
+    // impulse, **not** scaled by the normal impulse and **not** clamped by a
+    // Coulomb cone, so applying it costs the tangential velocity a flat
+    // `friction` of itself every frame the contact exists. Against a wall that is
+    // `3.5 %` per frame - `2.2 * |v|` of equivalent force at 60 Hz, which is what
+    // the force balance was chasing as a missing drag term.
+    //
+    // Unlike the normal term this one *is* divided by mass, because it is an
+    // impulse the denominator never touches.
+    let tangential = velocity - contact.normal * normal_speed;
+    let inverse_mass = if state.body.mass > 0.0 {
+        1.0 / state.body.mass
     } else {
-        Vec3::ZERO
+        0.0
     };
+    let friction_delta = tangential * (-friction * inverse_mass);
+
+    let velocity_delta = normal_delta + friction_delta;
+    state.body.linear_velocity += velocity_delta;
 
     // Arm the collision stun, the other half of the contact response: for the next
     // half second the engine produces nothing and the ship has no lateral grip.
@@ -257,6 +329,10 @@ pub fn resolve<R: Raycaster + ?Sized>(
     //
     // - The hull must actually have been moving *into* the surface. A ship already
     //   leaving one is only being position-corrected, and that is not an impact.
+    //   Tested on `normal_speed` rather than on `velocity_delta`, which is no
+    //   longer the same question: friction makes the delta non-zero for a pure
+    //   scrape, and the impulse the original posts to `Ship_ApplyCollisionImpulse`
+    //   is a real hit, not a graze.
     // - It must be the **first** such frame. `Ship_ApplyCollisionImpulse`
     //   (`0x0883f274`) is gated on a pending impulse vector at
     //   `entity->0x4c + 0x110` and zeroes that vector on its way out on every path,
@@ -266,16 +342,17 @@ pub fn resolve<R: Raycaster + ?Sized>(
     // Without the edge test this runs away: `0.5 s` armed per frame against a `dt`
     // decay is 30:1 at 60 Hz, so leaning on a wall for a second cuts the engine for
     // half a minute. See `ShipState::wall_contact_prev`.
-    if velocity_delta != Vec3::ZERO && !state.wall_contact_prev {
+    let impact = normal_speed < 0.0;
+    if impact && !state.wall_contact_prev {
         state.stun_timer += STUN_PER_CONTACT;
     }
-    state.wall_contact_prev = velocity_delta != Vec3::ZERO;
+    state.wall_contact_prev = impact;
 
     WallResponse {
         resolved: Some(contact),
         escape,
         velocity_delta,
-        restitution,
+        friction,
         ..response
     }
 }
@@ -499,13 +576,69 @@ mod tests {
             "{:?}",
             state.body
         );
-        // Restitution 0.05: 10 in becomes 0.5 out.
+        // `body+0x388` is 0.4, so `-(1 + e) * vn` turns 10 in into 4 out. The
+        // velocity is purely along the normal, so friction has nothing to act on.
         assert!(
-            (state.body.linear_velocity.x + 0.5).abs() < 1e-3,
+            (state.body.linear_velocity.x + 4.0).abs() < 1e-3,
             "{:?}",
             state.body.linear_velocity
         );
-        assert!((response.restitution - 0.05).abs() < 1e-6);
+        assert!((response.friction - 0.035).abs() < 1e-6);
+    }
+
+    /// **The measurement this module exists to reproduce.**
+    ///
+    /// A craft in sustained wall contact loses a flat `3.5 %` of its speed every
+    /// frame - `(0.05 + 0.02) / 2`, the combined contact friction - and the loss
+    /// is *multiplicative*, not an impulse: it scales with the speed, which is why
+    /// `docs/physics/force-balance-ground-truth.md` mistook it for a drag force
+    /// linear in `fs` at coefficient `2.28`.
+    ///
+    /// This is the exact form of the law, with the normal velocity held at zero so
+    /// nothing else contributes. `data/traces/talons-junction-standing-start.csv`
+    /// gives the bound rather than the equality: from tick 66 on, the per-frame
+    /// loss runs `5.21 %`, `3.92 %`, `3.78 %`, `3.63 %`, `3.577 %`, `3.560 %` -
+    /// monotone, and **never below `3.5 %` on any of its 230 contact ticks**. It
+    /// cannot go below, because moving speed out of the tangent and into the
+    /// normal only adds loss; so the asymptote is a one-sided prediction that a
+    /// friction of `0.036` would already have falsified.
+    #[test]
+    fn a_pure_scrape_costs_exactly_the_contact_friction_per_frame() {
+        // Moving along the wall's plane (+z) rather than into it (+x), so
+        // `dot(v, n)` is zero and only the tangential term acts.
+        let mut state = ship_at(1.0, 0.0);
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, 40.0);
+
+        resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &wall(1.6, Surface::Wall),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+
+        let expected = 40.0 * (1.0 - 0.035);
+        assert!(
+            (state.body.linear_velocity.z - expected).abs() < 1e-4,
+            "{:?} is not {expected}",
+            state.body.linear_velocity
+        );
+        // And it is a scale, not a decrement: a slower craft loses proportionally
+        // less, which is the property the trace's flat ratio proves.
+        state.body.position = Vec3::new(1.0, 0.0, 0.0);
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, 10.0);
+        resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &wall(1.6, Surface::Wall),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+        assert!(
+            (state.body.linear_velocity.z - 10.0 * (1.0 - 0.035)).abs() < 1e-4,
+            "{:?}",
+            state.body.linear_velocity
+        );
     }
 
     /// The tunnelling case, which the hull probes cannot see: the ship starts in
@@ -651,10 +784,22 @@ mod tests {
         assert_eq!(state.stun_timer, 0.0);
     }
 
-    /// A ship already leaving a surface must not be shoved along the normal, or a
-    /// scrape would fling it: only the position correction applies.
+    /// The contact is **two-sided**: a hull still overlapping the wall but already
+    /// moving out is pulled back, not left alone.
+    ///
+    /// This is a deliberate reversal of what this module used to do, and it is
+    /// what the original does: `Body_ResolveContact` (`0x0884e968`) has no
+    /// `dot(v, n) < 0` test anywhere - the only gate is that a contact exists,
+    /// which is `depth > 0.0` here. `-(1 + 0.4) * vn` with `vn` positive is
+    /// negative, so `10` out becomes `4` back in.
+    ///
+    /// It matters because it is what makes a wall sticky, and stickiness is
+    /// recorded: in `talons-junction-standing-start.csv` `dot(v, right)` is
+    /// knocked to `-11.5` at tick 66 and is still `-2.2` at tick 295, never once
+    /// returning to zero across 230 ticks. A one-sided push cannot hold a craft
+    /// against a wall like that.
     #[test]
-    fn a_ship_moving_away_from_the_wall_keeps_its_velocity() {
+    fn a_ship_leaving_a_wall_it_still_overlaps_is_pulled_back() {
         let mut state = ship_at(1.0, -10.0);
         let response = resolve(
             &mut state,
@@ -664,8 +809,20 @@ mod tests {
             Vec3::new(1.0, 0.0, 0.0),
         );
         assert!(response.resolved.is_some());
-        assert_eq!(response.velocity_delta, Vec3::ZERO);
-        assert_eq!(state.body.linear_velocity, Vec3::new(-10.0, 0.0, 0.0));
+        assert!(
+            (state.body.linear_velocity.x - 4.0).abs() < 1e-3,
+            "{:?}",
+            state.body.linear_velocity
+        );
+        // The position correction still applies, and it is what clears the
+        // overlap so the next frame sees no contact at all.
+        assert!(
+            (state.body.position.x - 0.6).abs() < 1e-4,
+            "{:?}",
+            state.body
+        );
+        // But it is not an impact, so no stun.
+        assert_eq!(state.stun_timer, 0.0);
     }
 
     /// Zero hull dimensions must be a visible no-op rather than a quiet one: it
@@ -716,22 +873,25 @@ mod tests {
 
     /// The `-1.0` sentinel is not a coefficient. This path is unreachable in a
     /// race today, because only walls respond; it is pinned so that whoever makes
-    /// floors contactable inherits the right rule instead of a negative
-    /// restitution that adds energy.
+    /// floors contactable inherits the right rule instead of a negative friction
+    /// that *adds* tangential velocity.
     #[test]
-    fn the_never_bounce_sentinel_combines_to_zero_and_never_to_a_negative() {
-        assert_eq!(Surface::Wall.restitution(), Some(0.05));
-        assert_eq!(Surface::Floor.restitution(), None);
-        assert_eq!(Surface::MagFloor.restitution(), None);
-        assert_eq!(Surface::Reset.restitution(), None);
+    fn the_frictionless_sentinel_combines_to_zero_and_never_to_a_negative() {
+        assert_eq!(Surface::Wall.friction(), Some(0.05));
+        assert_eq!(Surface::Floor.friction(), None);
+        assert_eq!(Surface::MagFloor.friction(), None);
+        assert_eq!(Surface::Reset.friction(), None);
 
-        assert_eq!(combine_restitution(Some(0.05), Some(0.05)), 0.05);
-        assert_eq!(combine_restitution(Some(0.05), None), 0.0);
-        assert_eq!(combine_restitution(None, Some(0.05)), 0.0);
-        assert_eq!(combine_restitution(None, None), 0.0);
+        assert_eq!(combine_friction(Some(0.05), Some(0.05)), 0.05);
+        assert_eq!(combine_friction(Some(0.05), None), 0.0);
+        assert_eq!(combine_friction(None, Some(0.05)), 0.0);
+        assert_eq!(combine_friction(None, None), 0.0);
+        // The one that a race actually uses: the wall's 0.05 against the ship
+        // collider's own 0.02.
+        assert_eq!(SHIP_FRICTION, Some(0.02));
         assert_eq!(
-            combine_restitution(SHIP_RESTITUTION, Surface::Wall.restitution()),
-            0.05
+            combine_friction(SHIP_FRICTION, Surface::Wall.friction()),
+            0.035
         );
     }
 }

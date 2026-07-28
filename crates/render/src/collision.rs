@@ -14,7 +14,7 @@
 //!   `collision_world` is that [`SurfaceKind::Cage`] is not collidable, so by
 //!   default it is not drawn either - the picture is what physics sees, not what
 //!   the file holds. Pass `include_cage` to see the rest.
-//! - It does not do collision *response*. Nothing here reads restitution.
+//! - It does not do collision *response*. Nothing here reads friction.
 //!
 //! ## Why the default is wireframe
 //!

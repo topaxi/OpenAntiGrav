@@ -38,7 +38,7 @@
 //!
 //! Unlike a wall contact, **no penetration depth is required**: a reset volume is
 //! a trigger, not a surface, so touching it at all is the event. Nothing here
-//! reads restitution, and `Surface::Reset`'s is the never-bounce sentinel anyway.
+//! reads friction, and `Surface::Reset`'s is the frictionless sentinel anyway.
 
 use oag_core::math::Vec3;
 

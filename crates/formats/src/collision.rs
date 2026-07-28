@@ -72,7 +72,7 @@
 //!
 //! `Collision_RegisterNodeClasses` (`0x08934d44`) registers all five collision
 //! [`.vex`](crate::vex) classes with the same vtable. The class ID selects only a
-//! surface type and a restitution constant, so **magstrips are not special
+//! surface type and a friction constant, so **magstrips are not special
 //! geometry**: a magstrip is ordinary floor with surface type 3. See
 //! [`SurfaceKind`].
 //!
@@ -81,12 +81,17 @@
 //! PSP build ships none**, which fits `Definition.xml`'s per-track
 //! `collisionCageEnabled` attribute.
 //!
-//! Restitution is `-1.0` for [`Floor`](SurfaceKind::Floor),
+//! Friction is `-1.0` for [`Floor`](SurfaceKind::Floor),
 //! [`MagFloor`](SurfaceKind::MagFloor) and [`Reset`](SurfaceKind::Reset), and it
 //! is a **sentinel, not a value**: contact combination averages the two sides but
-//! forces zero if either is negative. Modelling it as a literal `-1.0`
-//! coefficient would add energy on every floor contact. It is therefore [`None`]
-//! here, and [`combine_restitution`] is the rule.
+//! forces zero if either is negative. It is therefore [`None`] here, and
+//! [`combine_friction`] is the rule.
+//!
+//! This float at `collider+0x64` was recorded as *restitution* until
+//! `Body_ResolveContact` (`0x0884e968`) was read: the resolver takes restitution
+//! from `body+0x388` and uses the combined `collider+0x64` only to scale the
+//! contact's tangential relative velocity. It is a **friction coefficient**. See
+//! `docs/ghidra/functions/psp-pulse/contact-response.md`.
 //!
 //! See `docs/formats/collision.md` for the evidence and
 //! `docs/ghidra/functions/psp-pulse/collision.md` for the addresses.
@@ -141,8 +146,8 @@ pub const HEADER_WORD: u32 = 0xffff_ffff;
 /// both shipped builds is this value anyway.
 pub const DEFAULT_VERTEX_SCALAR: f32 = 1.0;
 
-/// Restitution of a [`Wall`](SurfaceKind::Wall) surface.
-pub const WALL_RESTITUTION: f32 = 0.05;
+/// Friction of a [`Wall`](SurfaceKind::Wall) surface, from `collider+0x64`.
+pub const WALL_FRICTION: f32 = 0.05;
 
 /// Bytes per element of a chunk type, or `None` if the type is not known.
 ///
@@ -351,7 +356,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Which collision class a node is, and therefore how it behaves.
 ///
 /// All five share one vtable and one parser. The class ID selects a surface type
-/// and a restitution constant, nothing else, which is why a magstrip is not
+/// and a friction constant, nothing else, which is why a magstrip is not
 /// special geometry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceKind {
@@ -443,30 +448,31 @@ impl SurfaceKind {
         }
     }
 
-    /// Restitution, where `None` means **never bounce**.
+    /// Surface friction, where `None` means **frictionless**.
     ///
     /// The file's value for floors is `-1.0`, and that is a sentinel rather than
-    /// a coefficient: see [`combine_restitution`]. Representing it as `None`
+    /// a coefficient: see [`combine_friction`]. Representing it as `None`
     /// makes the distinction impossible to lose, because a negative coefficient
-    /// in a physics step adds energy instead of removing it.
+    /// would *add* tangential velocity in the contact response instead of
+    /// removing it.
     #[must_use]
-    pub fn restitution(self) -> Option<f32> {
+    pub fn friction(self) -> Option<f32> {
         match self {
-            Self::Wall => Some(WALL_RESTITUTION),
+            Self::Wall => Some(WALL_FRICTION),
             Self::Floor | Self::Reset | Self::MagFloor => None,
             Self::Cage => None,
         }
     }
 }
 
-/// Restitution of a contact between two surfaces.
+/// Friction of a contact between two colliders.
 ///
-/// The original averages the two values but forces zero if **either** is
-/// negative, so one non-bouncing surface makes the whole contact non-bouncing.
-/// A floor against a wall is therefore `0.0`, not the average of `-1.0` and
-/// `0.05`.
+/// `Collision_AddContact` (`0x08816864`) averages the two values but forces zero
+/// if **either** is negative, so one frictionless surface makes the whole contact
+/// frictionless. A floor against a wall is therefore `0.0`, not the average of
+/// `-1.0` and `0.05`.
 #[must_use]
-pub fn combine_restitution(a: Option<f32>, b: Option<f32>) -> f32 {
+pub fn combine_friction(a: Option<f32>, b: Option<f32>) -> f32 {
     match (a, b) {
         (Some(a), Some(b)) => (a + b) * 0.5,
         _ => 0.0,
@@ -1319,23 +1325,23 @@ mod tests {
     }
 
     /// The `-1.0` in the file is a sentinel, not a coefficient. Averaging it
-    /// against a wall's `0.05` gives `-0.475`, and a negative restitution adds
-    /// energy on every contact instead of removing it.
+    /// against a wall's `0.05` gives `-0.475`, and a negative friction would add
+    /// tangential velocity on every contact instead of removing it.
     #[test]
-    fn a_floor_never_bounces_whatever_it_touches() {
-        assert_eq!(SurfaceKind::Floor.restitution(), None);
-        assert_eq!(SurfaceKind::MagFloor.restitution(), None);
-        assert_eq!(SurfaceKind::Reset.restitution(), None);
-        assert_eq!(SurfaceKind::Wall.restitution(), Some(WALL_RESTITUTION));
+    fn a_floor_is_frictionless_whatever_it_touches() {
+        assert_eq!(SurfaceKind::Floor.friction(), None);
+        assert_eq!(SurfaceKind::MagFloor.friction(), None);
+        assert_eq!(SurfaceKind::Reset.friction(), None);
+        assert_eq!(SurfaceKind::Wall.friction(), Some(WALL_FRICTION));
 
-        let floor = SurfaceKind::Floor.restitution();
-        let wall = SurfaceKind::Wall.restitution();
-        assert_eq!(combine_restitution(floor, wall), 0.0);
-        assert_eq!(combine_restitution(wall, floor), 0.0);
-        assert_eq!(combine_restitution(floor, floor), 0.0);
+        let floor = SurfaceKind::Floor.friction();
+        let wall = SurfaceKind::Wall.friction();
+        assert_eq!(combine_friction(floor, wall), 0.0);
+        assert_eq!(combine_friction(wall, floor), 0.0);
+        assert_eq!(combine_friction(floor, floor), 0.0);
         // Two walls are the only bouncing contact, and they average.
-        assert_eq!(combine_restitution(wall, wall), WALL_RESTITUTION);
-        assert_eq!(combine_restitution(Some(0.1), Some(0.3)), 0.2);
+        assert_eq!(combine_friction(wall, wall), WALL_FRICTION);
+        assert_eq!(combine_friction(Some(0.1), Some(0.3)), 0.2);
     }
 
     /// Builds a `.vex` file from `(class_id, payload)` nodes, all at the root.

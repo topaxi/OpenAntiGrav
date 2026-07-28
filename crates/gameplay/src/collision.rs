@@ -139,36 +139,36 @@ mod tests {
     }
 
     /// `oag-physics` may not depend on `oag-formats`, so it carries its own copy
-    /// of the surface restitutions and of the "never bounce" rule. This crate is
-    /// the only one that can see both, which makes it the only place the two can
-    /// be held to agreement - and they have to agree, because
-    /// `oag_physics::wall` bounces a ship off a wall using its copy while the
-    /// value itself was read off the disc into the other.
+    /// of the surface frictions and of the "frictionless" sentinel rule. This
+    /// crate is the only one that can see both, which makes it the only place the
+    /// two can be held to agreement - and they have to agree, because
+    /// `oag_physics::wall` scrubs a ship's tangential velocity using its copy
+    /// while the value itself was read off the disc into the other.
     #[test]
-    fn the_two_copies_of_the_restitution_rule_agree() {
+    fn the_two_copies_of_the_friction_rule_agree() {
         for kind in SurfaceKind::ALL {
             let Some(surface) = surface_for(kind) else {
                 continue;
             };
             assert_eq!(
-                kind.restitution(),
-                surface.restitution(),
+                kind.friction(),
+                surface.friction(),
                 "{kind:?} disagrees between oag-formats and oag-physics"
             );
         }
         assert_eq!(
-            oag_formats::collision::WALL_RESTITUTION,
-            oag_physics::WALL_RESTITUTION
+            oag_formats::collision::WALL_FRICTION,
+            oag_physics::WALL_FRICTION
         );
 
-        // The sentinel rule itself, not just the constants: one non-bouncing
-        // side makes the whole contact non-bouncing, and it must never come out
+        // The sentinel rule itself, not just the constants: one frictionless
+        // side makes the whole contact frictionless, and it must never come out
         // negative.
-        for a in [Some(oag_physics::WALL_RESTITUTION), None] {
-            for b in [Some(oag_physics::WALL_RESTITUTION), None] {
-                let formats = oag_formats::collision::combine_restitution(a, b);
-                assert_eq!(formats, oag_physics::combine_restitution(a, b));
-                assert!(formats >= 0.0, "restitution went negative: {a:?} {b:?}");
+        for a in [Some(oag_physics::WALL_FRICTION), None] {
+            for b in [Some(oag_physics::WALL_FRICTION), None] {
+                let formats = oag_formats::collision::combine_friction(a, b);
+                assert_eq!(formats, oag_physics::combine_friction(a, b));
+                assert!(formats >= 0.0, "friction went negative: {a:?} {b:?}");
             }
         }
     }
