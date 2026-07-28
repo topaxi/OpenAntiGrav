@@ -457,6 +457,46 @@ and the packing reading was right anyway. The mechanism is a CLAMP.**
   world space rather than rebasing it"; three new names + two data labels
   applied and saved; `apply-ghidra-names.py` 490/0.
 
+**`boot-movies` (Task #14, `af2a7fd` + `984e130`): the "Wipeout Pure video at
+boot" user report is fixed, and the fix corrected the orchestrator's own
+brief.** The boot now enters `LogoFMV` playing `Data\Movies\Intro.PMF` - the
+Pulse FX400 team showcase - straight through with no frame holds, ending on
+the WipEout Pulse logo (screenshot-verified against the real disc; `just`
+gate green at 792 tests).
+
+- **Root cause confirmed by decoding, not inference**: `hash:b1ba72c3` is
+  the SCEE dev/pub reel - white background, cyan wireframe, "A-G RACING
+  //2197" plate, **zero Pulse branding at any frame** - and ships on Pure's
+  disc at the same sizes. `Intro.PMF` is unmistakably Pulse and exists in
+  no Pure archive. A stale-cache explanation was ruled out (no `b1ba72c3`
+  cache entry existed before the run).
+- **A trap for anyone reading the MoviePlayer runtime capture: the state
+  label is one screen AHEAD of the play.** `MoviePlayer_Open` fires during
+  the *previous* screen: `Intro.PMF` is armed while the language picker is
+  up and *shown by `LogoFMV`*; `Backdrop.PMF` is armed during `LogoFMV` and
+  *looped by `FE Screen`* (`repeat="true" sound="false"` - the menu
+  backdrop). The disc's own `Skin.xml` is unambiguous: `Language Selection`
+  has **no Movie widget at all**. The orchestrator's brief read the capture
+  the naive way and specified an inverted mapping; the agent caught it
+  against the XML and implemented the correct one. Recorded in
+  `frontend-video.md` so the ambiguity cannot mislead again. (Our own boot
+  report had printed the correct mapping every run - nobody read it.)
+- `DEFAULT_INTRO_REEL` is repointed to `DEFAULT_BOOT_MOVIE`
+  (`Data\Movies\Intro.PMF`) plus a separate `DEVPUB_REEL`; the reel leg
+  survives as `frontend::Leg::DevPubReel` behind `--reel`, its 144/231/260
+  holds pinned by a ground-truth test so it cannot rot. The PS2 no-PMF
+  degradation path re-verified. Extent trap fixed on the way: the old
+  `Frames(261)` default would have cut the 1200-frame Intro at 8.7 s;
+  default is now `Extent::Whole`, `--full-movie` replaced by
+  `--movie-frames <n>`.
+- **Still unknown, now explicitly**: what actually plays the three
+  260-frame reels. Nothing in boot does.
+- Bookkeeping: the agent's ADR-0008 revert got swept into `408129b`
+  (another agent's commit) - content verified correct, the original ADR is
+  restored; a reminder that concurrent agents in one tree must `git add`
+  only their own paths. `docs/formats/pmf.md`'s stale "only a guess" line
+  is queued as a follow-up.
+
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
 A new session spawned three concurrent background agents in this working tree,
