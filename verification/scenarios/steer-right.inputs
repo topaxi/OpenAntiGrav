@@ -1,0 +1,13 @@
+# The mirror of steer-left.inputs: a single constant turn, held right.
+#
+# See steer-left.inputs for why the pair exists and how to capture it. The two
+# are only useful together - a fitted steering constant that reproduces one
+# direction and not the other is describing an asymmetry that is not in the
+# input, so the pair is what
+# `crates/trace/tests/yaw_authority_ground_truth.rs` checks.
+#
+#     just trace --port 47810 --script verification/scenarios/steer-right.inputs \
+#         --script-lead 2 --warmup-hold cross --warmup 6 \
+#         --out data/traces/talons-junction-steer-right.csv
+
+200 cross right

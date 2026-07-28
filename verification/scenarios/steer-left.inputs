@@ -1,0 +1,29 @@
+# Scenario 2 of docs/reverse-engineering/verification-protocol.md: a single
+# constant turn, held left for the whole run.
+#
+# This exists as a *pair* with steer-right.inputs, and the pair is what
+# `crates/trace/tests/yaw_authority_ground_truth.rs` replays: it wants
+# `data/traces/talons-junction-steer-left.csv` and `-steer-right.csv` and fails
+# on missing input without them. A single held direction is the cleanest probe
+# of the steering law's magnitude, because nothing in the run is transient - the
+# yaw rate reaches whatever balance the drive and the damping settle at and
+# stays there.
+#
+# What it is *not* good for is the sign question, which is why
+# steer-both-ways.inputs exists alongside it: one constant turn cannot tell a
+# sign error from a plausible-looking curve. Use both.
+#
+# **Both halves of the pair end up in a wall**, and that is expected rather than
+# a flaw - 200 ticks of full lock at ~22 units/s is far more rotation than
+# Talon's Junction's first straight has room for. The ground-truth test replays
+# a 110-tick window and drops samples above 3 rad/s for exactly this reason.
+#
+# Capture it the way the reference scenario is captured (Time Trial, Venom,
+# Talon's Junction White, Assegai), warming up on thrust so the run starts at
+# racing speed rather than from a standstill:
+#
+#     just trace --port 47810 --script verification/scenarios/steer-left.inputs \
+#         --script-lead 2 --warmup-hold cross --warmup 6 \
+#         --out data/traces/talons-junction-steer-left.csv
+
+200 cross left

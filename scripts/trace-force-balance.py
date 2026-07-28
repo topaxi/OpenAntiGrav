@@ -86,6 +86,15 @@ def samples(path, normal_gravity, lo=0, hi=None, skip=()):
         speed = math.dist([0.0, 0.0, 0.0], velocity)
         forward_speed = _dot(velocity, forward)
 
+        # Rolling resistance normalises the velocity, so its direction - and
+        # with it the term below - is undefined at a dead stop. A standing-start
+        # capture really does contain such ticks (the launch is captured from
+        # rest, which is the whole point of taking one), so the row is dropped
+        # rather than divided by zero. One tick later the ship is moving and the
+        # row is usable again, so this costs at most the first tick of a launch.
+        if speed <= 1e-6:
+            continue
+
         # Net force along forward, with the along-slope gravity component
         # removed. Mass is 1, so acceleration is force.
         net = _dot(accel, forward) + normal_gravity * forward[1]

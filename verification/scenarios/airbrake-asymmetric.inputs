@@ -1,0 +1,44 @@
+# Asymmetric airbrakes with steering: the only scenario that exercises the
+# airbrake drag term at all.
+#
+# `Ship_UpdateAirbrakes` forms
+#
+#     |airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * fs
+#
+# gated on `fs > 0` (confidence 85, see
+# docs/ghidra/functions/psp-pulse/engine.md). Every capture taken before this
+# file existed holds both airbrakes at zero for its whole length, so the term is
+# **identically zero in all of them** - it has never been observed doing
+# anything, in either direction, and a force-balance measurement taken from
+# those captures cannot see it. That is why it is explicitly not the along-track
+# discrepancy `docs/physics/force-balance-ground-truth.md` measures, and why it
+# needs a scenario of its own.
+#
+# The two halves are mirrored so that the term's *magnitude* can be read
+# independently of any sign convention: `|airbrake_l - airbrake_r|` is symmetric
+# in the two shoulders, so the left-brake-plus-left-steer half and the
+# right-brake-plus-right-steer half must produce the same extra retardation. If
+# they do not, the recovered expression is wrong in a way a single-sided capture
+# would hide.
+#
+# The 30-tick straights between the halves are where both brakes are released
+# with speed still bled off, which is the only part of the run where the term is
+# back at zero at a speed the braked sections also visit - a within-capture
+# control.
+#
+# **This one ends up in a wall too**, and sooner than a plain steering scenario:
+# an airbrake on the inside of a turn is exactly how the game is meant to be
+# cornered, so the ship rotates much harder than `steer` alone would.
+#
+#     just trace --port 47810 \
+#         --script verification/scenarios/airbrake-asymmetric.inputs \
+#         --script-lead 2 --warmup-hold cross --warmup 6 \
+#         --out data/traces/talons-junction-airbrake-asymmetric.csv
+#
+# Reference scenario: Time Trial, Venom, Talon's Junction White, Assegai.
+
+30 cross
+50 cross left l
+30 cross
+50 cross right r
+40 cross
