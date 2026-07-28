@@ -368,12 +368,23 @@ a metre of lateral error by the first corner and a wall shortly after.
 So, precisely: **the committed file is a faithful record of the inputs of a lap
 that happened; it is not a reproducible emulator lap.** For our own side it is
 fully deterministic, which is what it is committed for - `oag-trace run --script`
-gives the same run every time from the same seed row. Making it replay into the
-emulator too needs the start *pose* pinned, not just the start position, and the
-debugger has no save state (see
-[the debugger page](../reverse-engineering/ppsspp-debugger.md#save-states-and-the-input-recording-api-that-may-replace-them)).
-The likeliest fix is the recording API that page describes, which was never
-tried.
+gives the same run every time from the same seed row.
+
+**The pose half of that is now fixed** (2026-07-28). The craft on the start line
+was never settling: it yaws at a constant `0.311` deg/s and the 2.51 degrees
+were eight seconds of wall-clock jitter in the handover between the restart and
+the capture. `psp-trace.py --start-heading 101.0` waits for the pose instead of
+for a duration and pins the heading to **`0.0001` degrees across three
+restarts**, against `4.3468` for the same three with a wall-clock handover;
+method, numbers and what it does not claim are on
+[the debugger page](../reverse-engineering/ppsspp-debugger.md#the-start-pose-is-pinnable-and-the-craft-was-never-settling).
+The candidate that page used to name - PPSSPP's input-recording API - was tried
+and is a dead end: `replay.flush` crashes the emulator on any recording that
+spans a screen transition.
+
+What has **not** been re-run is this section's own experiment: whether a pinned
+pose is enough to make 3,146 open-loop ticks come out as a lap. The pose was a
+necessary condition, not a proven sufficient one.
 
 ### What a real scripted run found
 

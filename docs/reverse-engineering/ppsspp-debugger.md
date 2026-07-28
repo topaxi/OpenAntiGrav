@@ -406,13 +406,110 @@ recording**:
 All four answer on v1.20.4. That is a route to the two things missing here that
 hand-authoring a script does badly: a **full lap**, which nobody wants to write 6,000
 ticks of by hand, and a *human-driven* reference run that could be dumped and
-converted into the committed script format rather than guessed at. Nothing has
-been built on it, and how `replay.execute`'s stream aligns with the per-tick
-breakpoint is unknown.
+converted into the committed script format rather than guessed at.
+
+### The replay API is a dead end on v1.20.4, and this is what it does
+
+It was tried, and the result is a **crash in PPSSPP itself**. Answering that
+they answer is not the same as answering that they work:
+
+- `replay.begin` starts recording and `replay.status` reports `saving: true`.
+  What comes out of a short `replay.flush` is a **17-byte-per-item stream keyed
+  to absolute emulated time**: a 3-second recording of `cross`+`left` flushed as
+  34 bytes, two items, each `action` byte + `u64` timestamp + a payload that
+  reads `0x4080` - `CTRL_CROSS | CTRL_LEFT` - for the button item and
+  `80 80 80 80` (a centred stick) for the analog one. Absolute timestamps are
+  why this can only ever reproduce **from a matching point**, which without a
+  save-state command means from boot.
+- **`replay.flush` kills the emulator as soon as the recording spans a real
+  screen transition.** Three runs, same signature every time: the websocket
+  reply never arrives and the process is gone, leaving
+  `stl_vector.h:1272: Assertion '__n < this->size()' failed` as the last line of
+  its log. It survived a recording that stayed on the boot logo pressing `down`
+  (222 bytes, 13 items); it died on a recording that walked into `Racebox`, and
+  again on one that walked into a Time Trial and drove.
+- So **the record half cannot produce a blob for anything worth replaying**, and
+  `replay.execute` on a real session is untestable from here: there is nothing
+  to hand it. Nothing about this is fixable from this repository - it is
+  upstream's bounds check.
+
+**Do not spend another session on this API** unless a newer PPSSPP fixes the
+assert. The start-pose problem it was the candidate for is solved below without
+it.
 
 For the record, since it is the obvious other idea: **there is no published
 Wipeout Pulse TAS** to borrow inputs from. PSP TASing through libtas exists and
 Wipeout *Pure* is mentioned as working, but no Pulse run was found.
+
+## The start pose is pinnable, and the craft was never settling
+
+The 2.51 degrees above were read as a craft *settling* onto its hover, which
+would mean waiting longer helps. **It is not settling. It is yawing, at a
+constant rate, and it never stops.** Sampled for 40 seconds after a restart, on
+three restarts:
+
+| | |
+| --- | --- |
+| heading at the first breakpoint hit | `96.0944`, `96.0944`, `96.0841` degrees |
+| drift rate | `0.005187` deg/frame = **`0.3109` deg/s, identical to four digits on all three** |
+| position at the first hit | within `0.00082` units across the three |
+| creep | `0.0145` units/s, monotone, in the same direction every time |
+
+So the start pose is a **deterministic function of how many frames the craft has
+sat there** - not a random settling, and not something a longer wait improves.
+The 2.51-degree spread was `2.51 / 0.3109 = 8` seconds of difference in how long
+the two runs waited, which is exactly the wall-clock jitter between
+`psp-drive.py restart` exiting and the next process reaching its first
+breakpoint (a `uv` start, a websocket connect, a menu check). Confidence **90**:
+three restarts, six-digit agreement on the rate, and the mechanism predicts the
+old number.
+
+That makes the fix cheap and self-anchoring: **wait for a heading rather than
+for a duration.** `psp-trace.py --start-heading DEGREES` discards breakpoint
+ticks until `atan2(fwd.x, fwd.z)` passes the target and records tick 0 there.
+It needs no frame counter shared between processes, no save state and no memory
+write, and it is exact to one tick - `0.005` degrees. Measured before and after,
+three restarts each, with a deliberate `0`/`6`/`14`-second jitter in the
+handover to stand in for a real chain's:
+
+| | heading spread | position spread |
+| --- | ---: | ---: |
+| wall-clock handover (what the chain did) | **`4.3468` degrees** | `0.0527` units |
+| `--start-heading 101.0` | **`0.0001` degrees** | `0.0022` units |
+
+The mechanism is visible in the run log rather than only in the result: the
+three pinned runs discarded **942, 583 and 104 ticks** before starting, which is
+the jitter they were absorbing, and all three still began within `0.0001`
+degrees of each other.
+
+One flake to expect while doing this: `psp-drive.py restart` fails perhaps one
+time in three with `memory.read_u32: Invalid address` - the craft is read while
+the race is still loading and the pointer is not live yet. It is transient and a
+plain retry fixes it; the measurement above retried once per restart. Anything
+scripting restarts in a loop should retry rather than treat it as a failure.
+
+`just scripted-emu` passes trailing arguments straight to `psp-trace.py`, so the
+whole chain takes it without a recipe change:
+
+```sh
+just scripted-emu verification/scenarios/steer-left.inputs \
+    data/traces/steer-left.csv --start-heading 101.0
+```
+
+The residual `0.0022` units is the craft's own creep during the one tick of
+heading resolution, and it is 24x smaller than before. Pick a target that every
+run can still reach: the heading starts at `96.09` and only ever increases, so
+`101.0` allows about 16 seconds of handover jitter, and a target already passed
+is refused with a message rather than waited out for a lap. The wait costs about
+`3.9` degrees at `0.311` deg/s of *emulated* time, and the capture runs at
+`0.37x`, so budget roughly 35 seconds of wall clock for it.
+
+Two things this does **not** claim. It has not been re-tested end to end on a
+whole-lap open-loop replay - the pose is pinned, whether that is *sufficient*
+for 3,146 ticks of open loop is the next measurement, and the honest prior is
+that a lap amplifies whatever is left. And the numbers above are Talon's
+Junction's start line only; another track's drift rate has not been measured,
+though the mechanism gives no reason for one to be at rest either.
 
 ## Driving a whole race, and the three numbers that make it possible
 

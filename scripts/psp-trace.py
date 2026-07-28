@@ -30,6 +30,7 @@ derived data - it is a list of button names somebody chose - and is committed.
 """
 
 import argparse
+import math
 import struct
 import time
 import sys
@@ -136,6 +137,30 @@ def main():
         "emulator at a small fraction of real time - too slow to sit through a "
         "start-line countdown. Warm up first, then capture the part that matters.",
     )
+    parser.add_argument(
+        "--start-heading",
+        type=float,
+        metavar="DEGREES",
+        help="discard ticks until the craft's heading - `atan2(fwd.x, fwd.z)` in "
+        "degrees - passes this, then record tick 0. A craft parked on the start "
+        "line is not at rest: it yaws at a steady 0.311 deg/s, the same to six "
+        "digits on every restart, so its pose is a function of how many frames it "
+        "has sat there and a wall-clock handover between `psp-drive.py restart` "
+        "and this script is what makes a start pose irreproducible. Waiting for a "
+        "heading is self-anchoring - it needs no shared frame counter and no "
+        "memory write - and it pins the pose to one tick, 0.005 degrees. See "
+        "docs/reverse-engineering/ppsspp-debugger.md.",
+    )
+    parser.add_argument(
+        "--start-heading-timeout",
+        type=int,
+        default=6000,
+        metavar="TICKS",
+        help="give up waiting for --start-heading after this many ticks. The "
+        "guard that matters is the other one: the heading only ever increases on "
+        "this start line, so a target already passed would otherwise wait for a "
+        "whole lap.",
+    )
     args = parser.parse_args()
 
     if args.script and args.hold:
@@ -217,7 +242,11 @@ def main():
         follow = args.craft
         tick = 0
         hits = 0
-        budget = ticks * args.max_ships + args.max_ships
+        waited = 0
+        # The ticks spent waiting for --start-heading are breakpoint hits too, so
+        # the budget has to cover them or the loop runs out before tick 0.
+        allowance = args.start_heading_timeout if args.start_heading is not None else 0
+        budget = (ticks + allowance) * args.max_ships + args.max_ships
         # `each_hit` owns the break/arm/resume cycle, including the two traps
         # around it, so the filter is a `continue` inside its loop rather than a
         # second copy of that sequence.
@@ -241,6 +270,28 @@ def main():
             craft_blob = dbg.read(craft, CRAFT_BYTES)
             body = struct.unpack("<I", craft_blob[BODY_POINTER : BODY_POINTER + 4])[0]
             body_blob = dbg.read(body, CRAFT_BYTES)
+
+            if args.start_heading is not None:
+                forward = struct.unpack_from("<3f", body_blob, 0x20)
+                degrees = math.degrees(math.atan2(forward[0], forward[2]))
+                if waited == 0:
+                    print("waiting for heading %.4f, at %.4f" % (args.start_heading, degrees),
+                          file=sys.stderr)
+                    if degrees > args.start_heading:
+                        print("the heading is already past the target - a start pose "
+                              "cannot be pinned to it on this run", file=sys.stderr)
+                        return 2
+                waited += 1
+                if degrees < args.start_heading:
+                    if waited > args.start_heading_timeout:
+                        print("gave up after %d tick(s) at heading %.4f" % (waited, degrees),
+                              file=sys.stderr)
+                        return 2
+                    continue
+                print("started at heading %.4f after %d tick(s)" % (degrees, waited),
+                      file=sys.stderr)
+                args.start_heading = None
+
             values = [struct.unpack("<f", craft_blob[at : at + 4])[0] for _, at in CRAFT_FIELDS]
             values += [struct.unpack("<f", body_blob[at : at + 4])[0] for _, at in BODY_FIELDS]
             print("%d,%s" % (tick, ",".join("%.7g" % v for v in values)), file=out)
@@ -278,4 +329,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
