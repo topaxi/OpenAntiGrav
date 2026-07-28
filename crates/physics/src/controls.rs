@@ -41,7 +41,7 @@ use crate::ship::{ShipControls, ShipState};
 /// **22x, not 100x**. Dividing by 100 here lands 4.7x too *weak* - measured, RMS
 /// error 1.05 rad/s against captures whose signal is 1.5. The real discrepancy and
 /// what stands in for it are documented at
-/// [`crate::forces::YAW_DRIVE_CALIBRATION`].
+/// [`crate::forces::YAW_INVERSE_INERTIA`].
 pub const CONTROL_RANGE: f32 = 100.0;
 
 /// The brake state's ceiling, and so every control state's nominal maximum.

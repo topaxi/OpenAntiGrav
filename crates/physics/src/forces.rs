@@ -58,131 +58,157 @@ use crate::params::Handling;
 use crate::ship::{ShipControls, ShipState};
 use crate::{controls, engine, passive};
 
-/// The factor the recovered yaw law needs to reproduce the measured yaw rate.
+/// The body-space box the ship's inverse inertia tensor is built from, `x`.
 ///
-/// **This is a calibration, not a recovered value, and the original has nothing
-/// like it.** It is written down because the alternative is a game that turns 22x
-/// too hard, and because the size and stability of the discrepancy are themselves
-/// a finding.
+/// See [`YAW_INVERSE_INERTIA`]. A code literal in the ship-entity constructor, not
+/// authored data: the same three numbers for every craft in the game.
+pub const INERTIA_BOX_X: f32 = 12.0;
+
+/// The body-space inertia box, `y`. See [`INERTIA_BOX_X`].
+pub const INERTIA_BOX_Y: f32 = 8.0;
+
+/// The body-space inertia box, `z`. See [`INERTIA_BOX_X`].
+pub const INERTIA_BOX_Z: f32 = 12.0;
+
+/// The mass the inertia tensor is built with, and **not** the mass the ship flies
+/// with.
 ///
-/// # The recovered law is verified, and it is wrong by 22x
+/// `FUN_08840c74` calls `Body_SetMass(body, 0.9)` at `0x08841414` and then
+/// `Body_SetBoxInertia` at `0x08841488`, in that order, so the tensor captures
+/// `0.9`. `Ship_UpdateCraft` then calls `Body_SetMass` again **every frame**
+/// (`0x0884985c`, from `Physical.mass` at class `+0xf4`) and nothing recomputes
+/// the tensor - `Body_SetMass` is six instructions and touches only mass and
+/// inverse mass. So the ship's rotational inertia is frozen at construction and
+/// decoupled from its translational mass for the rest of the race.
 ///
-/// Every link was read at instruction level:
+/// That is not a detail: it is what the captures measure. See
+/// [`YAW_INVERSE_INERTIA`].
+pub const INERTIA_MASS: f32 = 0.9;
+
+/// The yaw entry of the ship's body-space inverse inertia tensor, `1 / I_yy`.
 ///
-/// - `HandlingXml_ParseTurning` (`0x088398e0`) stores `Turning.amount` with
-///   `swc1 f0,0xd0(a0)` - **verbatim, no multiply**, unlike `Engine.amount`
-///   (`* 0.001`), `Brakes.amount` (`* -0.01`) and `Airbrake.amount` (`* 1e-4`).
-///   Confidence 95, read from disassembly.
-/// - `Xml_AttributeAsFloat` (`0x0895379c`) is a plain decimal reader, so an
-///   authored value arrives unchanged.
-/// - `Ship_UpdateSteering` (`0x08848788`) computes `steer * Turning.amount` and
-///   adds it to `craft+0x340`.
-/// - `Ship_ApplyAngularDamping` (`0x08848ed0`) adds
-///   `-5.0 * localAngularVelocity.y` to **the same accumulator** (see
-///   [`crate::passive::YAW_DAMPING`]).
-/// - `Body_AddTorqueLocal` (`0x0884d5bc`) forwards it to `body+0x120`, and the PS2
-///   `Body_Integrate` (`0x0015d088`) applies it as
-///   `angularVelocity += inverseInertia * torque * h`.
+/// **Recovered, not fitted.** This replaces `YAW_DRIVE_CALIBRATION`, a fitted
+/// `0.0452` that stood here while the tensor's writer was unknown. It is a
+/// textbook solid-box inertia, and the numbers are literals in the binary.
 ///
-/// Because drive and damping share one accumulator, any common factor - the
-/// inertia tensor included - cancels at equilibrium, leaving
-/// `omega = drive / 5` unconditionally. Substituting the shipped Assegai
-/// `Turning` block and the full-deflection `steer` near 96 the captures show makes
-/// that about **22x** the rate the hardware turns at. (The product is not recorded
-/// here, per `docs/formats/handling-stats.md`'s standing decision to keep shipped
-/// design data out of this repository.)
+/// # The writer
 ///
-/// The original does **1.5 rad/s**, measured two independent ways: the runtime
-/// capture in `docs/ghidra/functions/psp-pulse/engine.md` (`k` about `0.0155 rad/s`
-/// per unit of steer, confidence 90), and both captures in `data/traces/`, where
-/// `dot(cross(fwd_t, fwd_t+1), up) / dt` gives `+1.51` held left and `-1.42` held
-/// right.
+/// `Body_SetBoxInertia` (`0x0884e1ac`, 26 instructions) zeroes `body+0x40..0x80`
+/// from the all-zero constant at `0x08a907e0` and writes three diagonal entries:
 ///
-/// # Why it scales the whole yaw axis and not just steering
+/// ```text
+/// 0884e1ac  mul.s f13,f13,f13        ; y*y
+/// 0884e1b4  mul.s f14,f14,f14        ; z*z
+/// 0884e1c0  mul.s f12,f12,f12        ; x*x
+/// 0884e1cc  add.s f15,f13,f14        ; y*y + z*z
+/// 0884e1e4  add.s f14,f12,f14        ; x*x + z*z
+/// 0884e1f8  add.s f12,f12,f13        ; x*x + y*y
+/// 0884e1fc  lui   a1,0x4140          ; 12.0f
+/// 0884e200  lwc1  f16,0x374(a0)      ; the body's mass
+/// 0884e208  mul.s f15,f16,f15
+/// 0884e20c  div.s f15,f17,f15        ; 12 / (m * (y*y + z*z))
+/// 0884e218  swc1  f15,0x40(a0)       ; I^-1 [0][0]
+/// 0884e224  swc1  f14,0x54(a0)       ; I^-1 [1][1]
+/// 0884e22c  swc1  f12,0x68(a0)       ; I^-1 [2][2]
+/// ```
 ///
-/// Because the discrepancy is a property of the **axis**, not of the steering
-/// term. Three things drive body-local yaw - the airbrake's differential, steering,
-/// and [`crate::hover::BANK_TO_YAW_GAIN`]'s `30 * right.y` - and they all land in
-/// the same accumulator the missing resistance would act on.
+/// `I_xx = m (y^2 + z^2) / 12` is the solid rectangular cuboid, exactly.
 ///
-/// Scaling only steering was tried first and is **wrong in a way that shows up
-/// immediately in play**: it leaves bank-to-yaw 22x too strong *relative to*
-/// steering, so the break-even camber where a corner out-turns full opposite lock
-/// falls to about 14 degrees and a banked track steers the ship for you. That is
-/// pinned by
-/// `full_lock_out_yaws_the_bank_on_a_steeply_cambered_track` in
-/// `crates/physics/tests/yaw_authority.rs`.
+/// It has **one** caller, the thin world-level wrapper `World_SetBodyBoxInertia`
+/// (`0x0884e900`), which itself has **one** caller: the ship-entity constructor
+/// `FUN_08840c74`, at `0x08841488`, with the literal box `(12, 8, 12)` built at
+/// `0x08841470`-`0x0884148c` from `0x41400000`, `0x41000000`, `0x41400000`.
 ///
-/// Applied here, after every drive term and before the damping, the *ratios*
-/// between the three are preserved exactly and only the axis's overall authority
-/// moves. The damping is deliberately outside it - scaling that too would cancel
-/// straight back out of the equilibrium.
+/// # Why one constant for every ship - now answered rather than argued
 ///
-/// # Where the number comes from
+/// The old note here defended a single global factor as "what the evidence
+/// supports" and flagged that a per-ship inertia would break it. The box is a
+/// **code literal at a single call site**, so every craft in the game genuinely
+/// has the same tensor: `Misc` `width`/`length`/`height` reach the *collider*
+/// (scaled by `0.75` a few lines earlier in the same constructor) and not the
+/// inertia. The global constant is not a compromise; it is the mechanism.
 ///
-/// Fitted, by stepping `omega' = (-steer * amount * S - 5 * omega)` over each
-/// capture's own recorded `steer` and `dt` and minimising RMS error against the
-/// measured yaw rate. The two captures were fitted **separately** and agree:
-/// `0.0454` held left, `0.0450` held right, RMS error `0.10` and `0.04 rad/s`
-/// against a signal of `1.5`.
+/// # It agrees with the captures, and the agreement picks out the mass
 ///
-/// It is applied to the drive rather than folded into the damping deliberately.
-/// Raising [`crate::passive::YAW_DAMPING`] to about `107` would hit the same
-/// equilibrium, but it would also collapse the time constant from `0.2 s` to
-/// `0.009 s`, and the captures rule that out: `steer` chatters by about +/-8 % at
-/// roughly 20 Hz (the authentic non-clamping ramp in [`crate::controls`]) and the
-/// measured yaw rate does **not** follow it - it decays smoothly.
+/// With `(12, 8, 12)` and `m = 0.9` the tensor's inverse is
+/// `I = (15.6, 21.6, 15.6)` on `(right, up, forward)`. `scripts/trace-angular-fit.py`
+/// fitted the recorded `body+0x160` column against a body-local angular velocity
+/// on two captures and got `~(15, 21..22, 14..16)` - the same `x == z` symmetry
+/// and the same ratio (`1.385` recovered against `1.413` fitted), from a
+/// measurement that knew nothing about this function.
 ///
-/// # What is actually missing
+/// The agreement is sharp enough to **discriminate the mass**, which is the part
+/// worth keeping:
 ///
-/// Some yaw-opposing term in `Ship_UpdateCraft` that this crate does not model.
-/// The same shape of gap appeared on the longitudinal axis - the docs' "resistance
-/// is 12x short" - and resolved not as a missing resistance but as *thrust the
-/// original does not apply*, via an early return in `Ship_UpdateEngine` gated on
-/// the collision-stun timer `craft+0x290`. A yaw analogue is the first place to
-/// look; `Ship_ApplyLateralGrip` (`0x08848b78`) returns early on that same timer.
+/// | tensor built with | `I_yy` | against the fit's `21.2` |
+/// | --- | ---: | ---: |
+/// | `m = 0.9` (the constructor's) | `21.6` | `1.9 %` |
+/// | `m = 1.0` (`Body_Init`'s default) | `24.0` | `13 %` |
 ///
-/// One numeric lead, recorded but **not** built on: `1 / 0.0452` is `22.1`, and if
-/// the drive were divided by a yaw moment of inertia while the damping stayed an
-/// angular acceleration, `S` would be `1 / I_yy`. A textbook box tensor for the
-/// shipped Assegai hull gives `16.6`, the right order but 33 % out - which is why
-/// it stays a lead. Confidence **45** on the mechanism, **80** on the number
-/// reproducing the captures.
+/// So the captures independently confirm both the `Body_SetMass(0.9)` read *and*
+/// [`INERTIA_MASS`]'s claim that the tensor is frozen at construction: if it
+/// tracked the runtime mass the fit would have found `24`.
 ///
-/// # Why one constant for every ship
+/// Against the constant this replaces, `0.0452` fitted versus `0.046296`
+/// recovered is `2.4 %` - inside the spread of the fits themselves
+/// (`0.0454`/`0.0450` from the force-law fit, `0.04686`/`0.04506` from the
+/// angular-column fit).
 ///
-/// A single factor preserves the *relative* agility the designers authored:
-/// `Turning.amount` spans a factor of 1.38 across the teams, and scaling all of
-/// them alike keeps the nimble ships nimble. Since only one team was ever
-/// captured, that is also the only choice the evidence supports.
+/// # Why scaling the yaw drive is the *exact* form of this, not an approximation
 ///
-/// It is worth knowing which way this breaks. The inertia lead above, if it is
-/// ever confirmed, makes the missing factor **per-ship** - it would scale with hull
-/// dimensions, so a global constant would leave the largest hulls turning too hard
-/// and the smallest too softly. Capturing a second team, ideally one at the far end
-/// of the `amount` range, is what would tell the two apart.
-/// # What this number actually is, now that the mechanism is read
+/// The original damps **angular momentum**, not angular velocity:
+/// `Ship_ApplyAngularDamping` (`0x08848ed0`) loads `body+0x160` at `0x08848f08`,
+/// which `docs/ghidra/functions/psp-pulse/rigid-body.md` establishes is `L`, and
+/// multiplies it by `(-pitch_damping, -5, -2)`. So the original's yaw axis is
 ///
-/// **It is one entry of the body's inverse inertia tensor**, and the value here
-/// is still the fitted one only because the tensor's *writer* has not been found.
+/// ```text
+/// dL/dt = drive - 5 L,   omega = c L   with c = YAW_INVERSE_INERTIA
+/// ```
 ///
-/// `Body_Integrate` (`0x0884e230`) integrates torque straight into `body+0x160`
-/// with no inertia and no mass divide, then maps it to the angular velocity that
-/// turns the basis as `body+0x150 = basis^T * (body+0x40) * basis * body+0x160`
-/// (`0x0884e380`-`0x0884e39c`). So `body+0x160` is **angular momentum**, the
-/// accumulators hold **torque**, and `body+0x40` is the body-space inverse
-/// inertia tensor. The trace column this constant was fitted against is `I * w`,
-/// which is why dividing it by a body-local angular velocity recovers a per-axis
-/// factor at all, and why `1 / 0.0452` lands on the fit's yaw scale. See
-/// `docs/ghidra/functions/psp-pulse/rigid-body.md`.
+/// and differentiating the second into the first gives
+/// `domega/dt = c * drive - 5 * omega`. That is precisely what this crate
+/// computes when the yaw drive is scaled by `c` and the damping is left as an
+/// angular acceleration: same equilibrium, same `0.2 s` time constant, same
+/// transient. **This is the read law, in a different but equivalent
+/// arrangement**, not a stand-in for it.
 ///
-/// `Body_Init` leaves `body+0x40` as identity, so a craft's tensor is written by
-/// something else - the way `body+0x388` and `body+0x384` are - and that writer is
-/// unread. Until it is, **this stays a fitted stand-in and keeps its name**:
-/// substituting the fit's own `0.0452` and calling it recovered would be tuning
-/// wearing a costume. Confidence 88 on the mechanism, 0 on the constant being the
-/// original's.
-pub const YAW_DRIVE_CALIBRATION: f32 = 0.0452;
+/// It also retires the old note's "the inertia cancels at equilibrium, so it
+/// cannot be the missing factor". That argument assumed the damping read the
+/// angular *velocity*. It reads the momentum, and that is exactly why the
+/// inertia survives.
+///
+/// # What this does **not** yet fix: pitch and roll
+///
+/// The equivalence above is specific to the yaw axis, because that is the only
+/// axis this crate scales. On pitch and roll the same reading predicts
+/// `omega = drive / (damping * I)` where this crate computes `omega = drive /
+/// damping` - so **the crate applies about `15.6x` more pitch and roll authority
+/// than the original**, from `I_xx = I_zz = 15.6`.
+///
+/// That is deliberately not applied here. Landing it means moving the whole
+/// crate onto the momentum model - accumulators as torque, damping on `L`,
+/// [`crate::ship::Body::inertia`] carrying the real tensor - and half-applying
+/// that is the same failure mode `crate::integrate`'s docs warn about for the
+/// handedness flip. There is also **no capture of a pitch or roll input** to
+/// validate it against; the yaw axis has two. A held-pitch capture on the same
+/// scenario is what would settle it, and it is the obvious next task.
+///
+/// # Confidence
+///
+/// **92.** Every instruction of the writer, its single call site, the literal
+/// arguments and the mass ordering were read with the Allegrex module, and the
+/// result agrees with an independent two-capture fit to `2 %` on the one axis
+/// the fit constrains, reproducing a symmetry (`x == z`) the fit found on its
+/// own. One binary; the PS2 was not checked.
+///
+/// A methodology note worth keeping: an earlier revision of this constant
+/// recorded "a textbook box tensor for the shipped Assegai hull gives `16.6`,
+/// the right order but 33 % out - which is why it stays a lead". That lead was
+/// right in **kind** and wrong in its **dimensions** - the hull is not the box;
+/// a hard-coded `(12, 8, 12)` is. Being 33 % out was evidence about the inputs,
+/// not about the shape.
+pub const YAW_INVERSE_INERTIA: f32 =
+    12.0 / (INERTIA_MASS * (INERTIA_BOX_X * INERTIA_BOX_X + INERTIA_BOX_Z * INERTIA_BOX_Z));
 
 /// The world outside the ship, as the force law sees it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -435,10 +461,13 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let vertical_damping = passive::vertical_damping(up, velocity, contact_grounded);
 
     // Every body-local yaw *drive* has landed by now - the airbrake's at step 3,
-    // steering at step 4, bank-to-yaw at step 8 - and the damping has not. Scaling
-    // here is what keeps them in proportion to each other; see
-    // `YAW_DRIVE_CALIBRATION`.
-    acc.local_angular.y *= YAW_DRIVE_CALIBRATION;
+    // steering at step 4, bank-to-yaw at step 8 - and the damping has not. That
+    // ordering is what makes this the right place: the original damps angular
+    // *momentum*, and `domega/dt = c * drive - 5 * omega` is the exact
+    // rearrangement of that onto an acceleration accumulator. The damping must
+    // stay outside the scale for the equivalence to hold. See
+    // `YAW_INVERSE_INERTIA`.
+    acc.local_angular.y *= YAW_INVERSE_INERTIA;
 
     acc.world_angular += weathervane;
     acc.local_angular += angular_damping;
@@ -544,6 +573,38 @@ mod tests {
             },
             ..ShipState::default()
         }
+    }
+
+    /// The recovered tensor, pinned as the three numbers the binary computes.
+    ///
+    /// Not a test of this crate's own arithmetic: the diagonal `(15.6, 21.6, 15.6)`
+    /// is what `scripts/trace-angular-fit.py` independently measured off two real
+    /// captures as `~(15, 21..22, 14..16)`, so these three values are the point of
+    /// contact between an instruction read and a hardware measurement. If someone
+    /// edits [`INERTIA_BOX_X`] or [`INERTIA_MASS`] this is what says the tensor no
+    /// longer matches what the original's own recordings show.
+    #[test]
+    fn the_recovered_inertia_tensor_is_a_solid_box() {
+        let xx =
+            12.0 / (INERTIA_MASS * (INERTIA_BOX_Y * INERTIA_BOX_Y + INERTIA_BOX_Z * INERTIA_BOX_Z));
+        let zz =
+            12.0 / (INERTIA_MASS * (INERTIA_BOX_X * INERTIA_BOX_X + INERTIA_BOX_Y * INERTIA_BOX_Y));
+
+        // The box is square in plan, so pitch and roll inertia are equal and the
+        // yaw one is the odd axis out - the `x == z` symmetry the fit also found.
+        assert_eq!(xx, zz);
+        assert!(
+            YAW_INVERSE_INERTIA < xx,
+            "yaw must be the hardest axis to turn"
+        );
+
+        // (15.6, 21.6, 15.6), to a tolerance far tighter than the fit's own spread.
+        assert!((1.0 / xx - 15.6).abs() < 0.01, "I_xx was {}", 1.0 / xx);
+        assert!(
+            (1.0 / YAW_INVERSE_INERTIA - 21.6).abs() < 0.01,
+            "I_yy was {}",
+            1.0 / YAW_INVERSE_INERTIA
+        );
     }
 
     /// The staleness invariant, asserted where it is observable: on the frame a ship

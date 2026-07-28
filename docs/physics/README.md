@@ -24,9 +24,12 @@ on which candidate terms are already eliminated.
 **A second part is measured rather than read**, and it is the rotational half of
 the same story. [What `body+0x160` holds](angular-velocity-column.md) settles the
 sign and the frame of the recorded angular-velocity column against five captures'
-own basis derivatives, and finds the yaw axis carrying a factor of `21.2` -
-`YAW_DRIVE_CALIBRATION`'s reciprocal, arrived at with no simulation and no fit
-against our own physics.
+own basis derivatives, and finds the yaw axis carrying a factor of `21.2`,
+arrived at with no simulation and no fit against our own physics. The tensor's
+writer has since been read - a hard-coded solid box, see
+[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md) - and it gives
+`21.6`, so `oag_physics::forces::YAW_INVERSE_INERTIA` is now a recovered value
+rather than the fitted `YAW_DRIVE_CALIBRATION` that stood there.
 
 **This page no longer covers the whole force law.**
 [Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse/engine.md) was read
@@ -437,10 +440,11 @@ plausible-looking number would be indistinguishable from a recovered one later.
   right and `Turning.amount` really is stored verbatim, yet yaw still comes out about
   **22x** too strong. Dividing by the control range "fixes" it to 4.7x too weak. See
   [engine.md](../ghidra/functions/psp-pulse/engine.md#steering) for the instruction-level
-  reading and `oag_physics::forces::YAW_DRIVE_CALIBRATION` for what stands in
-  meanwhile - applied to the whole body-local yaw axis, because the bank-to-yaw
-  coupling recorded above shares the same accumulator and therefore the same
-  discrepancy.
+  reading and `oag_physics::forces::YAW_INVERSE_INERTIA` for what closes it -
+  **the yaw entry of the body's inverse inertia tensor**, recovered from
+  `Body_SetBoxInertia`, applied to the whole body-local yaw axis because the
+  bank-to-yaw coupling recorded above shares the same accumulator and therefore
+  the same factor.
 - **Whether the two angular accumulators hold torque or angular acceleration.** Nothing in
   any term visibly divides by an inertia, and the angular damping term's shape is
   dimensionally an acceleration, so `oag-physics` treats both as acceleration. Under that

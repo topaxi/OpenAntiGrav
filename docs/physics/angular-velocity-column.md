@@ -7,6 +7,14 @@ number [`YAW_DRIVE_CALIBRATION`](../../crates/physics/src/forces.rs) was fitted
 to, arrived at from a completely different direction and with no simulation
 involved, which turns a fitted constant into a measured one.
 
+**Read this page's later sections in order - it was written in three passes and
+the conclusion moves.** The measurement below is unchanged and still stands. What
+changed is what it is a measurement *of*: the tensor's writer has since been read
+(a hard-coded solid box giving `21.6`), the constant is now
+`oag_physics::forces::YAW_INVERSE_INERTIA` and is recovered rather than fitted,
+and this page's own numbers turned out to discriminate which mass the tensor was
+built with. See the last two sections.
+
 The two questions this answers were both open, and both were open in a way that
 static reading could not close:
 
@@ -158,10 +166,12 @@ across the whole ramp rather than only at the plateau.
 - `YAW_DRIVE_CALIBRATION` should stop being described as a fitted stand-in for
   an unknown term. It is a division by `21.2` on the yaw axis, and the reason a
   single global constant works across teams is that the factor is a property of
-  the *body layer*, not of `Turning.amount`.
-- Whether the factor is per-ship is still open and still decided the same way:
-  capture a second team, ideally at the far end of the `amount` range, and refit
-  `k_y`. If it moves, the constant has to become per-hull.
+  the *body layer*, not of `Turning.amount`. **Granted in full by the last
+  section: the constant is now recovered and renamed.**
+- Whether the factor is per-ship was open here and decided the same way -
+  capture a second team and refit `k_y`. **That is no longer needed**: the last
+  section reads the tensor's writer, and the box is a code literal shared by
+  every craft.
 
 ## Confirmed at instruction level: the factor is the inertia tensor
 
@@ -184,14 +194,36 @@ accumulators hold torque or angular acceleration" is answered: **torque**.
 Confidence **88**; evidence in
 [rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#bodyx160-is-angular-momentum-bodyx40-is-the-inverse-inertia-tensor).
 
-**One thing this does not do is retire the constant.** `Body_Init` leaves
-`body+0x40` as identity, and whatever writes a craft's real tensor has not been
-found. `YAW_DRIVE_CALIBRATION` can now be *described* correctly - it is one entry
-of `I^-1`, which is exactly why a single global works across teams - but its
-**value is still the fit's**, and writing `1/21.2` in as "recovered" would be
-tuning by another name. The bullet above asking that it stop being called a
-fitted stand-in is therefore half granted: the *mechanism* is recovered, the
-*number* is not.
+## The tensor's writer is now read, and the constant is retired
+
+An earlier revision of this section ended "one thing this does not do is retire
+the constant" - `Body_Init` leaves `body+0x40` as identity and the real writer
+was unknown, so the *mechanism* was recovered and the *number* was not. **Both
+are recovered now.** `Body_SetBoxInertia` (`0x0884e1ac`) builds a textbook solid
+box, and its single call site is the ship-entity constructor with the literal
+dimensions `(12, 8, 12)` and a mass of `0.9` set two calls earlier:
+
+```text
+I = m * (y^2 + z^2) / 12  ->  (15.6, 21.6, 15.6) on (right, up, forward)
+```
+
+against this page's fitted `~(15, 21.2, 15)`. `YAW_DRIVE_CALIBRATION` is gone;
+`oag_physics::forces::YAW_INVERSE_INERTIA` is `12 / (0.9 * (12^2 + 12^2))` =
+`0.046296`, against the fit's `0.0452`. Confidence **92**; evidence in
+[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md).
+
+**This page's measurement did more than corroborate the read - it discriminated
+the mass.** The constructor sets `0.9` and `Ship_UpdateCraft` overwrites the
+body's mass from `Physical.mass` every frame afterwards, but nothing recomputes
+the tensor. Building it with `m = 1.0` instead would give `I_yy = 24.0`, `13 %`
+from what this page measured, against `1.9 %` for `0.9`. So the fit here is what
+confirms the tensor is frozen at construction.
+
+It also answers the third bullet above: the factor is **not** per-ship, and no
+second-team capture is needed to decide it. The box is a code literal at a single
+call site, so every craft in the game shares the tensor. `Misc`
+`width`/`length`/`height` do reach the constructor - scaled by `0.75` - but they
+go to the collider, not the inertia.
 
 ## Reproducing it
 

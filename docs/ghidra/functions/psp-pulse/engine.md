@@ -1197,10 +1197,16 @@ via `Ship_UpdateEngine`'s early return on the collision-stun timer `craft+0x290`
 A yaw analogue is the first place to look, and `Ship_ApplyLateralGrip`
 (`0x08848b78`) returns early on that same timer.
 
-Until it is found, `oag_physics::forces::YAW_DRIVE_CALIBRATION` stands in for
-it: `0.0452`, fitted independently to each capture (`0.0454` left, `0.0450`
-right, RMS error `0.10` and `0.04 rad/s` against a signal of `1.5`) and pinned by
-`crates/trace/tests/yaw_authority_ground_truth.rs`.
+**It has since been found, and it is not a missing force term.** The original
+damps angular *momentum* rather than angular velocity - `Ship_ApplyAngularDamping`
+(`0x08848ed0`) loads `body+0x160` at `0x08848f08` - so the body's inverse inertia
+tensor does not cancel out of the yaw equilibrium the way this section assumed.
+That tensor is a hard-coded solid box giving `I_yy = 21.6`, and
+`oag_physics::forces::YAW_INVERSE_INERTIA` is its reciprocal, `0.046296`,
+replacing the fitted `YAW_DRIVE_CALIBRATION = 0.0452` that stood here. See
+[rigid-body.md](rigid-body.md), and
+`crates/trace/tests/yaw_authority_ground_truth.rs` for the replay against the two
+captures.
 
 **It scales the whole body-local yaw axis, not the steering term.** All three yaw
 drives - the airbrake differential, steering, and the hover epilogue's

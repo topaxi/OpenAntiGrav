@@ -1,10 +1,16 @@
 //! Does the steering term turn the ship at the rate the original turns at?
 //!
-//! [`oag_physics::forces::YAW_DRIVE_CALIBRATION`] is a *fitted* number - the
-//! recovered steering law is verified at instruction level and still predicts a
-//! yaw rate about 22x too high, so a calibration stands in for whatever term is
-//! missing. A fitted number with no test is a number that drifts, so this replays
-//! the two captures it was fitted to and fails if it stops reproducing them.
+//! [`oag_physics::forces::YAW_INVERSE_INERTIA`] is the yaw entry of the body's
+//! inverse inertia tensor, **read** out of `Body_SetBoxInertia` (`0x0884e1ac`)
+//! and its single call site rather than fitted. It used to be a fitted stand-in
+//! called `YAW_DRIVE_CALIBRATION`, and this test used to be what stopped that
+//! number drifting; it now does something better - it checks a recovered
+//! constant against captures it was **not** derived from.
+//!
+//! That distinction matters for how a failure here should be read. Under the old
+//! name a failure meant "the fit has gone stale, refit it". Now it means "the
+//! recovered value and the hardware disagree", which is a finding about the
+//! reading, not a licence to adjust the constant.
 //!
 //! `#[ignore]`d and never run in CI: it needs `data/traces/` and a disc image
 //! under `data/images/`, both gitignored. Run it with `just test-data`.
@@ -20,7 +26,7 @@ use oag_core::math::Vec3;
 use oag_formats::handling;
 use oag_gameplay::handling_for;
 use oag_physics::engine::steering;
-use oag_physics::forces::YAW_DRIVE_CALIBRATION;
+use oag_physics::forces::YAW_INVERSE_INERTIA;
 use oag_physics::passive::YAW_DAMPING;
 use oag_physics::{Handling, ShipState};
 
@@ -47,11 +53,23 @@ const TEAM: &str = "Assegai";
 const CLASS: oag_physics::SpeedClass = oag_physics::SpeedClass::Venom;
 
 /// How far the replayed yaw rate may sit from the recorded one, in rad/s, as an
-/// RMS over the window. The signal itself is near `1.5`, and the fit that chose
-/// the constant scored `0.10` on the left capture and `0.04` on the right, so
-/// this is roughly 2.5x the worse of the two: loose enough not to fail on an
-/// unrelated change to an adjacent term, tight enough that losing the calibration
-/// entirely (a 22x error) cannot pass.
+/// RMS over the window. The signal itself is near `1.5`, so this is a few percent
+/// of it: loose enough not to fail on an unrelated change to an adjacent term,
+/// tight enough that losing the tensor entirely (a 22x error) cannot pass.
+///
+/// Measured, on the day the recovered constant replaced the fitted one:
+///
+/// | | `steer-left` | `steer-right` |
+/// | --- | ---: | ---: |
+/// | fitted `0.0452` | `0.1208` | `0.1995` |
+/// | recovered `0.046296` | `0.1430` | `0.1808` |
+///
+/// **The recovered value is not a regression**: it trades a little accuracy on
+/// the left capture for more on the right, and its mean squared error across the
+/// two is marginally the lower of the two. Recorded rather than smoothed over,
+/// because "the read value happens to also fit better" would be a claim worth
+/// distrusting, and it is not the claim - the two are within each other's noise,
+/// which is exactly what agreement at this level should look like.
 const MAX_RMS_ERROR: f32 = 0.25;
 
 /// The window replayed. Both captures end up in a wall - the scenario notes in
@@ -65,20 +83,20 @@ const IMPACT_YAW: f32 = 3.0;
 /// One step of the isolated yaw equation:
 ///
 /// ```text
-/// omega' = steering(steer) * YAW_DRIVE_CALIBRATION + YAW_DAMPING * omega
+/// omega' = steering(steer) * YAW_INVERSE_INERTIA + YAW_DAMPING * omega
 /// ```
 ///
 /// Isolated deliberately. A full `oag_physics::step` would fold in hover, grip and
-/// wall response, none of which the calibration was fitted to and all of which
-/// carry their own open questions - the replay's known divergences would show up
-/// here as a steering failure.
+/// wall response, none of which this constant describes and all of which carry
+/// their own open questions - the replay's known divergences would show up here
+/// as a steering failure.
 fn advance_yaw(omega: f32, steer: f32, handling: &Handling, dt: f32) -> f32 {
     let state = ShipState {
         steer,
         ..ShipState::default()
     };
 
-    let drive = steering(&state, handling) * YAW_DRIVE_CALIBRATION;
+    let drive = steering(&state, handling) * YAW_INVERSE_INERTIA;
 
     omega + (drive + YAW_DAMPING * omega) * dt
 }
@@ -120,7 +138,7 @@ fn recorded_yaw(capture: &str) -> Vec<(f32, f32, f32)> {
 
 #[test]
 #[ignore = "needs a disc image in data/images/ and captures in data/traces/"]
-fn the_calibration_reproduces_the_recorded_yaw_rate() {
+fn the_recovered_yaw_inertia_reproduces_the_recorded_yaw_rate() {
     let handling = shipped_handling();
 
     for capture in ["steer-left", "steer-right"] {
@@ -146,8 +164,9 @@ fn the_calibration_reproduces_the_recorded_yaw_rate() {
         assert!(
             rmse < MAX_RMS_ERROR,
             "{capture}: RMS yaw error {rmse} rad/s against a signal near 1.5 \
-             (limit {MAX_RMS_ERROR}). YAW_DRIVE_CALIBRATION no longer \
-             reproduces the capture it was fitted to."
+             (limit {MAX_RMS_ERROR}). The recovered YAW_INVERSE_INERTIA no \
+             longer reproduces this capture - a disagreement between the \
+             reading and the hardware, not a constant to retune."
         );
     }
 }

@@ -53,6 +53,22 @@ pub struct Body {
     /// Mass, from `<Physical mass/>`.
     pub mass: f32,
     /// Diagonal of the body-space inertia tensor.
+    ///
+    /// # Why this is `Vec3::ONE` and not the recovered tensor
+    ///
+    /// The original's is now read - a solid box, `(15.6, 21.6, 15.6)`, see
+    /// [`crate::forces::YAW_INVERSE_INERTIA`] - and putting it here would be a
+    /// **no-op that looks like an implementation**: `forces::drain` multiplies
+    /// the angular accumulators by this and `integrate` divides by it, so it
+    /// cancels exactly. That cancellation is a consequence of this crate treating
+    /// the accumulators as angular *acceleration*, which the original does not -
+    /// it accumulates torque and damps angular *momentum*.
+    ///
+    /// Moving the crate onto the momentum model is what would make this field
+    /// mean something, and it is deliberately deferred: it changes pitch and roll
+    /// authority by about `15.6x` and there is no captured pitch or roll input to
+    /// validate that against. Until then the recovered yaw entry is applied at
+    /// the one place it is measured, and this stays the identity.
     pub inertia: Vec3,
 }
 

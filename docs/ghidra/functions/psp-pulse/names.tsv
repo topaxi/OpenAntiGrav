@@ -131,6 +131,9 @@
 0x0884d510	function	Body_AddForceAtPoint	88	rigid-body.md
 0x0884de5c	function	Body_Init	85	rigid-body.md
 0x0884e230	function	Body_Integrate	88	rigid-body.md
+0x0884e1ac	function	Body_SetBoxInertia	92	rigid-body.md
+0x0884e8b0	function	World_SetBodyMass	88	rigid-body.md
+0x0884e900	function	World_SetBodyBoxInertia	88	rigid-body.md
 0x0883a970	function	Xml_ReadGlobalSettings	85	engine.md
 0x0883fdec	function	Ship_UpdateStartBoost	85	engine.md
 0x088390b4	function	Xml_ReadBoostSettings	88	engine.md

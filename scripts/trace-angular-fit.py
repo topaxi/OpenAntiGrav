@@ -26,7 +26,7 @@ What the fit reports, and what each number decides:
   beats the single scale materially, the constants are a diagonal tensor rather
   than a unit conversion - i.e. the column is an angular *momentum* `I * w` in
   body coordinates, and `1/|k_y|` is the yaw term
-  `oag_physics::forces::YAW_DRIVE_CALIBRATION` stands in for.
+  `oag_physics::forces::YAW_INVERSE_INERTIA` stands in for.
 
 The measurement needs no simulation and no disc: a capture's own basis rows
 differentiate into the angular velocity the ship demonstrably had, and the

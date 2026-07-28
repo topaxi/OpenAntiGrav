@@ -939,7 +939,7 @@ mod tests {
     /// `docs/ghidra/functions/psp-pulse/engine.md`.
     const RECORDED_YAW_RATE: f32 = 1.51;
 
-    /// What `YAW_DRIVE_CALIBRATION` stands in for: the recovered steering law is
+    /// What `YAW_INVERSE_INERTIA` stands in for: the recovered steering law is
     /// verified at instruction level and predicts a yaw rate about 22x too high,
     /// so a run without the calibration turns 22 times too fast. The open
     /// question this column was added to move, `HANDOVER.md`.

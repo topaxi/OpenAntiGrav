@@ -1,18 +1,20 @@
 //! What the steering term is worth, in rad/s.
 //!
-//! This file exists because the recovered steering law is *verified* and still
-//! wrong by about 22x: see [`oag_physics::forces::YAW_DRIVE_CALIBRATION`] for
-//! the instruction-level reading and the measurements it disagrees with. The
-//! calibration that closes the gap is fitted to real captures, so it needs a test
-//! that fails when someone changes it - the usual "don't pin this crate's own
-//! arithmetic" rule in `ship_dynamics.rs` is suspended here precisely because
-//! there *is* an external measurement to pin against.
+//! This file exists because the steering law alone predicts a yaw rate about 22x
+//! the one the hardware turns at, and the factor that closes the gap is the yaw
+//! entry of the body's inverse inertia tensor - see
+//! [`oag_physics::forces::YAW_INVERSE_INERTIA`] for the instruction-level
+//! reading. That constant used to be *fitted* and these tests existed to stop it
+//! drifting; it is now *recovered*, and they exist to pin the shape of the axis
+//! it acts on, which is still worth a test - the usual "don't pin this crate's
+//! own arithmetic" rule in `ship_dynamics.rs` is suspended here precisely because
+//! there *is* an external measurement behind it.
 //!
 //! Both tests here run in CI on arbitrary round numbers, and pin the *shape* -
-//! that yaw settles at `steer * amount * calibration / |YAW_DAMPING|` - without
-//! reproducing any shipped handling value. One does it against a two-line ODE, so
-//! a failure points at the constant; the other drives the real `step`, so a
-//! failure points at the wiring.
+//! that yaw settles at `steer * amount * inverse_inertia / |YAW_DAMPING|` -
+//! without reproducing any shipped handling value. One does it against a two-line
+//! ODE, so a failure points at the constant; the other drives the real `step`, so
+//! a failure points at the wiring.
 //!
 //! What pins the *number* is `crates/trace/tests/yaw_authority_ground_truth.rs`,
 //! which replays the original's own recorded captures. It lives over there rather
@@ -25,22 +27,24 @@
 use oag_core::math::Vec3;
 use oag_physics::collide::{Surface, TriangleSoup};
 use oag_physics::engine::steering;
-use oag_physics::forces::YAW_DRIVE_CALIBRATION;
+use oag_physics::forces::YAW_INVERSE_INERTIA;
 use oag_physics::params::{Antigrav, Dimensions, Physical, Turning};
 use oag_physics::passive::YAW_DAMPING;
 use oag_physics::{Body, CollisionWorld, Environment, Handling, ShipControls, ShipState, step};
 
-/// One step of the isolated yaw equation the captures were fitted against:
+/// One step of the isolated yaw equation, the rearrangement of the original's
+/// momentum-damped axis onto an angular acceleration - see
+/// [`oag_physics::forces::YAW_INVERSE_INERTIA`]:
 ///
 /// ```text
-/// omega' = -steer * amount * calibration - YAW_DAMPING_MAGNITUDE * omega
+/// omega' = -steer * amount * inverse_inertia - YAW_DAMPING_MAGNITUDE * omega
 /// ```
 ///
 /// Isolated on purpose. Running the full `step` would fold in hover, grip and
-/// wall response, none of which is what the calibration was fitted to, and all of
+/// wall response, none of which the yaw axis's inertia describes, and all of
 /// which carry their own open questions.
 ///
-/// The calibration is applied here rather than inside `steering` because that is
+/// The inverse inertia is applied here rather than inside `steering` because that is
 /// where [`oag_physics::forces::evaluate`] applies it: to the summed yaw drive,
 /// before the damping. Mirroring the pipeline's shape is the point.
 fn advance_yaw(omega: f32, steer: f32, handling: &Handling, dt: f32) -> f32 {
@@ -48,7 +52,7 @@ fn advance_yaw(omega: f32, steer: f32, handling: &Handling, dt: f32) -> f32 {
         steer,
         ..ShipState::default()
     };
-    let drive = steering(&state, handling) * YAW_DRIVE_CALIBRATION;
+    let drive = steering(&state, handling) * YAW_INVERSE_INERTIA;
 
     omega + (drive + YAW_DAMPING * omega) * dt
 }
@@ -80,7 +84,7 @@ fn terminal_yaw_rate_is_the_damped_equilibrium_of_the_steering_term() {
     let steer = 100.0;
     let dt = 1.0 / 60.0;
 
-    let expected = -(steer * 2.0 * YAW_DRIVE_CALIBRATION) / -YAW_DAMPING;
+    let expected = -(steer * 2.0 * YAW_INVERSE_INERTIA) / -YAW_DAMPING;
 
     let mut omega = 0.0;
     for _ in 0..2000 {
@@ -116,7 +120,7 @@ fn terminal_yaw_rate_is_the_damped_equilibrium_of_the_steering_term() {
 /// which full lock has to exceed.
 ///
 /// This is a ratio, so it is invariant to
-/// [`oag_physics::forces::YAW_DRIVE_CALIBRATION`] - which is the whole point.
+/// [`oag_physics::forces::YAW_INVERSE_INERTIA`] - which is the whole point.
 /// Scaling *only* steering by that factor, and leaving bank-to-yaw at full
 /// strength, put the break-even bank at about 14 degrees and is exactly the bug
 /// this reproduces.
@@ -155,11 +159,11 @@ fn full_lock_out_yaws_the_bank_on_a_steeply_cambered_track() {
 ///
 /// The tolerance is deliberately loose (30 %). Running the whole force law brings
 /// in the weathervane, lateral grip and the hover probes' own torques, none of
-/// which the calibration was fitted to; the assertion is that yaw lands *at the
-/// right rate*, not that the two models agree to the last digit.
+/// which the yaw axis's inertia describes; the assertion is that yaw lands *at
+/// the right rate*, not that the two models agree to the last digit.
 ///
 /// **This does not pin the constant's value**, and neither does the test above:
-/// both derive `expected` from [`YAW_DRIVE_CALIBRATION`], so editing it moves
+/// both derive `expected` from [`YAW_INVERSE_INERTIA`], so editing it moves
 /// both sides and they stay green. That is deliberate - the number's only honest
 /// judge is the original's own behaviour, which is
 /// `crates/trace/tests/yaw_authority_ground_truth.rs` under `just test-data`.
@@ -239,7 +243,7 @@ fn steering_reaches_that_same_rate_through_the_real_force_law() {
         previous_forward = forward;
     }
 
-    let expected = -(100.0 * amount * YAW_DRIVE_CALIBRATION) / -YAW_DAMPING;
+    let expected = -(100.0 * amount * YAW_INVERSE_INERTIA) / -YAW_DAMPING;
     assert!(
         (yaw - expected).abs() < 0.3 * expected.abs(),
         "yaw through the force law settled at {yaw} rad/s, expected about {expected}"

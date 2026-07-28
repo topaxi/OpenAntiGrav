@@ -433,7 +433,7 @@ pub fn brakes(state: &ShipState, handling: &Handling) -> Vec3 {
 ///
 /// This function is the literal law, unmodified. The transcription nonetheless
 /// predicts a yaw rate 22x higher than the original's, and what stands in for the
-/// missing term is [`crate::forces::YAW_DRIVE_CALIBRATION`], applied once to the
+/// missing term is [`crate::forces::YAW_INVERSE_INERTIA`], applied once to the
 /// whole yaw axis in [`crate::forces::evaluate`] rather than here - the airbrake's
 /// yaw and bank-to-yaw share the discrepancy, and scaling only this term throws
 /// their ratios out. Read that constant before changing anything here.

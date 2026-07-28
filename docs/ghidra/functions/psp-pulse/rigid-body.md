@@ -238,31 +238,136 @@ anything. The four fields are one consistent scheme:
 `w_game = -w_physics` convention.** The recorded `+0x160` column is `I * w`, so
 dividing it by a body-local angular velocity recovers the **diagonal of `I`** -
 the fit's `~(-15, -21..-22, -14..-16)` - and `1 / |k_y| = 0.0452`, the value
-`oag_physics::forces::YAW_DRIVE_CALIBRATION` was fitted to, is the **yaw entry of
-`I^-1`**, i.e. one element of the matrix at `body+0x40`. The "missing 22x yaw
-factor" is not a missing force term or a calibration; it is the tensor this
-engine has had all along.
+`YAW_DRIVE_CALIBRATION` was fitted to, is the **yaw entry of `I^-1`**, i.e. one
+element of the matrix at `body+0x40`. The "missing 22x yaw factor" is not a
+missing force term or a calibration; it is the tensor this engine has had all
+along. The writer is read in the next section, and the crate's constant is now
+`oag_physics::forces::YAW_INVERSE_INERTIA`.
 
-### What is still open: who writes `body+0x40`
+### Answered: `Body_SetBoxInertia` (`0x0884e1ac`) writes `body+0x40`
 
 `Body_Init` (`0x0884de5c`) sets `+0x40` to **identity**, and an identity `I^-1`
 would make `+0x150 == +0x160` and leave no per-axis factor at all - which the
-captures rule out. So something writes a non-identity tensor for a craft, exactly
-the way the ship-entity constructor overwrites `+0x388` and `+0x384`, and **that
-writer has not been found**. Checked and excluded: `Body_SetMass` (`0x0884d850`,
-six instructions, mass and invMass only), `Body_SetOrientation` (`0x0884d868`,
-basis and its transpose), `Body_ClearAccumulators` (`0x0884da24`), and
-`Ship_SetColliderFriction` (`0x0884da7c`).
+captures rule out. The writer has now been found. It is 26 instructions, and it
+is the textbook solid-box inertia:
 
-**This is the one step between the reading above and replacing
-`YAW_DRIVE_CALIBRATION` with a recovered constant, and it is deliberately not
-guessed.** The fit says the yaw entry is about `0.0452`; writing that number into
-the crate as "the recovered inertia" would be
-[force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)'s
-forbidden move in a new costume. The mechanism is now known at 88; the *value*
-stays fitted and labelled as fitted until the writer is read. Start from the
-ship-entity constructor `FUN_08840c74`, which is where every other per-craft body
-field is set.
+```text
+0884e1ac  mul.s  f13,f13,f13        ; y*y
+0884e1b0  lui    a2,0x8a9
+0884e1b4  mul.s  f14,f14,f14        ; z*z
+0884e1b8  addiu  a1,a0,0x40
+0884e1bc  lv.q   C400,0x7e0(a2)     ; 0x08a907e0, a 64-byte block of zeroes
+0884e1c0  mul.s  f12,f12,f12        ; x*x
+0884e1c4  sv.q   C400,0x0(a1)       ; body+0x40 := 0
+0884e1cc  add.s  f15,f13,f14        ; y*y + z*z
+0884e1d8  sv.q   C400,0x0(a2)       ; body+0x50 := 0
+0884e1e4  add.s  f14,f12,f14        ; x*x + z*z
+0884e1e8  sv.q   C400,0x0(a2)       ; body+0x60 := 0
+0884e1f4  sv.q   C400,0x0(a2)       ; body+0x70 := 0
+0884e1f8  add.s  f12,f12,f13        ; x*x + y*y
+0884e1fc  lui    a1,0x4140          ; 12.0f
+0884e200  lwc1   f16,0x374(a0)      ; the body's *current* mass
+0884e204  mtc1   a1,f17
+0884e208  mul.s  f15,f16,f15
+0884e20c  div.s  f15,f17,f15        ; 12 / (m * (y*y + z*z))
+0884e210  mul.s  f14,f16,f14
+0884e214  div.s  f14,f17,f14        ; 12 / (m * (x*x + z*z))
+0884e218  swc1   f15,0x40(a0)       ; I^-1 [0][0]
+0884e21c  mul.s  f12,f16,f12
+0884e220  div.s  f12,f17,f12        ; 12 / (m * (x*x + y*y))
+0884e224  swc1   f14,0x54(a0)       ; I^-1 [1][1]
+0884e228  jr     ra
+0884e22c  _swc1  f12,0x68(a0)       ; I^-1 [2][2]
+```
+
+`I_xx = m (y^2 + z^2) / 12` is the solid rectangular cuboid. Note the tensor is
+zeroed rather than set to identity - the constant at `0x08a907e0` was read and is
+64 bytes of `0x00` - so the result is purely diagonal with `[3][3] = 0`.
+
+Confidence **92**. Named `Body_SetBoxInertia`; the thin world-level wrapper
+`World_SetBodyBoxInertia` (`0x0884e900`, 88) looks the body up in the world's
+twelve-entry table and forwards, and `World_SetBodyMass` (`0x0884e8b0`, 88) is
+the same shape over `Body_SetMass`.
+
+#### The arguments are literals, and the mass is not the flying mass
+
+Both wrappers have exactly one caller each, and `World_SetBodyBoxInertia`'s is
+the ship-entity constructor `FUN_08840c74`. Read at instruction level:
+
+| Where | What |
+| --- | --- |
+| `0x08841404`-`0x08841414` | `World_SetBodyMass(world, body, 0.9)` - `0x3f666666` |
+| `0x08841470`-`0x0884148c` | `World_SetBodyBoxInertia(world, body, 12, 8, 12)` - `0x41400000`, `0x41000000`, `0x41400000` |
+
+In that order, so the tensor is built with `m = 0.9`. Two consequences that are
+not obvious and both matter:
+
+- **The box is a code literal, identical for every craft in the game.** `Misc`
+  `width`/`length`/`height` are read a few lines earlier in the same
+  constructor, scaled by `0.75`, and handed to the *collider* setup
+  (`FUN_0884e694`) - not to the inertia. So there is no per-team rotational
+  inertia, and a single global constant in a reimplementation is the mechanism
+  rather than a compromise.
+- **The tensor is frozen at construction.** `Ship_UpdateCraft` calls
+  `Body_SetMass` again on **every frame** (`0x0884985c`, `lwc1 f12,0x60(a1)`
+  through the `craft+0x70` class pointer, i.e. `Physical.mass`), and
+  `Body_SetMass` is six instructions that touch only `+0x374`/`+0x378`. Nothing
+  recomputes `+0x40`. So the craft's rotational inertia is decoupled from its
+  translational mass for the whole race.
+
+#### It agrees with the captures, and the agreement picks out the mass
+
+With `(12, 8, 12)` and `m = 0.9`:
+
+| Axis | `I^-1` | `I` |
+| --- | ---: | ---: |
+| `x` right | `0.064103` | `15.6` |
+| `y` up | `0.046296` | `21.6` |
+| `z` forward | `0.064103` | `15.6` |
+
+`scripts/trace-angular-fit.py` fitted the recorded `body+0x160` column against a
+body-local angular velocity on two captures and got `~(15, 21..22, 14..16)` -
+the same `x == z` symmetry, the same odd axis out, and a ratio of `1.413` against
+the recovered `1.385`. That measurement knew nothing about this function.
+
+The agreement is sharp enough to **discriminate which mass the tensor was built
+with**, which is the strongest part of this reading:
+
+| tensor built with | `I_yy` | against the fit's `21.2` |
+| --- | ---: | ---: |
+| `m = 0.9`, the constructor's | `21.6` | `1.9 %` |
+| `m = 1.0`, `Body_Init`'s default | `24.0` | `13 %` |
+
+So the captures independently confirm both the `0.9` and the "frozen at
+construction" claim: if the tensor tracked the runtime mass the fit would have
+landed on `24`. (`docs/physics/force-balance-ground-truth.md`'s `mass = 1` is
+`Physical.mass`, the runtime value the *integrator* divides by. Two different
+masses, both correct, and now distinguishable.)
+
+`oag_physics::forces::YAW_INVERSE_INERTIA` is this value, replacing the fitted
+`YAW_DRIVE_CALIBRATION = 0.0452`. Replayed against the two steer captures under
+`just test-data`, the recovered `0.046296` scores RMS `0.1430`/`0.1808` rad/s
+against the fitted value's `0.1208`/`0.1995` on a signal near `1.5` - better on
+one capture, worse on the other, marginally better in mean square. Within each
+other's noise, which is what agreement at this level should look like.
+
+#### What this does not settle: pitch and roll
+
+`Ship_ApplyAngularDamping` (`0x08848ed0`) loads **`body+0x160`** at `0x08848f08`
+- the angular *momentum*, not the angular velocity - and multiplies it by
+`(-pitch_damping, -5, -2)`. That is why the inertia does not cancel out of the
+equilibrium, and it retires the argument (recorded in `forces.rs` before this
+reading) that "drive and damping share one accumulator so the tensor cancels".
+It cancels only if the damping reads `omega`, and it does not.
+
+On the yaw axis, `dL/dt = drive - 5L` with `omega = c L` differentiates to
+`domega/dt = c * drive - 5 * omega`, so scaling the yaw drive by `c` on an
+acceleration accumulator is exactly equivalent. On pitch and roll the same
+reading predicts `omega = drive / (damping * I)` where `oag-physics` computes
+`omega = drive / damping`, i.e. **the crate applies about `15.6x` too much pitch
+and roll authority**. That is not applied yet: it needs the whole crate on the
+momentum model, and there is no captured pitch or roll input to validate it
+against. A held-pitch capture on the reference scenario is what would settle it.
 
 ## The contact response, and the friction law the force balance was missing
 
