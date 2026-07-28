@@ -559,8 +559,21 @@ angularLocal.y += speed * Airbrake.turn * (R - L) * 0.001
 ```
 
 Confidence **88** on the whole block, raised from the 84 the function carried
-on decompilation alone. Four details are worth having explicitly, each of which
-corrects or settles something written elsewhere:
+on decompilation alone.
+
+> **All three terms are now runtime-confirmed**, on the Time Trial lap's
+> wall-free intervals, against the values read above and with no fitting on the
+> instruction side: the forward `drag` term at `1.03`-`1.07`, the lateral
+> `amount` term at `0.9565 +/- 0.009`, and the yaw `turn` term at
+> `1.0042 +/- 0.0016`. Leaving the yaw term out inflates the fitted steering
+> drive by 56 %, so it is not a rounding-error term. Evidence and method in
+> [cornering-ground-truth.md](../../../physics/cornering-ground-truth.md).
+> The measurement also confirms the fourth bullet below directly: pairing the
+> ramp states with the wrong tick is what a naive reading of a capture does, and
+> it is worth a factor of `1.68` on the steering law.
+
+Four details are worth having explicitly, each of which corrects or settles
+something written elsewhere:
 
 - **The `drag` term's scale is `1e-5`, from two literals.** `0.01` at
   `0x0884ccf4` and `0.001` at `0x0884cd78`, applied to the same vector. The
@@ -1216,11 +1229,33 @@ and fails in play: it leaves bank-to-yaw 22x too strong *relative to* steering,
 dropping the break-even camber where a corner out-turns full opposite lock to
 about 14 degrees, so a banked section steers the ship for the player. The damping
 is deliberately left outside the factor - scaling that too would cancel straight
-back out of the equilibrium. It is **a calibration, not a
-recovered value**, confidence **80** on reproducing the captures and **45** on any
-mechanism. One lead, recorded but not built on: `1 / 0.0452` is `22.1`, and a
-textbook box tensor for the shipped Assegai hull gives a yaw moment of `16.6` -
-the right order, 33 % out.
+back out of the equilibrium.
+
+**The rest of this paragraph described `YAW_DRIVE_CALIBRATION`, which is retired,
+and its two hedges are now settled.** It read "a calibration, not a recovered
+value, confidence 80 on reproducing the captures and 45 on any mechanism", with
+a lead that `1 / 0.0452` is `22.1` against a textbook box tensor of `16.6` for
+the shipped Assegai hull - "the right order, 33 % out". Both are superseded:
+`Body_SetBoxInertia` (`0x0884e1ac`, conf 92) is called with a **code literal**
+box at a mass that is not `Physical.mass`, giving `I_yy = 21.6` exactly, and the
+Time Trial lap measures `avel_y / omega_y` at `-20.948` against that `-21.6` -
+`3 %`, at 90-164 units/s. The `16.6` was the right instinct applied to the wrong
+hull dimensions. See
+[cornering-ground-truth.md](../../../physics/cornering-ground-truth.md#pitch-and-roll-the-momentum-column-does-not-explain-the-rotation).
+
+**And the accumulator law above is now confirmed at runtime, exactly.** Fitting
+`d(avel_y)/dt` against all five writers of the `.y` lane over 2,845 wall-free
+intervals gives `steer * Turning.amount` at **`0.9998 +/- 0.0013`** and the
+angular damping at **`-5.0387 +/- 0.0097`**, rms `3.05` on a signal of `129.6`.
+So `Turning.amount` really is consumed verbatim, the damping really is `-5`, and
+**nothing is missing from the accumulator at all** - the whole of the "22x" was
+the inertia tensor between it and the observable. Confidence **92** on both,
+runtime-verified on one binary. One trap that measurement exposed and that any
+reuse of a capture must apply: the ramped `craft+0x2c0`-`0x2c8` columns are
+sampled at the top of `Ship_UpdateCraft` and therefore **lag the frame that used
+them by one tick**, because both `Ship_UpdateSteering` and
+`Ship_UpdateAirbrakes` ramp and then consume in the same call. Pairing naively
+multiplies the fit's residual by 5.6 and pulls the damping to `-5.61`.
 
 Applying it to the input rather than to the damping is itself evidence-led.
 Raising the damping to about `107` reaches the same equilibrium but collapses the

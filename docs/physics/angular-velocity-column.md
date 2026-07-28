@@ -230,6 +230,26 @@ call site, so every craft in the game shares the tensor. `Misc`
 `width`/`length`/`height` do reach the constructor - scaled by `0.75` - but they
 go to the collider, not the inertia.
 
+## Confirmed at racing speed - and the two attitude axes are not
+
+Everything on this page was measured on captures topping out near `25` units/s.
+A completed Time Trial lap at 90-164 units/s reproduces the yaw result on 2,845
+wall-free intervals: `avel_y / omega_y` fits at `-20.948` against the recovered
+`-21.6`, `3.0 %`, with `99.5 %` explained. The accumulator law this page
+vindicates is confirmed at the same time and much more tightly - `steer *
+Turning.amount` at `0.9998 +/- 0.0013` and the damping at `-5.0387 +/- 0.0097`,
+once the ramp columns are paired with the frame that actually used them (they
+lag by one tick, which is worth a factor of `1.68` if missed).
+
+**The same fit refutes the relation on pitch and roll**, at `0.231x` and
+`0.647x` of the tensor's own entries. `avel = -I * omega` is a kinematic
+identity, so failing it means the basis carries rotation that `body+0x160` does
+not account for - and the excess is `91 %` confined to the plane that tilts
+`up`, i.e. it is attitude alignment, not a wrong tensor. This page's first
+bullet ("local beats world") is unaffected; what is now open is whether
+`body+0x160` is the *only* input to the basis advance. See
+[cornering-ground-truth.md](cornering-ground-truth.md#pitch-and-roll-the-momentum-column-does-not-explain-the-rotation).
+
 ## Reproducing it
 
 ```sh

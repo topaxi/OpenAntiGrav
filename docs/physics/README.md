@@ -1,14 +1,17 @@
 # Physics
 
-**Status: model recovered from static analysis. The structure below is
-implemented in [`oag-physics`](../../crates/physics/src/lib.rs) and none of it is
-runtime-verified.**
+**Status: model recovered from static analysis, and now partly verified against
+captures of the original.** The structure below is implemented in
+[`oag-physics`](../../crates/physics/src/lib.rs).
 
 The shape of the ship dynamics is known, and every constant it needs lives in
-[handling stats](../formats/handling-stats.md). Nothing here has been verified at
-runtime; treat it as a specification to test against, not as truth. What exists
-in code is a transcription of this page, deliberately including the parts of it
-that look wrong. See [what is implemented](#what-is-implemented) for the split,
+[handling stats](../formats/handling-stats.md). **"None of it is
+runtime-verified" stood here until captures existed and is no longer true**: the
+engine's thrust law, the two passive resistances, the lateral grip law, the
+airbrake terms and the yaw accumulator have all been measured against the
+original and are marked in place below. The rest of this page is still a
+specification to test against rather than truth, and what exists in code is a
+transcription of it, deliberately including the parts that look wrong. See [what is implemented](#what-is-implemented) for the split,
 [the cross-product signs](#the-cross-product-signs-a-contradiction-here-resolved)
 for the contradiction on this page that arithmetic could settle, and
 [still open](#still-open) for the readings the evidence leaves undetermined.
@@ -16,10 +19,23 @@ for the contradiction on this page that arithmetic could settle, and
 **One part of this model is measured against the original rather than read.**
 [The along-track force balance](force-balance-ground-truth.md) reconstructs, from
 captured traces, what force the original actually applies along a craft's forward
-axis. It confirms the engine's thrust law at instruction level and shows that the
-crate applies about **53 units of net force too much** there, in a term that is
-**linear in speed**. That page is the authority on the longitudinal balance and
-on which candidate terms are already eliminated.
+axis. **Its conclusion has since inverted, and this paragraph used to carry the
+retracted version** ("the crate applies about 53 units of net force too much, in
+a term linear in speed"): the force law was right all along, and the two
+reference captures were recorded scraping a wall, losing `3.5 %` of their
+tangential velocity per frame in a post-integrate contact pass no force
+accumulator can see. That page is still the authority on the longitudinal
+balance and on which candidate terms are eliminated; read its resolution
+section, not its investigation, for the current state.
+
+**A wall-free cornering capture now measures the rest of the law.**
+[Cornering, measured against the original](cornering-ground-truth.md) projects a
+completed Time Trial lap onto the ship's forward *and* right axes: it reconfirms
+the forward law at slip angles up to 25 degrees, settles `Ship_ApplyLateralGrip`
+at `0.9985` of the disc's `grip_ground`, closes the yaw accumulator term by term
+(`steer * Turning.amount` at `0.9998`, damping at `-5.04`), and **refutes**
+`avel = -I * omega` on the pitch and roll axes while confirming it on yaw. It is
+the authority on the lateral axis and on the airbrake terms' magnitudes.
 
 **A second part is measured rather than read**, and it is the rotational half of
 the same story. [What `body+0x160` holds](angular-velocity-column.md) settles the
@@ -330,12 +346,34 @@ makes the pseudocode above and this reading the same statement: the parser store
 `slidegrip * 1e-4`, so an XML 0..100 is 0..0.01 in memory, `(0.01 - slidegrip)` runs from
 `0.01` down to exactly `0`, and the control states run 0..100 rather than 0..1.
 
+**Now runtime-confirmed, and raised to 92.** Projecting a wall-free cornering
+capture onto the ship's right axis fits the whole lateral law to `99.95 %` with
+an rms of `3.28` units against a grip force reaching `375`, and returns
+`grip_ground` at `0.9985 +/- 0.0005` of the disc's own value. The `k` factor is
+confirmed by the data rather than only by arithmetic: dropping it triples the
+residual. The law is **linear in `dot(v, right)` and independent of speed** -
+alternatives scaling with `|v|` or with `|v_lat|` are 3.5x and 6x worse - and it
+does not saturate out to a lateral speed of `37.5`. `grip_air` remains untested;
+no capture has a usable airborne stretch. Evidence in
+[cornering-ground-truth.md](cornering-ground-truth.md#the-lateral-axis-ship_applylateralgrip-is-exactly-right).
+
 **Worth recording as a method note.** This crate first implemented the prose and
 rejected the pseudocode as garbled, on the grounds that taken at face value it multiplied
 grip by about a hundred. The pseudocode was correct and the *units* were missing. A
 formula that cannot be right on the units in front of you is evidence about the units.
 
-**There is no dedicated airbrake drag term.** Speed loss under braking is
+**"There is no dedicated airbrake drag term" - a fourth copy of a claim that is
+false, and this is its correction.** `Ship_UpdateAirbrakes` applies
+`forward * fs * |L - R| * Airbrake.drag * |steerX| * 1e-5` (conf 88, read from
+both literals), `crates/physics/src/airbrake.rs` has implemented it since the
+crate was written, and a wall-free cornering capture measures it at `1.03` to
+`1.07` of the read value on 1,997 intervals where it reaches `31.5` units of
+force. Three other copies of this sentence were corrected in an earlier pass and
+this one was missed.
+
+What the sentence should say is that the `drag` parameter **does not slow the
+ship down**: every factor is non-negative and the term points along `+forward`,
+so for a ship moving forwards it accelerates. Speed loss under braking is
 indirect: lateral grip converting sideways motion into body-frame force, plus the
 always-on quadratic drag and a constant `-2.0 * unit(v)` rolling resistance.
 

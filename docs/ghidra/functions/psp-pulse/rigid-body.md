@@ -380,6 +380,35 @@ one alone is a half-application, and there is no captured pitch or roll input to
 validate against. A held-pitch capture on the reference scenario is what would
 settle it.
 
+#### What a wall-free cornering lap adds, and the negative it turns up
+
+`I_yy = 21.6` now has a second, independent runtime leg at racing speed rather
+than at the steer captures' `25 u/s`. Recovering the rotation the recorded basis
+actually performs (`omega` from `M[i]^T M[i+1]`) over 2,845 wall-free intervals
+of `data/traces/talons-junction-time-trial-lap.csv` and fitting `avel` against
+it gives `-20.948` on the up axis against this section's `-21.6` - **`3.0 %`, at
+90 to 164 units/s**, with `99.5 %` of the column's variance explained.
+Confidence **90** on the yaw entry.
+
+**The same fit refutes `avel = -I * omega` on pitch and roll**, which is a
+kinematic identity and so should have held on all three axes: pitch reads
+`-3.611` against `-15.6` (`0.231x`, 16 % explained) and roll `-10.100` against
+`-15.6` (`0.647x`, 62 %). Both are *below* `I`, so the basis rotates **more**
+than the momentum column accounts for. This does not touch `Body_SetBoxInertia`,
+which is read at 92 and confirmed on yaw; what it says is that something drives
+the attitude axes outside the momentum path. The evidence that it is attitude
+alignment rather than an analysis artefact - `91 %` of the excess rotation lies
+in the plane that tilts `up`, its lag-1 autocorrelation is `0.978`, and its
+magnitude scales with speed - is in
+[cornering-ground-truth.md](../../../physics/cornering-ground-truth.md#pitch-and-roll-the-momentum-column-does-not-explain-the-rotation),
+along with the four candidate `L`-to-`omega` maps that were tried and rejected.
+
+**So the pitch/roll bullet above cannot be validated from any existing capture**,
+and a held-pitch capture alone will not settle it either: the column that would
+is `body+0x150`, the angular velocity itself, which no capture records. Adding
+it is one line in `scripts/psp_trace_fields.py` and it answers directly whether
+the basis advance uses `I^-1 * body+0x160`.
+
 ## The contact response, and the friction law the force balance was missing
 
 [force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)

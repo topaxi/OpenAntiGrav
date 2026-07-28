@@ -504,9 +504,15 @@ instruction level and the drag coefficients are confirmed in both binaries. What
 genuinely open is on the contact side, and it is where a trace comparison still
 diverges:
 
-- **Contact generation.** No capture in `data/traces/` has more than 60 consecutive
-  wall-free ticks, so there is no clean reference straight to compare a wall-free run
-  against yet.
+- **Contact generation.** The premise this entry carried - that no capture has more
+  than 60 consecutive wall-free ticks - is **retired**:
+  `data/traces/talons-junction-time-trial-lap.csv` is 95.2 % wall-free with a
+  longest clean run of 313 ticks, and
+  [cornering-ground-truth.md](../physics/cornering-ground-truth.md) measures the
+  force law against it. What remains open is the crate side: replaying that lap's
+  own input script through `oag-trace run --script` tracks the original to under a
+  unit for 75 ticks, then leaves the surface for good at tick 313. That is contact
+  generation, not the force law.
 - **The angular response.** `crates/physics` resolves contacts at the centre of mass,
   so the original's `cross(r, impulse)` torque and its contribution to the resolver's
   denominator are both absent. That is the largest remaining gap between this crate's

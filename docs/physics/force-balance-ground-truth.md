@@ -318,6 +318,15 @@ because the capture is wall-contaminated throughout and carries an unexplained
 ~4.8-unit baseline deficit. That is a floor on the evidence, not a target: the
 crate implements the **read** values and is deliberately not fitted to it.
 
+> **The clean magnitude check that section asked for now exists, and the term
+> survives it.** The Time Trial lap holds 1,997 wall-free intervals with the
+> term active, reaching `31.5` units of force, and it fits at **`1.03` to
+> `1.07`** of the value read from the two literals - raising the magnitude
+> evidence from ~55 to **88**. See
+> [cornering-ground-truth.md](cornering-ground-truth.md#the-forward-axis-holds-while-cornering-and-it-finally-measures-the-airbrake-drag-term).
+> The instruction to implement the read values and not fit to a capture stands
+> unchanged; the remaining few per cent sit inside the residual the method has.
+
 ## Where the mechanism has to be - and where it turns out not to be
 
 By elimination, a linear-in-velocity opposing force of roughly `2.28 * fs` is
@@ -578,13 +587,18 @@ it multiplies are the two disc literals.
 
 ## What to do next
 
-1. **Recapture a clean straight.** No existing trace in `data/traces/` contains
-   more than 60 consecutive wall-free ticks. `speed / |velocity| == 1.0000` is now
-   a cheap, exact test for whether a capture is clean, and any future capture
+1. ~~**Recapture a clean straight.**~~ **Done, and it went further than a
+   straight.** `data/traces/talons-junction-time-trial-lap.csv` is 95.2 %
+   wall-free with a longest clean run of **313** ticks, retiring this item's
+   original premise that no trace held more than 60. `speed / |velocity| ==
+   1.0000` is the cheap, exact test that selects them, and any future capture
    should be checked with it before being used as a reference. It is also a
-   *positive* test now: a capture in wall contact should read the surface's
+   *positive* test: a capture in wall contact should read the surface's
    friction, so the ratio identifies which regime a capture is in rather than
-   only flagging that it is not clean.
+   only flagging that it is not clean. The measurement that capture made
+   possible is [cornering-ground-truth.md](cornering-ground-truth.md), which
+   confirms the forward law at a slip angle and settles the lateral axis and the
+   yaw accumulator.
 2. **Close the `0x10` pickup flag.** The wall attribution above is capped at
    confidence 75 because the stun timer stays at `0` across the tick-62 impact.
    The gate is narrowed but not closed: the flag word is `*(entity+0x4c) + 0x1b8`
