@@ -777,6 +777,117 @@ mod tests {
         );
     }
 
+    /// The recorded yaw rate the captures show with the stick held over, and the
+    /// signal the angular-velocity column was added to compare against:
+    /// `+1.51 rad/s`, `docs/ghidra/functions/psp-pulse/engine.md`.
+    const RECORDED_YAW_RATE: f32 = 1.51;
+
+    /// Tick 0 is an initial condition, not a measurement - the same thing that is
+    /// already true of position, velocity and the basis. So a recorded angular
+    /// velocity must come back out of tick 0 unchanged under **every** reading:
+    /// the seeding and the writing-back are one transformation and its inverse,
+    /// and a reading where they are not would put a tick-0 error into the
+    /// comparison that looks exactly like a physics bug.
+    #[test]
+    fn a_recorded_rotation_survives_tick_zero_under_every_reading() {
+        for angular in [
+            AngularReading::NegatedLocal,
+            AngularReading::Local,
+            AngularReading::NegatedWorld,
+            AngularReading::World,
+        ] {
+            let mut recorded = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+            let recorded_rate = Vec3::new(0.1, RECORDED_YAW_RATE, -0.05);
+            for frame in &mut recorded.frames {
+                frame.angular_velocity = Some(recorded_rate);
+            }
+            let simulated = replay(
+                &recorded,
+                &inert_handling(),
+                &Environment::default(),
+                &CollisionWorld::new(),
+                &Options {
+                    angular,
+                    ..Options::default()
+                },
+            );
+            let written = simulated.frames[0]
+                .angular_velocity
+                .expect("a replay always writes one");
+            assert!(
+                (written - recorded_rate).length() < 1e-5,
+                "{angular:?}: {written} is not {recorded_rate}"
+            );
+        }
+    }
+
+    /// A capture taken before the column existed leaves the rotation at rest,
+    /// which is what every run did before it existed. Nothing is invented for the
+    /// older file - see `crate::trace::REQUIRED_COLUMNS`.
+    #[test]
+    fn a_recording_without_an_angular_velocity_starts_at_rest() {
+        let recorded = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        assert_eq!(recorded.frames[0].angular_velocity, None);
+        let state = initial_state(
+            &recorded.frames[0],
+            &inert_handling(),
+            Basis::default(),
+            AngularReading::default(),
+        );
+        assert_eq!(state.body.angular_velocity, Vec3::ZERO);
+    }
+
+    /// And the seeding is not decorative: a ship handed the recorded turn rate
+    /// must actually be turning, or the column would be read and then ignored.
+    #[test]
+    fn a_seeded_rotation_actually_turns_the_ship() {
+        let mut turning = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        for frame in &mut turning.frames {
+            frame.angular_velocity = Some(Vec3::new(0.0, RECORDED_YAW_RATE, 0.0));
+        }
+        let still = coasting(4, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let run = |recorded| {
+            replay(
+                recorded,
+                &inert_handling(),
+                &Environment::default(),
+                &CollisionWorld::new(),
+                &Options::default(),
+            )
+        };
+        let (turned, stayed) = (run(&turning), run(&still));
+        // A tick of 1.51 rad/s is about 0.025 rad, so tick 1's noses are that far
+        // apart; the ship left at rest has not moved its at all.
+        let swept = crate::compare::checks(
+            &turned.frames[1],
+            &stayed.frames[1],
+            &crate::compare::Tolerances::default(),
+        );
+        let forward = swept
+            .iter()
+            .flatten()
+            .find(|check| check.field == Field::Forward)
+            .expect("the forward axis is always compared");
+        assert!(forward.error > 0.01, "{}", forward.error);
+    }
+
+    /// The simulated side always carries the timers it models and never the one
+    /// it does not, so `timer_2e0` is reported as not compared rather than as
+    /// agreement. `craft+0x2e0`'s arming condition has never been read.
+    #[test]
+    fn a_replay_carries_the_stun_timer_and_not_the_gate_it_does_not_model() {
+        let recorded = coasting(4, 1.0 / 60.0, Vec3::ZERO);
+        let simulated = replay(
+            &recorded,
+            &inert_handling(),
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        assert_eq!(simulated.frames[0].stun_timer, Some(0.0));
+        assert_eq!(simulated.frames[0].timer_2e0, None);
+    }
+
     #[test]
     fn an_empty_recording_replays_to_an_empty_trace() {
         let simulated = replay(
