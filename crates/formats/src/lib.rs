@@ -29,6 +29,7 @@ pub mod entropy;
 pub mod fexml;
 pub mod fnt;
 pub mod handling;
+pub mod ipf;
 pub mod ivf;
 pub mod lzss;
 pub mod pmf;

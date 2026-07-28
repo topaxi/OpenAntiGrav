@@ -28,8 +28,8 @@ actual content is around 900 MiB.
 | 585,799,372 | 74612 | `54748/PS2MUSIC.WAD` | unknown | 7.19 |
 | 377,308,096 | 360647 | `54748/WADS2.WAD` | [WAD](../formats/wad.md) | 6.14 |
 | 1,447,168 | 544880 | `54748/WADSP.WAD` | [WAD](../formats/wad.md) | 7.91 |
-| 6,548,432 | 298 | `54748/DATA/MOVIES/BG512.IPF` | `IPUF` | 3.91 |
-| 8,899,232 | 3496 | `54748/DATA/MOVIES/BG640.IPF` | `IPUF` | 3.10 |
+| 6,548,432 | 298 | `54748/DATA/MOVIES/BG512.IPF` | [`IPUF`](../formats/ipf.md) | 3.91 |
+| 8,899,232 | 3496 | `54748/DATA/MOVIES/BG640.IPF` | [`IPUF`](../formats/ipf.md) | 3.10 |
 | 20,905,988 | 7842 | `54748/DATA/MOVIES/INTRO512.PSS` | MPEG-2 PS | 5.84 |
 | 26,509,316 | 18051 | `54748/DATA/MOVIES/INTRO640.PSS` | MPEG-2 PS | 2.42 |
 | 15,653 | 545587 | `IOP/DBCMAN.IRX` | ELF | 4.66 |
@@ -154,11 +154,22 @@ Two resolutions of each, 512 and 640 wide:
 - `.PSS` files are MPEG-2 program streams, confirmed by the `00 00 01 BA` pack
   header. `ffmpeg` reads them directly - no separate demux step the way a
   `.PMF`'s H.264 elementary stream needs, since a program stream carries its
-  own container. `oag_game::movie::open_mpeg2_ps` decodes them. There is no
-  `.PSS` counterpart for the backdrop (`BG512.IPF`/`BG640.IPF` are `.IPF`
-  only), so that loop is still not decoded; the intro is.
-- `.IPF` files carry an `IPUF` magic and target the PS2's Image Processing Unit.
-  A bespoke container, not yet decoded.
+  own container. `oag_game::movie::open_mpeg2_ps` decodes them.
+- `.IPF` files carry an `IPUF` magic and hold IPU video - the intra-only
+  MPEG-2 the PS2's Image Processing Unit decodes - in a bespoke fixed-slot
+  container. **Both are now decoded**: see [`ipf.md`](../formats/ipf.md) for the
+  container and the transcode route. They are the looping menu backdrop, 225
+  frames at 25 fps and 270 at 29.97, the same nine seconds twice.
+
+**Both containers are picked between by one function, and it is the same one
+for both.**
+[`Movie_ResolveSourcePath`](../ghidra/functions/ps2-pulse/movie-paths.md)
+(`0x0019b168`, confidence 90, formerly `FUN_0019b168`) rewrites a `Movie`
+widget's `src` in place: `Data\Movies\Intro.pss` becomes `Intro512.pss` or
+`Intro640.pss`, and `Data\Movies\Backdrop.ipf` becomes `bg512.ipf` or
+`bg640.ipf`, both on the value of `0x0027a85c`. So neither name in the
+front-end XML is a file on the disc, and the PAL/NTSC split below governs the
+backdrop as well as the intro.
 
 **512 is PAL, 640 is NTSC - measured, not presumed.** `ffprobe`:
 `INTRO512.PSS` is 512x512 at 25 fps; `INTRO640.PSS` is 640x448 at 29.97 fps
@@ -166,14 +177,19 @@ Two resolutions of each, 512 and 640 wide:
 non-square: `SAR 4:3` on a square 512x512 decode). Confirmed against
 `SCES_547.48` in Ghidra, confidence **85**: `Data\Movies\Intro512.pss` and
 `Data\Movies\Intro640.pss` are both literal strings, selected in
-`FUN_0019b168` by a global (`0x0027a85c`) - nonzero picks `512`, zero picks
-`640`. That global's sole writer, `FUN_0010b030`, sets a PAL-shaped
+`Movie_ResolveSourcePath` by a global (`0x0027a85c`) - nonzero picks `512`, zero
+picks `640`. That global's sole writer, `FUN_0010b030`, sets a PAL-shaped
 non-square pixel-aspect correction (`0.8`/`1.1428`) and issues a GS mode-setup
 call when passed `1`, and a `1.0`/no-correction set when passed `0` - matching
 the measured PAL/NTSC split exactly. Not fully traced: the ultimate trigger
 that decides which value `FUN_0010b030` is called with (a numbered
 event-dispatcher case in `FUN_00186ed8`, itself not read further). For the
 EU/PAL disc this project reads, `512` is what `oag-game` tries first.
+
+**The `.IPF` backdrops have no rate of their own and inherit this split**, which
+is the only reason `BG512.IPF` is played at 25 Hz and `BG640.IPF` at 29.97: the
+same global picks between them, and the resulting durations are 9.000 s and
+9.009 s. See [`ipf.md`](../formats/ipf.md#the-frame-rate-is-inferred-not-read).
 
 **The encode itself is not stretched footage - it is genuinely anamorphic, and
 that is confidence 95, not an assumption from the SAR tag alone.** A regular,

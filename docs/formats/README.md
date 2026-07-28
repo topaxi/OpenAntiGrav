@@ -33,7 +33,7 @@ These are the project's actual work.
 | Ship data | `.dat` | PSP | unknown | Paired with ships; likely handling or collision. |
 | [PS2 music archive](ps2-audio.md) | `.wad` | PS2 | **understood** | `PS2MUSIC.WAD`, **not** the WAD container: a 12-byte-entry directory over 48 kHz 16-bit stereo PCM, uncompressed. Implemented; the chain closes to the byte and the sample rate is pinned against the PSP's ATRAC3plus copies of the same sixteen tracks. |
 | PS2 prerace archive | `.wad` | PS2 | unknown | `PRERACE.WAD`. Header `20 00 00 00`, entropy 0.08. Mostly empty. |
-| IPU video | `.IPF` | PS2 | unknown | Magic `IPUF`. Targets the PS2 Image Processing Unit. |
+| [PS2 IPU video](ipf.md) | `.IPF` | PS2 | **understood** | Magic `IPUF`: a 32-byte header over fixed-size slots, one intra-only MPEG-2 picture each for the PS2's Image Processing Unit. The looping menu backdrop. Container implemented and validated on both files - the slot arithmetic closes to the byte, and `ffmpeg`'s own IPU demuxer independently cuts the payload at the 495 boundaries the slot headers declare. The video is [transcoded out of process](../architecture/adr/0008-av1-movie-cache.md), like `.PMF`. |
 
 ## Platform formats
 

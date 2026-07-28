@@ -286,12 +286,18 @@ fn the_ps2_texture_gap_is_reported_rather_than_guessed_at() {
 
 /// Whatever the PS2 front end can do, its failures name the archives searched.
 ///
-/// The front end is the one half with a real gap: the PS2 ships no `.PMF` in any
-/// archive, so [`oag_game::boot::load`] degrades the intro to no picture rather than
-/// failing. Whether it gets past that depends on whether the front-end XML is in
-/// `WADS2.WAD` under the name the PSP uses, which nobody has checked - so this
-/// asserts the *shape of the answer* rather than the answer: it either boots, or it
-/// says which archive it could not find the front-end root in.
+/// **This assertion has been turned around once, and the history is the point.**
+/// It used to require `loaded.movie.is_none()`: the PS2 ships no `.PMF` in any
+/// archive, so the intro degraded to no picture at all. It does not any more -
+/// both the intro (`INTRO512.PSS`) and the backdrop (`BG512.IPF`) are loose in
+/// the ISO filesystem and both now decode, so what this checks is that the PS2
+/// answers with a movie that came from *there* rather than from a WAD: no PSMF
+/// header, and the report naming the loose file. See
+/// `docs/formats/ipf.md` and `docs/ps2/pulse-disc-layout.md`.
+///
+/// Whether it gets that far depends on whether the front-end XML is in
+/// `WADS2.WAD` under the name the PSP uses, so the outer shape is still "either
+/// boots, or says which archive it could not find the front-end root in".
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
@@ -314,10 +320,22 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
             for line in &loaded.report {
                 println!("{line}");
             }
+            let movie = loaded
+                .movie
+                .as_ref()
+                .expect("the PS2 disc has a loose intro; boot must find it");
             assert!(
-                loaded.movie.is_none(),
-                "the PS2 disc produced a PMF intro reel, which contradicts \
+                movie.header.is_none(),
+                "the PS2 disc produced a PSMF reel, which contradicts \
                  docs/ps2/pulse-disc-layout.md"
+            );
+            assert!(
+                loaded
+                    .report
+                    .iter()
+                    .any(|line| line.contains("MPEG-2 program stream")),
+                "the report does not name the loose intro it loaded; it was:\n{}",
+                loaded.report.join("\n")
             );
         }
         Err(e) => {

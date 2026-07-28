@@ -140,22 +140,31 @@ mesh that was never textured and never came off a `.vex`.
 **The boot movie now has a picture.** The PS2 ships no `.PMF` in any archive at
 all; its intro is a raw MPEG-2 program stream loose in the ISO filesystem -
 `DATA/MOVIES/INTRO512.PSS` (512x512, 25 fps) or `INTRO640.PSS` (640x448,
-29.97 fps), which measure as the PAL and NTSC cuts respectively. `.IPF` sits
-beside them for the looping menu backdrop, and *that* container is still not
-decoded - it carries no MPEG program stream at all (`BG512.IPF`/`BG640.IPF`
-have no `.PSS` counterpart the way `Intro` does), so the backdrop still runs
-without a picture.
+29.97 fps), which measure as the PAL and NTSC cuts respectively.
+
+**The looping menu backdrop decodes too now.** `BG512.IPF`/`BG640.IPF` sit
+beside the intro and carry no MPEG program stream at all, so they got no free
+ride through `ffmpeg` the way `Intro` did; the container is documented in
+[ipf.md](../formats/ipf.md) and the payload turned out to be IPU video, which
+`ffmpeg` does decode once the fixed-slot framing is swapped for its own `ipum`
+header. `just play data/images/pulse-ps2-eu.chd --movie 'Data\Movies\Backdrop.ipf'`
+plays it. Nothing in the boot sequence reaches `FE Screen` yet, so it is not
+*looped as the menu backdrop* - that is front-end work, not format work.
 
 [`oag_assets::pulse::read_loose_file`](../../crates/assets/src/pulse.rs) finds
-either `.PSS` on the disc's own filesystem the same way an archive is found by
+any of the four on the disc's own filesystem the same way an archive is found by
 name - trailing path components, case-insensitively - rather than by hash, and
 [`movie::open`](../../crates/game/src/movie.rs) dispatches on the blob's own
-magic (`PSMF` vs. the MPEG program stream's `00 00 01 BA` start code) rather
-than on which platform it came from. `512` is tried first for the disc this
-project reads (EU/PAL); see [pulse-disc-layout.md](../ps2/pulse-disc-layout.md)
-for the selection mechanism this was checked against. A movie **named** with
-`--movie` and not found is still an error: the defaults are defaults, and a
-source that lacks one is answering a default, where `--movie` is a request.
+magic (`PSMF`, the MPEG program stream's `00 00 01 BA` start code, or `IPUF`)
+rather than on which platform it came from. `512` is tried first for the disc
+this project reads (EU/PAL); see
+[pulse-disc-layout.md](../ps2/pulse-disc-layout.md) for the selection mechanism
+this was checked against, and
+[`boot::LOOSE_MOVIES`](../../crates/game/src/boot.rs) for the name table, which
+is the original's own (`Movie_ResolveSourcePath`) rather than ours. A movie
+**named** with `--movie` and not found is still an error: the defaults are
+defaults, and a source that lacks one is answering a default, where `--movie` is
+a request.
 
 **The picture was stretched at first, and that was this build's bug, not the
 original's.** `INTRO512.PSS`/`INTRO640.PSS` both declare a 4:3 display aspect

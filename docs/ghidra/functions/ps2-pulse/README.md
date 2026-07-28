@@ -22,11 +22,12 @@ form, and Ghidra's string search will return all three.
 | [Input](input.md) | The abstract button layer, the four edge masks, per-player pad blocks |
 | [Camera views](camera.md) | The player-selectable in-race views and the SELECT cycle |
 | [Front-end globals](fe-globals.md) | The `FEGlobals->` / `FEConst->` indirection, its registry, and the flag-bit tagging that makes one a live binding |
+| [Movie source paths](movie-paths.md) | How a `Movie` widget's `src` becomes a filename, and the one global that picks the PAL cut of both the intro and the backdrop |
 | [Recovered C library](libc.md) | `strlen`, `strcmp`, `strcasecmp`, `tolower`, `_ctype_` |
 
 ## Renames
 
-**Applied.** 132 symbols, collected in [names.tsv](names.tsv). There is no
+**Applied.** 138 symbols, collected in [names.tsv](names.tsv). There is no
 `just` recipe for this set yet; run the script directly against a bridge with
 `SCES_547.48` open:
 

@@ -168,3 +168,4 @@
 0x001fed38	function	Hash_Crc32String	82	fe-globals.md
 0x0015e600	function	Body_ResolveContactPair	85	craft-update.md
 0x0015ce28	function	Body_QueueDeferredImpulse	82	craft-update.md
+0x0019b168	function	Movie_ResolveSourcePath	90	movie-paths.md

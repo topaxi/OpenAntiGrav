@@ -23,12 +23,13 @@ pub struct Boot {
     pub frontend: Frontend,
     /// The intro movie, whether or not it has a picture.
     ///
-    /// `None` when the source has no such movie **at all**, which is not a PSP
-    /// case: the PS2 release ships no `.PMF` in any archive - its intro is
-    /// `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream sitting loose in the
-    /// filesystem, and `.IPF` beside it. Neither is decoded, so the honest
-    /// answer there is no movie rather than a movie with no picture, which is
-    /// what [`Movie::no_picture_reason`] means and is a different thing.
+    /// `None` when the source has no such movie **at all**. That was the PS2's
+    /// standing case and is no longer: the PS2 release ships no `.PMF` in any
+    /// archive, but both its containers now decode - `DATA/MOVIES/INTRO512.PSS`
+    /// (an MPEG-2 program stream) and `DATA/MOVIES/BG512.IPF` (IPU video), both
+    /// loose in the filesystem, reached through [`LOOSE_MOVIES`]. `None` still
+    /// means no movie rather than a movie with no picture, which is what
+    /// [`Movie::no_picture_reason`] means and is a different thing.
     pub movie: Option<Movie>,
     /// Every front-end image the screens reference, in one texture.
     pub sprites: crate::sprite::Sheet,
@@ -448,13 +449,14 @@ impl std::fmt::Display for EntryRef {
 /// Reads the boot movie, or reports why there is none.
 ///
 /// **A source with no reel of its own is not an error.** The PS2 release ships no
-/// `.PMF` in any archive: its intro is `DATA/MOVIES/INTRO512.PSS`, an MPEG-2
-/// program stream loose in the ISO filesystem, with `.IPF` beside it for the
-/// PS2's Image Processing Unit. Neither container is decoded, and neither is
-/// addressable as an archive entry, so there is nothing for `--movie` to name.
-/// Failing here would stop the whole front end over the one piece of it that is
-/// genuinely absent, so this says so and the sequence runs without a picture -
-/// the same path `--no-video` already takes.
+/// `.PMF` in any archive: its movies are loose in the ISO filesystem instead -
+/// `DATA/MOVIES/INTRO512.PSS`, an MPEG-2 program stream, and
+/// `DATA/MOVIES/BG512.IPF`, IPU video for the PS2's Image Processing Unit. Both
+/// decode, but neither is addressable as an archive entry, so
+/// [`LOOSE_MOVIES`] is consulted before giving up. A source with neither still
+/// gets the sequence without a picture rather than a failure - the same path
+/// `--no-video` already takes - because stopping the whole front end over the
+/// one piece of it that is genuinely absent helps nobody.
 ///
 /// **A movie the caller actually named is still an error**, and the
 /// discriminator is that rather than the platform: [`DEFAULT_BOOT_MOVIE`] and
@@ -476,12 +478,12 @@ fn load_movie(
         // Only the default boot movie has a loose-file fallback worth trying:
         // it is the PS2's own intro, a plain file outside every WAD. See
         // `load_loose_intro`.
-        None if options.movie == DEFAULT_BOOT_MOVIE => {
-            if let Some(movie) = load_loose_intro(options, report)? {
+        None if loose_candidates(&options.movie).is_some() => {
+            if let Some(movie) = load_loose_movie(&options.movie, options, report)? {
                 return Ok(Some(movie));
             }
             report.push(format!(
-                "{entry} is not in {}, and the source has no loose intro movie either, \
+                "{entry} is not in {}, and the source has no loose copy of it either, \
                  so the sequence plays with no picture",
                 data.label()
             ));
@@ -568,22 +570,69 @@ fn load_movie(
     Ok(Some(movie))
 }
 
-/// Tries the PS2's own intro: a raw MPEG-2 program stream loose on the disc's
-/// filesystem under `DATA/MOVIES/`, in two variants that measure as PAL
-/// (`INTRO512.PSS`, 512x512, 25 fps) and NTSC (`INTRO640.PSS`, 640x448,
-/// 29.97 fps). `Data\Movies\Intro.PMF` not being in any WAD is not itself
-/// evidence of which variant is right, so 512 is tried first: this disc is
-/// EU/PAL, and `SCES_547.48`'s selector between the two (global `0x0027a85c`,
-/// set from a PAL/NTSC-looking video-mode call) is not fully traced to its
-/// ultimate trigger. See `docs/ps2/pulse-disc-layout.md`.
+/// The PS2's movies, which are loose on the disc's own filesystem rather than
+/// in any WAD, keyed by the name that asks for them.
 ///
-/// `Ok(None)` when the source has neither file - a PSP source, or a PS2 one
+/// **The two-cut split and this table are the original's, read out of
+/// `SCES_547.48`.** `FUN_0019b168` tests the `Movie` widget's `src` for
+/// `\Intro.pss` or `\Backdrop.ipf` and rewrites it to
+/// `Data\Movies\Intro512.pss` / `Intro640.pss` or `Data\Movies\bg512.ipf` /
+/// `bg640.ipf`, choosing on one global (`0x0027a85c`) whose sole writer sets
+/// PAL pixel-aspect constants for the `512` value and NTSC ones for `640`. So
+/// the rewrite, the pairing and the region split are all the disc's, and the
+/// XML's names are never filenames on PS2.
+///
+/// `Data\Movies\Intro.PMF` is here because it is [`DEFAULT_BOOT_MOVIE`]: the
+/// PSP's name for the same reel, which a PS2 source answers with its own cut.
+///
+/// 512 is listed first because this disc is EU/PAL; the ultimate trigger that
+/// decides which value `0x0027a85c` takes is not traced. See
+/// `docs/ps2/pulse-disc-layout.md` and `docs/formats/ipf.md`.
+const LOOSE_MOVIES: [(&str, [&str; 2]); 3] = [
+    (
+        DEFAULT_BOOT_MOVIE,
+        ["DATA/MOVIES/INTRO512.PSS", "DATA/MOVIES/INTRO640.PSS"],
+    ),
+    (
+        r"Data\Movies\Intro.pss",
+        ["DATA/MOVIES/INTRO512.PSS", "DATA/MOVIES/INTRO640.PSS"],
+    ),
+    (
+        r"Data\Movies\Backdrop.ipf",
+        ["DATA/MOVIES/BG512.IPF", "DATA/MOVIES/BG640.IPF"],
+    ),
+];
+
+/// The loose files a movie name may be answered by, if any.
+///
+/// Case-insensitive because the front-end XML and the ISO 9660 directory
+/// disagree on it: the XML says `Backdrop.ipf`, the disc says `BG512.IPF`.
+fn loose_candidates(name: &str) -> Option<&'static [&'static str; 2]> {
+    LOOSE_MOVIES
+        .iter()
+        .find(|(asked, _)| asked.eq_ignore_ascii_case(name))
+        .map(|(_, candidates)| candidates)
+}
+
+/// Tries a movie that sits loose on the disc's filesystem rather than in a WAD.
+///
+/// This is every movie the PS2 release has: the intro as an MPEG-2 program
+/// stream (`INTRO512.PSS`, 512x512, 25 fps PAL; `INTRO640.PSS`, 640x448,
+/// 29.97 fps NTSC) and the menu backdrop as IPU video (`BG512.IPF`,
+/// `BG640.IPF`). See [`LOOSE_MOVIES`] for which name resolves to which.
+///
+/// `Ok(None)` when the source has neither cut - a PSP source, or a PS2 one
 /// missing both, which is not expected but is not this function's problem to
 /// diagnose.
-fn load_loose_intro(options: &Options, report: &mut Vec<String>) -> Result<Option<Movie>> {
-    const CANDIDATES: [&str; 2] = ["DATA/MOVIES/INTRO512.PSS", "DATA/MOVIES/INTRO640.PSS"];
-
-    let Some((path, blob)) = pulse::read_loose_file(&options.source, &CANDIDATES)? else {
+fn load_loose_movie(
+    name: &str,
+    options: &Options,
+    report: &mut Vec<String>,
+) -> Result<Option<Movie>> {
+    let Some(candidates) = loose_candidates(name) else {
+        return Ok(None);
+    };
+    let Some((path, blob)) = pulse::read_loose_file(&options.source, candidates)? else {
         return Ok(None);
     };
 
@@ -596,8 +645,15 @@ fn load_loose_intro(options: &Options, report: &mut Vec<String>) -> Result<Optio
         options.no_video,
     )?;
 
+    // Named from the blob's own magic, the same way `movie::open` dispatches,
+    // so the report cannot claim a container the decoder did not take.
+    let container = if blob.starts_with(&oag_formats::ipf::MAGIC) {
+        "IPU video"
+    } else {
+        "MPEG-2 program stream"
+    };
     report.push(format!(
-        "{path}: {}x{}, {}/{} fps, {} frames, MPEG-2 program stream",
+        "{path}: {}x{}, {}/{} fps, {} frames, {container}",
         movie.width, movie.height, movie.frame_rate.0, movie.frame_rate.1, movie.frame_count
     ));
     match (&movie.frames, &movie.no_picture_reason) {

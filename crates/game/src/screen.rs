@@ -25,10 +25,25 @@ use crate::input::button_from_name;
 // module is where the rest of the crate reaches for it.
 pub use oag_formats::fexml::{Node, parse};
 
+/// Container extensions a `Movie` widget's `src` may already carry.
+///
+/// The PS2 front-end XML spells them lower case; the disc's own ISO 9660
+/// directory spells the files upper case, so the test ignores case rather than
+/// picking a side.
+pub const MOVIE_EXTENSIONS: [&str; 3] = [".pmf", ".pss", ".ipf"];
+
+fn has_movie_extension(src: &str) -> bool {
+    let lower = src.to_ascii_lowercase();
+    MOVIE_EXTENSIONS.iter().any(|ext| lower.ends_with(ext))
+}
+
 /// One `Movie` widget's attributes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Movie {
-    /// The `src` attribute: a base name with **no extension**.
+    /// The `src` attribute.
+    ///
+    /// A base name with **no extension** on the PSP. On the PS2 it carries its
+    /// own - see [`Movie::entry_name`].
     pub src: String,
     /// Whether the movie has sound.
     pub sound: bool,
@@ -46,10 +61,23 @@ impl Movie {
     /// The archive entry name, assembled the way the widget assembles it.
     ///
     /// `Movie_ParseAttributes` appends `.PMF` when `localised` is absent, and
-    /// `_US.PMF` otherwise. The intro's `src` is `Data\Movies\Intro`, which is
-    /// why the filename never turned up in a string search of the executable.
+    /// `_US.PMF` otherwise. The PSP intro's `src` is `Data\Movies\Intro`, which
+    /// is why the filename never turned up in a string search of the
+    /// executable.
+    ///
+    /// **The PS2 build diverges, and its own XML is the evidence**: its `src`
+    /// values are `Data\Movies\Intro.pss` and `Data\Movies\Backdrop.ipf`,
+    /// extension included, and `SCES_547.48` matches on exactly those spellings
+    /// (`FUN_0019b168` tests for `\Intro.pss` and `\Backdrop.ipf` before
+    /// rewriting them to the region's cut). Appending `.PMF` to those would ask
+    /// for `Data\Movies\Backdrop.ipf.PMF`, which is nothing at all - so a `src`
+    /// that already names its container is taken as it stands. See
+    /// [`MOVIE_EXTENSIONS`].
     #[must_use]
     pub fn entry_name(&self) -> String {
+        if has_movie_extension(&self.src) {
+            return self.src.clone();
+        }
         if self.localised {
             format!("{}_US.PMF", self.src)
         } else {
@@ -468,6 +496,39 @@ mod tests {
             ..movie
         };
         assert_eq!(localised.entry_name(), r"Data\Movies\Intro_US.PMF");
+    }
+
+    #[test]
+    fn a_ps2_src_already_names_its_container() {
+        // Both spellings are read off the PS2 disc's own Skin.xml. Appending
+        // .PMF to either asks for a file that exists nowhere, which is what
+        // this build did before: `Data\Movies\Backdrop.ipf.PMF`.
+        let screens = Screens::from_xml(SAMPLE);
+        let template = screens.by_name("LogoFMV").unwrap().movie.clone().unwrap();
+
+        for src in [r"Data\Movies\Intro.pss", r"Data\Movies\Backdrop.ipf"] {
+            let movie = Movie {
+                src: src.to_string(),
+                ..template.clone()
+            };
+            assert_eq!(movie.entry_name(), src);
+            // `localised` must not reintroduce the suffix either.
+            let localised = Movie {
+                localised: true,
+                ..movie
+            };
+            assert_eq!(localised.entry_name(), src);
+        }
+    }
+
+    #[test]
+    fn an_extensionless_src_still_gets_the_psp_suffix() {
+        // The PSP rule is settled and this is its guard: nothing about the PS2
+        // divergence may change what `Data\Movies\Intro` resolves to.
+        let screens = Screens::from_xml(SAMPLE);
+        let movie = screens.by_name("LogoFMV").unwrap().movie.clone().unwrap();
+        assert!(!has_movie_extension(&movie.src));
+        assert_eq!(movie.entry_name(), r"Data\Movies\Intro.PMF");
     }
 
     #[test]

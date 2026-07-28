@@ -24,7 +24,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
-use oag_formats::{av1, pmf};
+use oag_formats::{av1, ipf, pmf};
 
 /// The rate the PSP presents `.PMF` frames at, as a rational.
 ///
@@ -55,12 +55,13 @@ const CACHE_CODEC: &str = "av1ll";
 /// A movie that has been demuxed, and possibly transcoded.
 #[derive(Debug)]
 pub struct Movie {
-    /// The PSMF header, for a `.PMF`. `None` for a raw MPEG-2 program
-    /// stream (the PS2's loose `.PSS` files), which carries no such header -
-    /// see [`open_mpeg2_ps`].
+    /// The PSMF header, for a `.PMF`. `None` for the PS2's loose files: a raw
+    /// MPEG-2 program stream (`.PSS`, see [`open_mpeg2_ps`]) carries no such
+    /// header, and an `.IPF` has one of its own shape (see [`open_ipuf`]).
     pub header: Option<pmf::Header>,
-    /// Frames measured by counting H.264 access units for a `.PMF`, or
-    /// decoded by `ffmpeg` for a raw MPEG-2 program stream.
+    /// Frames measured by counting H.264 access units for a `.PMF`, decoded
+    /// by `ffmpeg` for a raw MPEG-2 program stream, or read straight off the
+    /// container for an `.IPF`.
     pub frame_count: usize,
     /// Video width in pixels.
     pub width: u32,
@@ -185,9 +186,9 @@ const MPEG_PS_START_CODE: [u8; 4] = [0x00, 0x00, 0x01, 0xba];
 /// Makes a movie's frames available, transcoding if it must.
 ///
 /// Dispatches on the blob's own magic rather than on which platform it came
-/// from - a `.PMF`'s `PSMF` header, or a raw MPEG-2 program stream's pack
-/// start code - because what a decode path needs to know is what the file is,
-/// not what disc it happened to come off.
+/// from - a `.PMF`'s `PSMF` header, a raw MPEG-2 program stream's pack start
+/// code, or an `.IPF`'s `IPUF` - because what a decode path needs to know is
+/// what the file is, not what disc it happened to come off.
 ///
 /// `key` identifies the source for caching. It must change when the bytes do:
 /// the callers pass the WAD name hash and the entry size (or, for a loose PS2
@@ -207,6 +208,8 @@ pub fn open(
         open_psmf(blob, key, cache_dir, extent, no_video)
     } else if blob.starts_with(&MPEG_PS_START_CODE) {
         open_mpeg2_ps(blob, key, cache_dir, extent, no_video)
+    } else if blob.starts_with(&ipf::MAGIC) {
+        open_ipuf(blob, key, cache_dir, extent, no_video)
     } else {
         let head = &blob[..blob.len().min(4)];
         bail!("{key} is not a movie container this build recognises (starts with {head:02x?})")
@@ -347,6 +350,167 @@ fn open_mpeg2_ps(
             no_picture_reason: Some(format!("{reason:#}")),
         }),
     }
+}
+
+/// The rate a PS2 `.IPF` backdrop is presented at, by declared width.
+///
+/// **An `IPUF` container declares no frame rate at all**, so this is inferred
+/// rather than read, and the inference is the disc's own pairing:
+/// `SCES_547.48`'s `FUN_0019b168` rewrites the front-end XML's
+/// `Data\Movies\Backdrop.ipf` to `Data\Movies\bg512.ipf` or
+/// `Data\Movies\bg640.ipf` on exactly the same global (`0x0027a85c`) that picks
+/// `Intro512.pss` against `Intro640.pss` - and those two *do* declare their
+/// rates, measured at 25/1 and 30000/1001. So `bg512` is the PAL cut and
+/// `bg640` the NTSC one.
+///
+/// It checks out arithmetically as well: 225 frames at 25 Hz is 9.000 s and
+/// 270 at 30000/1001 is 9.009 s, so the two cuts are the same nine-second loop.
+/// Swapping the pairing would make one of them 10.8 s and the other 7.5 s.
+///
+/// See `docs/formats/ipf.md`.
+fn backdrop_frame_rate(width: u32) -> (u64, u64) {
+    if width == 640 {
+        (30_000, 1001)
+    } else {
+        (25, 1)
+    }
+}
+
+/// The display aspect both PS2 backdrop cuts are drawn at.
+///
+/// Same as the `.PSS` intro cuts of the same two sizes, which declare `4:3` in
+/// their own sequence headers - neither `512x512` nor `640x448` is 4:3 as a
+/// pixel grid, and the PS2's front end draws its movie over a `640x448` black
+/// `Image` filling the screen. An `IPUF` carries no aspect field, so this is
+/// taken from the paired cut rather than read.
+const BACKDROP_DISPLAY_ASPECT: (u32, u32) = (4, 3);
+
+/// Makes a PS2 `.IPF` backdrop's frames available, transcoding if it must.
+///
+/// The container is [`oag_formats::ipf`]: fixed-size slots around one IPU
+/// frame each. `ffmpeg` has an IPU decoder and a demuxer for Sony's own `ipum`
+/// wrapper, so the transcode input is the slots stripped off and that wrapper
+/// put on - see [`ipum`].
+///
+/// Width, height and frame count come from the container and are exact. The
+/// frame rate does not, because there is none to read: see
+/// [`backdrop_frame_rate`].
+fn open_ipuf(
+    blob: &[u8],
+    key: &str,
+    cache_dir: &Path,
+    extent: Extent,
+    no_video: bool,
+) -> Result<Movie> {
+    let parsed = ipf::parse(blob).map_err(|e| anyhow!("parsing {key} as an IPF: {e}"))?;
+    let width = parsed.header.width;
+    let height = parsed.header.height;
+    let frame_count = parsed.len();
+    let frame_rate = backdrop_frame_rate(width);
+
+    if no_video {
+        return Ok(Movie {
+            header: None,
+            frame_count,
+            width,
+            height,
+            frame_rate,
+            display_aspect: BACKDROP_DISPLAY_ASPECT,
+            frames: None,
+            no_picture_reason: Some("--no-video was given".to_string()),
+        });
+    }
+
+    let wanted = extent.limit(frame_count);
+
+    match transcode_ipu(&parsed, key, cache_dir, width, height, wanted) {
+        Ok(frames) => Ok(Movie {
+            header: None,
+            frame_count,
+            width,
+            height,
+            frame_rate,
+            display_aspect: BACKDROP_DISPLAY_ASPECT,
+            frames: Some(frames),
+            no_picture_reason: None,
+        }),
+        Err(reason) => Ok(Movie {
+            header: None,
+            frame_count,
+            width,
+            height,
+            frame_rate,
+            display_aspect: BACKDROP_DISPLAY_ASPECT,
+            frames: None,
+            no_picture_reason: Some(format!("{reason:#}")),
+        }),
+    }
+}
+
+/// Wraps a bare IPU bitstream in the 16-byte `ipum` header `ffmpeg`'s demuxer
+/// reads.
+///
+/// ```text
+/// +0x00  u8[4]   "ipum"
+/// +0x04  u32le   payload length
+/// +0x08  u16le   width
+/// +0x0a  u16le   height
+/// +0x0c  u32le   frame count
+/// +0x10          the bitstream
+/// ```
+///
+/// This is `ffmpeg`'s container, not Wipeout's, which is why it is built here
+/// rather than in `oag-formats`: it exists only to hand the transcoder the
+/// dimensions, which the IPU bitstream itself does not carry. Everything after
+/// the header is the `.IPF`'s own bytes, unaltered.
+fn ipum(bitstream: &[u8], width: u32, height: u32, frames: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(16 + bitstream.len());
+    out.extend_from_slice(b"ipum");
+    out.extend_from_slice(&(bitstream.len() as u32).to_le_bytes());
+    out.extend_from_slice(&(width as u16).to_le_bytes());
+    out.extend_from_slice(&(height as u16).to_le_bytes());
+    out.extend_from_slice(&(frames as u32).to_le_bytes());
+    out.extend_from_slice(bitstream);
+    out
+}
+
+/// Converts a PS2 `.IPF`'s IPU bitstream into lossless AV1 under `cache_dir`.
+fn transcode_ipu(
+    parsed: &ipf::Ipf<'_>,
+    key: &str,
+    cache_dir: &Path,
+    width: u32,
+    height: u32,
+    frames: usize,
+) -> Result<FrameStore> {
+    let name = format!(
+        "{key}-{width}x{height}-{CACHE_CODEC}-{}.ivf",
+        Extent::Frames(frames).key()
+    );
+    let out = cache_dir.join(&name);
+
+    let ready = FrameStore::open(out.clone(), width, height)
+        .ok()
+        .filter(|store| store.len == frames);
+
+    if let Some(store) = ready {
+        return Ok(store);
+    }
+
+    std::fs::create_dir_all(cache_dir)
+        .with_context(|| format!("creating {}", cache_dir.display()))?;
+
+    let source = cache_dir.join(format!("{key}.ipu"));
+    let wrapped = ipum(&parsed.bitstream(), width, height, parsed.len());
+    std::fs::write(&source, &wrapped).with_context(|| format!("writing {}", source.display()))?;
+
+    run_ffmpeg(&source, &out, Some("ipu"), Some(frames))?;
+
+    let store = FrameStore::open(out, width, height)?;
+    if store.len == 0 {
+        bail!("{} holds no frames", store.path().display());
+    }
+    Ok(store)
 }
 
 /// Converts an H.264 elementary stream into lossless AV1 under `cache_dir`.
