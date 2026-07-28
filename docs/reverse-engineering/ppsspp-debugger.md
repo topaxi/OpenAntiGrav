@@ -527,6 +527,7 @@ from, and - the decisive comparison - it does not even reproduce *itself*:
 | `1` unit | tick 68 | tick 123 |
 | `10` units | tick 172 | tick 182 |
 | `100` units | tick 495 | tick 495 |
+| at tick 3,146 | `194` units | `545` units |
 
 Over the full 3,146 ticks the open-loop run travels `1,461` units where the
 recorded lap covers `5,608`: it loses the racing line inside two seconds and
@@ -534,7 +535,7 @@ spends the rest of the run grinding along walls.
 
 **The mechanism is the original's variable timestep, and it is visible in the
 captures' own `dt` column.** Comparing the two pinned runs tick by tick, `dt` is
-identical on **14 of 1,341 ticks (1.0 %)** and differs from tick 0 onward - same
+identical on **31 of 3,146 ticks (1.0 %)** and differs from tick 0 onward - same
 mean (`0.016683`), different sequence, because the game integrates a *measured*
 frame duration ([ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md))
 and the emulator's frame durations depend on host load. The positions differ by
