@@ -101,6 +101,53 @@ A direct probe for the constant came back **negative**: nothing in
 `body+0x374 = 1.0` and `body+0x378 = 1.0`, mass and its reciprocal, stored
 unscaled.
 
+## This resolves the 22x yaw discrepancy, and vindicates the law
+
+[engine.md](../ghidra/functions/psp-pulse/engine.md) closes its
+"torque or angular acceleration" question by observing that steering and damping
+land in **one** accumulator (`craft+0x340` -> `body+0x120`), so any common factor
+- the inertia tensor included - cancels at equilibrium, leaving
+
+```text
+omega_y = steer * Turning.amount / 5
+```
+
+unconditionally. Against the shipped Assegai `Turning.amount = 1.68` and a
+`steer` column that saturates near `100`, that is `33.6` - and the craft
+observably yaws at about `1.5` rad/s, 22x less. That gap is what
+`YAW_DRIVE_CALIBRATION` exists to paper over.
+
+**The law is right. It predicts the stored column, not the rotation.** Held full
+lock, `data/traces/talons-junction-steer-right.csv`:
+
+| tick | `steer` | stored `avel_y` | observed yaw | ratio |
+| ---: | ---: | ---: | ---: | ---: |
+| 30 | 91.5 | 25.86 | -1.226 | -21.08 |
+| 45 | 97.8 | 31.50 | -1.485 | -21.21 |
+| 60 | 104.1 | 32.84 | -1.535 | -21.40 |
+| 65 | 98.2 | **32.92** | -1.546 | -21.30 |
+
+`steer * 1.68 / 5` at that plateau is **32.27**, against a stored `32.92` still
+settling onto it - agreement to about **2 %**. The mirrored left capture climbs
+the same curve with the sign flipped.
+
+So the cancellation argument is **correct about the accumulator** and the
+equilibrium it derives is now confirmed by measurement. What it cannot do is
+carry over to the observable, because the accumulator's equilibrium value *is
+not the angular velocity* - it is the quantity this page measures at `21.2` times
+the rotation performed. One factor survives, in the conversion, and it is exactly
+the missing 22x.
+
+Two things follow. The note's "it does not matter" should be read as scoped to
+the accumulator rather than to the yaw rate: **the equilibrium is not
+inertia-independent in anything observable.** And `YAW_DRIVE_CALIBRATION` is not
+covering for a missing or mis-signed *term* - every term in the yaw law is
+confirmed, and the constant is the unit conversion between the two quantities.
+
+Confidence **85**: two captures, mirrored, agreeing to 2 % on a formula derived
+independently at instruction level, with the ratio holding at `-21.0` to `-21.4`
+across the whole ramp rather than only at the plateau.
+
 ## Consequences
 
 - `Summary::angular_readings` **cannot decide this question in its current
