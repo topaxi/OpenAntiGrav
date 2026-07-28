@@ -504,12 +504,58 @@ is refused with a message rather than waited out for a lap. The wait costs about
 `3.9` degrees at `0.311` deg/s of *emulated* time, and the capture runs at
 `0.37x`, so budget roughly 35 seconds of wall clock for it.
 
-Two things this does **not** claim. It has not been re-tested end to end on a
-whole-lap open-loop replay - the pose is pinned, whether that is *sufficient*
-for 3,146 ticks of open loop is the next measurement, and the honest prior is
-that a lap amplifies whatever is left. And the numbers above are Talon's
-Junction's start line only; another track's drift rate has not been measured,
-though the mechanism gives no reason for one to be at rest either.
+One thing this does **not** claim: the numbers above are Talon's Junction's
+start line only, and another track's drift rate has not been measured, though the
+mechanism gives no reason for one to be at rest either.
+
+### Measured: a pinned pose is necessary and nowhere near sufficient
+
+The whole-lap open-loop replay this section used to flag as "the next
+measurement" has now been run, twice, and the answer is a clean negative.
+
+**The pinning half works perfectly.** Both runs discarded exactly **943 ticks**
+and started at heading **101.0018** - the same numbers to every digit, from two
+independent restarts.
+
+**The replay half does not.** The 3,146-tick committed lap script
+(`verification/scenarios/talons-junction-time-trial-lap.inputs`) driven
+open-loop from that pinned start does not reproduce the lap it was recorded
+from, and - the decisive comparison - it does not even reproduce *itself*:
+
+| Separation reaches | vs the recorded lap (start `0.77` deg apart) | run 1 vs run 2 (starts `0.0000` deg apart) |
+| --- | ---: | ---: |
+| `1` unit | tick 68 | tick 123 |
+| `10` units | tick 172 | tick 182 |
+| `100` units | tick 495 | tick 495 |
+
+Over the full 3,146 ticks the open-loop run travels `1,461` units where the
+recorded lap covers `5,608`: it loses the racing line inside two seconds and
+spends the rest of the run grinding along walls.
+
+**The mechanism is the original's variable timestep, and it is visible in the
+captures' own `dt` column.** Comparing the two pinned runs tick by tick, `dt` is
+identical on **14 of 1,341 ticks (1.0 %)** and differs from tick 0 onward - same
+mean (`0.016683`), different sequence, because the game integrates a *measured*
+frame duration ([ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md))
+and the emulator's frame durations depend on host load. The positions differ by
+`0.0017` units on tick 0 and grow from there. No amount of pose pinning can fix
+that: it is not an initial-condition problem.
+
+**What this means for the workflow**, and it is a genuine constraint rather than
+a defect to fix:
+
+- **A capture and its script are one run.** Anything that needs the original's
+  own trajectory has to be recorded closed-loop (`psp-autopilot.py`) or seeded
+  from a capture (`oag-trace run`), which is what every comparison in `docs/`
+  already does.
+- **Open-loop scripts are still fine for short scenarios.** The pitch, steer and
+  airbrake captures are 200-360 ticks and diverge by well under a unit over their
+  useful windows; the pinning is what makes *those* repeatable.
+- `just scripted-sim` - the same script through our own simulation - is
+  deterministic by construction and unaffected. Its usefulness as a *fidelity*
+  metric is what this bounds: two runs of the original disagree with each other
+  by 100 units at tick 495, so no target for that recipe is meaningful past the
+  first few hundred ticks.
 
 ## Driving a whole race, and the three numbers that make it possible
 

@@ -382,9 +382,18 @@ The candidate that page used to name - PPSSPP's input-recording API - was tried
 and is a dead end: `replay.flush` crashes the emulator on any recording that
 spans a screen transition.
 
-What has **not** been re-run is this section's own experiment: whether a pinned
-pose is enough to make 3,146 open-loop ticks come out as a lap. The pose was a
-necessary condition, not a proven sufficient one.
+**The replay half is now measured, and it is a negative.** Driven open-loop from
+the pinned start, the committed lap script reproduces neither the recorded lap
+nor a second run of itself: two runs whose starts agree to `0.0000` degrees are
+`1` unit apart by tick 123 and `100` apart by tick 495. The cause is the
+original's variable timestep - `dt` is identical on `1.0 %` of ticks between two
+runs, because the game integrates a measured frame duration and the emulator's
+frame durations depend on host load. Numbers and consequences on
+[the debugger page](../reverse-engineering/ppsspp-debugger.md#measured-a-pinned-pose-is-necessary-and-nowhere-near-sufficient).
+So the sentence above stands permanently rather than pending a fix: **the
+committed file is a faithful record of the inputs of a lap that happened, and it
+is not a reproducible emulator lap.** Short scenarios are unaffected, and our own
+side stays deterministic.
 
 ### What a real scripted run found
 
