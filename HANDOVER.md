@@ -288,6 +288,55 @@ steps, and detach/race warnings - read it before the next capture session.
 Its narrative final report never arrived; the committed docs and the
 centrally re-run analyses above carry the substance.
 
+**`hover-re`, third task - the RE half of the wall question (`8934877`,
+listing fix `97599eb`): the friction law is recovered at instruction level,
+and `3.67 %` is the friction coefficient itself.** Full evidence in
+`docs/ghidra/functions/psp-pulse/rigid-body.md`:
+
+- **`Body_ResolveContact` (`0x0884e968`, conf 88**, formerly `FUN_0884e968`):
+  normal impulse `j = -(1 + e) * vn / (invMass + angularTerm)` with `e` read
+  from `body->restitution(+0x388)`; then, gated on `c->friction(+0x34) > 0`,
+  the impulse gains a tangential term whose net effect through
+  `Body_ApplyImpulseAtPoint` (`0x0884d64c`, `invMass = 1`) is exactly
+  **`velocity -= c->friction * vt`**, `vt` the contact-point velocity
+  perpendicular to the normal. For a wall scrape `vt` is nearly the whole
+  forward velocity: multiplicative, velocity-space, once per contact per
+  frame - matching the measurement in every respect. The `4.2 % -> 3.67 %`
+  decay is the normal component dying as the motion becomes purely
+  tangential (conf 80), so **the settled `3.67 %` is the friction
+  coefficient of that surface**. `Body_Translate` (`0x0884d9f8`, 92) also
+  named; `Ship_HoverTwoPoint` uses it for probe push-out, a second agreeing
+  use site.
+- **`wall.rs` implements only the normal impulse - it has no tangential term
+  at all.** The gap is real and exactly this shape.
+- **Deliberately not implemented, and the near-miss is on the record**: the
+  coefficient is per-contact *data* read from `contact+0x34`, and nothing
+  read so far shows what fills it. The tempting move - wiring
+  `oag_physics::collide::Hit::vertex_scalar` straight in - would be wrong:
+  that field **defaults to `1.0`** when a mesh has no chunk 3, and friction
+  `1.0` in this law removes the entire tangential velocity in one frame (the
+  ship stops dead); the measurement wants `0.0367`. Either a scale sits
+  between them or the field is not the friction. Hypothesis capped at 50 in
+  the doc, unimplemented.
+- **The implementation brief, handed to a fourth agent (`wall-re`) with Task
+  #11**: read the writer of `contact+0x34` starting from
+  `Collision_AddContact` (`0x08816864`, 86) and
+  `CollisionMesh_AvgVertexScalar` (`0x0881835c`, 84) - settling the units
+  question and collision.md's confidence-40 per-vertex scalar in one pass -
+  then add the tangential term sourcing the coefficient the way the binary
+  does, and validate with `speed/|velocity|` (reads `1.0000` free, settles
+  at the surface friction while scraping - sharper than any position
+  comparison). `the_ship_does_not_stay_on_the_track_yet` re-checked this
+  pass: still fails, 117/118, unchanged - it is the headline to watch.
+- Cross-checked on both binaries: the PS2 twin has the same construction and
+  the same friction-at-`contact+0x34`, deferred into the 8-entry queue
+  instead of folded inline.
+- Process note: a review of `4a9d185` raised two verifiability nits in the
+  `Ship_ApplyVerticalDamping` listing (an out-of-order address, elided
+  FPU-to-VU transfers); `97599eb` replaced it with the full 37-instruction
+  listing in address order with nothing elided. Teammate reports go to the
+  orchestrating session by name, not "main" - "main" bounces for teammates.
+
 ## 2026-07-28: a three-agent pass is in flight, and the capture harness got its angular-velocity column
 
 A new session spawned three concurrent background agents in this working tree,
