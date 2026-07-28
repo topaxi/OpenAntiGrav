@@ -125,15 +125,22 @@ podman run --rm -v "$PWD:/src" -w /src docker.io/library/debian:bookworm-slim \
 
 then `just appimage --skip-build` after copying that binary over
 `target/release/oag-game`, or point the script at it. Debian bookworm is glibc
-2.36, which covers every SteamOS 3.5 or newer. `cargo-zigbuild`
-(`--target x86_64-unknown-linux-gnu.2.36`) does the same thing without a
-container. A third option, if neither is available, is pinning the old symbol
-versions with `.symver` directives - it works, it is fragile, and it needs
-revisiting every time glibc adds a version, so prefer either of the above.
+2.36; **whether 2.36 clears the Deck is exactly the unverified part** - see
+below. `cargo-zigbuild` (`--target x86_64-unknown-linux-gnu.2.36`) does the same
+thing without a container. A third option, if neither is available, is pinning
+the old symbol versions with `.symver` directives - it works, it is fragile, and
+it needs revisiting every time glibc adds a version, so prefer either of the
+above.
 
-**This has not been verified on a Deck** - nobody with the hardware has run it
-yet, and the exact SteamOS glibc version is the missing number. Treat the
-container build as the documented fallback rather than as known-necessary.
+**Two things here are written from reasoning rather than from a run.** The
+container command above has never been executed - if it fails, suspect the
+command before suspecting the environment. And the number this all turns on, the
+SteamOS glibc version, was never established: SteamOS is a rolling Arch
+snapshot, the only figure findable was 2.33 from a 2022 discussion, and no
+hardware was available to check. Step 4 of
+[running it on a Steam Deck](#running-it-on-a-steam-deck) is how the number gets
+found: run the AppImage from a terminal, and either it starts or it names the
+version it wanted.
 
 ## Where the disc image comes from
 

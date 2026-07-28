@@ -24,6 +24,12 @@ data/
 `tools/` is populated by `just build-allegrex`. It holds a git checkout and a
 build output, neither of which belongs in this repository.
 
+`cache/` is where a **repository checkout** caches converted assets. A packaged
+build has no checkout around it and uses `~/.cache/oag/` instead, rather than
+writing beside wherever it was run from - see
+[packaging](../docs/tools/packaging.md#where-the-disc-image-comes-from).
+Deleting either is always safe.
+
 `cache/` holds assets converted from your own originals, where converting once is
 better than reproducing the original decoder: see
 [ADR-0004](../docs/architecture/adr/0004-asset-pipeline.md). It is derived
