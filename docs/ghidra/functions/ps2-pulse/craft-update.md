@@ -909,25 +909,57 @@ positionally, **and** it holds the only other `-0.25` immediate
 [engine.md](../psp-pulse/engine.md) gives for that term.
 
 **Its body has now been read, and it raises the confidence to 92 while settling a
-question the PSP side got wrong.** The whole function is 25 instructions:
+question the PSP side got wrong.** The whole function is 37 instructions, and
+here they all are, in address order and with nothing elided - the FPU-to-VU
+transfers matter, because the scalars are computed in `f1`/`f2` and have to reach
+`vf1`/`vf3` through the integer file before any `vmulx` can use them:
 
 ```text
-00159e84  lwc1  f3,0x2e0(a0)     ; craft+0x2e0, the grounded fraction
-00159e88  c.eq.S f3,f0           ; == 0 ?
-00159e90  bc1f  0x00159f04       ; NOT zero -> return, having done nothing
-00159e98  lqc2  vf2,0x180(a0)    ; craft+0x180, the up axis
-00159ea0  lqc2  vf1,0x1b0(a0)    ; craft+0x1b0, the linear velocity
-00159ea8  vmul.xyz  vf1,vf2,vf1
-00159eb4  vadday.x  ACC,vf1,vf1
-00159eb8  vmaddz.x  vf1,vf3,vf1  ; dot(up, velocity)
-00159ebc  lui   at,0xbe80        ; -0.25f
-00159eac  lui   at,0x3f80        ; 1.0f
-00159ec8  sub.S f1,f1,f3         ; 1 - grounded
-00159ee4  vmulx.xyzw vf2,vf2,vf1 ; up * dot
-00159ef0  vmulx.xyzw vf2,vf2,vf3 ; * -0.25
-00159ef4  vmulx.xyzw vf2,vf2,vf1 ; * (1 - grounded)
+00159e78  addiu sp,sp,-0x20
+00159e7c  clear f0                ; f0 = 0.0
+00159e80  sd    ra,0x10(sp)
+00159e84  lwc1  f3,0x2e0(a0)      ; f3 = craft+0x2e0, the grounded fraction
+00159e88  c.eq.S f3,f0            ; grounded == 0 ?
+00159e8c  nop
+00159e90  bc1f  0x00159f04        ; NOT zero -> return, having done nothing
+00159e94  _ld   ra,0x10(sp)       ; delay slot, on the return path
+00159e98  lqc2  vf2,0x180(a0)     ; vf2 = craft+0x180, the up axis
+00159e9c  vaddw.xyz vf3,vf0,vf0   ; vf3.xyz = (1,1,1), vf0 being (0,0,0,1)
+00159ea0  lqc2  vf1,0x1b0(a0)     ; vf1 = craft+0x1b0, the linear velocity
+00159ea4  move  a1,sp
+00159ea8  vmul.xyz vf1,vf2,vf1    ; vf1 = up * velocity, component-wise
+00159eac  lui   at,0x3f80
+00159eb0  mtc1  at,f1             ; f1 = 1.0f
+00159eb4  vadday.x ACC,vf1,vf1    ; ACC.x = vf1.x + vf1.y
+00159eb8  vmaddz.x vf1,vf3,vf1    ; vf1.x = ACC.x + 1*vf1.z == dot(up, velocity)
+00159ebc  lui   at,0xbe80
+00159ec0  mtc1  at,f2             ; f2 = -0.25f
+00159ec4  qmfc2 v0,vf1            ; v0 = bits of dot            (VU -> integer)
+00159ec8  sub.S f1,f1,f3          ; f1 = 1.0 - grounded
+00159ecc  mtc1  v0,f0             ; f0 = dot                    (integer -> FPU)
+00159ed0  lw    a0,0x1ec(a0)      ; a0 = craft+0x1ec, the body
+00159ed4  mfc1  v0,f2             ; v0 = bits of -0.25
+00159ed8  mfc1  v1,f0             ; v1 = bits of dot
+00159edc  qmtc2 v0,vf3            ; vf3.x = -0.25   (vf3 reused, no longer 1,1,1)
+00159ee0  qmtc2 v1,vf1            ; vf1.x = dot
+00159ee4  vmulx.xyzw vf2,vf2,vf1  ; vf2 = up * dot
+00159ee8  mfc1  v0,f1             ; v0 = bits of (1 - grounded)
+00159eec  qmtc2 v0,vf1            ; vf1.x = 1 - grounded        (vf1 reused)
+00159ef0  vmulx.xyzw vf2,vf2,vf3  ; vf2 *= -0.25
+00159ef4  vmulx.xyzw vf2,vf2,vf1  ; vf2 *= (1 - grounded)
 00159ef8  jal   Body_AddForceWorld
+00159efc  _sqc2 vf2,0x0(sp)       ; delay slot: the force, at a1 == sp
+00159f00  ld    ra,0x10(sp)
+00159f04  jr    ra
+00159f08  _addiu sp,sp,0x20
 ```
+
+**Both `vf1` and `vf3` are reused mid-function**, which is the only thing that
+makes the listing hard to follow: `vf3` carries the `(1,1,1)` broadcast that
+completes the dot product at `0x00159eb8` and is then overwritten with `-0.25` at
+`0x00159edc`, and `vf1` carries the dot product and is then overwritten with
+`1 - grounded` at `0x00159eec`. Read without that, the last three `vmulx` look
+like they multiply by the wrong things.
 
 so the term is `up * dot(up, velocity) * -0.25 * (1 - grounded)` - **term for term
 the PSP inline at `0x08849c60`, on a different ISA and a different compiler.**
