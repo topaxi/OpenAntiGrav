@@ -123,21 +123,48 @@ resolution; the short version, because it inverts the standing diagnosis:
   `speed/|velocity| == 1.0000`. `the_ship_does_not_stay_on_the_track_yet`
   still fails and is now expected to hinge on the wall response.
 
-**`captures` (in flight): the angular column is not angular velocity in
-matching units, and that un-ties `oag-trace show`'s four-way scoring.**
-`scripts/trace-angular-fit.py` (`7738bf4`) exists because the four
-`AngularReading`s come back *undecided* on real data - all four residuals land
-within a few percent of the column's own rms. The script's fit says why: the
-recorded `body+0x160` column is proportional to the **body-local** angular
-velocity with three distinct negative per-axis constants near `-15, -21, -15` -
-i.e. it reads like a body-frame angular *momentum* `I * w` with a diagonal
-inertia tensor, and `1/|k_y| ~= 1/21` is suspiciously close to the `1/22.1`
-that `YAW_DRIVE_CALIBRATION` stands in for. If that holds it would revise this
-file's earlier "the yaw equilibrium is provably inertia-independent" note -
-treat as preliminary until the agent's final report and steering captures land.
-It also committed scripted scenarios (`verification/scenarios/steer-left`,
-`steer-right`, `airbrake-asymmetric.inputs`) and a division-by-zero fix in
-`trace-force-balance.py` for stationary data.
+**`captures` (tasks #3/#4 done): six new captures exist, the two starved
+ground-truth tests now run, and the angular column is settled as
+negated-body-local `I * w`.** The agent marked both tasks complete; its
+narrative report never arrived, so everything here was **re-verified centrally
+from the files themselves**, which is stronger anyway:
+
+- `data/traces/` now holds `talons-junction-standing-start.csv` (300 ticks -
+  the file the M4 resolution rests on), `-steer-avel`, `-steer-left`,
+  `-steer-right`, `-airbrake-asymmetric`, and `-free-run-118` (200 ticks
+  each), plus `ours-*` sim-side counterparts. All are gitignored data; they
+  exist only on this machine.
+- **The two `#[ignore]`d yaw ground-truth tests pass**: `cargo nextest run -p
+  oag-trace --run-ignored all` is **88/88 with 0 skipped** - the
+  `steer-left`/`-right` captures satisfy them, and
+  `the_calibration_reproduces_the_recorded_yaw_rate` holds on real data.
+- **`scripts/trace-angular-fit.py` (`7738bf4`), re-run centrally on the new
+  captures**: `oag-trace show`'s four one-to-one `AngularReading`s tie
+  because the column is not in matching units. Fitted, the verdict is
+  decisive - **local beats world** (91.9 % vs 65.9 % explained on
+  `steer-avel`; 83.9 % vs 25.8 % on the standing start) **and the scale is
+  negative**: the recorded `body+0x160` is the *negation* of the body-local
+  angular velocity, scaled per axis by roughly `(-15, -21..-22, -14..-16)`
+  (right, up, forward). That settles both open questions at once:
+  craft-update.md's `w_game = -w_physics` gets its frame (body-local), and
+  engine.md's 74-capped local-vs-world resolves to local.
+- **The up-axis constant is `YAW_DRIVE_CALIBRATION` to within the fit's own
+  noise**: `1/|k_y|` reads `0.04686` (steer-avel) and `0.04506` (standing
+  start) against the crate's fitted `0.0452`. The diagonal-per-axis model
+  beating the single scale (95-96 % explained) reads like a body-frame
+  angular *momentum* `I * w` with diagonal inertia - which would mean the
+  "missing 22x yaw factor" was the **inertia tensor** all along and would
+  revise this file's earlier "the yaw equilibrium is provably
+  inertia-independent" note. That last step is interpretation, not yet
+  measurement: no instruction has been read showing `body+0x160` multiplied
+  by an inertia on its way to the orientation update. Flagged as the obvious
+  next RE target for whoever is in `Body_Integrate` next.
+- Also committed (`7738bf4`): scripted scenarios
+  (`verification/scenarios/steer-left`, `steer-right`,
+  `airbrake-asymmetric.inputs`) and a division-by-zero fix in
+  `trace-force-balance.py` for stationary data. The airbrake-asymmetric
+  capture - the only scenario that exercises the `1e-5` airbrake drag term -
+  exists but its analysis has not been run yet.
 
 **`mechanical` (done): the SAP +/-1024 contradiction is dissolved into a
 narrower question, the docs debt is paid, and `oag-trace` reads both discs.**
