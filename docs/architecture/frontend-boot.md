@@ -372,7 +372,7 @@ colour, not a broken picture.
 real duration against the black backdrop the `LogoFMV` screen puts behind the
 movie anyway, and the missing tool is named on stdout. `--no-video` forces that
 path, and it reads 2 KiB instead of 5 MiB because only the header is needed. In
-that case a frame counter is drawn over the intro, because eight seconds of black
+that case a frame counter is drawn over the movie, because forty seconds of black
 screen is otherwise indistinguishable from a hang; `--overlay` turns it on when
 there *is* a picture, which is how the pacing above was checked frame by frame.
 

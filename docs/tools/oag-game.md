@@ -70,7 +70,7 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 
 All of them apply to a race started from the front end as well, since it is the same
 race. `--class` in particular is parsed before anything is loaded, so a misspelling
-is not discovered eight seconds of intro later.
+is not discovered forty seconds of intro later.
 
 ## Either disc
 

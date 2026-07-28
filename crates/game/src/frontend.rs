@@ -298,9 +298,10 @@ impl Frontend {
             placements,
             player: crate::movie::Player::new(frames, false),
             has_picture,
-            // Without a picture the intro is a black screen for eight seconds,
-            // so the counter is the only sign it is running. With one it is
-            // clutter, and the pacing can be read off the picture instead.
+            // Without a picture the movie is a black screen for as long as it
+            // runs - forty seconds for the disc's own intro - so the counter is
+            // the only sign it is running. With one it is clutter, and the
+            // pacing can be read off the picture instead.
             overlay: !has_picture,
             hold: Hold::None,
             held_for: 0.0,

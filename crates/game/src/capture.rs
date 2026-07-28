@@ -61,8 +61,9 @@ pub struct Options {
 
 /// How many ticks the runner will take before giving up on `until`.
 ///
-/// The intro is eight seconds plus three two-second holds, so a minute of
-/// simulated time is generous and still bounded.
+/// The boot movie is forty seconds, and the `--reel` leg is eight plus three
+/// two-second holds, so a minute of simulated time covers either and is still
+/// bounded.
 const MAX_TICKS: u32 = 60 * 60;
 
 /// Runs the sequence and writes one frame.

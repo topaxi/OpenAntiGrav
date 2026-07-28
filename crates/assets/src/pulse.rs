@@ -106,7 +106,12 @@ pub mod names {
 /// `CLAUDE.md` forbid below 50 confidence, and a movie filename that no string
 /// search, no XML and no runtime trace has produced is well below that.
 pub mod hashes {
-    /// The dev/pub reel the intro state plays, in its three regional cuts.
+    /// The dev/pub reel `Intro Screen->IntroMovie1` plays, in its three
+    /// regional cuts.
+    ///
+    /// **Not a boot movie.** The disc's own boot opens `Data\Movies\Intro.PMF`
+    /// and `Data\Movies\Backdrop.PMF` and nothing else, and never enters the
+    /// state whose counters these fit; where they *are* played is unestablished.
     ///
     /// Each is 480x272, 260 frames, 8.68 s, `PSMF0012` - a different container
     /// version from the `PSMF0014` of [`names::INTRO_MOVIE`], which is a second
@@ -127,7 +132,7 @@ pub mod hashes {
     /// sizes - so the set is region-invariant content and the cut must be picked
     /// at runtime. Which mechanism picks it has not been read out of the binary.
     ///
-    /// This one is `oag-game`'s default, because the executable on the image
+    /// This one is what `oag-game --reel` defaults to, because the executable on the image
     /// this project reads is the EU build throughout despite its `UCUS-98712`
     /// serial: 18 `UCES00465` strings in `BOOT.BIN` and no `UCUS` string at all,
     /// an ISO volume id and publisher of `SCEE`, and a whole
