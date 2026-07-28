@@ -757,10 +757,19 @@ impl Frontend {
         }
 
         // `DisplayLanguages` plus `Menu`: one row per language the disc offers,
-        // in its own name.
-        let menu_x = 50.0;
-        let menu_y = 60.0;
-        let row = 24.0;
+        // at the `Menu` widget's own position, scale, colour and alignment.
+        // There is no per-row height in the XML - `DisplayLanguages` only
+        // populates the list `Menu` draws - so row spacing is inferred from
+        // the widget's own font's line height, the same quantity a line of
+        // that font would step by anywhere else it is used.
+        let menu = screen.menu.as_ref();
+        let menu_x = menu.map_or(0.0, |m| m.x);
+        let menu_y = menu.map_or(0.0, |m| m.y);
+        let scale = menu.map_or(1.0, |m| m.scale).max(0.5);
+        let align = Align::parse(menu.map_or("left", |m| m.align.as_str()));
+        let color = argb_to_rgba(menu.map_or(0xffff_ffff, |m| m.color));
+        let row = font_line_height(menu.map_or("Default", |m| m.font.as_str())) * scale;
+
         for (index, language) in self.languages.iter().enumerate() {
             let y = menu_y + index as f32 * row;
             let selected = index == self.selected;
@@ -773,13 +782,13 @@ impl Frontend {
             out.push(Draw::Text {
                 x: menu_x,
                 y,
-                scale: 1.6,
+                scale,
                 color: if selected {
                     [1.0, 1.0, 1.0, 1.0]
                 } else {
-                    [0.6, 0.85, 0.9, 1.0]
+                    color
                 },
-                align: Align::Left,
+                align,
                 text: language.native_name.clone(),
             });
         }
@@ -789,6 +798,25 @@ impl Frontend {
     #[must_use]
     pub fn language_screen(&self) -> Option<&Screen> {
         self.screens.language_selection()
+    }
+}
+
+/// The line height of a font id, in the PSP's own pixel units.
+///
+/// Matches the `.fnt` files named in `oag_assets::pulse::names::fonts`:
+/// `Default` is `pulse_text.fnt` (13px), `Menu` is `Pulse_20.fnt` (22px),
+/// `Title`, `Small`, `InGame` and `Stats` are `Pulse_14.fnt` (17px), `HUD` is
+/// `PulseHud.fnt` (25px) and `HUDSmall` is `small.fnt` (10px). The XML is
+/// inconsistent about case (`font="menu"` and `font="Menu"` both appear), so
+/// this matches case-insensitively.
+fn font_line_height(font: &str) -> f32 {
+    match font.to_ascii_lowercase().as_str() {
+        "menu" => 22.0,
+        "title" | "small" | "ingame" | "stats" => 17.0,
+        "hud" => 25.0,
+        "hudsmall" => 10.0,
+        // "Default", and anything this build does not otherwise recognise.
+        _ => 13.0,
     }
 }
 
@@ -817,7 +845,7 @@ mod tests {
   <Screen type="Language Selection" name="Language Selection">
     <Text name="LanguageText"><Values idstring="Language Selection" font="Title" x="21" y="0"></Values></Text>
     <DisplayLanguages><Values clear="true"></Values></DisplayLanguages>
-    <Menu name="Language"><Values align="left"></Values></Menu>
+    <Menu name="Language"><Values align="left" font="Default" x="50" scale="1.0" y="46" color="0xFF33A6B9"></Values></Menu>
     <Redirect name="LanguageAutoRedirect">
       <Values backward="none"></Values>
       <Default goto="LogoFMV"></Default>

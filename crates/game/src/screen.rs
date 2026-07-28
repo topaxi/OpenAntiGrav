@@ -165,6 +165,31 @@ pub struct Image {
     pub auto_load: bool,
 }
 
+/// A `Menu` widget: a named, selectable list, and where/how its rows draw.
+///
+/// The picker's `Menu` has no per-row positions of its own - `DisplayLanguages`
+/// populates it with one row per language the disc offers, and every row shares
+/// this one widget's `x`, `scale`, `color` and `align`, stepping down from `y`
+/// by however tall a row is. Nothing in the XML states a row height; see
+/// `docs/architecture/frontend-boot.md` for how that gap is closed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Menu {
+    /// The `name` attribute, `"Language"` on the picker.
+    pub name: String,
+    /// Left edge of every row.
+    pub x: f32,
+    /// Top edge of the first row.
+    pub y: f32,
+    /// Scale multiplier, shared by every row.
+    pub scale: f32,
+    /// ARGB, as the XML writes it, shared by every row.
+    pub color: u32,
+    /// `left`, `right` or `centre`.
+    pub align: String,
+    /// Font name, e.g. `Default`.
+    pub font: String,
+}
+
 /// One screen, flattened out of the tree.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Screen {
@@ -187,8 +212,8 @@ pub struct Screen {
     /// Whether the screen has a `DisplayLanguages` widget, which is what makes
     /// it the language picker.
     pub display_languages: bool,
-    /// Whether the screen has a `Menu` widget, and its name.
-    pub menu: Option<String>,
+    /// The screen's `Menu` widget, if it has one.
+    pub menu: Option<Menu>,
 }
 
 impl Screen {
@@ -299,7 +324,7 @@ impl Screens {
                 "text" => screen.texts.push(self.text_from_node(child)),
                 "redirect" => screen.redirects.push(redirect_from_node(child)),
                 "displaylanguages" => screen.display_languages = true,
-                "menu" => screen.menu = Some(child.attr("name").unwrap_or("Menu").to_string()),
+                "menu" => screen.menu = Some(self.menu_from_node(child)),
                 _ => {}
             }
         }
@@ -324,6 +349,21 @@ impl Screens {
                 .and_then(parse_argb)
                 .unwrap_or(0xffff_ffff),
             auto_load: node.flag("AutoLoad").unwrap_or(false),
+        }
+    }
+
+    fn menu_from_node(&self, node: &Node) -> Menu {
+        Menu {
+            name: node.attr("name").unwrap_or("Menu").to_string(),
+            x: self.number(node.value("x")).unwrap_or(0.0),
+            y: self.number(node.value("y")).unwrap_or(0.0),
+            scale: self.number(node.value("scale")).unwrap_or(1.0),
+            color: self
+                .resolve(node.value("color").unwrap_or_default())
+                .and_then(parse_argb)
+                .unwrap_or(0xffff_ffff),
+            align: node.value("align").unwrap_or("left").to_string(),
+            font: node.value("font").unwrap_or("Default").to_string(),
         }
     }
 
@@ -432,14 +472,18 @@ mod tests {
     const SAMPLE: &str = r#"
 <Screen>
   <Variable global="TitleColor"><Values String="0xFF000000"></Values></Variable>
+  <Variable global="TextColor"><Values String="0xFF33A6B9"></Values></Variable>
   <Variable global="MenuXOffset"><Values String="50"></Values></Variable>
+  <Variable global="MenuScale"><Values String="1.0"></Values></Variable>
   <Screen type="Language Selection" name="Language Selection">
     <Text name="LanguageText" StartEnabled="false">
       <Values idstring="Language Selection" font="Title" x="FEGlobals->
         MenuXOffset" scale="1.0" color="FEGlobals->TitleColor"></Values>
     </Text>
     <DisplayLanguages><Values clear="true"></Values></DisplayLanguages>
-    <Menu name="Language" focus="false" save="true"><Values align="left"></Values></Menu>
+    <Menu name="Language" focus="false" StartEnabled="false" save="true">
+      <Values align="left" font="Default" x="FEGlobals->MenuXOffset" scale="FEGlobals->MenuScale" y="46" color="FEGlobals->TextColor"></Values>
+    </Menu>
     <Redirect name="LanguageAutoRedirect">
       <Values backward="none"></Values>
       <Default goto="LogoFMV"></Default>
@@ -538,7 +582,28 @@ mod tests {
         assert_eq!(screen.name, "Language Selection");
         assert_eq!(screen.kind.as_deref(), Some("Language Selection"));
         assert!(screen.display_languages);
-        assert_eq!(screen.menu.as_deref(), Some("Language"));
+        let menu = screen.menu.as_ref().unwrap();
+        assert_eq!(menu.name, "Language");
+    }
+
+    #[test]
+    fn the_menu_widget_s_own_layout_resolves_through_feglobals() {
+        let screens = Screens::from_xml(SAMPLE);
+        let menu = screens
+            .by_name("Language Selection")
+            .unwrap()
+            .menu
+            .as_ref()
+            .unwrap();
+        assert_eq!(menu.x, 50.0, "x came from FEGlobals->MenuXOffset");
+        assert_eq!(menu.y, 46.0);
+        assert_eq!(menu.scale, 1.0, "scale came from FEGlobals->MenuScale");
+        assert_eq!(
+            menu.color, 0xff33_a6b9,
+            "color came from FEGlobals->TextColor"
+        );
+        assert_eq!(menu.align, "left");
+        assert_eq!(menu.font, "Default");
     }
 
     #[test]

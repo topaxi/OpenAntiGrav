@@ -381,12 +381,22 @@ hands the frames over intact for whenever we do.
 
 ## The Language Selection screen
 
-Everything on it comes from the disc.
+Almost everything on it comes from the disc; the one thing that does not says
+so below.
 
 **The screen** is found two independent ways that agree: the element with
 `type="Language Selection"`, and the element with a `DisplayLanguages` child. It
 also has a `Menu name="Language" save="true"` and three `Text` widgets whose
 `idstring`s are looked up in the string table.
+
+**The `Menu`'s own layout** - `x`, `y`, `scale`, `color`, `align`, `font` - is
+read the same way `Text` and `Image` widgets already are, `FEGlobals->`
+indirections included: `x="FEGlobals->MenuXOffset"` (50), `y="46"` (a literal,
+not an indirection), `scale="FEGlobals->MenuScale"` (1.0), `color="FEGlobals->
+TextColor"` (`0xFF33A6B9`), `align="left"`. Confidence **95**: every value is
+read from the disc's own file and
+[asserted](../../crates/game/tests/boot_ground_truth.rs) against it directly,
+not inferred.
 
 **The languages** are plugins, not a list in code. Each of
 `Data\Plugins\PI008..PI012\Definition.xml` carries `<Font Language="French">`
@@ -413,19 +423,39 @@ probe, not the answer.
 
 ### What the screen does not yet do faithfully
 
-- **The text is not the game's font.** The `.fnt` metrics decode cleanly but the
-  atlas's pixel layout does not; see [fnt.md](../formats/fnt.md). The menu uses
-  5x7 glyphs written for this project, uppercase only, and characters outside
-  that set are **skipped**, so `Français` draws as `FRANAIS`. That is meant to
-  look like the approximation it is.
-- **The layout is ours.** The `Text` widgets are at their own XML coordinates, in
-  their own colours, but the language rows are not: `DisplayLanguages` and `Menu`
-  have layout attributes this build does not read yet.
+- **The `Menu`'s row spacing is inferred, not measured.** `DisplayLanguages`
+  populates the picker's `Menu` with one row per language, but nothing in the
+  XML states a row height - only the widget's own `x`, `y`, `scale`, `color`,
+  `align` and `font` are real, and every row shares them. Row spacing is taken
+  from the `Menu`'s own font's documented line height (13px for `Default`,
+  scaled by `MenuScale`), which is the same quantity a line of that font steps
+  by anywhere else it is used, but it is an inference rather than a value read
+  off the disc. Confidence **60**: the font-name-to-line-height mapping is
+  real (`oag_assets::pulse::names::fonts`), but nothing here confirms a `Menu`
+  list actually paces its rows by its font's line height rather than some other
+  constant - no runtime capture of the picker exists to check against (see
+  below).
 - **Near-black text is lifted.** The picker's title is `0xFF000000`, because the
   real screen sits on the menu's lit background, which nothing draws yet. Black
   on black would look like a bug in our code rather than a missing background.
-- `FE_CONFIRM_BUTTON` resolves to a single glyph in the game's own font encoding,
-  which our font has no character for, so it draws as nothing.
+- **The selection highlight has no XML backing.** The filled bar behind the
+  current row and its white text are this viewer's own affordance for showing
+  what is selected, not something the disc's own `Menu` widget draws.
+
+The font itself is no longer on this list: the `.fnt` atlas decodes for real
+now (see [fnt.md](../formats/fnt.md)), so `Français` draws with its own ç and
+`FE_CONFIRM_BUTTON` draws the game's own cross-button glyph. The 5x7 built-in
+font survives only as a fallback for a font that fails to decode.
+
+**This screen was very likely carried over from Wipeout Pure with only its
+`FEGlobals` retuned.** Pure's own `Skin.xml` (`data/images/pure-psp-usa.chd`)
+has the same `Language Selection` screen: the same widget names
+(`LanguageText`, `ControlTextConfirmButton`, `ControlTextConfirm`), the same
+`Menu name="Language" save="true"`, and the same literal `y="46"` on the `Menu`
+widget - the one number on it that is not behind a `FEGlobals->` indirection.
+Pure's `MenuXOffset` (21) and `MenuScale` (1.15) differ from Pulse's (50, 1.0),
+so those get retuned per game, but the screen template - down to that one
+pixel offset - reads like it was never touched.
 
 ## The state machine
 

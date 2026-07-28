@@ -209,6 +209,74 @@ anticipated exactly this outcome ("Not a failure: it would mean the lookup
 has been recovered since this was written") and is why it didn't just start
 failing the moment the fix landed.
 
+## The Language Selection picker's own `Menu` layout is real now, and a trap for the next person who tries to verify it against a live capture
+
+Asked to align the picker closer to the original. `screen::Menu` (was just
+`Option<String>` holding the widget's name) now carries its real `x`, `y`,
+`scale`, `color`, `align` and `font`, read the same FEGlobals-resolving way
+`Text`/`Image` already are, and `frontend::draw_language_selection` uses them
+instead of the hand-picked `50.0`/`60.0`/`24.0`/`1.6` it had before. Row
+spacing (nothing in the XML states one) is inferred from the `Menu`'s own
+font's documented line height times its scale - see
+`docs/architecture/frontend-boot.md#the-language-selection-screen` for the
+value table and the two different confidence scores (95 for the literal
+attributes, 60 for the row-spacing inference).
+
+**The trap: the USA disc never shows this screen, and proving that costs
+about an hour if you don't already know it.** Tried three ways to get a live
+PPSSPP capture of the real picker to check the row spacing against - backed up
+`~/.config/ppsspp/PSP/SAVEDATA/UCES00465P0000` (Pulse's own save slot, not
+obviously named after either disc's serial), wired the websocket debugger
+(`scripts/psp-drive.py`'s `Debugger`) to watch `state_name()` and stop the
+instant it reads `"Language Selection"`. Every attempt - true first boot, and
+again after a profile already existed - goes straight from
+`CreateFromBoot`/`AutoLoadingProfileScreen` to `Main Menu`. **The picker is
+never entered.** The user confirmed why mid-task: the USA disc is
+English-only, and the front end skips the picker outright when there's only
+one language to show - it isn't a bug in the harness. `Data.wad` on the US
+disc still carries all five language plugins (`PI008..PI012`, see the table
+above), so the game *could* show a picker; the US executable just never asks
+it to. A live capture needs a EU PSP disc (not in `data/images/`) or a PS2
+BIOS in PCSX2 (the user does not have one - do not suggest sourcing one).
+Restore the savedata backup (move, don't delete) before concluding a PPSSPP
+session that touched it.
+
+**What the XML evidence gives instead, and it is stronger than it sounds:**
+Pulse's own `Menu` (`y="46"`, `x` via `MenuXOffset=50`, `scale` via
+`MenuScale=1.0`, `color` via `TextColor=0xFF33A6B9`) cross-checks two ways.
+Wipeout Pure's own `Skin.xml` (`data/images/pure-psp-usa.chd`) has the
+identical `Language Selection` screen - same widget names, same
+`Menu name="Language" save="true"`, and the same literal `y="46"` (the one
+number on the widget that isn't behind a `FEGlobals->` indirection) - strongly
+suggesting this screen was carried into Pulse from Pure with only the
+`FEGlobals` retuned (Pure's own `MenuXOffset`/`MenuScale` are 21/1.15, not
+50/1.0). And the PS2 EU disc's own `Skin.xml` (`WADS2.WAD`, same
+`Data\Plugins\PI001\GUI\Skin.xml` path) has `y="76"`, `TextColor` identical at
+`0xFF33A6B9`, and `MenuXOffset`/`TitleXOffset` both `66` - `76/46 = 1.652` and
+`66/50 = 1.32`, both within a rounding of the platforms' own resolution ratios
+(`448/272 = 1.647`, `640/480 = 1.333`). Two independently authored files
+agreeing on a proportionally-consistent, non-round number is stronger evidence
+than a single read of one file, even though neither could be confirmed by an
+actual on-screen capture this pass.
+
+**One dangling thread, not chased further because it's about Pure, not
+Pulse:** Pure's `Skin.xml` references `FEGlobals->TextColor` at seven sites
+and never defines a `TextColor` global anywhere in that file. Either a
+shared/base skin XML loaded ahead of it (which `Screens::from_xml` does not
+merge across `LoadXML` includes) defines it, or it is a genuine dangling
+reference in the original engine. Whoever next gives Pure's front end
+attention will want to know this isn't a parser bug on this project's side.
+
+**Also fixed while in the area:** `docs/architecture/frontend-boot.md`'s
+"What the screen does not yet do faithfully" section claimed a 5x7,
+uppercase-only placeholder font (`Français` drawing as `FRANAIS`) and that
+`FE_CONFIRM_BUTTON` "draws as nothing." Both were stale - `docs/formats/fnt.md`
+already documents the real `.fnt` atlas decoding (status: understood), and
+the current build's own screenshot shows `Français` with its `ç` and the `X`
+confirm glyph rendering. The two docs had disagreed for some number of
+commits before this was caught; worth remembering that a page can go stale
+even when a sibling page in the same tree already has the correction.
+
 ## Reference: a real-hardware(ish) capture of the Pulse intro on YouTube
 
 The user pointed to <https://www.youtube.com/watch?v=lGAWYHmgo7o> as a

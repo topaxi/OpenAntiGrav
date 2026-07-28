@@ -205,7 +205,16 @@ fn the_language_screen_is_data_driven() {
         screen.display_languages,
         "it is the DisplayLanguages widget that makes it the picker"
     );
-    assert_eq!(screen.menu.as_deref(), Some("Language"));
+    let menu = screen.menu.as_ref().expect("the picker has a Menu widget");
+    assert_eq!(menu.name, "Language");
+    assert_eq!(menu.x, 50.0, "x came from FEGlobals->MenuXOffset");
+    assert_eq!(menu.y, 46.0);
+    assert_eq!(menu.scale, 1.0, "scale came from FEGlobals->MenuScale");
+    assert_eq!(
+        menu.color, 0xff33_a6b9,
+        "color came from FEGlobals->TextColor"
+    );
+    assert_eq!(menu.align, "left");
     assert!(
         !screen.texts.is_empty(),
         "the picker has its own Text widgets"
