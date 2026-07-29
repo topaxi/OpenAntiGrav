@@ -6,7 +6,16 @@
 # was sent, shifted two ticks later so the file reads in `oag-trace`'s
 # convention rather than the breakpoint's - so replay it into the emulator with
 # `psp-trace.py --script-lead 2` and into our own physics with
-# `oag-trace run --script` unshifted. See docs/tools/oag-trace.md.
+# `oag-trace run --script ... --script-lead 2`. See docs/tools/oag-trace.md.
+#
+# **The lead is needed on BOTH sides and the sentence above once said otherwise.**
+# Sending tick k+2 at tick k means the first two lines' opening ticks are never
+# sent at all, so a capture is this file with its first two ticks released, and
+# a replay that applies them drives an input the original never saw. Two ticks
+# survive the whole run because the steering ramp never settles on its target:
+# unshifted, this file's replay ends 8 degrees off heading by tick 70, meets a
+# wall at tick 147 that the original never touches, and travels 754 units where
+# the original travelled 1,045. That was recorded as M4's blocker for a session.
 #
 # The run this came off finished the lap: the game's own HUD read `Lap 2 of 3`
 # with `best 1.11.08` at tick 3087, which is the game timing the lap rather than

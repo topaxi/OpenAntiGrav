@@ -175,6 +175,10 @@ launch-hdfury-ps3 image="data/images/hdfury-ps3-eu.iso" *ARGS:
 #   just scripted-sim                                    # the whole-lap scenario
 #   just scripted-sim verification/scenarios/steer-left.inputs
 #   just scripted-sim verification/scenarios/steer-left.inputs --every 20 --out /tmp/ours.csv
+#
+# Add `--script-lead 2` if the run is going to be held next to a capture: every
+# capture under data/traces/ was taken through `psp-trace.py --script-lead 2`,
+# which never sends the script's first two ticks. See docs/tools/oag-trace.md.
 [doc("Run a committed scenario through our own physics and print a run report")]
 scripted-sim scenario=default_scenario *ARGS:
     cargo run -q -p oag-trace -- drive {{scenario}} --source {{psp_image}} {{ARGS}}
@@ -200,7 +204,7 @@ scripted-emu scenario=default_scenario out="data/traces/scripted-emu.csv" *ARGS:
     uv run --with websocket-client python scripts/psp-trace.py \
         --script {{scenario}} --script-lead 2 --out {{out}} {{ARGS}}
     @echo "captured {{out}}; compare it with:"
-    @echo "    just trace-compare run {{out}} --source {{psp_image}} --script {{scenario}}"
+    @echo "    just trace-compare run {{out}} --source {{psp_image}} --script {{scenario}} --script-lead 2"
 
 # Capture a per-tick trace out of the original running in PPSSPP. Needs a PPSSPP
 # with its websocket debugger enabled and the game already in a race; see

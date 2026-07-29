@@ -37,8 +37,15 @@ points at it. Prune again rather than appending indefinitely.
   gitignored, it does not travel into a worktree or a restricted sandbox.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status as of `0c3e78d`:** green at 871 tests, `just test-data` at 921,
-  `audit-leakage` clean.
+- **Gate status:** green at 874 tests, `audit-leakage` clean. `just test-data`
+  is 923 of 924, and **the one failure is the machine rather than the code**:
+  `oag-disc::ground_truth listing_matches_chdman_and_the_reference_iso` shells
+  out to `chdman extractdvd` into `/tmp/oag-ground-truth.iso`, `/tmp` here is a
+  6.8 G tmpfs, and the extracted PSP ISO does not fit in what is free. It fails
+  at "Extracting, 29.4% complete... Error writing to file; check disk space",
+  which `nextest` reports as `chdman extractdvd failed` two frames up and reads
+  like a broken invocation. Free `/tmp` or point the test elsewhere; do not go
+  looking for a disc bug.
 
 ## Where the project stands
 
@@ -52,22 +59,36 @@ and [`angular-velocity-column.md`](docs/physics/angular-velocity-column.md)) and
 under [`docs/ghidra/functions/`](docs/ghidra/functions/README.md) - `engine.md`,
 `rigid-body.md`, `contact-response.md`, `craft-update.md`.
 
-**What blocks M4 now is not contact generation** (that diagnosis was stale for
-31 commits before being corrected). Running the committed whole-lap scenario
-through our own physics, the ship reaches about 40 units/s by tick 400, **stops
-dead at one place on the circuit for roughly a thousand ticks**, then reverses:
-618 units of path travelled in 3,146 ticks against the original's **1,045** on
-the same inputs, grounded on 3,145 of 3,146 ticks and never further than 20.4
-units from the spline. It is not falling off the track any more - it is
-**wedged**, and too slow round the circuit by a factor of about 1.7.
+**The wedge is gone, and it was never physics.** For one session the blocker was
+stated as "618 units of path against the original's 1,045, wedged at one place on
+the circuit" - a craft that stopped dead with full thrust. It was the capture
+harness. `psp-trace.py --script-lead 2` sends the script's tick `k + 2` at the
+breakpoint for tick `k`, which cancels the emulator's three-frame input latency
+correctly for every transition *after* the start and, in doing so, **never sends
+the script's first two states at all**: at tick 0 the pointer already stands at
+index 2. Our replay applied them. Two ticks of head start, and they do not wash
+out, because `ramp_steering` travels toward its target without clamping to it and
+a saturated axis oscillates around it forever - unlike the airbrake ramp, which
+clamps and resynchronises on every transition. The whole chain is measured in
+[`oag-trace.md`](docs/tools/oag-trace.md#the-first-two-ticks-of-a-script-never-reach-the-emulator):
+a standing 17 % steering offset, 8 degrees of heading by tick 70, 15 units wide of
+the original on a half-width of 17.9, and a wall at tick 147 the original never
+touches.
 
-**One hypothesis is already dead, and it was mine.** The run report's angular
-velocity averages 21.2 rad/s over the lap, which reads like a craft spinning
-three and a half times a second and was written up as the likely cause. The
-fresh capture kills it: **the original reads 22.96 rad/s on the same scenario**,
-slightly *higher* than ours. Whatever that column is, both sides do the same
-thing with it and it is not the wedge. Recorded because it is exactly the kind
-of plausible number a next pass would otherwise spend a day on.
+`oag-trace run --script-lead N` and `drive --script-lead N` now exist to release
+the same ticks. **Pass `--script-lead 2` against everything in `data/traces/`**,
+and pass it on both sides of any new capture.
+
+The two facts that made this findable, if a comparable thing ever comes up again:
+the offset shows on `throttle` and `airbrake_r` as well as `steer`, on **two
+independent captures**, and the *control columns are a pure function of the script
+and `dt`* - they do not depend on the trajectory at all, so a mismatch there is
+never a physics symptom.
+
+**One older hypothesis stays dead.** The run report's angular velocity averages
+21.2 rad/s over the lap, which reads like a craft spinning three and a half times
+a second. The original reads **22.96 rad/s on the same scenario**, slightly
+*higher* than ours. Whatever that column is, both sides do the same thing with it.
 
 **Read lap fidelity off the *seeded* comparison** (`oag-trace run --reseed N`),
 never the open-loop one, and note the roadmap's exit criterion is now stated as
@@ -80,17 +101,25 @@ agreeing on about 1 % of ticks. A 3,146-tick single-seeded trajectory comparison
 measures the emulator's scheduler, not the force law, and a byte-exact
 implementation would fail it.
 
-**The lap was recaptured on 2026-07-29 and both comparisons run.** Numbers, so
-the next pass has a baseline rather than a re-run:
+**Score the lap on the window where the capture is clean.** The 2026-07-29
+recapture is wall-free on only **32.7 %** of its ticks and first touches a wall at
+tick **171**, so a whole-run number is mostly a measurement of the original's own
+scrapes. Over ticks 0-170, the corrected replay against that capture:
 
-| | single-seeded | `--reseed 60` |
+| Ticks 0-170 | `--script-lead 0` | `--script-lead 2` |
 | --- | ---: | ---: |
-| Position, max error | 148.7 at tick 435 | **10.3** at tick 299 |
-| Position, mean first/last quarter | 100.8 -> 22.9 | 1.89 -> 1.65 |
-| Orientation, worst axis | 0.66 rad | **0.114** rad |
-| Velocity, max | 97.8 | 54.5 |
-| `grounded` | exact on 3,146 of 3,146 - but see below | exact |
-| Trend, every field | shrinking or bounded; **nothing growing** | same |
+| Position, max error | 22.85 | **6.54** |
+| Position, mean error | 6.12 | **2.41** |
+| Speed, max error | 75.44 | **6.01** |
+| Speed, mean error | 9.97 | **2.75** |
+
+Under `--reseed 60` the position figure does not move (**10.3** at tick 299 either
+way - a 60-tick window never accumulates enough to show it), but the worst
+orientation axis goes 0.114 -> **0.0824** rad. The whole-run single-seeded number
+is now 253.7 at tick 2,494 and *growing*, and that is the honest reading rather
+than a regression: our run no longer wedges where the capture does, so after about
+tick 400 the two are simply doing different things and the comparison stops
+meaning anything.
 
 **Do not read `grounded` as the headline it looks like.** The original's column
 is `1.0` on all 3,146 ticks of this capture, so agreement means only that our
@@ -99,11 +128,6 @@ which read `0.5` against `1.0` and then left the surface for good at tick 313,
 but no evidence that the hover model quantises contact the way the original
 does. A constant column cannot test that, and under `--reseed` the field is one
 of the ones the seed restores anyway.
-
-The number that *is* worth having is the reseeded position error: a couple of
-units per second of simulation, never above ten. That is a very different
-statement from the single-seeded 148, which is mostly one early divergence
-carried forward.
 
 **The standing start was retaken too, and it is the pass's best result.**
 `verification/scenarios/standing-start.inputs` is new - 300 ticks of held thrust
@@ -114,7 +138,10 @@ demonstrably not the same one (clean for 186 ticks rather than 66; hits the wall
 at 119 units/s rather than 54):
 
 - **launch acceleration 32.69** on its third tick, against the recorded 32.52
-  and the predicted 31.8;
+  and the predicted 31.8. *"Third tick" now has an explanation rather than being
+  a quirk of the capture: it is the first tick the emulator was sent thrust, the
+  first two having been eaten by the lead.* Both legs are properties of the
+  capture, so neither moves with the replay fix;
 - **the `0.035` contact-friction floor never crossed** - minimum loss 3.534 %
   over 114 contact ticks, decaying 3.835 % -> 3.633 %, with **0 of 114** ticks
   above 5 units/s falling below it.
@@ -145,7 +172,8 @@ used, kept because commits and docs cite them.
 
 | Thread | What is known, and the next step |
 | --- | --- |
-| **The wedge: 618 units of path against the original's 1,045** | See above. The blocker, and the cheapest thing in this table to reproduce (`just scripted-sim`, fifteen seconds). The 21 rad/s spin is **not** the cause - the original reads 22.96 on the same scenario. |
+| **The standing start's wall arrives eight ticks early** | Corrected for the lead, our craft meets `standing-start`'s outer wall at tick **179** against the capture's **187**, having tracked position to 1.06 units and speed to 0.6 % over the clean launch before it. Eight ticks of cross-track drift over three seconds of straight-line thrust is a real difference and nothing above explains it. The smallest live discrepancy in this table and the cheapest to iterate on - 300 ticks, no steering, one capture that already exists. |
+| **`drive` spawns 51 units from where the original starts** | `oag-trace drive` (and `oag_game::race` through the same `Pose::from_sample`) puts the ship on **spline sample 0**, at `(56.5, -50.6, -187.7)`. The capture's own start line is `(6.07, -50.07, -196.10)` - nearest sample **3415** of 3448, and **9 units off the centreline**, which is what a grid slot behind the start line looks like. So `just scripted-sim`'s report is a different journey round the circuit from any capture and its path length is not comparable to one; use `run --script --script-lead 2`, which seeds from the capture. **Do not move the spawn on this**: one datum for where the grid is is not a recovered value, and the rule about fitted constants applies. Finding the original's grid placement is the actual next step. |
 | **The 13 % roll-stiffness gap** | The recovered tensor runs the roll oscillator 13 % stiff against measurement. Untouched by the downforce fix by construction (the probes are on the centreline), so it is now the only gap of its kind. |
 | **A clean lap scenario** | The committed lap script is a closed-loop autopilot recording and no longer flies clean open-loop (67.3 % of the recapture is in wall contact). Re-derive one from `just autopilot` rather than replaying the file. |
 | **Nothing airborne has ever been captured** | `grip_air`, the airborne pitch gain and the `-0.3` airborne weathervane consequently have no runtime leg at all. One capture with a real jump in it closes several at once. |
@@ -211,6 +239,17 @@ the past.
   been chased turned out to be something real - an inverse-inertia entry, a box
   tensor, a friction coefficient - and writing the fit in would have closed the
   question at exactly the wrong moment.
+- **Check the control columns agree before reading anything else in a
+  comparison.** They are a pure function of the script and `dt` - no trajectory
+  reaches them - so a mismatch there is a harness bug by construction and every
+  physics number below it is meaningless. The two-tick lead offset sat in plain
+  sight in `oag-trace compare`'s own output (`throttle max error 1.000e2 at tick
+  1`) for a session while the rows underneath it were read as a wedge. **Read the
+  table from the top.**
+- **A control that ramps without clamping has no attractor, and an input error
+  in one never decays.** The steering ramp oscillates around a saturated target
+  forever; the airbrake ramp clamps and resynchronises on every transition. Same
+  two-tick error, one washed out in six ticks and the other survived 3,146.
 - **Check a capture is clean before fitting anything to it.** `speed` and
   `|velocity|` agree to 1e-6 in free flight, so `speed/|velocity| == 1.0000` is
   a free contact detector. Two reference captures were recorded scraping a wall
@@ -312,10 +351,14 @@ approached from above; the mag-lock probe re-finding the magstrip from geometry
 that knows nothing about the capture (91 % of inverted poses against 0.3 % of
 upright ones). Method and numbers in the two ground-truth pages under
 [`docs/physics/`](docs/physics/README.md). Add to that the whole-lap result
-above: **`grounded` exact on 3,146 of 3,146 ticks** against a real circuit, with
-every field's error trend shrinking or bounded - the broadest runtime evidence
-the harness has produced, and the reason the wedge is now the only lap-scale
-symptom left.
+above, now that the input is aligned: over the 170 ticks of the recapture that
+are wall-free, **position tracks to 6.54 units at the worst and 2.41 on average**
+on a craft doing 100 units/s, with speed inside 6.01 - and `grounded` exact on
+3,146 of 3,146 ticks. That is the broadest runtime evidence the harness has
+produced. Its limits are worth stating in the same breath: the capture is clean
+on only a third of its ticks, so nothing after tick 171 measures our physics, and
+`grounded` is a constant column on this capture, so agreeing with it says only
+that our ship also never left the ground.
 
 **Instruction-level reading with no runtime leg yet.** Mag-lock's blend weights
 and its `|h - d| > 5.0` fallback; the swept collision path; everything airborne.

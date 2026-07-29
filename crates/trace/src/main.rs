@@ -109,6 +109,17 @@ enum Command {
         /// `verification/scenarios/` for the committed ones.
         #[arg(long, value_name = "FILE", conflicts_with_all = ["hold", "steer", "airbrake_left", "airbrake_right"])]
         script: Option<PathBuf>,
+        /// Release the script's first N ticks, as the capture harness did.
+        ///
+        /// **Pass the same N the capture was taken with**, which for everything
+        /// under `data/traces/` is `2` - `just scripted-emu` runs `psp-trace.py
+        /// --script-lead 2`. That option sends the script's tick `k + N` at the
+        /// breakpoint for tick `k`, so the first N states never reach the
+        /// emulator at all, and a replay that applies them is driving an input
+        /// the capture never saw. See `oag_trace::script::Script::with_capture_lead`
+        /// for why two ticks survive a 3,146-tick run rather than washing out.
+        #[arg(long, value_name = "N", default_value_t = 0, requires = "script")]
+        script_lead: usize,
         /// Hold a button for the whole run, e.g. `--hold cross`. Repeatable.
         ///
         /// Matches `psp-trace.py --hold`. Giving any held input switches the run
@@ -183,6 +194,14 @@ enum Command {
     Drive {
         /// The input script, e.g. `verification/scenarios/steer-left.inputs`.
         script: PathBuf,
+        /// Release the script's first N ticks, as the capture harness did.
+        ///
+        /// Only worth setting when the run is going to be held next to a capture
+        /// of the same script: everything under `data/traces/` was taken through
+        /// `psp-trace.py --script-lead 2`, which never sends the script's first
+        /// two ticks. See `oag_trace::script::Script::with_capture_lead`.
+        #[arg(long, value_name = "N", default_value_t = 0)]
+        script_lead: usize,
         /// A disc image, or a directory extracted with `oag-unpack`.
         #[arg(long)]
         source: String,
@@ -375,6 +394,7 @@ fn main() -> Result<()> {
         } => dump_track(&source, &track, steps),
         Command::Drive {
             script,
+            script_lead,
             source,
             track,
             team,
@@ -387,6 +407,7 @@ fn main() -> Result<()> {
             angular,
         } => drive_scenario(DriveArgs {
             script,
+            script_lead,
             source,
             track,
             team,
@@ -416,6 +437,7 @@ fn main() -> Result<()> {
             class,
             out,
             script,
+            script_lead,
             hold,
             steer,
             airbrake_left,
@@ -434,6 +456,7 @@ fn main() -> Result<()> {
             class,
             out,
             script,
+            script_lead,
             hold,
             steer,
             airbrake_left,
@@ -452,6 +475,7 @@ fn main() -> Result<()> {
 #[derive(Debug)]
 struct DriveArgs {
     script: PathBuf,
+    script_lead: usize,
     source: String,
     track: String,
     team: String,
@@ -474,7 +498,7 @@ struct DriveArgs {
 /// says whether the run is still on the circuit, and the reason this needs the
 /// spline as well as the collision mesh.
 fn drive_scenario(args: DriveArgs) -> Result<()> {
-    let script = read_script(&args.script)?;
+    let script = read_script(&args.script)?.with_capture_lead(args.script_lead);
     if script.is_empty() {
         bail!("{}: the script has no ticks in it", args.script.display());
     }
@@ -543,6 +567,14 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
         pose.position.z,
         spawn_height(&handling),
     );
+    if args.script_lead > 0 {
+        println!(
+            "--script-lead {}: the first {} tick(s) of the script are released, \
+             the way a capture taken with psp-trace.py --script-lead {} never \
+             received them",
+            args.script_lead, args.script_lead, args.script_lead,
+        );
+    }
     println!();
 
     let run = replay::drive(
@@ -752,6 +784,7 @@ struct RunArgs {
     class: String,
     out: Option<PathBuf>,
     script: Option<PathBuf>,
+    script_lead: usize,
     hold: Vec<String>,
     steer: Option<f32>,
     airbrake_left: Option<f32>,
@@ -873,7 +906,9 @@ fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
                 ticks - script.len(),
             );
         }
-        return Ok(Inputs::Scripted(script.states));
+        return Ok(Inputs::Scripted(
+            script.with_capture_lead(args.script_lead).states,
+        ));
     }
     if args.hold.is_empty()
         && args.steer.is_none()

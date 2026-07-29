@@ -74,8 +74,14 @@ just trace --script verification/scenarios/steer-both-ways.inputs \
 cargo run -p oag-trace -- run data/traces/venom-steer.csv \
     --source data/images/pulse-psp-usa.chd \
     --script verification/scenarios/steer-both-ways.inputs \
+    --script-lead 2 \
     --out data/traces/ours.csv
 ```
+
+**Pass `--script-lead 2` whenever the capture was taken with
+`psp-trace.py --script-lead 2`**, which every capture under `data/traces/` was.
+Without it the replay drives two ticks of input the emulator never received, and
+[the steering ramp carries that forward for the whole run](#the-first-two-ticks-of-a-script-never-reach-the-emulator).
 
 `--hold cross` on both sides is the older, simpler form and still works; it is
 the right thing for a straight line and cannot express anything else.
@@ -87,6 +93,7 @@ see [the lap scenario](#a-whole-lap-and-where-it-came-from):
 cargo run -p oag-trace -- run data/traces/talons-junction-time-trial-lap.csv \
     --source data/images/pulse-psp-usa.chd \
     --script verification/scenarios/talons-junction-time-trial-lap.inputs \
+    --script-lead 2 \
     --out /tmp/ours-lap.csv
 ```
 
@@ -451,6 +458,70 @@ recording has two ticks of zero throttle at rows 1 and 2 that the script never
 asked for. It is `shrinking` and gone by row 3. Warming up with the same button
 the script's first line holds is what makes it harmless.
 
+### The first two ticks of a script never reach the emulator
+
+`psp-trace.py --script-lead 2` sends the script's tick `k + 2` at the breakpoint
+for tick `k`. That cancels the emulator's three-frame input latency correctly in
+steady state - every transition after the start lands on the tick it should, which
+is what [the debugger page](../reverse-engineering/ppsspp-debugger.md#input-set-at-a-breakpoint-lands-three-frames-later)
+measured. What it also does, and what nobody wrote down until now, is leave the
+script's **first two states undelivered**: at emulator tick 0 the script pointer
+already stands at index 2, so nothing ever sends index 0 or 1.
+
+So a capture taken that way is a recording of the script *with its first two ticks
+released*, and a replay that applies them is driving an input the original never
+saw. `oag-trace run --script-lead 2` releases the same two, in place - it does
+**not** delay the rest, because the rest is already aligned.
+
+**It is measurable in the capture, on two independent scenarios**, and it is the
+same two ticks in both. `talons-junction-standing-start.csv` reads `throttle` 0 on
+rows 0-2 and 100 from row 3, where our unshifted replay reads 100 from row 1; its
+`speed` column is our unshifted column offset by exactly two rows (recorded 0.566
+at row 3 against our 0.556 at row 1, 1.109 at row 4 against 1.098 at row 2). The
+lap capture shows the identical offset on `throttle`, `airbrake_r` **and**
+`steer`.
+
+**Two ticks do not wash out, and the reason is the steering ramp.**
+`ramp_steering` (`crates/physics/src/controls.rs`) travels toward its target at
+`gain` and away at `falloff` **without clamping to it**, so a saturated axis
+oscillates around the target forever and never reaches it. The airbrake ramp does
+clamp (`ramp` uses `.min(target)`), so it resynchronises on every transition - and
+indeed the airbrake columns agree to a mean of 0.012 across the whole lap while
+`steer` is out by a mean of 10.2 on every one of 3,146 ticks. The measured chain,
+end to end, on `talons-junction-time-trial-lap`:
+
+| Where | What two ticks of head start became |
+| --- | --- |
+| `steer` state | a standing ~17-unit offset, 17 % of the axis |
+| Heading, by tick 70 | **8 degrees**, and it does not decay |
+| Cross-track offset, by tick 145 | 15 units wide of the original, on a half-width of 17.9 |
+| Tick 147 | a wall the original never touches: `|v|` 100.9 -> 82.2 in one tick, lateral velocity +32.5 |
+| The rest of the run | 754 units of path against the original's 1,045 |
+
+That last row was recorded as M4's blocker - a craft "wedged" at one place on the
+circuit and too slow round it by a factor of 1.7. It was the harness.
+
+**What correcting it is worth**, scored over the window where the capture itself
+is clean (ticks 0-170, before the *original* first touches a wall; the capture is
+clean on only 32.7 % of its ticks overall, so nothing later measures our physics):
+
+| Ticks 0-170 | `--script-lead 0` | `--script-lead 2` |
+| --- | ---: | ---: |
+| Position, max error | 22.85 | **6.54** |
+| Position, mean error | 6.12 | **2.41** |
+| Speed, max error | 75.44 | **6.01** |
+| Speed, mean error | 9.97 | **2.75** |
+
+The standing start moves the same way over its own clean launch (ticks 0-178,
+before the scrape): position max 4.878 -> **1.057**, speed max 11.2 -> **0.7** on
+a craft doing 116 units/s, which is 0.6 %. Under `--reseed 60` the position figure
+does not move (10.30 either way, because a 60-tick window never accumulates
+enough), but the worst orientation axis goes 0.114 -> **0.0824** rad.
+
+One residual, worth keeping: our craft meets the standing start's wall at tick
+**179** against the capture's **187**. Eight ticks of cross-track drift over 3
+seconds is a real difference and is not explained by anything above.
+
 ### What is still not confirmed
 
 - ~~**PPSSPP's analog sign.**~~ Settled, as a side effect of measuring the pitch
@@ -731,6 +802,7 @@ oag-trace run data/traces/lap.csv --source ... --script ... --reseed 60
 | `--source <image>` | Disc image or an `oag-unpack` extraction, for handling and collision |
 | `--track`, `--team`, `--class` | Which track, team and speed class the capture was taken in |
 | `--script <file>` | Drive the run from the same input script the capture was taken with. Excludes the four held options below |
+| `--script-lead <N>` | Release the script's first `N` ticks, because the capture harness never sent them. **`2` for every capture under `data/traces/`**; see [below](#the-first-two-ticks-of-a-script-never-reach-the-emulator) |
 | `--hold <button>` | Hold a button for the whole run, as `psp-trace.py --hold` did. Repeatable |
 | `--steer`, `--airbrake-left`, `--airbrake-right` | Hold an axis for the whole run |
 | `--fixed-dt` | Step at our own 60 Hz instead of the recording's own frame times |

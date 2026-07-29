@@ -307,6 +307,34 @@ impl Script {
         Ok(Self { states })
     }
 
+    /// Releases the first `lead` ticks, the way a capture taken with a lead did.
+    ///
+    /// `scripts/psp-trace.py --script-lead N` sends the script's tick `k + N` at
+    /// the breakpoint for tick `k`, to cancel the emulator's own input latency.
+    /// It cancels it correctly in steady state - every transition after the start
+    /// lands on the tick it should - but the first `N` states are consequently
+    /// **never sent to the emulator at all**: at tick 0 the script pointer already
+    /// stands at `N`. So a capture taken that way is a recording of the script
+    /// with its first `N` ticks released, and replaying the file unaltered on our
+    /// side drives a different input.
+    ///
+    /// It is not a small difference, because the steering ramp has no attractor.
+    /// [`crate::script`]'s consumers ramp toward a target and, once saturated,
+    /// oscillate around it forever without ever reaching it - unlike the airbrake
+    /// ramp, which clamps and so resynchronises on every transition. Two ticks of
+    /// head start therefore survive the whole run as a steering-magnitude offset:
+    /// measured against `talons-junction-time-trial-lap.csv` it is a persistent
+    /// 17 % of the axis, an 8-degree heading error by tick 70, and a wall the
+    /// original never touches at tick 147. See `docs/tools/oag-trace.md`.
+    ///
+    /// A `lead` past the end of the script releases all of it.
+    #[must_use]
+    pub fn with_capture_lead(mut self, lead: usize) -> Self {
+        let released = lead.min(self.states.len());
+        self.states[..released].fill(State::default());
+        self
+    }
+
     /// How many ticks the script covers.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -515,6 +543,37 @@ mod tests {
             script.states[0].is_held(button::LEFT),
             "the button is still held; only the axis is overridden"
         );
+    }
+
+    /// The lead releases the first ticks **in place**: every later transition
+    /// has to land on the tick it already landed on, because that is the half of
+    /// `psp-trace.py --script-lead` that is correct. Delaying the whole script by
+    /// two instead was tried against `talons-junction-time-trial-lap.csv` and is
+    /// measurably worse - it pulls the airbrake columns from a mean error of
+    /// 0.012 to 3.75.
+    #[test]
+    fn a_capture_lead_releases_the_first_ticks_without_moving_the_rest() {
+        let script = Script::parse("3 cross right\n2 cross\n").expect("parses");
+        let led = script.clone().with_capture_lead(2);
+        assert_eq!(led.len(), script.len());
+        assert_eq!(led.states[0], State::default());
+        assert_eq!(led.states[1], State::default());
+        assert_eq!(led.states[2], script.states[2], "unmoved");
+        assert_eq!(led.states[4], script.states[4], "unmoved");
+    }
+
+    #[test]
+    fn a_capture_lead_past_the_end_releases_the_whole_script() {
+        let script = Script::parse("2 cross\n").expect("parses");
+        let led = script.with_capture_lead(9);
+        assert_eq!(led.len(), 2);
+        assert!(led.states.iter().all(|state| *state == State::default()));
+    }
+
+    #[test]
+    fn a_zero_capture_lead_changes_nothing() {
+        let script = Script::parse("3 cross right\n2 none\n").expect("parses");
+        assert_eq!(script.clone().with_capture_lead(0), script);
     }
 
     #[test]

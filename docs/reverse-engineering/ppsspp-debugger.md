@@ -193,7 +193,17 @@ from row `T` to row `T+1`. So the emulator is **two ticks behind our own
 convention** and `--script-lead 2` closes it; re-captured at that lead, `steer`
 moves at row 61 for the script's tick 60 and at row 109 for its tick 108.
 
-Two consequences worth knowing:
+**The lead closes the phase error and opens a second one, at the start only.**
+Sending tick `k + 2` at tick `k` means the script's first two states are never
+sent at all - at tick 0 the pointer already stands at index 2. So a capture taken
+at lead 2 is a recording of the script *with its first two ticks released*, and
+the replay side has to release them too: `oag-trace run --script-lead 2`. It cost
+a session and stood as M4's blocker before anyone looked, because the steering
+ramp never settles on its target and so carries two ticks of head start all the
+way round a lap. The measurement, and what correcting it was worth, is in
+[`oag-trace.md`](../tools/oag-trace.md#the-first-two-ticks-of-a-script-never-reach-the-emulator).
+
+Two further consequences worth knowing:
 
 - **A `--warmup-hold` handover costs the same three frames.** Releasing the
   warmup's thrust just before the loop and letting the script's first `cross`
@@ -674,7 +684,10 @@ Three things about it specifically:
   breakpoint lands three frames later, which is two ticks behind `oag-trace`'s own
   convention; see [the trap above](#input-set-at-a-breakpoint-lands-three-frames-later).
   Pass it, or every comparison carries a two-tick phase error that reads as a lag
-  in the physics.
+  in the physics. **Pass the matching `oag-trace run --script-lead 2` on the
+  replay side as well**, or the comparison carries the mirror-image error instead:
+  the lead leaves the script's first two ticks undelivered, and our side applies
+  them.
 
 What that capture reads: 200 ticks, `dt` mean 0.016684 (59.94 Hz, min 0.016316,
 max 0.017029), speed 23.6 to 25.1, 78.0 units travelled, `throttle` a flat 100,
