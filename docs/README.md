@@ -34,6 +34,7 @@ Then, depending on what you are here to do:
 | Use the tools | [Tool docs](tools/README.md) |
 | Package it for a Steam Deck | [Packaging](tools/packaging.md) |
 | Run the game | [Front-end boot](architecture/frontend-boot.md) |
+| Add or change a menu | [Menus](architecture/menus.md) |
 | Verify against the original | [Verification protocol](reverse-engineering/verification-protocol.md) |
 
 ## Tree

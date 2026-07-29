@@ -384,7 +384,16 @@ unread code and still blocks this milestone. See
 
 ## M6 - Shell and polish
 
-- [ ] Menus and the front end
+- [~] Menus and the front end. **The shell exists and navigates**: our own
+      definition format in `assets/ui/menu.toml`, a page tree with working
+      Race, Options, Graphics and Controls pages, reached from `Launch Game`
+      and able to start a race. Every row is live - speed class, team and
+      circuit are persisted and applied, anisotropic filtering is written to
+      `settings.toml` on the keypress, and the chosen language skips the picker
+      on the next run. Circuits and their names come off the player's own disc
+      rather than out of the asset. See [menus](../architecture/menus.md).
+      Style, animation and the disc's own artwork are all still absent, and
+      **rebinding** is the one row that displays without editing.
 - [ ] Save data
 - [ ] Replay
 - [ ] PS2 asset path at parity with PSP

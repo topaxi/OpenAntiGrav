@@ -11,7 +11,13 @@ That reads `data/images/pulse-psp-usa.chd`, plays `Data\Movies\Intro.PMF` - the
 40-second Pulse intro, and the only movie the disc's own boot ever opens - and
 lands on a Language Selection screen built from the disc's own XML. START, or
 space, skips it. Picking a language fires `Launch Game`, and `Launch Game`
-starts [a race](../tools/oag-game.md) in the same window.
+opens [the menus](menus.md), from which START on the Race page loads
+[a race](../tools/oag-game.md) into the same window.
+
+**The language is remembered.** Once the picker has been through, the choice is
+written to `settings.toml` and the next run goes straight past it: the state is
+still entered and left the same frame, so the sequence below is unchanged.
+`--pick-language` shows it anyway.
 
 ```sh
 # No display needed.
@@ -25,7 +31,7 @@ just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross
 | --- | --- |
 | `LogoFMV` | Entered at boot. `Data\Movies\Intro.PMF` plays straight through, 1200 frames of it. START or cross skips it. |
 | `Language Selection` | The disc's own picker. Up and down move, cross selects. |
-| `Launch Game` | End of the front end. The composition root loads a track and a ship and hands the window to a race. |
+| `Launch Game` | End of the front end. The composition root opens [the menus](menus.md), which are **ours** - see that page for why they are not the disc's `MainMenu_Definition.xml`. |
 
 Every one of those names is a **string literal from the original**, not one we
 invented. `"LogoFMV"` is a screen in the disc's front-end XML, and so is its
