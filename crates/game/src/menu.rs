@@ -227,6 +227,26 @@ impl std::fmt::Display for Value {
     }
 }
 
+/// "This row is inert while *that* row holds *this* value."
+///
+/// Named rather than a bare setting name because the interesting cases are not
+/// boolean. VSYNC has three values and only the middle one - classic `Fifo` -
+/// makes a frame limit meaningless: `Immediate` and `Mailbox` both leave the
+/// loop free to run ahead, so the limiter is live under either. A condition
+/// that could only say "while that toggle is on" would have got that wrong in
+/// the one place it is used.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Condition {
+    /// The settings key of the row that decides.
+    pub setting: String,
+    /// The value that row must hold for this one to be inert.
+    ///
+    /// The **stored** value, not the label: what a row is set to is
+    /// [`Entry::chosen`], and on a disc-supplied list those are different
+    /// strings.
+    pub value: Value,
+}
+
 /// One row of a page.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Entry {
@@ -261,10 +281,8 @@ pub enum Entry {
         source: Option<ValueSource>,
         /// Which one is current. Seeded by [`Menu::seed`], never read off disk.
         current: usize,
-        /// A `toggle` row's setting that makes this one inert while it is on.
-        ///
-        /// See [`Menu::is_disabled`].
-        disabled_by: Option<String>,
+        /// What makes this row inert. See [`Menu::is_disabled`].
+        disabled_by: Option<Condition>,
     },
     /// Flips a boolean setting.
     Toggle {
@@ -274,10 +292,8 @@ pub enum Entry {
         setting: String,
         /// Whether it is on. Seeded by [`Menu::seed`].
         on: bool,
-        /// A `toggle` row's setting that makes this one inert while it is on.
-        ///
-        /// See [`Menu::is_disabled`].
-        disabled_by: Option<String>,
+        /// What makes this row inert. See [`Menu::is_disabled`].
+        disabled_by: Option<Condition>,
     },
     /// Shows what an abstract button is currently bound to.
     ///
@@ -360,14 +376,29 @@ impl Entry {
         matches!(self, Self::Choice { .. } | Self::Toggle { .. })
     }
 
-    /// The setting whose being on makes this row inert, if it declared one.
+    /// What makes this row inert, if it declared anything.
     #[must_use]
-    pub fn disabled_by(&self) -> Option<&str> {
+    pub fn disabled_by(&self) -> Option<&Condition> {
         match self {
             Self::Choice { disabled_by, .. } | Self::Toggle { disabled_by, .. } => {
-                disabled_by.as_deref()
+                disabled_by.as_ref()
             }
             _ => None,
+        }
+    }
+
+    /// Every value this row could be set to, for the loader's own checking.
+    ///
+    /// Empty for a row whose list comes off a disc, which is why the check that
+    /// uses this treats empty as "cannot say" rather than as "holds nothing".
+    fn offers(&self) -> Vec<Value> {
+        match self {
+            Self::Choice { values, .. } => values
+                .iter()
+                .map(|option| Value::Text(option.value.clone()))
+                .collect(),
+            Self::Toggle { .. } => vec![Value::Flag(true), Value::Flag(false)],
+            _ => Vec::new(),
         }
     }
 }
@@ -444,13 +475,16 @@ pub enum Error {
     /// A page nothing can reach, which is a menu entry somebody forgot to add.
     #[error("page {0:?} is not reachable from the root page")]
     Unreachable(String),
-    /// A `disabled_by` naming a setting no `toggle` row edits.
-    #[error("{context}: disabled_by {setting:?}, which no toggle row edits")]
-    NoSuchToggle {
+    /// A `disabled_by` naming a setting nothing edits, or a value no row can
+    /// hold.
+    #[error("{context}: disabled_by {setting:?}: {problem}")]
+    BadCondition {
         /// Where it is.
         context: String,
         /// What it named.
         setting: String,
+        /// Why that cannot work.
+        problem: String,
     },
 }
 
@@ -487,9 +521,9 @@ mod raw {
         pub values: Vec<String>,
         pub values_from: Option<String>,
         pub button: Option<String>,
-        /// Names a `toggle` row's setting that makes this row inert while it is
-        /// on. Only `choice` and `toggle` rows may carry it.
-        pub disabled_by: Option<String>,
+        /// `{ setting = "...", value = ... }`: what makes this row inert. Only
+        /// `choice` and `toggle` rows may carry it.
+        pub disabled_by: Option<Condition>,
         /// Reserved for localisation: the id of a string in the disc's own
         /// table, for a build that wants the original's wording.
         ///
@@ -502,6 +536,14 @@ mod raw {
             reason = "accepted so the format does not change when localisation lands"
         )]
         pub string_id: Option<String>,
+    }
+
+    /// `disabled_by = { setting = "graphics.vsync", value = "on" }`, or
+    /// `value = true` against a toggle.
+    #[derive(Deserialize)]
+    pub struct Condition {
+        pub setting: String,
+        pub value: toml::Value,
     }
 }
 
@@ -558,33 +600,52 @@ impl Definition {
     /// this runs - [`resolve`] refuses them - so what is left are the two
     /// failures that need the whole file in view: a page that parses,
     /// resolves, and that no entry anywhere links to, and a `disabled_by`
-    /// naming a toggle that is not on any page. Both ship silently otherwise -
-    /// the first as a menu nobody can reach, the second as a row that is never
-    /// greyed out because the condition it waits on does not exist.
+    /// whose condition can never come true. Both ship silently otherwise - the
+    /// first as a menu nobody can reach, the second as a row that is never
+    /// greyed out, which looks exactly like a working one.
+    ///
+    /// The condition is checked against the *values the deciding row offers*,
+    /// not merely against its existence, so `value = "onn"` is a startup error
+    /// rather than a setting that quietly never applies. A row whose list comes
+    /// off a disc has no values yet at load, and there the check stops at
+    /// existence rather than guessing.
     ///
     /// # Errors
     ///
     /// [`Error::Unreachable`], naming the first orphan in file order, and
-    /// [`Error::NoSuchToggle`].
+    /// [`Error::BadCondition`].
     pub fn check(&self) -> Result<(), Error> {
-        let toggles: BTreeSet<&str> = self
-            .pages
-            .iter()
-            .flat_map(|page| page.entries.iter())
-            .filter_map(|entry| match entry {
-                Entry::Toggle { setting, .. } => Some(setting.as_str()),
-                _ => None,
-            })
-            .collect();
         for page in &self.pages {
             for (row, entry) in page.entries.iter().enumerate() {
-                if let Some(setting) = entry.disabled_by()
-                    && !toggles.contains(setting)
-                {
-                    return Err(Error::NoSuchToggle {
-                        context: format!("page {:?} entry {row}", page.id),
-                        setting: setting.to_string(),
-                    });
+                let Some(condition) = entry.disabled_by() else {
+                    continue;
+                };
+                let context = format!("page {:?} entry {row}", page.id);
+                let bad = |problem: String| Error::BadCondition {
+                    context: context.clone(),
+                    setting: condition.setting.clone(),
+                    problem,
+                };
+
+                let Some(decides) = self
+                    .pages
+                    .iter()
+                    .flat_map(|page| page.entries.iter())
+                    .find(|other| other.setting() == Some(condition.setting.as_str()))
+                else {
+                    return Err(bad("no row edits it".to_string()));
+                };
+                let offered = decides.offers();
+                if !offered.is_empty() && !offered.contains(&condition.value) {
+                    return Err(bad(format!(
+                        "that row cannot hold {}; it offers {}",
+                        condition.value,
+                        offered
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )));
                 }
             }
         }
@@ -641,6 +702,11 @@ fn resolve(
             ),
         });
     }
+    let disabled_by = entry
+        .disabled_by
+        .as_ref()
+        .map(|condition| condition_from(condition, context))
+        .transpose()?;
 
     match entry.kind.as_str() {
         "submenu" => {
@@ -692,7 +758,7 @@ fn resolve(
                 values: entry.values.iter().map(Choice::plain).collect(),
                 source,
                 current: 0,
-                disabled_by: entry.disabled_by.clone(),
+                disabled_by,
             })
         }
         "toggle" => {
@@ -701,7 +767,7 @@ fn resolve(
                 label,
                 setting: setting.clone(),
                 on: false,
-                disabled_by: entry.disabled_by.clone(),
+                disabled_by,
             })
         }
         "binding" => {
@@ -718,6 +784,33 @@ fn resolve(
             problem: format!("{other:?} is not an entry kind"),
         }),
     }
+}
+
+/// Turns one raw condition into a resolved one.
+///
+/// A string becomes the value a `choice` row stores and a boolean becomes what
+/// a `toggle` row holds. Nothing else is accepted: a number would have to
+/// decide silently whether `60` is the text `"60"` a frame-limit row stores or
+/// something else, and guessing is how a condition that never fires ships.
+fn condition_from(raw: &raw::Condition, context: &str) -> Result<Condition, Error> {
+    let value = match &raw.value {
+        toml::Value::String(text) => Value::Text(text.clone()),
+        toml::Value::Boolean(flag) => Value::Flag(*flag),
+        other => {
+            return Err(Error::BadCondition {
+                context: context.to_string(),
+                setting: raw.setting.clone(),
+                problem: format!(
+                    "a condition's value is a string or a boolean, not {}",
+                    other.type_str()
+                ),
+            });
+        }
+    };
+    Ok(Condition {
+        setting: raw.setting.clone(),
+        value,
+    })
 }
 
 /// What the menus did on a tick, for the composition root to act on.
@@ -935,37 +1028,32 @@ impl Menu {
         out
     }
 
-    /// What a `toggle` row that edits `setting` is currently set to.
-    fn flag(&self, setting: &str) -> Option<bool> {
+    /// What the row that edits `setting` is currently set to.
+    fn held(&self, setting: &str) -> Option<Value> {
         self.definition
             .pages
             .iter()
             .flat_map(|page| page.entries.iter())
-            .find_map(|entry| match entry {
-                Entry::Toggle {
-                    setting: key, on, ..
-                } if key == setting => Some(*on),
-                _ => None,
-            })
+            .find(|entry| entry.setting() == Some(setting))
+            .and_then(Entry::chosen)
     }
 
-    /// Whether this row is inert because another row is on.
+    /// Whether this row is inert because another row holds a particular value.
     ///
     /// The one piece of cross-row logic in the menus, and it is deliberately
-    /// the *only* one: a definition names a `toggle` row's setting and the
-    /// answer is read off that row, so this module still knows nothing about
-    /// what any setting means. Turning vsync on greys out the frame limit
-    /// because the definition says the two are related, not because `menu.rs`
-    /// has heard of either.
+    /// the *only* one: a definition names another row's setting and value, and
+    /// the answer is read off **that row**, so this module still knows nothing
+    /// about what any setting means. Vsync greys out the frame limit because
+    /// the definition says so, not because `menu.rs` has heard of either.
     ///
     /// A disabled row is **greyed, not hidden**. Hiding it would change the row
     /// count under the cursor, and - worse - a player looking for a setting
     /// that has silently vanished has no way to find out what took it away.
     #[must_use]
     pub fn is_disabled(&self, entry: &Entry) -> bool {
-        entry
-            .disabled_by()
-            .is_some_and(|setting| self.flag(setting) == Some(true))
+        entry.disabled_by().is_some_and(|condition| {
+            self.held(&condition.setting).as_ref() == Some(&condition.value)
+        })
     }
 
     /// Whether the row the cursor is on is inert.
@@ -1371,15 +1459,28 @@ mod tests {
             crate::perf::FrameLimit::OFFERED,
             "the frame-limit rows and `FrameLimit::OFFERED` must be one list"
         );
+
+        let vsync: Vec<crate::perf::Vsync> = values("graphics.vsync")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            vsync,
+            crate::perf::Vsync::ALL,
+            "the vsync rows and `Vsync::ALL` must be one list"
+        );
     }
 
-    /// The definition's own answer to "vsync makes the limiter meaningless".
+    /// The definition's own answer to "classic vsync makes the limiter
+    /// meaningless, and the other two modes do not".
     ///
-    /// Pinned here because the two halves live in different files: the pairing
-    /// is asserted in `assets/ui/menu.toml`, and the loop that honours it is in
-    /// `main.rs`. A row that lost its `disabled_by` would still parse.
+    /// Pinned here because the halves live in different files: the pairing is
+    /// asserted in `assets/ui/menu.toml`, and the loop that honours it is in
+    /// `main.rs` against `Vsync::paces_itself`. Both have to name the same
+    /// value or the row greys out at the wrong time, and a row that lost its
+    /// `disabled_by` altogether would still parse.
     #[test]
-    fn the_frame_limit_is_disabled_by_vsync() {
+    fn the_frame_limit_is_disabled_by_classic_vsync_alone() {
         let definition = built_in();
         let entry = definition
             .pages
@@ -1387,22 +1488,30 @@ mod tests {
             .flat_map(|page| page.entries.iter())
             .find(|entry| entry.setting() == Some("graphics.frame_limit"))
             .expect("nothing edits graphics.frame_limit");
-        assert_eq!(entry.disabled_by(), Some("graphics.vsync"));
-        assert!(
-            definition
-                .pages
-                .iter()
-                .flat_map(|page| page.entries.iter())
-                .any(|entry| matches!(entry, Entry::Toggle { setting, .. }
-                    if setting == "graphics.vsync")),
-            "graphics.vsync has to be a toggle for `is_disabled` to read it"
-        );
+        let condition = entry.disabled_by().expect("the limiter has a condition");
+        assert_eq!(condition.setting, "graphics.vsync");
+        assert_eq!(condition.value, Value::Text("on".to_string()));
+
+        // The same value from the other side, so the menu and the loop cannot
+        // drift into disagreeing about which mode paces itself.
+        let Value::Text(name) = &condition.value else {
+            panic!("the vsync row stores text");
+        };
+        let mode: crate::perf::Vsync = name.parse().expect("a real vsync mode");
+        assert!(mode.paces_itself());
+        for other in crate::perf::Vsync::ALL {
+            assert_eq!(
+                other.paces_itself(),
+                other == mode,
+                "{other} is the wrong side of the condition"
+            );
+        }
     }
 
     /// A disabled row is selectable and readable and does not move, which is
     /// three separate things a player would notice.
     #[test]
-    fn a_disabled_row_is_inert_until_the_row_that_disables_it_is_off() {
+    fn a_disabled_row_is_inert_until_the_row_that_disables_it_moves_off_the_value() {
         let mut menu = Menu::new(built_in());
         assert!(menu.open("graphics"), "the graphics page exists");
         let row = menu
@@ -1412,7 +1521,7 @@ mod tests {
             .position(|entry| entry.setting() == Some("graphics.frame_limit"))
             .expect("the frame limit is on the graphics page");
 
-        menu.seed("graphics.vsync", &Value::Flag(true));
+        menu.seed("graphics.vsync", &Value::Text("on".to_string()));
         menu.seed("graphics.frame_limit", &Value::Text("60".to_string()));
         for _ in 0..row {
             press(&mut menu, &[button::DOWN]);
@@ -1428,8 +1537,10 @@ mod tests {
             Some(Value::Text("60".to_string()))
         );
 
-        // And with vsync off it is an ordinary row again.
-        menu.seed("graphics.vsync", &Value::Flag(false));
+        // And under either of the other two modes it is an ordinary row
+        // again - `smooth` especially, where the limiter is the only thing
+        // stopping the GPU rendering frames that get discarded.
+        menu.seed("graphics.vsync", &Value::Text("smooth".to_string()));
         let events = press(&mut menu, &[button::RIGHT]);
         assert_eq!(events.len(), 1, "{events:?}");
         assert_ne!(
@@ -1464,16 +1575,18 @@ mod tests {
                 .expect("the row is drawn")
         };
 
-        menu.seed("graphics.vsync", &Value::Flag(true));
+        menu.seed("graphics.vsync", &Value::Text("on".to_string()));
         assert_eq!(label_colour(&menu), DIMMED);
-        menu.seed("graphics.vsync", &Value::Flag(false));
+        menu.seed("graphics.vsync", &Value::Text("off".to_string()));
+        assert_eq!(label_colour(&menu), SELECTED);
+        menu.seed("graphics.vsync", &Value::Text("smooth".to_string()));
         assert_eq!(label_colour(&menu), SELECTED);
     }
 
-    /// `disabled_by` naming something no toggle edits is a row that is never
+    /// `disabled_by` naming something nothing edits is a row that is never
     /// greyed out, which looks exactly like a working one.
     #[test]
-    fn a_disabled_by_naming_no_toggle_is_refused() {
+    fn a_condition_on_a_setting_nothing_edits_is_refused() {
         let text = r#"
 version = 1
 root = "main"
@@ -1483,12 +1596,60 @@ id = "main"
 kind = "choice"
 label = "LIMIT"
 setting = "a.limit"
-disabled_by = "a.nothing"
+disabled_by = { setting = "a.nothing", value = "on" }
 values = ["1", "2"]
 "#;
         let e = Definition::parse(text).expect_err("must not load");
-        assert!(matches!(e, Error::NoSuchToggle { .. }), "{e}");
+        assert!(matches!(e, Error::BadCondition { .. }), "{e}");
         assert!(e.to_string().contains("a.nothing"), "{e}");
+    }
+
+    /// And a value that row can never hold is the same failure one level down:
+    /// the setting exists, the condition is simply unreachable, and the row
+    /// stays live forever.
+    #[test]
+    fn a_condition_on_a_value_no_row_can_hold_is_refused() {
+        let text = r#"
+version = 1
+root = "main"
+[[page]]
+id = "main"
+[[page.entry]]
+kind = "choice"
+label = "VSYNC"
+setting = "a.vsync"
+values = ["off", "on"]
+[[page.entry]]
+kind = "choice"
+label = "LIMIT"
+setting = "a.limit"
+disabled_by = { setting = "a.vsync", value = "onn" }
+values = ["1", "2"]
+"#;
+        let e = Definition::parse(text).expect_err("must not load");
+        assert!(matches!(e, Error::BadCondition { .. }), "{e}");
+        assert!(e.to_string().contains("onn"), "{e}");
+        assert!(e.to_string().contains("off, on"), "{e}");
+    }
+
+    /// A number cannot be told apart from the text a choice row stores, so it
+    /// is refused rather than guessed at.
+    #[test]
+    fn a_condition_value_that_is_not_text_or_a_flag_is_refused() {
+        let text = r#"
+version = 1
+root = "main"
+[[page]]
+id = "main"
+[[page.entry]]
+kind = "choice"
+label = "LIMIT"
+setting = "a.limit"
+disabled_by = { setting = "a.limit", value = 60 }
+values = ["1", "2"]
+"#;
+        let e = Definition::parse(text).expect_err("must not load");
+        assert!(matches!(e, Error::BadCondition { .. }), "{e}");
     }
 
     /// And on a kind that cannot be adjusted it would parse and do nothing,
@@ -1507,7 +1668,7 @@ setting = "a.vsync"
 [[page.entry]]
 kind = "back"
 label = "BACK"
-disabled_by = "a.vsync"
+disabled_by = { setting = "a.vsync", value = true }
 "#;
         let e = Definition::parse(text).expect_err("must not load");
         assert!(matches!(e, Error::BadEntry { .. }), "{e}");

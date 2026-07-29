@@ -116,9 +116,145 @@ impl std::fmt::Display for Overlay {
     }
 }
 
+/// How the finished frame reaches the display.
+///
+/// **"Double buffering or triple buffering" is not a setting any more**, and
+/// this is what it became. On Vulkan - which is what wgpu is - the buffer count
+/// is not the knob; the *present mode* is, and it decides both whether the
+/// picture can tear and whether the loop is allowed to run ahead of the
+/// refresh. The three below are the three answers that differ from a player's
+/// side, not the six the API has.
+///
+/// The middle one is the one with the cliff. Classic vsync blocks until the
+/// next refresh, so missing it by a microsecond costs a whole one and 144
+/// becomes 72 - which is the exact problem triple buffering was invented for,
+/// and why [`Vsync::Smooth`] is worth a row of its own rather than being the
+/// same thing as "on".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(try_from = "VsyncRepr", into = "String")]
+pub enum Vsync {
+    /// No waiting at all: Vulkan's `Immediate`. Tears, and has the lowest
+    /// latency there is.
+    ///
+    /// The default, because this is a racing game: vsync's cost is a frame of
+    /// latency, and that is the one thing a player steering at 60 Hz feels
+    /// directly. [`FrameLimit`] is what stops it running at four figures.
+    #[default]
+    Off,
+    /// Waits for the refresh: Vulkan's `Fifo`, the only mode every device is
+    /// required to have.
+    ///
+    /// Never tears, and has the half-rate cliff described above. This is the
+    /// one mode where the display decides how often a frame is presented, so it
+    /// is the one that makes [`FrameLimit`] meaningless.
+    ///
+    /// Measured on a 60 Hz panel: 59 frames a second at a 16.8 ms mean - and a
+    /// **34.1 ms maximum**, which is the cliff caught in the act. One frame in
+    /// the window missed its refresh and waited for the next, and that single
+    /// doubled frame is exactly what [`Vsync::Smooth`] exists to avoid.
+    On,
+    /// Presents the newest finished frame at the refresh and throws the rest
+    /// away: Vulkan's `Mailbox`, which is triple buffering done properly.
+    ///
+    /// Spelled `smooth` rather than `triple` because the buffer count is not
+    /// what a player is choosing - what they get is "never tears, never
+    /// halves", and how many images the swapchain holds to do it is the
+    /// driver's business.
+    ///
+    /// Never tears *and* never halves - the loop is not blocked, so a frame
+    /// that misses one refresh simply catches the next. What it costs is the
+    /// frames it discards, which is why a limiter is still worth having here
+    /// and why this mode does **not** grey the limit row out.
+    ///
+    /// **It does not pin to the refresh, and it does not free-run either.**
+    /// Measured on the same 60 Hz panel with no limit: [`Vsync::Off`] gave
+    /// 1356 frames a second and this gave 240, because acquiring an image
+    /// blocks once they are all in flight. Four times the refresh is not a rate
+    /// anybody asked for, which is the practical argument for keeping the limit
+    /// row live here rather than the theoretical one.
+    Smooth,
+}
+
+impl Vsync {
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::On => "on",
+            Self::Smooth => "smooth",
+        }
+    }
+
+    /// Whether the display decides the rate, which is what makes a frame limit
+    /// pointless.
+    ///
+    /// True for [`Vsync::On`] alone. `Smooth` looks like vsync and is not, in
+    /// the way that matters here: it caps *presentation* at the refresh and
+    /// leaves *rendering* unbounded, so without a limit it will happily render
+    /// a thousand frames a second and discard nine hundred and forty of them.
+    #[must_use]
+    pub fn paces_itself(self) -> bool {
+        self == Self::On
+    }
+
+    /// Every mode, for the menus and for error messages.
+    pub const ALL: [Self; 3] = [Self::Off, Self::On, Self::Smooth];
+}
+
+impl std::str::FromStr for Vsync {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| format!("{text:?} is not a vsync mode; try off, on or smooth"))
+    }
+}
+
+impl std::fmt::Display for Vsync {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// What a settings file is allowed to say, which includes what an older one
+/// already says.
+///
+/// This was a `bool` for exactly one commit before the smooth mode made it
+/// three-valued, and a file written in between would otherwise fail to parse
+/// with "invalid type: boolean". Accepting both costs twenty lines and the
+/// canonical rewrite normalises it to a name on the next run, so the
+/// compatibility does not accumulate.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum VsyncRepr {
+    Flag(bool),
+    Name(String),
+}
+
+impl TryFrom<VsyncRepr> for Vsync {
+    type Error = String;
+
+    fn try_from(repr: VsyncRepr) -> Result<Self, Self::Error> {
+        match repr {
+            VsyncRepr::Flag(true) => Ok(Self::On),
+            VsyncRepr::Flag(false) => Ok(Self::Off),
+            VsyncRepr::Name(name) => name.parse(),
+        }
+    }
+}
+
+impl From<Vsync> for String {
+    fn from(mode: Vsync) -> Self {
+        mode.to_string()
+    }
+}
+
 /// How many frames a second the loop may produce, or unlimited.
 ///
-/// **Only consulted when vsync is off.** With vsync on the display decides, and
+/// **Not consulted under [`Vsync::On`].** There the display decides, and
 /// a second limiter underneath it would either do nothing or beat against the
 /// refresh - which is worse than no limiter at all, because it turns an even
 /// 60 into an uneven one. The graphics page says so by greying the row out; see

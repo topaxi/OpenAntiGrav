@@ -179,26 +179,31 @@ label = "ANISOTROPIC FILTERING"
 setting = "graphics.anisotropy"
 values = ["off", "2x", "4x", "8x", "16x"]
 
-# Vsync and the limiter are one pair: with vsync on the display decides how
-# often a frame is presented, so the limit below is not consulted at all and
-# `disabled_by` greys it out rather than leaving a row that does nothing.
-# Greyed and not hidden - a setting that vanishes gives a player no way to find
-# out what took it away.
+# `off` never waits and tears; `on` is classic vsync, which never tears and
+# halves the rate when a frame misses a refresh; `smooth` is that miss handled
+# properly - the newest finished frame is presented and the rest discarded.
 #
-# Vsync defaults OFF and the limit to 240: this is a racing game, vsync costs a
+# Defaults to `off` with the limit at 240: this is a racing game, vsync costs a
 # frame of latency, and 240 is the top of the tier displays are built at so it
 # caps nothing common while still bounding a menu page that would otherwise run
 # at four figures.
 [[page.entry]]
-kind = "toggle"
+kind = "choice"
 label = "VSYNC"
 setting = "graphics.vsync"
+values = ["off", "on", "smooth"]
 
+# **Only `on` disables the limiter**, which is why the condition names a value
+# rather than just a setting. `off` and `smooth` both leave the loop free to run
+# ahead of the display, so a limit is live under either - and under `smooth` it
+# is the only thing stopping the GPU rendering frames that get thrown away.
+# Greyed and not hidden: a setting that vanishes gives a player no way to find
+# out what took it away.
 [[page.entry]]
 kind = "choice"
 label = "FRAME LIMIT"
 setting = "graphics.frame_limit"
-disabled_by = "graphics.vsync"
+disabled_by = { setting = "graphics.vsync", value = "on" }
 values = [
     "unlimited",
     "30",

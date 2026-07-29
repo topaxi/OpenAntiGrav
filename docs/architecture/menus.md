@@ -86,22 +86,21 @@ Six entry kinds: `submenu`, `action`, `choice`, `toggle`, `binding`, `back`.
 
 ### One row disabling another
 
-A `choice` or a `toggle` may carry `disabled_by`, naming a **`toggle` row's
-setting** that makes it inert while that toggle is on. VSYNC and FRAME LIMIT are
-the pair it exists for: with vsync on the display decides how often a frame is
-presented, so the limit is not consulted at all. Vsync ships **off** and the
-limit at **240** - this is a racing game, vsync costs a frame of latency, and
-240 is the top of the tier displays are actually built at (144, 165, 240), so it
-caps nothing common while still stopping a menu page running the GPU at four
-figures.
+A `choice` or a `toggle` may carry `disabled_by`, naming **another row's setting
+and the value that makes this one inert**:
 
 ```toml
 [[page.entry]]
 kind = "choice"
 label = "FRAME LIMIT"
 setting = "graphics.frame_limit"
-disabled_by = "graphics.vsync"
+disabled_by = { setting = "graphics.vsync", value = "on" }
 ```
+
+**A value and not just a setting**, and the one place it is used is why. VSYNC
+has three modes and only the middle one makes a frame limit meaningless - see
+below - so a condition that could only say "while that toggle is on" would have
+been wrong here.
 
 This is the **only** cross-row logic in the menus, and it stays inside the rule
 that this module knows nothing about what a setting means: the answer is read
@@ -114,10 +113,12 @@ way to find out what took it away. It still takes the cursor, still shows its
 value, and does not move; `adjust` returns no event, so a keypress on it cannot
 persist a change nobody made.
 
-Two things the loader refuses, each with a test: a `disabled_by` on a kind that
-cannot be adjusted (it would parse and do nothing), and one naming a setting no
-`toggle` row edits (the row would never grey out, which looks exactly like a
-working one).
+Three things the loader refuses, each with a test: a `disabled_by` on a kind
+that cannot be adjusted (it would parse and do nothing), one naming a setting no
+row edits, and - the one that catches a typo - **one naming a value the deciding
+row cannot hold**. `value = "onn"` is a startup error rather than a row that
+quietly never greys out. A row whose list comes off a disc has no values yet at
+load, and there the check stops at existence rather than guessing.
 
 **`action` and `values_from` are closed sets**, checked at load against enums in
 `menu.rs`. A typo in the asset is a startup error naming what it did know, not a
@@ -239,12 +240,57 @@ It is **window-only**. `--screenshot` runs the sequence as fast as it can with
 nothing presenting, so a frame time from it would be a real measurement of
 something nobody is asking about.
 
+### Vsync, and where triple buffering went
+
+VSYNC has three values, because on a modern API "double or triple buffering" is
+not a setting - the **present mode** is, and it decides both whether the picture
+can tear and whether the loop may run ahead of the display:
+
+| Row value | Vulkan | What a player gets | Measured, 60 Hz panel |
+| --- | --- | --- | --- |
+| `off` | `Immediate` | Tears. The lowest latency there is, and the default: this is a racing game, and vsync's cost is a frame of latency on the one thing a player feels directly. | 1356 fps unlimited |
+| `on` | `Fifo` | Never tears, and has the half-rate cliff - miss a refresh by a microsecond and you wait a whole one, so 144 becomes 72. | 59 fps, 16.8 ms mean, **34.1 ms max** |
+| `smooth` | `Mailbox` | Triple buffering done properly: never tears *and* never halves, at the price of the frames it discards. | 240 fps unlimited; 120 under a 120 limit |
+
+Two things in that last column are worth reading rather than skimming. The
+34.1 ms maximum under `on` **is the cliff, caught in the act** - one frame in
+the window missed its refresh and waited for the next, and that single doubled
+frame is the whole reason `smooth` is a row. And `smooth` does not pin to the
+refresh: it ran at four times it, because acquiring an image blocks only once
+they are all in flight. Four times the refresh is not a rate anybody asked for,
+which is the practical argument for keeping the limit live there.
+
+Spelled `smooth` and not `triple` because the buffer count is not what a player
+is choosing. What they are choosing is "never tears, never halves"; how many
+images the swapchain holds to deliver it is the driver's business.
+
+**Only `on` greys the limiter out**, which is the whole reason `disabled_by`
+names a value. `off` and `smooth` both leave the loop free to run ahead, and
+under `smooth` the limit is the only thing stopping the GPU rendering frames
+that are then thrown away. The setting ships at **240** - the top of the tier
+displays are actually built at (144, 165, 240), so it caps nothing common while
+still stopping a menu page running the GPU at four figures.
+
+Only `Fifo` is guaranteed to exist; Vulkan makes the other two optional and
+configuring a surface with a mode it does not have is a *panic*, not an error.
+So each row value is a **chain** - `off` falls back to `Mailbox` before `Fifo`,
+because what it asked for is an unblocked loop and mailbox keeps that - walked
+against what the surface reported, and a fallback is printed rather than left
+looking like a setting that did nothing.
+
 The limiter that the overlay measures lives in `about_to_wait` and not in the
 frame: producing fewer frames means *asking* for fewer, not drawing one and then
 sleeping on a submitted command buffer. `ControlFlow::WaitUntil` hands the
-waiting to the platform's own timer, and the deadline is measured from the start
-of the last frame so the setting is a frame *rate* rather than a gap - a
-60-limited loop that spends 10 ms drawing waits 6.7, not 16.7.
+waiting to the platform's own timer.
+
+**The deadline is anchored to the previous deadline, not to when the loop woke**,
+and that is the difference between a 240 limit delivering 240 and delivering 220.
+A timer fires at or after its target, never before, and the platform's
+granularity is around a millisecond - a quarter of a 4.17 ms period. Measuring
+the next deadline from the wake-up banks that overshoot into every frame;
+measuring it from the previous deadline puts the frames on a fixed grid, so a
+late wake is followed by an early-relative one and the average is the rate that
+was asked for. Measured: 220 before, a flat 240 after.
 
 None of this touches the simulation. The timestep is fixed at 60 Hz per
 [ADR-0007](adr/0007-fixed-timestep-vs-original.md) whatever the frame rate is,

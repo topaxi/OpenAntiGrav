@@ -114,20 +114,7 @@ pub struct Source {
     pub image: Option<String>,
 }
 
-/// Vsync's default, spelled once so [`Graphics::default`] and serde's
-/// `default` cannot disagree about it.
-///
-/// **Off**, with [`crate::perf::FrameLimit::DEFAULT`] doing the bounding
-/// instead. This is a racing game: vsync's cost is a frame of latency, which is
-/// the one thing a player steering at 60 Hz feels directly, and the limiter
-/// gives back most of what vsync was there for without it. A player who wants
-/// the tear-free presentation turns it on, and the limit row greys out because
-/// the display is then deciding.
-fn default_vsync() -> bool {
-    false
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Graphics {
     /// Anisotropic filtering level for track and ship textures: `off`, `2x`,
     /// `4x`, `8x` or `16x`.
@@ -168,39 +155,26 @@ pub struct Graphics {
     /// is the thing a player actually sees.
     #[serde(default)]
     pub perf_overlay: crate::perf::Overlay,
-    /// Whether the surface waits for the display's refresh.
+    /// How a finished frame reaches the display: `off`, `on` or `smooth`.
     ///
-    /// **Off by default**, because this is a racing game and vsync's cost is a
-    /// frame of latency. Turning it on is what a player does about tearing, and
-    /// doing so hands the pacing to the display - which is why it greys
-    /// [`Graphics::frame_limit`] out rather than stacking with it.
-    #[serde(default = "default_vsync")]
-    pub vsync: bool,
-    /// How many frames a second the loop may produce when vsync is off:
-    /// `unlimited`, or a rate up to 1000. Defaults to 240.
+    /// **`off` by default**, because this is a racing game and vsync's cost is
+    /// a frame of latency. `smooth` is what "triple buffering" means on a
+    /// modern API - no tearing and no half-rate cliff, at the price of the
+    /// frames it discards. See [`crate::perf::Vsync`].
     ///
-    /// **Ignored entirely while `vsync` is on**, where the display decides. See
+    /// A file that still says `vsync = true` or `false` is read, and rewritten
+    /// as a name.
+    #[serde(default)]
+    pub vsync: crate::perf::Vsync,
+    /// How many frames a second the loop may produce: `unlimited`, or a rate up
+    /// to 1000. Defaults to 240.
+    ///
+    /// **Ignored under `vsync = "on"`**, where the display decides - and only
+    /// there. Under `smooth` the loop is not blocked, so without this it
+    /// renders frames the compositor throws away. See
     /// [`crate::perf::FrameLimit`].
     #[serde(default)]
     pub frame_limit: crate::perf::FrameLimit,
-}
-
-impl Default for Graphics {
-    /// Written out rather than derived, because vsync's default is `true` and
-    /// a derived one would be `false` - silently, and only for the field where
-    /// it matters most.
-    fn default() -> Self {
-        Self {
-            anisotropy: Anisotropy::default(),
-            aspect: crate::display::Aspect::default(),
-            window_mode: crate::display::WindowMode::default(),
-            render_scale: crate::display::Scale::default(),
-            window_size: crate::display::Size::default(),
-            perf_overlay: crate::perf::Overlay::default(),
-            vsync: default_vsync(),
-            frame_limit: crate::perf::FrameLimit::default(),
-        }
-    }
 }
 
 /// Where the settings file lives: `<config dir>/oag/settings.toml`.
@@ -300,10 +274,7 @@ pub fn menu_seeds(
             "graphics.perf_overlay",
             text(&settings.graphics.perf_overlay.to_string()),
         ),
-        (
-            "graphics.vsync",
-            crate::menu::Value::Flag(settings.graphics.vsync),
-        ),
+        ("graphics.vsync", text(&settings.graphics.vsync.to_string())),
         (
             "graphics.frame_limit",
             text(&settings.graphics.frame_limit.to_string()),
@@ -376,25 +347,32 @@ mod tests {
         assert_eq!(settings.race.class, "venom");
     }
 
-    /// The one field whose default is not its type's own, asserted from both
-    /// directions.
-    ///
-    /// `Graphics` has a hand-written `Default` precisely because a derived one
-    /// would make `vsync` false by accident rather than on purpose - which
-    /// happens to be the same value, and that is exactly why it needs pinning:
-    /// the day the default flips, a derive would silently disagree with
-    /// `default_vsync` and only the file-loading path would notice.
+    /// The pacing defaults, asserted from both directions: what a fresh
+    /// `Graphics` holds and what an empty file loads as.
     #[test]
     fn the_two_ways_of_getting_a_default_agree() {
         let fresh = Graphics::default();
         let loaded: Settings = toml::from_str("").expect("parse");
-        assert_eq!(fresh.vsync, default_vsync());
         assert_eq!(loaded.graphics.vsync, fresh.vsync);
         assert_eq!(loaded.graphics.frame_limit, fresh.frame_limit);
+        assert_eq!(fresh.vsync, crate::perf::Vsync::Off);
         assert_eq!(
             fresh.frame_limit,
             crate::perf::FrameLimit::DEFAULT,
             "a fresh install should be limited, not unlimited"
         );
+    }
+
+    /// `vsync` was a boolean for one commit. A file written in that window has
+    /// to keep loading, and has to come back out as a name.
+    #[test]
+    fn a_boolean_vsync_still_loads_and_is_rewritten_as_a_name() {
+        let off: Settings = toml::from_str("[graphics]\nvsync = false").expect("parse");
+        assert_eq!(off.graphics.vsync, crate::perf::Vsync::Off);
+        let on: Settings = toml::from_str("[graphics]\nvsync = true").expect("parse");
+        assert_eq!(on.graphics.vsync, crate::perf::Vsync::On);
+
+        let written = toml::to_string_pretty(&on).expect("serialise");
+        assert!(written.contains("vsync = \"on\""), "{written}");
     }
 }

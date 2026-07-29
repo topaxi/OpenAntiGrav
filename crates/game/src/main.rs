@@ -741,19 +741,28 @@ fn fullscreen(mode: display::WindowMode) -> Option<winit::window::Fullscreen> {
     }
 }
 
-/// What the surface is configured with, for a vsync setting.
+/// What each vsync setting asks the surface for, best first.
 ///
-/// The `Auto` pair rather than `Fifo` and `Immediate` by name: those two are
-/// not both supported everywhere, and a present mode a surface does not offer
-/// is a panic at configure time. `AutoNoVsync` takes the best unthrottled mode
-/// the adapter has and falls back to `Fifo` when it has none, which is the
-/// honest answer on a platform that will not tear - the frame limiter then
-/// still does what it says, because it is not the surface doing the waiting.
-fn present_mode(vsync: bool) -> wgpu::PresentMode {
-    if vsync {
-        wgpu::PresentMode::AutoVsync
-    } else {
-        wgpu::PresentMode::AutoNoVsync
+/// Named modes rather than wgpu's `Auto` pair, because the three settings are
+/// three specific behaviours and `AutoNoVsync` picks between two of them: it
+/// prefers `Mailbox` and falls back to `Immediate`, so asking for it made
+/// "off" mean *either* "tear for the lowest latency" or "never tear", driver
+/// depending. That is exactly the distinction this row now exists to let a
+/// player make.
+///
+/// The cost of naming them is that **only `Fifo` is guaranteed** - Vulkan
+/// requires it and makes the other two optional - and configuring a surface
+/// with a mode it does not offer is a panic, not an error. Hence a chain per
+/// setting and [`Gpu::present_mode`] walking it against what the surface
+/// actually reported.
+fn present_modes(vsync: perf::Vsync) -> &'static [wgpu::PresentMode] {
+    match vsync {
+        // Second choice is `Mailbox` and not `Fifo`: what "off" is asked for is
+        // a loop that is never blocked, and mailbox keeps that while fifo
+        // destroys it.
+        perf::Vsync::Off => &[wgpu::PresentMode::Immediate, wgpu::PresentMode::Mailbox],
+        perf::Vsync::On => &[wgpu::PresentMode::Fifo],
+        perf::Vsync::Smooth => &[wgpu::PresentMode::Mailbox, wgpu::PresentMode::Fifo],
     }
 }
 
@@ -767,6 +776,8 @@ struct Gpu {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
+    /// The present modes this surface actually has. See [`Gpu::present_mode`].
+    offered: Vec<wgpu::PresentMode>,
 }
 
 impl Gpu {
@@ -810,19 +821,49 @@ impl Gpu {
         .context("requesting the device")?;
 
         let size = window.inner_size();
-        let mut config = surface
+        let config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .context("surface is not supported by this adapter")?;
-        config.present_mode = present_mode(graphics.vsync);
-        surface.configure(&device, &config);
+        // Kept because the adapter is not: every later change of the vsync row
+        // has to be checked against this same list, and re-requesting an
+        // adapter to ask would be a second answer to the same question.
+        let offered = surface.get_capabilities(&adapter).present_modes;
 
-        Ok(Self {
+        let mut gpu = Self {
             window,
             device,
             queue,
             surface,
             config,
-        })
+            offered,
+        };
+        gpu.config.present_mode = gpu.present_mode(graphics.vsync);
+        gpu.surface.configure(&gpu.device, &gpu.config);
+        Ok(gpu)
+    }
+
+    /// The best present mode this surface offers for a vsync setting.
+    ///
+    /// Falls back to `Fifo`, which Vulkan requires every device to have, and
+    /// says so once rather than silently: "vsync off did nothing" is otherwise
+    /// a bug report about this build rather than a fact about the driver.
+    fn present_mode(&self, vsync: perf::Vsync) -> wgpu::PresentMode {
+        for wanted in present_modes(vsync) {
+            if self.offered.contains(wanted) {
+                return *wanted;
+            }
+        }
+        println!(
+            "note: this surface offers {:?}, so vsync {vsync} falls back to Fifo",
+            self.offered
+        );
+        wgpu::PresentMode::Fifo
+    }
+
+    /// Puts `vsync` into effect.
+    fn set_vsync(&mut self, vsync: perf::Vsync) {
+        self.config.present_mode = self.present_mode(vsync);
+        self.surface.configure(&self.device, &self.config);
     }
 
     /// The viewport, which every stage draws into.
@@ -1098,15 +1139,15 @@ impl Session {
     /// How long one frame is allowed to take at the least, or `None` when
     /// nothing is limiting.
     ///
-    /// `None` while vsync is on, whatever the limit says: the display is
-    /// already deciding, and a second limiter underneath it does not halve the
-    /// frame rate, it beats against the refresh and turns an even 60 into an
-    /// uneven one. That is why the menu greys the row out rather than leaving
-    /// both live - the two settings are not independent, and pretending they
-    /// are produces exactly the stutter the other half of `perf` exists to
-    /// show.
+    /// `None` under `vsync = "on"` alone, whatever the limit says: there the
+    /// display is deciding, and a second limiter underneath it does not halve
+    /// the frame rate, it beats against the refresh and turns an even 60 into
+    /// an uneven one. That is why the menu greys the row out under that one
+    /// value and not the other two - `off` and `smooth` both leave the loop
+    /// free to run ahead, and under `smooth` the limit is the only thing
+    /// stopping the GPU rendering frames that are then discarded.
     fn frame_period(&self) -> Option<std::time::Duration> {
-        if self.settings.graphics.vsync {
+        if self.settings.graphics.vsync.paces_itself() {
             return None;
         }
         self.settings.graphics.frame_limit.period()
@@ -1561,26 +1602,23 @@ impl Session {
                     return;
                 }
             },
-            "graphics.vsync" => {
-                // A flag, so it is read off the value rather than parsed: the
-                // row is a toggle and `Value::Flag` is what it emits.
-                let menu::Value::Flag(on) = value else {
-                    eprintln!("ignoring {setting} = {text:?}: expected on or off");
+            "graphics.vsync" => match text.parse::<perf::Vsync>() {
+                Ok(vsync) => {
+                    self.settings.graphics.vsync = vsync;
+                    // Applied immediately, by reconfiguring the surface. A
+                    // player who turns vsync off and sees nothing change will
+                    // assume it is broken, and the frame limiter that comes
+                    // with it would then look broken too.
+                    self.gpu.set_vsync(vsync);
+                    // The frames either side of a surface reconfigure are not
+                    // frames anyone is going to present at that rate.
+                    self.stalled = true;
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
                     return;
-                };
-                self.settings.graphics.vsync = *on;
-                // Applied immediately, by reconfiguring the surface. A player
-                // who turns vsync off and sees nothing change will assume it is
-                // broken, and the frame limiter that comes with it would then
-                // look broken too.
-                self.gpu.config.present_mode = present_mode(*on);
-                self.gpu
-                    .surface
-                    .configure(&self.gpu.device, &self.gpu.config);
-                // The frames either side of a surface reconfigure are not
-                // frames anyone is going to present at that rate.
-                self.stalled = true;
-            }
+                }
+            },
             "graphics.frame_limit" => match text.parse::<perf::FrameLimit>() {
                 // Applied by the next `about_to_wait`, which is what waits.
                 Ok(limit) => self.settings.graphics.frame_limit = limit,

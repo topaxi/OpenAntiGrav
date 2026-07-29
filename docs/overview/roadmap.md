@@ -403,7 +403,7 @@ unread code and still blocks this milestone. See
       stage draws into an offscreen target and one pass stretches it into the
       aspect rectangle, which is also where the letterbox bars come from. See
       [menus](../architecture/menus.md) and `oag_game::display`.
-      **Frame pacing is in too**: vsync, an **unlocked or limited frame rate**
+      **Frame pacing is in too**: a three-way vsync (off, on, or `smooth` - the mailbox present mode, which is triple buffering done properly), an **unlocked or limited frame rate**
       (unlimited, or up to 1000), and a performance overlay that shows the rate,
       the mean, the 99th percentile and a per-frame graph - because an average
       frame rate is exactly what hides uneven frames. `oag_game::perf`.
