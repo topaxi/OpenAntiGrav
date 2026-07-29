@@ -16,6 +16,7 @@
 //! Traces are derived game data and live under `data/traces/`, which is
 //! gitignored; nothing here can run in CI.
 
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -127,6 +128,21 @@ enum Command {
         /// Step at our own 60 Hz instead of the recording's own frame times.
         #[arg(long)]
         fixed_dt: bool,
+        /// Put the ship back on the recording every N ticks.
+        ///
+        /// Without this a run is seeded once, at tick 0, and a long comparison
+        /// measures how far two chaotic trajectories drift apart rather than how
+        /// good the force law is. The original integrates the frame durations it
+        /// measured, so **two captures of the same script from the original
+        /// itself diverge by 100 units at tick 495** - no implementation can pass
+        /// a single-seeded three-thousand-tick comparison.
+        ///
+        /// With it, the recording becomes a sequence of independent N-tick
+        /// comparisons and every error is a statement about one window. Use both:
+        /// the single-seeded run says how long we track, the reseeded one says
+        /// how wrong the physics is per window. They are different questions.
+        #[arg(long, value_name = "N")]
+        reseed: Option<NonZeroUsize>,
         /// How the recorded basis maps onto the body's axes.
         #[arg(long, value_enum, default_value_t = BasisArg::LeftUpForward)]
         basis: BasisArg,
@@ -405,6 +421,7 @@ fn main() -> Result<()> {
             airbrake_left,
             airbrake_right,
             fixed_dt,
+            reseed,
             basis,
             angular,
             no_collision,
@@ -422,6 +439,7 @@ fn main() -> Result<()> {
             airbrake_left,
             airbrake_right,
             fixed_dt,
+            reseed,
             basis,
             angular,
             no_collision,
@@ -739,6 +757,7 @@ struct RunArgs {
     airbrake_left: Option<f32>,
     airbrake_right: Option<f32>,
     fixed_dt: bool,
+    reseed: Option<NonZeroUsize>,
     basis: BasisArg,
     angular: AngularArg,
     no_collision: bool,
@@ -784,6 +803,7 @@ fn run(args: RunArgs) -> Result<()> {
         },
         basis: args.basis.into(),
         angular: args.angular.into(),
+        reseed: args.reseed,
     };
     if args.fixed_dt {
         eprintln!(
@@ -803,9 +823,29 @@ fn run(args: RunArgs) -> Result<()> {
         &options,
     );
     if let Some(path) = &args.out {
-        std::fs::write(path, simulated.to_csv())
-            .with_context(|| format!("writing {}", path.display()))?;
+        // The reseed interval rides along in the file itself. A reseeded run's
+        // columns are indistinguishable from a single-seeded one's, and a CSV
+        // outlives the terminal it was produced in.
+        let csv = match args.reseed {
+            Some(every) => format!(
+                "# reseeded from the recording every {} tick(s)\n{}",
+                every,
+                simulated.to_csv()
+            ),
+            None => simulated.to_csv(),
+        };
+        std::fs::write(path, csv).with_context(|| format!("writing {}", path.display()))?;
         eprintln!("wrote {}", path.display());
+    }
+
+    if let Some(every) = args.reseed {
+        println!(
+            "reseeded from the recording every {every} tick(s), so what follows is \
+             {every}-tick window error, not a trajectory comparison. Nothing below \
+             says how long our run tracks the original - re-run without --reseed \
+             for that."
+        );
+        println!();
     }
 
     println!(

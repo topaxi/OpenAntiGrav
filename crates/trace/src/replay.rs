@@ -44,6 +44,8 @@
 //! - **`time_since_landing` and the leap timer are not in the capture**, so a run
 //!   starts outside the landing window with no leap in progress.
 
+use std::num::NonZeroUsize;
+
 use oag_core::math::{Mat3, Quat, Vec3};
 use oag_gameplay::input::{Input, button};
 use oag_gameplay::{InputSnapshot, Ship, World, ship_controls};
@@ -160,6 +162,34 @@ pub struct Options {
     /// What the recorded angular-velocity column means, which decides both how
     /// the body's rotation is seeded and how ours is written back out.
     pub angular: AngularReading,
+    /// Put the ship back on the recording's own state every this many ticks.
+    ///
+    /// `None` - the default - seeds tick 0 and never again, which is what every
+    /// run did before this existed and is the right thing for a short scenario.
+    ///
+    /// # Why a long comparison needs it
+    ///
+    /// The original integrates the frame duration it actually measured
+    /// ([ADR-0007](../../../docs/architecture/adr/0007-fixed-timestep-vs-original.md)),
+    /// and those durations follow host load. Two captures of the *same script
+    /// from the original itself* diverge by 100 units at tick 495, because `dt`
+    /// agrees on about 1 % of ticks. So a single-seeded run of three thousand
+    /// ticks measures the divergence of two chaotic trajectories, and no
+    /// implementation - not even a byte-exact one - can pass it.
+    ///
+    /// Re-seeding turns the same recording into a sequence of independent short
+    /// comparisons: each window asks "given exactly where the original was,
+    /// where does our force law put the ship over the next `n` ticks?", which is
+    /// the question the force law can actually answer. The error stops
+    /// compounding, so a max error is a statement about the *worst window*
+    /// rather than about how long the run happened to be.
+    ///
+    /// It is deliberately not the default. A reseeded run cannot tell you the
+    /// one thing a single-seeded run can - how long we track the original before
+    /// coming apart - and reporting one as the other would be the exact class of
+    /// silent misreading this harness exists to prevent. Both numbers are worth
+    /// having; they are not the same number.
+    pub reseed: Option<NonZeroUsize>,
 }
 
 /// The ship state a recording's first row describes.
@@ -307,6 +337,22 @@ pub fn replay<R: Raycaster + ?Sized>(
     };
 
     for (index, recorded) in trace.frames.iter().enumerate() {
+        // Put the ship back on the recording, when asked. Deliberately *before*
+        // the row is emitted, so a window's first row is the seed itself and
+        // reads as an initial condition exactly the way tick 0 does - the same
+        // property that makes tick 0 uninformative rather than a false match.
+        // `initial_state` is reused rather than reimplemented: a second seeding
+        // path would be one more thing to keep in agreement, and the whole point
+        // of a window is that it starts where tick 0 starts.
+        if let Some(every) = options.reseed
+            && index > 0
+            && index % every.get() == 0
+        {
+            world.ships[0].physics =
+                initial_state(recorded, handling, options.basis, options.angular);
+            speed_cached = recorded.speed_cached;
+        }
+
         let dt = match options.dt {
             DeltaSource::Trace => recorded.dt,
             DeltaSource::Fixed(dt) => dt,
@@ -414,6 +460,8 @@ pub fn drive<R: Raycaster + ?Sized>(
         dt: DeltaSource::Fixed(options.dt),
         basis: options.basis,
         angular: options.angular,
+        // A scenario run has no recording to be put back onto.
+        reseed: None,
     };
 
     for index in 0..options.ticks {
@@ -1220,6 +1268,118 @@ mod tests {
             comparison.field(Field::Position).trend.verdict,
             crate::compare::TrendVerdict::Growing,
             "a constant acceleration is a systematic error, not a bounded one"
+        );
+    }
+
+    fn reseeding(every: usize) -> Options {
+        Options {
+            reseed: NonZeroUsize::new(every),
+            ..Options::default()
+        }
+    }
+
+    /// The default must stay exactly what it was, or every existing invocation
+    /// silently changes meaning.
+    #[test]
+    fn a_run_is_seeded_once_unless_asked_otherwise() {
+        assert_eq!(Options::default().reseed, None);
+
+        let recorded = coasting(120, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let mut handling = inert_handling();
+        handling.physical.normal_gravity = 9.8;
+        handling.physical.flight_gravity = 9.8;
+        let once = replay(
+            &recorded,
+            &handling,
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        let explicit = replay(
+            &recorded,
+            &handling,
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options {
+                reseed: None,
+                ..Options::default()
+            },
+        );
+        assert_eq!(once.to_csv(), explicit.to_csv());
+    }
+
+    /// The property the whole option exists for: error stops compounding.
+    ///
+    /// The same falling-under-gravity divergence as
+    /// [`a_physics_difference_shows_up_as_a_dated_divergence`], which grows as
+    /// `t^2` when the run is seeded once. Re-seeded every twenty ticks it cannot
+    /// exceed what twenty ticks of that acceleration produce, however long the
+    /// recording is - so the max error stops being a statement about the run's
+    /// length and becomes one about the window's.
+    #[test]
+    fn reseeding_bounds_the_error_by_the_window_rather_than_the_run() {
+        let recorded = coasting(600, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let mut handling = inert_handling();
+        handling.physical.normal_gravity = 9.8;
+        handling.physical.flight_gravity = 9.8;
+
+        let seeded_once = replay(
+            &recorded,
+            &handling,
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &Options::default(),
+        );
+        let reseeded = replay(
+            &recorded,
+            &handling,
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &reseeding(20),
+        );
+
+        let once = compare(&recorded, &seeded_once, &Tolerances::default());
+        let windowed = compare(&recorded, &reseeded, &Tolerances::default());
+        let (once, windowed) = (
+            once.field(Field::Position).max_error,
+            windowed.field(Field::Position).max_error,
+        );
+        // Free fall over a window of `n` ticks goes as `n^2`, so twenty ticks of
+        // it against six hundred is a factor of nine hundred. An order of
+        // magnitude is the assertion; the exact ratio is arithmetic nobody should
+        // have to keep true.
+        assert!(
+            windowed * 10.0 < once,
+            "reseeded error {windowed} is not bounded well below the compounded {once}"
+        );
+    }
+
+    /// A window's first row is the recording's own state, so it is an initial
+    /// condition and not a measurement - the same property tick 0 has, and the
+    /// reason the seed happens before the row is emitted rather than after.
+    #[test]
+    fn every_window_starts_exactly_on_the_recording() {
+        let recorded = coasting(100, 1.0 / 60.0, Vec3::new(0.0, 0.0, 22.0));
+        let mut handling = inert_handling();
+        handling.physical.normal_gravity = 9.8;
+        handling.physical.flight_gravity = 9.8;
+        let simulated = replay(
+            &recorded,
+            &handling,
+            &Environment::default(),
+            &CollisionWorld::new(),
+            &reseeding(25),
+        );
+
+        for tick in [0, 25, 50, 75] {
+            assert_eq!(
+                simulated.frames[tick].position, recorded.frames[tick].position,
+                "tick {tick} is a seeded row and must agree exactly"
+            );
+        }
+        assert_ne!(
+            simulated.frames[24].position, recorded.frames[24].position,
+            "the tick before a seed is a measurement and must be free to diverge"
         );
     }
 }

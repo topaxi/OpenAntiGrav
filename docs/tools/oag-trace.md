@@ -666,6 +666,40 @@ pressing works as a `--source` too: both entry names are spelled the same on
 both releases, and a run off `pulse-ps2-eu.chd` loads the same 196 colliders and
 the same Assegai Venom handling as one off `pulse-psp-usa.chd`.
 
+## Reseeding, and why a long comparison needs it
+
+A run seeded once, at tick 0, answers **"how long do we track the original?"**
+That is the right question for a two-hundred-tick scenario and the wrong one for
+a lap.
+
+The original integrates the frame duration it actually measured
+([ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)), and those
+durations follow host load. Driving the *original itself* twice with the same
+script and the same pinned start pose, `dt` agrees on about **1 %** of ticks and
+the two runs of the original are **100 units apart by tick 495**. So over three
+thousand ticks a single-seeded comparison measures the divergence of two chaotic
+trajectories, and **no implementation can pass it - not even a byte-exact one.**
+Chasing that number is chasing the emulator's scheduler.
+
+`--reseed N` puts the ship back on the recording's own state every `N` ticks,
+using the same seeding path tick 0 uses. The recording becomes a sequence of
+independent `N`-tick comparisons, each asking the question the force law can
+actually answer: *given exactly where the original was, where do we put the ship
+over the next `N` ticks?* Error stops compounding, so a maximum is a statement
+about the worst window rather than about how long the run happened to be.
+
+It is deliberately not the default, and the report says so on every reseeded run
+(the written CSV carries it as a header comment too, because a CSV outlives the
+terminal it came from). The two numbers answer different questions and neither
+substitutes for the other:
+
+```sh
+# how long we track the original
+oag-trace run data/traces/lap.csv --source ... --script ...
+# how wrong the physics is, per second, across the whole lap
+oag-trace run data/traces/lap.csv --source ... --script ... --reseed 60
+```
+
 ## Options
 
 | Option | Meaning |
@@ -676,6 +710,7 @@ the same Assegai Venom handling as one off `pulse-psp-usa.chd`.
 | `--hold <button>` | Hold a button for the whole run, as `psp-trace.py --hold` did. Repeatable |
 | `--steer`, `--airbrake-left`, `--airbrake-right` | Hold an axis for the whole run |
 | `--fixed-dt` | Step at our own 60 Hz instead of the recording's own frame times |
+| `--reseed <N>` | Put the ship back on the recording every `N` ticks. See [below](#reseeding-and-why-a-long-comparison-needs-it) |
 | `--basis` | `left-up-forward` (default) or `right-up-back` |
 | `--angular` | What the recorded angular velocity means: `negated-local` (default), `local`, `negated-world`, `world` |
 | `--no-collision` | Ignore the track's geometry: a ship with nothing to hover on |
