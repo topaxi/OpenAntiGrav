@@ -156,6 +156,17 @@ fn the_ps2_disc_loads_a_driveable_race() {
         !loaded.setup.collision.colliders().is_empty(),
         "the PS2 track has no collision geometry, so a ship has nothing to hover on"
     );
+    // Asserted rather than left to the spawn, because a PS2 track with no
+    // `Start Position` node falls back to the spline *silently* - the race still
+    // loads, the ship still flies, and the fallback would look exactly like the
+    // recovered path from outside. The PS2 authors the same node as the PSP: it
+    // reads byte-identical on `16_Track`, which is also the corroboration that
+    // the two discs ship one set of authored track data.
+    assert!(
+        loaded.setup.start_position.is_some(),
+        "the PS2 track carries no Start Position node, so the race is quietly spawning \
+         on the spline instead"
+    );
     assert!(
         !loaded.ship_model.indices.is_empty(),
         "the PS2 ship model decoded no triangles"

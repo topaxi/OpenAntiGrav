@@ -622,6 +622,67 @@ fn the_authored_slot_points_where_the_original_starts() {
     );
 }
 
+/// The reference capture is on `track.vex`, not `track_reversed.vex`.
+///
+/// **This is the `01_Track` trap one level down, and it had to be measured.** M3
+/// settled the track by casting the recording's own positions against every
+/// track's *collision geometry* and finding one where all of them land - see
+/// `oag_game::race::DEFAULT_TRACK`. A forward layout and its reverse share that
+/// geometry, so that test could not tell the two apart, and something has to.
+///
+/// What made the question live rather than theoretical: `track_reversed.vex`'s
+/// authored slot sits **2.2 units** from where the original's craft starts, `y`
+/// agreeing to 0.0096, and **4.011 units** above its own collision surface
+/// against a resting craft height of 4.002-4.009. Three coincidences pointing at
+/// the reversed layout, against `track.vex`'s slot at 139.7 units. Only the
+/// heading separates them, so the heading is what this asks.
+///
+/// It is not close: the recorded craft faces **along** `track.vex`'s tangent and
+/// **against** the reversed variant's, by construction of the pair. So the
+/// coincidences are exactly that - the two layouts' grids bracket one shared
+/// start line, and the reversed grid's authored slot happens to land near the
+/// forward grid's pole.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_captured_start_pose_faces_along_the_forward_layout() {
+    let Some(image) = image() else { return };
+    let forward = Vec3::from_array(CAPTURED_FORWARD);
+    let at = Vec3::from_array(CAPTURED_START);
+
+    let mut readings = Vec::new();
+    for variant in ["track.vex", "track_reversed.vex"] {
+        let name = format!(r"Data\Environments\16_Track\{variant}");
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            track: name.clone(),
+            class: SpeedClass::Venom,
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+
+        let (_, sample, _) = loaded
+            .setup
+            .spline
+            .nearest(at)
+            .expect("a resampled spline has samples");
+        let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
+        let along = forward.dot(tangent);
+        println!("{variant}: the recorded craft faces the tangent at {along:.4}");
+        readings.push((variant, along));
+    }
+
+    assert!(
+        readings[0].1 > 0.9,
+        "the capture faces {:.4} along track.vex's tangent, so the reference scenario is not          on the layout race::DEFAULT_TRACK names",
+        readings[0].1
+    );
+    assert!(
+        readings[1].1 < -0.9,
+        "the capture faces {:.4} along track_reversed.vex's tangent, which should be the          negation of the forward layout's",
+        readings[1].1
+    );
+}
+
 /// A ship spawned on the authored slot is where the hover law wants it.
 ///
 /// The spawn takes its height off the collision surface under the slot rather

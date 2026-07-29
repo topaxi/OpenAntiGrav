@@ -448,10 +448,32 @@ are tens of degrees out.
 
 The *positions* differ, and by a lot: the captured start pose is 139.7 units
 away, decomposing in the slot's own frame into **137.9 units ahead, 22.4 to its
-left and 0.8 up**. Both are ~10 units off the centreline, on opposite sides. That
-is the shape of a two-column grid staggered back from the line, with the authored
-slot a rear one and a time trial starting at pole — but *which* slot, and what
-lays out the rest, is **not determined**, and nothing in the crate derives them.
+left and 0.8 up**. Both are ~10 units off the centreline, on opposite sides.
+Those three numbers are what any account of the grid has to explain. **This page
+does not offer one** — which slot the authored node is, and what lays out the
+other seven, are not determined, and nothing in the crate derives them.
+
+#### One unexplained coincidence, recorded rather than resolved
+
+`track_reversed.vex`'s authored slot sits **2.2 units** from where the original's
+craft starts on the *forward* layout, with `y` agreeing to **0.0096**, and it
+stands **4.011 units** above its own collision surface against a resting craft
+height measured at 4.002–4.009. Three quantities agreeing, where `track.vex`'s
+own slot is 139.7 units away and 2.698 above its surface.
+
+It is not the layout the capture is on, and that is measured rather than argued:
+the recorded craft faces **along** `track.vex`'s spline tangent at `+0.9999` and
+against the reversed variant's at `−0.9999`, on 170 of 170 clean ticks of both
+captures (`the_captured_start_pose_faces_along_the_forward_layout`). Worth
+running, because the collision geometry is shared between the two variants — the
+[M3 track identification](../overview/roadmap.md#m3---verification-harness) cast
+positions against *geometry* and so could not have separated them.
+
+The reading that fits is that the two layouts' grids bracket one shared start
+line, each set back in its own direction, so the reversed grid's authored slot
+lands near the forward grid's front row. That is a reading, not a finding; the
+three agreeing numbers are the finding, and they are here so the next person
+meets them with the refutation attached.
 
 ### The authored `y` is not a ride height
 

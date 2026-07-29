@@ -280,7 +280,7 @@ attributable:
 | The ten box sample points (`Collider_BoxSamplePoints`, `0x08818a00`) | landed earlier, with the angular half |
 | The angular share of the denominator and the `0.1`-scaled application | landed earlier, with the sample points |
 | A contact per (sample point, triangle) pair, and no non-wall hit hiding a wall | **nothing** - both are real divergences this track's geometry never exercises |
-| Single-sided rejection instead of flipping the normal (`Collision_BoxAgainstMesh`, `0x08815cd4`) | 617.5 units travelled to 618.6 - the size 99.6 % predicts |
+| Single-sided rejection instead of flipping the normal (`Collision_BoxAgainstMesh`, `0x08815cd4`) | 617.5 units travelled to 618.6 - the size 99.6 % predicts. Both figures are from the spline-sample-0 spawn the race no longer uses, so the 1.1-unit difference is the finding and the absolutes do not reproduce |
 
 That last row rests on a measurement this pass added rather than an
 assumption: **2,076 of `16_Track`'s 2,084 wall triangles (99.6 %) are wound
