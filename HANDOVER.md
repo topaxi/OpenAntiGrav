@@ -37,7 +37,7 @@ points at it. Prune again rather than appending indefinitely.
   gitignored, it does not travel into a worktree or a restricted sandbox.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** green at 874 tests, `audit-leakage` clean. `just test-data`
+- **Gate status:** green at 882 tests, `audit-leakage` clean. `just test-data`
   is 926 of 927, and **the one failure is the machine rather than the code**:
   `oag-disc::ground_truth listing_matches_chdman_and_the_reference_iso` shells
   out to `chdman extractdvd` into `/tmp/oag-ground-truth.iso`, `/tmp` here is a
@@ -173,7 +173,7 @@ used, kept because commits and docs cite them.
 | Thread | What is known, and the next step |
 | --- | --- |
 | **Our hull meets the wall six ticks early, and it is not drift** | Corrected for the lead, our craft loses speed to `standing-start`'s outer wall on tick **179** against the capture's **187**, having tracked position to 1.06 units and heading to 0.29 degrees the whole way there. **It is a contact-geometry difference, not a trajectory one, and that is measured rather than argued:** `crates/trace/tests/wall_contact_ground_truth.rs` walks the *recorded* poses and asks our hull whether it finds a wall there, which puts our first contact at tick **181** on the original's own line - so six of the eight ticks are the geometry and two are the trajectory. The probe that fires is the lower front outer corner, `1.82` units past the wall plane by the time the original responds, under the `2.0` depth gate so nothing is dropping it. **It reproduces on the lap capture** - ours 168 against the original's 171, dated by the cleanliness test, same probe on the opposite side of the craft and a different wall - so it is a property of the hull rather than of one triangle. The pair does **not** separate the width term from the length term: the forward-to-wall angle is 4.05 degrees on the standing start against 7.33 on the lap, but turning ticks into distance needs the wall's own divergence and the spline's half-widths are the AI track's, not the collision mesh's. **Next step: read `Collider_BoxSamplePoints` (`0x08818a00`) for which fields it loads, both axes** - `hull_sample_points`' axis-to-dimension mapping is confidence 88 resting on the box-inertia agreement, and that leg is weak here because `Body_SetBoxInertia`'s literal box is square in `x` and `z` while `<Misc>` is not. Do **not** adjust an extent to close six ticks; there is also only 0.2 units of headroom under `MAX_CONTACT_DEPTH` before contacts start being dropped outright. |
-| **`drive` spawns 51 units from where the original starts** | `oag-trace drive` (and `oag_game::race` through the same `Pose::from_sample`) puts the ship on **spline sample 0**, at `(56.5, -50.6, -187.7)`. The capture's own start line is `(6.07, -50.07, -196.10)` - nearest sample **3415** of 3448, and **9 units off the centreline**, which is what a grid slot behind the start line looks like. So `just scripted-sim`'s report is a different journey round the circuit from any capture and its path length is not comparable to one; use `run --script --script-lead 2`, which seeds from the capture. **Do not move the spawn on this**: one datum for where the grid is is not a recovered value, and the rule about fitted constants applies. Finding the original's grid placement is the actual next step. |
+| **The grid: one slot is recovered, seven are not** | **Resolved half.** `Start Position` (class `0x3bc`) is decoded and `oag_game::race` and `oag-trace drive` both spawn on it rather than on spline sample 0, which was never a recovered value. The reading is confirmed against the running game by *heading*: the slot's forward is within **1.12 degrees** of the original's craft at the start of a captured time trial. What it is **not** is pole - the capture starts 137.9 units ahead of the slot and 22.4 to its left, both about 10 units off the centreline on opposite sides, which is the shape of a two-column grid staggered back from the line. Exactly **one** node per track on all 40 files, so the other seven slots are laid out by unread code. **Next step is that code**, not more data: nothing in `.vex` will produce slot 2. Two traps recorded on [`track.md`](docs/formats/track.md#start-position): the authored `y` is **not** a ride height (1.03-7.36 units above the collision surface across the 40 files, so the spawn raycasts instead), and `just scripted-sim`'s path length is still not comparable to a capture's - it now starts from the grid rather than 51 units past the line, but that is a third journey, not the capture's. Use `run --script --script-lead 2`. |
 | **The 13 % roll-stiffness gap** | The recovered tensor runs the roll oscillator 13 % stiff against measurement. Untouched by the downforce fix by construction (the probes are on the centreline), so it is now the only gap of its kind. |
 | **A clean lap scenario** | The committed lap script is a closed-loop autopilot recording and no longer flies clean open-loop (67.3 % of the recapture is in wall contact). Re-derive one from `just autopilot` rather than replaying the file. |
 | **Nothing airborne has ever been captured** | `grip_air`, the airborne pitch gain and the `-0.3` airborne weathervane consequently have no runtime leg at all. One capture with a real jump in it closes several at once. |
@@ -255,6 +255,19 @@ the past.
   a free contact detector. Two reference captures were recorded scraping a wall
   for their whole length, and the resulting "missing linear resistance" stood as
   the M4 blocker for a session and a half.
+- **A number in authored data that looks like a height usually is not one.**
+  `Start Position`'s `y` reads exactly like a ride height on `01_Track` (2.42,
+  between the surface and the lifted spline) and is not one: measured against
+  each track's own collision mesh it ranges **1.03 to 7.36** across the 40 files.
+  Checking it on one track would have shipped a spawn that only works there. The
+  same shape of check is cheap for any authored constant: ask what it is a height
+  *above*, then measure that on every file rather than the convenient one.
+- **When position and heading disagree about whether a reading is right, the
+  heading is the one that can carry the argument.** The authored grid slot is
+  139.7 units from where the original's craft actually starts, which is equally
+  consistent with a misread matrix and with a grid behind the line. Its forward
+  agreeing to 1.12 degrees is consistent with only one of those. Rotations have
+  no free parameters; positions have three.
 - **A fidelity fix that changes nothing measurable is still a finding.**
   `raycast_all` moved the whole-lap scenario by not one digit (617.538 units
   either way) and single-sided rejection moved it by 1.1; both were real
@@ -349,7 +362,10 @@ three axes, pitch to 0.13 % and the `I * omega` identity to 0.01 %; the pitch
 step response at 1.006x; the contact friction coefficient as a one-sided bound
 approached from above; the mag-lock probe re-finding the magstrip from geometry
 that knows nothing about the capture (91 % of inverted poses against 0.3 % of
-upright ones). Method and numbers in the two ground-truth pages under
+upright ones); and the authored `Start Position` frame, whose forward lands
+within **1.12 degrees** of the original's craft at the start line and whose left
+lands within 1.54 - read off the disc by a parser that knows nothing about the
+capture. Method and numbers in the two ground-truth pages under
 [`docs/physics/`](docs/physics/README.md). Add to that the whole-lap result
 above, now that the input is aligned: over the 170 ticks of the recapture that
 are wall-free, **position tracks to 6.54 units at the worst and 2.41 on average**

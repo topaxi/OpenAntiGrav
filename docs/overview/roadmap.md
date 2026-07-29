@@ -372,6 +372,14 @@ seen from the authoring side.
 **Exit criterion:** an eight-ship race that is indistinguishable from the
 original to a player, and whose per-tick trace stays within tolerance.
 
+**One piece of the grid landed early, from M4's side.** A track's authored
+`Start Position` is decoded and a ship starts on it rather than on a spline
+index, with its heading checked against the original's own craft at the start
+line to 1.12 degrees. That is the *slot*, singular: one node per track, so
+grid *formation* — seven more slots, and which ship gets which — is still
+unread code and still blocks this milestone. See
+[`Start Position`](../formats/track.md#start-position).
+
 ---
 
 ## M6 - Shell and polish
@@ -412,7 +420,7 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 | Question | Blocks | Tracked in |
 | --- | --- | --- |
 | Where is lap counting? `gate` has no runtime class at all. | M5 | [track data](../formats/track.md) |
-| How is a ship assigned a grid slot? | M5 | [track data](../formats/track.md) |
+| How is a ship assigned a grid slot? **Narrowed, and half of it is answered**: the authored `Start Position` node is decoded and a ship now starts on it, its heading confirmed against the original's own craft to 1.12 degrees. But there is exactly **one** node per track on all 40 files, 3.2-20.5 units off the centreline and 137.9 units behind where a time trial starts - so the grid is laid out by code, not data, and what lays it out is unread. | M5 | [track data](../formats/track.md) |
 | What does the per-vertex collision scalar mean? **Not answerable from assets**: all 602,086 are exactly `1.0`, so only the consumer can say. | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | How does the sweep-and-prune packing hold coordinates beyond +/-1024, when real tracks reach 1,554? **Narrowed by survey**: all 16 environments measured; 7 reach past ±1024, but nothing on either disc *spans* more than 2,048 (widest 2026.6057, `10_Track`, 98.96% of the window). So the geometry is not at fault and the packed input cannot be raw world space - the open part is reading `Sap_Init` (`0x0882f8f4`) for the base it must subtract. | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |

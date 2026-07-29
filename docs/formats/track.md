@@ -391,17 +391,87 @@ mechanism depends on the `+0x20` axis being what this page says it is.
 
 ## `Start Position`
 
+**Status: decoded, and the spawn path uses it.**
+[`oag_formats::track::start_position`](../../crates/formats/src/track.rs) reads
+it and `oag_gameplay::spawn::Pose::from_start_position` places a ship on it.
+
 Grid slots are **named resources**, not an array. The bind formats
 `"start position %d"` and publishes the node's transform into the resource
 dictionary, re-orthonormalised with up forced to `(0,1,0)`.
 
 The payload is 64 bytes: a row-major 4x4 matrix. On `01_Track` it is identity
-rotation with translation `(-700.57, 2.42, 144.52)`, so the bind's
-re-orthonormalisation is a no-op on shipped data. That the second row is the up
-axis, forced to `(0,1,0)`, is what fixes the world's handedness for everything
+rotation with translation `(-700.57, 2.42, 144.52)`. That the second row is the
+up axis, forced to `(0,1,0)`, is what fixes the world's handedness for everything
 else on this page. Confidence **92**.
 
-How a ship is assigned a slot number is **not** determined.
+### The rows are the craft's own left-up-forward basis
+
+`cross(row0, row1) = row2` holds **exactly on all 40 PSP track files** — the
+same identity the recorded craft basis satisfies on 200 of 200 ticks (see
+[engine.md](../ghidra/functions/psp-pulse/engine.md)). Row 1 is up, so rows 0 and
+2 are the remaining two axes in the same order the craft carries them, and the
+data agrees axis for axis with the track's own frame:
+
+| Against the nearest spline sample | 40 of 40 files |
+| --- | --- |
+| `dot(row2, tangent)` | `+1.000` — row 2 is forward |
+| `dot(row1, -down)` | `+1.000` — row 1 is up |
+| `dot(row0, lateral)` | `-1.000` — row 0 is **left** |
+
+That last row settles an open question this page used to carry: **`lateral`
+points to the driver's right.** The widths are stored as
+`[-half_width_left, +half_width_right]` along it, so the field names are correct
+as written rather than merely internally consistent. Confidence **90**, from the
+40-file agreement plus the runtime leg below.
+
+**And the bind's fix-up is real, if small.** The authored up row is already
+exactly `(0,1,0)` on 31 of the 40 files and off it by at most **1.600 degrees**
+on the other nine, so it is not the no-op an earlier edition of this page called
+it. Which of the remaining two rows the original preserves while
+re-orthonormalising **was not read**; that 1.600-degree bound is what makes the
+question a bounded uncertainty rather than an open one, and the crate keeps
+forward.
+
+### It is one grid slot, and it is not pole
+
+Every one of the 40 files carries **exactly one** `Start Position` node, so a
+grid of eight is not authored: seven slots come from code that has not been read.
+The one that is authored is **not** on the centreline — it sits between **3.24
+and 20.48 units** off it on every track, always inside the track's own
+half-widths. A start-line marker would be on the line; a grid slot is not.
+
+The runtime leg comes from the reference capture, and it is the **heading** that
+carries it. On `16_Track` the authored slot's forward is within **1.12 degrees**
+of the craft's own forward at the start of a captured time trial, and its left
+within **1.54** of the craft's left. Read the rows in any other order and those
+are tens of degrees out.
+
+The *positions* differ, and by a lot: the captured start pose is 139.7 units
+away, decomposing in the slot's own frame into **137.9 units ahead, 22.4 to its
+left and 0.8 up**. Both are ~10 units off the centreline, on opposite sides. That
+is the shape of a two-column grid staggered back from the line, with the authored
+slot a rear one and a time trial starting at pole — but *which* slot, and what
+lays out the rest, is **not determined**, and nothing in the crate derives them.
+
+### The authored `y` is not a ride height
+
+It looks like one and is not. Cast straight down onto each track's own collision
+mesh, the slot sits anywhere from **1.03 to 7.36 units** above the surface
+beneath it (`02_Track` and `06_Track` are the extremes; `01_Track`'s 2.42 is
+mid-range). A ship started a fixed height above the authored value is therefore
+out of its own hover probes' reach on some tracks and inside the floor on others.
+
+So the slot supplies **where a ship stands and which way it points**, and the
+height comes off the collision geometry — `spawn_height` above the surface, the
+same quantity everywhere else. One corroboration falls out of doing it that way:
+at `16_Track`'s slot the collision surface and the spline's own surface line
+agree to within **0.01 units**, which nothing arranged.
+
+How a ship is assigned a slot number is still **not** determined.
+
+Every claim in this section is asserted in
+`crates/formats/tests/track_ground_truth.rs` and
+`crates/game/tests/race_ground_truth.rs`, against the disc rather than in prose.
 
 ## Pads
 
@@ -438,10 +508,15 @@ until something proves otherwise.
 - `SplinePt` `+0x40` (what the *file* means by it - the runtime reuses the slot
   as a sentinel, see above), `+0x58` (always `0x10`), `+0x5c`-`+0x5f`,
   `+0x62`-`+0x66`, `+0x68`-`+0x6f`.
-- Which lateral direction is "left". The widths are clamped as
-  `[-half_width_left, +half_width_right]`, so the sign convention is internally
-  consistent, but nothing here proves the negative side is the driver's left.
-- How a ship gets its grid slot.
-- **Nothing here has been verified under an emulator.** Everything above is
-  static reading plus agreement with shipped data, which is what caps the scores
-  at 94.
+- ~~Which lateral direction is "left".~~ **Answered**: `lateral` points to the
+  driver's **right**. `Start Position`'s row 0 is the craft's left axis and
+  `dot(row0, lateral)` is `-1.000` on all 40 track files, so the widths stored as
+  `[-half_width_left, +half_width_right]` mean what their names say rather than
+  only being internally consistent. See [`Start Position`](#start-position).
+- How a ship gets its grid slot. **Narrowed**: exactly one slot is authored per
+  track and it is neither the centreline nor pole, so the other seven are laid
+  out by unread code rather than by data.
+- **Almost nothing here has been verified under an emulator.** Everything above
+  is static reading plus agreement with shipped data, which is what caps the
+  scores at 94. The exception is `Start Position`'s frame, whose heading now
+  agrees with the original's own craft at the start line to 1.12 degrees.

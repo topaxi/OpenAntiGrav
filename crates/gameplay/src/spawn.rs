@@ -44,10 +44,12 @@ impl Pose {
     ///
     /// `lateral_offset` is measured along the sample's own `lateral` axis, which
     /// is the same axis `racing_line`, `ai_bound_left` and `ai_bound_right` are
-    /// expressed in. Using that axis rather than a derived right vector keeps
-    /// this correct **whichever way `lateral` points**, which matters because
-    /// whether a positive `racing_line` means left or right has not been
-    /// established.
+    /// expressed in. Using that axis rather than a derived right vector is what
+    /// made this correct while which way `lateral` points was still open; it now
+    /// points to the driver's **right**, from the `Start Position` frame agreeing
+    /// with it on all 40 shipped tracks - see `docs/formats/track.md`. So a
+    /// positive `racing_line` is a racing line to the right, and this keeps
+    /// using the stored axis anyway rather than restating that as a sign.
     ///
     /// `height` is measured along the ship's up axis from the surface line.
     /// Note that the height a ship actually settles at is emergent from the

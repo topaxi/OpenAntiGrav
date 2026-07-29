@@ -276,7 +276,9 @@ physics constant is adjusted from here.
 
 | Thing | Source |
 | --- | --- |
-| The spline, and the pose a ship starts in | the track's `WO Track` node, via [`track`](../formats/track.md) |
+| The spline | the track's `WO Track` node, via [`track`](../formats/track.md) |
+| The pose a ship starts in | the track's [`Start Position`](../formats/track.md#start-position) node, falling back to the spline when a track has none |
+| How high above the track it starts | cast onto the collision mesh under that slot — the authored `y` is not a ride height |
 | What the hover probes hit | the track's [collision nodes](../formats/collision.md) |
 | Every force-law parameter | the team's [`handlingstats.xml`](../formats/handling-stats.md) |
 | The chase camera's seven values | that file's `<ExternalCameraFar>` |

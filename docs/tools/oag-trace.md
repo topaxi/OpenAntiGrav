@@ -965,9 +965,15 @@ worth:
   **Retired.** That was the wedge, and it was the two-tick input offset above -
   aligned, the same replay tracks the original to 6.54 units over the window
   where the capture is clean. The 618 came from `just scripted-sim`, which has
-  its own separate problem: it starts on **spline sample 0** while the capture
+  its own separate problem: it started on **spline sample 0** while the capture
   starts near sample 3415 and 9 units off the centreline, so its path length was
-  never comparable to a capture's in the first place.
+  never comparable to a capture's in the first place. `drive` now starts on the
+  track's authored `Start Position` instead — a recovered value rather than an
+  index — but that is a *third* place on the circuit, 137.9 units behind the
+  capture's own start, so the warning stands unchanged: **do not compare
+  `scripted-sim`'s path length to a capture's.** Use `run --script
+  --script-lead 2`, which seeds from the capture.
+  See [`track.md`](../formats/track.md#start-position).
 - **`grounded` says less than it looks like it says.** The original's column is
   `1.0` on every tick of this capture, so agreement means our ship also never
   leaves the ground - real progress against the 2026-07-28 run below, and not a
