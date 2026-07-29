@@ -12,13 +12,20 @@
 //!   original. A B-spline blend of unit vectors is not a unit vector, so
 //!   anything building a rotation from them has to.
 //!
-//! What is **not** here: grid slot assignment. How the original assigns a ship
-//! to a grid slot is an open question tracked against M5 in
-//! `docs/overview/roadmap.md`, and guessing at it would be a guess dressed as
-//! code.
+//! Two ways in, and they claim different things.
+//! [`Pose::from_start_position`] uses the track's own authored `Start Position`
+//! node - a recovered value, and the one to prefer. [`Pose::from_sample`] puts a
+//! ship on the spline, which is where a track with no such node has to go and
+//! which claims only "on the track".
+//!
+//! What is still **not** here: grid slot *assignment*. Every PSP track ships
+//! exactly one `Start Position`, so the other seven slots are laid out by code
+//! that has not been read, and how a ship is assigned one remains an open
+//! question tracked against M5 in `docs/overview/roadmap.md`. Deriving the rest
+//! of a grid from the one authored slot would be a guess dressed as code.
 
 use oag_core::math::{Mat3, Quat, Vec3};
-use oag_formats::track::Sample;
+use oag_formats::track::{Sample, StartPosition};
 use oag_physics::Handling;
 
 use crate::world::Ship;
@@ -57,6 +64,52 @@ impl Pose {
 
         Self {
             position,
+            orientation: orientation_from_axes(forward, up),
+        }
+    }
+
+    /// A pose from the track's own authored grid slot, lifted off the surface.
+    ///
+    /// [`oag_formats::track::StartPosition`] is where the exporter put a ship and
+    /// which way it faces, after the bind handler's fix-up - a recovered value
+    /// rather than an index into a resampled spline, which is what makes this the
+    /// one to prefer when a track has such a node.
+    ///
+    /// **It is one slot, not the grid.** Every PSP track ships exactly one, so
+    /// where the other seven sit is still code nobody has read, and this offers
+    /// no way to ask for slot `n`. Nor is it necessarily pole: on `16_Track` the
+    /// authored slot sits about 138 units behind where a time trial actually
+    /// starts. See `docs/formats/track.md`.
+    ///
+    /// # The slot's own height is not the one to start at, and that is measured
+    ///
+    /// `ground` is the world `y` of the collision surface under the slot, and
+    /// `height` is measured up from *that* - not from the slot. The authored `y`
+    /// looks like a ride height and is not one: across the 40 shipped PSP track
+    /// files it sits anywhere from **1.03 to 7.36 units** above the surface
+    /// beneath it. Starting a ship `height` above the authored value would
+    /// therefore put it out of its own probes' reach on some tracks and inside
+    /// the floor on others, which is a spawn that works on the track it was tried
+    /// on. So the slot supplies where a ship stands and which way it points, and
+    /// the height comes from where it comes from everywhere else - see
+    /// [`spawn_height`].
+    ///
+    /// `None` keeps the authored `y`, for a caller with no collision geometry to
+    /// ask. That is the honest fallback rather than the right answer.
+    ///
+    /// Both the lift and `ground` are along world up rather than the slot's own,
+    /// because the bind has already forced that axis to `(0, 1, 0)`.
+    #[must_use]
+    pub fn from_start_position(slot: &StartPosition, ground: Option<f32>, height: f32) -> Self {
+        let up = Vec3::from_array(slot.up);
+        let forward = Vec3::from_array(slot.forward);
+        let mut position = Vec3::from_array(slot.position);
+        if let Some(ground) = ground {
+            position.y = ground;
+        }
+
+        Self {
+            position: position + up * height,
             orientation: orientation_from_axes(forward, up),
         }
     }
@@ -344,5 +397,63 @@ mod tests {
         let mut ship = Ship::default();
         ship.place_at(Pose::from_sample(&level_sample(), 0.0, 0.0));
         assert!(ship.physics.time_since_landing >= 0.2);
+    }
+
+    /// The frame `16_Track` ships: facing `+X`, which is `-Z` rotated a quarter
+    /// turn about world up.
+    fn level_slot() -> StartPosition {
+        StartPosition {
+            position: [8.0, -50.0, -196.0],
+            left: [0.0, 0.0, -1.0],
+            up: [0.0, 1.0, 0.0],
+            forward: [1.0, 0.0, 0.0],
+        }
+    }
+
+    #[test]
+    fn a_slot_faces_the_way_the_track_authored_it() {
+        let pose = Pose::from_start_position(&level_slot(), None, 0.0);
+        assert_eq!(pose.position, Vec3::new(8.0, -50.0, -196.0));
+
+        let forward = pose.orientation * Vec3::NEG_Z;
+        assert!((forward - Vec3::X).length() < 1e-6, "got {forward}");
+        let up = pose.orientation * Vec3::Y;
+        assert!((up - Vec3::Y).length() < 1e-6, "got {up}");
+    }
+
+    /// The bind has already levelled the slot's up axis, so the lift is
+    /// vertical - the same direction on every slot of every track.
+    #[test]
+    fn a_slot_lifts_along_world_up() {
+        let pose = Pose::from_start_position(&level_slot(), None, 4.0);
+        assert_eq!(pose.position, Vec3::new(8.0, -46.0, -196.0));
+    }
+
+    /// The authored `y` is not a ride height, so a caller that knows where the
+    /// floor is measures from the floor and the slot's own height is discarded.
+    #[test]
+    fn a_known_ground_height_replaces_the_authored_one() {
+        let pose = Pose::from_start_position(&level_slot(), Some(-60.0), 4.0);
+        assert_eq!(pose.position, Vec3::new(8.0, -56.0, -196.0));
+    }
+
+    /// The two constructors agree where the inputs agree, which is what makes
+    /// falling back to the spline a fallback rather than a different convention.
+    #[test]
+    fn a_slot_and_a_sample_facing_the_same_way_give_the_same_orientation() {
+        let slot = StartPosition {
+            position: [0.0, 0.0, 0.0],
+            left: [1.0, 0.0, 0.0],
+            up: [0.0, 1.0, 0.0],
+            forward: [0.0, 0.0, -1.0],
+        };
+        let from_slot = Pose::from_start_position(&slot, None, 0.0);
+        let from_sample = Pose::from_sample(&level_sample(), 0.0, 0.0);
+        assert!(
+            from_slot.orientation.angle_between(from_sample.orientation) < 1e-5,
+            "{:?} vs {:?}",
+            from_slot.orientation,
+            from_sample.orientation
+        );
     }
 }

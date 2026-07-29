@@ -345,6 +345,100 @@ pub fn basis(t: f32) -> [f32; 4] {
     ]
 }
 
+/// Bytes of a `Start Position` node's payload: a row-major 4x4 matrix.
+pub const START_POSITION_LEN: usize = 64;
+
+/// Where a track says a ship begins, after the bind's own fix-up.
+///
+/// The payload is an authored 4x4 transform whose rows are the same
+/// **left-up-forward** basis the running craft carries, and which the bind
+/// handler (`0x08926ae8`) does not use as authored: it forces the up row to
+/// world `(0, 1, 0)` and re-orthonormalises around it. [`start_position`]
+/// reproduces that, so this is the frame the *game* starts from rather than the
+/// frame the exporter wrote.
+///
+/// **One per track, and it is not the centreline.** All 40 PSP track files carry
+/// exactly one `Start Position` node, and on every one of them it sits between
+/// 3.3 and 20.5 units off the spline's own centreline - so it is a grid *slot*,
+/// not a start-line marker, and the other seven slots are laid out by code that
+/// has not been recovered. See `docs/formats/track.md`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StartPosition {
+    /// World-space position of the slot.
+    pub position: [f32; 3],
+    /// The slot's left axis, unit length and perpendicular to [`Self::up`].
+    pub left: [f32; 3],
+    /// World up, `(0, 1, 0)`, which the bind forces rather than reads.
+    pub up: [f32; 3],
+    /// The slot's forward axis, unit length and perpendicular to [`Self::up`].
+    pub forward: [f32; 3],
+}
+
+/// Decodes a `Start Position` node payload, applying the bind's fix-up.
+///
+/// `None` when the payload is not 64 bytes, or when the authored forward axis is
+/// vertical and so has nothing left of it once the up component is removed -
+/// degenerate rather than merely unusual, and no shipped track has one.
+///
+/// # What is reproduced, and what was assumed
+///
+/// The forced up row is read: `docs/formats/track.md` has it from the bind
+/// handler, corroborated by the frame conventions everywhere else on that page.
+/// **Which of the remaining two rows the original preserves was not read**, and
+/// this keeps *forward*, on the grounds that where a ship points is the part of
+/// a grid slot that is authored deliberately.
+///
+/// How much that choice can matter is bounded by the data rather than argued:
+/// the authored up row is *already* world up on 31 of the 40 shipped track
+/// files, and off it by at most **1.600 degrees** on the other nine, so any
+/// re-orthonormalisation that forces up and keeps the frame right-handed lands
+/// within that angle of any other. The fix-up is nonetheless not a no-op, which
+/// is why it is applied rather than skipped.
+#[must_use]
+pub fn start_position(payload: &[u8]) -> Option<StartPosition> {
+    if payload.len() < START_POSITION_LEN {
+        return None;
+    }
+    let row = |r: usize| {
+        [
+            f32_at(payload, r * 16),
+            f32_at(payload, r * 16 + 4),
+            f32_at(payload, r * 16 + 8),
+        ]
+    };
+
+    let up = [0.0, 1.0, 0.0];
+    let authored = row(2);
+    // Gram-Schmidt against an axis that is exactly `+y`, so the projection is
+    // just the y component.
+    let forward = normalize([authored[0], 0.0, authored[2]])?;
+    let left = cross(up, forward);
+
+    Some(StartPosition {
+        position: row(3),
+        left,
+        up,
+        forward,
+    })
+}
+
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+fn normalize(v: [f32; 3]) -> Option<[f32; 3]> {
+    let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if length > 1e-6 {
+        Some([v[0] / length, v[1] / length, v[2] / length])
+    } else {
+        None
+    }
+}
+
 /// Bytes of reserved block for a given version.
 #[must_use]
 pub fn reserved_len(version: u32) -> usize {
@@ -790,5 +884,87 @@ mod tests {
         let track = parse(&build(0x105, &[4, 4])).expect("parse");
         assert_eq!(track.paths[0].sample(1, 0.3).expect("sample").flags, 0b01);
         assert_eq!(track.paths[1].sample(1, 0.3).expect("sample").flags, 0b10);
+    }
+
+    /// Builds a `Start Position` payload from four rows.
+    fn slot(rows: [[f32; 3]; 4]) -> Vec<u8> {
+        let mut out = vec![0u8; START_POSITION_LEN];
+        for (r, row) in rows.iter().enumerate() {
+            for (c, value) in row.iter().enumerate() {
+                let at = r * 16 + c * 4;
+                out[at..at + 4].copy_from_slice(&value.to_le_bytes());
+            }
+            out[r * 16 + 12..r * 16 + 16].copy_from_slice(&f32::to_le_bytes(if r == 3 {
+                1.0
+            } else {
+                0.0
+            }));
+        }
+        out
+    }
+
+    #[test]
+    fn a_start_position_reads_its_rows_as_left_up_forward() {
+        // The identity every shipped slot satisfies exactly: cross(left, up) is
+        // forward. A frame facing `+x` with `-z` to its left is the one
+        // `16_Track` ships.
+        let position = start_position(&slot([
+            [0.0, 0.0, -1.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [8.0, -50.0, -196.0],
+        ]))
+        .expect("a non-degenerate frame");
+
+        assert_eq!(position.position, [8.0, -50.0, -196.0]);
+        assert_eq!(position.forward, [1.0, 0.0, 0.0]);
+        assert_eq!(position.up, [0.0, 1.0, 0.0]);
+        assert_eq!(position.left, [0.0, 0.0, -1.0]);
+    }
+
+    /// The bind forces up rather than reading it, so an authored frame that is
+    /// tilted comes back level - and the forward axis comes back perpendicular
+    /// to the up it was given, not to the one it was written with.
+    #[test]
+    fn the_bind_levels_a_tilted_slot() {
+        let tilt = 0.25f32;
+        let position = start_position(&slot([
+            [0.0, 0.0, -1.0],
+            [-tilt, 1.0, 0.0],
+            [1.0, tilt, 0.0],
+            [0.0, 0.0, 0.0],
+        ]))
+        .expect("a non-degenerate frame");
+
+        assert_eq!(position.up, [0.0, 1.0, 0.0]);
+        assert!(position.forward[1].abs() < 1e-6, "{:?}", position.forward);
+        assert!(
+            (position.forward[0] - 1.0).abs() < 1e-6,
+            "{:?}",
+            position.forward
+        );
+        // Still right-handed after the fix-up.
+        let expected = cross(position.left, position.up);
+        for (want, got) in expected.iter().zip(position.forward) {
+            assert!((want - got).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn a_vertical_forward_axis_has_no_slot_to_report() {
+        assert!(
+            start_position(&slot([
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0],
+            ]))
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn a_short_start_position_payload_is_refused() {
+        assert!(start_position(&[0u8; 63]).is_none());
     }
 }

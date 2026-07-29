@@ -252,6 +252,195 @@ fn every_shipped_track_decodes_with_nothing_left_over() {
 /// Class ID of a `WO Track` node, from `docs/formats/track.md`.
 const CLASS_WO_TRACK: u32 = 0x3bb;
 
+/// What a track says about where a ship starts, checked on every shipped file.
+///
+/// Four separate claims, and each one is load-bearing somewhere else:
+///
+/// - **Exactly one `Start Position` per track.** This is what says a grid is not
+///   authored. `oag_gameplay::spawn` places a ship on the one slot that exists
+///   and refuses to derive the other seven, and that refusal is only right if
+///   there really is one.
+/// - **The rows are the craft's own left-up-forward basis**, satisfying
+///   `cross(left, up) = forward` - the same identity the recorded craft basis
+///   satisfies on 200 of 200 ticks. Read the rows as right-up-forward instead and
+///   a ship spawns mirrored.
+/// - **The bind's fix-up is small but not empty.** `track::start_position`
+///   forces up to world `(0, 1, 0)`, which is a change on some tracks; this
+///   bounds how big a change, so that *which* of the other two rows the original
+///   preserves - unread - is a bounded uncertainty rather than an open one.
+/// - **The slot is off the centreline, on every track.** That is the evidence
+///   that it is a grid slot rather than a start-line marker, and it is why
+///   `docs/formats/track.md` no longer reads it as the latter.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_shipped_track_authors_exactly_one_start_position() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == "PSP_GAME/USRDIR/Data.wad")
+        .expect("Data.wad present")
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, Directory::directory_len(count))
+        .expect("directory");
+    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    let mut checked = 0usize;
+    let mut worst_tilt = 0.0f32;
+    let mut nearest_centreline = f32::INFINITY;
+    let mut furthest_centreline = 0.0f32;
+
+    for dir_name in TRACK_DIRS {
+        for file in TRACK_FILES {
+            let name = format!("Data\\Environments\\{dir_name}\\{file}");
+            let hash = wad::hash_name(&name);
+            let Some(entry) = dir.entries.iter().find(|e| e.name_hash == hash) else {
+                continue;
+            };
+            if entry.size == 0 {
+                continue;
+            }
+
+            let raw = disc
+                .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
+                .expect("blob");
+            let model = match entry.compression {
+                Compression::None => raw,
+                Compression::Lzss => {
+                    oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize)
+                        .expect("lzss")
+                }
+                Compression::Zlib => panic!("{name}: unexpected zlib entry"),
+            };
+
+            let nodes = vex::nodes(&model).expect("nodes");
+            let slots: Vec<_> = nodes
+                .iter()
+                .filter(|n| n.class_id == vex::CLASS_START_POSITION)
+                .collect();
+            assert_eq!(
+                slots.len(),
+                1,
+                "{name}: {} Start Position node(s); a grid is not authored, so this must be one",
+                slots.len()
+            );
+
+            let payload = &model[slots[0].payload()];
+            assert_eq!(
+                payload.len(),
+                track::START_POSITION_LEN,
+                "{name}: a Start Position payload is a 4x4 matrix"
+            );
+
+            let authored = vex::transform(payload).expect("a 64-byte payload is a matrix");
+            let row = |r: usize| [authored[r * 4], authored[r * 4 + 1], authored[r * 4 + 2]];
+            let (left, up, forward) = (row(0), row(1), row(2));
+            let expected = cross(unit(left), unit(up));
+            assert!(
+                distance(expected, unit(forward)) < 1e-5,
+                "{name}: cross(row0, row1) is {expected:?} and row2 is {forward:?}, so the rows \
+                 are not the craft's left-up-forward basis"
+            );
+
+            let tilt = dot(unit(up), [0.0, 1.0, 0.0]).clamp(-1.0, 1.0).acos();
+            worst_tilt = worst_tilt.max(tilt.to_degrees());
+
+            let slot = track::start_position(payload).expect("a non-degenerate authored frame");
+            assert_eq!(slot.up, [0.0, 1.0, 0.0], "{name}: the bind forces up");
+            assert!(
+                (dot(slot.forward, slot.forward).sqrt() - 1.0).abs() < 1e-5,
+                "{name}: forward is not unit length"
+            );
+            assert!(
+                dot(slot.forward, slot.up).abs() < 1e-6,
+                "{name}: forward is not perpendicular to the forced up"
+            );
+
+            // Off the centreline, and inside the track. The nearest control point
+            // rather than a resampled curve: at these spacings the two differ by
+            // far less than the margins asserted here.
+            let wo = nodes
+                .iter()
+                .find(|n| n.class_id == CLASS_WO_TRACK)
+                .expect("a track has a WO Track node");
+            let ai = track::parse(&model[wo.payload()]).expect("parse WO Track");
+            let nearest = ai
+                .paths
+                .iter()
+                .flat_map(|path| path.points.iter())
+                .min_by(|a, b| {
+                    distance(a.pos, slot.position).total_cmp(&distance(b.pos, slot.position))
+                })
+                .expect("a track has control points");
+
+            let offset = [
+                slot.position[0] - nearest.pos[0],
+                slot.position[1] - nearest.pos[1],
+                slot.position[2] - nearest.pos[2],
+            ];
+            let lateral = dot(offset, unit(nearest.lateral));
+            nearest_centreline = nearest_centreline.min(lateral.abs());
+            furthest_centreline = furthest_centreline.max(lateral.abs());
+
+            assert!(
+                lateral.abs() > 1.0,
+                "{name}: the slot is {lateral:.2} off the centreline, which would make it a \
+                 start-line marker rather than a grid slot"
+            );
+            assert!(
+                lateral >= -nearest.half_width_left - 1e-3
+                    && lateral <= nearest.half_width_right + 1e-3,
+                "{name}: the slot is {lateral:.2} off the centreline, outside the track's own \
+                 [-{}, {}]",
+                nearest.half_width_left,
+                nearest.half_width_right
+            );
+
+            checked += 1;
+        }
+    }
+
+    println!(
+        "{checked} tracks: authored up is off world up by at most {worst_tilt:.3} degrees, and \
+         the slot sits {nearest_centreline:.2}-{furthest_centreline:.2} off the centreline"
+    );
+    assert!(
+        checked >= MIN_TRACKS,
+        "only {checked} tracks checked; the disc should carry at least {MIN_TRACKS}"
+    );
+    // The bound the parser's own documentation quotes. A file that broke it would
+    // make the unread half of the bind's fix-up matter, which is the point of
+    // measuring rather than assuming.
+    assert!(
+        worst_tilt < 2.0,
+        "an authored up row is {worst_tilt:.3} degrees off world up, so which row the bind's \
+         re-orthonormalisation preserves is no longer a detail"
+    );
+}
+
+fn unit(v: [f32; 3]) -> [f32; 3] {
+    let length = dot(v, v).sqrt();
+    [v[0] / length, v[1] / length, v[2] / length]
+}
+
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
 /// Every decoded vertex must fall inside its batch's declared bounding box.
 ///
 /// This is the check `docs/formats/vex.md` describes and, until now, only ever

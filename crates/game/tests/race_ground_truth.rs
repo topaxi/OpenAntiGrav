@@ -115,15 +115,20 @@ fn envelope(loaded: &race::Loaded) -> f32 {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_ship_spawns_on_the_spline_and_flies_along_it() {
+fn a_ship_spawns_on_the_track_and_flies_along_it() {
     let Some(loaded) = load() else { return };
     let bound = envelope(&loaded);
     let handling = loaded.setup.handling;
     let mut race = race::Race::start(loaded.setup);
 
-    // The spawn itself: on the racing line, the suspension's target height above the
-    // surface, the right way up, and with the mass the force law will read also in
-    // the body the integrator divides by.
+    // The spawn itself: on the track's authored `Start Position`, the suspension's
+    // resting height above the surface, the right way up, and with the mass the force
+    // law will read also in the body the integrator divides by.
+    //
+    // The height assertion below is worth more than it looks now that the spawn takes
+    // its height off the *collision mesh* under the slot while this reads it off the
+    // *spline*: agreeing to a hundredth means those two surfaces agree there, which
+    // nothing made them do.
     let start = race.telemetry();
     assert!(start.position.is_finite(), "{:?}", start.position);
     assert_eq!(race.ship().physics.body.mass, handling.physical.mass);
@@ -518,5 +523,165 @@ fn the_track_s_walls_are_wound_toward_the_circuit() {
         "the shipped wall winding is mixed ({:.1}% inward), so a single-sided \
          contact gate cannot be implemented from it without more evidence",
         fraction * 100.0
+    );
+}
+
+/// Where the original's own craft stands at the start of a Talon's Junction time
+/// trial, read off `data/traces/talons-junction-standing-start.csv` at tick 0.
+///
+/// **Written in rather than read from the file, deliberately.** `data/` is
+/// gitignored and derived captures under it have gone missing once already, taking
+/// three documents' citations with them; a start pose is four numbers and the
+/// point of this test is that they outlive the CSV. The heading is the recorded
+/// craft basis, read left-up-forward - see `HANDOVER.md` on why the column names
+/// cannot be taken at face value.
+const CAPTURED_START: [f32; 3] = [6.07941, -50.06461, -195.9884];
+const CAPTURED_FORWARD: [f32; 3] = [0.9998092, 0.004672341, -0.01896589];
+const CAPTURED_LEFT: [f32; 3] = [-0.0188732, -0.01914353, -0.9996386];
+
+/// The authored grid slot points where the original's craft points.
+///
+/// This is the check that says `Start Position` is read correctly rather than
+/// merely parsed, and it is the *heading* that says it. Position cannot: the
+/// authored slot and the pose a time trial starts from are 139.7 units apart, and
+/// a distance that large is as consistent with a misread matrix as with a grid
+/// laid out behind the line. A heading agreeing to a degree is not.
+///
+/// So the assertions are split by what each one can carry:
+///
+/// - **Heading, asserted tightly.** The slot's forward is within 1.2 degrees of
+///   the craft's, and its left within 1.6 of the craft's left. Read the rows in
+///   any other order, or take the recorded basis at its column names, and these
+///   are tens of degrees out.
+/// - **Position, asserted only in the slot's own frame**, where the separation
+///   decomposes into 137.9 units *along* the slot's forward, 22.4 to its left and
+///   0.8 up. Those are the three numbers a grid hypothesis has to explain; none
+///   of them is asserted as a value, only in sign and rough scale, because what
+///   lays out the other seven slots has not been read.
+///
+/// The vertical figure is the one to be most careful with: 0.8 is the gap between
+/// two *authored* heights on a track that falls away, not a ride height. See
+/// `oag_gameplay::spawn::Pose::from_start_position` for why the spawn takes its
+/// height off the collision geometry instead.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_authored_slot_points_where_the_original_starts() {
+    let Some(loaded) = load() else { return };
+    let slot = loaded
+        .setup
+        .start_position
+        .expect("16_Track authors a Start Position");
+
+    let forward = Vec3::from_array(slot.forward);
+    let left = Vec3::from_array(slot.left);
+    let heading = forward
+        .dot(Vec3::from_array(CAPTURED_FORWARD))
+        .clamp(-1.0, 1.0)
+        .acos()
+        .to_degrees();
+    let sideways = left
+        .dot(Vec3::from_array(CAPTURED_LEFT))
+        .clamp(-1.0, 1.0)
+        .acos()
+        .to_degrees();
+
+    let offset = Vec3::from_array(CAPTURED_START) - Vec3::from_array(slot.position);
+    println!(
+        "the authored slot is {:.2} units from the original's start pose: {:.2} ahead, \
+         {:.2} left, {:.2} up; heading agrees to {heading:.2} degrees and left to \
+         {sideways:.2}",
+        offset.length(),
+        offset.dot(forward),
+        offset.dot(left),
+        offset.dot(Vec3::from_array(slot.up)),
+    );
+
+    assert!(
+        heading < 3.0,
+        "the authored slot faces {heading:.2} degrees away from where the original's craft \
+         faces at the start line, so the matrix rows are not being read as left-up-forward"
+    );
+    assert!(
+        sideways < 3.0,
+        "the authored slot's left is {sideways:.2} degrees off the craft's left"
+    );
+
+    // Behind the line, not past it: the slot is upstream of where a time trial
+    // begins, which is what a grid slot is and what a start-line marker is not.
+    assert!(
+        offset.dot(forward) > 50.0,
+        "the original starts {:.2} units along the slot's own forward, which is not behind it",
+        offset.dot(forward)
+    );
+    // And across the track from it, by about a track column rather than a
+    // rounding error - the two are not the same slot.
+    assert!(
+        offset.dot(left).abs() > 5.0,
+        "the original starts {:.2} units to the slot's side, so the two may be one slot",
+        offset.dot(left)
+    );
+}
+
+/// A ship spawned on the authored slot is where the hover law wants it.
+///
+/// The spawn takes its height off the collision surface under the slot rather
+/// than out of the slot's own `y`, and this is what that buys: both probes in
+/// contact on the very first tick, on the track the reference scenario uses.
+/// Asserting it here rather than trusting the arithmetic, because the authored
+/// height ranges over six units across the shipped tracks and a spawn that only
+/// works on one of them would still pass every unit test.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
+    let Some(loaded) = load() else { return };
+    let handling = loaded.setup.handling;
+    let colliders = loaded.setup.collision.clone();
+    let slot = loaded
+        .setup
+        .start_position
+        .expect("16_Track authors a Start Position");
+    let mut race = race::Race::start(loaded.setup);
+
+    let start = race.telemetry();
+    println!(
+        "spawned at {:?}, {:.3} above the slot's own authored y",
+        start.position,
+        start.position.y - slot.position[1]
+    );
+
+    // Facing where the slot says, still, after the pose has been through a
+    // quaternion and back out of the body.
+    let forward = race.ship().physics.body.forward();
+    assert!(
+        forward.dot(Vec3::from_array(slot.forward)) > 0.999,
+        "the spawned ship faces {forward} and the slot says {:?}",
+        slot.forward
+    );
+
+    // One tick, so the hover probes have run.
+    let mut held = race::HeldButtons::new(0);
+    race.tick(&held.snapshot());
+    assert_eq!(
+        race.ship().physics.grounded,
+        1.0,
+        "both hover probes must reach the track from the authored slot, got {}: {}",
+        race.ship().physics.grounded,
+        race::describe(&race.telemetry())
+    );
+
+    // And the surface really is under it, at the height the spawn claims.
+    let origin = start.position + Vec3::Y * 20.0;
+    let hit = oag_physics::Raycaster::raycast(
+        &colliders,
+        oag_physics::Ray::new(origin, Vec3::NEG_Y, 80.0),
+        None,
+        false,
+    )
+    .expect("the authored slot has track under it");
+    let above = start.position.y - hit.point.y;
+    assert!(
+        (above - race::spawn_height(&handling)).abs() < 0.01,
+        "the ship spawned {above:.3} above the surface, wanted {:.3}",
+        race::spawn_height(&handling)
     );
 }

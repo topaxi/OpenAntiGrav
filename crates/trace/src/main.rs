@@ -22,11 +22,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use oag_assets::pulse;
+use oag_core::math::Vec3;
 use oag_formats::{collision, handling, track};
 use oag_gameplay::input::button_from_name;
 use oag_gameplay::spawn::{Pose, box_inertia, spawn_height};
 use oag_gameplay::{Ship, collision_world, handling_for};
-use oag_physics::{CollisionWorld, Environment, Handling, SpeedClass};
+use oag_physics::{CollisionWorld, Environment, Handling, Ray, Raycaster, SpeedClass};
 use oag_trace::compare::Tolerances;
 use oag_trace::replay::{Basis, DeltaSource, DriveOptions, Held, Inputs, Options};
 use oag_trace::trace::AngularReading;
@@ -45,13 +46,6 @@ const DEFAULT_TEAM: &str = "Assegai";
 
 /// Our own fixed timestep, for `--fixed-dt`. ADR-0007.
 const FIXED_DT: f32 = 1.0 / 60.0;
-
-/// Class ID of a `.vex` node whose payload is a `WO Track` spline graph.
-///
-/// The same constant `oag_render::track` reads it with, restated rather than
-/// imported: no crate here may depend on the renderer, and a class ID is a fact
-/// about the file format.
-const CLASS_WO_TRACK: u32 = 0x3bb;
 
 /// Curve samples per control-point interval, for `oag-trace track`.
 ///
@@ -524,6 +518,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
             .into_iter()
             .map(|(_, sample)| sample)
             .collect();
+    let start_position = load_start_position(&args.source, &args.track)?;
     let start = samples
         .first()
         .copied()
@@ -535,11 +530,30 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
         collision
     };
 
-    // The same placement `oag_game::race` makes, through the same function: the
-    // first spline sample, offset by its own racing line, at the height the hover
-    // spring rests at. A scenario run that started anywhere else would not be the
-    // scenario.
-    let pose = Pose::from_sample(&start, start.racing_line, spawn_height(&handling));
+    // The same placement `oag_game::race` makes, and for the same reason: the
+    // track's own `Start Position` when it has one, at the height the hover spring
+    // rests at, and the first spline sample only when it has not. A scenario run
+    // that started anywhere else would not be the scenario.
+    let pose = match &start_position {
+        Some(slot) => {
+            let origin = Vec3::from_array(slot.position) + Vec3::Y * 20.0;
+            let ground = collision
+                .raycast(Ray::new(origin, Vec3::NEG_Y, 80.0), None, false)
+                .map(|hit| hit.point.y);
+            eprintln!(
+                "{}: Start Position {:?} facing {:?}, ground {ground:?}",
+                args.track, slot.position, slot.forward
+            );
+            Pose::from_start_position(slot, ground, spawn_height(&handling))
+        }
+        None => {
+            eprintln!(
+                "{}: no Start Position node, starting on the spline",
+                args.track
+            );
+            Pose::from_sample(&start, start.racing_line, spawn_height(&handling))
+        }
+    };
     let mut ship = Ship::default();
     ship.physics.body.mass = handling.physical.mass;
     ship.physics.body.inertia = box_inertia();
@@ -665,6 +679,29 @@ fn off_spline(position: oag_core::math::Vec3, samples: &[track::Sample]) -> f32 
         .fold(f32::INFINITY, f32::min)
 }
 
+/// Reads a track's authored grid slot out of its `.vex`, for `drive`.
+///
+/// `Ok(None)` when the file carries no `Start Position` node, which is not an
+/// error: a track without one is a track a ship starts on the spline of, the
+/// same fallback `oag_game::race` takes.
+fn load_start_position(source: &str, name: &str) -> Result<Option<track::StartPosition>> {
+    let mut archives = pulse::Archives::open(source)?;
+    let blob = archives
+        .read_name(name)
+        .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))?;
+    let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
+    let Some(node) = nodes
+        .iter()
+        .find(|n| n.class_id == oag_formats::vex::CLASS_START_POSITION)
+    else {
+        return Ok(None);
+    };
+    let payload = blob
+        .get(node.payload())
+        .context("the Start Position payload runs past the end of the file")?;
+    Ok(track::start_position(payload))
+}
+
 /// Reads a track's `WO Track` spline graph out of its `.vex`, for `track` and
 /// for `drive`.
 fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
@@ -675,7 +712,7 @@ fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
     let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
     let node = nodes
         .iter()
-        .find(|n| n.class_id == CLASS_WO_TRACK)
+        .find(|n| n.class_id == oag_formats::vex::CLASS_WO_TRACK)
         .with_context(|| format!("{name} has no WO Track node"))?;
     let payload = blob
         .get(node.payload())

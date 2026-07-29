@@ -53,7 +53,8 @@ use anyhow::{Context, Result};
 use oag_assets::pulse;
 use oag_core::math::{Mat4, Vec3};
 use oag_core::{TickClock, TickRate};
-use oag_formats::track::{AiTrack, Sample};
+use oag_formats::track::{AiTrack, Sample, StartPosition};
+use oag_formats::vex;
 use oag_formats::{collision, handling};
 use oag_gameplay::{
     InputSnapshot, Pose, Ship, World, collision_world, handling_for, ship_controls,
@@ -215,6 +216,12 @@ pub struct Setup {
     pub ai: AiTrack,
     /// The spline resampled for locating a ship, and for placing it.
     pub spline: Spline,
+    /// The track's own authored grid slot, when it has one.
+    ///
+    /// `None` is not a broken track: it means this source's file carries no
+    /// `Start Position` node, and a ship goes on the spline instead. Every PSP
+    /// track has one, so on that path this is always `Some`.
+    pub start_position: Option<StartPosition>,
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.
@@ -287,6 +294,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // than it does on the PSP, where nothing is compressed at all: 5,861 of
     // `WADS2.WAD`'s 7,200 entries are LZSS.
     let track_blob = read(&mut archives, &options.track)?;
+    let start_position = start_position_of(&track_blob);
+    match start_position {
+        Some(slot) => report.push(format!(
+            "Start Position: {:?} facing {:?}",
+            slot.position, slot.forward
+        )),
+        None => report.push("no Start Position node: spawning on the spline instead".to_string()),
+    }
     let nodes =
         collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", options.track))?;
     let collision = collision_world(&nodes);
@@ -397,6 +412,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         setup: Setup {
             ai,
             spline,
+            start_position,
             collision,
             handling,
             chase,
@@ -440,6 +456,80 @@ pub fn load(options: &Options) -> Result<Loaded> {
 /// slot that will not decode deserves the same line, and the PS2 disc carries
 /// PSP-format batches too - so "which disc is this" is never the right question to
 /// ask about one mesh.
+/// Where a ship starts a race: the track's authored slot, or the spline.
+///
+/// The authored [`StartPosition`] wins whenever the track has one, because it is
+/// a value recovered off the disc and `spline.start()` is an artifact of how this
+/// crate resamples - sample 0 of path 0, which is wherever the exporter happened
+/// to begin writing control points. On `16_Track` the two are **188.8 units
+/// apart** and the authored slot is the one on the grid.
+///
+/// What this is **not** is pole. Every track ships one slot and a race grids
+/// eight, so this places a ship on the one slot that was authored and says
+/// nothing about the other seven. On `16_Track` a time trial in the original
+/// starts about 138 units *ahead* of this, on the other side of the centreline -
+/// which is what makes the remaining slots worth recovering rather than
+/// deriving. See `docs/formats/track.md#start-position`.
+///
+/// The height comes off the collision geometry rather than out of the slot: see
+/// [`Pose::from_start_position`] for the measurement that says the authored `y`
+/// is not a ride height. `collision` is cast straight down from well above the
+/// slot, and a slot over a hole in the mesh falls back to the authored value.
+///
+/// `None` only when a track has no authored slot *and* an empty spline, which no
+/// real track is.
+#[must_use]
+fn spawn_pose(
+    spline: &Spline,
+    start_position: Option<&StartPosition>,
+    collision: &CollisionWorld,
+    handling: &Handling,
+) -> Option<Pose> {
+    let height = spawn_height(handling);
+    if let Some(slot) = start_position {
+        return Some(Pose::from_start_position(
+            slot,
+            ground_under(collision, slot),
+            height,
+        ));
+    }
+    spline
+        .start()
+        .map(|sample| Pose::from_sample(sample, sample.racing_line, height))
+}
+
+/// How far up the track's own drop for a spawn probe starts, and how far it
+/// reaches.
+///
+/// Generous either way on purpose: this is a one-off query at load, and a slot
+/// authored a few units under an overhanging piece of track should still find the
+/// floor rather than silently falling back.
+const SPAWN_PROBE_RISE: f32 = 20.0;
+const SPAWN_PROBE_REACH: f32 = 80.0;
+
+/// The world `y` of the collision surface under an authored slot, if there is one.
+#[must_use]
+fn ground_under(collision: &CollisionWorld, slot: &StartPosition) -> Option<f32> {
+    let origin = Vec3::from_array(slot.position) + Vec3::Y * SPAWN_PROBE_RISE;
+    let ray = oag_physics::Ray::new(origin, Vec3::NEG_Y, SPAWN_PROBE_REACH);
+    oag_physics::Raycaster::raycast(collision, ray, None, false).map(|hit| hit.point.y)
+}
+
+/// Reads a track `.vex`'s authored grid slot, if it has one.
+///
+/// `None` covers three cases a caller treats the same way and none of which is an
+/// error: a blob that is not a `.vex` at all, one with no `Start Position` node,
+/// and one whose node payload is not the 64 bytes a transform needs. A track with
+/// no authored slot is a track a ship goes on the spline of.
+#[must_use]
+fn start_position_of(blob: &[u8]) -> Option<StartPosition> {
+    let nodes = vex::nodes(blob).ok()?;
+    let node = nodes
+        .iter()
+        .find(|node| node.class_id == vex::CLASS_START_POSITION)?;
+    oag_formats::track::start_position(blob.get(node.payload())?)
+}
+
 #[must_use]
 fn untextured_note(model: &Model) -> Option<String> {
     let slots = model.textures.len();
@@ -698,6 +788,7 @@ impl Race {
     pub fn start(setup: Setup) -> Self {
         let Setup {
             spline,
+            start_position,
             collision,
             handling,
             chase,
@@ -710,12 +801,8 @@ impl Race {
         ship.handling = handling;
         ship.physics.body.mass = handling.physical.mass;
         ship.physics.body.inertia = box_inertia();
-        if let Some(sample) = spline.start() {
-            ship.place_at(Pose::from_sample(
-                sample,
-                sample.racing_line,
-                spawn_height(&handling),
-            ));
+        if let Some(pose) = spawn_pose(&spline, start_position.as_ref(), &collision, &handling) {
+            ship.place_at(pose);
         }
         world.ship_count = 1;
 
@@ -1606,6 +1693,9 @@ mod tests {
         Setup {
             ai,
             spline,
+            // The synthetic track has no authored slot, which is the fallback
+            // path: every assertion below is about a ship placed on the spline.
+            start_position: None,
             collision: CollisionWorld::new(),
             handling,
             // Round numbers, chosen to make the geometry readable. None of these

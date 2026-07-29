@@ -86,6 +86,16 @@ pub const CLASS_MAG_FLOOR_COLLISION: u32 = 0x3e6;
 /// Class ID of a `Cage Collision` node, which the loader parses and then skips.
 pub const CLASS_CAGE_COLLISION: u32 = 0x3e7;
 
+/// Class ID of a `WO Track` node: the AI spline graph, decoded by
+/// [`track::parse`](crate::track::parse).
+pub const CLASS_WO_TRACK: u32 = 0x3bb;
+
+/// Class ID of a `Start Position` node, decoded by
+/// [`track::start_position`](crate::track::start_position).
+///
+/// Exactly one per track file, on all 40 of the PSP disc's.
+pub const CLASS_START_POSITION: u32 = 0x3bc;
+
 /// Class ID of a `Transform` node.
 ///
 /// 715 of `01_Track`'s 2,071 nodes. Its payload is a 4x4 matrix, or nothing at
