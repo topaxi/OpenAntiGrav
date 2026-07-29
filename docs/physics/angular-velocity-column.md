@@ -420,6 +420,23 @@ tensor, and the special-cased yaw scale.
 through `oag-trace run --script` and compared axis by axis against the rotation
 the original's own basis performs, so neither side's column conventions enter:
 
+> **Every replayed number in this section was taken at `--script-lead 0`**, i.e.
+> before it was known that `psp-trace.py --script-lead 2` never sends a script's
+> first two ticks - see
+> [oag-trace.md](../tools/oag-trace.md#the-first-two-ticks-of-a-script-never-reach-the-emulator).
+> The two pitch captures have since been lost with the rest of `data/traces/`, so
+> this cannot be re-run until they are retaken; when they are, retake them with
+> the lead passed on both sides. **What this does and does not put in doubt:**
+> the fits that run on the *capture alone* - the inertia tensor, the yaw
+> accumulator, the lateral grip, the contact friction, the force law - never
+> touch a simulated run and do not move. What moves is anything comparing our
+> trajectory against the recording, which is the two tables below and the
+> `oag-trace run` max-error table further down. The pitch axis has no ramp state
+> of its own (`controls::update` ramps thrust, the airbrakes, the brake and the
+> steering, and nothing else), so a two-tick offset shifts *when* the step
+> arrives rather than how hard it is - which is the reason to expect the rate
+> ratios to survive, not a reason to assume they have.
+
 | stage | our pitch rate, rms | error rms | against a recorded `0.1358` |
 | --- | ---: | ---: | ---: |
 | before | `8.6821` | `8.6864` | 6397 % |
@@ -676,7 +693,12 @@ place**, which is the property the geometry was previously thought to break.
   with the same `3145/3146` grounded and the same worst off-spline `20.4` - also
   unchanged, and worth flagging separately that `659` is itself far below the
   `2,792` the contact-generation pass recorded, so something between those two
-  passes regressed that scenario and it is **not** this change.
+  passes regressed that scenario and it is **not** this change. **Both absolute
+  figures are now known to be un-comparable to a capture** for two separate
+  reasons found later: `drive` spawns on spline sample 0 rather than the
+  original's grid slot 51 units away, and until `--script-lead` existed the
+  replay drove two ticks of input the emulator never received. The `659 -> 618`
+  *difference* still stands, since both sides of it were measured the same way.
 
 ### What was deliberately not landed
 

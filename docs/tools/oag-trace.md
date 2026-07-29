@@ -932,6 +932,15 @@ about the force law.
 
 ### 2026-07-29, on a fresh capture of the same scenario
 
+> **Measured at `--script-lead 0`, which we now know is the wrong input.** Every
+> number in this subsection was taken before
+> [the first-two-ticks finding](#the-first-two-ticks-of-a-script-never-reach-the-emulator),
+> so the replay was driving two ticks of input the emulator never received. The
+> corrected figures are in that section; the ones here are the misaligned
+> baseline they are quoted against, kept because the size of the difference is
+> the finding. The `--reseed 60` column is the one that barely moves (10.3
+> either way); the single-seeded column is the one that meant nothing.
+
 Both sides driven by `talons-junction-time-trial-lap.inputs`, 3,146 ticks,
 `16_Track`, Assegai in Venom. Nothing here was tuned to.
 
@@ -952,10 +961,13 @@ one early divergence carried forward, not a force law that is 148 units wrong.
 Three readings from the same run, in descending order of how much they are
 worth:
 
-- **The ship travels 618 units of path where the original travels 1,045**, on
-  identical inputs. That is the open question, and it is the one the run report
-  calls a wedge: ours stops dead at one place on the circuit for roughly a
-  thousand ticks and then reverses.
+- ~~**The ship travels 618 units of path where the original travels 1,045.**~~
+  **Retired.** That was the wedge, and it was the two-tick input offset above -
+  aligned, the same replay tracks the original to 6.54 units over the window
+  where the capture is clean. The 618 came from `just scripted-sim`, which has
+  its own separate problem: it starts on **spline sample 0** while the capture
+  starts near sample 3415 and 9 units off the centreline, so its path length was
+  never comparable to a capture's in the first place.
 - **`grounded` says less than it looks like it says.** The original's column is
   `1.0` on every tick of this capture, so agreement means our ship also never
   leaves the ground - real progress against the 2026-07-28 run below, and not a
@@ -973,8 +985,10 @@ drifts into the walls - the same reproducibility negative, seen from the
 authoring side rather than the measuring side. A clean lap scenario has to be
 re-derived from a fresh `just autopilot` run, not replayed from the committed
 file. It also means this capture **cannot** serve as a force-balance regression:
-for much of it the craft is wedged at under one unit per second, where the ratio
-is dominated by the normal impulse and `|velocity|` can exceed `speed` outright.
+for much of it the *original itself* is grinding along a wall at under one unit
+per second, where the ratio is dominated by the normal impulse and `|velocity|`
+can exceed `speed` outright. It first touches a wall at tick **171**, which is
+the honest end of any window scored against it.
 [The standing start](#the-standing-start-and-what-it-regression-tests) is the
 capture for that.
 

@@ -288,23 +288,34 @@ toward the circuit**, which is the fact the original's rejection gate needs and
 which nothing in `docs/` had established. See
 `crates/game/tests/race_ground_truth.rs`.
 
-**What actually separates M4 from its exit criterion is a ship that gets
-wedged.** Over the committed whole-lap scenario it reaches about 40 units/s by
-tick 400, stops dead at one place on the circuit for roughly a thousand ticks,
-then reverses - travelling **618 units of path in 3,146 ticks against the
-original's 1,045 on the same inputs**. That is an open question, not a known
-omission. See
-[contact-response](../ghidra/functions/psp-pulse/contact-response.md).
+~~**What actually separates M4 from its exit criterion is a ship that gets
+wedged**, travelling 618 units of path in 3,146 ticks against the original's
+1,045 on the same inputs.~~ **Retired, and it was never the physics.** The two
+sides were not being driven by the same inputs: `psp-trace.py --script-lead 2`
+never sends a script's first two ticks, and the replay applied them. Two ticks
+survive a whole lap because the steering ramp oscillates around a saturated
+target rather than clamping to it, so the head start became a standing 17 %
+steering offset, 8 degrees of heading by tick 70, and a wall at tick 147 the
+original never touches. `oag-trace run --script-lead 2` is the fix; the chain is
+measured in
+[`oag-trace.md`](../tools/oag-trace.md#the-first-two-ticks-of-a-script-never-reach-the-emulator).
 
-**The lap was recaptured on 2026-07-29 and both comparisons run**, which killed
-one hypothesis and produced the strongest single result the harness has given:
+**The lap was recaptured on 2026-07-29 and both comparisons run**, and re-scored
+after the input was aligned. Read the comparison over the window where the
+*capture* is clean - it first touches a wall at tick 171 and is wall-free on only
+32.7 % of its ticks, so nothing later measures our physics:
 
-| | single-seeded | `--reseed 60` |
+| Ticks 0-170 | `--script-lead 0` | `--script-lead 2` |
 | --- | ---: | ---: |
-| Position, max error | 148.7 at tick 435 | **10.3** at tick 299 |
-| Orientation, worst axis | 0.66 rad | **0.114** rad |
-| `grounded` | exact on 3,146 of 3,146 - but see below | exact |
-| Trend, every field | shrinking or bounded; nothing growing | same |
+| Position, max error | 22.85 | **6.54** |
+| Position, mean error | 6.12 | **2.41** |
+| Speed, max error | 75.44 | **6.01** |
+| Speed, mean error | 9.97 | **2.75** |
+
+Under `--reseed 60` the position figure is **10.3** at tick 299 either way - a
+60-tick window never accumulates enough to show the offset - while the worst
+orientation axis goes 0.114 to **0.0824** rad. `grounded` is exact on 3,146 of
+3,146 ticks.
 
 **What `grounded` agreeing on every tick does and does not say.** The original's
 column is `1.0` on all 3,146 ticks of this capture, so the agreement means *our
@@ -315,9 +326,9 @@ model quantises contact the same way the original does; a constant column cannot
 test that. Under `--reseed` it says even less, because `grounded` is one of the
 fields the seed restores, 52 times a lap.
 
-The hypothesis that died: the run report's **21 rad/s** average angular velocity
-looked like a craft spinning three and a half times a second and was the obvious
-suspect for the wedge. **The original reads 22.96 rad/s on the same scenario**,
+The hypothesis that died first, before the wedge itself did: the run report's
+**21 rad/s** average angular velocity looked like a craft spinning three and a
+half times a second. **The original reads 22.96 rad/s on the same scenario**,
 slightly higher than ours. Both sides do the same thing with that column and it
 is not the cause.
 
