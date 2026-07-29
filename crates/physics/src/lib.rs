@@ -76,6 +76,7 @@ pub mod integrate;
 pub mod maglock;
 pub mod params;
 pub mod passive;
+pub mod probe;
 pub mod reset;
 pub mod ship;
 pub mod wall;

@@ -49,6 +49,12 @@ jobs:
         run: cargo run -q -p oag-core --example determinism_report
       - name: Assert hashes match the committed reference
         run: cargo test -p oag-core --release determinism -- --nocapture
+      # The math foundation above is not the simulation. These two cover the
+      # real force law, over a synthetic world so they need no disc image.
+      - name: Print simulation determinism hashes
+        run: cargo run -q -p oag-physics --example determinism_report
+      - name: Assert simulation hashes match the committed reference
+        run: cargo test -p oag-physics --release --test determinism -- --nocapture
 
   leakage:
     name: no game content committed
