@@ -1,0 +1,202 @@
+# OpenAntiGrav's menu tree.
+#
+# This file is OURS. It is not a transcription of the disc's
+# `MainMenu_Definition.xml` and is not meant to become one: this project needs
+# the menus a PC game has (input bindings, graphics settings) and the original
+# had no reason to carry those. See `crates/game/src/menu.rs` for the reasoning
+# and for the format.
+#
+# Rules the loader enforces, so a mistake here is a startup error rather than a
+# row that does nothing when pressed:
+#
+#   - every `target` names a page in this file;
+#   - every `action` is one the game handles: launch_race, quit;
+#   - every `button` is an abstract button name;
+#   - every page is reachable from `root`.
+#
+# Edit it and run `cargo nextest run -p oag-game menu::` to check it, or pass
+# `--menu <path>` to try a copy without rebuilding.
+#
+# Labels are literal text on purpose. `string_id` is reserved for a build that
+# wants the original's own wording out of the disc's string table, and nothing
+# reads it yet.
+#
+# The identifiers in `values` below are archive path components, not display
+# names: `16_Track` is a directory on the disc, and the name the game shows a
+# player for that circuit is content this project does not ship. See
+# `docs/architecture/adr/0006-no-copyrighted-content.md`.
+
+version = 1
+root = "main"
+
+[[page]]
+id = "main"
+title = "OPENANTIGRAV"
+
+[[page.entry]]
+kind = "submenu"
+label = "RACE"
+target = "race"
+
+[[page.entry]]
+kind = "submenu"
+label = "OPTIONS"
+target = "options"
+
+[[page.entry]]
+kind = "action"
+label = "QUIT"
+action = "quit"
+
+[[page]]
+id = "race"
+title = "RACE"
+
+# Speed class, team and track are the three things `race::Options` actually
+# carries, so all three are live rather than decorative. The values are the
+# ones `SpeedClass::from_name` and the disc's own directory layout accept; a
+# value this list offers that the source does not have fails at load with the
+# entry name in the message, which is the honest failure.
+[[page.entry]]
+kind = "choice"
+label = "SPEED CLASS"
+setting = "race.class"
+values = ["venom", "flash", "rapier", "phantom"]
+
+[[page.entry]]
+kind = "choice"
+label = "TEAM"
+setting = "race.team"
+values = [
+    "AG_Systems",
+    "Assegai",
+    "EGX",
+    "Feisar",
+    "Goteki",
+    "Piranha",
+    "Qirex",
+    "Triakis",
+]
+
+[[page.entry]]
+kind = "choice"
+label = "TRACK"
+setting = "race.track"
+values = [
+    "01_Track",
+    "02_Track",
+    "03_Track",
+    "04_Track",
+    "05_Track",
+    "06_Track",
+    "07_Track",
+    "09_Track",
+    "10_Track",
+    "13_Track",
+    "14_Track",
+    "16_Track",
+]
+
+[[page.entry]]
+kind = "choice"
+label = "LAYOUT"
+setting = "race.layout"
+values = ["track", "track_reversed", "zone_track", "zone_track_reversed"]
+
+[[page.entry]]
+kind = "action"
+label = "START"
+action = "launch_race"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+
+[[page]]
+id = "options"
+title = "OPTIONS"
+
+[[page.entry]]
+kind = "submenu"
+label = "GRAPHICS"
+target = "graphics"
+
+[[page.entry]]
+kind = "submenu"
+label = "CONTROLS"
+target = "controls"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+
+[[page]]
+id = "graphics"
+title = "GRAPHICS"
+
+# One entry, and it is a real one: it moves `graphics.anisotropy` in
+# `settings.toml` and the next race built uses it. More land here as the
+# renderer grows something to expose; a row that does nothing is worse than a
+# row that is missing.
+[[page.entry]]
+kind = "choice"
+label = "ANISOTROPIC FILTERING"
+setting = "graphics.anisotropy"
+values = ["off", "2x", "4x", "8x", "16x"]
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+
+[[page]]
+id = "controls"
+title = "CONTROLS"
+
+# Read-only in this build. `oag_input::keys::map_key` is a hardcoded match, so
+# rebinding needs a table, persistence and conflict handling before a row here
+# can do anything; these exist so what is bound is visible in the game rather
+# than only in that file, and so the format does not have to change when
+# rebinding lands.
+[[page.entry]]
+kind = "binding"
+label = "THRUST"
+button = "cross"
+
+[[page.entry]]
+kind = "binding"
+label = "BRAKE"
+button = "circle"
+
+[[page.entry]]
+kind = "binding"
+label = "STEER LEFT"
+button = "left"
+
+[[page.entry]]
+kind = "binding"
+label = "STEER RIGHT"
+button = "right"
+
+[[page.entry]]
+kind = "binding"
+label = "PITCH UP"
+button = "up"
+
+[[page.entry]]
+kind = "binding"
+label = "PITCH DOWN"
+button = "down"
+
+[[page.entry]]
+kind = "binding"
+label = "AIRBRAKE LEFT"
+button = "l"
+
+[[page.entry]]
+kind = "binding"
+label = "AIRBRAKE RIGHT"
+button = "r"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
