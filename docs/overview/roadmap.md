@@ -205,6 +205,25 @@ ordering. See also [frame pacing](../psp/frame-pacing.md).
 **Exit criterion:** a single-ship time trial that passes trace comparison for
 the full lap, and that feels right to someone who knows the original.
 
+**What "passes for the full lap" has to mean, because the literal reading is
+not decidable.** The original integrates the frame duration it actually
+measured ([ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)),
+and those durations follow host load: driving the *original itself* twice with
+the same script and the same pinned start pose, `dt` agrees on about **1 %** of
+ticks and the two runs of the original are **100 units apart by tick 495**. A
+single-seeded three-thousand-tick trajectory comparison therefore cannot be
+passed by any implementation, byte-exact ones included; it measures the
+emulator's scheduler. So the criterion is read as two numbers, both from
+[`oag-trace`](../tools/oag-trace.md):
+
+- **single-seeded**, how many ticks we track the original before coming apart;
+- **`--reseed N`**, the per-window error across the whole lap, judged against
+  [the protocol's tolerances](../reverse-engineering/verification-protocol.md#tolerances).
+
+The second is the one that says whether the force law is right everywhere on
+the circuit; the first is the one that says whether it is right *enough* to
+compound cleanly.
+
 **Closer than it was, and the remaining gap is now one clean, isolated
 question instead of three tangled ones.** Trace comparison exists (M3) and has
 been run against the real reference scenario. Three things that looked like
@@ -248,11 +267,36 @@ track for the full 600 ticks, finite throughout, grounded on all 600 and with
 no respawns, its worst distance from the spline 27.2 of a 114-unit envelope.
 `the_ship_does_not_stay_on_the_track_yet` has been retired for
 `a_ship_stays_on_the_track_for_ten_seconds`, which pins that the right way
-round. What still separates M4 from its exit
-criterion is **trace-comparison convergence over a full lap**: the replay of
-the wall-scraping reference capture diverges because contact *generation*
-differs (single deepest-probe contact, no angular response at the contact),
-not because any recovered law is wrong. See
+round.
+
+**Contact generation is no longer the gap, and the paragraph that used to say
+it was had been stale for thirty-one commits.** All four of the things it
+named are in `crates/physics/src/wall.rs`, each pinned by a unit test and each
+measured against the whole-lap scenario on its own commit so the effect is
+attributable:
+
+| Recovered behaviour | Effect on the lap scenario |
+| --- | --- |
+| The ten box sample points (`Collider_BoxSamplePoints`, `0x08818a00`) | landed earlier, with the angular half |
+| The angular share of the denominator and the `0.1`-scaled application | landed earlier, with the sample points |
+| A contact per (sample point, triangle) pair, and no non-wall hit hiding a wall | **nothing** - both are real divergences this track's geometry never exercises |
+| Single-sided rejection instead of flipping the normal (`Collision_BoxAgainstMesh`, `0x08815cd4`) | 617.5 units travelled to 618.6 - the size 99.6 % predicts |
+
+That last row rests on a measurement this pass added rather than an
+assumption: **2,076 of `16_Track`'s 2,084 wall triangles (99.6 %) are wound
+toward the circuit**, which is the fact the original's rejection gate needs and
+which nothing in `docs/` had established. See
+`crates/game/tests/race_ground_truth.rs`.
+
+**What actually separates M4 from its exit criterion is a ship that gets
+wedged.** Over the committed whole-lap scenario it reaches about 40 units/s by
+tick 400, stops dead at one place on the circuit for roughly a thousand ticks,
+then reverses - travelling 618 units of path in 3,146 ticks and ending 122
+units from where it started. Its angular velocity averages **21 rad/s** across
+the lap, which is three and a half revolutions a second and is almost certainly
+the same problem seen from the other side. That is an open question, not a
+known omission, and it is the first thing a fresh lap capture should be pointed
+at. See
 [contact-response](../ghidra/functions/psp-pulse/contact-response.md).
 
 ---

@@ -47,9 +47,14 @@
 //! contact the whole way, and what was missing was the contact response that reads it.
 //!
 //! What is left is **not** on the track-holding axis: the speed is still far above any
-//! capture's, and the trace comparison still diverges on contact generation and on the
-//! angular half of the contact response. See
-//! `docs/physics/force-balance-ground-truth.md`, and nothing here is tuned to hide it.
+//! capture's. Contact generation is no longer the gap it was - the ten box sample
+//! points, the angular half of the response, per-triangle contacts and the original's
+//! single-sided rejection are all in `oag_physics::wall` now, each measured against
+//! the whole-lap scenario on its own commit. What the lap run shows instead is a ship
+//! that gets **wedged**: it reaches about 40 units/s by tick 400, stops at one place
+//! on the circuit for a thousand ticks and then reverses, and its angular velocity
+//! averages 21 rad/s over the lap. See `docs/physics/force-balance-ground-truth.md`,
+//! and nothing here is tuned to hide it.
 
 use std::path::{Path, PathBuf};
 
@@ -334,9 +339,15 @@ fn the_front_end_hands_off_into_a_driveable_race() {
 /// original's** - this run peaks at 122 against a capture's 23.6-25.1 - and nothing
 /// here asserts it, because a clean straight has no equilibrium to assert and the
 /// captures that looked like one were in sustained wall contact. See
-/// `docs/physics/force-balance-ground-truth.md`, whose remaining gaps - contact
-/// generation and the missing `cross(r, impulse)` angular response - are what a trace
-/// comparison still diverges on.
+/// `docs/physics/force-balance-ground-truth.md`.
+///
+/// **The "contact generation and the missing `cross(r, impulse)` angular response"
+/// this used to name as the remaining gaps are both closed**, and were already
+/// closed when that sentence was written - `oag_physics::wall` has the ten box
+/// sample points, the angular share of the denominator, the `0.1`-scaled angular
+/// application, per-triangle contacts and the original's single-sided rejection.
+/// What a whole-lap comparison diverges on now is an open question rather than a
+/// known omission.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_ship_stays_on_the_track_for_ten_seconds() {

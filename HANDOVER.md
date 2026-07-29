@@ -15,6 +15,129 @@ This pass then opened **M3**, and that is the news: the original can now be
 driven and read from a script. Four things that were static readings are now
 runtime-verified, and one open question the roadmap tracked is answered.
 
+## 2026-07-29: M4's blocker was documented wrong, the lap criterion was undecidable, and the determinism gate never saw the simulation
+
+Four findings, in the order they mattered. The gate is green at **871 tests**
+(860 before), `just test-data` at 921, `audit-leakage` clean.
+
+**1. The roadmap's M4 blocker had been stale for thirty-one commits.** It said
+the lap comparison diverges because "contact *generation* differs (single
+deepest-probe contact, no angular response at the contact)". That text was last
+touched by `ec24435`; `919526d` landed 31 commits later and gave
+`crates/physics/src/wall.rs` both of those things, each pinned by a unit test
+(`every_penetrating_sample_point_is_resolved_not_just_the_deepest`,
+`a_contact_off_the_centre_of_mass_yaws_the_ship`). The same stale sentence was
+repeated in `crates/game/tests/race_ground_truth.rs`. **Both are rewritten.**
+The lesson is the one `frontend-boot.md` already taught once this month: a page
+can go stale while a sibling page in the same tree already carries the
+correction, and `git log -S <symbol>` against the doc's own last-touched commit
+settles it in one command.
+
+**2. `data/traces/` had lost the two captures the physics docs rest on.**
+`talons-junction-time-trial-lap.csv`, `-lap-omega.csv` and
+`talons-junction-standing-start.csv` were all gone; only `steer-left`,
+`steer-right` and `venom-assegai` remained. `force-balance-ground-truth.md`,
+`contact-response.md` and three citations inside `wall.rs` all point at files
+that were not there, so HANDOVER's own opening claim that every finding in
+`docs/` is reproducible against the images was **false for those files**.
+
+**The trap, and it is a nasty one: `rg` and `fd` cannot tell you this.** Both
+respect `.gitignore`, and `data/` is gitignored, so both return nothing with
+exit code 0 whether the directory is full or empty. `/bin/ls` is what
+distinguishes "there is nothing here" from "I am not allowed to look" - and note
+that plain `ls` may be aliased in the user's shell (`ls -la` failed with
+`ls:1: command not found: -la` in this session's zsh, which reads like a broken
+argument and is not).
+
+**3. M4's exit criterion, read literally, cannot be passed by anyone.** It asks
+for a time trial "that passes trace comparison for the full lap", and `oag-trace
+run` seeds tick 0 and never again. But task #32 of the 2026-07-28 pass recorded a
+permanent negative: the original integrates the frame duration it *measured*, so
+`dt` matches on about 1 % of ticks and **two runs of the original itself are 100
+units apart by tick 495**. A 3,146-tick single-seeded trajectory comparison
+measures the emulator's scheduler, not the force law, and a byte-exact
+implementation would fail it.
+
+`oag-trace run --reseed N` puts the ship back on the recording every `N` ticks
+through the same `initial_state` path tick 0 uses, so the recording becomes a
+sequence of independent `N`-tick comparisons and error stops compounding.
+`compare.rs` needed no change; what it needed was for the report **and the
+written CSV** to state the interval, since a reseeded run's columns are
+otherwise indistinguishable from a single-seeded one's. **The roadmap's exit
+criterion is restated as two numbers** - single-seeded tracking length, and
+reseeded per-window error - with the negative cited as why the trajectory form
+cannot be the target.
+
+**4. The determinism gate did not cover the simulation, and nobody had checked.**
+`crates/core/tests/determinism.rs` hashes `oag_core::probe` and nothing else;
+`oag-physics` state never reached CI's three-OS job. `verification-protocol.md`
+makes this a precondition - *"before any comparison against the original is
+meaningful, our own simulation must be reproducible"* - so the sentence pointed
+at a gate that could not see the thing it was about.
+
+`oag_physics::probe` is the twin of `oag_core::probe` and deliberately **not** a
+miniature simulation: it steps `oag_physics::step` over a scripted input and a
+synthetic corridor (floor plus two walls, built in the file), so it runs in CI on
+all three OSes rather than being `#[ignore]`d for want of a disc image. Debug and
+release agree. Two mechanisms keep the hashed field list from rotting and **both
+are needed**: exhaustive destructuring makes a new `ShipState`/`Body` field a
+compile error, and a perturbation test proves each field actually reaches the
+hash rather than merely being bound. That second test **caught a real hole on its
+first run** - `time_since_landing` defaults to `1.0`, so perturbing it *to* `1.0`
+was a no-op and the check was passing vacuously.
+
+### Contact generation: three limits closed, and what each was worth
+
+Each landed on its own commit with `just scripted-sim` measured before and
+after, so the effect is attributable. Two of the three are worth as much for
+what they did *not* change:
+
+| Change | Effect on the whole-lap scenario |
+| --- | --- |
+| `Raycaster::raycast_all` - a contact per (sample point, triangle) pair, and no non-wall hit hiding a wall behind it | **nothing, to the last digit.** 617.538 units travelled either way |
+| Single-sided rejection instead of flipping the normal | 617.538 -> 618.647 travelled, 120.819 -> 121.945 start-to-finish |
+
+The first two limits were real divergences from `Collision_BoxAgainstMesh` that
+`16_Track`'s geometry never exercises. **Fixing them anyway was right - the point
+is that a fidelity fix which changes nothing measurable is a finding, and one
+that gets quietly re-litigated if it is not written down.**
+
+**New measurement, and it is what makes single-siding safe to ship:** the
+original's `dot(boxCentre - s, n) > 0` gate is only faithful if the shipped walls
+face the circuit, which nothing in `docs/` established.
+`the_track_s_walls_are_wound_toward_the_circuit` (in `race_ground_truth.rs`)
+measures it: **2,076 of 2,084 wall triangles on `16_Track`, 99.6 %**, wound
+toward the nearest point of the track's own spline. The 0.4 % is exactly the
+size of the lap delta above. The test asserts only that the answer is not
+*mixed* (30-70 %), because a mixed result is what would sink the whole approach
+and a tidy track is not something a track is obliged to be.
+
+Eight tests broke on that commit, **all of them fixtures rather than
+behaviour**: `wall()`, `narrow_wall()` and `vertical_quad_at()` all built quads
+whose raw `(b-a) x (c-a)` normal pointed *away* from the ship, and passed only
+because `facing()` flipped it. Their winding is load-bearing now and the doc
+comments say so. Every numeric assertion survived untouched - `vx -3.84`,
+`omega.y 0.032`, `0.965^5` - which is the canary that says it was a fixture
+repair. `facing()` itself is kept, for the swept query and for reset volumes,
+with a doc explaining why those are a different question.
+
+### What actually blocks M4 now, and it is not contact generation
+
+The committed whole-lap scenario through our own physics: the ship reaches about
+40 units/s by tick 400, **stops dead at one place on the circuit for roughly a
+thousand ticks**, then reverses. It travels 618 units of path in 3,146 ticks and
+finishes 122 units from where it started, grounded on 3,145 of 3,146 ticks and
+never further than 20.4 units from the spline. So it is not falling off the
+track any more - it is **wedged**.
+
+The number that most likely names the cause is in the same report: **angular
+velocity averages 21.2 rad/s over the lap**, three and a half revolutions a
+second, and the run report's own basis-derivative check agrees (best reading
+20.2), so the ship really is spinning rather than the column being misread. A
+wedged, spinning craft is one symptom, not two. **That is where the next pass
+should start**, and it needs no emulator - `just scripted-sim` shows it in
+fifteen seconds.
+
 ## Read this first: the disc images are in place
 
 `data/images/` now holds all three, copied from `~/Downloads` this session:

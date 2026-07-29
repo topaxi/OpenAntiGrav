@@ -822,6 +822,18 @@ about the force law.
 
 ## What the whole-lap comparison found
 
+> **Superseded, and worth knowing why.** The run below was measured 2026-07-28
+> against a capture that no longer exists - `data/traces/` is gitignored and
+> those files were lost. More importantly it **predates `919526d`**, which gave
+> `oag_physics::wall` the original's ten box sample points and the angular half
+> of the contact response, and three further contact-generation commits after
+> that. Its diagnosis - "points at hover-probe contact generation: eight probes
+> taking only the deepest hit, and no `cross(r, impulse)` angular response" -
+> describes a crate that has not existed for some time. It is kept because the
+> *shape* of the reading is still the right way to read one of these, and
+> because a superseded measurement left in place is cheaper to correct than a
+> deleted one is to rediscover.
+
 Both sides driven by `talons-junction-time-trial-lap.inputs`, 3,146 ticks, the
 recording seeding tick 0. Measured 2026-07-28; nothing here was tuned to.
 
