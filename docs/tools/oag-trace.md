@@ -1058,6 +1058,51 @@ make `|velocity|` exceed `speed` outright - the whole-lap capture has ticks
 reading a *negative* loss for that reason. Any future use of this test must
 restrict itself to contact ticks at speed, which is what the last row above does.
 
+### Our hull meets that wall six ticks early, and it is the contact geometry
+
+With the input aligned (`--script-lead 2`), the replay tracks this capture to
+**1.06 units of position and 0.29 degrees of heading** for its whole clean launch
+- and then loses 4.25 units/s on tick **179**, where the original is still
+accelerating and does not take its own hit until **187**. Eight ticks, about
+sixteen units of track.
+
+A replay cannot say why, because a replay's pose is its own: the craft might
+genuinely be sitting further toward the wall, or our hull might answer "am I in
+contact" differently at the same pose.
+`crates/trace/tests/wall_contact_ground_truth.rs` settles it by walking the
+**recorded** poses - the original's own position and basis, tick by tick - and
+asking `oag_physics::wall::resolve` whether our hull finds a wall there. No
+integration and no accumulated error, so what comes back is our contact geometry
+measured against the original's trajectory:
+
+| | Tick |
+| --- | ---: |
+| Our hull's first respondable contact, on the original's own line | **181** |
+| Our replay's own first speed loss | 179 |
+| The original's first speed loss | **187** |
+
+**So six of the eight ticks are contact geometry and two are trajectory.**
+Neither half was decidable before.
+
+**Which probe, and how deep.** The first to fire is the **lower front outer
+corner** (`lower -R +F` of `hull_sample_points`), at a penetration depth of
+`0.182`; the forward flank probe follows at tick 183. By tick 187, where the
+original finally responds, that corner is **1.82 units** past the wall plane -
+under the `MAX_CONTACT_DEPTH = 2.0` gate, so nothing in the crate is dropping it.
+
+**What this does not settle, and the next step.** There is no minimum-depth gate
+to blame: the crate's gate is an *upper* bound and reproduces the original's. The
+open question is the sample points themselves. That corner sits at
+`right * width/2 + forward * length/2` from the centre, and `<Misc>`'s length is
+long relative to its width, so on a wall the craft closes on at about six degrees
+the forward half-extent contributes a real share of the lateral reach. The
+axis-to-dimension mapping in `hull_sample_points` is confidence **88** and rests
+on the box-inertia agreement rather than on a second read - and that leg is
+weaker here than it looks, because `Body_SetBoxInertia`'s literal box is square
+in `x` and `z` while `<Misc>` is nothing like square. **Reading
+`Collider_BoxSamplePoints` (`0x08818a00`) for which fields it actually loads is
+the next step**, not adjusting an extent to close six ticks.
+
 ## Not yet
 
 - **No save state.** The starting point is still the documented menu walk from a
