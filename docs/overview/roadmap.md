@@ -317,6 +317,25 @@ Under `--reseed 60` the position figure is **10.3** at tick 299 either way - a
 orientation axis goes 0.114 to **0.0824** rad. `grounded` is exact on 3,146 of
 3,146 ticks.
 
+**So what blocks M4 now is that no capture can decide the first of its two
+numbers.** The criterion above asks how many ticks we track the original before
+coming apart, and that question has no answer past tick **171** on anything in
+`data/traces/`: the lap recapture is wall-free on 32.7 % of its ticks and first
+touches a wall there, after which the comparison measures the original's own
+scrapes rather than our force law. **A clean lap capture is therefore load-bearing
+for the milestone**, not a convenience - and it has to be re-derived from a fresh
+`just autopilot` run, because the committed lap script is a closed-loop recording
+that no longer flies clean open-loop. The second number, the reseeded per-window
+error, is answerable today and is the table above.
+
+The other live gap is smaller and sharper: **our hull begins responding to a wall
+about six ticks before the original does.** Measured against the original's own
+recorded poses rather than a replay - so it is contact geometry, not accumulated
+trajectory error - and reproduced on both captures, on the same lower front
+corner probe. See
+[`oag-trace.md`](../tools/oag-trace.md#our-hull-meets-that-wall-six-ticks-early-and-it-is-the-contact-geometry);
+the next step is reading `Collider_BoxSamplePoints` (`0x08818a00`).
+
 **What `grounded` agreeing on every tick does and does not say.** The original's
 column is `1.0` on all 3,146 ticks of this capture, so the agreement means *our
 ship also never leaves the ground* - which the 2026-07-28 run could not manage

@@ -26,6 +26,21 @@
 //! are our craft sitting fractionally further toward the wall by the time it gets
 //! there. Neither half was decidable from the replay alone.
 //!
+//! **It is a hull probe finding it, not the swept query.** Both paths run inside
+//! [`oag_physics::wall::resolve`], and the swept one is the only thing the
+//! `previous_position` argument here could confound. Probed directly: the corner
+//! probe reports the wall at 181 at a depth of `0.182` with no swept contact
+//! anywhere near it, which is the same tick `resolve` reports. So the reading is
+//! about the sample points and their extents.
+//!
+//! **A geometry change that moves this has a cliff under it.** By the time the
+//! original responds, that corner is `1.82` units past the wall plane, against
+//! [`oag_physics::wall::MAX_CONTACT_DEPTH`] of `2.0` - and that gate *drops* a
+//! contact rather than clamping it, reproducing the original. So a fix that
+//! delays our response by letting the hull penetrate further has about two tenths
+//! of a unit of headroom before contacts start being discarded, and the symptom
+//! then is tunnelling rather than a late response.
+//!
 //! **What a failure means.** This is not a tolerance on a fitted number. It pins
 //! a measured gap that is currently an open question, so a change here is a
 //! finding either way: shrinking is progress on the contact geometry and wants
@@ -45,6 +60,7 @@ use oag_trace::trace::AngularReading;
 const IMAGE: &str = "data/images/pulse-psp-usa.chd";
 const TRACK: &str = r"Data\Environments\16_Track\track.vex";
 const CAPTURE: &str = "data/traces/talons-junction-standing-start.csv";
+const LAP_CAPTURE: &str = "data/traces/talons-junction-time-trial-lap.csv";
 
 /// Same team and class as every other capture-backed test here; see
 /// `yaw_authority_ground_truth.rs` for why this is written down rather than
@@ -184,6 +200,64 @@ fn our_hull_finds_the_wall_within_a_few_ticks_of_where_the_original_does() {
         early <= ALLOWED_EARLY_TICKS,
         "our hull finds the wall at tick {ours}, {early} ticks before the \
          original's own response at {RECORDED_WALL_TICK}; the measured gap when \
-         this was written was 8"
+         this was written was 6"
+    );
+}
+
+/// The lap capture, which is where the gap stops being one wall's property.
+///
+/// It cannot date its wall by `speed` the way the standing start does - the craft
+/// is cornering under power and loses speed for reasons that are not walls - so
+/// the cleanliness test dates it instead: `speed / |velocity|` reads exactly
+/// `1.0000` in free flight, and the first tick it does not is the first tick the
+/// craft is touching something. That puts the original's first wall at tick 171
+/// and ours at 168.
+///
+/// **Both captures fire the same probe**, the lower *front* corner, on opposite
+/// sides of the craft and on different walls - which is what makes this a
+/// property of the hull rather than of one triangle. What the pair does **not**
+/// do is separate the width term from the length term. The forward-to-wall angle
+/// is 4.05 degrees on the standing start against 7.33 here, so the two do sample
+/// the trade-off; but turning a tick count into a distance needs the wall's own
+/// divergence along the approach, and the spline's half-widths are the AI track's
+/// rather than the collision mesh's. Fitting the two extents to two tick counts
+/// through that proxy gives a length correction larger than the length. Read
+/// `Collider_BoxSamplePoints` for both axes.
+#[test]
+#[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
+fn the_same_gap_shows_on_the_lap_capture_and_the_same_probe_finds_it() {
+    let (handling, collision, _) = load();
+    let text = std::fs::read_to_string(workspace(LAP_CAPTURE)).expect("reading the lap capture");
+    let trace = Trace::parse(&text).expect("parsing the lap capture");
+
+    // The original's first contact, by the cleanliness test. Ticks 0-5 are the
+    // craft sitting on the grid, where `|velocity|` is small enough for the ratio
+    // to be noise rather than a reading.
+    let theirs = trace
+        .frames
+        .iter()
+        .enumerate()
+        .skip(6)
+        .find(|(_, frame)| {
+            let magnitude = frame.velocity.length();
+            magnitude > 1e-6 && (frame.speed / magnitude - 1.0).abs() >= 1e-4
+        })
+        .map(|(tick, _)| tick)
+        .expect("the lap capture never touches anything");
+
+    let ours = first_contact_on_the_recorded_line(&handling, &collision, &trace)
+        .expect("our hull never finds a wall on a line that spends a third of itself in one");
+    eprintln!("lap: ours {ours}, the original's {theirs}");
+
+    assert!(
+        ours <= theirs,
+        "our hull finds the lap's wall at tick {ours}, after the original's \
+         {theirs} - the opposite of the known gap"
+    );
+    assert!(
+        theirs - ours <= ALLOWED_EARLY_TICKS,
+        "our hull finds the lap's wall {} ticks before the original's {theirs}; \
+         the measured gap when this was written was 3",
+        theirs - ours
     );
 }

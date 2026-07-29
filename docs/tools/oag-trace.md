@@ -1089,19 +1089,41 @@ corner** (`lower -R +F` of `hull_sample_points`), at a penetration depth of
 `0.182`; the forward flank probe follows at tick 183. By tick 187, where the
 original finally responds, that corner is **1.82 units** past the wall plane -
 under the `MAX_CONTACT_DEPTH = 2.0` gate, so nothing in the crate is dropping it.
+It is a hull probe finding it and not the swept query, checked directly, which
+matters because the swept path is the only thing the recorded `previous_position`
+could have confounded.
 
-**What this does not settle, and the next step.** There is no minimum-depth gate
-to blame: the crate's gate is an *upper* bound and reproduces the original's. The
-open question is the sample points themselves. That corner sits at
-`right * width/2 + forward * length/2` from the centre, and `<Misc>`'s length is
-long relative to its width, so on a wall the craft closes on at about six degrees
-the forward half-extent contributes a real share of the lateral reach. The
-axis-to-dimension mapping in `hull_sample_points` is confidence **88** and rests
-on the box-inertia agreement rather than on a second read - and that leg is
-weaker here than it looks, because `Body_SetBoxInertia`'s literal box is square
-in `x` and `z` while `<Misc>` is nothing like square. **Reading
-`Collider_BoxSamplePoints` (`0x08818a00`) for which fields it actually loads is
-the next step**, not adjusting an extent to close six ticks.
+**It reproduces on the lap capture, which is what makes it the hull's property
+and not one triangle's.** The lap cannot date its wall by `speed` - the craft is
+cornering under power - so the cleanliness test dates it instead, at tick **171**
+against our **168**. Same probe class, opposite side of the craft, different
+wall.
+
+| Capture | Forward-to-wall angle at contact | Ours | The original's | Gap |
+| --- | ---: | ---: | ---: | ---: |
+| Standing start | 4.05° | 181 | 187 | 6 |
+| Lap | 7.33° | 168 | 171 | 3 |
+
+**What the pair does not settle.** The two angles do sample the trade-off between
+the width and length terms - the corner sits at `right * width/2 + forward *
+length/2`, so a shallower approach leans on the width and a steeper one on the
+length - but converting a tick count into a distance needs the wall's own
+divergence along the approach, and the spline's half-widths are the *AI track's*
+rather than the collision mesh's. Fitting two extents to two tick counts through
+that proxy returns a length correction larger than the length, which is the model
+failing rather than a result.
+
+**The next step, and what not to do.** There is no minimum-depth gate to blame:
+the crate's gate is an *upper* bound and reproduces the original's. The open
+question is the sample points. `hull_sample_points`' axis-to-dimension mapping is
+confidence **88** and rests on the box-inertia agreement rather than on a second
+read - a leg that is weaker here than it looks, because `Body_SetBoxInertia`'s
+literal box is square in `x` and `z` while `<Misc>` is nothing like square.
+**Read `Collider_BoxSamplePoints` (`0x08818a00`) for which fields it actually
+loads, on both axes**, rather than adjusting an extent to close six ticks - and
+note there is only about two tenths of a unit of headroom under
+`MAX_CONTACT_DEPTH` before a deeper-penetrating hull starts having its contacts
+dropped outright, where the symptom is tunnelling rather than a late response.
 
 ## Not yet
 
