@@ -394,6 +394,15 @@ unread code and still blocks this milestone. See
       rather than out of the asset. See [menus](../architecture/menus.md).
       Style, animation and the disc's own artwork are all still absent, and
       **rebinding** is the one row that displays without editing.
+- [~] Modern features. The display half is in: window mode (windowed or
+      borderless), window size, aspect ratio (`psp`, `ps2` or `free`) and a
+      **render scale** from 50 % to 200 %, the last of which is the
+      internal-resolution knob below 100 and supersampling above it. Every
+      stage draws into an offscreen target and one pass stretches it into the
+      aspect rectangle, which is also where the letterbox bars come from. See
+      [menus](../architecture/menus.md) and `oag_game::display`.
+      Unlocked frame rate, HDR, VRR, FSR and Steam Input are all still open -
+      [modern features](modern-features.md).
 - [ ] Save data
 - [ ] Replay
 - [ ] PS2 asset path at parity with PSP

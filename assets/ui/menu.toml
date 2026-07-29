@@ -150,6 +150,16 @@ label = "WINDOW SIZE"
 setting = "graphics.window_size"
 values = ["960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
 
+# What percentage of the displayed size the game is actually rendered at.
+# Below 100 is the usual internal-resolution knob, above it is supersampling,
+# and it is measured against the aspect rectangle so it means the same thing at
+# every aspect. Applies from the next frame.
+[[page.entry]]
+kind = "choice"
+label = "RENDER SCALE"
+setting = "graphics.render_scale"
+values = ["50", "75", "100", "125", "150", "200"]
+
 # The shape the game is drawn at inside whatever window it got, with the
 # leftover left black. `psp` is 480x272, the shape every camera value on the
 # disc was authored for; `ps2` is 4:3; `free` fills the window without widening

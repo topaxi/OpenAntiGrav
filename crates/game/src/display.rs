@@ -226,6 +226,99 @@ impl From<Size> for String {
     }
 }
 
+/// How much of the viewport rectangle the game is actually rendered at, as a
+/// percentage.
+///
+/// Below 100 this is the usual internal-resolution knob; above it, it is
+/// supersampling. A percentage rather than an absolute resolution because a
+/// percentage has no invalid values - see [`crate::upscale`] for the argument.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct Scale(u32);
+
+impl Scale {
+    /// Rendering at exactly the size it is displayed at.
+    pub const FULL: Self = Self(100);
+
+    /// The narrowest and widest a scale may be.
+    ///
+    /// Not preferences: below the floor a 480-wide viewport renders at 120
+    /// pixels and the menus stop being readable at all, and above the ceiling
+    /// the target runs past what an adapter will allocate on an ordinary
+    /// window. [`crate::upscale::target_size`] clamps the actual pixels too,
+    /// because the ceiling here is not a per-device answer.
+    pub const RANGE: std::ops::RangeInclusive<u32> = 25..=200;
+
+    /// The percentages the menus offer.
+    pub const OFFERED: [Self; 6] = [
+        Self(50),
+        Self(75),
+        Self(100),
+        Self(125),
+        Self(150),
+        Self(200),
+    ];
+
+    /// The multiplier this percentage means.
+    #[must_use]
+    pub fn factor(self) -> f32 {
+        self.0 as f32 / 100.0
+    }
+
+    /// The percentage itself.
+    #[must_use]
+    pub fn percent(self) -> u32 {
+        self.0
+    }
+}
+
+impl Default for Scale {
+    fn default() -> Self {
+        Self::FULL
+    }
+}
+
+impl std::str::FromStr for Scale {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let percent: u32 = text
+            .trim()
+            .trim_end_matches('%')
+            .parse()
+            .map_err(|e| format!("{text:?} is not a render scale: {e}"))?;
+        Self::try_from(percent)
+    }
+}
+
+impl TryFrom<u32> for Scale {
+    type Error = String;
+
+    fn try_from(percent: u32) -> Result<Self, Self::Error> {
+        if Self::RANGE.contains(&percent) {
+            Ok(Self(percent))
+        } else {
+            Err(format!(
+                "a render scale of {percent} is outside {}-{}",
+                Self::RANGE.start(),
+                Self::RANGE.end()
+            ))
+        }
+    }
+}
+
+impl From<Scale> for u32 {
+    fn from(scale: Scale) -> Self {
+        scale.0
+    }
+}
+
+impl std::fmt::Display for Scale {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// The centred rectangle of `aspect` inside a `target`-sized viewport.
 ///
 /// Returns `(x, y, width, height)` in physical pixels, which is exactly what
@@ -382,6 +475,27 @@ mod tests {
                 "{size} is {have}, wanted about {wanted}"
             );
         }
+    }
+
+    #[test]
+    fn a_scale_round_trips_and_refuses_what_it_cannot_draw() {
+        assert_eq!("100".parse::<Scale>(), Ok(Scale::FULL));
+        assert_eq!("50%".parse::<Scale>().expect("parse").factor(), 0.5);
+        assert_eq!(Scale::FULL.to_string(), "100");
+        for bad in ["0", "24", "201", "1000", "half", ""] {
+            assert!(bad.parse::<Scale>().is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn every_offered_scale_is_one_this_build_accepts() {
+        for scale in Scale::OFFERED {
+            assert_eq!(scale.to_string().parse::<Scale>(), Ok(scale));
+        }
+        assert!(
+            Scale::OFFERED.contains(&Scale::FULL),
+            "100% must be offered"
+        );
     }
 
     #[test]

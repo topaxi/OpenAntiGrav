@@ -39,6 +39,7 @@ the release rather than of this project:
 | LANGUAGE | the language plugins `PI008`-`PI012` |
 | TEAM | `oag_formats::handling::TEAMS`, pinned to the eight shipped `handlingstats.xml` files by a test |
 | SPEED CLASS | `oag_physics::SpeedClass::ALL` |
+| WINDOW MODE / SIZE / ASPECT / RENDER SCALE | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 
 That split is what keeps [ADR-0006](adr/0006-no-copyrighted-content.md)
 satisfied while the Race page still says "Talon's Junction White": the words are

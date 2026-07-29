@@ -38,7 +38,9 @@ use oag_game::frontend::{self, Frontend};
 use oag_game::input;
 use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{boot, capture, catalogue, display, menu, movie, race, report, settings, source};
+use oag_game::{
+    boot, capture, catalogue, display, menu, movie, race, report, settings, source, upscale,
+};
 use oag_input::Controls;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
@@ -557,9 +559,21 @@ impl App {
     /// loop resumes twice after the loaded state has been taken.
     fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Session>> {
         let gpu = Gpu::new(event_loop, &self.settings.graphics)?;
+        let graphics = &self.settings.graphics;
+
+        // Built before the stage, because a race's depth attachment has to match
+        // this rather than the window.
+        let target = upscale::target_size(
+            display::viewport(gpu.size(), graphics.aspect),
+            graphics.render_scale,
+            gpu.device.limits().max_texture_dimension_2d,
+        );
+        let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.config.format, target)
+            .context("building the upscale pipeline")?;
+
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
-            Stage::race(&gpu, loaded, self.anisotropy)?
+            Stage::race(&gpu, loaded, framebuffer.size(), self.anisotropy)?
         } else if let Some(loaded) = self.boot.take() {
             Stage::frontend(&gpu, loaded, self.video_format, self.trace)?
         } else {
@@ -573,6 +587,7 @@ impl App {
 
         Ok(Some(Session {
             gpu,
+            framebuffer,
             stage,
             controls,
             clock: TickClock::new(TickRate::DEFAULT),
@@ -778,7 +793,17 @@ impl Stage {
         })))
     }
 
-    fn race(gpu: &Gpu, loaded: race::Loaded, anisotropy: Anisotropy) -> Result<Self> {
+    /// `size` is the **framebuffer's**, not the window's: the scene's depth
+    /// attachment has to match the colour one it will be drawn with, and that is
+    /// the offscreen target rather than the surface. Getting it from the window
+    /// is right only at a render scale of 100 % on an unshaped aspect, which is
+    /// exactly the case that would let it ship looking correct.
+    fn race(
+        gpu: &Gpu,
+        loaded: race::Loaded,
+        size: (u32, u32),
+        anisotropy: Anisotropy,
+    ) -> Result<Self> {
         let race::Loaded {
             setup,
             track_model,
@@ -793,7 +818,7 @@ impl Stage {
             ship_model,
             collision_model,
             gpu.config.format,
-            gpu.size(),
+            size,
             anisotropy,
         )?;
         Ok(Self::Race(Box::new(RaceStage {
@@ -915,6 +940,13 @@ struct Session {
     /// The persisted settings, kept because the menus change them and every
     /// change is written straight back.
     settings: settings::Settings,
+    /// Where every stage draws, before it is stretched onto the surface.
+    ///
+    /// On the session rather than on a stage because it outlives them: a race
+    /// taking the window over does not want a fresh target, and the size it
+    /// should be is a property of the window and the settings rather than of
+    /// what happens to be on screen.
+    framebuffer: upscale::Framebuffer,
     /// Set when a menu asks to quit, read by the event loop.
     quit: bool,
     /// What the menus need, when this run has menus at all.
@@ -959,11 +991,9 @@ impl Session {
         self.gpu
             .surface
             .configure(&self.gpu.device, &self.gpu.config);
-        // The depth attachment has to match the colour one, or the next pass is a
-        // validation error.
-        if let Stage::Race(stage) = &mut self.stage {
-            stage.scene.resize(&self.gpu.device, (width, height));
-        }
+        // The depth attachment follows the *framebuffer*, not the window, and
+        // `frame` resizes both together - so a resize only has to invalidate,
+        // which configuring the surface above already did.
     }
 
     fn frame(&mut self) -> Result<()> {
@@ -1064,14 +1094,37 @@ impl Session {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("frame"),
             });
-        // One rectangle for every stage, so a mode change moves the whole game
+        // Where the game goes on the surface, and how many pixels it is drawn
+        // with. One rectangle for every stage, so a change moves the whole game
         // rather than only what happens to be on screen.
-        let viewport = display::viewport(self.gpu.size(), self.settings.graphics.aspect);
-        match &mut self.stage {
-            Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, &view, viewport)?,
-            Stage::Menu(stage) => stage.render(&self.gpu, &mut encoder, &view, viewport),
-            Stage::Race(stage) => stage.render(&self.gpu, &mut encoder, &view, viewport),
+        let graphics = &self.settings.graphics;
+        let rect = display::viewport(self.gpu.size(), graphics.aspect);
+        let wanted = upscale::target_size(
+            rect,
+            graphics.render_scale,
+            self.gpu.device.limits().max_texture_dimension_2d,
+        );
+        if self.framebuffer.resize(&self.gpu.device, wanted) {
+            // A depth attachment whose size does not match the colour one is a
+            // validation error, so the race's has to follow.
+            if let Stage::Race(stage) = &mut self.stage {
+                stage
+                    .scene
+                    .resize(&self.gpu.device, self.framebuffer.size());
+            }
         }
+
+        // Each stage fills the target, and the target *is* the game's
+        // rectangle: the bars are the surface the blit does not cover.
+        let size = self.framebuffer.size();
+        let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
+        let target = self.framebuffer.view();
+        match &mut self.stage {
+            Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, target, inside)?,
+            Stage::Menu(stage) => stage.render(&self.gpu, &mut encoder, target, inside),
+            Stage::Race(stage) => stage.render(&self.gpu, &mut encoder, target, inside),
+        }
+        self.framebuffer.present(&mut encoder, &view, rect);
         self.gpu.queue.submit(Some(encoder.finish()));
         self.gpu.queue.present(frame);
         Ok(())
@@ -1236,6 +1289,15 @@ impl Session {
                     return;
                 }
             },
+            "graphics.render_scale" => match text.parse::<display::Scale>() {
+                // Applied by the next frame: `frame` sizes the target from this
+                // every time and rebuilds it when the answer changes.
+                Ok(scale) => self.settings.graphics.render_scale = scale,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.anisotropy" => match text.parse::<Anisotropy>() {
                 Ok(level) => {
                     self.anisotropy = level;
@@ -1269,7 +1331,7 @@ impl Session {
         for line in &loaded.report {
             println!("{line}");
         }
-        self.stage = Stage::race(&self.gpu, loaded, self.anisotropy)?;
+        self.stage = Stage::race(&self.gpu, loaded, self.framebuffer.size(), self.anisotropy)?;
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())
     }

@@ -132,6 +132,14 @@ pub struct Graphics {
     /// `windowed` or `borderless`. See [`crate::display::WindowMode`].
     #[serde(default)]
     pub window_mode: crate::display::WindowMode,
+    /// What percentage of the displayed size the game is rendered at.
+    ///
+    /// Below 100 is the usual internal-resolution knob; above it is
+    /// supersampling. Measured against the aspect rectangle rather than the
+    /// window, so it means the same thing whatever `aspect` is. See
+    /// [`crate::display::Scale`].
+    #[serde(default)]
+    pub render_scale: crate::display::Scale,
     /// How big a *windowed* window is, spelled `1440x816`.
     ///
     /// A window property, not a graphics one in the sense the others are:
@@ -221,6 +229,10 @@ pub fn menu_seeds(
         (
             "graphics.aspect",
             text(&settings.graphics.aspect.to_string()),
+        ),
+        (
+            "graphics.render_scale",
+            text(&settings.graphics.render_scale.to_string()),
         ),
         (
             "graphics.window_mode",

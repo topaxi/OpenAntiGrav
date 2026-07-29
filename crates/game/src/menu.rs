@@ -1203,6 +1203,16 @@ mod tests {
         }
         assert_eq!(modes.len(), WindowMode::ALL.len());
 
+        let scales: Vec<crate::display::Scale> = values("graphics.render_scale")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            scales,
+            crate::display::Scale::OFFERED,
+            "the render-scale rows and `Scale::OFFERED` must be one list"
+        );
+
         let sizes: Vec<Size> = values("graphics.window_size")
             .iter()
             .map(|name| name.parse::<Size>().unwrap_or_else(|e| panic!("{e}")))
