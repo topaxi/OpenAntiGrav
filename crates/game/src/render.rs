@@ -340,9 +340,65 @@ impl Renderer {
         Ok(())
     }
 
-    /// Draws `list` into `view`.
+    /// Draws `list` into `view`, clearing it first.
+    ///
+    /// What a stage does: it owns the frame, so it starts from black and the
+    /// bars outside `viewport` are what it leaves uncovered.
     pub fn render(
         &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        list: &[Draw],
+        viewport: (f32, f32, f32, f32),
+    ) {
+        self.render_with(
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            device,
+            queue,
+            encoder,
+            view,
+            list,
+            viewport,
+        );
+    }
+
+    /// Draws `list` **over** whatever is already in `view`.
+    ///
+    /// What the performance overlay does: it is not a stage and does not own
+    /// the frame, so it has to keep what the stage drew. That is the only
+    /// difference - a second pass with the same pipelines, which is also why
+    /// the overlay needs a renderer of its own rather than a flag on the
+    /// stage's: a race draws through [`crate::race::Scene`] and has no
+    /// [`Renderer`] at all.
+    pub fn overlay(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        list: &[Draw],
+        viewport: (f32, f32, f32, f32),
+    ) {
+        self.render_with(
+            wgpu::LoadOp::Load,
+            device,
+            queue,
+            encoder,
+            view,
+            list,
+            viewport,
+        );
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the two public wrappers differ only in the load op"
+    )]
+    fn render_with(
+        &mut self,
+        load: wgpu::LoadOp<wgpu::Color>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
@@ -418,7 +474,7 @@ impl Renderer {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    load,
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -427,7 +483,7 @@ impl Renderer {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        // The pass cleared the whole surface to black, so whatever the
+        // A clearing pass clears the whole surface to black, so whatever the
         // rectangle does not cover stays black - which is what the bars are.
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
 

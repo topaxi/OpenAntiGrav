@@ -261,6 +261,10 @@ pub enum Entry {
         source: Option<ValueSource>,
         /// Which one is current. Seeded by [`Menu::seed`], never read off disk.
         current: usize,
+        /// A `toggle` row's setting that makes this one inert while it is on.
+        ///
+        /// See [`Menu::is_disabled`].
+        disabled_by: Option<String>,
     },
     /// Flips a boolean setting.
     Toggle {
@@ -270,6 +274,10 @@ pub enum Entry {
         setting: String,
         /// Whether it is on. Seeded by [`Menu::seed`].
         on: bool,
+        /// A `toggle` row's setting that makes this one inert while it is on.
+        ///
+        /// See [`Menu::is_disabled`].
+        disabled_by: Option<String>,
     },
     /// Shows what an abstract button is currently bound to.
     ///
@@ -351,6 +359,17 @@ impl Entry {
     pub fn is_adjustable(&self) -> bool {
         matches!(self, Self::Choice { .. } | Self::Toggle { .. })
     }
+
+    /// The setting whose being on makes this row inert, if it declared one.
+    #[must_use]
+    pub fn disabled_by(&self) -> Option<&str> {
+        match self {
+            Self::Choice { disabled_by, .. } | Self::Toggle { disabled_by, .. } => {
+                disabled_by.as_deref()
+            }
+            _ => None,
+        }
+    }
 }
 
 /// One page: a title and its rows.
@@ -425,6 +444,14 @@ pub enum Error {
     /// A page nothing can reach, which is a menu entry somebody forgot to add.
     #[error("page {0:?} is not reachable from the root page")]
     Unreachable(String),
+    /// A `disabled_by` naming a setting no `toggle` row edits.
+    #[error("{context}: disabled_by {setting:?}, which no toggle row edits")]
+    NoSuchToggle {
+        /// Where it is.
+        context: String,
+        /// What it named.
+        setting: String,
+    },
 }
 
 /// The file's own shape, before it is checked and resolved.
@@ -460,6 +487,9 @@ mod raw {
         pub values: Vec<String>,
         pub values_from: Option<String>,
         pub button: Option<String>,
+        /// Names a `toggle` row's setting that makes this row inert while it is
+        /// on. Only `choice` and `toggle` rows may carry it.
+        pub disabled_by: Option<String>,
         /// Reserved for localisation: the id of a string in the disc's own
         /// table, for a build that wants the original's wording.
         ///
@@ -521,18 +551,44 @@ impl Definition {
         Ok(definition)
     }
 
-    /// The check that earns its keep: every page is reachable from the root.
+    /// The checks that earn their keep: the ones a row cannot make about
+    /// itself.
     ///
     /// Dangling targets and unknown actions are already impossible by the time
-    /// this runs - [`resolve`] refuses them - so what is left is the failure
-    /// this cannot catch at the row level: a page that parses, resolves, and
-    /// that no entry anywhere links to. That is a menu somebody wrote and
-    /// forgot to hang off anything, and without this it ships silently.
+    /// this runs - [`resolve`] refuses them - so what is left are the two
+    /// failures that need the whole file in view: a page that parses,
+    /// resolves, and that no entry anywhere links to, and a `disabled_by`
+    /// naming a toggle that is not on any page. Both ship silently otherwise -
+    /// the first as a menu nobody can reach, the second as a row that is never
+    /// greyed out because the condition it waits on does not exist.
     ///
     /// # Errors
     ///
-    /// [`Error::Unreachable`], naming the first orphan in file order.
+    /// [`Error::Unreachable`], naming the first orphan in file order, and
+    /// [`Error::NoSuchToggle`].
     pub fn check(&self) -> Result<(), Error> {
+        let toggles: BTreeSet<&str> = self
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter_map(|entry| match entry {
+                Entry::Toggle { setting, .. } => Some(setting.as_str()),
+                _ => None,
+            })
+            .collect();
+        for page in &self.pages {
+            for (row, entry) in page.entries.iter().enumerate() {
+                if let Some(setting) = entry.disabled_by()
+                    && !toggles.contains(setting)
+                {
+                    return Err(Error::NoSuchToggle {
+                        context: format!("page {:?} entry {row}", page.id),
+                        setting: setting.to_string(),
+                    });
+                }
+            }
+        }
+
         let mut seen = BTreeSet::new();
         let mut stack = vec![self.root];
         while let Some(page) = stack.pop() {
@@ -572,6 +628,19 @@ fn resolve(
         context: context.to_string(),
         problem: format!("a {:?} entry needs {field}", entry.kind),
     };
+
+    // Only a row that can be adjusted can be disabled. On a `back` or a
+    // `submenu` the field would parse and do nothing, which is the failure the
+    // rest of this loader exists to make impossible.
+    if entry.disabled_by.is_some() && !matches!(entry.kind.as_str(), "choice" | "toggle") {
+        return Err(Error::BadEntry {
+            context: context.to_string(),
+            problem: format!(
+                "a {:?} entry cannot be disabled_by anything; only choice and toggle can",
+                entry.kind
+            ),
+        });
+    }
 
     match entry.kind.as_str() {
         "submenu" => {
@@ -623,6 +692,7 @@ fn resolve(
                 values: entry.values.iter().map(Choice::plain).collect(),
                 source,
                 current: 0,
+                disabled_by: entry.disabled_by.clone(),
             })
         }
         "toggle" => {
@@ -631,6 +701,7 @@ fn resolve(
                 label,
                 setting: setting.clone(),
                 on: false,
+                disabled_by: entry.disabled_by.clone(),
             })
         }
         "binding" => {
@@ -864,8 +935,55 @@ impl Menu {
         out
     }
 
+    /// What a `toggle` row that edits `setting` is currently set to.
+    fn flag(&self, setting: &str) -> Option<bool> {
+        self.definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .find_map(|entry| match entry {
+                Entry::Toggle {
+                    setting: key, on, ..
+                } if key == setting => Some(*on),
+                _ => None,
+            })
+    }
+
+    /// Whether this row is inert because another row is on.
+    ///
+    /// The one piece of cross-row logic in the menus, and it is deliberately
+    /// the *only* one: a definition names a `toggle` row's setting and the
+    /// answer is read off that row, so this module still knows nothing about
+    /// what any setting means. Turning vsync on greys out the frame limit
+    /// because the definition says the two are related, not because `menu.rs`
+    /// has heard of either.
+    ///
+    /// A disabled row is **greyed, not hidden**. Hiding it would change the row
+    /// count under the cursor, and - worse - a player looking for a setting
+    /// that has silently vanished has no way to find out what took it away.
+    #[must_use]
+    pub fn is_disabled(&self, entry: &Entry) -> bool {
+        entry
+            .disabled_by()
+            .is_some_and(|setting| self.flag(setting) == Some(true))
+    }
+
+    /// Whether the row the cursor is on is inert.
+    fn selected_is_disabled(&self) -> bool {
+        self.page()
+            .entries
+            .get(self.selected())
+            .is_some_and(|entry| self.is_disabled(entry))
+    }
+
     /// Moves the selected row's value by `step`, wrapping.
     fn adjust(&mut self, step: i32) -> Option<MenuEvent> {
+        // A disabled row does not move, and does not report a change it did not
+        // make. Checked here rather than in `update` so activating one is inert
+        // too - `activate` steps an adjustable row forward.
+        if self.selected_is_disabled() {
+            return None;
+        }
         let page = self.current();
         let row = self.cursor[page];
         let entry = self.definition.pages[page].entries.get_mut(row)?;
@@ -924,7 +1042,14 @@ impl Menu {
     }
 
     /// Pops a page, or reports that the root was backed out of.
-    fn back(&mut self) -> Vec<MenuEvent> {
+    ///
+    /// Public because escape is not a game button and must not become one:
+    /// mapping it onto `circle` would give the menus their back key and give a
+    /// race a brake. The window layer therefore calls this directly, out of
+    /// band with the tick loop, which is safe precisely because the menus hold
+    /// no input state of their own - [`Self::update`] takes edges off a
+    /// snapshot and this takes none at all.
+    pub fn back(&mut self) -> Vec<MenuEvent> {
         if self.stack.len() > 1 {
             self.stack.pop();
             Vec::new()
@@ -993,17 +1118,21 @@ pub fn draw_list(menu: &Menu, bindings: &dyn Fn(u8) -> Vec<&'static str>) -> Vec
             });
         }
 
-        let readable = !matches!(entry, Entry::Binding { .. });
+        // A binding cannot be changed yet and a disabled row cannot be changed
+        // now; both read as "this does nothing if you press it", which is what
+        // the dim colour says. The highlight bar is still drawn, so a disabled
+        // row can be selected and read rather than being unreachable.
+        let inert = matches!(entry, Entry::Binding { .. }) || menu.is_disabled(entry);
         out.push(Draw::Text {
             x: MARGIN_X,
             y,
             scale: ROW_SCALE,
-            color: if selected {
-                SELECTED
-            } else if readable {
-                NORMAL
-            } else {
+            color: if inert {
                 DIMMED
+            } else if selected {
+                SELECTED
+            } else {
+                NORMAL
             },
             align: Align::Left,
             text: entry.label().to_string(),
@@ -1028,7 +1157,7 @@ pub fn draw_list(menu: &Menu, bindings: &dyn Fn(u8) -> Vec<&'static str>) -> Vec
                 x: VALUE_RIGHT,
                 y,
                 scale: ROW_SCALE,
-                color: if selected && entry.is_adjustable() {
+                color: if selected && entry.is_adjustable() && !inert {
                     SELECTED
                 } else {
                     DIMMED
@@ -1222,6 +1351,167 @@ mod tests {
             Size::OFFERED,
             "the window-size rows and `Size::OFFERED` must be one list"
         );
+
+        let overlays: Vec<crate::perf::Overlay> = values("graphics.perf_overlay")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            overlays,
+            crate::perf::Overlay::ALL,
+            "the overlay rows and `Overlay::ALL` must be one list"
+        );
+
+        let limits: Vec<crate::perf::FrameLimit> = values("graphics.frame_limit")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            limits,
+            crate::perf::FrameLimit::OFFERED,
+            "the frame-limit rows and `FrameLimit::OFFERED` must be one list"
+        );
+    }
+
+    /// The definition's own answer to "vsync makes the limiter meaningless".
+    ///
+    /// Pinned here because the two halves live in different files: the pairing
+    /// is asserted in `assets/ui/menu.toml`, and the loop that honours it is in
+    /// `main.rs`. A row that lost its `disabled_by` would still parse.
+    #[test]
+    fn the_frame_limit_is_disabled_by_vsync() {
+        let definition = built_in();
+        let entry = definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .find(|entry| entry.setting() == Some("graphics.frame_limit"))
+            .expect("nothing edits graphics.frame_limit");
+        assert_eq!(entry.disabled_by(), Some("graphics.vsync"));
+        assert!(
+            definition
+                .pages
+                .iter()
+                .flat_map(|page| page.entries.iter())
+                .any(|entry| matches!(entry, Entry::Toggle { setting, .. }
+                    if setting == "graphics.vsync")),
+            "graphics.vsync has to be a toggle for `is_disabled` to read it"
+        );
+    }
+
+    /// A disabled row is selectable and readable and does not move, which is
+    /// three separate things a player would notice.
+    #[test]
+    fn a_disabled_row_is_inert_until_the_row_that_disables_it_is_off() {
+        let mut menu = Menu::new(built_in());
+        assert!(menu.open("graphics"), "the graphics page exists");
+        let row = menu
+            .page()
+            .entries
+            .iter()
+            .position(|entry| entry.setting() == Some("graphics.frame_limit"))
+            .expect("the frame limit is on the graphics page");
+
+        menu.seed("graphics.vsync", &Value::Flag(true));
+        menu.seed("graphics.frame_limit", &Value::Text("60".to_string()));
+        for _ in 0..row {
+            press(&mut menu, &[button::DOWN]);
+        }
+        assert_eq!(menu.selected(), row);
+
+        // Right does nothing, and says nothing: an event here would persist a
+        // change the player did not make.
+        assert_eq!(press(&mut menu, &[button::RIGHT]), Vec::new());
+        assert_eq!(press(&mut menu, &[button::CROSS]), Vec::new());
+        assert_eq!(
+            menu.page().entries[row].chosen(),
+            Some(Value::Text("60".to_string()))
+        );
+
+        // And with vsync off it is an ordinary row again.
+        menu.seed("graphics.vsync", &Value::Flag(false));
+        let events = press(&mut menu, &[button::RIGHT]);
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert_ne!(
+            menu.page().entries[row].chosen(),
+            Some(Value::Text("60".to_string()))
+        );
+    }
+
+    /// The visible half: a disabled row draws dim, so "this does nothing" is
+    /// something a player can see rather than something they discover.
+    #[test]
+    fn a_disabled_row_is_drawn_dimmed_even_when_it_is_selected() {
+        let mut menu = Menu::new(built_in());
+        assert!(menu.open("graphics"));
+        let row = menu
+            .page()
+            .entries
+            .iter()
+            .position(|entry| entry.setting() == Some("graphics.frame_limit"))
+            .expect("the frame limit is on the graphics page");
+        for _ in 0..row {
+            press(&mut menu, &[button::DOWN]);
+        }
+
+        let label_colour = |menu: &Menu| {
+            let list = draw_list(menu, &|_| vec!["X"]);
+            list.iter()
+                .find_map(|draw| match draw {
+                    Draw::Text { color, text, .. } if text == "FRAME LIMIT" => Some(*color),
+                    _ => None,
+                })
+                .expect("the row is drawn")
+        };
+
+        menu.seed("graphics.vsync", &Value::Flag(true));
+        assert_eq!(label_colour(&menu), DIMMED);
+        menu.seed("graphics.vsync", &Value::Flag(false));
+        assert_eq!(label_colour(&menu), SELECTED);
+    }
+
+    /// `disabled_by` naming something no toggle edits is a row that is never
+    /// greyed out, which looks exactly like a working one.
+    #[test]
+    fn a_disabled_by_naming_no_toggle_is_refused() {
+        let text = r#"
+version = 1
+root = "main"
+[[page]]
+id = "main"
+[[page.entry]]
+kind = "choice"
+label = "LIMIT"
+setting = "a.limit"
+disabled_by = "a.nothing"
+values = ["1", "2"]
+"#;
+        let e = Definition::parse(text).expect_err("must not load");
+        assert!(matches!(e, Error::NoSuchToggle { .. }), "{e}");
+        assert!(e.to_string().contains("a.nothing"), "{e}");
+    }
+
+    /// And on a kind that cannot be adjusted it would parse and do nothing,
+    /// which is the whole class of mistake this loader exists to refuse.
+    #[test]
+    fn only_an_adjustable_row_may_be_disabled() {
+        let text = r#"
+version = 1
+root = "main"
+[[page]]
+id = "main"
+[[page.entry]]
+kind = "toggle"
+label = "VSYNC"
+setting = "a.vsync"
+[[page.entry]]
+kind = "back"
+label = "BACK"
+disabled_by = "a.vsync"
+"#;
+        let e = Definition::parse(text).expect_err("must not load");
+        assert!(matches!(e, Error::BadEntry { .. }), "{e}");
+        assert!(e.to_string().contains("disabled_by"), "{e}");
     }
 
     #[test]

@@ -39,7 +39,7 @@ use oag_game::input;
 use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{
-    boot, capture, catalogue, display, menu, movie, race, report, settings, source, upscale,
+    boot, capture, catalogue, display, menu, movie, perf, race, report, settings, source, upscale,
 };
 use oag_input::Controls;
 use oag_physics::SpeedClass;
@@ -275,7 +275,7 @@ fn main() -> Result<()> {
     // XML, every language plugin and a string table, and may shell out to `ffmpeg`
     // to transcode the intro. Going straight to a race needs none of it.
     if cli.race {
-        return run_race(&cli, race_options, settings.graphics.aspect, anisotropy);
+        return run_race(&cli, race_options, &settings, anisotropy);
     }
 
     let leg = if cli.reel {
@@ -461,6 +461,9 @@ fn parse_size(text: &str) -> Result<(u32, u32)> {
 const TITLE: &str = "OpenAntiGrav";
 
 /// Printed before the front end opens: the picker's own keys.
+///
+/// Escape quits here and only here, because the boot sequence is the first
+/// thing on screen and has nothing behind it to go back to.
 const MENU_KEYS: &str = "arrow keys or the left stick move, return, X or cross \
      selects, space or start skips, escape quits";
 
@@ -469,20 +472,36 @@ const SHELL_TITLE: &str = "OpenAntiGrav - menu";
 
 /// Printed when the menus open, which have one key the picker does not.
 const SHELL_KEYS: &str = "up and down move, left and right change a setting, \
-     return, X or cross selects, backspace or circle goes back, escape quits";
+     return, X or cross selects, backspace, circle or escape goes back";
 
 /// And once a race has taken it over.
 const RACE_TITLE: &str = "OpenAntiGrav - race";
 
-/// Printed whenever a race takes the window, by either route.
+/// Printed whenever a race takes the window, by either route - and the two
+/// routes differ in exactly one key, which is why what escape does is spelled
+/// separately rather than assumed.
 const RACE_KEYS: &str = "arrow keys or the left stick steer, X, return or R2 thrusts, \
-     Q and E or the shoulders are the airbrakes, L2 is both, escape quits";
+     Q and E or the shoulders are the airbrakes, L2 is both";
+
+/// What escape does from a race the menus started, and from one `--race` did.
+///
+/// Escape is "back one level" everywhere; the difference is only that `--race`
+/// has no level behind it. See [`Session::escape`].
+const ESC_TO_MENU: &str = ", escape returns to the menus";
+const ESC_QUITS: &str = ", escape quits";
 
 /// Loads a track and a ship and either captures one frame or opens a window.
+///
+/// **The settings apply here too**, even though this route never opens a menu
+/// to change them with. It used to take only the aspect, which left a window
+/// opened with `--race` ignoring the window size, the render scale and the
+/// performance overlay that the same file was setting for every other route -
+/// and the overlay is most wanted exactly here, where a track is on screen.
+/// Nothing on this path writes the file back.
 fn run_race(
     cli: &Cli,
     options: race::Options,
-    aspect: display::Aspect,
+    settings: &settings::Settings,
     anisotropy: Anisotropy,
 ) -> Result<()> {
     let loaded = race::load(&options)?;
@@ -503,13 +522,13 @@ fn run_race(
                 held: button_mask(cli.hold.as_deref()),
                 size: parse_size(&cli.size)?,
                 log_every: cli.log_every,
-                aspect,
+                aspect: settings.graphics.aspect,
                 anisotropy,
             },
         );
     }
 
-    println!("\n{RACE_KEYS}");
+    println!("\n{RACE_KEYS}{ESC_QUITS}");
 
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the simulation runs whether or not input arrives.
@@ -522,10 +541,11 @@ fn run_race(
         trace: cli.trace,
         log_every: cli.log_every,
         anisotropy,
+        settings: settings.clone(),
         // `--race` opens a window straight onto a track: no front end, so no
-        // font and no sprite sheet, so no menus. Defaults rather than the file
-        // because nothing on this path can change a setting.
-        settings: settings::Settings::default(),
+        // font and no sprite sheet, so no menu tree and no circuit list. The
+        // settings still apply, they just cannot be changed from here - which
+        // is what makes escape quit on this route rather than back out.
         shell: None,
         state: None,
     };
@@ -585,6 +605,21 @@ impl App {
             println!("gamepad: {name}");
         }
 
+        // Built now rather than when the setting is first turned on, and from
+        // **our own** 5x7 glyphs rather than the disc's font, for the same
+        // reason: the overlay has to work on every route, and `--race` never
+        // loads a font at all. One pipeline and a 616-byte atlas, against a
+        // fallible build and a borrow dance in the middle of `frame`.
+        let overlay = Renderer::new(
+            &gpu.device,
+            &gpu.queue,
+            gpu.config.format,
+            None,
+            oag_game::font::Atlas::build(),
+            &oag_game::sprite::Sheet::default(),
+        )
+        .context("building the performance overlay")?;
+
         Ok(Some(Session {
             gpu,
             framebuffer,
@@ -592,6 +627,10 @@ impl App {
             controls,
             clock: TickClock::new(TickRate::DEFAULT),
             last: std::time::Instant::now(),
+            meter: perf::Meter::new(),
+            overlay,
+            stalled: true,
+            next_frame: std::time::Instant::now(),
             race_options: self.race_options.clone(),
             log_every: self.log_every,
             anisotropy: self.anisotropy,
@@ -633,10 +672,15 @@ impl ApplicationHandler for App {
             WindowEvent::Focused(false) => session.controls.release_all(),
 
             WindowEvent::KeyboardInput { event, .. } => {
+                // **`repeat` matters now that escape navigates.** winit resends
+                // `Pressed` while a key is held, and back-one-level repeated
+                // thirty times a second walks out of the menus and quits. It
+                // did not matter while escape exited on the first one.
                 if event.logical_key == Key::Named(NamedKey::Escape)
                     && event.state == ElementState::Pressed
+                    && !event.repeat
                 {
-                    event_loop.exit();
+                    session.escape();
                     return;
                 }
                 session
@@ -663,8 +707,23 @@ impl ApplicationHandler for App {
             event_loop.exit();
             return;
         }
-        if let Some(session) = &self.state {
-            session.gpu.window.request_redraw();
+        let Some(session) = &self.state else {
+            return;
+        };
+
+        // **The frame limiter is here and not in `frame`**, because the way to
+        // produce fewer frames is to ask for fewer, not to draw one and then
+        // sleep holding a submitted command buffer. `WaitUntil` hands the
+        // waiting to the platform's own timer; `Poll` is what it was before and
+        // is still what an unlimited run does.
+        match session.next_frame_at() {
+            Some(deadline) if std::time::Instant::now() < deadline => {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+            }
+            _ => {
+                event_loop.set_control_flow(ControlFlow::Poll);
+                session.gpu.window.request_redraw();
+            }
         }
     }
 }
@@ -679,6 +738,22 @@ fn fullscreen(mode: display::WindowMode) -> Option<winit::window::Fullscreen> {
     match mode {
         display::WindowMode::Windowed => None,
         display::WindowMode::Borderless => Some(winit::window::Fullscreen::Borderless(None)),
+    }
+}
+
+/// What the surface is configured with, for a vsync setting.
+///
+/// The `Auto` pair rather than `Fifo` and `Immediate` by name: those two are
+/// not both supported everywhere, and a present mode a surface does not offer
+/// is a panic at configure time. `AutoNoVsync` takes the best unthrottled mode
+/// the adapter has and falls back to `Fifo` when it has none, which is the
+/// honest answer on a platform that will not tear - the frame limiter then
+/// still does what it says, because it is not the surface doing the waiting.
+fn present_mode(vsync: bool) -> wgpu::PresentMode {
+    if vsync {
+        wgpu::PresentMode::AutoVsync
+    } else {
+        wgpu::PresentMode::AutoNoVsync
     }
 }
 
@@ -735,9 +810,10 @@ impl Gpu {
         .context("requesting the device")?;
 
         let size = window.inner_size();
-        let config = surface
+        let mut config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .context("surface is not supported by this adapter")?;
+        config.present_mode = present_mode(graphics.vsync);
         surface.configure(&device, &config);
 
         Ok(Self {
@@ -929,6 +1005,29 @@ struct Session {
     controls: Controls,
     clock: TickClock,
     last: std::time::Instant,
+    /// Recent frame times, for the performance overlay.
+    ///
+    /// Fed from the same `elapsed` the fixed timestep is driven by, which is
+    /// the only wall clock in the process. Nothing the simulation reads comes
+    /// back out of it - see [`perf`].
+    meter: perf::Meter,
+    /// Draws the overlay over whatever the stage drew.
+    ///
+    /// A renderer of its own because a race has none: `race::Scene` draws
+    /// meshes and knows nothing about text.
+    overlay: Renderer,
+    /// Set whenever the loop is about to stall on a load, so the frame that
+    /// carries it is dropped from [`Session::meter`] rather than measured.
+    ///
+    /// Starts `true`: the first frame's `elapsed` reaches back to before the
+    /// window existed.
+    stalled: bool,
+    /// When the next frame is due, under a frame limit.
+    ///
+    /// A schedule rather than a stopwatch - see
+    /// [`Session::schedule_next_frame`], which is where the difference between
+    /// asking for 240 and getting it lives.
+    next_frame: std::time::Instant,
     /// What `Launch Game` starts, kept because the front end is loaded long
     /// before anyone knows whether a race will be asked for.
     race_options: race::Options,
@@ -996,6 +1095,77 @@ impl Session {
         // which configuring the surface above already did.
     }
 
+    /// How long one frame is allowed to take at the least, or `None` when
+    /// nothing is limiting.
+    ///
+    /// `None` while vsync is on, whatever the limit says: the display is
+    /// already deciding, and a second limiter underneath it does not halve the
+    /// frame rate, it beats against the refresh and turns an even 60 into an
+    /// uneven one. That is why the menu greys the row out rather than leaving
+    /// both live - the two settings are not independent, and pretending they
+    /// are produces exactly the stutter the other half of `perf` exists to
+    /// show.
+    fn frame_period(&self) -> Option<std::time::Duration> {
+        if self.settings.graphics.vsync {
+            return None;
+        }
+        self.settings.graphics.frame_limit.period()
+    }
+
+    /// The earliest the next frame may start, or `None` for as soon as
+    /// possible.
+    fn next_frame_at(&self) -> Option<std::time::Instant> {
+        self.frame_period().map(|_| self.next_frame)
+    }
+
+    /// What a frame time is measured against in the overlay: the rate this
+    /// build is actually trying to present at.
+    ///
+    /// **Not the tick rate**, which is what this used to pass and which stopped
+    /// being right the moment a frame limiter existed. Against 60 Hz a 4 ms
+    /// frame is a 4-pixel sliver and every column is green, so a 240-limited
+    /// run - the default - drew a pacing graph that conveyed nothing. The rule
+    /// line means "one target frame" and the target has to be the one in force.
+    ///
+    /// With vsync on the display is the target and this build cannot ask a
+    /// surface what its refresh is, so it falls back to the simulation's own
+    /// rate. On a 144 Hz panel that reads pessimistically - the numbers are
+    /// still measured, only the graph's scale is off - and getting it right
+    /// needs a refresh rate off the monitor, which is work of its own.
+    fn presentation_hz(&self) -> u32 {
+        self.frame_period()
+            .and_then(|_| self.settings.graphics.frame_limit.hz())
+            .unwrap_or_else(|| self.clock.rate().hz())
+    }
+
+    /// Puts the next frame on the schedule, one period after the last one was
+    /// *due* rather than one period after now.
+    ///
+    /// **This is the difference between a 240 limit delivering 240 and
+    /// delivering 220.** A timer wakes at or after its deadline, never before,
+    /// and the platform's granularity is around a millisecond - which at a
+    /// 4.17 ms period is a quarter of it. Measuring the next deadline from when
+    /// the loop actually woke banks that overshoot into every frame and the
+    /// error compounds into a systematically low frame rate; measuring it from
+    /// the previous deadline puts the frames on a fixed grid, so a late wake-up
+    /// is followed by an early-relative one and the *average* is the rate that
+    /// was asked for.
+    ///
+    /// The schedule is resynchronised whenever it is more than one period away
+    /// from now, in either direction: behind means the loop stalled on a load
+    /// and must not pay it back as a burst of frames, ahead means the limit
+    /// itself just changed and the old period is still on the clock.
+    fn schedule_next_frame(&mut self, now: std::time::Instant) {
+        let Some(period) = self.frame_period() else {
+            self.next_frame = now;
+            return;
+        };
+        self.next_frame += period;
+        if self.next_frame < now || self.next_frame > now + period {
+            self.next_frame = now + period;
+        }
+    }
+
     fn frame(&mut self) -> Result<()> {
         // Checked before this frame's ticks rather than after them, so the frame
         // that entered `Launch Game` is drawn once before the load stalls the
@@ -1036,6 +1206,23 @@ impl Session {
         let now = std::time::Instant::now();
         let elapsed = now.duration_since(self.last);
         self.last = now;
+        self.schedule_next_frame(now);
+        // The presentation layer's only reader of the clock, and it reads the
+        // same value the timestep does rather than taking its own.
+        //
+        // **A load is not a frame time.** Opening the menus or building a race
+        // stalls the loop for a few hundred milliseconds, and that stall lands
+        // in exactly one `elapsed` - the same one, whichever side of this the
+        // stage change happened on, because a stage only ever changes above or
+        // below here. Recording it would put one 1000 ms column across the
+        // graph for the two seconds a player is most likely to be looking at
+        // it, so the frame that carries a load is dropped instead.
+        if self.stalled {
+            self.meter.clear();
+            self.stalled = false;
+        } else {
+            self.meter.record(elapsed.as_secs_f32());
+        }
         let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
         let steps = self.clock.advance(nanos);
         let dt = f64::from(self.clock.rate().dt());
@@ -1124,6 +1311,27 @@ impl Session {
             Stage::Menu(stage) => stage.render(&self.gpu, &mut encoder, target, inside),
             Stage::Race(stage) => stage.render(&self.gpu, &mut encoder, target, inside),
         }
+
+        // Over the stage and inside the offscreen target, so the overlay is
+        // drawn at the render scale the game is - measuring a frame nobody is
+        // presenting would be the one way to get this wrong. One pass, skipped
+        // entirely when the setting is off.
+        let list = perf::draw_list(
+            &self.meter,
+            self.settings.graphics.perf_overlay,
+            self.presentation_hz(),
+        );
+        if !list.is_empty() {
+            self.overlay.overlay(
+                &self.gpu.device,
+                &self.gpu.queue,
+                &mut encoder,
+                target,
+                &list,
+                inside,
+            );
+        }
+
         self.framebuffer.present(&mut encoder, &view, rect);
         self.gpu.queue.submit(Some(encoder.finish()));
         self.gpu.queue.present(frame);
@@ -1141,6 +1349,8 @@ impl Session {
             .shell
             .clone()
             .context("this run has no menus: nothing loaded a font or a sprite sheet")?;
+        // Everything below this is a load, and a load is not a frame time.
+        self.stalled = true;
         let mut model = menu::Menu::new(shell.definition.clone());
         // Supplied before seeding, because a value cannot be seeded onto a list
         // that is not there yet.
@@ -1211,7 +1421,7 @@ impl Session {
                 }
                 println!("\nloading {}", self.race_options.track);
                 match self.launch_race() {
-                    Ok(()) => println!("\n{RACE_KEYS}"),
+                    Ok(()) => println!("\n{RACE_KEYS}{ESC_TO_MENU}"),
                     // Reported rather than fatal: leaving the menus on screen
                     // lets the player pick something else, where a vanished
                     // window would just look like a crash.
@@ -1224,6 +1434,51 @@ impl Session {
                 self.quit = true;
             }
         }
+    }
+
+    /// What escape does, which is **back one level** and not quit.
+    ///
+    /// One rule, three places it lands:
+    ///
+    /// - in the menus, it pops a page, exactly as circle does. On the root page
+    ///   `Menu::back` raises `Closed`, which already means "there is nothing
+    ///   behind the menus", so the last one still quits;
+    /// - in a race, it hands the window back to the menus;
+    /// - in the front end, or in a `--race` run that never had menus, there is
+    ///   no level behind and it quits.
+    ///
+    /// **Leaving a race discards it.** There is no pause and no resume - the
+    /// `World` is dropped and re-entering the race loads a fresh one - and
+    /// building that is a milestone of its own, not something to half-do here.
+    /// A player who backs out of a race expects to lose it; one who backs out
+    /// and finds a *stale* race would not.
+    fn escape(&mut self) {
+        // Collected before anything else touches `self`: `handle_menu` takes
+        // `&mut self` and the events borrow the stage.
+        if let Stage::Menu(stage) = &mut self.stage {
+            let events = stage.menu.back();
+            for event in events {
+                self.handle_menu(&event);
+            }
+            return;
+        }
+
+        if matches!(self.stage, Stage::Race(_)) && self.shell.is_some() {
+            println!("\nleaving the race");
+            match self.open_menus() {
+                Ok(()) => println!("\n{SHELL_KEYS}"),
+                // Reported rather than fatal, and then it quits: a race whose
+                // menus cannot be rebuilt has nothing left to offer, but a
+                // window that vanished with no message would read as a crash.
+                Err(e) => {
+                    eprintln!("cannot return to the menus: {e:#}");
+                    self.quit = true;
+                }
+            }
+            return;
+        }
+
+        self.quit = true;
     }
 
     /// Puts the window into the mode and size the settings now hold.
@@ -1298,6 +1553,42 @@ impl Session {
                     return;
                 }
             },
+            "graphics.perf_overlay" => match text.parse::<perf::Overlay>() {
+                // Applied by the next frame, which draws it or does not.
+                Ok(mode) => self.settings.graphics.perf_overlay = mode,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "graphics.vsync" => {
+                // A flag, so it is read off the value rather than parsed: the
+                // row is a toggle and `Value::Flag` is what it emits.
+                let menu::Value::Flag(on) = value else {
+                    eprintln!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                };
+                self.settings.graphics.vsync = *on;
+                // Applied immediately, by reconfiguring the surface. A player
+                // who turns vsync off and sees nothing change will assume it is
+                // broken, and the frame limiter that comes with it would then
+                // look broken too.
+                self.gpu.config.present_mode = present_mode(*on);
+                self.gpu
+                    .surface
+                    .configure(&self.gpu.device, &self.gpu.config);
+                // The frames either side of a surface reconfigure are not
+                // frames anyone is going to present at that rate.
+                self.stalled = true;
+            }
+            "graphics.frame_limit" => match text.parse::<perf::FrameLimit>() {
+                // Applied by the next `about_to_wait`, which is what waits.
+                Ok(limit) => self.settings.graphics.frame_limit = limit,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.anisotropy" => match text.parse::<Anisotropy>() {
                 Ok(level) => {
                     self.anisotropy = level;
@@ -1327,6 +1618,7 @@ impl Session {
     /// The window, the device and the surface are the ones already open, so the
     /// handoff costs a load and not a second window.
     fn launch_race(&mut self) -> Result<()> {
+        self.stalled = true;
         let loaded = race::load(&self.race_options)?;
         for line in &loaded.report {
             println!("{line}");

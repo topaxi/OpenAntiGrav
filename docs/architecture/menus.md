@@ -40,6 +40,7 @@ the release rather than of this project:
 | TEAM | `oag_formats::handling::TEAMS`, pinned to the eight shipped `handlingstats.xml` files by a test |
 | SPEED CLASS | `oag_physics::SpeedClass::ALL` |
 | WINDOW MODE / SIZE / ASPECT / RENDER SCALE | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
+| PERFORMANCE OVERLAY / FRAME LIMIT | `oag_game::perf`, pinned the same way |
 
 That split is what keeps [ADR-0006](adr/0006-no-copyrighted-content.md)
 satisfied while the Race page still says "Talon's Junction White": the words are
@@ -82,6 +83,41 @@ target = "options"
 ```
 
 Six entry kinds: `submenu`, `action`, `choice`, `toggle`, `binding`, `back`.
+
+### One row disabling another
+
+A `choice` or a `toggle` may carry `disabled_by`, naming a **`toggle` row's
+setting** that makes it inert while that toggle is on. VSYNC and FRAME LIMIT are
+the pair it exists for: with vsync on the display decides how often a frame is
+presented, so the limit is not consulted at all. Vsync ships **off** and the
+limit at **240** - this is a racing game, vsync costs a frame of latency, and
+240 is the top of the tier displays are actually built at (144, 165, 240), so it
+caps nothing common while still stopping a menu page running the GPU at four
+figures.
+
+```toml
+[[page.entry]]
+kind = "choice"
+label = "FRAME LIMIT"
+setting = "graphics.frame_limit"
+disabled_by = "graphics.vsync"
+```
+
+This is the **only** cross-row logic in the menus, and it stays inside the rule
+that this module knows nothing about what a setting means: the answer is read
+off the other *row*, not out of the settings file. `menu.rs` has not heard of
+vsync.
+
+A disabled row is **greyed, not hidden**. Hiding it changes the row count under
+the cursor, and a player looking for a setting that has silently vanished has no
+way to find out what took it away. It still takes the cursor, still shows its
+value, and does not move; `adjust` returns no event, so a keypress on it cannot
+persist a change nobody made.
+
+Two things the loader refuses, each with a test: a `disabled_by` on a kind that
+cannot be adjusted (it would parse and do nothing), and one naming a setting no
+`toggle` row edits (the row would never grey out, which looks exactly like a
+working one).
 
 **`action` and `values_from` are closed sets**, checked at load against enums in
 `menu.rs`. A typo in the asset is a startup error naming what it did know, not a
@@ -153,6 +189,66 @@ without this repository containing its name.
   less noticeable because a race is built after the menus anyway.
 - **Anything a HUD needs.** When `oag-ui` exists (M5, see
   [workspace layout](workspace-layout.md)), this module moves into it.
+
+## What escape does
+
+**Back one level, everywhere**, which is one rule and three places it lands:
+
+| Where | What happens |
+| --- | --- |
+| The menus | Pops a page, exactly as circle does. On the root page there is nothing behind the menus, so it quits |
+| A race | Hands the window back to the menus |
+| The boot sequence, or a `--race` run | Nothing is behind it, so it quits |
+
+It used to call `event_loop.exit()` on the first keypress from anywhere, which
+is the behaviour a player is least likely to want and the one they cannot undo.
+
+Two things this cost that are worth knowing before touching it again:
+
+- **Escape is not a game button and must not become one.** Mapping it onto
+  `circle` would give the menus their back key for free and give a race a
+  brake. So the window layer calls `Menu::back` directly, out of band with the
+  tick loop - safe only because the menus hold no input state of their own.
+- **`repeat` matters now.** winit resends `Pressed` while a key is held, and
+  "back one level" thirty times a second walks out of the menus and quits. It
+  did not matter while the first press exited.
+
+**Leaving a race discards it.** There is no pause and no resume: the `World` is
+dropped and re-entering loads a fresh race. A player who backs out expects to
+lose the race; one who backs out and finds a *stale* one would not, so a
+half-built pause would be worse than none.
+
+## The performance overlay
+
+`GRAPHICS -> PERFORMANCE OVERLAY` is `off`, `fps` or `pacing`, and it is the one
+row here that draws over every stage rather than configuring one.
+[`crates/game/src/perf.rs`](../../crates/game/src/perf.rs) has the reasoning; the
+part that belongs on this page is why it is **three values and not a toggle**:
+`fps` answers "is there headroom", `pacing` answers "are the frames evenly
+spaced", and the second question is the one an average frame rate is incapable
+of answering. A game can hold a perfect 60 and stutter visibly, and only the
+graph shows it.
+
+It is drawn **into the offscreen target**, so at a render scale of 50 % the
+overlay is drawn at 50 % too - it costs what the game costs, or it is measuring a
+frame that does not exist. It uses this project's own 5x7 glyphs rather than the
+disc's font, because `--race` never loads a font and an overlay that vanishes on
+the route where it is most wanted is not an overlay.
+
+It is **window-only**. `--screenshot` runs the sequence as fast as it can with
+nothing presenting, so a frame time from it would be a real measurement of
+something nobody is asking about.
+
+The limiter that the overlay measures lives in `about_to_wait` and not in the
+frame: producing fewer frames means *asking* for fewer, not drawing one and then
+sleeping on a submitted command buffer. `ControlFlow::WaitUntil` hands the
+waiting to the platform's own timer, and the deadline is measured from the start
+of the last frame so the setting is a frame *rate* rather than a gap - a
+60-limited loop that spends 10 ms drawing waits 6.7, not 16.7.
+
+None of this touches the simulation. The timestep is fixed at 60 Hz per
+[ADR-0007](adr/0007-fixed-timestep-vs-original.md) whatever the frame rate is,
+so a 30-limited run takes two ticks a frame rather than running in slow motion.
 
 ## What deliberately bypasses the menus
 

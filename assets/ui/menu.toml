@@ -179,6 +179,50 @@ label = "ANISOTROPIC FILTERING"
 setting = "graphics.anisotropy"
 values = ["off", "2x", "4x", "8x", "16x"]
 
+# Vsync and the limiter are one pair: with vsync on the display decides how
+# often a frame is presented, so the limit below is not consulted at all and
+# `disabled_by` greys it out rather than leaving a row that does nothing.
+# Greyed and not hidden - a setting that vanishes gives a player no way to find
+# out what took it away.
+#
+# Vsync defaults OFF and the limit to 240: this is a racing game, vsync costs a
+# frame of latency, and 240 is the top of the tier displays are built at so it
+# caps nothing common while still bounding a menu page that would otherwise run
+# at four figures.
+[[page.entry]]
+kind = "toggle"
+label = "VSYNC"
+setting = "graphics.vsync"
+
+[[page.entry]]
+kind = "choice"
+label = "FRAME LIMIT"
+setting = "graphics.frame_limit"
+disabled_by = "graphics.vsync"
+values = [
+    "unlimited",
+    "30",
+    "60",
+    "72",
+    "90",
+    "120",
+    "144",
+    "165",
+    "240",
+    "360",
+    "480",
+    "1000",
+]
+
+# `fps` is one line of numbers; `pacing` adds the graph, which is the one that
+# shows uneven frames - an average frame rate is exactly what hides them. Drawn
+# over every stage from the next frame. See `crates/game/src/perf.rs`.
+[[page.entry]]
+kind = "choice"
+label = "PERFORMANCE OVERLAY"
+setting = "graphics.perf_overlay"
+values = ["off", "fps", "pacing"]
+
 [[page.entry]]
 kind = "back"
 label = "BACK"

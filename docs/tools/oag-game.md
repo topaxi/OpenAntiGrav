@@ -26,8 +26,15 @@ just play --race    # the race on its own
 ```
 
 WASD steers (arrow keys also work), X or Return thrusts, Q and E are the left
-and right airbrakes, C and V are square and triangle, Escape quits. The keys
-are the same
+and right airbrakes, C and V are square and triangle.
+
+**Escape goes back one level**, and only quits when there is nothing behind:
+from a race it returns to the menus, from a menu page it pops one page, and from
+the root page or a `--race` run - which never had menus - it quits. Backing out
+of a race **discards** it; there is no pause and re-entering loads a fresh one.
+The whole rule is on the [menus](../architecture/menus.md#what-escape-does) page.
+
+The keys are the same
 [abstract button layer](../ghidra/functions/psp-pulse/input.md) the front end uses;
 there is one mapping from a keyboard to a snapshot and both halves go through it,
 one set of devices for the whole session, so a key held across the handoff stays

@@ -1,0 +1,744 @@
+//! Frame pacing: how many frames arrive, how evenly, and how many are allowed
+//! to.
+//!
+//! [`Meter`] and [`draw_list`] measure and report; [`FrameLimit`] is the one
+//! knob that changes what is measured. They live together because a limiter
+//! whose effect cannot be seen is a setting nobody can tell is working.
+//!
+//! # The overlay
+//!
+//! Two numbers, because they answer different questions. **Frames per second**
+//! says whether there is headroom. **Frame pacing** says whether the frames are
+//! spaced evenly, and a game can hold a perfect 60 and still stutter visibly if
+//! every fourth frame takes twice as long as the three before it. An average
+//! cannot show that - it is exactly what an average erases - so the graph draws
+//! every frame in the window and the text reports the 99th percentile next to
+//! the mean.
+//!
+//! # Why this is not a determinism problem
+//!
+//! `docs/architecture/determinism.md` forbids the simulation reading a wall
+//! clock, and this module is built on nothing else. The rule holds because
+//! **nothing here is read by the simulation**: [`Meter`] is fed durations by
+//! the composition root's frame loop and produces [`Draw`]s, and no path leads
+//! from a [`Stats`] back into a tick. Keeping [`Meter::record`] taking a
+//! duration rather than reading the clock itself is what makes that checkable -
+//! the whole module is a pure function of a fed sequence, and its tests feed
+//! one.
+//!
+//! [`FrameLimit`] is the same argument from the other side: it changes how
+//! often the *loop* runs, never how far a tick advances. The timestep is fixed
+//! at 60 Hz per ADR-0007 whatever the frame rate is, so limiting to 30 gives
+//! two ticks a frame rather than a slow-motion race.
+//!
+//! # Where it is drawn
+//!
+//! Into the offscreen target, over whatever the stage drew, in the same
+//! 480x272 space as the front end and the menus - so at a render scale of 50 %
+//! the overlay is drawn at 50 % too. That is deliberate: the overlay should
+//! cost what the game costs, or it is measuring a frame that does not exist.
+//!
+//! It is **window-only**. `--screenshot` runs the sequence as fast as it can
+//! with no presentation at all, so a frame time from it would be a real
+//! measurement of something nobody is asking about.
+
+use serde::{Deserialize, Serialize};
+
+use crate::frontend::{Align, Draw};
+
+/// How many frames the meter remembers: two seconds at 60 Hz.
+///
+/// Long enough that a single hitch is visible for long enough to read, short
+/// enough that the numbers still follow what is happening now. It is also the
+/// graph's width in pixels, one column per frame, so no sample is dropped or
+/// doubled on the way to the screen.
+pub const WINDOW: usize = 120;
+
+/// The longest frame the meter will believe, in seconds.
+///
+/// A load - a track, a ship, a set of pipelines - lands in exactly one frame's
+/// duration and is not a frame time in any useful sense. The composition root
+/// calls [`Meter::clear`] whenever it knows it has stalled; this is the
+/// backstop for the stalls it does not know about, and it clamps rather than
+/// discards because a two-second hitch the player *saw* should not vanish from
+/// the graph that exists to show hitches.
+const LONGEST: f32 = 1.0;
+
+/// What the overlay shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Overlay {
+    /// Nothing.
+    #[default]
+    Off,
+    /// One line: the frame rate and the mean frame time.
+    Fps,
+    /// The line, a second line of pacing figures, and a graph of every frame in
+    /// the window.
+    Pacing,
+}
+
+impl Overlay {
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Fps => "fps",
+            Self::Pacing => "pacing",
+        }
+    }
+
+    /// Whether anything is drawn at all.
+    #[must_use]
+    pub fn is_on(self) -> bool {
+        self != Self::Off
+    }
+
+    /// Every mode, for the menus and for error messages.
+    pub const ALL: [Self; 3] = [Self::Off, Self::Fps, Self::Pacing];
+}
+
+impl std::str::FromStr for Overlay {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| format!("{text:?} is not a performance overlay; try off, fps or pacing"))
+    }
+}
+
+impl std::fmt::Display for Overlay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// How many frames a second the loop may produce, or unlimited.
+///
+/// **Only consulted when vsync is off.** With vsync on the display decides, and
+/// a second limiter underneath it would either do nothing or beat against the
+/// refresh - which is worse than no limiter at all, because it turns an even
+/// 60 into an uneven one. The graphics page says so by greying the row out; see
+/// `docs/architecture/menus.md`.
+///
+/// Zero is unlimited rather than a rate of zero, which is why the field is
+/// private and [`FrameLimit::hz`] returns an `Option`: nothing outside this type
+/// has to know the sentinel, and nothing can divide by it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct FrameLimit(u32);
+
+impl FrameLimit {
+    /// As fast as the loop can go.
+    pub const UNLIMITED: Self = Self(0);
+
+    /// The fastest limit that can be asked for.
+    ///
+    /// Not a preference: past about here the limiter is measuring intervals
+    /// shorter than the scheduler's own resolution, so what it delivers stops
+    /// being what it was asked for. A player who wants more than this wants
+    /// [`FrameLimit::UNLIMITED`], and that is a different row value rather than
+    /// a larger number.
+    pub const MAX: u32 = 1000;
+
+    /// What a fresh install is limited to, with vsync off by default.
+    ///
+    /// **240**, which is the top of the tier displays are actually built at
+    /// (144, 165, 240) rather than a number picked for roundness: it does not
+    /// cap any common panel, and it still stops a menu page running the GPU at
+    /// four figures for no picture anybody can see. Unlimited is a row away for
+    /// a player who wants it, and the point of a default is that the run nobody
+    /// configured is already sane.
+    pub const DEFAULT: Self = Self(240);
+
+    /// The limits the menus offer: unlimited, then the refresh rates displays
+    /// are actually built at, then the ceiling.
+    pub const OFFERED: [Self; 12] = [
+        Self::UNLIMITED,
+        Self(30),
+        Self(60),
+        Self(72),
+        Self(90),
+        Self(120),
+        Self(144),
+        Self(165),
+        Self(240),
+        Self(360),
+        Self(480),
+        Self(Self::MAX),
+    ];
+
+    /// The rate asked for, or `None` for unlimited.
+    #[must_use]
+    pub fn hz(self) -> Option<u32> {
+        (self.0 > 0).then_some(self.0)
+    }
+
+    /// How long one frame is allowed to take at the least, or `None` for
+    /// unlimited.
+    #[must_use]
+    pub fn period(self) -> Option<std::time::Duration> {
+        self.hz()
+            .map(|hz| std::time::Duration::from_nanos(1_000_000_000 / u64::from(hz)))
+    }
+}
+
+impl Default for FrameLimit {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl std::str::FromStr for FrameLimit {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let text = text.trim();
+        if text.eq_ignore_ascii_case("unlimited") {
+            return Ok(Self::UNLIMITED);
+        }
+        let hz: u32 = text
+            .parse()
+            .map_err(|_| format!("{text:?} is not a frame limit; write a rate or \"unlimited\""))?;
+        // Zero is rejected rather than accepted as a second spelling of
+        // unlimited: two spellings for one value is how a settings file and a
+        // menu row start disagreeing about what is selected.
+        if hz == 0 || hz > Self::MAX {
+            return Err(format!(
+                "a frame limit is 1 to {} frames a second, or \"unlimited\"",
+                Self::MAX
+            ));
+        }
+        Ok(Self(hz))
+    }
+}
+
+impl std::fmt::Display for FrameLimit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.hz() {
+            Some(hz) => write!(f, "{hz}"),
+            None => f.write_str("unlimited"),
+        }
+    }
+}
+
+impl TryFrom<String> for FrameLimit {
+    type Error = String;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        text.parse()
+    }
+}
+
+impl From<FrameLimit> for String {
+    fn from(limit: FrameLimit) -> Self {
+        limit.to_string()
+    }
+}
+
+/// A ring of the most recent frame durations, in seconds.
+///
+/// Fixed size and no allocation: this is fed once per frame forever, and a
+/// growing buffer measuring frame times would eventually be the thing making
+/// them worse.
+#[derive(Debug, Clone)]
+pub struct Meter {
+    samples: [f32; WINDOW],
+    /// How many of `samples` are real. Saturates at [`WINDOW`].
+    len: usize,
+    /// Where the next sample goes, which is also the oldest one once full.
+    next: usize,
+}
+
+impl Default for Meter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Meter {
+    /// An empty meter, which reports nothing until it has been fed.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            samples: [0.0; WINDOW],
+            len: 0,
+            next: 0,
+        }
+    }
+
+    /// Records one frame, given how long it took in seconds.
+    ///
+    /// **Takes the duration rather than reading a clock**, which is what makes
+    /// every number below testable against a fed sequence instead of against
+    /// whatever the machine happened to do.
+    ///
+    /// A duration that is not a finite positive number is dropped: a clock that
+    /// went backwards is not a fast frame, and a zero would make the frame rate
+    /// infinite. Anything longer than a second is clamped - see [`LONGEST`].
+    pub fn record(&mut self, seconds: f32) {
+        if !seconds.is_finite() || seconds <= 0.0 {
+            return;
+        }
+        self.samples[self.next] = seconds.min(LONGEST);
+        self.next = (self.next + 1) % WINDOW;
+        self.len = (self.len + 1).min(WINDOW);
+    }
+
+    /// Forgets everything recorded so far.
+    ///
+    /// Called by the frame loop whenever it knows it has just stalled - opening
+    /// the menus, loading a race - because that stall is a load and not a frame
+    /// time, and one 1000 ms column would otherwise dominate the graph for the
+    /// two seconds a player is most likely to be looking at it.
+    pub fn clear(&mut self) {
+        self.len = 0;
+        self.next = 0;
+    }
+
+    /// Whether anything has been recorded.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Every remembered frame, oldest first.
+    fn frames(&self) -> impl Iterator<Item = f32> + '_ {
+        // Full, the oldest sample is the one `next` is about to overwrite;
+        // partly filled, nothing has wrapped yet and the oldest is index 0.
+        let start = if self.len == WINDOW { self.next } else { 0 };
+        (0..self.len).map(move |i| self.samples[(start + i) % WINDOW])
+    }
+
+    /// What the window says, or `None` if nothing usable is in it.
+    #[must_use]
+    pub fn stats(&self) -> Option<Stats> {
+        if self.len == 0 {
+            return None;
+        }
+        let mut sorted = [0.0f32; WINDOW];
+        let mut total = 0.0;
+        for (slot, frame) in sorted.iter_mut().zip(self.frames()) {
+            *slot = frame;
+            total += frame;
+        }
+        let window = &mut sorted[..self.len];
+        // `total_cmp` rather than `partial_cmp`: `record` already rejected the
+        // NaN that would make a partial ordering panic, and asking for a total
+        // one means this cannot start depending on that having happened.
+        window.sort_unstable_by(f32::total_cmp);
+
+        if total <= 0.0 {
+            return None;
+        }
+        let count = self.len as f32;
+        // The 99th percentile by nearest rank, which at a full window is the
+        // second-worst frame. Reported instead of the worst because one outlier
+        // - the frame a compositor decided to reconfigure the surface on - is
+        // not what stutter feels like; it is the shape of the tail that is.
+        let rank = (((self.len - 1) as f32) * 0.99).round() as usize;
+
+        Some(Stats {
+            fps: count / total,
+            mean_ms: (total / count) * 1000.0,
+            p99_ms: window[rank] * 1000.0,
+            worst_ms: window[self.len - 1] * 1000.0,
+        })
+    }
+}
+
+/// What a window of frames adds up to. All times in milliseconds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Stats {
+    /// Frames divided by the time they took, which is not `1000 / mean_ms`
+    /// rounded - it is the same number, and it is computed from the total so a
+    /// short window is still honest.
+    pub fps: f32,
+    /// Mean frame time.
+    pub mean_ms: f32,
+    /// 99th percentile frame time: what the slow frames cost.
+    pub p99_ms: f32,
+    /// The longest frame in the window.
+    pub worst_ms: f32,
+}
+
+/// Where the panel sits in the 480x272 space, and how big it is.
+///
+/// Top right, because the front end and the menus both start at the left margin
+/// and a race puts its ship in the middle. Nothing here is recovered from
+/// anything; it is picked to stay legible at the smallest window the game opens.
+const RIGHT: f32 = 474.0;
+const TOP: f32 = 4.0;
+const PAD: f32 = 4.0;
+const LINE: f32 = 10.0;
+/// One column per remembered frame, so the graph is [`WINDOW`] pixels wide.
+const GRAPH_W: f32 = WINDOW as f32;
+const GRAPH_H: f32 = 30.0;
+const PANEL_W: f32 = GRAPH_W + PAD * 2.0;
+
+/// The panel, the text, and the three bands a frame time can fall in.
+const PANEL: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
+const TEXT: [f32; 4] = [0.92, 0.95, 1.0, 1.0];
+const GOOD: [f32; 4] = [0.35, 0.86, 0.45, 0.9];
+const WARN: [f32; 4] = [0.96, 0.78, 0.25, 0.9];
+const BAD: [f32; 4] = [0.94, 0.32, 0.3, 0.95];
+/// The line across the graph at one target frame time.
+const RULE: [f32; 4] = [1.0, 1.0, 1.0, 0.35];
+
+/// How much over the target still counts as on time.
+///
+/// A little over 5 %, so a 60 Hz target does not paint every frame amber for
+/// arriving at 16.8 ms instead of 16.67. The graph exists to show stutter, and
+/// a graph that is always amber shows nothing.
+const SLACK: f32 = 1.05;
+
+/// The height of the graph, in frame times: two target frames, so the target
+/// itself sits exactly halfway up and the rule is easy to read against.
+const GRAPH_FRAMES: f32 = 2.0;
+
+/// The overlay, as plain data.
+///
+/// The same [`Draw`] vocabulary the front end and the menus emit, so the
+/// composition root rasterises it with the renderer it already has.
+///
+/// `target_hz` is what a frame is being measured against: **the rate the loop
+/// is actually trying to present at**, which is [`FrameLimit`] when one is in
+/// force and the simulation's rate otherwise. It only sets the colours and the
+/// graph's scale; the numbers are measured, not scaled - but get it wrong and
+/// the graph says nothing, because against a target four times too slow every
+/// column is a green sliver at the floor.
+#[must_use]
+pub fn draw_list(meter: &Meter, mode: Overlay, target_hz: u32) -> Vec<Draw> {
+    if !mode.is_on() {
+        return Vec::new();
+    }
+    let Some(stats) = meter.stats() else {
+        return Vec::new();
+    };
+    let target_ms = 1000.0 / target_hz.max(1) as f32;
+
+    let graph = mode == Overlay::Pacing;
+    let mut lines = vec![format!("{:.0} FPS  {:.1} MS", stats.fps, stats.mean_ms)];
+    if graph {
+        lines.push(format!(
+            "P99 {:.1}  MAX {:.1}",
+            stats.p99_ms, stats.worst_ms
+        ));
+    }
+
+    let text_height = lines.len() as f32 * LINE;
+    let panel_h = PAD * 2.0 + text_height + if graph { GRAPH_H + PAD } else { 0.0 };
+
+    let mut out = vec![Draw::Fill {
+        rect: [RIGHT - PANEL_W, TOP, PANEL_W, panel_h],
+        color: PANEL,
+    }];
+
+    for (row, text) in lines.into_iter().enumerate() {
+        out.push(Draw::Text {
+            x: RIGHT - PAD,
+            y: TOP + PAD + row as f32 * LINE,
+            scale: 1.0,
+            color: TEXT,
+            align: Align::Right,
+            text,
+        });
+    }
+
+    if !graph {
+        return out;
+    }
+
+    let left = RIGHT - PAD - GRAPH_W;
+    let top = TOP + PAD + text_height + PAD;
+    let bottom = top + GRAPH_H;
+    let ceiling = target_ms * GRAPH_FRAMES;
+
+    // The target, drawn under the columns so a column that reaches it is not
+    // cut in half by its own reference line.
+    out.push(Draw::Fill {
+        rect: [left, bottom - GRAPH_H / GRAPH_FRAMES, GRAPH_W, 1.0],
+        color: RULE,
+    });
+
+    // Oldest at the left, so the graph reads the way a chart does and the
+    // newest frame is the one nearest the numbers above it.
+    for (column, frame) in meter.frames().enumerate() {
+        let ms = frame * 1000.0;
+        let height = (ms / ceiling).min(1.0) * GRAPH_H;
+        if height <= 0.0 {
+            continue;
+        }
+        out.push(Draw::Fill {
+            rect: [left + column as f32, bottom - height, 1.0, height],
+            color: band(ms, target_ms),
+        });
+    }
+
+    out
+}
+
+/// Which band a frame time falls in.
+fn band(ms: f32, target_ms: f32) -> [f32; 4] {
+    if ms <= target_ms * SLACK {
+        GOOD
+    } else if ms <= target_ms * GRAPH_FRAMES {
+        WARN
+    } else {
+        BAD
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Sixty frames of exactly 1/60 s.
+    fn steady(meter: &mut Meter, frames: usize, seconds: f32) {
+        for _ in 0..frames {
+            meter.record(seconds);
+        }
+    }
+
+    #[test]
+    fn an_empty_meter_reports_nothing_rather_than_infinity() {
+        let meter = Meter::new();
+        assert!(meter.is_empty());
+        assert_eq!(meter.stats(), None);
+        assert!(draw_list(&meter, Overlay::Pacing, 60).is_empty());
+    }
+
+    #[test]
+    fn a_steady_sixty_reads_as_sixty() {
+        let mut meter = Meter::new();
+        steady(&mut meter, WINDOW, 1.0 / 60.0);
+        let stats = meter.stats().expect("fed");
+        assert!((stats.fps - 60.0).abs() < 0.01, "{}", stats.fps);
+        assert!((stats.mean_ms - 16.667).abs() < 0.01, "{}", stats.mean_ms);
+        assert!((stats.worst_ms - 16.667).abs() < 0.01, "{}", stats.worst_ms);
+    }
+
+    /// The whole reason the graph exists: alternating 8 ms and 25 ms averages
+    /// out to a comfortable 16.5 ms and looks awful.
+    #[test]
+    fn an_average_hides_the_stutter_the_percentile_shows() {
+        let mut meter = Meter::new();
+        for i in 0..WINDOW {
+            meter.record(if i % 2 == 0 { 0.008 } else { 0.025 });
+        }
+        let stats = meter.stats().expect("fed");
+        assert!((stats.mean_ms - 16.5).abs() < 0.01, "{}", stats.mean_ms);
+        assert!(stats.fps > 60.0, "{}", stats.fps);
+        assert!((stats.p99_ms - 25.0).abs() < 0.01, "{}", stats.p99_ms);
+    }
+
+    /// One catastrophic frame must not be what the p99 reports, or the figure
+    /// is just `worst_ms` under another name.
+    #[test]
+    fn one_outlier_moves_the_maximum_and_not_the_percentile() {
+        let mut meter = Meter::new();
+        steady(&mut meter, WINDOW - 1, 1.0 / 60.0);
+        meter.record(0.5);
+        let stats = meter.stats().expect("fed");
+        assert!((stats.worst_ms - 500.0).abs() < 0.01, "{}", stats.worst_ms);
+        assert!(stats.p99_ms < 17.0, "{}", stats.p99_ms);
+    }
+
+    #[test]
+    fn the_ring_forgets_the_oldest_frame_and_keeps_the_order() {
+        let mut meter = Meter::new();
+        for i in 0..WINDOW + 10 {
+            meter.record((i + 1) as f32 / 10_000.0);
+        }
+        let frames: Vec<f32> = meter.frames().collect();
+        assert_eq!(frames.len(), WINDOW);
+        assert!((frames[0] - 11.0 / 10_000.0).abs() < 1e-9, "{}", frames[0]);
+        let last = frames[WINDOW - 1];
+        assert!(
+            (last - (WINDOW + 10) as f32 / 10_000.0).abs() < 1e-9,
+            "{last}"
+        );
+    }
+
+    /// A clock that goes backwards, a zero-length frame and a NaN are all
+    /// things a wall clock can hand over, and none of them is a frame.
+    #[test]
+    fn a_nonsense_duration_is_dropped_and_a_stall_is_clamped() {
+        let mut meter = Meter::new();
+        meter.record(-1.0);
+        meter.record(0.0);
+        meter.record(f32::NAN);
+        meter.record(f32::INFINITY);
+        assert!(meter.is_empty());
+
+        meter.record(30.0);
+        let stats = meter.stats().expect("fed");
+        assert!(
+            (stats.worst_ms - LONGEST * 1000.0).abs() < 0.01,
+            "{}",
+            stats.worst_ms
+        );
+    }
+
+    #[test]
+    fn clearing_forgets_the_load_that_was_not_a_frame() {
+        let mut meter = Meter::new();
+        meter.record(0.9);
+        meter.clear();
+        assert!(meter.is_empty());
+        steady(&mut meter, 10, 1.0 / 60.0);
+        let stats = meter.stats().expect("fed");
+        assert!(stats.worst_ms < 17.0, "{}", stats.worst_ms);
+    }
+
+    #[test]
+    fn off_draws_nothing_however_full_the_meter_is() {
+        let mut meter = Meter::new();
+        steady(&mut meter, WINDOW, 1.0 / 60.0);
+        assert!(draw_list(&meter, Overlay::Off, 60).is_empty());
+    }
+
+    /// The counter is one panel and one line; the pacing view adds a second
+    /// line, the rule and one column per remembered frame.
+    #[test]
+    fn each_mode_draws_exactly_what_it_promises() {
+        let mut meter = Meter::new();
+        steady(&mut meter, WINDOW, 1.0 / 60.0);
+
+        let fps = draw_list(&meter, Overlay::Fps, 60);
+        assert_eq!(fps.len(), 2);
+        assert!(matches!(fps[0], Draw::Fill { .. }));
+        assert!(matches!(&fps[1], Draw::Text { text, .. } if text.starts_with("60 FPS")));
+
+        let pacing = draw_list(&meter, Overlay::Pacing, 60);
+        // panel + two lines + the rule + one column per frame
+        assert_eq!(pacing.len(), 4 + WINDOW);
+        assert!(matches!(&pacing[2], Draw::Text { text, .. } if text.starts_with("P99")));
+    }
+
+    /// Every rectangle has to land inside the panel it is drawn under, or the
+    /// overlay writes over the game somewhere nobody looked.
+    #[test]
+    fn nothing_is_drawn_outside_the_panel() {
+        let mut meter = Meter::new();
+        for i in 0..WINDOW {
+            meter.record(if i == 7 { 0.5 } else { 1.0 / 60.0 });
+        }
+        let list = draw_list(&meter, Overlay::Pacing, 60);
+        let Draw::Fill { rect: panel, .. } = list[0] else {
+            panic!("the panel comes first");
+        };
+        for draw in &list[1..] {
+            let Draw::Fill { rect, .. } = draw else {
+                continue;
+            };
+            assert!(rect[0] >= panel[0], "{rect:?} starts left of {panel:?}");
+            assert!(
+                rect[0] + rect[2] <= panel[0] + panel[2],
+                "{rect:?} runs past {panel:?}"
+            );
+            assert!(rect[1] >= panel[1], "{rect:?} starts above {panel:?}");
+            assert!(
+                rect[1] + rect[3] <= panel[1] + panel[3] + 0.001,
+                "{rect:?} runs below {panel:?}"
+            );
+        }
+    }
+
+    /// The graph is drawn against the target, not against 60 Hz, and the
+    /// difference is the whole readability of it: at a 240 limit a 4.2 ms frame
+    /// has to fill half the box, and against 60 the same frame is a sliver at
+    /// the floor that says nothing about pacing at all.
+    #[test]
+    fn the_graph_is_scaled_to_the_target_it_is_given() {
+        let mut meter = Meter::new();
+        steady(&mut meter, WINDOW, 1.0 / 240.0);
+
+        let heights = |target| {
+            draw_list(&meter, Overlay::Pacing, target)
+                .into_iter()
+                .skip(4) // the panel, two lines of text and the rule
+                .filter_map(|draw| match draw {
+                    Draw::Fill { rect, color } => Some((rect[3], color)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let (tall, colour) = heights(240)[0];
+        assert!((tall - GRAPH_H / 2.0).abs() < 0.1, "{tall}");
+        assert_eq!(colour, GOOD, "a frame exactly at the target is on time");
+
+        let (sliver, _) = heights(60)[0];
+        assert!(sliver < GRAPH_H / 6.0, "{sliver}");
+    }
+
+    /// A frame at the target is on time, one a little over is late, and one
+    /// past the graph's ceiling is the colour that says so.
+    #[test]
+    fn the_bands_split_where_they_say_they_do() {
+        assert_eq!(band(16.6, 16.667), GOOD);
+        assert_eq!(band(17.4, 16.667), GOOD);
+        assert_eq!(band(20.0, 16.667), WARN);
+        assert_eq!(band(33.3, 16.667), WARN);
+        assert_eq!(band(40.0, 16.667), BAD);
+    }
+
+    #[test]
+    fn every_frame_limit_survives_a_round_trip_through_its_own_spelling() {
+        for limit in FrameLimit::OFFERED {
+            assert_eq!(limit.to_string().parse::<FrameLimit>(), Ok(limit));
+        }
+        assert_eq!(FrameLimit::UNLIMITED.to_string(), "unlimited");
+        assert_eq!("UNLIMITED".parse(), Ok(FrameLimit::UNLIMITED));
+    }
+
+    /// Zero is not a second spelling of unlimited, and the ceiling is a
+    /// ceiling. Both would otherwise land in the settings file as a value the
+    /// menus cannot select and the loop cannot honour.
+    #[test]
+    fn a_frame_limit_outside_the_range_is_refused() {
+        assert!("0".parse::<FrameLimit>().is_err());
+        assert!("1001".parse::<FrameLimit>().is_err());
+        assert!("-1".parse::<FrameLimit>().is_err());
+        assert!("fast".parse::<FrameLimit>().is_err());
+        assert_eq!("1000".parse(), Ok(FrameLimit::OFFERED[11]));
+    }
+
+    /// The default has to be one of the values the menus offer, or the row
+    /// draws whatever happens to be first and the first nudge of it persists
+    /// that as a deliberate choice.
+    #[test]
+    fn the_default_limit_is_one_the_menus_can_show() {
+        assert_eq!(FrameLimit::default(), FrameLimit::DEFAULT);
+        assert!(
+            FrameLimit::OFFERED.contains(&FrameLimit::DEFAULT),
+            "{} is not on the list the menus offer",
+            FrameLimit::DEFAULT
+        );
+        assert_eq!(FrameLimit::DEFAULT.hz(), Some(240));
+    }
+
+    #[test]
+    fn unlimited_has_no_period_to_wait_out() {
+        assert_eq!(FrameLimit::UNLIMITED.hz(), None);
+        assert_eq!(FrameLimit::UNLIMITED.period(), None);
+        let sixty: FrameLimit = "60".parse().expect("parse");
+        assert_eq!(sixty.hz(), Some(60));
+        assert_eq!(
+            sixty.period(),
+            Some(std::time::Duration::from_nanos(16_666_666))
+        );
+    }
+
+    #[test]
+    fn every_mode_survives_a_round_trip_through_its_own_spelling() {
+        for mode in Overlay::ALL {
+            assert_eq!(mode.to_string().parse::<Overlay>(), Ok(mode));
+        }
+        assert!("graph".parse::<Overlay>().is_err());
+    }
+}

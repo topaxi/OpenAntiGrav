@@ -391,7 +391,9 @@ unread code and still blocks this milestone. See
       circuit are persisted and applied, anisotropic filtering is written to
       `settings.toml` on the keypress, and the chosen language skips the picker
       on the next run. Circuits and their names come off the player's own disc
-      rather than out of the asset. See [menus](../architecture/menus.md).
+      rather than out of the asset. **Escape backs out one level** rather than
+      quitting: a race returns to the menus, a page pops, and only the front
+      end and `--race` quit on it. See [menus](../architecture/menus.md).
       Style, animation and the disc's own artwork are all still absent, and
       **rebinding** is the one row that displays without editing.
 - [~] Modern features. The display half is in: window mode (windowed or
@@ -401,7 +403,11 @@ unread code and still blocks this milestone. See
       stage draws into an offscreen target and one pass stretches it into the
       aspect rectangle, which is also where the letterbox bars come from. See
       [menus](../architecture/menus.md) and `oag_game::display`.
-      Unlocked frame rate, HDR, VRR, FSR and Steam Input are all still open -
+      **Frame pacing is in too**: vsync, an **unlocked or limited frame rate**
+      (unlimited, or up to 1000), and a performance overlay that shows the rate,
+      the mean, the 99th percentile and a per-frame graph - because an average
+      frame rate is exactly what hides uneven frames. `oag_game::perf`.
+      HDR, VRR, FSR and Steam Input are still open -
       [modern features](modern-features.md).
 - [ ] Save data
 - [ ] Replay
