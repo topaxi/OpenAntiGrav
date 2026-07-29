@@ -1,0 +1,30 @@
+# Scenario 4 of docs/reverse-engineering/verification-protocol.md: wall scrape,
+# reached from a standing start.
+#
+# Full thrust from rest, held for 300 ticks, with no steering at all. On the
+# reference scenario's start line that is enough to launch, cross the track and
+# meet the outer wall at around tick 66, after which the craft scrapes along it
+# for the rest of the run.
+#
+# It exists to be *two* measurements in one capture, and the join is the point:
+#
+# - **Ticks 0-60ish: a clean launch.** `speed / |velocity| == 1.0000` while the
+#   craft is on the floor and nothing else, because floors combine to friction
+#   zero (`Collision_AddContact`'s `-1.0` sentinel). That stretch is what fits
+#   the recovered engine force law end to end - see
+#   docs/physics/force-balance-ground-truth.md.
+# - **Ticks 66-300: a sustained scrape at speed.** The per-frame velocity loss
+#   there is the direct read of the contact friction, and the reason it has to
+#   be *at speed* is that the ratio stops meaning anything once the craft is
+#   nearly stationary: the normal impulse dominates, and restitution can make
+#   `|velocity|` exceed `speed` outright.
+#
+# This file reconstructs a capture that was taken before scenarios were
+# committed and has since been lost with the rest of `data/traces/`. The
+# scenario is the durable artefact; the CSV is not.
+#
+# Reference scenario: Time Trial, Venom, Talon's Junction White
+# (Data\Environments\16_Track), Assegai. A script's warmup holds nothing,
+# because holding thrust through the countdown is a false start.
+
+300 cross

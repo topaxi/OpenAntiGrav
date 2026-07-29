@@ -89,17 +89,43 @@ the next pass has a baseline rather than a re-run:
 | Position, mean first/last quarter | 100.8 -> 22.9 | 1.89 -> 1.65 |
 | Orientation, worst axis | 0.66 rad | **0.114** rad |
 | Velocity, max | 97.8 | 54.5 |
-| `grounded` | **exact on 3,146 of 3,146** | exact |
+| `grounded` | exact on 3,146 of 3,146 - but see below | exact |
 | Trend, every field | shrinking or bounded; **nothing growing** | same |
 
-`grounded` agreeing exactly over a whole lap is the strongest single result in
-the table: the hover model decides the same thing about surface contact as the
-original on every one of 3,146 ticks. And the reseeded position error - a couple
-of units per second of simulation, never above ten - is a very different
-statement from the single-seeded 148, which is mostly one early divergence being
+**Do not read `grounded` as the headline it looks like.** The original's column
+is `1.0` on all 3,146 ticks of this capture, so agreement means only that our
+ship also never leaves the ground - a real improvement over the 2026-07-28 run,
+which read `0.5` against `1.0` and then left the surface for good at tick 313,
+but no evidence that the hover model quantises contact the way the original
+does. A constant column cannot test that, and under `--reseed` the field is one
+of the ones the seed restores anyway.
+
+The number that *is* worth having is the reseeded position error: a couple of
+units per second of simulation, never above ten. That is a very different
+statement from the single-seeded 148, which is mostly one early divergence
 carried forward.
 
-**Two things about the capture itself that the next person needs.** First, the
+**The standing start was retaken too, and it is the pass's best result.**
+`verification/scenarios/standing-start.inputs` is new - 300 ticks of held thrust
+from the start line - and it reconstructs a capture that was lost before
+scenarios were committed. It reproduces *both* legs of the force-balance
+conclusion on data that did not exist when they were derived, from a run that is
+demonstrably not the same one (clean for 186 ticks rather than 66; hits the wall
+at 119 units/s rather than 54):
+
+- **launch acceleration 32.69** on its third tick, against the recorded 32.52
+  and the predicted 31.8;
+- **the `0.035` contact-friction floor never crossed** - minimum loss 3.534 %
+  over 114 contact ticks, decaying 3.835 % -> 3.633 %, with **0 of 114** ticks
+  above 5 units/s falling below it.
+
+One condition on ever re-running that test, learned by getting it wrong on the
+lap capture first: it only measures friction while the craft is *moving*. Below
+a few units per second the normal impulse dominates and restitution can push
+`|velocity|` above `speed`, giving a negative loss - the lap capture has ticks
+reading `-380 %` on a craft wedged at 0.15 units/s.
+
+**Two things about the lap capture itself that the next person needs.** First, the
 committed lap script **no longer flies a clean lap in the emulator**: this
 capture fails the `speed/|velocity| == 1.0000` cleanliness test on **67.3 %** of
 its ticks (36.8 % over the first 600), where the 2026-07-28 capture of the same
@@ -285,7 +311,11 @@ step response at 1.006x; the contact friction coefficient as a one-sided bound
 approached from above; the mag-lock probe re-finding the magstrip from geometry
 that knows nothing about the capture (91 % of inverted poses against 0.3 % of
 upright ones). Method and numbers in the two ground-truth pages under
-[`docs/physics/`](docs/physics/README.md).
+[`docs/physics/`](docs/physics/README.md). Add to that the whole-lap result
+above: **`grounded` exact on 3,146 of 3,146 ticks** against a real circuit, with
+every field's error trend shrinking or bounded - the broadest runtime evidence
+the harness has produced, and the reason the wedge is now the only lap-scale
+symptom left.
 
 **Instruction-level reading with no runtime leg yet.** Mag-lock's blend weights
 and its `|h - d| > 5.0` fallback; the swept collision path; everything airborne.

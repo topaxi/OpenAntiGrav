@@ -303,13 +303,17 @@ one hypothesis and produced the strongest single result the harness has given:
 | --- | ---: | ---: |
 | Position, max error | 148.7 at tick 435 | **10.3** at tick 299 |
 | Orientation, worst axis | 0.66 rad | **0.114** rad |
-| `grounded` | **exact on 3,146 of 3,146** | exact |
+| `grounded` | exact on 3,146 of 3,146 - but see below | exact |
 | Trend, every field | shrinking or bounded; nothing growing | same |
 
-**`grounded` agreeing exactly across a whole lap** means the hover model decides
-the same thing about surface contact as the original on every tick of a real
-circuit, which is what the 2026-07-28 run - where ours read `0.5` against the
-original's `1.0` and then left the surface entirely - could not do.
+**What `grounded` agreeing on every tick does and does not say.** The original's
+column is `1.0` on all 3,146 ticks of this capture, so the agreement means *our
+ship also never leaves the ground* - which the 2026-07-28 run could not manage
+(it read `0.5` against the original's `1.0`, then left the surface for good at
+tick 313). That is a real improvement and it is **not** evidence that the hover
+model quantises contact the same way the original does; a constant column cannot
+test that. Under `--reseed` it says even less, because `grounded` is one of the
+fields the seed restores, 52 times a lap.
 
 The hypothesis that died: the run report's **21 rad/s** average angular velocity
 looked like a craft spinning three and a half times a second and was the obvious

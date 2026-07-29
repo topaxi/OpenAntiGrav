@@ -197,6 +197,34 @@ tick 295 alone; a friction of `0.03` would leave a `0.5 %` gap that never closes
 The prediction `0.035` is the only value in that neighbourhood the data admits,
 and it was read out of two literals before the trace was consulted.
 
+### Re-measured 2026-07-29, on an independent capture
+
+The recording above was lost with the rest of `data/traces/` and has been retaken
+from `verification/scenarios/standing-start.inputs`. **It is not the same run**:
+the craft meets the wall at tick **186** rather than 66, and does so at 119
+units/s rather than 54. What it does to the prediction:
+
+| | 2026-07-28 | 2026-07-29 |
+| --- | ---: | ---: |
+| Contact ticks | 230 | 114 |
+| Loss on the impact tick | `5.21 %` | `3.835 %` |
+| Loss at the end of the run | `3.560 %` | `3.633 %` |
+| **Minimum loss anywhere in contact** | above `3.5 %` | **`3.534 %`**, at 104 units/s |
+| Contact ticks above 5 units/s below the `0.035` floor | - | **0 of 114** |
+
+The floor holds on data that did not exist when it was predicted, from a
+different impact at twice the speed. The launch half of the same capture
+reproduces the other leg too - see
+[force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md).
+
+**One condition on any future use of this test, learned the hard way.** It is
+only a friction measurement while the craft is *moving*. Below a few units per
+second the normal impulse dominates the ratio and restitution can push
+`|velocity|` **above** `speed`, giving a negative "loss"; the whole-lap capture
+of the same day has ticks reading `-380 %` for that reason, on a craft wedged at
+0.15 units/s. Restrict the test to contact ticks at speed, as the last row above
+does.
+
 Confidence **90** for the whole chain: the combination rule is nine plain
 instructions, the two constants are single literals on branch-free paths, the
 resolver is read at 88, and the measurement is one-sided rather than a best fit.

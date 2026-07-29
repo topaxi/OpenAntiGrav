@@ -237,7 +237,8 @@ every committed scenario.
 | `airbrake-asymmetric.inputs` | Thrust and steer with one airbrake, the only scenario that exercises the `1e-5` airbrake drag term |
 | `pitch-both-ways.inputs` | **360 ticks of pitch, stationary on the start line, no thrust.** The cleanest capture in `data/traces/` - `speed/|velocity|` reads `1.0000` on 360 of 360 ticks - and the first with any pitch input at all |
 | `pitch-hold-thrust.inputs` | Thrust and a held nose-up off the line. Clean to tick 128 at 84 units/s, and dirty after |
-| `talons-junction-time-trial-lap.inputs` | **3,146 ticks: one completed lap of Talon's Junction White.** Not hand-authored - see below |
+| `standing-start.inputs` | **300 ticks of held thrust from the start line.** Two measurements in one: a clean launch to tick 186, then a sustained scrape at speed. The force-balance regression test - see [below](#the-standing-start-and-what-it-regression-tests) |
+| `talons-junction-time-trial-lap.inputs` | **3,146 ticks: one completed lap of Talon's Junction White.** Not hand-authored - see below, and note it no longer flies clean open-loop |
 
 `steer-both-ways` turns both ways on purpose. The sign of the yaw response is one
 of the things this harness exists to settle - row 0 of the recorded basis being
@@ -688,6 +689,29 @@ actually answer: *given exactly where the original was, where do we put the ship
 over the next `N` ticks?* Error stops compounding, so a maximum is a statement
 about the worst window rather than about how long the run happened to be.
 
+### What a re-seed restores, and what it silently resets
+
+A window boundary runs the *same* `initial_state` tick 0 runs, which is the point
+- but that also means it inherits tick 0's limits, and
+[what a run is seeded with](#what-a-run-is-seeded-with-and-what-it-cannot-be)
+now applies once per window rather than once per run. Concretely, every seeded
+tick rebuilds the ship from `ShipState::default()` plus the recorded columns, so
+these are **reset rather than carried**, because the capture does not have them:
+
+| Field | What the reset asserts |
+| --- | --- |
+| `time_since_landing` | `1.0` - outside the landing window, so `landing_rebound` does not act |
+| `leap_timer` | no leap in progress |
+| `sideshift_timers` | no sideshift in flight |
+| `stun_timer` | not stunned - true on every capture so far, and checked |
+| `mag_lock_blend`, `mag_contact` | no magstrip hold |
+
+So a window that begins one tick after the original landed starts as though it
+had not, and `--reseed 12` would assert that five times a second. Choose `N`
+large enough that a window is mostly *simulation* rather than mostly
+initial-condition artefact - `60` is a second, and is the value the whole-lap
+readings below use.
+
 It is deliberately not the default, and the report says so on every reseeded run
 (the written CSV carries it as a header comment too, because a CSV outlives the
 terminal it came from). The two numbers answer different questions and neither
@@ -834,6 +858,56 @@ about the force law.
 > because a superseded measurement left in place is cheaper to correct than a
 > deleted one is to rediscover.
 
+### 2026-07-29, on a fresh capture of the same scenario
+
+Both sides driven by `talons-junction-time-trial-lap.inputs`, 3,146 ticks,
+`16_Track`, Assegai in Venom. Nothing here was tuned to.
+
+| Field | single-seeded | `--reseed 60` |
+| --- | ---: | ---: |
+| Position, max error | 148.7 at tick 435 | **10.3** at tick 299 |
+| Position, mean first -> last quarter | 100.8 -> 22.9 | 1.89 -> 1.65 |
+| Orientation, worst axis | 0.66 rad | **0.114** rad |
+| Velocity, max | 97.8 | 54.5 |
+| `grounded` | exact on 3,146 of 3,146 | exact |
+| Trend | shrinking or bounded on every field; **nothing growing** | same |
+
+The two columns are the two questions this page's
+[reseeding section](#reseeding-and-why-a-long-comparison-needs-it) describes, and
+the gap between them is what compounding costs: most of the single-seeded 148 is
+one early divergence carried forward, not a force law that is 148 units wrong.
+
+Three readings from the same run, in descending order of how much they are
+worth:
+
+- **The ship travels 618 units of path where the original travels 1,045**, on
+  identical inputs. That is the open question, and it is the one the run report
+  calls a wedge: ours stops dead at one place on the circuit for roughly a
+  thousand ticks and then reverses.
+- **`grounded` says less than it looks like it says.** The original's column is
+  `1.0` on every tick of this capture, so agreement means our ship also never
+  leaves the ground - real progress against the 2026-07-28 run below, and not a
+  test of how the hover model quantises contact. A constant column cannot be one.
+- **The angular-velocity hypothesis is dead.** Our run averages 21.2 rad/s over
+  the lap, which reads like a craft spinning three and a half times a second and
+  was the obvious suspect. The original reads **22.96**. Both sides do the same
+  thing with that column.
+
+**Caveat on the capture itself, which changes what a clean number would take:**
+it fails the `speed / |velocity| == 1.0000` cleanliness test on **67.3 %** of its
+ticks, where the 2026-07-28 capture of the same script was 95.2 % wall-free. The
+script is a **closed-loop autopilot recording**, and replaying it open-loop
+drifts into the walls - the same reproducibility negative, seen from the
+authoring side rather than the measuring side. A clean lap scenario has to be
+re-derived from a fresh `just autopilot` run, not replayed from the committed
+file. It also means this capture **cannot** serve as a force-balance regression:
+for much of it the craft is wedged at under one unit per second, where the ratio
+is dominated by the normal impulse and `|velocity|` can exceed `speed` outright.
+[The standing start](#the-standing-start-and-what-it-regression-tests) is the
+capture for that.
+
+### 2026-07-28, for comparison
+
 Both sides driven by `talons-junction-time-trial-lap.inputs`, 3,146 ticks, the
 recording seeding tick 0. Measured 2026-07-28; nothing here was tuned to.
 
@@ -862,6 +936,41 @@ Two smaller readings from the same run:
 - The original's stun timer never armed across the entire lap, and `craft+0x2e0`
   never rose above zero - on a lap that is 95.2 % wall-free, which is what makes
   that a statement about the lap rather than about the gate.
+
+## The standing start, and what it regression-tests
+
+`verification/scenarios/standing-start.inputs` is 300 ticks of held thrust from
+the start line with no steering, and it is deliberately two measurements joined
+in one capture: a clean launch, then a sustained scrape **at speed**. Captured
+2026-07-29 to replace a lost predecessor.
+
+| | |
+| --- | --- |
+| Clean ticks (`speed / \|velocity\| == 1.0000`) | **186** of 300 |
+| First contact tick | 186 |
+| Speed range | 0.015 to 119.39 units/s |
+| Launch acceleration, ticks 2-5 | 32.69, 32.50, 32.97, 33.61 |
+| Per-frame loss over the 114 contact ticks | 3.835 % falling to 3.633 % |
+| Minimum loss anywhere in the contact stretch | **3.534 %**, at 104 units/s |
+| Contact ticks above 5 units/s below the `0.035` floor | **0** |
+
+Both halves reproduce a documented number from an independent capture:
+
+- **The launch.** `force-balance-ground-truth.md` records 32.52 against a
+  predicted 31.8 for the same measurement; this capture reads 32.69 on its third
+  tick. The engine force law is confirmed, not re-fitted.
+- **The scrape.** `contact-response.md` derives `contact->friction = (0.05 +
+  0.02) / 2 = 0.035` from two literals and argues it is a hard *floor* on the
+  per-frame loss, approached from above and never crossed. **114 fresh contact
+  ticks, minimum 3.534 %, floor never crossed**, decaying toward it exactly as
+  that page predicts. Note the contact starts at tick 186 here rather than the
+  predecessor's 66, so this is not the same recording read twice.
+
+**Why the speed condition is not optional.** Below a few units per second the
+ratio stops measuring friction: the normal impulse dominates, and restitution can
+make `|velocity|` exceed `speed` outright - the whole-lap capture has ticks
+reading a *negative* loss for that reason. Any future use of this test must
+restrict itself to contact ticks at speed, which is what the last row above does.
 
 ## Not yet
 
