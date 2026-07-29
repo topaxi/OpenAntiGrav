@@ -75,6 +75,50 @@ Input and camera before physics is deliberate. They are the cheapest way to
 establish the coordinate conventions and the structure layouts that physics then
 depends on, and getting those wrong makes physics unreadable.
 
+## Validating a decoder
+
+Every format decoded here had a self-check available, and using it has caught
+real errors nine times and confirmed a format outright three more. **Look for
+the arithmetic that must hold before writing the parser, then put it in a test
+rather than in prose.**
+
+| Format | The invariant that closes it |
+| --- | --- |
+| [WAD](../formats/wad.md) | The offset chain. 193/193 against 2/193 resolved a transposition. |
+| [`.vex` geometry](../formats/vex.md) | Each batch's declared bounding box, over 342,115 vertices. |
+| `.vex` node tree | Child counts sum to one less than the node count. Exact as a `u16`; 111 million as a `u32`, which settled the width. |
+| Embedded textures | Sizes sum to the declared block length. |
+| [Track](../formats/track.md) | Exactly 64 `section` nodes, matching the 64-bit PVS mask. |
+| `WO Track` | The payload closes on 40 of 40 files. |
+| [LZSS](../formats/lzss.md) | Where the *reader* stops - every one of 6,053 streams consumed to within a byte or two of its end. |
+| [PMF](../formats/pmf.md) | Header arithmetic, zero stray bytes, access-unit counts against duration. |
+| [Collision](../formats/collision.md) | The walk closes on 319 of 319 nodes once 16-byte node padding is accounted for - which also pinned the chunk count at 32 bits and turned an unknown `u16` into the stride. |
+| [Handling stats](../formats/handling-stats.md) | Completeness: 8 teams x 4 classes x every attribute, with a test that removes each of 174 attributes in turn and requires every removal to error. |
+| The handling parameter block | 32 floats = `0x80` = the observed per-class stride, closing with no gap or overlap, which is what placed 13 previously unknown offsets. |
+
+**An invariant beats a careful re-read, and it beats a plausible hypothesis.**
+The collision walk came up 10 bytes short; the answer was 16-byte node padding,
+not the `u16`-chunk-count theory the error message itself suggested and the code
+was already nudging toward.
+
+## Verifying a change with no "before" to compare against
+
+A refactor that must not change behaviour - a crate extraction, a renderer
+split - has no recorded baseline, but one can be manufactured:
+
+```sh
+git worktree add /tmp/before HEAD
+# The worktree already contains a tracked data/README.md, so link data/images,
+# not data.
+ln -s "$PWD/data/images" /tmp/before/data/images
+```
+
+Build the tool in the worktree, capture screenshots there, capture the same ones
+from the working tree, and `cmp` them. The [`oag-render`](../../crates/render)
+extraction was verified this way - `--mesh` on a ship, `--track`, and a
+front-end texture all came out byte-identical - which makes it verified rather
+than only "behaviour-preserving by construction".
+
 ## Open questions
 
 Live questions, with what would resolve each.

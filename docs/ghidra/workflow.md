@@ -89,6 +89,32 @@ one. Two habits keep this useful:
 2. **Verify at runtime before trusting anything above 84.** A breakpoint settles
    in a minute what an hour of reading cannot.
 
+### Bridge quirks that have each cost a session
+
+- **Pass `program=` on every call.** With both `BOOT.BIN` and `SCES_547.48`
+  open, omitting it silently targets whichever is active.
+- **`dry_run` is not honoured by the rename endpoints.** They report what they
+  would do and do it anyway.
+- **Global names without a Hungarian type prefix are rejected**, which is not
+  this project's convention. Apply data labels through `create_label` instead.
+- **`scripts/apply-ghidra-names.py` reports "No function found" for functions
+  that exist and are already correctly named.** It is a rename-endpoint quirk,
+  not a script bug and not a real absence: probe `get_function_by_address`
+  before concluding a database needs restoring, and never read that script's
+  failure count as evidence that names are missing.
+- **`import_file` returns `auto_analyzed: true` immediately**, and
+  `analysis_status` then reports `analyzed: true, function_count: 1` - exactly
+  the signature of a wrong-language import. It is not; analysis simply has not
+  run. Call `reanalyze` (it times out, which is normal for a 1.9 MiB binary and
+  means analysis started) and poll `analysis_status` until `analyzing` goes
+  false. Judge the import on the count *after* that.
+
+### Reading the raw binary outside Ghidra
+
+`jal` targets in `BOOT.BIN` encode the **ELF vaddr** (base 0), not the
+`0x08804000` image base. Scanning the extracted binary for calls to
+`0x0884d850` means searching for `0x0C012614`, not `0x0E213614`.
+
 ## Cross-referencing platforms
 
 When a function is understood on one platform, look for its counterpart on the

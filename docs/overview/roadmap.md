@@ -291,13 +291,38 @@ which nothing in `docs/` had established. See
 **What actually separates M4 from its exit criterion is a ship that gets
 wedged.** Over the committed whole-lap scenario it reaches about 40 units/s by
 tick 400, stops dead at one place on the circuit for roughly a thousand ticks,
-then reverses - travelling 618 units of path in 3,146 ticks and ending 122
-units from where it started. Its angular velocity averages **21 rad/s** across
-the lap, which is three and a half revolutions a second and is almost certainly
-the same problem seen from the other side. That is an open question, not a
-known omission, and it is the first thing a fresh lap capture should be pointed
-at. See
+then reverses - travelling **618 units of path in 3,146 ticks against the
+original's 1,045 on the same inputs**. That is an open question, not a known
+omission. See
 [contact-response](../ghidra/functions/psp-pulse/contact-response.md).
+
+**The lap was recaptured on 2026-07-29 and both comparisons run**, which killed
+one hypothesis and produced the strongest single result the harness has given:
+
+| | single-seeded | `--reseed 60` |
+| --- | ---: | ---: |
+| Position, max error | 148.7 at tick 435 | **10.3** at tick 299 |
+| Orientation, worst axis | 0.66 rad | **0.114** rad |
+| `grounded` | **exact on 3,146 of 3,146** | exact |
+| Trend, every field | shrinking or bounded; nothing growing | same |
+
+**`grounded` agreeing exactly across a whole lap** means the hover model decides
+the same thing about surface contact as the original on every tick of a real
+circuit, which is what the 2026-07-28 run - where ours read `0.5` against the
+original's `1.0` and then left the surface entirely - could not do.
+
+The hypothesis that died: the run report's **21 rad/s** average angular velocity
+looked like a craft spinning three and a half times a second and was the obvious
+suspect for the wedge. **The original reads 22.96 rad/s on the same scenario**,
+slightly higher than ours. Both sides do the same thing with that column and it
+is not the cause.
+
+One caveat on the capture, because it changes what a *clean* number would take:
+the recapture fails the `speed/|velocity| == 1.0000` cleanliness test on 67.3 %
+of its ticks, where the 2026-07-28 capture of the same script was 95.2 %
+wall-free. The script is a closed-loop autopilot recording and replaying it
+open-loop drifts into the walls - the same reproducibility negative as above,
+seen from the authoring side.
 
 ---
 
