@@ -1164,6 +1164,56 @@ mod tests {
         }
     }
 
+    /// The same drift guard as the two above, for the three rows that move a
+    /// window. A value here that `display` cannot parse would be ignored at
+    /// runtime with a message, which is the failure a player meets as "this row
+    /// does nothing".
+    #[test]
+    fn the_graphics_page_offers_only_display_settings_that_parse() {
+        use crate::display::{Aspect, Size, WindowMode};
+        let definition = built_in();
+        let values = |setting: &str| -> Vec<String> {
+            definition
+                .pages
+                .iter()
+                .flat_map(|page| page.entries.iter())
+                .find(|entry| entry.setting() == Some(setting))
+                .and_then(|entry| match entry {
+                    Entry::Choice { values, .. } => {
+                        Some(values.iter().map(|v| v.value.clone()).collect())
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("no choice edits {setting:?}"))
+        };
+
+        let aspects = values("graphics.aspect");
+        for name in &aspects {
+            name.parse::<Aspect>().unwrap_or_else(|e| panic!("{e}"));
+        }
+        assert_eq!(
+            aspects.len(),
+            Aspect::ALL.len(),
+            "every aspect should be offerable"
+        );
+
+        let modes = values("graphics.window_mode");
+        for name in &modes {
+            name.parse::<WindowMode>().unwrap_or_else(|e| panic!("{e}"));
+        }
+        assert_eq!(modes.len(), WindowMode::ALL.len());
+
+        let sizes: Vec<Size> = values("graphics.window_size")
+            .iter()
+            .map(|name| name.parse::<Size>().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            sizes,
+            Size::OFFERED,
+            "the window-size rows and `Size::OFFERED` must be one list"
+        );
+    }
+
     #[test]
     fn a_version_this_build_does_not_know_is_refused() {
         let error = Definition::parse("version = 99\nroot = \"main\"").expect_err("refused");
@@ -1419,9 +1469,8 @@ mod tests {
         .expect("parse");
         let mut menu = Menu::new(definition);
 
-        let offered = |names: &[&str]| -> Vec<Choice> {
-            names.iter().map(|n| Choice::plain(*n)).collect()
-        };
+        let offered =
+            |names: &[&str]| -> Vec<Choice> { names.iter().map(|n| Choice::plain(*n)).collect() };
         menu.supply(ValueSource::Languages, &offered(&["French", "English"]));
         assert!(menu.seed("language", &Value::Text("English".to_string())));
         assert_eq!(

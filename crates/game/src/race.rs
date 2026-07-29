@@ -1297,9 +1297,9 @@ impl Scene {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         race: &Race,
-        size: (u32, u32),
+        viewport: (f32, f32, f32, f32),
     ) {
-        let aspect = size.0.max(1) as f32 / size.1.max(1) as f32;
+        let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far) * race.view();
         self.track.write(queue, view_projection, Mat4::IDENTITY);
         self.ship
@@ -1318,12 +1318,13 @@ impl Scene {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.03,
-                        g: 0.04,
-                        b: 0.06,
-                        a: 1.0,
-                    }),
+                    // Black rather than the near-black blue this used to clear
+                    // to. The clear covers the whole attachment and the scene is
+                    // then drawn into a sub-rectangle, so this colour is what
+                    // `Aspect`'s bars are made of - and a bar has to read as a
+                    // bar. The old value was 0.03/0.04/0.06, dark enough that
+                    // losing it costs nothing inside the viewport either.
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -1339,6 +1340,7 @@ impl Scene {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
         self.track.draw(&mut pass);
         self.ship.draw(&mut pass);
         if let Some(collision) = &self.collision {
@@ -1377,6 +1379,12 @@ pub struct CaptureOptions {
     pub size: (u32, u32),
     /// Print a telemetry line every this many ticks. Zero prints none.
     pub log_every: u32,
+    /// The shape to draw at inside the frame, leaving bars.
+    ///
+    /// A capture is a picture of a window, so it letterboxes the way a window
+    /// does. At the default `--size`, which is the PSP's own shape, every value
+    /// of this fills the frame and nothing changes.
+    pub aspect: crate::display::Aspect,
     /// Anisotropic filtering level for the track and ship textures.
     pub anisotropy: Anisotropy,
 }
@@ -1473,7 +1481,15 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("race capture"),
     });
-    scene.render(&queue, &mut encoder, &view, &race, (width, height));
+    // Shaped the same way a window is, so a screenshot frames what a player
+    // would have seen at that size rather than a differently-cropped picture.
+    scene.render(
+        &queue,
+        &mut encoder,
+        &view,
+        &race,
+        crate::display::viewport((width, height), options.aspect),
+    );
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),
         wgpu::TexelCopyBufferInfo {

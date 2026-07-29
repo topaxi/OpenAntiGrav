@@ -38,7 +38,7 @@ use oag_game::frontend::{self, Frontend};
 use oag_game::input;
 use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{boot, capture, catalogue, menu, movie, race, report, settings, source};
+use oag_game::{boot, capture, catalogue, display, menu, movie, race, report, settings, source};
 use oag_input::Controls;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
@@ -273,7 +273,7 @@ fn main() -> Result<()> {
     // XML, every language plugin and a string table, and may shell out to `ffmpeg`
     // to transcode the intro. Going straight to a race needs none of it.
     if cli.race {
-        return run_race(&cli, race_options, anisotropy);
+        return run_race(&cli, race_options, settings.graphics.aspect, anisotropy);
     }
 
     let leg = if cli.reel {
@@ -435,13 +435,12 @@ fn button_mask(names: Option<&str>) -> u32 {
     })
 }
 
-/// The window's size, and a capture's default, front end and race alike.
+/// A capture's default size, front end and race alike.
 ///
 /// Three times the PSP's screen, so the 5x7 glyphs stay legible and a screenshot
-/// frames exactly what the window would have shown.
-const WINDOW_SIZE: (u32, u32) = (1440, 816);
-
-/// [`WINDOW_SIZE`] as `--size` spells it.
+/// frames what the window would have shown at its own default. The *window's*
+/// size is `graphics.window_size` and is a setting - see
+/// [`display::Size::default`], which is this same shape.
 const DEFAULT_SIZE: &str = "1440x816";
 
 /// Parses `WIDTHxHEIGHT`.
@@ -478,7 +477,12 @@ const RACE_KEYS: &str = "arrow keys or the left stick steer, X, return or R2 thr
      Q and E or the shoulders are the airbrakes, L2 is both, escape quits";
 
 /// Loads a track and a ship and either captures one frame or opens a window.
-fn run_race(cli: &Cli, options: race::Options, anisotropy: Anisotropy) -> Result<()> {
+fn run_race(
+    cli: &Cli,
+    options: race::Options,
+    aspect: display::Aspect,
+    anisotropy: Anisotropy,
+) -> Result<()> {
     let loaded = race::load(&options)?;
     for line in &loaded.report {
         println!("{line}");
@@ -497,6 +501,7 @@ fn run_race(cli: &Cli, options: race::Options, anisotropy: Anisotropy) -> Result
                 held: button_mask(cli.hold.as_deref()),
                 size: parse_size(&cli.size)?,
                 log_every: cli.log_every,
+                aspect,
                 anisotropy,
             },
         );
@@ -551,7 +556,7 @@ impl App {
     /// `Ok(None)` means there was nothing to show, which only happens if the event
     /// loop resumes twice after the loaded state has been taken.
     fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Session>> {
-        let gpu = Gpu::new(event_loop)?;
+        let gpu = Gpu::new(event_loop, &self.settings.graphics)?;
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
             Stage::race(&gpu, loaded, self.anisotropy)?
@@ -649,6 +654,19 @@ impl ApplicationHandler for App {
     }
 }
 
+/// What winit is asked for, for a mode.
+///
+/// `Borderless(None)` means "the monitor this window is on", which is what
+/// makes it unable to fail: exclusive fullscreen needs a `VideoMode` enumerated
+/// off a monitor and can be refused, and this build does not offer it. See
+/// [`display::WindowMode::ALL`].
+fn fullscreen(mode: display::WindowMode) -> Option<winit::window::Fullscreen> {
+    match mode {
+        display::WindowMode::Windowed => None,
+        display::WindowMode::Borderless => Some(winit::window::Fullscreen::Borderless(None)),
+    }
+}
+
 /// The window and the GPU objects, which both stages draw through.
 ///
 /// One window and one device for the whole process: the front end reaching
@@ -662,19 +680,24 @@ struct Gpu {
 }
 
 impl Gpu {
-    fn new(event_loop: &ActiveEventLoop) -> Result<Self> {
-        // Fixed size on purpose, for now. It sets the window's minimum and maximum
-        // to the same thing, which is the signal a tiling compositor floats a
-        // window on rather than squeezing it into a column - measured under niri,
-        // which tiles it to a portrait slot without this and honours 1440x816 with
-        // it. The renderer does not depend on it: `Race::projection` fits the field
-        // of view to whatever viewport it is given, so a tiled or fullscreen window
-        // still frames the track correctly. This is the early-stages default, not a
-        // decision that a game window should never resize.
+    fn new(event_loop: &ActiveEventLoop, graphics: &settings::Graphics) -> Result<Self> {
+        // **A windowed window is fixed size, and that is a measurement.** Setting
+        // the minimum and maximum to the same thing is the signal a tiling
+        // compositor floats a window on rather than squeezing it into a column -
+        // measured under niri, which tiles it to a portrait slot without this and
+        // honours the requested size with it. Borderless has to be resizable,
+        // because the compositor is about to resize it to the monitor.
+        //
+        // The renderer does not depend on either: `Race::projection` fits the
+        // field of view to whatever viewport it is given, and `display::viewport`
+        // shapes that viewport, so any window still frames the track correctly.
+        let size = graphics.window_size;
+        let borderless = graphics.window_mode == display::WindowMode::Borderless;
         let attributes = Window::default_attributes()
             .with_title(TITLE)
-            .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_SIZE.0, WINDOW_SIZE.1))
-            .with_resizable(false);
+            .with_inner_size(winit::dpi::LogicalSize::new(size.width, size.height))
+            .with_resizable(borderless)
+            .with_fullscreen(fullscreen(graphics.window_mode));
         let window = Arc::new(
             event_loop
                 .create_window(attributes)
@@ -794,10 +817,16 @@ struct MenuStage {
 }
 
 impl MenuStage {
-    fn render(&mut self, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    fn render(
+        &mut self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+    ) {
         let list = menu::draw_list(&self.menu, &keys::bound_keys);
         self.renderer
-            .render(&gpu.device, &gpu.queue, encoder, view, &list, gpu.size());
+            .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
     }
 }
 
@@ -816,11 +845,12 @@ impl FrontendStage {
         gpu: &Gpu,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
     ) -> Result<()> {
         let list = self.frontend.draw_list();
         self.sync_video(&gpu.queue, &list)?;
         self.renderer
-            .render(&gpu.device, &gpu.queue, encoder, view, &list, gpu.size());
+            .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
         Ok(())
     }
 
@@ -852,9 +882,15 @@ struct RaceStage {
 }
 
 impl RaceStage {
-    fn render(&self, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    fn render(
+        &self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+    ) {
         self.scene
-            .render(&gpu.queue, encoder, view, &self.race, gpu.size());
+            .render(&gpu.queue, encoder, view, &self.race, viewport);
     }
 }
 
@@ -1028,10 +1064,13 @@ impl Session {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("frame"),
             });
+        // One rectangle for every stage, so a mode change moves the whole game
+        // rather than only what happens to be on screen.
+        let viewport = display::viewport(self.gpu.size(), self.settings.graphics.aspect);
         match &mut self.stage {
-            Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, &view)?,
-            Stage::Menu(stage) => stage.render(&self.gpu, &mut encoder, &view),
-            Stage::Race(stage) => stage.render(&self.gpu, &mut encoder, &view),
+            Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, &view, viewport)?,
+            Stage::Menu(stage) => stage.render(&self.gpu, &mut encoder, &view, viewport),
+            Stage::Race(stage) => stage.render(&self.gpu, &mut encoder, &view, viewport),
         }
         self.gpu.queue.submit(Some(encoder.finish()));
         self.gpu.queue.present(frame);
@@ -1134,6 +1173,32 @@ impl Session {
         }
     }
 
+    /// Puts the window into the mode and size the settings now hold.
+    ///
+    /// Immediately, unlike anisotropy and the language: a player who picks
+    /// borderless and sees nothing happen will assume it is broken. The resize
+    /// event the compositor sends back is what reconfigures the surface, so
+    /// nothing here touches it.
+    ///
+    /// The size is asked for only in windowed mode, and the request may be
+    /// refused - a compositor is allowed to ignore it, and a tiling one will.
+    /// Nothing depends on it being honoured.
+    fn apply_window(&mut self) {
+        let graphics = &self.settings.graphics;
+        self.gpu
+            .window
+            .set_fullscreen(fullscreen(graphics.window_mode));
+        let windowed = graphics.window_mode == display::WindowMode::Windowed;
+        self.gpu.window.set_resizable(!windowed);
+        if windowed {
+            let size = graphics.window_size;
+            let _ = self
+                .gpu
+                .window
+                .request_inner_size(winit::dpi::LogicalSize::new(size.width, size.height));
+        }
+    }
+
     /// Applies a changed setting and writes it back.
     ///
     /// Persisted on every keypress rather than on the way out, because there is
@@ -1142,6 +1207,35 @@ impl Session {
     fn apply_setting(&mut self, setting: &str, value: &menu::Value) {
         let text = value.to_string();
         match setting {
+            "graphics.aspect" => match text.parse::<display::Aspect>() {
+                // Applied by the next frame, because every stage takes its
+                // viewport from this on the way into its pass.
+                Ok(aspect) => self.settings.graphics.aspect = aspect,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "graphics.window_mode" => match text.parse::<display::WindowMode>() {
+                Ok(mode) => {
+                    self.settings.graphics.window_mode = mode;
+                    self.apply_window();
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "graphics.window_size" => match text.parse::<display::Size>() {
+                Ok(size) => {
+                    self.settings.graphics.window_size = size;
+                    self.apply_window();
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.anisotropy" => match text.parse::<Anisotropy>() {
                 Ok(level) => {
                     self.anisotropy = level;

@@ -135,6 +135,34 @@ title = "GRAPHICS"
 # `settings.toml` and the next race built uses it. More land here as the
 # renderer grows something to expose; a row that does nothing is worse than a
 # row that is missing.
+# Window mode and size apply the moment they change. A compositor is free to
+# ignore a size request, and a tiling one will - nothing depends on it being
+# honoured.
+[[page.entry]]
+kind = "choice"
+label = "WINDOW MODE"
+setting = "graphics.window_mode"
+values = ["windowed", "borderless"]
+
+[[page.entry]]
+kind = "choice"
+label = "WINDOW SIZE"
+setting = "graphics.window_size"
+values = ["960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
+
+# The shape the game is drawn at inside whatever window it got, with the
+# leftover left black. `psp` is 480x272, the shape every camera value on the
+# disc was authored for; `ps2` is 4:3; `free` fills the window without widening
+# the field of view, because nothing on the disc says what the original would
+# have shown on a 21:9 screen.
+[[page.entry]]
+kind = "choice"
+label = "ASPECT RATIO"
+setting = "graphics.aspect"
+values = ["psp", "ps2", "free"]
+
+# Applies to the next race built rather than immediately: the sampler is made
+# when a race's pipelines are.
 [[page.entry]]
 kind = "choice"
 label = "ANISOTROPIC FILTERING"

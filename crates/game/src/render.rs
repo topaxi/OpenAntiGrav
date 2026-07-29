@@ -348,7 +348,7 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         list: &[Draw],
-        target: (u32, u32),
+        viewport: (f32, f32, f32, f32),
     ) {
         self.quads.clear();
         // Where the movie sits in the quad order. The list is painted back to
@@ -389,7 +389,12 @@ impl Renderer {
             &self.uniform_buffer,
             0,
             bytemuck::bytes_of(&Uniforms {
-                viewport: letterbox(target),
+                // Fitted to the *viewport rectangle*, not to the surface. The
+                // two are the same thing at `Aspect::Psp` on a PSP-shaped
+                // window and are not otherwise, and feeding the surface here
+                // would letterbox the widgets a second time inside the bars
+                // `set_viewport` already left.
+                viewport: letterbox((viewport.2 as u32, viewport.3 as u32)),
                 screen: [SCREEN.0, SCREEN.1],
                 atlas: [self.atlas.width as f32, self.atlas.height as f32],
                 sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
@@ -422,6 +427,9 @@ impl Renderer {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        // The pass cleared the whole surface to black, so whatever the
+        // rectangle does not cover stays black - which is what the bars are.
+        pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
 
         let total = self.quads.len() as u32;
         let split = video_at.unwrap_or(total);

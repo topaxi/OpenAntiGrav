@@ -26,6 +26,7 @@
 pub mod boot;
 pub mod capture;
 pub mod catalogue;
+pub mod display;
 pub mod font;
 pub mod frontend;
 /// The abstract button layer, which lives in `oag-gameplay` because the

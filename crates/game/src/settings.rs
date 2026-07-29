@@ -125,6 +125,20 @@ pub struct Graphics {
     /// leave most of that work unused out of the box.
     #[serde(with = "AnisotropyDef", default)]
     pub anisotropy: Anisotropy,
+    /// The shape the game is drawn at inside its window: `psp`, `ps2` or
+    /// `free`. See [`crate::display::Aspect`].
+    #[serde(default)]
+    pub aspect: crate::display::Aspect,
+    /// `windowed` or `borderless`. See [`crate::display::WindowMode`].
+    #[serde(default)]
+    pub window_mode: crate::display::WindowMode,
+    /// How big a *windowed* window is, spelled `1440x816`.
+    ///
+    /// A window property, not a graphics one in the sense the others are:
+    /// borderless ignores it entirely, because the display decides. It sits in
+    /// this table anyway because that is where a player looks for it.
+    #[serde(default)]
+    pub window_size: crate::display::Size,
 }
 
 /// Where the settings file lives: `<config dir>/oag/settings.toml`.
@@ -204,6 +218,18 @@ pub fn menu_seeds(
     let text = |value: &str| crate::menu::Value::Text(value.to_string());
     let mut out = vec![
         ("graphics.anisotropy", text(&anisotropy.to_string())),
+        (
+            "graphics.aspect",
+            text(&settings.graphics.aspect.to_string()),
+        ),
+        (
+            "graphics.window_mode",
+            text(&settings.graphics.window_mode.to_string()),
+        ),
+        (
+            "graphics.window_size",
+            text(&settings.graphics.window_size.to_string()),
+        ),
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),
         ("race.track", text(&settings.race.track)),

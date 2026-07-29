@@ -234,6 +234,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         return race::capture(
             loaded,
             &race::CaptureOptions {
+                aspect: options.settings.graphics.aspect,
                 path: options.path.clone(),
                 ticks: options.ticks.saturating_sub(ticks),
                 held: options.held,
@@ -315,7 +316,18 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("capture"),
     });
-    renderer.render(&device, &queue, &mut encoder, &view, &list, (width, height));
+    // Shaped the same way a window is, for the same reason the race capture is:
+    // a screenshot should frame what a player would have seen at that size. At
+    // the default `--size`, which is the PSP's own shape, every aspect fills the
+    // frame and nothing changes.
+    renderer.render(
+        &device,
+        &queue,
+        &mut encoder,
+        &view,
+        &list,
+        crate::display::viewport((width, height), options.settings.graphics.aspect),
+    );
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
