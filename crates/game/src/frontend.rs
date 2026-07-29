@@ -189,7 +189,7 @@ pub const SCREEN: (f32, f32) = (480.0, 272.0);
 /// decodes to a square 512x512 but its own display aspect is 4:3, narrower
 /// than `SCREEN`'s ~16:9, so this pillarboxes it rather than stretching it
 /// wide. See `crate::movie::Movie::display_aspect`.
-fn pillarbox(screen: (f32, f32), aspect: (u32, u32)) -> [f32; 4] {
+pub fn pillarbox(screen: (f32, f32), aspect: (u32, u32)) -> [f32; 4] {
     let (screen_w, screen_h) = screen;
     let content = aspect.0 as f32 / aspect.1 as f32;
     let frame = screen_w / screen_h;
@@ -787,10 +787,21 @@ impl Frontend {
                 // below, not a claim about the game's layout.
                 y: text.y.max(1.0 * scale),
                 scale,
-                // The XML's title colour is black on a black backdrop, because
-                // the real screen sits on the menu's own lit background. Nothing
-                // draws that yet, so the colour is lifted rather than silently
-                // producing an empty screen.
+                // The XML's title colour is black on a black backdrop, so the
+                // colour is lifted rather than silently producing an empty
+                // screen.
+                //
+                // **Why it is black is a hypothesis, not a finding**, and it is
+                // worth being explicit now that the menu backdrop exists and
+                // could be drawn here. The guess is that the real screen sits on
+                // a lit background; the evidence is against reaching for it,
+                // because only three screens in this XML carry a `Movie` widget
+                // and `Language Selection` is not one of them - and the picker
+                // runs *before* `LogoFMV`, so the backdrop being loaded at that
+                // point is not established either. Settling it means finding
+                // what the picker's parent draws, not assuming it is the thing
+                // we now happen to have. So the lift stays and the backdrop is
+                // not drawn here. See `docs/architecture/menus.md`.
                 color: lighten(argb_to_rgba(text.color)),
                 align: Align::parse(&text.align),
                 text: body.to_string(),

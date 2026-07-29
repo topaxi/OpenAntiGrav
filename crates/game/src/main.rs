@@ -335,14 +335,7 @@ fn main() -> Result<()> {
     // A source with no intro reel at all - which is every PS2 source, whose
     // intro is an MPEG-2 program stream outside the archives - has no video
     // format either, and the front end draws without one.
-    let video_format = loaded.movie.as_ref().and_then(|movie| {
-        movie.frames.as_ref().map(|frames| VideoFormat {
-            width: movie.width,
-            height: movie.height,
-            chroma_width: frames.chroma_width,
-            chroma_height: frames.chroma_height,
-        })
-    });
+    let video_format = loaded.movie.as_ref().and_then(VideoFormat::of);
 
     if let Some(path) = cli.screenshot {
         return capture::run(
@@ -591,6 +584,10 @@ impl App {
         let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.config.format, target)
             .context("building the upscale pipeline")?;
 
+        // Taken out of the boot before the front end takes the rest: it belongs
+        // to the menus, which outlive the sequence that loaded it, and `--race`
+        // has neither.
+        let backdrop = self.boot.as_mut().and_then(|loaded| loaded.backdrop.take());
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
             Stage::race(&gpu, loaded, framebuffer.size(), self.anisotropy)?
@@ -638,6 +635,7 @@ impl App {
             settings: self.settings.clone(),
             shell: self.shell.clone(),
             quit: false,
+            backdrop,
         }))
     }
 }
@@ -1039,19 +1037,101 @@ impl Stage {
 struct MenuStage {
     renderer: Renderer,
     menu: menu::Menu,
+    /// Where the disc's looping backdrop has got to, and where it goes on
+    /// screen. `None` when this source has no backdrop, and then the rows are
+    /// drawn on black exactly as they were before it existed.
+    ///
+    /// The player lives here rather than in `Session` because it is part of what
+    /// is on screen: a stage that is not running should not be advancing a
+    /// movie, and putting it here makes that structural instead of remembered.
+    backdrop: Option<Backdrop>,
+}
+
+/// The looping menu picture: a player, where it goes, and which frame is up.
+struct Backdrop {
+    player: movie::Player,
+    rect: [f32; 4],
+    /// The frame currently in the renderer's planes, so a frame that has not
+    /// changed is not decoded or re-uploaded. The backdrop presents at 30 Hz
+    /// and a frame is around 196 KB, so this matters: see
+    /// [`MenuStage::render`] for what one decode actually costs.
+    uploaded: Option<usize>,
+    /// The decoded frame, kept so a frame change is not also an allocation.
+    /// The same reason `FrontendStage` keeps one.
+    bytes: Vec<u8>,
 }
 
 impl MenuStage {
+    /// Advances the backdrop by one tick.
+    ///
+    /// Driven from the same fixed `dt` the simulation is, and for the same
+    /// reason the front end's movie is: nothing here reads the wall clock. The
+    /// player wraps rather than finishing - it is a loop, which is the whole
+    /// difference between this movie and the intro.
+    fn tick(&mut self, dt: f64) {
+        if let Some(backdrop) = &mut self.backdrop {
+            backdrop.player.update(dt);
+        }
+    }
+
+    /// Draws the page, decoding and uploading a backdrop frame when the one on
+    /// screen is stale.
+    ///
+    /// # The decode is on this thread and it is expensive
+    ///
+    /// **Measured on the PSP backdrop, release build: 0.03 ms to 30 ms for one
+    /// frame, and which it is depends on where in the movie the loop has got
+    /// to.** The upload is 0.06 ms and is not the problem. Every other frame is
+    /// nearly free because the decoder's frame delay is 1 and a picture is
+    /// usually already queued, so the real cost is a spike every second frame
+    /// change: about 5 ms through the movie's quiet half and 12-30 ms through
+    /// its busy one.
+    ///
+    /// That is 30 frame changes a second times roughly 8 ms, so **around a
+    /// quarter of a second of every second is spent inside `read_frame`**, on
+    /// the thread that also draws. Under a 240 frame limit that caps the loop
+    /// near 180: the limiter did not make anything slower, it removed the
+    /// headroom that was hiding the stalls. Unlimited, the same stalls are
+    /// amortised over 800-odd frames and the *average* rate still looks fine
+    /// while individual frames are tens of milliseconds long, which the pacing
+    /// graph shows and the fps counter cannot.
+    ///
+    /// **This is not a cost the menus introduced.** `FrontendStage::sync_video`
+    /// does the same blocking decode on the same thread for the intro, and has
+    /// since it was written - the menus only made it measurable, because a menu
+    /// is a thing a player sits on with a frame counter open. The fix is to move
+    /// the decode off this thread, not to draw less; it is not done here, and
+    /// `HANDOVER.md` carries it as a named next step.
     fn render(
         &mut self,
         gpu: &Gpu,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
-    ) {
-        let list = menu::draw_list(&self.menu, &keys::bound_keys);
+        frames: Option<&mut movie::FrameStore>,
+    ) -> Result<()> {
+        let shown = match (&mut self.backdrop, frames) {
+            (Some(backdrop), Some(frames)) => {
+                let wanted = backdrop.player.frame().min(frames.len.saturating_sub(1));
+                if backdrop.uploaded != Some(wanted) {
+                    frames.read_frame(wanted, &mut backdrop.bytes)?;
+                    self.renderer.upload_frame(&gpu.queue, &backdrop.bytes)?;
+                    backdrop.uploaded = Some(wanted);
+                }
+                Some(menu::Backdrop {
+                    rect: backdrop.rect,
+                    frame: wanted,
+                })
+            }
+            // A backdrop whose frames could not be opened is no backdrop: the
+            // planes hold nothing, and drawing them would be a green rectangle
+            // over the menu rather than a missing picture.
+            _ => None,
+        };
+        let list = menu::draw_list(&self.menu, &keys::bound_keys, shown);
         self.renderer
             .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
+        Ok(())
     }
 }
 
@@ -1175,6 +1255,13 @@ struct Session {
     quit: bool,
     /// What the menus need, when this run has menus at all.
     shell: Option<Shell>,
+    /// The looping picture the menus are drawn on, when this source has one.
+    ///
+    /// On the session and not in [`Shell`], which is `Clone`d into every stage
+    /// that needs it: a movie is a file handle and a decoder, held once. The
+    /// menu stage borrows the frames for the one upload it needs and owns the
+    /// playhead. See [`MenuStage::backdrop`].
+    backdrop: Option<movie::Movie>,
 }
 
 /// Everything the menus need, gathered where it is loaded.
@@ -1367,6 +1454,7 @@ impl Session {
                     }
                 }
                 Stage::Menu(stage) => {
+                    stage.tick(dt);
                     let events = stage.menu.update(self.controls.buttons_mut());
                     for event in events {
                         self.handle_menu(&event);
@@ -1440,7 +1528,15 @@ impl Session {
         let target = self.framebuffer.view();
         match &mut self.stage {
             Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, target, inside)?,
-            Stage::Menu(stage) => stage.render(&self.gpu, &mut encoder, target, inside),
+            Stage::Menu(stage) => stage.render(
+                &self.gpu,
+                &mut encoder,
+                target,
+                inside,
+                self.backdrop
+                    .as_mut()
+                    .and_then(|movie| movie.frames.as_mut()),
+            )?,
             Stage::Race(stage) => stage.render(
                 &self.gpu,
                 &mut encoder,
@@ -1511,19 +1607,46 @@ impl Session {
         model.supply(menu::ValueSource::Monitors, &monitors);
         self.seed_menu(&mut model);
 
+        // **The movie planes are asked for only when there is a movie to put in
+        // them.** This used to be unconditionally `None`, on the grounds that
+        // wanting them would tie the menus to a stage that had played one; that
+        // reasoning still holds and this does not break it. What the menus are
+        // tied to is a *movie*, handed to them by whoever built the session, and
+        // it is optional - the menus open with no backdrop on a source that has
+        // none and on `--no-video`, and draw on black there.
+        let backdrop = self
+            .backdrop
+            .as_ref()
+            .filter(|movie| movie.frames.is_some());
         let renderer = Renderer::new(
             &self.gpu.device,
             &self.gpu.queue,
             self.gpu.config.format,
-            // No video: a menu draws text and rectangles, and asking for the
-            // movie planes would tie the menus to a stage that played one.
-            None,
+            backdrop.and_then(VideoFormat::of),
             shell.font,
             &shell.sprites,
         )?;
         self.stage = Stage::Menu(Box::new(MenuStage {
             renderer,
             menu: model,
+            backdrop: backdrop.map(|movie| Backdrop {
+                // `repeat`, which is the whole difference between this movie and
+                // the intro: `FE Screen` sits under it for as long as a player
+                // is in the menus, so it wraps rather than finishing on its last
+                // frame. See `movie::Player`.
+                player: movie::Player::new(
+                    movie.frames.as_ref().map_or(0, |frames| frames.len),
+                    true,
+                    movie.frame_rate,
+                ),
+                // Pillarboxed rather than stretched, because the PS2's cut is
+                // not the PSP's shape: an `.IPF` declares its own display
+                // aspect. The PSP's `.PMF` is already 480x272, so this is the
+                // full screen there and changes nothing.
+                rect: frontend::pillarbox(frontend::SCREEN, movie.display_aspect),
+                uploaded: None,
+                bytes: Vec::new(),
+            }),
         }));
         self.gpu.window.set_title(SHELL_TITLE);
         Ok(())

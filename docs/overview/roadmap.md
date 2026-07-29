@@ -394,8 +394,11 @@ unread code and still blocks this milestone. See
       rather than out of the asset. **Escape backs out one level** rather than
       quitting: a race returns to the menus, a page pops, and only the front
       end and `--race` quit on it. See [menus](../architecture/menus.md).
-      Style, animation and the disc's own artwork are all still absent, and
-      **rebinding** is the one row that displays without editing.
+      The rows are drawn over **the disc's own looping menu backdrop**, the
+      movie `FE Screen`'s `Movie` widget names, so the menus sit on the
+      background the original's do. Style, animation and the rest of the disc's
+      artwork are still absent, and **rebinding** is the one row that displays
+      without editing.
 - [~] Modern features. The display half is in: **monitor selection** (by name,
       never by index), window mode (windowed or borderless), window size,
       aspect ratio (`psp`, `ps2` or `free`), **brightness and gamma**, and a

@@ -31,6 +31,13 @@ pub struct Boot {
     /// means no movie rather than a movie with no picture, which is what
     /// [`Movie::no_picture_reason`] means and is a different thing.
     pub movie: Option<Movie>,
+    /// The looping backdrop the disc's own `FE Screen` plays behind its menus,
+    /// for ours to sit on. See [`load_backdrop`].
+    ///
+    /// `None` is an ordinary outcome and not an error: a source that does not
+    /// carry it, `--no-video`, or a missing `ffmpeg`. The menus draw on black
+    /// there, which is what they did before this existed.
+    pub backdrop: Option<Movie>,
     /// Every front-end image the screens reference, in one texture.
     pub sprites: crate::sprite::Sheet,
     /// The text atlas: the disc's own font when it decodes, ours when it does
@@ -118,6 +125,7 @@ pub fn load(options: &Options) -> Result<Boot> {
     );
     let tracks = load_tracks(&mut archives, &mut report);
     let movie = load_movie(&mut archives, options, &mut report)?;
+    let backdrop = load_backdrop(&mut archives, options, &mut report);
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
     // The cached frames when there are any, and the demuxed count when there
@@ -168,9 +176,61 @@ pub fn load(options: &Options) -> Result<Boot> {
         font,
         frontend,
         movie,
+        backdrop,
         sprites,
         report,
     })
+}
+
+/// Loads the looping backdrop the disc plays behind its menus.
+///
+/// **The disc's own arrangement, not decoration we invented.** `FE Screen` -
+/// the original's main menu - carries a `Movie` widget naming
+/// `Data\Movies\Backdrop.PMF`, and a cold boot under PPSSPP with
+/// `MoviePlayer_Open` armed from reset opens exactly two movies in ten minutes:
+/// the intro, and this. See [`DEFAULT_BOOT_MOVIE`] and
+/// `docs/ghidra/functions/psp-pulse/frontend-video.md`. Our menu tree is ours;
+/// what it sits on is the disc's.
+///
+/// Three differences from [`load_movie`], each of which is why this is its own
+/// function rather than a second call:
+///
+/// - **Absence is never an error.** `load_movie` bails on a movie the command
+///   line named and the source does not have, because a run that cannot play
+///   the movie it was asked for has failed. Nothing asked for this one, so
+///   every way of not getting it - no such entry, no `ffmpeg`, `--no-video` -
+///   ends as `None` and a note, and the menus draw on black.
+/// - **Always the whole movie**, whatever `--movie-frames` says. That flag
+///   exists so a first run need not transcode 1200 intro frames; capping a
+///   *loop* at four would make the backdrop stutter round every seventh of a
+///   second, which is not a shorter version of the same thing.
+/// - **It is loaded here, at boot, rather than when the menus first open.** The
+///   270 frames cost about thirteen seconds to transcode once and nothing on
+///   every run after, and boot is already paying that for the intro's 1200 -
+///   whereas the menus open on a keypress out of a race, where a
+///   thirteen-second freeze would read as a hang.
+fn load_backdrop(
+    archives: &mut oag_assets::pulse::Archives,
+    options: &Options,
+    report: &mut Vec<String>,
+) -> Option<Movie> {
+    if options.no_video {
+        return None;
+    }
+    let wanted = Options {
+        movie: pulse::names::BACKDROP_MOVIE.to_string(),
+        extent: Extent::Whole,
+        ..options.clone()
+    };
+    match load_movie(archives, &wanted, report) {
+        Ok(movie) => movie,
+        // Reported and dropped. `load_movie` only errors here on an entry it
+        // cannot read, and the backdrop is not worth failing a boot over.
+        Err(e) => {
+            report.push(format!("no menu backdrop: {e:#}"));
+            None
+        }
+    }
 }
 
 /// Decodes every image the screens name.
@@ -641,11 +701,13 @@ fn load_movie(
 ///
 /// `Data\Movies\Intro.PMF` is here because it is [`DEFAULT_BOOT_MOVIE`]: the
 /// PSP's name for the same reel, which a PS2 source answers with its own cut.
+/// `Data\Movies\Backdrop.PMF` is here for exactly the same reason, and so that
+/// [`load_backdrop`] can ask for one name on both platforms.
 ///
 /// 512 is listed first because this disc is EU/PAL; the ultimate trigger that
 /// decides which value `0x0027a85c` takes is not traced. See
 /// `docs/ps2/pulse-disc-layout.md` and `docs/formats/ipf.md`.
-const LOOSE_MOVIES: [(&str, [&str; 2]); 3] = [
+const LOOSE_MOVIES: [(&str, [&str; 2]); 4] = [
     (
         DEFAULT_BOOT_MOVIE,
         ["DATA/MOVIES/INTRO512.PSS", "DATA/MOVIES/INTRO640.PSS"],
@@ -656,6 +718,10 @@ const LOOSE_MOVIES: [(&str, [&str; 2]); 3] = [
     ),
     (
         r"Data\Movies\Backdrop.ipf",
+        ["DATA/MOVIES/BG512.IPF", "DATA/MOVIES/BG640.IPF"],
+    ),
+    (
+        pulse::names::BACKDROP_MOVIE,
         ["DATA/MOVIES/BG512.IPF", "DATA/MOVIES/BG640.IPF"],
     ),
 ];

@@ -82,6 +82,11 @@ const MAX_TICKS: u32 = 60 * 60;
 /// The lists matter even for a still: a circuit row with nothing in it and one
 /// showing this disc's twenty-four circuits are different pictures, and the
 /// point of the flag is to look at the real one.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "every one of these is a separate thing the page needs, and a struct \
+              for one call site would name the grouping without clarifying it"
+)]
 fn menu_page(
     settings: &crate::settings::Settings,
     anisotropy: Anisotropy,
@@ -89,6 +94,7 @@ fn menu_page(
     tracks: &[crate::catalogue::Track],
     languages: &[crate::language::Language],
     strings: &crate::language::StringTable,
+    backdrop: Option<crate::menu::Backdrop>,
 ) -> Result<Vec<crate::frontend::Draw>> {
     let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN)
         .context("parsing the built-in menu definition")?;
@@ -145,7 +151,11 @@ fn menu_page(
         model.seed(key, &value);
     }
     model.open(page);
-    Ok(crate::menu::draw_list(&model, &oag_input::keys::bound_keys))
+    Ok(crate::menu::draw_list(
+        &model,
+        &oag_input::keys::bound_keys,
+        backdrop,
+    ))
 }
 
 /// Runs the sequence and writes one frame.
@@ -155,7 +165,8 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         strings,
         tracks,
         mut frontend,
-        mut movie,
+        movie,
+        backdrop,
         font,
         sprites,
         ..
@@ -265,17 +276,44 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         );
     }
 
-    let list = match (&options.menu_page, &options.screen) {
-        (Some(page), _) => menu_page(
-            &options.settings,
-            options.anisotropy,
-            page,
-            &tracks,
-            &languages,
-            &strings,
-        )?,
-        (None, Some(name)) => frontend.draw_screen(name),
-        (None, None) => frontend.draw_list(),
+    // **`--menu-page`'s picture comes off a different movie than the sequence's
+    // does.** A menu page's `Draw::Video` is the disc's looping menu backdrop,
+    // not the intro reel, so the movie the frame is read from and the plane
+    // geometry the pipeline is built for both have to be the backdrop's. Getting
+    // that wrong is not a compile error and not a crash: it reads a frame of the
+    // intro into planes sized for the backdrop, and the flag quietly stops
+    // showing what a player would see - which is exactly what this module exists
+    // not to do.
+    //
+    // Frame zero and not a moving one: a capture is one picture, and there is
+    // nothing here for a playhead to be advanced by.
+    let (mut movie, video_format, list) = match (&options.menu_page, &options.screen) {
+        (Some(page), _) => {
+            let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
+            let frame = showing.map(|movie| crate::menu::Backdrop {
+                rect: crate::frontend::pillarbox(crate::frontend::SCREEN, movie.display_aspect),
+                frame: 0,
+            });
+            let format = showing.and_then(VideoFormat::of);
+            let list = menu_page(
+                &options.settings,
+                options.anisotropy,
+                page,
+                &tracks,
+                &languages,
+                &strings,
+                frame,
+            )?;
+            (backdrop, format, list)
+        }
+        (None, Some(name)) => {
+            let list = frontend.draw_screen(name);
+            (movie, video_format, list)
+        }
+        (None, None) => {
+            let list = frontend.draw_list();
+            (movie, video_format, list)
+        }
     };
 
     let instance = wgpu::Instance::default();

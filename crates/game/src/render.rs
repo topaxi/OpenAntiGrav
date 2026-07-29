@@ -68,6 +68,28 @@ pub struct VideoFormat {
     pub chroma_height: u32,
 }
 
+impl VideoFormat {
+    /// The plane geometry `movie`'s cached frames need, or `None` when it has
+    /// no frames to show.
+    ///
+    /// Three callers ask the same question - the front end's intro, the menus'
+    /// backdrop, and the offscreen capture of either - so it is one function.
+    /// `None` covers a source that carries no such movie, `--no-video`, and a
+    /// missing `ffmpeg`, and every one of those has to end in a renderer built
+    /// **without** the video pipeline: building it and never filling it draws a
+    /// green rectangle rather than nothing, the planes being zeroed rather than
+    /// absent.
+    #[must_use]
+    pub fn of(movie: &crate::movie::Movie) -> Option<Self> {
+        movie.frames.as_ref().map(|frames| Self {
+            width: movie.width,
+            height: movie.height,
+            chroma_width: frames.chroma_width,
+            chroma_height: frames.chroma_height,
+        })
+    }
+}
+
 /// The renderer.
 pub struct Renderer {
     ui_pipeline: wgpu::RenderPipeline,

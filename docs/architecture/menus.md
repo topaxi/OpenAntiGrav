@@ -240,6 +240,60 @@ dropped and re-entering loads a fresh race. A player who backs out expects to
 lose the race; one who backs out and finds a *stale* one would not, so a
 half-built pause would be worse than none.
 
+## The background the menus sit on
+
+The rows are drawn over **the disc's own looping menu backdrop**, and that is a
+recovery rather than decoration this project invented. `FE Screen` - the
+original's main menu - carries a `Movie` widget naming
+`Data\Movies\Backdrop.PMF`, and a cold boot under PPSSPP with `MoviePlayer_Open`
+armed from reset opens exactly two movies in ten minutes: the intro, and this
+one. See [frontend boot](frontend-boot.md) and
+[`frontend-video.md`](../ghidra/functions/psp-pulse/frontend-video.md). The menu
+*tree* is ours; what it sits on is the disc's, and citing which widget names it
+is what keeps the two apart.
+
+On PSP it is a 480x272 `.PMF`, 270 frames, 9.01 seconds. On PS2 the same name
+resolves through `boot::LOOSE_MOVIES` to `BG512.IPF` / `BG640.IPF` - IPU video,
+512x512 or 640x448 with a declared 4:3 display aspect, so it is **pillarboxed
+rather than stretched**, exactly as the `.PSS` intro cuts already are.
+
+Four decisions worth having written down:
+
+- **It loads at boot, not when the menus first open.** The 270 frames cost about
+  thirteen seconds to transcode once and nothing on every run after; boot already
+  pays that for the intro's 1200. The menus, by contrast, open on a keypress out
+  of a race, where a thirteen-second freeze would read as a hang.
+- **Always the whole movie**, whatever `--movie-frames` says. That flag exists so
+  a first run need not transcode 1200 intro frames. Capping a *loop* at four
+  frames is not a shorter version of the same thing; it is a stutter.
+- **Absent is an ordinary outcome.** A source that does not carry it,
+  `--no-video`, or a missing `ffmpeg` all end with no backdrop, and the menus
+  draw on black exactly as they did before this existed. The renderer is built
+  **without** the video pipeline there, because building it and never filling it
+  draws a green rectangle rather than nothing.
+- **`--menu-page` shows it too**, at frame zero. That flag exists to look at a
+  layout without walking to it, and a flag that quietly stops showing what a
+  player sees would defeat the purpose. It needs care in the capture path: a menu
+  page's `Draw::Video` is the *backdrop*, while the sequence's is the *intro*, so
+  the movie the frame is read from and the plane geometry the pipeline is built
+  for both have to be swapped together. Getting that wrong is neither a compile
+  error nor a crash.
+
+`menu.rs` is handed **a frame index and a rectangle**, not a movie. Which frame
+is showing is timing and where it goes is the source's display aspect; neither is
+a menu's business, the same way what a setting *means* is not. `main.rs` owns the
+player, and it wraps rather than finishing - which is the whole difference
+between this movie and the intro.
+
+**The language picker deliberately does not get one.** The comment in
+`frontend.rs` guessing that its black-on-black title colour is black *because*
+the real screen sits on a lit background is a hypothesis, and the evidence is
+against acting on it: only three screens in that XML carry a `Movie` widget and
+`Language Selection` is not one of them, and the picker runs before `LogoFMV`, so
+the backdrop being loaded by then is not established either. Settling it means
+finding what the picker's parent draws. Until then the colour stays lifted and
+the picker stays black.
+
 ## DISPLAY against GRAPHICS
 
 Two pages under OPTIONS rather than one, and the line between them is **whether

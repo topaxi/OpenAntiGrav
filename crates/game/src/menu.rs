@@ -173,6 +173,21 @@ impl ValueSource {
     }
 }
 
+/// One frame of the looping picture the rows are drawn on top of.
+///
+/// **A frame and a rectangle, not a movie.** Deciding which frame is showing is
+/// timing, deciding where it goes is the source's own display aspect, and
+/// neither is a menu's business - this module draws a list and knows nothing
+/// about either, the same way it knows nothing about what a setting means.
+/// `main.rs` owns the player; see [`draw_list`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Backdrop {
+    /// Where the picture goes on the 480x272 screen: `[x, y, width, height]`.
+    pub rect: [f32; 4],
+    /// Which frame of it to show, counting from zero.
+    pub frame: usize,
+}
+
 /// One option on a `choice` row: what it stores, and what it shows.
 ///
 /// Named for the row kind rather than for "option", which would shadow
@@ -1189,17 +1204,34 @@ const DIMMED: [f32; 4] = [0.45, 0.5, 0.56, 1.0];
 /// than looked up, because a keyboard is a device concern: `oag_input::keys`
 /// owns the mapping, this crate owns the layout, and neither has to know how
 /// the other works. `main.rs` hands over [`oag_input::keys::bound_keys`].
+///
+/// `backdrop` is the same arrangement one step further out: a frame and a
+/// rectangle, already decided, rather than a movie this module would then have
+/// to know how to play. `None` draws the rows on whatever the pass cleared to,
+/// which is black - see [`Backdrop`].
 #[must_use]
-pub fn draw_list(menu: &Menu, bindings: &dyn Fn(u8) -> Vec<&'static str>) -> Vec<Draw> {
+pub fn draw_list(
+    menu: &Menu,
+    bindings: &dyn Fn(u8) -> Vec<&'static str>,
+    backdrop: Option<Backdrop>,
+) -> Vec<Draw> {
     let page = menu.page();
-    let mut out = vec![Draw::Text {
+    // First in the list, because the list is painted back to front.
+    let mut out: Vec<Draw> = backdrop
+        .map(|backdrop| Draw::Video {
+            rect: backdrop.rect,
+            frame: backdrop.frame,
+        })
+        .into_iter()
+        .collect();
+    out.push(Draw::Text {
         x: MARGIN_X,
         y: TITLE_Y,
         scale: 1.4,
         color: SELECTED,
         align: Align::Left,
         text: page.title.clone(),
-    }];
+    });
 
     for (row, entry) in page.entries.iter().enumerate() {
         let y = FIRST_ROW_Y + row as f32 * ROW_HEIGHT;
@@ -1650,7 +1682,7 @@ mod tests {
         }
 
         let label_colour = |menu: &Menu| {
-            let list = draw_list(menu, &|_| vec!["X"]);
+            let list = draw_list(menu, &|_| vec!["X"], None);
             list.iter()
                 .find_map(|draw| match draw {
                     Draw::Text { color, text, .. } if text == "FRAME LIMIT" => Some(*color),
@@ -2168,7 +2200,7 @@ disabled_by = { setting = "a.vsync", value = true }
     fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
         let mut menu = Menu::new(fixture());
         press(&mut menu, &[button::CROSS]);
-        let list = draw_list(&menu, &no_bindings);
+        let list = draw_list(&menu, &no_bindings, None);
 
         let texts: Vec<&String> = list
             .iter()
@@ -2202,7 +2234,7 @@ disabled_by = { setting = "a.vsync", value = true }
     fn values_are_right_aligned_on_one_edge() {
         let mut menu = Menu::new(fixture());
         press(&mut menu, &[button::CROSS]);
-        for draw in draw_list(&menu, &no_bindings) {
+        for draw in draw_list(&menu, &no_bindings, None) {
             if let Draw::Text { align, x, .. } = draw
                 && align == Align::Right
             {
@@ -2229,17 +2261,55 @@ disabled_by = { setting = "a.vsync", value = true }
         )
         .expect("parse");
         let menu = Menu::new(definition);
-        let list = draw_list(&menu, &no_bindings);
+        let list = draw_list(&menu, &no_bindings, None);
         assert!(
             list.iter()
                 .any(|draw| matches!(draw, Draw::Text { text, .. } if text == "UNBOUND")),
             "{list:?}"
         );
-        let list = draw_list(&menu, &|_| vec!["ENTER", "X"]);
+        let list = draw_list(&menu, &|_| vec!["ENTER", "X"], None);
         assert!(
             list.iter()
                 .any(|draw| matches!(draw, Draw::Text { text, .. } if text == "ENTER / X")),
             "{list:?}"
+        );
+    }
+
+    /// The backdrop has to be **first** in the list and nothing else may move.
+    ///
+    /// First because the list is painted back to front, and a menu drawn under
+    /// its own background is a black screen with a movie on it. Nothing else
+    /// moving is the other half: a source with a backdrop and one without have
+    /// to lay the rows out identically, or the layout depends on which disc is
+    /// in the drive.
+    #[test]
+    fn a_backdrop_is_drawn_behind_the_rows_and_moves_none_of_them() {
+        let mut menu = Menu::new(built_in());
+        assert!(menu.open("display"));
+
+        let plain = draw_list(&menu, &no_bindings, None);
+        assert!(
+            !plain.iter().any(|draw| matches!(draw, Draw::Video { .. })),
+            "no backdrop means no video draw at all: {plain:?}"
+        );
+
+        let backdrop = Backdrop {
+            rect: [12.0, 34.0, 456.0, 78.0],
+            frame: 91,
+        };
+        let with = draw_list(&menu, &no_bindings, Some(backdrop));
+        assert_eq!(
+            with.first(),
+            Some(&Draw::Video {
+                rect: backdrop.rect,
+                frame: backdrop.frame,
+            }),
+            "the backdrop has to be painted first: {with:?}"
+        );
+        assert_eq!(
+            &with[1..],
+            &plain[..],
+            "a backdrop must add a draw and change no other"
         );
     }
 

@@ -241,6 +241,13 @@ current and shown by `FE Screen` after it. Reading the labels as "the state that
 plays it" would put the silent looping backdrop on the logo screen, which is both
 XML-contradicted and audibly wrong.
 
+**`Backdrop.PMF` is now drawn**, behind [our own menus](menus.md#the-background-the-menus-sit-on)
+rather than behind a reconstruction of `FE Screen`. `repeat="true"` on that
+widget is what the player here is built with, and `sound="false"` is why no audio
+path was needed for it. It is loaded during boot alongside the intro, because the
+menus can be opened by a keypress out of a race and a first-run transcode is
+about thirteen seconds.
+
 `LogoFMV` is therefore what this build boots into, playing `Data\Movies\Intro.PMF`
 whole and with no frame holds - the widget has no frame counters. The reel leg is
 kept, because it is real code with real constants, and is reached with `--reel`;
