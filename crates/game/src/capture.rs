@@ -65,6 +65,9 @@ pub struct Options {
     /// iterating on a layout otherwise costs. Takes no input and runs no state
     /// machine.
     pub menu_page: Option<String>,
+    /// The persisted settings, so `--menu-page` draws the rows a player would
+    /// see rather than each list's first entry.
+    pub settings: crate::settings::Settings,
 }
 
 /// How many ticks the runner will take before giving up on `until`.
@@ -80,7 +83,8 @@ const MAX_TICKS: u32 = 60 * 60;
 /// showing this disc's twenty-four circuits are different pictures, and the
 /// point of the flag is to look at the real one.
 fn menu_page(
-    options: &Options,
+    settings: &crate::settings::Settings,
+    anisotropy: Anisotropy,
     page: &str,
     tracks: &[crate::catalogue::Track],
     languages: &[crate::language::Language],
@@ -105,18 +109,23 @@ fn menu_page(
         crate::menu::ValueSource::Tracks,
         &tracks
             .iter()
-            .map(|track| crate::menu::Option_::labelled(&track.id, strings.get_or_id(&track.id)))
+            .map(|track| crate::menu::Choice::labelled(&track.id, strings.get_or_id(&track.id)))
             .collect::<Vec<_>>(),
     );
     model.supply(
         crate::menu::ValueSource::Languages,
         &languages
             .iter()
-            .map(|language| crate::menu::Option_::labelled(&language.name, &language.native_name))
+            .map(|language| crate::menu::Choice::labelled(&language.name, &language.native_name))
             .collect::<Vec<_>>(),
     );
+    // Seeded after supplying, and from the same list the live menus use, so
+    // what the flag draws is what a player would see rather than whatever each
+    // row's list happened to start on.
+    for (key, value) in crate::settings::menu_seeds(settings, anisotropy) {
+        model.seed(key, &value);
+    }
     model.open(page);
-    let _ = options;
     Ok(crate::menu::draw_list(&model, &oag_input::keys::bound_keys))
 }
 
@@ -236,7 +245,14 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     }
 
     let list = match (&options.menu_page, &options.screen) {
-        (Some(page), _) => menu_page(options, page, &tracks, &languages, &strings)?,
+        (Some(page), _) => menu_page(
+            &options.settings,
+            options.anisotropy,
+            page,
+            &tracks,
+            &languages,
+            &strings,
+        )?,
         (None, Some(name)) => frontend.draw_screen(name),
         (None, None) => frontend.draw_list(),
     };

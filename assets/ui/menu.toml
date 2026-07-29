@@ -113,9 +113,10 @@ kind = "submenu"
 label = "CONTROLS"
 target = "controls"
 
-# Also read from the source: the USA PSP disc ships English only, so on that
-# release this row has one option and says so, rather than offering languages
-# it cannot select.
+# Also read from the source. Changing it takes effect on the **next launch**:
+# the string table is loaded once at boot, and reloading it under a front end
+# that has already handed off is work nothing needs yet. Picking a language here
+# also means the picker stays skipped, since that is the same setting.
 [[page.entry]]
 kind = "choice"
 label = "LANGUAGE"

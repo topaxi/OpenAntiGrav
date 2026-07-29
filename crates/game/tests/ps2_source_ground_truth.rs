@@ -339,6 +339,8 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
     };
 
     let options = oag_game::boot::Options {
+        // No saved language: these boot a fresh install every time.
+        language: None,
         source: image.display().to_string(),
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: oag_game::boot::DEFAULT_BOOT_MOVIE.to_string(),

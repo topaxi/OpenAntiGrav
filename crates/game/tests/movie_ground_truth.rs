@@ -75,6 +75,8 @@ fn load() -> Option<boot::Boot> {
         return None;
     }
     let options = boot::Options {
+        // No saved language: these boot a fresh install every time.
+        language: None,
         source: image.display().to_string(),
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: pulse::names::INTRO_MOVIE.to_string(),

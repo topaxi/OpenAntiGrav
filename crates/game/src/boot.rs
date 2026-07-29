@@ -66,6 +66,13 @@ pub struct Options {
     pub source: String,
     /// Which movie leg the sequence boots into.
     pub leg: crate::frontend::Leg,
+    /// The language to load the string table for, by the XML's own English
+    /// name, when one has been chosen on an earlier run.
+    ///
+    /// `None` falls back to English and then to whatever the source lists
+    /// first, which is what a first run gets. A name this source does not carry
+    /// falls back the same way rather than failing.
+    pub language: Option<String>,
     /// Which `Data.wad` entry that leg plays, as a name or a name hash.
     ///
     /// Three of the disc's movies have no recovered name, and one of them is
@@ -103,7 +110,12 @@ pub fn load(options: &Options) -> Result<Boot> {
     let screens = load_screens(&mut archives, &mut report)?;
     let languages = load_languages(&mut archives, &mut report);
     let offered = languages.clone();
-    let strings = load_strings(&mut archives, &languages, &mut report);
+    let strings = load_strings(
+        &mut archives,
+        &languages,
+        options.language.as_deref(),
+        &mut report,
+    );
     let tracks = load_tracks(&mut archives, &mut report);
     let movie = load_movie(&mut archives, options, &mut report)?;
     let sprites = load_sprites(&mut archives, &screens, &mut report);
@@ -364,13 +376,18 @@ fn load_tracks(
 fn load_strings(
     archives: &mut oag_assets::pulse::Archives,
     languages: &[Language],
+    preferred: Option<&str>,
     report: &mut Vec<String>,
 ) -> StringTable {
-    // English if the disc has it, otherwise whatever comes first. The original
-    // has a saved language to fall back on; there is nothing saved yet.
-    let chosen = languages
-        .iter()
-        .find(|l| l.name == "English")
+    // The saved language first, then English, then whatever comes first. The
+    // fallback chain used to end at English with a note that there was nothing
+    // saved to prefer; there is now. A saved name this source does not carry
+    // falls through rather than failing - the same rule the picker's own
+    // preselection follows, and for the same reason: a settings file written
+    // against the EU disc must not stop the USA one booting.
+    let chosen = preferred
+        .and_then(|name| languages.iter().find(|l| l.name.eq_ignore_ascii_case(name)))
+        .or_else(|| languages.iter().find(|l| l.name == "English"))
         .or_else(|| languages.first());
 
     let Some(language) = chosen else {

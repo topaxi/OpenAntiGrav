@@ -54,6 +54,8 @@ fn load() -> Option<boot::Boot> {
 fn load_leg(leg: oag_game::frontend::Leg, movie: &str) -> Option<boot::Boot> {
     let image = image()?;
     let options = boot::Options {
+        // No saved language: these boot a fresh install every time.
+        language: None,
         source: image.display().to_string(),
         leg,
         movie: movie.to_string(),

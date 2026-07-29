@@ -185,6 +185,35 @@ pub fn load() -> Result<Settings> {
     Ok(settings)
 }
 
+/// What every menu row that edits a setting should currently read.
+///
+/// One list, used by the live menus and by `--menu-page`'s debugging view, so
+/// the picture the flag draws is the picture a player would see rather than
+/// whatever each row's list happened to start on. Keeping it here rather than in
+/// `menu.rs` is the same seam as everywhere else: the menus never read settings,
+/// and this is the settings side handing them over.
+///
+/// `anisotropy` is passed rather than read off `settings` because the command
+/// line can override it for one run, and the menus should show what is in
+/// effect.
+#[must_use]
+pub fn menu_seeds(
+    settings: &Settings,
+    anisotropy: Anisotropy,
+) -> Vec<(&'static str, crate::menu::Value)> {
+    let text = |value: &str| crate::menu::Value::Text(value.to_string());
+    let mut out = vec![
+        ("graphics.anisotropy", text(&anisotropy.to_string())),
+        ("race.class", text(&settings.race.class)),
+        ("race.team", text(&settings.race.team)),
+        ("race.track", text(&settings.race.track)),
+    ];
+    if let Some(language) = &settings.language {
+        out.push(("language", text(language)));
+    }
+    out
+}
+
 /// Writes `settings` back to [`path`], creating the directory if it is missing.
 ///
 /// Called when a menu changes something, so a setting survives the run it was

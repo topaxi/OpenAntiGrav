@@ -165,6 +165,9 @@ impl ValueSource {
 
 /// One option on a `choice` row: what it stores, and what it shows.
 ///
+/// Named for the row kind rather than for "option", which would shadow
+/// `std::option::Option` everywhere this module returns one.
+///
 /// The two are the same thing for a list the definition spells out - `off`,
 /// `4x` - and are **not** for a list that comes off a disc. A circuit stores
 /// `16_Track`, which is a plugin id and stable, and shows "Talon's Junction
@@ -172,14 +175,14 @@ impl ValueSource {
 /// Keeping them apart is what lets the menus name a track without this
 /// repository containing its name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Option_ {
+pub struct Choice {
     /// What the setting is set to.
     pub value: String,
     /// What the row draws.
     pub label: String,
 }
 
-impl Option_ {
+impl Choice {
     /// An option whose stored value is also what it shows.
     #[must_use]
     pub fn plain(value: impl Into<String>) -> Self {
@@ -253,7 +256,7 @@ pub enum Entry {
         /// [`ValueSource`]. A row with nothing to offer draws its label and no
         /// value and does not move, which is the honest thing for a list this
         /// source turned out not to have.
-        values: Vec<Option_>,
+        values: Vec<Choice>,
         /// Where [`Self::Choice::values`] comes from, when not the definition.
         source: Option<ValueSource>,
         /// Which one is current. Seeded by [`Menu::seed`], never read off disk.
@@ -331,7 +334,7 @@ impl Entry {
     /// What this row's setting is currently set to, as opposed to what it
     /// shows.
     #[must_use]
-    pub fn chosen(&self) -> std::option::Option<Value> {
+    pub fn chosen(&self) -> Option<Value> {
         match self {
             Self::Choice {
                 values, current, ..
@@ -617,7 +620,7 @@ fn resolve(
             Ok(Entry::Choice {
                 label,
                 setting: setting.clone(),
-                values: entry.values.iter().map(Option_::plain).collect(),
+                values: entry.values.iter().map(Choice::plain).collect(),
                 source,
                 current: 0,
             })
@@ -750,7 +753,13 @@ impl Menu {
     /// Returns how many rows were filled. Supplying an empty list is allowed and
     /// is not the same as not calling this: it means the source really has
     /// nothing, and the row draws as an unusable one rather than as a lie.
-    pub fn supply(&mut self, source: ValueSource, values: &[Option_]) -> usize {
+    ///
+    /// **The row keeps the value it was already on**, if the new list still has
+    /// it, and falls to the first option otherwise. That is what makes the order
+    /// of `supply` and `seed` stop mattering: resetting to index 0 instead would
+    /// leave a seeded row silently showing whatever happened to be first, and
+    /// the first nudge of it would persist that as the player's choice.
+    pub fn supply(&mut self, source: ValueSource, values: &[Choice]) -> usize {
         let mut filled = 0;
         for page in &mut self.definition.pages {
             for entry in &mut page.entries {
@@ -762,8 +771,11 @@ impl Menu {
                 } = entry
                     && *from == Some(source)
                 {
+                    let held = list.get(*current).map(|option| option.value.clone());
                     values.clone_into(list);
-                    *current = 0;
+                    *current = held
+                        .and_then(|value| list.iter().position(|option| option.value == value))
+                        .unwrap_or(0);
                     filled += 1;
                 }
             }
@@ -1383,6 +1395,148 @@ mod tests {
             Some(Value::Text("off".to_string())),
             "the row stays on a value the player can actually reach"
         );
+    }
+
+    /// The bug this ordering rule exists to stop: a row seeded to the player's
+    /// value, then handed its list, must not silently fall back to whatever is
+    /// first. It would draw wrong *and* the next nudge would persist the wrong
+    /// value as a deliberate choice.
+    #[test]
+    fn supplying_a_list_keeps_the_value_the_row_was_already_on() {
+        let definition = Definition::parse(
+            r#"
+            version = 1
+            root = "main"
+            [[page]]
+            id = "main"
+            [[page.entry]]
+            kind = "choice"
+            label = "LANGUAGE"
+            setting = "language"
+            values_from = "languages"
+            "#,
+        )
+        .expect("parse");
+        let mut menu = Menu::new(definition);
+
+        let offered = |names: &[&str]| -> Vec<Choice> {
+            names.iter().map(|n| Choice::plain(*n)).collect()
+        };
+        menu.supply(ValueSource::Languages, &offered(&["French", "English"]));
+        assert!(menu.seed("language", &Value::Text("English".to_string())));
+        assert_eq!(
+            menu.page().entries[0].chosen(),
+            Some(Value::Text("English".to_string()))
+        );
+
+        // Supplied again, the seeded value survives even though it is not first.
+        menu.supply(
+            ValueSource::Languages,
+            &offered(&["French", "German", "English"]),
+        );
+        assert_eq!(
+            menu.page().entries[0].chosen(),
+            Some(Value::Text("English".to_string())),
+            "a re-supplied list must not reset the row to its first option"
+        );
+
+        // And a list that no longer has it falls to the first, which is the only
+        // thing left to fall to.
+        menu.supply(ValueSource::Languages, &offered(&["French", "German"]));
+        assert_eq!(
+            menu.page().entries[0].chosen(),
+            Some(Value::Text("French".to_string()))
+        );
+    }
+
+    /// A disc-supplied row stores an id and shows a name, and the event carries
+    /// the id. Persisting the label would write words a player read into a
+    /// settings file, where the next run would not recognise them.
+    #[test]
+    fn a_supplied_row_shows_its_label_and_reports_its_value() {
+        let definition = Definition::parse(
+            r#"
+            version = 1
+            root = "main"
+            [[page]]
+            id = "main"
+            [[page.entry]]
+            kind = "choice"
+            label = "TRACK"
+            setting = "race.track"
+            values_from = "tracks"
+            "#,
+        )
+        .expect("parse");
+        let mut menu = Menu::new(definition);
+        menu.supply(
+            ValueSource::Tracks,
+            &[
+                Choice::labelled("16_Track", "A Circuit"),
+                Choice::labelled("32_Track", "A Circuit Reversed"),
+            ],
+        );
+
+        assert_eq!(
+            menu.page().entries[0].value(),
+            Some(Value::Text("A Circuit".to_string())),
+            "the row draws the name"
+        );
+        let events = press(&mut menu, &[button::RIGHT]);
+        assert_eq!(
+            events,
+            vec![MenuEvent::Changed {
+                setting: "race.track".to_string(),
+                value: Value::Text("32_Track".to_string()),
+            }],
+            "and reports the id"
+        );
+    }
+
+    /// A row whose source turned out to have nothing draws no value and does
+    /// not move, rather than panicking on an empty list.
+    #[test]
+    fn a_row_with_nothing_supplied_is_inert() {
+        let definition = Definition::parse(
+            r#"
+            version = 1
+            root = "main"
+            [[page]]
+            id = "main"
+            [[page.entry]]
+            kind = "choice"
+            label = "TRACK"
+            setting = "race.track"
+            values_from = "tracks"
+            "#,
+        )
+        .expect("parse");
+        let mut menu = Menu::new(definition);
+        menu.supply(ValueSource::Tracks, &[]);
+
+        assert_eq!(menu.page().entries[0].value(), None);
+        assert!(press(&mut menu, &[button::RIGHT]).is_empty());
+        assert!(press(&mut menu, &[button::CROSS]).is_empty());
+    }
+
+    #[test]
+    fn a_choice_cannot_declare_both_a_list_and_a_source() {
+        let error = Definition::parse(
+            r#"
+            version = 1
+            root = "main"
+            [[page]]
+            id = "main"
+            [[page.entry]]
+            kind = "choice"
+            label = "TRACK"
+            setting = "race.track"
+            values = ["16_Track"]
+            values_from = "tracks"
+            "#,
+        )
+        .expect_err("refused");
+        assert!(error.to_string().contains("alternatives"), "{error}");
     }
 
     #[test]

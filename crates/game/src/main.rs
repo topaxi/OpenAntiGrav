@@ -283,6 +283,10 @@ fn main() -> Result<()> {
     };
     let options = boot::Options {
         source: source.clone(),
+        // The string table follows the saved language, so a player who picked
+        // French once reads French from the next boot rather than only having
+        // the picker skipped.
+        language: settings.language.clone(),
         leg,
         movie: cli.movie.clone().unwrap_or_else(|| {
             match leg {
@@ -354,6 +358,7 @@ fn main() -> Result<()> {
                 size: parse_size(&cli.size)?,
                 screen: cli.screen.clone(),
                 menu_page: cli.menu_page.clone(),
+                settings: settings.clone(),
                 anisotropy,
             },
         );
@@ -390,7 +395,7 @@ fn main() -> Result<()> {
         languages: loaded
             .languages
             .iter()
-            .map(|language| menu::Option_::labelled(&language.name, &language.native_name))
+            .map(|language| menu::Choice::labelled(&language.name, &language.native_name))
             .collect(),
         font: loaded.font.clone(),
         sprites: loaded.sprites.clone(),
@@ -893,7 +898,7 @@ struct Shell {
     tracks: Vec<(catalogue::Track, String)>,
     /// Every language this source offers, valued by its English name and
     /// labelled in itself.
-    languages: Vec<menu::Option_>,
+    languages: Vec<menu::Choice>,
     font: oag_game::font::Atlas,
     sprites: oag_game::sprite::Sheet,
 }
@@ -1047,10 +1052,10 @@ impl Session {
         let mut model = menu::Menu::new(shell.definition.clone());
         // Supplied before seeding, because a value cannot be seeded onto a list
         // that is not there yet.
-        let tracks: Vec<menu::Option_> = shell
+        let tracks: Vec<menu::Choice> = shell
             .tracks
             .iter()
-            .map(|(track, name)| menu::Option_::labelled(&track.id, name))
+            .map(|(track, name)| menu::Choice::labelled(&track.id, name))
             .collect();
         model.supply(menu::ValueSource::Tracks, &tracks);
         model.supply(menu::ValueSource::Languages, &shell.languages);
@@ -1080,31 +1085,7 @@ impl Session {
     /// exists that a player has no way to change, which is a gap worth seeing in
     /// the log rather than a silent one.
     fn seed_menu(&self, model: &mut menu::Menu) {
-        let seeds = [
-            (
-                "graphics.anisotropy",
-                menu::Value::Text(self.anisotropy.to_string()),
-            ),
-            (
-                "race.class",
-                menu::Value::Text(self.settings.race.class.clone()),
-            ),
-            (
-                "race.team",
-                menu::Value::Text(self.settings.race.team.clone()),
-            ),
-            (
-                "race.track",
-                menu::Value::Text(self.settings.race.track.clone()),
-            ),
-        ];
-        let seeds = seeds.into_iter().chain(
-            self.settings
-                .language
-                .clone()
-                .map(|name| ("language", menu::Value::Text(name))),
-        );
-        for (key, value) in seeds {
+        for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy) {
             if !model.seed(key, &value) {
                 eprintln!("note: nothing in the menus edits {key}");
             }

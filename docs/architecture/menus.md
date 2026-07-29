@@ -119,8 +119,11 @@ The menus never read or write settings, and never touch a disc. Three narrow
 calls carry everything:
 
 - `Menu::supply(source, options)` - what a row *may* be set to, for lists that
-  come off a disc. Called before seeding, because a value cannot be seeded onto a
-  list that is not there yet.
+  come off a disc. **A row keeps the value it was already on** if the new list
+  still has it. Resetting to the first option instead is the bug this rule
+  exists to stop: a row seeded to the player's language and then handed its list
+  would draw the wrong one, and the first nudge of it would persist that as a
+  deliberate choice.
 - `Menu::seed(setting, value)` - what a row *is* set to. A value the row does not
   offer is ignored rather than added, so a stale config file cannot smuggle an
   unreachable option onto the list.
@@ -143,6 +146,10 @@ without this repository containing its name.
   what the game does.
 - **Localised labels.** Row labels are literal text. `string_id` is accepted and
   not read, so adding localisation later is not a format change.
+- **Applying a language without relaunching.** The LANGUAGE row writes the
+  setting, and the string table it selects is loaded once at boot; the change
+  therefore lands on the next launch. Anisotropic filtering is the same, and is
+  less noticeable because a race is built after the menus anyway.
 - **Anything a HUD needs.** When `oag-ui` exists (M5, see
   [workspace layout](workspace-layout.md)), this module moves into it.
 
