@@ -53,6 +53,15 @@ pub mod names {
     /// the `LoadXML` list that pulls in the rest of the menus.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\PI001\GUI\Skin.xml";
 
+    /// The game plugin's own definition: which circuits, teams, ship models and
+    /// music tracks this release carries.
+    ///
+    /// `PI001` is the game plugin, where `PI008`-`PI012` are the language ones.
+    /// The circuits are the part this project reads today - see
+    /// `oag_game::catalogue` - and they are **entries rather than directories**:
+    /// two of them can name one environment and differ only by `Reversed`.
+    pub const GAME_PLUGIN_DEFINITION: &str = r"Data\Plugins\PI001\Definition.xml";
+
     /// The intro movie played by the `LogoFMV` and `Play Intro` screens.
     ///
     /// The name is not in the executable: the `Movie` widget builds it from the

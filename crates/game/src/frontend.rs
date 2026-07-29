@@ -229,6 +229,9 @@ pub struct Frontend {
     selected: usize,
     /// The picked language, once one is picked.
     chosen: Option<String>,
+    /// Set by [`Frontend::preselect_language`]: take the highlighted language
+    /// the frame the picker is entered instead of waiting for a press.
+    auto_confirm: bool,
     /// Where each referenced image sits in the sprite sheet.
     ///
     /// The sheet's pixels live in the renderer; the model only needs to know
@@ -330,6 +333,7 @@ impl Frontend {
             languages,
             selected: 0,
             chosen: None,
+            auto_confirm: false,
             placements,
             player: crate::movie::Player::new(frames, false, movie_frame_rate),
             video_aspect,
@@ -544,8 +548,16 @@ impl Frontend {
         if self.languages.is_empty() {
             return;
         }
-        let count = self.languages.len();
+        // A language already chosen on a previous run leaves the picker the
+        // frame it is entered. The state is still entered rather than skipped
+        // in the machine, so the transition sequence a test asserts on is the
+        // same one; what changes is that nobody has to press anything.
+        if std::mem::take(&mut self.auto_confirm) {
+            self.confirm_language();
+            return;
+        }
 
+        let count = self.languages.len();
         if input.is_pressed(button::DOWN) {
             input.consume_press(button::DOWN);
             self.selected = (self.selected + 1) % count;
@@ -554,23 +566,52 @@ impl Frontend {
             self.selected = (self.selected + count - 1) % count;
         } else if input.is_pressed(button::CROSS) {
             input.consume_press(button::CROSS);
-            let language = self.languages[self.selected].clone();
-            let disc_goto = self.language_auto_redirect().map(str::to_string);
-            self.chosen = Some(language.name.clone());
+            self.confirm_language();
+        }
+    }
+
+    /// Takes the highlighted language and leaves for `Launch Game`.
+    fn confirm_language(&mut self) {
+        let language = self.languages[self.selected].clone();
+        let disc_goto = self.language_auto_redirect().map(str::to_string);
+        self.chosen = Some(language.name.clone());
+        self.notes.push(format!(
+            "language {} ({}) selected, firing {}",
+            language.name,
+            language.native_name,
+            states::LAUNCH_GAME
+        ));
+        if let Some(goto) = disc_goto {
             self.notes.push(format!(
-                "language {} ({}) selected, firing {}",
-                language.name,
-                language.native_name,
+                "note: the disc's own LanguageAutoRedirect goes to {goto}, not {}",
                 states::LAUNCH_GAME
             ));
-            if let Some(goto) = disc_goto {
-                self.notes.push(format!(
-                    "note: the disc's own LanguageAutoRedirect goes to {goto}, not {}",
-                    states::LAUNCH_GAME
-                ));
-            }
-            self.machine.fire(states::LAUNCH_GAME);
         }
+        self.machine.fire(states::LAUNCH_GAME);
+    }
+
+    /// Chooses `name` without showing the picker, if this source offers it.
+    ///
+    /// Returns whether the name matched. `false` is the case that matters: a
+    /// settings file naming a language this disc does not carry - a EU save
+    /// opened against the USA release, which ships English only - must fall back
+    /// to asking rather than silently racing in the wrong language or refusing
+    /// to boot. The caller reports it; nothing here fails.
+    ///
+    /// Matched on the XML's English name (`French`), which is what
+    /// [`Self::chosen`] returns and so what a settings file will have in it.
+    /// Case-insensitively, because a hand-edited config is a hand-edited config.
+    pub fn preselect_language(&mut self, name: &str) -> bool {
+        let Some(at) = self
+            .languages
+            .iter()
+            .position(|language| language.name.eq_ignore_ascii_case(name))
+        else {
+            return false;
+        };
+        self.selected = at;
+        self.auto_confirm = true;
+        true
     }
 
     /// What to draw this frame.

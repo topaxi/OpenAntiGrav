@@ -1,9 +1,10 @@
 //! The shell's menus: our own definition, not the disc's.
 //!
 //! Like [`frontend`](crate::frontend), this holds no GPU handles, opens no
-//! files and reads no clock. It takes input events in and emits
-//! [`MenuEvent`]s out; `main.rs` draws it and acts on what it emits. It moves
-//! to `oag-ui` when the HUD arrives and that crate exists - see
+//! files and reads no clock. It takes input in and emits [`MenuEvent`]s and a
+//! list of [`Draw`](crate::frontend::Draw)s out, both of which are plain data;
+//! `main.rs` rasterises the one and acts on the other. It moves to `oag-ui`
+//! when the HUD arrives and that crate exists - see
 //! `docs/architecture/workspace-layout.md`.
 //!
 //! # Why this is not the front-end XML
@@ -46,6 +47,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
+use crate::frontend::{Align, Draw};
 use crate::input::{Input, button, button_from_name};
 
 /// Reads a button as an **edge** and consumes it in one step.
@@ -119,6 +121,85 @@ impl Action {
     }
 }
 
+/// Where a `choice`'s values come from when the definition cannot name them.
+///
+/// A closed set for the same reason [`Action`] is: a typo has to be a load
+/// error, not a row that is empty at runtime. The definition says *which* list
+/// it wants and the composition root supplies it through [`Menu::supply`], so
+/// this module still knows nothing about discs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueSource {
+    /// The languages this source actually carries, which is a property of the
+    /// disc: the USA PSP release ships English only, and a menu that offered
+    /// French on it would be offering something that cannot be selected.
+    Languages,
+    /// The circuits this source offers, from its own plugin definition.
+    ///
+    /// Not a directory listing: `16_Track` and `32_Track` are two races and one
+    /// folder. And the label is the localised name out of the string table, so
+    /// what a player reads never appears in this repository. See
+    /// [`crate::catalogue`].
+    Tracks,
+}
+
+impl ValueSource {
+    /// The spelling used in the definition file.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Languages => "languages",
+            Self::Tracks => "tracks",
+        }
+    }
+
+    /// Parses a definition file's spelling.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "languages" => Some(Self::Languages),
+            "tracks" => Some(Self::Tracks),
+            _ => None,
+        }
+    }
+}
+
+/// One option on a `choice` row: what it stores, and what it shows.
+///
+/// The two are the same thing for a list the definition spells out - `off`,
+/// `4x` - and are **not** for a list that comes off a disc. A circuit stores
+/// `16_Track`, which is a plugin id and stable, and shows "Talon's Junction
+/// White", which is localised shipped content that only ever exists in memory.
+/// Keeping them apart is what lets the menus name a track without this
+/// repository containing its name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Option_ {
+    /// What the setting is set to.
+    pub value: String,
+    /// What the row draws.
+    pub label: String,
+}
+
+impl Option_ {
+    /// An option whose stored value is also what it shows.
+    #[must_use]
+    pub fn plain(value: impl Into<String>) -> Self {
+        let value = value.into();
+        Self {
+            label: value.clone(),
+            value,
+        }
+    }
+
+    /// An option that stores one thing and shows another.
+    #[must_use]
+    pub fn labelled(value: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            label: label.into(),
+        }
+    }
+}
+
 /// What a setting a menu can move is worth.
 ///
 /// Deliberately narrow: a menu is a list of rows, so anything it can edit has
@@ -167,7 +248,14 @@ pub enum Entry {
         /// The settings key the composition root knows this by.
         setting: String,
         /// The values, in the order left and right move through them.
-        values: Vec<String>,
+        ///
+        /// Empty until [`Menu::supply`] fills it, when the entry declared a
+        /// [`ValueSource`]. A row with nothing to offer draws its label and no
+        /// value and does not move, which is the honest thing for a list this
+        /// source turned out not to have.
+        values: Vec<Option_>,
+        /// Where [`Self::Choice::values`] comes from, when not the definition.
+        source: Option<ValueSource>,
         /// Which one is current. Seeded by [`Menu::seed`], never read off disk.
         current: usize,
     },
@@ -224,12 +312,32 @@ impl Entry {
     }
 
     /// What the row shows on its right-hand side, if anything.
+    ///
+    /// The *label*. What the setting is set to is [`Self::chosen`], and on a
+    /// disc-supplied list the two are different strings.
     #[must_use]
     pub fn value(&self) -> Option<Value> {
         match self {
             Self::Choice {
                 values, current, ..
-            } => values.get(*current).cloned().map(Value::Text),
+            } => values
+                .get(*current)
+                .map(|option| Value::Text(option.label.clone())),
+            Self::Toggle { on, .. } => Some(Value::Flag(*on)),
+            _ => None,
+        }
+    }
+
+    /// What this row's setting is currently set to, as opposed to what it
+    /// shows.
+    #[must_use]
+    pub fn chosen(&self) -> std::option::Option<Value> {
+        match self {
+            Self::Choice {
+                values, current, ..
+            } => values
+                .get(*current)
+                .map(|option| Value::Text(option.value.clone())),
             Self::Toggle { on, .. } => Some(Value::Flag(*on)),
             _ => None,
         }
@@ -347,6 +455,7 @@ mod raw {
         pub setting: Option<String>,
         #[serde(default)]
         pub values: Vec<String>,
+        pub values_from: Option<String>,
         pub button: Option<String>,
         /// Reserved for localisation: the id of a string in the disc's own
         /// table, for a build that wants the original's wording.
@@ -485,13 +594,31 @@ fn resolve(
         }
         "choice" => {
             let setting = entry.setting.as_ref().ok_or_else(|| missing("setting"))?;
-            if entry.values.is_empty() {
-                return Err(missing("at least one value"));
+            let source = match entry.values_from.as_deref() {
+                Some(name) => Some(ValueSource::parse(name).ok_or_else(|| Error::BadEntry {
+                    context: context.to_string(),
+                    problem: format!("{name:?} is not a value source (languages, tracks)"),
+                })?),
+                None => None,
+            };
+            // A list has to come from exactly one place. Both would leave it
+            // ambiguous which wins when the source turns out to be empty, and
+            // neither is a row with nothing on it.
+            match (source, entry.values.is_empty()) {
+                (None, true) => return Err(missing("values, or a values_from")),
+                (Some(_), false) => {
+                    return Err(Error::BadEntry {
+                        context: context.to_string(),
+                        problem: "values and values_from are alternatives, not both".to_string(),
+                    });
+                }
+                _ => {}
             }
             Ok(Entry::Choice {
                 label,
                 setting: setting.clone(),
-                values: entry.values.clone(),
+                values: entry.values.iter().map(Option_::plain).collect(),
+                source,
                 current: 0,
             })
         }
@@ -593,7 +720,7 @@ impl Menu {
                         },
                         Value::Text(text),
                     ) if key == setting => {
-                        if let Some(at) = values.iter().position(|v| v == text) {
+                        if let Some(at) = values.iter().position(|v| &v.value == text) {
                             *current = at;
                             seeded = true;
                         }
@@ -612,6 +739,52 @@ impl Menu {
             }
         }
         seeded
+    }
+
+    /// Fills in every row whose values come from `source`.
+    ///
+    /// The mirror of [`Self::seed`]: that one says what a row is *set* to, this
+    /// one says what it may be set to at all. Called before seeding, because a
+    /// value cannot be seeded onto a list that is not there yet.
+    ///
+    /// Returns how many rows were filled. Supplying an empty list is allowed and
+    /// is not the same as not calling this: it means the source really has
+    /// nothing, and the row draws as an unusable one rather than as a lie.
+    pub fn supply(&mut self, source: ValueSource, values: &[Option_]) -> usize {
+        let mut filled = 0;
+        for page in &mut self.definition.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    values: list,
+                    source: from,
+                    current,
+                    ..
+                } = entry
+                    && *from == Some(source)
+                {
+                    values.clone_into(list);
+                    *current = 0;
+                    filled += 1;
+                }
+            }
+        }
+        filled
+    }
+
+    /// Jumps straight to a page, discarding the stack.
+    ///
+    /// For looking at one page without walking to it - `--menu-page` - rather
+    /// than for navigation, which is why the stack is *replaced*: a page reached
+    /// this way was not reached through anything, and pretending otherwise would
+    /// give it a back destination it never had.
+    ///
+    /// Returns whether the page exists.
+    pub fn open(&mut self, id: &str) -> bool {
+        let Some(at) = self.definition.pages.iter().position(|page| page.id == id) else {
+            return false;
+        };
+        self.stack = vec![at];
+        true
     }
 
     /// The definition, for reporting and for drawing.
@@ -699,7 +872,9 @@ impl Menu {
                 *current = (*current as i32 + step).rem_euclid(count) as usize;
                 Some(MenuEvent::Changed {
                     setting: setting.clone(),
-                    value: Value::Text(values[*current].clone()),
+                    // The stored value, not the label: a settings file holds
+                    // `16_Track`, never the words a player read.
+                    value: Value::Text(values[*current].value.clone()),
                 })
             }
             Entry::Toggle { setting, on, .. } => {
@@ -745,6 +920,114 @@ impl Menu {
             vec![MenuEvent::Closed]
         }
     }
+}
+
+/// Where the rows start and how they are spaced, in the 480x272 space the rest
+/// of the front end draws in.
+///
+/// Round numbers rather than measured ones. Nothing here is recovered - the
+/// disc's own menu layout has not been read and this is not trying to look like
+/// it - so these are picked to be legible at the smallest window the game
+/// opens, and the value column is right-aligned against [`VALUE_RIGHT`] so a
+/// long label and a long value cannot collide.
+const MARGIN_X: f32 = 40.0;
+const VALUE_RIGHT: f32 = 440.0;
+const TITLE_Y: f32 = 28.0;
+const FIRST_ROW_Y: f32 = 72.0;
+const ROW_HEIGHT: f32 = 20.0;
+const ROW_SCALE: f32 = 1.0;
+
+/// The highlight behind the selected row, and the two text colours.
+const HIGHLIGHT: [f32; 4] = [0.37, 0.86, 0.96, 0.35];
+const SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const NORMAL: [f32; 4] = [0.72, 0.78, 0.84, 1.0];
+/// Rows that show something the player cannot change yet.
+const DIMMED: [f32; 4] = [0.45, 0.5, 0.56, 1.0];
+
+/// What one page looks like, as plain data.
+///
+/// The same [`Draw`] vocabulary the language picker emits, so `main.rs`
+/// rasterises menus with the renderer it already has and there is one text
+/// path rather than two.
+///
+/// `bindings` answers "what is this button bound to" and is passed in rather
+/// than looked up, because a keyboard is a device concern: `oag_input::keys`
+/// owns the mapping, this crate owns the layout, and neither has to know how
+/// the other works. `main.rs` hands over [`oag_input::keys::bound_keys`].
+#[must_use]
+pub fn draw_list(menu: &Menu, bindings: &dyn Fn(u8) -> Vec<&'static str>) -> Vec<Draw> {
+    let page = menu.page();
+    let mut out = vec![Draw::Text {
+        x: MARGIN_X,
+        y: TITLE_Y,
+        scale: 1.4,
+        color: SELECTED,
+        align: Align::Left,
+        text: page.title.clone(),
+    }];
+
+    for (row, entry) in page.entries.iter().enumerate() {
+        let y = FIRST_ROW_Y + row as f32 * ROW_HEIGHT;
+        let selected = row == menu.selected();
+        if selected {
+            out.push(Draw::Fill {
+                rect: [
+                    MARGIN_X - 8.0,
+                    y - 3.0,
+                    VALUE_RIGHT - MARGIN_X + 16.0,
+                    ROW_HEIGHT - 2.0,
+                ],
+                color: HIGHLIGHT,
+            });
+        }
+
+        let readable = !matches!(entry, Entry::Binding { .. });
+        out.push(Draw::Text {
+            x: MARGIN_X,
+            y,
+            scale: ROW_SCALE,
+            color: if selected {
+                SELECTED
+            } else if readable {
+                NORMAL
+            } else {
+                DIMMED
+            },
+            align: Align::Left,
+            text: entry.label().to_string(),
+        });
+
+        // The right-hand column: a setting's value, or what a button is bound
+        // to. `Align::Right` anchors at `x - width`, so both kinds land on the
+        // same edge whatever they say.
+        let value = match entry {
+            Entry::Binding { button, .. } => {
+                let keys = bindings(*button);
+                if keys.is_empty() {
+                    Some("UNBOUND".to_string())
+                } else {
+                    Some(keys.join(" / "))
+                }
+            }
+            other => other.value().map(|value| value.to_string()),
+        };
+        if let Some(text) = value {
+            out.push(Draw::Text {
+                x: VALUE_RIGHT,
+                y,
+                scale: ROW_SCALE,
+                color: if selected && entry.is_adjustable() {
+                    SELECTED
+                } else {
+                    DIMMED
+                },
+                align: Align::Right,
+                text,
+            });
+        }
+    }
+
+    out
 }
 
 #[cfg(test)]
@@ -813,6 +1096,7 @@ mod tests {
     fn the_race_page_offers_only_teams_and_classes_the_game_accepts() {
         let definition = built_in();
         let values = |setting: &str| -> Vec<String> {
+            #[allow(clippy::redundant_closure_for_method_calls)]
             definition
                 .pages
                 .iter()
@@ -822,7 +1106,7 @@ mod tests {
                         setting: key,
                         values,
                         ..
-                    } if key == setting => Some(values.clone()),
+                    } if key == setting => Some(values.iter().map(|v| v.value.clone()).collect()),
                     _ => None,
                 })
                 .unwrap_or_else(|| panic!("no choice edits {setting:?}"))
@@ -860,9 +1144,11 @@ mod tests {
         else {
             panic!("nothing edits graphics.anisotropy");
         };
-        for name in values {
-            name.parse::<oag_render::mesh_render::Anisotropy>()
-                .unwrap_or_else(|e| panic!("{name:?}: {e}"));
+        for option in values {
+            option
+                .value
+                .parse::<oag_render::mesh_render::Anisotropy>()
+                .unwrap_or_else(|e| panic!("{:?}: {e}", option.value));
         }
     }
 
@@ -1122,6 +1408,91 @@ mod tests {
         let events = press(&mut menu, &[button::CIRCLE]);
         assert_eq!(events, vec![MenuEvent::Closed]);
         assert_eq!(menu.depth(), 1, "and leaves the stack alone");
+    }
+
+    /// No keys bound to anything, for the layout tests: what a binding row
+    /// shows is `oag-input`'s business and is asserted there.
+    fn no_bindings(_: u8) -> Vec<&'static str> {
+        Vec::new()
+    }
+
+    #[test]
+    fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
+        let mut menu = Menu::new(fixture());
+        press(&mut menu, &[button::CROSS]);
+        let list = draw_list(&menu, &no_bindings);
+
+        let texts: Vec<&String> = list
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert!(texts.contains(&&"OPTIONS".to_string()), "{texts:?}");
+        assert!(texts.contains(&&"FILTERING".to_string()), "{texts:?}");
+        assert!(
+            texts.contains(&&"off".to_string()),
+            "a choice draws its value: {texts:?}"
+        );
+        assert!(
+            texts.contains(&&"OFF".to_string()),
+            "a toggle draws ON or OFF: {texts:?}"
+        );
+
+        let highlights = list
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Fill { .. }))
+            .count();
+        assert_eq!(highlights, 1, "exactly one row is highlighted");
+    }
+
+    /// The value column is right-aligned against a fixed edge, which is the
+    /// whole reason a long label and a long value cannot overlap. Asserted
+    /// because it is invisible in a headless test otherwise.
+    #[test]
+    fn values_are_right_aligned_on_one_edge() {
+        let mut menu = Menu::new(fixture());
+        press(&mut menu, &[button::CROSS]);
+        for draw in draw_list(&menu, &no_bindings) {
+            if let Draw::Text { align, x, .. } = draw
+                && align == Align::Right
+            {
+                assert!((x - VALUE_RIGHT).abs() < f32::EPSILON, "got {x}");
+            }
+        }
+    }
+
+    /// A row for a button nothing is bound to says so rather than drawing an
+    /// empty column that reads as a layout bug.
+    #[test]
+    fn an_unbound_button_draws_the_word_rather_than_nothing() {
+        let definition = Definition::parse(
+            r#"
+            version = 1
+            root = "main"
+            [[page]]
+            id = "main"
+            [[page.entry]]
+            kind = "binding"
+            label = "THRUST"
+            button = "cross"
+            "#,
+        )
+        .expect("parse");
+        let menu = Menu::new(definition);
+        let list = draw_list(&menu, &no_bindings);
+        assert!(
+            list.iter()
+                .any(|draw| matches!(draw, Draw::Text { text, .. } if text == "UNBOUND")),
+            "{list:?}"
+        );
+        let list = draw_list(&menu, &|_| vec!["ENTER", "X"]);
+        assert!(
+            list.iter()
+                .any(|draw| matches!(draw, Draw::Text { text, .. } if text == "ENTER / X")),
+            "{list:?}"
+        );
     }
 
     #[test]

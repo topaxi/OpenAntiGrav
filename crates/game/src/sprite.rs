@@ -35,7 +35,12 @@ pub struct Placed {
 }
 
 /// Every front-end image, in one RGBA buffer.
-#[derive(Debug)]
+///
+/// `Clone` because the menus draw through the same pipeline the picker does and
+/// build their own renderer from the same sheet - see `main.rs`'s `Shell`. It
+/// is a few hundred kilobytes copied once at startup, against tying the menus
+/// to a stage that must have run first.
+#[derive(Debug, Clone)]
 pub struct Sheet {
     /// Sheet width in pixels.
     pub width: u32,

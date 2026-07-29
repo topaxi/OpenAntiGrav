@@ -45,9 +45,86 @@ pub fn map_key(key: &Key) -> Option<u8> {
     })
 }
 
+/// Every key this build offers to [`map_key`], for showing a player what is
+/// bound to what.
+///
+/// A list of *candidates*, not a binding table: [`bound_keys`] asks `map_key`
+/// itself about each one, so what the Controls page shows is literally what the
+/// mapping does rather than a second copy of it that can drift. Adding a key to
+/// `map_key` and forgetting it here under-reports; the reverse is impossible,
+/// and [`tests::every_mapped_button_has_a_key_to_show_for_it`] catches the
+/// under-reporting case for any button that has no candidate at all.
+fn candidates() -> Vec<(&'static str, Key)> {
+    vec![
+        ("UP", Key::Named(NamedKey::ArrowUp)),
+        ("DOWN", Key::Named(NamedKey::ArrowDown)),
+        ("LEFT", Key::Named(NamedKey::ArrowLeft)),
+        ("RIGHT", Key::Named(NamedKey::ArrowRight)),
+        ("ENTER", Key::Named(NamedKey::Enter)),
+        ("BACKSPACE", Key::Named(NamedKey::Backspace)),
+        ("SPACE", Key::Named(NamedKey::Space)),
+        ("TAB", Key::Named(NamedKey::Tab)),
+        ("W", Key::Character("w".into())),
+        ("A", Key::Character("a".into())),
+        ("S", Key::Character("s".into())),
+        ("D", Key::Character("d".into())),
+        ("X", Key::Character("x".into())),
+        ("Z", Key::Character("z".into())),
+        ("C", Key::Character("c".into())),
+        ("V", Key::Character("v".into())),
+        ("Q", Key::Character("q".into())),
+        ("E", Key::Character("e".into())),
+    ]
+}
+
+/// Which keys currently produce `button`, in candidate order.
+///
+/// Empty when nothing does, which is a real answer rather than a failure: not
+/// every abstract button the game knows has a key on this layout.
+#[must_use]
+pub fn bound_keys(button: u8) -> Vec<&'static str> {
+    candidates()
+        .into_iter()
+        .filter(|(_, key)| map_key(key) == Some(button))
+        .map(|(name, _)| name)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The under-reporting guard. A key added to `map_key` and not to
+    /// `candidates` would leave the Controls page quietly wrong; this catches
+    /// the case where a whole button ends up with nothing to show, which is the
+    /// version of that mistake a player would notice.
+    #[test]
+    fn every_mapped_button_has_a_key_to_show_for_it() {
+        let mut mapped: Vec<u8> = candidates()
+            .iter()
+            .filter_map(|(_, k)| map_key(k))
+            .collect();
+        mapped.sort_unstable();
+        mapped.dedup();
+        for button in mapped {
+            assert!(
+                !bound_keys(button).is_empty(),
+                "button {button} maps from a key but reports none"
+            );
+        }
+    }
+
+    #[test]
+    fn a_button_with_two_keys_reports_both() {
+        assert_eq!(bound_keys(button::UP), ["UP", "W"]);
+        assert_eq!(bound_keys(button::CROSS), ["ENTER", "X"]);
+    }
+
+    #[test]
+    fn a_button_no_key_produces_reports_nothing() {
+        // Nothing on this layout is bound to the PSP's own `any` pseudo-button.
+        assert!(bound_keys(oag_gameplay::input::button::ANY).is_empty());
+    }
 
     #[test]
     fn return_and_x_are_both_activate() {

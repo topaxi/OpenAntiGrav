@@ -36,6 +36,17 @@ pub struct Boot {
     /// The text atlas: the disc's own font when it decodes, ours when it does
     /// not.
     pub font: crate::font::Atlas,
+    /// Every language this source offers, for the menus' own language row.
+    ///
+    /// The picker inside [`Self::frontend`] has the same list; this is the copy
+    /// the menus read, so they do not have to reach into a boot sequence that
+    /// has already handed off.
+    pub languages: Vec<Language>,
+    /// The chosen language's string table, for turning a plugin id into
+    /// something a player can read.
+    pub strings: StringTable,
+    /// Every circuit this source offers to race on. See [`crate::catalogue`].
+    pub tracks: Vec<crate::catalogue::Track>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
@@ -91,7 +102,9 @@ pub fn load(options: &Options) -> Result<Boot> {
     let font = load_font(&mut archives, &mut report);
     let screens = load_screens(&mut archives, &mut report)?;
     let languages = load_languages(&mut archives, &mut report);
+    let offered = languages.clone();
     let strings = load_strings(&mut archives, &languages, &mut report);
+    let tracks = load_tracks(&mut archives, &mut report);
     let movie = load_movie(&mut archives, options, &mut report)?;
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
@@ -120,7 +133,7 @@ pub fn load(options: &Options) -> Result<Boot> {
     let frontend = Frontend::booting(
         options.leg,
         screens,
-        strings,
+        strings.clone(),
         languages,
         placements,
         frames,
@@ -137,6 +150,9 @@ pub fn load(options: &Options) -> Result<Boot> {
     }
 
     Ok(Boot {
+        languages: offered,
+        strings,
+        tracks,
         font,
         frontend,
         movie,
@@ -319,6 +335,30 @@ fn load_languages(
         ));
     }
     out
+}
+
+/// Reads the raceable circuits out of the game plugin's own definition.
+///
+/// An empty list is reported and not fatal: a source whose plugin will not read
+/// still boots, still races the default track, and the menus' circuit row draws
+/// as one with nothing to offer rather than the game refusing to start.
+fn load_tracks(
+    archives: &mut pulse::Archives,
+    report: &mut Vec<String>,
+) -> Vec<crate::catalogue::Track> {
+    let name = pulse::names::GAME_PLUGIN_DEFINITION;
+    let tracks = match archives
+        .read_name(name)
+        .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
+    {
+        Ok(xml) => crate::catalogue::tracks(&xml),
+        Err(e) => {
+            report.push(format!("{name}: {e}"));
+            Vec::new()
+        }
+    };
+    report.push(format!("{name}: {} raceable circuit(s)", tracks.len()));
+    tracks
 }
 
 fn load_strings(

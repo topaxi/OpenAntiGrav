@@ -21,9 +21,10 @@
 # wants the original's own wording out of the disc's string table, and nothing
 # reads it yet.
 #
-# The identifiers in `values` below are archive path components, not display
-# names: `16_Track` is a directory on the disc, and the name the game shows a
-# player for that circuit is content this project does not ship. See
+# Identifiers in `values` are archive path components, never display names:
+# `Assegai` is a directory on the disc. Anything a player should read in their
+# own language comes from the source at runtime through `values_from`, so no
+# shipped content ever lands in this file. See
 # `docs/architecture/adr/0006-no-copyrighted-content.md`.
 
 version = 1
@@ -78,30 +79,16 @@ values = [
     "Triakis",
 ]
 
+# The circuits come from the source, not from this file, and so do their names:
+# `values_from = "tracks"` reads `Data\Plugins\PI001\Definition.xml` for what
+# is raceable and the language's own string table for what to call it. That is
+# why there is no list here and no separate LAYOUT row - a reversed circuit is
+# its own entry in that file, with its own id and its own name.
 [[page.entry]]
 kind = "choice"
 label = "TRACK"
 setting = "race.track"
-values = [
-    "01_Track",
-    "02_Track",
-    "03_Track",
-    "04_Track",
-    "05_Track",
-    "06_Track",
-    "07_Track",
-    "09_Track",
-    "10_Track",
-    "13_Track",
-    "14_Track",
-    "16_Track",
-]
-
-[[page.entry]]
-kind = "choice"
-label = "LAYOUT"
-setting = "race.layout"
-values = ["track", "track_reversed", "zone_track", "zone_track_reversed"]
+values_from = "tracks"
 
 [[page.entry]]
 kind = "action"
@@ -125,6 +112,15 @@ target = "graphics"
 kind = "submenu"
 label = "CONTROLS"
 target = "controls"
+
+# Also read from the source: the USA PSP disc ships English only, so on that
+# release this row has one option and says so, rather than offering languages
+# it cannot select.
+[[page.entry]]
+kind = "choice"
+label = "LANGUAGE"
+setting = "language"
+values_from = "languages"
 
 [[page.entry]]
 kind = "back"

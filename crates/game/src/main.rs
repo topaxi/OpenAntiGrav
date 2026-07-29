@@ -36,8 +36,9 @@ use oag_core::{TickClock, TickRate};
 
 use oag_game::frontend::{self, Frontend};
 use oag_game::input;
+use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{boot, capture, movie, race, report, settings, source};
+use oag_game::{boot, capture, catalogue, menu, movie, race, report, settings, source};
 use oag_input::Controls;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
@@ -156,6 +157,30 @@ struct Cli {
     /// seconds is otherwise indistinguishable from a hang.
     #[arg(long)]
     overlay: bool,
+
+    /// Load the menu tree from this file instead of the one built into the
+    /// binary.
+    ///
+    /// For editing `assets/ui/menu.toml` without a rebuild. Checked the same
+    /// way the built-in one is, so a mistake in it is a startup error.
+    #[arg(long, value_name = "FILE")]
+    menu: Option<std::path::PathBuf>,
+
+    /// With `--screenshot`, draw one page of our own menus instead of the
+    /// sequence: a page id from `assets/ui/menu.toml`.
+    ///
+    /// For looking at a layout without launching the game and walking to it.
+    /// Like `--screen`, it takes no input and runs no state machine.
+    #[arg(long, value_name = "PAGE")]
+    menu_page: Option<String>,
+
+    /// Show the language picker even when a language is already chosen.
+    ///
+    /// Without this the picker is skipped once `settings.toml` names a
+    /// language, which is what a player wants and what makes the second run
+    /// shorter than the first.
+    #[arg(long)]
+    pick_language: bool,
 
     /// Print every state transition as it happens, exits included.
     #[arg(long)]
@@ -280,6 +305,19 @@ fn main() -> Result<()> {
     if cli.overlay {
         loaded.frontend.set_overlay(true);
     }
+    // A language chosen on an earlier run skips the picker. Reported either
+    // way: silently not asking is indistinguishable from a broken picker, and
+    // silently asking again is indistinguishable from a setting that did not
+    // save.
+    match (cli.pick_language, settings.language.as_deref()) {
+        (false, Some(name)) if loaded.frontend.preselect_language(name) => {
+            println!("language {name} from settings, skipping the picker");
+        }
+        (false, Some(name)) => {
+            eprintln!("this source does not offer {name:?}, so the picker is shown");
+        }
+        _ => {}
+    }
     for line in &loaded.report {
         println!("{line}");
     }
@@ -315,10 +353,48 @@ fn main() -> Result<()> {
                 log_every: cli.log_every,
                 size: parse_size(&cli.size)?,
                 screen: cli.screen.clone(),
+                menu_page: cli.menu_page.clone(),
                 anisotropy,
             },
         );
     }
+
+    // Parsed here rather than when the menus open, so a broken definition is a
+    // startup error and not something a player meets after the intro.
+    let definition = match cli.menu.as_deref() {
+        Some(path) => {
+            let text = std::fs::read_to_string(path)
+                .with_context(|| format!("reading {}", path.display()))?;
+            menu::Definition::parse(&text).with_context(|| format!("parsing {}", path.display()))?
+        }
+        None => menu::Definition::parse(menu::BUILT_IN)
+            .context("parsing the built-in menu definition")?,
+    };
+    // The two lists that come off the disc rather than out of the definition:
+    // what is raceable, and what languages exist. Both carry a label the player
+    // reads and a value the settings file stores, and on a circuit those are
+    // different strings - `16_Track` against its localised name, which is
+    // shipped content and only ever lives in memory.
+    let shell = Shell {
+        definition,
+        tracks: loaded
+            .tracks
+            .iter()
+            .map(|track| {
+                (
+                    track.clone(),
+                    loaded.strings.get_or_id(&track.id).to_string(),
+                )
+            })
+            .collect(),
+        languages: loaded
+            .languages
+            .iter()
+            .map(|language| menu::Option_::labelled(&language.name, &language.native_name))
+            .collect(),
+        font: loaded.font.clone(),
+        sprites: loaded.sprites.clone(),
+    };
 
     println!("\n{MENU_KEYS}");
 
@@ -334,6 +410,8 @@ fn main() -> Result<()> {
         trace: cli.trace,
         log_every: cli.log_every,
         anisotropy,
+        settings,
+        shell: Some(shell),
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -376,9 +454,16 @@ fn parse_size(text: &str) -> Result<(u32, u32)> {
 /// The window's title while the front end is on screen.
 const TITLE: &str = "OpenAntiGrav";
 
-/// Printed before the front end opens.
+/// Printed before the front end opens: the picker's own keys.
 const MENU_KEYS: &str = "arrow keys or the left stick move, return, X or cross \
      selects, space or start skips, escape quits";
+
+/// And once the menus have the window.
+const SHELL_TITLE: &str = "OpenAntiGrav - menu";
+
+/// Printed when the menus open, which have one key the picker does not.
+const SHELL_KEYS: &str = "up and down move, left and right change a setting, \
+     return, X or cross selects, backspace or circle goes back, escape quits";
 
 /// And once a race has taken it over.
 const RACE_TITLE: &str = "OpenAntiGrav - race";
@@ -425,6 +510,11 @@ fn run_race(cli: &Cli, options: race::Options, anisotropy: Anisotropy) -> Result
         trace: cli.trace,
         log_every: cli.log_every,
         anisotropy,
+        // `--race` opens a window straight onto a track: no front end, so no
+        // font and no sprite sheet, so no menus. Defaults rather than the file
+        // because nothing on this path can change a setting.
+        settings: settings::Settings::default(),
+        shell: None,
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -443,6 +533,10 @@ struct App {
     trace: bool,
     log_every: u32,
     anisotropy: Anisotropy,
+    /// The persisted settings, which the menus edit and write straight back.
+    settings: settings::Settings,
+    /// What the menus need, absent on the `--race` path.
+    shell: Option<Shell>,
     state: Option<Session>,
 }
 
@@ -477,6 +571,9 @@ impl App {
             log_every: self.log_every,
             anisotropy: self.anisotropy,
             launched: false,
+            settings: self.settings.clone(),
+            shell: self.shell.clone(),
+            quit: false,
         }))
     }
 }
@@ -533,7 +630,14 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn about_to_wait(&mut self, _: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // A menu asking to quit is handled here rather than where it is raised:
+        // the tick loop has no event loop to call, and quitting from inside a
+        // frame would leave that frame half-drawn.
+        if self.state.as_ref().is_some_and(|session| session.quit) {
+            event_loop.exit();
+            return;
+        }
         if let Some(session) = &self.state {
             session.gpu.window.request_redraw();
         }
@@ -615,6 +719,8 @@ impl Gpu {
 enum Stage {
     /// The boot sequence: the intro reel, then the language picker.
     Frontend(Box<FrontendStage>),
+    /// Our own menus, between the boot sequence and a race.
+    Menu(Box<MenuStage>),
     /// A ship on a track.
     Race(Box<RaceStage>),
 }
@@ -670,6 +776,26 @@ impl Stage {
 }
 
 /// The front end, and everything only it needs.
+/// The menus, and a renderer of their own.
+///
+/// Built from the same font atlas and sprite sheet the front end draws with,
+/// rather than taken over from it: the menus have to be openable from somewhere
+/// that is not the front end - a pause menu, eventually - and a stage that can
+/// only exist downstream of another one cannot be. It costs one pipeline build
+/// at a moment already spent loading.
+struct MenuStage {
+    renderer: Renderer,
+    menu: menu::Menu,
+}
+
+impl MenuStage {
+    fn render(&mut self, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        let list = menu::draw_list(&self.menu, &keys::bound_keys);
+        self.renderer
+            .render(&gpu.device, &gpu.queue, encoder, view, &list, gpu.size());
+    }
+}
+
 struct FrontendStage {
     renderer: Renderer,
     frontend: Frontend,
@@ -745,6 +871,41 @@ struct Session {
     /// Set the first time `Launch Game` starts a race, so a load that fails is
     /// reported once rather than on every frame.
     launched: bool,
+    /// The persisted settings, kept because the menus change them and every
+    /// change is written straight back.
+    settings: settings::Settings,
+    /// Set when a menu asks to quit, read by the event loop.
+    quit: bool,
+    /// What the menus need, when this run has menus at all.
+    shell: Option<Shell>,
+}
+
+/// Everything the menus need, gathered where it is loaded.
+///
+/// `None` on the `--race` path, which opens a window straight onto a track and
+/// never loads a front end - so there is no font, no sprite sheet, and nothing
+/// to draw a menu with. That is a real state rather than an oversight, and
+/// [`Session::open_menus`] says so rather than unwrapping.
+#[derive(Clone)]
+struct Shell {
+    definition: menu::Definition,
+    /// Every raceable circuit and the name to show for it.
+    tracks: Vec<(catalogue::Track, String)>,
+    /// Every language this source offers, valued by its English name and
+    /// labelled in itself.
+    languages: Vec<menu::Option_>,
+    font: oag_game::font::Atlas,
+    sprites: oag_game::sprite::Sheet,
+}
+
+impl Shell {
+    /// Which circuit a stored `race.track` names, if this source has it.
+    fn track(&self, id: &str) -> Option<&catalogue::Track> {
+        self.tracks
+            .iter()
+            .map(|(track, _)| track)
+            .find(|track| track.id == id)
+    }
 }
 
 impl Session {
@@ -768,16 +929,33 @@ impl Session {
         // Checked before this frame's ticks rather than after them, so the frame
         // that entered `Launch Game` is drawn once before the load stalls the
         // window.
+        // `Launch Game` opens **our menus**, not a race. The original has a main
+        // menu between the picker and a track and this build now has one too; it
+        // is simply not the original's, which is why the state whose transition
+        // gets us here is still spelled the way the disc spells it while what it
+        // reaches is not a recovered screen at all. See `oag_game::menu`.
         if !self.launched
             && matches!(&self.stage, Stage::Frontend(stage) if stage.frontend.is_finished())
         {
             self.launched = true;
-            println!("\n{}: loading a race", frontend::states::LAUNCH_GAME);
-            match self.launch_race() {
-                Ok(()) => println!("\n{RACE_KEYS}"),
-                // Reported rather than fatal: leaving the front end on screen is
-                // more use than a window that vanishes.
-                Err(e) => eprintln!("cannot start a race: {e:#}"),
+            println!("\n{}: opening the menus", frontend::states::LAUNCH_GAME);
+            // Whatever the picker settled on, remembered for next time. Taken
+            // here rather than in the picker because this is where the front
+            // end is known to be finished with it, and because `menu.rs` and
+            // `frontend.rs` both stay ignorant of where settings live.
+            if let Stage::Frontend(stage) = &self.stage
+                && let Some(language) = stage.frontend.chosen()
+                && self.settings.language.as_deref() != Some(language)
+            {
+                self.settings.language = Some(language.to_string());
+                if let Err(e) = settings::save(&self.settings) {
+                    eprintln!("could not save the chosen language: {e:#}");
+                }
+            }
+            if let Err(e) = self.open_menus() {
+                eprintln!("cannot open the menus: {e:#}");
+            } else {
+                println!("\n{SHELL_KEYS}");
             }
         }
 
@@ -803,6 +981,12 @@ impl Session {
                     report(&events, stage.trace);
                     for note in stage.frontend.take_notes() {
                         println!("{note}");
+                    }
+                }
+                Stage::Menu(stage) => {
+                    let events = stage.menu.update(self.controls.buttons_mut());
+                    for event in events {
+                        self.handle_menu(&event);
                     }
                 }
                 Stage::Race(stage) => {
@@ -841,6 +1025,7 @@ impl Session {
             });
         match &mut self.stage {
             Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, &view)?,
+            Stage::Menu(stage) => stage.render(&self.gpu, &mut encoder, &view),
             Stage::Race(stage) => stage.render(&self.gpu, &mut encoder, &view),
         }
         self.gpu.queue.submit(Some(encoder.finish()));
@@ -848,7 +1033,159 @@ impl Session {
         Ok(())
     }
 
-    /// Replaces the front end with the race its `Launch Game` asks for.
+    /// Replaces the front end with the menus, seeded from the settings.
+    ///
+    /// The renderer moves across rather than being rebuilt - it holds the disc's
+    /// font atlas and sprite sheet, already uploaded, and a menu row is text and
+    /// a rectangle. A stage that is not the front end leaves the menus where
+    /// they are, which is what makes this safe to call from the frame loop.
+    fn open_menus(&mut self) -> Result<()> {
+        let shell = self
+            .shell
+            .clone()
+            .context("this run has no menus: nothing loaded a font or a sprite sheet")?;
+        let mut model = menu::Menu::new(shell.definition.clone());
+        // Supplied before seeding, because a value cannot be seeded onto a list
+        // that is not there yet.
+        let tracks: Vec<menu::Option_> = shell
+            .tracks
+            .iter()
+            .map(|(track, name)| menu::Option_::labelled(&track.id, name))
+            .collect();
+        model.supply(menu::ValueSource::Tracks, &tracks);
+        model.supply(menu::ValueSource::Languages, &shell.languages);
+        self.seed_menu(&mut model);
+
+        let renderer = Renderer::new(
+            &self.gpu.device,
+            &self.gpu.queue,
+            self.gpu.config.format,
+            // No video: a menu draws text and rectangles, and asking for the
+            // movie planes would tie the menus to a stage that played one.
+            None,
+            shell.font,
+            &shell.sprites,
+        )?;
+        self.stage = Stage::Menu(Box::new(MenuStage {
+            renderer,
+            menu: model,
+        }));
+        self.gpu.window.set_title(SHELL_TITLE);
+        Ok(())
+    }
+
+    /// Puts every setting the menus can edit onto the row that edits it.
+    ///
+    /// A key nothing edits is reported rather than ignored: it means a setting
+    /// exists that a player has no way to change, which is a gap worth seeing in
+    /// the log rather than a silent one.
+    fn seed_menu(&self, model: &mut menu::Menu) {
+        let seeds = [
+            (
+                "graphics.anisotropy",
+                menu::Value::Text(self.anisotropy.to_string()),
+            ),
+            (
+                "race.class",
+                menu::Value::Text(self.settings.race.class.clone()),
+            ),
+            (
+                "race.team",
+                menu::Value::Text(self.settings.race.team.clone()),
+            ),
+            (
+                "race.track",
+                menu::Value::Text(self.settings.race.track.clone()),
+            ),
+        ];
+        let seeds = seeds.into_iter().chain(
+            self.settings
+                .language
+                .clone()
+                .map(|name| ("language", menu::Value::Text(name))),
+        );
+        for (key, value) in seeds {
+            if !model.seed(key, &value) {
+                eprintln!("note: nothing in the menus edits {key}");
+            }
+        }
+    }
+
+    /// Acts on one thing the menus did.
+    fn handle_menu(&mut self, event: &menu::MenuEvent) {
+        match event {
+            menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
+            menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
+                // The stored id names a *race*, and only this source can say
+                // which file that is. A source that no longer offers it keeps
+                // whatever track the options already held rather than guessing
+                // a path, which would fail at the archive with a message about
+                // a missing entry instead of about a missing circuit.
+                match self
+                    .shell
+                    .as_ref()
+                    .and_then(|shell| shell.track(&self.settings.race.track))
+                {
+                    Some(track) => self.race_options.track = track.entry_name(),
+                    None => eprintln!(
+                        "this source does not offer {:?}, racing {} instead",
+                        self.settings.race.track, self.race_options.track
+                    ),
+                }
+                self.race_options.team = self.settings.race.team.clone();
+                if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {
+                    self.race_options.class = class;
+                }
+                println!("\nloading {}", self.race_options.track);
+                match self.launch_race() {
+                    Ok(()) => println!("\n{RACE_KEYS}"),
+                    // Reported rather than fatal: leaving the menus on screen
+                    // lets the player pick something else, where a vanished
+                    // window would just look like a crash.
+                    Err(e) => eprintln!("cannot start a race: {e:#}"),
+                }
+            }
+            // Backing out of the root page means the same thing as choosing
+            // QUIT: there is nothing behind the menus to go back to.
+            menu::MenuEvent::Fired(menu::Action::Quit) | menu::MenuEvent::Closed => {
+                self.quit = true;
+            }
+        }
+    }
+
+    /// Applies a changed setting and writes it back.
+    ///
+    /// Persisted on every keypress rather than on the way out, because there is
+    /// no way out that is guaranteed to run: a player quits with the window
+    /// button as often as with the menu. The file is a few hundred bytes.
+    fn apply_setting(&mut self, setting: &str, value: &menu::Value) {
+        let text = value.to_string();
+        match setting {
+            "graphics.anisotropy" => match text.parse::<Anisotropy>() {
+                Ok(level) => {
+                    self.anisotropy = level;
+                    self.settings.graphics.anisotropy = level;
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "race.class" => self.settings.race.class = text,
+            "race.team" => self.settings.race.team = text,
+            "race.track" => self.settings.race.track = text,
+            "language" => self.settings.language = Some(text),
+            other => {
+                eprintln!("note: nothing applies {other}");
+                return;
+            }
+        }
+        if let Err(e) = settings::save(&self.settings) {
+            eprintln!("could not save settings: {e:#}");
+        }
+    }
+
+    /// Replaces whatever is on screen with the race the menus ask for.
     ///
     /// The window, the device and the surface are the ones already open, so the
     /// handoff costs a load and not a second window.

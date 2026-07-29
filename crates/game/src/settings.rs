@@ -37,6 +37,69 @@ pub struct Settings {
     pub graphics: Graphics,
     #[serde(default)]
     pub source: Source,
+    #[serde(default)]
+    pub race: Race,
+    /// The language picked last time, by the XML's own English name
+    /// (`English`, `French`).
+    ///
+    /// `None` means the picker has not been through yet, and is what makes the
+    /// first run ask and every run after it not. Naming a language the source
+    /// does not carry falls back to asking, with a note - a settings file
+    /// written against the EU disc opened against the USA one, which ships
+    /// English only. `--pick-language` shows the picker regardless.
+    #[serde(default)]
+    pub language: Option<String>,
+}
+
+/// What the Race page of the menus last chose.
+///
+/// Persisted for the same reason `source.image` is: a player who always races
+/// one team on one circuit should not have to say so twice. These are archive
+/// path components and speed-class names, **not display names** - the words the
+/// original shows a player for a circuit are content this project does not ship.
+/// See `docs/architecture/adr/0006-no-copyrighted-content.md`.
+///
+/// The command line still wins for the run it is given on, and `--race` skips
+/// the menus entirely, so these are what the menus set rather than a second
+/// place to configure a race from.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Race {
+    /// Speed class: `venom`, `flash`, `rapier` or `phantom`.
+    #[serde(default = "default_class")]
+    pub class: String,
+    /// Team directory under `Data\Ships\`, one of `handling::TEAMS`.
+    #[serde(default = "default_team")]
+    pub team: String,
+    /// Which circuit, by the id its own plugin definition gives it.
+    ///
+    /// **A race, not a directory.** `16_Track` and `32_Track` are two entries
+    /// and one folder, the second being the first driven the other way, so this
+    /// is not a path component and must not be turned into one here - only the
+    /// source can say which `.vex` an id loads. See [`crate::catalogue`].
+    #[serde(default = "default_track")]
+    pub track: String,
+}
+
+fn default_class() -> String {
+    "venom".to_string()
+}
+fn default_team() -> String {
+    crate::race::DEFAULT_TEAM.to_string()
+}
+/// The circuit the reference scenario is on, so the default run is the one
+/// every capture under `data/traces/` was taken against.
+fn default_track() -> String {
+    "16_Track".to_string()
+}
+
+impl Default for Race {
+    fn default() -> Self {
+        Self {
+            class: default_class(),
+            team: default_team(),
+            track: default_track(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -120,4 +183,63 @@ pub fn load() -> Result<Settings> {
     }
 
     Ok(settings)
+}
+
+/// Writes `settings` back to [`path`], creating the directory if it is missing.
+///
+/// Called when a menu changes something, so a setting survives the run it was
+/// changed in. Silently does nothing on a platform with no config directory,
+/// which is the same thing [`load`] does there and for the same reason: there
+/// is nowhere to put it, and that is not the player's problem to be told about
+/// on every keypress.
+///
+/// # Errors
+///
+/// Propagates a directory that cannot be created and a file that cannot be
+/// written.
+pub fn save(settings: &Settings) -> Result<()> {
+    let Some(path) = path() else {
+        return Ok(());
+    };
+    let text = format!(
+        "{HEADER}{}",
+        toml::to_string_pretty(settings).context("serialising settings")?
+    );
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The default circuit has to be the one every capture was taken on, or a
+    /// fresh install races something a trace comparison cannot be run against.
+    ///
+    /// Note what is *not* asserted: that the id composes into a path. It does
+    /// not - only the source can say which `.vex` an id loads, which is
+    /// `catalogue`'s job and is why `Race` carries no layout field.
+    #[test]
+    fn the_default_circuit_is_the_reference_scenarios_own() {
+        let race = Race::default();
+        assert_eq!(race.track, "16_Track");
+        assert!(
+            crate::race::DEFAULT_TRACK.contains(&race.track),
+            "{} is not the circuit {} names",
+            race.track,
+            crate::race::DEFAULT_TRACK
+        );
+    }
+
+    /// A settings file from a build that predates the race table must still
+    /// load, with the table filled in rather than the parse failing.
+    #[test]
+    fn an_older_settings_file_gains_the_race_table() {
+        let settings: Settings = toml::from_str("[graphics]\nanisotropy = \"4x\"").expect("parse");
+        assert_eq!(settings.race.track, "16_Track");
+        assert_eq!(settings.race.class, "venom");
+    }
 }

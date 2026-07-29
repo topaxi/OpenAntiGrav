@@ -57,6 +57,14 @@ pub struct Options {
     /// Anisotropic filtering level, only relevant if the handoff to
     /// [`Options::race`] happens.
     pub anisotropy: Anisotropy,
+    /// Draw one page of **our own** menus instead of the sequence.
+    ///
+    /// The same kind of debugging view [`Options::screen`] is, for the other
+    /// tree: a page id from `assets/ui/menu.toml`. It exists so a menu can be
+    /// looked at without launching the game and walking to it, which is what
+    /// iterating on a layout otherwise costs. Takes no input and runs no state
+    /// machine.
+    pub menu_page: Option<String>,
 }
 
 /// How many ticks the runner will take before giving up on `until`.
@@ -66,9 +74,58 @@ pub struct Options {
 /// bounded.
 const MAX_TICKS: u32 = 60 * 60;
 
+/// Draws one page of our own menus, with the source's own lists supplied.
+///
+/// The lists matter even for a still: a circuit row with nothing in it and one
+/// showing this disc's twenty-four circuits are different pictures, and the
+/// point of the flag is to look at the real one.
+fn menu_page(
+    options: &Options,
+    page: &str,
+    tracks: &[crate::catalogue::Track],
+    languages: &[crate::language::Language],
+    strings: &crate::language::StringTable,
+) -> Result<Vec<crate::frontend::Draw>> {
+    let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN)
+        .context("parsing the built-in menu definition")?;
+    if definition.page(page).is_none() {
+        anyhow::bail!(
+            "no menu page named {page:?}; this definition has {}",
+            definition
+                .pages
+                .iter()
+                .map(|p| format!("{:?}", p.id))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    let mut model = crate::menu::Menu::new(definition);
+    model.supply(
+        crate::menu::ValueSource::Tracks,
+        &tracks
+            .iter()
+            .map(|track| crate::menu::Option_::labelled(&track.id, strings.get_or_id(&track.id)))
+            .collect::<Vec<_>>(),
+    );
+    model.supply(
+        crate::menu::ValueSource::Languages,
+        &languages
+            .iter()
+            .map(|language| crate::menu::Option_::labelled(&language.name, &language.native_name))
+            .collect::<Vec<_>>(),
+    );
+    model.open(page);
+    let _ = options;
+    Ok(crate::menu::draw_list(&model, &oag_input::keys::bound_keys))
+}
+
 /// Runs the sequence and writes one frame.
 pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -> Result<()> {
     let Boot {
+        languages,
+        strings,
+        tracks,
         mut frontend,
         mut movie,
         font,
@@ -103,10 +160,10 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
     let mut input = Input::new();
     let mut ticks = 0u32;
 
-    // `--screen` draws the XML and nothing else, so the sequence is not run at
-    // all: stepping it would only move the state machine somewhere the capture
-    // then ignores.
-    while options.screen.is_none() {
+    // `--screen` and `--menu-page` both draw one thing and nothing else, so the
+    // sequence is not run at all: stepping it would only move the state machine
+    // somewhere the capture then ignores.
+    while options.screen.is_none() && options.menu_page.is_none() {
         // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
         // so the ticks they asked for are spent on the race rather than on a state
         // whose whole content is the word LAUNCH GAME.
@@ -178,9 +235,10 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         );
     }
 
-    let list = match &options.screen {
-        Some(name) => frontend.draw_screen(name),
-        None => frontend.draw_list(),
+    let list = match (&options.menu_page, &options.screen) {
+        (Some(page), _) => menu_page(options, page, &tracks, &languages, &strings)?,
+        (None, Some(name)) => frontend.draw_screen(name),
+        (None, None) => frontend.draw_list(),
     };
 
     let instance = wgpu::Instance::default();
