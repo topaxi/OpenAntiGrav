@@ -141,6 +141,52 @@ pub trait Raycaster {
     /// `include_reset` is set, and must skip the collider whose index is
     /// `skip`, which is how the ship avoids hitting itself.
     fn raycast(&self, ray: Ray, skip: Option<u32>, include_reset: bool) -> Option<RaycastHit>;
+
+    /// **Every** hit along the segment, not just the nearest.
+    ///
+    /// Writes into `out` and returns how many slots it filled, at most
+    /// `out.len()`. Hits past that are **dropped rather than substituted**, so
+    /// the set never depends on how full the buffer happened to get. Same
+    /// `skip` and `include_reset` semantics as [`Self::raycast`].
+    ///
+    /// Order is each implementation's own storage order - ascending triangle
+    /// index within a mesh, ascending collider index across a world - never a
+    /// distance sort. That is deliberate: the consumer resolves contacts in the
+    /// order it receives them and each one reads the body state the previous one
+    /// left, so the order feeds simulation state and must not depend on a float
+    /// comparison. See `docs/architecture/determinism.md`.
+    ///
+    /// # Why the hull contact path needs it
+    ///
+    /// `Collision_BoxAgainstMesh` (`0x08815cd4`) tests every box sample point
+    /// against **every** candidate triangle with no de-duplication, so one point
+    /// wedged into a corner produces two contacts and is scrubbed twice. A
+    /// nearest-hit query cannot express that, and it also lets a floor triangle
+    /// standing in front of a wall suppress the wall entirely - neither of which
+    /// the original does. See
+    /// `docs/ghidra/functions/psp-pulse/collision.md#contact-generation`.
+    ///
+    /// # The default implementation is a trap worth knowing about
+    ///
+    /// It reports only the nearest hit, so a `Raycaster` that has not overridden
+    /// this - a test double, say - keeps exactly the old behaviour and produces
+    /// exactly one contact per probe. That is the right thing for a double that
+    /// exists to count queries, and the wrong thing to debug for an hour.
+    fn raycast_all(
+        &self,
+        ray: Ray,
+        skip: Option<u32>,
+        include_reset: bool,
+        out: &mut [Option<RaycastHit>],
+    ) -> usize {
+        match (self.raycast(ray, skip, include_reset), out.first_mut()) {
+            (Some(hit), Some(slot)) => {
+                *slot = Some(hit);
+                1
+            }
+            _ => 0,
+        }
+    }
 }
 
 /// A bounded segment query.
@@ -506,6 +552,70 @@ impl Raycaster for TriangleSoup {
 
         nearest.map(|(_, hit)| hit)
     }
+
+    /// Every triangle the segment crosses, in **ascending triangle index**.
+    ///
+    /// The same order `Collision_BoxAgainstMesh` walks its candidates in, and
+    /// the same traversal and rejects `raycast` uses - only the nearest-hit
+    /// comparison is gone. Nothing is de-duplicated: two coplanar triangles both
+    /// crossed by one segment report twice, which is what the original does.
+    fn raycast_all(
+        &self,
+        ray: Ray,
+        skip: Option<u32>,
+        include_reset: bool,
+        out: &mut [Option<RaycastHit>],
+    ) -> usize {
+        if skip == Some(self.collider) {
+            return 0;
+        }
+        if !include_reset && self.surface.is_skipped_by_default() {
+            return 0;
+        }
+
+        let p0 = ray.origin;
+        let p1 = ray.end();
+
+        let segment = Aabb::from_segment(p0, p1);
+        if !segment.overlaps(&self.bounds) {
+            return 0;
+        }
+
+        let mut found = 0;
+        for tri in &self.triangles {
+            if found == out.len() {
+                break;
+            }
+
+            let a = self.vertices[tri[0] as usize];
+            let b = self.vertices[tri[1] as usize];
+            let c = self.vertices[tri[2] as usize];
+
+            let mut box_of_tri = Aabb::EMPTY;
+            box_of_tri.expand(a);
+            box_of_tri.expand(b);
+            box_of_tri.expand(c);
+            if !segment.overlaps(&box_of_tri) {
+                continue;
+            }
+
+            let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
+                continue;
+            };
+
+            out[found] = Some(RaycastHit {
+                point: p0 + (p1 - p0) * hit.t,
+                normal: hit.normal.normalize_or_zero(),
+                distance: hit.t * ray.length,
+                surface: self.surface,
+                vertex_scalar: self.triangle_scalar(*tri),
+                collider: self.collider,
+            });
+            found += 1;
+        }
+
+        found
+    }
 }
 
 /// Every collider a segment query can reach.
@@ -561,6 +671,28 @@ impl Raycaster for CollisionWorld {
         }
 
         nearest
+    }
+
+    /// Every hit across every collider, in **ascending collider index** and,
+    /// within a collider, ascending triangle index.
+    ///
+    /// The same order [`Self::raycast`]'s nearest-hit comparison already walks,
+    /// which `crates/gameplay`'s loader keeps stable for a given track.
+    fn raycast_all(
+        &self,
+        ray: Ray,
+        skip: Option<u32>,
+        include_reset: bool,
+        out: &mut [Option<RaycastHit>],
+    ) -> usize {
+        let mut found = 0;
+        for collider in &self.colliders {
+            if found == out.len() {
+                break;
+            }
+            found += collider.raycast_all(ray, skip, include_reset, &mut out[found..]);
+        }
+        found
     }
 }
 

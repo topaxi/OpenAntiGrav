@@ -431,3 +431,81 @@ fn the_collision_geometry_is_under_the_spline() {
          {reach} units; the spline and the collision geometry are not the same track"
     );
 }
+
+/// Which way the shipped `Wall` triangles are wound, measured rather than assumed.
+///
+/// **This is the measurement that gates single-sided wall contacts.**
+/// `Collision_BoxAgainstMesh` (`0x08815cd4`) does not flip a triangle normal; it
+/// *rejects* the sample point when `dot(boxCentre - sample, n) <= 0`, so the raw
+/// winding normal is what reaches the contact - see
+/// `docs/ghidra/functions/psp-pulse/collision.md`. `oag_physics::wall` flips
+/// instead, which is safe under either winding and is why nobody has had to know
+/// this. Reproducing the original's rejection is only correct if the shipped
+/// walls actually face the circuit, and nothing in `docs/` says they do.
+///
+/// So: for every `Wall` triangle on the track, take its raw winding normal
+/// `(b - a) x (c - a)` and ask whether it points toward the nearest point of the
+/// track's own spline. A wall that faces the circuit answers yes.
+///
+/// The assertion is deliberately loose. Some walls genuinely face away - a
+/// barrier with a driveable side and a scenery side, a tunnel mouth, geometry
+/// past a junction where "nearest spline point" is the wrong reference - and a
+/// track is not obliged to be tidy. What would sink single-siding is a *mixed*
+/// result, so the claim is that one answer dominates, and the printed fraction
+/// is the number a reader should take away rather than the pass.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_track_s_walls_are_wound_toward_the_circuit() {
+    let Some(loaded) = load() else { return };
+    let spline = &loaded.setup.spline;
+    assert!(!spline.is_empty(), "the track produced no spline samples");
+
+    let centres: Vec<Vec3> = (0..spline.len())
+        .filter_map(|index| spline.sample(index))
+        .map(|sample| Vec3::from_array(sample.pos))
+        .collect();
+
+    let mut inward = 0usize;
+    let mut outward = 0usize;
+    for collider in loaded.setup.collision.colliders() {
+        if collider.surface() != oag_physics::Surface::Wall {
+            continue;
+        }
+        for index in 0..collider.triangle_count() {
+            let Some([a, b, c]) = collider.triangle(index) else {
+                continue;
+            };
+            let normal = (b - a).cross(c - a);
+            if normal.length_squared() <= 0.0 {
+                continue;
+            }
+            let centroid = (a + b + c) / 3.0;
+            let Some(nearest) = centres.iter().copied().min_by(|p, q| {
+                (*p - centroid)
+                    .length_squared()
+                    .total_cmp(&(*q - centroid).length_squared())
+            }) else {
+                continue;
+            };
+            if normal.dot(nearest - centroid) > 0.0 {
+                inward += 1;
+            } else {
+                outward += 1;
+            }
+        }
+    }
+
+    let total = inward + outward;
+    assert!(total > 0, "the track has no wall triangles to measure");
+    let fraction = inward as f32 / total as f32;
+    println!(
+        "{inward}/{total} wall triangles ({:.1}%) are wound toward the nearest spline point",
+        fraction * 100.0
+    );
+    assert!(
+        !(0.3..=0.7).contains(&fraction),
+        "the shipped wall winding is mixed ({:.1}% inward), so a single-sided \
+         contact gate cannot be implemented from it without more evidence",
+        fraction * 100.0
+    );
+}

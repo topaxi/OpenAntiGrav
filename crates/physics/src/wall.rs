@@ -73,24 +73,41 @@
 //!
 //! # Known limits
 //!
-//! - **At most one contact per sample point.** The original tests every sample
-//!   point against every candidate triangle, so one point wedged into a corner
-//!   can produce two contacts and be scrubbed twice; [`Raycaster::raycast`]
-//!   returns only the nearest hit, so each point contributes at most one. Ten
-//!   contacts a frame rather than the original's up-to-128.
 //! - **Two-sided normals.** [`facing`] flips a triangle normal that points along
 //!   the probe. The original does not flip: `Collision_BoxAgainstMesh` *rejects*
 //!   the sample point when `dot(centre - sample, n) <= 0`, so a wall only
 //!   collides from its front face. Kept as it was, because the collision debug
 //!   view shades two-sided for a reason and turning walls single-sided is a
 //!   separate experiment with its own risk.
-//! - **A nearer non-wall hit hides a wall behind it.** [`Raycaster::raycast`]
-//!   returns the nearest hit of any surface, so a floor triangle in front of a
-//!   wall along the same probe suppresses that probe.
+//! - **The contact set is built probe-major, the original's is
+//!   triangle-major.** `Collision_BoxAgainstMesh` loops candidate triangles on
+//!   the outside and the ten sample points on the inside; this module does the
+//!   reverse, because [`hull_probes`] is the shared query surface (with
+//!   [`crate::reset`]) and a triangle-major loop would need a "candidate
+//!   triangles in this AABB" API that does not exist. Every predicate is
+//!   independent of the loop order, so the resulting **set** is identical - the
+//!   **order** is not, and each contact reads the body state the previous one
+//!   left.
+//! - **Two invented caps**, [`MAX_HITS_PER_PROBE`] and [`HULL_CONTACTS`]. The
+//!   original caps nothing per sample point; its 128 is the size of an array. A
+//!   frame that hits either cap reports it in
+//!   [`WallResponse::dropped_contacts`] rather than quietly resolving fewer.
 //! - **The swept contact applies an impulse; the original's swept pass does
 //!   not.** `Body_StepWorld` sweeps in pass 1 and only calls `Body_SetPosition`;
 //!   its velocity change comes from whatever contacts pass 5 then finds. Ours is
 //!   a tunnelling guard that has to do both because it runs after the move.
+//! - **A successful sweep replaces the probe set for that frame.** [`resolve`]
+//!   takes the swept contact and never calls [`hull_contacts`]. The original's
+//!   pass 1 and pass 5 both run; ours are exclusive, because our sweep runs
+//!   after the move and has already applied an impulse for the same crossing
+//!   that pass 5's contacts would.
+//!
+//! Two limits left this list rather than being written off. **"At most one
+//! contact per sample point"** and **"a nearer non-wall hit hides a wall behind
+//! it"** were the same missing capability - a nearest-hit query - and
+//! [`Raycaster::raycast_all`] closes both. Neither moved the whole-lap scenario
+//! by a single digit, which is worth knowing: they were real divergences from
+//! the original that this track's geometry never exercises.
 
 use oag_core::math::Vec3;
 
@@ -281,6 +298,15 @@ pub struct WallResponse {
     /// feature that silently stops working when a parameter set arrives with zero
     /// dimensions.
     pub hull_degenerate: bool,
+    /// How many contacts were discarded for want of room.
+    ///
+    /// Non-zero means a probe found more geometry than
+    /// [`MAX_HITS_PER_PROBE`] allows, or the frame produced more than
+    /// [`HULL_CONTACTS`] contacts in total. Both caps are **inventions** - the
+    /// original has neither - so a frame that hits one is a frame where this
+    /// crate and the original can differ, and it says so instead of quietly
+    /// resolving fewer contacts.
+    pub dropped_contacts: u32,
 }
 
 /// The box support function: how far the hull reaches along `direction`.
@@ -350,14 +376,16 @@ pub fn resolve<R: Raycaster + ?Sized>(
     // A fixed-size array rather than a `Vec`: the world is plain data
     // (ADR-0003), and a bounded contact set is also what makes the iteration
     // order below trivially deterministic.
-    let mut contacts = [None; HULL_PROBES];
+    let mut contacts = [None; HULL_CONTACTS];
     let found =
         if let Some(swept) = swept_contact(state, handling, env, raycaster, previous_position) {
             response.swept = true;
             contacts[0] = Some(swept);
             1
         } else {
-            hull_contacts(state, handling, env, raycaster, &mut contacts)
+            let (found, dropped) = hull_contacts(state, handling, env, raycaster, &mut contacts);
+            response.dropped_contacts = dropped;
+            found
         };
     response.contacts = found as u32;
 
@@ -713,64 +741,109 @@ pub fn hull_probes(body: &Body, handling: &Handling) -> [(Vec3, Vec3, f32); HULL
     })
 }
 
-/// Every hull probe that found a respondable surface, in probe order.
+/// How many hits a single hull probe may contribute.
 ///
-/// Writes into `out` and returns how many it filled. Fixed-size and
-/// index-ordered, so nothing about the result depends on iteration order or on
-/// an allocation; see the determinism rules in
+/// **An invention, and labelled as one.** The original caps nothing per sample
+/// point: `Collision_BoxAgainstMesh` tests every point against every candidate
+/// triangle and appends until the world's contact array is full, and that array
+/// holds 128 - a layout artefact of `world+0x450`, not a design number. Four is
+/// enough for a point wedged into a corner where three or four wall triangles
+/// meet, which is the case the cap exists for, and it keeps
+/// [`HULL_CONTACTS`] small enough to live on the stack.
+///
+/// Overflow is reported rather than swallowed: see
+/// [`WallResponse::dropped_contacts`].
+pub const MAX_HITS_PER_PROBE: usize = 4;
+
+/// The hull contact buffer: [`HULL_PROBES`] probes times [`MAX_HITS_PER_PROBE`].
+pub const HULL_CONTACTS: usize = HULL_PROBES * MAX_HITS_PER_PROBE;
+
+/// Every hull contact, in probe order and then in the geometry's own order.
+///
+/// Writes into `out` and returns how many it filled, plus how many were dropped
+/// for want of room. Fixed-size and index-ordered, so nothing about the result
+/// depends on iteration order or on an allocation; see the determinism rules in
 /// `docs/architecture/determinism.md`.
+///
+/// # One probe can make more than one contact
+///
+/// `Collision_BoxAgainstMesh` (`0x08815cd4`) tests each sample point against
+/// **every** candidate triangle and de-duplicates nothing, so a point behind two
+/// triangles of the same wall produces two contacts and is scrubbed twice. It
+/// also means a floor triangle standing in front of a wall does not hide the
+/// wall: each triangle is its own test. Both follow from asking the raycaster
+/// for every hit rather than the nearest one, which is what
+/// [`Raycaster::raycast_all`] is for.
 fn hull_contacts<R: Raycaster + ?Sized>(
     state: &ShipState,
     handling: &Handling,
     env: &Environment,
     raycaster: &R,
-    out: &mut [Option<WallContact>; HULL_PROBES],
-) -> usize {
+    out: &mut [Option<WallContact>; HULL_CONTACTS],
+) -> (usize, u32) {
     let mut found = 0;
+    let mut dropped = 0;
 
     for (origin, direction, reach) in hull_probes(&state.body, handling) {
         let probeable = reach > MIN_HULL_EXTENT;
         if !probeable {
             continue;
         }
-        let Some(hit) =
-            raycaster.raycast(Ray::new(origin, direction, reach), env.self_collider, false)
-        else {
-            continue;
-        };
-        if !responds(hit.surface) {
-            continue;
+
+        let mut hits = [None; MAX_HITS_PER_PROBE];
+        let hit_count = raycaster.raycast_all(
+            Ray::new(origin, direction, reach),
+            env.self_collider,
+            false,
+            &mut hits,
+        );
+
+        for hit in hits.iter().flatten().take(hit_count) {
+            // Per hit, not per probe. Bailing on the nearest hit's surface is
+            // what used to let a floor in front of a wall suppress the wall.
+            if !responds(hit.surface) {
+                continue;
+            }
+            let normal = facing(hit.normal, direction);
+            // The original's depth is the *perpendicular* distance of the sample
+            // point behind the triangle plane, `-dot(n, sample - v0)`, not the
+            // shortfall along the probe. The two differ by the cosine between the
+            // probe and the normal, and on a corner probe against an oblique wall
+            // that cosine is nowhere near one - taking the shortfall would push the
+            // hull out too far and turn a graze into a shove.
+            let overshoot = reach - hit.distance;
+            let depth = overshoot * -normal.dot(direction);
+            let penetrating = depth > 0.0 && depth < MAX_CONTACT_DEPTH;
+            if !penetrating {
+                continue;
+            }
+            if found == out.len() {
+                dropped += 1;
+                continue;
+            }
+            out[found] = Some(WallContact {
+                // The contact point is the **sample point**, not where the segment
+                // met the triangle: `Collision_AddContact` stores `s1`, its
+                // `samplePoint` argument, into `contact+0x00` at `0x088169e8`, and
+                // the intersection point `Collision_SegmentTriangle` hands back goes
+                // nowhere. It matters now that there is a lever arm, because the two
+                // are a whole penetration depth apart.
+                point: origin + direction * reach,
+                normal,
+                depth,
+                surface: hit.surface,
+                collider: hit.collider,
+            });
+            found += 1;
         }
-        let normal = facing(hit.normal, direction);
-        // The original's depth is the *perpendicular* distance of the sample
-        // point behind the triangle plane, `-dot(n, sample - v0)`, not the
-        // shortfall along the probe. The two differ by the cosine between the
-        // probe and the normal, and on a corner probe against an oblique wall
-        // that cosine is nowhere near one - taking the shortfall would push the
-        // hull out too far and turn a graze into a shove.
-        let overshoot = reach - hit.distance;
-        let depth = overshoot * -normal.dot(direction);
-        let penetrating = depth > 0.0 && depth < MAX_CONTACT_DEPTH;
-        if !penetrating {
-            continue;
+
+        // A probe that filled its own buffer may have had more behind it.
+        if hit_count == MAX_HITS_PER_PROBE {
+            dropped += 1;
         }
-        out[found] = Some(WallContact {
-            // The contact point is the **sample point**, not where the segment
-            // met the triangle: `Collision_AddContact` stores `s1`, its
-            // `samplePoint` argument, into `contact+0x00` at `0x088169e8`, and
-            // the intersection point `Collision_SegmentTriangle` hands back goes
-            // nowhere. It matters now that there is a lever arm, because the two
-            // are a whole penetration depth apart.
-            point: origin + direction * reach,
-            normal,
-            depth,
-            surface: hit.surface,
-            collider: hit.collider,
-        });
-        found += 1;
     }
 
-    found
+    (found, dropped)
 }
 
 /// A normal flipped to oppose `direction`, and normalised.
@@ -851,6 +924,23 @@ mod tests {
             0,
         ));
         world
+    }
+
+    /// A quad in the plane `x = at`, as one collider with a given surface,
+    /// pushed onto an existing world so several can be stacked along one probe.
+    fn push_quad(world: &mut CollisionWorld, at: f32, surface: Surface, collider: u32) {
+        world.push(TriangleSoup::new(
+            vec![
+                [at, -100.0, -100.0],
+                [at, 100.0, -100.0],
+                [at, 100.0, 100.0],
+                [at, -100.0, 100.0],
+            ],
+            vec![[0, 1, 2], [0, 2, 3]],
+            Vec::new(),
+            surface,
+            collider,
+        ));
     }
 
     fn ship_at(x: f32, vx: f32) -> ShipState {
@@ -1155,6 +1245,84 @@ mod tests {
             state.body
         );
         assert!(state.body.linear_velocity.x < 0.0);
+    }
+
+    /// A floor standing in front of a wall used to hide the wall entirely.
+    ///
+    /// [`Raycaster::raycast`] returns the nearest hit of *any* surface, so the
+    /// old probe took the floor, found [`responds`] false and gave up - even
+    /// though the wall two tenths of a unit further on was penetrating.
+    /// `Collision_BoxAgainstMesh` has no such coupling: every triangle is its own
+    /// test, and a surface the response ignores simply produces no contact rather
+    /// than suppressing one.
+    ///
+    /// The nearest-hit reading is what the assertion below would have got: zero
+    /// contacts, silently, on geometry that should push the ship out.
+    #[test]
+    fn a_floor_in_front_of_a_wall_no_longer_hides_it() {
+        let mut world = CollisionWorld::new();
+        push_quad(&mut world, 1.4, Surface::Floor, 0);
+        push_quad(&mut world, 1.6, Surface::Wall, 1);
+
+        let mut state = ship_at(1.0, 40.0);
+        let response = resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &world,
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+
+        assert_eq!(response.contacts, 5, "{response:?}");
+        assert!(
+            response
+                .resolved
+                .is_some_and(|c| c.surface == Surface::Wall),
+            "the wall behind the floor is what should have responded: {response:?}"
+        );
+        assert!(state.body.linear_velocity.x < 40.0, "{:?}", state.body);
+    }
+
+    /// One sample point behind two surfaces makes two contacts, and is scrubbed
+    /// twice.
+    ///
+    /// `Collision_BoxAgainstMesh` de-duplicates nothing - see
+    /// `docs/ghidra/functions/psp-pulse/collision.md#how-many-contacts-a-craft-vs-track-frame-makes`,
+    /// which works the same arithmetic the other way round to conclude that the
+    /// recorded scrape must have been *one* contact per frame. A nearest-hit
+    /// query could not express this at all.
+    ///
+    /// Two walls a tenth apart rather than two coplanar ones, so the fixture
+    /// cannot be read as depending on a tie-break.
+    #[test]
+    fn a_sample_point_behind_two_walls_is_scrubbed_twice() {
+        let mut world = CollisionWorld::new();
+        push_quad(&mut world, 1.5, Surface::Wall, 0);
+        push_quad(&mut world, 1.6, Surface::Wall, 1);
+
+        let mut state = ship_at(1.0, 0.0);
+        state.body.linear_velocity = Vec3::new(0.0, 0.0, 40.0);
+
+        let response = resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &world,
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+
+        // Five right-hand sample points, each behind both planes.
+        assert_eq!(response.contacts, 10, "{response:?}");
+        assert_eq!(response.resolved_count, 10, "{response:?}");
+        assert_eq!(response.dropped_contacts, 0, "{response:?}");
+        // Ten scrubs rather than five: the tangential loss compounds per
+        // contact, exactly as the five-contact case compounds per sample point.
+        let five = 40.0 * (1.0f32 - 0.035).powi(5);
+        assert!(
+            state.body.linear_velocity.z < five,
+            "{:?} should have lost more than the five-contact case's {five}",
+            state.body.linear_velocity
+        );
     }
 
     /// The hover spring owns floors. A lateral probe that fired on one would
