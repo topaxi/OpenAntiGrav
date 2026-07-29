@@ -119,6 +119,25 @@ fn menu_page(
             .map(|language| crate::menu::Choice::labelled(&language.name, &language.native_name))
             .collect::<Vec<_>>(),
     );
+    // No window here, so no screens to enumerate: the list is `default` plus
+    // whatever the settings already name. That is enough for the row to draw
+    // the player's own value, which is all `--menu-page` is for, and it does
+    // not invent a monitor this machine may not have.
+    model.supply(
+        crate::menu::ValueSource::Monitors,
+        &crate::display::Monitor::offered(
+            &settings
+                .display
+                .monitor
+                .name()
+                .map(ToString::to_string)
+                .into_iter()
+                .collect::<Vec<_>>(),
+        )
+        .into_iter()
+        .map(crate::menu::Choice::plain)
+        .collect::<Vec<_>>(),
+    );
     // Seeded after supplying, and from the same list the live menus use, so
     // what the flag draws is what a player would see rather than whatever each
     // row's list happened to start on.
@@ -234,13 +253,14 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         return race::capture(
             loaded,
             &race::CaptureOptions {
-                aspect: options.settings.graphics.aspect,
+                aspect: options.settings.display.aspect,
                 path: options.path.clone(),
                 ticks: options.ticks.saturating_sub(ticks),
                 held: options.held,
                 size: (width, height),
                 log_every: options.log_every,
                 anisotropy: options.anisotropy,
+                fov: options.settings.graphics.fov,
             },
         );
     }
@@ -326,7 +346,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         &mut encoder,
         &view,
         &list,
-        crate::display::viewport((width, height), options.settings.graphics.aspect),
+        crate::display::viewport((width, height), options.settings.display.aspect),
     );
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),

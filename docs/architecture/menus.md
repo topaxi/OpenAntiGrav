@@ -39,8 +39,18 @@ the release rather than of this project:
 | LANGUAGE | the language plugins `PI008`-`PI012` |
 | TEAM | `oag_formats::handling::TEAMS`, pinned to the eight shipped `handlingstats.xml` files by a test |
 | SPEED CLASS | `oag_physics::SpeedClass::ALL` |
-| WINDOW MODE / SIZE / ASPECT / RENDER SCALE | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
-| PERFORMANCE OVERLAY / FRAME LIMIT | `oag_game::perf`, pinned the same way |
+| MONITOR | winit's own monitor list, read every time the menus open |
+| WINDOW MODE / SIZE / ASPECT / RENDER SCALE / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
+| PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_game::perf`, pinned the same way |
+
+MONITOR is the one supplied row that is a property of **the desk** rather than
+of the disc, and it is supplied for the same reason the others are: a definition
+file cannot know it, and a row offering a screen that is not plugged in would be
+offering something that cannot be selected. It stores a **name**, never an
+index - a compositor is free to enumerate screens in whatever order it woke up
+in, and an index would silently move the game somewhere else. A name that is no
+longer there falls back to the default with a note; `default` is always first on
+the list, because it is the way back from a screen that has since been unplugged.
 
 That split is what keeps [ADR-0006](adr/0006-no-copyrighted-content.md)
 satisfied while the Race page still says "Talon's Junction White": the words are
@@ -93,8 +103,8 @@ and the value that makes this one inert**:
 [[page.entry]]
 kind = "choice"
 label = "FRAME LIMIT"
-setting = "graphics.frame_limit"
-disabled_by = { setting = "graphics.vsync", value = "on" }
+setting = "display.frame_limit"
+disabled_by = { setting = "display.vsync", value = "on" }
 ```
 
 **A value and not just a setting**, and the one place it is used is why. VSYNC
@@ -142,11 +152,22 @@ time:
 | Neither `values` nor `values_from` | A choice with nothing to choose |
 | A page nothing links to | A menu somebody wrote and forgot to hang off anything. Parses, resolves, and ships silently without this |
 
-Two more tests pin the asset against the code's own lists, which is the class of
-mistake the format check cannot see: the TEAM row must *be*
-`handling::TEAMS`, and every anisotropy value must parse as `Anisotropy`. Both
-would otherwise fail deep inside an archive lookup at race load, with a message
-about a missing WAD entry rather than about a menu.
+Three more tests pin the asset against the code's own lists, which is the class
+of mistake the format check cannot see:
+
+- The TEAM row must *be* `handling::TEAMS`, and every anisotropy value must
+  parse as `Anisotropy`. Both would otherwise fail deep inside an archive lookup
+  at race load, with a message about a missing WAD entry rather than about a
+  menu.
+- Every value on DISPLAY and GRAPHICS must parse, and each list must *be* its
+  type's own `ALL`/`OFFERED`. A value that does not parse is ignored at runtime
+  with a message on stderr, which a player meets as "this row does nothing".
+- **Every row on those two pages must be one `settings::menu_seeds` fills in**,
+  which is the one that catches a setting renamed on one side of the split and
+  not the other. A row the seeds do not know opens on its list's first option
+  instead of the player's own value - and since the seeds and the composition
+  root's `apply_setting` are written against the same key strings, it catches a
+  row nothing applies too.
 
 **All of this runs in CI**, unlike most of this repository's interesting tests,
 because the thing under test is ours and needs no disc image.
@@ -218,6 +239,93 @@ Two things this cost that are worth knowing before touching it again:
 dropped and re-entering loads a fresh race. A player who backs out expects to
 lose the race; one who backs out and finds a *stale* one would not, so a
 half-built pause would be worse than none.
+
+## DISPLAY against GRAPHICS
+
+Two pages under OPTIONS rather than one, and the line between them is **whether
+the renderer would notice**:
+
+| | Rows | What they have in common |
+| --- | --- | --- |
+| DISPLAY | MONITOR, WINDOW MODE, WINDOW SIZE, ASPECT RATIO, VSYNC, FRAME LIMIT, BRIGHTNESS, GAMMA | The picture's container, and how a finished frame reaches a screen |
+| GRAPHICS | RENDER SCALE, ANISOTROPIC FILTERING, FIELD OF VIEW, PERFORMANCE OVERLAY | How the picture is drawn |
+
+Turning vsync off changes nothing about the frame that is drawn, only about when
+it is shown; halving the render scale changes the frame itself. That test is
+what settles the two rows a reader would otherwise argue about:
+
+- **Brightness and gamma are DISPLAY**, even though they are a fragment shader.
+  They are a calibration of somebody's monitor, applied to a frame the game has
+  already finished drawing - see below.
+- **The performance overlay is GRAPHICS**, even though it is a diagnostic and
+  not decoration. It is drawn *into* the offscreen target, at the render scale,
+  over whatever stage is running; measuring a frame nobody is presenting is
+  exactly the way to get it wrong.
+
+`settings.toml` is split the same way, into `[display]` and `[graphics]`, so
+there is one vocabulary rather than two. Everything was in `[graphics]` before
+the split, and a file that still is gets its moved keys carried across on load
+rather than silently dropped - serde ignores a table field it does not know, so
+without that a player who had set borderless at 120 Hz would have opened the
+game windowed at 240 with no message and nothing wrong in the file.
+
+The value types all still live in one module,
+[`crates/game/src/display.rs`](../../crates/game/src/display.rs). That module is
+the vocabulary, not the page list: `Scale` sits next to `Aspect` there and they
+are on different pages, and that is fine. What each value may be and how it is
+spelled is one question; which page a player finds it on is another.
+
+## Brightness and gamma
+
+Both are applied in the **blit that puts the finished frame on the surface**,
+which is the one pass every frame goes through. The front end, the menus and a
+race are three renderers that share nothing else; grading in each would be three
+places to get it wrong and three places to forget when a fourth stage lands.
+Doing it once also means a player calibrating the picture watches the menu they
+are standing on change as they do it, which is the only way to calibrate
+anything.
+
+Both are **percentages, and 100 leaves the frame alone** - offered on both lists,
+so there is always a way back. Brightness multiplies; gamma bends the midtones
+without moving black or white, which is the one that makes a dark corner of a
+track visible without washing out the rest. Brightness is a multiply and not a
+lift because adding a constant raises black off black, and a race at night then
+looks like a race in fog.
+
+Two honest limitations, both recorded rather than papered over:
+
+- The blit samples values that are **linear** when the surface format is an sRGB
+  one, so this is not the display-gamma knob a CRT-era game shipped and is not
+  claimed to be. What it does is the thing that knob was used for.
+- **A screenshot is not graded.** `--screenshot` and the race capture write the
+  offscreen frame straight out without going through this pass. That is the
+  wanted answer: these are settings about somebody's monitor, and baking them
+  into a PNG that goes into a bug report would make every capture disagree with
+  every other one.
+
+## Field of view
+
+`GRAPHICS -> FIELD OF VIEW` is a **percentage of the field the disc's own data
+authored**, not an angle, and that is a deliberate refusal rather than a
+simplification. `<ExternalCameraFar fov>` comes off the disc and **its unit is
+unrecovered** - `Race::projection` reads it as degrees and says so in the load
+report. A row that let a player type `90` would be quietly asserting a unit this
+project has not established; a multiplier says what it does - wider or narrower
+than the game frames it - without claiming to know what the number underneath
+means.
+
+It scales the **tangent** of the half-angle rather than the angle, because the
+tangent is what the projection matrix is built from: 150 % then means half again
+as much across the screen at every starting angle, where scaling the angle would
+mean less and less the wider the field already was.
+
+The setting is applied *before*
+[`fit_vertical_fov`](../../crates/render/src/camera/mod.rs), so the two compose
+in the order a reader expects: the player widens the field the disc asked for,
+and the result is then fitted to whatever shape the window is. At 100 % - the
+default - nothing is applied at all and the value comes back bit-identical, so
+every capture under `data/traces/` is still taken against the same projection it
+always was. A test asserts exactly that.
 
 ## The performance overlay
 
@@ -305,10 +413,17 @@ looking at a layout without walking to it.
 
 ## Persistence
 
-`settings.toml` gains `[race]` (class, team, circuit id) and `language`. A
-setting is written on the keypress that changes it, not on the way out, because
-there is no way out that is guaranteed to run - a player quits with the window
-button as often as with the menu, and the file is a few hundred bytes.
+`settings.toml` holds `[display]`, `[graphics]`, `[race]` (class, team, circuit
+id), `[source]` and `language`. A setting is written on the keypress that
+changes it, not on the way out, because there is no way out that is guaranteed
+to run - a player quits with the window button as often as with the menu, and
+the file is a few hundred bytes.
+
+The file is also **rewritten complete on every load**, with any key it was
+missing filled in at its default, so what is on disk is always a full reference
+for what can go in it. That rewrite is what finishes the `[graphics]` to
+`[display]` migration described above: it runs once per install in practice, and
+`[display]` wins if a hand edit ever puts an old key back.
 
 `language` is what skips the picker on the second run. The picker state is still
 entered and left the same frame rather than being skipped in the state machine,

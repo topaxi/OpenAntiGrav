@@ -1,10 +1,29 @@
-//! Persisted graphics settings.
+//! Persisted settings.
 //!
 //! Read from `<config dir>/oag/settings.toml` on startup and rewritten with
 //! every recognised key filled in, so the file on disk always documents what
 //! it can hold rather than starting empty or silently dropping a key an older
 //! version never wrote. A CLI flag still wins over whatever is on disk for
 //! that one run; see `--anisotropy` in `main.rs`.
+//!
+//! # Display against graphics
+//!
+//! Two tables, matching the two pages the menus put them on:
+//!
+//! - **`[display]`** is the picture's container and how it reaches a screen:
+//!   which monitor, what kind of window, how big, what shape, how a finished
+//!   frame is presented and what happens to it on the way out.
+//! - **`[graphics]`** is how the picture is drawn: how many pixels, how the
+//!   textures are filtered, how much of the world is in frame.
+//!
+//! The line between them is *whether the renderer would notice*. Turning off
+//! vsync changes nothing about the frame that is drawn, only about when it is
+//! shown; halving the render scale changes the frame itself. Brightness and
+//! gamma sit on the display side under that rule even though they are a shader:
+//! they are a monitor calibration, applied after the game has finished drawing.
+//!
+//! Everything was in `[graphics]` until this split, so [`load`] migrates a file
+//! that still is - see [`migrate`].
 
 use std::path::PathBuf;
 
@@ -33,6 +52,8 @@ enum AnisotropyDef {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Settings {
+    #[serde(default)]
+    pub display: Display,
     #[serde(default)]
     pub graphics: Graphics,
     #[serde(default)]
@@ -114,47 +135,33 @@ pub struct Source {
     pub image: Option<String>,
 }
 
+/// Which screen the game opens on, what kind of window it opens, and how a
+/// finished frame gets from the renderer onto it.
+///
+/// Nothing in here changes what is drawn - see the module documentation for
+/// where the line against [`Graphics`] falls and why.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Graphics {
-    /// Anisotropic filtering level for track and ship textures: `off`, `2x`,
-    /// `4x`, `8x` or `16x`.
+pub struct Display {
+    /// Which screen to open on: `default`, or a monitor by name. See
+    /// [`crate::display::Monitor`].
     ///
-    /// Defaults to the highest level. Anisotropy is the one texture-filtering
-    /// setting worth exposing at all - see `mesh_render::mip_chain` - and a
-    /// user turns it down for performance, never up, so defaulting low would
-    /// leave most of that work unused out of the box.
-    #[serde(with = "AnisotropyDef", default)]
-    pub anisotropy: Anisotropy,
+    /// A name this machine does not have falls back to the default with a note
+    /// rather than failing, because the usual way to get one is to unplug a
+    /// screen.
+    #[serde(default)]
+    pub monitor: crate::display::Monitor,
+    /// `windowed` or `borderless`. See [`crate::display::WindowMode`].
+    #[serde(default)]
+    pub window_mode: crate::display::WindowMode,
+    /// How big a *windowed* window is, spelled `1440x816`.
+    ///
+    /// Means nothing in borderless, where the display decides.
+    #[serde(default)]
+    pub window_size: crate::display::Size,
     /// The shape the game is drawn at inside its window: `psp`, `ps2` or
     /// `free`. See [`crate::display::Aspect`].
     #[serde(default)]
     pub aspect: crate::display::Aspect,
-    /// `windowed` or `borderless`. See [`crate::display::WindowMode`].
-    #[serde(default)]
-    pub window_mode: crate::display::WindowMode,
-    /// What percentage of the displayed size the game is rendered at.
-    ///
-    /// Below 100 is the usual internal-resolution knob; above it is
-    /// supersampling. Measured against the aspect rectangle rather than the
-    /// window, so it means the same thing whatever `aspect` is. See
-    /// [`crate::display::Scale`].
-    #[serde(default)]
-    pub render_scale: crate::display::Scale,
-    /// How big a *windowed* window is, spelled `1440x816`.
-    ///
-    /// A window property, not a graphics one in the sense the others are:
-    /// borderless ignores it entirely, because the display decides. It sits in
-    /// this table anyway because that is where a player looks for it.
-    #[serde(default)]
-    pub window_size: crate::display::Size,
-    /// The performance overlay: `off`, `fps` or `pacing`.
-    ///
-    /// Off by default, because it is a diagnostic and not decoration. See
-    /// [`crate::perf`] for what the two live modes show and why the second one
-    /// exists at all - an average frame rate cannot show uneven frames, which
-    /// is the thing a player actually sees.
-    #[serde(default)]
-    pub perf_overlay: crate::perf::Overlay,
     /// How a finished frame reaches the display: `off`, `on` or `smooth`.
     ///
     /// **`off` by default**, because this is a racing game and vsync's cost is
@@ -175,6 +182,52 @@ pub struct Graphics {
     /// [`crate::perf::FrameLimit`].
     #[serde(default)]
     pub frame_limit: crate::perf::FrameLimit,
+    /// What the finished picture is multiplied by, as a percentage. See
+    /// [`crate::display::Brightness`].
+    #[serde(default)]
+    pub brightness: crate::display::Brightness,
+    /// The midtone curve applied to the finished picture, as a percentage of
+    /// 1.0. See [`crate::display::Gamma`].
+    #[serde(default)]
+    pub gamma: crate::display::Gamma,
+}
+
+/// How the picture itself is drawn.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Graphics {
+    /// What percentage of the displayed size the game is rendered at.
+    ///
+    /// Below 100 is the usual internal-resolution knob; above it is
+    /// supersampling. Measured against the aspect rectangle rather than the
+    /// window, so it means the same thing whatever `display.aspect` is. See
+    /// [`crate::display::Scale`].
+    #[serde(default)]
+    pub render_scale: crate::display::Scale,
+    /// Anisotropic filtering level for track and ship textures: `off`, `2x`,
+    /// `4x`, `8x` or `16x`.
+    ///
+    /// Defaults to the highest level. Anisotropy is the one texture-filtering
+    /// setting worth exposing at all - see `mesh_render::mip_chain` - and a
+    /// user turns it down for performance, never up, so defaulting low would
+    /// leave most of that work unused out of the box.
+    #[serde(with = "AnisotropyDef", default)]
+    pub anisotropy: Anisotropy,
+    /// How wide the camera's field of view is, as a percentage of the one the
+    /// disc's own data authored. See [`crate::display::Fov`].
+    #[serde(default)]
+    pub fov: crate::display::Fov,
+    /// The performance overlay: `off`, `fps` or `pacing`.
+    ///
+    /// Off by default, because it is a diagnostic and not decoration. See
+    /// [`crate::perf`] for what the two live modes show and why the second one
+    /// exists at all - an average frame rate cannot show uneven frames, which
+    /// is the thing a player actually sees.
+    ///
+    /// In this table rather than `[display]` because it is drawn *into* the
+    /// frame, at the render scale, over whatever stage is running - measuring a
+    /// frame nobody is presenting is the one way to get it wrong.
+    #[serde(default)]
+    pub perf_overlay: crate::perf::Overlay,
 }
 
 /// Where the settings file lives: `<config dir>/oag/settings.toml`.
@@ -196,6 +249,70 @@ const HEADER: &str = "\
 
 ";
 
+/// The keys that used to live in `[graphics]` and now live in `[display]`.
+///
+/// Kept as a list rather than folded into [`migrate`] so the one thing a reader
+/// needs from that function - *which* keys moved - is a line they can read.
+const MOVED_TO_DISPLAY: [&str; 5] = [
+    "window_mode",
+    "window_size",
+    "aspect",
+    "vsync",
+    "frame_limit",
+];
+
+/// Moves any of [`MOVED_TO_DISPLAY`] a file still holds in `[graphics]` over to
+/// `[display]`.
+///
+/// Every one of these was a `[graphics]` key before the split, and serde
+/// ignores a table field it does not know: without this, a player who had set
+/// borderless and 120 Hz would open the game windowed at 240 with no message
+/// and nothing wrong in the file. The next [`save`] writes the file back in the
+/// new shape, so this runs once per install in practice.
+///
+/// **`[display]` wins where both have a key.** That is the case where the file
+/// has already been migrated and something - a hand edit, a copy from an older
+/// machine - put the old key back; the new spelling is the one the player last
+/// saw on the menu.
+///
+/// Anything not on that list is left alone, so a `[graphics]` that still has
+/// `anisotropy` or `render_scale` is not touched: those did not move.
+fn migrate(table: &mut toml::Table) {
+    // Checked *before* anything is taken out of `[graphics]`, so a file this
+    // gives up on is left exactly as it was rather than half-moved. A
+    // `display` that is not a table is given up on rather than replaced:
+    // deserialising is about to report it with the key name, which is more use
+    // than a silent overwrite.
+    if table.get("display").is_some_and(|value| !value.is_table()) {
+        return;
+    }
+    let Some(graphics) = table
+        .get_mut("graphics")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return;
+    };
+    let moved: Vec<(String, toml::Value)> = MOVED_TO_DISPLAY
+        .iter()
+        .filter_map(|key| {
+            graphics
+                .remove(*key)
+                .map(|value| ((*key).to_string(), value))
+        })
+        .collect();
+    if moved.is_empty() {
+        return;
+    }
+    let display = table
+        .entry("display")
+        .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+        .as_table_mut()
+        .expect("checked on the way in, and only ever inserted as a table");
+    for (key, value) in moved {
+        display.entry(key).or_insert(value);
+    }
+}
+
 /// Loads settings from [`path`], creating the file - or filling in whatever
 /// keys it is missing - with defaults.
 ///
@@ -215,7 +332,13 @@ pub fn load() -> Result<Settings> {
 
     let settings: Settings = match &on_disk {
         Some(text) => {
-            toml::from_str(text).with_context(|| format!("parsing {}", path.display()))?
+            let mut table: toml::Table = text
+                .parse()
+                .with_context(|| format!("parsing {}", path.display()))?;
+            migrate(&mut table);
+            table
+                .try_into()
+                .with_context(|| format!("parsing {}", path.display()))?
         }
         None => Settings::default(),
     };
@@ -253,31 +376,38 @@ pub fn menu_seeds(
 ) -> Vec<(&'static str, crate::menu::Value)> {
     let text = |value: &str| crate::menu::Value::Text(value.to_string());
     let mut out = vec![
-        ("graphics.anisotropy", text(&anisotropy.to_string())),
         (
-            "graphics.aspect",
-            text(&settings.graphics.aspect.to_string()),
+            "display.monitor",
+            text(&settings.display.monitor.to_string()),
         ),
+        (
+            "display.window_mode",
+            text(&settings.display.window_mode.to_string()),
+        ),
+        (
+            "display.window_size",
+            text(&settings.display.window_size.to_string()),
+        ),
+        ("display.aspect", text(&settings.display.aspect.to_string())),
+        ("display.vsync", text(&settings.display.vsync.to_string())),
+        (
+            "display.frame_limit",
+            text(&settings.display.frame_limit.to_string()),
+        ),
+        (
+            "display.brightness",
+            text(&settings.display.brightness.to_string()),
+        ),
+        ("display.gamma", text(&settings.display.gamma.to_string())),
         (
             "graphics.render_scale",
             text(&settings.graphics.render_scale.to_string()),
         ),
-        (
-            "graphics.window_mode",
-            text(&settings.graphics.window_mode.to_string()),
-        ),
-        (
-            "graphics.window_size",
-            text(&settings.graphics.window_size.to_string()),
-        ),
+        ("graphics.anisotropy", text(&anisotropy.to_string())),
+        ("graphics.fov", text(&settings.graphics.fov.to_string())),
         (
             "graphics.perf_overlay",
             text(&settings.graphics.perf_overlay.to_string()),
-        ),
-        ("graphics.vsync", text(&settings.graphics.vsync.to_string())),
-        (
-            "graphics.frame_limit",
-            text(&settings.graphics.frame_limit.to_string()),
         ),
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),
@@ -348,18 +478,28 @@ mod tests {
     }
 
     /// The pacing defaults, asserted from both directions: what a fresh
-    /// `Graphics` holds and what an empty file loads as.
+    /// `Display` holds and what an empty file loads as.
     #[test]
     fn the_two_ways_of_getting_a_default_agree() {
-        let fresh = Graphics::default();
+        let fresh = Display::default();
         let loaded: Settings = toml::from_str("").expect("parse");
-        assert_eq!(loaded.graphics.vsync, fresh.vsync);
-        assert_eq!(loaded.graphics.frame_limit, fresh.frame_limit);
+        assert_eq!(loaded.display.vsync, fresh.vsync);
+        assert_eq!(loaded.display.frame_limit, fresh.frame_limit);
         assert_eq!(fresh.vsync, crate::perf::Vsync::Off);
         assert_eq!(
             fresh.frame_limit,
             crate::perf::FrameLimit::DEFAULT,
             "a fresh install should be limited, not unlimited"
+        );
+        // The three settings this split added, so a fresh install is the game
+        // as its data authors framed it and as the renderer drew it.
+        assert!(fresh.monitor.is_default());
+        assert_eq!(fresh.brightness, crate::display::Brightness::NEUTRAL);
+        assert_eq!(fresh.gamma, crate::display::Gamma::NEUTRAL);
+        assert_eq!(
+            Graphics::default().fov,
+            crate::display::Fov::AUTHORED,
+            "the default field of view has to be the disc's own"
         );
     }
 
@@ -367,12 +507,152 @@ mod tests {
     /// to keep loading, and has to come back out as a name.
     #[test]
     fn a_boolean_vsync_still_loads_and_is_rewritten_as_a_name() {
-        let off: Settings = toml::from_str("[graphics]\nvsync = false").expect("parse");
-        assert_eq!(off.graphics.vsync, crate::perf::Vsync::Off);
-        let on: Settings = toml::from_str("[graphics]\nvsync = true").expect("parse");
-        assert_eq!(on.graphics.vsync, crate::perf::Vsync::On);
+        let off: Settings = toml::from_str("[display]\nvsync = false").expect("parse");
+        assert_eq!(off.display.vsync, crate::perf::Vsync::Off);
+        let on: Settings = toml::from_str("[display]\nvsync = true").expect("parse");
+        assert_eq!(on.display.vsync, crate::perf::Vsync::On);
 
         let written = toml::to_string_pretty(&on).expect("serialise");
         assert!(written.contains("vsync = \"on\""), "{written}");
+    }
+
+    /// Parses `text` the way [`load`] does, migration included.
+    fn read(text: &str) -> Settings {
+        let mut table: toml::Table = text.parse().expect("parse");
+        migrate(&mut table);
+        table.try_into().expect("deserialise")
+    }
+
+    /// Every file written before the split has all of these in `[graphics]`,
+    /// and serde would drop each one silently. A player who had set borderless
+    /// at 120 Hz has to still be set that way after upgrading.
+    #[test]
+    fn a_file_written_before_the_split_keeps_its_display_settings() {
+        let settings = read(
+            "\
+[graphics]
+anisotropy = \"4x\"
+aspect = \"free\"
+window_mode = \"borderless\"
+window_size = \"1920x1080\"
+render_scale = 75
+vsync = \"smooth\"
+frame_limit = \"120\"
+perf_overlay = \"fps\"
+",
+        );
+
+        // Moved.
+        assert_eq!(settings.display.aspect, crate::display::Aspect::Free);
+        assert_eq!(
+            settings.display.window_mode,
+            crate::display::WindowMode::Borderless
+        );
+        assert_eq!(
+            settings.display.window_size,
+            crate::display::Size::new(1920, 1080)
+        );
+        assert_eq!(settings.display.vsync, crate::perf::Vsync::Smooth);
+        assert_eq!(settings.display.frame_limit.hz(), Some(120));
+        // Stayed, and must not have been carried across with the rest.
+        assert_eq!(settings.graphics.anisotropy, Anisotropy::X4);
+        assert_eq!(settings.graphics.render_scale.percent(), 75);
+        assert_eq!(settings.graphics.perf_overlay, crate::perf::Overlay::Fps);
+        // Added, so they come out as their defaults rather than as an error.
+        assert!(settings.display.monitor.is_default());
+        assert_eq!(settings.graphics.fov, crate::display::Fov::AUTHORED);
+
+        // And the file written back is in the new shape, with nothing left in
+        // the old table to be migrated a second time.
+        let written = toml::to_string_pretty(&settings).expect("serialise");
+        let round_tripped = read(&written);
+        assert_eq!(round_tripped.display.aspect, crate::display::Aspect::Free);
+        assert_eq!(round_tripped.display.frame_limit.hz(), Some(120));
+    }
+
+    /// The already-migrated case, where something has put an old key back: the
+    /// new spelling is the one the player last saw on the menu, so it wins.
+    #[test]
+    fn a_display_table_wins_over_a_leftover_graphics_key() {
+        let settings = read(
+            "\
+[display]
+aspect = \"ps2\"
+
+[graphics]
+aspect = \"free\"
+window_mode = \"borderless\"
+",
+        );
+        assert_eq!(settings.display.aspect, crate::display::Aspect::Ps2);
+        // The key that only the old table had still moves across.
+        assert_eq!(
+            settings.display.window_mode,
+            crate::display::WindowMode::Borderless
+        );
+    }
+
+    /// A file that never had a `[graphics]` table at all, and a file that is
+    /// already entirely in the new shape: both have to come through untouched.
+    #[test]
+    fn migration_leaves_a_file_that_needs_none_alone() {
+        for text in [
+            "",
+            "[display]\naspect = \"ps2\"\n",
+            "[race]\nclass = \"flash\"\n",
+        ] {
+            let mut table: toml::Table = text.parse().expect("parse");
+            let before = table.clone();
+            migrate(&mut table);
+            assert_eq!(table, before, "{text:?}");
+        }
+    }
+
+    /// A bad value in the moved key has to be reported against the key, not
+    /// swallowed by the migration - a typo should be visible.
+    #[test]
+    fn a_malformed_moved_key_is_still_an_error() {
+        let mut table: toml::Table = "[graphics]\naspect = \"16:9\"\n".parse().expect("parse");
+        migrate(&mut table);
+        let error = table
+            .try_into::<Settings>()
+            .expect_err("16:9 is not an aspect");
+        assert!(error.to_string().contains("aspect"), "{error}");
+    }
+
+    /// A `display` that is not a table means the parse below is about to fail
+    /// with the key name. Migration must leave the file alone rather than
+    /// emptying `[graphics]` into nowhere on the way to that message.
+    #[test]
+    fn a_display_key_that_is_not_a_table_leaves_the_file_untouched() {
+        let text = "display = 3\n\n[graphics]\naspect = \"free\"\n";
+        let mut table: toml::Table = text.parse().expect("parse");
+        let before = table.clone();
+        migrate(&mut table);
+        assert_eq!(table, before, "nothing may be moved out of [graphics]");
+        assert!(table.try_into::<Settings>().is_err(), "and it still fails");
+    }
+
+    /// Every seed names a setting the file can actually hold, which is what
+    /// stops a renamed field leaving a menu row showing its list's first
+    /// option instead of the player's own value.
+    #[test]
+    fn every_menu_seed_names_a_key_the_settings_file_has() {
+        let settings = Settings::default();
+        let written = toml::to_string_pretty(&settings).expect("serialise");
+        let table: toml::Table = written.parse().expect("parse");
+
+        for (setting, _) in menu_seeds(&settings, Anisotropy::default()) {
+            let Some((section, key)) = setting.split_once('.') else {
+                // `language` is a bare key, and only present once picked.
+                assert_eq!(setting, "language");
+                continue;
+            };
+            let holder = table
+                .get(section)
+                .and_then(toml::Value::as_table)
+                .unwrap_or_else(|| panic!("no [{section}] table for {setting}"));
+            assert!(holder.contains_key(key), "[{section}] has no {key}");
+        }
     }
 }

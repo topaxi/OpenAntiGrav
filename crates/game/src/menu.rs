@@ -140,6 +140,14 @@ pub enum ValueSource {
     /// what a player reads never appears in this repository. See
     /// [`crate::catalogue`].
     Tracks,
+    /// The screens this machine has, which is a property of the desk rather
+    /// than of the disc - the first source here that is.
+    ///
+    /// Supplied for the same reason the other two are: a definition file cannot
+    /// know them, and a row offering a monitor that is not plugged in would be
+    /// offering something that cannot be selected. `default` is always first,
+    /// so there is a way back from a screen that has since been unplugged.
+    Monitors,
 }
 
 impl ValueSource {
@@ -149,6 +157,7 @@ impl ValueSource {
         match self {
             Self::Languages => "languages",
             Self::Tracks => "tracks",
+            Self::Monitors => "monitors",
         }
     }
 
@@ -158,6 +167,7 @@ impl ValueSource {
         match name {
             "languages" => Some(Self::Languages),
             "tracks" => Some(Self::Tracks),
+            "monitors" => Some(Self::Monitors),
             _ => None,
         }
     }
@@ -538,7 +548,7 @@ mod raw {
         pub string_id: Option<String>,
     }
 
-    /// `disabled_by = { setting = "graphics.vsync", value = "on" }`, or
+    /// `disabled_by = { setting = "display.vsync", value = "on" }`, or
     /// `value = true` against a toggle.
     #[derive(Deserialize)]
     pub struct Condition {
@@ -1359,11 +1369,10 @@ mod tests {
         );
     }
 
-    /// Anisotropy is the one graphics row that is live, so its values have to be
-    /// exactly what `Anisotropy` parses - a typo here would persist a setting
-    /// the next run refuses to load.
+    /// Anisotropy's values have to be exactly what `Anisotropy` parses - a typo
+    /// here would persist a setting the next run refuses to load.
     #[test]
-    fn the_graphics_page_offers_only_anisotropy_levels_that_parse() {
+    fn the_anisotropy_row_offers_only_levels_that_parse() {
         let definition = built_in();
         let Some(Entry::Choice { values, .. }) = definition
             .pages
@@ -1381,13 +1390,13 @@ mod tests {
         }
     }
 
-    /// The same drift guard as the two above, for the three rows that move a
-    /// window. A value here that `display` cannot parse would be ignored at
+    /// The same drift guard as the one above, for every row on DISPLAY and
+    /// GRAPHICS. A value here that `display` cannot parse would be ignored at
     /// runtime with a message, which is the failure a player meets as "this row
     /// does nothing".
     #[test]
-    fn the_graphics_page_offers_only_display_settings_that_parse() {
-        use crate::display::{Aspect, Size, WindowMode};
+    fn the_two_settings_pages_offer_only_values_that_parse() {
+        use crate::display::{Aspect, Brightness, Fov, Gamma, Size, WindowMode};
         let definition = built_in();
         let values = |setting: &str| -> Vec<String> {
             definition
@@ -1404,7 +1413,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("no choice edits {setting:?}"))
         };
 
-        let aspects = values("graphics.aspect");
+        let aspects = values("display.aspect");
         for name in &aspects {
             name.parse::<Aspect>().unwrap_or_else(|e| panic!("{e}"));
         }
@@ -1414,7 +1423,7 @@ mod tests {
             "every aspect should be offerable"
         );
 
-        let modes = values("graphics.window_mode");
+        let modes = values("display.window_mode");
         for name in &modes {
             name.parse::<WindowMode>().unwrap_or_else(|e| panic!("{e}"));
         }
@@ -1430,7 +1439,7 @@ mod tests {
             "the render-scale rows and `Scale::OFFERED` must be one list"
         );
 
-        let sizes: Vec<Size> = values("graphics.window_size")
+        let sizes: Vec<Size> = values("display.window_size")
             .iter()
             .map(|name| name.parse::<Size>().unwrap_or_else(|e| panic!("{e}")))
             .collect();
@@ -1450,7 +1459,7 @@ mod tests {
             "the overlay rows and `Overlay::ALL` must be one list"
         );
 
-        let limits: Vec<crate::perf::FrameLimit> = values("graphics.frame_limit")
+        let limits: Vec<crate::perf::FrameLimit> = values("display.frame_limit")
             .iter()
             .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
             .collect();
@@ -1460,7 +1469,7 @@ mod tests {
             "the frame-limit rows and `FrameLimit::OFFERED` must be one list"
         );
 
-        let vsync: Vec<crate::perf::Vsync> = values("graphics.vsync")
+        let vsync: Vec<crate::perf::Vsync> = values("display.vsync")
             .iter()
             .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
             .collect();
@@ -1469,6 +1478,81 @@ mod tests {
             crate::perf::Vsync::ALL,
             "the vsync rows and `Vsync::ALL` must be one list"
         );
+
+        let brightness: Vec<Brightness> = values("display.brightness")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            brightness,
+            Brightness::OFFERED,
+            "the brightness rows and `Brightness::OFFERED` must be one list"
+        );
+
+        let gamma: Vec<Gamma> = values("display.gamma")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            gamma,
+            Gamma::OFFERED,
+            "the gamma rows and `Gamma::OFFERED` must be one list"
+        );
+
+        let fov: Vec<Fov> = values("graphics.fov")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            fov,
+            Fov::OFFERED,
+            "the field-of-view rows and `Fov::OFFERED` must be one list"
+        );
+    }
+
+    /// Every row on the two settings pages has to be one `apply_setting`
+    /// handles and `menu_seeds` fills in, or it is a row that moves and does
+    /// nothing - which is the failure this whole file is arranged to prevent.
+    ///
+    /// Checked against the seeds rather than against `main.rs`, which this
+    /// crate's library half cannot see: a setting the seeds do not know would
+    /// also open its row on the list's first option instead of the player's
+    /// own value, so the two lists have to agree anyway.
+    #[test]
+    fn every_settings_row_is_one_the_game_seeds() {
+        let definition = built_in();
+        let seeded: Vec<&str> = crate::settings::menu_seeds(
+            &crate::settings::Settings::default(),
+            oag_render::mesh_render::Anisotropy::default(),
+        )
+        .into_iter()
+        .map(|(setting, _)| setting)
+        .collect();
+
+        for page in &definition.pages {
+            if page.id != "display" && page.id != "graphics" {
+                continue;
+            }
+            for entry in &page.entries {
+                let Some(setting) = entry.setting() else {
+                    continue;
+                };
+                assert!(
+                    seeded.contains(&setting),
+                    "{setting} is on the {} page and is not seeded",
+                    page.id
+                );
+            }
+        }
+
+        // And both pages exist, so a rename in the definition cannot make the
+        // loop above vacuous.
+        for id in ["display", "graphics"] {
+            assert!(
+                definition.pages.iter().any(|page| page.id == id),
+                "no {id} page"
+            );
+        }
     }
 
     /// The definition's own answer to "classic vsync makes the limiter
@@ -1486,10 +1570,10 @@ mod tests {
             .pages
             .iter()
             .flat_map(|page| page.entries.iter())
-            .find(|entry| entry.setting() == Some("graphics.frame_limit"))
+            .find(|entry| entry.setting() == Some("display.frame_limit"))
             .expect("nothing edits graphics.frame_limit");
         let condition = entry.disabled_by().expect("the limiter has a condition");
-        assert_eq!(condition.setting, "graphics.vsync");
+        assert_eq!(condition.setting, "display.vsync");
         assert_eq!(condition.value, Value::Text("on".to_string()));
 
         // The same value from the other side, so the menu and the loop cannot
@@ -1513,16 +1597,16 @@ mod tests {
     #[test]
     fn a_disabled_row_is_inert_until_the_row_that_disables_it_moves_off_the_value() {
         let mut menu = Menu::new(built_in());
-        assert!(menu.open("graphics"), "the graphics page exists");
+        assert!(menu.open("display"), "the display page exists");
         let row = menu
             .page()
             .entries
             .iter()
-            .position(|entry| entry.setting() == Some("graphics.frame_limit"))
-            .expect("the frame limit is on the graphics page");
+            .position(|entry| entry.setting() == Some("display.frame_limit"))
+            .expect("the frame limit is on the display page");
 
-        menu.seed("graphics.vsync", &Value::Text("on".to_string()));
-        menu.seed("graphics.frame_limit", &Value::Text("60".to_string()));
+        menu.seed("display.vsync", &Value::Text("on".to_string()));
+        menu.seed("display.frame_limit", &Value::Text("60".to_string()));
         for _ in 0..row {
             press(&mut menu, &[button::DOWN]);
         }
@@ -1540,7 +1624,7 @@ mod tests {
         // And under either of the other two modes it is an ordinary row
         // again - `smooth` especially, where the limiter is the only thing
         // stopping the GPU rendering frames that get discarded.
-        menu.seed("graphics.vsync", &Value::Text("smooth".to_string()));
+        menu.seed("display.vsync", &Value::Text("smooth".to_string()));
         let events = press(&mut menu, &[button::RIGHT]);
         assert_eq!(events.len(), 1, "{events:?}");
         assert_ne!(
@@ -1554,13 +1638,13 @@ mod tests {
     #[test]
     fn a_disabled_row_is_drawn_dimmed_even_when_it_is_selected() {
         let mut menu = Menu::new(built_in());
-        assert!(menu.open("graphics"));
+        assert!(menu.open("display"));
         let row = menu
             .page()
             .entries
             .iter()
-            .position(|entry| entry.setting() == Some("graphics.frame_limit"))
-            .expect("the frame limit is on the graphics page");
+            .position(|entry| entry.setting() == Some("display.frame_limit"))
+            .expect("the frame limit is on the display page");
         for _ in 0..row {
             press(&mut menu, &[button::DOWN]);
         }
@@ -1575,11 +1659,11 @@ mod tests {
                 .expect("the row is drawn")
         };
 
-        menu.seed("graphics.vsync", &Value::Text("on".to_string()));
+        menu.seed("display.vsync", &Value::Text("on".to_string()));
         assert_eq!(label_colour(&menu), DIMMED);
-        menu.seed("graphics.vsync", &Value::Text("off".to_string()));
+        menu.seed("display.vsync", &Value::Text("off".to_string()));
         assert_eq!(label_colour(&menu), SELECTED);
-        menu.seed("graphics.vsync", &Value::Text("smooth".to_string()));
+        menu.seed("display.vsync", &Value::Text("smooth".to_string()));
         assert_eq!(label_colour(&menu), SELECTED);
     }
 

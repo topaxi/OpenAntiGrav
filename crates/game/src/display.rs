@@ -1,19 +1,31 @@
-//! What shape the game is drawn at, and what kind of window it is drawn in.
+//! The vocabulary the picture is configured in: which screen, what shape, how
+//! big, how bright.
 //!
-//! Three settings live here and they are three different questions, which is
-//! why they are three settings:
+//! Every setting here is a separate question, which is why it is a separate
+//! type:
 //!
+//! - [`Monitor`] is *which* screen, when there is more than one.
 //! - [`WindowMode`] is what the compositor is asked for.
-//! - [`Size`] is how big a *windowed* window is, and means nothing in the other
-//!   two modes, where the display decides.
+//! - [`Size`] is how big a *windowed* window is, and means nothing in
+//!   borderless, where the display decides.
 //! - [`Aspect`] is the shape the game is drawn at **inside** whatever it got,
 //!   with the leftover bars left black.
+//! - [`Scale`] is how many pixels that shape is actually rendered with.
+//! - [`Fov`] is how much of the world fits in it.
+//! - [`Brightness`] and [`Gamma`] are what happens to the finished picture on
+//!   its way to the surface.
+//!
+//! **These are the types, not the menu pages.** The menus split them across
+//! DISPLAY and GRAPHICS and the settings file across `[display]` and
+//! `[graphics]`; this module is one place to define what each value may be and
+//! how it is spelled, and that split is [`crate::settings`]'s business.
 //!
 //! The arithmetic is [`viewport`], a pure function with tests, because none of
 //! this is checkable from the gate: it is all window and GPU, and a screenshot
 //! per mode is the only empirical check there is. Keeping the fit in a function
 //! means the part that can be wrong in a way nobody notices is the part that is
-//! tested.
+//! tested. The same reasoning puts [`Monitor::choose`] and [`Fov::apply`] here
+//! rather than at their call sites.
 
 use serde::{Deserialize, Serialize};
 
@@ -138,6 +150,116 @@ impl std::fmt::Display for WindowMode {
     }
 }
 
+/// Which screen the game opens on: `default`, or a monitor by the name the
+/// windowing system gives it.
+///
+/// A **name and not an index**, because an index is a promise the machine does
+/// not keep: unplugging a screen, or a compositor that enumerates them in
+/// whatever order it woke up in, silently moves the game somewhere else. A name
+/// that is no longer there is instead a miss, and a miss falls back to the
+/// default - see [`Monitor::choose`].
+///
+/// There is no value this cannot hold, which is why the conversion is `From`
+/// and not `TryFrom`: a monitor name is whatever the platform says it is, and
+/// this type has no grounds to refuse one.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(from = "String", into = "String")]
+pub struct Monitor(Option<String>);
+
+impl Monitor {
+    /// The spelling for "whichever one the compositor would have picked".
+    pub const DEFAULT: &'static str = "default";
+
+    /// Letting the compositor decide, which is what a single-monitor machine
+    /// wants and what a name it no longer has falls back to.
+    #[must_use]
+    pub const fn default_monitor() -> Self {
+        Self(None)
+    }
+
+    /// Whether this is the default rather than a named screen.
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        self.0.is_none()
+    }
+
+    /// The name this setting holds, or `None` for the default.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        self.0.as_deref()
+    }
+
+    /// The list a MONITOR row is offered, for the screens `available` names.
+    ///
+    /// [`Monitor::DEFAULT`] first and always, because it is the way back from a
+    /// screen that has since been unplugged - and, on a machine with one
+    /// screen, the only sensible row. A name already equal to it is not
+    /// repeated, so a compositor that really does call a monitor "default"
+    /// leaves the list one entry long rather than two identical ones.
+    #[must_use]
+    pub fn offered(available: &[String]) -> Vec<String> {
+        let mut out = vec![Self::DEFAULT.to_string()];
+        out.extend(
+            available
+                .iter()
+                .filter(|name| !name.eq_ignore_ascii_case(Self::DEFAULT))
+                .cloned(),
+        );
+        out
+    }
+
+    /// Which of `available` this setting picks, or `None` for the default and
+    /// for a name this machine does not have.
+    ///
+    /// The two `None`s are deliberately the same answer: a settings file
+    /// written at a desk with two screens, opened on a laptop with one, should
+    /// open a window rather than report a problem the player did not cause.
+    /// [`Monitor::is_default`] is what tells the caller which of the two
+    /// happened, so a *miss* can still be worth a note.
+    ///
+    /// Matching is case-insensitive on the whole name. Nothing partial: two
+    /// screens from one manufacturer share a prefix, and picking the wrong one
+    /// of those is exactly the failure a name was chosen to avoid.
+    #[must_use]
+    pub fn choose(&self, available: &[String]) -> Option<usize> {
+        let wanted = self.0.as_deref()?;
+        available
+            .iter()
+            .position(|name| name.eq_ignore_ascii_case(wanted))
+    }
+}
+
+impl std::str::FromStr for Monitor {
+    type Err = std::convert::Infallible;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(text.to_string()))
+    }
+}
+
+impl From<String> for Monitor {
+    fn from(text: String) -> Self {
+        let trimmed = text.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case(Self::DEFAULT) {
+            Self(None)
+        } else {
+            Self(Some(trimmed.to_string()))
+        }
+    }
+}
+
+impl From<Monitor> for String {
+    fn from(monitor: Monitor) -> Self {
+        monitor.to_string()
+    }
+}
+
+impl std::fmt::Display for Monitor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.as_deref().unwrap_or(Self::DEFAULT))
+    }
+}
+
 /// A window size, spelled `1440x816`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -226,6 +348,67 @@ impl From<Size> for String {
     }
 }
 
+/// Writes out the plumbing every percentage setting below shares: a default, a
+/// range-checked `TryFrom<u32>`, `FromStr` that tolerates a trailing `%`, and
+/// the `Display` those round-trip through.
+///
+/// A macro rather than one shared `Percent` type because the four must not be
+/// interchangeable - a brightness handed to the projection would compile and be
+/// wrong - and rather than four hand-written copies because copies are the kind
+/// of thing that drifts one edit at a time. Each type still declares its own
+/// `RANGE`, `OFFERED` and neutral value, which is all that actually differs.
+macro_rules! percentage {
+    ($type:ident, $neutral:ident, $what:literal) => {
+        impl Default for $type {
+            fn default() -> Self {
+                Self::$neutral
+            }
+        }
+
+        impl TryFrom<u32> for $type {
+            type Error = String;
+
+            fn try_from(percent: u32) -> Result<Self, Self::Error> {
+                if Self::RANGE.contains(&percent) {
+                    Ok(Self(percent))
+                } else {
+                    Err(format!(
+                        concat!("a ", $what, " of {} is outside {}-{}"),
+                        percent,
+                        Self::RANGE.start(),
+                        Self::RANGE.end()
+                    ))
+                }
+            }
+        }
+
+        impl std::str::FromStr for $type {
+            type Err = String;
+
+            fn from_str(text: &str) -> Result<Self, Self::Err> {
+                let percent: u32 = text
+                    .trim()
+                    .trim_end_matches('%')
+                    .parse()
+                    .map_err(|e| format!(concat!("{:?} is not a ", $what, ": {}"), text, e))?;
+                Self::try_from(percent)
+            }
+        }
+
+        impl From<$type> for u32 {
+            fn from(value: $type) -> Self {
+                value.0
+            }
+        }
+
+        impl std::fmt::Display for $type {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+}
+
 /// How much of the viewport rectangle the game is actually rendered at, as a
 /// percentage.
 ///
@@ -272,51 +455,192 @@ impl Scale {
     }
 }
 
-impl Default for Scale {
-    fn default() -> Self {
-        Self::FULL
+/// How much the finished picture is multiplied by on its way to the surface, as
+/// a percentage. 100 is untouched.
+///
+/// A multiply and not a lift: adding a constant raises black off black and
+/// leaves a race at night looking like a race in fog, and the thing a player
+/// reaches for this setting to fix - a track they cannot see into - is a
+/// midtone problem [`Gamma`] handles better anyway. Both are applied in the
+/// blit pass, so both cover every stage; see [`crate::upscale`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct Brightness(u32);
+
+impl Brightness {
+    /// Leaving the picture alone.
+    pub const NEUTRAL: Self = Self(100);
+
+    /// The narrowest and widest this may be.
+    ///
+    /// Bounded at both ends because both ends are a black screen a player
+    /// cannot get back from with a menu they can no longer read.
+    pub const RANGE: std::ops::RangeInclusive<u32> = 50..=200;
+
+    /// The percentages the menus offer.
+    pub const OFFERED: [Self; 7] = [
+        Self(50),
+        Self(75),
+        Self(90),
+        Self(100),
+        Self(110),
+        Self(125),
+        Self(150),
+    ];
+
+    /// The multiplier this percentage means.
+    #[must_use]
+    pub fn factor(self) -> f32 {
+        self.0 as f32 / 100.0
+    }
+
+    /// The percentage itself.
+    #[must_use]
+    pub fn percent(self) -> u32 {
+        self.0
     }
 }
 
-impl std::str::FromStr for Scale {
-    type Err = String;
+/// The exponent curve applied to the finished picture, as a percentage of 1.0.
+/// 100 is untouched; above it lifts the midtones without touching black or
+/// white, below it deepens them.
+///
+/// **Applied to the values the blit samples, which are linear when the surface
+/// is an sRGB one** - so this is not the display-gamma knob a CRT-era game
+/// shipped, and it is not claimed to be. What it does is the thing that knob
+/// was used for: making a dark corner of a track visible without washing the
+/// rest of it out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct Gamma(u32);
 
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let percent: u32 = text
-            .trim()
-            .trim_end_matches('%')
-            .parse()
-            .map_err(|e| format!("{text:?} is not a render scale: {e}"))?;
-        Self::try_from(percent)
+impl Gamma {
+    /// Leaving the picture alone.
+    pub const NEUTRAL: Self = Self(100);
+
+    /// The narrowest and widest this may be, bounded for the same reason
+    /// [`Brightness::RANGE`] is.
+    pub const RANGE: std::ops::RangeInclusive<u32> = 50..=200;
+
+    /// The percentages the menus offer.
+    pub const OFFERED: [Self; 7] = [
+        Self(60),
+        Self(80),
+        Self(90),
+        Self(100),
+        Self(110),
+        Self(120),
+        Self(140),
+    ];
+
+    /// The exponent the shader raises the picture to, which is the reciprocal
+    /// of the gamma this names: a gamma above 1 is an exponent below it, and
+    /// that is what brightens.
+    ///
+    /// Computed here rather than in the shader so the reciprocal is taken once
+    /// per frame instead of once per pixel, and so the one place it could be
+    /// the wrong way round has a test.
+    #[must_use]
+    pub fn exponent(self) -> f32 {
+        100.0 / self.0 as f32
+    }
+
+    /// The percentage itself.
+    #[must_use]
+    pub fn percent(self) -> u32 {
+        self.0
     }
 }
 
-impl TryFrom<u32> for Scale {
-    type Error = String;
+/// How wide the camera's field of view is, as a percentage of the one the
+/// original's own data authored. 100 is the authored value.
+///
+/// **A percentage of the authored field and not an absolute angle**, which is
+/// the whole point: `<ExternalCameraFar fov>` comes off the disc, its unit is
+/// unrecovered (see [`crate::race::Race::projection`]), and a row that let a
+/// player type `90` would be quietly asserting a unit this project has not
+/// established. A multiplier says what it does - wider or narrower than the
+/// game frames it - without claiming to know what the number underneath means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct Fov(u32);
 
-    fn try_from(percent: u32) -> Result<Self, Self::Error> {
-        if Self::RANGE.contains(&percent) {
-            Ok(Self(percent))
-        } else {
-            Err(format!(
-                "a render scale of {percent} is outside {}-{}",
-                Self::RANGE.start(),
-                Self::RANGE.end()
-            ))
+impl Fov {
+    /// The field of view the disc's own data asks for.
+    pub const AUTHORED: Self = Self(100);
+
+    /// The narrowest and widest this may be.
+    ///
+    /// The ceiling is not a preference: the tangent scaling below runs to a
+    /// half-angle approaching a straight line, and past roughly twice the
+    /// authored field the projection is fisheye and the track is unreadable.
+    pub const RANGE: std::ops::RangeInclusive<u32> = 50..=200;
+
+    /// The percentages the menus offer.
+    pub const OFFERED: [Self; 7] = [
+        Self(75),
+        Self(90),
+        Self(100),
+        Self(110),
+        Self(125),
+        Self(150),
+        Self(175),
+    ];
+
+    /// `fov_radians` widened or narrowed by this setting.
+    ///
+    /// **Scales the tangent of the half-angle, not the angle.** The tangent is
+    /// what the projection matrix is actually built from, so scaling it is what
+    /// makes 150 % mean "half again as much across the screen"; scaling the
+    /// angle would make the same percentage mean less and less the wider the
+    /// field already was, and would run past half a turn where this cannot.
+    ///
+    /// At [`Fov::AUTHORED`] the input comes back bit-identical rather than
+    /// through `atan(tan(x))`, so leaving the setting alone is not a rounding
+    /// difference against every capture taken before it existed.
+    #[must_use]
+    pub fn apply(self, fov_radians: f32) -> f32 {
+        if self == Self::AUTHORED {
+            return fov_radians;
         }
+        2.0 * ((fov_radians * 0.5).tan() * self.factor()).atan()
+    }
+
+    /// The multiplier this percentage means.
+    #[must_use]
+    pub fn factor(self) -> f32 {
+        self.0 as f32 / 100.0
+    }
+
+    /// The percentage itself.
+    #[must_use]
+    pub fn percent(self) -> u32 {
+        self.0
     }
 }
 
-impl From<Scale> for u32 {
-    fn from(scale: Scale) -> Self {
-        scale.0
-    }
-}
+percentage!(Scale, FULL, "render scale");
+percentage!(Brightness, NEUTRAL, "brightness");
+percentage!(Gamma, NEUTRAL, "gamma");
+percentage!(Fov, AUTHORED, "field of view");
 
-impl std::fmt::Display for Scale {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
+/// Where a window of `size` goes to sit centred on a monitor whose own
+/// rectangle starts at `origin` and is `area` across, all in physical pixels.
+///
+/// [`Monitor`] picks *which* screen; this is the only reason that picking does
+/// anything in windowed mode, where there is no fullscreen request to carry the
+/// choice. A window is placed by its top-left corner in one coordinate space
+/// spanning every monitor, so "on that screen" is arithmetic rather than a flag.
+///
+/// A window larger than the monitor is pinned to the origin rather than centred
+/// off the top-left edge, where a title bar would be unreachable.
+#[must_use]
+pub fn centred(origin: (i32, i32), area: (u32, u32), size: (u32, u32)) -> (i32, i32) {
+    let offset = |span: u32, window: u32| ((span as i64 - window as i64) / 2).max(0) as i32;
+    (
+        origin.0.saturating_add(offset(area.0, size.0)),
+        origin.1.saturating_add(offset(area.1, size.1)),
+    )
 }
 
 /// The centred rectangle of `aspect` inside a `target`-sized viewport.
@@ -496,6 +820,191 @@ mod tests {
             Scale::OFFERED.contains(&Scale::FULL),
             "100% must be offered"
         );
+    }
+
+    /// The three percentages the macro writes out behave the way the render
+    /// scale already did, which is the whole reason they share it.
+    #[test]
+    fn every_percentage_round_trips_and_refuses_what_is_outside_its_range() {
+        assert_eq!("100".parse::<Brightness>(), Ok(Brightness::NEUTRAL));
+        assert_eq!("100".parse::<Gamma>(), Ok(Gamma::NEUTRAL));
+        assert_eq!("100%".parse::<Fov>(), Ok(Fov::AUTHORED));
+        assert_eq!(Brightness::default(), Brightness::NEUTRAL);
+        assert_eq!(Gamma::default(), Gamma::NEUTRAL);
+        assert_eq!(Fov::default(), Fov::AUTHORED);
+
+        for bad in ["0", "49", "201", "bright", ""] {
+            assert!(bad.parse::<Brightness>().is_err(), "{bad}");
+            assert!(bad.parse::<Gamma>().is_err(), "{bad}");
+            assert!(bad.parse::<Fov>().is_err(), "{bad}");
+        }
+
+        for value in Brightness::OFFERED {
+            assert_eq!(value.to_string().parse::<Brightness>(), Ok(value));
+        }
+        for value in Gamma::OFFERED {
+            assert_eq!(value.to_string().parse::<Gamma>(), Ok(value));
+        }
+        for value in Fov::OFFERED {
+            assert_eq!(value.to_string().parse::<Fov>(), Ok(value));
+        }
+    }
+
+    /// Each list has to offer the value that changes nothing, or a player who
+    /// moves one of these has no way back to how the game shipped.
+    #[test]
+    fn every_percentage_offers_its_own_neutral() {
+        assert!(Brightness::OFFERED.contains(&Brightness::NEUTRAL));
+        assert!(Gamma::OFFERED.contains(&Gamma::NEUTRAL));
+        assert!(Fov::OFFERED.contains(&Fov::AUTHORED));
+    }
+
+    /// The one place gamma could be the wrong way round: the setting names the
+    /// gamma, the shader wants its reciprocal, and a gamma above 1 has to
+    /// brighten.
+    #[test]
+    fn a_higher_gamma_is_a_lower_exponent_and_brightens() {
+        assert_eq!(Gamma::NEUTRAL.exponent(), 1.0);
+        let up: Gamma = "140".parse().expect("parse");
+        let down: Gamma = "60".parse().expect("parse");
+        assert!(up.exponent() < 1.0, "{}", up.exponent());
+        assert!(down.exponent() > 1.0, "{}", down.exponent());
+        // A midtone, raised to each exponent. Above 1.0 gamma it has to come
+        // out lighter, below it darker, and black and white must not move.
+        let grey = 0.25f32;
+        assert!(grey.powf(up.exponent()) > grey);
+        assert!(grey.powf(down.exponent()) < grey);
+        for exponent in [up.exponent(), down.exponent()] {
+            assert_eq!(0.0f32.powf(exponent), 0.0);
+            assert_eq!(1.0f32.powf(exponent), 1.0);
+        }
+    }
+
+    /// The authored field has to come back untouched, bit for bit: every
+    /// capture in `data/traces/` was taken before this setting existed.
+    #[test]
+    fn the_authored_field_of_view_is_returned_unchanged() {
+        for degrees in [30.0f32, 45.0, 60.0, 91.5] {
+            let fov = degrees.to_radians();
+            assert_eq!(Fov::AUTHORED.apply(fov), fov, "{degrees}");
+        }
+    }
+
+    /// The property the tangent scaling exists for: a percentage means that
+    /// much more across the screen, and the result stays a projection.
+    #[test]
+    fn a_wider_field_of_view_scales_the_tangent_and_stays_below_half_a_turn() {
+        let fov = 60.0f32.to_radians();
+        let authored = (fov * 0.5).tan();
+        for percent in ["50", "75", "125", "150", "200"] {
+            let setting: Fov = percent.parse().expect("parse");
+            let applied = setting.apply(fov);
+            let scaled = (applied * 0.5).tan();
+            assert!(
+                (scaled - authored * setting.factor()).abs() < 1e-5,
+                "{percent}: {scaled} vs {}",
+                authored * setting.factor()
+            );
+            assert!(applied > 0.0 && applied < std::f32::consts::PI, "{percent}");
+        }
+        // Monotone, or the row would not read as a slider.
+        let narrow: Fov = "75".parse().expect("parse");
+        let wide: Fov = "150".parse().expect("parse");
+        assert!(narrow.apply(fov) < fov && fov < wide.apply(fov));
+    }
+
+    /// The second monitor in a left-to-right pair, which is the case the whole
+    /// setting exists for: the window has to land inside *its* rectangle, not
+    /// at the same offset on the first one.
+    #[test]
+    fn a_window_is_centred_inside_the_monitor_it_is_given() {
+        assert_eq!(centred((0, 0), (1920, 1080), (1440, 816)), (240, 132));
+        assert_eq!(centred((1920, 0), (2560, 1440), (1440, 816)), (2480, 312));
+        // A monitor above and left of the origin, which is where a compositor
+        // puts a second screen arranged that way.
+        assert_eq!(
+            centred((-1920, -180), (1920, 1080), (1920, 1080)),
+            (-1920, -180)
+        );
+    }
+
+    /// A window bigger than the screen is pinned rather than centred off the
+    /// top-left edge, where the title bar cannot be reached.
+    #[test]
+    fn an_oversized_window_stays_at_the_monitors_own_corner() {
+        assert_eq!(centred((1920, 0), (1280, 720), (2560, 1440)), (1920, 0));
+        assert_eq!(centred((0, 0), (0, 0), (1440, 816)), (0, 0));
+    }
+
+    #[test]
+    fn a_monitor_round_trips_through_its_own_spelling() {
+        let default: Monitor = "default".parse().expect("infallible");
+        assert!(default.is_default());
+        assert_eq!(default, Monitor::default());
+        assert_eq!(default.to_string(), Monitor::DEFAULT);
+        // Whitespace and an empty file value are the default too, not a screen
+        // named "".
+        for text in ["", "   ", "DEFAULT"] {
+            assert!(
+                text.parse::<Monitor>().expect("infallible").is_default(),
+                "{text:?}"
+            );
+        }
+
+        let named: Monitor = " DP-2 ".parse().expect("infallible");
+        assert_eq!(named.name(), Some("DP-2"));
+        assert_eq!(named.to_string(), "DP-2");
+        assert_eq!(named.to_string().parse::<Monitor>(), Ok(named));
+    }
+
+    /// The offered list is what a player has to be able to get back to the
+    /// default from, so the default is on it whatever the machine has.
+    #[test]
+    fn the_default_is_always_the_first_monitor_offered() {
+        assert_eq!(Monitor::offered(&[]), [Monitor::DEFAULT]);
+        assert_eq!(
+            Monitor::offered(&["eDP-1".to_string(), "DP-2".to_string()]),
+            [Monitor::DEFAULT, "eDP-1", "DP-2"]
+        );
+        // Not repeated, however a compositor spells it.
+        assert_eq!(
+            Monitor::offered(&["Default".to_string(), "DP-2".to_string()]),
+            [Monitor::DEFAULT, "DP-2"]
+        );
+        // And every entry on it round-trips to a setting that picks something.
+        let available = ["eDP-1".to_string(), "DP-2".to_string()];
+        for offered in Monitor::offered(&available) {
+            let monitor: Monitor = offered.parse().expect("infallible");
+            assert!(
+                monitor.is_default() || monitor.choose(&available).is_some(),
+                "{offered} is offered and selects nothing"
+            );
+        }
+    }
+
+    #[test]
+    fn a_monitor_picks_the_screen_it_names_and_nothing_else() {
+        let available = ["eDP-1".to_string(), "DP-2".to_string()];
+        assert_eq!(
+            "DP-2".parse::<Monitor>().unwrap().choose(&available),
+            Some(1)
+        );
+        // Case-insensitive, because a compositor is free to change how it
+        // capitalises between releases.
+        assert_eq!(
+            "dp-2".parse::<Monitor>().unwrap().choose(&available),
+            Some(1)
+        );
+        // The default never names one.
+        assert_eq!(Monitor::default_monitor().choose(&available), None);
+        // A screen this machine does not have falls back rather than failing,
+        // and `is_default` is what tells the two apart.
+        let missing: Monitor = "HDMI-A-1".parse().unwrap();
+        assert_eq!(missing.choose(&available), None);
+        assert!(!missing.is_default());
+        // Nothing partial: `DP` must not select `DP-2`.
+        assert_eq!("DP".parse::<Monitor>().unwrap().choose(&available), None);
+        assert_eq!(missing.choose(&[]), None);
     }
 
     #[test]

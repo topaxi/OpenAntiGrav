@@ -10,9 +10,10 @@
 //! A percentage has no invalid values. An absolute render resolution has to be
 //! validated against the window every time either changes, and a settings file
 //! left holding `3840x2160` on a 1080p window is a state somebody has to define
-//! behaviour for. `graphics.window_size` is a window property and absolute;
-//! this is a graphics one and relative, and keeping them different kinds is what
-//! stops them being conflated.
+//! behaviour for. `display.window_size` is a window property and absolute; this
+//! is a graphics one and relative, and keeping them different kinds is what
+//! stops them being conflated - and is why they sit in different tables and on
+//! different menu pages.
 //!
 //! # What it is measured against
 //!
@@ -21,10 +22,47 @@
 //! pillarboxed 4:3 window, the game is drawn at half the 4:3 area rather than
 //! half a window it was never using. The bars are drawn by the blit pass
 //! clearing the surface, so they cost no offscreen pixels at all.
+//!
+//! # Why brightness and gamma are here
+//!
+//! Because this is the one pass every frame goes through. The front end, the
+//! menus and a race are three renderers that share nothing else, and grading in
+//! each would be three places to get it wrong and three places to forget when a
+//! fourth stage lands. Here it is one shader, and a player calibrating the
+//! picture sees the menu they are standing on change as they do it.
+//!
+//! **A screenshot is not graded.** `--screenshot` and the race capture write
+//! the offscreen frame straight out without going through this pass, and that
+//! is the wanted answer rather than an oversight: brightness and gamma are a
+//! setting about somebody's monitor, and baking them into a PNG that goes into
+//! a bug report would make every capture disagree with every other one.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
-use crate::display::Scale;
+use crate::display::{Brightness, Gamma, Scale};
+
+/// What the blit does to the picture on its way onto the surface, as the
+/// shader's uniform expects it.
+///
+/// `repr(C)` and sixteen bytes: a uniform binding has a minimum size, and the
+/// two floats alone are half of it.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+struct Grade {
+    brightness: f32,
+    exponent: f32,
+    padding: [f32; 2],
+}
+
+impl Grade {
+    fn new(brightness: Brightness, gamma: Gamma) -> Self {
+        Self {
+            brightness: brightness.factor(),
+            exponent: gamma.exponent(),
+            padding: [0.0; 2],
+        }
+    }
+}
 
 /// The offscreen target and the pipeline that puts it on screen.
 pub struct Framebuffer {
@@ -34,6 +72,11 @@ pub struct Framebuffer {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
+    /// The grade the shader reads, and the copy of it that says whether a write
+    /// is needed. Uploaded only when it changes: this is two floats a player
+    /// moves from a menu, not per-frame data.
+    grade: wgpu::Buffer,
+    graded: Grade,
     size: (u32, u32),
     format: wgpu::TextureFormat,
 }
@@ -72,6 +115,16 @@ impl Framebuffer {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
                     count: None,
                 },
             ],
@@ -119,7 +172,25 @@ impl Framebuffer {
             cache: None,
         });
 
-        let (texture, view, bind_group) = target(device, &layout, &sampler, format, size);
+        // Neutral to begin with, and moved by `set_grade` from the first frame
+        // if the settings say otherwise: an untouched picture is what a fresh
+        // install draws. Filled at creation rather than through the queue,
+        // which keeps building a framebuffer a device-only operation.
+        let graded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL);
+        let grade = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("upscale grade"),
+            size: std::mem::size_of::<Grade>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: true,
+        });
+        grade
+            .slice(..)
+            .get_mapped_range_mut()
+            .context("mapping the grade buffer")?
+            .copy_from_slice(bytemuck::bytes_of(&graded));
+        grade.unmap();
+
+        let (texture, view, bind_group) = target(device, &layout, &sampler, &grade, format, size);
         Ok(Self {
             pipeline,
             layout,
@@ -127,9 +198,25 @@ impl Framebuffer {
             texture,
             view,
             bind_group,
+            grade,
+            graded,
             size,
             format,
         })
+    }
+
+    /// Makes sure the shader is grading with `brightness` and `gamma`.
+    ///
+    /// Written only when it changes, which is when a player moves one of two
+    /// menu rows. Cheap enough to call every frame, which is what the caller
+    /// does - it has no other way to know the settings moved.
+    pub fn set_grade(&mut self, queue: &wgpu::Queue, brightness: Brightness, gamma: Gamma) {
+        let wanted = Grade::new(brightness, gamma);
+        if wanted == self.graded {
+            return;
+        }
+        queue.write_buffer(&self.grade, 0, bytemuck::bytes_of(&wanted));
+        self.graded = wanted;
     }
 
     /// Makes sure the target is `size`, rebuilding it if it is not.
@@ -143,8 +230,14 @@ impl Framebuffer {
         if size == self.size {
             return false;
         }
-        let (texture, view, bind_group) =
-            target(device, &self.layout, &self.sampler, self.format, size);
+        let (texture, view, bind_group) = target(
+            device,
+            &self.layout,
+            &self.sampler,
+            &self.grade,
+            self.format,
+            size,
+        );
         self.texture = texture;
         self.view = view;
         self.bind_group = bind_group;
@@ -202,6 +295,7 @@ fn target(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     sampler: &wgpu::Sampler,
+    grade: &wgpu::Buffer,
     format: wgpu::TextureFormat,
     size: (u32, u32),
 ) -> (wgpu::Texture, wgpu::TextureView, wgpu::BindGroup) {
@@ -231,6 +325,10 @@ fn target(
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: grade.as_entire_binding(),
             },
         ],
     });
@@ -276,6 +374,161 @@ mod tests {
     use super::*;
 
     const LIMIT: u32 = 8192;
+
+    /// Runs one grade through the real pipeline and reads back the pixel.
+    ///
+    /// `Rgba8Unorm` and not the surface's sRGB format, so the arithmetic is
+    /// exact rather than encoded on the way out: this is asserting what the
+    /// shader *did*, and a gamma encode on top of it would put every expected
+    /// value behind a second curve.
+    ///
+    /// Returns `None` on a machine with no adapter, which is what CI's runners
+    /// are - so the caller skips rather than fails there.
+    fn graded(input: [f32; 4], brightness: Brightness, gamma: Gamma) -> Option<[u8; 4]> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("upscale grade test"),
+            ..Default::default()
+        }))
+        .ok()?;
+
+        let format = wgpu::TextureFormat::Rgba8Unorm;
+        let mut framebuffer = Framebuffer::new(&device, format, (1, 1)).expect("the pipeline");
+        framebuffer.set_grade(&queue, brightness, gamma);
+
+        let surface = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("grade readback"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let surface_view = surface.create_view(&Default::default());
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("grade readback"),
+            size: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = device.create_command_encoder(&Default::default());
+        // The offscreen target is filled by clearing it, which is the cheapest
+        // way to put a known colour under the blit.
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("grade input"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: framebuffer.view(),
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: f64::from(input[0]),
+                        g: f64::from(input[1]),
+                        b: f64::from(input[2]),
+                        a: f64::from(input[3]),
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        framebuffer.present(&mut encoder, &surface_view, (0.0, 0.0, 1.0, 1.0));
+        encoder.copy_texture_to_buffer(
+            surface.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
+                    rows_per_image: Some(1),
+                },
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.submit(Some(encoder.finish()));
+
+        let slice = readback.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| {});
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("the GPU");
+        let mapped = slice.get_mapped_range().expect("the readback");
+        Some([mapped[0], mapped[1], mapped[2], mapped[3]])
+    }
+
+    /// The one thing no other check in this repository can see.
+    ///
+    /// `--screenshot` deliberately bypasses this pass, so brightness and gamma
+    /// have no picture anywhere to be compared against, and at their defaults
+    /// both are 1.0 - a swapped pair or a misbound uniform is invisible in
+    /// every other test here and would ship looking fine. So this one renders
+    /// through the real pipeline and reads the pixel back.
+    #[test]
+    fn the_grade_moves_the_picture_in_the_direction_the_setting_names() {
+        // A midtone: black and white are the two values gamma cannot move, so
+        // either would pass a broken exponent.
+        const INPUT: [f32; 4] = [0.25, 0.25, 0.25, 1.0];
+        let neutral = Brightness::NEUTRAL;
+        let plain = Gamma::NEUTRAL;
+
+        let Some(untouched) = graded(INPUT, neutral, plain) else {
+            eprintln!("no GPU adapter; skipping");
+            return;
+        };
+        // 0.25 in, 0.25 out - the neutral grade is not a grade.
+        assert!(
+            untouched[0].abs_diff(64) <= 1,
+            "neutral changed it: {untouched:?}"
+        );
+        assert_eq!(untouched[3], 255, "alpha must come through untouched");
+
+        let up = graded(INPUT, neutral, "140".parse().expect("parse")).expect("an adapter");
+        let down = graded(INPUT, neutral, "60".parse().expect("parse")).expect("an adapter");
+        assert!(up[0] > untouched[0], "gamma 140 has to brighten: {up:?}");
+        assert!(down[0] < untouched[0], "gamma 60 has to darken: {down:?}");
+
+        // Brightness on its own, at the neutral gamma, is exactly the
+        // multiply - which is also what proves the two are not swapped, since
+        // a gamma of 1.5 applied to 0.25 is nothing like 1.5 times it.
+        let brighter = graded(INPUT, "150".parse().expect("parse"), plain).expect("an adapter");
+        assert!(
+            brighter[0].abs_diff(96) <= 1,
+            "150 % of 0.25 is 0.375: {brighter:?}"
+        );
+        let darker = graded(INPUT, "50".parse().expect("parse"), plain).expect("an adapter");
+        assert!(darker[0].abs_diff(32) <= 1, "half of 0.25: {darker:?}");
+    }
+
+    /// The uniform has to be the size a uniform binding may be, and the
+    /// neutral grade has to be the one that changes nothing - `set_grade`
+    /// compares against it to decide whether to write at all, so a wrong
+    /// neutral would leave a fresh install grading its own picture.
+    #[test]
+    fn the_neutral_grade_changes_nothing_and_fills_a_uniform_binding() {
+        assert_eq!(std::mem::size_of::<Grade>(), 16);
+        let neutral = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL);
+        assert_eq!(neutral.brightness, 1.0);
+        assert_eq!(neutral.exponent, 1.0);
+        assert_eq!(neutral.padding, [0.0; 2]);
+        // And it is what `Default` gives, which is what an untouched settings
+        // file loads as.
+        assert_eq!(Grade::new(Brightness::default(), Gamma::default()), neutral);
+    }
 
     #[test]
     fn full_scale_is_the_rectangle_itself() {

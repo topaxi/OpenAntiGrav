@@ -1010,7 +1010,8 @@ impl Race {
         self.camera.view(target_of(self.ship()), &self.chase_params)
     }
 
-    /// The projection for a viewport of the given aspect ratio.
+    /// The projection for a viewport of the given aspect ratio, with the
+    /// player's field-of-view setting applied.
     ///
     /// **`<ExternalCameraFar fov>`'s unit is unrecovered.** It is read here as
     /// degrees, and `oag_render::camera::projection` names its parameter
@@ -1025,16 +1026,21 @@ impl Race {
     /// sides away; at the PSP's aspect and anything wider it is the authored value
     /// unchanged. That is a presentation choice and is documented as one.
     ///
+    /// `setting` is a **percentage of that authored value** and is applied
+    /// *before* the fit, so the two compose in the order a reader would expect:
+    /// the player widens the field the disc asked for, and the result is then
+    /// fitted to whatever shape the window is. At
+    /// [`Fov::AUTHORED`](crate::display::Fov::AUTHORED) - the default - nothing
+    /// is applied at all and this is the projection every capture under
+    /// `data/traces/` was taken with.
+    ///
     /// `near` is 1.0 rather than something tiny: track half-widths are tens of
     /// units, so a near plane at 0.01 spends the depth range on nothing and
     /// z-fights in the distance.
     #[must_use]
-    pub fn projection(&self, aspect: f32, far: f32) -> Mat4 {
-        let fov = oag_render::camera::fit_vertical_fov(
-            self.chase_params.fov.to_radians(),
-            AUTHORED_ASPECT,
-            aspect,
-        );
+    pub fn projection(&self, aspect: f32, far: f32, setting: crate::display::Fov) -> Mat4 {
+        let authored = setting.apply(self.chase_params.fov.to_radians());
+        let fov = oag_render::camera::fit_vertical_fov(authored, AUTHORED_ASPECT, aspect);
         oag_render::camera::projection(fov, aspect, 1.0, far)
     }
 
@@ -1298,9 +1304,10 @@ impl Scene {
         view: &wgpu::TextureView,
         race: &Race,
         viewport: (f32, f32, f32, f32),
+        fov: crate::display::Fov,
     ) {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
-        let view_projection = race.projection(aspect, self.far) * race.view();
+        let view_projection = race.projection(aspect, self.far, fov) * race.view();
         self.track.write(queue, view_projection, Mat4::IDENTITY);
         self.ship
             .write(queue, view_projection, race.ship_model_matrix());
@@ -1387,6 +1394,9 @@ pub struct CaptureOptions {
     pub aspect: crate::display::Aspect,
     /// Anisotropic filtering level for the track and ship textures.
     pub anisotropy: Anisotropy,
+    /// The field-of-view setting, for the same reason `aspect` is here: a
+    /// capture should frame what a player at these settings would have seen.
+    pub fov: crate::display::Fov,
 }
 
 /// Runs a race headless and writes one frame to a PNG.
@@ -1489,6 +1499,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         &view,
         &race,
         crate::display::viewport((width, height), options.aspect),
+        options.fov,
     );
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),
@@ -1726,6 +1737,46 @@ mod tests {
                 spring_vert: 2.0,
             },
         }
+    }
+
+    /// The field-of-view setting has to reach the matrix, and its default has
+    /// to leave that matrix exactly as it was before the setting existed - the
+    /// ground-truth captures under `data/traces/` were taken against it.
+    #[test]
+    fn the_field_of_view_setting_widens_the_projection_and_defaults_to_the_authored_one() {
+        use crate::display::Fov;
+
+        let race = Race::start(setup(Handling::default()));
+        let aspect = AUTHORED_ASPECT;
+        let authored = race.projection(aspect, 1000.0, Fov::AUTHORED);
+
+        // The projection's first column scales x by `1 / (tan(fov/2) * aspect)`,
+        // so a wider field is a *smaller* number there. Read off the matrix
+        // rather than recomputed, which would only restate `Fov::apply`.
+        let x_scale = |m: Mat4| m.col(0).x;
+        let wide: Fov = "150".parse().expect("parse");
+        let narrow: Fov = "75".parse().expect("parse");
+        assert!(
+            x_scale(race.projection(aspect, 1000.0, wide)) < x_scale(authored),
+            "150 % has to show more"
+        );
+        assert!(
+            x_scale(race.projection(aspect, 1000.0, narrow)) > x_scale(authored),
+            "75 % has to show less"
+        );
+
+        // And the untouched setting is the matrix the fit alone produces.
+        let unchanged = oag_render::camera::projection(
+            oag_render::camera::fit_vertical_fov(
+                race.chase_params.fov.to_radians(),
+                AUTHORED_ASPECT,
+                aspect,
+            ),
+            aspect,
+            1.0,
+            1000.0,
+        );
+        assert_eq!(authored, unchanged);
     }
 
     #[test]

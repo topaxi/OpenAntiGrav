@@ -103,6 +103,17 @@ label = "BACK"
 id = "options"
 title = "OPTIONS"
 
+# Two pages and not one, and the line between them is whether the renderer
+# would notice. DISPLAY is the picture's container and how a finished frame
+# reaches a screen; GRAPHICS is how the picture is drawn. Turning vsync off
+# changes nothing about the frame, only about when it is shown; halving the
+# render scale changes the frame itself. The settings file is split the same
+# way, into `[display]` and `[graphics]` - see `crates/game/src/settings.rs`.
+[[page.entry]]
+kind = "submenu"
+label = "DISPLAY"
+target = "display"
+
 [[page.entry]]
 kind = "submenu"
 label = "GRAPHICS"
@@ -128,37 +139,38 @@ kind = "back"
 label = "BACK"
 
 [[page]]
-id = "graphics"
-title = "GRAPHICS"
+id = "display"
+title = "DISPLAY"
 
-# One entry, and it is a real one: it moves `graphics.anisotropy` in
-# `settings.toml` and the next race built uses it. More land here as the
-# renderer grows something to expose; a row that does nothing is worse than a
-# row that is missing.
+# The screens this machine has, read at runtime the way the tracks and the
+# languages are: a definition file cannot know them, and a compositor is free to
+# rename or unplug one between launches. `default` is always offered and always
+# first, because it is the way back from a screen that is no longer there. The
+# setting stores a **name**, not an index - see `crates/game/src/display.rs`.
+#
+# Borderless carries the choice in the fullscreen request; windowed has nothing
+# to carry it, so the window is centred on the chosen screen instead. Either
+# way the compositor may refuse, and a tiling one will.
+[[page.entry]]
+kind = "choice"
+label = "MONITOR"
+setting = "display.monitor"
+values_from = "monitors"
+
 # Window mode and size apply the moment they change. A compositor is free to
 # ignore a size request, and a tiling one will - nothing depends on it being
 # honoured.
 [[page.entry]]
 kind = "choice"
 label = "WINDOW MODE"
-setting = "graphics.window_mode"
+setting = "display.window_mode"
 values = ["windowed", "borderless"]
 
 [[page.entry]]
 kind = "choice"
 label = "WINDOW SIZE"
-setting = "graphics.window_size"
+setting = "display.window_size"
 values = ["960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
-
-# What percentage of the displayed size the game is actually rendered at.
-# Below 100 is the usual internal-resolution knob, above it is supersampling,
-# and it is measured against the aspect rectangle so it means the same thing at
-# every aspect. Applies from the next frame.
-[[page.entry]]
-kind = "choice"
-label = "RENDER SCALE"
-setting = "graphics.render_scale"
-values = ["50", "75", "100", "125", "150", "200"]
 
 # The shape the game is drawn at inside whatever window it got, with the
 # leftover left black. `psp` is 480x272, the shape every camera value on the
@@ -168,16 +180,8 @@ values = ["50", "75", "100", "125", "150", "200"]
 [[page.entry]]
 kind = "choice"
 label = "ASPECT RATIO"
-setting = "graphics.aspect"
+setting = "display.aspect"
 values = ["psp", "ps2", "free"]
-
-# Applies to the next race built rather than immediately: the sampler is made
-# when a race's pipelines are.
-[[page.entry]]
-kind = "choice"
-label = "ANISOTROPIC FILTERING"
-setting = "graphics.anisotropy"
-values = ["off", "2x", "4x", "8x", "16x"]
 
 # `off` never waits and tears; `on` is classic vsync, which never tears and
 # halves the rate when a frame misses a refresh; `smooth` is that miss handled
@@ -190,7 +194,7 @@ values = ["off", "2x", "4x", "8x", "16x"]
 [[page.entry]]
 kind = "choice"
 label = "VSYNC"
-setting = "graphics.vsync"
+setting = "display.vsync"
 values = ["off", "on", "smooth"]
 
 # **Only `on` disables the limiter**, which is why the condition names a value
@@ -202,8 +206,8 @@ values = ["off", "on", "smooth"]
 [[page.entry]]
 kind = "choice"
 label = "FRAME LIMIT"
-setting = "graphics.frame_limit"
-disabled_by = { setting = "graphics.vsync", value = "on" }
+setting = "display.frame_limit"
+disabled_by = { setting = "display.vsync", value = "on" }
 values = [
     "unlimited",
     "30",
@@ -219,9 +223,69 @@ values = [
     "1000",
 ]
 
+# Both are applied by the blit that puts the finished frame on the surface, so
+# both cover every stage and both show on this page as they are changed - which
+# is the only way to calibrate a picture. Percentages: 100 leaves the frame
+# alone, and both lists offer it so there is a way back.
+#
+# Brightness multiplies; gamma bends the midtones without moving black or
+# white, which is the one that makes a dark corner of a track visible without
+# washing out the rest. See `crates/game/src/upscale.rs`.
+[[page.entry]]
+kind = "choice"
+label = "BRIGHTNESS"
+setting = "display.brightness"
+values = ["50", "75", "90", "100", "110", "125", "150"]
+
+[[page.entry]]
+kind = "choice"
+label = "GAMMA"
+setting = "display.gamma"
+values = ["60", "80", "90", "100", "110", "120", "140"]
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+
+[[page]]
+id = "graphics"
+title = "GRAPHICS"
+
+# What percentage of the displayed size the game is actually rendered at.
+# Below 100 is the usual internal-resolution knob, above it is supersampling,
+# and it is measured against the aspect rectangle so it means the same thing at
+# every aspect. Applies from the next frame.
+[[page.entry]]
+kind = "choice"
+label = "RENDER SCALE"
+setting = "graphics.render_scale"
+values = ["50", "75", "100", "125", "150", "200"]
+
+# Applies to the next race built rather than immediately: the sampler is made
+# when a race's pipelines are.
+[[page.entry]]
+kind = "choice"
+label = "ANISOTROPIC FILTERING"
+setting = "graphics.anisotropy"
+values = ["off", "2x", "4x", "8x", "16x"]
+
+# A **percentage of the field of view the disc's own data authored**, not an
+# angle. `<ExternalCameraFar fov>` comes off the disc and its unit is
+# unrecovered, so a row that let a player type `90` would be quietly asserting a
+# unit this project has not established; a multiplier says what it does without
+# claiming to know what the number underneath means. 100 is the authored value,
+# and it is the default. Applies from the next frame a race draws.
+[[page.entry]]
+kind = "choice"
+label = "FIELD OF VIEW"
+setting = "graphics.fov"
+values = ["75", "90", "100", "110", "125", "150", "175"]
+
 # `fps` is one line of numbers; `pacing` adds the graph, which is the one that
 # shows uneven frames - an average frame rate is exactly what hides them. Drawn
-# over every stage from the next frame. See `crates/game/src/perf.rs`.
+# over every stage from the next frame, into the offscreen target and so at the
+# render scale - which is why it is on this page and not DISPLAY. See
+# `crates/game/src/perf.rs`.
 [[page.entry]]
 kind = "choice"
 label = "PERFORMANCE OVERLAY"

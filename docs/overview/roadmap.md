@@ -386,7 +386,7 @@ unread code and still blocks this milestone. See
 
 - [~] Menus and the front end. **The shell exists and navigates**: our own
       definition format in `assets/ui/menu.toml`, a page tree with working
-      Race, Options, Graphics and Controls pages, reached from `Launch Game`
+      Race, Options, Display, Graphics and Controls pages, reached from `Launch Game`
       and able to start a race. Every row is live - speed class, team and
       circuit are persisted and applied, anisotropic filtering is written to
       `settings.toml` on the keypress, and the chosen language skips the picker
@@ -396,13 +396,21 @@ unread code and still blocks this milestone. See
       end and `--race` quit on it. See [menus](../architecture/menus.md).
       Style, animation and the disc's own artwork are all still absent, and
       **rebinding** is the one row that displays without editing.
-- [~] Modern features. The display half is in: window mode (windowed or
-      borderless), window size, aspect ratio (`psp`, `ps2` or `free`) and a
+- [~] Modern features. The display half is in: **monitor selection** (by name,
+      never by index), window mode (windowed or borderless), window size,
+      aspect ratio (`psp`, `ps2` or `free`), **brightness and gamma**, and a
       **render scale** from 50 % to 200 %, the last of which is the
       internal-resolution knob below 100 and supersampling above it. Every
       stage draws into an offscreen target and one pass stretches it into the
-      aspect rectangle, which is also where the letterbox bars come from. See
-      [menus](../architecture/menus.md) and `oag_game::display`.
+      aspect rectangle, which is also where the letterbox bars and the
+      brightness/gamma grade come from - one pass, so every stage is covered
+      and a screenshot deliberately is not. A **field of view** row is in as a
+      percentage of the disc's authored value rather than an angle, because
+      `<ExternalCameraFar fov>`'s unit is unrecovered and a row in degrees
+      would assert one. The settings are split into `[display]` and
+      `[graphics]` to match the two menu pages, with an older `[graphics]`-only
+      file migrated on load. See [menus](../architecture/menus.md) and
+      `oag_game::display`.
       **Frame pacing is in too**: a three-way vsync (off, on, or `smooth` - the mailbox present mode, which is triple buffering done properly), an **unlocked or limited frame rate**
       (unlimited, or up to 1000), and a performance overlay that shows the rate,
       the mean, the 99th percentile and a per-frame graph - because an average

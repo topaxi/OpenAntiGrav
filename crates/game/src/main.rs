@@ -522,8 +522,9 @@ fn run_race(
                 held: button_mask(cli.hold.as_deref()),
                 size: parse_size(&cli.size)?,
                 log_every: cli.log_every,
-                aspect: settings.graphics.aspect,
+                aspect: settings.display.aspect,
                 anisotropy,
+                fov: settings.graphics.fov,
             },
         );
     }
@@ -578,14 +579,13 @@ impl App {
     /// `Ok(None)` means there was nothing to show, which only happens if the event
     /// loop resumes twice after the loaded state has been taken.
     fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Session>> {
-        let gpu = Gpu::new(event_loop, &self.settings.graphics)?;
-        let graphics = &self.settings.graphics;
+        let gpu = Gpu::new(event_loop, &self.settings.display)?;
 
         // Built before the stage, because a race's depth attachment has to match
         // this rather than the window.
         let target = upscale::target_size(
-            display::viewport(gpu.size(), graphics.aspect),
-            graphics.render_scale,
+            display::viewport(gpu.size(), self.settings.display.aspect),
+            self.settings.graphics.render_scale,
             gpu.device.limits().max_texture_dimension_2d,
         );
         let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.config.format, target)
@@ -728,17 +728,92 @@ impl ApplicationHandler for App {
     }
 }
 
-/// What winit is asked for, for a mode.
+/// What winit is asked for, for a mode and a chosen screen.
 ///
 /// `Borderless(None)` means "the monitor this window is on", which is what
 /// makes it unable to fail: exclusive fullscreen needs a `VideoMode` enumerated
 /// off a monitor and can be refused, and this build does not offer it. See
-/// [`display::WindowMode::ALL`].
-fn fullscreen(mode: display::WindowMode) -> Option<winit::window::Fullscreen> {
+/// [`display::WindowMode::ALL`]. Naming a monitor keeps that property - it is
+/// still borderless, just on a screen this build has already confirmed exists.
+fn fullscreen(
+    mode: display::WindowMode,
+    monitor: Option<winit::monitor::MonitorHandle>,
+) -> Option<winit::window::Fullscreen> {
     match mode {
         display::WindowMode::Windowed => None,
-        display::WindowMode::Borderless => Some(winit::window::Fullscreen::Borderless(None)),
+        display::WindowMode::Borderless => Some(winit::window::Fullscreen::Borderless(monitor)),
     }
+}
+
+/// What each monitor is called on the menu and in the settings file.
+///
+/// A screen the platform has no name for is numbered instead, so the list has
+/// no blank rows. That number is positional and a settings file holding one is
+/// therefore as fragile as an index would have been - which is why it is the
+/// fallback and not the scheme; see [`display::Monitor`].
+fn monitor_names(monitors: &[winit::monitor::MonitorHandle]) -> Vec<String> {
+    monitors
+        .iter()
+        .enumerate()
+        .map(|(index, monitor)| {
+            monitor
+                .name()
+                .unwrap_or_else(|| format!("screen {}", index + 1))
+        })
+        .collect()
+}
+
+/// The monitor a setting names, or `None` for "let the compositor decide".
+///
+/// A name this machine does not have is a note and the default, not an error:
+/// the ordinary way to get one is to unplug a screen, and refusing to open a
+/// window over it would be punishing a player for their own desk. The note
+/// lists what is there, because the next thing anyone wants is the spelling.
+fn choose_monitor(
+    monitors: Vec<winit::monitor::MonitorHandle>,
+    setting: &display::Monitor,
+) -> Option<winit::monitor::MonitorHandle> {
+    let names = monitor_names(&monitors);
+    if let Some(index) = setting.choose(&names) {
+        return monitors.into_iter().nth(index);
+    }
+    if let Some(wanted) = setting.name() {
+        eprintln!(
+            "no monitor named {wanted:?}; using the default (this machine has: {})",
+            names.join(", ")
+        );
+    }
+    None
+}
+
+/// Where a windowed window goes to sit on `monitor`.
+///
+/// The arithmetic is [`display::centred`], which is tested; this is the part
+/// that reads winit's own rectangle and cannot be. A monitor's scale factor is
+/// what turns the setting's logical size into the physical pixels the position
+/// is measured in - getting that wrong offsets the window by the difference on
+/// any screen that is not at 100 %.
+///
+/// **Centred on the window's inner extent and applied to its outer one**, so a
+/// decorated window sits high by about a title bar. Not corrected, because the
+/// correction is not knowable before the window exists and the frame size is
+/// the compositor's to decide anyway - this is a request it may refuse
+/// outright, and being a title bar off "centred" is the smallest of the ways
+/// that can go.
+fn centred_on(
+    monitor: &winit::monitor::MonitorHandle,
+    size: display::Size,
+) -> winit::dpi::PhysicalPosition<i32> {
+    let scale = monitor.scale_factor();
+    let physical = |value: u32| (f64::from(value) * scale).round().max(0.0) as u32;
+    let origin = monitor.position();
+    let area = monitor.size();
+    let (x, y) = display::centred(
+        (origin.x, origin.y),
+        (area.width, area.height),
+        (physical(size.width), physical(size.height)),
+    );
+    winit::dpi::PhysicalPosition::new(x, y)
 }
 
 /// What each vsync setting asks the surface for, best first.
@@ -781,7 +856,7 @@ struct Gpu {
 }
 
 impl Gpu {
-    fn new(event_loop: &ActiveEventLoop, graphics: &settings::Graphics) -> Result<Self> {
+    fn new(event_loop: &ActiveEventLoop, settings: &settings::Display) -> Result<Self> {
         // **A windowed window is fixed size, and that is a measurement.** Setting
         // the minimum and maximum to the same thing is the signal a tiling
         // compositor floats a window on rather than squeezing it into a column -
@@ -792,13 +867,21 @@ impl Gpu {
         // The renderer does not depend on either: `Race::projection` fits the
         // field of view to whatever viewport it is given, and `display::viewport`
         // shapes that viewport, so any window still frames the track correctly.
-        let size = graphics.window_size;
-        let borderless = graphics.window_mode == display::WindowMode::Borderless;
-        let attributes = Window::default_attributes()
+        let size = settings.window_size;
+        let borderless = settings.window_mode == display::WindowMode::Borderless;
+        let monitor = choose_monitor(event_loop.available_monitors().collect(), &settings.monitor);
+        let mut attributes = Window::default_attributes()
             .with_title(TITLE)
             .with_inner_size(winit::dpi::LogicalSize::new(size.width, size.height))
             .with_resizable(borderless)
-            .with_fullscreen(fullscreen(graphics.window_mode));
+            .with_fullscreen(fullscreen(settings.window_mode, monitor.clone()));
+        // Borderless carries the choice in the fullscreen request; windowed has
+        // nothing to carry it, so the window is placed on the screen instead.
+        // Asked for at creation rather than moved afterwards, which would open
+        // it on one monitor and jump it to another in view of the player.
+        if let (false, Some(monitor)) = (borderless, &monitor) {
+            attributes = attributes.with_position(centred_on(monitor, size));
+        }
         let window = Arc::new(
             event_loop
                 .create_window(attributes)
@@ -837,7 +920,7 @@ impl Gpu {
             config,
             offered,
         };
-        gpu.config.present_mode = gpu.present_mode(graphics.vsync);
+        gpu.config.present_mode = gpu.present_mode(settings.vsync);
         gpu.surface.configure(&gpu.device, &gpu.config);
         Ok(gpu)
     }
@@ -1030,9 +1113,10 @@ impl RaceStage {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
+        fov: display::Fov,
     ) {
         self.scene
-            .render(&gpu.queue, encoder, view, &self.race, viewport);
+            .render(&gpu.queue, encoder, view, &self.race, viewport, fov);
     }
 }
 
@@ -1147,10 +1231,10 @@ impl Session {
     /// free to run ahead, and under `smooth` the limit is the only thing
     /// stopping the GPU rendering frames that are then discarded.
     fn frame_period(&self) -> Option<std::time::Duration> {
-        if self.settings.graphics.vsync.paces_itself() {
+        if self.settings.display.vsync.paces_itself() {
             return None;
         }
-        self.settings.graphics.frame_limit.period()
+        self.settings.display.frame_limit.period()
     }
 
     /// The earliest the next frame may start, or `None` for as soon as
@@ -1175,7 +1259,7 @@ impl Session {
     /// needs a refresh rate off the monitor, which is work of its own.
     fn presentation_hz(&self) -> u32 {
         self.frame_period()
-            .and_then(|_| self.settings.graphics.frame_limit.hz())
+            .and_then(|_| self.settings.display.frame_limit.hz())
             .unwrap_or_else(|| self.clock.rate().hz())
     }
 
@@ -1325,11 +1409,10 @@ impl Session {
         // Where the game goes on the surface, and how many pixels it is drawn
         // with. One rectangle for every stage, so a change moves the whole game
         // rather than only what happens to be on screen.
-        let graphics = &self.settings.graphics;
-        let rect = display::viewport(self.gpu.size(), graphics.aspect);
+        let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
         let wanted = upscale::target_size(
             rect,
-            graphics.render_scale,
+            self.settings.graphics.render_scale,
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         if self.framebuffer.resize(&self.gpu.device, wanted) {
@@ -1342,6 +1425,14 @@ impl Session {
             }
         }
 
+        // Cheap when nothing moved, which is almost every frame: the blit reads
+        // this and there is no event that says a menu row changed it.
+        self.framebuffer.set_grade(
+            &self.gpu.queue,
+            self.settings.display.brightness,
+            self.settings.display.gamma,
+        );
+
         // Each stage fills the target, and the target *is* the game's
         // rectangle: the bars are the surface the blit does not cover.
         let size = self.framebuffer.size();
@@ -1350,7 +1441,13 @@ impl Session {
         match &mut self.stage {
             Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, target, inside)?,
             Stage::Menu(stage) => stage.render(&self.gpu, &mut encoder, target, inside),
-            Stage::Race(stage) => stage.render(&self.gpu, &mut encoder, target, inside),
+            Stage::Race(stage) => stage.render(
+                &self.gpu,
+                &mut encoder,
+                target,
+                inside,
+                self.settings.graphics.fov,
+            ),
         }
 
         // Over the stage and inside the offscreen target, so the overlay is
@@ -1402,6 +1499,16 @@ impl Session {
             .collect();
         model.supply(menu::ValueSource::Tracks, &tracks);
         model.supply(menu::ValueSource::Languages, &shell.languages);
+        // Enumerated every time the menus open rather than kept from startup,
+        // because a screen can be plugged in while the game is running and the
+        // row should show it without a restart.
+        let monitors: Vec<menu::Choice> = display::Monitor::offered(&monitor_names(
+            &self.gpu.window.available_monitors().collect::<Vec<_>>(),
+        ))
+        .into_iter()
+        .map(menu::Choice::plain)
+        .collect();
+        model.supply(menu::ValueSource::Monitors, &monitors);
         self.seed_menu(&mut model);
 
         let renderer = Renderer::new(
@@ -1522,29 +1629,44 @@ impl Session {
         self.quit = true;
     }
 
-    /// Puts the window into the mode and size the settings now hold.
+    /// Puts the window onto the monitor, and into the mode and size, that the
+    /// settings now hold.
     ///
     /// Immediately, unlike anisotropy and the language: a player who picks
     /// borderless and sees nothing happen will assume it is broken. The resize
     /// event the compositor sends back is what reconfigures the surface, so
     /// nothing here touches it.
     ///
-    /// The size is asked for only in windowed mode, and the request may be
-    /// refused - a compositor is allowed to ignore it, and a tiling one will.
-    /// Nothing depends on it being honoured.
+    /// The size and the position are asked for only in windowed mode, and
+    /// **every request here may be refused** - a compositor is allowed to
+    /// ignore all three, and a tiling one will ignore at least two. Nothing
+    /// depends on any of them being honoured.
     fn apply_window(&mut self) {
-        let graphics = &self.settings.graphics;
+        let wanted = self.settings.display.clone();
+        let monitor = choose_monitor(
+            self.gpu.window.available_monitors().collect(),
+            &wanted.monitor,
+        );
         self.gpu
             .window
-            .set_fullscreen(fullscreen(graphics.window_mode));
-        let windowed = graphics.window_mode == display::WindowMode::Windowed;
+            .set_fullscreen(fullscreen(wanted.window_mode, monitor.clone()));
+        let windowed = wanted.window_mode == display::WindowMode::Windowed;
         self.gpu.window.set_resizable(!windowed);
         if windowed {
-            let size = graphics.window_size;
+            let size = wanted.window_size;
             let _ = self
                 .gpu
                 .window
                 .request_inner_size(winit::dpi::LogicalSize::new(size.width, size.height));
+            // Moved before it is resized as far as the compositor is concerned,
+            // both being requests it may reorder or drop; the position is
+            // computed from the size the settings hold rather than the one the
+            // window currently has, so the two do not have to agree yet.
+            if let Some(monitor) = &monitor {
+                self.gpu
+                    .window
+                    .set_outer_position(centred_on(monitor, size));
+            }
         }
     }
 
@@ -1556,30 +1678,56 @@ impl Session {
     fn apply_setting(&mut self, setting: &str, value: &menu::Value) {
         let text = value.to_string();
         match setting {
-            "graphics.aspect" => match text.parse::<display::Aspect>() {
+            // `display.monitor` never fails to parse - a monitor name is
+            // whatever the platform says it is - so a name this machine does
+            // not have is reported by `choose_monitor` when the window is
+            // moved, not here. See `display::Monitor`.
+            "display.monitor" => {
+                self.settings.display.monitor = display::Monitor::from(text);
+                self.apply_window();
+            }
+            "display.window_mode" => match text.parse::<display::WindowMode>() {
+                Ok(mode) => {
+                    self.settings.display.window_mode = mode;
+                    self.apply_window();
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "display.window_size" => match text.parse::<display::Size>() {
+                Ok(size) => {
+                    self.settings.display.window_size = size;
+                    self.apply_window();
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "display.aspect" => match text.parse::<display::Aspect>() {
                 // Applied by the next frame, because every stage takes its
                 // viewport from this on the way into its pass.
-                Ok(aspect) => self.settings.graphics.aspect = aspect,
+                Ok(aspect) => self.settings.display.aspect = aspect,
                 Err(e) => {
                     eprintln!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
-            "graphics.window_mode" => match text.parse::<display::WindowMode>() {
-                Ok(mode) => {
-                    self.settings.graphics.window_mode = mode;
-                    self.apply_window();
-                }
+            // Both applied by the next frame: the blit pass reads them on its
+            // way onto the surface, so a change shows on whatever is on screen
+            // - including the menu the player is standing on, which is the
+            // point of putting them there rather than behind a race.
+            "display.brightness" => match text.parse::<display::Brightness>() {
+                Ok(brightness) => self.settings.display.brightness = brightness,
                 Err(e) => {
                     eprintln!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
-            "graphics.window_size" => match text.parse::<display::Size>() {
-                Ok(size) => {
-                    self.settings.graphics.window_size = size;
-                    self.apply_window();
-                }
+            "display.gamma" => match text.parse::<display::Gamma>() {
+                Ok(gamma) => self.settings.display.gamma = gamma,
                 Err(e) => {
                     eprintln!("ignoring {setting} = {text:?}: {e}");
                     return;
@@ -1594,6 +1742,16 @@ impl Session {
                     return;
                 }
             },
+            "graphics.fov" => match text.parse::<display::Fov>() {
+                // Applied by the next frame the race draws, which builds its
+                // projection from this every time. Nothing else uses it: the
+                // front end and the menus are drawn flat.
+                Ok(fov) => self.settings.graphics.fov = fov,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.perf_overlay" => match text.parse::<perf::Overlay>() {
                 // Applied by the next frame, which draws it or does not.
                 Ok(mode) => self.settings.graphics.perf_overlay = mode,
@@ -1602,9 +1760,9 @@ impl Session {
                     return;
                 }
             },
-            "graphics.vsync" => match text.parse::<perf::Vsync>() {
+            "display.vsync" => match text.parse::<perf::Vsync>() {
                 Ok(vsync) => {
-                    self.settings.graphics.vsync = vsync;
+                    self.settings.display.vsync = vsync;
                     // Applied immediately, by reconfiguring the surface. A
                     // player who turns vsync off and sees nothing change will
                     // assume it is broken, and the frame limiter that comes
@@ -1619,9 +1777,9 @@ impl Session {
                     return;
                 }
             },
-            "graphics.frame_limit" => match text.parse::<perf::FrameLimit>() {
+            "display.frame_limit" => match text.parse::<perf::FrameLimit>() {
                 // Applied by the next `about_to_wait`, which is what waits.
-                Ok(limit) => self.settings.graphics.frame_limit = limit,
+                Ok(limit) => self.settings.display.frame_limit = limit,
                 Err(e) => {
                     eprintln!("ignoring {setting} = {text:?}: {e}");
                     return;
