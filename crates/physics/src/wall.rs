@@ -73,12 +73,6 @@
 //!
 //! # Known limits
 //!
-//! - **Two-sided normals.** [`facing`] flips a triangle normal that points along
-//!   the probe. The original does not flip: `Collision_BoxAgainstMesh` *rejects*
-//!   the sample point when `dot(centre - sample, n) <= 0`, so a wall only
-//!   collides from its front face. Kept as it was, because the collision debug
-//!   view shades two-sided for a reason and turning walls single-sided is a
-//!   separate experiment with its own risk.
 //! - **The contact set is built probe-major, the original's is
 //!   triangle-major.** `Collision_BoxAgainstMesh` loops candidate triangles on
 //!   the outside and the ten sample points on the inside; this module does the
@@ -102,12 +96,21 @@
 //!   after the move and has already applied an impulse for the same crossing
 //!   that pass 5's contacts would.
 //!
-//! Two limits left this list rather than being written off. **"At most one
-//! contact per sample point"** and **"a nearer non-wall hit hides a wall behind
-//! it"** were the same missing capability - a nearest-hit query - and
-//! [`Raycaster::raycast_all`] closes both. Neither moved the whole-lap scenario
-//! by a single digit, which is worth knowing: they were real divergences from
-//! the original that this track's geometry never exercises.
+//! Three limits left this list rather than being written off, and what each cost
+//! on the whole-lap scenario is recorded because a fidelity fix that changes
+//! nothing is worth as much to know about as one that does:
+//!
+//! - **"At most one contact per sample point"** and **"a nearer non-wall hit
+//!   hides a wall behind it"** were the same missing capability - a nearest-hit
+//!   query - and [`Raycaster::raycast_all`] closes both. **Neither moved the lap
+//!   by a single digit.** They were real divergences from the original that this
+//!   track's geometry never exercises.
+//! - **"Two-sided normals"**: [`hull_contacts`] now *rejects* a sample point
+//!   whose triangle faces away, exactly as `Collision_BoxAgainstMesh` does,
+//!   instead of flipping the normal. That one moved the lap, barely - 617.5
+//!   units travelled to 618.6 - which is the size the data predicts: 99.6 % of
+//!   `16_Track`'s wall triangles already face the circuit, so only the remaining
+//!   0.4 % can behave differently.
 
 use oag_core::math::Vec3;
 
@@ -804,7 +807,29 @@ fn hull_contacts<R: Raycaster + ?Sized>(
             if !responds(hit.surface) {
                 continue;
             }
-            let normal = facing(hit.normal, direction);
+            // **Single-sided, by rejection rather than by flipping.**
+            // `Collision_BoxAgainstMesh` (`0x08815cd4`) skips a sample point
+            // unless `dot(boxCentre - s, n) > 0`, and passes the raw winding
+            // normal on to `Collision_AddContact` - there is no flip anywhere in
+            // the original. `boxCentre - s` is `-reach * direction`, so the gate
+            // is exactly `dot(direction, n) < 0`.
+            //
+            // Because it is a rejection, every accepted normal already points
+            // back at the ship, which is what makes [`facing`] unnecessary here
+            // rather than merely unused: the escape `normal * depth` and the
+            // depth's own sign both come out right without it.
+            //
+            // This is only faithful if the shipped walls actually face the
+            // circuit, which is a fact about the data and was measured rather
+            // than assumed: **2,076 of 2,084 wall triangles on `16_Track`
+            // (99.6 %)** are wound toward the nearest point of the track's own
+            // spline. See
+            // `crates/game/tests/race_ground_truth.rs`'s
+            // `the_track_s_walls_are_wound_toward_the_circuit`.
+            let normal = hit.normal;
+            if normal.dot(direction) >= 0.0 {
+                continue;
+            }
             // The original's depth is the *perpendicular* distance of the sample
             // point behind the triangle plane, `-dot(n, sample - v0)`, not the
             // shortfall along the probe. The two differ by the cosine between the
@@ -848,9 +873,17 @@ fn hull_contacts<R: Raycaster + ?Sized>(
 
 /// A normal flipped to oppose `direction`, and normalised.
 ///
-/// Collision winding is not guaranteed to face the ship - the same fact the
-/// collision debug view shades two-sided for - so the raw triangle normal is only
-/// an axis, not an orientation.
+/// **The hull contact path no longer uses this**, and the reason is worth
+/// keeping: [`hull_contacts`] reproduces `Collision_BoxAgainstMesh`'s
+/// `dot(boxCentre - s, n) > 0` *rejection*, and because a rejection only ever
+/// accepts a normal that already opposes the probe, flipping afterwards would be
+/// a no-op on everything it accepts and a fabrication on everything it does not.
+///
+/// Two callers remain, both querying something other than a hull-versus-mesh
+/// contact: [`swept_contact`] and [`crate::reset`]. The original's swept pass is
+/// `Collision_RaycastWorld`, a different query with no evidence of a side gate,
+/// and reset volumes are trigger geometry rather than surfaces - so for both, a
+/// triangle's winding is an axis and not an orientation.
 pub(crate) fn facing(normal: Vec3, direction: Vec3) -> Vec3 {
     let n = normal.normalize_or_zero();
     if n.dot(direction) > 0.0 { -n } else { n }
@@ -876,7 +909,14 @@ mod tests {
         }
     }
 
-    /// A large quad in the plane `x = at`, facing along -x.
+    /// A large quad in the plane `x = at`, wound so its **raw** normal is `-x`.
+    ///
+    /// The winding is load-bearing now that contacts are single-sided:
+    /// `segment_triangle` takes `(b - a) x (c - a)`, and every ship in these
+    /// tests approaches from `x < at`, so the triangles must be indexed
+    /// `[0, 2, 1]` / `[0, 3, 2]` to face it. Indexed the other way the quad is a
+    /// back face and produces no contact at all - which is the behaviour the
+    /// original has and this fixture is not trying to test.
     fn wall(at: f32, surface: Surface) -> CollisionWorld {
         let mut world = CollisionWorld::new();
         world.push(TriangleSoup::new(
@@ -886,7 +926,7 @@ mod tests {
                 [at, 100.0, 100.0],
                 [at, -100.0, 100.0],
             ],
-            vec![[0, 1, 2], [0, 2, 3]],
+            vec![[0, 2, 1], [0, 3, 2]],
             Vec::new(),
             surface,
             0,
@@ -918,7 +958,7 @@ mod tests {
                 [at, 0.2, 0.5],
                 [at, -0.2, 0.5],
             ],
-            vec![[0, 1, 2], [0, 2, 3]],
+            vec![[0, 2, 1], [0, 3, 2]],
             Vec::new(),
             surface,
             0,
@@ -936,7 +976,7 @@ mod tests {
                 [at, 100.0, 100.0],
                 [at, -100.0, 100.0],
             ],
-            vec![[0, 1, 2], [0, 2, 3]],
+            vec![[0, 2, 1], [0, 3, 2]],
             Vec::new(),
             surface,
             collider,
@@ -1323,6 +1363,61 @@ mod tests {
             "{:?} should have lost more than the five-contact case's {five}",
             state.body.linear_velocity
         );
+    }
+
+    /// A wall wound away from the ship is a back face, and produces nothing.
+    ///
+    /// `Collision_BoxAgainstMesh` (`0x08815cd4`) skips a sample point unless
+    /// `dot(boxCentre - s, n) > 0`, with no flip anywhere - so a triangle whose
+    /// stored winding faces away from the box is simply not a contact. This
+    /// module used to flip instead, which made every wall two-sided.
+    ///
+    /// The pair is what makes the test worth having: the same geometry indexed
+    /// the other way round *must* respond, or the first half would pass because
+    /// nothing was in reach.
+    #[test]
+    fn a_wall_wound_away_from_the_ship_is_a_back_face() {
+        let front_facing = |wound_toward: bool| {
+            let mut world = CollisionWorld::new();
+            world.push(TriangleSoup::new(
+                vec![
+                    [1.6, -100.0, -100.0],
+                    [1.6, 100.0, -100.0],
+                    [1.6, 100.0, 100.0],
+                    [1.6, -100.0, 100.0],
+                ],
+                if wound_toward {
+                    vec![[0, 2, 1], [0, 3, 2]]
+                } else {
+                    vec![[0, 1, 2], [0, 2, 3]]
+                },
+                Vec::new(),
+                Surface::Wall,
+                0,
+            ));
+
+            let mut state = ship_at(1.0, 0.0);
+            state.body.linear_velocity = Vec3::new(0.0, 0.0, 40.0);
+            let response = resolve(
+                &mut state,
+                &handling(),
+                &Environment::default(),
+                &world,
+                Vec3::new(1.0, 0.0, 0.0),
+            );
+            (response.contacts, state.body.linear_velocity.z)
+        };
+
+        let (facing_contacts, facing_speed) = front_facing(true);
+        assert_eq!(facing_contacts, 5);
+        assert!(facing_speed < 40.0);
+
+        let (back_contacts, back_speed) = front_facing(false);
+        assert_eq!(
+            back_contacts, 0,
+            "a back face must not produce a contact at all"
+        );
+        assert_eq!(back_speed, 40.0, "and must not touch the body");
     }
 
     /// The hover spring owns floors. A lateral probe that fired on one would
