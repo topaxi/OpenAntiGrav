@@ -104,8 +104,10 @@ implementation would fail it.
 
 **Score the lap on the window where the capture is clean.** The 2026-07-29
 recapture is wall-free on only **32.7 %** of its ticks and first touches a wall at
-tick **171**, so a whole-run number is mostly a measurement of the original's own
-scrapes. Over ticks 0-170, the corrected replay against that capture:
+tick **171** - both now `oag-trace show`'s own numbers rather than an ad hoc
+count, see [`oag-trace.md`](docs/tools/oag-trace.md#show-and-the-cleanliness-report-in-it)
+- so a whole-run number is mostly a measurement of the original's own scrapes.
+Over ticks 0-170, the corrected replay against that capture:
 
 | Ticks 0-170 | `--script-lead 0` | `--script-lead 2` |
 | --- | ---: | ---: |

@@ -637,6 +637,26 @@ impl Trace {
             );
         }
         summary.angular_readings = self.angular_readings(&mut summary.angular_rms);
+
+        for frame in &self.frames {
+            let magnitude = frame.velocity.length();
+            let unmeasurable = magnitude < UNMEASURABLE_SPEED;
+            if unmeasurable {
+                summary.unmeasurable_ticks += 1;
+            }
+            if (frame.speed / magnitude - 1.0).abs() < CLEAN_TOLERANCE {
+                summary.clean_ticks += 1;
+            } else if summary.first_contact.is_none() && !unmeasurable {
+                // A tick below the floor cannot *date* a contact even though it
+                // still counts toward `clean_ticks` above: near zero speed the
+                // ratio is undefined at exactly zero velocity (NaN, which never
+                // compares clean) and unreliable just above it, so an early
+                // near-rest tick must not poison the first-contact date the way
+                // it is allowed to nudge the fraction. See `UNMEASURABLE_SPEED`.
+                summary.first_contact = Some(frame.tick as usize);
+            }
+        }
+
         summary
     }
 
@@ -687,6 +707,29 @@ impl Trace {
         Some(fits)
     }
 }
+
+/// How far `speed / |velocity|` may sit from `1.0` and still count as clean
+/// (free) flight.
+///
+/// `speed` and `|velocity|` agree to `1e-6` in free flight - the captures write
+/// seven significant digits - so this is a wide margin rather than a tight fit,
+/// matching the `1e-4` already used ad hoc in
+/// `crates/trace/tests/wall_contact_ground_truth.rs` before this existed.
+pub const CLEAN_TOLERANCE: f32 = 1e-4;
+
+/// Below this speed, `speed / |velocity|` stops measuring contact at all and
+/// starts measuring rounding.
+///
+/// The normal impulse dominates at low speed and restitution can push
+/// `|velocity|` above `speed` outright, which is what produced a `-380 %`
+/// "friction" reading on a craft wedged at 0.15 units/s on the lap capture -
+/// see `HANDOVER.md`. Split two ways in [`Summary`], deliberately: it does
+/// **not** change [`Summary::clean_ticks`], which counts every tick with no
+/// floor to match the fraction already on record, but it **does** stop a tick
+/// below it from being named by [`Summary::first_contact`] - at exactly zero
+/// velocity the ratio is `0/0` (`NaN`), and a fresh capture starting from a
+/// dead stop would otherwise report tick 0 as the first contact on every run.
+pub const UNMEASURABLE_SPEED: f32 = 1.0;
 
 /// How far `cross(row0, up)` may sit from `forward` and still count as a
 /// positively oriented basis.
@@ -842,6 +885,50 @@ pub struct Summary {
     pub stunned_ticks: Option<usize>,
     /// How many ticks had the second engine gate at `craft+0x2e0` above zero.
     pub timer_2e0_ticks: Option<usize>,
+    /// How many ticks pass the free-flight contact detector:
+    /// `speed / |velocity|` within [`CLEAN_TOLERANCE`] of `1.0`.
+    ///
+    /// Counted over **every** tick with no speed floor, matching how the
+    /// **32.7 %**/**171** figures in `HANDOVER.md` for the reference lap
+    /// capture were first read by hand - reproduced exactly
+    /// (`1029/3146`, first contact `171`) once this existed, which is what
+    /// pins the convention here rather than the floor-excluding one
+    /// [`Self::unmeasurable_ticks`] might suggest. The working rule this
+    /// exists to make mechanical: *"Check a capture is clean before fitting
+    /// anything to it"* - `speed` and `|velocity|` agree to `1e-6` in free
+    /// flight, so a mismatch is a free contact detector. Two reference
+    /// captures once stood as the M4 blocker for a session and a half because
+    /// nobody ran this check.
+    pub clean_ticks: usize,
+    /// The first tick that fails the clean test at or above
+    /// [`UNMEASURABLE_SPEED`], or `None` if every such tick passes.
+    ///
+    /// A tick below the floor is skipped when *searching* for this - it still
+    /// contributes to [`Self::clean_ticks`] above, which counts every tick
+    /// with no floor, but it cannot be the tick this field names. Two reasons:
+    /// at exactly zero velocity the ratio is `0/0` (`NaN`, which never compares
+    /// clean and would otherwise poison this field with tick 0 on any capture
+    /// that starts from a dead stop), and just above zero it is real but
+    /// unreliable in the same way `unmeasurable_ticks` describes. Verified
+    /// against both anchors this module reproduces: neither the lap capture's
+    /// **171** nor the standing start's **186** moves, because in both files
+    /// nothing below the floor precedes the real first contact.
+    pub first_contact: Option<usize>,
+    /// How many ticks sit below [`UNMEASURABLE_SPEED`].
+    ///
+    /// Excluded from being **named** by [`Self::first_contact`] (see its docs)
+    /// but **not excluded** from [`Self::clean_ticks`]'s count, which counts
+    /// every tick with no floor - folding the floor into that fraction would
+    /// produce a different number from the one already on record.
+    ///
+    /// Below a few units per second the ratio stops measuring contact at all:
+    /// the normal impulse dominates and restitution can push `|velocity|`
+    /// above `speed` outright, which is what produced a `-380 %` "friction"
+    /// reading on a craft wedged at 0.15 units/s on the lap capture. A high
+    /// count here alongside a low `clean_ticks` fraction is a hint to look at
+    /// `speed_min` before trusting the headline number, not a reason to
+    /// recompute it with a floor.
+    pub unmeasurable_ticks: usize,
 }
 
 impl Summary {
@@ -902,6 +989,18 @@ impl fmt::Display for Summary {
                 )?;
             }
         }
+
+        writeln!(
+            f,
+            "clean (speed / |velocity| ~= 1.0): {}/{} tick(s), first contact {} \
+             ({} tick(s) below {UNMEASURABLE_SPEED} unit/s: counted in the \
+             fraction, skipped when dating first contact - see the field docs)",
+            self.clean_ticks,
+            self.ticks,
+            self.first_contact
+                .map_or_else(|| "none".to_string(), |tick| tick.to_string()),
+            self.unmeasurable_ticks
+        )?;
 
         match self.stunned_ticks {
             None => write!(f, "stun timer: not in this capture"),
@@ -1365,6 +1464,102 @@ grounded,dt,tick
         assert_eq!(summary.stunned_ticks, Some(1));
         assert_eq!(summary.timer_2e0_ticks, Some(0));
         assert!(summary.to_string().contains("armed on 1/2"), "{summary}");
+    }
+
+    /// A synthetic contact tick and a synthetic unmeasurably-slow tick, checked
+    /// against the mechanical version of the `speed / |velocity|` check that
+    /// used to be computed ad hoc - see [`Summary::clean_ticks`], which this
+    /// pins by construction rather than by reproducing a real capture (that
+    /// reproduction lives in `HANDOVER.md`'s own numbers: 1029/3146 and first
+    /// contact 171 on the reference lap capture, 186/300 and first contact 186
+    /// on the standing start, both reproduced exactly once this existed).
+    #[test]
+    fn the_cleanliness_report_dates_the_first_contact_and_tallies_the_unmeasurable() {
+        let clean = Frame {
+            tick: 0,
+            velocity: Vec3::new(0.0, 0.0, 10.0),
+            speed: 10.0,
+            ..Frame::default()
+        };
+        let contact = Frame {
+            tick: 1,
+            velocity: Vec3::new(0.0, 0.0, 10.0),
+            speed: 8.0,
+            ..Frame::default()
+        };
+        // Below `UNMEASURABLE_SPEED`, and would also fail the raw ratio test -
+        // both counts see it, neither excludes it.
+        let unmeasurable = Frame {
+            tick: 2,
+            velocity: Vec3::new(0.0, 0.0, 0.5),
+            speed: 100.0,
+            ..Frame::default()
+        };
+        let trace = Trace {
+            frames: vec![clean, contact, unmeasurable],
+        };
+
+        let summary = trace.summary();
+        assert_eq!(summary.first_contact, Some(1), "{summary:?}");
+        assert_eq!(summary.clean_ticks, 1, "{summary:?}");
+        assert_eq!(summary.unmeasurable_ticks, 1, "{summary:?}");
+        assert!(
+            summary.to_string().contains("1/3 tick(s), first contact 1"),
+            "{summary}"
+        );
+    }
+
+    /// A trace with nothing under [`UNMEASURABLE_SPEED`] and nothing that ever
+    /// diverges is clean start to finish, with no contact to date.
+    #[test]
+    fn a_fully_clean_trace_reports_no_first_contact() {
+        let frame = Frame {
+            velocity: Vec3::new(0.0, 0.0, 10.0),
+            speed: 10.0,
+            ..Frame::default()
+        };
+        let trace = Trace {
+            frames: vec![frame, frame],
+        };
+
+        let summary = trace.summary();
+        assert_eq!(summary.first_contact, None, "{summary:?}");
+        assert_eq!(summary.clean_ticks, 2, "{summary:?}");
+        assert_eq!(summary.unmeasurable_ticks, 0, "{summary:?}");
+    }
+
+    /// A dead stop at tick 0 - `velocity == Vec3::ZERO`, so the ratio is `0/0`
+    /// (`NaN`, which never compares clean) - must not become `first_contact`.
+    /// This is exactly the shape a fresh capture's grid start takes, and is
+    /// why `first_contact` skips ticks below `UNMEASURABLE_SPEED` rather than
+    /// trusting whatever a near-zero-velocity ratio happens to read.
+    #[test]
+    fn a_dead_stop_at_the_start_does_not_poison_the_first_contact_date() {
+        let rest = Frame {
+            tick: 0,
+            velocity: Vec3::ZERO,
+            speed: 0.0,
+            ..Frame::default()
+        };
+        let clean = Frame {
+            tick: 1,
+            velocity: Vec3::new(0.0, 0.0, 10.0),
+            speed: 10.0,
+            ..Frame::default()
+        };
+        let contact = Frame {
+            tick: 2,
+            velocity: Vec3::new(0.0, 0.0, 10.0),
+            speed: 8.0,
+            ..Frame::default()
+        };
+        let trace = Trace {
+            frames: vec![rest, clean, contact],
+        };
+
+        let summary = trace.summary();
+        assert_eq!(summary.first_contact, Some(2), "{summary:?}");
+        assert_eq!(summary.unmeasurable_ticks, 1, "{summary:?}");
     }
 
     #[test]

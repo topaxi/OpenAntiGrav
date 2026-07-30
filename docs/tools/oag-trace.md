@@ -104,6 +104,53 @@ input path - are all on
 [the debugger page](../reverse-engineering/ppsspp-debugger.md). Read it before
 capturing.
 
+## `show`, and the cleanliness report in it
+
+```
+$ oag-trace show data/traces/talons-junction-time-trial-lap.csv
+3146 tick(s)
+dt: min 0.016060, mean 0.016683 (59.94 Hz), max 0.017426
+speed: 0.015 to 117.381
+travelled 1045.432 unit(s) along the path, 120.091 from start to finish
+cross(row0, up) = forward on 3146/3146 tick(s)
+angular velocity: 3146/3146 tick(s), rms 22.9576 rad/s
+  against the basis derivative, best first: negated-local 21.8858, ...
+clean (speed / |velocity| ~= 1.0): 1029/3146 tick(s), first contact 171 (435 tick(s) below 1 unit/s: counted in the fraction, skipped when dating first contact - see the field docs)
+stun timer: never armed; craft+0x2e0 never above zero
+```
+
+**"Check a capture is clean before fitting anything to it" used to be a working
+rule with no tool behind it**: `speed` and `|velocity|` agree to `1e-6` in free
+flight, so `speed / |velocity| == 1.0000` is a free contact detector, but the
+32.7 % and 67.3 % figures quoted for the reference lap capture in `HANDOVER.md`
+were computed ad hoc, once, off to the side. `Trace::summary`'s `clean_ticks` and
+`first_contact` (`crates/trace/src/trace.rs`) make it mechanical - every `show`
+now prints it - and reproduce both established figures exactly: **1029/3146,
+first contact 171** on the lap capture, **186/300, first contact 186** on the
+standing start, both matching the numbers already on record before this existed.
+
+**The fraction and the date use the floor differently, and that split is
+deliberate.** `clean_ticks` counts every tick with no speed floor, matching the
+32.7 % figure already on record - folding a floor into it would produce a
+*different* number from the one already written down. `first_contact` skips
+ticks below `UNMEASURABLE_SPEED` (1 unit/s) when **searching**, because at
+exactly zero velocity the ratio is `0/0` (`NaN`, which never compares clean) and
+just above zero it is real but unreliable - restitution can push `|velocity|`
+above `speed` outright, which is what produced a `-380 %` "friction" reading on
+a craft wedged at 0.15 units/s on the lap capture. Without the skip, any fresh
+capture starting from a dead stop - which is exactly what an autopilot run does -
+would report tick 0 as "first contact" regardless of what actually happened.
+Both established anchors were checked against this and neither moved: nothing
+below the floor precedes the real first contact in either file. A high
+`unmeasurable_ticks` count next to a low clean fraction is still worth a look at
+`speed_min` before trusting the headline number, just not a reason to recompute
+either figure with a floor.
+
+**What `first_contact` needs for the first-touched tick to mean anything**: a
+long clean *prefix*, not a clean whole capture. A capture that scrapes at tick
+900 is still useful for anything that only needs 900 clean ticks, even though
+its overall percentage looks bad.
+
 ## The run report
 
 `oag-trace drive` has no recording to diverge from, so what it prints is what the
