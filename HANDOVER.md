@@ -257,8 +257,15 @@ the past.
   clean number. Our own frames do not have this problem (flat ribbon over black), which
   makes the comparison asymmetric in exactly the direction that flatters us.
 
-  **The method that would work is difference imaging against the emulator's own
-  memory**: break, capture, write zero into the trail's three layer-colour fields
+  **The cheap remedy is to capture on a dark part of the circuit.** Talon's Junction
+  has tunnel sections where the scenery contributes almost nothing, and the plume
+  reads clearly against them; the start straight is the worst possible choice and is
+  what `straight-line.inputs` happens to run along. Pick the frame by *both* speed and
+  mean frame luma - a burst logging the two is a few lines - rather than by speed
+  alone.
+
+  **The rigorous method, if a number rather than a picture is wanted, is difference
+  imaging against the emulator's own memory**: break, capture, write zero into the trail's three layer-colour fields
   (`child+0xf8` / `+0x128` / `+0x158`) or the intensity at `flare+0xbc`, capture again,
   subtract. Same pose, exhaust removed, so the difference *is* the plume in isolation
   and can be measured against hull width. The missing piece is the flare object's
