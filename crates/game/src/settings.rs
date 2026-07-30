@@ -204,8 +204,12 @@ pub struct Display {
     pub gamma: crate::display::Gamma,
 }
 
+fn default_frustum_culling() -> bool {
+    true
+}
+
 /// How the picture itself is drawn.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Graphics {
     /// What percentage of the displayed size the game is rendered at.
     ///
@@ -243,19 +247,18 @@ pub struct Graphics {
     /// Whether the track's draw calls are tested against the camera's view
     /// frustum before being submitted, skipping the ones entirely outside it.
     ///
-    /// **Off by default, deliberately.** Measured on `16_Track`: the test
-    /// itself costs about 59 microseconds a frame to check all ~2,000 draw
-    /// calls, a real, unconditional cost, while what it saves is GPU
-    /// submission of the roughly half that turn out to be outside the camera,
-    /// and this project already renders comfortably above target frame rate
-    /// (hundreds of FPS unlocked) at current scene complexity, so that saving
-    /// is not confirmed to be worth more than the cost yet. Worth revisiting
-    /// once more is drawn per frame at once (other ships, weapons, effects),
-    /// see the frustum-culling entry in `docs/overview/roadmap.md`. No menu
-    /// row on purpose: this is a setting for someone measuring the renderer,
-    /// not a player-facing trade-off, the same reasoning `[graphics] lod`'s
-    /// scope stopped short of a live distance switch.
-    #[serde(default)]
+    /// **On by default.** The test itself has a real, unconditional cost -
+    /// measured on `16_Track`, about 59 microseconds a frame to check all
+    /// ~2,000 draw calls - and whether the GPU-submission saving is worth more
+    /// than that depends on the GPU: a pixel-identical screenshot with the
+    /// setting on versus off confirms it changes nothing about what is drawn,
+    /// but a discrete GPU with headroom to spare may not see the saving,
+    /// while a weaker or integrated one measurably does. Defaulting on is the
+    /// bet that the second case is the more common one to default for; no
+    /// menu row, since turning it back off is a one-line settings-file edit
+    /// for whoever's hardware disagrees. See the frustum-culling entry in
+    /// `docs/overview/roadmap.md`.
+    #[serde(default = "default_frustum_culling")]
     pub frustum_culling: bool,
     /// Whether a track draws every child of an authored `LodGroup`, or only
     /// the higher-detail first one. Not a quality tier and not distance-based,
@@ -267,6 +270,19 @@ pub struct Graphics {
     /// rather than opting a player into a divergence they did not ask for.
     #[serde(with = "LodDef", default)]
     pub lod: Lod,
+}
+
+impl Default for Graphics {
+    fn default() -> Self {
+        Self {
+            render_scale: crate::display::Scale::default(),
+            anisotropy: Anisotropy::default(),
+            fov: crate::display::Fov::default(),
+            perf_overlay: crate::perf::Overlay::default(),
+            frustum_culling: default_frustum_culling(),
+            lod: Lod::default(),
+        }
+    }
 }
 
 /// Where the settings file lives: `<config dir>/oag/settings.toml`.

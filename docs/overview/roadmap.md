@@ -573,16 +573,17 @@ change how this list should be read:
       draw calls), not the ship or the collision overlay, since both carry a
       non-identity model matrix the bounds are not valid against without an
       extra transform not yet written.
-      **Off by default** (`[graphics] frustum_culling`, config-file only, no
-      menu row): measured on `16_Track`, the test itself costs ~59
-      microseconds a frame to check all ~2,000 draw calls, a real cost, while
-      this project already renders comfortably above target frame rate at
-      current scene complexity, so the GPU-submission saving is not confirmed
-      to be worth more than that cost yet - a pixel-identical screenshot
-      comparison with the setting on and off found zero visual difference,
-      confirming correctness even though the performance case is not proven
-      today. Worth flipping on and re-measuring once more is drawn per frame
-      at once (weapons, other ships, effects).
+      **On by default** (`[graphics] frustum_culling`, config-file only, no
+      menu row). Measured on `16_Track`, the test itself costs ~59
+      microseconds a frame to check all ~2,000 draw calls, a real,
+      unconditional cost; whether the GPU-submission saving is worth more than
+      that depends on the GPU - confirmed as a real, noticeable improvement on
+      a weak integrated GPU, unconfirmed on anything with more headroom to
+      spare. A pixel-identical screenshot comparison with the setting on and
+      off found zero visual difference, so the default is a bet on which GPU
+      is more common, not a correctness question. Worth re-measuring once more
+      is drawn per frame at once (weapons, other ships, effects), where the
+      saving should only grow.
 
 ### Lighting and shadow
 
