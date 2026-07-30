@@ -16,15 +16,16 @@ for what is actually done versus planned before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # fmt-check + lint + test + check-docs - the gate every commit must pass
+just              # fmt-check + lint + test + check-docs + check-deps - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace
 just test-data    # also runs #[ignore]d ground-truth tests that need data/images/ populated
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
+just check-deps   # asserts the two dependency-boundary rules below (scripts/check-dependency-rules.py)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
-just audit-leakage # asserts no game content (.chd/.iso/.wad/.elf/... ) is tracked by git
+just audit-leakage # asserts no tracked game content or reproduction (scripts/check-leakage.py)
 ```
 
 Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not `cargo test`).
@@ -117,7 +118,9 @@ added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the
 full table and reasoning. Don't create placeholder crates ahead of that.
 
-Two dependency rules, both enforceable and worth checking before adding an import:
+Two dependency rules, both enforced by `just check-deps` (part of the `just` gate,
+`scripts/check-dependency-rules.py`) so a `cargo add` that breaks one fails CI, not just
+review:
 
 1. No gameplay crate depends on `oag-render`, `oag-audio`, `oag-input`, `winit` or `wgpu`.
    The simulation consumes an input *snapshot type* owned by `oag-gameplay`, never the

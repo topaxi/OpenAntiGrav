@@ -25,6 +25,22 @@
 *.img
 *.gcm
 
+# Reproductions this project itself writes, not just source content: a
+# `--screenshot` is a rendering of the disc's models and textures, and the
+# movie cache demuxes to these four formats (crates/game/src/movie.rs). See
+# scripts/check-leakage.py, which is the single source of truth this list
+# must stay in sync with.
+*.png
+*.ivf
+!/crates/formats/tests/data/testsrc-64x64.ivf
+*.h264
+*.ipu
+*.pss
+*.mip
+*.vex
+*.fnt
+*.pmf
+
 # Packaged builds and the packaging tool. `just appimage` writes into
 # data/appimage/, which /data/* already covers; this catches an AppImage built
 # with --out somewhere else, since no binary is ever committed either.

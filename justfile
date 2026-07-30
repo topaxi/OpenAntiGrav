@@ -15,8 +15,8 @@ psp_iso := env_var_or_default("OAG_ISO", "data/cache/pulse-psp-usa.iso")
 # the recorded whole lap of Talon's Junction. See docs/tools/oag-trace.md.
 default_scenario := "verification/scenarios/talons-junction-time-trial-lap.inputs"
 
-# fmt + lint + test + docs, the gate every commit must pass
-check: fmt-check lint test check-docs
+# fmt + lint + test + docs + architecture rules, the gate every commit must pass
+check: fmt-check lint test check-docs check-deps
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -244,12 +244,10 @@ resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
 apply-names *ARGS: resolve-imports
     python3 scripts/apply-ghidra-names.py {{ARGS}}
 
-# Assert no game content has ever been committed
+# Assert no game content (or a reproduction this project itself writes) is tracked
 audit-leakage:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if git ls-files | grep -Ei '\.(chd|iso|cso|pkg|pbp|wad|elf|prx|self|bin|img|ppst|p2s|state)$'; then
-        echo "FAIL: game content is tracked by git" >&2
-        exit 1
-    fi
-    echo "OK: no game content tracked"
+    python3 scripts/check-leakage.py
+
+# Assert the two architecture dependency rules from CLAUDE.md still hold
+check-deps:
+    python3 scripts/check-dependency-rules.py

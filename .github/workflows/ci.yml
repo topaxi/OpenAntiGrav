@@ -11,11 +11,11 @@ env:
 
 jobs:
   check:
-    name: fmt / clippy / test
+    name: fmt / clippy / test / dependency rules
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -23,6 +23,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - uses: taiki-e/install-action@nextest
       - run: cargo nextest run --workspace
+      - name: Assert the two architecture dependency rules still hold
+        run: python3 scripts/check-dependency-rules.py
 
   docs:
     name: documentation links
@@ -30,6 +32,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/check-doc-links.py
+
+  # Cargo.toml's `rust-version` is a promise nothing else checks. `cargo
+  # +<toolchain>` is required rather than a plain `cargo build`: rustup's
+  # override precedence puts rust-toolchain.toml above whatever toolchain
+  # this job just installed, so an unprefixed `cargo build` would silently
+  # build with the pinned dev toolchain above and never test the floor at
+  # all - which is exactly the "decorative MSRV" failure mode this job
+  # exists to catch. If the two ever diverge, this job is the one that is
+  # supposed to fail.
+  msrv:
+    name: MSRV build (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88
+        id: msrv-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +${{ steps.msrv-toolchain.outputs.name }} build --workspace
 
   # The simulation must produce bit-identical results on every target we ship.
   # This job exists from day one on purpose: a determinism gate added later can
@@ -43,28 +63,31 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
       - uses: Swatinem/rust-cache@v2
-      - name: Print determinism hashes
+      - name: Print determinism hashes (release)
         run: cargo run -q -p oag-core --example determinism_report
-      - name: Assert hashes match the committed reference
+      - name: Assert hashes match the committed reference (release)
         run: cargo test -p oag-core --release determinism -- --nocapture
       # The math foundation above is not the simulation. These two cover the
       # real force law, over a synthetic world so they need no disc image.
-      - name: Print simulation determinism hashes
+      - name: Print simulation determinism hashes (release)
         run: cargo run -q -p oag-physics --example determinism_report
-      - name: Assert simulation hashes match the committed reference
+      - name: Assert simulation hashes match the committed reference (release)
         run: cargo test -p oag-physics --release --test determinism -- --nocapture
+      # determinism.md requires bit-identical state in debug too, not just
+      # release. Linux-debug is also covered by the `check` job's `cargo
+      # nextest run --workspace`; these two make Windows-debug and
+      # macOS-debug actually run instead of being claimed by the doc alone.
+      - name: Assert hashes match the committed reference (debug)
+        run: cargo test -p oag-core determinism -- --nocapture
+      - name: Assert simulation hashes match the committed reference (debug)
+        run: cargo test -p oag-physics --test determinism -- --nocapture
 
   leakage:
     name: no game content committed
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Assert no game content is tracked
-        run: |
-          if git ls-files | grep -Ei '\.(chd|iso|cso|pkg|pbp|wad|elf|prx|self|bin|img)$'; then
-            echo "::error::game content is tracked by git"
-            exit 1
-          fi
-          echo "OK: no game content tracked"
+      - name: Assert no game content (or a reproduction this project writes) is tracked
+        run: python3 scripts/check-leakage.py

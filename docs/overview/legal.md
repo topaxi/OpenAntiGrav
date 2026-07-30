@@ -17,10 +17,17 @@ Three layers, because one is not enough:
 
 1. **`data/` is gitignored.** Everything except its README.
 2. **Extension patterns are gitignored** globally (`*.chd`, `*.iso`, `*.wad`,
-   `*.elf`, `*.bin`, and others), so a stray copy outside `data/` is still
-   caught.
+   `*.elf`, `*.bin`, and others, including reproductions this project itself
+   writes, such as `--screenshot` output and the movie cache), so a stray copy
+   outside `data/` is still caught.
 3. **CI fails** if any tracked file matches those patterns. Run the same check
    locally with `just audit-leakage`.
+
+The extension list backing layers 2 and 3 lives in one place,
+[`scripts/check-leakage.py`](../../scripts/check-leakage.py), which both checks
+tracked files and asserts `.gitignore` covers the same list - so the two
+layers cannot drift out of sync with each other the way three independently
+hand-maintained copies once did.
 
 ## What is fine to commit
 

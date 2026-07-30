@@ -1,3 +1,8 @@
 [toolchain]
-channel = "stable"
+# Pinned rather than "stable": with `RUSTFLAGS: -D warnings` in CI, a new lint
+# in a stable release would redden CI on code nobody touched, and pinning
+# makes "the toolchain moved" and "the code moved" distinguishable if the
+# determinism gate ever fires. Bump deliberately, not as a side effect of
+# something else.
+channel = "1.97.1"
 components = ["rustfmt", "clippy"]

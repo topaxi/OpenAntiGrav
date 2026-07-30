@@ -38,7 +38,7 @@ copies. See [`docs/overview/legal.md`](docs/overview/legal.md).
 
 ### Required
 
-- **Rust** stable (1.85+, edition 2024). Install via [rustup](https://rustup.rs).
+- **Rust** stable (1.88+, edition 2024). Install via [rustup](https://rustup.rs).
 - **[cargo-nextest](https://nexte.st)** for the test runner.
 - **[just](https://github.com/casey/just)** for the task runner.
 
