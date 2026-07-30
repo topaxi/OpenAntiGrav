@@ -81,6 +81,16 @@ pub const TRAIL_SAMPLES: usize = 10;
 /// makes the ribbon roughly 2.5x too wide and it covers the track.
 pub const LAYER_WIDTH: [f32; LAYERS] = [1.0, 0.7, 0.5];
 
+/// Width at the head of the trail, `ring+0x24` at preset 2.
+pub const TRAIL_HEAD_TAPER: f32 = 1.0;
+
+/// The taper's per-second rate, `ring+0x2c`, which `Trail_InitPreset` derives as
+/// `-(ring[0x24] / (capacity * dt)) * 0.75` = **-4.5**.
+///
+/// The `0.75` is preset 2's own `fVar7`. Kept as the derivation rather than as the
+/// product so the three presets stay distinguishable.
+pub const TRAIL_TAPER_RATE: f32 = -(TRAIL_HEAD_TAPER / (TRAIL_SAMPLES as f32 * SUBSTEP_DT)) * 0.75;
+
 /// The ring's width scale, `ring+0x1c` from `Trail_InitRing`.
 ///
 /// Named rather than folded into [`LAYER_WIDTH`] because it is a separate recovered
@@ -398,7 +408,7 @@ impl Exhaust {
         let mut out = Vec::with_capacity(LAYERS * (TRAIL_SAMPLES - 1) * 6);
         for layer in 0..LAYERS {
             let layer_alpha = alphas[layer] * self.alpha;
-            let width = LAYER_WIDTH[layer] * TRAIL_WIDTH_SCALE;
+            let base_width = LAYER_WIDTH[layer] * TRAIL_WIDTH_SCALE;
             // Toward the viewer, from the camera's own basis. Widening each segment
             // perpendicular to *both* this and the segment's direction is what
             // makes the ribbon face the camera along its whole length instead of
@@ -413,18 +423,26 @@ impl Exhaust {
                 let pb = b + back_b * trail_weight(tb);
 
                 let along = pb - pa;
-                let across = match along.cross(view).try_normalize() {
-                    Some(n) => n * width,
+                let unit = along
+                    .cross(view)
+                    .try_normalize()
                     // Degenerate: the craft has not moved between samples, or the
                     // segment points straight at the eye. Fall back to the camera's
                     // right so the quad stays a quad rather than collapsing.
-                    None => right * width,
-                };
+                    .unwrap_or(right);
+                // Tapered per end, not per segment: this is the silhouette.
+                let across_a = unit * (base_width * trail_taper(k));
+                let across_b = unit * (base_width * trail_taper(k + 1));
 
-                // Head bright, tail dark: the linear step `Trail_DrawRibbon` takes,
-                // `head / (capacity - 1)` per segment.
-                let aa = layer_alpha * (1.0 - ta);
-                let ab = layer_alpha * (1.0 - tb);
+                // **No per-segment alpha fade.** `Trail_DrawRibbon` does step a value
+                // down from `ring+0x20` toward the tail, but it feeds
+                // `sceGuAlphaFunc` - an alpha *test* reference - and preset 2 never
+                // sets `ring+0x20`, so `Trail_InitRing`'s zero stands and the test
+                // passes everything. The falloff a viewer sees is the width taper
+                // above. Fading alpha here as well, which this did at first, dims
+                // the tail twice.
+                let aa = layer_alpha;
+                let ab = layer_alpha;
 
                 // The texture scale and scroll are baked into the texcoords rather
                 // than set as pipeline state, because all three layers share one
@@ -435,7 +453,8 @@ impl Exhaust {
                 out.extend_from_slice(&segment(
                     pa,
                     pb,
-                    across,
+                    across_a,
+                    across_b,
                     aa,
                     ab,
                     ta * su + ou,
@@ -563,8 +582,11 @@ fn range(rng: &mut Rng, (lo, hi): (f32, f32)) -> f32 {
 
 /// How far back the plume spreads over the whole history, in world units.
 ///
-/// **Ours, not the original's; confidence 50.** See [`trail_weight`] for why the
-/// recovered table cannot supply it.
+/// **Now recovered as effectively zero, confidence 85** - it was a guess at 50
+/// until `Trail_BuildOffsetTable`'s weights were evaluated. Those weights come out
+/// at `2.6e-6` per sample over the ship's ten, so the displacement along the
+/// exhaust direction is numerically nil and the ribbon's shape is purely its
+/// position history. Zero here is the original's answer, not a tuning choice.
 ///
 /// Note this is *not* the trail's length - the position history supplies that, and
 /// at racing speed ten ticks already span some 17 units. This is only the extra
@@ -607,6 +629,30 @@ pub fn trail_weight(t: f32) -> f32 {
     trail_ease(t) * TRAIL_LENGTH
 }
 
+/// The per-sample width multiplier: **1.0 at the head, 0.325 at the tail**.
+///
+/// This is the ribbon's whole silhouette and it was missed at first, which is most
+/// of why our plume read as a uniform slab against the original's tapering one.
+/// Read off the instructions rather than the decompiler
+/// (`0x0892ae60`..`0x0892ae84`):
+///
+/// ```text
+/// f12  = layer_width * ring[0x1c]      ; ring+0x1c is 1.0
+/// S020 = f12 * S700                    ; S700 varies per sample
+/// vscl.q C730, C000, S020              ; scales the camera basis by it
+/// vscl.q C720, C010, S020
+/// ```
+///
+/// `S700` is `point.q0.x + point.q1.x * table[i].x`, which resolves to
+/// `ring[0x24] + ring[0x2c] * (i * dt)` = `1.0 - 0.075 * i`, reaching `0.325` at
+/// sample 9. The decompiler renders `S700` as a position component, which is what
+/// made it look like nonsense - the first lane of a trail point is this scalar and
+/// the position occupies the other three.
+#[must_use]
+pub fn trail_taper(sample: usize) -> f32 {
+    (TRAIL_HEAD_TAPER + TRAIL_TAPER_RATE * sample as f32 * SUBSTEP_DT).max(0.0)
+}
+
 /// The recovered ease curve, normalised to `0.0` at `t = 0` and `1.0` at `t = 1`.
 ///
 /// Split out from [`trail_weight`] so the **shape** - which is the original's - stays
@@ -633,7 +679,8 @@ pub fn trail_ease(t: f32) -> f32 {
 fn segment(
     a: Vec3,
     b: Vec3,
-    across: Vec3,
+    across_a: Vec3,
+    across_b: Vec3,
     alpha_a: f32,
     alpha_b: f32,
     u_a: f32,
@@ -653,10 +700,10 @@ fn segment(
         // Emissive, like the flare: no light rig.
         lit: 0.0,
     };
-    let al = at(a - across, u_a, v_offset, alpha_a);
-    let ar = at(a + across, u_a, v_offset + 1.0, alpha_a);
-    let bl = at(b - across, u_b, v_offset, alpha_b);
-    let br = at(b + across, u_b, v_offset + 1.0, alpha_b);
+    let al = at(a - across_a, u_a, v_offset, alpha_a);
+    let ar = at(a + across_a, u_a, v_offset + 1.0, alpha_a);
+    let bl = at(b - across_b, u_b, v_offset, alpha_b);
+    let br = at(b + across_b, u_b, v_offset + 1.0, alpha_b);
     [al, ar, bl, ar, br, bl]
 }
 
@@ -1356,26 +1403,60 @@ mod tests {
         assert!(e.trail_vertices(Vec3::X, Vec3::Y).is_empty());
     }
 
-    /// The ribbon runs backwards from the newest sample, and the head is the
-    /// brightest part of it.
+    /// The ribbon tapers in width from head to tail, and does **not** fade in alpha.
+    ///
+    /// Both halves matter. The taper is the silhouette - `1.0 - 0.075 * i`, reaching
+    /// 0.325 at sample 9 - and it was missed at first, which is most of why our
+    /// plume read as a uniform slab. The absent alpha fade is the other half: an
+    /// earlier version faded alpha *as well*, dimming the tail twice.
     #[test]
-    fn the_ribbon_is_brightest_at_the_head() {
+    fn the_ribbon_tapers_in_width_and_does_not_fade_in_alpha() {
         let mut e = Exhaust::new();
         let mut r = rng();
         for _ in 0..600 {
             e.advance(1.0 / 60.0, 100.0, 200.0, &mut r);
         }
+        // A straight run, so every segment shares one `across` direction and the
+        // only thing varying along it is the taper.
         for k in 0..TRAIL_SAMPLES {
             e.push_trail(Vec3::new(0.0, 0.0, -(k as f32) * 3.0), -Vec3::Z);
         }
         let v = e.trail_vertices(Vec3::X, Vec3::Y);
 
-        // First segment of the innermost layer against its last segment.
-        let head = v[0].colour[3];
         let per_layer = (TRAIL_SAMPLES - 1) * 6;
-        let tail = v[per_layer - 1].colour[3];
-        assert!(head > tail, "head {head} must outshine tail {tail}");
-        assert!(tail >= 0.0);
+        let width_at = |vertex: usize| (v[vertex + 1].position[0] - v[vertex].position[0]).abs();
+
+        // First segment's head end against the last segment's tail end.
+        let head = width_at(0);
+        let tail = width_at(per_layer - 6 + 2);
+        assert!(head > tail, "head {head} must be wider than tail {tail}");
+
+        // The recovered ratio: 0.325 / 1.0 at the extremes.
+        let ratio = trail_taper(TRAIL_SAMPLES - 1) / trail_taper(0);
+        assert!((ratio - 0.325).abs() < 1e-3, "taper ratio {ratio}");
+
+        // Alpha is uniform along the layer - the falloff is width, not opacity.
+        let alpha = v[0].colour[3];
+        for (n, vert) in v[..per_layer].iter().enumerate() {
+            assert!(
+                (vert.colour[3] - alpha).abs() < 1e-6,
+                "vertex {n} alpha {} differs from {alpha}",
+                vert.colour[3]
+            );
+        }
+    }
+
+    /// The taper is monotonic and never negative.
+    #[test]
+    fn the_taper_falls_monotonically_and_stays_positive() {
+        let mut last = f32::INFINITY;
+        for i in 0..TRAIL_SAMPLES {
+            let w = trail_taper(i);
+            assert!(w < last, "not falling at {i}");
+            assert!(w > 0.0, "taper went non-positive at {i}");
+            last = w;
+        }
+        assert!((trail_taper(0) - 1.0).abs() < 1e-6);
     }
 
     /// The offset ease is monotonic, starts at zero and spans `TRAIL_LENGTH`.

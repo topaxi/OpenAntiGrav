@@ -349,9 +349,33 @@ w[i]` (`w` from the array at `+0x138`). Per sample it emits, for each of
 - a scrolling UV offset, `u += du * K * 3.0` and `v += dv * K`, each wrapped to
   `[0,1]` and applied with `sceGuTexOffset`.
 
-Alpha fades linearly head to tail: the per-segment alpha starts at
-`self+0x20 * 255` and decreases by `(self+0x20 * 255) / (capacity - 1)` each
-segment.
+**The ribbon tapers in width, and does not fade in alpha.** Both readings here were
+wrong at first and the correction came from the instructions rather than the
+decompiler, at `0x0892ae60`..`0x0892ae84`:
+
+```text
+f12  = layer_width * ring[0x1c]      ; ring+0x1c is 1.0
+S020 = f12 * S700                    ; S700 varies per sample
+vscl.q C730, C000, S020              ; scales the camera basis by it
+vscl.q C720, C010, S020
+```
+
+`S700` is `point.q0.x + point.q1.x * table[i].x`, i.e.
+`ring[0x24] + ring[0x2c] * (i * dt)` = **`1.0 - 0.075 * i`**, reaching `0.325` at
+sample 9. So the width runs from full at the head to about a third at the tail -
+that taper is the ribbon's entire silhouette. The decompiler renders `S700` as a
+position component, which is why it read as nonsense: **the first lane of a trail
+point is this scalar and the position occupies the other three**, which also explains
+`Trail_PushPoint`'s apparently jumbled field order.
+
+The value stepped down toward the tail from `ring+0x20` feeds `sceGuAlphaFunc` - an
+alpha *test* reference - and **preset 2 never sets `ring+0x20`**, so
+`Trail_InitRing`'s zero stands and the test passes everything. There is no
+per-segment alpha fade for a racing craft.
+
+`Trail_BuildOffsetTable`'s weights, evaluated, come out at `2.6e-6` per sample over
+ten, so the displacement along the exhaust direction is **numerically nil**. The
+ribbon's shape is purely its position history.
 
 Confidence is 78 rather than 85 because the width array, the layer count and the
 `+0x1c` scale are all read as *shapes* - nothing pins their authored values, and
@@ -493,7 +517,8 @@ node the parser does not decode. Against the PSP disc's `Data.wad`:
 | --- | --- | --- |
 | `ring+0x04` | 10 | ring capacity, in samples |
 | `ring+0x1c` | 1.0 | width scale, applied to every layer width |
-| `ring+0x24` | 1.0 | head alpha |
+| `ring+0x2c` | -4.5 | **taper rate**, derived as `-(ring[0x24] / (capacity * dt)) * 0.75` |
+| `ring+0x24` | 1.0 | **width taper at the head** |
 | `ring+0x64` | 3 | layer count |
 | `ring+0x60` | 90 | `capacity * 10 - 10`, vertices per layer |
 
