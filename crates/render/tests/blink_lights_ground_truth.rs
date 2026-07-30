@@ -20,10 +20,10 @@
 //! is not exercised by any other code path, so a rename or a decoding change
 //! could silently stop the heuristic from ever matching real data while every
 //! synthetic name test keeps passing. This walks every playable team's real
-//! `Ship.vex` and asserts that **all eight** decode at least one
-//! `blink`-tagged draw call - the actual claim being made, and a stronger one
-//! than "at least one ship" precisely because the signal generalised across
-//! every ship once it was keyed on the texture instead of the mesh name.
+//! `Ship.vex` and asserts that **all eight** decode at least one vertex with
+//! `glow == 1.0` - the actual claim being made, and a stronger one than "at
+//! least one ship" precisely because the signal generalised across every ship
+//! once it was keyed on the texture instead of the mesh name.
 
 use std::path::{Path, PathBuf};
 
@@ -56,29 +56,29 @@ fn image() -> Option<PathBuf> {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn every_team_has_a_blink_tagged_draw_call() {
+fn every_team_has_a_glow_tagged_vertex() {
     let Some(image) = image() else { return };
     let mut archives =
         oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
 
-    let mut teams_without_blink = Vec::new();
+    let mut teams_without_glow = Vec::new();
     for team in TEAMS {
         let name = ship_entry_name(team);
         let blob = archives.read_name(&name).expect("reading Ship.vex");
         let model = mesh::build(&name, &blob).expect("decoding Ship.vex");
-        let blink_draws = model.draws.iter().filter(|d| d.blink).count();
+        let glow_vertices = model.vertices.iter().filter(|v| v.glow == 1.0).count();
         println!(
-            "{team}: {blink_draws} blink-tagged draw call(s) of {}",
-            model.draws.len()
+            "{team}: {glow_vertices} glow-tagged vertex/vertices of {}",
+            model.vertices.len()
         );
-        if blink_draws == 0 {
-            teams_without_blink.push(team);
+        if glow_vertices == 0 {
+            teams_without_glow.push(team);
         }
     }
 
     assert!(
-        teams_without_blink.is_empty(),
-        "team(s) with no blink-tagged draw call: {teams_without_blink:?} - \
+        teams_without_glow.is_empty(),
+        "team(s) with no glow-tagged vertex: {teams_without_glow:?} - \
          is_blink_light_texture no longer matches every ship's real data"
     );
 }

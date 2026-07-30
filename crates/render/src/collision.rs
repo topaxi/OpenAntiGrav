@@ -226,7 +226,6 @@ pub fn build_model(
     let draws = vec![DrawCall {
         range: 0..indices_len(&indices),
         texture: None,
-        blink: false,
     }];
     Model {
         label: label.to_string(),
@@ -320,6 +319,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         colour,
         texcoord: [0.0, 0.0],
         lit,
+        glow: 0.0,
     }
 }
 

@@ -254,6 +254,7 @@ impl Session {
             self.orbit.yaw,
             self.orbit.pitch,
             self.orbit.zoom,
+            0.0,
         );
 
         let frame = match self.surface.get_current_texture() {

@@ -115,7 +115,6 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
     let draws = vec![DrawCall {
         range: 0..indices.len() as u32,
         texture: None,
-        blink: false,
     }];
 
     let mut lo = [f32::MAX; 3];
@@ -196,6 +195,7 @@ fn strip(
             colour,
             texcoord: [0.0, 0.0],
             lit: 1.0,
+            glow: 0.0,
         });
         vertices.push(GpuVertex {
             position: edges_of(s, right, lift),
@@ -203,6 +203,7 @@ fn strip(
             colour,
             texcoord: [1.0, 0.0],
             lit: 1.0,
+            glow: 0.0,
         });
     }
     for i in 0..samples.len() as u32 - 1 {

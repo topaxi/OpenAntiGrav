@@ -571,12 +571,74 @@ generalise to all 8 ships at once - see
 walks every team's real `Ship.vex` and fails if any one of them stops
 producing a blink-tagged draw call.
 
-`crates/game/src/race.rs` renders the tagged draws blinking on a free-running
-tick counter (`BLINK_PERIOD_TICKS`), skipping the draw call outright in its
-"off" phase rather than swapping to a dark texture, since nothing recovered
-gives an off-state asset. **The blink period (currently a half-second
-placeholder) is invented, not recovered** - this still needs a real capture to
-compare against.
+### The animation is authored in the texture, on its V axis - not per-ship, not in engine code
+
+**Confidence: 85.** `colours_flashing_GLOW.tga` is 32x16. Its width (U) is the
+colour-band axis already described above; its height (V) turned out to be a
+*time* axis - a small filmstrip, not a spatial gradient.
+
+The evidence, all read directly off the decoded model and texture, no
+decompiled code involved:
+
+- A light's mesh quad is authored at a **narrow, fixed V**, not spread across
+  the texture. Assegai's shoulder-light pair sits at `v` `0.945-0.953`, which
+  lands on row 15 of 16 - one single row, picked once at author time.
+- That row's colour is one frame of a cycle. Column 18 (the saturated-red
+  column, bracketed by near-black at columns 17 and 19) reads, top to bottom:
+  a bright peak, a fall to a trough around row 4, and a climb back to a second
+  peak at row 8 - **the same 8-value sequence twice** in the 16 rows, not 16
+  independent values. Column 30 (the pale cyan/green column, at the nose
+  cluster's own U) has the same shape - peak, fall, trough, climb, repeated
+  twice - just a different colour. Column 27 (the grey/white column) is
+  **not** a smooth peak-and-trough; it is irregular, jumping between values
+  with no single hump. Three columns, three different authored curves, one
+  texture.
+- A live capture (120 frame-accurate screenshots from a running PPSSPP,
+  breakpointed on `Game_RenderFrame`, pixels sampled at the shoulder-light
+  pair - both mirrored instances tracked byte-identical) measured a real,
+  smooth pulse: sharp rise, several frames held at peak, a roughly even fall
+  to a trough, a roughly even climb back - repeating every 29-31 frames.
+  Downsampled to 8 bins and rotated to start at its own trough, that measured
+  shape (roughly `94, 130, 200, 248, 255, 253, 226, 127`) tracks column 18's
+  own trough-rotated shape (`79, 120, 203, 255, 255, 248, 203, 111`) closely
+  enough - same single-hump shape, same rough proportions of rise, plateau and
+  fall - to call it the same curve read two different ways, not a coincidence.
+  16 rows at roughly 4 frames each is ~30-32 frames, matching the measured
+  period directly.
+
+Put together: the engine scrolls this one shared texture's V coordinate
+globally, on a clock around 4 frames per row. Any geometry sampling it inherits
+whichever row is currently "up" at its own authored U (colour) and V (phase
+within the cycle) - which is why every ship's `glowingShape` uses the exact
+same texture, why the material struct carries no per-ship or per-light tag (see
+above - there is nothing to tag; the animation is not a material property, it
+is what the texture *is*), and why red pulses smoothly while the grey/white
+band flickers irregularly: those are different authored pixel sequences in the
+same asset, not different code paths. This also resolves the wide measured U
+range from the previous revision of this section: it was never one batch
+smeared across the palette at one instant, it was several small light elements
+at different fixed `(u, v)` points, each one row deep, which only reads as a
+wide range when every vertex in a batch is pooled together.
+
+**What is not yet nailed down:** the exact scroll rate (frames-per-row is
+inferred from one measured period against one column, not read out of engine
+code) and the exact row-to-time correspondence at t=0 (phase). Confidence 85
+covers "this is a V-axis palette-scroll animation, authored per-column in the
+texture" - the precise timing constant is a narrower, separately-checkable
+claim once implemented and compared against a fresh capture.
+
+**Scroll direction: decreasing V, not increasing.** The measured red curve
+above is close to symmetric (rise and fall take similar shapes), so it does
+not distinguish a forward from a backward scroll. The grey/white column does:
+its authored row sequence is asymmetric rather than a single smooth hump, so
+playing it the wrong way round is a real, visible difference - a fast
+attack/slow decay reads as the reverse, a slow build to a sudden cutoff.
+`crates/render/src/mesh.wgsl` subtracts the scroll offset rather than adding
+it, on direct report against the original rather than an independent
+frame-by-frame capture of the white light specifically (unlike the red curve
+above, which is a real measurement). **Confidence 55** for the direction
+specifically - lower than the mechanism itself, and worth a proper capture of
+the white light if this is revisited.
 
 Track `Mesh` nodes carry no name at all (confirmed on `16_Track\track.vex`
 with `--nodes --class 0x125`: every entry's name column is blank) and, checked

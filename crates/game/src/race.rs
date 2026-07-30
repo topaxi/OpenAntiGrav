@@ -1531,6 +1531,10 @@ fn key_for_button(index: u8) -> Option<winit::keyboard::Key> {
 struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
+    glow_scroll: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
@@ -1595,19 +1599,19 @@ impl Drawable {
         })
     }
 
-    fn write(&self, queue: &wgpu::Queue, view_projection: Mat4, model: Mat4) {
+    fn write(&self, queue: &wgpu::Queue, view_projection: Mat4, model: Mat4, glow_scroll: f32) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             model: model.to_cols_array_2d(),
+            glow_scroll,
+            _pad0: 0.0,
+            _pad1: 0.0,
+            _pad2: 0.0,
         };
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
 
-    /// `blink_on` gates draw calls flagged `blink` (see
-    /// [`oag_render::mesh::DrawCall::blink`]): off, they are skipped rather than
-    /// drawn dark, since nothing in the format gives an "off" texture to fall
-    /// back to.
-    fn draw(&self, pass: &mut wgpu::RenderPass<'_>, blink_on: bool) {
+    fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
         if self.model.indices.is_empty() {
             return;
         }
@@ -1617,9 +1621,6 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         for draw in &self.model.draws {
-            if draw.blink && !blink_on {
-                continue;
-            }
             let slot = draw.texture.map_or(0, |t| t + 1);
             pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
@@ -1627,17 +1628,23 @@ impl Drawable {
     }
 }
 
-/// How long a blink light spends in each of its on and off phases.
+/// How many ticks it takes the blink-light palette (`colours_flashing_GLOW.tga`,
+/// see `oag_render::mesh::GpuVertex::glow`) to scroll through its full 16 rows.
 ///
-/// Not recovered from anything - no captured trace has been compared against
-/// this yet. A half-second phase (30 ticks at the simulation's fixed 60 Hz) is
-/// a plausible, clearly-visible placeholder; see `docs/formats/vex.md` for the
-/// naming evidence this is built on.
-const BLINK_PERIOD_TICKS: u64 = 30;
+/// **Confidence: 85** for the mechanism (a V-axis palette scroll - see
+/// `docs/formats/vex.md`, "The animation is authored in the texture, on its V
+/// axis"), and a narrower, separately-checkable claim for this specific rate.
+/// A live capture (120 frame-accurate PPSSPP screenshots, pixels sampled at a
+/// real light) measured one authored 8-row cycle repeating every 29-31 ticks;
+/// the texture repeats that 8-row cycle twice across its 16 rows, so one full
+/// scroll of all 16 rows - `GLOW_SCROLL_PERIOD_TICKS` - is twice that, 60
+/// ticks (one second at the simulation's fixed 60 Hz).
+const GLOW_SCROLL_PERIOD_TICKS: u64 = 60;
 
-/// Whether a blink light is in its "on" phase at `tick`.
-fn blink_is_on(tick: u64) -> bool {
-    (tick / BLINK_PERIOD_TICKS).is_multiple_of(2)
+/// The blink-light palette's current scroll offset, in the texture's own V
+/// (row) units, for `tick`.
+fn glow_scroll(tick: u64) -> f32 {
+    (tick % GLOW_SCROLL_PERIOD_TICKS) as f32 / GLOW_SCROLL_PERIOD_TICKS as f32
 }
 
 /// The track and the ship on the GPU, drawn from a chase camera.
@@ -1734,11 +1741,13 @@ impl Scene {
     ) {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
-        self.track.write(queue, view_projection, Mat4::IDENTITY);
+        let scroll = glow_scroll(race.world.tick);
+        self.track
+            .write(queue, view_projection, Mat4::IDENTITY, scroll);
         self.ship
-            .write(queue, view_projection, race.ship_model_matrix());
+            .write(queue, view_projection, race.ship_model_matrix(), scroll);
         if let Some(collision) = &self.collision {
-            collision.write(queue, view_projection, Mat4::IDENTITY);
+            collision.write(queue, view_projection, Mat4::IDENTITY, scroll);
         }
 
         // The camera's own axes, read out of the view matrix: for a view matrix
@@ -1797,11 +1806,10 @@ impl Scene {
             multiview_mask: None,
         });
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
-        let blink_on = blink_is_on(race.world.tick);
-        self.track.draw(&mut pass, blink_on);
-        self.ship.draw(&mut pass, blink_on);
+        self.track.draw(&mut pass);
+        self.ship.draw(&mut pass);
         if let Some(collision) = &self.collision {
-            collision.draw(&mut pass, blink_on);
+            collision.draw(&mut pass);
         }
         // Last, and that ordering is load-bearing: the flare tests depth but does
         // not write it, so the hull's depth has to already be in the buffer for the
@@ -2061,12 +2069,11 @@ mod tests {
     }
 
     #[test]
-    fn blink_starts_on_and_flips_every_period() {
-        assert!(blink_is_on(0));
-        assert!(blink_is_on(BLINK_PERIOD_TICKS - 1));
-        assert!(!blink_is_on(BLINK_PERIOD_TICKS));
-        assert!(!blink_is_on(2 * BLINK_PERIOD_TICKS - 1));
-        assert!(blink_is_on(2 * BLINK_PERIOD_TICKS));
+    fn glow_scroll_starts_at_zero_and_wraps_every_period() {
+        assert_eq!(glow_scroll(0), 0.0);
+        assert!((glow_scroll(GLOW_SCROLL_PERIOD_TICKS / 2) - 0.5).abs() < 1e-6);
+        assert_eq!(glow_scroll(GLOW_SCROLL_PERIOD_TICKS), 0.0);
+        assert_eq!(glow_scroll(GLOW_SCROLL_PERIOD_TICKS * 3), 0.0);
     }
 
     /// The PS2 shape, measured: five slots declared and none of them filled.

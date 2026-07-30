@@ -15,6 +15,10 @@ use crate::mesh::{GpuVertex, Model};
 struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
+    glow_scroll: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 /// Builds the camera and model matrices for a given orbit angle.
@@ -25,7 +29,19 @@ struct Uniforms {
 /// bounding-box assertion in `oag-formats` is.
 ///
 /// `zoom` scales the orbit distance; 1.0 is the default framing described above.
-fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32, zoom: f32) -> Uniforms {
+///
+/// `glow_scroll` is the blink-light palette scroll offset - see
+/// `oag_render::mesh::GpuVertex::glow` - in the texture's own V (row) units.
+/// Callers with no game clock (this crate's own viewer and capture paths)
+/// pass `0.0`, which shows every blink light at its authored, unanimated row.
+fn matrices(
+    model: &Model,
+    aspect: f32,
+    yaw: f32,
+    pitch: f32,
+    zoom: f32,
+    glow_scroll: f32,
+) -> Uniforms {
     let distance = model.radius * 3.0 * zoom;
     let eye = Vec3::new(
         distance * yaw.cos() * pitch.cos(),
@@ -40,6 +56,10 @@ fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32, zoom: f32) -> Unif
     Uniforms {
         view_projection: (projection * view).to_cols_array_2d(),
         model: Mat4::from_translation(-centre).to_cols_array_2d(),
+        glow_scroll,
+        _pad0: 0.0,
+        _pad1: 0.0,
+        _pad2: 0.0,
     }
 }
 
@@ -48,6 +68,7 @@ fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32, zoom: f32) -> Unif
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 /// Recomputes the camera and model matrices and uploads them to `buffer`.
+#[allow(clippy::too_many_arguments)]
 pub fn write_uniforms(
     queue: &wgpu::Queue,
     buffer: &wgpu::Buffer,
@@ -56,8 +77,9 @@ pub fn write_uniforms(
     yaw: f32,
     pitch: f32,
     zoom: f32,
+    glow_scroll: f32,
 ) {
-    let uniforms = matrices(model, aspect, yaw, pitch, zoom);
+    let uniforms = matrices(model, aspect, yaw, pitch, zoom, glow_scroll);
     queue.write_buffer(buffer, 0, bytemuck::bytes_of(&uniforms));
 }
 
@@ -134,6 +156,7 @@ pub fn capture_from(
         yaw,
         pitch,
         1.0,
+        0.0,
     );
 
     // The bind group must reference the buffer we just filled.
@@ -410,7 +433,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32
+                    4 => Float32, 5 => Float32
                 ],
             })],
             compilation_options: Default::default(),

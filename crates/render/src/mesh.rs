@@ -20,6 +20,14 @@ pub struct GpuVertex {
     /// need the rig. This is the viewer's own choice, not the game's: the GE
     /// decides per draw from state we have not recovered.
     pub lit: f32,
+    /// 1.0 for a vertex whose texture is the shared blink-light palette
+    /// (`colours_flashing_GLOW.tga`), 0.0 otherwise. See
+    /// [`is_blink_light_texture`] for what qualifies and the evidence behind
+    /// it. The shader adds a per-frame scroll offset to this vertex's V
+    /// texture coordinate when `glow` is 1.0, which is the whole animation:
+    /// the light's colour and brightness curve live in the texture, not in
+    /// any code here.
+    pub glow: f32,
 }
 
 /// A run of indices sharing one texture.
@@ -28,14 +36,10 @@ pub struct DrawCall {
     pub range: std::ops::Range<u32>,
     /// Index into [`Model::textures`], or `None` for untextured.
     pub texture: Option<usize>,
-    /// Whether this run is a free-running blink light rather than an
-    /// always-on surface. See [`is_blink_light_texture`] for what qualifies
-    /// and the evidence behind it.
-    pub blink: bool,
 }
 
-/// Whether a decoded texture's name identifies its surface as a periodic
-/// blink light.
+/// Whether a decoded texture's name identifies its surface as the shared
+/// blink-light palette, animated by scrolling its V (row) coordinate.
 ///
 /// **Confidence: 85.** Every one of the 8 playable PSP ships carries a mesh
 /// named `glowingShape` whose material resolves to the exact same shared
@@ -45,11 +49,13 @@ pub struct DrawCall {
 /// (`flasherShape`/`flasher1Shape`) resolve to the identical texture, which is
 /// why matching by mesh name generalised badly (each ship names its extra
 /// copies of this light differently, or not at all) while matching by the
-/// texture it actually paints generalises to all of them. See
-/// `docs/formats/vex.md` for the full survey (`crates/render/tests/blink_lights_ground_truth.rs`
-/// checks it against every real ship). **The blink *period* is a separate,
-/// unscored, invented placeholder** - see the caller that drives this from a
-/// tick count.
+/// texture it actually paints generalises to all of them.
+///
+/// The texture's rows turned out to be the animation itself - see
+/// `docs/formats/vex.md`, "The animation is authored in the texture, on its V
+/// axis", for the full survey and the capture that confirmed it
+/// (`crates/render/tests/blink_lights_ground_truth.rs` checks the texture
+/// match against every real ship).
 ///
 /// Matching on the texture rather than the mesh name also means a mesh with
 /// more than one material - Feisar's `self_illuminatedShape` has one batch on
@@ -205,6 +211,21 @@ pub fn build_with_textures(
         for batch in vex::mesh_batches(payload, 0).context("decoding batches")? {
             let base = vertices.len() as u32;
             let first_index = indices.len() as u32;
+
+            // material index -> texture ordinal -> a texture we decoded. Any
+            // link in that chain can be missing, and a missing one draws
+            // untextured rather than borrowing a neighbour's skin.
+            let texture = materials
+                .get(usize::from(batch.material_index))
+                .copied()
+                .flatten()
+                .map(|t| t as usize)
+                .filter(|&t| textures.get(t).is_some_and(Option::is_some));
+            let glow = texture
+                .and_then(|t| textures.get(t))
+                .and_then(Option::as_ref)
+                .is_some_and(|t| is_blink_light_texture(&t.label));
+
             for v in &batch.vertices {
                 vertices.push(GpuVertex {
                     position: vex::transform_point(&to_world, v.position),
@@ -221,6 +242,7 @@ pub fn build_with_textures(
                     }),
                     texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
                     lit: if v.colour.is_some() { 0.0 } else { 1.0 },
+                    glow: f32::from(glow),
                 });
             }
             for tri in batch.triangles() {
@@ -230,23 +252,9 @@ pub fn build_with_textures(
 
             let last_index = indices.len() as u32;
             if last_index > first_index {
-                // material index -> texture ordinal -> a texture we decoded.
-                // Any link in that chain can be missing, and a missing one draws
-                // untextured rather than borrowing a neighbour's skin.
-                let texture = materials
-                    .get(usize::from(batch.material_index))
-                    .copied()
-                    .flatten()
-                    .map(|t| t as usize)
-                    .filter(|&t| textures.get(t).is_some_and(Option::is_some));
-                let blink = texture
-                    .and_then(|t| textures.get(t))
-                    .and_then(Option::as_ref)
-                    .is_some_and(|t| is_blink_light_texture(&t.label));
                 draws.push(DrawCall {
                     range: first_index..last_index,
                     texture,
-                    blink,
                 });
             }
         }
@@ -384,7 +392,6 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         out.draws.extend(model.draws.into_iter().map(|d| DrawCall {
             range: (d.range.start + index_base)..(d.range.end + index_base),
             texture: d.texture.map(|t| t + texture_base),
-            blink: d.blink,
         }));
         out.textures.extend(model.textures);
         out.mesh_count += model.mesh_count;
@@ -426,13 +433,13 @@ mod merge_tests {
                     colour: [1.0; 4],
                     texcoord: [0.0; 2],
                     lit: 1.0,
+                    glow: 0.0,
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),
             draws: vec![DrawCall {
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),
-                blink: false,
             }],
             textures: (0..textures).map(|_| None).collect(),
             centre: [0.0; 3],
