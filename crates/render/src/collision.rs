@@ -232,6 +232,7 @@ pub fn build_model(
         vertices,
         indices,
         draws,
+        transparent_draws: Vec::new(),
         textures: Vec::new(),
         centre,
         radius,

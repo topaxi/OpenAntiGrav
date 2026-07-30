@@ -63,8 +63,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     return out;
 }
 
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let n = normalize(in.normal);
 
     let key = max(dot(n, normalize(vec3<f32>(0.4, 0.8, 0.5))), 0.0);
@@ -75,5 +74,26 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
     // Vertex colour modulates the texture, as the GE's texture-env does.
-    return vec4<f32>(texel.rgb * in.colour.rgb * light, 1.0);
+    return vec4<f32>(texel.rgb * in.colour.rgb * light, texel.a);
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    let shaded = lit_texel(in);
+    // This pipeline is opaque (`blend: None`), so the alpha channel is never
+    // blended with - but it is still written to whatever render target is
+    // bound, so it stays a hardcoded 1.0 here rather than the texture's own
+    // alpha, matching every prior opaque render exactly. `fs_main_blend`
+    // below is the one that actually reads the texture's alpha.
+    return vec4<f32>(shaded.rgb, 1.0);
+}
+
+// Used only by the second, blended pipeline (`oag_render::mesh_render`'s
+// list-B pass) - see `oag_render::mesh::Model::transparent_draws`. Identical
+// to `fs_main` except it outputs the texture's own alpha instead of a
+// hardcoded 1.0, which is what lets the blend state built around this entry
+// point actually blend rather than replace.
+@fragment
+fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
+    return lit_texel(in);
 }

@@ -432,6 +432,38 @@ Mesh header:
 A batch belongs to list A while `pass_mask & 1` is set, and to list B while
 `pass_mask & 2` is set.
 
+### List B is real, distinct geometry, not a second pass over list A
+
+**Confidence: 90.** `oag_render::mesh` used to read list A only, on the theory
+that B was a duplicate pass and reading both would draw the same surface
+twice. Checked directly against `16_Track` (Talon's Junction): most meshes
+that have batches in both lists really do share them (mesh `507`'s four batches
+sit at offsets reachable from both `list_a_off` and `list_b_off`), but a large
+number of other meshes have **zero** list-A batches and are made up entirely
+of list-B ones - skipping list B does not avoid a duplicate for these, it
+drops their geometry completely. A world-space reconstruction of every batch
+(via `oag_formats::vex::world_transforms`, `mesh_batches` and
+`transform_point`, list A and list-B-only plotted separately) shows the
+list-B-only geometry sitting on the track's own route, not off to the side -
+among it, a dense cluster of panels (materials resolving to a flat tint, a
+black-to-cyan gradient, and a striped grate texture) is the track's reported
+"glass floor". Every batch checked this way reads `Batch::is_transparent() ==
+true`, `is_alpha_tested() == false`: meant to be smoothly alpha-blended, not
+an alpha-tested cutout. The same list also carries unrelated things - billboard
+trees and an animated glow-strip texture (`exitglow`, authored 13 times on
+this track per the census above) - since it is simply "every alpha-blended
+batch", not a floor-specific list.
+
+`oag_render::mesh::Model::transparent_draws` (from `mesh_batches(payload, 1)`)
+now renders this list through a second, blended pipeline
+(`oag_render::mesh_render::Built::blend_pipeline`), the same
+opaque-pipeline-plus-blended-pipeline-in-one-pass shape `oag_render::exhaust`
+already uses. **What that pipeline's blend state is not** is a recovered fact:
+`oag_render::mesh_render::TRANSPARENT_BLEND` (`SrcAlpha`/`OneMinusSrcAlpha`) is
+a plausible reading, not a decompiled one, and is documented at its
+definition as an unscored placeholder - the same status this file gives the
+blink-light period.
+
 **Geometry is never indexed** — the index argument to `sceGuDrawArray` is always
 zero. The material array is reached through `mesh+0x5c` at runtime, stride 0x14,
 with a texture index at `+0x04` into the model's texture array (`model+0x1a4`,

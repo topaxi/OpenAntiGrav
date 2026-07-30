@@ -99,8 +99,14 @@ pub struct Model {
     pub label: String,
     pub vertices: Vec<GpuVertex>,
     pub indices: Vec<u32>,
-    /// One per material run, in draw order.
+    /// One per material run, in draw order. Opaque; drawn with depth write on
+    /// and no blending.
     pub draws: Vec<DrawCall>,
+    /// Batches authored as alpha-blended (list B on disk - see
+    /// [`build_with_textures`]), indexing the same `vertices`/`indices` as
+    /// [`Self::draws`]. Meant to be drawn after `draws`, blended and with
+    /// depth write off.
+    pub transparent_draws: Vec<DrawCall>,
     /// Textures embedded in the model, one slot per `Texture` node.
     ///
     /// `None` where the node exists but this build cannot decode it. The slots
@@ -193,6 +199,7 @@ pub fn build_with_textures(
     let mut vertices: Vec<GpuVertex> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
     let mut draws: Vec<DrawCall> = Vec::new();
+    let mut transparent_draws: Vec<DrawCall> = Vec::new();
     let mut mesh_count = 0;
 
     for (index, node) in nodes
@@ -204,58 +211,68 @@ pub fn build_with_textures(
         let to_world = world[index];
         let mut contributed = false;
 
-        // List A is the ordinary render list; B is a second pass. Taking only A
-        // avoids drawing the same surface twice.
+        // A batch belongs to list A while `pass_mask & 1` is set, and to list B
+        // while `pass_mask & 2` is set - one bit split of one contiguous batch
+        // array, not two independent passes over the same geometry (see
+        // `docs/formats/vex.md`, "Geometry is pre-batched GE display lists").
+        // `vex::mesh_batches` already stops at the first batch tagged for the
+        // other list, so reading both here never draws a shared batch twice;
+        // list B is where every alpha-blended batch on a track lives, and a
+        // mesh made up entirely of list-B batches has nothing in list A at
+        // all, so skipping it drops that mesh's geometry completely rather
+        // than avoiding a duplicate.
         let materials = vex::mesh_materials(payload);
 
-        for batch in vex::mesh_batches(payload, 0).context("decoding batches")? {
-            let base = vertices.len() as u32;
-            let first_index = indices.len() as u32;
+        for (batch_list, out) in [(0u8, &mut draws), (1u8, &mut transparent_draws)] {
+            for batch in vex::mesh_batches(payload, batch_list).context("decoding batches")? {
+                let base = vertices.len() as u32;
+                let first_index = indices.len() as u32;
 
-            // material index -> texture ordinal -> a texture we decoded. Any
-            // link in that chain can be missing, and a missing one draws
-            // untextured rather than borrowing a neighbour's skin.
-            let texture = materials
-                .get(usize::from(batch.material_index))
-                .copied()
-                .flatten()
-                .map(|t| t as usize)
-                .filter(|&t| textures.get(t).is_some_and(Option::is_some));
-            let glow = texture
-                .and_then(|t| textures.get(t))
-                .and_then(Option::as_ref)
-                .is_some_and(|t| is_blink_light_texture(&t.label));
+                // material index -> texture ordinal -> a texture we decoded. Any
+                // link in that chain can be missing, and a missing one draws
+                // untextured rather than borrowing a neighbour's skin.
+                let texture = materials
+                    .get(usize::from(batch.material_index))
+                    .copied()
+                    .flatten()
+                    .map(|t| t as usize)
+                    .filter(|&t| textures.get(t).is_some_and(Option::is_some));
+                let glow = texture
+                    .and_then(|t| textures.get(t))
+                    .and_then(Option::as_ref)
+                    .is_some_and(|t| is_blink_light_texture(&t.label));
 
-            for v in &batch.vertices {
-                vertices.push(GpuVertex {
-                    position: vex::transform_point(&to_world, v.position),
-                    // A batch without normals is prelit, so face it at the
-                    // camera rather than leaving it black.
-                    normal: v.normal.unwrap_or([0.0, 0.0, 1.0]),
-                    colour: v.colour.map_or([0.75, 0.78, 0.82, 1.0], |c| {
-                        [
-                            f32::from(c[0]) / 255.0,
-                            f32::from(c[1]) / 255.0,
-                            f32::from(c[2]) / 255.0,
-                            f32::from(c[3]) / 255.0,
-                        ]
-                    }),
-                    texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
-                    lit: if v.colour.is_some() { 0.0 } else { 1.0 },
-                    glow: f32::from(glow),
-                });
-            }
-            for tri in batch.triangles() {
-                indices.extend([base + tri[0], base + tri[1], base + tri[2]]);
-                contributed = true;
-            }
+                for v in &batch.vertices {
+                    vertices.push(GpuVertex {
+                        position: vex::transform_point(&to_world, v.position),
+                        // A batch without normals is prelit, so face it at the
+                        // camera rather than leaving it black.
+                        normal: v.normal.unwrap_or([0.0, 0.0, 1.0]),
+                        colour: v.colour.map_or([0.75, 0.78, 0.82, 1.0], |c| {
+                            [
+                                f32::from(c[0]) / 255.0,
+                                f32::from(c[1]) / 255.0,
+                                f32::from(c[2]) / 255.0,
+                                f32::from(c[3]) / 255.0,
+                            ]
+                        }),
+                        texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
+                        lit: if v.colour.is_some() { 0.0 } else { 1.0 },
+                        glow: f32::from(glow),
+                    });
+                }
+                for tri in batch.triangles() {
+                    indices.extend([base + tri[0], base + tri[1], base + tri[2]]);
+                    contributed = true;
+                }
 
-            let last_index = indices.len() as u32;
-            if last_index > first_index {
-                draws.push(DrawCall {
-                    range: first_index..last_index,
-                    texture,
-                });
+                let last_index = indices.len() as u32;
+                if last_index > first_index {
+                    out.push(DrawCall {
+                        range: first_index..last_index,
+                        texture,
+                    });
+                }
             }
         }
         if contributed {
@@ -290,6 +307,7 @@ pub fn build_with_textures(
         vertices,
         indices,
         draws,
+        transparent_draws,
         textures,
         centre,
         radius,
@@ -372,6 +390,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         vertices: Vec::new(),
         indices: Vec::new(),
         draws: Vec::new(),
+        transparent_draws: Vec::new(),
         textures: Vec::new(),
         centre: [0.0; 3],
         radius: 1.0,
@@ -389,10 +408,13 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         out.vertices.extend(model.vertices);
         out.indices
             .extend(model.indices.iter().map(|i| i + vertex_base));
-        out.draws.extend(model.draws.into_iter().map(|d| DrawCall {
+        let rebase = |d: DrawCall| DrawCall {
             range: (d.range.start + index_base)..(d.range.end + index_base),
             texture: d.texture.map(|t| t + texture_base),
-        }));
+        };
+        out.draws.extend(model.draws.into_iter().map(rebase));
+        out.transparent_draws
+            .extend(model.transparent_draws.into_iter().map(rebase));
         out.textures.extend(model.textures);
         out.mesh_count += model.mesh_count;
     }
@@ -441,6 +463,7 @@ mod merge_tests {
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),
             }],
+            transparent_draws: Vec::new(),
             textures: (0..textures).map(|_| None).collect(),
             centre: [0.0; 3],
             radius: 1.0,

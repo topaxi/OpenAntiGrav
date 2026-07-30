@@ -140,6 +140,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         vertices,
         indices,
         draws,
+        transparent_draws: Vec::new(),
         textures: Vec::new(),
         centre,
         radius,

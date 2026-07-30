@@ -1546,6 +1546,7 @@ struct Uniforms {
 struct Drawable {
     model: Model,
     pipeline: wgpu::RenderPipeline,
+    blend_pipeline: wgpu::RenderPipeline,
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,
@@ -1570,8 +1571,14 @@ impl Drawable {
         format: wgpu::TextureFormat,
         anisotropy: Anisotropy,
     ) -> Result<Self> {
-        let (pipeline, _placeholder, vertices, indices, textures) =
-            mesh_render::build(device, queue, &model, format, anisotropy)?;
+        let mesh_render::Built {
+            pipeline,
+            blend_pipeline,
+            bind_group: _placeholder,
+            vertex_buffer: vertices,
+            index_buffer: indices,
+            texture_binds: textures,
+        } = mesh_render::build(device, queue, &model, format, anisotropy)?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("race uniforms"),
@@ -1591,6 +1598,7 @@ impl Drawable {
         Ok(Self {
             model,
             pipeline,
+            blend_pipeline,
             vertices,
             indices,
             uniforms,
@@ -1621,6 +1629,15 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         for draw in &self.model.draws {
+            let slot = draw.texture.map_or(0, |t| t + 1);
+            pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+        }
+
+        // Second pipeline, same pass: list-B batches, blended. See
+        // `mesh_render::Built::blend_pipeline`.
+        pass.set_pipeline(&self.blend_pipeline);
+        for draw in &self.model.transparent_draws {
             let slot = draw.texture.map_or(0, |t| t + 1);
             pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
@@ -2052,6 +2069,7 @@ mod tests {
             vertices: Vec::new(),
             indices: vec![0; 6],
             draws: Vec::new(),
+            transparent_draws: Vec::new(),
             textures: (0..slots)
                 .map(|index| {
                     (index < decoded).then(|| mesh::ModelTexture {

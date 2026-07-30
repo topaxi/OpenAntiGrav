@@ -121,6 +121,7 @@ struct Session {
     config: wgpu::SurfaceConfiguration,
     depth_view: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
+    blend_pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
@@ -169,8 +170,14 @@ impl Session {
             .context("surface is not supported by this adapter")?;
         surface.configure(&device, &config);
 
-        let (pipeline, placeholder_bind_group, vertex_buffer, index_buffer, texture_binds) =
-            mesh_render::build(&device, &queue, &model, config.format, anisotropy)?;
+        let mesh_render::Built {
+            pipeline,
+            blend_pipeline,
+            bind_group: placeholder_bind_group,
+            vertex_buffer,
+            index_buffer,
+            texture_binds,
+        } = mesh_render::build(&device, &queue, &model, config.format, anisotropy)?;
         let _ = placeholder_bind_group;
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -199,6 +206,7 @@ impl Session {
             config,
             depth_view,
             pipeline,
+            blend_pipeline,
             uniform_buffer,
             bind_group,
             vertex_buffer,
@@ -314,6 +322,19 @@ impl Session {
             // One draw per material run. Slot 0 is the white fallback, so a
             // texture index of n binds slot n + 1. Matches `mesh_render::capture_from`.
             for draw in &self.model.draws {
+                let slot = draw.texture.map_or(0, |t| t + 1);
+                pass.set_bind_group(
+                    1,
+                    &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
+                    &[],
+                );
+                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            }
+
+            // Second pipeline, same pass: list-B batches, blended. See
+            // `mesh_render::Built::blend_pipeline`.
+            pass.set_pipeline(&self.blend_pipeline);
+            for draw in &self.model.transparent_draws {
                 let slot = draw.texture.map_or(0, |t| t + 1);
                 pass.set_bind_group(
                     1,

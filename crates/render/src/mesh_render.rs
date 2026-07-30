@@ -139,8 +139,14 @@ pub fn capture_from(
         view_formats: &[],
     });
 
-    let (pipeline, bind_group, vertex_buffer, index_buffer, texture_binds) =
-        build(&device, &queue, model, format, anisotropy)?;
+    let Built {
+        pipeline,
+        blend_pipeline,
+        bind_group,
+        vertex_buffer,
+        index_buffer,
+        texture_binds,
+    } = build(&device, &queue, model, format, anisotropy)?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniforms"),
@@ -226,6 +232,17 @@ pub fn capture_from(
         // One draw per material run. Slot 0 is the white fallback, so a texture
         // index of n binds slot n + 1.
         for draw in &model.draws {
+            let slot = draw.texture.map_or(0, |t| t + 1);
+            pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+        }
+
+        // Second pipeline, same pass: `Model::transparent_draws` is list B,
+        // meant to be blended rather than replace. See
+        // `crate::exhaust::Pipeline` for the precedent of pairing an opaque
+        // and a blended pipeline this way.
+        pass.set_pipeline(&blend_pipeline);
+        for draw in &model.transparent_draws {
             let slot = draw.texture.map_or(0, |t| t + 1);
             pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
@@ -354,13 +371,46 @@ fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
     levels
 }
 
-pub type Built = (
-    wgpu::RenderPipeline,
-    wgpu::BindGroup,
-    wgpu::Buffer,
-    wgpu::Buffer,
-    Vec<wgpu::BindGroup>,
-);
+/// The blend this crate uses for a model's `transparent_draws` (list B).
+///
+/// **Not recovered from the game.** Unlike [`crate::exhaust::BLEND`], no GE
+/// blend-function state has been read out of a decompile for these batches;
+/// this is a plausible reading (source-over, the ordinary "glass" lerp), not
+/// a confirmed one - an unscored placeholder in the same sense
+/// `crates/game/src/race.rs`'s `GLOW_SCROLL_PERIOD_TICKS` documents its own
+/// invented constants. `Batch::is_transparent`/`is_alpha_tested` in
+/// `oag_formats::vex` are what is actually confirmed: that these batches are
+/// meant to be blended rather than replaced, and are not alpha-tested
+/// cutouts. Revise this the moment the real state is recovered.
+pub const TRANSPARENT_BLEND: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
+/// Everything [`build`] hands back: geometry, texture bindings, and the two
+/// pipelines a `Model` draws through.
+#[derive(Debug)]
+pub struct Built {
+    /// Opaque pass: depth write on, no blending. Draws [`Model::draws`].
+    pub pipeline: wgpu::RenderPipeline,
+    /// Blended pass: depth write off, [`TRANSPARENT_BLEND`]. Draws
+    /// [`Model::transparent_draws`], as a second `set_pipeline` in the same
+    /// render pass as `pipeline` - see [`crate::exhaust::Pipeline`] for the
+    /// precedent.
+    pub blend_pipeline: wgpu::RenderPipeline,
+    pub bind_group: wgpu::BindGroup,
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub texture_binds: Vec<wgpu::BindGroup>,
+}
 
 /// Builds the pipeline, geometry and texture bindings for `model`.
 ///
@@ -454,6 +504,54 @@ pub fn build(
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
             depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    // Second pipeline for `Model::transparent_draws` (list B): same shader
+    // module, bind group layouts and vertex layout, blended instead of
+    // replaced and with depth write off so an overlapping transparent draw
+    // cannot occlude one drawn after it - see `TRANSPARENT_BLEND` and
+    // `crate::exhaust::Pipeline`, which established this opaque/blended
+    // pairing first.
+    let blend_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("mesh blend"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            buffers: &[Some(wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![
+                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                    4 => Float32, 5 => Float32
+                ],
+            })],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main_blend"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: Some(TRANSPARENT_BLEND),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            cull_mode: None,
+            ..Default::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(false),
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: Default::default(),
             bias: Default::default(),
@@ -572,11 +670,12 @@ pub fn build(
         }],
     });
 
-    Ok((
+    Ok(Built {
         pipeline,
+        blend_pipeline,
         bind_group,
         vertex_buffer,
         index_buffer,
         texture_binds,
-    ))
+    })
 }
