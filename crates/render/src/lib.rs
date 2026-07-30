@@ -14,6 +14,8 @@
 //! Modules:
 //!
 //! - [`mesh`] decodes a `.vex` model into one portable vertex and index buffer.
+//! - [`exhaust`] is the ship's engine flare: the recovered state machine, and the
+//!   one blended pipeline in the crate.
 //! - [`track`] builds the driveable ribbon from a decoded track spline.
 //! - [`collision`] builds a debug view of the collision soup the physics world
 //!   is made of.
@@ -23,6 +25,7 @@
 
 pub mod camera;
 pub mod collision;
+pub mod exhaust;
 pub mod mesh;
 pub mod mesh_render;
 pub mod track;

@@ -5,13 +5,20 @@
 //! +0x02  u16      height
 //! +0x04  u8       bits_per_pixel      4 or 8
 //! +0x05  u8       unk_0x05            0 in every standalone .mip seen
-//! +0x06  u8       unk_0x06            1 in every standalone .mip seen
-//! +0x07  u8       unk_0x07            2 or 3
-//! +0x08  u8       unk_0x08            0 or 1
+//! +0x06  u8       mip_levels          1 in FE.wad; 4 on the engine-flare sprite
+//! +0x07  u8       flags               bit 0 is FLAG_SWIZZLED
+//! +0x08  u8       unk_0x08            complement of +0x07 bit 0
 //! +0x09  u8[7]    zero
 //! +0x10  RGBA8888 palette, 1 << bits_per_pixel entries
-//!        indices, width * height * bits_per_pixel / 8 bytes
+//!        level 0, width * height * bits_per_pixel / 8 bytes
+//!        then each further level, both dimensions halved (floored at 1)
 //! ```
+//!
+//! **`+0x06` is a mip count**, which this parser assumed was always 1 until
+//! `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` - 128x64 at 8bpp,
+//! `+0x06 == 4`, 11,920 bytes against the 9,232 one level implies - showed
+//! otherwise. `psp-texture.md` had predicted exactly that gap. Only level 0 is
+//! decoded; the rest of the chain is validated and skipped.
 //!
 //! See `docs/formats/psp-texture.md` for the evidence.
 //!
@@ -176,6 +183,62 @@ pub struct Texture {
     pub indices: Vec<u8>,
     /// The header bytes whose meaning is not established, `+0x05` to `+0x08`.
     pub unknown: [u8; 4],
+    /// Mip levels stored in the blob, from `+0x06`; at least 1.
+    ///
+    /// Only level 0 is decoded - [`Texture::indices`] is always exactly
+    /// `width * height` - but the count has to be read to know how long the blob
+    /// should be. See [`Texture::parse`].
+    pub mip_levels: u8,
+}
+
+/// Most mip levels a blob may declare.
+///
+/// A 4-level chain is the largest seen. The cap exists so a garbage byte at
+/// `+0x06` cannot make the size arithmetic accept an arbitrary blob: without it,
+/// a large enough level count sums to almost any length.
+pub const MAX_MIP_LEVELS: u8 = 16;
+
+/// Bytes the whole mip chain occupies.
+///
+/// Each level halves both dimensions, floored at 1, and rounds up to a whole byte.
+///
+/// # Levels after the first pad their rows to 16 bytes
+///
+/// Confidence **88**, and the evidence is two exact hits from one rule:
+///
+/// | Texture | Levels | Unpadded | Padded tail | Blob |
+/// | --- | ---: | ---: | ---: | ---: |
+/// | `grabbedEngineFlare128x64x8` 128x64 | 4 | 11,920 | 11,920 | **11,920** |
+/// | `Engine_noise` 64x64 | 4 | 6,480 | **6,544** | **6,544** |
+///
+/// The flare is unaffected because every one of its levels is already at least 16
+/// bytes wide; the noise texture's level 3 is 8x8, an 8-byte row padded to 16, and
+/// that single difference is the whole 64-byte discrepancy. `SWIZZLE_BLOCK_BYTES`
+/// is the same 16, which is not a coincidence: it is the GE's texture row
+/// alignment.
+///
+/// **Level 0 is deliberately not padded**, and that asymmetry is a statement about
+/// the evidence rather than about the hardware. No observed texture has a level-0
+/// row under 16 bytes, so the question is untested there - and leaving it unpadded
+/// makes the single-level arithmetic byte-identical to what it was before mip
+/// support existed, which is what keeps the 346 already-decoding entries decoding.
+/// If a narrow single-level texture ever fails to identify, this is the first thing
+/// to try.
+fn mip_chain_len(width: u16, height: u16, bits_per_pixel: u8, levels: u8) -> usize {
+    let mut total = 0usize;
+    let (mut w, mut h) = (usize::from(width), usize::from(height));
+    for level in 0..levels.max(1) {
+        let row = (w * usize::from(bits_per_pixel)).div_ceil(8);
+        let stride = if level == 0 {
+            row
+        } else {
+            row.next_multiple_of(SWIZZLE_BLOCK_BYTES)
+        };
+        total += stride * h;
+        w = (w / 2).max(1);
+        h = (h / 2).max(1);
+    }
+    total
 }
 
 impl Texture {
@@ -217,7 +280,23 @@ impl Texture {
         let palette_len = colours * 4;
         // Exact, not truncating: the odd 4bpp case is refused above.
         let pixel_len = pixels * bits_per_pixel as usize / 8;
-        let expected = HEADER_LEN + palette_len + pixel_len;
+
+        // `+0x06` is a **mip count**, which this parser assumed was always 1
+        // until `Data.wad` produced a counter-example. `psp-texture.md` predicted
+        // exactly that ("the size arithmetic above holds for this corpus but
+        // would not for a mipmapped texture. Worth re-checking against
+        // `Data.wad`"), and the engine-flare sprite is the case:
+        // `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` is 128x64 at 8bpp
+        // with `+0x06 == 4`, and 11,920 bytes rather than the 9,232 a single
+        // level implies. The chain accounts for it exactly:
+        //
+        //     16 + 1024 + 8192 + 2048 + 512 + 128 = 11,920
+        //
+        // A zero is read as one, since a blob with no pixels at all is not a
+        // texture worth accepting.
+        let mip_levels = data[6].clamp(1, MAX_MIP_LEVELS);
+        let expected =
+            HEADER_LEN + palette_len + mip_chain_len(width, height, bits_per_pixel, mip_levels);
 
         // The size is fully determined by the header, so a mismatch means this
         // is not a texture rather than that it is a damaged one.
@@ -233,7 +312,11 @@ impl Texture {
             .map(|c| [c[0], c[1], c[2], c[3]])
             .collect();
 
-        let stored = &data[HEADER_LEN + palette_len..];
+        // Level 0 only. Slicing to `pixel_len` rather than taking the rest of the
+        // blob is what keeps `indices` exactly `width * height` long on a
+        // mipmapped texture - `to_rgba` feeds `png::encode_rgba`, which asserts
+        // that.
+        let stored = &data[HEADER_LEN + palette_len..HEADER_LEN + palette_len + pixel_len];
         // Bit 0 of `+0x07` says the pixels are stored in the GE's swizzled
         // layout rather than raster order. Five of `FE.wad`'s thirteen textures
         // set it, and reading those linearly gives noise: `00006_cee1c5a4`
@@ -268,6 +351,7 @@ impl Texture {
             palette,
             indices,
             unknown: [data[5], data[6], data[7], data[8]],
+            mip_levels,
         })
     }
 
@@ -347,6 +431,94 @@ mod tests {
             width as usize * height as usize * bpp as usize / 8,
         ));
         out
+    }
+
+    /// `+0x06` is a mip count, and a chain of them still decodes to level 0.
+    ///
+    /// This exists because the parser assumed one level for a long time and
+    /// `psp-texture.md` flagged the assumption as untested against `Data.wad`.
+    /// The engine-flare sprite is the counter-example: 128x64 at 8bpp with
+    /// `+0x06 == 4` and 11,920 bytes, where one level implies 9,232. The shape is
+    /// reproduced here synthetically - no game data in any test.
+    #[test]
+    fn a_mipmapped_blob_declares_its_chain_and_decodes_level_zero() {
+        let (w, h) = (128u16, 64u16);
+        let mut blob = build(w, h, 8, 0);
+        blob[6] = 4;
+        // Levels 1..3, appended after the level-0 pixels `build` already wrote.
+        // Every row here is already at least 16 bytes, so no padding applies -
+        // which is exactly why the flare sprite's length is unaffected by it.
+        for (lw, lh) in [(64usize, 32usize), (32, 16), (16, 8)] {
+            blob.extend(std::iter::repeat_n(0u8, lw * lh));
+        }
+
+        // The exact length the disc's own sprite has, arrived at independently.
+        assert_eq!(blob.len(), 11_920);
+
+        let parsed = Texture::parse(&blob).expect("a mipmapped texture must parse");
+        assert_eq!(parsed.mip_levels, 4);
+        assert_eq!(parsed.width, w);
+        assert_eq!(parsed.height, h);
+        // Level 0 only: the extra levels must not lengthen `indices`, or
+        // `png::encode_rgba` would reject the buffer for its dimensions.
+        assert_eq!(parsed.indices.len(), usize::from(w) * usize::from(h));
+
+        // Truncating the chain must be refused rather than read as a shorter
+        // texture, which is the property that keeps `looks_like_texture` strong.
+        blob.truncate(blob.len() - 1);
+        assert!(matches!(
+            Texture::parse(&blob),
+            Err(Error::SizeMismatch { .. })
+        ));
+    }
+
+    /// A tail level narrower than 16 bytes pads its rows to 16.
+    ///
+    /// This is the rule the noise texture forced:
+    /// `Data\Tex\engineFlare\Engine_noise.mip` is 64x64 at 8bpp with 4 levels
+    /// and **6,544** bytes, where an unpadded chain implies 6,480. The whole
+    /// 64-byte difference is level 3, an 8x8 whose 8-byte rows pad to 16.
+    #[test]
+    fn a_narrow_tail_level_pads_its_rows_to_sixteen_bytes() {
+        let mut blob = build(64, 64, 8, 0);
+        blob[6] = 4;
+        for (lw, lh) in [(32usize, 32usize), (16, 16)] {
+            blob.extend(std::iter::repeat_n(0u8, lw * lh));
+        }
+        // Level 3 is 8x8: 8 rows of a 16-byte stride, not of an 8-byte one.
+        blob.extend(std::iter::repeat_n(0u8, 16 * 8));
+
+        assert_eq!(blob.len(), 6_544, "the length the disc's own texture has");
+        let parsed = Texture::parse(&blob).expect("a padded chain must parse");
+        assert_eq!(parsed.mip_levels, 4);
+        assert_eq!(parsed.indices.len(), 64 * 64);
+
+        // Without the padding the blob is 64 bytes shorter, and must be refused -
+        // that is what makes the rule load-bearing rather than cosmetic.
+        let mut unpadded = build(64, 64, 8, 0);
+        unpadded[6] = 4;
+        for n in [32 * 32usize, 16 * 16, 8 * 8] {
+            unpadded.extend(std::iter::repeat_n(0u8, n));
+        }
+        assert_eq!(unpadded.len(), 6_480);
+        assert!(matches!(
+            Texture::parse(&unpadded),
+            Err(Error::SizeMismatch { .. })
+        ));
+    }
+
+    /// A single-level blob is unaffected by the mip arithmetic.
+    ///
+    /// The 346 standalone `.mip` entries that already decoded must keep decoding;
+    /// this pins that the change only widened what parses.
+    #[test]
+    fn one_level_is_still_the_plain_case() {
+        for (w, h, bpp) in [(64u16, 16u16, 8u8), (32, 32, 4), (8, 8, 8)] {
+            let blob = build(w, h, bpp, 0);
+            let parsed = Texture::parse(&blob).expect("parse");
+            assert_eq!(parsed.mip_levels, 1);
+            assert_eq!(parsed.indices.len(), usize::from(w) * usize::from(h));
+        }
     }
 
     #[test]

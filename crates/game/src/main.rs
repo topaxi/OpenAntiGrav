@@ -1007,6 +1007,8 @@ impl Stage {
             track_model,
             ship_model,
             collision_model,
+            flare,
+            noise,
             ..
         } = loaded;
         let scene = race::Scene::new(
@@ -1015,6 +1017,8 @@ impl Stage {
             track_model,
             ship_model,
             collision_model,
+            flare,
+            noise,
             gpu.config.format,
             size,
             anisotropy,

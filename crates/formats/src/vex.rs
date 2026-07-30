@@ -102,6 +102,169 @@ pub const CLASS_START_POSITION: u32 = 0x3bc;
 /// all when the transform is the identity.
 pub const CLASS_TRANSFORM: u32 = 0x6e;
 
+/// Class ID of an `Engine Flare` node: the ship's exhaust.
+///
+/// Its runtime handler is read at instruction level in
+/// `docs/ghidra/functions/psp-pulse/exhaust.md`: an additive camera-facing quad
+/// at the nozzle, plus the `~ENGINE` sound and the `<Team>boost.vex` model.
+pub const CLASS_ENGINE_FLARE: u32 = 0x3bf;
+
+/// Class ID of a `ParticleSystem` node.
+///
+/// The `.pob` payload it names is undecoded; see `docs/formats/README.md`.
+pub const CLASS_PARTICLE_SYSTEM: u32 = 0x3c4;
+
+/// Class ID of a `Trail` node: a position-history ribbon.
+///
+/// Distinct from [`CLASS_ENGINE_FLARE`], which carries no history at all. The
+/// ribbon's ring buffer and draw are in `exhaust.md`.
+pub const CLASS_TRAIL: u32 = 0x3c8;
+
+/// Class ID of an `exitglow` node.
+pub const CLASS_EXITGLOW: u32 = 0x3e4;
+
+/// Class ID of an `engine_fire` node.
+pub const CLASS_ENGINE_FIRE: u32 = 0x3e5;
+
+/// Class ID of a `Ship Collision Fx` node.
+pub const CLASS_SHIP_COLLISION_FX: u32 = 0x3d0;
+
+/// Class ID of a `Ship Muzzle` node.
+pub const CLASS_SHIP_MUZZLE: u32 = 0x3e2;
+
+/// Class ID of an `Airbrake` node.
+pub const CLASS_AIRBRAKE: u32 = 0x3c5;
+
+/// The `.vex` class-ID to name table, as the shipped executable carries it.
+///
+/// Read out of `BOOT.BIN` at `0x08ab2370` - stride 12, `{u32 id, char *name,
+/// ptr}`, names at `0x08a84d40`, terminated by `id == -1`. The third field is a
+/// runtime slot that `Vex_RegisterClass` fills at boot, **not** a shared vtable.
+/// `docs/ghidra/functions/psp-pulse/exhaust.md` carries the evidence and the
+/// confidence score (95, because ten of these IDs were already in this file from
+/// unrelated evidence and every one agrees).
+///
+/// These are names, not content: a class name describes the format, which is what
+/// ADR-0006 permits. Nothing here is a tuning value.
+///
+/// **Not exhaustive.** The read stopped at `0x08ab26a0` without reaching the
+/// terminator, so the generic Maya classes with small sequential ids
+/// (`0 Invalid`, `1 Base`, `2 Name`, …) are only partly covered and the table's
+/// extent is unknown. `0x3e3` genuinely has no entry, and the table does contain
+/// out-of-order ids (`0x3d0`, `0x3e9`, `0x3eb`), so a gap proves nothing.
+const CLASS_NAMES: &[(u32, &str)] = &[
+    (0x06e, "Transform"),
+    (0x0f4, "World"),
+    (0x0f7, "Camera"),
+    (0x123, "NurbsSurface"),
+    (0x125, "Mesh"),
+    (0x12c, "AmbientLight"),
+    (0x131, "DirectionalLight"),
+    (0x132, "PointLight"),
+    (0x2ee, "LodGroup"),
+    (0x3b9, "Floor Collision"),
+    (0x3ba, "Wall Collision"),
+    (0x3bb, "WO Track"),
+    (0x3bc, "Start Position"),
+    (0x3bd, "Speedup Pad"),
+    (0x3be, "Weapon Pad"),
+    (0x3bf, "Engine Flare"),
+    (0x3c0, "Anim Transform"),
+    (0x3c1, "Texture"),
+    (0x3c2, "Dynamic Point Light"),
+    (0x3c3, "Dynamic Shadow Occluder"),
+    (0x3c4, "ParticleSystem"),
+    (0x3c5, "Airbrake"),
+    (0x3c6, "Skycube"),
+    (0x3c7, "Quake"),
+    (0x3c8, "Trail"),
+    (0x3c9, "section"),
+    (0x3ca, "gate"),
+    (0x3cb, "shadow"),
+    (0x3cc, "speaker"),
+    (0x3cd, "Reset Collision"),
+    (0x3ce, "wospot"),
+    (0x3cf, "wopoint"),
+    (0x3d0, "Ship Collision Fx"),
+    (0x3d3, "fogCube"),
+    (0x3d4, "MeshNode_Ghost"),
+    (0x3d5, "sea"),
+    (0x3d6, "seaweed"),
+    (0x3d7, "seareflect"),
+    (0x3d8, "cloudCube"),
+    (0x3d9, "cloudGroup"),
+    (0x3da, "weatherPos"),
+    (0x3db, "Unused 1"),
+    (0x3dc, "animationTrigger"),
+    (0x3dd, "gridCamera"),
+    (0x3de, "lensflare"),
+    (0x3df, "textureBlob"),
+    (0x3e0, "blob"),
+    (0x3e1, "sound"),
+    (0x3e2, "Ship Muzzle"),
+    (0x3e4, "exitglow"),
+    (0x3e5, "engine_fire"),
+    (0x3e6, "Mag Floor Collision"),
+    (0x3e7, "Cage Collision"),
+    (0x3e9, "soundcone"),
+    (0x3eb, "cannon_flash"),
+];
+
+/// The shipped name for a class ID, or `None` if the ID is not in
+/// [`CLASS_NAMES`].
+///
+/// `None` means "not in the part of the table that was read", not "invalid" -
+/// see [`CLASS_NAMES`] on the missing extent.
+#[must_use]
+pub fn class_name(class_id: u32) -> Option<&'static str> {
+    CLASS_NAMES
+        .iter()
+        .find(|(id, _)| *id == class_id)
+        .map(|(_, name)| *name)
+}
+
+/// Every node of one class, in tree order.
+///
+/// Exists because callers were all hand-rolling
+/// `nodes(data).iter().filter(|n| n.class_id == ...)`, and a class filter is the
+/// first thing anything reading a `.vex` wants.
+pub fn nodes_by_class(nodes: &[Node], class_id: u32) -> impl Iterator<Item = &Node> {
+    nodes.iter().filter(move |n| n.class_id == class_id)
+}
+
+/// Model-space matrices of every node of `class_id` that carries a 4x4 payload.
+///
+/// The locator classes - `Engine Flare`, `Ship Muzzle`, `Ship Collision Fx`,
+/// `cannon_flash`, `Start Position` - all store a **64-byte payload in exactly
+/// the layout [`transform`] reads**: row-major, translation in row 3. That is not
+/// assumed here; [`crate::track::start_position`] already decodes `Start
+/// Position` that way, and its reading is corroborated against the running game
+/// to within 1.12 degrees of heading (see `docs/formats/track.md`).
+///
+/// [`world_transforms`] deliberately treats every non-`Transform` class as the
+/// identity, because a track's assembly must not depend on guessing at payloads
+/// it does not decode. This function is the opposite trade, taken explicitly for
+/// one class at a time, and it composes with the parent chain the same way.
+///
+/// Nodes whose payload is too short to be a matrix are skipped rather than
+/// defaulted to the identity: a locator at the origin and a locator that failed
+/// to decode should not look the same to a caller.
+pub fn class_world_transforms(data: &[u8], nodes: &[Node], class_id: u32) -> Vec<[f32; 16]> {
+    let chain = world_transforms(data, nodes);
+    nodes
+        .iter()
+        .filter(|node| node.class_id == class_id)
+        .filter_map(|node| {
+            let local = transform(data.get(node.payload())?)?;
+            let parent = node
+                .parent
+                .and_then(|p| chain.get(p).copied())
+                .unwrap_or(IDENTITY);
+            Some(multiply(&local, &parent))
+        })
+        .collect()
+}
+
 /// Divisor for `s16` positions and the `f32` scale.
 ///
 /// The game's own offline direction uses 32767; 32768 matches the hardware

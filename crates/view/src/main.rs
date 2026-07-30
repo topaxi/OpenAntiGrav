@@ -26,6 +26,7 @@ use std::sync::Arc;
 // live in `oag-render`, so the game draws through the same code. What is left
 // here is the viewer: the CLI, the window and the texture browser.
 use oag_assets::Archive;
+use oag_formats::vex;
 use oag_render::mesh_render::Anisotropy;
 use oag_render::{collision, mesh, mesh_render, track};
 
@@ -148,6 +149,71 @@ struct Cli {
     /// 8x or 16x.
     #[arg(long, default_value_t = Anisotropy::default())]
     anisotropy: Anisotropy,
+
+    /// Print every node of a `.vex` file - class, name, size, tree position -
+    /// and exit, drawing nothing.
+    ///
+    /// The parser has always returned every node regardless of class; until this
+    /// flag there was no way to look at the ones nothing decodes. That is how
+    /// the effects classes stayed unexamined while `docs/formats/vex.md` listed
+    /// their names.
+    #[arg(long)]
+    nodes: Option<String>,
+
+    /// Restrict `--nodes` to one class, by decimal id or `0x`-prefixed hex.
+    #[arg(long)]
+    class: Option<String>,
+}
+
+/// Prints a `.vex` file's node tree, and a per-class census under it.
+///
+/// The census is the part worth reading: a count per class says what a file *is*
+/// in one screen, and an unnamed class ID is a prompt to go back to the table in
+/// [`oag_formats::vex::class_name`] rather than a defect.
+fn report_nodes(data: &[u8], label: &str, only: Option<u32>) -> Result<()> {
+    let nodes = vex::nodes(data).with_context(|| format!("walking {label}"))?;
+    println!("{label}: {} node(s)", nodes.len());
+
+    let shown: Vec<&vex::Node> = match only {
+        Some(id) => vex::nodes_by_class(&nodes, id).collect(),
+        None => nodes.iter().collect(),
+    };
+    if let Some(id) = only {
+        let name = vex::class_name(id).unwrap_or("unnamed class");
+        println!("  filtered to 0x{id:03x} {name}: {} node(s)", shown.len());
+    }
+
+    for node in &shown {
+        // Indent by depth so the tree reads as a tree; the parent index is
+        // printed as well because a filtered view loses the indentation's
+        // meaning entirely.
+        let indent = "  ".repeat(node.depth.min(16));
+        let class = vex::class_name(node.class_id).unwrap_or("?");
+        let name = node.name.as_deref().unwrap_or("");
+        println!(
+            "  {indent}0x{:03x} {class:<24} {name:<32} \
+             {} byte(s), {} child(ren), parent {:?}",
+            node.class_id, node.data_size, node.child_count, node.parent,
+        );
+    }
+
+    // Census over the whole file, not over the filtered view: the point of it is
+    // to say what is present, and a filter has already decided that.
+    let mut census: Vec<(u32, usize)> = Vec::new();
+    for node in &nodes {
+        match census.iter_mut().find(|(id, _)| *id == node.class_id) {
+            Some((_, count)) => *count += 1,
+            None => census.push((node.class_id, 1)),
+        }
+    }
+    census.sort_unstable_by_key(|(id, _)| *id);
+
+    println!("  class census:");
+    for (id, count) in census {
+        let name = vex::class_name(id).unwrap_or("unnamed - not in the read table");
+        println!("    0x{id:03x} {name:<28} {count:>5}");
+    }
+    Ok(())
 }
 
 /// Prints the per-class breakdown of a track's collision soup.
@@ -240,6 +306,21 @@ fn load_texture_set(spec: &str, entry: &str) -> Result<Vec<Option<mesh::ModelTex
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Some(name) = &cli.nodes {
+        let only = match &cli.class {
+            None => None,
+            Some(text) => Some(
+                match text.strip_prefix("0x") {
+                    Some(hex) => u32::from_str_radix(hex, 16),
+                    None => text.parse::<u32>(),
+                }
+                .with_context(|| format!("{text} is not a class id"))?,
+            ),
+        };
+        let data = mesh::read_blob(&cli.archive, name)?;
+        return report_nodes(&data, name, only);
+    }
 
     if let Some(name) = &cli.collision {
         let (nodes, label) = collision::load(&cli.archive, name)?;

@@ -163,9 +163,75 @@ bits of `+0x07` mean, and what `+0x05` is, is still open.
 
 The [embedded texture node in `.vex`](vex.md#embedded-textures) has a
 **`mip_count`** byte at the corresponding offset, which suggests `+0x05` or
-`+0x06` is a mip count here. Every standalone `.mip` has exactly one level, so
-the size arithmetic above holds for this corpus but **would not** for a
-mipmapped texture. Worth re-checking against `Data.wad`.
+`+0x06` is a mip count here.
+
+### `+0x06` is the mip count - confirmed, and it was `Data.wad` that showed it
+
+**Confidence 92.** This section previously read "every standalone `.mip` has
+exactly one level, so the size arithmetic above holds for this corpus but would
+not for a mipmapped texture - worth re-checking against `Data.wad`". That
+re-check has happened and the prediction was right.
+
+`Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` - the ship exhaust sprite,
+named as a literal in the executable at `0x08a84c80` - is **128x64 at 8bpp with
+`+0x06 == 4`**, and it is **11,920 bytes** where a single level implies 9,232. The
+chain accounts for the difference exactly, with each level halving both
+dimensions:
+
+| Part | Bytes | Running |
+| --- | ---: | ---: |
+| header | 16 | 16 |
+| palette, 256 x RGBA8888 | 1,024 | 1,040 |
+| level 0, 128x64 | 8,192 | 9,232 |
+| level 1, 64x32 | 2,048 | 11,280 |
+| level 2, 32x16 | 512 | 11,792 |
+| level 3, 16x8 | 128 | **11,920** |
+
+An exact hit on a four-term sum is not a coincidence, which is what puts this at
+92 rather than in the 70s.
+
+### Levels after the first pad their rows to 16 bytes
+
+**Confidence 88**, from a second texture that the mip count alone did not explain.
+`Data\Tex\engineFlare\Engine_noise.mip` is **64x64 at 8bpp with `+0x06 == 4`**
+and **6,544** bytes, where a tightly packed chain implies 6,480. The 64-byte
+difference is entirely level 3: an 8x8 whose 8-byte rows are padded to a 16-byte
+stride, `8 * 16 = 128` instead of `8 * 8 = 64`.
+
+| Texture | Levels | Packed | Padded tail | Blob |
+| --- | ---: | ---: | ---: | ---: |
+| `grabbedEngineFlare128x64x8` 128x64 | 4 | 11,920 | 11,920 | **11,920** |
+| `Engine_noise` 64x64 | 4 | 6,480 | **6,544** | **6,544** |
+
+**One rule, two exact hits.** The flare is unaffected because every one of its
+levels is already at least 16 bytes wide, which is also why the mip fix landed
+before this one was noticed. 16 is [`SWIZZLE_BLOCK_BYTES`] - the GE's texture row
+alignment - so the two are the same constant rather than a coincidence.
+
+**Level 0 is deliberately left unpadded**, and that asymmetry is a statement about
+the evidence rather than the hardware: no observed texture has a level-0 row under
+16 bytes, so the question is untested there, and leaving it alone keeps the
+single-level arithmetic byte-identical to what the 346-entry corpus was verified
+against. If a narrow single-level texture ever fails to identify, try this first. `oag_formats::texture` now reads the count, validates
+the whole chain and decodes **level 0 only**, so `indices` stays exactly
+`width * height` long - `png::encode_rgba` asserts that. The change only widens
+what parses: at one level the arithmetic is unchanged, and all 346 previously
+decoding entries still decode.
+
+Two smaller notes from the same blob, both mild contradictions of the FE-only
+corpus this page was written against:
+
+- `+0x06` is `4` here against "1 in every standalone `.mip` seen". That is the
+  finding above.
+- `+0x07` is `1`, i.e. **bit 0 set, so this texture is swizzled**, and `+0x08` is
+  `0` - its complement, as documented. The existing unswizzle path handles it with
+  no change; worth recording only because it means `Data.wad` swizzles textures
+  that `FE.wad`'s sample would have suggested were rare.
+
+The corpus statement above ("all 346 decode") was measured before this fix and
+covers `FE.wad`, `FEData.wad` and `Data`'s *standalone* set as then identified.
+**A mipmapped entry would previously have failed identification rather than
+mis-decoded**, so the count is a floor: re-running the sweep may now find more.
 
 ### Non-indexed formats
 

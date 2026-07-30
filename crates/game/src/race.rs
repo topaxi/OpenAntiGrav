@@ -52,7 +52,7 @@
 use anyhow::{Context, Result};
 use oag_assets::pulse;
 use oag_core::math::{Mat4, Vec3};
-use oag_core::{TickClock, TickRate};
+use oag_core::{Rng, TickClock, TickRate};
 use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
 use oag_formats::{collision, handling};
@@ -63,6 +63,7 @@ use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::collision as render_collision;
+use oag_render::exhaust::{self, Exhaust, FlareTexture};
 use oag_render::mesh::Model;
 use oag_render::mesh_render::Anisotropy;
 use oag_render::{mesh, mesh_render, track as track_render};
@@ -143,6 +144,14 @@ pub const AUTHORED_ASPECT: f32 = crate::frontend::SCREEN.0 / crate::frontend::SC
 /// generator, so this exists only so the seed is written down in one place for
 /// whenever something does. See `crates/core/src/rng.rs`.
 pub const SEED: u64 = 1;
+
+/// Seed for the exhaust's flicker, kept distinct from [`SEED`].
+///
+/// The exhaust draws two numbers per tick and the simulation must not see them:
+/// sharing a generator would let the picture change the physics, which is what
+/// `docs/architecture/determinism.md` forbids. A separate seed also means the two
+/// streams cannot be mistaken for each other when reading a capture.
+pub const EXHAUST_SEED: u64 = 0xe8_a5_71_00;
 
 /// The archive entry name of a team's `.vex` model.
 ///
@@ -228,6 +237,14 @@ pub struct Setup {
     pub handling: Handling,
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
+    /// The `engine_flare` locator, in the ship model's own space.
+    ///
+    /// `None` means the model carries no `Engine Flare` node, and the exhaust is
+    /// then not drawn rather than guessed at. Every team whose `Ship.vex`
+    /// resolves by name has **exactly one**, a direct child of `world` - see
+    /// `docs/ghidra/functions/psp-pulse/exhaust.md`. One nozzle, centred, not one
+    /// per visible engine.
+    pub nozzle: Option<Vec3>,
 }
 
 /// A [`Setup`] plus the geometry to draw it with.
@@ -241,8 +258,75 @@ pub struct Loaded {
     pub ship_model: Model,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,
+    /// The trail ribbon's noise texture off the disc, when it decodes.
+    pub noise: Option<FlareTexture>,
+    /// The engine-flare texture off the disc, when it decodes.
+    ///
+    /// `None` falls back to [`Exhaust`]'s procedural glow, and the load report
+    /// says so - it is not a silent substitution.
+    pub flare: Option<FlareTexture>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
+}
+
+/// The exhaust sprite's texture, named as a literal string in the executable.
+///
+/// At `0x08a84c80`, loaded by `Texture_LoadEngineFlare`. Being a literal means the
+/// WAD lookup is an exact `wad::hash_name` hit rather than a mined candidate, which
+/// is unusual for this project and worth the note.
+pub const FLARE_TEXTURE: &str = r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip";
+
+/// The trail ribbon's texture, also a literal in the executable.
+///
+/// At `0x08a889e4`, loaded by `Texture_LoadEngineNoise` into three slots that
+/// `Trail_DrawRibbon` indexes per layer. Note the directory case differs from
+/// [`FLARE_TEXTURE`]'s - `engineFlare` here, `EngineFlare` there - which does not
+/// matter, since the WAD hash is case-insensitive.
+pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
+
+/// The `engine_flare` locator's position in the ship model's own space.
+///
+/// A locator class stores a 4x4 in its 64-byte payload exactly as a `Transform`
+/// does, which is why [`vex::class_world_transforms`] can compose it with the
+/// parent chain. Row 3 is the translation.
+///
+/// Takes the **first** node if a model somehow had several. Every team checked has
+/// exactly one, so this is a total order on a set of size one rather than a policy.
+fn engine_flare(ship_blob: &[u8]) -> Option<Vec3> {
+    let nodes = vex::nodes(ship_blob).ok()?;
+    let m = vex::class_world_transforms(ship_blob, &nodes, vex::CLASS_ENGINE_FLARE)
+        .into_iter()
+        .next()?;
+    Some(Vec3::new(m[12], m[13], m[14]))
+}
+
+/// Decodes a `.mip` texture out of the archive set.
+///
+/// Returns the pixels and a line for the load report, or the reason it could not -
+/// **as text, not as `None`**. A missing entry and a blob that does not parse are
+/// different problems with different fixes (name mining versus the decoder), and a
+/// silent fallback hides which one happened.
+fn mip_texture(
+    archives: &mut pulse::Archives,
+    name: &str,
+) -> std::result::Result<(FlareTexture, String), String> {
+    let blob = archives
+        .read_name(name)
+        .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
+    let texture = oag_formats::texture::Texture::parse(&blob)
+        .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", blob.len()))?;
+    let note = format!(
+        "{name}: {}x{}, {} mip level(s)",
+        texture.width, texture.height, texture.mip_levels
+    );
+    Ok((
+        FlareTexture {
+            width: u32::from(texture.width),
+            height: u32::from(texture.height),
+            rgba: texture.to_rgba(),
+        },
+        note,
+    ))
 }
 
 /// Loads a track, a ship and its handling out of a disc image.
@@ -408,6 +492,41 @@ pub fn load(options: &Options) -> Result<Loaded> {
         None
     };
 
+    let nozzle = engine_flare(&ship_blob);
+    match nozzle {
+        Some(at) => report.push(format!(
+            "{ship_name}: engine_flare locator at {at:?} in model space"
+        )),
+        None => report.push(format!(
+            "{ship_name}: no Engine Flare node - the exhaust will not be drawn"
+        )),
+    }
+
+    let noise = match mip_texture(&mut archives, NOISE_TEXTURE) {
+        Ok((texture, note)) => {
+            report.push(note);
+            Some(texture)
+        }
+        Err(why) => {
+            report.push(format!("{why} - the trail falls back to a procedural glow"));
+            None
+        }
+    };
+
+    let flare = match mip_texture(&mut archives, FLARE_TEXTURE) {
+        Ok((texture, note)) => {
+            report.push(note);
+            Some(texture)
+        }
+        Err(why) => {
+            // Reported rather than silently swapped for the placeholder. A
+            // stand-in that looks plausible is how a decode failure survives
+            // review; see the note on `FlareTexture::placeholder`.
+            report.push(format!("{why} - the flare falls back to a procedural glow"));
+            None
+        }
+    };
+
     Ok(Loaded {
         setup: Setup {
             ai,
@@ -416,10 +535,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
             collision,
             handling,
             chase,
+            nozzle,
         },
         track_model,
         collision_model,
         ship_model,
+        flare,
+        noise,
         report,
     })
 }
@@ -757,6 +879,23 @@ pub struct Race {
     /// How many times the ship has been respawned this race, for tests and for
     /// the load report.
     respawns: u32,
+    /// The exhaust's animation state, advanced on the simulation tick.
+    ///
+    /// Here rather than in `World` for the same reason [`Chase`] is: it is
+    /// render-only state, so it must not enter a snapshot a replay or a
+    /// determinism hash reads. `physics/src/probe.rs` destructures `ShipState`
+    /// exhaustively on purpose, and adding a visual field there would move the
+    /// pinned hashes for no reason.
+    exhaust: Exhaust,
+    /// The flicker's generator, deliberately **not** `world.rng`.
+    ///
+    /// The exhaust draws two random numbers per tick. Taking them from the
+    /// simulation's generator would make the picture change what the simulation
+    /// does next - the determinism rules exist to prevent exactly that. Seeded, so
+    /// a capture at tick *n* is still reproducible.
+    exhaust_rng: Rng,
+    /// The `engine_flare` locator in model space, when the ship model has one.
+    nozzle: Option<Vec3>,
 }
 
 /// Ticks a `Reset` contact is ignored for after a respawn.
@@ -792,6 +931,7 @@ impl Race {
             collision,
             handling,
             chase,
+            nozzle,
             ..
         } = setup;
 
@@ -821,6 +961,11 @@ impl Race {
             respawns_in_a_row: 0,
             respawn_disabled: false,
             respawns: 0,
+            // Cold, then snapped on the first tick. A race starts from a standing
+            // start with no thrust, so there is nothing to snap *to* here.
+            exhaust: Exhaust::new(),
+            exhaust_rng: Rng::new(EXHAUST_SEED),
+            nozzle,
         }
     }
 
@@ -914,6 +1059,25 @@ impl Race {
         self.world.tick += 1;
         let target = target_of(&self.world.ships[0]);
         self.camera.advance(target, &self.chase_params, self.dt);
+
+        // Advanced here, on the fixed tick, and not in the frame loop. That is
+        // what makes the headless `capture` path - which calls only `tick` -
+        // produce the same flare at the same tick count as the window does, and
+        // it is the same reason the chase camera is advanced from here.
+        let ship = &self.world.ships[0].physics;
+        let thrust = ship.thrust;
+        let speed = ship.body.linear_velocity.length();
+        self.exhaust
+            .advance(self.dt, thrust, speed, &mut self.exhaust_rng);
+
+        // One sample per tick, which is what `Trail_Update` does per frame - it
+        // takes no `dt` at all. The direction is the nozzle's own backwards axis so
+        // a segment keeps the orientation the craft had when it was laid down,
+        // rather than swinging with the current pose as the ship turns.
+        if let Some(nozzle) = self.nozzle() {
+            let back = -self.ship().physics.body.forward();
+            self.exhaust.push_trail(nozzle, back);
+        }
         evaluated
     }
 
@@ -970,6 +1134,11 @@ impl Race {
         self.respawns_in_a_row += 1;
         self.respawn_cooldown = RESPAWN_COOLDOWN_TICKS;
 
+        // Otherwise the ribbon spans the teleport: ten samples of history from
+        // wherever the craft fell off, stretched across the track to where it was
+        // put back. The camera is snapped for the same reason.
+        self.exhaust.clear_trail();
+
         if self.respawns_in_a_row >= RESPAWN_GIVE_UP {
             self.respawn_disabled = true;
             eprintln!(
@@ -1002,6 +1171,26 @@ impl Race {
             spline_distance,
             height_above_spline,
         }
+    }
+
+    /// The exhaust's current animation state.
+    #[must_use]
+    pub fn exhaust(&self) -> &Exhaust {
+        &self.exhaust
+    }
+
+    /// The `engine_flare` locator in **world** space, or `None` when the ship
+    /// model carries no `Engine Flare` node.
+    ///
+    /// Composed through [`Race::ship_model_matrix`], which is the only correct
+    /// route: the locator is authored in `.vex` model space, so it has to pick up
+    /// [`MODEL_YAW`] exactly as the hull's vertices do. A nozzle built from
+    /// `body.forward()` instead would be a half-turn out and would sit on the
+    /// ship's nose.
+    #[must_use]
+    pub fn nozzle(&self) -> Option<Vec3> {
+        let local = self.nozzle?;
+        Some(self.ship_model_matrix().transform_point3(local))
     }
 
     /// Where the camera is and what it is aimed at, as a view matrix.
@@ -1242,6 +1431,14 @@ pub struct Scene {
     /// for it. Drawn with the identity transform, same as the track: the
     /// collision geometry is already in world space.
     collision: Option<Drawable>,
+    /// The engine flare: the one blended pipeline in the frame.
+    ///
+    /// `RefCell` because its per-frame upload needs `&mut` while [`Scene::render`]
+    /// stays `&self`. That signature is worth keeping: the alternative threads
+    /// `&mut` through `RaceStage::render` and `race::capture` for a buffer write
+    /// that `queue` already accepts through a shared reference. The borrow is
+    /// taken and released inside `render` with nothing re-entrant in between.
+    exhaust: std::cell::RefCell<exhaust::Pipeline>,
     depth: wgpu::Texture,
     /// Where the far plane goes, from the track's own extent.
     far: f32,
@@ -1263,6 +1460,8 @@ impl Scene {
         track_model: Model,
         ship_model: Model,
         collision_model: Option<Model>,
+        flare: Option<FlareTexture>,
+        noise: Option<FlareTexture>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -1276,10 +1475,19 @@ impl Scene {
         let collision = collision_model
             .map(|model| Drawable::new(device, queue, model, format, anisotropy))
             .transpose()?;
+        // 64 is a stand-in size only, and only when the disc's own texture did not
+        // decode; `load` has already reported that when it happens.
+        let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
+        let noise = noise.unwrap_or_else(|| FlareTexture::placeholder(64));
+        let exhaust = std::cell::RefCell::new(exhaust::Pipeline::new(
+            device, queue, format, &flare, &noise,
+        ));
+
         Ok(Self {
             track,
             ship,
             collision,
+            exhaust,
             depth: depth_texture(device, size),
             far,
         })
@@ -1314,6 +1522,29 @@ impl Scene {
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY);
         }
+
+        // The camera's own axes, read out of the view matrix: for a view matrix
+        // `V`, world-space right and up are rows 0 and 1 of its rotation part.
+        // Building the quad from these is what makes it face the viewer, and it is
+        // the whole reason this is world-space rather than the original's
+        // post-projection sprite.
+        let camera = race.view();
+        let right = Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
+        let up = Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
+        let (vertices, trail) = match race.nozzle() {
+            Some(nozzle) => (
+                race.exhaust().vertices(nozzle, right, up),
+                race.exhaust().trail_vertices(right, up),
+            ),
+            // No locator, nothing drawn - rather than a flare at the origin.
+            None => (Vec::new(), Vec::new()),
+        };
+        self.exhaust.borrow_mut().upload(
+            queue,
+            &view_projection.to_cols_array_2d(),
+            &vertices,
+            &trail,
+        );
 
         let depth_view = self
             .depth
@@ -1353,6 +1584,10 @@ impl Scene {
         if let Some(collision) = &self.collision {
             collision.draw(&mut pass);
         }
+        // Last, and that ordering is load-bearing: the flare tests depth but does
+        // not write it, so the hull's depth has to already be in the buffer for the
+        // flare to be occluded by it.
+        self.exhaust.borrow().draw(&mut pass);
     }
 }
 
@@ -1416,6 +1651,8 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         track_model,
         ship_model,
         collision_model,
+        flare,
+        noise,
         ..
     } = loaded;
     let mut race = Race::start(setup);
@@ -1455,6 +1692,8 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         track_model,
         ship_model,
         collision_model,
+        flare,
+        noise,
         format,
         (width, height),
         options.anisotropy,
@@ -1736,6 +1975,10 @@ mod tests {
                 spring_horiz: 4.0,
                 spring_vert: 2.0,
             },
+            // A synthetic setup has no ship model, so no locator either. The
+            // exhaust still ticks; it just has nowhere to be drawn, which is the
+            // same path a model with no `Engine Flare` node takes.
+            nozzle: None,
         }
     }
 

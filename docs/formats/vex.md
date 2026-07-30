@@ -92,18 +92,59 @@ Game-specific types, from the class-ID table. This list is effectively a
 specification of what a track contains, which makes it the most valuable single
 find so far for M1 and M4.
 
+The IDs below were read out of the table in 2026-07, and the decode is
+**self-validating at confidence 95**: ten of them were already in
+`crates/formats/src/vex.rs` from unrelated evidence, and every one agrees -
+including the two most easily confused, `Mag Floor Collision 0x3e6` and
+`Cage Collision 0x3e7`. Mirrored in that file's `CLASS_NAMES`.
+
 | Group | Types |
 | --- | --- |
-| Scene | `World`, `Transform`, `Anim Transform`, `LodGroup`, `Camera`, `gridCamera` |
-| Geometry | `Mesh`, `MeshNode_Ghost`, `NurbsSurface`, `Texture` |
-| Lighting | `AmbientLight`, `DirectionalLight`, `PointLight`, `Dynamic Point Light`, `Dynamic Shadow Occluder`, `lensflare` |
-| **Track** | `WO Track`, `section`, `gate`, `Start Position`, `Speedup Pad`, `Weapon Pad` |
-| **Collision** | `Floor Collision`, `Wall Collision`, `Mag Floor Collision`, `Cage Collision`, `Reset Collision`, `Ship Collision Fx` |
-| Ship | `Airbrake`, `Engine Flare`, `Ship Muzzle`, `engine_fire`, `exitglow`, `cannon_flash` |
-| Effects | `ParticleSystem`, `Trail`, `Quake`, `blob`, `textureBlob`, `shadow` |
-| Environment | `Skycube`, `fogCube`, `cloudCube`, `cloudGroup`, `sea`, `seareflect`, `seaweed`, `weatherPos` |
-| Audio | `sound`, `soundcone`, `speaker` |
-| Misc | `wospot`, `wopoint`, `animationTrigger` |
+| Scene | `World` `0x0f4`, `Transform` `0x06e`, `Anim Transform` `0x3c0`, `LodGroup` `0x2ee`, `Camera` `0x0f7`, `gridCamera` `0x3dd` |
+| Geometry | `Mesh` `0x125`, `MeshNode_Ghost` `0x3d4`, `NurbsSurface` `0x123`, `Texture` `0x3c1` |
+| Lighting | `AmbientLight` `0x12c`, `DirectionalLight` `0x131`, `PointLight` `0x132`, `Dynamic Point Light` `0x3c2`, `Dynamic Shadow Occluder` `0x3c3`, `lensflare` `0x3de` |
+| **Track** | `WO Track` `0x3bb`, `section` `0x3c9`, `gate` `0x3ca`, `Start Position` `0x3bc`, `Speedup Pad` `0x3bd`, `Weapon Pad` `0x3be` |
+| **Collision** | `Floor Collision` `0x3b9`, `Wall Collision` `0x3ba`, `Mag Floor Collision` `0x3e6`, `Cage Collision` `0x3e7`, `Reset Collision` `0x3cd`, `Ship Collision Fx` `0x3d0` |
+| Ship | `Airbrake` `0x3c5`, `Engine Flare` `0x3bf`, `Ship Muzzle` `0x3e2`, `engine_fire` `0x3e5`, `exitglow` `0x3e4`, `cannon_flash` `0x3eb` |
+| Effects | `ParticleSystem` `0x3c4`, `Trail` `0x3c8`, `Quake` `0x3c7`, `blob` `0x3e0`, `textureBlob` `0x3df`, `shadow` `0x3cb` |
+| Environment | `Skycube` `0x3c6`, `fogCube` `0x3d3`, `cloudCube` `0x3d8`, `cloudGroup` `0x3d9`, `sea` `0x3d5`, `seareflect` `0x3d7`, `seaweed` `0x3d6`, `weatherPos` `0x3da` |
+| Audio | `sound` `0x3e1`, `soundcone` `0x3e9`, `speaker` `0x3cc` |
+| Misc | `wospot` `0x3ce`, `wopoint` `0x3cf`, `animationTrigger` `0x3dc`, `Unused 1` `0x3db` |
+
+Three properties of the table itself, all needed to read it correctly:
+
+- **The third field is a runtime slot, not a shared vtable.** It reads
+  `0x08b62c08` in every shipped entry, which looks like one handler for
+  everything. `Vex_RegisterClass` (`0x08908eb8`) writes each class's descriptor
+  into it at boot, and `Vex_FindClassDescriptor` returns `&DAT_08b62c08` - a
+  *fallback* - on a miss. All-identical in `.data` means nothing is registered
+  yet.
+- **Terminated by `id == -1`**, per both walkers. Past the game classes it
+  continues into generic Maya classes with small sequential ids (`0 Invalid`,
+  `1 Base`, `2 Name`, …). Read as far as `0x08ab26a0`; **the terminator was not
+  reached, so the extent is not stated here.**
+- **`0x3e3` has no entry**, and the ids are not strictly ordered (`0x3d0`,
+  `0x3e9`, `0x3eb` all sit out of sequence), so a gap is not evidence of a missing
+  class.
+
+There are **46 registration call sites**, one per class, in alphabetical order by
+class name with monotonically increasing method-table addresses - one translation
+unit per class, in static-initialiser link order. Method tables are `0x88` bytes
+apart, and slot `+0x24` is update, `+0x34` submit, `+0x44` draw, `+0x7c` init.
+**Class dispatch is by descriptor lookup, never by immediate compare**: there is
+no `li 0x3bf` anywhere in 635,898 instructions, so searching for a class ID as a
+constant will not find its handler.
+
+Neither `engine_fire` nor `exitglow` has a registration site - neither appears
+between `Engine Flare` and `fogCube` where alphabetical order would put it - yet
+`exitglow` is authored **13 times** on `16_Track`. So an unregistered class can
+still have instances, the same way `gate` does. Details and per-file censuses in
+[`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md).
+
+`oag-view --nodes <entry>` prints every node with its class, name and payload
+size, plus a per-class census; `--class 0x3bf` filters to one. That is the tool
+these censuses come from, and it exists because nothing could previously print a
+node the parser does not decode.
 
 `section` is a **visibility partition**, not the lap structure, and the spline
 lives in `WO Track`; `gate` is never registered as a runtime class at all. Those

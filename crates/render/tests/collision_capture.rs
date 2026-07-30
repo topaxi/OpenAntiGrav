@@ -5,7 +5,7 @@
 //! picture of the collision view without a disc image:
 //!
 //! ```sh
-//! cargo nextest run -p oag-render --ignored -E 'test(collision)' --no-capture
+//! cargo nextest run -p oag-render --run-ignored all -E 'test(collision)' --no-capture
 //! ```
 //!
 //! It writes to `$OAG_COLLISION_PNG` or a temporary file. What it asserts is

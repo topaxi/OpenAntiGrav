@@ -1,13 +1,18 @@
 # Rendering
 
-> **Not yet started.** Milestone M4.
+> **Started.** Milestone M4. The wgpu device, the mesh pipeline, the track ribbon,
+> the collision view, the three cameras and the **ship exhaust** exist; see
+> [`architecture/workspace-layout.md`](../architecture/workspace-layout.md) for the
+> crate's seams and [`roadmap.md`](../overview/roadmap.md) for what is still open.
 
 ## Scope
 
 - wgpu device and surface setup
 - Track and scenery rendering
 - Ship rendering, including team liveries
-- Particle effects: thrust, weapons, impacts
+- Particle effects: thrust (**done** - the `Engine Flare` class, recovered in
+  [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md) and implemented in
+  `oag_render::exhaust`), weapons, impacts
 - The HUD
 - Post-processing, and the series' distinctive look
 - Modern display features: ultrawide, HDR, VRR, dynamic resolution, and
