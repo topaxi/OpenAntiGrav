@@ -272,6 +272,7 @@ fn main() -> Result<()> {
         class,
         ribbon: cli.ribbon,
         collision: cli.collision,
+        lod: settings.graphics.lod,
     };
 
     // Before `boot::load`, deliberately: the front end's load parses the front-end

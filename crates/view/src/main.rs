@@ -442,7 +442,9 @@ fn main() -> Result<()> {
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
-        let model = mesh::build_with_textures(name, &data, external)?;
+        // Both tiers, always: an asset inspector's job is to show what is on
+        // the disc, not to apply a performance divergence from it.
+        let model = mesh::build_with_textures(name, &data, external, mesh::Lod::Both)?;
         println!(
             "{}: {} meshes, {} vertices, {} triangles, radius {:.2}",
             model.label,

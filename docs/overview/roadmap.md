@@ -551,13 +551,15 @@ change how this list should be read:
 - [ ] `Anim Transform` `0x3c0` - the authored animation channel. This is the one
       that makes scenery move, and nothing reads it yet
 - [ ] `animationTrigger` `0x3dc` - what starts an animation
-- [ ] `LodGroup` `0x2ee` - authored, but confirmed (see `docs/formats/vex.md`,
-      "`LodGroup`: authored, but never switched at runtime") that the original
-      never selects a tier at runtime: both children of a `child_count == 2`
-      group are always drawn, ten times over on `16_Track` alone. Rendering
-      only tier 0 would remove real duplicate geometry, but it is an invented
-      performance divergence from the original, not a recovered mechanism -
-      a call for whoever picks this up, not an obvious yes
+- [x] `LodGroup` `0x2ee` - confirmed (see `docs/formats/vex.md`, "`LodGroup`:
+      authored, but never switched at runtime") that the original never
+      selects a tier at runtime: both children of a `child_count == 2` group
+      are always drawn, ten times over on `16_Track` alone. `oag_render::mesh::Lod`
+      (`[graphics] lod` in the settings file: `both`/`single`) offers a
+      load-time choice between reproducing that (default) and keeping only the
+      higher-detail tier - a static deduplication, not a distance-based switch.
+      A genuine live switch needs the same per-frame camera mechanism as
+      frustum culling below, and is not built
 - [ ] PVS culling off the track's own `section` `0x3c9` payload. The sections are
       [decoded](../formats/track.md) and attached to the spline rather than to a
       point-in-volume test; nothing culls with them

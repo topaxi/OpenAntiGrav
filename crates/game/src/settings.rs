@@ -30,6 +30,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use oag_render::mesh::Lod;
 use oag_render::mesh_render::Anisotropy;
 
 /// Mirrors [`Anisotropy`] for serde, which cannot derive on a type this crate
@@ -48,6 +49,17 @@ enum AnisotropyDef {
     X8,
     #[serde(rename = "16x")]
     X16,
+}
+
+/// Mirrors [`Lod`] for serde, the same way [`AnisotropyDef`] mirrors
+/// `Anisotropy` - a type this crate does not own, so it cannot derive here.
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Lod")]
+enum LodDef {
+    #[serde(rename = "both")]
+    Both,
+    #[serde(rename = "single")]
+    Single,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -228,6 +240,16 @@ pub struct Graphics {
     /// frame nobody is presenting is the one way to get it wrong.
     #[serde(default)]
     pub perf_overlay: crate::perf::Overlay,
+    /// Whether a track draws every child of an authored `LodGroup`, or only
+    /// the higher-detail first one. Not a quality tier and not distance-based,
+    /// see [`Lod`] for why. `both` matches the original, duplicate geometry
+    /// included; `single` is a load-time choice that removes it.
+    ///
+    /// Defaults to `both`: this changes what is drawn, unlike a texture filter
+    /// or an overlay, so the out-of-the-box behaviour matches the original
+    /// rather than opting a player into a divergence they did not ask for.
+    #[serde(with = "LodDef", default)]
+    pub lod: Lod,
 }
 
 /// Where the settings file lives: `<config dir>/oag/settings.toml`.
@@ -409,6 +431,7 @@ pub fn menu_seeds(
             "graphics.perf_overlay",
             text(&settings.graphics.perf_overlay.to_string()),
         ),
+        ("graphics.lod", text(&settings.graphics.lod.to_string())),
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),
         ("race.track", text(&settings.race.track)),

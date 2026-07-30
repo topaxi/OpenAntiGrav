@@ -198,9 +198,17 @@ Not confidence 90+ only because the switch-distance field's *unit* is
 unconfirmed (world units are the natural read, but nothing ties it to camera
 distance specifically) and the corpus is one track, not several.
 
+**The same track's PS2 build carries the same shape.** 10 `LodGroup` nodes (9
+with `child_count == 2`, 1 with `child_count == 1`, versus PSP's 11 and 10),
+same offsets, same "magic" field byte-identical across every PS2 sample - just
+a *different* platform-wide constant than PSP's
+(`0x08028bb8 0x0adbd758 0x46357f86` versus PSP's, above). One constant per
+platform rather than per node either way, which is what the corpus now spans:
+two platforms agreeing on structure, not one.
+
 ### The runtime never reads any of it
 
-**Confidence 85.** `docs/ghidra/functions/psp-pulse/exhaust.md` already
+**Confidence 88.** `docs/ghidra/functions/psp-pulse/exhaust.md` already
 established the class table's structure and the trap in reading it: the
 table's third field is a *runtime slot* `Vex_RegisterClass` (`0x08908eb8`)
 fills at boot from one of 46 per-class static initialisers, not a shared
@@ -209,19 +217,24 @@ so the only way to find a class's real behaviour is its registration call
 site.
 
 `LodGroup`'s is `FUN_0890c028`, which registers method table `&DAT_08ad160c`.
-Two independent checks on that table both come back generic:
+Three independent checks on that table all come back empty or generic:
 
 - **`update`/`submit`/`draw`** (`+0x24`/`+0x34`/`+0x44`, the slot layout
-  `exhaust.md` established) are `0x089447a4`/`0x089447f4`/`0x0894484c` - all in
-  the `0x08944xxx` range `exhaust.md` already identified as shared base-class
-  defaults (the same range `Engine Flare` and `Trail`'s *unshared* slots sit
-  outside of). `LodGroup` has no custom per-frame behaviour at all.
+  `exhaust.md` established) are `0x089447a4`/`0x089447f4`/`0x0894484c`. These
+  are not merely "shared defaults" by inference from address range - each was
+  disassembled directly. `update` is `jr ra; nop`: return, do nothing, no
+  exceptions. `submit` and `draw` are each four instructions that OR one flag
+  bit into the node's flags word and return; neither touches `child_count`,
+  position, or the switch-distance field, nor calls anything else. There is no
+  room in either for a hidden distance check.
 - **`init`** (`+0x7c`) is `0x0890bc7c`, which *is* `LodGroup`-specific - but it
   turns out to be pure vtable-stamping boilerplate (stamp the method-table and
   class-name pointers, call the shared allocator) on top of `FUN_08944fc0`,
   the universal base-node constructor (32 unrelated call sites, including
-  `Vex_LoadModel` itself). It never reads `child_count`, the position, or the
-  switch-distance field from the payload.
+  `Vex_LoadModel` itself). The one call inside it that looked like it might
+  parse the payload, `FUN_08944bd4`, decompiles to pure sibling-list linkage
+  (splicing the new node into its parent's child chain) - it never reads
+  `child_count`, the position, or the switch-distance field either.
 
 The generic tree walker that collects drawable nodes (`FUN_08a71364`, called
 from `Vex_LoadModel` to gather every `Mesh` in the tree) recurses into **every**
@@ -233,30 +246,78 @@ for (child = *(int*)(node+0x10); child != 0; child = *(int*)(child+0xc))
 ```
 
 No distance check, no class-based branch, nothing keyed on `LodGroup`
-specifically. Between this and the generic method table above, the conclusion
-is convergent from two independent angles: **this retail PSP binary has no
-LOD-tier-selection code anywhere.** When `child_count == 2`, both tiers are
-collected and drawn, always - the ten `16_Track` instances with real mesh
-geometry in both subtrees are not a hypothetical, they are ten places this
-build draws overlapping duplicate geometry at two detail levels every frame.
+specifically. Three independent angles - the method table's per-slot
+disassembly, the constructor's actual field reads, and the generic tree walk -
+all agree: **this retail PSP binary has no LOD-tier-selection code anywhere.**
+When `child_count == 2`, both tiers are collected and drawn, always.
 
 Not confidence 90+ because "no code branches on this" is a negative result -
-thorough by two unrelated routes, but a third undiscovered path (e.g. inside
-`Vex_LoadModel`'s own root-node dispatch, only partially read) can't be ruled
-out with certainty the way a positive decode can.
+thorough by three unrelated routes now, but a fourth undiscovered path (e.g.
+inside `Vex_LoadModel`'s own root-node dispatch, only partially read) can't be
+ruled out with the certainty a positive decode gets.
+
+### The two tiers are genuine, well-formed LOD pairs, not mismatched content
+
+**Confidence 90.** That the runtime never selects a tier raises an obvious
+question: are the "detail levels" even real, or could this class have been
+repurposed or left half-finished, with its second child being unrelated
+content rather than an actual simplification? Checked directly by walking each
+`child_count == 2` group's two node-tree children separately (not just the
+payload's four-byte counter) and measuring real triangle count, material
+count and world-space bounding box for each subtree, on all ten real instances
+on `16_Track`:
+
+| Node | Tier 0 triangles | Tier 1 triangles | Ratio | Centres match |
+| --- | --- | --- | --- | --- |
+| 22  | 1556 | 78   | 20x | yes (within 1.5 units) |
+| 27  | 669  | 201  | 3x  | yes |
+| 66  | 211  | 91   | 2x  | yes |
+| 88  | 414  | 146  | 3x  | yes |
+| 417 | 798  | 52   | 15x | yes |
+| 431 | 1005 | 197  | 5x  | yes, bbox identical |
+| 441 | 2048 | 1024 | 2x  | yes |
+| 485 | 2183 | 1251 | 2x  | yes, bbox identical |
+| 824 | 1369 | 389  | 4x  | yes (within 3 units) |
+| 885 | 957  | 214  | 4x  | yes (within 1 unit) |
+
+Ten for ten: tier 0 always has more triangles than tier 1 (2x to 20x), and
+every pair's bounding box and centre coincide to within a few world units -
+the same object in the same place, not two unrelated pieces of scenery that
+happen to share a parent. This is deliberate, correctly authored LOD content.
+**"Never wired up" and "not accurate" are independent questions, and this
+project's evidence answers them oppositely**: the selection mechanism was cut
+before shipping, but the assets it was meant to select between are real and
+correct.
 
 **What this means for a reimplementation:** the payload's `child_count`/
-switch-distance fields are real authoring-time data, but there is no observed
-behaviour to reproduce - the original always renders every child. Adding
-distance-based tier switching would not be recovering a mechanism, it would be
-*inventing* one, and it would visibly diverge from the original (culling
-geometry the original always drew). Rendering only tier 0 of a `child_count ==
-2` group is a legitimate, faithful-to-measurement optimisation (it removes
-genuine duplicate geometry the original also draws twice, just without
-picking a "better" tier by distance), but it is a deliberate, documented
-performance divergence, not a recovered feature - it should be labelled as
-such wherever it lands, the same way `TRANSPARENT_BLEND` and
-`ALPHA_TEST_THRESHOLD` above are labelled as invented rather than recovered.
+switch-distance fields are real authoring-time data, and the geometry on both
+sides of them is real, correctly-scaled content - not a case where the
+"missing feature" excuses low confidence in the assets themselves. But there
+is still no *observed selection behaviour* to reproduce: the original always
+renders every child. Adding distance-based tier switching would not be
+recovering a mechanism, it would be *inventing* one, and it would visibly
+diverge from the original (culling geometry the original always drew).
+Rendering only tier 0 of a `child_count == 2` group is a legitimate,
+faithful-to-measurement optimisation (it removes genuine duplicate geometry
+the original also draws twice, just without picking a "better" tier by
+distance), but it is a deliberate, documented performance divergence, not a
+recovered feature - it should be labelled as such wherever it lands, the same
+way `TRANSPARENT_BLEND` and `ALPHA_TEST_THRESHOLD` above are labelled as
+invented rather than recovered.
+
+**Implemented as `oag_render::mesh::Lod`** (`both`/`single`, `[graphics] lod`
+in the settings file, defaulting to `both`): a load-time choice, not a live
+switch, and deliberately not named after quality or distance - neither exists
+here. `single` measured 3,643 fewer triangles on `16_Track` (exactly the sum
+of every tier-1 subtree's own triangle count) and was visually indistinguishable
+from `both` at normal viewing distance in every case but one, where `both`
+showed a small patch of the tier-1 mesh poking through the tier-0 surface it
+mostly sits inside - `single` is if anything the cleaner picture, not just the
+cheaper one. A genuine distance-based switch, using the authored
+switch-distance value the original itself never reads, would need `Model` to
+carry per-node bounds and the render loop to re-check them against the camera
+every frame - the same live mechanism the frustum-culling entry below needs,
+and not yet built.
 
 ## Vertex format
 

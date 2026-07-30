@@ -102,6 +102,14 @@ pub const CLASS_START_POSITION: u32 = 0x3bc;
 /// all when the transform is the identity.
 pub const CLASS_TRANSFORM: u32 = 0x6e;
 
+/// Class ID of a `LodGroup` node: an authored level of detail.
+///
+/// Its payload's `child_count` (`u32` at `+0x50`) and, when that is `2`, a
+/// switch-distance `f32` right after are real authoring-time data - but the
+/// original PSP binary never reads either. See `docs/formats/vex.md`,
+/// "`LodGroup`: authored, but never switched at runtime".
+pub const CLASS_LOD_GROUP: u32 = 0x2ee;
+
 /// Class ID of an `Engine Flare` node: the ship's exhaust.
 ///
 /// Its runtime handler is read at instruction level in

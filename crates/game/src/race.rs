@@ -214,6 +214,9 @@ pub struct Options {
     /// made of - the same view `oag-view --collision` draws, wireframe and
     /// Cage-excluded, on top of whichever track model was chosen above.
     pub collision: bool,
+    /// Whether ship and track models draw every child of an authored
+    /// `LodGroup`, or only the higher-detail first one. See [`mesh::Lod`].
+    pub lod: mesh::Lod,
 }
 
 impl Default for Options {
@@ -225,6 +228,7 @@ impl Default for Options {
             class: SpeedClass::Venom,
             ribbon: false,
             collision: false,
+            lod: mesh::Lod::Both,
         }
     }
 }
@@ -445,7 +449,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     let ship_name = ship_entry_name(&options.team);
     let ship_blob = read(&mut archives, &ship_name)?;
-    let mut ship_model = mesh::build(&ship_name, &ship_blob)?;
+    let mut ship_model = mesh::build_with_textures(&ship_name, &ship_blob, None, options.lod)?;
     // The PS2 signature: `Texture` nodes exist (the model wants textures) but
     // every one is missing (its embedded block was empty). Only then is the
     // directory-position heuristic worth trying - see `ps2_texture_set`.
@@ -453,7 +457,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         && ship_model.textures.iter().all(Option::is_none)
         && let Some(external) = ps2_texture_set(&mut archives, &ship_name)
     {
-        ship_model = mesh::build_with_textures(&ship_name, &ship_blob, Some(external))?;
+        ship_model =
+            mesh::build_with_textures(&ship_name, &ship_blob, Some(external), options.lod)?;
     }
     report.push(format!(
         "{ship_name}: {} triangle(s), model centre {:?}, radius {:.2}",
@@ -465,7 +470,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let track_model = if options.ribbon {
         track_render::build_model(&label, &ai)
     } else {
-        let mut track_model = mesh::build(&options.track, &track_blob)?;
+        let mut track_model =
+            mesh::build_with_textures(&options.track, &track_blob, None, options.lod)?;
         // Same PS2 signature and the same directory-position heuristic as the
         // ship above. Checked separately for tracks specifically (not just
         // assumed from the ship result): the entry directly before a track's
@@ -477,7 +483,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
             && track_model.textures.iter().all(Option::is_none)
             && let Some(external) = ps2_texture_set(&mut archives, &options.track)
         {
-            track_model = mesh::build_with_textures(&options.track, &track_blob, Some(external))?;
+            track_model = mesh::build_with_textures(
+                &options.track,
+                &track_blob,
+                Some(external),
+                options.lod,
+            )?;
         }
         track_model
     };
