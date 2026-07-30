@@ -338,6 +338,68 @@ There is also no scenario where a committed definition unlocks playing without a
 disc: a race needs track geometry, ship models and handling stats from the same
 archive.
 
+## The shipped art is raster, and the disc suggests it was not always
+
+Worth writing down because the HUD *looks* vector-native - flat fills, hard edges,
+geometric chevrons and bars - and it is fair to ask whether any of it is.
+
+**Everything this build draws is rasterised, and all of it is authored for
+480x272:**
+
+| Asset | What it actually is |
+| --- | --- |
+| `PulseHUD.mip` | 256x256, **8 bpp paletted raster**, 84 of 100 `Src=` references |
+| `PulseHud.fnt` | 512x256 **4 bpp paletted bitmap** glyph atlas |
+| `small.fnt` | 256x128, likewise |
+
+So every bar, chevron, icon and digit is pixels, and at a modern window size it is
+being magnified: the 1440x816 captures in this project are already a ~3x upscale
+with linear filtering, which is exactly why the zoomed glyph comparisons look soft.
+At 4K it is ~8x. The one exception is `HeadToHeadBar`, which carries no `Src` and is
+a solid `Draw::Fill` - resolution-independent by accident rather than by design.
+
+**But 26 `Data\HUD\*.vex` files are polygonal geometry.** They are named exactly
+after HUD elements - `Bar_1`, `Bar_2`, `Bar_3`, `Bar_outline_1`, `Speed`, `Shield`,
+`Lap`, `Position`, `Thrust`, eleven `Weapon_*`, `Zone_Bar_*`, `Zone_outline_1` -
+and their embedded Maya source paths and node names are unmistakably meshes:
+`polySurfaceShape1`, `polySurface01_nolight`, `Cube1_nolight`, `Lap1_nolight`,
+several carrying `AnimEnd` markers. The `_nolight` suffix is what you would name
+flat-shaded overlay geometry.
+
+Nothing references them: no layout's `Src=`, and `BOOT.BIN` holds no
+`Data\HUD\...vex` string at all. They are also `.vex` **version 4** with root class
+`0x0ee`, which [vex.md](../formats/vex.md) says does not occur in Pulse.
+
+What that means is **not** established. The defensible reading is only that a
+geometry representation of these elements existed in the pipeline; whether it was
+the source the `.mip` atlas was baked from, an abandoned approach, or another
+platform's path is unknown, and the class-`0x0ee` decoder does not exist yet to
+look. Do not write it up as "the HUD was vector".
+
+### Redrawing the art as vector is a good future option, and the seams are already right
+
+Recorded as a direction, not a decision:
+
+- **Resolution independence is the payoff.** A vector or procedural HUD is sharp at
+  any window size, and the original's own layout is hard-authored for 480x272, so a
+  16:9 or ultrawide HUD wants anchors rather than absolute pixels anyway - the same
+  argument as the override format below.
+- **Our own art is committable.** This is the useful asymmetry with
+  [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md): a *transcription*
+  of the disc's layout is derived data and cannot be committed, but art **we** draw
+  is our work and can be. So the vector path is the part of a "commit an artifact"
+  idea that is actually available.
+- **The seam exists.** `hud::Sprite` carries a destination `rect` and a source `uv`
+  independently, and `draw_list` decides only which widgets are live. Substituting a
+  vector or procedural draw for the atlas sample is a renderer concern; `Layout`
+  stays the geometry source and the tests stay valid.
+- **Keep the layout disc-derived.** Only the *art* becomes ours. Parsing the disc's
+  geometry is what makes the HUD match whatever region and revision the player owns,
+  and it is what keeps this out of ADR-0006's way.
+- **Some of it is already vector.** The bars sample a wedge out of the atlas, but
+  they are a rectangle and a crop; `Draw::Fill` draws one with no art at all. The
+  bars are the cheapest thing to convert and the most visible.
+
 ## Deferred, and known
 
 Recorded so none of this reads as undiscovered work.
