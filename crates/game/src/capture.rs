@@ -276,6 +276,8 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 log_every: options.log_every,
                 anisotropy: options.anisotropy,
                 fov: options.settings.graphics.fov,
+                frustum_culling: options.settings.graphics.frustum_culling,
+                pvs_culling: options.settings.graphics.pvs_culling,
             },
         );
     }

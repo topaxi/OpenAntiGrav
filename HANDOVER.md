@@ -213,6 +213,7 @@ used, kept because commits and docs cite them.
 
 | Thread | What is known, and the next step |
 | --- | --- |
+| **PVS culling is on, and the ceiling on it is our own batching** | **2026-07-30.** The track's authored `section` `0x3c9` payload is decoded (`oag_formats::pvs`, validated over both discs) and culls before the frustum test (`oag_render::pvs`, `[graphics] pvs_culling`, on by default). See [ADR-0011](docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md). **No baker was written and none should be** - the artists' visibility set ships on the disc, so the "sample a camera per segment and raycast" design is reimplementing shipped data, and the up-vector-on-inverted-track hazard that design has to solve does not exist when there is no sampling camera. Three next steps, in value order: **(1)** the saving is capped at 22-66% (median ~47%) because a `DrawCall` is one material run whose bounding sphere reaches 6-14 of the 64 sections - **splitting batches by section at load** is the only lever that moves this, and it trades draw-call count for it, so measure before building; **(2)** which section a *mesh* belongs to is still unrecovered - `oag_render::pvs` invents it by sphere-versus-box overlap and says so, and recovering the original's association would retire the only invented part of the pipeline; **(3)** moving entities (rival craft, weapons) have no section and so are never culled by tier one. |
 | **The HUD draws, and the four things left on it are named** | **The layout was never a reverse-engineering problem** - Pulse ships five HUD layouts in `Data.wad` as `Data\XML\*_HUD.xml`, exact pixel rectangles, atlas UVs, colour constants and font roles, and they decode with the `fexml` machinery this project already had. A pass concluded the opposite from *negative* evidence (no HUD element in `fexml.md`'s known-element table) and planned to measure rectangles off screenshots; the cheap check that would have caught it - grep the archive listing for `HUD` - was never run. See [hud.md](docs/ui/hud.md). What is left: **(1)** the default outline colour is the layout's `HudBGColour` at 25 % alpha and the original's reads crisper, so measure it off a frame; **(2)** `TotalTime` overflows the right edge by 12 px and it is not clear whether the original clips too; **(3)** whether `SpeedBarMark` slides with speed - needs one frame at speed, the start-line frame cannot say; **(4)** a mode's code substitutes string keys into widgets the layout positioned - a time trial's top right reads `record` (`IG_HUD_RECORD`) where `TimeTrial_HUD.xml` says `IG_HUD_TOTAL`, and 26 of the binary's 38 `IG_HUD_*` keys appear in no layout at all - so the substitution rule is unread and is deliberately **not** worked around by hardcoding. Zone, Eliminator, the `<Mode3D>` countdown and sights, and text outlines as a second pass are all scoped out and listed on the page. |
 | **The two HUD fonts are pre-outlined, and one doc claim was wrong about it** | `font.rs` asserted the `.fnt` palette was "an alpha ramp over a single RGB … so the colour carries no information the vertex colour does not already supply". True of the three menu fonts, **false of `PulseHud.fnt` and `small.fnt`**: they carry six distinct greys where the menu fonts carry one white, alpha is the silhouette of glyph *plus* a baked outline, and the grey level separates body from outline. Reading alpha alone filled the outline with glyph and turned a 25-pixel lap time into a solid white box. The glyph atlas is `Rg8Unorm` now and text composites `mix(BorderColor, Color, mask)`, which is exactly the two colours the XML supplies. Menu fonts are unaffected *by construction* (constant mask) and that was checked on screen, not assumed. Pinned by `fnt_ground_truth` asserting exactly two of five fonts are outlined. **A screenshot caught this and no test would have** - the arithmetic was all correct. |
 | **Capturing a PPSSPP reference frame has three traps worth not rediscovering** | **`RemoteISOPort` does not pin the debugger port** - PPSSPP bound an ephemeral 46659 while `psp-drive.py` defaults to 47810, so `preflight` reported no debugger at all; read the real port off `ss -ltnp \| grep PPSSPP` and pass `--port`. **An unfocused window grabs as pure black** with no error, the documented SDL throttle - focus it and check the grab's mean luma before reading anything off it. **`niri msg windows` prints no absolute coordinates** but `niri msg --json windows` gives `tile_pos_in_workspace_view`, which is what `grim -g` wants; getting it wrong crops a corner and looks like a HUD missing half its widgets. Also note **two emulator instances can be running** (another agent's), so match on pid and window id rather than on app id. |
@@ -419,6 +420,42 @@ the past.
   pixel-identical screenshot while silently doing nothing.
 
 ## Traps that are live
+
+**Reading the discs:**
+
+- **`ends_with("Data.wad")` also matches `BEData.wad` and `FEData.wad`**, and
+  `BEData.wad` sorts first and holds no tracks. A survey written that way
+  reports **zero** section nodes on the PSP disc and reads exactly like "this
+  format is not on this platform". Cost a full detour on 2026-07-30. Match the
+  full path, the way `collision_ground_truth.rs` always has.
+- **Pure does not share Pulse's `.vex` class numbering.** Pure track files use
+  classes around `0x36f..0x393` where Pulse uses `0x3b9..0x3e9`, so any Pulse
+  `CLASS_*` constant matches nothing on that disc and every Pure survey comes
+  back empty. Pinned by `pure_does_not_share_pulses_class_numbering` so it is
+  not rediscovered as a parser bug. Recovering Pure's own table is open work.
+- **Shipped `section` data is not tidy, and a strict parser refuses real
+  tracks.** ~2 % of PVS mask bits name a section the file does not declare, one
+  id is authored three times over on four tracks, and 116 PS2 control points
+  name a section their file lacks. All benign; all would be "corruption" to a
+  parser that assumed otherwise. See `docs/formats/track.md`.
+
+**Measuring a renderer change:**
+
+- **An aggregate statistic can rank a broken change as the better one.** The
+  first mesh-to-section rule placed a draw call by the single section holding
+  its bounding-sphere *centre*. It reported **fewer** draw calls surviving the
+  cull - which reads as better culling - and it deleted a ridge line and a
+  building from the frame, because geometry wider than a section has its centre
+  in only one of them. **A screenshot comparison caught it and no counter
+  would.** `--screenshot` now honours both culling settings precisely so this
+  comparison is runnable; two captures at the same `--ticks` differing only by a
+  setting must be byte-identical.
+- **Do not add per-frame work to save per-draw work without measuring both
+  sides.** Building the PVS visible set needs the craft and the camera located
+  on the spline, and `Spline::nearest` walks all ~3,400 samples - twice a frame
+  would have cost the same order as the frustum tests it saves. The craft's
+  index is already cached in `Ship::segment` by the simulation's own tick, and
+  the camera is found in a 96-sample window around it.
 
 **Process, in a shared tree:**
 

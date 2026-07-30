@@ -208,6 +208,11 @@ fn default_frustum_culling() -> bool {
     true
 }
 
+/// See [`Graphics::pvs_culling`]: on, having cleared the screenshot comparison.
+fn default_pvs_culling() -> bool {
+    true
+}
+
 /// How the picture itself is drawn.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Graphics {
@@ -260,6 +265,39 @@ pub struct Graphics {
     /// `docs/overview/roadmap.md`.
     #[serde(default = "default_frustum_culling")]
     pub frustum_culling: bool,
+    /// Whether the track's authored potentially-visible set culls draw calls
+    /// before the frustum test sees them.
+    ///
+    /// **On by default**, for a reason [`Self::frustum_culling`] cannot claim:
+    /// the visibility itself is not this project's guess. Every track ships a
+    /// 64-bit mask per section saying what is visible from it, authored by the
+    /// people who built the circuit, and this reads that rather than deriving
+    /// anything. Measured over both discs, a section sees a mean of 7.6 of 64.
+    ///
+    /// What *is* this project's own is which section a render mesh belongs to -
+    /// sections attach to spline control points, not to meshes, and no read of
+    /// either binary has recovered the association. `oag_render::pvs` therefore
+    /// decides it, by intersecting each draw call's bounding sphere with the
+    /// authored boxes and keeping every section it reaches.
+    ///
+    /// So the bar this had to clear before defaulting on was the one frustum
+    /// culling cleared: **a screenshot comparison showing it changes nothing
+    /// about what is drawn.** Thirty captures - three tracks, several tick
+    /// counts, every combination of the two tiers - come out byte-identical to
+    /// culling nothing. An earlier and cheaper association rule, placing a draw
+    /// call by the single section containing its centre, did **not**: it lost
+    /// scenery wider than a section, which is recorded in `oag_render::pvs` so
+    /// the cheaper rule is not reintroduced as an optimisation.
+    ///
+    /// **The saving is modest and track-dependent.** Measured across all 40
+    /// PSP track files, the first tier removes 22% to 66% of the frustum test's
+    /// input - about half on a median track - and in the worst *section* of
+    /// nearly every track it removes nothing. The limit is this renderer's own
+    /// batching, a `DrawCall` being one material run spanning 6 to 14 sections,
+    /// not the authored data. See
+    /// `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md`.
+    #[serde(default = "default_pvs_culling")]
+    pub pvs_culling: bool,
     /// Whether a track draws every child of an authored `LodGroup`, or only
     /// the higher-detail first one. Not a quality tier and not distance-based,
     /// see [`Lod`] for why. `both` matches the original, duplicate geometry
@@ -280,6 +318,7 @@ impl Default for Graphics {
             fov: crate::display::Fov::default(),
             perf_overlay: crate::perf::Overlay::default(),
             frustum_culling: default_frustum_culling(),
+            pvs_culling: default_pvs_culling(),
             lod: Lod::default(),
         }
     }

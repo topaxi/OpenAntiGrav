@@ -3,7 +3,9 @@
 **Status: decoded and validated.** The `WO Track` spline graph parses on all 40
 track files on the PSP disc with **zero bytes unaccounted for**, and is
 implemented in [`oag_formats::track`](../../crates/formats/src/track.rs). The
-visibility `section` payload is read from the binary only and is not implemented.
+visibility `section` payload is now decoded too, in
+[`oag_formats::pvs`](../../crates/formats/src/pvs.rs), and validated against
+both discs - see [below](#implemented-and-what-running-it-against-the-discs-corrected).
 
 Two things that sound like they should be the same are not:
 
@@ -76,13 +78,15 @@ below matches a node type actually present in a shipped track.
 ```c
 struct SectionPayload {
     u8  index;         // array index, also the PVS bit position
-    u8  has_bounds;    // selects the optional bbox block
-    u8  pad[6];        // never read
+    u8  has_bounds;    // selects the optional bbox block; set on every
+                       // section on both discs
+    u8  pad[6];        // never read, and never initialised either
     u32 pvs_mask_lo;   // sections 0..31 visible from here
     u32 pvs_mask_hi;   // sections 32..63; own bit OR'd in at load
     // if has_bounds:
-    float bbox_min[4];
+    float bbox_min[4]; // the fourth component is w, not a coordinate
     float bbox_max[4];
+    char  name[];      // NUL-terminated, padded to the 16-byte node alignment
 };
 ```
 
@@ -96,6 +100,51 @@ gather buffer. Worth knowing before designing anything that assumes more.
 Confidence **90** for the mask, **85** for the bounding box. The cap is
 corroborated by the data: no control point on any of the 40 track files carries a
 `section_id` above 63.
+
+### Implemented, and what running it against the discs corrected
+
+Decoded by [`oag_formats::pvs`](../../crates/formats/src/pvs.rs) and validated
+against every track file on both Pulse discs by
+[`pvs_ground_truth.rs`](../../crates/formats/tests/pvs_ground_truth.rs): 2,268
+sections over 40 PSP track files and 3,045 over 59 PS2 ones, cross-checked
+against 84,479 spline control points. See
+[ADR-0011](../architecture/adr/0011-authored-pvs-before-frustum-culling.md) for
+what the renderer does with it.
+
+Five corrections to the struct above, all from shipped data rather than from a
+re-read of the binary:
+
+1. **The payload does not end at the bounding box.** A NUL-terminated name
+   follows, padded to the node alignment, so a real `section` is 0x40, 0x50 or
+   0x60 bytes and never 0x30. Nothing reads it at runtime, but a parser that
+   assumes the struct is the whole payload is wrong about every section on
+   every disc.
+2. **The fourth float of each corner is `w`, not zero padding**, and the
+   platforms disagree: PSP writes `0.0` on all 4,544 corners, PS2 writes `1.0`
+   on 5,872 of 6,098. Either way it is not a coordinate, which is what a
+   three-wide read would turn it into.
+3. **A mask may name a section its own file does not declare** - 2.17% of set
+   bits on PSP, 4.01% on PS2. Masks that outlived a deleted section; inert,
+   because the original only ever tests bits for sections it is iterating.
+   This is also the evidence for the field offsets: the stray rate at the
+   documented `+0x08` is far below the rate four bytes either side (7.74% and
+   13.33% on PSP, 8.69% and 22.94% on PS2), which is what a wrong offset
+   reading uninitialised pad or a bbox float looks like.
+4. **One id is authored three times over**, on 2 of 40 PSP and 2 of 59 PS2
+   tracks, with byte-identical masks each time. A parser that treats a repeated
+   index as corruption refuses four shipped tracks.
+5. **116 of 50,218 PS2 control points name a section their file does not
+   declare** - none of the 34,261 PSP ones do. The out-of-range all-ones
+   fallback is therefore load-bearing on real data, not just a defensive branch.
+
+Mask density, which is the figure any culling design rests on: **a mean of 7.6
+of 64 sections visible from a section on PSP and 7.5 on PS2.**
+
+**Pulse's class ids do not carry to Pure.** Pure track files use classes around
+`0x36f..0x393` where Pulse uses `0x3b9..0x3e9`, so `CLASS_SECTION` matches
+nothing on that disc. Recovering Pure's own numbering is separate work; until
+then an empty result there means the constant does not apply, not that Pure has
+no visibility partition.
 
 Note that section ids are **not** guaranteed to be dense. `09_Track`'s reversed
 variant has 44 `section` nodes and a maximum `section_id` of 45, so the ids come

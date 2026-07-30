@@ -522,6 +522,8 @@ fn run_race(
                 aspect: settings.display.aspect,
                 anisotropy,
                 fov: settings.graphics.fov,
+                frustum_culling: settings.graphics.frustum_culling,
+                pvs_culling: settings.graphics.pvs_culling,
             },
         );
     }
@@ -1053,6 +1055,7 @@ impl Stage {
             track_model,
             ship_model,
             collision_model,
+            visibility,
             flare,
             noise,
             ..
@@ -1068,6 +1071,7 @@ impl Stage {
             gpu.config.format,
             size,
             anisotropy,
+            visibility,
         )?;
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.
@@ -1289,6 +1293,11 @@ impl RaceStage {
     /// renderers own a growable instance buffer, the same reason
     /// [`Renderer::overlay`] takes `&mut self`. The scene stays immutable behind
     /// its own `RefCell`.
+    // The two culling flags are independent settings read from the same place,
+    // and a struct to carry them past one call site would name the grouping
+    // without clarifying it - the same call this file already makes for
+    // `Scene::new`.
+    #[allow(clippy::too_many_arguments)]
     fn render(
         &mut self,
         gpu: &Gpu,
@@ -1297,10 +1306,11 @@ impl RaceStage {
         viewport: (f32, f32, f32, f32),
         fov: display::Fov,
         cull: bool,
+        pvs_cull: bool,
     ) -> race::SceneStats {
-        let stats = self
-            .scene
-            .render(&gpu.queue, encoder, view, &self.race, viewport, fov, cull);
+        let stats = self.scene.render(
+            &gpu.queue, encoder, view, &self.race, viewport, fov, cull, pvs_cull,
+        );
 
         // Over the scene and inside the same target, so the HUD is drawn at the
         // render scale the game is and lands in a `--screenshot` too.
@@ -1684,6 +1694,7 @@ impl Session {
                 inside,
                 self.settings.graphics.fov,
                 self.settings.graphics.frustum_culling,
+                self.settings.graphics.pvs_culling,
             )),
         };
 

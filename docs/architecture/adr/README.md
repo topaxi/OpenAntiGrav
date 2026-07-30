@@ -21,6 +21,7 @@ out to be wrong.
 | [0008](0008-av1-movie-cache.md) | Cache movies as lossless AV1, and decode them in process | Accepted |
 | [0009](0009-multi-game-fanout.md) | Fan out to other games by verified layer, not by date | Accepted |
 | [0010](0010-movie-decode-thread.md) | Decode movie frames on a worker thread, one per movie | Accepted |
+| [0011](0011-authored-pvs-before-frustum-culling.md) | Cull with the track's authored PVS, before the view frustum | Accepted |
 
 ## Format
 

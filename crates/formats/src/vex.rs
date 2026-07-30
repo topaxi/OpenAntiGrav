@@ -96,6 +96,15 @@ pub const CLASS_WO_TRACK: u32 = 0x3bb;
 /// Exactly one per track file, on all 40 of the PSP disc's.
 pub const CLASS_START_POSITION: u32 = 0x3bc;
 
+/// Class ID of a `section` node: the authored visibility partition, decoded by
+/// [`pvs::TrackPvs`](crate::pvs::TrackPvs).
+///
+/// **Not the lap structure**, despite sitting beside `Start Position` and the
+/// pads in the class table. A `section` carries a potentially-visible-set
+/// bitmask and a bounding box and nothing else; the track path is
+/// [`CLASS_WO_TRACK`].
+pub const CLASS_SECTION: u32 = 0x3c9;
+
 /// Class ID of a `Transform` node.
 ///
 /// 715 of `01_Track`'s 2,071 nodes. Its payload is a 4x4 matrix, or nothing at

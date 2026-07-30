@@ -560,9 +560,24 @@ change how this list should be read:
       higher-detail tier - a static deduplication, not a distance-based switch.
       A genuine live switch needs the same per-frame camera mechanism as
       frustum culling below, and is not built
-- [ ] PVS culling off the track's own `section` `0x3c9` payload. The sections are
-      [decoded](../formats/track.md) and attached to the spline rather than to a
-      point-in-volume test; nothing culls with them
+- [x] **PVS culling** off the track's own `section` `0x3c9` payload. The
+      payload is now [decoded](../formats/track.md) (`oag_formats::pvs`,
+      validated against every track file on both discs) and drawn with:
+      `oag_render::pvs` intersects each draw call's bounding sphere with the
+      authored section boxes at load, and the race loop tests that mask against
+      the sections visible from the craft's and the camera's own sections
+      before the frustum test runs. **On by default**
+      (`[graphics] pvs_culling`), having cleared the same bar frustum culling
+      did - thirty captures across three tracks, several tick counts and every
+      combination of the two tiers, all byte-identical to culling nothing.
+      Cuts what reaches the frustum test by 22-66% depending on the track -
+      about half on a median one, measured over all 40 of the PSP disc's track
+      files - and by nothing at all in the worst section of nearly every one.
+      See
+      [ADR-0011](../architecture/adr/0011-authored-pvs-before-frustum-culling.md),
+      which also records the cheaper association rule that was tried first and
+      lost background scenery, and why our own batch granularity - not the
+      authored data - is what caps the saving
 - [ ] `MeshNode_Ghost` `0x3d4` - ghost rendering. Needs replay data, so it lands
       with replay in M7 if that comes first
 - [x] **Frustum culling.** Not an authored class - a plain engine technique.

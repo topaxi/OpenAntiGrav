@@ -22,10 +22,13 @@
 //! - [`mesh_render`] is the pipeline that draws either of those, offscreen or
 //!   into a surface.
 //! - [`camera`] is the camera maths: orbit, free and the chase spring.
+//! - [`pvs`] places draw calls into the track's authored visibility sections,
+//!   and is the first tier of the two-tier cull the draw loop runs.
 
 pub mod camera;
 pub mod collision;
 pub mod exhaust;
 pub mod mesh;
 pub mod mesh_render;
+pub mod pvs;
 pub mod track;

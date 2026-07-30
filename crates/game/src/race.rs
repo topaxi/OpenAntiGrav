@@ -76,6 +76,7 @@ use oag_render::collision as render_collision;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
 use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::Anisotropy;
+use oag_render::pvs::{DrawSections, PlacementStats, SectionPadding, UNPLACED, VisibleSet};
 use oag_render::{mesh, mesh_render, track as track_render};
 
 /// The track a race is flown on unless another is named.
@@ -279,6 +280,12 @@ pub struct Loaded {
     pub ship_model: Model,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,
+    /// The track's authored visibility partition, when it decoded.
+    ///
+    /// `None` when the track declares no `section` nodes - a driveable-ribbon
+    /// build has no art meshes to place, and Pure tracks do not use Pulse's
+    /// class numbering at all. The first tier is then skipped.
+    pub visibility: Option<TrackVisibility>,
     /// The trail ribbon's noise texture off the disc, when it decodes.
     pub noise: Option<FlareTexture>,
     /// The engine-flare texture off the disc, when it decodes.
@@ -510,6 +517,31 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
+    // The authored PVS. Skipped for a ribbon build, whose geometry is generated
+    // from the spline rather than authored, so the section boxes have nothing
+    // to say about it.
+    let visibility = if options.ribbon {
+        None
+    } else {
+        TrackVisibility::build(&track_model, &track_blob, &ai)
+    };
+    match &visibility {
+        Some(visibility) => report.push(format!(
+            "{} authored visibility section(s); {} of {} draw call(s) placed \
+             ({:.1}%), {} spanning more than one, {:.1} section(s) each on average",
+            visibility.pvs.len(),
+            visibility.placement.placed,
+            visibility.placement.total(),
+            visibility.placement.placed_fraction() * 100.0,
+            visibility.placement.spanning,
+            visibility.placement.mean_sections(),
+        )),
+        None if options.ribbon => {}
+        None => report.push(
+            "no authored visibility sections: PVS culling is unavailable on this track".to_string(),
+        ),
+    }
+
     let spline = Spline::from_track(&ai);
     report.push(format!(
         "{} spline sample(s), {} per segment, widest half-width {:.1}",
@@ -585,6 +617,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         track_model,
         collision_model,
         ship_model,
+        visibility,
         flare,
         noise,
         report,
@@ -964,6 +997,40 @@ impl Spline {
         for (index, sample) in self.samples.iter().enumerate() {
             let distance = (Vec3::from_array(sample.pos) - position).length();
             // Strictly nearer, so a tie keeps the earlier sample.
+            if best.is_none_or(|(_, previous)| distance < previous) {
+                best = Some((index, distance));
+            }
+        }
+        best.map(|(index, distance)| (index, &self.samples[index], distance))
+    }
+
+    /// The nearest sample to `position`, searching only `window` samples either
+    /// side of `around` in table order.
+    ///
+    /// **A local search whose failure mode is safe.** [`Self::nearest`] walks
+    /// every sample - ~3,400 on a real track - which is affordable once a tick
+    /// inside the simulation and not twice more per *frame* on top. The camera
+    /// is a chase spring a few units behind the craft, so it is a few samples
+    /// away in this table, and a window finds it.
+    ///
+    /// When it does not - the window straddles a junction, or the camera really
+    /// has left the track - the answer is a sample that is too far away, which
+    /// the caller turns into [`UNPLACED`] and therefore into *draw everything*.
+    /// A local search that misses costs a frame of culling, never a frame of
+    /// missing geometry, which is why this is allowed to be approximate.
+    #[must_use]
+    pub fn nearest_within(
+        &self,
+        position: Vec3,
+        around: usize,
+        window: usize,
+    ) -> Option<(usize, &Sample, f32)> {
+        let last = self.samples.len().checked_sub(1)?;
+        let from = around.saturating_sub(window);
+        let to = around.saturating_add(window).min(last);
+        let mut best: Option<(usize, f32)> = None;
+        for index in from..=to {
+            let distance = (Vec3::from_array(self.samples[index].pos) - position).length();
             if best.is_none_or(|(_, previous)| distance < previous) {
                 best = Some((index, distance));
             }
@@ -1423,6 +1490,84 @@ impl Race {
         self.camera.view(target_of(self.ship()), &self.chase_params)
     }
 
+    /// The camera's own world position, from the view matrix it produces.
+    ///
+    /// A view matrix is the inverse of the camera's world transform, so
+    /// inverting it back and taking the translation column is the camera's
+    /// position. Read out rather than tracked separately so it cannot drift
+    /// from what is actually being rendered.
+    #[must_use]
+    pub fn camera_position(&self) -> Vec3 {
+        self.view().inverse().w_axis.truncate()
+    }
+
+    /// The authored sections the craft and the camera are in, for PVS culling.
+    ///
+    /// [`UNPLACED`] means "do not trust this", which the visibility set turns
+    /// into *draw everything*. Three things produce it, and all three are
+    /// states where culling to a section would be most likely to be visibly
+    /// wrong:
+    ///
+    /// - **The track has no spline**, so nothing can be located at all.
+    /// - **The point is off the track**, more than
+    ///   [`OFF_TRACK_HALF_WIDTHS`] half-widths from the nearest sample. This is
+    ///   the case that matters: a craft that has fallen off, gone airborne over
+    ///   a gap or been knocked into scenery is usually still inside some
+    ///   authored box and would otherwise get a confidently wrong answer. See
+    ///   that constant for why the lookup's own out-of-range fallback does not
+    ///   cover this.
+    /// - **A respawn is in flight** ([`RESPAWN_COOLDOWN_TICKS`]), where the
+    ///   craft teleports and the camera spring is still catching up, so neither
+    ///   position describes the shot for several frames.
+    ///
+    /// The craft and the camera are located independently, so the common case
+    /// of a camera swinging off the racing line while the craft is fine
+    /// degrades only the camera's half.
+    #[must_use]
+    pub fn visibility_sections(&self) -> (u8, u8) {
+        if self.respawn_cooldown > 0 {
+            return (UNPLACED, UNPLACED);
+        }
+        let ship = self.ship();
+        // The simulation already located the craft this tick and left the
+        // sample index in `Ship::segment`, so the craft's half is a table read
+        // rather than a second scan of the whole track. Doing it again here
+        // would cost more per frame than the culling it enables saves.
+        // `u16::MAX` is the never-located sentinel, and it is out of range of
+        // any real table, so the bounds check covers both.
+        let index = usize::from(ship.segment);
+        if index >= self.spline.len() {
+            return (UNPLACED, UNPLACED);
+        }
+        let craft = self.section_of(index, ship.physics.body.position);
+        // The camera is a chase spring a few units behind, so it is a few
+        // samples away in the same table. See `Spline::nearest_within` for why
+        // a local search is allowed to miss.
+        let camera =
+            match self
+                .spline
+                .nearest_within(self.camera_position(), index, CAMERA_SEARCH_SAMPLES)
+            {
+                Some((camera_index, _, _)) => self.section_of(camera_index, self.camera_position()),
+                None => UNPLACED,
+            };
+        (craft, camera)
+    }
+
+    /// The section of the sample at `index`, or [`UNPLACED`] when `position` is
+    /// too far from it to trust. See [`Self::visibility_sections`].
+    fn section_of(&self, index: usize, position: Vec3) -> u8 {
+        let Some(sample) = self.spline.sample(index) else {
+            return UNPLACED;
+        };
+        let distance = (Vec3::from_array(sample.pos) - position).length();
+        let half_width = sample.half_width_left.max(sample.half_width_right);
+        if distance > half_width * OFF_TRACK_HALF_WIDTHS {
+            return UNPLACED;
+        }
+        sample.section_id
+    }
+
     /// The projection for a viewport of the given aspect ratio, with the
     /// player's field-of-view setting applied.
     ///
@@ -1583,16 +1728,94 @@ impl SceneStats {
     }
 }
 
-/// Whether `draw` should be submitted: always, with no frustum, otherwise only
-/// when its own bounds touch it. See [`Drawable::draw`] for why some callers
-/// pass `None`.
-fn visible(draw: &DrawCall, frustum: Option<&Frustum>) -> bool {
-    match frustum {
-        None => true,
-        Some(frustum) => {
-            frustum.intersects_sphere(Vec3::from_array(draw.bounds.centre), draw.bounds.radius)
+/// The track's authored visibility partition, and where this track's geometry
+/// sits in it.
+///
+/// Built once at load. Per frame it answers one question - which sections may
+/// be drawn - in a handful of array reads. See
+/// `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md`.
+#[derive(Debug)]
+pub struct TrackVisibility {
+    pvs: oag_formats::pvs::TrackPvs,
+    padding: SectionPadding,
+    sections: DrawSections,
+    /// What the association rule managed, for the load report.
+    pub placement: PlacementStats,
+}
+
+impl TrackVisibility {
+    /// Reads the `section` nodes of a track and places its draw calls in them.
+    ///
+    /// Returns `None` when the track declares no sections at all - which is
+    /// every Pure track, since Pure does not share Pulse's class numbering.
+    /// The caller then draws with no first tier, exactly as before.
+    #[must_use]
+    pub fn build(model: &Model, blob: &[u8], ai: &AiTrack) -> Option<Self> {
+        let pvs = oag_formats::pvs::TrackPvs::parse(blob).ok()?;
+        if pvs.is_empty() {
+            return None;
         }
+        let (sections, placement) = DrawSections::place(model, &pvs);
+        Some(Self {
+            pvs,
+            padding: SectionPadding::from_track(ai),
+            sections,
+            placement,
+        })
     }
+
+    /// What may be drawn with the craft in `craft` and the camera in `camera`.
+    #[must_use]
+    fn set(&self, craft: u8, camera: u8) -> VisibleSet {
+        VisibleSet::around(&self.pvs, &self.padding, craft, camera)
+    }
+}
+
+/// How far off the nearest spline sample a point may be and still be trusted to
+/// name a section, as a multiple of the track's widest half-width.
+///
+/// **The conservative path exists because a craft can leave the partition, and
+/// being outside it is not the same as looking up an id the track does not
+/// have.** A craft that has fallen off, is airborne over a gap, or has been
+/// knocked into scenery is usually still inside *some* authored box, so it gets
+/// a valid answer that is simply wrong for what the camera is now framing - the
+/// all-ones fallback never fires on its own. Culling to a stale section exactly
+/// when the craft is somewhere unusual is the most visible way this could fail,
+/// so distance to the racing line gates it instead.
+///
+/// Three half-widths is deliberately loose: it must not trip during ordinary
+/// wide cornering, only when the craft is somewhere the authored partition was
+/// not drawn around. Widening it costs nothing but a little culling; narrowing
+/// it risks pop-in. There is no recovered value to match - the original does
+/// not have this problem, because it never culls to a camera.
+const OFF_TRACK_HALF_WIDTHS: f32 = 3.0;
+
+/// How many samples either side of the craft's own the camera is looked for in.
+///
+/// At four samples per control-point interval this is a couple of dozen
+/// intervals of track, far more than a chase camera trails by, and about
+/// thirty-five times cheaper than the whole-table scan it replaces. Missing is
+/// safe - see [`Spline::nearest_within`].
+const CAMERA_SEARCH_SAMPLES: usize = 96;
+
+/// Whether `draw` should be submitted, in two tiers.
+///
+/// **The authored PVS first, the frustum second**, which is the ordering the
+/// ADR is about: the mask test is an integer `and` and the frustum test is six
+/// plane-versus-sphere evaluations, so the cheap one has to run first for the
+/// second tier to see less work. Delegated to `oag_render::pvs` so the ordering
+/// lives with the types it operates on rather than being re-established at each
+/// call site.
+///
+/// `set` is `None` when `[graphics] pvs_culling` is off or the track has no
+/// sections; `frustum` is `None` per [`Drawable::draw`].
+fn visible(
+    draw: &DrawCall,
+    sections: u64,
+    set: Option<&VisibleSet>,
+    frustum: Option<&Frustum>,
+) -> bool {
+    oag_render::pvs::visible(draw, sections, set, frustum)
 }
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
@@ -1690,8 +1913,22 @@ impl Drawable {
     /// against a world-space frustum only while that space and world space
     /// are the same transform, which is only true here for the track (see the
     /// `Mat4::IDENTITY` passed to [`Self::write`] at each call site).
-    fn draw(&self, pass: &mut wgpu::RenderPass<'_>, frustum: Option<&Frustum>) -> SceneStats {
+    fn draw(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        sections: Option<&DrawSections>,
+        set: Option<&VisibleSet>,
+        frustum: Option<&Frustum>,
+    ) -> SceneStats {
         let mut stats = SceneStats::default();
+        // A model with no placement table has every draw call unplaced, which
+        // the first tier always allows. That is the ship and the collision
+        // overlay, and any track whose sections did not decode.
+        let empty: &[u64] = &[];
+        let (opaque, alpha_tested, transparent) = match sections {
+            Some(s) => (&s.opaque[..], &s.alpha_tested[..], &s.transparent[..]),
+            None => (empty, empty, empty),
+        };
         if self.model.indices.is_empty() {
             return stats;
         }
@@ -1700,8 +1937,8 @@ impl Drawable {
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
-        for draw in &self.model.draws {
-            if !visible(draw, frustum) {
+        for (index, draw) in self.model.draws.iter().enumerate() {
+            if !visible(draw, DrawSections::at(opaque, index), set, frustum) {
                 stats.draws_culled += 1;
                 continue;
             }
@@ -1715,8 +1952,8 @@ impl Drawable {
         // Second pipeline, same pass: alpha-tested batches, cutout. See
         // `mesh_render::Built::alpha_test_pipeline`.
         pass.set_pipeline(&self.alpha_test_pipeline);
-        for draw in &self.model.alpha_tested_draws {
-            if !visible(draw, frustum) {
+        for (index, draw) in self.model.alpha_tested_draws.iter().enumerate() {
+            if !visible(draw, DrawSections::at(alpha_tested, index), set, frustum) {
                 stats.draws_culled += 1;
                 continue;
             }
@@ -1730,8 +1967,8 @@ impl Drawable {
         // Third pipeline, same pass: transparent batches, blended. See
         // `mesh_render::Built::blend_pipeline`.
         pass.set_pipeline(&self.blend_pipeline);
-        for draw in &self.model.transparent_draws {
-            if !visible(draw, frustum) {
+        for (index, draw) in self.model.transparent_draws.iter().enumerate() {
+            if !visible(draw, DrawSections::at(transparent, index), set, frustum) {
                 stats.draws_culled += 1;
                 continue;
             }
@@ -1768,6 +2005,11 @@ fn glow_scroll(tick: u64) -> f32 {
 #[derive(Debug)]
 pub struct Scene {
     track: Drawable,
+    /// The track's authored visibility partition, when it decoded.
+    ///
+    /// `None` for a track with no `section` nodes - every Pure track - and the
+    /// first tier is then skipped entirely rather than approximated.
+    visibility: Option<TrackVisibility>,
     ship: Drawable,
     /// The collision soup overlay, present only when `Options::collision` asked
     /// for it. Drawn with the identity transform, same as the track: the
@@ -1807,6 +2049,7 @@ impl Scene {
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
+        visibility: Option<TrackVisibility>,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
@@ -1827,6 +2070,7 @@ impl Scene {
 
         Ok(Self {
             track,
+            visibility,
             ship,
             collision,
             exhaust,
@@ -1863,10 +2107,23 @@ impl Scene {
         viewport: (f32, f32, f32, f32),
         fov: crate::display::Fov,
         cull: bool,
+        pvs_cull: bool,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
+        // Tier one, built once a frame. Both sections come from the authored
+        // spline rather than from the section boxes: a control point's
+        // `section_id` is what the artists wrote, while a point-in-box test is
+        // something this project invented.
+        let visible_set = self
+            .visibility
+            .as_ref()
+            .filter(|_| pvs_cull)
+            .map(|visibility| {
+                let (craft, camera) = race.visibility_sections();
+                visibility.set(craft, camera)
+            });
         let scroll = glow_scroll(race.world.tick);
         self.track
             .write(queue, view_projection, Mat4::IDENTITY, scroll);
@@ -1932,10 +2189,15 @@ impl Scene {
             multiview_mask: None,
         });
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
-        let mut stats = self.track.draw(&mut pass, frustum.as_ref());
-        stats.add(self.ship.draw(&mut pass, None));
+        let mut stats = self.track.draw(
+            &mut pass,
+            self.visibility.as_ref().map(|v| &v.sections),
+            visible_set.as_ref(),
+            frustum.as_ref(),
+        );
+        stats.add(self.ship.draw(&mut pass, None, None, None));
         if let Some(collision) = &self.collision {
-            stats.add(collision.draw(&mut pass, None));
+            stats.add(collision.draw(&mut pass, None, None, None));
         }
         // Last, and that ordering is load-bearing: the flare tests depth but does
         // not write it, so the hull's depth has to already be in the buffer for the
@@ -1986,6 +2248,23 @@ pub struct CaptureOptions {
     /// The field-of-view setting, for the same reason `aspect` is here: a
     /// capture should frame what a player at these settings would have seen.
     pub fov: crate::display::Fov,
+    /// Whether the view frustum culls before the frame is drawn.
+    ///
+    /// Honoured rather than forced off, so that the screenshot comparison this
+    /// project already claims for `[graphics] frustum_culling` can actually be
+    /// run from a capture, and so a report of geometry going missing can be
+    /// attributed to a tier rather than guessed at.
+    pub frustum_culling: bool,
+    /// Whether the authored PVS culls before the frame is drawn.
+    ///
+    /// Here, and honoured, so that `--screenshot` with `[graphics] pvs_culling`
+    /// on and off produces two images to compare. **That comparison is the only
+    /// way to show the association rule in `oag_render::pvs` places geometry in
+    /// the right sections rather than merely in some section**, and it is the
+    /// bar that setting has to clear before it can default on - the same one
+    /// frustum culling passed. Frustum culling stays off in a capture either
+    /// way, so the two images differ by this tier alone.
+    pub pvs_culling: bool,
 }
 
 /// Runs a race headless and writes one frame to a PNG.
@@ -2006,6 +2285,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         track_model,
         ship_model,
         collision_model,
+        visibility,
         flare,
         noise,
         ..
@@ -2052,6 +2332,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         format,
         (width, height),
         options.anisotropy,
+        visibility,
     )?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -2088,8 +2369,9 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     // Shaped the same way a window is, so a screenshot frames what a player
     // would have seen at that size rather than a differently-cropped picture.
     let viewport = crate::display::viewport((width, height), options.aspect);
-    // Off, matching `[graphics] frustum_culling`'s own default: a screenshot
-    // is one frame, not a budget to save microseconds against.
+    // Both tiers follow their settings, because two captures differing only by
+    // one of them are how that tier gets validated - see
+    // `CaptureOptions::frustum_culling` and `CaptureOptions::pvs_culling`.
     scene.render(
         &queue,
         &mut encoder,
@@ -2097,7 +2379,8 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         &race,
         viewport,
         options.fov,
-        false,
+        options.frustum_culling,
+        options.pvs_culling,
     );
 
     // The HUD, into the same target. Without this a race screenshot would show
@@ -2434,6 +2717,96 @@ mod tests {
     fn the_widest_half_width_comes_from_the_track() {
         let spline = Spline::from_track(&straight_track());
         assert!((spline.max_half_width() - 12.0).abs() < 1e-3);
+    }
+
+    /// A local search finds what a whole-table search would, when the answer is
+    /// inside the window.
+    #[test]
+    fn a_local_search_agrees_with_a_whole_table_one_inside_its_window() {
+        let spline = Spline::from_track(&straight_track());
+        let target = Vec3::from_array(spline.sample(20).expect("a sample").pos);
+        let (whole, _, _) = spline.nearest(target).expect("a sample");
+        let (local, _, distance) = spline
+            .nearest_within(target, 20, 8)
+            .expect("a sample in the window");
+        assert_eq!(local, whole);
+        assert!(distance < 1e-3, "{distance}");
+    }
+
+    /// And when the answer is outside the window it returns something too far
+    /// away, which the caller turns into "draw everything" rather than into a
+    /// confident wrong section. See `Spline::nearest_within`.
+    #[test]
+    fn a_local_search_that_misses_reports_a_distance_the_caller_will_reject() {
+        let spline = Spline::from_track(&straight_track());
+        let far_end = Vec3::from_array(spline.sample(30).expect("a sample").pos);
+        let (index, _, distance) = spline
+            .nearest_within(far_end, 0, 2)
+            .expect("a sample in the window");
+        assert!(index <= 2, "the search stayed inside its window");
+        assert!(
+            distance > 12.0 * OFF_TRACK_HALF_WIDTHS,
+            "a miss must be far enough to be rejected, was {distance}"
+        );
+    }
+
+    /// **The conservative path, which nothing else exercises.** A craft on the
+    /// racing line names its section; one that has left the track names
+    /// nothing, so the visible set becomes everything.
+    #[test]
+    fn a_position_off_the_track_refuses_to_name_a_section() {
+        let race = Race::start(setup(Handling::default()));
+        let spline = race.spline();
+        let sample = *spline.sample(4).expect("a sample");
+        let on_line = Vec3::from_array(sample.pos);
+
+        assert_eq!(
+            race.section_of(4, on_line),
+            sample.section_id,
+            "a craft on the racing line names its own section"
+        );
+
+        // The synthetic track is 12 units wide either side, so the gate is at
+        // 36. Checked either side of it rather than at one distance, so the
+        // test would fail if the threshold were dropped entirely.
+        let half_width = 12.0 * OFF_TRACK_HALF_WIDTHS;
+        let lateral = Vec3::from_array(sample.lateral);
+        assert_eq!(
+            race.section_of(4, on_line + lateral * (half_width - 1.0)),
+            sample.section_id,
+            "still on the track at just under the gate"
+        );
+        assert_eq!(
+            race.section_of(4, on_line + lateral * (half_width + 1.0)),
+            UNPLACED,
+            "just past the gate, nothing may be culled on this position's word"
+        );
+        assert_eq!(
+            race.section_of(4, on_line + Vec3::Y * 200.0),
+            UNPLACED,
+            "far above the track - airborne over a gap, or fallen through"
+        );
+        assert_eq!(
+            race.section_of(9_999, on_line),
+            UNPLACED,
+            "a sample index the table does not have"
+        );
+    }
+
+    /// A respawn in flight teleports the craft and leaves the camera spring
+    /// catching up, so neither position describes the shot.
+    #[test]
+    fn a_respawn_in_flight_makes_everything_visible() {
+        let mut race = Race::start(setup(Handling::default()));
+        race.respawn_cooldown = 1;
+        assert_eq!(race.visibility_sections(), (UNPLACED, UNPLACED));
+
+        // And the resulting set really is everything, not merely two unknown
+        // ids - this is the property the whole conservative path exists for.
+        let pvs = oag_formats::pvs::TrackPvs::empty();
+        let padding = SectionPadding::default();
+        let (craft, camera) = race.visibility_sections();
+        assert!(VisibleSet::around(&pvs, &padding, craft, camera).is_everything());
     }
 
     /// A parameter set with a real hull, so the reset probes have something to
