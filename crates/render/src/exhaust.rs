@@ -88,12 +88,35 @@ pub const LAYER_WIDTH: [f32; LAYERS] = [1.0, 0.7, 0.5];
 /// the widths were pre-multiplied.
 pub const TRAIL_WIDTH_SCALE: f32 = 1.0;
 
-/// Per-layer offset along the exhaust direction, from `ring+0x88` / `+0xb8` /
-/// `+0xe8` at preset 2.
+/// Per-layer `u` scroll rate, from `ring+0x88` / `+0xb8` / `+0xe8` at preset 2.
 ///
-/// All negative and increasingly so, which is what stacks the three layers back
-/// along the plume rather than concentrically.
-pub const LAYER_OFFSET: [f32; LAYERS] = [-1.5, -3.0, -6.0];
+/// **These were first read as position offsets along the exhaust direction**,
+/// which put the three layers up to 6 units apart and stretched the plume badly.
+/// They are texture scroll rates: `Trail_DrawRibbon` does
+/// `u += rate * dt * 3.0`, wraps to `[0,1]` and hands the result to
+/// `sceGuTexOffset`. Laying the per-layer block out settles it - see the block
+/// table on `exhaust.md` - and the giveaway is that the *same* stride-`0x30` block
+/// holds the colour fields `Exhaust_Update` demonstrably writes.
+///
+/// Negative, so the noise flows *along* the ribbon away from the nozzle.
+pub const LAYER_SCROLL_U: [f32; LAYERS] = [-1.5, -3.0, -6.0];
+
+/// Per-layer `v` scroll rate, from `ring+0x8c` / `+0xbc` / `+0xec` at preset 2.
+///
+/// The middle layer runs the other way, which is what stops the three reading as
+/// one texture at three brightnesses.
+pub const LAYER_SCROLL_V: [f32; LAYERS] = [1.0, -1.0, 1.0];
+
+/// The `u` scroll's extra gain. `Trail_DrawRibbon` multiplies only `u` by this.
+pub const SCROLL_U_GAIN: f32 = 3.0;
+
+/// Per-layer `u` texture scale, from `ring+0x90` / `+0xc0` / `+0xf0` at preset 2,
+/// passed to `sceGuTexScale`.
+///
+/// The noise tiles this many times along the ribbon, so the inner layer is the
+/// most finely detailed. `v` is `1.0` on all three (`ring+0x94` / `+0xc4` /
+/// `+0xf4`), so nothing tiles across the width.
+pub const LAYER_TEX_SCALE_U: [f32; LAYERS] = [7.5, 6.0, 4.5];
 
 /// The offset-table time constant, `Trail_BuildOffsetTable`'s argument.
 ///
@@ -219,6 +242,8 @@ pub struct Exhaust {
     trail_back: [Vec3; TRAIL_SAMPLES],
     trail_len: usize,
     trail_write: usize,
+    /// Per-layer texture scroll, wrapped to `[0, 1)` as the original wraps it.
+    scroll: [[f32; 2]; LAYERS],
 }
 
 impl Default for Exhaust {
@@ -243,6 +268,7 @@ impl Exhaust {
             trail_back: [Vec3::ZERO; TRAIL_SAMPLES],
             trail_len: 0,
             trail_write: 0,
+            scroll: [[0.0; 2]; LAYERS],
         }
     }
 
@@ -290,6 +316,17 @@ impl Exhaust {
             + self.boost_timer * HALF_SIZE_BOOST_GAIN;
         self.half_size = base * range(rng, FLICKER) * HALF_SIZE_TO_WORLD;
         self.alpha = range(rng, ALPHA_FLICKER);
+
+        // `Trail_DrawRibbon` advances these itself, at a per-frame constant that is
+        // `0x3c888889` = 0.016666668 - the same 1/60 as the lag substep, so at this
+        // project's fixed rate `dt` is that constant and the two agree.
+        for n in 0..LAYERS {
+            let u = self.scroll[n][0] + LAYER_SCROLL_U[n] * dt * SCROLL_U_GAIN;
+            let v = self.scroll[n][1] + LAYER_SCROLL_V[n] * dt;
+            // Wrapped rather than left to grow: the original wraps to keep the
+            // offset small, and an unbounded texcoord loses precision.
+            self.scroll[n] = [u.rem_euclid(1.0), v.rem_euclid(1.0)];
+        }
     }
 
     /// Records one trail sample.
@@ -341,7 +378,7 @@ impl Exhaust {
     /// The ribbon's vertices: three layers of camera-facing quads.
     ///
     /// Empty until [`Exhaust::trail_ready`]. Each layer runs the full history at
-    /// its own [`LAYER_WIDTH`] and [`LAYER_OFFSET`], coloured by its own staggered
+    /// its own [`LAYER_WIDTH`], scroll and tiling, coloured by its own staggered
     /// alpha from [`Exhaust::layer_alphas`], and fades linearly from the head to
     /// the tail - `Trail_DrawRibbon` steps its alpha down by
     /// `head / (capacity - 1)` per segment.
@@ -372,8 +409,8 @@ impl Exhaust {
                 let (b, back_b) = samples[k + 1];
                 let ta = k as f32 / last;
                 let tb = (k + 1) as f32 / last;
-                let pa = a + back_a * (LAYER_OFFSET[layer] + trail_weight(ta));
-                let pb = b + back_b * (LAYER_OFFSET[layer] + trail_weight(tb));
+                let pa = a + back_a * trail_weight(ta);
+                let pb = b + back_b * trail_weight(tb);
 
                 let along = pb - pa;
                 let across = match along.cross(view).try_normalize() {
@@ -388,7 +425,23 @@ impl Exhaust {
                 // `head / (capacity - 1)` per segment.
                 let aa = layer_alpha * (1.0 - ta);
                 let ab = layer_alpha * (1.0 - tb);
-                out.extend_from_slice(&segment(pa, pb, across, aa, ab, ta, tb));
+
+                // The texture scale and scroll are baked into the texcoords rather
+                // than set as pipeline state, because all three layers share one
+                // draw. `sceGuTexScale(su, 1.0)` plus `sceGuTexOffset(u, v)` is the
+                // same thing: tile `su` times along the ribbon, shifted.
+                let su = LAYER_TEX_SCALE_U[layer];
+                let [ou, ov] = self.scroll[layer];
+                out.extend_from_slice(&segment(
+                    pa,
+                    pb,
+                    across,
+                    aa,
+                    ab,
+                    ta * su + ou,
+                    tb * su + ou,
+                    ov,
+                ));
             }
         }
         out
@@ -516,9 +569,13 @@ fn range(rng: &mut Rng, (lo, hi): (f32, f32)) -> f32 {
 /// Note this is *not* the trail's length - the position history supplies that, and
 /// at racing speed ten ticks already span some 17 units. This is only the extra
 /// stretch each sample takes along its own exhaust direction, so it belongs on the
-/// same scale as the recovered [`LAYER_OFFSET`] values (which reach -6.0) rather
-/// than on the scale of the whole ribbon. Set to 10 at first, which stacked on top
-/// of the history and produced a plume wide and long enough to cover the track.
+/// scale of a hull rather than of the whole ribbon. Set to 10 at first, which
+/// stacked on top of the history and produced a plume long enough to cover the
+/// track.
+///
+/// This is now the *only* displacement along the exhaust direction: the values
+/// once used here as per-layer position offsets turned out to be
+/// [`LAYER_SCROLL_U`] rates, so nothing recovered pushes a layer backwards.
 pub const TRAIL_LENGTH: f32 = 3.0;
 
 /// Displacement along the exhaust direction for a sample at fraction `t` of the
@@ -547,29 +604,39 @@ pub fn trail_weight(t: f32) -> f32 {
 
 /// Six vertices for one ribbon segment, widened by `across` at both ends.
 ///
-/// `v` runs along the trail so the noise texture streams down it; `u` spans the
-/// width. That orientation is what makes a scrolling `u` offset read as flow.
+/// **`u` runs along the trail and `v` spans the width**, which is the way round the
+/// recovered `sceGuTexScale(su, 1.0)` requires: `su` is 7.5 at the inner layer and
+/// scales `u`, so `u` has to be the axis that tiles. Swapping the two - which this
+/// did at first - tiles the noise *across* a one-unit-wide ribbon and stretches a
+/// single column of it down the whole trail.
+#[allow(clippy::too_many_arguments)]
 fn segment(
     a: Vec3,
     b: Vec3,
     across: Vec3,
     alpha_a: f32,
     alpha_b: f32,
-    v_a: f32,
-    v_b: f32,
+    u_a: f32,
+    u_b: f32,
+    v_offset: f32,
 ) -> [GpuVertex; 6] {
-    let at = |p: Vec3, u: f32, v: f32, alpha: f32| GpuVertex {
+    // Greyscale, not white-with-alpha. `Exhaust_Update` writes the layer's ramp
+    // into all four of its colour channels, so the contribution is the ramp
+    // *squared* once the additive blend weights rgb by alpha. Writing
+    // `[1, 1, 1, ramp]` instead - which this did at first - gives a linear falloff
+    // and a visibly hotter, flatter plume.
+    let at = |p: Vec3, u: f32, v: f32, ramp: f32| GpuVertex {
         position: p.to_array(),
         normal: [0.0, 0.0, 1.0],
-        colour: [1.0, 1.0, 1.0, alpha],
+        colour: [ramp, ramp, ramp, ramp],
         texcoord: [u, v],
         // Emissive, like the flare: no light rig.
         lit: 0.0,
     };
-    let al = at(a - across, 0.0, v_a, alpha_a);
-    let ar = at(a + across, 1.0, v_a, alpha_a);
-    let bl = at(b - across, 0.0, v_b, alpha_b);
-    let br = at(b + across, 1.0, v_b, alpha_b);
+    let al = at(a - across, u_a, v_offset, alpha_a);
+    let ar = at(a + across, u_a, v_offset + 1.0, alpha_a);
+    let bl = at(b - across, u_b, v_offset, alpha_b);
+    let br = at(b + across, u_b, v_offset + 1.0, alpha_b);
     [al, ar, bl, ar, br, bl]
 }
 
@@ -938,11 +1005,17 @@ impl FlareTexture {
             },
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        // Clamped, not repeated: the quad samples the full 0..1 range and a
-        // repeat would wrap the glow's soft edge back onto itself.
+        // `u` repeats, `v` clamps.
+        //
+        // The flare quad samples exactly 0..1 in both, so either mode suits it. The
+        // ribbon does not: its `u` runs `0..LAYER_TEX_SCALE_U` along the trail plus
+        // a scroll offset, which is the whole point of the tiling, so clamping it
+        // would smear one column of the noise down the entire length. `v` spans the
+        // width once, and clamping there keeps the soft edge from wrapping onto
+        // itself.
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(label),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,

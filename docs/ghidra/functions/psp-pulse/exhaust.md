@@ -492,18 +492,64 @@ node the parser does not decode. Against the PSP disc's `Data.wad`:
 | Field | Value | Reading |
 | --- | --- | --- |
 | `ring+0x04` | 10 | ring capacity, in samples |
-| `ring+0x64` | 3 | layer count |
-| `ring+0x78` / `+0xa8` / `+0xd8` | 1.0 / 0.7 / 0.5 | per-layer width |
-| `ring+0x88` / `+0xb8` / `+0xe8` | -1.5 / -3.0 / -6.0 | per-layer offset |
-| `ring+0x90` / `+0xc0` / `+0xf0` | 7.5 / 6.0 / 4.5 | per-layer, unread |
+| `ring+0x1c` | 1.0 | width scale, applied to every layer width |
 | `ring+0x24` | 1.0 | head alpha |
+| `ring+0x64` | 3 | layer count |
 | `ring+0x60` | 90 | `capacity * 10 - 10`, vertices per layer |
 
-The three layer colours land at `ring+0x98`, `+0xc8`, `+0xf8` - stride `0x30`, the
-`+0x20` colour field of each per-layer block. In child coordinates those are
-`+0xf8`, `+0x128`, `+0x158`, **exactly the three addresses `Exhaust_Update`
-writes**. That match is what ties the staggered ramps to the ribbon rather than to
-three concentric quads, which is how they were first read.
+Per-layer blocks are **stride `0x30` from `ring+0x78`**, and laying them out is what
+makes the fields readable:
+
+| In block | Layer 0 | Layer 1 | Layer 2 | Reading |
+| --- | ---: | ---: | ---: | --- |
+| `+0x00` | 1.0 | 0.7 | 0.5 | half-width, in world units |
+| `+0x08` | 0 | 0 | 0 | `u` scroll offset, animated |
+| `+0x0c` | 0 | 0 | 0 | `v` scroll offset, animated |
+| `+0x10` | -1.5 | -3.0 | -6.0 | **`u` scroll rate** |
+| `+0x14` | 1.0 | -1.0 | 1.0 | **`v` scroll rate** |
+| `+0x18` | 7.5 | 6.0 | 4.5 | **`u` texture scale** (`sceGuTexScale`) |
+| `+0x1c` | 1.0 | 1.0 | 1.0 | `v` texture scale |
+| `+0x20`..`+0x2c` | see below | | | RGBA |
+
+**`+0x10` is a scroll rate, not a position offset**, and an earlier version of this
+page had it as the latter - which put the three layers up to 6 units apart along the
+exhaust and stretched the plume badly. `Trail_DrawRibbon` advances
+
+```
+u += rate_u * dt * 3.0      (only u carries the 3.0)
+v += rate_v * dt
+```
+
+wraps both to `[0,1]` and passes them to `sceGuTexOffset`. `dt` is
+`_DAT_08a889d0` = `0x3c888889` = **0.016666668** - the same 1/60 the lag substeps
+use, so at this project's fixed rate the two agree exactly. The middle layer scrolls
+`v` the other way, which is what stops three copies of one texture reading as one
+texture at three brightnesses.
+
+What settles the layout is that the *same* stride-`0x30` block holds the colour
+fields `Exhaust_Update` demonstrably writes, so the block boundaries are not a
+guess.
+
+The three layer colours land at `ring+0x98`, `+0xc8`, `+0xf8` - the `+0x20` field of
+each block. In child coordinates those are `+0xf8`, `+0x128`, `+0x158`, **exactly the
+three addresses `Exhaust_Update` writes**. That match is what ties the staggered
+ramps to the ribbon rather than to three concentric quads, which is how they were
+first read.
+
+**The preset's own colours are dead on arrival for a racing craft**, and this is
+worth recording because they look meaningful: layer 0 is a deep blue
+`(0, 0.031, 0.502)`, layer 1 a magenta `(0.608, 0, 0.486)`, layer 2 a near-white
+`(0.824, 0.824, 0.824)`. `Exhaust_Update` overwrites **all four channels of all
+three** every frame with that layer's staggered ramp, multiplied by a tint at
+`flare+0x68`..`+0x74` that it sets to `(1, 1, 1, 1)` in the same breath. So the
+ribbon a racing ship draws is greyscale, and the authored colours only matter to
+whatever else uses this preset - or to a tint that is always white here and is a
+hook for something unfound.
+
+That `Exhaust_Update` writes the ramp into **rgb as well as alpha** matters to the
+result: with the additive blend weighting rgb by alpha, the contribution goes as the
+ramp *squared*. Writing `(1, 1, 1, ramp)` instead gives a linear falloff and a
+visibly hotter, flatter plume.
 
 `Trail_BuildOffsetTable` (`0x08929a74`), called with `80.0`, fills `ring+0x138`
 with the per-sample offset weights `Trail_DrawRibbon` indexes: `+0x28 = -1/80` and
