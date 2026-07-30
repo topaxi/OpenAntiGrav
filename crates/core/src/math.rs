@@ -30,6 +30,79 @@ pub mod camera {
     pub use glam::camera::rh::view::look_at_mat4 as look_at;
 }
 
+/// The camera's view volume, for deciding what is worth submitting to the GPU
+/// at all.
+///
+/// Pure and GPU-free on purpose - the same reasoning [`camera`] and
+/// `oag_render::mesh_render::matrices` already follow: this is arithmetic a
+/// test can check directly, not something only a screenshot can verify.
+pub mod frustum {
+    use super::{Mat4, Vec3, Vec4};
+
+    /// The six half-spaces of a view-projection matrix's clip volume, each as
+    /// `(normal, distance)` such that a world-space point `p` is inside this
+    /// plane when `normal.dot(p) + distance >= 0`.
+    ///
+    /// Extracted with the standard Gribb-Hartmann method: each plane is a row
+    /// of the combined view-projection matrix, added to or subtracted from the
+    /// `w` row depending on which clip-space bound it represents. The near and
+    /// far planes use the `z` row alone rather than `w +/- z`, because this
+    /// project's projections put clip-space `z` in `0..w` (a right-handed,
+    /// 0..1 depth range - see [`camera`]), not OpenGL's `-w..w`.
+    #[derive(Debug, Clone, Copy)]
+    pub struct Frustum {
+        planes: [Vec4; 6],
+    }
+
+    impl Frustum {
+        /// Builds a frustum from a combined view-projection matrix.
+        #[must_use]
+        pub fn from_view_projection(view_projection: Mat4) -> Self {
+            // `Mat4` is column-major, so row `i` of the matrix that transforms
+            // a column vector is built from element `i` of each column.
+            let row = |i: usize| {
+                Vec4::new(
+                    view_projection.x_axis[i],
+                    view_projection.y_axis[i],
+                    view_projection.z_axis[i],
+                    view_projection.w_axis[i],
+                )
+            };
+            let (x, y, z, w) = (row(0), row(1), row(2), row(3));
+            Self {
+                planes: [
+                    w + x, // left:   clip.x >= -clip.w
+                    w - x, // right:  clip.x <=  clip.w
+                    w + y, // bottom: clip.y >= -clip.w
+                    w - y, // top:    clip.y <=  clip.w
+                    z,     // near:   clip.z >= 0
+                    w - z, // far:    clip.z <= clip.w
+                ],
+            }
+        }
+
+        /// Whether a world-space sphere touches or is inside this frustum.
+        ///
+        /// Conservative: a sphere is a looser bound than the mesh it stands in
+        /// for, so this can return `true` for a mesh that is not actually
+        /// visible (never wrongly culls one that is). Each plane is tested with
+        /// its own un-normalised magnitude divided out, so the comparison is a
+        /// true world-space distance regardless of the matrix's own scale.
+        #[must_use]
+        pub fn intersects_sphere(&self, centre: Vec3, radius: f32) -> bool {
+            self.planes.iter().all(|p| {
+                let normal = Vec3::new(p.x, p.y, p.z);
+                let length = normal.length();
+                if length <= 0.0 {
+                    // A degenerate plane cannot exclude anything.
+                    return true;
+                }
+                (normal.dot(centre) + p.w) / length >= -radius
+            })
+        }
+    }
+}
+
 /// Fixed-point helpers.
 ///
 /// The original PSP and PS2 builds are expected to use fixed-point in at least
@@ -116,5 +189,62 @@ mod tests {
         assert_eq!(binary_angle_to_radians(0), 0.0);
         assert!((binary_angle_to_radians(16384) - core::f32::consts::FRAC_PI_2).abs() < 1e-6);
         assert!((binary_angle_to_radians(32768) - core::f32::consts::PI).abs() < 1e-6);
+    }
+
+    mod frustum_tests {
+        use super::*;
+        use crate::math::frustum::Frustum;
+
+        /// A camera at the origin looking down -z, 90-degree vertical field of
+        /// view, matching the aspect so the horizontal field is 90 degrees too -
+        /// chosen so the maths below are checkable by hand rather than only by
+        /// trusting the library.
+        fn test_frustum() -> Frustum {
+            let projection = camera::perspective(core::f32::consts::FRAC_PI_2, 1.0, 1.0, 100.0);
+            let view = camera::look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
+            Frustum::from_view_projection(projection * view)
+        }
+
+        #[test]
+        fn a_point_straight_ahead_is_inside() {
+            let frustum = test_frustum();
+            assert!(frustum.intersects_sphere(Vec3::new(0.0, 0.0, -10.0), 0.0));
+        }
+
+        #[test]
+        fn a_point_behind_the_camera_is_outside() {
+            let frustum = test_frustum();
+            assert!(!frustum.intersects_sphere(Vec3::new(0.0, 0.0, 10.0), 0.0));
+        }
+
+        #[test]
+        fn a_point_nearer_than_the_near_plane_is_outside() {
+            let frustum = test_frustum();
+            assert!(!frustum.intersects_sphere(Vec3::new(0.0, 0.0, -0.5), 0.0));
+        }
+
+        #[test]
+        fn a_point_past_the_far_plane_is_outside() {
+            let frustum = test_frustum();
+            assert!(!frustum.intersects_sphere(Vec3::new(0.0, 0.0, -200.0), 0.0));
+        }
+
+        /// A 90-degree field of view means the side plane sits at 45 degrees, so
+        /// a point twice as far to the side as it is deep is exactly on the
+        /// boundary - just past it is outside, with zero radius to forgive it.
+        #[test]
+        fn a_point_outside_the_horizontal_field_of_view_is_outside() {
+            let frustum = test_frustum();
+            assert!(!frustum.intersects_sphere(Vec3::new(11.0, 0.0, -10.0), 0.0));
+        }
+
+        /// The same out-of-view point, forgiven by a sphere radius large enough
+        /// to reach back inside the plane - proof the radius is read in real
+        /// world units, not a raw, un-normalised clip-space quantity.
+        #[test]
+        fn a_large_enough_radius_brings_a_point_back_inside() {
+            let frustum = test_frustum();
+            assert!(frustum.intersects_sphere(Vec3::new(11.0, 0.0, -10.0), 2.0));
+        }
     }
 }

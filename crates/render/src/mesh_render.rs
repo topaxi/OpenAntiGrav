@@ -68,6 +68,10 @@ fn matrices(
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 /// Recomputes the camera and model matrices and uploads them to `buffer`.
+///
+/// Returns the view-projection matrix it just wrote, so a caller can build a
+/// [`oag_core::math::frustum::Frustum`] from the same camera without
+/// recomputing it.
 #[allow(clippy::too_many_arguments)]
 pub fn write_uniforms(
     queue: &wgpu::Queue,
@@ -78,9 +82,10 @@ pub fn write_uniforms(
     pitch: f32,
     zoom: f32,
     glow_scroll: f32,
-) {
+) -> Mat4 {
     let uniforms = matrices(model, aspect, yaw, pitch, zoom, glow_scroll);
     queue.write_buffer(buffer, 0, bytemuck::bytes_of(&uniforms));
+    Mat4::from_cols_array_2d(&uniforms.view_projection)
 }
 
 /// Size, in bytes, of the uniform buffer `write_uniforms` expects.

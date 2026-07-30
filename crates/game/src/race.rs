@@ -60,6 +60,7 @@
 
 use anyhow::{Context, Result};
 use oag_assets::pulse;
+use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Vec3};
 use oag_core::{Rng, TickClock, TickRate};
 use oag_formats::track::{AiTrack, Sample, StartPosition};
@@ -73,7 +74,7 @@ use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::collision as render_collision;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
-use oag_render::mesh::Model;
+use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::Anisotropy;
 use oag_render::{mesh, mesh_render, track as track_render};
 
@@ -1562,6 +1563,38 @@ struct Uniforms {
     _pad2: f32,
 }
 
+/// What one frame's frustum culling did, for the performance overlay.
+///
+/// Plain counts rather than anything richer: the point is to show the effect
+/// of `[graphics] lod` and frustum culling is having, not to profile the
+/// renderer.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SceneStats {
+    pub draws_submitted: u32,
+    pub draws_culled: u32,
+    pub triangles: u32,
+}
+
+impl SceneStats {
+    fn add(&mut self, other: Self) {
+        self.draws_submitted += other.draws_submitted;
+        self.draws_culled += other.draws_culled;
+        self.triangles += other.triangles;
+    }
+}
+
+/// Whether `draw` should be submitted: always, with no frustum, otherwise only
+/// when its own bounds touch it. See [`Drawable::draw`] for why some callers
+/// pass `None`.
+fn visible(draw: &DrawCall, frustum: Option<&Frustum>) -> bool {
+    match frustum {
+        None => true,
+        Some(frustum) => {
+            frustum.intersects_sphere(Vec3::from_array(draw.bounds.centre), draw.bounds.radius)
+        }
+    }
+}
+
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
 /// Two of these are drawn into one render pass. Separate pipelines rather than one
@@ -1647,9 +1680,20 @@ impl Drawable {
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
 
-    fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
+    /// Draws every list, in pipeline order, and reports what it submitted.
+    ///
+    /// `frustum` is `None` for the ship and the collision overlay: both draw a
+    /// handful of batches next to the camera regardless, where the bookkeeping
+    /// would cost more than the culling could ever save, and both carry a
+    /// non-identity model matrix the track does not - the [`Bounds`] on a
+    /// `DrawCall` are in the *model's own* space, valid to test directly
+    /// against a world-space frustum only while that space and world space
+    /// are the same transform, which is only true here for the track (see the
+    /// `Mat4::IDENTITY` passed to [`Self::write`] at each call site).
+    fn draw(&self, pass: &mut wgpu::RenderPass<'_>, frustum: Option<&Frustum>) -> SceneStats {
+        let mut stats = SceneStats::default();
         if self.model.indices.is_empty() {
-            return;
+            return stats;
         }
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &[]);
@@ -1657,6 +1701,12 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         for draw in &self.model.draws {
+            if !visible(draw, frustum) {
+                stats.draws_culled += 1;
+                continue;
+            }
+            stats.draws_submitted += 1;
+            stats.triangles += (draw.range.end - draw.range.start) / 3;
             let slot = draw.texture.map_or(0, |t| t + 1);
             pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
@@ -1666,6 +1716,12 @@ impl Drawable {
         // `mesh_render::Built::alpha_test_pipeline`.
         pass.set_pipeline(&self.alpha_test_pipeline);
         for draw in &self.model.alpha_tested_draws {
+            if !visible(draw, frustum) {
+                stats.draws_culled += 1;
+                continue;
+            }
+            stats.draws_submitted += 1;
+            stats.triangles += (draw.range.end - draw.range.start) / 3;
             let slot = draw.texture.map_or(0, |t| t + 1);
             pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
@@ -1675,10 +1731,17 @@ impl Drawable {
         // `mesh_render::Built::blend_pipeline`.
         pass.set_pipeline(&self.blend_pipeline);
         for draw in &self.model.transparent_draws {
+            if !visible(draw, frustum) {
+                stats.draws_culled += 1;
+                continue;
+            }
+            stats.draws_submitted += 1;
+            stats.triangles += (draw.range.end - draw.range.start) / 3;
             let slot = draw.texture.map_or(0, |t| t + 1);
             pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
+        stats
     }
 }
 
@@ -1784,6 +1847,13 @@ impl Scene {
     ///
     /// One render pass with one clear: a second pass would either wipe the first's
     /// colour or need its own decision about the depth buffer.
+    ///
+    /// `cull` is `[graphics] frustum_culling` - off by default, see that
+    /// setting's own doc comment for the measurement behind that default.
+    ///
+    /// Returns what the track's frustum culling did, for the performance
+    /// overlay - see [`SceneStats`].
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         queue: &wgpu::Queue,
@@ -1792,9 +1862,11 @@ impl Scene {
         race: &Race,
         viewport: (f32, f32, f32, f32),
         fov: crate::display::Fov,
-    ) {
+        cull: bool,
+    ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
+        let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         let scroll = glow_scroll(race.world.tick);
         self.track
             .write(queue, view_projection, Mat4::IDENTITY, scroll);
@@ -1860,15 +1932,16 @@ impl Scene {
             multiview_mask: None,
         });
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
-        self.track.draw(&mut pass);
-        self.ship.draw(&mut pass);
+        let mut stats = self.track.draw(&mut pass, frustum.as_ref());
+        stats.add(self.ship.draw(&mut pass, None));
         if let Some(collision) = &self.collision {
-            collision.draw(&mut pass);
+            stats.add(collision.draw(&mut pass, None));
         }
         // Last, and that ordering is load-bearing: the flare tests depth but does
         // not write it, so the hull's depth has to already be in the buffer for the
         // flare to be occluded by it.
         self.exhaust.borrow().draw(&mut pass);
+        stats
     }
 }
 
@@ -2015,7 +2088,17 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     // Shaped the same way a window is, so a screenshot frames what a player
     // would have seen at that size rather than a differently-cropped picture.
     let viewport = crate::display::viewport((width, height), options.aspect);
-    scene.render(&queue, &mut encoder, &view, &race, viewport, options.fov);
+    // Off, matching `[graphics] frustum_culling`'s own default: a screenshot
+    // is one frame, not a budget to save microseconds against.
+    scene.render(
+        &queue,
+        &mut encoder,
+        &view,
+        &race,
+        viewport,
+        options.fov,
+        false,
+    );
 
     // The HUD, into the same target. Without this a race screenshot would show
     // the track and no HUD at all, because unlike the front end's capture this

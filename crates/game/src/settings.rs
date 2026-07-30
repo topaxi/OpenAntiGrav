@@ -228,18 +228,35 @@ pub struct Graphics {
     /// disc's own data authored. See [`crate::display::Fov`].
     #[serde(default)]
     pub fov: crate::display::Fov,
-    /// The performance overlay: `off`, `fps` or `pacing`.
+    /// The performance overlay: `off`, `fps`, `pacing` or `dev`.
     ///
     /// Off by default, because it is a diagnostic and not decoration. See
-    /// [`crate::perf`] for what the two live modes show and why the second one
-    /// exists at all - an average frame rate cannot show uneven frames, which
-    /// is the thing a player actually sees.
+    /// [`crate::perf`] for what each live mode shows and why `pacing` exists at
+    /// all - an average frame rate cannot show uneven frames, which is the
+    /// thing a player actually sees.
     ///
     /// In this table rather than `[display]` because it is drawn *into* the
     /// frame, at the render scale, over whatever stage is running - measuring a
     /// frame nobody is presenting is the one way to get it wrong.
     #[serde(default)]
     pub perf_overlay: crate::perf::Overlay,
+    /// Whether the track's draw calls are tested against the camera's view
+    /// frustum before being submitted, skipping the ones entirely outside it.
+    ///
+    /// **Off by default, deliberately.** Measured on `16_Track`: the test
+    /// itself costs about 59 microseconds a frame to check all ~2,000 draw
+    /// calls, a real, unconditional cost, while what it saves is GPU
+    /// submission of the roughly half that turn out to be outside the camera,
+    /// and this project already renders comfortably above target frame rate
+    /// (hundreds of FPS unlocked) at current scene complexity, so that saving
+    /// is not confirmed to be worth more than the cost yet. Worth revisiting
+    /// once more is drawn per frame at once (other ships, weapons, effects),
+    /// see the frustum-culling entry in `docs/overview/roadmap.md`. No menu
+    /// row on purpose: this is a setting for someone measuring the renderer,
+    /// not a player-facing trade-off, the same reasoning `[graphics] lod`'s
+    /// scope stopped short of a live distance switch.
+    #[serde(default)]
+    pub frustum_culling: bool,
     /// Whether a track draws every child of an authored `LodGroup`, or only
     /// the higher-detail first one. Not a quality tier and not distance-based,
     /// see [`Lod`] for why. `both` matches the original, duplicate geometry

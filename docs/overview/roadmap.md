@@ -565,16 +565,24 @@ change how this list should be read:
       point-in-volume test; nothing culls with them
 - [ ] `MeshNode_Ghost` `0x3d4` - ghost rendering. Needs replay data, so it lands
       with replay in M7 if that comes first
-- [ ] **Frustum culling.** Not an authored class - a plain engine technique the
-      renderer has none of today: every `DrawCall` in a `Model` is submitted every
-      frame regardless of the camera, because `mesh::build_with_textures` flattens
-      a track into one buffer and discards each mesh's own bounds once the
-      model-wide centre/radius is computed. Needs `Model` to carry a bounding
-      volume per `DrawCall` (or per cluster) instead, checked against the camera
-      frustum before `draw_indexed`. Lower priority than it sounds at current
-      draw-call counts (order 2,000 for `16_Track`, already hundreds of fps) -
-      matters more once more is being drawn per frame at once (weapons, other
-      ships, effects) than it does today.
+- [x] **Frustum culling.** Not an authored class - a plain engine technique.
+      `DrawCall` now carries its own world-space bounding sphere
+      (`mesh::Bounds`), tested per frame against the camera's view frustum
+      (`oag_core::math::frustum::Frustum`, unit-tested Gribb-Hartmann
+      extraction) before `draw_indexed`; applied only to the track (~2,000
+      draw calls), not the ship or the collision overlay, since both carry a
+      non-identity model matrix the bounds are not valid against without an
+      extra transform not yet written.
+      **Off by default** (`[graphics] frustum_culling`, config-file only, no
+      menu row): measured on `16_Track`, the test itself costs ~59
+      microseconds a frame to check all ~2,000 draw calls, a real cost, while
+      this project already renders comfortably above target frame rate at
+      current scene complexity, so the GPU-submission saving is not confirmed
+      to be worth more than that cost yet - a pixel-identical screenshot
+      comparison with the setting on and off found zero visual difference,
+      confirming correctness even though the performance case is not proven
+      today. Worth flipping on and re-measuring once more is drawn per frame
+      at once (weapons, other ships, effects).
 
 ### Lighting and shadow
 

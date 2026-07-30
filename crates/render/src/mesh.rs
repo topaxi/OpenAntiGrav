@@ -30,12 +30,28 @@ pub struct GpuVertex {
     pub glow: f32,
 }
 
+/// A world-space bounding sphere, for frustum culling.
+///
+/// A sphere rather than an oriented box: cheap to test
+/// ([`oag_core::math::frustum::Frustum::intersects_sphere`]), and a batch's
+/// own vertices already give a centre and radius for free while they are
+/// being iterated to build [`GpuVertex`]s, with no separate pass needed.
+#[derive(Debug, Clone, Copy)]
+pub struct Bounds {
+    pub centre: [f32; 3],
+    pub radius: f32,
+}
+
 /// A run of indices sharing one texture.
 #[derive(Debug)]
 pub struct DrawCall {
     pub range: std::ops::Range<u32>,
     /// Index into [`Model::textures`], or `None` for untextured.
     pub texture: Option<usize>,
+    /// World-space bounds of this draw call's own vertices, for frustum
+    /// culling - not the whole model's, which would defeat the point on a
+    /// track where one `Model` is the entire circuit.
+    pub bounds: Bounds,
 }
 
 /// Whether a decoded texture's name identifies its surface as the shared
@@ -374,9 +390,16 @@ pub fn build_with_textures(
                     .and_then(Option::as_ref)
                     .is_some_and(|t| is_blink_light_texture(&t.label));
 
+                let mut lo = [f32::MAX; 3];
+                let mut hi = [f32::MIN; 3];
                 for v in &batch.vertices {
+                    let position = vex::transform_point(&to_world, v.position);
+                    for k in 0..3 {
+                        lo[k] = lo[k].min(position[k]);
+                        hi[k] = hi[k].max(position[k]);
+                    }
                     vertices.push(GpuVertex {
-                        position: vex::transform_point(&to_world, v.position),
+                        position,
                         // A batch without normals is prelit, so face it at the
                         // camera rather than leaving it black.
                         normal: v.normal.unwrap_or([0.0, 0.0, 1.0]),
@@ -400,9 +423,22 @@ pub fn build_with_textures(
 
                 let last_index = indices.len() as u32;
                 if last_index > first_index {
+                    let centre = [
+                        (lo[0] + hi[0]) * 0.5,
+                        (lo[1] + hi[1]) * 0.5,
+                        (lo[2] + hi[2]) * 0.5,
+                    ];
+                    // The AABB's own circumscribing sphere: not the tightest
+                    // possible fit, but cheap, always conservative, and exact
+                    // from data already being walked for the vertices above.
+                    let radius = (0..3)
+                        .map(|k| (hi[k] - centre[k]).powi(2))
+                        .sum::<f32>()
+                        .sqrt();
                     out.push(DrawCall {
                         range: first_index..last_index,
                         texture,
+                        bounds: Bounds { centre, radius },
                     });
                 }
             }
@@ -545,6 +581,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         let rebase = |d: DrawCall| DrawCall {
             range: (d.range.start + index_base)..(d.range.end + index_base),
             texture: d.texture.map(|t| t + texture_base),
+            bounds: d.bounds,
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
         out.alpha_tested_draws
@@ -598,6 +635,10 @@ mod merge_tests {
             draws: vec![DrawCall {
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),
+                bounds: Bounds {
+                    centre: [0.0; 3],
+                    radius: 1.0,
+                },
             }],
             alpha_tested_draws: Vec::new(),
             transparent_draws: Vec::new(),

@@ -76,6 +76,14 @@ pub enum Overlay {
     /// The line, a second line of pacing figures, and a graph of every frame in
     /// the window.
     Pacing,
+    /// Everything [`Self::Pacing`] shows, plus a third line of scene counts:
+    /// draw calls submitted against the total, and triangles submitted - see
+    /// [`crate::race::SceneStats`].
+    ///
+    /// Its own tier rather than folded into `Pacing`, since the extra line
+    /// names renderer-internal things (`[graphics] lod`, frustum culling)
+    /// most players reaching for `pacing` are not asking about.
+    Dev,
 }
 
 impl Overlay {
@@ -86,6 +94,7 @@ impl Overlay {
             Self::Off => "off",
             Self::Fps => "fps",
             Self::Pacing => "pacing",
+            Self::Dev => "dev",
         }
     }
 
@@ -96,7 +105,7 @@ impl Overlay {
     }
 
     /// Every mode, for the menus and for error messages.
-    pub const ALL: [Self; 3] = [Self::Off, Self::Fps, Self::Pacing];
+    pub const ALL: [Self; 4] = [Self::Off, Self::Fps, Self::Pacing, Self::Dev];
 }
 
 impl std::str::FromStr for Overlay {
@@ -106,7 +115,9 @@ impl std::str::FromStr for Overlay {
         Self::ALL
             .into_iter()
             .find(|mode| mode.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| format!("{text:?} is not a performance overlay; try off, fps or pacing"))
+            .ok_or_else(|| {
+                format!("{text:?} is not a performance overlay; try off, fps, pacing or dev")
+            })
     }
 }
 
@@ -547,7 +558,12 @@ const GRAPH_FRAMES: f32 = 2.0;
 /// the graph says nothing, because against a target four times too slow every
 /// column is a green sliver at the floor.
 #[must_use]
-pub fn draw_list(meter: &Meter, mode: Overlay, target_hz: u32) -> Vec<Draw> {
+pub fn draw_list(
+    meter: &Meter,
+    mode: Overlay,
+    target_hz: u32,
+    scene: Option<crate::race::SceneStats>,
+) -> Vec<Draw> {
     if !mode.is_on() {
         return Vec::new();
     }
@@ -556,12 +572,27 @@ pub fn draw_list(meter: &Meter, mode: Overlay, target_hz: u32) -> Vec<Draw> {
     };
     let target_ms = 1000.0 / target_hz.max(1) as f32;
 
-    let graph = mode == Overlay::Pacing;
+    let graph = mode == Overlay::Pacing || mode == Overlay::Dev;
     let mut lines = vec![format!("{:.0} FPS  {:.1} MS", stats.fps, stats.mean_ms)];
     if graph {
         lines.push(format!(
             "P99 {:.1}  MAX {:.1}",
             stats.p99_ms, stats.worst_ms
+        ));
+    }
+    // The scene's own numbers, so `[graphics] lod` and frustum culling have
+    // something on screen to show they did anything at all - a stage with no
+    // scene (the front end, the menus) passes `None` rather than a stats
+    // value of all zeroes, which would read as "nothing is ever drawn". Only
+    // under `Dev`: a player choosing `pacing` wants frame timing, not a
+    // renderer-internal count.
+    if mode == Overlay::Dev
+        && let Some(scene) = scene
+    {
+        let total = scene.draws_submitted + scene.draws_culled;
+        lines.push(format!(
+            "DRAWS {}/{total}  TRIS {}",
+            scene.draws_submitted, scene.triangles
         ));
     }
 
@@ -645,7 +676,7 @@ mod tests {
         let meter = Meter::new();
         assert!(meter.is_empty());
         assert_eq!(meter.stats(), None);
-        assert!(draw_list(&meter, Overlay::Pacing, 60).is_empty());
+        assert!(draw_list(&meter, Overlay::Pacing, 60, None).is_empty());
     }
 
     #[test]
@@ -735,7 +766,7 @@ mod tests {
     fn off_draws_nothing_however_full_the_meter_is() {
         let mut meter = Meter::new();
         steady(&mut meter, WINDOW, 1.0 / 60.0);
-        assert!(draw_list(&meter, Overlay::Off, 60).is_empty());
+        assert!(draw_list(&meter, Overlay::Off, 60, None).is_empty());
     }
 
     /// The counter is one panel and one line; the pacing view adds a second
@@ -745,12 +776,12 @@ mod tests {
         let mut meter = Meter::new();
         steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-        let fps = draw_list(&meter, Overlay::Fps, 60);
+        let fps = draw_list(&meter, Overlay::Fps, 60, None);
         assert_eq!(fps.len(), 2);
         assert!(matches!(fps[0], Draw::Fill { .. }));
         assert!(matches!(&fps[1], Draw::Text { text, .. } if text.starts_with("60 FPS")));
 
-        let pacing = draw_list(&meter, Overlay::Pacing, 60);
+        let pacing = draw_list(&meter, Overlay::Pacing, 60, None);
         // panel + two lines + the rule + one column per frame
         assert_eq!(pacing.len(), 4 + WINDOW);
         assert!(matches!(&pacing[2], Draw::Text { text, .. } if text.starts_with("P99")));
@@ -764,7 +795,7 @@ mod tests {
         for i in 0..WINDOW {
             meter.record(if i == 7 { 0.5 } else { 1.0 / 60.0 });
         }
-        let list = draw_list(&meter, Overlay::Pacing, 60);
+        let list = draw_list(&meter, Overlay::Pacing, 60, None);
         let Draw::Fill { rect: panel, .. } = list[0] else {
             panic!("the panel comes first");
         };
@@ -795,7 +826,7 @@ mod tests {
         steady(&mut meter, WINDOW, 1.0 / 240.0);
 
         let heights = |target| {
-            draw_list(&meter, Overlay::Pacing, target)
+            draw_list(&meter, Overlay::Pacing, target, None)
                 .into_iter()
                 .skip(4) // the panel, two lines of text and the rule
                 .filter_map(|draw| match draw {

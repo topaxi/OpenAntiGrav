@@ -1296,9 +1296,11 @@ impl RaceStage {
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
         fov: display::Fov,
-    ) {
-        self.scene
-            .render(&gpu.queue, encoder, view, &self.race, viewport, fov);
+        cull: bool,
+    ) -> race::SceneStats {
+        let stats = self
+            .scene
+            .render(&gpu.queue, encoder, view, &self.race, viewport, fov, cull);
 
         // Over the scene and inside the same target, so the HUD is drawn at the
         // render scale the game is and lands in a `--screenshot` too.
@@ -1306,6 +1308,7 @@ impl RaceStage {
             let readout = self.race.readout();
             hud.draw(&gpu.device, &gpu.queue, encoder, view, &readout, viewport);
         }
+        stats
     }
 }
 
@@ -1659,23 +1662,30 @@ impl Session {
         let size = self.framebuffer.size();
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let target = self.framebuffer.view();
-        match &mut self.stage {
-            Stage::Frontend(stage) => stage.render(&self.gpu, &mut encoder, target, inside)?,
-            Stage::Menu(stage) => stage.render(
-                &self.gpu,
-                &mut encoder,
-                target,
-                inside,
-                self.backdrop.as_mut(),
-            )?,
-            Stage::Race(stage) => stage.render(
+        let scene_stats = match &mut self.stage {
+            Stage::Frontend(stage) => {
+                stage.render(&self.gpu, &mut encoder, target, inside)?;
+                None
+            }
+            Stage::Menu(stage) => {
+                stage.render(
+                    &self.gpu,
+                    &mut encoder,
+                    target,
+                    inside,
+                    self.backdrop.as_mut(),
+                )?;
+                None
+            }
+            Stage::Race(stage) => Some(stage.render(
                 &self.gpu,
                 &mut encoder,
                 target,
                 inside,
                 self.settings.graphics.fov,
-            ),
-        }
+                self.settings.graphics.frustum_culling,
+            )),
+        };
 
         // Over the stage and inside the offscreen target, so the overlay is
         // drawn at the render scale the game is - measuring a frame nobody is
@@ -1685,6 +1695,7 @@ impl Session {
             &self.meter,
             self.settings.graphics.perf_overlay,
             self.presentation_hz(),
+            scene_stats,
         );
         if !list.is_empty() {
             self.overlay.overlay(

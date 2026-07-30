@@ -27,7 +27,7 @@ use anyhow::{Context, Result, bail};
 use oag_formats::track::{self, AiTrack, Sample};
 use oag_formats::vex;
 
-use crate::mesh::{DrawCall, GpuVertex, Model};
+use crate::mesh::{Bounds, DrawCall, GpuVertex, Model};
 
 /// Curve samples per control-point interval.
 ///
@@ -111,12 +111,6 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         }
     }
 
-    // One draw call: the ribbon is untextured, so there is nothing to split on.
-    let draws = vec![DrawCall {
-        range: 0..indices.len() as u32,
-        texture: None,
-    }];
-
     let mut lo = [f32::MAX; 3];
     let mut hi = [f32::MIN; 3];
     for v in &vertices {
@@ -134,6 +128,22 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         .map(|i| (hi[i] - lo[i]) * 0.5)
         .fold(0.0f32, f32::max)
         .max(0.001);
+
+    // One draw call: the ribbon is untextured, so there is nothing to split on.
+    // Bounds are the box's own circumscribing sphere - the diagonal, not
+    // `radius` above, which is only half the longest single axis and would
+    // under-cover the corners of a non-cubic box.
+    let draws = vec![DrawCall {
+        range: 0..indices.len() as u32,
+        texture: None,
+        bounds: Bounds {
+            centre,
+            radius: (0..3)
+                .map(|i| (hi[i] - centre[i]).powi(2))
+                .sum::<f32>()
+                .sqrt(),
+        },
+    }];
 
     Model {
         label: label.to_string(),

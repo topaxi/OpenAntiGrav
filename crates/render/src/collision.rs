@@ -33,7 +33,7 @@
 use anyhow::{Context, Result};
 use oag_formats::collision::{self, CollisionNode, SurfaceKind};
 
-use crate::mesh::{DrawCall, GpuVertex, Model};
+use crate::mesh::{Bounds, DrawCall, GpuVertex, Model};
 
 /// How the soup is drawn.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -222,10 +222,26 @@ pub fn build_model(
     }
 
     let (centre, radius) = frame(&vertices);
-    // Untextured, so there is nothing to split the buffer on.
+    // Untextured, so there is nothing to split the buffer on. Bounds use the
+    // box's own circumscribing sphere (the diagonal), not `radius` above,
+    // which is only half the longest single axis and would under-cover the
+    // corners of a non-cubic box.
+    let bounds_radius = vertices
+        .iter()
+        .map(|v| {
+            (0..3)
+                .map(|i| (v.position[i] - centre[i]).powi(2))
+                .sum::<f32>()
+        })
+        .fold(0.0f32, f32::max)
+        .sqrt();
     let draws = vec![DrawCall {
         range: 0..indices_len(&indices),
         texture: None,
+        bounds: Bounds {
+            centre,
+            radius: bounds_radius,
+        },
     }];
     Model {
         label: label.to_string(),
