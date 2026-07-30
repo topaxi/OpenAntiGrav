@@ -125,7 +125,13 @@ pub enum Align {
 }
 
 impl Align {
-    fn parse(value: &str) -> Self {
+    /// Reads the XML's own spelling, tolerating both `centre` and `center`.
+    ///
+    /// Public because the HUD layouts spell alignment the same way this screen's
+    /// widgets do, and one reading of the attribute is better than two that can
+    /// disagree. See [`crate::hud`].
+    #[must_use]
+    pub fn parse(value: &str) -> Self {
         match value.to_ascii_lowercase().as_str() {
             "centre" | "center" => Self::Centre,
             "right" => Self::Right,
@@ -168,8 +174,18 @@ pub enum Draw {
         y: f32,
         /// Scale multiplier applied to the glyph cell.
         scale: f32,
-        /// Colour.
+        /// Colour of the glyph body.
         color: [f32; 4],
+        /// Colour of the glyph's **baked outline**, when the font has one.
+        ///
+        /// `None` means "the same as the body", which is what every caller wanted
+        /// before the two HUD fonts turned up: those two bake an outline into their
+        /// atlas and distinguish it only by grey level, so drawing them without a
+        /// separate border colour fills the whole silhouette and a digit becomes a
+        /// box. The three menu fonts and the built-in glyphs carry a constant mask,
+        /// so this changes nothing for them whatever it is set to. See
+        /// [`crate::font::Atlas::luma`].
+        border: Option<[f32; 4]>,
         /// Alignment about `x`.
         align: Align,
         /// The text.
@@ -636,6 +652,7 @@ impl Frontend {
                     y: 250.0,
                     scale: 1.0,
                     color: [1.0, 1.0, 1.0, 0.5],
+                    border: None,
                     align: Align::Left,
                     text: format!(
                         "INTRO FRAME {} / {}{}",
@@ -663,6 +680,7 @@ impl Frontend {
                 y: height / 2.0 - 4.0,
                 scale: 2.0,
                 color: [1.0, 1.0, 1.0, 1.0],
+                border: None,
                 align: Align::Centre,
                 text: states::LAUNCH_GAME.to_ascii_uppercase(),
             });
@@ -702,6 +720,7 @@ impl Frontend {
                 y: text.y,
                 scale: text.scale,
                 color: argb_to_rgba(text.color),
+                border: None,
                 align: Align::parse(&text.align),
                 text: self.strings.get_or_id(id).to_string(),
             });
@@ -803,6 +822,7 @@ impl Frontend {
                 // we now happen to have. So the lift stays and the backdrop is
                 // not drawn here. See `docs/architecture/menus.md`.
                 color: lighten(argb_to_rgba(text.color)),
+                border: None,
                 align: Align::parse(&text.align),
                 text: body.to_string(),
             });
@@ -840,6 +860,7 @@ impl Frontend {
                 } else {
                     color
                 },
+                border: None,
                 align,
                 text: language.native_name.clone(),
             });

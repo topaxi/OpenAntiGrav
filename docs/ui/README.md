@@ -1,6 +1,17 @@
 # User interface
 
-> **Not yet started.** Milestone M5 for the HUD, M6 for menus.
+> **In progress.** The **HUD layout is recovered and parsed** (M5) - see
+> [hud.md](hud.md). The menus exist and navigate (M6) - see
+> [menus.md](../architecture/menus.md).
+
+## The HUD is authored data
+
+Worth stating here because this page previously implied otherwise. Pulse's
+in-race HUD is **not** drawn from code: five layouts ship in `Data.wad` as
+`Data\XML\*_HUD.xml`, carrying exact pixel rectangles, atlas sub-rectangles,
+colour constants, font roles and alignment. They decode with the same front-end
+XML machinery described below. [hud.md](hud.md) has the schema, the widget
+inventory and the confidence scores.
 
 ## Scope
 

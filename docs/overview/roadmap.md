@@ -363,7 +363,15 @@ seen from the authoring side.
 ## M5 - Full race
 
 - [ ] Race rules, grid, lap timing, positions
-- [ ] HUD
+- [~] HUD. **The disc's own layout is parsed and drawn.** All five
+      `Data\XML\*_HUD.xml` layouts decode - exact rectangles, atlas UVs, colour
+      constants, font roles - and a race draws the speed and shield bars, the lap
+      block, the three clocks and the wrong-way warning through them, in the
+      disc's `PulseHud`/`small` fonts off its own `PulseHUD.mip`. Verified against
+      a PPSSPP reference frame. What it does **not** have is anything to show for
+      lap, position or a depleting shield, because none of those exists yet - the
+      widgets are omitted rather than filled with invented values. See
+      [hud.md](../ui/hud.md) for the four named gaps and what is scoped out.
 - [ ] Weapons and pickups
 - [ ] Shield and energy
 - [ ] AI

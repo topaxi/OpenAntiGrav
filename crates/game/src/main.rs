@@ -1043,6 +1043,7 @@ impl Stage {
     ) -> Result<Self> {
         let race::Loaded {
             setup,
+            hud,
             track_model,
             ship_model,
             collision_model,
@@ -1062,9 +1063,14 @@ impl Stage {
             size,
             anisotropy,
         )?;
+        // Against the **surface** format, like every other renderer here, because
+        // the HUD is composited into the offscreen target which shares it.
+        let overlay = oag_game::hud::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
+            .context("building the HUD overlay")?;
         Ok(Self::Race(Box::new(RaceStage {
             scene,
             race: race::Race::start(setup),
+            hud: overlay,
         })))
     }
 }
@@ -1268,11 +1274,17 @@ impl FrontendStage {
 struct RaceStage {
     scene: race::Scene,
     race: race::Race,
+    /// The HUD, or `None` when the disc's layout could not be read.
+    hud: Option<oag_game::hud::Overlay>,
 }
 
 impl RaceStage {
+    /// `&mut self` rather than `&self`, unlike the other stages: the HUD's
+    /// renderers own a growable instance buffer, the same reason
+    /// [`Renderer::overlay`] takes `&mut self`. The scene stays immutable behind
+    /// its own `RefCell`.
     fn render(
-        &self,
+        &mut self,
         gpu: &Gpu,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
@@ -1281,6 +1293,13 @@ impl RaceStage {
     ) {
         self.scene
             .render(&gpu.queue, encoder, view, &self.race, viewport, fov);
+
+        // Over the scene and inside the same target, so the HUD is drawn at the
+        // render scale the game is and lands in a `--screenshot` too.
+        if let Some(hud) = &mut self.hud {
+            let readout = self.race.readout();
+            hud.draw(&gpu.device, &gpu.queue, encoder, view, &readout, viewport);
+        }
     }
 }
 

@@ -3,6 +3,12 @@
 // One pipeline draws both text and solid fills: the glyph atlas carries a single
 // opaque texel that solid rectangles sample, so there is no second pipeline and
 // no second bind group to keep in step.
+//
+// The glyph atlas is two channels, not one. `r` is a body/outline mask and `g` is
+// coverage, because the disc's two HUD fonts bake an outline into their atlas and
+// distinguish it only by grey level - see `font.rs`. Text is composited as
+// `mix(border, color, mask)` at `coverage`, which for the three menu fonts (mask
+// constant 1) is exactly the plain `color` it always was.
 
 struct Uniforms {
     // Multiplies clip space to letterbox 480x272 into a window of any shape.
@@ -31,18 +37,21 @@ struct Instance {
     // u, v, width, height in atlas pixels.
     @location(1) uv: vec4<f32>,
     @location(2) color: vec4<f32>,
+    // What the glyph's baked outline is drawn in. Only the atlas path reads it.
+    @location(3) border: vec4<f32>,
     // 0 indexes the glyph atlas, 1 the sprite sheet.
-    @location(3) mode: f32,
+    @location(4) mode: f32,
 };
 
 struct VertexOut {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
+    @location(2) border: vec4<f32>,
     // Flat: a quad is one or the other, and interpolating the flag across the
     // triangle would make the middle of a sprite sample somewhere between the
     // two textures.
-    @location(2) @interpolate(flat) mode: f32,
+    @location(3) @interpolate(flat) mode: f32,
 };
 
 fn corner_of(index: u32) -> vec2<f32> {
@@ -73,6 +82,7 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     let size = select(uniforms.atlas, uniforms.sprites, instance.mode > 0.5);
     out.uv = (instance.uv.xy + corner * instance.uv.zw) / size;
     out.color = instance.color;
+    out.border = instance.border;
     out.mode = instance.mode;
     return out;
 }
@@ -82,10 +92,17 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // Both are sampled unconditionally and one is discarded. `textureSample`
     // needs uniform control flow for its implicit derivatives, and the mode flag
     // is per-instance, so branching around the sample is not allowed here.
-    let coverage = textureSample(atlas_texture, atlas_sampler, in.uv).r;
+    let glyph = textureSample(atlas_texture, atlas_sampler, in.uv);
+    // `r` is the body/outline mask, `g` the silhouette's coverage.
+    let mask = glyph.r;
+    let coverage = glyph.g;
     let sprite = textureSample(sprite_texture, sprite_sampler, in.uv);
 
-    let from_atlas = vec4<f32>(in.color.rgb, in.color.a * coverage);
+    // Body toward `color`, outline toward `border`. The alpha is mixed too, so a
+    // translucent border colour - which is what the HUD authors, 0x40000000 -
+    // leaves the outline fainter than the glyph rather than opaque black.
+    let ink = mix(in.border, in.color, mask);
+    let from_atlas = vec4<f32>(ink.rgb, ink.a * coverage);
     let from_sheet = sprite * in.color;
     return select(from_atlas, from_sheet, in.mode > 0.5);
 }

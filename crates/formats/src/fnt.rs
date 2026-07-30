@@ -361,6 +361,10 @@ impl Font {
     }
 
     /// Alpha of the atlas pixel at `(x, y)`, or 0 outside it.
+    ///
+    /// The glyph's **silhouette**: for the two HUD fonts that includes the baked
+    /// outline, so alpha alone does not say where the glyph body ends. See
+    /// [`Self::luma_at`].
     #[must_use]
     pub fn alpha_at(&self, x: usize, y: usize) -> u8 {
         let (w, h) = (usize::from(self.width), usize::from(self.height));
@@ -371,6 +375,61 @@ impl Font {
             .get(y * w + x)
             .and_then(|&i| self.palette.get(usize::from(i)))
             .map_or(0, |c| c[3])
+    }
+
+    /// Grey level of the atlas pixel at `(x, y)`, or 0 outside it.
+    ///
+    /// Every palette entry in every shipped font is a **neutral grey** - `r == g ==
+    /// b` on all 16 entries of all five Pulse fonts and all six of Pure's - so this
+    /// reads the red channel rather than computing a weighted luminance, and the
+    /// choice costs nothing.
+    ///
+    /// # What it means
+    ///
+    /// The **body/outline mask**. The three menu fonts are a single pure white, so
+    /// this is a constant 255 for them and carries nothing. The two HUD fonts carry
+    /// six distinct greys and are pre-outlined: light is glyph body, dark is
+    /// outline. A renderer that wants the original's look mixes the text colour
+    /// toward the border colour by this and takes its opacity from
+    /// [`Self::alpha_at`].
+    ///
+    /// Reading alpha alone draws body and outline in one colour, which turns an
+    /// outlined digit into a filled box - measured, not hypothesised. See
+    /// `docs/formats/fnt.md` and `oag_game::font`.
+    #[must_use]
+    pub fn luma_at(&self, x: usize, y: usize) -> u8 {
+        let (w, h) = (usize::from(self.width), usize::from(self.height));
+        if x >= w || y >= h {
+            return 0;
+        }
+        self.indices
+            .get(y * w + x)
+            .and_then(|&i| self.palette.get(usize::from(i)))
+            .map_or(0, |c| c[0])
+    }
+
+    /// Whether this font bakes an outline into its atlas.
+    ///
+    /// True when the palette holds more than one distinct grey, which is the
+    /// property that distinguishes the two HUD fonts from the three menu ones. A
+    /// caller that only wants to know whether [`Self::luma_at`] carries information
+    /// can ask this instead of inspecting the palette.
+    #[must_use]
+    pub fn is_outlined(&self) -> bool {
+        let mut seen: Option<u8> = None;
+        for entry in &self.palette {
+            // Fully transparent entries carry no colour worth comparing: their RGB
+            // is never sampled, and in these fonts it is zero regardless.
+            if entry[3] == 0 {
+                continue;
+            }
+            match seen {
+                None => seen = Some(entry[0]),
+                Some(first) if first != entry[0] => return true,
+                Some(_) => {}
+            }
+        }
+        false
     }
 }
 

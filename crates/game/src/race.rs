@@ -252,6 +252,8 @@ pub struct Setup {
 pub struct Loaded {
     /// The simulation half.
     pub setup: Setup,
+    /// The HUD's layout, atlas, fonts and strings.
+    pub hud: crate::hud::Assets,
     /// What to draw for the track.
     pub track_model: Model,
     /// What to draw for the ship.
@@ -527,6 +529,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
+    let hud = load_hud(&mut archives, &mut report);
+
     Ok(Loaded {
         setup: Setup {
             ai,
@@ -537,6 +541,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             chase,
             nozzle,
         },
+        hud,
         track_model,
         collision_model,
         ship_model,
@@ -544,6 +549,131 @@ pub fn load(options: &Options) -> Result<Loaded> {
         noise,
         report,
     })
+}
+
+/// Which layout a race uses.
+///
+/// **Time trial, and that is a placeholder rather than a choice.** A race has no
+/// mode concept yet - `Options` carries a track, a team and a speed class and
+/// nothing that says "single race" or "eliminator" - so there is nothing to select
+/// on. Time trial is the smallest layout that carries every widget with a real
+/// source, and it is the mode every reference capture in this project was taken
+/// in. When modes exist this becomes a lookup; the four other entries are in
+/// [`crate::hud::layouts`] already.
+const HUD_LAYOUT: &str = crate::hud::layouts::TIME_TRIAL;
+
+/// Reads the HUD's layout, atlas, fonts and strings.
+///
+/// Every piece degrades on its own and says so. The report matters more here than
+/// it looks: a HUD drawn in the 5x7 fallback font looks like a rendering bug, and
+/// a silent fallback would send someone looking in the shader.
+fn load_hud(archives: &mut pulse::Archives, report: &mut Vec<String>) -> crate::hud::Assets {
+    let layout = match archives
+        .read_name(HUD_LAYOUT)
+        .map_err(|e| e.to_string())
+        .and_then(|blob| oag_formats::fexml::expand(&blob).map_err(|e| e.to_string()))
+    {
+        Ok(xml) => {
+            let layout = crate::hud::Layout::from_xml(&xml);
+            report.push(format!(
+                "HUD {HUD_LAYOUT}: {} sprite(s), {} fill(s), {} label(s), {} model(s)",
+                layout.sprites.len(),
+                layout.fills.len(),
+                layout.labels.len(),
+                layout.models.len()
+            ));
+            for note in &layout.skipped {
+                report.push(format!("HUD: skipped {note}"));
+            }
+            Some(layout)
+        }
+        Err(why) => {
+            report.push(format!("HUD {HUD_LAYOUT} unavailable ({why}); no HUD"));
+            None
+        }
+    };
+
+    // One texture in the sheet, which is what `Sheet::build` is for. Going
+    // through the sheet rather than binding the atlas directly means the HUD
+    // shares the renderer every other screen uses, `Draw::Sprite` and all.
+    let mut sheet = crate::sprite::Sheet::default();
+    match archives.read_name(crate::hud::ATLAS) {
+        Ok(blob) => {
+            let mut notes = Vec::new();
+            let built =
+                crate::sprite::Sheet::build(&[(crate::hud::ATLAS.to_string(), blob)], &mut notes);
+            report.extend(notes);
+            if built.get(crate::hud::ATLAS).is_some() {
+                report.push(format!(
+                    "HUD atlas {}: {}x{} sheet",
+                    crate::hud::ATLAS,
+                    built.width,
+                    built.height
+                ));
+                sheet = built;
+            } else {
+                report.push(format!("HUD atlas {} did not decode", crate::hud::ATLAS));
+            }
+        }
+        Err(why) => report.push(format!(
+            "HUD atlas {} unavailable ({why})",
+            crate::hud::ATLAS
+        )),
+    }
+
+    let font = hud_font(archives, pulse::names::fonts::HUD, report);
+    let small_font = hud_font(archives, pulse::names::fonts::SMALL, report);
+
+    // The HUD's captions are `idstring` keys - `IG_HUD_LAP`, `IG_HUD_BEST` - and
+    // without a table `StringTable::get_or_id` falls back to the key itself, which
+    // put `ig_hud_lap` on screen where `LAP` belongs. The preferred language is the
+    // player's saved one; a race reached through `--race` has no settings to read,
+    // so this takes the chain's default rather than threading one through.
+    let languages = crate::boot::load_languages(archives, report);
+    let strings = crate::boot::load_strings(archives, &languages, None, report);
+
+    crate::hud::Assets {
+        layout,
+        sheet,
+        font,
+        small_font,
+        strings,
+    }
+}
+
+/// Reads one `.fnt`, falling back to the built-in glyphs and saying so.
+///
+/// The same shape as `crate::boot::load_font`, which reads the front end's
+/// `Default` font. Not shared with it because that one reaches through
+/// `read_front_end_first` for a front-end archive order this path does not have,
+/// and threading a strategy through would be more code than the six lines it saves.
+fn hud_font(
+    archives: &mut pulse::Archives,
+    name: &str,
+    report: &mut Vec<String>,
+) -> crate::font::Atlas {
+    match archives
+        .read_name(name)
+        .map_err(|e| e.to_string())
+        .and_then(|blob| oag_formats::fnt::Font::parse(&blob).map_err(|e| e.to_string()))
+    {
+        Ok(font) => {
+            report.push(format!(
+                "HUD font {name}: {}x{} atlas, {} glyph(s), line height {}",
+                font.width,
+                font.height,
+                font.glyphs.len(),
+                font.line_height
+            ));
+            crate::font::Atlas::from_font(&font)
+        }
+        Err(why) => {
+            report.push(format!(
+                "HUD font {name} unavailable ({why}); drawing with 5x7"
+            ));
+            crate::font::Atlas::build()
+        }
+    }
 }
 
 /// Says so when a model's texture slots did not all fill, and why.
@@ -1173,6 +1303,60 @@ impl Race {
         }
     }
 
+    /// Whether the ship is pointing back down the track.
+    ///
+    /// `dot(craft_forward, sample.tangent) < 0`. **The tangent, not the sample
+    /// index** - `HANDOVER.md` records index order as unusable for this, because
+    /// `Spline::from_track` concatenates paths in file order rather than travel
+    /// order, and on a slow capture most windows step by zero. The dot product has
+    /// neither failure mode and reads `+0.9999` against `-0.9999`.
+    ///
+    /// `false` when the ship is not near the spline at all, which is the safe way
+    /// round: a spurious warning is worse than a missing one.
+    #[must_use]
+    pub fn wrong_way(&self) -> bool {
+        let ship = self.ship();
+        let Some((_, sample, _)) = self.spline.nearest(ship.physics.body.position) else {
+            return false;
+        };
+        let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
+        ship.physics.body.forward().dot(tangent) < 0.0
+    }
+
+    /// What the HUD shows, as of the last tick.
+    ///
+    /// Separate from [`Telemetry`], which is a log line and carries diagnostics
+    /// no player sees. The fields with no source yet are left at their "unknown"
+    /// value rather than filled with a plausible number - `lap` and `place` read
+    /// zero, and [`crate::hud`] omits a widget rather than claiming a value it does
+    /// not have. See `docs/ui/hud.md`.
+    #[must_use]
+    pub fn readout(&self) -> crate::hud::Readout {
+        let ship = self.ship();
+        crate::hud::Readout {
+            speed_kmh: ship.physics.body.linear_velocity.length()
+                * oag_render::exhaust::SPEED_TO_KMH,
+            speed_full_kmh: crate::hud::DEFAULT_SPEED_FULL_KMH,
+            // The pool the ship started with. Nothing depletes it: there are no
+            // weapons, and track-contact damage is unrecovered - so the bar reads
+            // full for the whole race, deliberately.
+            shield: ship.handling.dimensions.shield,
+            shield_max: ship.handling.dimensions.shield,
+            // Lap counting is an open M5 question; zero means "unknown" and the
+            // widget is omitted. `docs/formats/track.md#where-is-lap-counting`.
+            lap: 0,
+            laps: 0,
+            // One ship on the grid until grid formation is recovered: seven of the
+            // eight slots are laid out by unread code.
+            place: 0,
+            ships: u32::from(self.world.ship_count),
+            race_ticks: self.world.tick,
+            lap_ticks: self.world.tick,
+            best_lap_ticks: None,
+            wrong_way: self.wrong_way(),
+        }
+    }
+
     /// The exhaust's current animation state.
     #[must_use]
     pub fn exhaust(&self) -> &Exhaust {
@@ -1648,6 +1832,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     let (width, height) = options.size;
     let Loaded {
         setup,
+        hud,
         track_model,
         ship_model,
         collision_model,
@@ -1732,14 +1917,30 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     });
     // Shaped the same way a window is, so a screenshot frames what a player
     // would have seen at that size rather than a differently-cropped picture.
-    scene.render(
-        &queue,
-        &mut encoder,
-        &view,
-        &race,
-        crate::display::viewport((width, height), options.aspect),
-        options.fov,
-    );
+    let viewport = crate::display::viewport((width, height), options.aspect);
+    scene.render(&queue, &mut encoder, &view, &race, viewport, options.fov);
+
+    // The HUD, into the same target. Without this a race screenshot would show
+    // the track and no HUD at all, because unlike the front end's capture this
+    // path has no `Framebuffer` and so no overlay pass of its own - which would
+    // make `--screenshot` useless for the one thing it is most wanted for.
+    //
+    // Note this target is `Rgba8Unorm` while a window's is sRGB, and
+    // `Renderer::new` forks the sprite sheet's texture format on
+    // `format.is_srgb()`. Text and fills go through the R8 coverage atlas and are
+    // unaffected; the HUD's art is not. See `docs/ui/hud.md`.
+    match crate::hud::Overlay::new(&device, &queue, format, &hud) {
+        Ok(Some(mut overlay)) => overlay.draw(
+            &device,
+            &queue,
+            &mut encoder,
+            &view,
+            &race.readout(),
+            viewport,
+        ),
+        Ok(None) => println!("no HUD layout: capturing without one"),
+        Err(why) => println!("the HUD overlay did not build ({why}); capturing without one"),
+    }
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),
         wgpu::TexelCopyBufferInfo {

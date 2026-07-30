@@ -1229,6 +1229,7 @@ pub fn draw_list(
         y: TITLE_Y,
         scale: 1.4,
         color: SELECTED,
+        border: None,
         align: Align::Left,
         text: page.title.clone(),
     });
@@ -1264,6 +1265,7 @@ pub fn draw_list(
             } else {
                 NORMAL
             },
+            border: None,
             align: Align::Left,
             text: entry.label().to_string(),
         });
@@ -1292,6 +1294,7 @@ pub fn draw_list(
                 } else {
                     DIMMED
                 },
+                border: None,
                 align: Align::Right,
                 text,
             });

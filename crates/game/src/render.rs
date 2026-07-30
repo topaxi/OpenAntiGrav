@@ -38,6 +38,13 @@ struct Quad {
     rect: [f32; 4],
     uv: [f32; 4],
     color: [f32; 4],
+    /// The colour the glyph's baked outline takes, RGBA.
+    ///
+    /// Only the atlas path reads it, and only for a font that bakes an outline -
+    /// the two HUD ones. Everywhere else the atlas's mask is a constant 255, so
+    /// the mix collapses to `color` and this is never visible. See
+    /// `crate::font::Atlas::luma`.
+    border: [f32; 4],
     /// Which texture `uv` indexes: [`MODE_ATLAS`] or [`MODE_SPRITE`].
     ///
     /// Per-quad rather than per-pipeline, so images, text and fills stay in one
@@ -46,6 +53,13 @@ struct Quad {
     /// genuinely different pipeline; a sprite is not.
     mode: f32,
 }
+
+/// What a glyph's baked outline is drawn in when nothing supplies a colour.
+///
+/// Fully transparent, so the outline drops out and only the body draws. See the
+/// `Draw::Text` arm in [`Renderer::render_with`] for why this rather than the body
+/// colour or an invented black.
+const TRANSPARENT: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
 /// A quad whose `uv` is in glyph-atlas pixels, sampled for coverage.
 const MODE_ATLAS: f32 = 0.0;
@@ -178,12 +192,13 @@ impl Renderer {
             ..Default::default()
         });
 
-        let atlas_texture = upload_r8(
+        let atlas_texture = upload_rg8(
             device,
             queue,
             "glyph atlas",
             atlas.width,
             atlas.height,
+            &atlas.luma,
             &atlas.coverage,
         );
         let atlas_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -291,7 +306,8 @@ impl Renderer {
                         0 => Float32x4,
                         1 => Float32x4,
                         2 => Float32x4,
-                        3 => Float32
+                        3 => Float32x4,
+                        4 => Float32
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -468,6 +484,9 @@ impl Renderer {
                     rect: *rect,
                     uv: *uv,
                     color: *color,
+                    // A sprite is sampled as RGBA and never mixed, so this is
+                    // inert here. It still has to be a real value.
+                    border: *color,
                     mode: MODE_SPRITE,
                 }),
                 Draw::Text {
@@ -475,9 +494,37 @@ impl Renderer {
                     y,
                     scale,
                     color,
+                    border,
                     align,
                     text,
-                } => self.push_text(*x, *y, *scale, *color, *align, text),
+                } => self.push_text(
+                    *x,
+                    *y,
+                    *scale,
+                    *color,
+                    // No border colour means a **transparent** outline, so only the
+                    // glyph body draws.
+                    //
+                    // For the three menu fonts and the built-in glyphs this is
+                    // provably a no-op: their mask is a constant 255, so
+                    // `mix(border, color, 1)` is `color` whatever `border` is.
+                    //
+                    // For the two HUD fonts it is a real decision, and it is the
+                    // conservative one. 57 of the 84 HUD-font widgets in the
+                    // shipped layouts carry no `BorderColor` - every time readout
+                    // among them - so something has to fill the baked outline.
+                    // Using the body colour fills it with more glyph and a digit
+                    // becomes a box; using an invented opaque black would put a
+                    // colour nobody recovered into the picture. Transparent draws
+                    // exactly the glyph and invents nothing.
+                    //
+                    // **Whether the original defaults to an opaque outline instead
+                    // is unverified**, and one PPSSPP reference frame settles it.
+                    // See `docs/ui/hud.md`.
+                    border.unwrap_or(TRANSPARENT),
+                    *align,
+                    text,
+                ),
             }
         }
 
@@ -566,11 +613,27 @@ impl Renderer {
             // reads full coverage.
             uv: [solid.x as f32 + 0.5, solid.y as f32 + 0.5, 0.0, 0.0],
             color,
+            // A fill samples the solid patch, whose mask is all body, so the mix
+            // is a no-op and this only has to be a real value.
+            border: color,
             mode: MODE_ATLAS,
         });
     }
 
-    fn push_text(&mut self, x: f32, y: f32, scale: f32, color: [f32; 4], align: Align, text: &str) {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a line of text is this many independent properties"
+    )]
+    fn push_text(
+        &mut self,
+        x: f32,
+        y: f32,
+        scale: f32,
+        color: [f32; 4],
+        border: [f32; 4],
+        align: Align,
+        text: &str,
+    ) {
         let width = font::measure(&self.atlas, text) * scale;
         let mut pen = match align {
             Align::Left => x,
@@ -599,6 +662,7 @@ impl Renderer {
                     cell.height as f32,
                 ],
                 color,
+                border,
                 mode: MODE_ATLAS,
             });
             pen += cell.advance * scale;
@@ -758,6 +822,13 @@ fn sampler_entry(binding: u32, kind: wgpu::SamplerBindingType) -> wgpu::BindGrou
     }
 }
 
+/// A single-channel texture, for a movie's Y, U and V planes.
+///
+/// Kept separate from [`blank_rg8`] rather than folded into it: the glyph atlas
+/// needs two channels and a movie plane needs one, and a plane created with two
+/// makes `upload_frame`'s `bytes_per_row` half a row - which wgpu rejects as
+/// "number of bytes per row is less than the number of bytes in a complete row",
+/// an error that names the symptom and not the cause.
 fn blank_r8(device: &wgpu::Device, label: &str, width: u32, height: u32) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
@@ -770,6 +841,24 @@ fn blank_r8(device: &wgpu::Device, label: &str, width: u32, height: u32) -> wgpu
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    })
+}
+
+/// A two-channel texture for the glyph atlas: body/outline mask and coverage.
+fn blank_rg8(device: &wgpu::Device, label: &str, width: u32, height: u32) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size: wgpu::Extent3d {
+            width: width.max(1),
+            height: height.max(1),
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rg8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     })
@@ -815,21 +904,32 @@ fn upload_rgba(
     texture
 }
 
-fn upload_r8(
+/// Uploads the glyph atlas's two planes as one two-channel texture.
+///
+/// `r` is the body/outline mask and `g` is coverage. Interleaved here rather than
+/// kept as two textures because one sample is cheaper than two and the bind group
+/// stays the size it was. See `crate::font::Atlas`.
+fn upload_rg8(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     label: &str,
     width: u32,
     height: u32,
-    bytes: &[u8],
+    luma: &[u8],
+    coverage: &[u8],
 ) -> wgpu::Texture {
-    let texture = blank_r8(device, label, width, height);
+    let texture = blank_rg8(device, label, width, height);
+    let mut bytes = Vec::with_capacity(luma.len() * 2);
+    for (&l, &c) in luma.iter().zip(coverage) {
+        bytes.push(l);
+        bytes.push(c);
+    }
     queue.write_texture(
         texture.as_image_copy(),
-        bytes,
+        &bytes,
         wgpu::TexelCopyBufferLayout {
             offset: 0,
-            bytes_per_row: Some(width),
+            bytes_per_row: Some(width * 2),
             rows_per_image: Some(height),
         },
         wgpu::Extent3d {

@@ -579,6 +579,7 @@ pub fn draw_list(meter: &Meter, mode: Overlay, target_hz: u32) -> Vec<Draw> {
             y: TOP + PAD + row as f32 * LINE,
             scale: 1.0,
             color: TEXT,
+            border: None,
             align: Align::Right,
             text,
         });

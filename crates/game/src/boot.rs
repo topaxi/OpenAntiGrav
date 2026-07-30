@@ -378,7 +378,12 @@ fn load_screens(
     Ok(screens)
 }
 
-fn load_languages(
+/// Every language plugin this source carries.
+///
+/// Public because a race needs the string table too, for the HUD's `idstring`
+/// captions, and it does not go through the boot path that used to be the only
+/// caller. See [`load_strings`].
+pub fn load_languages(
     archives: &mut oag_assets::pulse::Archives,
     report: &mut Vec<String>,
 ) -> Vec<Language> {
@@ -433,7 +438,11 @@ fn load_tracks(
     tracks
 }
 
-fn load_strings(
+/// The chosen language's string table.
+///
+/// Public for the same reason [`load_languages`] is: the HUD resolves `IG_HUD_*`
+/// keys through this, and a race reaches it without booting the front end.
+pub fn load_strings(
     archives: &mut oag_assets::pulse::Archives,
     languages: &[Language],
     preferred: Option<&str>,

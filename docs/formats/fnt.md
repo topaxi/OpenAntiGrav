@@ -135,6 +135,62 @@ needs. `pulse_text`, `Pulse_14` and `Pulse_20` are pure white with 16 alphas;
 `PulseHud` and `small` are black with 16 alphas, which is what an outlined HUD
 font looks like.
 
+Note the alphas are **not monotonic** with the palette index - `PulseHud`'s run
+`0, 10, 21, 34, 55, 74, 92, 112, 135, 157, 193, 170, 254, 227, 216, 230`. An index
+selects an alpha directly, so no ordering is required, and looking for one is a
+dead end.
+
+### The RGB is a second channel, not a constant
+
+**Corrected 2026-07-30, and the correction is load-bearing for anything that draws
+these fonts.** The line above - "black with 16 alphas" - is true of the *darkest*
+entries and wrong about the palette as a whole. Counting **distinct greys** among
+the entries whose alpha is non-zero:
+
+| Font | Distinct greys | Digit box inked at alpha > 128 |
+| --- | ---: | ---: |
+| `pulse_text.fnt` | **1** (255) | 25.5 % |
+| `Pulse_14.fnt` | **1** (255) | - |
+| `Pulse_20.fnt` | **1** (255) | 25.6 % |
+| `PulseHud.fnt` | **6** (0, 1, 5, 77, 209, 255) | **64.5 %** |
+| `small.fnt` | **6** (0, 2, 4, 137, 193, 222) | **62.4 %** |
+
+Every entry is a neutral grey (`r == g == b` on all 16 entries of all five Pulse
+fonts and all six of Pure's), so one channel carries it.
+
+**The two HUD fonts are pre-outlined.** Alpha is the silhouette of glyph *plus*
+outline - which is why their edge-ink rate is exactly 1.000 below and the menu
+fonts' is 0.967-0.973 - and the grey level says which part is which: light is
+glyph body, dark is outline. The three menu fonts carry one pure white, so for
+them alpha alone is the whole story.
+
+A renderer therefore needs **both** channels for the HUD fonts:
+
+```text
+rgb = mix(border_colour, text_colour, grey)
+a   = text_colour.a * alpha
+```
+
+and the front-end XML supplies both colours - `Color` and `BorderColor`, the
+latter on 54 of the HUD's widgets. Reading alpha alone draws body and outline in
+one colour, which fills the counter of a `0` and turns a 25-pixel lap time into a
+solid box; that is measured rather than hypothesised, and it is what
+[`oag_game::font`](../../crates/game/src/font.rs) did until this was found. See
+[the HUD](../ui/hud.md).
+
+`oag_formats::fnt::Font::luma_at` and `Font::is_outlined` expose this, and
+`fnt_ground_truth` asserts that **exactly two** of the five fonts are outlined.
+
+**The default outline, settled by a reference frame.** 57 of the 84 HUD-font
+widgets in the shipped layouts carry no `BorderColor` at all, including every time
+readout, so something has to fill the outline for those. A 2026-07-30 PPSSPP frame
+shows the original outlining **every** HUD-font widget, `CurrentTime` and
+`BestTime` included, so drawing no outline is wrong. This project defaults to the
+layout's own `HudBGColour` (`0x40000000`), which is what every widget that *does*
+name a border points at. The original's outline reads crisper than 25 % alpha
+produces, so the exact colour is still approximate - see
+[the HUD](../ui/hud.md#still-open-after-the-frame).
+
 Read 48 bytes early the same fonts have four or five distinct alphas and a dozen
 dead entries, and `small.fnt`'s brightest visible entry is alpha 26 of 255. No
 font can be drawn with that, and it is the tell that should have been followed
@@ -173,6 +229,12 @@ L, R, START, SELECT, HOME and face-button glyphs. That is the same standard
 Confidence: **94**. The size identity is exact and holds on all five fonts, the
 palette and edge-ink measurements are corpus-wide, and the swizzle direction and
 the `flags` bit are read directly out of the executable rather than inferred.
+
+The two-channel reading above is **95**: the grey counts and ink fractions are
+measured across the whole corpus and pinned by a test, the mask/silhouette
+division is corroborated by the XML carrying exactly the two colours it needs, and
+it was verified by rendering. What is *not* established is the default outline
+colour for a widget that supplies none.
 Per the [rubric](../reverse-engineering/confidence-rubric.md) that is data
 agreement plus static reading rather than a runtime trace, which caps at 94.
 

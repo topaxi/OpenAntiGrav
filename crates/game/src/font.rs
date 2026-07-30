@@ -8,15 +8,40 @@
 //! fallback: 5x7, uppercase only, written for this project, and meant to look
 //! like the approximation it is.
 //!
-//! Both produce one 8-bit coverage plane with a fully opaque patch for solid
-//! fills, and a per-character [`Cell`] carrying its own size and advance, so the
-//! renderer draws either without knowing which it has.
+//! Both produce **two** 8-bit planes - a coverage plane and a body/outline mask -
+//! with a fully opaque patch for solid fills, and a per-character [`Cell`]
+//! carrying its own size and advance, so the renderer draws either without knowing
+//! which it has.
 //!
-//! The real atlas is coverage-only on purpose. Its palette is a 16-level alpha
-//! ramp over a single RGB - white in the three menu fonts, black in the two HUD
-//! ones - so the colour carries no information the vertex colour does not
-//! already supply, and dropping to one channel keeps the existing pipeline.
-//! See `docs/formats/fnt.md`.
+//! # Two planes, because the HUD fonts need both
+//!
+//! An earlier revision of this comment said the atlas was coverage-only on
+//! purpose: "its palette is a 16-level alpha ramp over a single RGB - white in the
+//! three menu fonts, black in the two HUD ones - so the colour carries no
+//! information the vertex colour does not already supply". **That was measured and
+//! it is wrong for the two HUD fonts.** Distinct palette RGB values, per font:
+//!
+//! | Font | Distinct RGB | Digit ink at alpha > 128 |
+//! | --- | ---: | ---: |
+//! | `pulse_text.fnt`, `Pulse_20.fnt` (menus) | **1** - pure white | 25 % |
+//! | `PulseHud.fnt`, `small.fnt` (HUD) | **6** - 0, 1, 5, 77, 209, 255 | 64 % |
+//!
+//! The HUD fonts are **pre-outlined**: alpha is the silhouette of glyph *plus*
+//! outline, and the grey level says which part is which - white body, black
+//! outline. Reading alpha alone throws the distinction away and draws the whole
+//! silhouette in one colour, which turns a white digit with a black edge into a
+//! solid white box. That is what it did, and at 25 px the lap time was
+//! unreadable.
+//!
+//! So [`Atlas`] carries [`Atlas::luma`] beside [`Atlas::coverage`], and the
+//! renderer composites `mix(border, colour, luma)` at `coverage`. The XML supplies
+//! both colours - `Color` and `BorderColor`, the latter on 54 of the HUD's
+//! widgets - which is the corroboration that this is the intended model rather
+//! than a plausible one.
+//!
+//! **The menu fonts are unaffected by construction**: their luma is a constant 255,
+//! so `mix(border, colour, 1)` is `colour` whatever the border is. Same for the
+//! built-in glyphs. See `docs/formats/fnt.md` and `docs/ui/hud.md`.
 //!
 //! # Folding, and the letter that disappeared
 //!
@@ -535,7 +560,7 @@ pub struct Cell {
     pub advance: f32,
 }
 
-/// The glyph atlas: one 8-bit coverage byte per pixel.
+/// The glyph atlas: a coverage byte and a body/outline byte per pixel.
 #[derive(Debug, Clone)]
 pub struct Atlas {
     /// Width in pixels.
@@ -543,7 +568,16 @@ pub struct Atlas {
     /// Height in pixels.
     pub height: u32,
     /// Coverage, row-major from the top left.
+    ///
+    /// The glyph's silhouette, outline included. This is the opacity.
     pub coverage: Vec<u8>,
+    /// The body/outline mask, row-major, same length as [`Self::coverage`].
+    ///
+    /// `255` is glyph body, `0` is outline, and the renderer mixes the text colour
+    /// toward the border colour by it. A constant `255` - which is what the menu
+    /// fonts and the built-in set produce - means "all body", so the border colour
+    /// never shows and the result is the plain coloured glyph.
+    pub luma: Vec<u8>,
     /// The fully opaque texel used to draw solid rectangles.
     pub solid: Cell,
     /// Distance between baselines in pixels, for callers laying out rows.
@@ -569,6 +603,10 @@ impl Atlas {
         let width = cells * CELL;
         let height = CELL;
         let mut coverage = vec![0u8; (width * height) as usize];
+        // All body, no outline: the built-in glyphs are hard-edged pixel art and
+        // have no outline to distinguish, so the mask is constant and the mix
+        // collapses to the text colour.
+        let luma = vec![0xffu8; (width * height) as usize];
 
         for (index, (_, rows)) in GLYPHS.iter().enumerate() {
             let left = index as u32 * CELL;
@@ -589,6 +627,7 @@ impl Atlas {
             width,
             height,
             coverage,
+            luma,
             solid,
             line_height: CELL as f32,
             glyphs: BTreeMap::new(),
@@ -610,13 +649,22 @@ impl Atlas {
         // filtering cannot pull a transparent neighbour into a solid fill.
         let height = source_height + 2;
         let mut coverage = vec![0u8; (width * height) as usize];
+        // Body where the palette is light, outline where it is dark. The two HUD
+        // fonts carry six distinct greys here; the three menu fonts carry only
+        // white, so this plane is constant for them and costs nothing.
+        let mut luma = vec![0u8; (width * height) as usize];
 
         for y in 0..source_height {
             for x in 0..width {
-                coverage[(y * width + x) as usize] = font.alpha_at(x as usize, y as usize);
+                let at = (y * width + x) as usize;
+                coverage[at] = font.alpha_at(x as usize, y as usize);
+                luma[at] = font.luma_at(x as usize, y as usize);
             }
         }
         let solid = solid_patch(&mut coverage, width, 0, source_height);
+        // The solid patch is a fill, not a glyph: it must be all body, or a fill
+        // drawn next to outlined text would take the border colour.
+        solid_patch(&mut luma, width, 0, source_height);
 
         let mut glyphs = BTreeMap::new();
         for glyph in &font.glyphs {
@@ -639,6 +687,7 @@ impl Atlas {
             width,
             height,
             coverage,
+            luma,
             solid,
             #[expect(
                 clippy::cast_precision_loss,

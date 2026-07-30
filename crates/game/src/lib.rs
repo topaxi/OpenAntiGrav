@@ -29,6 +29,7 @@ pub mod catalogue;
 pub mod display;
 pub mod font;
 pub mod frontend;
+pub mod hud;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one
 /// depends on it. Re-exported here so the front end's own call sites read the

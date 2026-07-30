@@ -58,6 +58,31 @@ fn image(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Inked pixels over total, across the ten digit glyphs.
+///
+/// The measure that separates a bare stroke from a pre-outlined one: a normal
+/// typeface inks about a quarter of a digit's box, and a glyph carrying a baked
+/// outline inks nearly two thirds of it.
+fn digit_ink(font: &Font) -> (usize, usize) {
+    let (mut inked, mut total) = (0usize, 0usize);
+    for ch in "0123456789".chars() {
+        let Some(g) = font
+            .glyphs
+            .iter()
+            .find(|g| char::from_u32(u32::from(g.codepoint)) == Some(ch))
+        else {
+            continue;
+        };
+        for y in g.v0..g.v1 {
+            for x in g.u0..g.u1 {
+                total += 1;
+                inked += usize::from(font.alpha_at(usize::from(x), usize::from(y)) > 128);
+            }
+        }
+    }
+    (inked, total)
+}
+
 /// Fraction of glyphs whose leftmost and rightmost box column both hold ink.
 ///
 /// `u1 - u0` is the glyph's declared width, so the box is tight horizontally and
@@ -114,6 +139,7 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
     let mut fonts = 0;
     let mut glyphs = 0;
     let mut worst_bounds = 1.0f64;
+    let mut outlined = 0usize;
     let mut alpha_levels: BTreeMap<usize, usize> = BTreeMap::new();
 
     for (index, entry) in dir.entries.iter().enumerate() {
@@ -160,13 +186,46 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
             "entry {index}: only {levels} distinct palette alphas, expected a full ramp"
         );
 
+        // How many distinct greys the palette carries, and how much of a digit's
+        // box is inked. Together these separate the two HUD fonts from the three
+        // menu ones - see `outlined` below.
+        let greys = font
+            .palette
+            .iter()
+            .filter(|c| c[3] != 0)
+            .map(|c| c[0])
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        let (ink, ink_total) = digit_ink(&font);
+        let ink_rate = ink as f64 / ink_total.max(1) as f64;
+        if font.is_outlined() {
+            outlined += 1;
+            // A pre-outlined glyph's silhouette covers far more of its box than a
+            // bare stroke does. Measured: 62-65 % against 25-26 %.
+            assert!(
+                ink_rate > 0.45,
+                "entry {index}: outlined but only {ink_rate:.3} of a digit box is inked"
+            );
+        } else {
+            assert_eq!(
+                greys, 1,
+                "entry {index}: not outlined, so the palette should hold one grey"
+            );
+            assert!(
+                ink_rate < 0.45,
+                "entry {index}: not outlined but {ink_rate:.3} of a digit box is inked"
+            );
+        }
+
         let (checked, rate) = tight_horizontal_bounds(&font);
         println!(
-            "  entry {index:2} {}x{} lh={:2} glyphs={:3} checked={checked:3} edge-ink={rate:.3}",
+            "  entry {index:2} {}x{} lh={:2} glyphs={:3} checked={checked:3} \
+             edge-ink={rate:.3} greys={greys} digit-ink={ink_rate:.3} outlined={}",
             font.width,
             font.height,
             font.line_height,
-            font.glyphs.len()
+            font.glyphs.len(),
+            font.is_outlined()
         );
         worst_bounds = worst_bounds.min(rate);
     }
@@ -174,10 +233,20 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
     println!("fonts        {fonts}");
     println!("glyphs       {glyphs}");
     println!("alpha levels {alpha_levels:?}");
+    println!("outlined     {outlined} of {fonts}");
     println!("worst edge-ink rate {worst_bounds:.3}");
 
     assert_eq!(fonts, EXPECTED_FONTS, "wrong number of fonts found");
     assert!(glyphs > 800, "only {glyphs} glyphs decoded");
+    // `PulseHud.fnt` and `small.fnt`, the `HUD` and `HUDSmall` roles, and nothing
+    // else. This is the property a renderer has to act on: their palette RGB is a
+    // body/outline mask rather than a constant, so reading alpha alone fills the
+    // outline with glyph and a digit becomes a solid box. Pinned here because it
+    // was got wrong - see `oag_game::font` and `docs/formats/fnt.md`.
+    assert_eq!(
+        outlined, 2,
+        "expected exactly two outlined fonts, found {outlined}"
+    );
     // The old reading scored 0.44 here; a correct one is near 1. The bound is
     // set below the observed 0.967 to leave room for a glyph whose leftmost
     // column is genuinely a fully-transparent antialiasing step.
