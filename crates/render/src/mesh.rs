@@ -29,54 +29,51 @@ pub struct DrawCall {
     /// Index into [`Model::textures`], or `None` for untextured.
     pub texture: Option<usize>,
     /// Whether this run is a free-running blink light rather than an
-    /// always-on surface. See [`is_blink_light_name`] for what qualifies and
-    /// the evidence behind it.
+    /// always-on surface. See [`is_blink_light_texture`] for what qualifies
+    /// and the evidence behind it.
     pub blink: bool,
 }
 
-/// Whether a mesh node's name identifies it as a periodic blink light, as
-/// opposed to an input-driven flash (weapon muzzle, airbrake) that happens to
-/// share the "flash" substring.
+/// Whether a decoded texture's name identifies its surface as a periodic
+/// blink light.
 ///
-/// Evidence (confidence ~55, not yet cross-checked against a captured trace):
-/// grepping the PSP `Data.wad` turns up three distinct naming families under
-/// `*flash*`/`*GLOW*` - `cannon_flash*` (weapon muzzle), `underbrake_flash*`
-/// resolving to `colours_flashing_GLOW.tga` (airbrake-linked, per
-/// `docs/formats/vex.md`), and a third, generic `flasher*Shape` /
-/// `flashers*Shape` family with no input qualifier in the name. The bare name
-/// is the best signal available for "this one blinks on a timer" rather than
-/// "this one lights up in response to a game event" - see
-/// `docs/formats/vex.md` for the full note. The blink *period* is not
-/// recovered from anything; the caller that drives this flag from a tick
-/// count picks a plausible one.
+/// **Confidence: 85.** Every one of the 8 playable PSP ships carries a mesh
+/// named `glowingShape` whose material resolves to the exact same shared
+/// texture, `Data\Tex\colours_flashing_GLOW.tga` - not a per-ship asset, a
+/// common one. The ship-specific mesh names first noticed on Feisar
+/// (`underbrake_flashrightShape`/`underbrake_flashleftShape`) and Triakis
+/// (`flasherShape`/`flasher1Shape`) resolve to the identical texture, which is
+/// why matching by mesh name generalised badly (each ship names its extra
+/// copies of this light differently, or not at all) while matching by the
+/// texture it actually paints generalises to all of them. See
+/// `docs/formats/vex.md` for the full survey (`crates/render/tests/blink_lights_ground_truth.rs`
+/// checks it against every real ship). **The blink *period* is a separate,
+/// unscored, invented placeholder** - see the caller that drives this from a
+/// tick count.
+///
+/// Matching on the texture rather than the mesh name also means a mesh with
+/// more than one material - Feisar's `self_illuminatedShape` has one batch on
+/// this texture and another on the ship's own steady-lit skin - is judged
+/// batch by batch instead of being wrongly all-or-nothing.
 #[must_use]
-pub fn is_blink_light_name(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    lower.starts_with("flasher") && !lower.contains("cannon") && !lower.contains("underbrake")
+pub fn is_blink_light_texture(label: &str) -> bool {
+    label.to_ascii_lowercase().contains("flashing_glow")
 }
 
 #[cfg(test)]
-mod blink_name_tests {
-    use super::is_blink_light_name;
+mod blink_texture_tests {
+    use super::is_blink_light_texture;
 
     #[test]
-    fn matches_the_generic_flasher_family() {
-        assert!(is_blink_light_name("flasherShape"));
-        assert!(is_blink_light_name("flashersShape"));
-        assert!(is_blink_light_name("flashersShape1"));
+    fn matches_the_shared_blink_texture_however_it_is_cased() {
+        assert!(is_blink_light_texture("colours_flashing_GLOW.tga"));
+        assert!(is_blink_light_texture("COLOURS_FLASHING_GLOW.TGA"));
     }
 
     #[test]
-    fn excludes_input_driven_flashes() {
-        assert!(!is_blink_light_name("cannon_flashShape"));
-        assert!(!is_blink_light_name("underbrake_flashrightShape"));
-        assert!(!is_blink_light_name("cannon_flash_left"));
-    }
-
-    #[test]
-    fn excludes_unrelated_names() {
-        assert!(!is_blink_light_name("hullShape"));
-        assert!(!is_blink_light_name("colours_flashing_GLOW"));
+    fn excludes_unrelated_textures() {
+        assert!(!is_blink_light_texture("engine_general.tga"));
+        assert!(!is_blink_light_texture("texture1.tga"));
     }
 }
 
@@ -200,7 +197,6 @@ pub fn build_with_textures(
         let payload = &data[node.payload()];
         let to_world = world[index];
         let mut contributed = false;
-        let blink = node.name.as_deref().is_some_and(is_blink_light_name);
 
         // List A is the ordinary render list; B is a second pass. Taking only A
         // avoids drawing the same surface twice.
@@ -243,6 +239,10 @@ pub fn build_with_textures(
                     .flatten()
                     .map(|t| t as usize)
                     .filter(|&t| textures.get(t).is_some_and(Option::is_some));
+                let blink = texture
+                    .and_then(|t| textures.get(t))
+                    .and_then(Option::as_ref)
+                    .is_some_and(|t| is_blink_light_texture(&t.label));
                 draws.push(DrawCall {
                     range: first_index..last_index,
                     texture,

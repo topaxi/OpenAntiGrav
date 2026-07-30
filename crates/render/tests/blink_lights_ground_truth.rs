@@ -1,5 +1,5 @@
-//! Confirms `oag_render::mesh::is_blink_light_name` actually fires on a real ship,
-//! not just on the mined name strings it was written against.
+//! Confirms `oag_render::mesh::is_blink_light_texture` actually fires on every
+//! real ship, not just on the mined texture name it was written against.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this project
 //! does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
@@ -12,15 +12,18 @@
 //!
 //! # What this is for
 //!
-//! The heuristic in `oag_render::mesh::is_blink_light_name` was built from grepping
-//! mesh names out of the PSP `Data.wad` by hand (see `docs/formats/vex.md`, "Ship
-//! lights: three separate `*flash*`/`*GLOW*` families, not one"). That grep is not
-//! code path anything else exercises, so a rename or a decoding change could silently
-//! stop the heuristic from ever matching real data while every synthetic name test
-//! keeps passing. This walks every playable team's real `Ship.vex` and asserts that at
-//! least one of them decodes at least one `blink`-tagged draw call, which is the
-//! actual claim being made: that some ship in the game has a mesh this heuristic
-//! catches.
+//! The heuristic in `oag_render::mesh::is_blink_light_texture` was built from
+//! decoding real materials on real ships (see `docs/formats/vex.md`, "Ship
+//! lights: one shared texture, not a mesh-naming convention"): every one of
+//! the 8 playable teams turned out to carry a mesh whose material resolves to
+//! the exact same shared texture, `colours_flashing_GLOW.tga`. That discovery
+//! is not exercised by any other code path, so a rename or a decoding change
+//! could silently stop the heuristic from ever matching real data while every
+//! synthetic name test keeps passing. This walks every playable team's real
+//! `Ship.vex` and asserts that **all eight** decode at least one
+//! `blink`-tagged draw call - the actual claim being made, and a stronger one
+//! than "at least one ship" precisely because the signal generalised across
+//! every ship once it was keyed on the texture instead of the mesh name.
 
 use std::path::{Path, PathBuf};
 
@@ -53,12 +56,12 @@ fn image() -> Option<PathBuf> {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn at_least_one_team_has_a_blink_tagged_draw_call() {
+fn every_team_has_a_blink_tagged_draw_call() {
     let Some(image) = image() else { return };
     let mut archives =
         oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
 
-    let mut teams_with_blink = Vec::new();
+    let mut teams_without_blink = Vec::new();
     for team in TEAMS {
         let name = ship_entry_name(team);
         let blob = archives.read_name(&name).expect("reading Ship.vex");
@@ -68,14 +71,14 @@ fn at_least_one_team_has_a_blink_tagged_draw_call() {
             "{team}: {blink_draws} blink-tagged draw call(s) of {}",
             model.draws.len()
         );
-        if blink_draws > 0 {
-            teams_with_blink.push(team);
+        if blink_draws == 0 {
+            teams_without_blink.push(team);
         }
     }
 
     assert!(
-        !teams_with_blink.is_empty(),
-        "no team's Ship.vex decoded a blink-tagged draw call - \
-         is_blink_light_name no longer matches anything real"
+        teams_without_blink.is_empty(),
+        "team(s) with no blink-tagged draw call: {teams_without_blink:?} - \
+         is_blink_light_texture no longer matches every ship's real data"
     );
 }
