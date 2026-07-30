@@ -188,6 +188,80 @@ fn rewinding_a_real_movie_reproduces_its_frames() {
     assert_eq!(first, again, "a rewind changed the picture");
 }
 
+/// A [`movie::Feed`] must hand over the same frames, in the same order, that
+/// reading the store straight through does.
+///
+/// The unit tests in `movie.rs` cover the ring and the position arithmetic
+/// without a decoder. What only a real movie can cover is the **worker**: that
+/// the frames it pushes are the right ones, that it runs ahead rather than
+/// waiting to be asked, and that a looping feed wraps back to frame 0 without
+/// replaying the movie.
+#[test]
+#[ignore = "needs data/images/ and ffmpeg"]
+fn a_feed_hands_over_the_frames_the_store_would() {
+    let Some(loaded) = load() else { return };
+    let mut movie = loaded.movie.expect("the PSP disc carries the reel");
+    let store = movie.frames.take().expect("the movie transcoded");
+
+    // The reference, decoded synchronously the way the render thread used to.
+    let mut reference = Vec::new();
+    let mut bytes = Vec::new();
+    let mut sync = store;
+    for index in 0..FRAMES {
+        sync.read_frame(index, &mut bytes).expect("decoding");
+        reference.push(bytes.clone());
+    }
+
+    // `repeat`, so the position past the last frame is frame 0 again.
+    let mut feed = movie::Feed::spawn(sync, true, movie.width, movie.height);
+    assert_eq!(feed.len(), FRAMES);
+
+    // One full pass, then far enough round again to have wrapped twice.
+    for position in 0..(FRAMES as u64 * 2 + 5) {
+        let frame = take_eventually(&mut feed, position);
+        let index = (position % FRAMES as u64) as usize;
+        assert_eq!(frame.position, position);
+        assert_eq!(
+            frame.index, index,
+            "position {position} named the wrong frame"
+        );
+        assert_eq!(
+            frame.bytes, reference[index],
+            "the feed's picture at position {position} is not the store's frame {index}"
+        );
+    }
+
+    // Back to the start, which is what opening the menus a second time does.
+    feed.restart();
+    let frame = take_eventually(&mut feed, 0);
+    assert_eq!(frame.index, 0, "a restarted feed begins again at frame 0");
+    assert_eq!(frame.bytes, reference[0]);
+    assert!(feed.take_error().is_none(), "nothing failed to decode");
+}
+
+/// Waits for the worker to reach `position`, which it does in milliseconds.
+///
+/// `take_upto` returning `None` is the ordinary "not decoded yet" answer the
+/// render thread deals with by keeping the picture it has. A test wants the
+/// frame, so it waits - but with a bound, because a feed that never produces
+/// anything must fail rather than hang the suite.
+fn take_eventually(feed: &mut movie::Feed, position: u64) -> movie::Frame {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Some(frame) = feed.take_upto(position) {
+            return frame;
+        }
+        if let Some(reason) = feed.take_error() {
+            panic!("the feed failed at position {position}: {reason}");
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the feed never produced position {position}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 /// The geometry the renderer is handed must be the movie's own.
 #[test]
 #[ignore = "needs data/images/ and ffmpeg"]

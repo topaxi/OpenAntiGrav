@@ -88,6 +88,24 @@ impl VideoFormat {
             chroma_height: frames.chroma_height,
         })
     }
+
+    /// The same question, asked of a movie whose frames have moved onto a
+    /// decode thread.
+    ///
+    /// [`crate::movie::Feed::spawn`] consumes the [`crate::movie::FrameStore`],
+    /// so [`VideoFormat::of`] cannot answer for a movie that is being played in a
+    /// window - `frames` is `None` there and the honest reading of that is "no
+    /// picture", which would build a renderer with no video pipeline and draw the
+    /// menus on black. The feed carries the four numbers across instead.
+    #[must_use]
+    pub fn of_feed(feed: &crate::movie::Feed) -> Self {
+        Self {
+            width: feed.width,
+            height: feed.height,
+            chroma_width: feed.chroma_width,
+            chroma_height: feed.chroma_height,
+        }
+    }
 }
 
 /// The renderer.

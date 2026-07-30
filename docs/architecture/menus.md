@@ -257,7 +257,7 @@ resolves through `boot::LOOSE_MOVIES` to `BG512.IPF` / `BG640.IPF` - IPU video,
 512x512 or 640x448 with a declared 4:3 display aspect, so it is **pillarboxed
 rather than stretched**, exactly as the `.PSS` intro cuts already are.
 
-Four decisions worth having written down:
+Five decisions worth having written down:
 
 - **It loads at boot, not when the menus first open.** The 270 frames cost about
   thirteen seconds to transcode once and nothing on every run after; boot already
@@ -271,19 +271,36 @@ Four decisions worth having written down:
   draw on black exactly as they did before this existed. The renderer is built
   **without** the video pipeline there, because building it and never filling it
   draws a green rectangle rather than nothing.
+- **The frames are decoded on a worker thread, not on the thread that draws.**
+  Decoding one costs up to 30 ms and a frame at 240 Hz has 4.17 ms, so the two
+  cannot be the same thread: `movie::Feed` runs a decoder four frames ahead and
+  the menus upload whichever frame is ready. This was measured *because* of the
+  backdrop and fixed for both movies -
+  [ADR-0010](adr/0010-movie-decode-thread.md) has the numbers, and the reason it
+  does not touch the [determinism](determinism.md) rules.
 - **`--menu-page` shows it too**, at frame zero. That flag exists to look at a
   layout without walking to it, and a flag that quietly stops showing what a
   player sees would defeat the purpose. It needs care in the capture path: a menu
   page's `Draw::Video` is the *backdrop*, while the sequence's is the *intro*, so
   the movie the frame is read from and the plane geometry the pipeline is built
   for both have to be swapped together. Getting that wrong is neither a compile
-  error nor a crash.
+  error nor a crash. **And it is not a check on the live menus**: the capture path
+  holds its own `movie::Movie` with its frames intact, where the window's have
+  moved onto a decode thread, so a `--menu-page` screenshot can look perfectly
+  right while a real window draws the rows on black. Only a screenshot of an
+  actual window covers that.
 
 `menu.rs` is handed **a frame index and a rectangle**, not a movie. Which frame
 is showing is timing and where it goes is the source's display aspect; neither is
 a menu's business, the same way what a setting *means* is not. `main.rs` owns the
 player, and it wraps rather than finishing - which is the whole difference
 between this movie and the intro.
+
+The index it is handed is **the frame in the renderer's planes**, not the one the
+playhead names, and the two can differ by a frame while the decode thread catches
+up. `None` rather than a frame means no picture has arrived yet, and then the
+video draw is left out altogether - the rows sit on black for a frame or two after
+the menus open, because zeroed planes would be green.
 
 **The language picker deliberately does not get one.** The comment in
 `frontend.rs` guessing that its black-on-black title colour is black *because*

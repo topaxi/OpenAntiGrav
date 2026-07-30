@@ -30,7 +30,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use oag_core::{TickClock, TickRate};
 
@@ -587,7 +587,36 @@ impl App {
         // Taken out of the boot before the front end takes the rest: it belongs
         // to the menus, which outlive the sequence that loaded it, and `--race`
         // has neither.
-        let backdrop = self.boot.as_mut().and_then(|loaded| loaded.backdrop.take());
+        //
+        // Split in two here, and this is the last place both halves are in one
+        // hand: the frames move onto a decode thread and the presentation - the
+        // rate, the rectangle - stays behind, because a `Feed` deals in pixels
+        // and knows nothing about where they go. `repeat: true`, which is the
+        // whole difference between this movie and the intro.
+        let (backdrop, backdrop_shape) =
+            match self.boot.as_mut().and_then(|loaded| loaded.backdrop.take()) {
+                Some(movie) => {
+                    let shape = BackdropShape {
+                        frame_rate: movie.frame_rate,
+                        // Pillarboxed rather than stretched, because the PS2's cut is
+                        // not the PSP's shape: an `.IPF` declares its own display
+                        // aspect. The PSP's `.PMF` is already 480x272, so this is the
+                        // full screen there and changes nothing.
+                        rect: frontend::pillarbox(frontend::SCREEN, movie.display_aspect),
+                    };
+                    let (width, height) = (movie.width, movie.height);
+                    // No frames is no backdrop, and then there is no shape to keep
+                    // either: the two are `Some` and `None` together everywhere below.
+                    match movie.frames {
+                        Some(frames) => (
+                            Some(movie::Feed::spawn(frames, true, width, height)),
+                            Some(shape),
+                        ),
+                        None => (None, None),
+                    }
+                }
+                None => (None, None),
+            };
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
             Stage::race(&gpu, loaded, framebuffer.size(), self.anisotropy)?
@@ -636,6 +665,7 @@ impl App {
             shell: self.shell.clone(),
             quit: false,
             backdrop,
+            backdrop_shape,
         }))
     }
 }
@@ -981,12 +1011,21 @@ impl Stage {
             loaded.font.clone(),
             &loaded.sprites,
         )?;
+        // The store moves onto its own thread and the `Movie` around it is done
+        // with: everything else it carried - the frame count, the rate, the
+        // aspect - was read into the sequence and the renderer before this.
+        // `repeat: false`, because the intro ends rather than starting again.
+        let feed = loaded.movie.and_then(|movie| {
+            let (width, height) = (movie.width, movie.height);
+            movie
+                .frames
+                .map(|frames| movie::Feed::spawn(frames, false, width, height))
+        });
         Ok(Self::Frontend(Box::new(FrontendStage {
             renderer,
             frontend: loaded.frontend,
-            movie: loaded.movie,
-            frame_bytes: Vec::new(),
-            uploaded: None,
+            feed,
+            shown: false,
             trace,
         })))
     }
@@ -1055,14 +1094,16 @@ struct MenuStage {
 struct Backdrop {
     player: movie::Player,
     rect: [f32; 4],
-    /// The frame currently in the renderer's planes, so a frame that has not
-    /// changed is not decoded or re-uploaded. The backdrop presents at 30 Hz
-    /// and a frame is around 196 KB, so this matters: see
-    /// [`MenuStage::render`] for what one decode actually costs.
-    uploaded: Option<usize>,
-    /// The decoded frame, kept so a frame change is not also an allocation.
-    /// The same reason `FrontendStage` keeps one.
-    bytes: Vec<u8>,
+    /// Which frame is **actually in the renderer's planes**, or `None` while none
+    /// is.
+    ///
+    /// Not "which frame we would like": the decode happens on another thread now,
+    /// so for the first frame or two after the menus open there is genuinely no
+    /// picture, and `None` is what stops the video quad being drawn over zeroed
+    /// planes - which is a green rectangle, not a black one. It is also what the
+    /// draw list reports, so the list names the frame on screen rather than one
+    /// that may not have arrived. See [`MenuStage::render`].
+    shown: Option<usize>,
 }
 
 impl MenuStage {
@@ -1078,53 +1119,63 @@ impl MenuStage {
         }
     }
 
-    /// Draws the page, decoding and uploading a backdrop frame when the one on
-    /// screen is stale.
+    /// Draws the page, uploading whatever backdrop frame the decode thread has
+    /// ready.
     ///
-    /// # The decode is on this thread and it is expensive
+    /// # The decode used to be on this thread, and it cost up to 30 ms a frame
     ///
-    /// **Measured on the PSP backdrop, release build: 0.03 ms to 30 ms for one
-    /// frame, and which it is depends on where in the movie the loop has got
-    /// to.** The upload is 0.06 ms and is not the problem. Every other frame is
-    /// nearly free because the decoder's frame delay is 1 and a picture is
-    /// usually already queued, so the real cost is a spike every second frame
-    /// change: about 5 ms through the movie's quiet half and 12-30 ms through
-    /// its busy one.
+    /// **Measured on the PSP backdrop, release build: `FrameStore::read_frame`
+    /// took 0.03 ms to 30 ms for one frame**, depending on where in the movie the
+    /// loop had got to - about 5 ms through the quiet half, 12-30 ms through the
+    /// busy one, with every other call nearly free because the decoder's frame
+    /// delay is 1. The upload was 0.06 ms and never the problem. At 30 frame
+    /// changes a second that was **roughly a quarter of every second spent
+    /// decoding on the thread that also draws**, which capped a 240-limited loop
+    /// near 180 and, unlimited, hid inside an average that looked fine while
+    /// individual frames were tens of milliseconds long.
     ///
-    /// That is 30 frame changes a second times roughly 8 ms, so **around a
-    /// quarter of a second of every second is spent inside `read_frame`**, on
-    /// the thread that also draws. Under a 240 frame limit that caps the loop
-    /// near 180: the limiter did not make anything slower, it removed the
-    /// headroom that was hiding the stalls. Unlimited, the same stalls are
-    /// amortised over 800-odd frames and the *average* rate still looks fine
-    /// while individual frames are tens of milliseconds long, which the pacing
-    /// graph shows and the fps counter cannot.
+    /// It is now a [`movie::Feed`]: a worker thread decodes ahead into a small
+    /// ring and this asks for the newest frame at or before the playhead. What is
+    /// left on this thread is the upload, and only on a frame that changed. See
+    /// [ADR-0010](../../docs/architecture/adr/0010-movie-decode-thread.md).
     ///
-    /// **This is not a cost the menus introduced.** `FrontendStage::sync_video`
-    /// does the same blocking decode on the same thread for the intro, and has
-    /// since it was written - the menus only made it measurable, because a menu
-    /// is a thing a player sits on with a frame counter open. The fix is to move
-    /// the decode off this thread, not to draw less; it is not done here, and
-    /// `HANDOVER.md` carries it as a named next step.
+    /// # A frame that has not arrived is not a frame
+    ///
+    /// `take_upto` returning `None` is ordinary and means *keep what is on
+    /// screen*. It happens for the first frame or two after the menus open, and
+    /// it would happen again if the worker ever fell behind. Two rules follow,
+    /// and both are load-bearing rather than defensive:
+    ///
+    /// - **Nothing is uploaded**, so the planes keep the last good picture. A
+    ///   frame held one frame longer is invisible at 30 Hz.
+    /// - **With no picture at all, the video draw is left out entirely.** Zeroed
+    ///   I420 planes are not black - `Y=0, U=0, V=0` is green - so drawing the
+    ///   quad before the first frame lands would flash green over the menu. The
+    ///   rows draw on black instead, exactly as they do on a source with no
+    ///   backdrop.
     fn render(
         &mut self,
         gpu: &Gpu,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
-        frames: Option<&mut movie::FrameStore>,
+        feed: Option<&mut movie::Feed>,
     ) -> Result<()> {
-        let shown = match (&mut self.backdrop, frames) {
-            (Some(backdrop), Some(frames)) => {
-                let wanted = backdrop.player.frame().min(frames.len.saturating_sub(1));
-                if backdrop.uploaded != Some(wanted) {
-                    frames.read_frame(wanted, &mut backdrop.bytes)?;
-                    self.renderer.upload_frame(&gpu.queue, &backdrop.bytes)?;
-                    backdrop.uploaded = Some(wanted);
+        let shown = match (&mut self.backdrop, feed) {
+            (Some(backdrop), Some(feed)) => {
+                // Surfaced before the frame it would have been, and once: the
+                // feed hands a decode failure over exactly one time.
+                if let Some(reason) = feed.take_error() {
+                    bail!("decoding the menu backdrop: {reason}");
                 }
-                Some(menu::Backdrop {
+                if let Some(frame) = feed.take_upto(backdrop.player.position()) {
+                    self.renderer.upload_frame(&gpu.queue, &frame.bytes)?;
+                    backdrop.shown = Some(frame.index);
+                }
+                // The frame on screen, not the one the playhead names.
+                backdrop.shown.map(|frame| menu::Backdrop {
                     rect: backdrop.rect,
-                    frame: wanted,
+                    frame,
                 })
             }
             // A backdrop whose frames could not be opened is no backdrop: the
@@ -1142,9 +1193,13 @@ impl MenuStage {
 struct FrontendStage {
     renderer: Renderer,
     frontend: Frontend,
-    movie: Option<movie::Movie>,
-    frame_bytes: Vec<u8>,
-    uploaded: Option<usize>,
+    /// The intro, decoded on a worker thread. `None` on a source with no movie,
+    /// under `--no-video`, and with no `ffmpeg` - and then the renderer was built
+    /// with no video pipeline either, so the draw is skipped rather than green.
+    feed: Option<movie::Feed>,
+    /// Whether a picture has ever reached the planes. See
+    /// [`FrontendStage::sync_video`].
+    shown: bool,
     trace: bool,
 }
 
@@ -1156,30 +1211,55 @@ impl FrontendStage {
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
     ) -> Result<()> {
-        let list = self.frontend.draw_list();
-        self.sync_video(&gpu.queue, &list)?;
+        let mut list = self.frontend.draw_list();
+        self.sync_video(&gpu.queue, &mut list)?;
         self.renderer
             .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
         Ok(())
     }
 
-    /// Uploads the movie frame the draw list asks for, if it changed.
-    fn sync_video(&mut self, queue: &wgpu::Queue, list: &[frontend::Draw]) -> Result<()> {
+    /// Uploads the newest decoded frame at or before the one the draw list asks
+    /// for.
+    ///
+    /// **This is the older of the two blocking decodes and it has always done
+    /// it**: the intro called `FrameStore::read_frame` straight from the render
+    /// thread from the day it was written, and the menu backdrop only made the
+    /// cost measurable. Both go through a [`movie::Feed`] now - see
+    /// [`MenuStage::render`] for the numbers and
+    /// [ADR-0010](../../docs/architecture/adr/0010-movie-decode-thread.md) for
+    /// the reasoning.
+    ///
+    /// The intro does not loop, so its position and its frame index are the same
+    /// number - clamped to the cache, because `--movie-frames` can make the cache
+    /// shorter than the sequence and the last frame then holds for the rest of it.
+    ///
+    /// `list` is trimmed rather than only read: until a picture has reached the
+    /// planes there is nothing to draw, and drawing the quad anyway would put
+    /// green over the screen rather than black, zeroed I420 being green. This
+    /// costs the first frame or two of a 40-second movie that fades up from black
+    /// anyway.
+    fn sync_video(&mut self, queue: &wgpu::Queue, list: &mut Vec<frontend::Draw>) -> Result<()> {
         let Some(wanted) = list.iter().find_map(|draw| match draw {
             frontend::Draw::Video { frame, .. } => Some(*frame),
             _ => None,
         }) else {
             return Ok(());
         };
-        if self.uploaded == Some(wanted) {
-            return Ok(());
+        if let Some(feed) = self.feed.as_mut() {
+            if let Some(reason) = feed.take_error() {
+                bail!("decoding the intro movie: {reason}");
+            }
+            // `saturating_sub`, so an empty cache is a movie with no picture
+            // rather than a panic on `0 - 1`.
+            let position = wanted.min(feed.len().saturating_sub(1)) as u64;
+            if let Some(frame) = feed.take_upto(position) {
+                self.renderer.upload_frame(queue, &frame.bytes)?;
+                self.shown = true;
+            }
+            if !self.shown {
+                list.retain(|draw| !matches!(draw, frontend::Draw::Video { .. }));
+            }
         }
-        let Some(frames) = self.movie.as_mut().and_then(|movie| movie.frames.as_mut()) else {
-            return Ok(());
-        };
-        frames.read_frame(wanted.min(frames.len - 1), &mut self.frame_bytes)?;
-        self.renderer.upload_frame(queue, &self.frame_bytes)?;
-        self.uploaded = Some(wanted);
         Ok(())
     }
 }
@@ -1262,10 +1342,34 @@ struct Session {
     /// The looping picture the menus are drawn on, when this source has one.
     ///
     /// On the session and not in [`Shell`], which is `Clone`d into every stage
-    /// that needs it: a movie is a file handle and a decoder, held once. The
-    /// menu stage borrows the frames for the one upload it needs and owns the
+    /// that needs it: a movie is a decoder and a multi-megabyte blob, held once.
+    /// The menu stage borrows the feed for the one upload it needs and owns the
     /// playhead. See [`MenuStage::backdrop`].
-    backdrop: Option<movie::Movie>,
+    ///
+    /// **It outlives the menu stage on purpose.** A player walking menu -> race
+    /// -> escape -> menu would otherwise pay a fresh decoder and a fresh read of
+    /// the cache file every time; instead the stage is rebuilt and the feed is
+    /// only [`movie::Feed::restart`]ed, which is one decoder flush. It also means
+    /// the worker is alive while a race is on screen - parked on a full ring,
+    /// costing nothing, because nothing is taking frames out of it.
+    backdrop: Option<movie::Feed>,
+    /// The backdrop's frame rate and where on screen it goes, kept because the
+    /// feed carries pixels and not presentation.
+    backdrop_shape: Option<BackdropShape>,
+}
+
+/// What the menus need to know about the backdrop besides its pixels.
+///
+/// Read off the [`movie::Movie`] before its frames moved onto a decode thread,
+/// because that is the last moment both are in one place.
+#[derive(Clone, Copy)]
+struct BackdropShape {
+    /// The rate this cut presents frames at. A `.PMF` is 30000/1001; the PS2's
+    /// `.IPF` cuts are 25/1 or 30000/1001 depending on which one it is.
+    frame_rate: (u64, u64),
+    /// Where the picture goes on the 480x272 screen, pillarboxed if the cut's
+    /// display aspect is not the screen's.
+    rect: [f32; 4],
 }
 
 /// Everything the menus need, gathered where it is loaded.
@@ -1537,9 +1641,7 @@ impl Session {
                 &mut encoder,
                 target,
                 inside,
-                self.backdrop
-                    .as_mut()
-                    .and_then(|movie| movie.frames.as_mut()),
+                self.backdrop.as_mut(),
             )?,
             Stage::Race(stage) => stage.render(
                 &self.gpu,
@@ -1618,38 +1720,45 @@ impl Session {
         // tied to is a *movie*, handed to them by whoever built the session, and
         // it is optional - the menus open with no backdrop on a source that has
         // none and on `--no-video`, and draw on black there.
-        let backdrop = self
-            .backdrop
-            .as_ref()
-            .filter(|movie| movie.frames.is_some());
+        //
+        // **Asked of the feed, not of a `Movie`.** The frames moved onto a decode
+        // thread when the session was built, so a `Movie`'s `frames` is `None`
+        // by now and testing it would build a renderer with no video pipeline and
+        // draw the menus on black - with no error anywhere, and with
+        // `--menu-page` still looking right, because that flag goes through the
+        // headless capture path and its movie is a different one that kept its
+        // frames. See `VideoFormat::of_feed`.
+        //
+        // **And the feed is put back to the start.** `Player::new` below begins at
+        // frame zero every time the menus open, so the feed has to begin at
+        // position zero with it or the second open compares this player's
+        // positions against a worker that is hundreds of frames further on, takes
+        // nothing, and freezes on the last picture of the first visit.
+        let shape = self.backdrop_shape.filter(|_| self.backdrop.is_some());
+        let format = self.backdrop.as_ref().map(VideoFormat::of_feed);
+        if let Some(feed) = self.backdrop.as_mut() {
+            feed.restart();
+        }
+        let frames = self.backdrop.as_ref().map_or(0, movie::Feed::len);
         let renderer = Renderer::new(
             &self.gpu.device,
             &self.gpu.queue,
             self.gpu.config.format,
-            backdrop.and_then(VideoFormat::of),
+            format,
             shell.font,
             &shell.sprites,
         )?;
         self.stage = Stage::Menu(Box::new(MenuStage {
             renderer,
             menu: model,
-            backdrop: backdrop.map(|movie| Backdrop {
+            backdrop: shape.map(|shape| Backdrop {
                 // `repeat`, which is the whole difference between this movie and
                 // the intro: `FE Screen` sits under it for as long as a player
                 // is in the menus, so it wraps rather than finishing on its last
                 // frame. See `movie::Player`.
-                player: movie::Player::new(
-                    movie.frames.as_ref().map_or(0, |frames| frames.len),
-                    true,
-                    movie.frame_rate,
-                ),
-                // Pillarboxed rather than stretched, because the PS2's cut is
-                // not the PSP's shape: an `.IPF` declares its own display
-                // aspect. The PSP's `.PMF` is already 480x272, so this is the
-                // full screen there and changes nothing.
-                rect: frontend::pillarbox(frontend::SCREEN, movie.display_aspect),
-                uploaded: None,
-                bytes: Vec::new(),
+                player: movie::Player::new(frames, true, shape.frame_rate),
+                rect: shape.rect,
+                shown: None,
             }),
         }));
         self.gpu.window.set_title(SHELL_TITLE);
