@@ -173,6 +173,91 @@ orthonormal, and composing them puts 482 meshes into a recognisable track whose
 outline matches the independently decoded spline. Not higher because nothing has
 been run under an emulator.
 
+## `LodGroup`: authored, but never switched at runtime
+
+Class `0x2ee`, one of the two field-having classes in the scene table alongside
+`Transform` (`docs/formats/vex.md:103` lists it under Scene). 11 instances on
+`16_Track` (PSP), all structurally identical.
+
+### The payload
+
+**Confidence 88.** Every sample decodes as: a 64-byte identity transform, a
+12-byte position (x, y, z), a 4-byte constant `1.0`, a 4-byte `child_count`
+(`u32`), then a 12-byte constant "magic" (`0x1f8963d8 0x14cbd676 0xf2561de7`,
+byte-identical across all 11 samples), then - only when `child_count == 2` - a
+4-byte switch-distance `f32`, then zero padding out to 112 bytes total (96
+bytes when `child_count == 1`, no switch-distance field and no padding).
+`distances_present == child_count - 1` is exact across every sample, not a
+loose correlation. 10 of the 11 instances on `16_Track` have `child_count ==
+2`; only one has `child_count == 1`. Each `LodGroup`'s node-tree children (the
+VEX tree structure, not the payload) are, in every observed case, one or more
+`Transform` + `Mesh` pairs per tier - real, distinct geometry in both tiers
+when `child_count == 2`, not a placeholder second child.
+
+Not confidence 90+ only because the switch-distance field's *unit* is
+unconfirmed (world units are the natural read, but nothing ties it to camera
+distance specifically) and the corpus is one track, not several.
+
+### The runtime never reads any of it
+
+**Confidence 85.** `docs/ghidra/functions/psp-pulse/exhaust.md` already
+established the class table's structure and the trap in reading it: the
+table's third field is a *runtime slot* `Vex_RegisterClass` (`0x08908eb8`)
+fills at boot from one of 46 per-class static initialisers, not a shared
+vtable, and dispatch is by descriptor lookup, never by an immediate compare -
+so the only way to find a class's real behaviour is its registration call
+site.
+
+`LodGroup`'s is `FUN_0890c028`, which registers method table `&DAT_08ad160c`.
+Two independent checks on that table both come back generic:
+
+- **`update`/`submit`/`draw`** (`+0x24`/`+0x34`/`+0x44`, the slot layout
+  `exhaust.md` established) are `0x089447a4`/`0x089447f4`/`0x0894484c` - all in
+  the `0x08944xxx` range `exhaust.md` already identified as shared base-class
+  defaults (the same range `Engine Flare` and `Trail`'s *unshared* slots sit
+  outside of). `LodGroup` has no custom per-frame behaviour at all.
+- **`init`** (`+0x7c`) is `0x0890bc7c`, which *is* `LodGroup`-specific - but it
+  turns out to be pure vtable-stamping boilerplate (stamp the method-table and
+  class-name pointers, call the shared allocator) on top of `FUN_08944fc0`,
+  the universal base-node constructor (32 unrelated call sites, including
+  `Vex_LoadModel` itself). It never reads `child_count`, the position, or the
+  switch-distance field from the payload.
+
+The generic tree walker that collects drawable nodes (`FUN_08a71364`, called
+from `Vex_LoadModel` to gather every `Mesh` in the tree) recurses into **every**
+child unconditionally:
+
+```c
+for (child = *(int*)(node+0x10); child != 0; child = *(int*)(child+0xc))
+    FUN_08a71364(child, out, cap, count, target_class);
+```
+
+No distance check, no class-based branch, nothing keyed on `LodGroup`
+specifically. Between this and the generic method table above, the conclusion
+is convergent from two independent angles: **this retail PSP binary has no
+LOD-tier-selection code anywhere.** When `child_count == 2`, both tiers are
+collected and drawn, always - the ten `16_Track` instances with real mesh
+geometry in both subtrees are not a hypothetical, they are ten places this
+build draws overlapping duplicate geometry at two detail levels every frame.
+
+Not confidence 90+ because "no code branches on this" is a negative result -
+thorough by two unrelated routes, but a third undiscovered path (e.g. inside
+`Vex_LoadModel`'s own root-node dispatch, only partially read) can't be ruled
+out with certainty the way a positive decode can.
+
+**What this means for a reimplementation:** the payload's `child_count`/
+switch-distance fields are real authoring-time data, but there is no observed
+behaviour to reproduce - the original always renders every child. Adding
+distance-based tier switching would not be recovering a mechanism, it would be
+*inventing* one, and it would visibly diverge from the original (culling
+geometry the original always drew). Rendering only tier 0 of a `child_count ==
+2` group is a legitimate, faithful-to-measurement optimisation (it removes
+genuine duplicate geometry the original also draws twice, just without
+picking a "better" tier by distance), but it is a deliberate, documented
+performance divergence, not a recovered feature - it should be labelled as
+such wherever it lands, the same way `TRANSPARENT_BLEND` and
+`ALPHA_TEST_THRESHOLD` above are labelled as invented rather than recovered.
+
 ## Vertex format
 
 The GU vertex type at batch `+0x0a` selects the layout. On **PSP**, position is
