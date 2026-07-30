@@ -274,12 +274,12 @@ impl Hold {
         };
 
         let mut from_ray = false;
-        if (measured - height).abs() > HEIGHT_MISMATCH_LIMIT {
-            if let Some(contact) = contact {
-                axis = contact.normal;
-                height = (position - contact.point).dot(axis);
-                from_ray = true;
-            }
+        if (measured - height).abs() > HEIGHT_MISMATCH_LIMIT
+            && let Some(contact) = contact
+        {
+            axis = contact.normal;
+            height = (position - contact.point).dot(axis);
+            from_ray = true;
         }
 
         Some(Self {

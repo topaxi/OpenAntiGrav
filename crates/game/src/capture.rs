@@ -230,7 +230,11 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
             break;
         }
 
-        let pulse = if ticks % 2 == 0 { options.pressed } else { 0 };
+        let pulse = if ticks.is_multiple_of(2) {
+            options.pressed
+        } else {
+            0
+        };
         input.begin_frame(options.held | pulse);
         let events = frontend.update(dt, &mut input);
         crate::report(&events, options.trace);

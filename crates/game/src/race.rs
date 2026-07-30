@@ -1860,7 +1860,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     for _ in 0..options.ticks {
         let snapshot = held.snapshot();
         race.tick(&snapshot);
-        if options.log_every > 0 && race.world.tick % u64::from(options.log_every) == 0 {
+        if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
             println!("{}", describe(&race.telemetry()));
         }
     }

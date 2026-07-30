@@ -116,14 +116,14 @@ pub fn search_path() -> Vec<PathBuf> {
     // `$APPIMAGE` is the path of the running AppImage file, set by its runtime.
     // Its *parent* is the portable directory; `$APPDIR`, the mounted image, is
     // not searched on purpose.
-    if let Some(appimage) = std::env::var_os("APPIMAGE") {
-        if let Some(directory) = Path::new(&appimage).parent() {
-            // The directory itself first - "copy both files into one folder" is
-            // the simplest thing a player can do - then an `images/`
-            // subdirectory, for someone who would rather keep it tidy.
-            push(directory.to_path_buf());
-            push(directory.join("images"));
-        }
+    if let Some(appimage) = std::env::var_os("APPIMAGE")
+        && let Some(directory) = Path::new(&appimage).parent()
+    {
+        // The directory itself first - "copy both files into one folder" is
+        // the simplest thing a player can do - then an `images/`
+        // subdirectory, for someone who would rather keep it tidy.
+        push(directory.to_path_buf());
+        push(directory.join("images"));
     }
 
     if let Some(data) = dirs::data_dir() {

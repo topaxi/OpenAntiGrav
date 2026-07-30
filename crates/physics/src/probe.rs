@@ -237,7 +237,11 @@ pub fn controls(script: Script, tick: u32) -> ShipControls {
         }
         // A sustained slalom for the rest of the run.
         _ => {
-            controls.steer_x = if (tick / 37) % 2 == 0 { 0.8 } else { -0.8 };
+            controls.steer_x = if (tick / 37).is_multiple_of(2) {
+                0.8
+            } else {
+                -0.8
+            };
         }
     }
 

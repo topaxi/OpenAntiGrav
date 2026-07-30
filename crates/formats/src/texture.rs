@@ -68,7 +68,7 @@ pub const SWIZZLE_BLOCK_ROWS: usize = 8;
 #[must_use]
 pub fn unswizzle(src: &[u8], row_bytes: usize, height: usize) -> Vec<u8> {
     let mut dst = vec![0u8; src.len()];
-    if row_bytes % SWIZZLE_BLOCK_BYTES != 0 || row_bytes == 0 {
+    if !row_bytes.is_multiple_of(SWIZZLE_BLOCK_BYTES) || row_bytes == 0 {
         dst.copy_from_slice(src);
         return dst;
     }
@@ -272,7 +272,7 @@ impl Texture {
         }
 
         let pixels = width as usize * height as usize;
-        if bits_per_pixel == 4 && pixels % 2 != 0 {
+        if bits_per_pixel == 4 && !pixels.is_multiple_of(2) {
             return Err(Error::OddPixelCountAt4Bpp { width, height });
         }
 

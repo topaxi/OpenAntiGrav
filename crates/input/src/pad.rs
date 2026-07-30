@@ -230,10 +230,10 @@ impl Pad {
         let mut reading = Reading::default();
         for (_, pad) in gilrs.gamepads() {
             for button in BOUND_BUTTONS {
-                if pad.is_pressed(button) {
-                    if let Some(index) = map_button(button) {
-                        reading.buttons |= 1u32 << index;
-                    }
+                if pad.is_pressed(button)
+                    && let Some(index) = map_button(button)
+                {
+                    reading.buttons |= 1u32 << index;
                 }
             }
             reading.stick_x = larger(reading.stick_x, pad.value(gilrs::Axis::LeftStickX));

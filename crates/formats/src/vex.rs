@@ -603,7 +603,7 @@ impl Batch {
                 .map(|i| {
                     let i = i as u32;
                     // Flip winding on odd triangles so all faces agree.
-                    if i % 2 == 0 {
+                    if i.is_multiple_of(2) {
                         [i, i + 1, i + 2]
                     } else {
                         [i + 1, i, i + 2]

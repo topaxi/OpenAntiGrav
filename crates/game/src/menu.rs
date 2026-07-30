@@ -1037,10 +1037,10 @@ impl Menu {
 
         let right = take(input, button::RIGHT);
         let left = take(input, button::LEFT);
-        if right || left {
-            if let Some(event) = self.adjust(if right { 1 } else { -1 }) {
-                out.push(event);
-            }
+        if (right || left)
+            && let Some(event) = self.adjust(if right { 1 } else { -1 })
+        {
+            out.push(event);
         }
 
         if take(input, button::CROSS) || take(input, button::START) {

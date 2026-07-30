@@ -191,10 +191,11 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
                 continue;
             }
             let payload = &model[range];
-            if let Ok(geometry) = collision::parse_chunks(payload) {
-                if geometry.padded_len() == payload.len() && geometry.vertex_count() > 2 {
-                    *into.false_positives.entry(node.class_id).or_default() += 1;
-                }
+            if let Ok(geometry) = collision::parse_chunks(payload)
+                && geometry.padded_len() == payload.len()
+                && geometry.vertex_count() > 2
+            {
+                *into.false_positives.entry(node.class_id).or_default() += 1;
             }
         }
 
@@ -531,13 +532,12 @@ fn collision_shaped(
                 continue;
             }
             let payload = &model[range];
-            if let Ok(geometry) = collision::parse_chunks(payload) {
-                if geometry.padded_len() == payload.len()
-                    && geometry.version == collision::HEADER_WORD
-                    && geometry.vertex_count() > 2
-                {
-                    *candidates.entry(node.class_id).or_default() += 1;
-                }
+            if let Ok(geometry) = collision::parse_chunks(payload)
+                && geometry.padded_len() == payload.len()
+                && geometry.version == collision::HEADER_WORD
+                && geometry.vertex_count() > 2
+            {
+                *candidates.entry(node.class_id).or_default() += 1;
             }
         }
     }

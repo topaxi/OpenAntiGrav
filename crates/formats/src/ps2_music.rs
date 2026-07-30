@@ -198,7 +198,7 @@ impl Directory {
                 size: word(1),
                 offset: word(2),
             };
-            if entry.size as usize % FRAME_LEN != 0 {
+            if !(entry.size as usize).is_multiple_of(FRAME_LEN) {
                 return Err(Error::PartialFrame {
                     index,
                     size: entry.size,

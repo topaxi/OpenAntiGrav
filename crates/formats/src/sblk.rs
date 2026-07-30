@@ -263,7 +263,7 @@ impl<'a> Bank<'a> {
                 section: sections[1].1,
             });
         }
-        if waveforms.len() % ADPCM_BLOCK_LEN != 0 {
+        if !waveforms.len().is_multiple_of(ADPCM_BLOCK_LEN) {
             return Err(Error::PartialAdpcmBlock {
                 size: waveforms.len(),
             });
