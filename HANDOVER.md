@@ -237,6 +237,35 @@ the past.
 
 ## Working rules that were learned expensively
 
+- **You cannot measure the original's exhaust by thresholding a screenshot, and the
+  exhaust has *two* independent inputs that both have to be matched.** Two traps, one
+  pass, both cost a wrong conclusion.
+
+  First, **intensity is driven by time under thrust (+0.25/s to a ceiling of 1.0), and
+  ribbon length by speed (`10 samples x speed`)**. Matching only speed produced a pair
+  3x apart on brightness and an "our flare is too dim" reading; matching only thrust
+  time gives the opposite. A comparison frame is worthless unless it pins both, and our
+  craft reaches 64 units/s in 1.2 s where the emulator took roughly 6 s - so the two
+  may not be *able* to sit at the same speed and the same intensity at once. If so that
+  gap is a physics question surfacing through the exhaust, and it must be separated
+  before another exhaust constant is touched.
+
+  Second, **brightness thresholding measures Talon's Junction, not the plume.** On the
+  start straight the road's own light strips saturate a **245-pixel** run in a band
+  with no exhaust in it, against 108 px in the band containing the ship. Any
+  "widest saturated run" statistic is therefore dominated by scenery, and it reads as a
+  clean number. Our own frames do not have this problem (flat ribbon over black), which
+  makes the comparison asymmetric in exactly the direction that flatters us.
+
+  **The method that would work is difference imaging against the emulator's own
+  memory**: break, capture, write zero into the trail's three layer-colour fields
+  (`child+0xf8` / `+0x128` / `+0x158`) or the intensity at `flare+0xbc`, capture again,
+  subtract. Same pose, exhaust removed, so the difference *is* the plume in isolation
+  and can be measured against hull width. The missing piece is the flare object's
+  runtime address - it is a scene-graph child of the craft, and `craft+0x794` is the
+  already-traced ship node to walk from. **Do that before tuning
+  `HALF_SIZE_TO_WORLD`**; until then it stays at 1.0 and confidence 55, and "our bloom
+  looks bigger" stays an impression rather than a measurement.
 - **An xref count on a class descriptor bounds *authored* instances only.** The
   exhaust pass concluded that racing craft have no trail, because `Trail`'s class
   descriptor is referenced by nothing but its own registration function and no
