@@ -154,7 +154,12 @@ The instrument everything after this is measured with.
 - [x] Scripted input playback into PPSSPP: `input.buttons.send`/`press` through
       the websocket debugger, verified by watching `craft+0x2b8` read 100 while
       thrust is held
-- [ ] Save-state driven fixed-start scenarios
+- [x] Fixed-start scenarios: **not** via a PPSSPP save state - measured
+      2026-07-30 at `0.031` units / `1.41` degrees between two loads, no better
+      than the plain menu walk - but via heading-pinning
+      (`--start-heading`, `0.0022` units / `0.0001` degrees), already
+      committed. See
+      [ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md#measured-a-save-state-does-not-pin-the-pose-as-tightly-as---start-heading-does-and-is-not-adopted).
 - [x] Trace capture: `scripts/psp-trace.py` records position, orientation,
       velocity, dt, groundedness and the whole control block per call of
       `Ship_UpdateCraft`, breakpoint-driven off the running game
@@ -336,16 +341,55 @@ Under `--reseed 60` the position figure is **10.3** at tick 299 either way - a
 orientation axis goes 0.114 to **0.0824** rad. `grounded` is exact on 3,146 of
 3,146 ticks.
 
-**So what blocks M4 now is that no capture can decide the first of its two
-numbers.** The criterion above asks how many ticks we track the original before
-coming apart, and that question has no answer past tick **171** on anything in
-`data/traces/`: the lap recapture is wall-free on 32.7 % of its ticks and first
-touches a wall there, after which the comparison measures the original's own
-scrapes rather than our force law. **A clean lap capture is therefore load-bearing
-for the milestone**, not a convenience - and it has to be re-derived from a fresh
-`just autopilot` run, because the committed lap script is a closed-loop recording
-that no longer flies clean open-loop. The second number, the reseeded per-window
-error, is answerable today and is the table above.
+**A fresh clean-lap capture exists (2026-07-30), and it moves the ceiling on
+number 1 from 171 to 256, not further.** `oag-trace show`'s cleanliness report
+(added this pass, see [oag-trace.md](../tools/oag-trace.md#show-and-the-cleanliness-report-in-it))
+put a number on the old capture's 32.7 %/tick-171 figures for the first time;
+a fresh `just autopilot` lap (`data/traces/talons-junction-clean-lap.csv`,
+2,977 ticks) is dramatically cleaner overall - wall-free on **96.3 %** of its
+ticks - but still first touches a wall at tick **256**. A second attempt
+chasing the lifted centre line instead of the authored racing line
+(`--column lift`) landed at tick 249, no better; per the plan this pass worked
+to, two attempts with no material gain in the clean prefix is itself the
+result, not a reason to keep tuning the controller.
+
+**And 256 ticks of "wall-free" is not 256 ticks of "physics agrees" - the wall
+stops being the binding constraint well before that.** Scored with
+`--script-lead 2` (confirmed correct the same way the 2026-07-29 row above
+did: `throttle`/`brake` are bit-exact across all 2,977 ticks only at lead 2),
+single-seeded position error over the *same* ticks 0-170 window as the row
+above is **10.12** max / **2.50** mean - consistent with the older capture's
+6.54/2.41, a different lap on the same track section rather than a
+regression - but over the fuller 0-255 clean window it is **47.76** max (tick
+255) / **13.28** mean, because error is already growing fast by tick 200
+(17.5 at tick 180, 44.1 at tick 240) while the ship is still nowhere near a
+wall. The whole-run single-seeded figure is 1,245 units at tick 1,628 and
+still growing, the same character as before: not comparable tick-for-tick
+against a different capture's trajectory, and not meaningful past a few
+hundred ticks regardless.
+
+Under `--reseed 60` on this capture, position error is **28.86** at tick 1,739
+(bounded, not growing) and the worst orientation axis is **0.4858** rad at
+tick 1,129 (also bounded) - both markedly larger than the 2026-07-29 capture's
+10.3/0.0824. **Checked, not just read, before attributing this to the lap's
+own content rather than a regression**: two things changed between the two
+figures, the capture *and* the physics (the collision-box scale fix, above),
+so the 2026-07-29 capture was re-run under today's physics to isolate them.
+Its worst reseeded orientation axis today is **0.0541** rad - a modest shift
+from the 0.0824 it read before the collision fix, not the 6x jump the new
+capture shows. That rules the physics change out as the cause: the new
+capture's larger error tracks its own content, holding racing speed
+(100-150 units/s) and cornering hard throughout where the older capture spent
+most of its length slowed and wedged against a wall, and per-window error
+scales with how aggressively the craft is maneuvering.
+
+**So the honest read of number 1 is that the wall was never the whole
+story.** Closing the 171-tick ceiling to 256 removed the wall as the limiting
+factor earlier than expected - by tick 200-255 the force law itself, not
+contact geometry, is already tens of units off on a clean line. That is a
+different, harder problem than the one this pass set out to close, and it is
+now the one blocking number 1's headline figure from moving materially further
+without physics work, not another capture.
 
 The other live gap **was our hull responding to a wall about six ticks before
 the original does; it is now three-to-five ticks after.** Measured against the

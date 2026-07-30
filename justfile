@@ -248,7 +248,7 @@ apply-names *ARGS: resolve-imports
 audit-leakage:
     #!/usr/bin/env bash
     set -euo pipefail
-    if git ls-files | grep -Ei '\.(chd|iso|cso|pkg|pbp|wad|elf|prx|self|bin|img)$'; then
+    if git ls-files | grep -Ei '\.(chd|iso|cso|pkg|pbp|wad|elf|prx|self|bin|img|ppst|p2s|state)$'; then
         echo "FAIL: game content is tracked by git" >&2
         exit 1
     fi

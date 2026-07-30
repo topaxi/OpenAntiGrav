@@ -102,27 +102,46 @@ agreeing on about 1 % of ticks. A 3,146-tick single-seeded trajectory comparison
 measures the emulator's scheduler, not the force law, and a byte-exact
 implementation would fail it.
 
-**Score the lap on the window where the capture is clean.** The 2026-07-29
-recapture is wall-free on only **32.7 %** of its ticks and first touches a wall at
-tick **171** - both now `oag-trace show`'s own numbers rather than an ad hoc
-count, see [`oag-trace.md`](docs/tools/oag-trace.md#show-and-the-cleanliness-report-in-it)
-- so a whole-run number is mostly a measurement of the original's own scrapes.
-Over ticks 0-170, the corrected replay against that capture:
+**Score the lap on the window where the capture is clean - and a fresh, far
+cleaner capture now exists (2026-07-30).** The 2026-07-29 recapture was
+wall-free on only 32.7 % of its ticks; `data/traces/talons-junction-clean-lap.csv`
+(a fresh `just autopilot` lap, not a replay of any committed file) is wall-free
+on **96.3 %**, both now `oag-trace show`'s own numbers rather than an ad hoc
+count, see [`oag-trace.md`](docs/tools/oag-trace.md#show-and-the-cleanliness-report-in-it).
+It still first touches a wall at tick **256**, not much past the old 171 - a
+second attempt chasing the lifted centre line (`--column lift`) landed at 249,
+no better, so per this pass's plan two attempts with no material gain is the
+stopping point, not a reason to keep tuning the autopilot's steering.
+`--script-lead 2` is confirmed correct for this capture too (`throttle`/`brake`
+bit-exact across all 2,977 ticks only at lead 2, same check as before, run
+again because this capture came from `psp-autopilot.py` rather than
+`psp-trace.py --script`).
 
-| Ticks 0-170 | `--script-lead 0` | `--script-lead 2` |
-| --- | ---: | ---: |
-| Position, max error | 22.85 | **6.54** |
-| Position, mean error | 6.12 | **2.41** |
-| Speed, max error | 75.44 | **6.01** |
-| Speed, mean error | 9.97 | **2.75** |
-
-Under `--reseed 60` the position figure does not move (**10.3** at tick 299 either
-way - a 60-tick window never accumulates enough to show it), but the worst
-orientation axis goes 0.114 -> **0.0824** rad. The whole-run single-seeded number
-is now 253.7 at tick 2,494 and *growing*, and that is the honest reading rather
-than a regression: our run no longer wedges where the capture does, so after about
-tick 400 the two are simply doing different things and the comparison stops
-meaning anything.
+**The real finding is that the wall was never the whole story.** Even inside
+this capture's own clean window, single-seeded position error is already 17.5
+units by tick 180 and 44.1 by tick 240 - **47.76 max / 13.28 mean over ticks
+0-255**, while the same ticks 0-170 window used before still reads 10.12
+max / 2.50 mean, consistent with the old 6.54/2.41 (a different lap through the
+same opening straight, not a regression). So closing the wall-contact ceiling
+from 171 to 256 did not buy 85 more ticks of "the physics agrees" - it exposed
+that the force law itself, not contact geometry, was already the thing limiting
+comparison length well inside the old window's tolerance. That is the harder
+problem left blocking M4's single-seeded number, not another capture. Under
+`--reseed 60` this capture reads **28.86** at tick 1,739 (bounded) and worst
+orientation axis **0.4858** rad at tick 1,129 (bounded) - both larger than the
+old capture's 10.3/0.0824. **Checked before attributing that to the lap
+rather than the collision-box scale fix that landed the same session**:
+re-run under today's physics, the old capture's worst reseeded orientation
+axis is 0.0541 rad, a modest shift from 0.0824 and nowhere near the new
+capture's 6x jump - so the gap is this lap holding racing speed and cornering
+hard throughout rather than spending most of its length wedged at low speed
+against a wall, not the physics regressing. The whole-run single-seeded
+figure is 1,245 units at tick 1,628 and growing - same character as the old
+capture's 253.7 at tick 2,494, not comparable tick-for-tick across two
+different trajectories, and meaningless past a few hundred ticks either way.
+(The tool's own "first divergence at tick 0, field angular_velocity" headline
+for this capture is the `1e-4` tolerance floor on an idle craft, not a
+tracking failure - read the position row, not the top line.)
 
 **Do not read `grounded` as the headline it looks like.** The original's column
 is `1.0` on all 3,146 ticks of this capture, so agreement means only that our
@@ -155,18 +174,37 @@ a few units per second the normal impulse dominates and restitution can push
 `|velocity|` above `speed`, giving a negative loss - the lap capture has ticks
 reading `-380 %` on a craft wedged at 0.15 units/s.
 
-**Two things about the lap capture itself that the next person needs.** First, the
-committed lap script **no longer flies a clean lap in the emulator**: this
-capture fails the `speed/|velocity| == 1.0000` cleanliness test on **67.3 %** of
-its ticks (36.8 % over the first 600), where the 2026-07-28 capture of the same
-script was 95.2 % wall-free. The script was recorded *closed-loop* by
-`psp-autopilot.py`, and replaying it open-loop drifts into the walls - which is
-the same negative as above, seen from the authoring side rather than the
-measuring side. **A clean lap scenario has to be re-derived from a fresh
-autopilot run, not replayed from the committed file.** Second, the capture
-timed out at tick 561 on its first attempt (`never stopped at 0x08849618`) and
-completed on a straight retry after restarting PPSSPP, so a stalled capture is
-worth one retry before it is worth diagnosing.
+**A clean lap scenario was re-derived (2026-07-30), and it is what the section
+above scores.** The old committed lap script had stopped flying clean when
+replayed open-loop (67.3 % wall contact, down from 95.2 % on an earlier
+capture of the same script) because it was recorded *closed-loop* and an
+open-loop replay drifts into walls - the same negative seen from the
+authoring side. `just drive menu` (cold boot) + `just drive restart` +
+`just autopilot --spline /tmp/spline.csv --laps 1` produced
+`talons-junction-clean-lap.{inputs,csv}` fresh, script and trace from the same
+run, which is now the committed scenario and the capture both. First-attempt
+stalls are still worth one retry before diagnosing: this capture's own first
+attempt at the earlier committed script timed out at tick 561
+(`never stopped at 0x08849618`) and completed on a straight retry after
+restarting PPSSPP.
+
+**A save-state fixed start was investigated and not adopted - `--start-heading`
+above already beats it.** The unchecked M3 roadmap item asked for a save-state
+driven fixed start; `--state=FILE` turns out to exist (the websocket debugger's
+own `savestate.*` commands do not, confirmed by string-dumping the binary) and
+`wtype` (Wayland's virtual-keyboard protocol) can drive PPSSPP's own Escape
+overlay to create one - both undocumented before this pass, both now on
+[ppsspp-debugger.md](docs/reverse-engineering/ppsspp-debugger.md#save-states-and-the-input-recording-api-that-may-replace-them).
+But measured against two independent loads of the same state (craft cut at a
+settled start-line pose), the pose disagreed by **0.031 units / 1.41 degrees** -
+no tighter than the plain `restart` menu walk's 0.03/2.51, and two orders of
+magnitude worse than `--start-heading`'s already-committed 0.0022/0.0001. The
+roadmap checkbox is now closed **via heading-pinning, not a save state** -
+[see above](#where-the-project-stands) - and the state-loading mechanism is
+kept documented rather than wired in, in case a future need a heading pin
+cannot reach (mid-race state, a different track's start) makes it worth
+returning to. `.ppst`/`.p2s`/`.state` are now in `just audit-leakage`'s
+extension list, which did not cover them before.
 
 ## Open threads
 
@@ -187,7 +225,6 @@ used, kept because commits and docs cite them.
 | **The `.vex` class-ID table's extent is still unknown** | All ~55 game classes are transcribed into [vex.md](docs/formats/vex.md) and `vex::CLASS_NAMES`, self-validating at 95 against the ten IDs earlier passes had found independently. But the walk stopped at `0x08ab26a0` without reaching the `id == -1` terminator, so the generic Maya classes past `0x3eb` are only partly covered. Cheap to finish; nothing depends on it. |
 | **The five teams whose `Ship.vex` does not resolve by name** | `Auricom`, `Harimau`, `Icaras`, `Mirage`, `Van_Uber` have no `Data.wad` entry hashing to `Data\Ships\<Team>\Ship.vex` on the PSP disc, so eight of thirteen teams were censused. A `mine-names` job, not a format one. Note the path templates resolve with the **FE team-model name**, whose default is the literal `"ship"` at `0x08a84cb4` - hence `shipwreck.vex` and `shipboost.vex`, *not* `Assegaiwreck.vex`. Guessing the team name into those templates 404s, which cost a wrong conclusion once. |
 | **The 13 % roll-stiffness gap** | The recovered tensor runs the roll oscillator 13 % stiff against measurement. Untouched by the downforce fix by construction (the probes are on the centreline), so it is now the only gap of its kind. |
-| **A clean lap scenario** | The committed lap script is a closed-loop autopilot recording and no longer flies clean open-loop (67.3 % of the recapture is in wall contact). Re-derive one from `just autopilot` rather than replaying the file. |
 | **Menus: rebinding is the one thing on them that does not work** | The shell navigates and every other row is live - see [menus.md](docs/architecture/menus.md). A `binding` row shows what `oag_input::keys::map_key` returns and cannot change it, because that function is a hardcoded `match`: rebinding needs a table, persistence and conflict handling. `keys::bound_keys` probes `map_key` with a candidate set rather than keeping a second table, so the page cannot drift from the game, but the candidate list can under-report a key added to `map_key` and not to it. **Escape now backs out of a race into the menus**, which is most of the road to a pause menu and is deliberately *not* one: the `World` is dropped rather than suspended, so re-entering loads a fresh race. Suspending it is the remaining work, and the menu stage already builds its own renderer so it can be opened from somewhere that is not the front end. |
 | **MONITOR has only ever run on a one-screen machine** | It landed with the DISPLAY/GRAPHICS split and it is the one row there with no coverage of its working path. The *miss* path is confirmed on `eDP-1`: a settings file naming `nope-not-here` prints `no monitor named ... (this machine has: eDP-1)` and falls back to the default. **Picking a second screen has never been executed**, in either window mode. `display::centred` and `Monitor::choose` are unit-tested; `centred_on` in `main.rs` is not, and it is the part that reads winit's rectangle and scale factor - a wrong scale factor offsets the window by the difference on any screen not at 100 %, and it centres on the *inner* extent while setting the *outer* position, so a decorated window sits high by about a title bar (known, documented on the function, not corrected). **Try it on two screens before leaning on it**: `just play`, OPTIONS -> DISPLAY -> MONITOR, windowed and borderless. Note the compositor may refuse all of it and a tiling one will. |
 | **Movie decode is off the render thread; what is left is the audio it has no counterpart for** | **Resolved, and measured on both sides.** `movie::Feed` owns the `FrameStore` on a worker thread, decodes four frames ahead into a ring, and hands the drawing thread the newest frame at or before the playhead; both call sites went through it, the menu backdrop and the intro (`FrontendStage::sync_video`, which had always done the same blocking decode). [ADR-0010](docs/architecture/adr/0010-movie-decode-thread.md) has the design, the rejected alternatives and the full tables. The headline, same 45-second run through both stages, same instrumentation: PSP menu at a 240 limit went from **197.7 fps min / 51.85 ms worst frame** to **240.0 / 4.71**, the PSP front end from 213.5/43.35 to 240.0/4.44, and the PS2's 512x512 `BG512.IPF` - the worst case at **82.25 ms** - to **7.04 ms**. **The "front end" figures are the intro's code path playing the *backdrop's* stream**, not `Intro.PMF`: every run passed `--movie 'Data\Movies\Backdrop.PMF'` so that one nine-second movie reaches both stages. Same cache format, same decoder, so `sync_video` is exercised faithfully - but a 240-limited loop over `Intro.PMF`'s own 1200 frames is the one thing nobody measured either side, and its cache is warm if anyone wants to. Unlimited, the PSP menu's worst frame went 46.51 -> 7.45 ms while the *median* barely moved (942 -> 1016 fps), which is the whole point: the average was never the symptom. **Three things worth knowing before touching it.** `--menu-page` cannot check this path - the capture goes through its own `Movie` whose frames were never taken, so it looks right even when a real window draws on black; use a screenshot of an actual window. `Feed::restart` carries an epoch because a restart can land mid-decode, and getting that wrong breaks the *second* menu open only. And the ring is deliberately not a channel: the consumer polls several times per movie frame and must be able to look at positions without consuming them. **What is genuinely left is not this**: the movie has no audio at all (ATRAC3+ is demuxed and discarded), and whenever it gets some, the playhead becomes something two consumers pace against rather than one - `movie::Player` is the place that changes, not `Feed`. |

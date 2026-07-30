@@ -34,7 +34,7 @@ ticks and then drifts has a different bug from one that is wrong at tick 1.
 
 | Piece | Purpose |
 | --- | --- |
-| Save state | A fixed, reproducible starting point. Committed as a reference by name, not content. **Not built.** The starting point is still reached by the documented menu walk in [the debugger page](ppsspp-debugger.md#the-reference-scenario), which is reproducible but slow. |
+| Fixed start | A fixed, reproducible starting point. **Built, not as a save state**: a PPSSPP `.ppst` pins position no tighter than the plain menu walk (`0.031` units / `1.41` degrees between two loads, measured 2026-07-30) and is not used. `--start-heading` pins to `0.0022` units / `0.0001` degrees instead - see [the debugger page](ppsspp-debugger.md#the-start-pose-is-pinnable-and-the-craft-was-never-settling) - and is what `just scripted-emu` uses. |
 | Input script | Per-tick controller state. Plain text, committed. **Built**: `verification/scenarios/*.inputs`, read by `scripts/input_script.py` on the capture side and `oag_trace::script` on ours. |
 | Trace capture | Emulator-side recording of the observed values, per tick. **Built**: `scripts/psp-trace.py`, on top of [PPSSPP's websocket debugger](ppsspp-debugger.md). |
 | `oag-trace` | Runs our engine on the same input and compares. **Built**: [`docs/tools/oag-trace.md`](../tools/oag-trace.md). |

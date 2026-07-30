@@ -1,0 +1,244 @@
+# Recorded by scripts/psp-autopilot.py chasing /tmp/spline.csv (line column).
+# Every line is what the emulator was actually sent on those ticks,
+# shifted 2 tick(s) later so the file is in oag-trace's convention;
+# replay it into the emulator with `psp-trace.py --script-lead 2`.
+
+25 cross right r
+11 cross right
+4 cross
+11 cross left
+20 cross left l
+13 cross left
+3 cross
+12 cross right
+18 cross right r
+12 cross right
+3 cross
+13 cross left
+14 cross left l
+11 cross left
+2 cross
+9 cross right
+27 cross right r
+8 cross right
+3 cross
+8 cross left
+26 cross left l
+10 cross left
+3 cross
+9 cross right
+27 cross right r
+10 cross right
+3 cross
+14 cross left
+10 cross left l
+12 cross left
+3 cross
+10 cross right
+30 cross right r
+11 cross right
+3 cross
+17 cross left
+2 cross left l
+19 cross left
+3 cross
+10 cross right
+35 cross right r
+11 cross right
+3 cross
+10 cross left
+16 cross left l
+10 cross left
+2 cross
+8 cross right
+40 cross right r
+9 cross right
+3 cross
+9 cross left
+22 cross left l
+10 cross left
+3 cross
+9 cross right
+29 cross right r
+9 cross right
+2 cross
+10 cross left
+24 cross left l
+8 cross left
+3 cross
+8 cross right
+28 cross right r
+9 cross right
+3 cross
+10 cross left
+22 cross left l
+10 cross left
+3 cross
+10 cross right
+22 cross right r
+9 cross right
+3 cross
+9 cross left
+28 cross left l
+9 cross left
+3 cross
+10 cross right
+20 cross right r
+10 cross right
+3 cross
+9 cross left
+28 cross left l
+10 cross left
+3 cross
+12 cross right
+20 cross right r
+11 cross right
+3 cross
+9 cross left
+21 cross left l
+9 cross left
+2 cross
+7 cross right
+34 cross right r
+8 cross right
+3 cross
+8 cross left
+34 cross left l
+9 cross left
+3 cross
+7 cross right
+30 cross right r
+10 cross right
+2 cross
+9 cross left
+28 cross left l
+8 cross left
+2 cross
+7 cross right
+33 cross right r
+8 cross right
+2 cross
+8 cross left
+35 cross left l
+8 cross left
+3 cross
+8 cross right
+29 cross right r
+10 cross right
+4 cross
+36 cross left
+4 cross
+13 cross right
+20 cross right r
+13 cross right
+4 cross
+28 cross left
+3 cross
+6 cross right
+46 cross right r
+10 cross right
+3 cross
+11 cross left
+17 cross left l
+12 cross left
+2 cross
+10 cross right
+22 cross right r
+9 cross right
+2 cross
+8 cross left
+38 cross left l
+9 cross left
+2 cross
+9 cross right
+24 cross right r
+10 cross right
+2 cross
+9 cross left
+31 cross left l
+10 cross left
+3 cross
+9 cross right
+25 cross right r
+12 cross right
+4 cross
+33 cross left
+4 cross
+9 cross right
+37 cross right r
+9 cross right
+3 cross
+10 cross left
+20 cross left l
+11 cross left
+3 cross
+11 cross right
+15 cross right r
+11 cross right
+2 cross
+9 cross left
+37 cross left l
+9 cross left
+2 cross
+9 cross right
+28 cross right r
+10 cross right
+4 cross
+31 cross left
+3 cross
+8 cross right
+70 cross right r
+10 cross right
+3 cross
+13 cross left
+10 cross left l
+12 cross left
+3 cross
+9 cross right
+25 cross right r
+7 cross right
+2 cross
+9 cross left
+25 cross left l
+10 cross left
+2 cross
+10 cross right
+26 cross right r
+9 cross right
+3 cross
+8 cross left
+30 cross left l
+7 cross left
+3 cross
+9 cross right
+23 cross right r
+8 cross right
+3 cross
+8 cross left
+43 cross left l
+11 cross left
+4 cross
+30 cross right
+3 cross
+8 cross left
+38 cross left l
+10 cross left
+3 cross
+14 cross right
+10 cross right r
+12 cross right
+3 cross
+10 cross left
+20 cross left l
+10 cross left
+3 cross
+11 cross right
+21 cross right r
+10 cross right
+3 cross
+11 cross left
+19 cross left l
+11 cross left
+3 cross
+10 cross right
+18 cross right r

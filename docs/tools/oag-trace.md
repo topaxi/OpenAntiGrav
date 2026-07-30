@@ -1045,6 +1045,74 @@ the honest end of any window scored against it.
 [The standing start](#the-standing-start-and-what-it-regression-tests) is the
 capture for that.
 
+### 2026-07-30, a fresh autopilot lap flown clean
+
+The 2026-07-29 capture above cannot answer M4's single-seeded number past
+tick 171 - it is wall-free on only 32.7 % of its ticks. `oag-trace show`'s
+cleanliness report (`clean_ticks`/`first_contact`, added this pass) put that in
+writing for the first time; closing it needed a **new** capture, since a
+closed-loop autopilot recording does not fly clean when replayed open-loop
+(the same finding, from the authoring side).
+
+`just drive menu` (cold boot) + `just drive restart`, then
+`just autopilot --spline /tmp/spline.csv --laps 1 --shot-window 8`, flown fresh
+against `16_Track`'s own spline (`oag-trace track`), gives
+`data/traces/talons-junction-clean-lap.csv` - **2,977 ticks**, wall-free on
+**96.3 %** of them, first touching a wall at tick **256**. A second attempt
+chasing the lifted centre (`--column lift`) landed at tick 249 - no material
+gain, so per this pass's own plan, two attempts without a materially longer
+prefix is the stopping point rather than a reason to keep tuning the
+controller.
+
+**`--script-lead 2` is confirmed correct for an autopilot-recorded capture
+too, not just a `psp-trace.py --script` one**, empirically: at lead 0,
+`throttle` disagrees by up to 100 at tick 1; at lead 2 it is bit-exact across
+all 2,977 ticks, same for `brake`. `psp-autopilot.py --emit-lead 2` (the
+default) already shifts the emitted `.inputs` file into this convention when
+it is written, and the `--trace-out` capture it writes alongside is in the
+breakpoint-native timing that lead 2 re-aligns against - the same reasoning
+as [the first-two-ticks finding](#the-first-two-ticks-of-a-script-never-reach-the-emulator),
+reached by a different route this time (autopilot capture, not `psp-trace.py`)
+and landing on the same answer.
+
+Scored with `--script-lead 2`:
+
+| Field | single-seeded | `--reseed 60` |
+| --- | ---: | ---: |
+| Position, ticks 0-170 (same window as 2026-07-29, above) | 10.12 max / 2.50 mean | - |
+| Position, ticks 0-255 (this capture's own clean window) | 47.76 max (tick 255) / 13.28 mean | - |
+| Position, whole run | 1,245 at tick 1,628, growing | **28.86** at tick 1,739, bounded |
+| Orientation, worst axis | - | **0.4858** rad at tick 1,129, bounded |
+
+The ticks-0-170 row is consistent with 2026-07-29's 6.54 max / 2.41 mean -
+similar order of magnitude on a different lap through the same opening
+straight, not a regression. **The honest finding is that the wall was never
+the whole story**: even within this capture's own clean window, position
+error is already 17.5 units by tick 180 and 44.1 by tick 240 - the force law,
+not contact geometry, is the thing now limiting how long a single-seeded
+comparison stays meaningful, and it was limiting things well before the wall
+used to cut the window short at 171.
+
+The `--reseed 60` numbers are larger than 2026-07-29's (10.3 / 0.0824) too,
+and that comparison has a confound worth ruling out before trusting it: the
+collision-box scale fix (above) landed between the two captures, so a larger
+number could be the physics moving rather than the lap. Checked by re-running
+`talons-junction-time-trial-lap.csv` (2026-07-29's own capture) under today's
+physics: its worst reseeded orientation axis is now **0.0541** rad, a modest
+shift from 0.0824, not the 6x jump to 0.4858 the new capture shows. So the gap
+is the lap's own content, not a regression: this capture holds racing speed
+and corners hard throughout where the older capture spent most of its length
+slowed against a wall, and per-window error scales with how hard the craft is
+maneuvering.
+
+One more thing worth reading correctly off this capture: `oag-trace run`'s own
+headline reads **"first divergence at tick 0, field angular_velocity, error
+0.000640 rad/s"** against a `1e-4` absolute tolerance. That is the tolerance
+floor on an idle craft, not a tracking failure - the same character as the
+worked example [above](#what-the-output-says), where tick 1 is the headline
+for the same reason. Read the field table's `position` row for the number
+that means something here, not the top line.
+
 ### 2026-07-28, for comparison
 
 Both sides driven by `talons-junction-time-trial-lap.inputs`, 3,146 ticks, the

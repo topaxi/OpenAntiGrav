@@ -377,10 +377,48 @@ The protocol wants a save state as the fixed starting point, so that a scenario
 does not have to be re-reached by the menu walk below every time. **The websocket
 debugger has no save-state command**: `savestate.save`, `savestate.load`,
 `game.savestate` and `state.save` are all answered with `Bad message: unknown
-event` on v1.20.4. Driving the SDL build's own hotkey from outside did not work
-either - `xdotool key F1` at the window produced no file under
-`~/.config/ppsspp/PSP/PPSSPP_STATE`. So the starting point is still the menu walk,
-and a capture still costs a countdown.
+event` on v1.20.4 - confirmed twice, the second time by dumping the build's own
+string table (`strings /usr/bin/PPSSPPSDL`) rather than by guessing more command
+names, which is the stronger form of the same claim. So a state cannot be
+*created* through the API; it has to be created the way a human does, once, by
+hand.
+
+**Loading one is a different question, and it works.** `PPSSPPSDL --help` lists
+`--state=FILE` - "load state from FILE" - which combines with
+`--appendconfig=/tmp/debugger.ini` to boot straight into a saved pose with the
+websocket debugger already live. The earlier `xdotool key F1` failure is not
+evidence against the hotkey: that binary is not installed on this machine, and
+PPSSPP runs under `SDL_VIDEODRIVER=wayland`, which X11 key injection cannot
+reach regardless of which key it tries. With `wtype` (Wayland's own virtual
+keyboard protocol, paired with `niri msg action focus-window --id N` so the
+press lands on the right window) the actual save flow is:
+
+1. Focus the PPSSPP window, then `wtype -k Escape` - **not** F1, F2, F5, Tab, a
+   number key or Space, all of which do nothing silently and read exactly like
+   the original dead end. Escape opens PPSSPP's *own* overlay (five save
+   slots plus Settings/Continue on the right), which is a different screen
+   from the game's in-race pause menu (`Start`, "GAME PAUSED", reached by the
+   `cross`-button sequence elsewhere on this page) - it is easy to confuse the
+   two from a screenshot alone.
+2. `wtype -k Left` four times, then `wtype -k Right` once, to reach a slot's
+   "Save state" button - the overlay's default focus is not on it - then
+   `wtype -k Return`.
+3. A `.ppst` (the state, tens of MB) and a `.jpg` thumbnail appear under
+   `~/.config/ppsspp/PSP/PPSSPP_STATE/`, which was confirmed empty beforehand;
+   that emptiness is exactly the check that told the original `xdotool` attempt
+   it had failed.
+
+One trap while the overlay is open: **`memory.read_u32` and friends time out**,
+because loading a state (or having the save overlay open at all) suspends
+emulation, and the debugger's polling has nothing to catch. That reads as a
+crashed debugger to a script that does not expect it; it recovers as soon as
+the overlay is dismissed.
+
+A state file is a full RAM dump of the game, so it is game content like
+anything under `data/`: gitignored, never committed, and now covered by
+`just audit-leakage`'s extension list (`.ppst`, `.p2s`, `.state`), which did not
+include it before this pass despite `data/traces/` already getting the same
+treatment.
 
 **A reproducible starting point exists anyway, and it is not a save state.**
 `scripts/psp-drive.py restart` runs the pause-menu sequence below end to end -
@@ -450,6 +488,40 @@ it.
 For the record, since it is the obvious other idea: **there is no published
 Wipeout Pulse TAS** to borrow inputs from. PSP TASing through libtas exists and
 Wipeout *Pure* is mentioned as working, but no Pulse run was found.
+
+### Measured: a save state does not pin the pose as tightly as `--start-heading` does, and is not adopted
+
+With loading now possible, the obvious next question is whether a save state
+gives a *tighter* fixed start than the pause-menu walk. Measured 2026-07-30, on
+a state cut at the start line after letting the craft's hover settle (`speed`
+readings flat across two consecutive polls before saving) and loaded twice from
+two independent, fully killed-and-relaunched PPSSPP processes:
+
+| | position delta | heading delta |
+| --- | ---: | ---: |
+| two loads of the same `.ppst` | `0.031` units | `1.41` degrees |
+| `psp-drive.py restart`, for comparison | `0.03` units | `2.51` degrees |
+| `--start-heading` (below) | `0.0022` units | `0.0001` degrees |
+
+The craft pointer (`0x09a0cff0`) was identical across both loads - the state
+loads the same heap layout both times, so the mechanism itself is not
+suspect - but the two reads showed a nonzero, sign-differing residual velocity
+(hover jitter that never fully stops even at rest), and `psp-drive.py`'s
+breakpoint-driven read fires an indeterminate number of ticks after boot rather
+than at a synchronized instant, so **the two-degree-scale spread here cannot be
+cleanly attributed to the save mechanism versus this measurement's own
+attach-timing jitter** - resolving that would need a tick-exact read (a frame
+counter compared across runs), which this pass did not build.
+
+Either way, the number that matters is the comparison: a save state is roughly
+the same precision as `restart` and **two orders of magnitude worse** than
+`--start-heading`, which is already committed, already wired into
+`just scripted-emu`, and does not need a RAM dump, `wtype`, or a window to
+focus. **A save state is not adopted as the fixed-start mechanism.** What this
+pass leaves behind instead: `--state=FILE` and the wtype/Escape recipe above
+work and are documented, in case a future need (loading mid-race state that
+`--start-heading` cannot reach, or a PPSSPP version where the replay API above
+gets fixed) makes them worth returning to.
 
 ## The start pose is pinnable, and the craft was never settling
 
