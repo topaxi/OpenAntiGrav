@@ -150,7 +150,7 @@ Unlike Pure, which ships 26 `PRX` modules including the full `pspnet` stack and
 
 Pure had downloadable content delivered over HTTP. Pulse's absent HTTP stack
 suggests it either does not use online downloads or uses a different mechanism.
-Worth knowing before any of M7's networking work.
+Worth knowing before any of M8's networking work.
 
 ## Layout observations
 

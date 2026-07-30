@@ -93,6 +93,6 @@ same team and track lineage; the last title before the studio closed. Whether
 any code or format DNA survives from the PSP era is entirely unknown, and is the
 single most valuable open question for the project's long-term premise.
 
-Examining it is an M7 task. Doing it earlier would be a distraction, but the
+Examining it is an M8 task. Doing it earlier would be a distraction, but the
 answer would materially change how much abstraction is worth building now, so it
 may be worth a cheap look sooner rather than later.

@@ -1,6 +1,6 @@
 # Networking
 
-> **Not yet started.** Milestone M7, after single-player is complete.
+> **Not yet started.** Milestone M8, after single-player is complete.
 
 ## Scope
 

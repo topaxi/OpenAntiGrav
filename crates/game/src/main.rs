@@ -212,12 +212,15 @@ struct Cli {
     #[arg(long, default_value = "venom")]
     class: String,
 
-    /// Draw the track's art meshes instead of its driveable ribbon.
+    /// Development view: draw the driveable ribbon instead of the track's art
+    /// meshes.
     ///
-    /// The ribbon is the default because it is the geometry the simulation spawns
-    /// on, so it shows whether the ship is where the physics thinks it is.
+    /// The ribbon is the geometry the simulation actually spawns on and queries,
+    /// so ship-plus-ribbon shows directly whether the ship is where the physics
+    /// thinks it is - useful for a physics comparison and misleading about
+    /// everything else. A race draws the map by default.
     #[arg(long)]
-    art: bool,
+    ribbon: bool,
 
     /// Overlay the collision soup - the geometry the physics world is actually
     /// made of, the same view `oag-view --collision` draws - on top of the
@@ -267,7 +270,7 @@ fn main() -> Result<()> {
         track: cli.track.clone(),
         team: cli.team.clone(),
         class,
-        art: cli.art,
+        ribbon: cli.ribbon,
         collision: cli.collision,
     };
 

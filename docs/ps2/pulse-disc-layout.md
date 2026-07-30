@@ -143,7 +143,7 @@ Nine modules for the I/O processor, all standard Sony middleware:
 | `DS2O_D.IRX` | DualShock 2 |
 | `IOPRP310.IMG` | Bundled IOP module archive, magic `RESET` |
 
-Relevant when audio (M5) or save data (M6) come up. `SCREAM` in particular means
+Relevant when audio (M5) or save data (M7) come up. `SCREAM` in particular means
 the PS2 audio format is likely a documented Sony bank format rather than
 something bespoke.
 

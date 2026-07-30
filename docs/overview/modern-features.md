@@ -3,8 +3,8 @@
 Desired long-term features recorded ahead of time, because each one has a
 licensing question ("this must remain an OSS project") and one or two cheap
 architectural decisions that are much easier to make early than to retrofit.
-All of this is M6-scoped ("modern features") or later; nothing here blocks
-current work. Licence statements are as of 2026-07 - re-verify them when M6
+All of this is M7-scoped ("modern features") or later; nothing here blocks
+current work. Licence statements are as of 2026-07 - re-verify them when M7
 actually opens, especially FSR4's.
 
 ## Upscaling: FSR 3.1, with FSR4 arriving via the driver
@@ -46,7 +46,7 @@ nearly free to design in and expensive to retrofit:
 - a real **depth buffer** the upscaler can consume;
 - **camera jitter** support (sub-pixel projection offsets per frame);
 - **render resolution decoupled from presentation resolution** (dynamic
-  resolution is already on the M6 list, so this aligns with existing plans).
+  resolution is already on the M7 list, so this aligns with existing plans).
 
 ## Steam Input
 
@@ -129,6 +129,6 @@ be most of the win for a fraction of the machinery.
 | --- | --- | --- |
 | FSR 3.1 upscaling | MIT, open | Design `oag-render` for motion vectors, depth, jitter, decoupled render resolution |
 | FSR3 frame generation | MIT, open | Skip - interpolated presentation from the 60 Hz simulation is the better fit |
-| FSR4 | Closed binary via driver (re-check at M6) | Expose the FSR 3.1 API surface; let drivers upgrade it; ship nothing proprietary |
+| FSR4 | Closed binary via driver (re-check at M7) | Expose the FSR 3.1 API surface; let drivers upgrade it; ship nothing proprietary |
 | Steam Input | Proprietary SDK | `gilrs`/SDL baseline in `oag-input`; optional non-vendored `steamworks` feature; keep the input layer action-shaped |
 | FMV upscaling | Open models exist (mind the weights licences) | None - ADR-0008's cache design already leaves the door open; output stays in `data/`, never committed |

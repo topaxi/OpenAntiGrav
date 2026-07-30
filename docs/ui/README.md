@@ -1,7 +1,7 @@
 # User interface
 
 > **In progress.** The **HUD layout is recovered and parsed** (M5) - see
-> [hud.md](hud.md). The menus exist and navigate (M6) - see
+> [hud.md](hud.md). The menus exist and navigate (M7) - see
 > [menus.md](../architecture/menus.md).
 
 ## The HUD is authored data

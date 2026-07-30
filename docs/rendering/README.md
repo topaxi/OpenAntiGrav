@@ -1,24 +1,51 @@
 # Rendering
 
-> **Started.** Milestone M4. The wgpu device, the mesh pipeline, the track ribbon,
-> the collision view, the three cameras and the **ship exhaust** exist; see
-> [`architecture/workspace-layout.md`](../architecture/workspace-layout.md) for the
-> crate's seams and [`roadmap.md`](../overview/roadmap.md) for what is still open.
+> **The MVP is done (M4); fidelity is its own milestone (M6).** The wgpu device,
+> the mesh pipeline, the track ribbon and art meshes, the collision view, the
+> three cameras, the **ship exhaust** and the **HUD** exist. What is absent is
+> almost all of what the `.vex` classes author: animation, lighting, the
+> environment classes, particles beyond the exhaust, and the series' look. See
+> [`roadmap.md` M6](../overview/roadmap.md#m6---rendering-fidelity) for the list,
+> which is derived from [the class table](../formats/vex.md) rather than invented,
+> and [`architecture/workspace-layout.md`](../architecture/workspace-layout.md)
+> for the crate's seams.
 
 ## Scope
 
-- wgpu device and surface setup
-- Track and scenery rendering
-- Ship rendering, including team liveries
+- wgpu device and surface setup - **done**
+- Track geometry: the driveable ribbon **and** the textured art meshes both
+  render. The art meshes are behind `--art` rather than being the default, for a
+  reason that is [about verification, not rendering](../overview/roadmap.md#m5---full-race)
+- Ship rendering, including team liveries - **done** for the eight teams whose
+  `Ship.vex` resolves by name
+- Scenery **animation**, authored as `Anim Transform` `0x3c0` and
+  `animationTrigger` `0x3dc` - nothing reads either yet
+- Lighting and shadow: five authored light classes plus
+  `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
+  exists (`GpuVertex.lit`), so this is about which surfaces are which
+- Environment: `Skycube`, `fogCube`, the cloud and sea classes - none implemented,
+  which is why a race currently has a black sky
 - Particle effects: thrust (**done** - the `Engine Flare` class, recovered in
   [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md) and implemented in
-  `oag_render::exhaust`), weapons, impacts
-- The HUD
+  `oag_render::exhaust`), then the general `ParticleSystem` `0x3c4`, weapons and
+  impacts. The impact and weapon effects are M5's, being gameplay-coupled
+- The HUD - **done** for the 2D layer, off the disc's own layouts; see
+  [the HUD](../ui/hud.md). Its `<Mode3D>` layer is not
 - Post-processing, and the series' distinctive look
 - Modern display features: ultrawide, HDR, VRR, dynamic resolution, and
   FSR-class upscaling - see [modern features](../overview/modern-features.md)
   for the licensing picture and the pipeline prerequisites (motion vectors,
   depth, camera jitter) to design in from the start
+
+## The art is raster, and that has a consequence
+
+Every shipped 2D asset is paletted raster authored for 480x272 - the HUD atlas at
+8 bpp, the fonts at 4 bpp - so a modern window magnifies all of it. Meanwhile 26
+`Data\HUD\*.vex` files are *polygonal geometry* named after HUD elements and
+referenced by nothing. Redrawing our own art as vector is a live option and the
+reasoning, including why our own art is committable where a transcription of the
+disc's is not, is on
+[the HUD page](../ui/hud.md#the-shipped-art-is-raster-and-the-disc-suggests-it-was-not-always).
 
 ## Principle
 

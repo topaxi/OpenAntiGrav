@@ -16,10 +16,19 @@
 //!
 //! # What is drawn
 //!
-//! The **driveable ribbon**, for the same reason `oag-view --track` draws it: it is
-//! the geometry the simulation spawns on, so a picture of ship-plus-ribbon shows
-//! directly whether the ship is where the physics thinks it is. `--art` draws the
-//! track's art meshes instead, which is prettier and proves less.
+//! The track's **art meshes** - the map, textured, as a player sees it. 144,351
+//! triangles on `16_Track`.
+//!
+//! `--ribbon` swaps in the **driveable ribbon** instead, a flat band over the
+//! spline, and that is a **development view** rather than a style: it is the
+//! geometry the simulation actually spawns on and queries, so a picture of
+//! ship-plus-ribbon shows directly whether the ship is where the physics thinks it
+//! is, where the art meshes are prettier and prove less.
+//!
+//! **The default used to be the other way round**, and that was right while M4's
+//! whole job was verifying a force law against a captured trace. It stopped being
+//! right once there was a game to look at: a player launching `just play` was
+//! shown a debug view of a spline.
 //!
 //! # Three things are not recovered, and none is papered over here
 //!
@@ -194,8 +203,13 @@ pub struct Options {
     pub team: String,
     /// Speed class the handling parameters are read for.
     pub class: SpeedClass,
-    /// Draw the track's art meshes instead of the driveable ribbon.
-    pub art: bool,
+    /// Draw the driveable ribbon instead of the track's art meshes.
+    ///
+    /// **A development view, not a style.** The ribbon is the geometry the
+    /// simulation spawns on and queries, so ship-plus-ribbon shows directly
+    /// whether the ship is where the physics thinks it is. Default is off, which
+    /// means a race draws the map.
+    pub ribbon: bool,
     /// Overlay the collision soup - the geometry the physics world is actually
     /// made of - the same view `oag-view --collision` draws, wireframe and
     /// Cage-excluded, on top of whichever track model was chosen above.
@@ -209,7 +223,7 @@ impl Default for Options {
             track: DEFAULT_TRACK.to_string(),
             team: DEFAULT_TEAM.to_string(),
             class: SpeedClass::Venom,
-            art: false,
+            ribbon: false,
             collision: false,
         }
     }
@@ -448,17 +462,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ship_model.radius
     ));
 
-    let track_model = if options.art {
-        mesh::build(&options.track, &track_blob)?
-    } else {
+    let track_model = if options.ribbon {
         track_render::build_model(&label, &ai)
+    } else {
+        mesh::build(&options.track, &track_blob)?
     };
     report.push(format!(
         "drawing the track's {}: {} triangle(s), radius {:.0}",
-        if options.art {
-            "art meshes"
-        } else {
+        if options.ribbon {
             "driveable ribbon"
+        } else {
+            "art meshes"
         },
         track_model.indices.len() / 3,
         track_model.radius

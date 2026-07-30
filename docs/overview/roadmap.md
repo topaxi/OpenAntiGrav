@@ -1,12 +1,26 @@
 # Roadmap
 
-Eight milestones. Each has an exit criterion that is a demonstrable fact, not a
+Nine milestones. Each has an exit criterion that is a demonstrable fact, not a
 judgement call, so it is always clear whether a milestone is done.
 
 The ordering follows the natural dependency chain, with one deliberate
 departure: the verification harness (M3) comes *before* the physics work (M4).
 Building ship handling before it can be measured against the original means
 building it twice, once by feel and once properly.
+
+**Renumbered 2026-07-30.** [Rendering fidelity](#m6---rendering-fidelity) became
+a milestone of its own, so the two after it shifted:
+
+| Was | Is now |
+| --- | --- |
+| M6 - Shell and polish | **M7** - Shell and polish |
+| M7 - Beyond Pulse | **M8** - Beyond Pulse |
+
+Documents written before that date may cite the old numbers. The ones under
+[`docs/`](../README.md) have been updated;
+[ADR-0009](../architecture/adr/0009-multi-game-fanout.md) has **not**, because
+[ADRs are immutable](../architecture/adr/README.md) - read its "M6" as this
+table's M7 and its "M7" as M8.
 
 ---
 
@@ -185,6 +199,11 @@ ordering. See also [frame pacing](../psp/frame-pacing.md).
       `oag-game` puts a ship on a real track with a chase camera, headless or in a
       window - reached from the front end's `Launch Game` in the same window, or
       directly with `--race`. See [oag-game](../tools/oag-game.md).
+      **MVP is meant literally, and the stopping point was deliberate**: geometry,
+      textures, a camera and the exhaust, with no scenery animation, no authored
+      lighting, no environment classes and none of the series' look. A renderer is
+      not what a physics comparison measures, so fidelity is [M6](#m6---rendering-fidelity)
+      rather than a hidden dependency of this milestone.
 - [x] Input: `oag-input` maps devices onto the abstract button layer and produces
       the `InputSnapshot` the simulation consumes
 - [x] Chase camera: `oag_render::camera::chase`, its seven parameters taken from
@@ -372,10 +391,65 @@ seen from the authoring side.
       lap, position or a depleting shield, because none of those exists yet - the
       widgets are omitted rather than filled with invented values. See
       [hud.md](../ui/hud.md) for the four named gaps and what is scoped out.
+- [x] **A race draws the map.** It used to draw the *driveable ribbon* - a flat
+      coloured band over the spline - with the art meshes behind an opt-in
+      `--art`. That default was deliberate and was right while M4's whole job was
+      verifying a force law: the ribbon is the geometry the simulation spawns on
+      and queries, so ship-plus-ribbon shows directly whether the ship is where
+      the physics thinks it is, where art meshes are "prettier and prove less".
+      It stopped being right once there was a game to look at, because `just play`
+      showed a player a debug view of a spline.
+      **Inverted**: art meshes are the default and `--ribbon` is the development
+      view, alongside `--collision` which was already one. 144,351 triangles on
+      `16_Track`, textured, with buildings, barriers, road markings and scenery.
+      The PS2 path draws the same geometry **untextured** - several track models
+      share one texture set and that grouping is not verified, so it is not
+      guessed at and the white fallback binds instead - which is a documented
+      known state rather than a regression, and all four PS2 ground-truth tests
+      pass on it.
+      A **graphics-menu row** for it is still open; today it is a flag only.
+      What still makes a race look unlike the original is authored lighting, sky
+      and fog, and those are [M6](#m6---rendering-fidelity).
 - [ ] Weapons and pickups
 - [ ] Shield and energy
 - [ ] AI
-- [ ] Audio
+- [ ] Audio, including the **positional** classes a track authors:
+      `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
+      waveforms decode already (M1); what is missing is placing them in the world.
+- [ ] **The visuals these systems own.** Effects that cannot be built before the
+      thing they belong to, so they sit here rather than with the rendering work
+      in M6. Each is a `.vex` class the loader already enumerates - see the
+      [class table](../formats/vex.md):
+      - `Ship Muzzle` `0x3e2` and `cannon_flash` `0x3eb` - weapon firing
+      - `Ship Collision Fx` `0x3d0` and `Cage Collision` `0x3e7` - impact and
+        scrape effects. `Data\visual_effects\cage_collision_curved.vex` is the
+        authored asset
+      - `Quake` `0x3c7` - the quake weapon's track deformation
+      - Shield hit response, whose model is `Data\Ships\<Team>\<Team>shield.vex`
+      - `shipwreck.vex` and `shipboost.vex`, the damage and boost ship states.
+        **Note the naming trap**: those resolve through the FE team-model name,
+        whose default is the literal `"ship"`, so it is `shipwreck.vex` and not
+        `Assegaiwreck.vex` - guessing the team name into the template 404s
+
+**A default run should be the production run**, and the defaults were audited
+against that on 2026-07-30. The art-mesh flip above was the only thing a player
+was getting the wrong side of; everything else already defaults the way a
+release would want it:
+
+| Default | Value | Why it is right |
+| --- | --- | --- |
+| Track model | **art meshes** | changed above; `--ribbon` is the dev view |
+| Anisotropic filtering | **16x**, the maximum | a user turns filtering *down* for performance, never up, so defaulting low leaves the mip work unused |
+| Render scale | 100 % | below is internal resolution, above is supersampling |
+| Collision overlay | off | a wireframe diagnostic |
+| Performance overlay | off | a diagnostic, not decoration |
+| Menu backdrop video | on | `--no-video` is opt-in |
+| HUD | on | drawn from the disc's own layout |
+
+The one thing still off that a player would want is the graphics-menu row for the
+track model, noted above. Anything added here later should be checked the same
+way: a flag that only a developer wants defaults off, and a flag that changes
+what a player sees defaults to whatever the original did.
 
 **Exit criterion:** an eight-ship race that is indistinguishable from the
 original to a player, and whose per-tick trace stays within tolerance.
@@ -390,7 +464,126 @@ unread code and still blocks this milestone. See
 
 ---
 
-## M6 - Shell and polish
+## M6 - Rendering fidelity
+
+Everything that makes a race *look* like the original, as opposed to being
+shaped like it. M4 built a renderer MVP - track geometry, ships, a chase camera
+and the exhaust - and deliberately stopped there, because a renderer is not what
+a physics comparison measures. This is the milestone that closes the gap.
+
+**It is its own milestone rather than a line in M7 for two reasons.** It is large
+enough that burying it beside menus, save data and PS2 parity would make that
+milestone's exit criterion undecidable; and it is almost entirely independent of
+gameplay, so it can proceed in parallel with M5 rather than behind it. The
+effects that *are* gameplay-coupled are in M5 above, on purpose.
+
+**The work list is not invented.** The `.vex` loader enumerates ~55 authored
+classes and [the class table](../formats/vex.md) groups them; what follows is
+those groups, minus what M4 and M5 already cover. So "full fidelity" here means a
+specific, countable set of authored things that a track or ship declares and this
+engine currently ignores - not an open-ended wish for it to look nicer.
+
+Two cautions carried over from
+[`vex.md`](../formats/vex.md) and [HANDOVER](../../HANDOVER.md), because they
+change how this list should be read:
+
+- **"Has instances" and "has a handler" are independent properties.** `engine_fire`
+  and `exitglow` have no registration site at all, yet `exitglow` is authored **13
+  times** on `16_Track`. An unregistered class can still be authored, and a
+  registered one can be authored nowhere.
+- **An xref count on a class descriptor bounds *authored* instances only.** Code
+  that builds an object directly never touches the descriptor - which is how the
+  exhaust pass concluded racing craft have no trail, when the emulator plainly
+  shows one. Look at the running game before concluding a visible thing is absent.
+
+### Scene, animation and culling
+
+- [ ] `Anim Transform` `0x3c0` - the authored animation channel. This is the one
+      that makes scenery move, and nothing reads it yet
+- [ ] `animationTrigger` `0x3dc` - what starts an animation
+- [ ] `LodGroup` `0x2ee` - authored level of detail
+- [ ] PVS culling off the track's own `section` `0x3c9` payload. The sections are
+      [decoded](../formats/track.md) and attached to the spline rather than to a
+      point-in-volume test; nothing culls with them
+- [ ] `MeshNode_Ghost` `0x3d4` - ghost rendering. Needs replay data, so it lands
+      with replay in M7 if that comes first
+
+### Lighting and shadow
+
+- [ ] `AmbientLight` `0x12c`, `DirectionalLight` `0x131`, `PointLight` `0x132`
+- [ ] `Dynamic Point Light` `0x3c2` - the moving lights, ships included
+- [ ] `Dynamic Shadow Occluder` `0x3c3` and `shadow` `0x3cb`
+- [ ] `lensflare` `0x3de`
+- [ ] Reconcile with the prelit path. `GpuVertex.lit` already selects per vertex
+      between the light rig and baked vertex colour, and the track ribbon is
+      prelit today - so this is a question of which surfaces are which, not of
+      adding lighting from nothing
+
+### Environment
+
+- [ ] `Skycube` `0x3c6`
+- [ ] `fogCube` `0x3d3`, and the fog *curve* separately - see the look below
+- [ ] `cloudCube` `0x3d8` and `cloudGroup` `0x3d9`
+- [ ] `sea` `0x3d5`, `seareflect` `0x3d7`, `seaweed` `0x3d6`
+- [ ] `weatherPos` `0x3da`
+- [ ] Track surface scrolling and animated textures. The exhaust's trail already
+      reads authored scroll rates, so the mechanism exists in one place and is
+      unread everywhere else
+
+### Ship visual state
+
+- [ ] `Airbrake` `0x3c5` - the airbrakes visibly deploy in the original and the
+      simulation already tracks `airbrake_left`/`airbrake_right` on the
+      `0..=100` scale, so this is a model animation driven by state that exists
+- [ ] `engine_fire` `0x3e5` and `exitglow` `0x3e4` - both authored, neither
+      registered; see the caution above
+- [ ] Livery and team variants across all thirteen teams. Five teams'
+      `Ship.vex` does not resolve by name yet, so eight of thirteen were
+      censused - a `mine-names` job, not a format one
+
+### Particles
+
+- [ ] `ParticleSystem` `0x3c4` - the general system. `Trail` `0x3c8` is done
+      (the exhaust) and is the worked example of one authored effect recovered
+      end to end
+- [ ] `blob` `0x3e0` and `textureBlob` `0x3df`
+
+### The series' look
+
+This group is different in kind from the others: it is not a class to implement
+but a set of judgements, and
+[`rendering/README.md`](../rendering/README.md) states the principle -
+**reproduce the output, not the pipeline** - along with the exception that
+matters here. Some of the original's look comes from its *limitations*, and where
+such an artefact is part of the game's identity rather than an accident it gets
+reproduced deliberately and documented as a choice.
+
+- [ ] The fog curve, which is a specific curve rather than a linear ramp
+- [ ] Bloom and the bright-pass on the exhaust and lights
+- [ ] Colour grading
+- [ ] Motion blur / speed streaking. Visible in the reference frames captured for
+      the HUD, so this is observed rather than assumed
+- [ ] Decide, and document as choices: dithering, and affine texture-mapping
+      artefacts. Both are hardware limitations; both are arguably identity
+- [ ] Retro-versus-modern as an explicit setting axis, if any of the above is
+      contentious. The screen-space exhaust sprite is already costed against this
+
+**Exit criterion:** a still frame from a race, at the original's aspect and with
+the same craft, track and camera, is hard to tell apart from a PPSSPP frame of
+the same place - and every deliberate departure is written down as a departure
+rather than being absent.
+
+**Why a still and not a video.** Frame-by-frame equivalence is not decidable here
+for the same reason M4's lap comparison is not: the original integrates a
+measured frame duration, so two runs of the original itself diverge. A still
+frame at a matched pose is decidable, and the HUD work proved the method - a
+screen-space comparison caught a font bug that every unit test passed. See
+[`docs/ui/hud.md`](../ui/hud.md#what-a-reference-frame-settled) for the capture
+recipe and its three traps.
+
+---
+
+## M7 - Shell and polish
 
 - [~] Menus and the front end. **The shell exists and navigates**: our own
       definition format in `assets/ui/menu.toml`, a page tree with working
@@ -442,7 +635,7 @@ paths.
 
 ---
 
-## M7 - Beyond Pulse
+## M8 - Beyond Pulse
 
 - [ ] Networking
 - [ ] Wipeout Pure

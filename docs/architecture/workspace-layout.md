@@ -40,8 +40,8 @@ crate created before its shape is understood tends to get the wrong shape.
 | `oag-ai` | M5 | Opponent behaviour. |
 | `oag-audio` | M5 | Mixing and playback. |
 | `oag-ui` | M5 | HUD and menus. |
-| `oag-replay` | M6 | Input recording and playback. |
-| `oag-net` | M7 | Multiplayer. |
+| `oag-replay` | M7 | Input recording and playback. |
+| `oag-net` | M8 | Multiplayer. |
 
 ## Dependency rules
 
