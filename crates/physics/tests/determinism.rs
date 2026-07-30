@@ -62,6 +62,14 @@ use oag_physics::{Environment, ShipState, step};
 /// - **First recorded 2026-07-29**, when this gate was added. Nothing was
 ///   regenerated: there was no previous reference for the simulation, because
 ///   the simulation was not covered by any determinism gate.
+/// - **Regenerated 2026-07-30.** `hull_sample_points`/`hull_extent`
+///   (`crates/physics/src/wall.rs`) now scale `<Misc>` hull dimensions by
+///   `hover::TARGET_GLOBAL_SCALE` (`0.75`) before building the collision box,
+///   matching `Ship_InitCraft`'s box-collider setup read at instruction level -
+///   see `docs/ghidra/functions/psp-pulse/collision.md`. Only the two
+///   3,600-tick hashes moved; the 600-tick `Corridor` entry is untouched
+///   because that scenario never reaches a wall in 600 ticks, which is the
+///   expected shape of a change scoped to contact geometry.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
@@ -72,14 +80,14 @@ const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         3_600,
         Script::Corridor,
-        0x6bbc_bf04_f931_4240,
-        0xe2ef_5959_3ae4_d468,
+        0xa3fb_793d_3418_2764,
+        0xe4ee_634e_31e3_4181,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xb788_6dbd_345d_4120,
-        0xbb3b_2986_eaca_4546,
+        0x7000_de92_de16_423a,
+        0x165a_2466_dcde_d5ff,
     ),
 ];
 

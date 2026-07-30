@@ -3,48 +3,71 @@
 //! The standing start crosses Talon's Junction diagonally under full thrust and
 //! meets the outer wall, and the capture dates that moment precisely: the
 //! original's `speed` column climbs on every one of ticks 0-186 and then falls by
-//! 4.38 units/s on 187. Replaying the same scenario through our own physics, ours
-//! takes its hit on tick **179** - eight ticks and about sixteen units of track
-//! early - having tracked the original's position to 1.06 units and its heading
-//! to 0.29 degrees the whole way there.
+//! 4.38 units/s on 187.
 //!
-//! That leaves two candidate explanations and no way to tell them apart from a
-//! replay, because a replay's pose is our own: either our craft really is sitting
-//! far enough toward the wall to touch it, or our hull answers "am I in contact"
-//! differently from `Collision_BoxAgainstMesh` (`0x08815cd4`) at the same pose.
-//!
-//! So this test takes our simulation out of the question entirely. It walks the
+//! This test takes our simulation out of the question entirely. It walks the
 //! **recorded** poses - the original's own position and basis, tick by tick - and
 //! asks [`oag_physics::wall::resolve`] whether our hull finds a wall there. No
 //! integration, no force law, no accumulated error: just our contact geometry
 //! against the original's trajectory.
 //!
-//! **It splits the eight ticks in two.** On the original's own line our hull
-//! first reports a respondable contact at tick **181**, six ticks before the
-//! original responds at 187. So six of the eight are our contact geometry
-//! answering earlier than `Collision_BoxAgainstMesh` does, and the remaining two
-//! are our craft sitting fractionally further toward the wall by the time it gets
-//! there. Neither half was decidable from the replay alone.
+//! # The box was a third too large, and correcting it overshot
 //!
-//! **It is a hull probe finding it, not the swept query.** Both paths run inside
-//! [`oag_physics::wall::resolve`], and the swept one is the only thing the
-//! `previous_position` argument here could confound. Probed directly: the corner
-//! probe reports the wall at 181 at a depth of `0.182` with no swept contact
-//! anywhere near it, which is the same tick `resolve` reports. So the reading is
-//! about the sample points and their extents.
+//! **First measured (2026-07-29): 6 ticks early on this capture, 3 on the lap
+//! capture below.** `hull_sample_points`/`hull_extent` built the collision box
+//! straight from `<Misc width height length>`, unscaled. **Corrected
+//! (2026-07-30):** `Ship_InitCraft` (`0x08841360`-`0x0884139c`) scales all three
+//! by `hover::TARGET_GLOBAL_SCALE` (`0.75`, the same global the hover target
+//! height uses) before building the box - see
+//! `docs/ghidra/functions/psp-pulse/collision.md`. Applying that scale is not
+//! optional and the evidence for `0.75` itself is not in question - it is read
+//! three independent ways (the global's own bit pattern, the multiply
+//! instructions in `Ship_InitCraft`, and the argument order reaching
+//! `Body_SetBoxDimensions`) - but it **overshoots past zero**: our hull now
+//! finds the wall **3 ticks late** here (tick 190 against the original's 187)
+//! and **5 ticks late** on the lap capture (176 against 171), both a smaller
+//! magnitude of error than before, but on the *other* side. See
+//! `our_hull_finds_the_wall_within_a_few_ticks_of_where_the_original_does`.
 //!
-//! **A geometry change that moves this has a cliff under it.** By the time the
-//! original responds, that corner is `1.82` units past the wall plane, against
-//! [`oag_physics::wall::MAX_CONTACT_DEPTH`] of `2.0` - and that gate *drops* a
-//! contact rather than clamping it, reproducing the original. So a fix that
-//! delays our response by letting the hull penetrate further has about two tenths
-//! of a unit of headroom before contacts start being discarded, and the symptom
-//! then is tunnelling rather than a late response.
+//! **The two captures moved by different amounts, and that itself is a
+//! reading.** A uniform box-size correction would be expected to move both by
+//! a similar ratio; instead the standing start's gap shrank (6 early -> 3 late)
+//! while the lap's grew (3 early -> 5 late). The two approach the wall at
+//! different angles (4.05 degrees on the standing start against 7.33 on the
+//! lap - see the module docs on `the_same_gap_shows_on_the_lap_capture...`
+//! below), which is consistent with a residual that depends on approach angle
+//! rather than being a further uniform scale error. **Do not fit a second
+//! scale to close this** - the `0.75` is recovered, not fitted, and chasing a
+//! few ticks with another constant is exactly the anti-pattern this project's
+//! history warns against. The residual is written down as an open question
+//! instead.
 //!
-//! **What a failure means.** This is not a tolerance on a fitted number. It pins
-//! a measured gap that is currently an open question, so a change here is a
-//! finding either way: shrinking is progress on the contact geometry and wants
-//! the new figure written down, and growing is a regression in it.
+//! **It is a hull probe finding it, not the swept query, on both readings, and
+//! it is still a lower corner rather than the flank pair.** Both paths run
+//! inside [`oag_physics::wall::resolve`], and the swept one is the only thing
+//! the `previous_position` argument here could confound, but a corner probe
+//! alone reproduces the same tick with no swept contact anywhere near it.
+//! Instrumented at the first-contact tick (`firing_probe_index` below): index
+//! **2** (`lower - right + forward`) on the standing start, index **1**
+//! (`lower + right - forward`) on the lap - both in `hull_sample_points`'s
+//! 0..3 range, on opposite sides of the hull as expected for opposite walls,
+//! and neither the flank pair (8/9) that the `0.75` scale shrank furthest in
+//! absolute terms. So the residual is not a probe-identity change the box
+//! shrink caused; it is the same *kind* of probe as before, just no longer at
+//! the same corner-to-wall distance.
+//!
+//! **A geometry change that moves this has a cliff under it, in the other
+//! direction now.** [`oag_physics::wall::MAX_CONTACT_DEPTH`] gates contact
+//! generation, dropping a sample point that has penetrated more than `2.0`
+//! units rather than clamping it - so a fix that makes the hull *larger* again
+//! has to stay clear of that gate, and a fix that leaves it late risks nothing
+//! there, only tunnelling risk from the swept path.
+//!
+//! **What a failure means.** This is not a tolerance on a fitted number. It
+//! pins a measured gap that is currently an open question, so a change here is
+//! a finding either way - which is why the bound below is symmetric (an
+//! absolute tick difference) rather than one-sided: the gap has already
+//! crossed zero once.
 //!
 //! `#[ignore]`d and never run in CI: it needs `data/traces/` and a disc image
 //! under `data/images/`, both gitignored. Run it with `just test-data`.
@@ -85,12 +108,15 @@ fn workspace(relative: &str) -> std::path::PathBuf {
 /// recapture.
 const RECORDED_WALL_TICK: usize = 187;
 
-/// How many ticks early our hull may find the wall on the original's own line.
+/// How many ticks our hull may disagree with the original about when it meets
+/// the wall, in **either** direction.
 ///
-/// **Measured, not chosen**: 6 on the day this test was written, so the bound is
-/// the measurement plus one. It is a bound on a known gap rather than a target -
-/// see the module docs.
-const ALLOWED_EARLY_TICKS: usize = 7;
+/// **Measured, not chosen.** It was 6 ticks early when this test was written;
+/// after `hull_sample_points` picked up the `0.75` box-dimension scale (see the
+/// module docs), it is 3 ticks *late* here and 5 late on the lap capture below -
+/// the gap crossed zero rather than closing, so the bound has to cover both
+/// signs. Kept at the largest measurement plus one.
+const ALLOWED_TICK_GAP: usize = 6;
 
 fn load() -> (Handling, oag_physics::CollisionWorld, Trace) {
     let mut archives = pulse::Archives::open(
@@ -154,6 +180,48 @@ fn first_contact_on_the_recorded_line(
         .map(|index| index + 1)
 }
 
+/// Which of [`wall::hull_sample_points`]'s ten indices produced the contact at
+/// a given tick, on the recorded pose.
+///
+/// `WallContact::point` is the sample point itself, not the triangle
+/// intersection (`docs/ghidra/functions/psp-pulse/collision.md`), so it should
+/// land exactly on one of the ten - matched by nearest distance rather than
+/// equality to stay robust to float noise carried through the resolve call.
+fn firing_probe_index(
+    handling: &Handling,
+    collision: &oag_physics::CollisionWorld,
+    tick: usize,
+    trace: &Trace,
+) -> Option<usize> {
+    let environment = Environment::default();
+    let previous = trace.frames.get(tick.checked_sub(1)?)?;
+    let frame = trace.frames.get(tick)?;
+    let mut state = initial_state(
+        frame,
+        handling,
+        Basis::LeftUpForward,
+        AngularReading::NegatedLocal,
+    );
+    let points = wall::hull_sample_points(&state.body, handling);
+    let response = wall::resolve(
+        &mut state,
+        handling,
+        &environment,
+        collision,
+        previous.position,
+    );
+    let contact = response.resolved?;
+    points
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            (**a - contact.point)
+                .length()
+                .total_cmp(&(**b - contact.point).length())
+        })
+        .map(|(index, _)| index)
+}
+
 /// Guards [`RECORDED_WALL_TICK`] against a recapture that moves it.
 #[test]
 #[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
@@ -184,23 +252,40 @@ fn our_hull_finds_the_wall_within_a_few_ticks_of_where_the_original_does() {
     let (handling, collision, trace) = load();
     let ours = first_contact_on_the_recorded_line(&handling, &collision, &trace)
         .expect("our hull never finds the wall on a line that ends up scraping one");
+    let probe = firing_probe_index(&handling, &collision, ours, &trace);
     eprintln!(
-        "our hull first finds the wall on the recorded line at tick {ours}; the \
-         original's own response begins at {RECORDED_WALL_TICK}"
+        "our hull first finds the wall on the recorded line at tick {ours} \
+         (probe index {probe:?}); the original's own response begins at \
+         {RECORDED_WALL_TICK}"
     );
 
+    // The sign is the finding, not just the magnitude: pre-fix, our hull was
+    // early on both captures; post-fix it is late on both. A magnitude-only
+    // bound would also pass the pre-fix (unscaled) box, which is exactly the
+    // regression this test exists to catch - so assert lateness explicitly,
+    // on top of the magnitude bound.
     assert!(
-        ours <= RECORDED_WALL_TICK,
-        "our hull finds the wall at tick {ours}, *after* the original's own \
-         response begins at {RECORDED_WALL_TICK} - which is the opposite of the \
-         known gap and wants investigating rather than accommodating"
+        ours > RECORDED_WALL_TICK,
+        "our hull finds the wall at tick {ours}, at or before the original's own \
+         response at {RECORDED_WALL_TICK} - the box-dimension scale in \
+         `hull_sample_points` may have regressed to unscaled `<Misc>` values"
     );
-    let early = RECORDED_WALL_TICK - ours;
+    let gap = ours - RECORDED_WALL_TICK;
     assert!(
-        early <= ALLOWED_EARLY_TICKS,
-        "our hull finds the wall at tick {ours}, {early} ticks before the \
-         original's own response at {RECORDED_WALL_TICK}; the measured gap when \
-         this was written was 6"
+        gap <= ALLOWED_TICK_GAP,
+        "our hull finds the wall at tick {ours}, {gap} tick(s) after the \
+         original's own response at {RECORDED_WALL_TICK}; the largest measured \
+         gap when this was written was 5 (the lap capture below), 3 here"
+    );
+    // Pinned so a change that moves the firing probe out of the lower-corner
+    // range (0..3) - onto the flank pair (8/9) the scale shrank furthest, or
+    // the upper corners (4..7), which nothing here approaches - is a change
+    // of *kind* and wants its own investigation rather than silently sliding
+    // through a tick-count bound.
+    assert!(
+        probe.is_some_and(|i| i < 4),
+        "the firing probe moved to index {probe:?}, out of the lower-corner \
+         range this finding was written about"
     );
 }
 
@@ -210,19 +295,20 @@ fn our_hull_finds_the_wall_within_a_few_ticks_of_where_the_original_does() {
 /// is cornering under power and loses speed for reasons that are not walls - so
 /// the cleanliness test dates it instead: `speed / |velocity|` reads exactly
 /// `1.0000` in free flight, and the first tick it does not is the first tick the
-/// craft is touching something. That puts the original's first wall at tick 171
-/// and ours at 168.
+/// craft is touching something. That puts the original's first wall at tick 171.
+/// Before the `0.75` box-dimension scale (see the module docs) ours was 168,
+/// three ticks early; after it, ours is **176, five ticks late**.
 ///
 /// **Both captures fire the same probe**, the lower *front* corner, on opposite
 /// sides of the craft and on different walls - which is what makes this a
 /// property of the hull rather than of one triangle. What the pair does **not**
 /// do is separate the width term from the length term. The forward-to-wall angle
-/// is 4.05 degrees on the standing start against 7.33 here, so the two do sample
-/// the trade-off; but turning a tick count into a distance needs the wall's own
-/// divergence along the approach, and the spline's half-widths are the AI track's
-/// rather than the collision mesh's. Fitting the two extents to two tick counts
-/// through that proxy gives a length correction larger than the length. Read
-/// `Collider_BoxSamplePoints` for both axes.
+/// is 4.05 degrees on the standing start against 7.33 here, and the two captures
+/// no longer move in the same direction by the same amount now that the box is
+/// scaled correctly (6 early -> 3 late here, 3 early -> 5 late on the lap) -
+/// consistent with a residual that depends on approach angle rather than a
+/// further uniform scale error. Read `Collider_BoxSamplePoints` for both axes if
+/// this is picked up again, but do not fit a second scale to close it.
 #[test]
 #[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
 fn the_same_gap_shows_on_the_lap_capture_and_the_same_probe_finds_it() {
@@ -247,17 +333,31 @@ fn the_same_gap_shows_on_the_lap_capture_and_the_same_probe_finds_it() {
 
     let ours = first_contact_on_the_recorded_line(&handling, &collision, &trace)
         .expect("our hull never finds a wall on a line that spends a third of itself in one");
-    eprintln!("lap: ours {ours}, the original's {theirs}");
+    let probe = firing_probe_index(&handling, &collision, ours, &trace);
+    eprintln!("lap: ours {ours} (probe index {probe:?}), the original's {theirs}");
 
+    // See the sign note on `our_hull_finds_the_wall_within_a_few_ticks_of_where_
+    // the_original_does`: assert lateness explicitly so a regression to the
+    // unscaled box (which was early here too) cannot hide behind a
+    // magnitude-only bound.
     assert!(
-        ours <= theirs,
-        "our hull finds the lap's wall at tick {ours}, after the original's \
-         {theirs} - the opposite of the known gap"
+        ours > theirs,
+        "our hull finds the lap's wall at tick {ours}, at or before the \
+         original's {theirs} - the box-dimension scale in `hull_sample_points` \
+         may have regressed to unscaled `<Misc>` values"
     );
+    let gap = ours - theirs;
     assert!(
-        theirs - ours <= ALLOWED_EARLY_TICKS,
-        "our hull finds the lap's wall {} ticks before the original's {theirs}; \
-         the measured gap when this was written was 3",
-        theirs - ours
+        gap <= ALLOWED_TICK_GAP,
+        "our hull finds the lap's wall at tick {ours}, {gap} tick(s) after \
+         the original's {theirs}; the largest measured gap when this was \
+         written was 5, here"
+    );
+    // See the same assertion on `our_hull_finds_the_wall_within_a_few_ticks_of_
+    // where_the_original_does`.
+    assert!(
+        probe.is_some_and(|i| i < 4),
+        "the firing probe moved to index {probe:?}, out of the lower-corner \
+         range this finding was written about"
     );
 }

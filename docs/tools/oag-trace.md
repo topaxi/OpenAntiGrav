@@ -1064,7 +1064,7 @@ make `|velocity|` exceed `speed` outright - the whole-lap capture has ticks
 reading a *negative* loss for that reason. Any future use of this test must
 restrict itself to contact ticks at speed, which is what the last row above does.
 
-### Our hull meets that wall six ticks early, and it is the contact geometry
+### Our hull met that wall six ticks early; the fix overshot into three-to-five ticks late
 
 With the input aligned (`--script-lead 2`), the replay tracks this capture to
 **1.06 units of position and 0.29 degrees of heading** for its whole clean launch
@@ -1079,57 +1079,84 @@ contact" differently at the same pose.
 **recorded** poses - the original's own position and basis, tick by tick - and
 asking `oag_physics::wall::resolve` whether our hull finds a wall there. No
 integration and no accumulated error, so what comes back is our contact geometry
-measured against the original's trajectory:
+measured against the original's trajectory. Originally (2026-07-29) that put our
+hull's first respondable contact on the original's own line at tick **181**
+against the original's own response at **187** - six of the eight ticks were
+contact geometry, two were trajectory.
 
-| | Tick |
-| --- | ---: |
-| Our hull's first respondable contact, on the original's own line | **181** |
-| Our replay's own first speed loss | 179 |
-| The original's first speed loss | **187** |
+**The cause was a missing `0.75` scale on the collision box, and it was already
+on record.** `Ship_InitCraft` (`0x08841360`-`0x0884139c`) scales `<Misc width
+height length>` by the same `0.75` global the hover target height uses
+(`hover::TARGET_GLOBAL_SCALE`, `0x08ab0e1c`) before building the ship's box
+collider - `docs/ghidra/functions/psp-pulse/collision.md#the-dimensions-feeding-the-collider-are-scaled-not-the-authored-misc-values`
+has the full argument trace, which also settles `hull_sample_points`'
+axis-to-dimension mapping (confidence **88 -> 95**: `Body_SetBoxInertia`'s
+literal box is square in `x` and `z` and could never distinguish width from
+length; the argument order into `Body_SetBoxDimensions` does).
+`crates/physics/src/wall.rs::hull_sample_points`/`hull_extent` never applied
+that scale, so the hull box was a third larger in every dimension than the
+original's - and `docs/ghidra/functions/psp-pulse/rigid-body.md` had already
+noted the same `0.75` scale in passing, two days earlier, while establishing
+that the inertia tensor is a code literal. It just never reached the collision
+code; see HANDOVER's working rules on sibling-doc staleness.
 
-**So six of the eight ticks are contact geometry and two are trajectory.**
-Neither half was decidable before.
+**Applying the scale did not close the gap to zero - it crossed to the other
+side.** Re-run after the fix (2026-07-30):
 
-**Which probe, and how deep.** The first to fire is the **lower front outer
-corner** (`lower -R +F` of `hull_sample_points`), at a penetration depth of
-`0.182`; the forward flank probe follows at tick 183. By tick 187, where the
-original finally responds, that corner is **1.82 units** past the wall plane -
-under the `MAX_CONTACT_DEPTH = 2.0` gate, so nothing in the crate is dropping it.
-It is a hull probe finding it and not the swept query, checked directly, which
-matters because the swept path is the only thing the recorded `previous_position`
-could have confounded.
+| | Standing start | Lap |
+| --- | ---: | ---: |
+| Ours, before the scale | 181 (6 early) | 168 (3 early) |
+| Ours, after the scale | **190** (3 late) | **176** (5 late) |
+| The original's own response | 187 | 171 |
+
+Both are a smaller magnitude of error than before, but moved by *different*
+amounts in the *same* direction - the standing start's gap roughly halved while
+the lap's grew - which argues against a further uniform scale error and for
+something that depends on approach angle instead (4.05° on the standing start
+against 7.33° on the lap; see the table below). **Do not fit a second scale to
+close this**: `0.75` is recovered, read three independent ways, not fitted, and
+chasing a residual with another constant is exactly the pattern this project's
+history warns against.
+
+**Which probe, and whether it moved.** Before the fix the first to fire was the
+**lower front outer corner** (`lower -R +F` of `hull_sample_points`) at a
+penetration depth of `0.182`. Instrumented after the fix
+(`firing_probe_index` in the ground-truth test file, which matches
+`WallContact::point` back to a `hull_sample_points` index): index **2**
+(`lower - right + forward`) on the standing start, index **1** (`lower + right
+- forward`) on the lap - both still in the `0..3` lower-corner range, not the
+flank pair (`8`/`9`) that a uniform shrink affects most in absolute terms. So
+the residual is the same *kind* of probe finding the wall late, not a different
+probe finding it at all; the ground-truth tests now assert this explicitly
+alongside the tick bound. It is a hull probe finding it and not the swept
+query, checked directly on both readings, which matters because the swept path
+is the only thing the recorded `previous_position` could have confounded.
 
 **It reproduces on the lap capture, which is what makes it the hull's property
 and not one triangle's.** The lap cannot date its wall by `speed` - the craft is
-cornering under power - so the cleanliness test dates it instead, at tick **171**
-against our **168**. Same probe class, opposite side of the craft, different
-wall.
+cornering under power - so the cleanliness test dates it instead, at tick
+**171** against our (post-fix) **176**. Same probe class, opposite side of the
+craft, different wall.
 
-| Capture | Forward-to-wall angle at contact | Ours | The original's | Gap |
+| Capture | Forward-to-wall angle at contact | Ours (pre-fix) | Ours (post-fix) | The original's |
 | --- | ---: | ---: | ---: | ---: |
-| Standing start | 4.05° | 181 | 187 | 6 |
-| Lap | 7.33° | 168 | 171 | 3 |
+| Standing start | 4.05° | 181 | 190 | 187 |
+| Lap | 7.33° | 168 | 176 | 171 |
 
-**What the pair does not settle.** The two angles do sample the trade-off between
-the width and length terms - the corner sits at `right * width/2 + forward *
-length/2`, so a shallower approach leans on the width and a steeper one on the
-length - but converting a tick count into a distance needs the wall's own
-divergence along the approach, and the spline's half-widths are the *AI track's*
-rather than the collision mesh's. Fitting two extents to two tick counts through
-that proxy returns a length correction larger than the length, which is the model
-failing rather than a result.
+**What the pair does not settle**, unchanged by the fix: the two angles do
+sample the trade-off between the width and length terms - the corner sits at
+`right * width/2 + forward * length/2`, so a shallower approach leans on the
+width and a steeper one on the length - but converting a tick count into a
+distance needs the wall's own divergence along the approach, and the spline's
+half-widths are the *AI track's* rather than the collision mesh's.
 
-**The next step, and what not to do.** There is no minimum-depth gate to blame:
-the crate's gate is an *upper* bound and reproduces the original's. The open
-question is the sample points. `hull_sample_points`' axis-to-dimension mapping is
-confidence **88** and rests on the box-inertia agreement rather than on a second
-read - a leg that is weaker here than it looks, because `Body_SetBoxInertia`'s
-literal box is square in `x` and `z` while `<Misc>` is nothing like square.
-**Read `Collider_BoxSamplePoints` (`0x08818a00`) for which fields it actually
-loads, on both axes**, rather than adjusting an extent to close six ticks - and
-note there is only about two tenths of a unit of headroom under
-`MAX_CONTACT_DEPTH` before a deeper-penetrating hull starts having its contacts
-dropped outright, where the symptom is tunnelling rather than a late response.
+**The ground-truth tests assert the sign, not just a magnitude bound**, because
+a magnitude-only tolerance covering both signs would also pass a regression
+back to the unscaled box (checked directly: reverting the scale and re-running
+reproduces the old early numbers inside a symmetric bound). There is still
+headroom under `MAX_CONTACT_DEPTH = 2.0` in the other direction now - a fix
+that makes the hull larger again risks the depth gate; a fix that leaves it
+later risks tunnelling on the swept path instead.
 
 ## Not yet
 

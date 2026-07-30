@@ -263,10 +263,53 @@ full half-width** - wall-scrape probes, which is what a craft that never rests
 its hull on a floor actually needs. Confidence **90**.
 
 Rows 0/1/2 are the body's right, up and forward and dimensions 0/1/2 are width,
-height and length. That mapping is **not read here**; it rests on
-`Body_SetBoxInertia`'s agreement with the trace fit (see
-[rigid-body.md](rigid-body.md#answered-body_setboxinertia-0x0884e1ac-writes-body0x40)),
-so it is confidence **88** rather than 90.
+height and length. That used to rest only on `Body_SetBoxInertia`'s agreement
+with the trace fit (see
+[rigid-body.md](rigid-body.md#answered-body_setboxinertia-0x0884e1ac-writes-body0x40)) -
+a leg that cannot separate width from length, because its literal box is square
+in `x` and `z`. A second, independent read now confirms the same mapping and
+distinguishes the two: **confidence 95**, up from 88.
+
+### The dimensions feeding the collider are scaled, not the authored `<Misc>` values
+
+Read at instruction level in `Ship_InitCraft` (`0x08840c74`, `0x08841360`-
+`0x0884139c`), the block that builds the ship's own box collider:
+
+```text
+local_1c0 = stats+0x78 * K2      ; <Misc width>,  DAT_08ab0e1c
+local_1bc = stats+0x80 * K2      ; <Misc height>
+local_1b8 = stats+0x7c * K2      ; <Misc length>
+FUN_0884e694(world, class, 1, 1, &craft+0x794, &local_1c0)
+```
+
+`stats+0x78`/`+0x7c`/`+0x80` are `<Misc>`'s `width`/`length`/`height`
+(`handling-stats.md`'s PS2-confirmed offsets), and `K2` (`0x08ab0e1c`) is the
+same global `hover::TARGET_GLOBAL_SCALE` already reads as `0.75` for the hover
+target height - two unrelated systems, one shared scale. `FUN_0884e694`
+dispatches to `Body_SetBoxDimensions` (`0x0884dccc`) with `(width * K2, height *
+K2, length * K2)` in that argument order, which is also what settles the
+width/length ordering above: `stats+0x78` (width) reaches the first argument and
+`stats+0x7c` (length) the third, unambiguous where the inertia tensor's square
+`(12, 8, 12)` box could not distinguish them.
+
+**The scale itself was already on record, in a sibling doc, for two days
+before it reached the collision code.**
+[rigid-body.md](rigid-body.md#answered-body_setboxinertia-0x0884e1ac-writes-body0x40)
+noted in passing, while establishing that the inertia tensor is a code literal
+rather than per-team: "`Misc` `width`/`length`/`height` are read a few lines
+earlier in the same constructor, scaled by `0.75`, and handed to the collider
+setup ... not to the inertia." That sentence was written 2026-07-28 and is
+correct as far as it goes; it just never propagated to
+`crates/physics/src/wall.rs::hull_sample_points`/`hull_extent`, which kept
+building the hull box straight from `<Misc>` with no scale until this pass.
+Fourth instance of the pattern HANDOVER already tracks ("a page can go stale
+while a sibling page in the same tree already carries the correction") - this
+one cost two days rather than reaching the code at all until a second,
+independent chase (the six-tick-early wall contact) landed back on the same
+instructions. The hull box was a third larger in every dimension than the
+original's, which is the right direction and rough magnitude for that gap; see
+`crates/trace/tests/wall_contact_ground_truth.rs` for the after-the-fix
+measurement. Confidence **90** on the scale.
 
 `Body_SyncBoxCollider` (`0x0884db20`) is what calls the transform setter, copies
 the body's velocity to `collider+0x120` and rebuilds the collider AABB as
@@ -341,9 +384,9 @@ respawn. Confidence **86**.
 | `0x08818d58` | `Collision_SegmentHitsTriangle` | 88 |
 | `0x088159c0` | `Collision_StepNarrowphase` | 85 |
 | `0x08816eac` | `Collision_DispatchPair` | 85 |
-| `0x08818954` | `Collider_SetBoxDimensions` | 85 |
+| `0x08818954` | `Collider_SetBoxDimensions` | 90 |
 | `0x0884db20` | `Body_SyncBoxCollider` | 85 |
-| `0x0884dccc` | `Body_SetBoxDimensions` | 80 |
+| `0x0884dccc` | `Body_SetBoxDimensions` | 90 |
 | `0x08818540` | `CollisionMesh_BuildSap` | 85 |
 | `0x088183e8` | `CollisionMesh_Init` | 85 |
 | `0x0881835c` | `CollisionMesh_AvgVertexScalar` | 84 |

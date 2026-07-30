@@ -34,8 +34,9 @@
 //! Three things it reproduces exactly, because all three are recovered:
 //!
 //! - The hull is a **box**, and its extents come from `<Misc width height
-//!   length/>` in the ship's own `handlingstats.xml`. Nothing here is an invented
-//!   dimension.
+//!   length/>` in the ship's own `handlingstats.xml`, scaled by
+//!   [`crate::hover::TARGET_GLOBAL_SCALE`] before use - see
+//!   [`hull_sample_points`]. Nothing here is an invented dimension.
 //! - Friction is `0.05` for [`Surface::Wall`] and a `-1.0` **sentinel** for
 //!   everything else, combined against the ship's own `0.02` by
 //!   [`combine_friction`], which forces zero when either side is a sentinel. See
@@ -321,14 +322,16 @@ pub struct WallResponse {
 /// own half-extent, which is why the probes below can use it uniformly.
 ///
 /// Half-extents: `<Misc>` gives full hull dimensions, and the hull box is what
-/// the collider is built from. The hover probes are **not** placed from these -
-/// `oag_physics::hover::probe_offsets` is a code literal, as is the inertia
-/// tensor - so this is the one place the shipped dimensions still act.
+/// the collider is built from - **scaled by [`crate::hover::TARGET_GLOBAL_SCALE`]
+/// first**, the same `0.75` global the hover target height uses. See
+/// [`hull_sample_points`] for the read. The hover probes are **not** placed from
+/// these - `oag_physics::hover::probe_offsets` is a code literal, as is the
+/// inertia tensor - so this is the one place the shipped dimensions still act.
 #[must_use]
 pub fn hull_extent(body: &Body, dimensions: &Dimensions, direction: Vec3) -> f32 {
-    let half_width = dimensions.width * 0.5;
-    let half_height = dimensions.height * 0.5;
-    let half_length = dimensions.length * 0.5;
+    let half_width = dimensions.width * crate::hover::TARGET_GLOBAL_SCALE * 0.5;
+    let half_height = dimensions.height * crate::hover::TARGET_GLOBAL_SCALE * 0.5;
+    let half_length = dimensions.length * crate::hover::TARGET_GLOBAL_SCALE * 0.5;
 
     direction.dot(body.right()).abs() * half_width
         + direction.dot(body.up()).abs() * half_height
@@ -688,16 +691,33 @@ pub const HULL_PROBES: usize = 10;
 /// floor actually needs, and why the crate's old hand-chosen probe set happened
 /// to be shaped roughly like them.
 ///
-/// Confidence **90** on the geometry, **88** on the axis-to-dimension mapping
-/// (which rests on the box-inertia agreement rather than on a second read).
+/// **The `<Misc>` dimensions feeding the collider are not the authored values -
+/// they are scaled by `0.75` first**, the same global
+/// [`crate::hover::TARGET_GLOBAL_SCALE`] applies to the hover target height
+/// (`0x08ab0e1c`). Read at instruction level in `Ship_InitCraft`'s box-collider
+/// setup (`0x08841360`-`0x0884139c`): `stats+0x78`, `stats+0x80` and `stats+0x7c`
+/// (width, height, length - `docs/formats/handling-stats.md`'s `<Misc>` offsets)
+/// are each multiplied by `lwc1 f13,0xe1c(s1)` - the same address - before being
+/// passed to `Body_SetBoxDimensions` (`0x0884dccc`) in that order, which settles
+/// the width/length ordering too: `Body_SetBoxInertia`'s `(12, 8, 12)` box is
+/// square in `x` and `z` and could never distinguish them, but here the operand
+/// order is unambiguous - `stats+0x78` (width) feeds `Body_SetBoxDimensions`'s
+/// first argument and `stats+0x7c` (length) its third, exactly the mapping this
+/// function already used.
+///
+/// Confidence **90** on the geometry, **95** on the axis-to-dimension mapping
+/// (up from 88 - two independent reads now agree, and this one distinguishes
+/// width from length where the inertia tensor could not) and **90** on the
+/// `0.75` scale, new with this reading.
 #[must_use]
 pub fn hull_sample_points(body: &Body, handling: &Handling) -> [Vec3; HULL_PROBES] {
     let dimensions = &handling.dimensions;
     let centre = body.position;
+    let scale = crate::hover::TARGET_GLOBAL_SCALE;
     // `collider+0xc0`, `+0xd0`, `+0xe0` respectively.
-    let up = body.up() * (dimensions.height * 0.5);
-    let forward = body.forward() * (dimensions.length * 0.5);
-    let right = body.right() * (dimensions.width * 0.5);
+    let up = body.up() * (dimensions.height * scale * 0.5);
+    let forward = body.forward() * (dimensions.length * scale * 0.5);
+    let right = body.right() * (dimensions.width * scale * 0.5);
 
     let lower = centre - up;
     let upper = centre + up;
@@ -1010,21 +1030,24 @@ mod tests {
     /// this contact is
     ///
     /// ```text
-    /// r      = (1, 0, -0.5)        the right flank point, relative to the centre
-    /// r x n  = (0, 0.5, 0)         with n = (-1, 0, 0)
+    /// r      = (0.75, 0, -0.375)   the right flank point, relative to the centre
+    /// r x n  = (0, 0.375, 0)       with n = (-1, 0, 0)
     /// I^-1   = (1/15.6, 1/21.6, 1/15.6)
-    /// term   = n . ((0, 0.0231, 0) x r) = 0.01157
-    /// j      = 1.4 * 10 / 1.01157 = 13.84
+    /// term   = n . ((0, 0.01736, 0) x r) = 0.006510
+    /// j      = 1.4 * 10 / 1.006510 = 13.909
     /// ```
     ///
-    /// so `10` in becomes `3.84` out rather than `4.00`. A one-percent softening
-    /// on a lever this short; on a hull corner it is a factor of three. Asserted
+    /// so `10` in becomes `3.909` out rather than `4.00`. A shorter lever than a
+    /// hull corner's, since the flank point sits `length/8` ahead of centre
+    /// rather than at a full half-length - but still a real softening. Asserted
     /// to `1e-2` on a value derived from the constants rather than measured, so
     /// that a regression to `4.0` - which is what dropping the angular term
     /// again would give - fails here.
     #[test]
     fn a_ship_driven_into_a_wall_is_pushed_out_and_bounces_back() {
-        // Half-width is 1.0, so a centre at 1.0 leaves the hull 0.4 past x = 1.6.
+        // Half-width is 0.75 (`<Misc width>` 2.0, scaled by
+        // TARGET_GLOBAL_SCALE), so a centre at 1.0 leaves the hull 0.15 past
+        // x = 1.6.
         let mut state = ship_at(1.0, 10.0);
         let response = resolve(
             &mut state,
@@ -1038,19 +1061,19 @@ mod tests {
         assert_eq!(response.contacts, 1, "{response:?}");
         let contact = response.resolved.expect("a wall contact");
         assert_eq!(contact.surface, Surface::Wall);
-        assert!((contact.depth - 0.4).abs() < 1e-4, "{contact:?}");
+        assert!((contact.depth - 0.15).abs() < 1e-4, "{contact:?}");
         // Normal points back at the ship, i.e. along -x.
         assert!(contact.normal.x < -0.9, "{contact:?}");
 
         assert!(
-            (state.body.position.x - 0.6).abs() < 1e-4,
+            (state.body.position.x - 0.85).abs() < 1e-4,
             "{:?}",
             state.body
         );
         // The velocity is purely along the normal, so friction has nothing to act
         // on and only the normal impulse shows.
         assert!(
-            (state.body.linear_velocity.x + 3.84).abs() < 1e-2,
+            (state.body.linear_velocity.x + 3.909).abs() < 1e-2,
             "{:?}",
             state.body.linear_velocity
         );
@@ -1154,9 +1177,10 @@ mod tests {
             "{:?} is not {expected}",
             state.body.linear_velocity
         );
-        // Five push-outs of 0.4 each, all along -x.
+        // Five push-outs of 0.15 each (half-width 0.75, wall at 1.6), all
+        // along -x.
         assert!(
-            (response.escape.x + 2.0).abs() < 1e-3,
+            (response.escape.x + 0.75).abs() < 1e-3,
             "{:?}",
             response.escape
         );
@@ -1174,13 +1198,13 @@ mod tests {
     /// [`ANGULAR_IMPULSE_SCALE`] lives:
     ///
     /// ```text
-    /// p        = (-13.84, 0, 0)              the impulse from the test above
-    /// r x p    = (0, 6.92, 0)
+    /// p        = (-13.909, 0, 0)             the impulse from the test above
+    /// r x p    = (0, 5.216, 0)
     /// I^-1     = 1/21.6 on up
-    /// omega   += 0.1 * 6.92 / 21.6 = 0.0320
+    /// omega   += 0.1 * 5.216 / 21.6 = 0.02415
     /// ```
     ///
-    /// Without the `0.1` it would be `0.320`, an order of magnitude of spin per
+    /// Without the `0.1` it would be `0.2415`, an order of magnitude of spin per
     /// contact frame, which is the difference between a craft that scrapes along
     /// a wall and one that spins out on touching it.
     #[test]
@@ -1198,7 +1222,7 @@ mod tests {
 
         assert_eq!(response.contacts, 1, "{response:?}");
         let omega = state.body.angular_velocity;
-        assert!((omega.y - 0.032).abs() < 2e-3, "{omega:?}");
+        assert!((omega.y - 0.02415).abs() < 2e-3, "{omega:?}");
         assert!(omega.x.abs() < 1e-6 && omega.z.abs() < 1e-6, "{omega:?}");
         assert_eq!(response.angular_velocity_delta, omega);
     }
@@ -1219,8 +1243,8 @@ mod tests {
             &mut state,
             &handling(),
             &Environment::default(),
-            // The right flank point is at x = 2.0; a plane at x = -0.4 leaves it
-            // 2.4 behind.
+            // The right flank point is at x = 1.75; a plane at x = -0.4 leaves
+            // it 2.15 behind, still past MAX_CONTACT_DEPTH.
             &narrow_wall(-0.4, Surface::Wall),
             Vec3::new(1.0, 0.0, 0.0),
         );
@@ -1244,20 +1268,20 @@ mod tests {
         };
         let points = hull_sample_points(&body, &handling());
 
-        // width 2, height 1, length 4 -> half extents (1, 0.5, 2), and forward
-        // is -Z.
+        // width 2, height 1, length 4, scaled by TARGET_GLOBAL_SCALE (0.75)
+        // before halving -> half extents (0.75, 0.375, 1.5), and forward is -Z.
         let expected = [
-            Vec3::new(1.0, -0.5, -2.0),
-            Vec3::new(1.0, -0.5, 2.0),
-            Vec3::new(-1.0, -0.5, -2.0),
-            Vec3::new(-1.0, -0.5, 2.0),
-            Vec3::new(1.0, 0.5, -2.0),
-            Vec3::new(1.0, 0.5, 2.0),
-            Vec3::new(-1.0, 0.5, -2.0),
-            Vec3::new(-1.0, 0.5, 2.0),
+            Vec3::new(0.75, -0.375, -1.5),
+            Vec3::new(0.75, -0.375, 1.5),
+            Vec3::new(-0.75, -0.375, -1.5),
+            Vec3::new(-0.75, -0.375, 1.5),
+            Vec3::new(0.75, 0.375, -1.5),
+            Vec3::new(0.75, 0.375, 1.5),
+            Vec3::new(-0.75, 0.375, -1.5),
+            Vec3::new(-0.75, 0.375, 1.5),
             // length/8 ahead of centre, a half-width out to either side.
-            Vec3::new(1.0, 0.0, -0.5),
-            Vec3::new(-1.0, 0.0, -0.5),
+            Vec3::new(0.75, 0.0, -0.375),
+            Vec3::new(-0.75, 0.0, -0.375),
         ];
         for (got, want) in points.iter().zip(expected.iter()) {
             assert!((*got - *want).length() < 1e-6, "{got:?} is not {want:?}");
@@ -1280,9 +1304,9 @@ mod tests {
         );
 
         assert!(response.swept, "{response:?}");
-        // Pushed back to one half-width in front of the wall.
+        // Pushed back to one half-width (0.75) in front of the wall.
         assert!(
-            (state.body.position.x - 4.0).abs() < 1e-3,
+            (state.body.position.x - 4.25).abs() < 1e-3,
             "{:?}",
             state.body
         );
@@ -1541,18 +1565,18 @@ mod tests {
             Vec3::new(1.0, 0.0, 0.0),
         );
         assert!(response.resolved.is_some());
-        // `3.84`, not `4.00`, for the angular-denominator reason spelled out on
+        // `3.909`, not `4.00`, for the angular-denominator reason spelled out on
         // `a_ship_driven_into_a_wall_is_pushed_out_and_bounces_back`. What
-        // matters here is the *sign*: `10` out becomes `3.84` back in.
+        // matters here is the *sign*: `10` out becomes `3.909` back in.
         assert!(
-            (state.body.linear_velocity.x - 3.84).abs() < 1e-2,
+            (state.body.linear_velocity.x - 3.909).abs() < 1e-2,
             "{:?}",
             state.body.linear_velocity
         );
         // The position correction still applies, and it is what clears the
         // overlap so the next frame sees no contact at all.
         assert!(
-            (state.body.position.x - 0.6).abs() < 1e-4,
+            (state.body.position.x - 0.85).abs() < 1e-4,
             "{:?}",
             state.body
         );
@@ -1601,9 +1625,11 @@ mod tests {
     fn the_hull_extent_matches_the_half_extents_along_the_body_axes() {
         let body = Body::default();
         let h = handling();
-        assert!((hull_extent(&body, &h.dimensions, body.right()) - 1.0).abs() < 1e-6);
-        assert!((hull_extent(&body, &h.dimensions, body.up()) - 0.5).abs() < 1e-6);
-        assert!((hull_extent(&body, &h.dimensions, body.forward()) - 2.0).abs() < 1e-6);
+        // Scaled by TARGET_GLOBAL_SCALE (0.75) before halving: see
+        // `hull_sample_points`.
+        assert!((hull_extent(&body, &h.dimensions, body.right()) - 0.75).abs() < 1e-6);
+        assert!((hull_extent(&body, &h.dimensions, body.up()) - 0.375).abs() < 1e-6);
+        assert!((hull_extent(&body, &h.dimensions, body.forward()) - 1.5).abs() < 1e-6);
     }
 
     /// The `-1.0` sentinel is not a coefficient. This path is unreachable in a

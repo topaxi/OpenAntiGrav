@@ -347,13 +347,17 @@ for the milestone**, not a convenience - and it has to be re-derived from a fres
 that no longer flies clean open-loop. The second number, the reseeded per-window
 error, is answerable today and is the table above.
 
-The other live gap is smaller and sharper: **our hull begins responding to a wall
-about six ticks before the original does.** Measured against the original's own
-recorded poses rather than a replay - so it is contact geometry, not accumulated
-trajectory error - and reproduced on both captures, on the same lower front
-corner probe. See
-[`oag-trace.md`](../tools/oag-trace.md#our-hull-meets-that-wall-six-ticks-early-and-it-is-the-contact-geometry);
-the next step is reading `Collider_BoxSamplePoints` (`0x08818a00`).
+The other live gap **was our hull responding to a wall about six ticks before
+the original does; it is now three-to-five ticks after.** Measured against the
+original's own recorded poses rather than a replay - so it is contact geometry,
+not accumulated trajectory error. The cause was a missing `0.75` scale on the
+`<Misc>` dimensions feeding the collision box (`Ship_InitCraft`,
+`crates/physics/src/wall.rs`), corrected 2026-07-30; fixing it moved the gap to
+the other side of zero rather than closing it, by a different amount on each of
+the two captures, which reads as an approach-angle-dependent residual rather
+than a further scale error. See
+[`oag-trace.md`](../tools/oag-trace.md#our-hull-met-that-wall-six-ticks-early-the-fix-overshot-into-three-to-five-ticks-late)
+for the full account and what not to try next.
 
 **What `grounded` agreeing on every tick does and does not say.** The original's
 column is `1.0` on all 3,146 ticks of this capture, so the agreement means *our

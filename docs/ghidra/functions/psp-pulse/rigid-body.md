@@ -307,7 +307,11 @@ not obvious and both matter:
   constructor, scaled by `0.75`, and handed to the *collider* setup
   (`FUN_0884e694`) - not to the inertia. So there is no per-team rotational
   inertia, and a single global constant in a reimplementation is the mechanism
-  rather than a compromise.
+  rather than a compromise. **The scale on the collider side is `<Misc>`'s and
+  is per team** - see
+  [collision.md](collision.md#the-dimensions-feeding-the-collider-are-scaled-not-the-authored-misc-values)
+  for the full argument trace into `Body_SetBoxDimensions`; that page is
+  authoritative for the collider box, this one only for the inertia tensor.
 - **The tensor is frozen at construction.** `Ship_UpdateCraft` calls
   `Body_SetMass` again on **every frame** (`0x0884985c`, `lwc1 f12,0x60(a1)`
   through the `craft+0x70` class pointer, i.e. `Physical.mass`), and

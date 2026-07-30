@@ -225,7 +225,7 @@
 0x08818d58	function	Collision_SegmentHitsTriangle	88	collision.md
 0x08818a00	function	Collider_BoxSamplePoints	90	collision.md
 0x08818964	function	Collider_SetBoxTransform	90	collision.md
-0x08818954	function	Collider_SetBoxDimensions	85	collision.md
+0x08818954	function	Collider_SetBoxDimensions	90	collision.md
 0x0884db20	function	Body_SyncBoxCollider	85	collision.md
 0x0884dccc	function	Body_SetBoxDimensions	80	collision.md
 0x08ab2370	data	g_vex_class_table	92	exhaust.md
