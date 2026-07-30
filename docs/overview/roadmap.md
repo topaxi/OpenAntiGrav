@@ -450,11 +450,13 @@ seen from the authoring side.
       **Inverted**: art meshes are the default and `--ribbon` is the development
       view, alongside `--collision` which was already one. 144,351 triangles on
       `16_Track`, textured, with buildings, barriers, road markings and scenery.
-      The PS2 path draws the same geometry **untextured** - several track models
-      share one texture set and that grouping is not verified, so it is not
-      guessed at and the white fallback binds instead - which is a documented
-      known state rather than a regression, and all four PS2 ground-truth tests
-      pass on it.
+      The PS2 path now draws the same geometry **textured** too: the texture
+      set is the archive entry directly before the track's own `.vex`, the
+      same directory-position rule already solved for ships, checked
+      independently against all 32 `<n>_Track`/`track_reversed` models (27
+      fill every slot, the other 5 are short 1-2 slots and the load report
+      says so rather than guessing at a fill). See
+      [ps2-texture](../formats/ps2-texture.md).
       A **graphics-menu row** for it is still open; today it is a flag only.
       What still makes a race look unlike the original is authored lighting, sky
       and fog, and those are [M6](#m6---rendering-fidelity).

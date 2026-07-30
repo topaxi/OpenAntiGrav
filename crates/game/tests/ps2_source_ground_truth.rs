@@ -33,10 +33,13 @@
 //! shipped design data in the repository. Every assertion below is structural: a
 //! track has paths, a hull has positive extents, a position is finite.
 //!
-//! Textures are the one place a PS2 race is knowingly worse, and that is asserted as
-//! a *report line* rather than as a gap that must not exist: PS2 models keep their
-//! textures in separate archive entries and the model-to-set lookup is unrecovered,
-//! so the race draws untextured and says so. See `docs/formats/ps2-texture.md`.
+//! Textures used to be a place a PS2 race was knowingly worse; the model-to-set
+//! lookup is now recovered for both a ship and a track (directory position, not a
+//! name - see `docs/formats/ps2-texture.md`), and
+//! [`every_ps2_track_s_texture_set_is_found_by_directory_position`] asserts it stays
+//! that way for tracks specifically. A handful of slots on 5 of 32 tracks still do
+//! not decode (documented, not a regression to fix here), and the load report names
+//! any model whose slots did not all fill rather than guessing at one.
 
 use std::path::{Path, PathBuf};
 
@@ -262,9 +265,9 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
 /// Checked against **every** team, not just the default: a wrong or
 /// coincidental adjacency would show up as one team fitting and its neighbour
 /// not, since the rule is purely positional and every ship sits next to a
-/// different texture set. `16_Track\track.vex` is a separate, harder case -
-/// track models group several to one texture set (see the format doc's own
-/// survey) - and is not asserted here.
+/// different texture set. The same rule, checked separately, also holds for
+/// track models - see
+/// [`every_ps2_track_s_texture_set_is_found_by_directory_position`].
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
@@ -314,6 +317,64 @@ fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
             loaded.report.join("\n")
         );
     }
+}
+
+/// The same directory-position rule, checked independently for every
+/// circuit's own `track.vex`/`track_reversed.vex`, not extrapolated from the
+/// ship result above.
+///
+/// 27 of the 32 `<n>_Track` models on the disc fill every slot; the other 5
+/// are short 1 or 2 slots each (never more), for a total of exactly 7 missing
+/// slots across all 32 - see
+/// `docs/formats/ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name`.
+/// Asserting the exact total rather than "no more than a handful" is
+/// deliberate: a regression that broke the lookup entirely (falling back to
+/// the white texture for every slot) would still pass a looser bound.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_ps2_track_s_texture_set_is_found_by_directory_position() {
+    let Some(image) = image(PS2_IMAGE) else {
+        return;
+    };
+
+    let mut total_missing = 0usize;
+
+    for n in 1..=16u32 {
+        for variant in ["track.vex", "track_reversed.vex"] {
+            let track = format!(r"Data\Environments\{n:02}_Track\{variant}");
+            let loaded = race::load(&race::Options {
+                source: image.display().to_string(),
+                track: track.clone(),
+                class: SpeedClass::Venom,
+                ..race::Options::default()
+            })
+            .unwrap_or_else(|e| panic!("loading {track} off {PS2_IMAGE}: {e:#}"));
+
+            let model = &loaded.track_model;
+            assert!(
+                !model.textures.is_empty(),
+                "{track}'s PS2 track model declares no texture slots at all, which \
+                 contradicts docs/formats/ps2-texture.md's one-entry-per-Texture-node \
+                 reading"
+            );
+            let decoded = model.textures.iter().filter(|t| t.is_some()).count();
+            let missing = model.textures.len() - decoded;
+            assert!(
+                missing <= 2,
+                "{track}: {missing} of {} texture slot(s) undecoded, more than the \
+                 documented 0-2 slack; report was:\n{}",
+                model.textures.len(),
+                loaded.report.join("\n")
+            );
+            total_missing += missing;
+        }
+    }
+
+    assert_eq!(
+        total_missing, 7,
+        "expected exactly 7 undecoded texture slots total across all 32 track models \
+         (see docs/formats/ps2-texture.md), got {total_missing}"
+    );
 }
 
 /// Whatever the PS2 front end can do, its failures name the archives searched.

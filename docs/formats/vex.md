@@ -767,9 +767,12 @@ Applied, from
     it: `w` is not a position component.
   - ~~**Where PS2 textures live.**~~ - found and decoded, see
     [PS2 texture](ps2-texture.md). They are standalone archive entries holding a
-    GS upload packet, gathered per model into a nested WAD. What is still open
-    is **which** entry belongs to which model: the set is found by name hash at
-    runtime and the name is not recovered, so `oag-view` is told the entry.
+    GS upload packet, gathered per model into a nested WAD. ~~Which entry
+    belongs to which model~~ - directory position, not a name or hash: the
+    entry directly before the model's own. Solved for ships and, separately,
+    for each circuit's own `track.vex`; a model made of several small
+    shared-atlas pieces is the part still open, see
+    [PS2 texture](ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name).
 
 ## Other extensions found
 

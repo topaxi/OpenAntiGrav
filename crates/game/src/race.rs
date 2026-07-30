@@ -465,7 +465,21 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let track_model = if options.ribbon {
         track_render::build_model(&label, &ai)
     } else {
-        mesh::build(&options.track, &track_blob)?
+        let mut track_model = mesh::build(&options.track, &track_blob)?;
+        // Same PS2 signature and the same directory-position heuristic as the
+        // ship above. Checked separately for tracks specifically (not just
+        // assumed from the ship result): the entry directly before a track's
+        // own `.vex` decodes as a texture set with the same entry count as the
+        // model's `Texture` nodes on 27 of the 32 `<n>_Track`/`track_reversed`
+        // pairs on the PS2 disc, off by only 1-2 slots (never more) on the
+        // rest - see `docs/formats/ps2-texture.md`.
+        if !track_model.textures.is_empty()
+            && track_model.textures.iter().all(Option::is_none)
+            && let Some(external) = ps2_texture_set(&mut archives, &options.track)
+        {
+            track_model = mesh::build_with_textures(&options.track, &track_blob, Some(external))?;
+        }
+        track_model
     };
     report.push(format!(
         "drawing the track's {}: {} triangle(s), radius {:.0}",

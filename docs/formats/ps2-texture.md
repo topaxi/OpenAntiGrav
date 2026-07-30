@@ -1,12 +1,14 @@
 # PS2 texture
 
-**Status: understood, including the ship lookup.** Located, decoded,
-implemented in
+**Status: understood, including the ship and track lookup.** Located,
+decoded, implemented in
 [`oag-formats::ps2_texture`](../../crates/formats/src/ps2_texture.rs); every
 ship on the roster now draws in its own livery in `just play pulse-ps2`
 itself, not only through `oag-view --mesh ... --textures ...` naming an entry
-by hand. See [how a ship finds its texture set](#how-a-ship-finds-its-texture-set-directory-position-not-a-name)
-below.
+by hand, and so does every circuit's own `track.vex` (27 of 32 fully, the
+other 5 short 1-2 slots). See [how a model finds its texture
+set](#how-a-model-finds-its-texture-set-directory-position-not-a-name) below,
+which now covers both.
 
 Found as standalone entries in the PS2 [WAD](wad.md) archives. Not the same
 format as the [PSP `.mip`](psp-texture.md) at all, and not embedded in the model
@@ -254,14 +256,15 @@ testable     {"linear": 185, "psmt8": 4956}
 smoother     {"linear": 185, "psmt8": 4856}
 ```
 
-## How a ship finds its texture set: directory position, not a name
+## How a model finds its texture set: directory position, not a name
 
-**Solved for ships, confidence 90.** A model's texture set is never looked up
-by name or hash at all - it is the archive entry **directly before** the
-model's own entry in the WAD directory. `oag_assets::pulse::Archives::
-read_preceding` implements this, and `oag_game::race::load` uses it: when a
-ship's embedded texture slots are all empty (the PS2 signature), it reads the
-preceding entry and tries it as a texture set.
+**Solved for ships (confidence 90) and, separately, for tracks (confidence
+88 - see below).** A model's texture set is never looked up by name or hash
+at all - it is the archive entry **directly before** the model's own entry
+in the WAD directory. `oag_assets::pulse::Archives::read_preceding`
+implements this, and `oag_game::race::load` uses it for both a ship and the
+track model: when a model's embedded texture slots are all empty (the PS2
+signature), it reads the preceding entry and tries it as a texture set.
 
 This was checked independently against **every** team on the roster, not
 inferred from one example: `AG_Systems`, `Assegai`, `Auricom`, `EGX`,
@@ -273,21 +276,39 @@ adjacency would show some teams fitting and their neighbours not, not all
 eleven fitting exactly. `Mirage` and `Van_Uber` were not found under those
 names in `WADS2.WAD` and are not covered.
 
-**This is a ship-specific finding, not a general one.** The naive version of
-this rule - pairing by directory adjacency at all - was tried and rejected
-earlier at confidence too low to act on: the nearest preceding texture set
-matched entry counts for only 535 of the 975 models with `Texture` nodes
-disc-wide. What ships get right and the wider search did not: ships are
-`sub_entries == texture_nodes` at delta exactly **-1**; grouping every model
-in a directory by its nearest preceding texture set (the shape the wider
-search implies - a texture set followed by every model that shares it, up to
-the next texture set) covers all 975 with no gaps, in groups of 1, 2, 3, 4, 8
-or 12 models per set, but only 796 of 975 individually fit their group's set
-by entry count. Track and environment models are almost certainly in the
-larger groups (visual environments share atlases across several meshes the
-way a single ship does not), and that grouping rule is not verified against a
-single known-correct picture the way `Ship.vex` is. Left as a real, separate,
-smaller RE task.
+**This is not a ship-specific finding after all - it also holds for tracks,
+checked separately.** The naive version of this rule - pairing by directory
+adjacency at all - was tried and rejected earlier at confidence too low to
+act on: the nearest preceding texture set matched entry counts for only 535
+of the 975 models with `Texture` nodes disc-wide. That earlier check was
+disc-wide, over every model regardless of kind (ships, ship parts, weapons,
+tracks, front-end props all pooled together), and a texture-set-per-model
+count match failing for most of that pool does not mean it fails for large,
+single-owner models like a track's - it means most of the pool is small
+shared-atlas geometry that a per-model rule was never going to fit.
+
+Checked directly: every `Data\Environments\<n>_Track\track.vex` and
+`track_reversed.vex` on the PS2 disc (all 16 circuits, both directions, 32
+models) against the entry directly preceding it. **27 of 32 match exactly**
+(same entry count as `Texture` nodes); the other 5 (`02_Track`,
+`02_Track_reversed`, `06_Track_reversed`, `12_Track`, `12_Track_reversed`)
+are short by only 1 or 2 slots, never more, and `oag_game::race::load` already
+leaves a texture ordinal beyond a short set's length untextured rather than
+misaligning the rest - see `mesh::build_with_textures`'s doc comment. Same
+rule (`sub_entries == texture_nodes` at delta exactly **-1**), same
+`read_preceding`/`ps2_texture_set` call `oag_game::race::load` already made
+for ships, now also made for the track model when its embedded slots are all
+empty. **Confidence 88**: the same kind of exact-count data agreement the
+ship finding scored 90 on, one point short because 5 of 32 are near misses
+rather than exact and the reason for the shortfall (a handful of `Texture`
+nodes per track that reference no unique pixel data, a merge during
+packing, something else) is not identified.
+
+Track and environment models made of many small shared-atlas pieces (crates,
+decorations, ship-part-sized props) are the ones the wider, ungrouped 535/975
+figure says this rule will not fit - that piece is still open and is a
+separate, smaller RE task from "does a circuit's own `track.vex` get its
+textures back," which this section now answers.
 
 ## Not determined
 - **The `PSMT4` swizzle**, so five 4-bit textures do not decode. `parse` refuses
