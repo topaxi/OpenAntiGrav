@@ -88,12 +88,36 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(shaded.rgb, 1.0);
 }
 
-// Used only by the second, blended pipeline (`oag_render::mesh_render`'s
-// list-B pass) - see `oag_render::mesh::Model::transparent_draws`. Identical
-// to `fs_main` except it outputs the texture's own alpha instead of a
-// hardcoded 1.0, which is what lets the blend state built around this entry
-// point actually blend rather than replace.
+// Used only by the blended pipeline - see
+// `oag_render::mesh::Model::transparent_draws`. Identical to `fs_main` except
+// it outputs the texture's own alpha instead of a hardcoded 1.0, which is what
+// lets the blend state built around this entry point actually blend rather
+// than replace.
 @fragment
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     return lit_texel(in);
+}
+
+// The GE's real alpha-test reference value has not been recovered from a
+// decompile; 0.5 is an invented placeholder, the same status as
+// `mesh_render::TRANSPARENT_BLEND` and `race::GLOW_SCROLL_PERIOD_TICKS` -
+// revise the moment the real threshold is known.
+const ALPHA_TEST_THRESHOLD: f32 = 0.5;
+
+// Used only by the cutout pipeline - see
+// `oag_render::mesh::Model::alpha_tested_draws`. Unlike `fs_main_blend`, this
+// keeps depth write on (see `mesh_render::build`): a batch tagged
+// `is_alpha_tested()` is meant to be treated as opaque wherever its texel
+// clears the threshold, and fully absent everywhere else, not smoothly
+// blended - `discard` is what lets the pixels below the threshold contribute
+// neither colour nor depth, so surfaces behind a cutout's "empty" corners
+// still show through and still get occluded correctly by whatever the
+// cutout's solid pixels do draw.
+@fragment
+fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
+    let shaded = lit_texel(in);
+    if shaded.a < ALPHA_TEST_THRESHOLD {
+        discard;
+    }
+    return vec4<f32>(shaded.rgb, 1.0);
 }

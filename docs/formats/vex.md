@@ -454,15 +454,53 @@ trees and an animated glow-strip texture (`exitglow`, authored 13 times on
 this track per the census above) - since it is simply "every alpha-blended
 batch", not a floor-specific list.
 
-`oag_render::mesh::Model::transparent_draws` (from `mesh_batches(payload, 1)`)
-now renders this list through a second, blended pipeline
-(`oag_render::mesh_render::Built::blend_pipeline`), the same
-opaque-pipeline-plus-blended-pipeline-in-one-pass shape `oag_render::exhaust`
-already uses. **What that pipeline's blend state is not** is a recovered fact:
-`oag_render::mesh_render::TRANSPARENT_BLEND` (`SrcAlpha`/`OneMinusSrcAlpha`) is
-a plausible reading, not a decompiled one, and is documented at its
-definition as an unscored placeholder - the same status this file gives the
-blink-light period.
+### A batch's own attributes decide its pipeline, not which list it came from
+
+**Confidence: 88.** The PS2 build of the same track exposed a case list
+membership alone cannot explain: its tree billboards sit in **list A**, not
+list B, tagged `Batch::is_alpha_tested() == true`. Routing purely by list
+(A -> opaque, B -> blended, as the section above first shipped) left them in
+the opaque pipeline, which hardcodes alpha to 1.0 - the billboard's fully
+transparent corners rendered solid, showing as a rectangle instead of a tree.
+The general rule confirmed by this: a batch's destination is decided from
+`is_transparent()`/`is_alpha_tested()` on the batch itself, checked
+regardless of which list (A or B) produced it. The two flags were never
+observed set on the same batch across either platform's copy of this track.
+
+A further check mattered before trusting `is_alpha_tested()` as a rule:
+enumerating every alpha-tested batch on the PS2 build and decoding its
+texture's real alpha channel found 303 such batches across 15 textures, but
+only 209 of them (12 textures) have a texture with genuine alpha variation
+(0-255 range, or a partial range like 58-78); the other 94 (`tex[0]`,
+`tex[1]`, `tex[76]`, `tex[82]`, `tex[96]`, `tex[100]`, `tex[129]`) are on
+textures that are fully opaque (255 everywhere) despite carrying the flag.
+Routing every `is_alpha_tested()` batch into the same blended,
+depth-write-off pipeline as `is_transparent()` batches (tried first, and
+reverted) rendered those 94 correctly in isolation but broke mutual occlusion
+between them and the rest of the opaque scene, since depth write was off for
+geometry that has no actual transparency to justify it. `is_alpha_tested()`
+batches get their own pipeline instead - see below.
+
+`oag_render::mesh::Model` splits batches three ways: `draws` (opaque, neither
+flag set), `alpha_tested_draws` (`is_alpha_tested()`), `transparent_draws`
+(`is_transparent()`). Two more pipelines join the opaque one in
+`oag_render::mesh_render::Built`, all drawn in the same pass, in that order:
+
+- `alpha_test_pipeline` keeps depth write on and `discard`s pixels below a
+  threshold in the shader (`fs_main_alpha_test` in `mesh.wgsl`) rather than
+  blending - a cutout is meant to occlude and be occluded exactly like opaque
+  geometry wherever its texel clears the threshold, which is what makes both
+  the 94 texture-opaque batches and the 209 real-alpha-mask ones (trees among
+  them) render correctly through the same pipeline.
+- `blend_pipeline` is unchanged from the section above: depth write off,
+  `TRANSPARENT_BLEND`, drawn last so the opaque and cutout geometry's depth is
+  already resolved.
+
+**What is not recovered:** the GE's real alpha-test reference value and
+comparison function. `ALPHA_TEST_THRESHOLD` (0.5, in `mesh.wgsl`) is an
+invented placeholder, the same status this file already gives the blink-light
+period and `oag_render::mesh_render::TRANSPARENT_BLEND` gives its blend
+state - revise the moment the real threshold is known.
 
 **Geometry is never indexed** — the index argument to `sceGuDrawArray` is always
 zero. The material array is reached through `mesh+0x5c` at runtime, stride 0x14,

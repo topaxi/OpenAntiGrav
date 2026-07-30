@@ -100,12 +100,18 @@ pub struct Model {
     pub vertices: Vec<GpuVertex>,
     pub indices: Vec<u32>,
     /// One per material run, in draw order. Opaque; drawn with depth write on
-    /// and no blending.
+    /// and no blending. Neither `is_transparent()` nor `is_alpha_tested()`.
     pub draws: Vec<DrawCall>,
-    /// Batches authored as alpha-blended (list B on disk - see
-    /// [`build_with_textures`]), indexing the same `vertices`/`indices` as
-    /// [`Self::draws`]. Meant to be drawn after `draws`, blended and with
-    /// depth write off.
+    /// Batches tagged `is_alpha_tested()` (see [`build_with_textures`]),
+    /// indexing the same `vertices`/`indices` as [`Self::draws`]. Meant to be
+    /// drawn with a cutout (`discard` below a threshold) rather than a
+    /// hardcoded alpha of 1.0, but otherwise opaque - depth write stays on, so
+    /// overlapping cutout surfaces still occlude each other and the geometry
+    /// behind them correctly.
+    pub alpha_tested_draws: Vec<DrawCall>,
+    /// Batches tagged `is_transparent()` (see [`build_with_textures`]),
+    /// indexing the same `vertices`/`indices` as [`Self::draws`]. Meant to be
+    /// drawn after every other list, blended and with depth write off.
     pub transparent_draws: Vec<DrawCall>,
     /// Textures embedded in the model, one slot per `Texture` node.
     ///
@@ -199,6 +205,7 @@ pub fn build_with_textures(
     let mut vertices: Vec<GpuVertex> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
     let mut draws: Vec<DrawCall> = Vec::new();
+    let mut alpha_tested_draws: Vec<DrawCall> = Vec::new();
     let mut transparent_draws: Vec<DrawCall> = Vec::new();
     let mut mesh_count = 0;
 
@@ -217,14 +224,29 @@ pub fn build_with_textures(
         // `docs/formats/vex.md`, "Geometry is pre-batched GE display lists").
         // `vex::mesh_batches` already stops at the first batch tagged for the
         // other list, so reading both here never draws a shared batch twice;
-        // list B is where every alpha-blended batch on a track lives, and a
-        // mesh made up entirely of list-B batches has nothing in list A at
-        // all, so skipping it drops that mesh's geometry completely rather
-        // than avoiding a duplicate.
+        // a mesh made up entirely of list-B batches has nothing in list A at
+        // all, so skipping either list would drop that mesh's geometry
+        // completely rather than avoid a duplicate.
+        //
+        // Which list a batch is *in* is not the same question as which pipeline
+        // it needs: on `16_Track`'s PSP build every blended batch happens to
+        // live in list B alone, but the PS2 build tags its tree billboards
+        // `is_alpha_tested()` while leaving them in list A. Destination is
+        // decided from the batch's own attributes, not from which list produced
+        // it - `is_transparent()` and `is_alpha_tested()` were never observed
+        // set together on the same batch, but transparent takes priority if
+        // they ever are, since blending is the more permissive of the two.
         let materials = vex::mesh_materials(payload);
 
-        for (batch_list, out) in [(0u8, &mut draws), (1u8, &mut transparent_draws)] {
+        for batch_list in [0u8, 1u8] {
             for batch in vex::mesh_batches(payload, batch_list).context("decoding batches")? {
+                let out: &mut Vec<DrawCall> = if batch.is_transparent() {
+                    &mut transparent_draws
+                } else if batch.is_alpha_tested() {
+                    &mut alpha_tested_draws
+                } else {
+                    &mut draws
+                };
                 let base = vertices.len() as u32;
                 let first_index = indices.len() as u32;
 
@@ -307,6 +329,7 @@ pub fn build_with_textures(
         vertices,
         indices,
         draws,
+        alpha_tested_draws,
         transparent_draws,
         textures,
         centre,
@@ -390,6 +413,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         vertices: Vec::new(),
         indices: Vec::new(),
         draws: Vec::new(),
+        alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),
         textures: Vec::new(),
         centre: [0.0; 3],
@@ -413,6 +437,8 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             texture: d.texture.map(|t| t + texture_base),
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
+        out.alpha_tested_draws
+            .extend(model.alpha_tested_draws.into_iter().map(rebase));
         out.transparent_draws
             .extend(model.transparent_draws.into_iter().map(rebase));
         out.textures.extend(model.textures);
@@ -463,6 +489,7 @@ mod merge_tests {
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),
             }],
+            alpha_tested_draws: Vec::new(),
             transparent_draws: Vec::new(),
             textures: (0..textures).map(|_| None).collect(),
             centre: [0.0; 3],

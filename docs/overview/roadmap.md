@@ -557,6 +557,16 @@ change how this list should be read:
       point-in-volume test; nothing culls with them
 - [ ] `MeshNode_Ghost` `0x3d4` - ghost rendering. Needs replay data, so it lands
       with replay in M7 if that comes first
+- [ ] **Frustum culling.** Not an authored class - a plain engine technique the
+      renderer has none of today: every `DrawCall` in a `Model` is submitted every
+      frame regardless of the camera, because `mesh::build_with_textures` flattens
+      a track into one buffer and discards each mesh's own bounds once the
+      model-wide centre/radius is computed. Needs `Model` to carry a bounding
+      volume per `DrawCall` (or per cluster) instead, checked against the camera
+      frustum before `draw_indexed`. Lower priority than it sounds at current
+      draw-call counts (order 2,000 for `16_Track`, already hundreds of fps) -
+      matters more once more is being drawn per frame at once (weapons, other
+      ships, effects) than it does today.
 
 ### Lighting and shadow
 

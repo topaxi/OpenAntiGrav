@@ -121,6 +121,7 @@ struct Session {
     config: wgpu::SurfaceConfiguration,
     depth_view: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
+    alpha_test_pipeline: wgpu::RenderPipeline,
     blend_pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
@@ -172,6 +173,7 @@ impl Session {
 
         let mesh_render::Built {
             pipeline,
+            alpha_test_pipeline,
             blend_pipeline,
             bind_group: placeholder_bind_group,
             vertex_buffer,
@@ -206,6 +208,7 @@ impl Session {
             config,
             depth_view,
             pipeline,
+            alpha_test_pipeline,
             blend_pipeline,
             uniform_buffer,
             bind_group,
@@ -331,7 +334,20 @@ impl Session {
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
             }
 
-            // Second pipeline, same pass: list-B batches, blended. See
+            // Second pipeline, same pass: alpha-tested batches, cutout. See
+            // `mesh_render::Built::alpha_test_pipeline`.
+            pass.set_pipeline(&self.alpha_test_pipeline);
+            for draw in &self.model.alpha_tested_draws {
+                let slot = draw.texture.map_or(0, |t| t + 1);
+                pass.set_bind_group(
+                    1,
+                    &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
+                    &[],
+                );
+                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            }
+
+            // Third pipeline, same pass: transparent batches, blended. See
             // `mesh_render::Built::blend_pipeline`.
             pass.set_pipeline(&self.blend_pipeline);
             for draw in &self.model.transparent_draws {

@@ -1560,6 +1560,7 @@ struct Uniforms {
 struct Drawable {
     model: Model,
     pipeline: wgpu::RenderPipeline,
+    alpha_test_pipeline: wgpu::RenderPipeline,
     blend_pipeline: wgpu::RenderPipeline,
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
@@ -1587,6 +1588,7 @@ impl Drawable {
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
+            alpha_test_pipeline,
             blend_pipeline,
             bind_group: _placeholder,
             vertex_buffer: vertices,
@@ -1612,6 +1614,7 @@ impl Drawable {
         Ok(Self {
             model,
             pipeline,
+            alpha_test_pipeline,
             blend_pipeline,
             vertices,
             indices,
@@ -1648,7 +1651,16 @@ impl Drawable {
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
 
-        // Second pipeline, same pass: list-B batches, blended. See
+        // Second pipeline, same pass: alpha-tested batches, cutout. See
+        // `mesh_render::Built::alpha_test_pipeline`.
+        pass.set_pipeline(&self.alpha_test_pipeline);
+        for draw in &self.model.alpha_tested_draws {
+            let slot = draw.texture.map_or(0, |t| t + 1);
+            pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+        }
+
+        // Third pipeline, same pass: transparent batches, blended. See
         // `mesh_render::Built::blend_pipeline`.
         pass.set_pipeline(&self.blend_pipeline);
         for draw in &self.model.transparent_draws {
@@ -2083,6 +2095,7 @@ mod tests {
             vertices: Vec::new(),
             indices: vec![0; 6],
             draws: Vec::new(),
+            alpha_tested_draws: Vec::new(),
             transparent_draws: Vec::new(),
             textures: (0..slots)
                 .map(|index| {

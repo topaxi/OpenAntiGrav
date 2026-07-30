@@ -141,6 +141,7 @@ pub fn capture_from(
 
     let Built {
         pipeline,
+        alpha_test_pipeline,
         blend_pipeline,
         bind_group,
         vertex_buffer,
@@ -237,10 +238,19 @@ pub fn capture_from(
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
 
-        // Second pipeline, same pass: `Model::transparent_draws` is list B,
-        // meant to be blended rather than replace. See
-        // `crate::exhaust::Pipeline` for the precedent of pairing an opaque
-        // and a blended pipeline this way.
+        // Second pipeline, same pass: `Model::alpha_tested_draws` wants a
+        // cutout, not a hardcoded alpha of 1.0 - see `fs_main_alpha_test`.
+        pass.set_pipeline(&alpha_test_pipeline);
+        for draw in &model.alpha_tested_draws {
+            let slot = draw.texture.map_or(0, |t| t + 1);
+            pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+        }
+
+        // Third pipeline, same pass: `Model::transparent_draws` is meant to be
+        // blended rather than replace, and drawn last so opaque and cutout
+        // depth is already resolved. See `crate::exhaust::Pipeline` for the
+        // precedent of pairing an opaque and a blended pipeline this way.
         pass.set_pipeline(&blend_pipeline);
         for draw in &model.transparent_draws {
             let slot = draw.texture.map_or(0, |t| t + 1);
@@ -395,16 +405,22 @@ pub const TRANSPARENT_BLEND: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
-/// Everything [`build`] hands back: geometry, texture bindings, and the two
+/// Everything [`build`] hands back: geometry, texture bindings, and the three
 /// pipelines a `Model` draws through.
 #[derive(Debug)]
 pub struct Built {
     /// Opaque pass: depth write on, no blending. Draws [`Model::draws`].
     pub pipeline: wgpu::RenderPipeline,
+    /// Cutout pass: depth write on, no blending, `discard` below
+    /// `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD` (an invented placeholder, not a
+    /// recovered GE reference value). Draws [`Model::alpha_tested_draws`] as
+    /// a second `set_pipeline` in the same render pass as `pipeline`, before
+    /// `blend_pipeline`.
+    pub alpha_test_pipeline: wgpu::RenderPipeline,
     /// Blended pass: depth write off, [`TRANSPARENT_BLEND`]. Draws
-    /// [`Model::transparent_draws`], as a second `set_pipeline` in the same
-    /// render pass as `pipeline` - see [`crate::exhaust::Pipeline`] for the
-    /// precedent.
+    /// [`Model::transparent_draws`] last, as a third `set_pipeline` in the
+    /// same render pass - see [`crate::exhaust::Pipeline`] for the precedent
+    /// of pairing an opaque and a blended pipeline this way.
     pub blend_pipeline: wgpu::RenderPipeline,
     pub bind_group: wgpu::BindGroup,
     pub vertex_buffer: wgpu::Buffer,
@@ -513,7 +529,50 @@ pub fn build(
         cache: None,
     });
 
-    // Second pipeline for `Model::transparent_draws` (list B): same shader
+    // Second pipeline for `Model::alpha_tested_draws`: same shader module,
+    // bind group layouts, vertex layout and depth state as the opaque
+    // pipeline (a cutout is meant to occlude and be occluded exactly like
+    // opaque geometry), except the fragment shader discards pixels below a
+    // threshold instead of always returning alpha 1.0.
+    let alpha_test_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("mesh alpha test"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            buffers: &[Some(wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![
+                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                    4 => Float32, 5 => Float32
+                ],
+            })],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main_alpha_test"),
+            targets: &[Some(format.into())],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            cull_mode: None,
+            ..Default::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    // Third pipeline for `Model::transparent_draws` (list B): same shader
     // module, bind group layouts and vertex layout, blended instead of
     // replaced and with depth write off so an overlapping transparent draw
     // cannot occlude one drawn after it - see `TRANSPARENT_BLEND` and
@@ -672,6 +731,7 @@ pub fn build(
 
     Ok(Built {
         pipeline,
+        alpha_test_pipeline,
         blend_pipeline,
         bind_group,
         vertex_buffer,
