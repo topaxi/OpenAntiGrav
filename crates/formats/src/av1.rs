@@ -401,6 +401,21 @@ impl FrameSource {
     }
 }
 
+/// A decoder must be movable to another thread, and this fails the build if it
+/// stops being.
+///
+/// Not idle pedantry: `oag_game::movie::Feed` moves a whole [`FrameSource`] onto
+/// a worker thread so that decoding a frame - up to 30 ms - does not happen on
+/// the thread that draws. See
+/// [ADR-0010](../../../docs/architecture/adr/0010-movie-decode-thread.md). If a
+/// future `re_rav1d` made `Decoder` thread-bound, the error would otherwise land
+/// in `oag-game` as a confusing `Send` failure inside a closure rather than here,
+/// next to the decoder it is a fact about.
+const _: fn() = || {
+    fn assert_send<T: Send>() {}
+    assert_send::<FrameSource>();
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
