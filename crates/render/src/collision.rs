@@ -226,6 +226,7 @@ pub fn build_model(
     let draws = vec![DrawCall {
         range: 0..indices_len(&indices),
         texture: None,
+        blink: false,
     }];
     Model {
         label: label.to_string(),

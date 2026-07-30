@@ -1603,7 +1603,11 @@ impl Drawable {
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
 
-    fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
+    /// `blink_on` gates draw calls flagged `blink` (see
+    /// [`oag_render::mesh::DrawCall::blink`]): off, they are skipped rather than
+    /// drawn dark, since nothing in the format gives an "off" texture to fall
+    /// back to.
+    fn draw(&self, pass: &mut wgpu::RenderPass<'_>, blink_on: bool) {
         if self.model.indices.is_empty() {
             return;
         }
@@ -1613,11 +1617,27 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         for draw in &self.model.draws {
+            if draw.blink && !blink_on {
+                continue;
+            }
             let slot = draw.texture.map_or(0, |t| t + 1);
             pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
     }
+}
+
+/// How long a blink light spends in each of its on and off phases.
+///
+/// Not recovered from anything - no captured trace has been compared against
+/// this yet. A half-second phase (30 ticks at the simulation's fixed 60 Hz) is
+/// a plausible, clearly-visible placeholder; see `docs/formats/vex.md` for the
+/// naming evidence this is built on.
+const BLINK_PERIOD_TICKS: u64 = 30;
+
+/// Whether a blink light is in its "on" phase at `tick`.
+fn blink_is_on(tick: u64) -> bool {
+    (tick / BLINK_PERIOD_TICKS).is_multiple_of(2)
 }
 
 /// The track and the ship on the GPU, drawn from a chase camera.
@@ -1777,10 +1797,11 @@ impl Scene {
             multiview_mask: None,
         });
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
-        self.track.draw(&mut pass);
-        self.ship.draw(&mut pass);
+        let blink_on = blink_is_on(race.world.tick);
+        self.track.draw(&mut pass, blink_on);
+        self.ship.draw(&mut pass, blink_on);
         if let Some(collision) = &self.collision {
-            collision.draw(&mut pass);
+            collision.draw(&mut pass, blink_on);
         }
         // Last, and that ordering is load-bearing: the flare tests depth but does
         // not write it, so the hull's depth has to already be in the buffer for the
@@ -2037,6 +2058,15 @@ mod tests {
             radius: 1.0,
             mesh_count: 1,
         }
+    }
+
+    #[test]
+    fn blink_starts_on_and_flips_every_period() {
+        assert!(blink_is_on(0));
+        assert!(blink_is_on(BLINK_PERIOD_TICKS - 1));
+        assert!(!blink_is_on(BLINK_PERIOD_TICKS));
+        assert!(!blink_is_on(2 * BLINK_PERIOD_TICKS - 1));
+        assert!(blink_is_on(2 * BLINK_PERIOD_TICKS));
     }
 
     /// The PS2 shape, measured: five slots declared and none of them filled.

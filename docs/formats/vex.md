@@ -529,6 +529,60 @@ A batch's `material_index` selects an entry here, which then selects a texture.
 The mapping is confirmed semantically as well as structurally: the mesh named
 `underbrake_flashrightShape` resolves to `colours_flashing_GLOW.tga`.
 
+### Ship lights: three separate `*flash*`/`*GLOW*` families, not one
+
+**Confidence: 65** for the naming-family reading below, cross-checked against
+real node names on real ships (not just a `Data.wad` byte grep). **The blink
+*period* is a separate, unscored, invented placeholder** - see below; folding
+it into the same score as the naming claim would hide that the two rest on
+completely different evidence.
+
+Grepping the PSP `Data.wad` (`PSP_GAME/USRDIR/Data.wad` on `pulse-psp-usa.chd`)
+for `*flash*`/`*GLOW*` mesh names turns up three distinct families, not one:
+
+- `cannon_flash*` / `cannon_flashShape` - weapon muzzle flash, fires on a game
+  event.
+- `underbrake_flashrightShape` (and siblings) - resolves to
+  `colours_flashing_GLOW.tga`; the `underbrake` qualifier reads as
+  airbrake-linked, another game-event trigger rather than a free-running timer.
+- `flasherShape`, `flashersShape`, `flashersShape1` - no input qualifier in the
+  name at all. This is the best candidate for a periodic blink light (an
+  anti-collision strobe/beacon), as opposed to something that lights up in
+  response to player input.
+
+`oag_render::mesh::is_blink_light_name` renders the third family blinking on a
+free-running tick counter (`crates/game/src/race.rs`, `BLINK_PERIOD_TICKS`),
+skipping the draw call outright in its "off" phase rather than swapping to a
+dark texture, since nothing recovered gives an off-state asset. **The blink
+period (currently a half-second placeholder) is invented, not recovered** -
+this still needs a real capture to compare against. The `cannon_flash*` and
+`underbrake_flash*` families are deliberately left alone: driving those from
+the tick counter would fabricate a behaviour (constant blinking) the evidence
+argues against.
+
+**Naming is per-ship, not a shared convention, and the heuristic only catches
+one ship as a result.** `--nodes 'Data\Ships\<team>\Ship.vex' --class 0x125`
+shows `flasherShape`/`flashersShape*` only under Triakis (4 of its 18 draw
+calls; see `crates/render/tests/blink_lights_ground_truth.rs`, a ground-truth
+test that walks all 8 teams' real `Ship.vex` and fails if none match). Feisar's
+equivalent cockpit-area light is named `glowingShape` /
+`self_illuminatedShape` instead - structurally similar (a small mesh alongside
+the canopy) but with no naming signal that it blinks rather than staying lit,
+so `is_blink_light_name` deliberately does not try to generalise to it. Seven
+of eight ships currently get no blink light at all under this heuristic; that
+is a known scope boundary, not a bug, and widening it needs either more
+per-ship name evidence or a decoded signal that is not name-based (the
+`pass_mask`/material second-texture bits above are the candidate, but their
+exact meaning is still "not determined" - see that section).
+
+Track `Mesh` nodes carry no name at all (confirmed on `16_Track\track.vex`
+with `--nodes --class 0x125`: every entry's name column is blank), so this
+heuristic structurally cannot tag any track geometry as blinking - there is no
+risk of it making trackside art disappear. The `07_Pulse_light_BLEND_GLOW`
+name found in the same grep is a `Texture` node's embedded asset path
+(`Data\Environments\07_Track\Textures\...`), not a mesh name, and is unrelated
+to this mechanism.
+
 ## Path templates
 
 Names are built at runtime, which is why so few resolve from binary strings. The

@@ -28,6 +28,56 @@ pub struct DrawCall {
     pub range: std::ops::Range<u32>,
     /// Index into [`Model::textures`], or `None` for untextured.
     pub texture: Option<usize>,
+    /// Whether this run is a free-running blink light rather than an
+    /// always-on surface. See [`is_blink_light_name`] for what qualifies and
+    /// the evidence behind it.
+    pub blink: bool,
+}
+
+/// Whether a mesh node's name identifies it as a periodic blink light, as
+/// opposed to an input-driven flash (weapon muzzle, airbrake) that happens to
+/// share the "flash" substring.
+///
+/// Evidence (confidence ~55, not yet cross-checked against a captured trace):
+/// grepping the PSP `Data.wad` turns up three distinct naming families under
+/// `*flash*`/`*GLOW*` - `cannon_flash*` (weapon muzzle), `underbrake_flash*`
+/// resolving to `colours_flashing_GLOW.tga` (airbrake-linked, per
+/// `docs/formats/vex.md`), and a third, generic `flasher*Shape` /
+/// `flashers*Shape` family with no input qualifier in the name. The bare name
+/// is the best signal available for "this one blinks on a timer" rather than
+/// "this one lights up in response to a game event" - see
+/// `docs/formats/vex.md` for the full note. The blink *period* is not
+/// recovered from anything; the caller that drives this flag from a tick
+/// count picks a plausible one.
+#[must_use]
+pub fn is_blink_light_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with("flasher") && !lower.contains("cannon") && !lower.contains("underbrake")
+}
+
+#[cfg(test)]
+mod blink_name_tests {
+    use super::is_blink_light_name;
+
+    #[test]
+    fn matches_the_generic_flasher_family() {
+        assert!(is_blink_light_name("flasherShape"));
+        assert!(is_blink_light_name("flashersShape"));
+        assert!(is_blink_light_name("flashersShape1"));
+    }
+
+    #[test]
+    fn excludes_input_driven_flashes() {
+        assert!(!is_blink_light_name("cannon_flashShape"));
+        assert!(!is_blink_light_name("underbrake_flashrightShape"));
+        assert!(!is_blink_light_name("cannon_flash_left"));
+    }
+
+    #[test]
+    fn excludes_unrelated_names() {
+        assert!(!is_blink_light_name("hullShape"));
+        assert!(!is_blink_light_name("colours_flashing_GLOW"));
+    }
 }
 
 /// A texture decoded from the model.
@@ -150,6 +200,7 @@ pub fn build_with_textures(
         let payload = &data[node.payload()];
         let to_world = world[index];
         let mut contributed = false;
+        let blink = node.name.as_deref().is_some_and(is_blink_light_name);
 
         // List A is the ordinary render list; B is a second pass. Taking only A
         // avoids drawing the same surface twice.
@@ -195,6 +246,7 @@ pub fn build_with_textures(
                 draws.push(DrawCall {
                     range: first_index..last_index,
                     texture,
+                    blink,
                 });
             }
         }
@@ -332,6 +384,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         out.draws.extend(model.draws.into_iter().map(|d| DrawCall {
             range: (d.range.start + index_base)..(d.range.end + index_base),
             texture: d.texture.map(|t| t + texture_base),
+            blink: d.blink,
         }));
         out.textures.extend(model.textures);
         out.mesh_count += model.mesh_count;
@@ -379,6 +432,7 @@ mod merge_tests {
             draws: vec![DrawCall {
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),
+                blink: false,
             }],
             textures: (0..textures).map(|_| None).collect(),
             centre: [0.0; 3],
