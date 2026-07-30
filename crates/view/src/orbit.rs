@@ -149,6 +149,9 @@ impl Session {
                 .create_window(attributes)
                 .context("creating the window")?,
         );
+        // Orbiting is keyboard-only (arrows, +/-, PageUp/PageDown); the cursor
+        // has nothing to click on.
+        window.set_cursor_visible(false);
 
         let instance = wgpu::Instance::default();
         let surface = instance

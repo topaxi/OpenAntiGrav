@@ -512,8 +512,12 @@ impl ApplicationHandler for App {
         match event_loop
             .create_window(attributes)
             .context("creating the window")
-            .and_then(|window| Renderer::new(Arc::new(window)))
-        {
+            .and_then(|window| {
+                // Texture/mesh browsing is keyboard-only; the cursor has
+                // nothing to click on.
+                window.set_cursor_visible(false);
+                Renderer::new(Arc::new(window))
+            }) {
             Ok(mut renderer) => {
                 renderer.show(&self.assets[self.current]);
                 self.state = Some(renderer);

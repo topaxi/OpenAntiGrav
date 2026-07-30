@@ -918,6 +918,8 @@ impl Gpu {
                 .create_window(attributes)
                 .context("creating the window")?,
         );
+        // Racing is keyboard/gamepad-only; the cursor has nothing to click on.
+        window.set_cursor_visible(false);
 
         let instance = wgpu::Instance::default();
         let surface = instance
