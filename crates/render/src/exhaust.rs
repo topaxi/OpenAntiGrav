@@ -573,10 +573,19 @@ fn range(rng: &mut Rng, (lo, hi): (f32, f32)) -> f32 {
 /// stacked on top of the history and produced a plume long enough to cover the
 /// track.
 ///
-/// This is now the *only* displacement along the exhaust direction: the values
-/// once used here as per-layer position offsets turned out to be
-/// [`LAYER_SCROLL_U`] rates, so nothing recovered pushes a layer backwards.
-pub const TRAIL_LENGTH: f32 = 3.0;
+/// **Zero, and that is the point.** This is the only displacement along the exhaust
+/// direction, and it is entirely invented: the values once used here as per-layer
+/// position offsets turned out to be [`LAYER_SCROLL_U`] rates, so **nothing
+/// recovered pushes a sample backwards at all**. The 2026-07-30 PPSSPP reference
+/// shows a far more compact plume than ours, and of the candidate causes this is the
+/// only one that is not a recovered value - so it goes first, and to zero rather
+/// than to a smaller guess.
+///
+/// The ribbon's length is therefore now exactly its position history: ten ticks of
+/// where the nozzle actually was. [`trail_weight`] is kept, and still carries the
+/// recovered curve shape, so that if a matched comparison ever calls for a stretch
+/// the shape to apply it with is already here.
+pub const TRAIL_LENGTH: f32 = 0.0;
 
 /// Displacement along the exhaust direction for a sample at fraction `t` of the
 /// history, in world units.
@@ -595,11 +604,22 @@ pub const TRAIL_LENGTH: f32 = 3.0;
 /// [`TRAIL_LENGTH`] so it cannot be mistaken for a recovered value.
 #[must_use]
 pub fn trail_weight(t: f32) -> f32 {
+    trail_ease(t) * TRAIL_LENGTH
+}
+
+/// The recovered ease curve, normalised to `0.0` at `t = 0` and `1.0` at `t = 1`.
+///
+/// Split out from [`trail_weight`] so the **shape** - which is the original's - stays
+/// testable independently of the **scale** - which is ours and is currently zero.
+/// Folding the two together made the shape untestable the moment the scale went to
+/// zero, which is the wrong way round: the recovered half should be the durable half.
+#[must_use]
+pub fn trail_ease(t: f32) -> f32 {
     // With the argument scaled by K the exponent is just -t, so the curve is
     // `1 - exp(-t)`: zero at the head, 0.632 at the tail.
     let raw = 1.0 - (-t).exp();
     let full = 1.0 - (-1.0f32).exp();
-    raw / full * TRAIL_LENGTH
+    raw / full
 }
 
 /// Six vertices for one ribbon segment, widened by `across` at both ends.
@@ -1364,20 +1384,21 @@ mod tests {
     /// pins the shape rather than the magnitude.
     #[test]
     fn the_trail_ease_is_monotonic_over_its_span() {
-        assert_eq!(trail_weight(0.0), 0.0);
-        assert!((trail_weight(1.0) - TRAIL_LENGTH).abs() < 1e-4);
+        // The recovered shape, asserted on its own so it survives the scale being
+        // whatever a comparison ends up calling for - zero, at present.
+        assert_eq!(trail_ease(0.0), 0.0);
+        assert!((trail_ease(1.0) - 1.0).abs() < 1e-6);
         let mut last = -1.0;
         for i in 0..=20 {
-            let w = trail_weight(i as f32 / 20.0);
+            let w = trail_ease(i as f32 / 20.0);
             assert!(w > last, "not monotonic at {i}");
             last = w;
         }
-        // Eased, not linear: half way along the history it is past half the span.
-        assert!(
-            trail_weight(0.5) > TRAIL_LENGTH * 0.5,
-            "{}",
-            trail_weight(0.5)
-        );
+        // Eased, not linear: half way along it is already past half the span.
+        assert!(trail_ease(0.5) > 0.5, "{}", trail_ease(0.5));
+
+        // And the scale is applied on top, whatever it is.
+        assert!((trail_weight(1.0) - TRAIL_LENGTH).abs() < 1e-4);
     }
 
     /// The flare is emissive, so it must not take the mesh shader's light rig.
