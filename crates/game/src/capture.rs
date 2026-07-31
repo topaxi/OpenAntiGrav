@@ -174,6 +174,13 @@ fn menu_page(
     // Seeded after supplying, and from the same list the live menus use, so
     // what the flag draws is what a player would see rather than whatever each
     // row's list happened to start on.
+    //
+    // No `Menu::in_effect` to go with it, deliberately: the RENDERER row's
+    // restart note is the gap between the settings file and a *running* game,
+    // and there is no running game here - this path makes a device of its own to
+    // draw one frame with. Supplying the settings value would draw a note that
+    // is silent by construction; supplying this capture's adapter would say a
+    // player had changed something they have not touched.
     for (key, value) in crate::settings::menu_seeds(settings, anisotropy) {
         model.seed(key, &value);
     }

@@ -269,13 +269,15 @@ title = "GRAPHICS"
 # The only row on either settings page that cannot take effect this run. The
 # device is made once, at boot, and every pipeline and uploaded mesh hangs off
 # it. Not greyed and not warned - it is a live setting whose effect is simply
-# deferred, which is the same thing LANGUAGE does. See
+# deferred, which is the same thing LANGUAGE does - so it says so instead, from
+# the moment it is moved off the adapter the game is actually drawing with. See
 # `docs/architecture/menus.md`.
 [[page.entry]]
 kind = "choice"
 label = "RENDERER"
 setting = "graphics.renderer"
 values_from = "renderers"
+restart_required = "RESTART THE GAME TO DRAW WITH THIS"
 
 # What percentage of the displayed size the game is actually rendered at.
 # Below 100 is the usual internal-resolution knob, above it is supersampling,

@@ -952,6 +952,12 @@ struct Gpu {
     offered: Vec<wgpu::PresentMode>,
     /// What the RENDERER row offers. See [`adapter::Chosen::offered`].
     adapters: Vec<String>,
+    /// What the RENDERER row would have to say to describe this run, which is
+    /// not necessarily what the settings file says: a named adapter that would
+    /// not make a device fell back to the default, and the default is drawing
+    /// with something in particular. See [`adapter::Chosen::in_use`] and the
+    /// row's restart note.
+    in_use: Vec<String>,
 }
 
 /// What one adapter has to hand over before it can be drawn with.
@@ -967,6 +973,7 @@ struct BroughtUp {
     config: wgpu::SurfaceConfiguration,
     offered: Vec<wgpu::PresentMode>,
     adapters: Vec<String>,
+    in_use: Vec<String>,
 }
 
 impl Gpu {
@@ -999,12 +1006,36 @@ impl Gpu {
         // has to be checked against this same list, and re-requesting an
         // adapter to ask would be a second answer to the same question.
         let offered = surface.get_capabilities(&chosen.adapter).present_modes;
+        // Said here, after the device and the surface config, so the line is
+        // about an adapter that *worked*: an attempt that dies at either of them
+        // prints its own failure and falls back, and one line naming the loser
+        // and another naming the winner would leave a bug report to guess which
+        // one drew the picture. It also has to be said at all - `default` names
+        // nothing a player could look up, and a name this machine no longer has
+        // silently becomes the default. The driver comes with it because "which
+        // llvmpipe" and "which Mesa" are the next questions.
+        let info = chosen.adapter.get_info();
+        println!(
+            "renderer: {} (setting: {renderer}, driver: {} {})",
+            adapter::label(info.backend, &info.name, info.device_type),
+            if info.driver.is_empty() {
+                "unnamed"
+            } else {
+                &info.driver
+            },
+            if info.driver_info.is_empty() {
+                "-"
+            } else {
+                &info.driver_info
+            },
+        );
         Ok(BroughtUp {
             device,
             queue,
             config,
             offered,
             adapters: chosen.offered,
+            in_use: chosen.in_use,
         })
     }
 
@@ -1080,6 +1111,7 @@ impl Gpu {
             config,
             offered,
             adapters,
+            in_use,
         } = brought;
 
         let mut gpu = Self {
@@ -1090,6 +1122,7 @@ impl Gpu {
             config,
             offered,
             adapters,
+            in_use,
         };
         gpu.config.present_mode = gpu.present_mode(settings.vsync);
         gpu.surface.configure(&gpu.device, &gpu.config);
@@ -1920,6 +1953,19 @@ impl Session {
             .collect();
         model.supply(menu::ValueSource::Renderers, &renderers);
         self.seed_menu(&mut model);
+        // What the row is set to comes from the settings file, above; what the
+        // game is *drawing with* can only come from here, and the RENDERER row's
+        // restart note is the difference between the two. Told every time the
+        // menus open rather than once, because the model is new every time.
+        let in_use: Vec<menu::Value> = self
+            .gpu
+            .in_use
+            .iter()
+            .map(|name| menu::Value::Text(name.clone()))
+            .collect();
+        if !model.in_effect("graphics.renderer", &in_use) {
+            eprintln!("note: nothing in the menus defers graphics.renderer");
+        }
 
         // **The movie planes are asked for only when there is a movie to put in
         // them.** This used to be unconditionally `None`, on the grounds that

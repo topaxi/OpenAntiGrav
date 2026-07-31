@@ -326,6 +326,43 @@ pub struct Warning {
     pub message: String,
 }
 
+/// A note shown against a row whose new value is stored but cannot take effect
+/// until the game is relaunched.
+///
+/// The third of the three things a row can say about itself, and the one the
+/// other two cannot: `disabled_by` is "not now, because of that row", a
+/// [`Warning`] is "stored, and pointless next to that row", and this is "stored,
+/// and nothing on this machine will act on it before the next launch". Only the
+/// RENDERER row is like that today - the device is made once, at boot, and every
+/// pipeline and uploaded mesh hangs off it.
+///
+/// Unlike a warning this depends on nothing in the definition, because the
+/// question it answers is not about another row: it is whether the row has been
+/// moved off *what the game is actually doing*. Only the composition root knows
+/// that, and it says so through [`Menu::in_effect`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Restart {
+    /// What to tell the player. Shown under the rows, the same place a
+    /// [`Warning`]'s message is.
+    pub message: String,
+    /// Every value that describes what this setting is doing *this run*.
+    ///
+    /// Empty until [`Menu::in_effect`] supplies it, and until then the note is
+    /// silent: a row that cannot be compared against anything has nothing
+    /// truthful to say, and guessing would mean warning about a change the
+    /// player has not made. It is deliberately **not** seeded from
+    /// [`Menu::seed`], which reads the settings file - by the second time the
+    /// menus open, the file holds the value the player just chose and comparing
+    /// against it would say a change had taken effect when it had not.
+    ///
+    /// A list, for the same reason a [`Condition`] holds one: several rows can
+    /// spell the same run. A game booted on `default` is drawing with a
+    /// particular adapter *and* is on the default, so naming that adapter
+    /// explicitly changes the settings file and changes nothing about the
+    /// picture - and a note saying to restart for it would be false.
+    in_effect: Vec<Value>,
+}
+
 /// One row of a page.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Entry {
@@ -365,6 +402,9 @@ pub enum Entry {
         /// What makes this row's setting stored but ineffective. See
         /// [`Menu::warning`].
         warning: Option<Warning>,
+        /// What this row says when it has been moved off the value the game is
+        /// running on. See [`Menu::restart_note`].
+        restart: Option<Restart>,
     },
     /// Flips a boolean setting.
     Toggle {
@@ -379,6 +419,9 @@ pub enum Entry {
         /// What makes this row's setting stored but ineffective. See
         /// [`Menu::warning`].
         warning: Option<Warning>,
+        /// What this row says when it has been moved off the value the game is
+        /// running on. See [`Menu::restart_note`].
+        restart: Option<Restart>,
     },
     /// Shows what an abstract button is currently bound to.
     ///
@@ -466,6 +509,18 @@ impl Entry {
     pub fn warning(&self) -> Option<&Warning> {
         match self {
             Self::Choice { warning, .. } | Self::Toggle { warning, .. } => warning.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// This row's restart note, if it declared one.
+    ///
+    /// Declared, not applying: whether it currently has anything to say is
+    /// [`Menu::restart_note`], which needs the value in effect this run.
+    #[must_use]
+    pub fn restart(&self) -> Option<&Restart> {
+        match self {
+            Self::Choice { restart, .. } | Self::Toggle { restart, .. } => restart.as_ref(),
             _ => None,
         }
     }
@@ -622,6 +677,13 @@ mod raw {
         /// row's setting is stored but has no effect. Only `choice` and
         /// `toggle` rows may carry it.
         pub warn_when: Option<Warning>,
+        /// `restart_required = "..."`: what to say once this row has been moved
+        /// off the value the game is running on. The message rather than a
+        /// `true`, for the reason a `warn_when` carries one - a marker with
+        /// nothing to read is a puzzle - and because the wording belongs next to
+        /// the row it describes rather than in the code. Only `choice` and
+        /// `toggle` rows may carry it.
+        pub restart_required: Option<String>,
         /// Reserved for localisation: the id of a string in the disc's own
         /// table, for a build that wants the original's wording.
         ///
@@ -818,10 +880,12 @@ fn resolve(
         problem: format!("a {:?} entry needs {field}", entry.kind),
     };
 
-    // Only a row that can be adjusted can be disabled. On a `back` or a
-    // `submenu` the field would parse and do nothing, which is the failure the
-    // rest of this loader exists to make impossible.
-    if (entry.disabled_by.is_some() || entry.warn_when.is_some())
+    // Only a row that can be adjusted can be disabled, warned or deferred. On a
+    // `back` or a `submenu` the field would parse and do nothing, which is the
+    // failure the rest of this loader exists to make impossible.
+    if (entry.disabled_by.is_some()
+        || entry.warn_when.is_some()
+        || entry.restart_required.is_some())
         && !matches!(entry.kind.as_str(), "choice" | "toggle")
     {
         return Err(Error::BadEntry {
@@ -842,6 +906,23 @@ fn resolve(
         .as_ref()
         .map(|warning| warning_from(warning, context))
         .transpose()?;
+    // An empty message is the `restart_required = true` this field deliberately
+    // is not: a marker with nothing under it says something is wrong and does
+    // not say what to do about it.
+    let restart = match entry.restart_required.as_deref() {
+        Some("") => {
+            return Err(Error::BadEntry {
+                context: context.to_string(),
+                problem: "a restart_required needs a message: it is what the player is told"
+                    .to_string(),
+            });
+        }
+        Some(message) => Some(Restart {
+            message: message.to_string(),
+            in_effect: Vec::new(),
+        }),
+        None => None,
+    };
 
     match entry.kind.as_str() {
         "submenu" => {
@@ -895,6 +976,7 @@ fn resolve(
                 current: 0,
                 disabled_by,
                 warning,
+                restart,
             })
         }
         "toggle" => {
@@ -905,6 +987,7 @@ fn resolve(
                 on: false,
                 disabled_by,
                 warning,
+                restart,
             })
         }
         "binding" => {
@@ -1081,6 +1164,48 @@ impl Menu {
         seeded
     }
 
+    /// Tells every `restart_required` row that edits `setting` what the game is
+    /// **actually doing this run**.
+    ///
+    /// The third narrow call alongside [`Self::seed`] and [`Self::supply`], and
+    /// the distinction between it and `seed` is the whole point: `seed` says
+    /// what the settings file holds, this says what the running build is doing,
+    /// and a restart note exists precisely for the setting where those two can
+    /// disagree. Seeding both from the file would make the note vanish the
+    /// second time the menus opened - by then the file holds the value the
+    /// player chose, and nothing would be left to compare it against.
+    ///
+    /// Called after [`Self::supply`], for the same reason `seed` is: on a
+    /// disc-supplied or machine-supplied list there is nothing to compare
+    /// against until the list is there.
+    ///
+    /// Returns whether any row took it, which is how a caller notices a key
+    /// nothing defers - a `restart_required` row nobody supplies is silent, and
+    /// silence is what this is meant to prevent.
+    pub fn in_effect(&mut self, setting: &str, values: &[Value]) -> bool {
+        let mut told = false;
+        for page in &mut self.definition.pages {
+            for entry in &mut page.entries {
+                let (key, restart) = match entry {
+                    Entry::Choice {
+                        setting, restart, ..
+                    }
+                    | Entry::Toggle {
+                        setting, restart, ..
+                    } => (setting, restart),
+                    _ => continue,
+                };
+                if key == setting
+                    && let Some(restart) = restart.as_mut()
+                {
+                    values.clone_into(&mut restart.in_effect);
+                    told = true;
+                }
+            }
+        }
+        told
+    }
+
     /// Fills in every row whose values come from `source`.
     ///
     /// The mirror of [`Self::seed`]: that one says what a row is *set* to, this
@@ -1244,6 +1369,30 @@ impl Menu {
         })
     }
 
+    /// This row's restart note, if it has one and the row has been moved off
+    /// what the game is running on.
+    ///
+    /// Drawn normally like a warned row and for a stronger version of the same
+    /// reason: the setting is stored, it is what the next launch will use, and
+    /// greying it would say "you cannot change this" about the one row a player
+    /// most needs to be able to change - the way back from an adapter that will
+    /// not draw.
+    ///
+    /// Silent until the composition root has said what is in effect, and silent
+    /// while the row still holds it: a note that is on the moment the menus open
+    /// is one nobody reads by the time it means something.
+    #[must_use]
+    pub fn restart_note<'a>(&self, entry: &'a Entry) -> Option<&'a Restart> {
+        let chosen = entry.chosen();
+        entry.restart().filter(|restart| {
+            !restart.in_effect.is_empty()
+                && !restart
+                    .in_effect
+                    .iter()
+                    .any(|running| Some(running) == chosen.as_ref())
+        })
+    }
+
     /// Whether the row the cursor is on is inert.
     fn selected_is_disabled(&self) -> bool {
         self.page()
@@ -1403,10 +1552,14 @@ pub fn draw_list(
         text: page.title.clone(),
     });
 
-    // The first warned row's message, shown once under the rows however many
+    // The first noted row's message, shown once under the rows however many
     // rows are marked: two lines of small text competing for the same corner
     // would be less readable than one, and the markers already say which rows.
-    let mut warned: Option<String> = None;
+    // A restart note and a warning share the slot and the first row in page
+    // order wins, because they are the same kind of thing to a player - "this
+    // row is not doing what it says" - and ranking them would mean deciding
+    // which of two true sentences to hide.
+    let mut noted: Option<String> = None;
     for (row, entry) in page.entries.iter().enumerate() {
         let y = FIRST_ROW_Y + row as f32 * ROW_HEIGHT;
         let selected = row == menu.selected();
@@ -1430,8 +1583,12 @@ pub fn draw_list(
         // Marked in the margin rather than by recolouring the row: the colour
         // already means selected, normal or inert, and a fourth meaning on the
         // same channel would collide with those three. See `WARNING`.
-        if let Some(warning) = menu.warning(entry) {
-            warned.get_or_insert(warning.message.clone());
+        let note = menu
+            .warning(entry)
+            .map(|warning| &warning.message)
+            .or_else(|| menu.restart_note(entry).map(|restart| &restart.message));
+        if let Some(message) = note {
+            noted.get_or_insert(message.clone());
             out.push(Draw::Text {
                 x: MARGIN_X - 18.0,
                 y,
@@ -1491,7 +1648,7 @@ pub fn draw_list(
 
     // Under the last row rather than at a fixed height, so it sits with the
     // page it belongs to instead of floating away from a short one.
-    if let Some(message) = warned {
+    if let Some(message) = noted {
         out.push(Draw::Text {
             x: MARGIN_X - 18.0,
             y: FIRST_ROW_Y + page.entries.len() as f32 * ROW_HEIGHT + 6.0,
@@ -2068,6 +2225,209 @@ disabled_by = { setting = "a.vsync", value = true }
         let e = Definition::parse(text).expect_err("must not load");
         assert!(matches!(e, Error::BadEntry { .. }), "{e}");
         assert!(e.to_string().contains("disabled_by"), "{e}");
+    }
+
+    /// The RENDERER row is the one setting on either page that a running game
+    /// cannot act on, so it is the one row that has to say so. Pinned to the
+    /// asset because losing the field is invisible: the row keeps working, keeps
+    /// storing, and simply stops explaining why nothing changed.
+    #[test]
+    fn the_renderer_row_says_a_restart_is_needed() {
+        let definition = built_in();
+        let entry = definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .find(|entry| entry.setting() == Some("graphics.renderer"))
+            .expect("nothing edits graphics.renderer");
+        let restart = entry.restart().expect("the renderer defers to a restart");
+        assert!(
+            restart.message.to_uppercase().contains("RESTART"),
+            "the message has to say the word: {:?}",
+            restart.message
+        );
+        // Every other row on the two settings pages applies this run. A second
+        // one appearing here is not necessarily wrong, but it is a claim about
+        // what the game can do live and it should be made deliberately.
+        let deferred: Vec<&str> = definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.restart().is_some())
+            .filter_map(Entry::setting)
+            .collect();
+        assert_eq!(deferred, ["graphics.renderer"]);
+    }
+
+    /// The note is about what the *game* is doing, not about what the settings
+    /// file holds - which is why it stays quiet until it has been told, and why
+    /// it goes quiet again when the row comes back.
+    #[test]
+    fn the_restart_note_appears_only_once_the_row_leaves_what_is_running() {
+        let mut menu = Menu::new(built_in());
+        assert!(menu.open("graphics"), "the graphics page exists");
+        let adapters = ["default", "vulkan: Card", "vulkan: Other (cpu)"]
+            .map(|name| Choice::plain(name.to_string()));
+        menu.supply(ValueSource::Renderers, &adapters);
+        menu.seed(
+            "graphics.renderer",
+            &Value::Text("vulkan: Card".to_string()),
+        );
+        let row = |menu: &Menu| {
+            menu.page()
+                .entries
+                .iter()
+                .find(|entry| entry.setting() == Some("graphics.renderer"))
+                .expect("the renderer is on the graphics page")
+                .clone()
+        };
+
+        // Seeded, listed, and nothing has said what is running: silent. The
+        // alternative is a note on a menu nobody has touched.
+        assert!(menu.restart_note(&row(&menu)).is_none());
+
+        assert!(menu.in_effect(
+            "graphics.renderer",
+            &[Value::Text("vulkan: Card".to_string())]
+        ));
+        assert!(
+            menu.restart_note(&row(&menu)).is_none(),
+            "the row still holds what the game is drawing with"
+        );
+
+        // Moving it is the whole point, and the row is *not* greyed: it is the
+        // way back from an adapter that will not draw.
+        let events = press(&mut menu, &[button::RIGHT]);
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert!(menu.restart_note(&row(&menu)).is_some());
+
+        // And back again, because a note that never clears teaches a player to
+        // ignore it.
+        press(&mut menu, &[button::LEFT]);
+        assert!(menu.restart_note(&row(&menu)).is_none());
+    }
+
+    /// A game that let wgpu pick is on `default` *and* on whatever wgpu picked.
+    /// Naming that adapter changes the settings file and nothing about the
+    /// picture, so a note telling the player to restart for it would be false.
+    #[test]
+    fn naming_the_adapter_the_default_already_resolved_to_is_not_a_change() {
+        let mut menu = Menu::new(built_in());
+        assert!(menu.open("graphics"));
+        let adapters = ["default", "vulkan: Card", "vulkan: Other"]
+            .map(|name| Choice::plain(name.to_string()));
+        menu.supply(ValueSource::Renderers, &adapters);
+        menu.seed("graphics.renderer", &Value::Text("default".to_string()));
+        menu.in_effect(
+            "graphics.renderer",
+            &[
+                Value::Text("default".to_string()),
+                Value::Text("vulkan: Card".to_string()),
+            ],
+        );
+        let row = |menu: &Menu| {
+            menu.page()
+                .entries
+                .iter()
+                .find(|entry| entry.setting() == Some("graphics.renderer"))
+                .expect("the renderer is on the graphics page")
+                .clone()
+        };
+
+        // `default` -> `vulkan: Card`, the adapter it already resolved to.
+        press(&mut menu, &[button::RIGHT]);
+        assert_eq!(
+            row(&menu).chosen(),
+            Some(Value::Text("vulkan: Card".to_string()))
+        );
+        assert!(menu.restart_note(&row(&menu)).is_none());
+
+        // One further along is a different card, and that does need a restart.
+        press(&mut menu, &[button::RIGHT]);
+        assert!(menu.restart_note(&row(&menu)).is_some());
+    }
+
+    /// The visible half: an amber marker in the margin and one line under the
+    /// rows, the same channel a warning uses, because to a player they are the
+    /// same sentence - this row is not doing what it says.
+    #[test]
+    fn a_restart_note_is_drawn_in_the_margin_and_under_the_rows() {
+        let mut menu = Menu::new(built_in());
+        assert!(menu.open("graphics"));
+        let adapters = ["default", "vulkan: Card"].map(|name| Choice::plain(name.to_string()));
+        menu.supply(ValueSource::Renderers, &adapters);
+        menu.seed("graphics.renderer", &Value::Text("default".to_string()));
+        menu.in_effect("graphics.renderer", &[Value::Text("default".to_string())]);
+
+        let amber = |menu: &Menu| {
+            draw_list(menu, &|_| vec!["X"], None)
+                .into_iter()
+                .filter_map(|draw| match draw {
+                    Draw::Text { color, text, .. } if color == WARNING => Some(text),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(amber(&menu).is_empty(), "nothing has been changed yet");
+
+        press(&mut menu, &[button::RIGHT]);
+        let drawn = amber(&menu);
+        assert_eq!(drawn.len(), 2, "a marker and a message: {drawn:?}");
+        assert_eq!(drawn[0], "!");
+        assert!(drawn[1].to_uppercase().contains("RESTART"), "{drawn:?}");
+    }
+
+    /// A row nothing supplies is silent, which is the one way this mechanism
+    /// can fail invisibly - so `in_effect` reports whether anybody took it, and
+    /// the composition root says so on stderr.
+    #[test]
+    fn telling_a_setting_no_row_defers_reports_it() {
+        let mut menu = Menu::new(built_in());
+        assert!(menu.in_effect("graphics.renderer", &[Value::Text("default".to_string())]));
+        assert!(
+            !menu.in_effect("display.vsync", &[Value::Text("off".to_string())]),
+            "the vsync row applies live and declares no restart"
+        );
+        assert!(!menu.in_effect("nothing.at.all", &[Value::Flag(true)]));
+    }
+
+    /// A marker with nothing to read is a puzzle: it says something is wrong
+    /// and not what to do about it.
+    #[test]
+    fn a_restart_required_with_no_message_is_refused() {
+        let text = r#"
+version = 1
+root = "main"
+[[page]]
+id = "main"
+[[page.entry]]
+kind = "choice"
+label = "RENDERER"
+setting = "a.renderer"
+values = ["one", "two"]
+restart_required = ""
+"#;
+        let e = Definition::parse(text).expect_err("must not load");
+        assert!(matches!(e, Error::BadEntry { .. }), "{e}");
+        assert!(e.to_string().contains("restart_required"), "{e}");
+    }
+
+    /// And on a kind that cannot be adjusted it would parse and do nothing -
+    /// the same refusal `disabled_by` gets, for the same reason.
+    #[test]
+    fn only_an_adjustable_row_may_need_a_restart() {
+        let text = r#"
+version = 1
+root = "main"
+[[page]]
+id = "main"
+[[page.entry]]
+kind = "back"
+label = "BACK"
+restart_required = "RESTART THE GAME"
+"#;
+        let e = Definition::parse(text).expect_err("must not load");
+        assert!(matches!(e, Error::BadEntry { .. }), "{e}");
     }
 
     #[test]

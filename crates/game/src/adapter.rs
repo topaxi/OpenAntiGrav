@@ -148,6 +148,24 @@ pub struct Chosen {
     /// enumerating a second time to ask would be a second answer to the same
     /// question. Same reasoning as `Gpu::offered` and the present modes.
     pub offered: Vec<String>,
+    /// Every setting value that truthfully describes this choice.
+    ///
+    /// What the RENDERER row's restart note is measured against - see
+    /// [`crate::menu::Restart`] - so the question it answers is "would moving
+    /// the row here change anything", not "does the row match the settings
+    /// file".
+    ///
+    /// Usually one name. **Two on the default path**, and that is the case it
+    /// exists for: a game that let wgpu pick is on `default` *and* is drawing
+    /// with a particular adapter, so a player selecting that same adapter by
+    /// name has changed their settings file and nothing else. One entry would
+    /// have told them to restart for a picture that is already on screen.
+    ///
+    /// Empty only when the default path produced an adapter that is not in
+    /// `offered` at all, which is [`wgpu::Instance::request_adapter`] reaching
+    /// past what [`BACKENDS`] enumerates - nothing to compare against, and
+    /// saying nothing beats guessing.
+    pub in_use: Vec<String>,
 }
 
 /// The adapter `setting` names, or the one wgpu would have picked.
@@ -178,11 +196,18 @@ pub fn choose(
     let offered = names(&adapters);
 
     if let Some(index) = setting.choose(&offered) {
+        // `offered[index]` and not the setting's own spelling: the match is
+        // case-insensitive, and this string is compared against a menu row.
+        let in_use = vec![offered[index].clone()];
         let adapter = adapters
             .into_iter()
             .nth(index)
             .expect("`Renderer::choose` returns an index into the list it was given");
-        return Ok(Chosen { adapter, offered });
+        return Ok(Chosen {
+            adapter,
+            offered,
+            in_use,
+        });
     }
     if let Some(wanted) = setting.name() {
         eprintln!(
@@ -195,7 +220,23 @@ pub fn choose(
         ..Default::default()
     }))
     .context("no suitable GPU adapter (is a Vulkan driver installed?)")?;
-    Ok(Chosen { adapter, offered })
+    // Which of the enumerated adapters wgpu landed on, so the row can be told
+    // that naming it changes nothing. Matched on `AdapterInfo` because that is
+    // all an adapter can be compared by; two identical cards are indistinguishable
+    // by it, and the first of them is exactly the one `unique` numbered plainly.
+    let mut in_use = vec![Renderer::DEFAULT.to_string()];
+    let info = adapter.get_info();
+    if let Some(index) = adapters
+        .iter()
+        .position(|candidate| candidate.get_info() == info)
+    {
+        in_use.push(offered[index].clone());
+    }
+    Ok(Chosen {
+        adapter,
+        offered,
+        in_use,
+    })
 }
 
 #[cfg(test)]

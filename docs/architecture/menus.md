@@ -150,6 +150,7 @@ time:
 | An unknown `button` | |
 | `values` **and** `values_from` | A list has to come from exactly one place, or it is undecidable which wins when the source turns out to be empty |
 | Neither `values` nor `values_from` | A choice with nothing to choose |
+| A `restart_required` with an empty message, or on a kind that cannot be adjusted | A marker with nothing under it says something is wrong and not what to do about it; on a `back` row it would parse and do nothing |
 | A page nothing links to | A menu somebody wrote and forgot to hang off anything. Parses, resolves, and ships silently without this |
 
 Three more tests pin the asset against the code's own lists, which is the class
@@ -174,7 +175,7 @@ because the thing under test is ours and needs no disc image.
 
 ## The seams
 
-The menus never read or write settings, and never touch a disc. Three narrow
+The menus never read or write settings, and never touch a disc. Four narrow
 calls carry everything:
 
 - `Menu::supply(source, options)` - what a row *may* be set to, for lists that
@@ -186,6 +187,11 @@ calls carry everything:
 - `Menu::seed(setting, value)` - what a row *is* set to. A value the row does not
   offer is ignored rather than added, so a stale config file cannot smuggle an
   unreachable option onto the list.
+- `Menu::in_effect(setting, values)` - what the game is *doing*, for a
+  `restart_required` row. The one thing `seed` cannot stand in for: it reads the
+  settings file, and this is the setting where the file and the running build
+  are allowed to disagree. Returns whether any row took it, so a key nothing
+  defers is a line on stderr rather than a note that never appears.
 - `MenuEvent::Changed { setting, value }` - what the player moved. The
   composition root applies and persists it.
 
@@ -214,7 +220,11 @@ without this repository containing its name.
   mean destroying the device and with it the surface, the upscaler's
   framebuffer, every pipeline and every uploaded mesh, then rebuilding whatever
   stage is on screen - a `Race` holding all of that. That is a substantially
-  larger change than the row, and deferring it costs a relaunch. What is *not*
+  larger change than the row, and deferring it costs a relaunch. The row *says*
+  so now, from the moment it is moved off the adapter the game is drawing with -
+  see `restart_required` above - and the adapter that made the device is printed
+  at startup, so "which one am I on" is answerable from a log as well as from
+  the menu. What is *not*
   deferred is recovery: `Gpu::bring_up` retries on `default` when the named
   adapter enumerates but will not produce a device or configure the surface,
   because a setting reachable from inside the game must not be able to lock a
@@ -358,6 +368,35 @@ rather than one needing a warning - the loader refuses fewer than two for
 exactly that reason. It is not a hypothetical: the first version of the upscaler
 warning named only the render scale and so fired at every scale of 100 % and
 above whether or not the upscaler was even selected.
+
+A row can be **deferred** as well, which is the third and last thing a row can
+say about itself and the only one that is not about another row. `disabled_by` is
+"not now, because of that row"; a warning is "stored, and pointless next to that
+row"; `restart_required = "..."` is "stored, and nothing on this machine will act
+on it before the next launch". RENDERER is the only row that is like that, and
+until it said so the deferral was documented here and invisible in the game.
+
+It is drawn exactly like a warning - amber `!`, one line under the rows, the
+first noted row in page order taking the shared message slot - because to a
+player the two are the same sentence: this row is not doing what it says.
+
+What it is measured against is the difference. A warning reads another *row*, and
+so needs nothing from outside the menus. "Has this been changed since boot?"
+cannot be answered from inside them at all, and answering it from the settings
+file would be wrong in a way that only shows on the second visit: by then the
+file holds the value the player chose, and the note would clear itself while the
+old adapter was still drawing. So the composition root says what is running
+through a third narrow call, `Menu::in_effect(setting, values)`, and the note
+fires when the row holds none of them.
+
+**Values, plural, and that is the case it exists for**: a game that let wgpu pick
+is on `default` *and* on whatever wgpu picked, so a player naming that adapter
+explicitly has changed their settings file and nothing about the picture. One
+value would have told them to restart for a frame already on screen.
+`adapter::choose` returns both spellings for that reason, and after a fallback -
+a named adapter that enumerates but will not make a device - it returns the one
+that actually worked, so the note is about the picture rather than about the
+file.
 
 The conditions themselves take the same shape as `disabled_by`, and both now
 accept `values = [...]` as well as `value = ...`: "the upscaler does nothing" is true at
