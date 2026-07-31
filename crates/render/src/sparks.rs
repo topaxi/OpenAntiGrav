@@ -3,25 +3,45 @@
 //! Unlike [`crate::exhaust`], this is **not** a reading of the original's
 //! `Ship Collision Fx` node (`0x3d0`). The original ships a dedicated particle
 //! asset for this exact effect, `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB`
-//! (`docs/formats/wad.md`), but the `.pob`/`SYSP` particle-system format is
-//! undecoded on either disc (`docs/formats/README.md`), and the trigger
-//! function this module *is* anchored to - `FUN_088418e0`, the per-tick
-//! consumer of the wall-contact observation ring
-//! (`docs/ghidra/functions/psp-pulse/contact-response.md`) - was read in full
-//! this pass and turns out to drive camera shake, hull damage and a shield hit
-//! flash from one hit, none of which spawns a particle. The actual spark
-//! spawn site is an open thread (`HANDOVER.md`), not decidable by more static
-//! reading; see that page for what would settle it.
+//! (`docs/formats/wad.md`), and the `.pob`/`SYSP` particle-system format
+//! remains undecoded (`docs/formats/README.md`). But the *trigger* is no
+//! longer a gap: `ShipCollisionFx_Trigger` (`0x089246b4`), reached from
+//! `Ship_DispatchCollisionFx` (`0x0883de90`, previously mislabelled "camera
+//! shake" on this page - that function never calls a camera API, it
+//! dispatches the spark unconditionally and *separately* plays a proximity
+//! sound), is read in full in
+//! (`docs/ghidra/functions/psp-pulse/contact-response.md`). It names the
+//! three real spark resources, enforces a cooldown, and computes a severity
+//! value - see [`COLLISION_COOLDOWN`] below for what is now ported.
 //!
-//! So this effect is **authored**, the same tier [`crate::exhaust`]'s `Trail`
-//! is - the project's own "worked example" of a bespoke effect that is not
-//! derived from an authored particle asset. Two things are borrowed rather
-//! than invented outright: [`SEVERITY_SCALE`] and [`EJECTION_SCALE`] anchor
-//! the burst's size and speed to the same per-contact impulse magnitude
-//! `FUN_088418e0` scales by `0.0125` (camera shake) and `0.05` (hull damage),
-//! so a heavier impact reads as a bigger burst. Everything else - particle
-//! count, lifetime, colour, cone angle - has no recovered value behind it and
-//! is picked for a plausible look, not reproduced.
+//! One more thing the trigger's arguments corroborate, worth recording
+//! because it validates this module firing off `oag_physics::wall`
+//! specifically: `Ship_DispatchCollisionFx`'s `damaged` flag is
+//! `contact_record + 0x30 > 0.0`, and `+0x30` is the same ring-buffer field
+//! `contact-response.md` already reads as the *friction* `Body_RecordContact`
+//! stored. Wall contacts carry friction `0.035`; floor, magstrip and reset
+//! contacts carry `0.0` (same page). So "damaged" is not a health check - it
+//! is "this was a wall/track hit, not a floor one", which is exactly the
+//! class of contact `evaluated.wall` reports and nothing else. This module's
+//! trigger is therefore always in the original's "damaged" branch
+//! (`WO_SHIP_COLL_SPARK_DAMAGE`, since `Ship_DispatchCollisionFx` hardcodes
+//! `kind = 0` at its call site), which is a second, independent reason this
+//! module's own single-variant design does not need to branch.
+//!
+//! So this effect is still **authored** for its look - the same tier
+//! [`crate::exhaust`]'s `Trail` is - because the `.pob` asset itself, and
+//! therefore the actual particle count/size/colour/lifetime the original
+//! spawns, remain unrecovered. [`SEVERITY_SCALE`] and [`EJECTION_SCALE`]
+//! stay borrowed rather than replaced by `ShipCollisionFx_Trigger`'s own
+//! `intensity * 2.0 + 0.4` severity formula, deliberately: that formula's
+//! input is an *impulse magnitude* (`Body_RecordContact`'s stored `|p|`),
+//! this module's input is `oag_physics::wall::WallResponse::impact_speed` (a
+//! *velocity*), and what the formula's output is even used for downstream is
+//! still unread (`docs/formats/pob.md`) - porting the literal `2.0`/`0.4`
+//! onto a differently-scaled quantity would overstate what is recovered
+//! rather than under it. The timing constant is different: [`COLLISION_COOLDOWN`]
+//! **is** ported, because it is a pure duration, unit-independent, and
+//! directly settles a real behavioural gap (see below).
 //!
 //! # Two halves, deliberately
 //!
@@ -32,11 +52,14 @@
 //!
 //! [`Sparks::spawn`] does not gate on anything - every call spawns a burst.
 //! The caller (`crates/game/src/race.rs`) is responsible for calling it only
-//! on the **edge** of an impact, not on every tick of a sustained scrape.
-//! `oag_physics::wall::WallResponse::impact` stays `true` for the whole
-//! duration of a scrape, and firing on that level rather than on its rising
-//! edge is exactly the bug `oag_physics::wall::STUN_PER_CONTACT`'s doc
-//! comment already records costing a session of play-testing.
+//! when [`COLLISION_COOLDOWN`] has elapsed since the last burst, not on every
+//! tick of a sustained scrape. `oag_physics::wall::WallResponse::impact` stays
+//! `true` for the whole duration of a scrape, and firing on every one of
+//! those ticks is exactly the bug `oag_physics::wall::STUN_PER_CONTACT`'s doc
+//! comment already records costing a session of play-testing - the fix here
+//! is a cooldown timer rather than a one-shot edge latch, because the
+//! original itself re-fires periodically rather than staying silent for the
+//! rest of the scrape.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
@@ -97,6 +120,18 @@ pub const SIZE_VARIATION: (f32, f32) = (0.6, 1.4);
 
 /// Bounds of the per-particle ejection-speed multiplier. **Authored.**
 pub const EJECTION_VARIATION: (f32, f32) = (0.5, 1.5);
+
+/// Seconds a wall contact must persist before another burst is allowed.
+///
+/// **Recovered.** `ShipCollisionFx_Trigger` (`0x089246b4`,
+/// `docs/ghidra/functions/psp-pulse/contact-response.md`) re-arms exactly
+/// this long after every collision-variant spawn: `instance + 100 = now +
+/// 0.8`, checked on entry and skipped while still armed. A pure duration, so
+/// unlike [`SEVERITY_SCALE`]/[`EJECTION_SCALE`] it needs no unit conversion
+/// to reuse - the caller re-fires a burst every time this many seconds of
+/// continuous contact pass, rather than once per impact and then silence for
+/// the rest of a scrape.
+pub const COLLISION_COOLDOWN: f32 = 0.8;
 
 /// Converts a contact's impact speed into `[0, 1]` burst severity.
 ///

@@ -471,16 +471,17 @@ seen from the authoring side.
       in M6. Each is a `.vex` class the loader already enumerates - see the
       [class table](../formats/vex.md):
       - `Ship Muzzle` `0x3e2` and `cannon_flash` `0x3eb` - weapon firing
-      - [x] `Ship Collision Fx` `0x3d0` - **wall/track impact sparks, but as an
-        authored effect rather than a reading of this class.** The class's own
-        registration path is a dead end (see below) and the trigger function
-        it would plausibly go through, `FUN_088418e0`, was read in full
-        (2026-07-31) and turns out to drive camera shake, hull damage and a
-        shield flash from a hit, none of them a particle spawn - see
-        [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#fun_088418e0s-contact-loop-drives-three-separate-reactions-and-none-of-them-is-a-particle).
-        `oag_render::sparks` instead triggers off our own physics contact data
-        (`oag_physics::wall::WallResponse`), anchored to two of that function's
-        recovered scaling constants but not otherwise recovered - see that
+      - [x] `Ship Collision Fx` `0x3d0` - **wall/track impact sparks, currently
+        an authored effect rather than a reading of this class.** The class's
+        own registration path is a dead end (see below), but the actual
+        trigger, `ShipCollisionFx_Trigger` (`0x089246b4`), was found and read
+        in full (2026-07-31): it names the three real spark resources by
+        string and computes a usable severity formula from the same contact
+        impulse magnitude `contact-response.md` already recovers - see
+        [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function).
+        `oag_render::sparks` still triggers off our own physics contact data
+        (`oag_physics::wall::WallResponse`) rather than this class, and has
+        not yet been retuned against the newly recovered formula - see that
         module's doc comment and the open thread on `HANDOVER.md`.
       - `Cage Collision` `0x3e7` is **out of scope**: PSP-over-PS2 policy, and
         it has 0 nodes on the PSP disc (6 on PS2). Scrape effects for it are

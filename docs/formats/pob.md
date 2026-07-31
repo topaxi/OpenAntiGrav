@@ -223,6 +223,24 @@ promising next static step; short of that, a live capture that steps
 forward from a resolved `WO_SHIP_COLL_SPARK_DAMAGE` target rather than from
 the loader (which this pass did not attempt) is the next live one.
 
+### An interpreter is now located, but its field semantics are not
+
+Following the collision-spark spawn path documented in
+[contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
+(`ShipCollisionFx_Trigger` -> `FUN_08915484` -> `FUN_08916200` ->
+`FUN_088f3174` -> `FUN_088f58a4`) does reach code that reads a resolved SYSP
+resource's fields at **fixed offsets from `resource_base`**: `+0x944`,
+`+0x948` and `+0x94c` are read as a tree of child/sibling pointers (matching
+the same three offsets read once before, in a dead end from an earlier
+pass), and `+0x9a0` is unpacked as two `u16` halves of a `u32`, with both
+halves' reciprocals computed as floats immediately after - plausibly a
+sprite-atlas grid dimension pair, but that is a single-site inference with no
+corpus check behind it, not a claim. None of this has been read against real
+file bytes yet, and going further (`FUN_088f79b4`, which walks a
+`+0x9a4`/`+0x9a8` list next) is its own investigation rather than a quick
+follow-up - left here as a located, not-yet-pursued lead rather than chased
+into a general node-struct decoding project.
+
 ## Cross-platform: the PS2 port uses the identical format
 
 `SCES_547.48/WADS2.WAD` (the PS2 disc's main archive, same

@@ -310,26 +310,43 @@ hit by something - a rival, a weapon - and not to touching the track.
 `crates/physics` used to arm it from the wall constraint and no longer does; see
 `crates/physics/src/wall.rs`'s `STUN_PER_CONTACT`. Confidence **88**.
 
-### `FUN_088418e0`'s contact loop drives three separate reactions, and none of them is a particle
+### `FUN_088418e0`'s contact loop drives three separate reactions, and one of them **is** a particle
 
 **Read in full this pass**, prompted by planning the collision-spark visual
 effect (`oag_render::sparks`) and finding no prior page said what actually
 consumes a hit. The earlier phrase above - "computes camera and audio
 amplitudes" - turns out to conflate two of these three, one of them wrongly;
-corrected here rather than silently.
+corrected here rather than silently. A later pass (below) found the actual
+spark trigger sitting inside reaction #1, which this page had mislabelled
+"camera shake" - so the "one candidate left for a visual spark trigger"
+paragraph that used to close this section is retired; see
+[`ShipCollisionFx_Trigger`](#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
+below.
 
 For each record in the contact ring (`body + 0x170 + n*0x40`, `n < body+0x370`),
 the loop computes `|p|` - the impulse magnitude `Body_RecordContact` stored -
 and feeds it to:
 
-1. **Camera shake**, `FUN_0883de90(fVar21, param_2, piVar17)`, called only when
-   a squared distance to a stored world position (`DAT_08ab10b0 + 0x70`, read
-   as a camera-ish anchor) is in `(0, 10000)` - i.e. gated by proximity. The
-   amplitude is `min(|p| * 0.0125, 1.0)`. **Not decompiled this pass** - the
-   body is unread beyond this call site, so it stays cited by address only.
-   Confidence **60** on "this is a camera-shake amplitude, not something else"
-   (it is the reading `wall.rs`'s doc comment already carried); the function
-   itself is not renamed, per the confidence-band rule below 70.
+1. **`Ship_DispatchCollisionFx` (`0x0883de90`)**, called as
+   `FUN_0883de90(fVar21, param_2, piVar17)`, only when a squared distance to
+   a stored world position
+   (`DAT_08ab10b0 + 0x70`, read as a camera-ish anchor) is in `(0, 10000)` -
+   i.e. gated by proximity. **Decompiled in full this pass.** It finds the
+   nearest of up to 10 `Ship Collision Fx` (`0x3d0`) instances attached to the
+   craft (`param_2 + 0xc80` list, distance to the hit point at `param_3+0x10`),
+   then unconditionally calls `ShipCollisionFx_Trigger(|p|, thatInstance, 0,
+   depth > 0.0)` - **this is the spark spawn**, not a camera effect. Only
+   *after* that, if the reacting craft is the local player
+   (`FUN_0883e64c(param_2) == 1`), it separately plays an audio cue via
+   `FUN_08878750(|p| * 0.0125, ...)` - a proximity-scaled sound, one of two
+   variants depending on whether the hit point is in front of or behind the
+   craft. Nothing in this function's body calls a camera API; the "camera
+   shake" reading this page previously carried was a guess from the `0.0125`
+   scale alone and is **retracted**. Confidence **80** on the control flow
+   (nearest-instance search, unconditional spark dispatch, gated sound); **40**
+   on what `FUN_08878750` actually does with its arguments (sound cue is the
+   likely reading given `PTR_s_...COLLISIONS...`-shaped sound calls elsewhere
+   on this path, but the function itself is unread).
 2. **Hull damage**, `FUN_088439ac(|p| * 0.05 * 0.7, param_2, hitSide, 0, 0)`.
    **Decompiled in full this pass.** It decrements the ship's shield/energy
    (`FUN_0883e6f4(shield - amount, ...)`), accumulates per-kind telemetry
@@ -355,14 +372,71 @@ and feeds it to:
    unimplemented "Shield hit response" (`docs/overview/roadmap.md`, M5), not a
    hull spark. Confidence **75**.
 
-Also written on this pass, since it settles a natural next guess: the same
-loop arms flag bits `0x20` and `0x400020` on `craft + 0x860` right after
-reaction #2, whenever the damage gate fires. **This is the one candidate left
-for an actual visual spark trigger, and its consumer is unlocated** - nothing
-nearby in `FUN_088418e0` or its two decompiled callees reads it, and finding
-what does needs a live PPSSPP capture (breakpoint on a read of that bit
-during a scripted impact), not more static reading. See the open thread on
-`HANDOVER.md`.
+Also written on this pass: the same loop arms flag bits `0x20` and
+`0x400020` on `craft + 0x860` right after reaction #2, whenever the damage
+gate fires. A later pass in this same session found the actual spark trigger
+(reaction #1, above) instead, so these flag bits are no longer read as the
+spark candidate; their consumer is still unlocated and still unimportant to
+the spark question. Left as an open, low-priority thread rather than chased
+further.
+
+## `ShipCollisionFx_Trigger` (`0x089246b4`) is the actual spark-spawn function
+
+Reached from reaction #1 above. **Decompiled in full.** It takes
+`(float intensity, ShipCollisionFx *instance, int kind, char damaged)` and:
+
+1. **Names all three spark variants as literal strings**, spawned through the
+   same `FUN_08915484` resource-by-name path `Ship_DispatchCollisionFx` also
+   uses:
+   - `kind == 2` -> `WO_WEAPON_ABSORB` (shield-absorb effect - see
+     `FUN_08840640` below, not a collision at all).
+   - `kind` is 0 or 1, `damaged == 0` -> `WO_SHIP_COLL_SPARK_NODAMAGE`,
+     regardless of which of 0/1 `kind` is.
+   - `kind == 1`, `damaged != 0` -> `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`.
+   - `kind == 0`, `damaged != 0` -> `WO_SHIP_COLL_SPARK_DAMAGE`. This is the
+     one `Ship_DispatchCollisionFx` reaches from a wall/track contact
+     (`kind` is hardcoded `0` at that call site).
+2. **A 0.8-second cooldown, but only for `kind` 0 and 1.** `instance + 100`
+   holds "don't fire again before this time"; compared against a global clock
+   read at `*(DAT_08ab0818 + 0x40)` on entry, and set to `now + 0.8` after a
+   kind-0/1 spawn succeeds. The gate is `(kind != 0 && kind != 1) ||
+   (instance+100 <= now)`, so `kind == 2` (absorb) **bypasses the cooldown
+   entirely** - it has its own re-trigger discipline via the caller's
+   0.1-second stagger loop (`FUN_08840640`, below).
+3. **A severity value, `intensity * 2.0 + 0.4`, only for the two "damaged"
+   variants** (LEACHBEAM and COLL_SPARK_DAMAGE) - written as the last field of
+   a small stack buffer passed into `FUN_088f44d8` right after the spawned
+   instance is looked back up by hash. `WO_SHIP_COLL_SPARK_NODAMAGE` and
+   `WO_WEAPON_ABSORB` never receive this value at all, so the collision-only
+   read is: **for a track-contact hit at `damaged == true`, the recovered
+   parameter is `|p| * 2.0 + 0.4`, in the same impulse-magnitude units this
+   page already established** (`|p| * 0.0125` for the proximity sound,
+   `|p| * 0.05 * 0.7` for hull damage) - the caller passes the raw,
+   pre-scaling contact impulse magnitude straight through.
+4. **A `"COLLISIONS"` sound cue** (`FUN_089392b0(1.0, ..., "COLLISIONS", ...)`),
+   fired once per surviving kind-0/1 call, separate from and in addition to
+   the proximity cue `Ship_DispatchCollisionFx` itself plays.
+
+Confidence **85**: unambiguous, branch-clear decompile with three literal
+string names pinning the variant selection and clean, self-contained
+arithmetic for both the cooldown and the severity formula. Not runtime-traced.
+
+**What this does not yet establish**: what `intensity * 2.0 + 0.4` is a
+severity *of* - the stack buffer it's written into is opaque without reading
+`FUN_088f443c`/`FUN_088f44d8`, so whether it maps to spawn count, particle
+scale, lifetime or something else in the `.pob`-resolved resource is still
+open (see [`docs/formats/pob.md`](../../../formats/pob.md)). The two
+non-spark callers below are recorded for completeness, not chased further:
+
+- **`FUN_088439ac`** (hull damage, documented above) also calls
+  `ShipCollisionFx_Trigger(1.0, ..., shieldFlag, 1)` with a **hardcoded**
+  intensity of `1.0`, but only on the branch where shield/energy has just
+  reached zero - a death/destruction burst, not a per-hit spark, and not
+  scaled by damage magnitude.
+- **`FUN_08840640`** is the shield-absorb ability's own effect: it plays an
+  `"ABSORB"` sound once, then calls `ShipCollisionFx_Trigger(1.0, ..., 2, 0)`
+  in a loop over up to 10 attached instances, staggering a global float
+  (`DAT_08abf564`) by `0.1` per iteration - unrelated to wall/track contact.
 
 **Also checked and ruled out**: the `Ship Collision Fx` `0x3d0` class's own
 registration wrapper, `FUN_08924bf0` (`Vex_RegisterClass(&DAT_08b63f18,

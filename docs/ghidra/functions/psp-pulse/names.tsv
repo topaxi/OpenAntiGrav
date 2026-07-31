@@ -253,3 +253,5 @@
 0x0891e35c	function	Gfx_Enqueue	65	exhaust.md
 0x0890486c	function	Gfx_ViewDepth	60	exhaust.md
 0x0883d850	function	Ship_ThrustInput	55	exhaust.md
+0x089246b4	function	ShipCollisionFx_Trigger	85	contact-response.md
+0x0883de90	function	Ship_DispatchCollisionFx	80	contact-response.md

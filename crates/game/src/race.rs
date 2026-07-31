@@ -1146,16 +1146,19 @@ pub struct Race {
     /// The sparks' generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     sparks_rng: Rng,
-    /// Whether `oag_physics::wall::WallResponse::impact` was set on the
-    /// previous tick.
+    /// Seconds remaining before another spark burst is allowed.
     ///
-    /// This crate's own edge detector for spark spawning: `impact` stays
-    /// `true` for every tick of a sustained scrape, and spawning a burst on
-    /// every one of those ticks rather than on the rising edge is exactly the
-    /// per-frame-instead-of-per-impact bug
+    /// Counts down every tick regardless of contact, and gates a burst
+    /// alongside `oag_physics::wall::WallResponse::impact` - see
+    /// `oag_render::sparks::COLLISION_COOLDOWN`'s doc comment for why this is
+    /// a cooldown timer and not a one-shot edge latch: `impact` stays `true`
+    /// for every tick of a sustained scrape, and spawning a burst on every
+    /// one of those ticks is the per-frame-instead-of-per-impact bug
     /// `oag_physics::wall::STUN_PER_CONTACT`'s doc comment already records
-    /// costing a session of play-testing.
-    sparks_was_impacting: bool,
+    /// costing a session of play-testing, but the recovered original itself
+    /// re-fires periodically rather than going silent for the rest of the
+    /// scrape.
+    sparks_cooldown: f32,
 }
 
 /// Ticks a `Reset` contact is ignored for after a respawn.
@@ -1230,7 +1233,7 @@ impl Race {
             sparks_rng: Rng::new(SPARKS_SEED),
             // No sync frame to be mid-scrape on, so the first tick's contact -
             // if any - is always read as a fresh impact.
-            sparks_was_impacting: false,
+            sparks_cooldown: 0.0,
         }
     }
 
@@ -1344,12 +1347,12 @@ impl Race {
             self.exhaust.push_trail(nozzle, back);
         }
 
-        // Edge-triggered, not level-triggered - see `Self::sparks_was_impacting`'s
-        // doc comment for why a sustained scrape must not spawn a burst every
-        // tick.
-        let impact_edge = evaluated.wall.impact && !self.sparks_was_impacting;
-        self.sparks_was_impacting = evaluated.wall.impact;
-        if impact_edge && let Some(contact) = evaluated.wall.resolved {
+        // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
+        // doc comment for why a sustained scrape must re-fire periodically
+        // rather than spawn once and go silent.
+        self.sparks_cooldown = (self.sparks_cooldown - self.dt).max(0.0);
+        let can_fire = evaluated.wall.impact && self.sparks_cooldown <= 0.0;
+        if can_fire && let Some(contact) = evaluated.wall.resolved {
             // `contact.point` is deliberately the *penetrating* hull sample
             // point, not the wall surface - see its doc comment on
             // `oag_physics::wall::WallContact`, which matches the original's
@@ -1367,6 +1370,7 @@ impl Race {
                 evaluated.wall.impact_speed,
                 &mut self.sparks_rng,
             );
+            self.sparks_cooldown = sparks::COLLISION_COOLDOWN;
         }
         // Unconditional, like the exhaust: already-live particles keep ageing
         // even on a tick with no fresh impact.
@@ -3228,11 +3232,14 @@ mod tests {
     }
 
     /// **The firehose trap.** A ship held against a wall for many ticks must
-    /// spawn one spark burst, on the impact's rising edge, not one burst per
-    /// tick of the ensuing scrape - the shape of bug this guards against is
-    /// the same one `oag_physics::wall::STUN_PER_CONTACT`'s doc comment
-    /// records this crate cost a session of play-testing to, for the
-    /// collision stun rather than sparks.
+    /// spawn one spark burst per `oag_render::sparks::COLLISION_COOLDOWN`,
+    /// not one burst per tick of the ensuing scrape - the shape of bug this
+    /// guards against is the same one `oag_physics::wall::STUN_PER_CONTACT`'s
+    /// doc comment records this crate cost a session of play-testing to, for
+    /// the collision stun rather than sparks. Ten ticks (`10/60 s`) is well
+    /// inside the cooldown, so this only checks the *no-refire-yet* half; see
+    /// `a_sustained_scrape_refires_after_the_cooldown_elapses` for the other
+    /// half.
     ///
     /// The plane and approach are copied from
     /// [`falling_through_any_other_class_does_not_respawn`], a known-working
@@ -3268,12 +3275,71 @@ mod tests {
         for tick in 0..10 {
             push_toward_wall(&mut race);
             race.tick(&InputSnapshot::default());
-            assert_eq!(
-                race.sparks().alive_count(),
-                after_first_impact,
-                "tick {tick} of the same scrape spawned another burst"
+            assert!(
+                race.sparks().alive_count() <= after_first_impact,
+                "tick {tick} of the same scrape spawned another burst before the cooldown elapsed"
             );
         }
+    }
+
+    /// The other half of the firehose-trap guard: unlike a one-shot edge
+    /// latch, `ShipCollisionFx_Trigger`'s recovered behaviour is a periodic
+    /// re-fire - `oag_render::sparks::COLLISION_COOLDOWN` (`0.8` s) after the
+    /// last burst, for as long as contact continues. A spark's own
+    /// `oag_render::sparks::LIFETIME` (`0.4` s) is shorter than the cooldown,
+    /// so the pool is provably empty again by the time the second burst is
+    /// due - `alive_count` going `> 0` after a stretch of `0` is an
+    /// unambiguous signal of a fresh burst, not a leftover from the first.
+    #[test]
+    fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
+        let handling = hulled_handling();
+        let setup = setup_with(
+            handling,
+            vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+        );
+        let mut race = Race::start(setup);
+        let dt = race.dt();
+
+        let push_toward_wall = |race: &mut Race| {
+            let body = &mut race.world.ships[0].physics.body;
+            body.position = Vec3::new(20.0, -39.7, 0.0);
+            body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+        };
+
+        push_toward_wall(&mut race);
+        let evaluated = race.tick(&InputSnapshot::default());
+        assert!(
+            evaluated.wall.impact,
+            "the fixture never reaches the wall - not what this test means to check"
+        );
+
+        // Run past the spark lifetime but short of the cooldown: the first
+        // burst must have fully faded, and no second one is due yet.
+        let midpoint_ticks = ((oag_render::sparks::LIFETIME
+            + (oag_render::sparks::COLLISION_COOLDOWN - oag_render::sparks::LIFETIME) / 2.0)
+            / dt)
+            .ceil() as usize;
+        for _ in 0..midpoint_ticks {
+            push_toward_wall(&mut race);
+            race.tick(&InputSnapshot::default());
+        }
+        assert_eq!(
+            race.sparks().alive_count(),
+            0,
+            "the first burst should have fully faded by the cooldown's midpoint"
+        );
+
+        // Run past the cooldown itself: a second burst must have fired.
+        let remaining_ticks =
+            ((oag_render::sparks::COLLISION_COOLDOWN / dt).ceil() as usize + 1) - midpoint_ticks;
+        for _ in 0..remaining_ticks {
+            push_toward_wall(&mut race);
+            race.tick(&InputSnapshot::default());
+        }
+        assert!(
+            race.sparks().alive_count() > 0,
+            "no second burst fired after the cooldown elapsed"
+        );
     }
 
     /// The guard against the failure that would otherwise look like a hang: a
