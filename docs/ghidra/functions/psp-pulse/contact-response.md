@@ -421,12 +421,45 @@ Confidence **85**: unambiguous, branch-clear decompile with three literal
 string names pinning the variant selection and clean, self-contained
 arithmetic for both the cooldown and the severity formula. Not runtime-traced.
 
-**What this does not yet establish**: what `intensity * 2.0 + 0.4` is a
-severity *of* - the stack buffer it's written into is opaque without reading
-`FUN_088f443c`/`FUN_088f44d8`, so whether it maps to spawn count, particle
-scale, lifetime or something else in the `.pob`-resolved resource is still
-open (see [`docs/formats/pob.md`](../../../formats/pob.md)). The two
-non-spark callers below are recorded for completeness, not chased further:
+**Follow-up pass, same session: the severity target is now identified, and
+found not to be portable for a different reason than expected.**
+`FUN_088f443c`/`FUN_088f44d8` (read in full) are a symmetric getter/setter
+pair copying seven words between a stack buffer and offsets `+0x28..+0x40`
+of `iVar2` - the object `FUN_088f24d0` looks up **by the handle the trigger
+just wrote from the freshly spawned instance**, not the shared `.pob`
+resource. So the severity write is confirmed **instance state**, at field
+`+0x34` specifically (buffer index 3, disassembly-confirmed:
+`swc1 f20,0xc(sp)` writes the same `f20` the `intensity * 2.0 + 0.4`
+computation produced, into the middle of the getter-filled buffer, right
+before the setter writes it all back). That object is the generic
+`ParticleSystem` (`0x3c4`) node the `.pob` resource resolves into, reached
+through `FUN_08916200` - a much larger, general-purpose constructor this
+pass did not fully read, since doing so is the general-particle-system
+decode the project's own collision-sparks plan scoped out, not a
+collision-sparks-specific question.
+
+One read past that, `FUN_088f4910`, settles what the field is *for*:
+`+0x34` is loaded once and used as a plain multiplier (`fVar2`) against six
+derived fields (`+0x58`, `+0x5c`, `+0x60`, `+0x64`, `+0x68`, `+0x6c`),
+computed from base values read off a *different* pointer (`iVar1`, likely
+the resource or a resolved child record) together with two sibling instance
+fields (`+0x28`, `+0x2c`). **No clamp appears anywhere on this path.** That
+matters: reproducing `resolve_contact`'s own formula
+([rigid-body.md](rigid-body.md), confidence 90) against this crate's actual
+impulse magnitudes gives `1.39` for a `1` unit/s graze and `69`-`165` for a
+realistic `50`-`119` unit/s impact - so `intensity * 2.0 + 0.4` evaluates to
+`3.18`-`165.6` for any real contact, never anywhere near a `[0, 1]` range.
+The formula is genuinely an unbounded intensity multiplier, and what turns a
+`165x` multiplier into a sane-looking burst is the **base values it
+multiplies** - which live in the resolved `.pob` resource
+([`docs/formats/pob.md`](../../../formats/pob.md)) and remain unrecovered.
+So the severity number is confirmed unusable *as a value*, not merely
+unit-mismatched; `oag_render::sparks` documents this and does not port it,
+while porting [`COLLISION_COOLDOWN`](../../../../crates/render/src/sparks.rs)
+(a pure duration, with no resource-dependent base value) instead.
+
+The two non-spark callers below are recorded for completeness, not chased
+further:
 
 - **`FUN_088439ac`** (hull damage, documented above) also calls
   `ShipCollisionFx_Trigger(1.0, ..., shieldFlag, 1)` with a **hardcoded**

@@ -33,15 +33,29 @@
 //! therefore the actual particle count/size/colour/lifetime the original
 //! spawns, remain unrecovered. [`SEVERITY_SCALE`] and [`EJECTION_SCALE`]
 //! stay borrowed rather than replaced by `ShipCollisionFx_Trigger`'s own
-//! `intensity * 2.0 + 0.4` severity formula, deliberately: that formula's
-//! input is an *impulse magnitude* (`Body_RecordContact`'s stored `|p|`),
-//! this module's input is `oag_physics::wall::WallResponse::impact_speed` (a
-//! *velocity*), and what the formula's output is even used for downstream is
-//! still unread (`docs/formats/pob.md`) - porting the literal `2.0`/`0.4`
-//! onto a differently-scaled quantity would overstate what is recovered
-//! rather than under it. The timing constant is different: [`COLLISION_COOLDOWN`]
-//! **is** ported, because it is a pure duration, unit-independent, and
-//! directly settles a real behavioural gap (see below).
+//! `intensity * 2.0 + 0.4` severity formula - not merely because the units
+//! differ, but because a follow-up pass **checked, with real numbers, and
+//! ruled it out**: the severity value is written to the freshly spawned
+//! particle instance's own field (confirmed instance state, not the shared
+//! `.pob` resource - `docs/formats/pob.md`), and a further read
+//! (`FUN_088f4910`) confirms it is consumed as an **unbounded multiplier**
+//! on several derived emission fields, with **no upper clamp anywhere on
+//! this path**. Reproducing `resolve_contact`'s own literal formula
+//! (`docs/ghidra/functions/psp-pulse/contact-response.md`) against this
+//! crate's actual impulse magnitudes shows why that number cannot be ported
+//! as-is: even a barely-perceptible `1` unit/s graze already produces an
+//! impulse of `1.39`, so `intensity * 2.0 + 0.4 = 3.18` - three times past
+//! any `[0, 1]` ceiling - and a realistic `50`-`119` unit/s impact reaches
+//! `69`-`165`. The formula is real and the arithmetic is right; what makes
+//! a `165x` multiplier read as a sensible burst rather than an explosion is
+//! the **base values it multiplies**, which live inside the resolved
+//! `.pob` resource and are still unrecovered. So this is not a units
+//! mismatch to paper over - it is confirmation that the severity number
+//! cannot be used correctly without the resource data it was designed to
+//! scale. The timing constant is different: [`COLLISION_COOLDOWN`] **is**
+//! ported, because it is a pure duration with no resource-dependent base
+//! value to multiply, and directly settles a real behavioural gap (see
+//! below).
 //!
 //! # Two halves, deliberately
 //!
