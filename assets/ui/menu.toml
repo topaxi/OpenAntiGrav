@@ -267,14 +267,27 @@ values = ["50", "75", "100", "125", "150", "200"]
 # frame; the pipelines are built the first time `fsr1` is chosen.
 #
 # Has no effect at a render scale of 100 % or above: FSR 1 is a magnifier, and
-# asked to minify it re-introduces the aliasing supersampling just removed.
-# Live rather than greyed there, because `disabled_by` matches one value and
-# "100 and above" is three of the six this list offers.
+# asked to minify it re-introduces the aliasing supersampling just removed, so
+# `upscale::magnifies` declines to run it there.
+#
+# Warned rather than greyed, and the difference is who caused it. A greyed row
+# cannot be changed now because another row rules it out. This one can be
+# changed, is stored, and takes effect the moment the render scale comes back
+# under 100 - it is the *combination* that does nothing, and greying would say
+# "you cannot change this", which is false. The values listed are every one the
+# RENDER SCALE row above offers at 100 or above; the loader rejects a value that
+# row cannot hold, so this list cannot silently stop matching it.
 [[page.entry]]
 kind = "choice"
 label = "UPSCALER"
 setting = "graphics.upscaler"
 values = ["bilinear", "fsr1"]
+warn_when = { setting = "graphics.render_scale", values = [
+    "100",
+    "125",
+    "150",
+    "200",
+], message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE" }
 
 # How hard FSR 1's RCAS pass sharpens, in **stops**: 0 is maximum and each whole
 # step halves it, which is upstream FidelityFX's own scale and runs the opposite

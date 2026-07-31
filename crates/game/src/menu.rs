@@ -264,12 +264,45 @@ impl std::fmt::Display for Value {
 pub struct Condition {
     /// The settings key of the row that decides.
     pub setting: String,
-    /// The value that row must hold for this one to be inert.
+    /// The values that row may hold for this condition to hold - **any one of
+    /// them**, not all.
     ///
-    /// The **stored** value, not the label: what a row is set to is
+    /// A list and not a single value because the interesting conditions are not
+    /// all one-valued either: "the upscaler does nothing" is true at every
+    /// render scale of 100 % and above, which is four of the six that row
+    /// offers. Written `value = "on"` for the one-valued case and
+    /// `values = [...]` otherwise; the loader accepts either and stores this.
+    ///
+    /// The **stored** values, not the labels: what a row is set to is
     /// [`Entry::chosen`], and on a disc-supplied list those are different
     /// strings.
-    pub value: Value,
+    pub values: Vec<Value>,
+}
+
+impl Condition {
+    /// Whether `held` is one of the values this condition names.
+    #[must_use]
+    pub fn matches(&self, held: Option<&Value>) -> bool {
+        held.is_some_and(|held| self.values.iter().any(|value| value == held))
+    }
+}
+
+/// A note shown against a row whose setting is currently doing nothing, or
+/// less than it says.
+///
+/// Distinct from `disabled_by`, and the difference is who caused it. A disabled
+/// row cannot be changed *now* because another row rules it out - the frame
+/// limit under classic vsync. A warned row can be changed and will be stored
+/// and simply will not have the effect its label promises, because of a value
+/// somewhere else. Greying it would be a lie: the setting is live, it is the
+/// combination that is pointless.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Warning {
+    /// When to show it.
+    pub condition: Condition,
+    /// What to tell the player. Shown under the rows, once, for the first
+    /// warned row on the page.
+    pub message: String,
 }
 
 /// One row of a page.
@@ -308,6 +341,9 @@ pub enum Entry {
         current: usize,
         /// What makes this row inert. See [`Menu::is_disabled`].
         disabled_by: Option<Condition>,
+        /// What makes this row's setting stored but ineffective. See
+        /// [`Menu::warning`].
+        warning: Option<Warning>,
     },
     /// Flips a boolean setting.
     Toggle {
@@ -319,6 +355,9 @@ pub enum Entry {
         on: bool,
         /// What makes this row inert. See [`Menu::is_disabled`].
         disabled_by: Option<Condition>,
+        /// What makes this row's setting stored but ineffective. See
+        /// [`Menu::warning`].
+        warning: Option<Warning>,
     },
     /// Shows what an abstract button is currently bound to.
     ///
@@ -399,6 +438,15 @@ impl Entry {
     #[must_use]
     pub fn is_adjustable(&self) -> bool {
         matches!(self, Self::Choice { .. } | Self::Toggle { .. })
+    }
+
+    /// This row's warning, if it has one.
+    #[must_use]
+    pub fn warning(&self) -> Option<&Warning> {
+        match self {
+            Self::Choice { warning, .. } | Self::Toggle { warning, .. } => warning.as_ref(),
+            _ => None,
+        }
     }
 
     /// What makes this row inert, if it declared anything.
@@ -549,6 +597,10 @@ mod raw {
         /// `{ setting = "...", value = ... }`: what makes this row inert. Only
         /// `choice` and `toggle` rows may carry it.
         pub disabled_by: Option<Condition>,
+        /// `{ setting = "...", values = [...], message = "..." }`: when this
+        /// row's setting is stored but has no effect. Only `choice` and
+        /// `toggle` rows may carry it.
+        pub warn_when: Option<Warning>,
         /// Reserved for localisation: the id of a string in the disc's own
         /// table, for a build that wants the original's wording.
         ///
@@ -563,12 +615,26 @@ mod raw {
         pub string_id: Option<String>,
     }
 
-    /// `disabled_by = { setting = "display.vsync", value = "on" }`, or
-    /// `value = true` against a toggle.
+    /// `disabled_by = { setting = "display.vsync", value = "on" }`,
+    /// `value = true` against a toggle, or
+    /// `values = ["100", "125", "150", "200"]` for a condition that is not
+    /// one-valued.
     #[derive(Deserialize)]
     pub struct Condition {
         pub setting: String,
-        pub value: toml::Value,
+        pub value: Option<toml::Value>,
+        pub values: Option<Vec<toml::Value>>,
+    }
+
+    /// `warn_when = { setting = "...", values = [...], message = "..." }`.
+    ///
+    /// The message is not optional: a marker with nothing to read is a puzzle,
+    /// not a warning.
+    #[derive(Deserialize)]
+    pub struct Warning {
+        #[serde(flatten)]
+        pub condition: Condition,
+        pub message: String,
     }
 }
 
@@ -639,38 +705,55 @@ impl Definition {
     ///
     /// [`Error::Unreachable`], naming the first orphan in file order, and
     /// [`Error::BadCondition`].
+    /// Asserts a condition names a row that exists and values it can hold.
+    fn check_condition(&self, condition: &Condition, context: &str) -> Result<(), Error> {
+        let bad = |problem: String| Error::BadCondition {
+            context: context.to_string(),
+            setting: condition.setting.clone(),
+            problem,
+        };
+        let Some(decides) = self
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .find(|other| other.setting() == Some(condition.setting.as_str()))
+        else {
+            return Err(bad("no row edits it".to_string()));
+        };
+        let offered = decides.offers();
+        if offered.is_empty() {
+            // A disc-supplied list: what it will hold is not knowable here.
+            return Ok(());
+        }
+        for value in &condition.values {
+            if !offered.contains(value) {
+                return Err(bad(format!(
+                    "that row cannot hold {value}; it offers {}",
+                    offered
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )));
+            }
+        }
+        Ok(())
+    }
+
     pub fn check(&self) -> Result<(), Error> {
         for page in &self.pages {
             for (row, entry) in page.entries.iter().enumerate() {
-                let Some(condition) = entry.disabled_by() else {
-                    continue;
-                };
                 let context = format!("page {:?} entry {row}", page.id);
-                let bad = |problem: String| Error::BadCondition {
-                    context: context.clone(),
-                    setting: condition.setting.clone(),
-                    problem,
-                };
-
-                let Some(decides) = self
-                    .pages
-                    .iter()
-                    .flat_map(|page| page.entries.iter())
-                    .find(|other| other.setting() == Some(condition.setting.as_str()))
-                else {
-                    return Err(bad("no row edits it".to_string()));
-                };
-                let offered = decides.offers();
-                if !offered.is_empty() && !offered.contains(&condition.value) {
-                    return Err(bad(format!(
-                        "that row cannot hold {}; it offers {}",
-                        condition.value,
-                        offered
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )));
+                // Both kinds of condition get the same check, because both fail
+                // the same silent way: a condition naming a value no row can
+                // hold never fires, and a row that never greys or never warns
+                // looks exactly like one that had nothing to say.
+                for condition in entry
+                    .disabled_by()
+                    .into_iter()
+                    .chain(entry.warning().map(|warning| &warning.condition))
+                {
+                    self.check_condition(condition, &context)?;
                 }
             }
         }
@@ -718,7 +801,9 @@ fn resolve(
     // Only a row that can be adjusted can be disabled. On a `back` or a
     // `submenu` the field would parse and do nothing, which is the failure the
     // rest of this loader exists to make impossible.
-    if entry.disabled_by.is_some() && !matches!(entry.kind.as_str(), "choice" | "toggle") {
+    if (entry.disabled_by.is_some() || entry.warn_when.is_some())
+        && !matches!(entry.kind.as_str(), "choice" | "toggle")
+    {
         return Err(Error::BadEntry {
             context: context.to_string(),
             problem: format!(
@@ -731,6 +816,11 @@ fn resolve(
         .disabled_by
         .as_ref()
         .map(|condition| condition_from(condition, context))
+        .transpose()?;
+    let warning = entry
+        .warn_when
+        .as_ref()
+        .map(|warning| warning_from(warning, context))
         .transpose()?;
 
     match entry.kind.as_str() {
@@ -784,6 +874,7 @@ fn resolve(
                 source,
                 current: 0,
                 disabled_by,
+                warning,
             })
         }
         "toggle" => {
@@ -793,6 +884,7 @@ fn resolve(
                 setting: setting.clone(),
                 on: false,
                 disabled_by,
+                warning,
             })
         }
         "binding" => {
@@ -818,23 +910,48 @@ fn resolve(
 /// decide silently whether `60` is the text `"60"` a frame-limit row stores or
 /// something else, and guessing is how a condition that never fires ships.
 fn condition_from(raw: &raw::Condition, context: &str) -> Result<Condition, Error> {
-    let value = match &raw.value {
-        toml::Value::String(text) => Value::Text(text.clone()),
-        toml::Value::Boolean(flag) => Value::Flag(*flag),
-        other => {
-            return Err(Error::BadCondition {
-                context: context.to_string(),
-                setting: raw.setting.clone(),
-                problem: format!(
-                    "a condition's value is a string or a boolean, not {}",
-                    other.type_str()
-                ),
-            });
-        }
+    let bad = |problem: String| Error::BadCondition {
+        context: context.to_string(),
+        setting: raw.setting.clone(),
+        problem,
     };
+    // `value` and `values` are alternatives. Both would leave it ambiguous
+    // which wins, and neither is a condition that can ever hold - the same
+    // rule, for the same reason, as `values` and `values_from` on an entry.
+    let raws: Vec<&toml::Value> = match (&raw.value, &raw.values) {
+        (Some(_), Some(_)) => {
+            return Err(bad(
+                "value and values are alternatives, not both".to_string()
+            ));
+        }
+        (None, None) => return Err(bad("needs a value, or a values".to_string())),
+        (Some(one), None) => vec![one],
+        (None, Some(many)) if many.is_empty() => {
+            return Err(bad("an empty values can never hold".to_string()));
+        }
+        (None, Some(many)) => many.iter().collect(),
+    };
+    let values = raws
+        .into_iter()
+        .map(|value| match value {
+            toml::Value::String(text) => Ok(Value::Text(text.clone())),
+            toml::Value::Boolean(flag) => Ok(Value::Flag(*flag)),
+            other => Err(bad(format!(
+                "a condition's value is a string or a boolean, not {}",
+                other.type_str()
+            ))),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(Condition {
         setting: raw.setting.clone(),
-        value,
+        values,
+    })
+}
+
+fn warning_from(raw: &raw::Warning, context: &str) -> Result<Warning, Error> {
+    Ok(Warning {
+        condition: condition_from(&raw.condition, context)?,
+        message: raw.message.clone(),
     })
 }
 
@@ -1076,8 +1193,22 @@ impl Menu {
     /// that has silently vanished has no way to find out what took it away.
     #[must_use]
     pub fn is_disabled(&self, entry: &Entry) -> bool {
-        entry.disabled_by().is_some_and(|condition| {
-            self.held(&condition.setting).as_ref() == Some(&condition.value)
+        entry
+            .disabled_by()
+            .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))
+    }
+
+    /// This row's warning, if it has one and it currently applies.
+    ///
+    /// A warned row is drawn normally and marked, not greyed: its setting *is*
+    /// stored and *will* take effect the moment the row it conflicts with
+    /// moves. Greying would say "you cannot change this", which is false.
+    #[must_use]
+    pub fn warning<'a>(&self, entry: &'a Entry) -> Option<&'a Warning> {
+        entry.warning().filter(|warning| {
+            warning
+                .condition
+                .matches(self.held(&warning.condition.setting).as_ref())
         })
     }
 
@@ -1193,6 +1324,12 @@ const SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const NORMAL: [f32; 4] = [0.72, 0.78, 0.84, 1.0];
 /// Rows that show something the player cannot change yet.
 const DIMMED: [f32; 4] = [0.45, 0.5, 0.56, 1.0];
+/// A setting that is stored but currently doing nothing.
+///
+/// Amber, and on its own channel: the other three colours already mean
+/// selected, normal and inert, so a warning had to be a mark in the margin in a
+/// colour none of them use rather than a fourth shade of the row itself.
+const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 
 /// What one page looks like, as plain data.
 ///
@@ -1234,6 +1371,10 @@ pub fn draw_list(
         text: page.title.clone(),
     });
 
+    // The first warned row's message, shown once under the rows however many
+    // rows are marked: two lines of small text competing for the same corner
+    // would be less readable than one, and the markers already say which rows.
+    let mut warned: Option<String> = None;
     for (row, entry) in page.entries.iter().enumerate() {
         let y = FIRST_ROW_Y + row as f32 * ROW_HEIGHT;
         let selected = row == menu.selected();
@@ -1254,6 +1395,21 @@ pub fn draw_list(
         // the dim colour says. The highlight bar is still drawn, so a disabled
         // row can be selected and read rather than being unreachable.
         let inert = matches!(entry, Entry::Binding { .. }) || menu.is_disabled(entry);
+        // Marked in the margin rather than by recolouring the row: the colour
+        // already means selected, normal or inert, and a fourth meaning on the
+        // same channel would collide with those three. See `WARNING`.
+        if let Some(warning) = menu.warning(entry) {
+            warned.get_or_insert(warning.message.clone());
+            out.push(Draw::Text {
+                x: MARGIN_X - 18.0,
+                y,
+                scale: ROW_SCALE,
+                color: WARNING,
+                border: None,
+                align: Align::Left,
+                text: "!".to_string(),
+            });
+        }
         out.push(Draw::Text {
             x: MARGIN_X,
             y,
@@ -1299,6 +1455,20 @@ pub fn draw_list(
                 text,
             });
         }
+    }
+
+    // Under the last row rather than at a fixed height, so it sits with the
+    // page it belongs to instead of floating away from a short one.
+    if let Some(message) = warned {
+        out.push(Draw::Text {
+            x: MARGIN_X - 18.0,
+            y: FIRST_ROW_Y + page.entries.len() as f32 * ROW_HEIGHT + 6.0,
+            scale: ROW_SCALE * 0.8,
+            color: WARNING,
+            border: None,
+            align: Align::Left,
+            text: format!("! {message}"),
+        });
     }
 
     out
@@ -1618,6 +1788,46 @@ mod tests {
     /// `main.rs` against `Vsync::paces_itself`. Both have to name the same
     /// value or the row greys out at the wrong time, and a row that lost its
     /// `disabled_by` altogether would still parse.
+    /// The upscaler's warning must name exactly the scales it does nothing at.
+    ///
+    /// Two places encode "FSR 1 is a magnifier": `upscale::magnifies`, which
+    /// declines to run it, and this warning, which says so. They are pinned to
+    /// each other here because a drift between them is invisible either way -
+    /// a missing value warns nobody at a scale where the setting is dead, and a
+    /// spare value warns at a scale where it works.
+    #[test]
+    fn the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at() {
+        let definition = built_in();
+        let entry = definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .find(|entry| entry.setting() == Some("graphics.upscaler"))
+            .expect("nothing edits graphics.upscaler");
+        let warning = entry.warning().expect("the upscaler warns");
+        assert_eq!(warning.condition.setting, "graphics.render_scale");
+
+        let warned: Vec<crate::display::Scale> = warning
+            .condition
+            .values
+            .iter()
+            .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        // Every offered scale is on exactly the side the guard puts it: warned
+        // when a 1000-wide rectangle rendered at that scale is not smaller than
+        // the rectangle, and unwarned when it is.
+        let rect = (1000, 1000);
+        for scale in crate::display::Scale::OFFERED {
+            let scene = crate::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), scale, 8192);
+            let magnifies = crate::upscale::magnifies(scene, rect);
+            assert_eq!(
+                !magnifies,
+                warned.contains(&scale),
+                "{scale}: the guard and the warning disagree"
+            );
+        }
+    }
+
     #[test]
     fn the_frame_limit_is_disabled_by_classic_vsync_alone() {
         let definition = built_in();
@@ -1629,12 +1839,12 @@ mod tests {
             .expect("nothing edits graphics.frame_limit");
         let condition = entry.disabled_by().expect("the limiter has a condition");
         assert_eq!(condition.setting, "display.vsync");
-        assert_eq!(condition.value, Value::Text("on".to_string()));
+        assert_eq!(condition.values, vec![Value::Text("on".to_string())]);
 
         // The same value from the other side, so the menu and the loop cannot
         // drift into disagreeing about which mode paces itself.
-        let Value::Text(name) = &condition.value else {
-            panic!("the vsync row stores text");
+        let [Value::Text(name)] = condition.values.as_slice() else {
+            panic!("the vsync row stores one text value");
         };
         let mode: crate::perf::Vsync = name.parse().expect("a real vsync mode");
         assert!(mode.paces_itself());

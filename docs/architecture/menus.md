@@ -321,6 +321,24 @@ the renderer would notice**:
 | DISPLAY | MONITOR, WINDOW MODE, WINDOW SIZE, ASPECT RATIO, VSYNC, FRAME LIMIT, BRIGHTNESS, GAMMA | The picture's container, and how a finished frame reaches a screen |
 | GRAPHICS | RENDER SCALE, UPSCALER, UPSCALER SHARPNESS, ANISOTROPIC FILTERING, FIELD OF VIEW, PERFORMANCE OVERLAY | How the picture is drawn |
 
+A row can also be **warned** rather than greyed, which is a different thing and
+the UPSCALER row is why it exists. A greyed row cannot be changed *now* because
+another row rules it out. A warned row can be changed, is stored, and simply
+does not have the effect its label promises while some other row holds a
+particular value - FSR 1 above a render scale of 100 % being the case in hand.
+Greying that would say "you cannot change this", which is false; the setting is
+live and the *combination* is pointless. It draws as an amber `!` in the margin
+and one line of amber text under the rows, on its own colour channel because the
+three the rows already use mean selected, normal and inert.
+
+`warn_when` takes the same condition shape as `disabled_by`, and both now accept
+`values = [...]` as well as `value = ...`: "the upscaler does nothing" is true at
+four of the six scales RENDER SCALE offers, and a one-valued condition could not
+say so. The loader rejects a condition naming a value its row cannot hold, and a
+test pins the warning's list to `upscale::magnifies` from the other side, so the
+guard that declines to run the upscaler and the message that says it did not
+cannot drift apart.
+
 UPSCALER sits directly under RENDER SCALE because only the pairing means
 anything: at 100 % there is nothing to upscale and the choice is between a blit
 and a sharpen. UPSCALER SHARPNESS is greyed out on the bilinear path, which has
