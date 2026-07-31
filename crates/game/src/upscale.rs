@@ -282,6 +282,9 @@ impl Framebuffer {
     /// The grade's `decode` flag has to describe the source that is *actually*
     /// bound rather than the setting that asked for it, and the upscaler has to
     /// run after every stage has finished drawing but before the blit.
+    ///
+    /// **An upscaler only runs when it is actually upscaling** - see
+    /// [`magnifies`].
     pub fn resolve(
         &mut self,
         device: &wgpu::Device,
@@ -291,7 +294,9 @@ impl Framebuffer {
         rect: (f32, f32, f32, f32),
         presentation: &Presentation,
     ) {
-        let source = (presentation.upscaler == Upscaler::Fsr1).then(|| {
+        let source = (presentation.upscaler == Upscaler::Fsr1
+            && magnifies(self.size, (rect.2 as u32, rect.3 as u32)))
+        .then(|| {
             let fsr = self
                 .fsr1
                 .get_or_insert_with(|| fsr1::Fsr1::new(device, self.format));
@@ -463,6 +468,24 @@ fn target(
     });
     let bind_group = bind(device, layout, sampler, grade, &view);
     (texture, view, perceptual, bind_group)
+}
+
+/// Whether resolving `scene` to `rect` is a magnification, which is the only
+/// thing a spatial upscaler is for.
+///
+/// FSR 1 is a **magnifier**, and upstream says so: EASU's contract is that the
+/// output is larger than the input. Handed a render scale above 100 % it is
+/// being asked to minify, and its twelve taps then step more than one input
+/// texel apart and undersample - so it re-introduces exactly the aliasing the
+/// supersampling was there to remove. Measured on a trackside fence at 200 %:
+/// the bilinear blit resolves the mesh smoothly and FSR 1 turns it crunchy.
+///
+/// So the setting is honoured where it means something and quietly not where it
+/// would only do harm. A row that silently degrades the picture at three of the
+/// six render scales it sits next to would be worse than one that does nothing
+/// at those three.
+fn magnifies(scene: (u32, u32), rect: (u32, u32)) -> bool {
+    scene.0 < rect.0 || scene.1 < rect.1
 }
 
 /// The blit's one bind group: a source view, the sampler and the grade.
@@ -667,6 +690,22 @@ mod tests {
             readback.unmap();
         }
         Some((out[0], out[1]))
+    }
+
+    /// FSR 1 is a magnifier, and running it as a minifier undoes supersampling.
+    #[test]
+    fn an_upscaler_only_runs_when_it_is_actually_upscaling() {
+        // Half scale: the whole point.
+        assert!(magnifies((720, 408), (1440, 816)));
+        // Supersampling, where EASU would undersample its own input.
+        assert!(!magnifies((2880, 1632), (1440, 816)));
+        // Exactly one to one, where there is nothing to reconstruct.
+        assert!(!magnifies((1440, 816), (1440, 816)));
+        // Anisotropic cases still count: a scale is applied to both axes, but a
+        // clamped target and an odd rectangle can leave one axis short, and one
+        // short axis is still something to reconstruct.
+        assert!(magnifies((1440, 408), (1440, 816)));
+        assert!(magnifies((720, 816), (1440, 816)));
     }
 
     /// Turning the upscaler on must not move a flat colour.

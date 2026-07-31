@@ -233,6 +233,10 @@ pub struct Graphics {
     /// screenshot comparison nobody has published yet, so it does not become
     /// the default on the strength of the argument. See
     /// [`crate::display::Upscaler`].
+    ///
+    /// **Only has an effect below 100 % `render_scale`.** FSR 1 is a magnifier;
+    /// asked to minify it undoes the supersampling it was handed. See
+    /// `crate::upscale::magnifies`.
     #[serde(default)]
     pub upscaler: crate::display::Upscaler,
     /// How hard FSR 1's RCAS pass sharpens, in stops: 0 is maximum and each

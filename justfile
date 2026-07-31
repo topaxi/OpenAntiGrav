@@ -109,6 +109,30 @@ play-screenshots out="/tmp":
     cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-launch.png" \
         --until "Launch Game" --press start,cross --ticks 60
 
+# One race frame per upscaler, plus a supersampled reference, for judging a
+# resampler by looking rather than by counting. An aggregate statistic ranks a
+# sharpener below a blur every time - see HANDOVER, "Measuring a renderer
+# change" - so this recipe produces images and deliberately no numbers.
+#
+# `--presented` is what puts the render scale, the upscaler and the grade in the
+# way; without it a capture never reaches the blit and every image would be
+# identical. The scale is an argument because a magnifier can only be judged
+# where it is magnifying.
+compare-upscalers image scale="50" out="/tmp":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for upscaler in bilinear fsr1; do
+        cargo run -q --release -p oag-game -- "{{image}}" --race \
+            --screenshot "{{out}}/oag-upscale-{{scale}}-$upscaler.png" \
+            --ticks 300 --hold cross --presented \
+            --render-scale "{{scale}}" --upscaler "$upscaler"
+    done
+    # The ceiling to judge both against: the same frame with four times the
+    # samples, which is what neither of them can do better than.
+    cargo run -q --release -p oag-game -- "{{image}}" --race \
+        --screenshot "{{out}}/oag-upscale-reference.png" \
+        --ticks 300 --hold cross --presented --render-scale 200
+
 # The engine only: no game content is ever packaged, and the script refuses to
 # build if any found its way in. The player's own disc image is looked for
 # beside the AppImage at runtime. See docs/tools/packaging.md, which also
