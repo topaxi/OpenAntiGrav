@@ -30,8 +30,14 @@
   which is why a race currently has a black sky
 - Particle effects: thrust (**done** - the `Engine Flare` class, recovered in
   [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md) and implemented in
-  `oag_render::exhaust`), then the general `ParticleSystem` `0x3c4`, weapons and
-  impacts. The impact and weapon effects are M5's, being gameplay-coupled
+  `oag_render::exhaust`) and collision sparks (**done**, `oag_render::sparks` -
+  but **authored, not recovered**: the trigger function it would plausibly go
+  through was read in full and drives camera shake, hull damage and a shield
+  flash, none of them a particle spawn - see
+  [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#fun_088418e0s-contact-loop-drives-three-separate-reactions-and-none-of-them-is-a-particle)
+  and the open thread on `HANDOVER.md`), then the general `ParticleSystem`
+  `0x3c4` and weapon effects. The weapon effects are M5's, being
+  gameplay-coupled
 - The HUD - **done** for the 2D layer, off the disc's own layouts; see
   [the HUD](../ui/hud.md). Its `<Mode3D>` layer is not
 - Post-processing, and the series' distinctive look

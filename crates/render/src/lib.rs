@@ -24,6 +24,9 @@
 //! - [`camera`] is the camera maths: orbit, free and the chase spring.
 //! - [`pvs`] places draw calls into the track's authored visibility sections,
 //!   and is the first tier of the two-tier cull the draw loop runs.
+//! - [`sparks`] is the collision-spark burst: an authored effect, not a
+//!   reading of the original's (undecoded) particle asset - see that
+//!   module's doc comment.
 
 pub mod camera;
 pub mod collision;
@@ -32,4 +35,5 @@ pub mod mesh;
 pub mod mesh_render;
 pub mod post;
 pub mod pvs;
+pub mod sparks;
 pub mod track;

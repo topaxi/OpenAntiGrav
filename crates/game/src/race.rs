@@ -77,6 +77,7 @@ use oag_render::exhaust::{self, Exhaust, FlareTexture};
 use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::Anisotropy;
 use oag_render::pvs::{DrawSections, PlacementStats, SectionPadding, UNPLACED, VisibleSet};
+use oag_render::sparks::{self, Sparks};
 use oag_render::{mesh, mesh_render, track as track_render};
 
 /// The track a race is flown on unless another is named.
@@ -163,6 +164,10 @@ pub const SEED: u64 = 1;
 /// `docs/architecture/determinism.md` forbids. A separate seed also means the two
 /// streams cannot be mistaken for each other when reading a capture.
 pub const EXHAUST_SEED: u64 = 0xe8_a5_71_00;
+
+/// Seed for spark spawn parameters, kept distinct from [`SEED`] and
+/// [`EXHAUST_SEED`] for the same determinism reason.
+pub const SPARKS_SEED: u64 = 0x5_9a_2b_00;
 
 /// The archive entry name of a team's `.vex` model.
 ///
@@ -1133,6 +1138,24 @@ pub struct Race {
     exhaust_rng: Rng,
     /// The `engine_flare` locator in model space, when the ship model has one.
     nozzle: Option<Vec3>,
+    /// Collision sparks' particle pool, advanced on the simulation tick.
+    ///
+    /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -
+    /// see `oag_render::sparks`'s module doc comment.
+    sparks: Sparks,
+    /// The sparks' generator, deliberately **not** `world.rng` - see
+    /// [`Self::exhaust_rng`].
+    sparks_rng: Rng,
+    /// Whether `oag_physics::wall::WallResponse::impact` was set on the
+    /// previous tick.
+    ///
+    /// This crate's own edge detector for spark spawning: `impact` stays
+    /// `true` for every tick of a sustained scrape, and spawning a burst on
+    /// every one of those ticks rather than on the rising edge is exactly the
+    /// per-frame-instead-of-per-impact bug
+    /// `oag_physics::wall::STUN_PER_CONTACT`'s doc comment already records
+    /// costing a session of play-testing.
+    sparks_was_impacting: bool,
 }
 
 /// Ticks a `Reset` contact is ignored for after a respawn.
@@ -1203,6 +1226,11 @@ impl Race {
             exhaust: Exhaust::new(),
             exhaust_rng: Rng::new(EXHAUST_SEED),
             nozzle,
+            sparks: Sparks::new(),
+            sparks_rng: Rng::new(SPARKS_SEED),
+            // No sync frame to be mid-scrape on, so the first tick's contact -
+            // if any - is always read as a fresh impact.
+            sparks_was_impacting: false,
         }
     }
 
@@ -1315,6 +1343,24 @@ impl Race {
             let back = -self.ship().physics.body.forward();
             self.exhaust.push_trail(nozzle, back);
         }
+
+        // Edge-triggered, not level-triggered - see `Self::sparks_was_impacting`'s
+        // doc comment for why a sustained scrape must not spawn a burst every
+        // tick.
+        let impact_edge = evaluated.wall.impact && !self.sparks_was_impacting;
+        self.sparks_was_impacting = evaluated.wall.impact;
+        if impact_edge && let Some(contact) = evaluated.wall.resolved {
+            self.sparks.spawn(
+                contact.point,
+                contact.normal,
+                evaluated.wall.impact_speed,
+                &mut self.sparks_rng,
+            );
+        }
+        // Unconditional, like the exhaust: already-live particles keep ageing
+        // even on a tick with no fresh impact.
+        self.sparks.advance(self.dt);
+
         evaluated
     }
 
@@ -1468,6 +1514,12 @@ impl Race {
     #[must_use]
     pub fn exhaust(&self) -> &Exhaust {
         &self.exhaust
+    }
+
+    /// The collision sparks' current particle pool.
+    #[must_use]
+    pub fn sparks(&self) -> &Sparks {
+        &self.sparks
     }
 
     /// The `engine_flare` locator in **world** space, or `None` when the ship
@@ -2032,6 +2084,8 @@ pub struct Scene {
     /// that `queue` already accepts through a shared reference. The borrow is
     /// taken and released inside `render` with nothing re-entrant in between.
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
+    /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
+    sparks: std::cell::RefCell<sparks::Pipeline>,
     depth: wgpu::Texture,
     /// Where the far plane goes, from the track's own extent.
     far: f32,
@@ -2076,6 +2130,7 @@ impl Scene {
         let exhaust = std::cell::RefCell::new(exhaust::Pipeline::new(
             device, queue, format, &flare, &noise,
         ));
+        let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format));
 
         Ok(Self {
             track,
@@ -2083,6 +2138,7 @@ impl Scene {
             ship,
             collision,
             exhaust,
+            sparks,
             depth: depth_texture(device, size),
             far,
         })
@@ -2169,6 +2225,11 @@ impl Scene {
             &vertices,
             &trail,
         );
+        self.sparks.borrow_mut().upload(
+            queue,
+            &view_projection.to_cols_array_2d(),
+            &race.sparks().vertices(right, up),
+        );
 
         let depth_view = self
             .depth
@@ -2215,8 +2276,11 @@ impl Scene {
         }
         // Last, and that ordering is load-bearing: the flare tests depth but does
         // not write it, so the hull's depth has to already be in the buffer for the
-        // flare to be occluded by it.
+        // flare to be occluded by it. Sparks are the same kind of blended,
+        // depth-tested-not-written geometry, so they follow right after for the
+        // same reason.
         self.exhaust.borrow().draw(&mut pass);
+        self.sparks.borrow().draw(&mut pass);
         stats
     }
 }
@@ -3064,6 +3128,55 @@ mod tests {
                 race.tick(&InputSnapshot::default());
             }
             assert_eq!(race.respawns(), 0, "{surface:?} respawned the ship");
+        }
+    }
+
+    /// **The firehose trap.** A ship held against a wall for many ticks must
+    /// spawn one spark burst, on the impact's rising edge, not one burst per
+    /// tick of the ensuing scrape - the shape of bug this guards against is
+    /// the same one `oag_physics::wall::STUN_PER_CONTACT`'s doc comment
+    /// records this crate cost a session of play-testing to, for the
+    /// collision stun rather than sparks.
+    ///
+    /// The plane and approach are copied from
+    /// [`falling_through_any_other_class_does_not_respawn`], a known-working
+    /// `Surface::Wall` fixture, rather than a fresh vertical wall: getting a
+    /// triangle's winding backwards produces a silent "no contact" rather
+    /// than a loud failure, and this fixture is already proven to register.
+    #[test]
+    fn a_sustained_scrape_spawns_sparks_once_not_every_tick() {
+        let handling = hulled_handling();
+        let setup = setup_with(
+            handling,
+            vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+        );
+        let mut race = Race::start(setup);
+
+        // Reset to an inbound approach before every tick, so each one sees a
+        // fresh impact rather than the ship bouncing away after the first.
+        let push_toward_wall = |race: &mut Race| {
+            let body = &mut race.world.ships[0].physics.body;
+            body.position = Vec3::new(20.0, -39.7, 0.0);
+            body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+        };
+
+        push_toward_wall(&mut race);
+        let evaluated = race.tick(&InputSnapshot::default());
+        assert!(
+            evaluated.wall.impact,
+            "the fixture never reaches the wall - not what this test means to check"
+        );
+        let after_first_impact = race.sparks().alive_count();
+        assert!(after_first_impact > 0, "the first impact spawned no sparks");
+
+        for tick in 0..10 {
+            push_toward_wall(&mut race);
+            race.tick(&InputSnapshot::default());
+            assert_eq!(
+                race.sparks().alive_count(),
+                after_first_impact,
+                "tick {tick} of the same scrape spawned another burst"
+            );
         }
     }
 

@@ -297,10 +297,9 @@ Confidence **88** on the field identification, **90** on the instructions.
 the image and it is gated on a **pending impulse vector** at
 `entity->0x4c + 0x110` being non-zero, which it zeroes on the way out. Nothing in
 the contact path writes that vector: `Body_ResolveContact` ends with
-`Body_RecordContact`, and the only consumer of that ring - `FUN_088418e0` -
-computes camera and audio amplitudes (`0.05 * |p| * 0.7`, and
-`min(|p| * 0.0125, 1.0)`, plus a running signed maximum at `craft+0x80` whose
-sign records which side was hit) and writes no impulse anywhere.
+`Body_RecordContact`, and the only consumer of that ring - `FUN_088418e0` - reads
+the same per-contact impulse magnitude into three separate reactions (below) and
+writes no impulse anywhere.
 
 The captures agree, and they are the stronger leg:
 `data/traces/talons-junction-time-trial-lap.csv` is a complete lap, 3,146 ticks
@@ -310,6 +309,74 @@ them one continuous scrape, also `0.0` throughout. So the stun belongs to being
 hit by something - a rival, a weapon - and not to touching the track.
 `crates/physics` used to arm it from the wall constraint and no longer does; see
 `crates/physics/src/wall.rs`'s `STUN_PER_CONTACT`. Confidence **88**.
+
+### `FUN_088418e0`'s contact loop drives three separate reactions, and none of them is a particle
+
+**Read in full this pass**, prompted by planning the collision-spark visual
+effect (`oag_render::sparks`) and finding no prior page said what actually
+consumes a hit. The earlier phrase above - "computes camera and audio
+amplitudes" - turns out to conflate two of these three, one of them wrongly;
+corrected here rather than silently.
+
+For each record in the contact ring (`body + 0x170 + n*0x40`, `n < body+0x370`),
+the loop computes `|p|` - the impulse magnitude `Body_RecordContact` stored -
+and feeds it to:
+
+1. **Camera shake**, `FUN_0883de90(fVar21, param_2, piVar17)`, called only when
+   a squared distance to a stored world position (`DAT_08ab10b0 + 0x70`, read
+   as a camera-ish anchor) is in `(0, 10000)` - i.e. gated by proximity. The
+   amplitude is `min(|p| * 0.0125, 1.0)`. **Not decompiled this pass** - the
+   body is unread beyond this call site, so it stays cited by address only.
+   Confidence **60** on "this is a camera-shake amplitude, not something else"
+   (it is the reading `wall.rs`'s doc comment already carried); the function
+   itself is not renamed, per the confidence-band rule below 70.
+2. **Hull damage**, `FUN_088439ac(|p| * 0.05 * 0.7, param_2, hitSide, 0, 0)`.
+   **Decompiled in full this pass.** It decrements the ship's shield/energy
+   (`FUN_0883e6f4(shield - amount, ...)`), accumulates per-kind telemetry
+   buckets keyed by the fourth argument (weapon/collision type, `0` here),
+   triggers a death-state transition (`FUN_08844100(param_2, 4)`) when the
+   result reaches zero, and plays a sound cue on death. This is **not** camera
+   or audio amplitude as the earlier phrase read - it is the collision damage
+   path, the gameplay-facing twin of the recovered `0.05`/`0.7` scrape-friction
+   pair documented above. Gated on the per-contact scalar at
+   `record + 0x1a0` (the friction field `Body_RecordContact` stores) being
+   positive, and on a per-frame arm check (`FUN_0883e64c(param_2) == 1`).
+   Confidence **80**: an unambiguous, branch-clear decompile, but a single
+   static reading with no runtime trace corroborating it. Left as
+   `FUN_088439ac` for now rather than renamed - see the open thread on
+   `HANDOVER.md` for the rename-and-document follow-up this confidence level
+   would otherwise call for.
+3. **Shield hit flash**, a sibling branch taken *instead of* #2 when a linked
+   shield entity exists and its flag `0x10` (at `entity + 0x1b8`) is set:
+   `FUN_0885eb04(shieldEntity)`. **Decompiled in full**: six instructions that
+   write a stored world-space hit position (`DAT_08b3bf50`, presumably set
+   just before the call) and a literal `1.1` into fields on the shield entity
+   - a hit-position-and-duration arm for the separately-scoped, still
+   unimplemented "Shield hit response" (`docs/overview/roadmap.md`, M5), not a
+   hull spark. Confidence **75**.
+
+Also written on this pass, since it settles a natural next guess: the same
+loop arms flag bits `0x20` and `0x400020` on `craft + 0x860` right after
+reaction #2, whenever the damage gate fires. **This is the one candidate left
+for an actual visual spark trigger, and its consumer is unlocated** - nothing
+nearby in `FUN_088418e0` or its two decompiled callees reads it, and finding
+what does needs a live PPSSPP capture (breakpoint on a read of that bit
+during a scripted impact), not more static reading. See the open thread on
+`HANDOVER.md`.
+
+**Also checked and ruled out**: the `Ship Collision Fx` `0x3d0` class's own
+registration wrapper, `FUN_08924bf0` (`Vex_RegisterClass(&DAT_08b63f18,
+0x3d0)`), installs `FUN_08a6ba70` into the class descriptor's constructor
+slot. That function is not a constructor at all - it is a three-instruction
+thunk (`lui`/`jr`/`addiu` in the delay slot) that returns its own entry
+address, the same self-referential shape several other classes' descriptors
+install, which reads as a type-identity token rather than a per-instance
+constructor. So the authored scene-graph path for this class does not lead
+anywhere either, at least not through the route this pass checked; per
+HANDOVER's standing rule, an unregistered or trivially-registered class
+constructor does not prove the visual is absent, only that this particular
+lead is a dead end. Confidence **70** that `FUN_08a6ba70` is a type token
+rather than a constructor, on the instruction pattern alone.
 
 ## Where the PS2 build diverges, and why this crate follows the PSP
 

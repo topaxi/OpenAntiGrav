@@ -313,6 +313,25 @@ pub struct WallResponse {
     /// crate and the original can differ, and it says so instead of quietly
     /// resolving fewer contacts.
     pub dropped_contacts: u32,
+    /// Whether any contact this frame was inbound (`normal_speed < 0.0`).
+    ///
+    /// **Reporting only**, same tier as [`Self::resolved`] - not read by physics.
+    /// This is [`ShipState::wall_contact_prev`]'s own value for the frame that
+    /// just ran, exposed so a cosmetic consumer (a spark effect, say) can build
+    /// an edge trigger without touching simulation state. It stays `true` for
+    /// every tick of a sustained scrape, which is exactly why a consumer needs
+    /// to edge-detect rather than fire on the level - see [`STUN_PER_CONTACT`]'s
+    /// doc comment for what firing on the level costs.
+    pub impact: bool,
+    /// The most inbound `normal_speed` across this frame's contacts, negated
+    /// to a positive magnitude - `0.0` if [`Self::impact`] is `false`.
+    ///
+    /// **Reporting only.** Not a recovered quantity by itself; `FUN_088418e0`
+    /// (`docs/ghidra/functions/psp-pulse/contact-response.md`) scales the same
+    /// per-contact impulse magnitude by `0.05` and `0.0125` for its own
+    /// (non-visual) reactions, which is the anchor a spark effect's intensity
+    /// curve borrows.
+    pub impact_speed: f32,
 }
 
 /// The box support function: how far the hull reaches along `direction`.
@@ -411,6 +430,7 @@ pub fn resolve<R: Raycaster + ?Sized>(
     // and the determinism rules forbid an order that depends on anything but the
     // index.
     let mut impact = false;
+    let mut impact_speed = 0.0f32;
     let mut deepest: Option<(WallContact, f32)> = None;
 
     for contact in contacts.iter().flatten().take(found) {
@@ -422,6 +442,7 @@ pub fn resolve<R: Raycaster + ?Sized>(
         response.velocity_delta += applied.velocity_delta;
         response.angular_velocity_delta += applied.angular_velocity_delta;
         impact |= applied.normal_speed < 0.0;
+        impact_speed = impact_speed.max(-applied.normal_speed);
 
         if deepest.is_none_or(|(d, _)| contact.depth > d.depth) {
             deepest = Some((*contact, friction));
@@ -432,6 +453,9 @@ pub fn resolve<R: Raycaster + ?Sized>(
         response.resolved = Some(contact);
         response.friction = friction;
     }
+
+    response.impact = impact;
+    response.impact_speed = if impact { impact_speed } else { 0.0 };
 
     // **A track contact does not arm the collision stun**, and this used to.
     // See [`STUN_PER_CONTACT`] for the evidence and for what it cost.
@@ -1078,6 +1102,43 @@ mod tests {
             state.body.linear_velocity
         );
         assert!((response.friction - 0.035).abs() < 1e-6);
+    }
+
+    /// [`WallResponse::impact`]/[`WallResponse::impact_speed`] read the same
+    /// inbound contact this test's sibling above resolves: `vx = 10.0` into a
+    /// wall whose normal is `-x` gives `normal_speed = -10.0`, so `impact_speed`
+    /// reports the positive magnitude `10.0`.
+    #[test]
+    fn an_inbound_contact_reports_impact_and_its_speed() {
+        let mut state = ship_at(1.0, 10.0);
+        let response = resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &narrow_wall(1.6, Surface::Wall),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+        assert!(response.impact);
+        assert!((response.impact_speed - 10.0).abs() < 1e-2, "{response:?}");
+    }
+
+    /// The two-sided-contact companion to
+    /// [`an_inbound_contact_reports_impact_and_its_speed`]: a hull already
+    /// moving *out* of an overlap is pulled back (see
+    /// [`a_ship_leaving_a_wall_it_still_overlaps_is_pulled_back`]), but it is
+    /// not an impact, so a spark-style consumer must not fire on it either.
+    #[test]
+    fn an_outbound_contact_reports_no_impact() {
+        let mut state = ship_at(1.0, -10.0);
+        let response = resolve(
+            &mut state,
+            &handling(),
+            &Environment::default(),
+            &narrow_wall(1.6, Surface::Wall),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+        assert!(!response.impact, "{response:?}");
+        assert_eq!(response.impact_speed, 0.0);
     }
 
     /// **The measurement this module exists to reproduce.**
