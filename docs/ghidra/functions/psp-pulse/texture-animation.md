@@ -68,6 +68,56 @@ struct, and no name is proposed for either function - **confidence 45**, below
 the [rubric](../../../reverse-engineering/confidence-rubric.md)'s rename
 threshold. Written down instead, per that rubric's rule.
 
+## Measured in a live race: only the trail scrolls
+
+**Confidence 88, and it is a negative.** A breakpoint on `Gu_TexOffset` through
+a running Time Trial on Talon's Junction, 60 hits:
+
+| Return address | Hits | Offsets passed |
+| --- | ---: | --- |
+| `0x0892b088` in `Trail_DrawRibbon` | 9 | **9 distinct**, advancing every frame - `u` 0.100 to 0.800, `v` 0.067 to 1.933 |
+| `0x088a7b74` | 26 | `(0, 0)` every time |
+| `0x0891e8ec` | 25 | `(0, 0)` every time |
+
+So the **only** non-zero texture offset the engine submits during a race is the
+exhaust ribbon's, whose scroll rates were already recovered independently
+([`exhaust.md`](exhaust.md#trail)). The other two sites reset the offset and are
+called about three times a frame each, which is pipeline setup rather than
+per-batch state. **No track surface receives a texture-coordinate offset.**
+
+The read is on-target rather than incidental: Talon's Junction is `16_Track`,
+which carries two of the surfaces
+`oag_render::mesh::ANIMATED_TEXTURES` lists (`col_display7_GLOW` and
+`col_display7_BLEND_GLOW`), and `Gfx_BindTexture` was hit 80 times over the same
+window with many distinct texture objects, so the track was plainly drawing.
+
+**A CLUT scroll is not the explanation either.** Five palette regions reached
+through bound texture objects were byte-identical over a 3.5-second window with
+the CPU running. That does not cover every palette on the disc, so it is a
+bounded negative - **confidence 70** - but it removes the obvious second
+candidate.
+
+### What this does and does not overturn
+
+It does **not** touch the measurement that a ship's shoulder lights pulse: that
+came from 120 frame-accurate screenshots with pixels sampled at a real light,
+and it stands. What it contradicts is the *mechanism* inferred from it -
+[`vex.md`](../../../formats/vex.md) reads that pulse as the engine scrolling the
+shared texture's V globally, and no such offset is ever submitted, for the ship
+or for anything else. The pulse is real and its cause is **not** a texture-
+coordinate offset.
+
+The untested candidate that fits every observation is an animated **colour**
+rather than an animated coordinate: `Trail_DrawRibbon` already sets a per-draw
+colour through `FUN_0881125c`, and a per-object colour advanced on a clock would
+pulse a light without moving a UV or rewriting a palette. Not investigated.
+
+**Consequence for the renderer**: `[graphics] animated_textures` now defaults
+**off**. The eight track surfaces were selected on real geometry - narrow
+authored V bands against full-tile static art - and that measurement is kept,
+but making them scroll is a departure from the original rather than a
+reproduction of it.
+
 ## What was ruled out
 
 **`Gfx_BindTexture` (`0x08928460`) does not animate anything.** It compares the

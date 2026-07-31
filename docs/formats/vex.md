@@ -838,6 +838,18 @@ producing a blink-tagged draw call.
 
 ### The animation is authored in the texture, on its V axis - not per-ship, not in engine code
 
+> **Superseded in part, 2026-07-31.** The *pulse* below is measured and stands.
+> The *mechanism* - the engine scrolling this texture's V coordinate - does not:
+> a breakpoint on `Gu_TexOffset` through a live race found that the only
+> non-zero texture offsets submitted in a frame are the exhaust ribbon's, and
+> five candidate palettes were byte-static over the same window. Whatever makes
+> these lights pulse, it is neither a texture-coordinate offset nor a CLUT
+> scroll. An animated per-draw **colour** is the untested candidate that fits.
+> See [`texture-animation.md`](../ghidra/functions/psp-pulse/texture-animation.md).
+> Read the section below as the survey of the texture's contents - which is what
+> it is good for - not as a recovered mechanism.
+
+
 **Confidence: 85.** `colours_flashing_GLOW.tga` is 32x16. Its width (U) is the
 colour-band axis already described above; its height (V) turned out to be a
 *time* axis - a small filmstrip, not a spatial gradient.
@@ -971,10 +983,19 @@ and 9.6 of 16 rows and animate regardless - so gating at runtime on a narrow
 band would switch those two ships off.
 
 **Confidence 65** for the track surfaces, deliberately below 70: the geometry
-and the banded texture content are real measurements, but nothing has confirmed
+and the banded texture content are real measurements, but nothing had confirmed
 that the original animates these particular surfaces, and the rates are reused
-from the blink light rather than recovered. Behind `[graphics]
-animated_textures`, which exists so a capture can settle it.
+from the blink light rather than recovered.
+
+**The check has since been run, and it came back negative.** A breakpoint on
+`Gu_TexOffset` through a live race found the only non-zero texture offsets in the
+frame are the exhaust ribbon's; every other call passes `(0, 0)`, on a circuit
+carrying two of the surfaces listed above. **The original does not animate track
+surfaces by moving texture coordinates**, so `[graphics] animated_textures`
+defaults **off** and turning it on is a departure. The selection above is kept
+because the geometry behind it is a real measurement that whatever the true
+mechanism turns out to be will want. See
+[`texture-animation.md`](../ghidra/functions/psp-pulse/texture-animation.md).
 
 Two readings are ruled out rather than untested. There is **no authored scroll
 rate**: material `+0x0c..0x14` is zero on every material of every circuit. And
@@ -1088,3 +1109,10 @@ is unknown.
   not, and the same gap had hidden every other animated track texture. No score
   changed; the reasoning was replaced and the `+0x38` field documented as
   implemented.
+- **2026-07-31** - the V-scroll *mechanism* recorded above at 85 was measured
+  against the running game and contradicted: `Gu_TexOffset` is never called with
+  a non-zero offset except from `Trail_DrawRibbon`. The reading was an inference
+  from a real pulse plus a filmstrip-shaped texture, and both of those still
+  hold; only the step from them to "the engine scrolls V" was wrong. The
+  observation keeps its score, the mechanism does not, and the renderer's track
+  animation now defaults off.

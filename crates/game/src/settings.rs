@@ -311,30 +311,39 @@ pub struct Graphics {
     /// Whether trackside surfaces whose texture is a scrolling filmstrip
     /// animate, or stay on their authored frame.
     ///
-    /// **On by default**, but with a weaker claim behind it than any other
-    /// entry here, and it exists so that claim can be checked. The mechanism is
-    /// evidenced at confidence 85 on the ships - a V-axis palette scroll,
-    /// confirmed against a frame-accurate capture - but which *track* textures
-    /// it applies to is inferred at 65 from two structural measurements: the
-    /// texture's rows are banded like the ship's, and at least one draw call
-    /// paints it from a narrow V band, the authored signature of a quad that
-    /// picks a phase by V. No capture of the original has confirmed that these
-    /// particular surfaces move.
+    /// **Off by default, because the check it existed for came back negative.**
+    /// The surfaces were selected on structural evidence - banded texture rows,
+    /// and at least one draw call painting from a narrow V band, the authored
+    /// signature of a quad that picks a phase by V - and then measured against
+    /// the running original, which is what this switch was for.
     ///
-    /// So this is the switch that makes a before-and-after screenshot possible
-    /// against the running game. If a capture shows a surface in
-    /// `oag_render::mesh::ANIMATED_TEXTURES` is static in the original, the fix
-    /// is to remove that entry, not to turn this off. The ships are not covered
-    /// by it: their behaviour is established, and turning the inferred part off
-    /// should not switch off the part that is known.
+    /// A breakpoint on `Gu_TexOffset` (`0x08811630`) through a live race found
+    /// **60 calls from three sites, and the only non-zero offsets came from
+    /// `Trail_DrawRibbon`**: 9 calls, 9 distinct advancing values, the exhaust
+    /// ribbon whose scroll rates were already recovered. The other 51 calls
+    /// passed exactly `(0, 0)`. The race was Talon's Junction, which carries two
+    /// of the table's entries, and the track was plainly rendering throughout.
+    /// Five candidate palettes were byte-static over the same window, so a CLUT
+    /// scroll is not the explanation either. See
+    /// `docs/ghidra/functions/psp-pulse/texture-animation.md`.
+    ///
+    /// So **the original does not animate track surfaces by moving texture
+    /// coordinates**, and turning this on is a departure rather than a
+    /// reproduction. It is kept, off, because the geometry that selected those
+    /// surfaces is a real measurement that a future reading of the actual
+    /// mechanism will want.
+    ///
+    /// The ships are deliberately not covered by this switch: their pulse is
+    /// measured in a frame-accurate capture, so whatever drives it is real even
+    /// though this read shows it is not a UV offset.
     #[serde(default = "default_animated_textures")]
     pub animated_textures: bool,
 }
 
-/// See [`Graphics::animated_textures`]: on, matching every other default that
-/// reproduces rather than departs from the original.
+/// See [`Graphics::animated_textures`]: **off**, because a debugger read of the
+/// original found no texture-coordinate offset submitted for any track surface.
 fn default_animated_textures() -> bool {
-    true
+    false
 }
 
 impl Default for Graphics {

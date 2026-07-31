@@ -628,9 +628,14 @@ change how this list should be read:
       are measured, but no capture has confirmed the original animates these
       surfaces. See [`vex.md`](../formats/vex.md) and
       [`texture-animation.md`](../ghidra/functions/psp-pulse/texture-animation.md)
-- [ ] Confirm those eight against a PPSSPP capture, and recover the real scroll
-      rate. Every rate currently reuses the blink light's, which is the only one
-      measured; the global clock that drives it has not been found in the binary
+- [x] Confirm those eight against the running original - **done, and negative**.
+      `Gu_TexOffset` never carries a non-zero offset except from
+      `Trail_DrawRibbon`, on a circuit carrying two of them, and five candidate
+      palettes were byte-static. The original does not animate track surfaces by
+      moving texture coordinates, so the setting defaults **off**
+- [ ] Find what *does* drive the ship lights' measured pulse. It is neither a UV
+      offset nor a CLUT scroll; an animated per-draw colour is the untested
+      candidate, and `Trail_DrawRibbon` already sets one through `FUN_0881125c`
 - [ ] Continuous UV scroll, as distinct from the filmstrip above:
       `Plasma_scroll_ADD_GLOW` on `16_Track` is one tile with all rows distinct,
       so it slides rather than cycles. The exhaust's trail reads authored scroll
