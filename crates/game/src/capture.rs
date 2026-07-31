@@ -20,6 +20,13 @@ use crate::render::{Renderer, VideoFormat};
 pub struct Options {
     /// Where to write the PNG.
     pub path: std::path::PathBuf,
+    /// Capture the frame the way a window presents it - through the render
+    /// scale, the upscaler, the grade and the aspect bars.
+    ///
+    /// Only reaches the race hand-off today. The front end's own capture path
+    /// has no `Framebuffer` either, and giving it one is the same piece of work
+    /// as the UI-compositing restructure.
+    pub presented: bool,
     /// Run until this state is current, then capture.
     pub until: Option<String>,
     /// Run at least this many ticks first.
@@ -279,6 +286,15 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 frustum_culling: options.settings.graphics.frustum_culling,
                 pvs_culling: options.settings.graphics.pvs_culling,
                 animated_textures: options.settings.graphics.animated_textures,
+                presented: options.presented.then_some(race::Presented {
+                    render_scale: options.settings.graphics.render_scale,
+                    presentation: crate::upscale::Presentation {
+                        upscaler: options.settings.graphics.upscaler,
+                        sharpness: options.settings.graphics.upscale_sharpness,
+                        brightness: options.settings.display.brightness,
+                        gamma: options.settings.display.gamma,
+                    },
+                }),
             },
         );
     }

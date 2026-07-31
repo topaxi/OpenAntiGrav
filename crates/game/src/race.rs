@@ -2286,6 +2286,37 @@ pub struct CaptureOptions {
     /// gets checked against the running original, and that check is the whole
     /// reason the setting exists.
     pub animated_textures: bool,
+    /// Capture the frame the way a **window** presents it, rather than the
+    /// scene the way it is drawn.
+    ///
+    /// `None` is the ordinary capture: the scene, straight out of the target it
+    /// was drawn into, ungraded, at exactly `size`. That is the right default
+    /// for a bug report, and it is deliberately not a picture of a window - see
+    /// [`crate::upscale`].
+    ///
+    /// `Some` puts the whole presentation path in the way: the render scale,
+    /// the upscaler, the grade and the aspect bars. **This is the only way to
+    /// see an upscaler's output at all**, because the ordinary path never
+    /// reaches the blit, and it is therefore what a still-frame comparison
+    /// between resamplers has to use. It is also, necessarily, an sRGB pipeline
+    /// throughout, exactly as a window is.
+    pub presented: Option<Presented>,
+}
+
+/// [`Presented`] with the scene size worked out.
+#[derive(Debug, Clone, Copy)]
+struct PresentedState {
+    scene_size: (u32, u32),
+    presentation: crate::upscale::Presentation,
+}
+
+/// The settings a `--presented` capture needs that an ordinary one does not.
+#[derive(Debug, Clone, Copy)]
+pub struct Presented {
+    /// What fraction of the aspect rectangle the scene is drawn at.
+    pub render_scale: crate::display::Scale,
+    /// The upscaler, its sharpness, and the grade.
+    pub presentation: crate::upscale::Presentation,
 }
 
 /// Runs a race headless and writes one frame to a PNG.
@@ -2339,9 +2370,34 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     }))
     .context("requesting the device")?;
 
-    // Rgba8Unorm rather than an sRGB format: the readback goes straight into a PNG,
-    // so a second gamma encode would double-correct.
-    let format = wgpu::TextureFormat::Rgba8Unorm;
+    // `Rgba8Unorm` for an ordinary capture: the readback goes straight into a
+    // PNG and the front end's own draws already write sRGB values, so a second
+    // gamma encode would double-correct. A `--presented` capture is a picture
+    // of a *window*, so it takes the window's format and lets the hardware
+    // encode on write - which is also what makes the offscreen target's
+    // non-sRGB twin, and therefore FSR 1, work at all. See `crate::upscale`.
+    //
+    // (Whether the *ordinary* path should follow suit is an open question, and
+    // it is open because it would also encode authored HUD text colours. See
+    // HANDOVER.)
+    let format = match options.presented {
+        Some(_) => wgpu::TextureFormat::Rgba8UnormSrgb,
+        None => wgpu::TextureFormat::Rgba8Unorm,
+    };
+    // The scene's own size, which presented is the aspect rectangle scaled and
+    // otherwise is the whole capture.
+    let presented = options.presented.map(|state| PresentedState {
+        scene_size: crate::upscale::target_size(
+            crate::display::viewport((width, height), options.aspect),
+            state.render_scale,
+            device.limits().max_texture_dimension_2d,
+        ),
+        presentation: state.presentation,
+    });
+    // What the scene - and so its depth buffer - is actually drawn at. A depth
+    // attachment whose size does not match the colour one is a validation
+    // error, not a bad picture.
+    let scene_size = presented.map_or((width, height), |state| state.scene_size);
     let scene = Scene::new(
         &device,
         &queue,
@@ -2351,7 +2407,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         flare,
         noise,
         format,
-        (width, height),
+        scene_size,
         options.anisotropy,
         visibility,
     )?;
@@ -2370,7 +2426,22 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
-    let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+    let surface = target.create_view(&wgpu::TextureViewDescriptor::default());
+    // Where the scene is drawn. Presented, that is an offscreen target at the
+    // render scale which the blit later stretches into the aspect rectangle -
+    // the same two-step a window does. Otherwise it is the capture texture
+    // itself, and the scene draws into a sub-rectangle of it directly.
+    let mut framebuffer = match presented {
+        Some(state) => Some(
+            crate::upscale::Framebuffer::new(&device, format, state.scene_size)
+                .context("building the upscale pipeline")?,
+        ),
+        None => None,
+    };
+    let view = match &framebuffer {
+        Some(framebuffer) => framebuffer.view().clone(),
+        None => surface.clone(),
+    };
 
     // Texture copies want rows aligned to 256 bytes, so the readback buffer is
     // usually wider than the image and needs unpadding.
@@ -2389,7 +2460,18 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     });
     // Shaped the same way a window is, so a screenshot frames what a player
     // would have seen at that size rather than a differently-cropped picture.
-    let viewport = crate::display::viewport((width, height), options.aspect);
+    // Presented, the offscreen target *is* that rectangle and the bars are what
+    // the blit clears around it, so the scene fills its target instead.
+    let rect = crate::display::viewport((width, height), options.aspect);
+    let viewport = match presented {
+        Some(state) => (
+            0.0,
+            0.0,
+            state.scene_size.0 as f32,
+            state.scene_size.1 as f32,
+        ),
+        None => rect,
+    };
     // Both tiers follow their settings, because two captures differing only by
     // one of them are how that tier gets validated - see
     // `CaptureOptions::frustum_culling` and `CaptureOptions::pvs_culling`.
@@ -2410,10 +2492,11 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     // path has no `Framebuffer` and so no overlay pass of its own - which would
     // make `--screenshot` useless for the one thing it is most wanted for.
     //
-    // Note this target is `Rgba8Unorm` while a window's is sRGB, and
-    // `Renderer::new` forks the sprite sheet's texture format on
+    // Note an ordinary capture's target is `Rgba8Unorm` while a window's is
+    // sRGB, and `Renderer::new` forks the sprite sheet's texture format on
     // `format.is_srgb()`. Text and fills go through the R8 coverage atlas and are
-    // unaffected; the HUD's art is not. See `docs/ui/hud.md`.
+    // unaffected; the HUD's art is not. See `docs/ui/hud.md`. A `--presented`
+    // capture is sRGB throughout and so takes the window's side of that fork.
     match crate::hud::Overlay::new(&device, &queue, format, &hud) {
         Ok(Some(mut overlay)) => overlay.draw(
             &device,
@@ -2426,6 +2509,19 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         Ok(None) => println!("no HUD layout: capturing without one"),
         Err(why) => println!("the HUD overlay did not build ({why}); capturing without one"),
     }
+    // The upscaler, the grade and the blit, through exactly the call the
+    // window's frame loop makes.
+    if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
+        framebuffer.resolve(
+            &device,
+            &queue,
+            &mut encoder,
+            &surface,
+            rect,
+            &state.presentation,
+        );
+    }
+
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),
         wgpu::TexelCopyBufferInfo {

@@ -44,7 +44,6 @@ use oag_game::{
 use oag_input::Controls;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
-use oag_render::post::fsr1;
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -130,6 +129,18 @@ struct Cli {
     /// path works too.
     #[arg(long)]
     screen: Option<String>,
+
+    /// With `--screenshot`, capture the frame the way a window presents it:
+    /// through the render scale, the upscaler, the brightness/gamma grade and
+    /// the aspect bars.
+    ///
+    /// Off by default, because an ungraded capture at exactly `--size` is the
+    /// right thing for a bug report and a graded one would make every capture
+    /// disagree with every other. Turn it on to see what a player sees - which
+    /// is the only way to see `[graphics] upscaler` do anything at all, since
+    /// the ordinary capture never reaches the blit.
+    #[arg(long)]
+    presented: bool,
 
     /// With `--screenshot`, run this many ticks before capturing.
     ///
@@ -241,6 +252,27 @@ struct Cli {
     /// (`settings::path`) for this run only; the file on disk is not changed.
     #[arg(long)]
     anisotropy: Option<Anisotropy>,
+
+    /// Which resampler carries the frame onto the surface: bilinear or fsr1.
+    ///
+    /// Overrides `[graphics] upscaler` in the settings file (`settings::path`)
+    /// for this run only; the file on disk is not changed. Here for the same
+    /// reason `--anisotropy` is, and for one more: two `--presented` captures
+    /// differing only by this flag are how the resamplers get compared, and
+    /// asking somebody to edit a settings file between them is how a comparison
+    /// ends up differing by something else as well.
+    #[arg(long)]
+    upscaler: Option<crate::display::Upscaler>,
+
+    /// What percentage of the displayed size the game is rendered at, 25 to
+    /// 200.
+    ///
+    /// Overrides `[graphics] render_scale` for this run only. The companion to
+    /// `--upscaler`: a resampler can only be judged at a scale where it has
+    /// something to resample, and the two flags together are what let one
+    /// command produce one image of a comparison.
+    #[arg(long)]
+    render_scale: Option<u32>,
 }
 
 fn main() -> Result<()> {
@@ -251,6 +283,19 @@ fn main() -> Result<()> {
     // seconds of intro later.
     let settings = settings::load()?;
     let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
+    let render_scale = match cli.render_scale {
+        Some(percent) => crate::display::Scale::try_from(percent)
+            .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
+        None => settings.graphics.render_scale,
+    };
+    let settings = settings::Settings {
+        graphics: settings::Graphics {
+            upscaler: cli.upscaler.unwrap_or(settings.graphics.upscaler),
+            render_scale,
+            ..settings.graphics
+        },
+        ..settings
+    };
 
     // Parsed before anything is loaded, and for both ways in: the front end can
     // hand off to a race, so a misspelled class must not be discovered eight
@@ -358,6 +403,7 @@ fn main() -> Result<()> {
                 size: parse_size(&cli.size)?,
                 screen: cli.screen.clone(),
                 menu_page: cli.menu_page.clone(),
+                presented: cli.presented,
                 settings: settings.clone(),
                 anisotropy,
             },
@@ -526,6 +572,15 @@ fn run_race(
                 frustum_culling: settings.graphics.frustum_culling,
                 pvs_culling: settings.graphics.pvs_culling,
                 animated_textures: settings.graphics.animated_textures,
+                presented: cli.presented.then_some(race::Presented {
+                    render_scale: settings.graphics.render_scale,
+                    presentation: oag_game::upscale::Presentation {
+                        upscaler: settings.graphics.upscaler,
+                        sharpness: settings.graphics.upscale_sharpness,
+                        brightness: settings.display.brightness,
+                        gamma: settings.display.gamma,
+                    },
+                }),
             },
         );
     }
@@ -655,7 +710,6 @@ impl App {
         .context("building the performance overlay")?;
 
         Ok(Some(Session {
-            fsr1: None,
             gpu,
             framebuffer,
             stage,
@@ -1385,13 +1439,6 @@ struct Session {
     /// should be is a property of the window and the settings rather than of
     /// what happens to be on screen.
     framebuffer: upscale::Framebuffer,
-    /// FSR 1's two pipelines, built the first frame the setting asks for them.
-    ///
-    /// Lazy because most runs never select it, and the pipelines are two shader
-    /// compilations and two textures that a bilinear blit has no use for. The
-    /// `Result` is kept rather than unwrapped so a shader that will not compile
-    /// reports itself once and leaves the game running on the blit.
-    fsr1: Option<Result<fsr1::Fsr1>>,
     /// Set when a menu asks to quit, read by the event loop.
     quit: bool,
     /// What the menus need, when this run has menus at all.
@@ -1731,52 +1778,21 @@ impl Session {
             );
         }
 
-        // The upscaler resolves the offscreen target up to the rectangle the
-        // blit was going to stretch it into, and the blit then becomes a
-        // one-to-one copy that still owns the grade and the aspect bars. Its
-        // output is perceptual, which is what `upscaling` told the grade.
-        let upscaled = (self.settings.graphics.upscaler == display::Upscaler::Fsr1).then(|| {
-            let fsr = self
-                .fsr1
-                .get_or_insert_with(|| fsr1::Fsr1::new(&self.gpu.device, self.gpu.config.format));
-            let fsr = match fsr {
-                Ok(fsr) => fsr,
-                // A shader that will not compile is a build-time mistake, but
-                // it must not be a crash in a player's frame loop: say so once
-                // and carry on bilinear.
-                Err(why) => {
-                    eprintln!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
-                    return None;
-                }
-            };
-            fsr.render(
-                &self.gpu.device,
-                &self.gpu.queue,
-                &mut encoder,
-                fsr1::Frame {
-                    source: self.framebuffer.perceptual(),
-                    input: size,
-                    output: (rect.2 as u32, rect.3 as u32),
-                    sharpness: fsr1::Sharpness::stops(self.settings.graphics.upscale_sharpness),
-                },
-            );
-            fsr.output()
-                .map(|view| self.framebuffer.source(&self.gpu.device, view))
-        });
-        let upscaled = upscaled.flatten();
-
-        // Written here rather than earlier because the `decode` flag has to
-        // describe the source that is *actually* about to be bound. Asking the
-        // setting instead would grade an ungraded frame wrongly on the one
-        // frame the upscaler failed to build.
-        self.framebuffer.set_grade(
+        // The whole back half of the frame - the upscaler, the grade and the
+        // blit - so that this and a `--presented` capture cannot drift apart.
+        self.framebuffer.resolve(
+            &self.gpu.device,
             &self.gpu.queue,
-            self.settings.display.brightness,
-            self.settings.display.gamma,
-            upscaled.is_some(),
+            &mut encoder,
+            &view,
+            rect,
+            &upscale::Presentation {
+                upscaler: self.settings.graphics.upscaler,
+                sharpness: self.settings.graphics.upscale_sharpness,
+                brightness: self.settings.display.brightness,
+                gamma: self.settings.display.gamma,
+            },
         );
-        self.framebuffer
-            .present(&mut encoder, &view, rect, upscaled.as_ref());
         self.gpu.queue.submit(Some(encoder.finish()));
         self.gpu.queue.present(frame);
         Ok(())

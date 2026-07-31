@@ -31,15 +31,36 @@
 //! fourth stage lands. Here it is one shader, and a player calibrating the
 //! picture sees the menu they are standing on change as they do it.
 //!
-//! **A screenshot is not graded.** `--screenshot` and the race capture write
-//! the offscreen frame straight out without going through this pass, and that
-//! is the wanted answer rather than an oversight: brightness and gamma are a
-//! setting about somebody's monitor, and baking them into a PNG that goes into
-//! a bug report would make every capture disagree with every other one.
+//! **A screenshot is not graded, by default.** `--screenshot` and the race
+//! capture write the offscreen frame straight out without going through this
+//! pass, and that is the wanted answer rather than an oversight: brightness and
+//! gamma are a setting about somebody's monitor, and baking them into a PNG
+//! that goes into a bug report would make every capture disagree with every
+//! other one.
+//!
+//! `--presented` opts out of that and puts the whole path in the way - the
+//! render scale, the upscaler, the grade and the bars. It exists because the
+//! ordinary capture never reaches this pass at all, so without it there is no
+//! way to *see* what an upscaler did, and therefore no way to choose one. A
+//! comparison wants a picture of a window; a bug report does not.
 
 use anyhow::{Context, Result};
 
-use crate::display::{Brightness, Gamma, Scale};
+use oag_render::post::fsr1;
+
+use crate::display::{Brightness, Gamma, Scale, Upscaler};
+
+/// Everything the blit needs that a player chose, gathered so the window's
+/// frame loop and a capture can be handed the same thing.
+#[derive(Debug, Clone, Copy)]
+pub struct Presentation {
+    /// Which resampler carries the frame onto the surface.
+    pub upscaler: Upscaler,
+    /// FSR 1's RCAS sharpness in stops. Ignored by the bilinear path.
+    pub sharpness: f32,
+    pub brightness: Brightness,
+    pub gamma: Gamma,
+}
 
 /// What the blit does to the picture on its way onto the surface, as the
 /// shader's uniform expects it.
@@ -95,6 +116,13 @@ pub struct Framebuffer {
     /// moves from a menu, not per-frame data.
     grade: wgpu::Buffer,
     graded: Grade,
+    /// FSR 1's two pipelines, built the first frame the setting asks for them.
+    ///
+    /// Lazy because most runs never select it, and the pipelines are two shader
+    /// compilations and two textures a bilinear blit has no use for. The
+    /// `Result` is kept rather than unwrapped so a shader that will not compile
+    /// reports itself once and leaves the game running on the blit.
+    fsr1: Option<Result<fsr1::Fsr1>>,
     size: (u32, u32),
     format: wgpu::TextureFormat,
 }
@@ -220,6 +248,7 @@ impl Framebuffer {
             bind_group,
             grade,
             graded,
+            fsr1: None,
             size,
             format,
         })
@@ -243,6 +272,62 @@ impl Framebuffer {
         }
         queue.write_buffer(&self.grade, 0, bytemuck::bytes_of(&wanted));
         self.graded = wanted;
+    }
+
+    /// Runs the chosen upscaler and blits the result onto `surface`.
+    ///
+    /// The whole back half of a frame in one call, so that the window's frame
+    /// loop and a capture that wants to see what the window sees cannot drift
+    /// apart - which they would, because the ordering here has two traps in it.
+    /// The grade's `decode` flag has to describe the source that is *actually*
+    /// bound rather than the setting that asked for it, and the upscaler has to
+    /// run after every stage has finished drawing but before the blit.
+    pub fn resolve(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: &wgpu::TextureView,
+        rect: (f32, f32, f32, f32),
+        presentation: &Presentation,
+    ) {
+        let source = (presentation.upscaler == Upscaler::Fsr1).then(|| {
+            let fsr = self
+                .fsr1
+                .get_or_insert_with(|| fsr1::Fsr1::new(device, self.format));
+            let fsr = match fsr {
+                Ok(fsr) => fsr,
+                // A shader that will not compile is a build-time mistake, but
+                // it must not be a crash in a player's frame loop: say so once
+                // and carry on bilinear.
+                Err(why) => {
+                    eprintln!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
+                    return None;
+                }
+            };
+            fsr.render(
+                device,
+                queue,
+                encoder,
+                fsr1::Frame {
+                    source: &self.perceptual,
+                    input: self.size,
+                    output: (rect.2 as u32, rect.3 as u32),
+                    sharpness: fsr1::Sharpness::stops(presentation.sharpness),
+                },
+            );
+            fsr.output()
+                .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
+        });
+        let source = source.flatten();
+
+        self.set_grade(
+            queue,
+            presentation.brightness,
+            presentation.gamma,
+            source.is_some(),
+        );
+        self.present(encoder, surface, rect, source.as_ref());
     }
 
     /// Makes sure the target is `size`, rebuilding it if it is not.
