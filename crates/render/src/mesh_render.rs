@@ -116,7 +116,20 @@ pub fn capture_from(
     }))
     .context("requesting the device")?;
 
-    let format = wgpu::TextureFormat::Rgba8Unorm;
+    // **sRGB, so the hardware encodes on write exactly as the window's surface
+    // does**, and the bytes copied out are already the ones a PNG wants.
+    //
+    // The tempting alternative - a plain `Rgba8Unorm` target, on the grounds
+    // that a readback going straight into a PNG must not be gamma-encoded twice
+    // - is what this was, and it was wrong here. It is right only where the
+    // shader writes a value that is already sRGB, which is true of the front
+    // end's text and sprites and false of anything lit: `mesh.wgsl` multiplies
+    // a *linear* texel by the light rig, so an unencoded write stores linear
+    // light, and the capture comes out darker than the window it is supposed to
+    // match. Measured on the Feisar livery against the same view rendered both
+    // ways: the two disagree by a mean of ~2.4/255 and up to 57/255, the error
+    // being largest exactly where the rig is furthest from 1.0.
+    let format = wgpu::TextureFormat::Rgba8UnormSrgb;
     let size = wgpu::Extent3d {
         width,
         height,
