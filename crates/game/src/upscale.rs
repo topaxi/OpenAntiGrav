@@ -448,6 +448,176 @@ mod tests {
 
     const LIMIT: u32 = 8192;
 
+    /// Blits a flat colour with and without FSR 1 and returns both results.
+    ///
+    /// The offscreen target is **sRGB**, as it is in the game, which is what
+    /// makes this worth doing at all: it is the only configuration where the
+    /// perceptual view differs from the ordinary one, and so the only one that
+    /// exercises the whole colour-space arrangement rather than an accidental
+    /// identity. The surface is `Rgba8Unorm` so the readback is the shader's
+    /// own linear output with no second curve on top.
+    ///
+    /// Returns `None` with no adapter, so the caller skips.
+    fn both_paths(input: [f64; 3]) -> Option<([u8; 4], [u8; 4])> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("upscale fsr test"),
+            ..Default::default()
+        }))
+        .ok()?;
+
+        // One format for the offscreen target, the blit's pipeline and the
+        // surface, exactly as the game has it: `Framebuffer::new` takes the
+        // surface format and builds both against it.
+        let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+        let mut fsr =
+            oag_render::post::fsr1::Fsr1::new(&device, format).expect("the fsr pipelines");
+        let mut out = Vec::new();
+        for upscaling in [false, true] {
+            // Four texels in, sixteen out. Small, and still a real upscale: at
+            // one texel EASU's twelve taps would all be the same clamped edge.
+            let mut framebuffer = Framebuffer::new(&device, format, (2, 2)).expect("the pipeline");
+
+            let surface = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("fsr readback"),
+                size: wgpu::Extent3d {
+                    width: 4,
+                    height: 4,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
+            });
+            let surface_view = surface.create_view(&Default::default());
+            let readback = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("fsr readback"),
+                size: (wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 4) as u64,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+
+            let mut encoder = device.create_command_encoder(&Default::default());
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("fsr input"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: framebuffer.view(),
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: input[0],
+                            g: input[1],
+                            b: input[2],
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            let source = upscaling.then(|| {
+                fsr.render(
+                    &device,
+                    &queue,
+                    &mut encoder,
+                    oag_render::post::fsr1::Frame {
+                        source: framebuffer.perceptual(),
+                        input: framebuffer.size(),
+                        output: (4, 4),
+                        sharpness: oag_render::post::fsr1::Sharpness::DEFAULT,
+                    },
+                );
+                framebuffer.source(&device, fsr.output().expect("an fsr output"))
+            });
+            framebuffer.set_grade(
+                &queue,
+                Brightness::NEUTRAL,
+                Gamma::NEUTRAL,
+                source.is_some(),
+            );
+            framebuffer.present(
+                &mut encoder,
+                &surface_view,
+                (0.0, 0.0, 4.0, 4.0),
+                source.as_ref(),
+            );
+
+            encoder.copy_texture_to_buffer(
+                surface.as_image_copy(),
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &readback,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
+                        rows_per_image: Some(4),
+                    },
+                },
+                wgpu::Extent3d {
+                    width: 4,
+                    height: 4,
+                    depth_or_array_layers: 1,
+                },
+            );
+            queue.submit(Some(encoder.finish()));
+
+            let slice = readback.slice(..);
+            slice.map_async(wgpu::MapMode::Read, |_| {});
+            device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .expect("the GPU");
+            // The middle of the picture, away from the edge clamping.
+            let at = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize + 4;
+            let mapped = slice.get_mapped_range().expect("the readback");
+            out.push([mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]);
+            drop(mapped);
+            readback.unmap();
+        }
+        Some((out[0], out[1]))
+    }
+
+    /// Turning the upscaler on must not move a flat colour.
+    ///
+    /// This is the whole colour-space arrangement in one assertion, and it is
+    /// the cheapest way to catch the mistake most likely to be made here.
+    /// A flat picture is a fixed point of both EASU and RCAS, so the only thing
+    /// that can differ between the two paths is the transfer function: the
+    /// bilinear path lets the sampler decode an sRGB view, the FSR path reads a
+    /// non-sRGB view and decodes in the shader. If those two disagree - if the
+    /// decode were `pow(c, 2.2)` standing in for the real curve, or if the
+    /// non-sRGB view were not actually reaching the shader - a flat grey would
+    /// come out at two different values and this fails.
+    ///
+    /// **Skips with no adapter**, so a green CI run is not evidence it ran.
+    #[test]
+    fn turning_the_upscaler_on_does_not_shift_a_flat_colour() {
+        // Three levels, because the sRGB curve's two pieces meet in the darks
+        // and an approximation goes wrong there first.
+        for level in [0.02, 0.25, 0.5] {
+            let Some((bilinear, fsr)) = both_paths([level, level, level]) else {
+                eprintln!("no GPU adapter: skipping");
+                return;
+            };
+            for channel in 0..3 {
+                let drift = i32::from(bilinear[channel]).abs_diff(i32::from(fsr[channel]));
+                assert!(
+                    drift <= 2,
+                    "at {level}, channel {channel}: bilinear gave {bilinear:?} and fsr gave \
+                     {fsr:?}, a drift of {drift}/255 - the two paths disagree about the \
+                     transfer function"
+                );
+            }
+        }
+    }
+
     /// Runs one grade through the real pipeline and reads back the pixel.
     ///
     /// `Rgba8Unorm` and not the surface's sRGB format, so the arithmetic is
