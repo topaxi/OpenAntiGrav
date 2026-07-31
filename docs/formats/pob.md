@@ -241,6 +241,69 @@ file bytes yet, and going further (`FUN_088f79b4`, which walks a
 follow-up - left here as a located, not-yet-pursued lead rather than chased
 into a general node-struct decoding project.
 
+### A second, fixed-offset field block sits right after the name - no fixup needed
+
+`FUN_088f4910` (the function `ShipCollisionFx_Trigger`'s spawned particle
+instance reaches to derive its emission parameters, see
+[contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#fun_088f4910-derives-six-instance-fields-from-a-plain-scalar-block))
+reads `instance+0x20` as a pointer (`iVar1`) and then reads six plain floats
+off it at `+0x34`, `+0x38`, `+0x40`, `+0x48`, `+0x4c` and `+0x74`. This
+looked, before this pass, like it might be yet another indirection through
+the slot/fixup mechanism above. It is not: `iVar1` **is `resource_base`
+itself** - the exact same runtime address the slot table's own fixup
+arithmetic is relative to, holding the resource's NUL-terminated name at
+offset `+0x00`. So these six fields are plain, static, authored data sitting
+in the file immediately after the name (and after whatever padding/header
+fields occupy the space up to `+0x34`), never touched by the pointer-fixup
+pass at all - readable straight from disk with no runtime needed.
+
+**Confirmed two ways, in agreement:**
+
+- **Live.** A PPSSPP capture broke inside `ShipCollisionFx_Trigger` on a
+  real wall hit, read `instance+0x20`, and dumped the first `0x20` bytes at
+  that address: `"WO_SHIP_COLL_SPARK_DAMAGE\0"` - the resource's own name,
+  proving `iVar1 == resource_base`.
+- **Static.** Extracting the same resource
+  (`WO_SHIP_COLL_SPARK_DAMAGE.POB`, PSP `Data.wad` entry `0xeff1f331`, see
+  "Reproducing" above) and computing `resource_base = HEADER_LEN +
+  slots.len() * SLOT_LEN` with [`ParticleSystem::parse`](../../crates/formats/src/pob.rs)
+  lands on bytes that spell out the same name, and all six fields at
+  `resource_base + {0x34, 0x38, 0x40, 0x48, 0x4c, 0x74}` read back **exactly**
+  the values the live capture saw: `0.0144`, `-0.00035750002`, `0.0`,
+  `0.048`, `0.0`, `-0.011232`.
+
+The reconstruction goes further than the raw offsets agreeing: feeding those
+six file values through `FUN_088f4910`'s own arithmetic (see
+contact-response.md for the full derivation) reproduces all six of the
+*derived* output fields the live capture separately recorded on the spawned
+instance, to the same precision, with the two undetermined co-factor inputs
+(`instance+0x44`/`instance+0x48`) both resolving to the neutral default
+`1.0`. That is an end-to-end, byte-exact chain from file bytes through to
+the values driving `ShipCollisionFx_Trigger`'s spawn - not just a pointer
+match.
+
+**What this does not yet give**: usable units. The three-float group
+(`0.0144`, `-0.00035750002`, `0.0`) reads like a small vector - direction,
+velocity, or acceleration bias - but its magnitude (~0.014) does not obviously
+correspond to any of `oag_render::sparks`'s existing constants (ejection
+speed, size, cone angle) without knowing what world-space or engine-internal
+unit it is expressed in, or whether a further scale factor is applied
+downstream of `FUN_088f4910` before the instance data reaches whatever
+actually renders a particle. Porting a number whose unit is unconfirmed
+repeats the mistake corrected earlier in the same investigation (see
+contact-response.md's "Follow-up pass" section) - this offset block is
+recorded here as a located, format-level finding, not as a source for new
+`sparks.rs` constants.
+
+This is a genuinely separate structure from the slot table and from the
+`+0x944`/`+0x948`/`+0x94c`/`+0x9a0` tree-and-atlas fields the previous
+subsection describes - both live inside the same resolved resource, at
+different fixed offsets, serving different purposes (one is a small
+authored parameter block, the other is a node/atlas structure walked by
+`FUN_088f58a4`). Confirming whether the fields between `+0x00` (the name)
+and `+0x34` (the first of these six) hold anything meaningful, and what lies
+between `+0x4c` and `+0x74`, is unstarted.
+
 ## Cross-platform: the PS2 port uses the identical format
 
 `SCES_547.48/WADS2.WAD` (the PS2 disc's main archive, same
@@ -302,7 +365,13 @@ corroborated by the live trace's own reads, but the field layout inside a
 record is not decoded. **0** for a full field layout of either record kind.
 **30** for a fixed slot-table-*index* per attribute-mapper class - a
 plausible reading of the recovered layer names (`GLOW`, `debris`, ...),
-unverified.
+unverified. **90** for the fixed-offset scalar block at `resource_base +
+{0x34, 0x38, 0x40, 0x48, 0x4c, 0x74}` existing and being un-fixed-up authored
+data - a live trace and a static file read agree byte-exact on all six
+values, and the full consumer arithmetic (`FUN_088f4910`) reproduces the
+live-captured *derived* outputs from those same six values, both on a single
+file only. **0** for what those six values, or the derived outputs, mean
+semantically or what unit they are expressed in.
 
 **Validated against two discs**, `pulse-psp-usa` and `pulse-ps2-eu`. Not
 checked against Pure's UMD, or PS2's `WADSP.WAD`/`PRERACE.WAD`.
@@ -341,9 +410,14 @@ shape instead.
   fields (`+0x58`/`+0x5c`/`+0x60`/`+0x64`/`+0x68`/`+0x6c`), computed from base
   values read off the resolved resource (`iVar1`). The severity number itself
   is now recovered and ported (`oag_render::sparks::SEVERITY_SLOPE`/
-  `SEVERITY_FLOOR`) - it did not need this format decoded. What still does:
-  the six derived fields' own meaning (spawn count? colour? velocity spread?)
-  and the resource-side base values `FUN_088f4910` reads them from.
+  `SEVERITY_FLOOR`) - it did not need this format decoded. The resource-side
+  base values are now also recovered - see "A second, fixed-offset field
+  block sits right after the name" above - and their consumption arithmetic
+  is fully reconstructed byte-for-byte. What is still open is narrower than
+  either of those: what the six derived fields and their file-side inputs
+  *mean* (a velocity bias? a size/spread pair?) and therefore what unit
+  they're expressed in - not decoded, and not safely portable to
+  `sparks.rs` until it is.
 - **What a slot's *position* in the table means**, if anything - the
   attribute-mapper-class-per-index hypothesis is unverified.
 - **What a shared target (several slots resolving to the identical offset)

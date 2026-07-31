@@ -480,6 +480,84 @@ the still-undecoded `.pob` resource data
 ([`docs/formats/pob.md`](../../../formats/pob.md)), once the actual inputs
 are read correctly.
 
+### `FUN_088f4910` derives six instance fields from a plain scalar block
+
+*Second part of the same follow-up, after the severity correction above.*
+`iVar1` - the pointer `FUN_088f4910` reads its six base fields from
+(`+0x34`/`+0x38`/`+0x40`/`+0x48`/`+0x4c`/`+0x74`, per the reaction-list entry
+above) - is not a third indirection layer. A live capture read the first
+`0x20` bytes at `iVar1` and got `"WO_SHIP_COLL_SPARK_DAMAGE\0"`: `iVar1` **is
+`resource_base`**, the exact address the `.pob` resource's own pointer-fixup
+table is relative to (see
+[pob.md](../../../formats/pob.md#the-slot-table-is-a-pointer-fixup-table)).
+Extracting the resource file and reading the same six offsets from raw bytes
+(`resource_base = HEADER_LEN + slots.len() * SLOT_LEN`, computed with
+[`ParticleSystem::parse`](../../../../crates/formats/src/pob.rs)) reproduced
+the live-captured values exactly: `0.0144`, `-0.00035750002`, `0.0`,
+`0.048`, `0.0`, `-0.011232` at `+0x34/+0x38/+0x40/+0x48/+0x4c/+0x74`. These
+are plain authored floats sitting in the file, never touched by the
+pointer-fixup pass - see
+[pob.md](../../../formats/pob.md#a-second-fixed-offset-field-block-sits-right-after-the-name---no-fixup-needed)
+for the format-level writeup.
+
+The full decompile of `FUN_088f4910`:
+
+```c
+void FUN_088f4910(int param_1)  // param_1 = spawned ParticleSystem instance
+{
+  float fVar2 = *(float *)(param_1 + 0x34);           // severity, set by the trigger
+  int   iVar1 = *(int   *)(param_1 + 0x20);           // = resource_base, confirmed above
+  float fVar3 = *(float *)(param_1 + 0x2c) * fVar2 * *(float *)(param_1 + 0x48);
+  float fVar4 = *(float *)(param_1 + 0x28) * fVar2 * *(float *)(param_1 + 0x44);
+  *(float *)(param_1 + 0x58) = *(float *)(iVar1 + 0x34) * fVar3;
+  *(float *)(param_1 + 0x5c) = *(float *)(iVar1 + 0x38) * fVar3;
+  *(float *)(param_1 + 0x60) = *(float *)(iVar1 + 0x40) * fVar3;
+  *(float *)(param_1 + 0x64) = *(float *)(iVar1 + 0x48) * fVar4;
+  *(float *)(param_1 + 0x68) = *(float *)(iVar1 + 0x4c) * fVar4;
+  *(float *)(param_1 + 0x6c) = *(float *)(iVar1 + 0x74) * fVar2;
+  *(float *)(param_1 + 0x70) = *(float *)(iVar1 + 0x4cc) * *(float *)(param_1 + 0x3c);
+}
+```
+
+`param_1+0x28`/`+0x2c`/`+0x44`/`+0x48` are **instance-side** co-factors, a
+different address space from the resource-side offsets of the same name
+(`iVar1+0x28` was probed once out of caution and is unrelated - flagged here
+so it doesn't get misread as a correlation later). In the captured hit they
+all read `1.0`, the evident default, so `fVar3 == fVar4 == fVar2` (severity)
+for this capture and cannot yet be told apart from it alone.
+
+Reconstructing the six output fields from the file's own six values times
+the captured severity (`0.4250674545764923`) reproduces every one of the
+live-captured outputs to the same printed precision:
+
+| output | formula | predicted | captured |
+| --- | --- | --- | --- |
+| `+0x58` | `0.0144 * fVar3` | `0.006122` | `0.006120971404016018` |
+| `+0x5c` | `-0.00035750002 * fVar3` | `-0.000152` | `-0.00015196161984931678` |
+| `+0x60` | `0.0 * fVar3` | `0.0` | `0.0` |
+| `+0x64` | `0.048 * fVar4` | `0.020403` | `0.020403238013386726` |
+| `+0x68` | `0.0 * fVar4` | `0.0` | `0.0` |
+| `+0x6c` | `-0.011232 * fVar2` | `-0.004774` | `-0.004774357657879591` |
+
+This is an end-to-end, byte-exact chain from file bytes through to the
+values the spawn actually produces - the strongest evidence tier available
+without a second binary. What it is **not** is a decoded meaning: the
+`(0x58, 0x5c, 0x60)` group reads like a small 3-vector (direction? velocity
+bias?) and `(0x64, 0x68)` like a 2-component pair, both plausible fits for
+`sparks.rs`'s still-authored ejection/spread constants, but the magnitude
+(~0.014 for the largest component) doesn't self-evidently correspond to any
+unit this project's own physics or render code uses, and nothing downstream
+of `FUN_088f4910` - i.e. whatever actually turns these six numbers into a
+drawn particle - has been traced yet. Per the correction earlier in this
+same section, porting a number without a confirmed unit is exactly the
+mistake to avoid twice in one session; these six fields are recorded as a
+located, reproducible finding, not as new `sparks.rs` inputs. Confidence
+**90** for the offsets, the `iVar1 == resource_base` identity and the
+input-to-output arithmetic (live capture and static file read agree
+byte-exact, and the full derivation reproduces six independently-captured
+outputs) - all on a single file and a single captured hit, not corpus-wide.
+**0** for what any of the twelve numbers (six inputs, six outputs) mean.
+
 The two non-spark callers below are recorded for completeness, not chased
 further:
 
