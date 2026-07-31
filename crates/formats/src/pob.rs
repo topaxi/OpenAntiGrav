@@ -4,7 +4,10 @@
 //! load by name (`Data\Psys\%s.POB`, built at `FUN_089156a0` in the PSP
 //! `BOOT.BIN`). 35 exist in `Data.wad` on the PSP disc, one per authored
 //! effect - `WO_SHIP_COLL_SPARK_DAMAGE`, `WO_MISSILE_EXPLO`, `WO_RAIN`, and so
-//! on. See `docs/formats/pob.md` for the evidence and open questions.
+//! on. The PS2 port ships the identical container: 41 `SYSP` blobs in
+//! `WADS2.WAD`, 32 sharing a name hash (and so a path) with PSP, parsed and
+//! resolved by this same module with no code changes. See
+//! `docs/formats/pob.md` for the evidence and open questions.
 //!
 //! # Container
 //!
@@ -25,17 +28,41 @@
 //! confirmed by hashing the recovered name as a WAD entry path and finding it
 //! agrees with the blob's own entry hash, on all 35 files in the corpus.
 //!
-//! # What the slot table holds is not known
+//! # The slot table is a pointer-fixup table
 //!
-//! The values read as absolute file offsets: every real slot value across
-//! all 35 files lands inside `[1220, file_size)` and rises monotonically
-//! within a file. 1220 is not a coincidence either - it is a fixed boundary
-//! on every file, the end of a fixed-size first region (header, table, name
-//! and a per-system parameter block filling whatever the variable-length
-//! table and name left over) that the real tabulated data starts right after.
-//! Neither what a slot's value points at nor what its position in the table
-//! means is known - see the format page for the full census and the two
-//! structural leads found in the tabulated region itself.
+//! Confirmed by both decompilation and a live PPSSPP trace (`FUN_088f8e38`,
+//! called from the generic resource loader `FUN_088f3540` on every fresh
+//! load): a slot's raw value is not the offset of its data. It is the offset
+//! of a **fixup site** - a 4-byte field, relative to the resource's own base
+//! (`HEADER_LEN + slots.len() * SLOT_LEN`, i.e. right where the slot table
+//! ends) - holding a second, baked offset from the same base. The loader adds
+//! the base to that stored value in place, turning it from an on-disk
+//! relative offset into a live pointer:
+//!
+//! ```text
+//! fixup_site = resource_base + slots[i]
+//! target     = resource_base + read_u32(fixup_site)   // what the site holds *before* the add
+//! ```
+//!
+//! [`ParticleSystem::resolve_slot`] replays exactly this, entirely from the
+//! file's own bytes - no runtime needed to compute it, only to discover it.
+//! Verified live: all 26 real slots of `WO_SHIP_COLL_SPARK_DAMAGE` matched
+//! this arithmetic exactly, `fixup site value + resource_base == the address
+//! PPSSPP wrote there`, and the same two-hop resolution lands in bounds on
+//! **all 436 real slots across all 35 files** with zero exceptions.
+//!
+//! # Many resolved targets are readable strings
+//!
+//! 187 of those 436 (43%) are themselves NUL-terminated ASCII: developer
+//! texture paths (`Z:\WipeoutPSP\X2\Data\Psys\Tex\orange_glow2.tga`,
+//! `Z:\Art_Resources\Psys\Tex\pointglow_32x32.tga`) and short authored layer
+//! names (`GLOW`, `debris`, `thin_streaks`, `RINGS`). So a slot is a
+//! per-channel record: sometimes a texture reference, sometimes a name,
+//! sometimes (the non-string targets) a small run of floats whose layout is
+//! still unread. Neither the record's full field layout nor what a *shared*
+//! target (several slots resolving to the identical offset - the corpus's
+//! most common case, five slots to one target) means beyond "these channels
+//! fall back to the same default" is known yet - see the format page.
 
 /// The container magic.
 pub const MAGIC: &[u8; 4] = b"SYSP";
@@ -88,6 +115,13 @@ pub enum Error {
         /// `HEADER_LEN + payload.len()`.
         computed: u32,
     },
+    /// A slot's fixup site, or the target the site resolves to, runs past
+    /// the end of the blob. Never observed on any of the 436 real slots
+    /// across all 35 files.
+    SlotOutOfRange {
+        /// The slot's index in the table.
+        index: usize,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -106,6 +140,9 @@ impl std::fmt::Display for Error {
                 f,
                 "+0x04 declares {declared}, but header length plus the payload is {computed}"
             ),
+            Self::SlotOutOfRange { index } => {
+                write!(f, "slot {index}'s fixup site or target runs past the end")
+            }
         }
     }
 }
@@ -124,8 +161,9 @@ pub struct ParticleSystem<'a> {
     /// files in the corpus - see [`crate::wad::hash_name`].
     pub name: String,
     /// The slot table, one entry per declared slot: `None` for an unused slot
-    /// (the raw `0xffffffff`), `Some` otherwise. See the module documentation
-    /// for what the values are not yet known to mean.
+    /// (the raw `0xffffffff`), `Some(fixup_site)` otherwise. A slot's value is
+    /// not its target's offset - it is a *fixup site* that must be resolved
+    /// with [`Self::resolve_slot`]. See the module documentation.
     pub slots: Vec<Option<u32>>,
     /// Bytes after the name field, undecoded.
     pub payload: &'a [u8],
@@ -211,6 +249,48 @@ impl<'a> ParticleSystem<'a> {
             slots,
             payload,
         })
+    }
+
+    /// Resolves slot `index` to its target, as an offset into [`Self::payload`].
+    ///
+    /// Replays the pointer fixup the game's loader performs at load time (see
+    /// the module documentation): reads the raw value stored at the slot's
+    /// fixup site, adds the resource's own base to it, and returns that
+    /// address as an offset into `payload` - so `payload[result..]` is the
+    /// target. `data` must be the same bytes originally passed to
+    /// [`Self::parse`].
+    ///
+    /// Returns `Ok(None)` for an unused slot, and also for an `index` past
+    /// the end of [`Self::slots`] - there is no fixup site to resolve either
+    /// way.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::SlotOutOfRange`] if the fixup site, or the target it names,
+    /// runs past the end of `data`. Never observed on any of the 436 real
+    /// slots across all 35 files in the corpus, but `data` here is
+    /// caller-supplied and not re-validated against `self`.
+    pub fn resolve_slot(&self, data: &[u8], index: usize) -> Result<Option<usize>> {
+        let Some(Some(slot)) = self.slots.get(index).copied() else {
+            return Ok(None);
+        };
+        let resource_base = HEADER_LEN + self.slots.len() * SLOT_LEN;
+        let site = resource_base + slot as usize;
+        let Some(fixup_bytes) = data.get(site..site + SLOT_LEN) else {
+            return Err(Error::SlotOutOfRange { index });
+        };
+        let baked = u32::from_le_bytes([
+            fixup_bytes[0],
+            fixup_bytes[1],
+            fixup_bytes[2],
+            fixup_bytes[3],
+        ]);
+        let target = resource_base + baked as usize;
+        let name_end = resource_base + NAME_LEN;
+        if target < name_end || data.len() <= target {
+            return Err(Error::SlotOutOfRange { index });
+        }
+        Ok(Some(target - name_end))
     }
 }
 
@@ -311,5 +391,63 @@ mod tests {
         data[0] = b'X';
         assert_eq!(ParticleSystem::parse(&data), Err(Error::NotSysp));
         assert!(!looks_like_particle_system(&data));
+    }
+
+    /// A one-slot blob whose fixup site sits at the very start of `payload`
+    /// and whose baked value (`40`) resolves 8 bytes further in, where a
+    /// `MARK` marker sits - the same two-hop shape a live PPSSPP trace
+    /// confirmed for `WO_SHIP_COLL_SPARK_DAMAGE`'s 26 real slots.
+    fn pob_with_one_fixup() -> Vec<u8> {
+        let mut payload = vec![0u8; 12];
+        payload[0..4].copy_from_slice(&40u32.to_le_bytes());
+        payload[8..12].copy_from_slice(b"MARK");
+        pob("WO_TEST_FIXUP", &[Some(32)], &payload)
+    }
+
+    #[test]
+    fn a_slot_resolves_through_its_fixup_site_to_the_target() {
+        let data = pob_with_one_fixup();
+        let parsed = ParticleSystem::parse(&data).expect("parse");
+        let resolved = parsed.resolve_slot(&data, 0).expect("resolve");
+        assert_eq!(resolved, Some(8));
+        assert_eq!(&parsed.payload[8..12], b"MARK");
+    }
+
+    #[test]
+    fn an_unused_slot_resolves_to_none() {
+        let data = pob("WO_TEST", &[None], &[]);
+        let parsed = ParticleSystem::parse(&data).expect("parse");
+        assert_eq!(parsed.resolve_slot(&data, 0), Ok(None));
+    }
+
+    #[test]
+    fn an_index_past_the_table_resolves_to_none() {
+        let data = pob_with_one_fixup();
+        let parsed = ParticleSystem::parse(&data).expect("parse");
+        assert_eq!(parsed.resolve_slot(&data, 5), Ok(None));
+    }
+
+    #[test]
+    fn a_fixup_site_past_the_end_is_refused() {
+        let data = pob_with_one_fixup();
+        let parsed = ParticleSystem::parse(&data).expect("parse");
+        // The fixup site is at table_end(20) + slot(32) = 52; cut well before it.
+        let short = &data[..40];
+        assert_eq!(
+            parsed.resolve_slot(short, 0),
+            Err(Error::SlotOutOfRange { index: 0 })
+        );
+    }
+
+    #[test]
+    fn a_target_landing_before_the_payload_is_refused() {
+        let mut payload = vec![0u8; 12];
+        payload[0..4].copy_from_slice(&0u32.to_le_bytes()); // baked=0 -> target==table_end
+        let data = pob("WO_TEST", &[Some(32)], &payload);
+        let parsed = ParticleSystem::parse(&data).expect("parse");
+        assert_eq!(
+            parsed.resolve_slot(&data, 0),
+            Err(Error::SlotOutOfRange { index: 0 })
+        );
     }
 }
