@@ -27,15 +27,15 @@
 //!
 //! # What the slot table holds is not known
 //!
-//! The values are not per-file byte offsets: slot 0 is exactly 1220 in every
-//! one of the 35 files regardless of table length or total file size, which a
-//! self-relative offset could not be. They read more like a fixed vocabulary,
-//! a small heavily reused set of values, which fits the `ParticleAgeMapper`,
-//! `ParticleColorMapper`, `ParticleIncandecenceMapper` and
-//! `ParticleTransparencyMapper` class names findable elsewhere in the
-//! executable's string table: one plausible reading is a fixed slot per
-//! attribute-mapper class, present or absent (`None`) per particle system.
-//! That is a hypothesis, not a finding, see the format page.
+//! The values read as absolute file offsets: every real slot value across
+//! all 35 files lands inside `[1220, file_size)` and rises monotonically
+//! within a file. 1220 is not a coincidence either - it is a fixed boundary
+//! on every file, the end of a fixed-size first region (header, table, name
+//! and a per-system parameter block filling whatever the variable-length
+//! table and name left over) that the real tabulated data starts right after.
+//! Neither what a slot's value points at nor what its position in the table
+//! means is known - see the format page for the full census and the two
+//! structural leads found in the tabulated region itself.
 
 /// The container magic.
 pub const MAGIC: &[u8; 4] = b"SYSP";

@@ -72,17 +72,30 @@ and the `HANDOVER.md` open thread), and `WO_SHIP_COLL_SPARK_TRAIL` and
 
 ## What the slot table holds is not known
 
-The table is not a table of per-file byte offsets, even though it looked like
-one from a single sample. Census over all 35 files:
+The table reads as absolute file offsets, but into a region that starts at a
+fixed boundary rather than right after the table itself - see the next
+section for why that boundary, not the table, explains the one number that
+looked most like it ruled offsets out. Census over all 35 files:
 
-- **Slot 0 is exactly 1220 in every file**, regardless of the table's length
-  (which ranges 4 to 32 slots) or the file's total size (which ranges 5,808 to
-  55,392 bytes). A self-relative byte offset cannot be invariant across files
-  whose preceding header, table and name region are different lengths -
-  slot 0 alone rules that reading out.
+- **Every real (non-`0xffffffff`) slot value is inside `[1220, file_size)`**,
+  and the values within one file are monotonically non-decreasing. Both hold
+  on all 35 files with no exception - the shape an offset table into
+  file-absolute positions has to have.
+- **Slot 0 is exactly 1220 in every file that has one**, regardless of the
+  table's own length (4 to 32 slots) or the file's total size (5,808 to
+  55,392 bytes). Read as a *payload-relative* offset (from `name_end`, right
+  after the table and name) this is impossible - `name_end` itself varies
+  64 to 176 across those same files, so a self-relative value cannot stay
+  fixed. Read as *file-absolute*, into a region whose start really is a
+  constant 1220 regardless of the preceding table's length, it is exactly
+  what the invariant should look like. See the fixed-first-region finding
+  below for why that boundary itself is real.
 - Slots 1-3 cluster tightly (2368-2508) across every file that has them, and
   later slots drift wider but still repeat: 468 slots across the corpus carry
-  only 194 distinct values.
+  only 194 distinct values. Reused values across differently-authored effects
+  are consistent with an offset table whose earliest entries point at
+  small, similarly-sized shared records (see the ~224-byte record below),
+  not with continuous per-file-unique offsets.
 - `0xffffffff` (1 to 3 per file, on the files that have any) is always in the
   table's **trailing** slots, never an interior one, on all 35 files - so
   reading it as "used prefix, reserved tail" rather than "this specific slot
@@ -91,23 +104,61 @@ one from a single sample. Census over all 35 files:
   scan-for-terminator reading was the original, wrong one, and is what broke
   on the files with no trailing `0xffffffff` at all.
 
-The pattern - a small, heavily reused vocabulary rather than a continuous
-spread of file-specific values - fits a fixed slot per **attribute-mapper
-class**, present (`Some`) or absent (`None`) per particle system, rather than
-an offset table. `search_strings` over the executable turns up
-`ParticleAgeMapper`, `ParticleColorMapper`, `ParticleIncandecenceMapper`,
-`ParticleTransparencyMapper`, `ParticleCloud`, `DynParticleSetComponent` and
-`ParticleSamplerInfo` - standard Maya nParticle/particle-dynamics node class
-names, consistent with `.pob` being baked, per-attribute Maya particle
-dynamics data with a fixed schema of possible attribute channels. This is a
-hypothesis at confidence 40, not a finding: it explains the census without
-contradicting it, but nothing traces a slot value to a specific mapper class.
+A fixed slot per **attribute-mapper class** - `ParticleAgeMapper`,
+`ParticleColorMapper`, `ParticleIncandecenceMapper`,
+`ParticleTransparencyMapper` and others found by `search_strings` over the
+executable, standard Maya nParticle/particle-dynamics node names - was the
+working hypothesis for what a slot's *value* means before the offset reading
+above. It is weaker now that the values are file-absolute offsets rather
+than a small closed vocabulary, though the slot table's *index* could still
+be a fixed per-mapper-class position even if its *value* is an ordinary
+offset - the two are not mutually exclusive. Confidence 30, unverified in
+either form.
 
-## What the payload holds is not known
+## The payload: two structural leads, no schema yet
 
-Past the name field, payload sizes range 5,744 to 55,216 bytes and nothing
-about their internal structure has been read. The parser exposes it as raw
-bytes rather than guessing a layout.
+Past the name field, payload sizes range 5,744 to 55,216 bytes. The parser
+exposes it as raw bytes - nothing below is implemented, because neither lead
+is close to a full record layout - but two things came out of a corpus-wide
+scan that are worth recording rather than losing.
+
+**Byte offset 1220 (from the start of the file) is a fixed boundary on every
+file.** The region between the name field and absolute offset 1220 is not
+padding - its content differs across files that share the same table shape -
+so it reads as a fixed-size, **1220-byte total** first region (header + table
++ name + a per-system parameter block that fills whatever the variable-length
+table and name left over), with the real tabulated data starting at the fixed
+boundary right after it. `name_end <= 1220` and slot 0 `== 1220` hold on all
+35 files, but `name_end` maxes out at 176 against a 1220-byte budget, so the
+inequality has roughly 1,000 bytes of slack and is close to free - the real
+weight of the finding is slot 0 landing on the exact boundary every time, plus
+every other real slot value landing inside `[1220, file_size)` and ascending
+- not the inequality itself. Confidence 65: one exact repeated constant and a
+corpus-wide range check, short of the arithmetic-invariant tier because
+nothing inside either region (the parameter block, or the first tabulated
+record) is decoded yet.
+
+**A ~224-byte record repeats through the tabulated region, shaped like a
+keyframe.** Scanning payloads for three consecutive `1.0f` values turns one up
+in 34 of 35 files, always followed by one of two values: `10000000.0` (327 of
+390 occurrences corpus-wide) or a small real number, most often `0.1` (45
+occurrences). Consecutive hits inside one run are `224` bytes apart on **169**
+separate gaps corpus-wide, with `448` (`224 * 2`, one record differently
+shaped) the next most common. `10000000.0` reads as a "this segment does not
+end" sentinel - the kind of oversized constant an exporter uses for unbounded
+extrapolation - and the small trailing value as the last real, terminal
+sample of whatever curve the record belongs to. All five `WO_SHIP_COLL_SPARK*`
+files carry the identical record at the identical offset relative to their
+own name field (`name_end + 0x4a8`), which is corpus-wide schema, not
+anything specific to collision sparks. Confidence 55: the repeat spacing and
+the sentinel/terminal-value split are both real and corpus-wide, but nothing
+ties this candidate 224-byte record to a start offset, a field count inside
+it, or a specific attribute-mapper class.
+
+Neither lead is close to a `pob.rs` change: a boundary and a probable record
+size are not a schema, and guessing the fields inside a 224-byte record from
+three matching floats at its tail would be exactly the kind of unverified
+structure this project's own rubric marks down for.
 
 ## Where the parser is in the executable
 
@@ -144,9 +195,13 @@ exact arithmetic invariant (the size field) plus an exact hash agreement
 [rubric](../reverse-engineering/confidence-rubric.md) at 94 for data
 agreement and marked down slightly because two header words (`+0x0a`,
 `+0x0c`) are asserted constant from a 35-file sample with no corroborating
-read of the executable. **40** for the attribute-mapper-slot hypothesis about
-what the table values mean - a plausible reading, not a finding. **0** for the
-payload layout - nothing proposed yet.
+read of the executable. **65** for the 1220-byte fixed first region: real and
+corpus-wide, but a boundary rather than a decoded field, and part of the
+check (`name_end <= 1220`) is a loose bound rather than an exact one. **55**
+for the ~224-byte repeating record: real and corpus-wide, but no field inside
+it is identified. **30** for a fixed slot per attribute-mapper class -
+weakened, not strengthened, by the slot values turning out to be file-absolute
+offsets rather than a small closed vocabulary; see above.
 
 **Validated against one disc**, `pulse-psp-usa`. Not checked against
 `pulse-ps2-*` or Pure's UMD.
@@ -169,10 +224,10 @@ Unit tests in `pob.rs` build synthetic blobs instead.
 
 - **What the slot values mean.** See above - the attribute-mapper-class
   hypothesis is unverified.
-- **The payload layout.** Not even a first hypothesis - the two constant
-  header words, the small floats and keyframe-shaped runs a manual hex read
-  turned up are not enough to propose a structure without either the parser
-  function or a live capture to correlate against.
+- **The payload layout.** Two structural leads (the 1220-byte fixed first
+  region, the ~224-byte repeating record), neither close to a schema - see
+  above. Turning either into fields needs the parser function or a live
+  capture to correlate against, not more corpus scanning.
 - **The two constant header words at `+0x0a` and `+0x0c`.** Always 1 across
   the corpus; whether that is a version, a type tag, or something else is
   unknown. [`ParticleSystem::parse`](../../crates/formats/src/pob.rs) refuses
