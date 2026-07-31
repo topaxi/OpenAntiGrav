@@ -1350,8 +1350,19 @@ impl Race {
         let impact_edge = evaluated.wall.impact && !self.sparks_was_impacting;
         self.sparks_was_impacting = evaluated.wall.impact;
         if impact_edge && let Some(contact) = evaluated.wall.resolved {
+            // `contact.point` is deliberately the *penetrating* hull sample
+            // point, not the wall surface - see its doc comment on
+            // `oag_physics::wall::WallContact`, which matches the original's
+            // own `Collision_AddContact` exactly. Correct for physics, wrong
+            // for a visual: that point sits up to `depth` units inside the
+            // opaque wall, so a spark quad centred there is depth-tested away
+            // by the wall's own geometry almost every time and reads as
+            // nothing spawning. `point + normal * depth` is the same
+            // correction `resolve_contact`'s `escape` vector already applies
+            // to push the hull back out to the surface.
+            let surface = contact.point + contact.normal * contact.depth;
             self.sparks.spawn(
-                contact.point,
+                surface,
                 contact.normal,
                 evaluated.wall.impact_speed,
                 &mut self.sparks_rng,

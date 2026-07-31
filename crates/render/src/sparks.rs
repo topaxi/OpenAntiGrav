@@ -48,13 +48,21 @@ use crate::mesh::GpuVertex;
 /// A fixed-size array, not a `Vec` - same no-allocation convention
 /// `oag_physics::wall::WallResponse` and `oag_gameplay::World` already follow
 /// for their own bounded, plain-data state.
-pub const MAX_SPARKS: usize = 64;
+///
+/// `96`, not `64`: checked against a real PPSSPP capture
+/// (`verification/scenarios/steer-left.inputs`, which ends in a wall hit on
+/// Talon's Junction) - the original's burst reads as a much denser cluster
+/// than this module's first-cut counts produced. Raised alongside
+/// [`BURST_COUNT`]/[`MIN_BURST_COUNT`] rather than guessed independently.
+pub const MAX_SPARKS: usize = 96;
 
-/// Particles a full-severity burst spawns. **Authored.**
-pub const BURST_COUNT: usize = 16;
+/// Particles a full-severity burst spawns. **Authored**, raised from `16`
+/// after the same capture comparison [`MAX_SPARKS`] records.
+pub const BURST_COUNT: usize = 28;
 
-/// Particles the weakest burst that still fires spawns. **Authored.**
-pub const MIN_BURST_COUNT: usize = 4;
+/// Particles the weakest burst that still fires spawns. **Authored**, raised
+/// from `4` for the same reason.
+pub const MIN_BURST_COUNT: usize = 8;
 
 /// Seconds a spark lives before fading out. **Authored.**
 pub const LIFETIME: f32 = 0.4;
@@ -71,13 +79,18 @@ pub const GRAVITY: Vec3 = Vec3::new(0.0, -30.0, 0.0);
 /// Quad half-size at spawn, in world units, before the per-particle
 /// [`SIZE_VARIATION`] and the lifetime fade. **Authored.**
 ///
-/// Checked against a real capture, not just a formula: `0.06` (a twentieth of
-/// the exhaust flare's own half-size range) turned out to rasterize to a
-/// sub-pixel dot at ordinary chase-camera distance and read as nothing drawing
-/// at all - the same trap the fragment shader's fix below describes. `0.3`
-/// stays a fraction of the flare's `0.75`-`3.1` (debris, not a plume) while
-/// surviving that check in a `--race --screenshot` capture.
-pub const BASE_SIZE: f32 = 0.3;
+/// Checked against a real capture twice, not just a formula. `0.06` (a
+/// twentieth of the exhaust flare's own half-size range) rasterized to a
+/// sub-pixel dot right next to the camera and read as nothing drawing at all -
+/// the same trap the fragment shader's fix below describes. `0.3` cleared
+/// that check close to the camera but still under-drew at an ordinary
+/// contact's distance, several units further out - a real hull-probe contact
+/// (`crates/game/src/race.rs`'s `a_sustained_scrape_spawns_sparks_once...`
+/// fixture is close-up; most of a lap is not). `1.0` is what survived a
+/// PPSSPP-matched capture (`verification/scenarios/steer-left.inputs`) at the
+/// distance an actual wall hit happens at, and is still a third of the
+/// flare's own `0.75`-`3.1`.
+pub const BASE_SIZE: f32 = 1.0;
 
 /// Bounds of the per-particle size multiplier. **Authored.**
 pub const SIZE_VARIATION: (f32, f32) = (0.6, 1.4);
