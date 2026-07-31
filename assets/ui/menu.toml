@@ -251,6 +251,32 @@ label = "BACK"
 id = "graphics"
 title = "GRAPHICS"
 
+# Which adapter draws the picture. On this page and not DISPLAY because the line
+# between the two is whether the renderer would notice, and *what the renderer
+# is* is the most direct case of that there could be.
+#
+# The list is what this machine can present with, supplied at runtime - nothing
+# writable here could describe a GPU. `default` is first and always, so there is
+# a way back from an adapter that has since been uninstalled.
+#
+# **An entry marked `(cpu)` renders on the processor.** wgpu has no software
+# renderer of its own; that entry appears only when the system has a software
+# driver installed - Mesa lavapipe (`vulkan-swrast` on Arch,
+# `mesa-vulkan-drivers` on Debian) or WARP on Windows - and is absent otherwise
+# rather than being offered and failing. It is a diagnostic path, not a way to
+# play: pair it with RENDER SCALE 50 to get something watchable.
+#
+# The only row on either settings page that cannot take effect this run. The
+# device is made once, at boot, and every pipeline and uploaded mesh hangs off
+# it. Not greyed and not warned - it is a live setting whose effect is simply
+# deferred, which is the same thing LANGUAGE does. See
+# `docs/architecture/menus.md`.
+[[page.entry]]
+kind = "choice"
+label = "RENDERER"
+setting = "graphics.renderer"
+values_from = "renderers"
+
 # What percentage of the displayed size the game is actually rendered at.
 # Below 100 is the usual internal-resolution knob, above it is supersampling,
 # and it is measured against the aspect rectangle so it means the same thing at

@@ -151,6 +151,26 @@ fn menu_page(
         .map(crate::menu::Choice::plain)
         .collect::<Vec<_>>(),
     );
+    // The same treatment, and for a closer reason than it looks: enumerating
+    // adapters here would work, but with no surface to be compatible with it
+    // would list ones the window's own row would have dropped. A page drawn to
+    // show a player their settings should not offer a wider choice than the
+    // page they can actually use.
+    model.supply(
+        crate::menu::ValueSource::Renderers,
+        &crate::display::Renderer::offered(
+            &settings
+                .graphics
+                .renderer
+                .name()
+                .map(ToString::to_string)
+                .into_iter()
+                .collect::<Vec<_>>(),
+        )
+        .into_iter()
+        .map(crate::menu::Choice::plain)
+        .collect::<Vec<_>>(),
+    );
     // Seeded after supplying, and from the same list the live menus use, so
     // what the flag draws is what a player would see rather than whatever each
     // row's list happened to start on.
@@ -282,6 +302,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 size: (width, height),
                 log_every: options.log_every,
                 anisotropy: options.anisotropy,
+                renderer: options.settings.graphics.renderer.clone(),
                 fov: options.settings.graphics.fov,
                 frustum_culling: options.settings.graphics.frustum_culling,
                 pvs_culling: options.settings.graphics.pvs_culling,
@@ -339,12 +360,12 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         }
     };
 
-    let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        compatible_surface: None,
-        ..Default::default()
-    }))
-    .context("no GPU adapter available")?;
+    // The same adapter the window would have drawn with, so a screenshot is a
+    // picture of what a player sees rather than of whatever wgpu picked here.
+    // No surface to be compatible with, which is the only difference.
+    let instance = crate::adapter::instance();
+    let adapter =
+        crate::adapter::choose(&instance, None, &options.settings.graphics.renderer)?.adapter;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("oag-game offscreen"),
         ..Default::default()

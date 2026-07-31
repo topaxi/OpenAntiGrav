@@ -260,6 +260,120 @@ impl std::fmt::Display for Monitor {
     }
 }
 
+/// Which adapter the game draws with: `default`, or one by the name
+/// [`crate::adapter::label`] gives it.
+///
+/// [`Monitor`]'s shape, for [`Monitor`]'s reasons, against a different piece of
+/// hardware - a name rather than an index, and a name this machine no longer
+/// has is a miss that falls back rather than a refusal to start. Plugging in an
+/// eGPU reorders the list exactly the way plugging in a screen does.
+///
+/// The one thing it does not share is that the names it holds are *this
+/// project's* spelling and not the platform's: a driver reports a name that is
+/// only unique within its backend, so [`crate::adapter::label`] qualifies it.
+/// That matters here because [`crate::menu::Menu::seed`] matches the stored
+/// string exactly and silently shows the first row when it does not - a
+/// duplicate would put the player on an adapter they did not pick and persist
+/// it on their first nudge.
+///
+/// **Held rather than applied**: the device is made once, at boot, so a change
+/// lands on the next launch. See `docs/architecture/menus.md`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(from = "String", into = "String")]
+pub struct Renderer(Option<String>);
+
+impl Renderer {
+    /// The spelling for "whichever one wgpu would have picked".
+    pub const DEFAULT: &'static str = "default";
+
+    /// Letting wgpu decide, which is what a single-GPU machine wants and what a
+    /// name it no longer has falls back to.
+    #[must_use]
+    pub const fn default_renderer() -> Self {
+        Self(None)
+    }
+
+    /// Whether this is the default rather than a named adapter.
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        self.0.is_none()
+    }
+
+    /// The name this setting holds, or `None` for the default.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        self.0.as_deref()
+    }
+
+    /// The list a RENDERER row is offered, for the adapters `available` names.
+    ///
+    /// [`Renderer::DEFAULT`] first and always: it is the way back from an
+    /// adapter that has since been unplugged or uninstalled, and on a machine
+    /// with one GPU it is the only row that means anything.
+    #[must_use]
+    pub fn offered(available: &[String]) -> Vec<String> {
+        let mut out = vec![Self::DEFAULT.to_string()];
+        out.extend(
+            available
+                .iter()
+                .filter(|name| !name.eq_ignore_ascii_case(Self::DEFAULT))
+                .cloned(),
+        );
+        out
+    }
+
+    /// Which of `available` this setting picks, or `None` for the default and
+    /// for a name this machine does not have.
+    ///
+    /// The two `None`s are the same answer for the same reason they are in
+    /// [`Monitor::choose`]: a settings file written on a desktop with a
+    /// discrete card, opened on a laptop without it, should start the game.
+    /// [`Renderer::is_default`] tells the caller which of the two happened, so a
+    /// *miss* is still worth a note.
+    ///
+    /// Case-insensitive on the whole name, nothing partial - two cards from one
+    /// vendor share a prefix, and a driver version moving inside the name (as
+    /// llvmpipe's does) would make a prefix match land on the wrong entry.
+    #[must_use]
+    pub fn choose(&self, available: &[String]) -> Option<usize> {
+        let wanted = self.0.as_deref()?;
+        available
+            .iter()
+            .position(|name| name.eq_ignore_ascii_case(wanted))
+    }
+}
+
+impl std::str::FromStr for Renderer {
+    type Err = std::convert::Infallible;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(text.to_string()))
+    }
+}
+
+impl From<String> for Renderer {
+    fn from(text: String) -> Self {
+        let trimmed = text.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case(Self::DEFAULT) {
+            Self(None)
+        } else {
+            Self(Some(trimmed.to_string()))
+        }
+    }
+}
+
+impl From<Renderer> for String {
+    fn from(renderer: Renderer) -> Self {
+        renderer.to_string()
+    }
+}
+
+impl std::fmt::Display for Renderer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.as_deref().unwrap_or(Self::DEFAULT))
+    }
+}
+
 /// A window size, spelled `1440x816`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -1199,6 +1313,91 @@ mod tests {
         // Nothing partial: `DP` must not select `DP-2`.
         assert_eq!("DP".parse::<Monitor>().unwrap().choose(&available), None);
         assert_eq!(missing.choose(&[]), None);
+    }
+
+    /// The RENDERER row's whole safety property: what the settings file holds
+    /// has to come back as the same string, because `Menu::seed` matches it
+    /// exactly and shows the first row when it does not.
+    #[test]
+    fn a_renderer_round_trips_through_its_own_spelling() {
+        let default: Renderer = "default".parse().expect("infallible");
+        assert!(default.is_default());
+        assert_eq!(default, Renderer::default());
+        assert_eq!(default.to_string(), Renderer::DEFAULT);
+        for text in ["", "   ", "DEFAULT"] {
+            assert!(
+                text.parse::<Renderer>().expect("infallible").is_default(),
+                "{text:?}"
+            );
+        }
+
+        // A real label, punctuation and all: this is what `adapter::label`
+        // produces and what the file therefore has to carry unchanged.
+        let named: Renderer = "vulkan: llvmpipe (LLVM 22.1.8, 256 bits) (cpu)"
+            .parse()
+            .expect("infallible");
+        assert_eq!(
+            named.name(),
+            Some("vulkan: llvmpipe (LLVM 22.1.8, 256 bits) (cpu)")
+        );
+        assert_eq!(named.to_string().parse::<Renderer>(), Ok(named));
+    }
+
+    #[test]
+    fn the_default_is_always_the_first_renderer_offered() {
+        assert_eq!(Renderer::offered(&[]), [Renderer::DEFAULT]);
+        let available = [
+            "vulkan: AMD Radeon Graphics (RADV RENOIR)".to_string(),
+            "vulkan: llvmpipe (LLVM 22.1.8, 256 bits) (cpu)".to_string(),
+        ];
+        assert_eq!(
+            Renderer::offered(&available),
+            [
+                Renderer::DEFAULT,
+                "vulkan: AMD Radeon Graphics (RADV RENOIR)",
+                "vulkan: llvmpipe (LLVM 22.1.8, 256 bits) (cpu)",
+            ]
+        );
+        for offered in Renderer::offered(&available) {
+            let renderer: Renderer = offered.parse().expect("infallible");
+            assert!(
+                renderer.is_default() || renderer.choose(&available).is_some(),
+                "{offered} is offered and selects nothing"
+            );
+        }
+    }
+
+    #[test]
+    fn a_renderer_picks_the_adapter_it_names_and_nothing_else() {
+        let available = [
+            "vulkan: AMD Radeon Graphics (RADV RENOIR)".to_string(),
+            "vulkan: llvmpipe (LLVM 22.1.8, 256 bits) (cpu)".to_string(),
+        ];
+        assert_eq!(
+            "vulkan: llvmpipe (LLVM 22.1.8, 256 bits) (cpu)"
+                .parse::<Renderer>()
+                .unwrap()
+                .choose(&available),
+            Some(1)
+        );
+        assert_eq!(Renderer::default_renderer().choose(&available), None);
+        // A driver that is no longer installed falls back rather than failing:
+        // uninstalling `vulkan-swrast` must not stop the game starting.
+        let missing: Renderer = "vulkan: llvmpipe (LLVM 21.0.0, 256 bits) (cpu)"
+            .parse()
+            .unwrap();
+        assert_eq!(missing.choose(&available), None);
+        assert!(!missing.is_default());
+        // Nothing partial. The driver version lives *inside* the name, so a
+        // prefix match would happily select a different llvmpipe build - and,
+        // worse, the wrong backend's copy of a card that has two.
+        assert_eq!(
+            "vulkan: llvmpipe"
+                .parse::<Renderer>()
+                .unwrap()
+                .choose(&available),
+            None
+        );
     }
 
     #[test]

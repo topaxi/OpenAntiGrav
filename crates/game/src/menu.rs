@@ -148,6 +148,15 @@ pub enum ValueSource {
     /// offering something that cannot be selected. `default` is always first,
     /// so there is a way back from a screen that has since been unplugged.
     Monitors,
+    /// The adapters this machine can present with, which is the other property
+    /// of the desk rather than of the disc.
+    ///
+    /// Supplied and not spelled for a reason this list makes especially plain:
+    /// nothing that could be written in a definition file describes a GPU. What
+    /// is on it depends on the card, the driver and whether a *software* driver
+    /// is installed at all - see [`crate::adapter`]. `default` is always first,
+    /// so there is a way back from an adapter that has since been uninstalled.
+    Renderers,
 }
 
 impl ValueSource {
@@ -158,6 +167,7 @@ impl ValueSource {
             Self::Languages => "languages",
             Self::Tracks => "tracks",
             Self::Monitors => "monitors",
+            Self::Renderers => "renderers",
         }
     }
 
@@ -168,6 +178,7 @@ impl ValueSource {
             "languages" => Some(Self::Languages),
             "tracks" => Some(Self::Tracks),
             "monitors" => Some(Self::Monitors),
+            "renderers" => Some(Self::Renderers),
             _ => None,
         }
     }

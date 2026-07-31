@@ -6,6 +6,14 @@ included. It contains the engine and nothing else: **no game content is ever
 packaged** (see [legal](../overview/legal.md)), so the player supplies their own
 disc image and the game looks for it beside the AppImage.
 
+"A Vulkan driver" need not be a hardware one: a machine with Mesa's lavapipe
+installed (`vulkan-swrast` on Arch, `mesa-vulkan-drivers` on Debian) presents a
+CPU adapter that the OPTIONS -> GRAPHICS -> RENDERER row offers like any other,
+marked `(cpu)`. That is a diagnostic path rather than a way to play - pair it
+with RENDER SCALE 50 - but it is the difference between the AppImage starting and
+not on a machine with no working GPU driver. See
+[menus](../architecture/menus.md).
+
 ```sh
 just appimage                       # release build, then pack
 just appimage-portable              # the same, built against an older glibc

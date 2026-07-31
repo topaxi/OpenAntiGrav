@@ -2259,6 +2259,15 @@ pub struct CaptureOptions {
     pub aspect: crate::display::Aspect,
     /// Anisotropic filtering level for the track and ship textures.
     pub anisotropy: Anisotropy,
+    /// Which adapter to draw with, for the same reason `aspect` and `fov` are
+    /// here: a capture is only evidence about what a player sees if it was
+    /// drawn on the device they see it on. A driver is exactly the kind of
+    /// thing a rendering difference gets blamed on, so a capture that quietly
+    /// used a different one would be the wrong picture to argue from.
+    ///
+    /// There is no surface here, so an adapter that could not present is still
+    /// eligible - which is the one way this list can be wider than the menu's.
+    pub renderer: crate::display::Renderer,
     /// The field-of-view setting, for the same reason `aspect` is here: a
     /// capture should frame what a player at these settings would have seen.
     pub fov: crate::display::Fov,
@@ -2358,12 +2367,8 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         describe(&race.telemetry())
     );
 
-    let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        compatible_surface: None,
-        ..Default::default()
-    }))
-    .context("no GPU adapter available")?;
+    let instance = crate::adapter::instance();
+    let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("oag-game race offscreen"),
         ..Default::default()

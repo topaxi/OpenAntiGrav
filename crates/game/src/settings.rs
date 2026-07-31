@@ -216,6 +216,15 @@ fn default_pvs_culling() -> bool {
 /// How the picture itself is drawn.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Graphics {
+    /// Which adapter the game draws with: `default`, or one by name.
+    ///
+    /// **Read once, at boot.** The device is made from it and never remade, so
+    /// changing this lands on the next launch. See [`crate::adapter`], which is
+    /// also where the answer to "can it render on the CPU" lives: only if the
+    /// system has a software driver installed, and then it is on this list like
+    /// any other adapter.
+    #[serde(default)]
+    pub renderer: crate::display::Renderer,
     /// What percentage of the displayed size the game is rendered at.
     ///
     /// Below 100 is the usual internal-resolution knob; above it is
@@ -370,6 +379,7 @@ fn default_animated_textures() -> bool {
 impl Default for Graphics {
     fn default() -> Self {
         Self {
+            renderer: crate::display::Renderer::default(),
             render_scale: crate::display::Scale::default(),
             upscaler: crate::display::Upscaler::default(),
             upscale_sharpness: crate::display::Sharpness::default(),
@@ -553,6 +563,10 @@ pub fn menu_seeds(
             text(&settings.display.brightness.to_string()),
         ),
         ("display.gamma", text(&settings.display.gamma.to_string())),
+        (
+            "graphics.renderer",
+            text(&settings.graphics.renderer.to_string()),
+        ),
         (
             "graphics.render_scale",
             text(&settings.graphics.render_scale.to_string()),

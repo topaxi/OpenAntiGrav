@@ -39,7 +39,8 @@ use oag_game::input;
 use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{
-    boot, capture, catalogue, display, menu, movie, perf, race, report, settings, source, upscale,
+    adapter, boot, capture, catalogue, display, menu, movie, perf, race, report, settings, source,
+    upscale,
 };
 use oag_input::Controls;
 use oag_physics::SpeedClass;
@@ -568,6 +569,7 @@ fn run_race(
                 log_every: cli.log_every,
                 aspect: settings.display.aspect,
                 anisotropy,
+                renderer: settings.graphics.renderer.clone(),
                 fov: settings.graphics.fov,
                 frustum_culling: settings.graphics.frustum_culling,
                 pvs_culling: settings.graphics.pvs_culling,
@@ -635,7 +637,11 @@ impl App {
     /// `Ok(None)` means there was nothing to show, which only happens if the event
     /// loop resumes twice after the loaded state has been taken.
     fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Session>> {
-        let gpu = Gpu::new(event_loop, &self.settings.display)?;
+        let gpu = Gpu::new(
+            event_loop,
+            &self.settings.display,
+            &self.settings.graphics.renderer,
+        )?;
 
         // Built before the stage, because a race's depth attachment has to match
         // this rather than the window.
@@ -944,10 +950,69 @@ struct Gpu {
     config: wgpu::SurfaceConfiguration,
     /// The present modes this surface actually has. See [`Gpu::present_mode`].
     offered: Vec<wgpu::PresentMode>,
+    /// What the RENDERER row offers. See [`adapter::Chosen::offered`].
+    adapters: Vec<String>,
+}
+
+/// What one adapter has to hand over before it can be drawn with.
+///
+/// A struct rather than four statements inline because **all four have to
+/// succeed or none of them count**: a named adapter that enumerates fine can
+/// still refuse the device or the surface config, and the recovery for that is
+/// to run the whole sequence again on a different adapter. See
+/// [`Gpu::bring_up`].
+struct BroughtUp {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+    offered: Vec<wgpu::PresentMode>,
+    adapters: Vec<String>,
 }
 
 impl Gpu {
-    fn new(event_loop: &ActiveEventLoop, settings: &settings::Display) -> Result<Self> {
+    /// Everything downstream of picking an adapter, so it can be *re*-run.
+    ///
+    /// Split out because `apply_setting` saves on every keypress: the moment a
+    /// player nudges the RENDERER row, that adapter is in their settings file,
+    /// and if it then cannot make a device the game would not start again. A
+    /// setting you can change from inside the game must not be able to lock you
+    /// out of it, which is the same promise `choose_monitor` makes about a
+    /// screen that has been unplugged - one step further down, where the
+    /// adapter is found but will not serve.
+    fn bring_up(
+        instance: &wgpu::Instance,
+        surface: &wgpu::Surface<'static>,
+        size: winit::dpi::PhysicalSize<u32>,
+        renderer: &display::Renderer,
+    ) -> Result<BroughtUp> {
+        let chosen = adapter::choose(instance, Some(surface), renderer)?;
+        let (device, queue) =
+            pollster::block_on(chosen.adapter.request_device(&wgpu::DeviceDescriptor {
+                label: Some("oag-game"),
+                ..Default::default()
+            }))
+            .context("requesting the device")?;
+        let config = surface
+            .get_default_config(&chosen.adapter, size.width.max(1), size.height.max(1))
+            .context("surface is not supported by this adapter")?;
+        // Kept because the adapter is not: every later change of the vsync row
+        // has to be checked against this same list, and re-requesting an
+        // adapter to ask would be a second answer to the same question.
+        let offered = surface.get_capabilities(&chosen.adapter).present_modes;
+        Ok(BroughtUp {
+            device,
+            queue,
+            config,
+            offered,
+            adapters: chosen.offered,
+        })
+    }
+
+    fn new(
+        event_loop: &ActiveEventLoop,
+        settings: &settings::Display,
+        renderer: &display::Renderer,
+    ) -> Result<Self> {
         // **A windowed window is fixed size, and that is a measurement.** Setting
         // the minimum and maximum to the same thing is the signal a tiling
         // compositor floats a window on rather than squeezing it into a column -
@@ -981,29 +1046,41 @@ impl Gpu {
         // Racing is keyboard/gamepad-only; the cursor has nothing to click on.
         window.set_cursor_visible(false);
 
-        let instance = wgpu::Instance::default();
+        let instance = adapter::instance();
         let surface = instance
             .create_surface(window.clone())
             .context("creating the surface")?;
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            compatible_surface: Some(&surface),
-            ..Default::default()
-        }))
-        .context("no suitable GPU adapter (is a Vulkan driver installed?)")?;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("oag-game"),
-            ..Default::default()
-        }))
-        .context("requesting the device")?;
-
         let size = window.inner_size();
-        let config = surface
-            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
-            .context("surface is not supported by this adapter")?;
-        // Kept because the adapter is not: every later change of the vsync row
-        // has to be checked against this same list, and re-requesting an
-        // adapter to ask would be a second answer to the same question.
-        let offered = surface.get_capabilities(&adapter).present_modes;
+
+        let brought = match Self::bring_up(&instance, &surface, size, renderer) {
+            Ok(brought) => brought,
+            // A *named* adapter that will not serve is recoverable, and the
+            // recovery has to happen here rather than being left to the player:
+            // the settings file is the only other way back, and a player who
+            // cannot start the game cannot be told that from inside it.
+            Err(e) if !renderer.is_default() => {
+                eprintln!("renderer {renderer} could not be brought up: {e:#}");
+                eprintln!(
+                    "falling back to the default; set graphics.renderer = \"{}\" to keep it there",
+                    display::Renderer::DEFAULT
+                );
+                Self::bring_up(
+                    &instance,
+                    &surface,
+                    size,
+                    &display::Renderer::default_renderer(),
+                )
+                .context("the default renderer would not start either")?
+            }
+            Err(e) => return Err(e),
+        };
+        let BroughtUp {
+            device,
+            queue,
+            config,
+            offered,
+            adapters,
+        } = brought;
 
         let mut gpu = Self {
             window,
@@ -1012,6 +1089,7 @@ impl Gpu {
             surface,
             config,
             offered,
+            adapters,
         };
         gpu.config.present_mode = gpu.present_mode(settings.vsync);
         gpu.surface.configure(&gpu.device, &gpu.config);
@@ -1831,6 +1909,16 @@ impl Session {
         .map(menu::Choice::plain)
         .collect();
         model.supply(menu::ValueSource::Monitors, &monitors);
+        // Kept from startup rather than enumerated, unlike the monitors above,
+        // and the difference is what a fresh answer would be worth. A screen
+        // plugged in now can be used now; an adapter plugged in now cannot,
+        // because the device was made at boot. Listing one would be offering a
+        // row that does nothing this run.
+        let renderers: Vec<menu::Choice> = display::Renderer::offered(&self.gpu.adapters)
+            .into_iter()
+            .map(menu::Choice::plain)
+            .collect();
+        model.supply(menu::ValueSource::Renderers, &renderers);
         self.seed_menu(&mut model);
 
         // **The movie planes are asked for only when there is a movie to put in
@@ -2089,6 +2177,15 @@ impl Session {
                     return;
                 }
             },
+            // **Applied on the next launch**, and the only setting here that
+            // cannot be applied at all this run: the device, every pipeline and
+            // every uploaded mesh hang off the adapter chosen at boot, so
+            // switching would mean tearing down the surface, the framebuffer
+            // and whatever stage is on screen. Stored now, drawn with next time.
+            // `Gpu::new` retries on the default if this one will not start, so
+            // choosing an adapter that cannot serve is recoverable from inside
+            // the game rather than only from the settings file.
+            "graphics.renderer" => self.settings.graphics.renderer = display::Renderer::from(text),
             "graphics.render_scale" => match text.parse::<display::Scale>() {
                 // Applied by the next frame: `frame` sizes the target from this
                 // every time and rebuilds it when the answer changes.

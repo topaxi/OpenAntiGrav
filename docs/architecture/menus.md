@@ -209,6 +209,16 @@ without this repository containing its name.
   setting, and the string table it selects is loaded once at boot; the change
   therefore lands on the next launch. Anisotropic filtering is the same, and is
   less noticeable because a race is built after the menus anyway.
+- **Switching renderer without relaunching.** The RENDERER row writes the
+  setting; the adapter it names is chosen once, at boot. Applying it live would
+  mean destroying the device and with it the surface, the upscaler's
+  framebuffer, every pipeline and every uploaded mesh, then rebuilding whatever
+  stage is on screen - a `Race` holding all of that. That is a substantially
+  larger change than the row, and deferring it costs a relaunch. What is *not*
+  deferred is recovery: `Gpu::bring_up` retries on `default` when the named
+  adapter enumerates but will not produce a device or configure the surface,
+  because a setting reachable from inside the game must not be able to lock a
+  player out of it.
 - **Anything a HUD needs.** When `oag-ui` exists (M5, see
   [workspace layout](workspace-layout.md)), this module moves into it.
 
@@ -319,7 +329,16 @@ the renderer would notice**:
 | | Rows | What they have in common |
 | --- | --- | --- |
 | DISPLAY | MONITOR, WINDOW MODE, WINDOW SIZE, ASPECT RATIO, VSYNC, FRAME LIMIT, BRIGHTNESS, GAMMA | The picture's container, and how a finished frame reaches a screen |
-| GRAPHICS | RENDER SCALE, UPSCALER, UPSCALER SHARPNESS, ANISOTROPIC FILTERING, FIELD OF VIEW, PERFORMANCE OVERLAY | How the picture is drawn |
+| GRAPHICS | RENDERER, RENDER SCALE, UPSCALER, UPSCALER SHARPNESS, ANISOTROPIC FILTERING, FIELD OF VIEW, PERFORMANCE OVERLAY | How the picture is drawn |
+
+RENDERER is the most literal case of that criterion there is - it is *what*
+draws - which is why it sits on GRAPHICS despite resembling MONITOR in every
+mechanical respect: both are hardware the definition file cannot enumerate, both
+come through `values_from`, both fall back rather than fail on a name the machine
+no longer has. See [`crate::adapter`](../../crates/game/src/adapter.rs) for what
+it can offer, and in particular for why "render on the CPU" is a row that appears
+only on a machine with a software driver installed rather than a switch this
+project could provide.
 
 A row can also be **warned** rather than greyed, which is a different thing and
 the UPSCALER row is why it exists. A greyed row cannot be changed *now* because
