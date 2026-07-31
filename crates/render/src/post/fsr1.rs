@@ -77,7 +77,16 @@ pub struct Sharpness(f32);
 impl Sharpness {
     /// Upstream's own default, and what the sample ships with.
     pub const DEFAULT: Self = Self(0.2);
-    /// No sharpening at all: RCAS becomes a pass-through.
+    /// A zero lobe, which is as close to no sharpening as this pass gets.
+    ///
+    /// **Not quite a pass-through**, and the difference is upstream's rather
+    /// than a mistake here: the resolve divides by `prx_med_rcp(4*lobe + 1)`,
+    /// and that approximation returns 0.99685 at 1.0 rather than exactly 1.0.
+    /// So a zero lobe still darkens by about a third of a percent - 0.4/255 at
+    /// mid grey. Nothing in the game selects this ([`Sharpness::stops`] clamps
+    /// to upstream's documented range and never reaches it); a caller that
+    /// genuinely wants an untouched frame should skip the pass, not ask for
+    /// zero.
     pub const OFF: Self = Self(f32::INFINITY);
 
     /// Clamps `stops` into the range upstream documents, `0.0` to `2.0`.
@@ -89,9 +98,9 @@ impl Sharpness {
     /// `exp2(-stops)`, which is what the shader multiplies the lobe by.
     #[must_use]
     pub fn factor(self) -> f32 {
-        // `OFF` is an infinity, and `exp2(-inf)` is exactly zero, which makes
-        // the lobe zero and the resolve an identity. That is deliberate: it
-        // costs the same pass and keeps one code path.
+        // `OFF` is an infinity, and `exp2(-inf)` is exactly zero, so the lobe
+        // is exactly zero - which is not the same as the pass being an
+        // identity. See [`Sharpness::OFF`].
         (-self.0).exp2()
     }
 }
@@ -443,8 +452,9 @@ mod tests {
         // rather than on an lobe that produces unnatural results.
         assert_eq!(Sharpness::stops(-3.0).factor(), 1.0);
         assert_eq!(Sharpness::stops(9.0).factor(), 0.25);
-        // `OFF` multiplies the lobe by exactly zero, which makes RCAS's resolve
-        // an identity rather than an approximation of one.
+        // `OFF` multiplies the lobe by exactly zero. That is *not* the same as
+        // RCAS becoming a pass-through - see the constant's docs - but the
+        // factor itself is exact.
         assert_eq!(Sharpness::OFF.factor(), 0.0);
     }
 
@@ -522,6 +532,13 @@ mod tests {
     /// The input is a hard vertical edge - black left half, white right half -
     /// which is the case an edge-adaptive resampler exists for, and the one
     /// where it must visibly differ from a bilinear stretch.
+    ///
+    /// **What this does not prove.** A vertical edge is symmetric under a
+    /// swapped `textureGather` component ordering, so a gather mix-up can
+    /// survive it. This asserts that the port produces a correct picture rather
+    /// than garbage, not that it is EASU specifically - a bilinear stretch of
+    /// this input would also pass. A diagonal edge is the case that
+    /// discriminates gather ordering, and is the test to add next.
     ///
     /// **Skips when there is no adapter.** Run it locally on real hardware.
     #[test]
