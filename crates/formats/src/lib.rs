@@ -34,6 +34,7 @@ pub mod ivf;
 pub mod lzss;
 pub mod pmf;
 pub mod png;
+pub mod pob;
 pub mod ps2_music;
 pub mod ps2_texture;
 pub mod pvs;

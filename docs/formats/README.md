@@ -29,7 +29,7 @@ These are the project's actual work.
 | [PSP movie](pmf.md) | `.PMF` | PSP | **understood** | PSMF header and MPEG program stream. Header and demuxer implemented and validated against all 17 movies; the H.264 inside is [transcoded out of process](../architecture/adr/0004-asset-pipeline.md), not decoded here. |
 | [Bitmap font](fnt.md) | `.fnt` | PSP | **understood** | Metrics and atlas both decoded and validated across all five fonts and 863 glyphs. The atlas header is a 64-byte [`.vex`](vex.md) Texture node, not a `.mip` header, and its texels are the one thing on the disc stored **already swizzled**. |
 | [PSP sound bank](psp-audio.md) | `.bnk` | PSP | **partial** | An `SBlk` descriptor block plus PS-ADPCM waveforms. Container, header and codec implemented and validated across all 39 banks and 546,681 audio blocks; banks also carry their own name. Where each individual sound starts inside a bank is [not resolved](psp-audio.md#not-determined). |
-| Particle system | `.pob` | PSP | unknown | Magic `SYSP`. |
+| [Particle system](pob.md) | `.pob` | PSP | **partial** | `SYSP` container, slot table and name field decoded and validated across all 35 files; the slot values' meaning and the payload are not. |
 | Ship data | `.dat` | PSP | unknown | Paired with ships; likely handling or collision. |
 | [PS2 music archive](ps2-audio.md) | `.wad` | PS2 | **understood** | `PS2MUSIC.WAD`, **not** the WAD container: a 12-byte-entry directory over 48 kHz 16-bit stereo PCM, uncompressed. Implemented; the chain closes to the byte and the sample rate is pinned against the PSP's ATRAC3plus copies of the same sixteen tracks. |
 | PS2 prerace archive | `.wad` | PS2 | unknown | `PRERACE.WAD`. Header `20 00 00 00`, entropy 0.08. Mostly empty. |

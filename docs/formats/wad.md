@@ -268,8 +268,10 @@ sets it.
 
 ### What are the remaining blob types?
 
-`.bnk` sound banks (`03000000`), `\x01FNT` fonts, `SYSP` particle systems
-(`.pob`) and `.dat` files paired with ships are all undecoded.
+`.bnk` sound banks (`03000000`) are [partially decoded](psp-audio.md), `\x01FNT`
+fonts are [decoded](fnt.md), `SYSP` particle systems (`.pob`) are
+[partially decoded](pob.md) - the container and name, not the payload - and
+`.dat` files paired with ships remain undecoded.
 
 ## Usage
 
