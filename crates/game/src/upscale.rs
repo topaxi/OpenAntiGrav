@@ -484,6 +484,12 @@ fn target(
 /// would only do harm. A row that silently degrades the picture at three of the
 /// six render scales it sits next to would be worse than one that does nothing
 /// at those three.
+/// Either axis and not both: a render scale applies to both, but a clamped
+/// target or an odd rectangle can leave one axis equal while the other is
+/// short, and one short axis is still something to reconstruct. On the equal
+/// axis EASU then steps exactly one input texel per output texel, which is the
+/// one-to-one case - it reconstructs nothing there, but it also cannot produce
+/// the undersampling artefact above, which needs a step *greater* than one.
 fn magnifies(scene: (u32, u32), rect: (u32, u32)) -> bool {
     scene.0 < rect.0 || scene.1 < rect.1
 }

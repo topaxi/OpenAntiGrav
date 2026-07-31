@@ -669,6 +669,157 @@ mod tests {
         readback.unmap();
     }
 
+    /// RCAS must not overshoot, which is the artifact that would hurt text.
+    ///
+    /// A sharpener's characteristic failure is ringing: a bright halo just
+    /// outside a dark edge and a dark one just inside it. On 480x272-era
+    /// paletted sprite art and on glyphs lifted from a coverage atlas - which
+    /// is what the menus and the HUD are made of - that reads as fringing, and
+    /// it is the specific reason to doubt a global upscaler setting.
+    ///
+    /// The hard black-and-white edge in the test above cannot show it, because
+    /// overshoot past 0 and 255 is clamped away by the format. A **mid-range**
+    /// edge can: anything darker than the dark side or brighter than the bright
+    /// side is ringing, with nowhere to hide.
+    ///
+    /// **Some overshoot is what sharpening *is*, and RCAS does not promise
+    /// otherwise**: its limiters bound the result to `[0, 1]`, not to the local
+    /// neighbourhood. So this pins the magnitude rather than asserting zero.
+    /// Measured across a 128-level edge: 16/255 at maximum sharpening and
+    /// 10/255 at the shipped default - 12.5 % and 7.8 % of the edge contrast.
+    /// That is a well-behaved sharpener. This test exists to catch the day it
+    /// stops being one - a botched limiter or lobe would blow well past this.
+    ///
+    /// **Skips when there is no adapter.**
+    #[test]
+    fn sharpening_a_mid_range_edge_rings_only_as_much_as_sharpening_must() {
+        // A fifth of the edge contrast. Comfortably above what RCAS does and
+        // far below what a broken limiter would.
+        const BUDGET: u8 = (BRIGHT - DARK) / 5;
+        let Some(max) = ringing(0.0) else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        let default = ringing(0.2).expect("an adapter, having just had one");
+        for (what, (under, over)) in [("maximum", max), ("default", default)] {
+            assert!(
+                under <= BUDGET && over <= BUDGET,
+                "at {what} sharpening: undershoot {under} below {DARK}, \
+                 overshoot {over} above {BRIGHT}, budget {BUDGET}"
+            );
+        }
+        // And sharpening less must ring less, or the scale is upside down.
+        assert!(default.0 <= max.0 && default.1 <= max.1);
+    }
+
+    const DARK: u8 = 64;
+    const BRIGHT: u8 = 192;
+
+    /// The worst undershoot and overshoot across a mid-range edge, or `None`
+    /// with no adapter.
+    fn ringing(stops: f32) -> Option<(u8, u8)> {
+        const IN: (u32, u32) = (64, 64);
+        const OUT: (u32, u32) = (128, 128);
+
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
+
+        let format = wgpu::TextureFormat::Rgba8Unorm;
+        let scene = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("mid edge"),
+            size: wgpu::Extent3d {
+                width: IN.0,
+                height: IN.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let mut pixels = vec![0u8; (IN.0 * IN.1 * 4) as usize];
+        for y in 0..IN.1 {
+            for x in 0..IN.0 {
+                let value = if x < IN.0 / 2 { DARK } else { BRIGHT };
+                let at = ((y * IN.0 + x) * 4) as usize;
+                pixels[at..at + 4].copy_from_slice(&[value, value, value, 255]);
+            }
+        }
+        queue.write_texture(
+            scene.as_image_copy(),
+            &pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(IN.0 * 4),
+                rows_per_image: Some(IN.1),
+            },
+            scene.size(),
+        );
+        let source = scene.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut fsr = Fsr1::new(&device, format).expect("building the pipelines");
+        let mut encoder = device.create_command_encoder(&Default::default());
+        fsr.render(
+            &device,
+            &queue,
+            &mut encoder,
+            Frame {
+                source: &source,
+                input: IN,
+                output: OUT,
+                // Maximum sharpening: if anything rings, it rings here.
+                sharpness: Sharpness::stops(stops),
+            },
+        );
+
+        let unpadded = (OUT.0 * 4) as usize;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+        let padded = unpadded.div_ceil(align) * align;
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("readback"),
+            size: (padded * OUT.1 as usize) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            fsr.output_texture().expect("an output").as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded as u32),
+                    rows_per_image: Some(OUT.1),
+                },
+            },
+            wgpu::Extent3d {
+                width: OUT.0,
+                height: OUT.1,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.submit(Some(encoder.finish()));
+        readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("draining the queue");
+        let mapped = readback.slice(..).get_mapped_range().expect("mapping");
+
+        let row = OUT.1 / 2;
+        let mut worst = (0u8, 0u8);
+        for x in 0..OUT.0 {
+            let v = mapped[padded * row as usize + (x * 4) as usize];
+            worst.0 = worst.0.max(DARK.saturating_sub(v));
+            worst.1 = worst.1.max(v.saturating_sub(BRIGHT));
+        }
+        drop(mapped);
+        readback.unmap();
+        Some(worst)
+    }
+
     #[test]
     fn a_degenerate_size_cannot_divide_by_zero() {
         let c = Constants::new((0, 0), (0, 0), Sharpness::DEFAULT);

@@ -528,11 +528,13 @@ impl From<Sharpness> for String {
 pub enum Upscaler {
     /// One bilinear tap, which is what this always did.
     ///
-    /// **The default**, and it stays the default until a screenshot comparison
-    /// says otherwise - the same discipline the animated-texture setting got.
-    /// A resampler that is better on paper and worse on this game's art would
-    /// be a regression shipped on reasoning, and the art here is 480x272-era
-    /// paletted raster with hard edges, which is not what FSR was tuned on.
+    /// **The default.** The comparison that would move it has been run once,
+    /// at 50 % on one frame of one track, and FSR 1 won it clearly - but one
+    /// frame of one track is not the sample `animated_textures` was held to,
+    /// and the doubt that motivated the caution is specifically about content
+    /// this frame did not contain: the menus and the HUD are 480x272-era
+    /// paletted raster and glyphs off a coverage atlas, and a sharpener rings
+    /// on those in a way it does not on track geometry. See HANDOVER.
     #[default]
     Bilinear,
     /// AMD FidelityFX Super Resolution 1: EASU, then RCAS.

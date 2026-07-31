@@ -230,8 +230,10 @@ pub struct Graphics {
     /// Defaults to `bilinear`, which is what this always did. FSR 1 costs two
     /// fullscreen passes and is a clear win on photographic art at a low render
     /// scale; whether it is one on this game's hard-edged paletted art is a
-    /// screenshot comparison nobody has published yet, so it does not become
-    /// the default on the strength of the argument. See
+    /// screenshot comparison has now been run, and at 50 % on one frame of one
+    /// track FSR 1 wins clearly. **The default has not moved on it**, because
+    /// one frame of one track is not the sample `animated_textures` was held
+    /// to - see HANDOVER for what would settle it. See
     /// [`crate::display::Upscaler`].
     ///
     /// **Only has an effect below 100 % `render_scale`.** FSR 1 is a magnifier;
