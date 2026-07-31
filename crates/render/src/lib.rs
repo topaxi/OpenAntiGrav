@@ -30,5 +30,6 @@ pub mod collision;
 pub mod exhaust;
 pub mod mesh;
 pub mod mesh_render;
+pub mod post;
 pub mod pvs;
 pub mod track;
