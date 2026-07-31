@@ -15,7 +15,7 @@ use crate::mesh::{GpuVertex, Model};
 struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
-    glow_scroll: f32,
+    anim_phase: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
@@ -30,7 +30,7 @@ struct Uniforms {
 ///
 /// `zoom` scales the orbit distance; 1.0 is the default framing described above.
 ///
-/// `glow_scroll` is the blink-light palette scroll offset - see
+/// `anim_phase` is the blink-light palette scroll offset - see
 /// `oag_render::mesh::GpuVertex::glow` - in the texture's own V (row) units.
 /// Callers with no game clock (this crate's own viewer and capture paths)
 /// pass `0.0`, which shows every blink light at its authored, unanimated row.
@@ -40,7 +40,7 @@ fn matrices(
     yaw: f32,
     pitch: f32,
     zoom: f32,
-    glow_scroll: f32,
+    anim_phase: f32,
 ) -> Uniforms {
     let distance = model.radius * 3.0 * zoom;
     let eye = Vec3::new(
@@ -56,7 +56,7 @@ fn matrices(
     Uniforms {
         view_projection: (projection * view).to_cols_array_2d(),
         model: Mat4::from_translation(-centre).to_cols_array_2d(),
-        glow_scroll,
+        anim_phase,
         _pad0: 0.0,
         _pad1: 0.0,
         _pad2: 0.0,
@@ -81,9 +81,9 @@ pub fn write_uniforms(
     yaw: f32,
     pitch: f32,
     zoom: f32,
-    glow_scroll: f32,
+    anim_phase: f32,
 ) -> Mat4 {
-    let uniforms = matrices(model, aspect, yaw, pitch, zoom, glow_scroll);
+    let uniforms = matrices(model, aspect, yaw, pitch, zoom, anim_phase);
     queue.write_buffer(buffer, 0, bytemuck::bytes_of(&uniforms));
     Mat4::from_cols_array_2d(&uniforms.view_projection)
 }

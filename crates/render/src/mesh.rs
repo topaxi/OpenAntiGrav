@@ -20,14 +20,20 @@ pub struct GpuVertex {
     /// need the rig. This is the viewer's own choice, not the game's: the GE
     /// decides per draw from state we have not recovered.
     pub lit: f32,
-    /// 1.0 for a vertex whose texture is the shared blink-light palette
-    /// (`colours_flashing_GLOW.tga`), 0.0 otherwise. See
-    /// [`is_blink_light_texture`] for what qualifies and the evidence behind
-    /// it. The shader adds a per-frame scroll offset to this vertex's V
-    /// texture coordinate when `glow` is 1.0, which is the whole animation:
-    /// the light's colour and brightness curve live in the texture, not in
-    /// any code here.
-    pub glow: f32,
+    /// How many whole V (row) sweeps of this vertex's texture pass under it per
+    /// [`ANIM_PERIOD_TICKS`], or 0.0 for a surface that does not animate.
+    ///
+    /// The shader offsets the V texture coordinate by `v_cycles * anim_phase`,
+    /// and that is the entire animation: the colour and brightness curve lives
+    /// in the texture's own rows, not in any code here. Which textures qualify,
+    /// and the evidence for each, is [`ANIMATED_TEXTURES`].
+    ///
+    /// A rate rather than the flag this used to be, so a surface that turns out
+    /// to run at a different speed is a table entry rather than a second uniform
+    /// and a second branch. It stays one `f32` because no recovered surface
+    /// scrolls in U: a track model is millions of vertices, and a second
+    /// component would cost that much memory to carry zeroes.
+    pub v_cycles: f32,
 }
 
 /// A world-space bounding sphere, for frustum culling.
@@ -54,6 +60,115 @@ pub struct DrawCall {
     pub bounds: Bounds,
 }
 
+/// How many whole V sweeps of the blink-light palette pass per
+/// [`ANIM_PERIOD_TICKS`].
+///
+/// Two, because the measured single-cycle period is ~30 ticks and the texture
+/// repeats its 8-frame curve twice down its 16 rows, so a full sweep is ~60
+/// ticks. Every other entry in [`ANIMATED_TEXTURES`] reuses this rather than
+/// inventing its own: it is the one rate with a measurement behind it, and a
+/// shared wrong rate is easier to correct than seven separate guesses.
+const BLINK_V_CYCLES: f32 = 2.0;
+
+/// Textures whose surfaces animate by scrolling their V (row) coordinate, and
+/// how fast, in whole sweeps per [`ANIM_PERIOD_TICKS`].
+///
+/// Matched case-insensitively against the filename of the texture's **runtime
+/// asset path** (`Texture` node payload `+0x38`) - the only name a track
+/// texture has, since its node header carries none.
+///
+/// # Why a list and not a name rule
+///
+/// `_GLOW` and `_ADD` are the artists' blend-mode notes, not animation markers:
+/// `_ADD` is known to mean additive compositing, and the suffix sits on
+/// `hub_banner_GLOW.tga`, `col_banners2_ADD.tga` and `FEISAR3_GLOW.tga`, which
+/// are plainly static sponsor art. A suffix rule would make a whole circuit
+/// flicker. The material `flags` word at `+0x00` is no better: the static
+/// `hub_banner_GLOW` and the banded `flicker1nonalpha_GLOW` both carry `0x91`.
+/// And the file itself holds no rate - material `+0x0c..0x14` is zero on every
+/// material of every circuit. So the only honest key is an enumerated list, and
+/// each entry has to earn its place.
+///
+/// # What earned a place
+///
+/// Every entry has at least one draw call whose vertices sit in a **narrow V
+/// band** - the authored signature of a quad that picks a phase by V and lets
+/// the global scroll step it through the texture's rows. Measured per draw call
+/// (not aggregated: separate quads sit at different V deliberately, and merging
+/// them destroys the signal) by
+/// `crates/render/tests/animated_uv_ground_truth.rs`.
+///
+/// The band is evidence for *which* textures, not a runtime rule. The engine
+/// scrolls a shared texture globally and any geometry sampling it inherits the
+/// animation, wide V span included - Assegai's and Piranha's blink quads span
+/// 8.1 and 9.6 of 16 rows and still animate. Gating at runtime on a narrow band
+/// would switch those two ships off.
+///
+/// **Confidence 85 for `colours_flashing_GLOW.tga`** (surveyed across all eight
+/// ships and confirmed against a frame-accurate capture); **65 for every track
+/// entry** - the narrow-band geometry and the banded texture content are real
+/// measurements, but no capture of the original has confirmed that these
+/// particular surfaces move, and the rates are chosen rather than recovered.
+/// Below 70 deliberately: see `docs/reverse-engineering/confidence-rubric.md`.
+///
+/// # Deliberately excluded
+///
+/// - `tunnelanim_sb.tga`, despite the name: all 14 of its draws span its full
+///   32 rows, so a V scroll would slide the artwork rather than cycle it.
+/// - `flicker1/2nonalpha_GLOW.tga`: banded like the blink palette, but its
+///   draws tile ~4x vertically, and the pad geometry that mainly uses it is not
+///   loaded at all - every circuit embeds the texture while referencing it from
+///   zero materials.
+/// - `Plasma_scroll_ADD_GLOW.tga`: exactly one tile in both axes (63.75 of 64
+///   columns, 64.00 of 64 rows), with all rows distinct and flat luminance. That
+///   is a continuous scroll, a different mechanism, and no rate for it has been
+///   recovered.
+/// - Every `billboard*`, `banner*`, `WES_*_BANNER*` and `*_shinemap`: full-tile
+///   or environment-mapped on every draw.
+/// - `FEISAR2anim.tga`, which is the one asset that looks like a *horizontal*
+///   filmstrip - 256x32 in 8 distinct 32x32 blocks, on sponsor art, with `anim`
+///   in the artists' name. It is referenced by **zero materials** on all four
+///   circuits that embed it, so it is not drawn at all.
+///
+/// The U axis was measured too, not assumed: every hoarding and banner spans
+/// essentially its full width (`piranha_banner_ADD_GLOW` 254.00 of 256,
+/// `hub_banner_GLOW` 128.00 of 128, `WES_FEISAR_BANNER_A` 63.50 of 64), so
+/// trackside advertising is static on **both** axes. That is also why this is a
+/// scalar V rate rather than a `[f32; 2]`.
+pub const ANIMATED_TEXTURES: &[(&str, f32)] = &[
+    // Ships. Every one of the 8 playable teams carries a mesh whose material
+    // resolves to this one shared texture.
+    ("colours_flashing_glow", BLINK_V_CYCLES),
+    // On all 12 circuits, and the cleanest signature on the disc: its draws sit
+    // at a single exact V line (span 0.00 of 8 rows on 01, 07, 10, 13 and 16).
+    ("col_display7_glow", BLINK_V_CYCLES),
+    // Same family, 16_Track, narrowest draw 0.19 of 8 rows.
+    ("col_display7_blend_glow", BLINK_V_CYCLES),
+    // 07_Track, narrowest of 21 draws 0.00 of 32 rows.
+    ("07_pulse_light_blend_glow", BLINK_V_CYCLES),
+    // 13_Track. "cycle gradient" in the artists' own words, and the row means
+    // form a clean symmetric hump. Narrowest draws 0.25, 1.50 and 0.50 rows.
+    ("rf_cyclegrad_glow", BLINK_V_CYCLES),
+    ("rf_cyclegrad2_glow", BLINK_V_CYCLES),
+    ("rf_cyclegrad3_glow", BLINK_V_CYCLES),
+    // 10_Track, narrowest draws 0.45 of 4 rows and 0.00 of 64.
+    ("sl_bluestrip_glow", BLINK_V_CYCLES),
+    ("sl_purplestrip_glow", BLINK_V_CYCLES),
+];
+
+/// The V scroll rate for a decoded texture, or `None` if it does not animate.
+#[must_use]
+pub fn animated_v_cycles(label: &str) -> Option<f32> {
+    let key = label.to_ascii_lowercase();
+    // Longest match first, so `col_display7_BLEND_GLOW` is not claimed by the
+    // `col_display7_GLOW` entry through a shared prefix.
+    ANIMATED_TEXTURES
+        .iter()
+        .filter(|(name, _)| key.contains(name))
+        .max_by_key(|(name, _)| name.len())
+        .map(|&(_, cycles)| cycles)
+}
+
 /// Whether a decoded texture's name identifies its surface as the shared
 /// blink-light palette, animated by scrolling its V (row) coordinate.
 ///
@@ -77,6 +192,12 @@ pub struct DrawCall {
 /// more than one material - Feisar's `self_illuminatedShape` has one batch on
 /// this texture and another on the ship's own steady-lit skin - is judged
 /// batch by batch instead of being wrongly all-or-nothing.
+///
+/// Kept as its own predicate, rather than folded into [`animated_v_cycles`],
+/// because the ship claim is evidenced far more strongly than any track entry:
+/// this one is worth naming and citing separately even though the table would
+/// match the same label. `blink_lights_ground_truth.rs` asserts it against every
+/// real ship.
 #[must_use]
 pub fn is_blink_light_texture(label: &str) -> bool {
     label.to_ascii_lowercase().contains("flashing_glow")
@@ -84,7 +205,7 @@ pub fn is_blink_light_texture(label: &str) -> bool {
 
 #[cfg(test)]
 mod blink_texture_tests {
-    use super::is_blink_light_texture;
+    use super::{ANIMATED_TEXTURES, animated_v_cycles, is_blink_light_texture};
 
     #[test]
     fn matches_the_shared_blink_texture_however_it_is_cased() {
@@ -96,6 +217,53 @@ mod blink_texture_tests {
     fn excludes_unrelated_textures() {
         assert!(!is_blink_light_texture("engine_general.tga"));
         assert!(!is_blink_light_texture("texture1.tga"));
+    }
+
+    #[test]
+    fn the_blink_palette_animates_through_the_table_too() {
+        assert_eq!(animated_v_cycles("colours_flashing_GLOW.tga"), Some(2.0));
+    }
+
+    #[test]
+    fn track_entries_are_matched_case_insensitively() {
+        assert!(animated_v_cycles("col_display7_GLOW.tga").is_some());
+        assert!(animated_v_cycles("07_Pulse_light_BLEND_GLOW.TGA").is_some());
+        assert!(animated_v_cycles("rf_cyclegrad3_GLOW.tga").is_some());
+    }
+
+    /// The static sponsor art that a `_GLOW`/`_ADD` suffix rule would have
+    /// swept up. Each of these is a real texture on a real circuit.
+    #[test]
+    fn static_art_never_animates() {
+        for label in [
+            "hub_banner_GLOW.tga",
+            "col_banners2_ADD.tga",
+            "FEISAR3_GLOW.tga",
+            "Harimau_Glow.tga",
+            "billboard1.tga",
+            "banner2.tga",
+            "tunnelanim_sb.tga",
+            "flicker1nonalpha_GLOW.tga",
+            "Plasma_scroll_ADD_GLOW.tga",
+            "SL_stripwindows_shinemap.tga",
+        ] {
+            assert_eq!(animated_v_cycles(label), None, "{label} must not animate");
+        }
+    }
+
+    /// `col_display7_GLOW` is a prefix of `col_display7_BLEND_GLOW` in neither
+    /// direction, but both contain `col_display7`, so the longest-match rule is
+    /// what keeps a future shorter entry from swallowing a longer one.
+    #[test]
+    fn the_longest_matching_entry_wins() {
+        let table_keys: Vec<&str> = ANIMATED_TEXTURES.iter().map(|&(n, _)| n).collect();
+        assert!(table_keys.contains(&"col_display7_glow"));
+        assert!(table_keys.contains(&"col_display7_blend_glow"));
+        assert_eq!(
+            animated_v_cycles("col_display7_BLEND_GLOW.tga"),
+            Some(2.0),
+            "matched by the more specific entry"
+        );
     }
 }
 
@@ -303,9 +471,13 @@ pub fn build_with_textures(
         .into_iter()
         .map(|slot| {
             slot.map(|t| ModelTexture {
+                // The runtime path first: it is present on tracks *and* ships,
+                // where the node-header name is the artists' `Z:/...` authoring
+                // path and is absent altogether on every track texture.
                 label: t
-                    .name
+                    .asset_path
                     .as_deref()
+                    .or(t.name.as_deref())
                     .and_then(|n| n.rsplit(['/', '\\']).next())
                     .unwrap_or("?")
                     .to_string(),
@@ -383,12 +555,13 @@ pub fn build_with_textures(
                     .get(usize::from(batch.material_index))
                     .copied()
                     .flatten()
-                    .map(|t| t as usize)
+                    .map(|m| m.texture as usize)
                     .filter(|&t| textures.get(t).is_some_and(Option::is_some));
-                let glow = texture
+                let v_cycles = texture
                     .and_then(|t| textures.get(t))
                     .and_then(Option::as_ref)
-                    .is_some_and(|t| is_blink_light_texture(&t.label));
+                    .and_then(|t| animated_v_cycles(&t.label))
+                    .unwrap_or(0.0);
 
                 let mut lo = [f32::MAX; 3];
                 let mut hi = [f32::MIN; 3];
@@ -413,7 +586,7 @@ pub fn build_with_textures(
                         }),
                         texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
                         lit: if v.colour.is_some() { 0.0 } else { 1.0 },
-                        glow: f32::from(glow),
+                        v_cycles,
                     });
                 }
                 for tri in batch.triangles() {
@@ -628,7 +801,7 @@ mod merge_tests {
                     colour: [1.0; 4],
                     texcoord: [0.0; 2],
                     lit: 1.0,
-                    glow: 0.0,
+                    v_cycles: 0.0,
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),

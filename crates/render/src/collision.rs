@@ -337,7 +337,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         colour,
         texcoord: [0.0, 0.0],
         lit,
-        glow: 0.0,
+        v_cycles: 0.0,
     }
 }
 

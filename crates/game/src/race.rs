@@ -1702,7 +1702,7 @@ fn key_for_button(index: u8) -> Option<winit::keyboard::Key> {
 struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
-    glow_scroll: f32,
+    anim_phase: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
@@ -1891,11 +1891,11 @@ impl Drawable {
         })
     }
 
-    fn write(&self, queue: &wgpu::Queue, view_projection: Mat4, model: Mat4, glow_scroll: f32) {
+    fn write(&self, queue: &wgpu::Queue, view_projection: Mat4, model: Mat4, anim_phase: f32) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             model: model.to_cols_array_2d(),
-            glow_scroll,
+            anim_phase,
             _pad0: 0.0,
             _pad1: 0.0,
             _pad2: 0.0,
@@ -1982,23 +1982,32 @@ impl Drawable {
     }
 }
 
-/// How many ticks it takes the blink-light palette (`colours_flashing_GLOW.tga`,
-/// see `oag_render::mesh::GpuVertex::glow`) to scroll through its full 16 rows.
+/// The period of the global texture-animation clock, in ticks.
+///
+/// Every animated surface is a whole number of V sweeps per this period (see
+/// `oag_render::mesh::ANIMATED_TEXTURES`), which is what makes the wrap back to
+/// phase zero seamless instead of a visible jump: at the wrap every surface is
+/// an exact number of full texture heights along, and V wraps too.
+///
+/// 120 rather than 60 so a surface running at half the blink light's speed can
+/// still be expressed as an integer.
+const ANIM_PERIOD_TICKS: u64 = 120;
+
+/// The global texture-animation clock's phase for `tick`, 0.0 up to 1.0.
 ///
 /// **Confidence: 85** for the mechanism (a V-axis palette scroll - see
 /// `docs/formats/vex.md`, "The animation is authored in the texture, on its V
-/// axis"), and a narrower, separately-checkable claim for this specific rate.
-/// A live capture (120 frame-accurate PPSSPP screenshots, pixels sampled at a
-/// real light) measured one authored 8-row cycle repeating every 29-31 ticks;
-/// the texture repeats that 8-row cycle twice across its 16 rows, so one full
-/// scroll of all 16 rows - `GLOW_SCROLL_PERIOD_TICKS` - is twice that, 60
-/// ticks (one second at the simulation's fixed 60 Hz).
-const GLOW_SCROLL_PERIOD_TICKS: u64 = 60;
-
-/// The blink-light palette's current scroll offset, in the texture's own V
-/// (row) units, for `tick`.
-fn glow_scroll(tick: u64) -> f32 {
-    (tick % GLOW_SCROLL_PERIOD_TICKS) as f32 / GLOW_SCROLL_PERIOD_TICKS as f32
+/// axis"), and a narrower, separately-checkable claim for the rate. A live
+/// capture (120 frame-accurate PPSSPP screenshots, pixels sampled at a real
+/// light) measured one authored 8-row cycle repeating every 29-31 ticks; the
+/// blink texture repeats that 8-row cycle twice across its 16 rows, so one full
+/// scroll of all 16 rows is twice that, 60 ticks - which is `BLINK_V_CYCLES`
+/// (2.0) sweeps per this 120-tick period, one second at the fixed 60 Hz.
+///
+/// From `world.tick`, never the wall clock, so a replay of the same tick draws
+/// the same frame.
+fn anim_phase(tick: u64) -> f32 {
+    (tick % ANIM_PERIOD_TICKS) as f32 / ANIM_PERIOD_TICKS as f32
 }
 
 /// The track and the ship on the GPU, drawn from a chase camera.
@@ -2108,6 +2117,7 @@ impl Scene {
         fov: crate::display::Fov,
         cull: bool,
         pvs_cull: bool,
+        animated_textures: bool,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
@@ -2124,13 +2134,17 @@ impl Scene {
                 let (craft, camera) = race.visibility_sections();
                 visibility.set(craft, camera)
             });
-        let scroll = glow_scroll(race.world.tick);
+        let scroll = anim_phase(race.world.tick);
+        // The ship's lights keep scrolling either way: `[graphics]
+        // animated_textures` exists to test the *inferred* track entries
+        // against a capture, and the ship's behaviour is not inferred.
+        let track_scroll = if animated_textures { scroll } else { 0.0 };
         self.track
-            .write(queue, view_projection, Mat4::IDENTITY, scroll);
+            .write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         self.ship
             .write(queue, view_projection, race.ship_model_matrix(), scroll);
         if let Some(collision) = &self.collision {
-            collision.write(queue, view_projection, Mat4::IDENTITY, scroll);
+            collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         }
 
         // The camera's own axes, read out of the view matrix: for a view matrix
@@ -2265,6 +2279,13 @@ pub struct CaptureOptions {
     /// frustum culling passed. Frustum culling stays off in a capture either
     /// way, so the two images differ by this tier alone.
     pub pvs_culling: bool,
+    /// Whether the inferred trackside texture animations run.
+    ///
+    /// Honoured for the same reason the two culling tiers are: two captures
+    /// differing only by this setting are how `[graphics] animated_textures`
+    /// gets checked against the running original, and that check is the whole
+    /// reason the setting exists.
+    pub animated_textures: bool,
 }
 
 /// Runs a race headless and writes one frame to a PNG.
@@ -2381,6 +2402,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         options.fov,
         options.frustum_culling,
         options.pvs_culling,
+        options.animated_textures,
     );
 
     // The HUD, into the same target. Without this a race screenshot would show
@@ -2491,11 +2513,23 @@ mod tests {
     }
 
     #[test]
-    fn glow_scroll_starts_at_zero_and_wraps_every_period() {
-        assert_eq!(glow_scroll(0), 0.0);
-        assert!((glow_scroll(GLOW_SCROLL_PERIOD_TICKS / 2) - 0.5).abs() < 1e-6);
-        assert_eq!(glow_scroll(GLOW_SCROLL_PERIOD_TICKS), 0.0);
-        assert_eq!(glow_scroll(GLOW_SCROLL_PERIOD_TICKS * 3), 0.0);
+    fn anim_phase_starts_at_zero_and_wraps_every_period() {
+        assert_eq!(anim_phase(0), 0.0);
+        assert!((anim_phase(ANIM_PERIOD_TICKS / 2) - 0.5).abs() < 1e-6);
+        assert_eq!(anim_phase(ANIM_PERIOD_TICKS), 0.0);
+        assert_eq!(anim_phase(ANIM_PERIOD_TICKS * 3), 0.0);
+    }
+
+    /// The blink light kept the exact behaviour it had when the scroll was a
+    /// dedicated 60-tick uniform rather than a shared 120-tick clock with a
+    /// per-vertex rate: 2 sweeps per 120 ticks is 1 sweep per 60.
+    #[test]
+    fn the_blink_light_still_sweeps_once_every_sixty_ticks() {
+        let sweeps = |tick| anim_phase(tick) * oag_render::mesh::ANIMATED_TEXTURES[0].1;
+        assert_eq!(sweeps(0), 0.0);
+        assert!((sweeps(30) - 0.5).abs() < 1e-6);
+        assert!((sweeps(60) - 1.0).abs() < 1e-6);
+        assert!((sweeps(90) - 1.5).abs() < 1e-6);
     }
 
     /// The PS2 shape, measured: five slots declared and none of them filled.

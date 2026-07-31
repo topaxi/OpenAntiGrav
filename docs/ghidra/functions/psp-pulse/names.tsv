@@ -107,6 +107,8 @@
 0x0890c1e4	function	Mesh_EmitDrawArray	90	../../../formats/vex.md
 0x08810e98	function	Gu_DrawArray	92	../../../formats/vex.md
 0x08810598	function	Gu_CallList	90	../../../formats/vex.md
+0x08811630	function	Gu_TexOffset	88	texture-animation.md
+0x08810ab4	function	Gu_TexScale	88	texture-animation.md
 0x08883794	function	World_LoadTrack	85	../../../formats/vex.md
 0x08843258	function	Ship_LoadModel	87	../../../formats/vex.md
 

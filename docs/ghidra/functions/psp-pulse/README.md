@@ -19,6 +19,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Engine, brakes, steering, pitch](engine.md) | The craft update frame, every control force term, and the complete handling parameter block |
 | [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |
 | [XML reader](xml-reader.md) | The one parser behind the front end, handling stats and camera blocks, and its exponent-blind float accessor |
+| [Texture animation](texture-animation.md) | The GU texture offset/scale primitives, their callers, and what is still unknown about the global scroll clock |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
 
 ## Renames

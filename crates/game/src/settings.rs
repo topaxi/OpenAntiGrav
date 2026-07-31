@@ -308,6 +308,33 @@ pub struct Graphics {
     /// rather than opting a player into a divergence they did not ask for.
     #[serde(with = "LodDef", default)]
     pub lod: Lod,
+    /// Whether trackside surfaces whose texture is a scrolling filmstrip
+    /// animate, or stay on their authored frame.
+    ///
+    /// **On by default**, but with a weaker claim behind it than any other
+    /// entry here, and it exists so that claim can be checked. The mechanism is
+    /// evidenced at confidence 85 on the ships - a V-axis palette scroll,
+    /// confirmed against a frame-accurate capture - but which *track* textures
+    /// it applies to is inferred at 65 from two structural measurements: the
+    /// texture's rows are banded like the ship's, and at least one draw call
+    /// paints it from a narrow V band, the authored signature of a quad that
+    /// picks a phase by V. No capture of the original has confirmed that these
+    /// particular surfaces move.
+    ///
+    /// So this is the switch that makes a before-and-after screenshot possible
+    /// against the running game. If a capture shows a surface in
+    /// `oag_render::mesh::ANIMATED_TEXTURES` is static in the original, the fix
+    /// is to remove that entry, not to turn this off. The ships are not covered
+    /// by it: their behaviour is established, and turning the inferred part off
+    /// should not switch off the part that is known.
+    #[serde(default = "default_animated_textures")]
+    pub animated_textures: bool,
+}
+
+/// See [`Graphics::animated_textures`]: on, matching every other default that
+/// reproduces rather than departs from the original.
+fn default_animated_textures() -> bool {
+    true
 }
 
 impl Default for Graphics {
@@ -320,6 +347,7 @@ impl Default for Graphics {
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
             lod: Lod::default(),
+            animated_textures: default_animated_textures(),
         }
     }
 }

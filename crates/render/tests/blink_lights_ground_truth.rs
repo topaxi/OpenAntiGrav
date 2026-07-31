@@ -62,23 +62,42 @@ fn every_team_has_a_glow_tagged_vertex() {
         oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
 
     let mut teams_without_glow = Vec::new();
+    let mut teams_without_the_texture = Vec::new();
     for team in TEAMS {
         let name = ship_entry_name(team);
         let blob = archives.read_name(&name).expect("reading Ship.vex");
         let model = mesh::build(&name, &blob).expect("decoding Ship.vex");
-        let glow_vertices = model.vertices.iter().filter(|v| v.glow == 1.0).count();
+        let glow_vertices = model.vertices.iter().filter(|v| v.v_cycles != 0.0).count();
+        // The predicate itself, against the label the decoder actually
+        // produced - not only the tagging it feeds. `v_cycles` is now set from
+        // `ANIMATED_TEXTURES`, so without this the ship-specific claim
+        // `is_blink_light_texture` makes would have no test of its own left.
+        let labelled = model
+            .textures
+            .iter()
+            .flatten()
+            .any(|t| mesh::is_blink_light_texture(&t.label));
         println!(
-            "{team}: {glow_vertices} glow-tagged vertex/vertices of {}",
+            "{team}: {glow_vertices} glow-tagged vertex/vertices of {}, \
+             blink texture present: {labelled}",
             model.vertices.len()
         );
         if glow_vertices == 0 {
             teams_without_glow.push(team);
         }
+        if !labelled {
+            teams_without_the_texture.push(team);
+        }
     }
 
     assert!(
+        teams_without_the_texture.is_empty(),
+        "team(s) whose decoded texture labels no longer match \
+         is_blink_light_texture: {teams_without_the_texture:?}"
+    );
+    assert!(
         teams_without_glow.is_empty(),
         "team(s) with no glow-tagged vertex: {teams_without_glow:?} - \
-         is_blink_light_texture no longer matches every ship's real data"
+         ANIMATED_TEXTURES no longer matches every ship's real data"
     );
 }

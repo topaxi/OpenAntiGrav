@@ -524,6 +524,7 @@ fn run_race(
                 fov: settings.graphics.fov,
                 frustum_culling: settings.graphics.frustum_culling,
                 pvs_culling: settings.graphics.pvs_culling,
+                animated_textures: settings.graphics.animated_textures,
             },
         );
     }
@@ -1307,9 +1308,18 @@ impl RaceStage {
         fov: display::Fov,
         cull: bool,
         pvs_cull: bool,
+        animated_textures: bool,
     ) -> race::SceneStats {
         let stats = self.scene.render(
-            &gpu.queue, encoder, view, &self.race, viewport, fov, cull, pvs_cull,
+            &gpu.queue,
+            encoder,
+            view,
+            &self.race,
+            viewport,
+            fov,
+            cull,
+            pvs_cull,
+            animated_textures,
         );
 
         // Over the scene and inside the same target, so the HUD is drawn at the
@@ -1695,6 +1705,7 @@ impl Session {
                 self.settings.graphics.fov,
                 self.settings.graphics.frustum_culling,
                 self.settings.graphics.pvs_culling,
+                self.settings.graphics.animated_textures,
             )),
         };
 

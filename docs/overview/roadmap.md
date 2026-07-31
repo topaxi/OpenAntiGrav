@@ -618,9 +618,25 @@ change how this list should be read:
 - [ ] `cloudCube` `0x3d8` and `cloudGroup` `0x3d9`
 - [ ] `sea` `0x3d5`, `seareflect` `0x3d7`, `seaweed` `0x3d6`
 - [ ] `weatherPos` `0x3da`
-- [ ] Track surface scrolling and animated textures. The exhaust's trail already
-      reads authored scroll rates, so the mechanism exists in one place and is
-      unread everywhere else
+- [x] Trackside animated textures, as a V-axis scroll over a banded texture -
+      the same mechanism as the ship blink lights, generalised. Eight track
+      textures across five circuits, `col_display7_GLOW` on all twelve. Keyed by
+      an enumerated list rather than a name rule, because the format holds no
+      authored rate (material `+0x0c..0x14` is zero everywhere) and the material
+      `flags` word does not separate animated from static. **At confidence 65,
+      behind `[graphics] animated_textures`**: the geometry and texture content
+      are measured, but no capture has confirmed the original animates these
+      surfaces. See [`vex.md`](../formats/vex.md) and
+      [`texture-animation.md`](../ghidra/functions/psp-pulse/texture-animation.md)
+- [ ] Confirm those eight against a PPSSPP capture, and recover the real scroll
+      rate. Every rate currently reuses the blink light's, which is the only one
+      measured; the global clock that drives it has not been found in the binary
+- [ ] Continuous UV scroll, as distinct from the filmstrip above:
+      `Plasma_scroll_ADD_GLOW` on `16_Track` is one tile with all rows distinct,
+      so it slides rather than cycles. The exhaust's trail reads authored scroll
+      rates for its own layers, and no track equivalent has been found
+- [ ] The `0x2000` extra pass and its second texture index at material `+0x08` -
+      it lands on exactly the `*_shinemap` textures, and nothing draws it
 
 ### Ship visual state
 

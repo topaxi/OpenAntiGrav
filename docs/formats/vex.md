@@ -687,6 +687,22 @@ Textures live in a block appended after the node tree, described by
 The node *name* carries the original artist path, for example
 `Z:/WipeoutPSP/X2/Data/Ships/Feisar/Textures/engine_general.tga`.
 
+**The two paths are not interchangeable, and only one of them is always there.**
+A ship's `Texture` node uses the long header form (`header_size` 64 to 96) and
+carries the `Z:/` authoring path in it. A **track's** `Texture` nodes use the
+short 32-byte header with the name field zeroed, so `Node::name` is `None` for
+every one of them: the runtime path at `+0x38` is the only name a track texture
+has. Both forms carry `+0x38`, so it is the field to match a texture by.
+Implemented as `oag_formats::vex::EmbeddedTexture::asset_path` and
+`vex::texture_asset_path`; `oag-view --nodes --class 0x3c1` prints it, which is
+why a track's texture list is readable at all.
+
+Verified across all 12 PSP circuits: reading `+0x38` per node while stepping the
+texture block by each node's own `clut_size + texel_size` lands **exactly** on
+the file's end (`01_Track` 5,019,184 of 5,019,184; `07_Track` 4,860,288 of
+4,860,288; `16_Track` 5,107,104 of 5,107,104), so the names and the packing
+confirm each other. **Confidence 90.**
+
 **Nothing points at the pixel data.** Both pointer fields are zero in the file.
 Instead each texture's palette and texels are packed back to back, in node
 order, starting immediately after the tree:
@@ -744,6 +760,39 @@ At mesh payload `+0x30`, stride `0x14`, count at `+0x02`:
 A batch's `material_index` selects an entry here, which then selects a texture.
 The mapping is confirmed semantically as well as structurally: the mesh named
 `underbrake_flashrightShape` resolves to `colours_flashing_GLOW.tga`.
+
+All three fields are read, as `oag_formats::vex::Material`.
+
+### `+0x0c..0x14` is empty, and `flags` is render state
+
+Two negative results, both from surveying every material of all 12 PSP circuits
+(1,524 on `07_Track` alone). They matter because between them they rule out the
+file as a source of animation data.
+
+**The unused tail is zero everywhere.** `+0x0c..0x14` is eight bytes wide - the
+right size for a `u`/`v` scroll rate pair, and the exhaust's `Trail` does carry
+exactly such a pair in its own descriptor. It is `0000000000000000` on every
+material of every circuit. **There is no authored per-surface UV scroll rate in
+this format.** Confidence 90: an exhaustive scan of real data, which is what the
+[rubric](../reverse-engineering/confidence-rubric.md) caps below 95.
+
+**`flags` does not mark animation.** It is richly varied - 19 distinct values on
+`07_Track`, from `0x0001` on plain art to `0x2001`, `0x0192` and `0x0292` - and
+it does correlate with the artists' naming, but it does not separate animated
+surfaces from static ones: the static `hub_banner_GLOW` and the banded
+`flicker1nonalpha_GLOW` both carry `0x91`. Two bits are legible:
+
+| Bit | Where it lands | Reading |
+| --- | --- | --- |
+| `0x0080` | `07_archtrim_Glow_01`, `SL_BlueStrip_GLOW`, `col_display7_GLOW`, `07_Pulse_light_BLEND_GLOW` | accompanies the `_GLOW`/additive naming convention |
+| `0x2000` | **exactly** the `*_shinemap` textures - `SL_stripwindows_shinemap`, `rf_dome2_strip_shinemap`, `StripWindows_shinemap` | the extra pass, corroborating the same bit's meaning in a batch's `pass_mask` and the second texture index at `+0x08` |
+
+The `0x2000` correlation is the useful one: a bit whose name was guessed from
+`pass_mask` turns out to select precisely the textures whose *artist-given name*
+says they are environment maps. **Confidence 75** - two independent namings
+agreeing, with no code read behind it. `second_texture` is nonetheless 0 on
+every `07_Track` material, so the pass is not exercised there and the renderer
+does not implement it.
 
 ### Ship lights: one shared texture, not a mesh-naming convention
 
@@ -857,14 +906,80 @@ specifically - lower than the mechanism itself, and worth a proper capture of
 the white light if this is revisited.
 
 Track `Mesh` nodes carry no name at all (confirmed on `16_Track\track.vex`
-with `--nodes --class 0x125`: every entry's name column is blank) and, checked
-directly, none of their `Texture` nodes resolve to `colours_flashing_GLOW.tga`
-either - so this heuristic cannot tag any of the default track's geometry as
-blinking. The `07_Pulse_light_BLEND_GLOW` texture seen on `07_Track` is a
-distinct asset and unrelated to this one; a track that *does* reuse
-`colours_flashing_GLOW.tga` for a trackside light would correctly start
-blinking under this same signal, which would be the mechanism working as
-intended rather than a regression.
+with `--nodes --class 0x125`: every entry's name column is blank), and no track
+references `colours_flashing_GLOW.tga` - re-verified by extracting every
+`Texture` node's runtime path on all 12 circuits, not just the default one. It
+stays a ships-only asset. The `07_Pulse_light_BLEND_GLOW` texture seen on
+`07_Track` is a distinct asset.
+
+### Tracks animate too, through the same mechanism and different textures
+
+**The reasoning that first produced the paragraph above was wrong even though
+its conclusion was right**, and the error is worth recording because it hid a
+whole class of content. The check had been made against `Node::name`, which is
+`None` for *every* track texture (see [Embedded textures](#embedded-textures)):
+it could not have found a match whatever the track referenced. "No track uses
+this texture" and "the parser cannot read any track texture's name" produce the
+same empty result, and only the second was true of the tooling.
+
+Reading `+0x38` instead makes track textures matchable, and several are built
+the same way as the blink palette. The discriminator is geometric, measured per
+draw call by `crates/render/tests/animated_uv_ground_truth.rs`:
+
+| Texture | Circuits | Narrowest draw |
+| --- | --- | ---: |
+| `col_display7_GLOW.tga` | **all 12** | **0.00** of 8 rows |
+| `col_display7_BLEND_GLOW.tga` | 16 | 0.19 of 8 |
+| `07_Pulse_light_BLEND_GLOW.TGA` | 07 | 0.00 of 32 |
+| `rf_cyclegrad_GLOW.tga` | 13 | 0.25 of 64 |
+| `rf_cyclegrad2_GLOW.tga` | 13 | 1.50 of 64 |
+| `rf_cyclegrad3_GLOW.tga` | 13 | 0.50 of 16 |
+| `SL_BlueStrip_GLOW.tga` | 10 | 0.45 of 4 |
+| `SL_Purplestrip_GLOW.tga` | 10 | 0.00 of 64 |
+
+against the static sponsor art a naive `_GLOW`/`_ADD` rule would have swept up,
+which is painted by quads spanning the **whole** texture: `hub_banner_GLOW`
+65.00 of 128, `col_banners2_ADD` 31.94 of 32, `banner2` 128.00 of 128,
+`tunnelanim_sb` 32.00 of 32 despite its name, `flicker1nonalpha_GLOW` 122.62 of
+32, `Plasma_scroll_ADD_GLOW` 64.00 of 64. **The two groups do not overlap: every
+entry is at or under 1.5 rows and every exclusion is at or above 31.9.**
+
+### Trackside advertising is static, and that is measured on both axes
+
+The rows above only rule out a filmstrip stepping through *rows*. One asset
+looks like the horizontal case - **`FEISAR2anim.tga`**, 256x32 in 8 distinct
+32x32 blocks, on sponsor art, with `anim` in the artists' own name - and its
+shape cannot settle it, because `piranha_banner_ADD_GLOW.tga` is the same 256x32
+with the same 8 blocks and is unambiguously a static banner.
+
+Two measurements settle it. Every hoarding, banner and logo is painted by quads
+spanning essentially its full **width**: `piranha_banner_ADD_GLOW` 254.00 of 256,
+`hub_banner_GLOW` 128.00 of 128, `Moa_logo_GLOW` 128.00 of 128,
+`WES_FEISAR_BANNER_A` 63.50 of 64, `Lazerfence_ADD_GLOW` 64.00 of 64,
+`Plasma_scroll_ADD_GLOW` 63.75 of 64. And `FEISAR2anim.tga` is **referenced by
+zero materials** on all four circuits that embed it (`03`, `04`, `13`, `14`), so
+it is never drawn - the same shape as `flicker1/2nonalpha_GLOW`.
+
+So the billboards' contents render and do not move, on either axis. This is also
+why the renderer carries a scalar V rate per vertex rather than a `u`/`v` pair:
+nothing on the disc is authored to scroll in U.
+
+A narrow band is evidence for *which* textures, not a runtime rule. The engine
+scrolls a shared texture globally and any geometry sampling it inherits the
+animation whatever its V span - Assegai's and Piranha's own blink quads span 8.1
+and 9.6 of 16 rows and animate regardless - so gating at runtime on a narrow
+band would switch those two ships off.
+
+**Confidence 65** for the track surfaces, deliberately below 70: the geometry
+and the banded texture content are real measurements, but nothing has confirmed
+that the original animates these particular surfaces, and the rates are reused
+from the blink light rather than recovered. Behind `[graphics]
+animated_textures`, which exists so a capture can settle it.
+
+Two readings are ruled out rather than untested. There is **no authored scroll
+rate**: material `+0x0c..0x14` is zero on every material of every circuit. And
+the material `flags` word is **not** an animation switch: the static
+`hub_banner_GLOW` and the banded `flicker1nonalpha_GLOW` both carry `0x91`.
 
 ## Path templates
 
@@ -963,3 +1078,13 @@ Applied, from
 `.dat`, `.svml` (a markup format under `Data\SVML\`), `.tga` (under
 `Data\Tex\caustics\`), and a `.COLLISIONS` token at `0x08a886e0` whose purpose
 is unknown.
+
+## History
+
+- **2026-07-30** - "none of their `Texture` nodes resolve to
+  `colours_flashing_GLOW.tga`" was reached from a parser that read texture names
+  only out of the node header, where a track's are absent. The conclusion held
+  on re-checking against the runtime path at `+0x38`, but the evidence for it did
+  not, and the same gap had hidden every other animated track texture. No score
+  changed; the reasoning was replaced and the `+0x38` field documented as
+  implemented.

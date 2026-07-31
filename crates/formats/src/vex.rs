@@ -751,6 +751,16 @@ fn name_at(data: &[u8], at: usize, header_size: usize) -> Option<String> {
     Some(String::from_utf8_lossy(text).into_owned())
 }
 
+/// Reads a NUL-terminated string out of a payload, at a fixed offset.
+fn cstr_at(payload: &[u8], at: usize) -> Option<String> {
+    let bytes = payload.get(at..)?;
+    let text = bytes.split(|&b| b == 0).next()?;
+    if text.is_empty() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(text).into_owned())
+}
+
 /// Walks the node tree, depth-first.
 ///
 /// Stops at the first structurally impossible node rather than erroring, since
@@ -826,7 +836,21 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
 #[derive(Debug, Clone)]
 pub struct EmbeddedTexture {
     /// Original asset path, from the node name.
+    ///
+    /// This is the **authoring** path on the artists' machine, e.g.
+    /// `Z:/WipeoutPSP/X2/Data/Ships/Feisar/Textures/engine_general.tga`, and it
+    /// is only present when the node header is long enough to carry a name.
+    /// Track `Texture` nodes have a 32-byte header with the name field zeroed,
+    /// so on a track this is `None` for every texture and
+    /// [`asset_path`](Self::asset_path) is the only name available.
     pub name: Option<String>,
+    /// Runtime asset path, from payload `+0x38`, e.g.
+    /// `Data\Ships\Feisar\Textures\engine_general.tga`.
+    ///
+    /// Present on ships *and* tracks, which is what makes it the field to match
+    /// a texture by. Backslash-separated and in the game's own spelling, so it
+    /// is also what [`crate::wad::hash_name`] would take.
+    pub asset_path: Option<String>,
     /// Width in pixels.
     pub width: u16,
     /// Height in pixels.
@@ -967,6 +991,22 @@ pub fn world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
 /// Dropping them instead would silently renumber every later texture, which is
 /// not a decoding error that shows up as an error: it shows up as a model wearing
 /// the wrong skins. Use `.iter().flatten()` for a plain list.
+/// Offset of the runtime asset path inside a `Texture` node's payload.
+///
+/// The two pointer fields at `+0x10` and `+0x14` are zero at rest and patched at
+/// load, so the path is the last field of the header that survives on disc.
+const TEXTURE_ASSET_PATH: usize = 0x38;
+
+/// The runtime asset path out of a `Texture` node's payload.
+///
+/// Separate from [`textures`] because it needs only the node, not the embedded
+/// pixel block, so it also answers "what does this file reference" on a PS2
+/// scene whose texture block is empty.
+#[must_use]
+pub fn texture_asset_path(payload: &[u8]) -> Option<String> {
+    cstr_at(payload, TEXTURE_ASSET_PATH)
+}
+
 pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     let block = FILE_HEADER_LEN + tree_len(data)?;
     let mut at = block;
@@ -1042,6 +1082,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
 
         out.push(Some(EmbeddedTexture {
             name: node.name,
+            asset_path: cstr_at(p, TEXTURE_ASSET_PATH),
             width,
             height,
             bits_per_pixel,
@@ -1055,16 +1096,48 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     Ok(out)
 }
 
+/// One material of a mesh, from the stride-`0x14` array at `+0x30`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Material {
+    /// The `u16` at `+0x00`: render state, not an animation switch.
+    ///
+    /// Surveyed across every material of all 12 PSP circuits. It is richly
+    /// varied (19 distinct values on `07_Track` alone) and correlates with the
+    /// artists' own naming, but it does **not** separate animated surfaces from
+    /// static ones - `flicker1nonalpha_GLOW` and the plainly static
+    /// `hub_banner_GLOW` both carry `0x91`. Two bits are legible:
+    ///
+    /// - `0x0080` accompanies the `_GLOW`/additive naming convention.
+    /// - `0x2000` lands on exactly the `*_shinemap` textures, which is
+    ///   independent corroboration of the "extra pass" reading of the same bit
+    ///   in a batch's `pass_mask`, and of [`Material::second_texture`].
+    ///
+    /// Nothing consumes it yet. Recorded so the census is reproducible from the
+    /// parser rather than from a one-off script. See `docs/formats/vex.md`.
+    pub flags: u16,
+    /// The `u32` at `+0x04`: an index into the model's texture array, from
+    /// [`textures`].
+    pub texture: u32,
+    /// The `u32` at `+0x08`: the second texture of the `0x2000` extra pass.
+    ///
+    /// Zero on every material of `07_Track`, so the pass it belongs to is not
+    /// exercised there and this stays unread by the renderer.
+    pub second_texture: u32,
+}
+
 /// Materials of one mesh payload.
 ///
-/// Stride 0x14, starting at `+0x30`. The `u32` at `+0x04` indexes the model's
-/// texture array, from [`textures`].
+/// Stride 0x14, starting at `+0x30`.
 ///
 /// Positional for the same reason as [`textures`]: a batch selects a material by
 /// index, so a material that runs past the payload has to come back as `None`
 /// rather than shorten the list and renumber the ones after it.
+///
+/// The remaining `+0x0c..0x14` is **proven zero** on every material of every
+/// PSP circuit, which is what rules out an authored per-surface UV scroll rate
+/// and forces texture-keyed animation instead.
 #[must_use]
-pub fn mesh_materials(payload: &[u8]) -> Vec<Option<u32>> {
+pub fn mesh_materials(payload: &[u8]) -> Vec<Option<Material>> {
     if payload.len() < 0x30 {
         return Vec::new();
     }
@@ -1072,7 +1145,11 @@ pub fn mesh_materials(payload: &[u8]) -> Vec<Option<u32>> {
     (0..count)
         .map(|i| {
             let at = 0x30 + i * 0x14;
-            (at + 8 <= payload.len()).then(|| u32_at(payload, at + 4))
+            (at + 0x0c <= payload.len()).then(|| Material {
+                flags: u16_at(payload, at),
+                texture: u32_at(payload, at + 4),
+                second_texture: u32_at(payload, at + 8),
+            })
         })
         .collect()
 }
@@ -1773,6 +1850,52 @@ mod tests {
         assert_eq!(first.palette[0], [0x11, 0, 0, 255]);
     }
 
+    /// A track's `Texture` nodes use the short 32-byte header with the name
+    /// field zeroed, so the node name is `None` and the only name the texture
+    /// has is the runtime asset path at payload `+0x38`. Reading the header
+    /// alone is why every track texture used to come back unnamed, and why the
+    /// blink-light heuristic could never match track geometry.
+    #[test]
+    fn a_texture_names_itself_from_the_payload_when_the_header_does_not() {
+        let path = br"Data\Environments\07_Track\Textures\07_Pulse_light_BLEND_GLOW.TGA";
+        // 0x38 for the fixed fields, the path, and its NUL.
+        let mut payload = vec![0u8; 0x38 + path.len() + 1];
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // width
+        payload[2..4].copy_from_slice(&4u16.to_le_bytes()); // height
+        payload[4] = 8; // bits per pixel
+        payload[5] = 1; // mip count
+        payload[8..12].copy_from_slice(&4u32.to_le_bytes()); // clut_size
+        payload[12..16].copy_from_slice(&4u32.to_le_bytes()); // texel_size
+        payload[0x38..0x38 + path.len()].copy_from_slice(path);
+
+        let mut tree: Vec<u8> = Vec::new();
+        tree.extend(CLASS_TEXTURE.to_le_bytes());
+        // The short header: no name area at all, which is the whole point.
+        tree.extend(0x10u16.to_le_bytes());
+        tree.extend(0u16.to_le_bytes());
+        tree.extend((payload.len() as u32).to_le_bytes());
+        tree.extend(0u32.to_le_bytes()); // no children
+        tree.extend(&payload);
+
+        let mut data = Vec::new();
+        data.extend(6u32.to_le_bytes());
+        data.extend((tree.len() as u32).to_le_bytes());
+        data.extend(8u32.to_le_bytes()); // clut + texels
+        data.extend(MAGIC);
+        data.extend(tree);
+        data.extend([0x44u8, 0, 0, 255]); // one palette entry
+        data.extend([0u8; 4]); // texels
+
+        let slots = textures(&data).expect("textures");
+        let texture = slots[0].as_ref().expect("a decodable texture");
+        assert_eq!(texture.name, None, "the header carries no name");
+        assert_eq!(
+            texture.asset_path.as_deref(),
+            Some(std::str::from_utf8(path).expect("ascii")),
+            "the payload does"
+        );
+    }
+
     /// PS2's `.vex` scenes declare a zero-length texture block: `Texture`
     /// nodes carry real dimensions and non-zero `clut_size`/`texel_size`
     /// fields, but no palette or texel bytes follow the tree at all. Reading
@@ -1823,7 +1946,37 @@ mod tests {
         payload[0x30 + 4..0x30 + 8].copy_from_slice(&7u32.to_le_bytes());
 
         let materials = mesh_materials(&payload);
-        assert_eq!(materials, vec![Some(7), None]);
+        assert_eq!(
+            materials,
+            vec![
+                Some(Material {
+                    flags: 0,
+                    texture: 7,
+                    second_texture: 0,
+                }),
+                None,
+            ]
+        );
+    }
+
+    /// All three fields come out of their documented offsets, and the tail the
+    /// entry does not use is not mistaken for one of them.
+    #[test]
+    fn a_material_reads_flags_and_both_texture_indices() {
+        let mut payload = vec![0u8; 0x30 + 0x14];
+        payload[2..4].copy_from_slice(&1u16.to_le_bytes());
+        payload[0x30..0x30 + 2].copy_from_slice(&0x2001u16.to_le_bytes());
+        payload[0x30 + 4..0x30 + 8].copy_from_slice(&12u32.to_le_bytes());
+        payload[0x30 + 8..0x30 + 12].copy_from_slice(&34u32.to_le_bytes());
+
+        assert_eq!(
+            mesh_materials(&payload),
+            vec![Some(Material {
+                flags: 0x2001,
+                texture: 12,
+                second_texture: 34,
+            })]
+        );
     }
 
     /// Every combination the game's stride calculator can reach.

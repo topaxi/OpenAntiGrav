@@ -19,7 +19,10 @@
 - Ship rendering, including team liveries - **done** for the eight teams whose
   `Ship.vex` resolves by name
 - Scenery **animation**, authored as `Anim Transform` `0x3c0` and
-  `animationTrigger` `0x3dc` - nothing reads either yet
+  `animationTrigger` `0x3dc` - nothing reads either yet. Distinct from
+  **texture** animation, which is **done** for eight trackside textures: a
+  V-axis scroll over a banded texture, the ship blink lights' mechanism
+  generalised. See [`vex.md`](../formats/vex.md), "Tracks animate too"
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which

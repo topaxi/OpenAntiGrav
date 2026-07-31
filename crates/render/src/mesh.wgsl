@@ -8,14 +8,15 @@
 struct Uniforms {
     view_projection: mat4x4<f32>,
     model: mat4x4<f32>,
-    // Blink-light palette scroll, in the texture's own V (row) units - see
-    // `oag_render::mesh::GpuVertex::glow`. Only vertices with `glow == 1.0`
-    // are affected; every other surface ignores this value.
+    // Phase of the global texture-animation clock, 0.0 to 1.0 over
+    // `ANIM_PERIOD_TICKS`. Scaled per vertex by `v_cycles`, so a surface with
+    // `v_cycles == 0.0` - which is nearly all of them - ignores it entirely.
+    // See `oag_render::mesh::GpuVertex::v_cycles`.
     //
     // Three trailing f32 fields rather than a vec3: WGSL aligns vec3 to 16
     // bytes, which would silently insert padding this struct's Rust mirror
     // (a flat, tightly packed repr(C)) does not have.
-    glow_scroll: f32,
+    anim_phase: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
@@ -31,7 +32,7 @@ struct VertexInput {
     @location(2) colour: vec4<f32>,
     @location(3) texcoord: vec2<f32>,
     @location(4) lit: f32,
-    @location(5) glow: f32,
+    @location(5) v_cycles: f32,
 };
 
 struct VertexOutput {
@@ -58,7 +59,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // reads as backwards - a fade-then-flash instead of a flash-then-fade -
     // while red's near-symmetric curve looks the same either way. See
     // `docs/formats/vex.md`.
-    out.texcoord = in.texcoord - vec2<f32>(0.0, uniforms.glow_scroll * in.glow);
+    out.texcoord = in.texcoord - vec2<f32>(0.0, uniforms.anim_phase * in.v_cycles);
     out.lit = in.lit;
     return out;
 }

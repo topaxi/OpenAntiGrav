@@ -189,7 +189,17 @@ fn report_nodes(data: &[u8], label: &str, only: Option<u32>) -> Result<()> {
         // meaning entirely.
         let indent = "  ".repeat(node.depth.min(16));
         let class = vex::class_name(node.class_id).unwrap_or("?");
-        let name = node.name.as_deref().unwrap_or("");
+        // A `Texture` node keeps its runtime path in the payload, and on a track
+        // that is the only name it has: the node header is the short 32-byte
+        // form with the name field zeroed. Falling back to it here is what makes
+        // a track's texture list readable at all.
+        let payload_name = (node.class_id == vex::CLASS_TEXTURE)
+            .then(|| vex::texture_asset_path(&data[node.payload()]))
+            .flatten();
+        let name = payload_name
+            .as_deref()
+            .or(node.name.as_deref())
+            .unwrap_or("");
         println!(
             "  {indent}0x{:03x} {class:<24} {name:<32} \
              {} byte(s), {} child(ren), parent {:?}",
