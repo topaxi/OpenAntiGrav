@@ -138,6 +138,7 @@ pub struct Fsr1 {
 
 #[derive(Debug)]
 struct Target {
+    texture: wgpu::Texture,
     view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
 }
@@ -266,6 +267,12 @@ impl Fsr1 {
         self.sharpened.as_ref().map(|target| &target.view)
     }
 
+    /// The texture behind [`output`](Self::output), for a readback.
+    #[must_use]
+    pub fn output_texture(&self) -> Option<&wgpu::Texture> {
+        self.sharpened.as_ref().map(|target| &target.texture)
+    }
+
     /// Runs EASU and then RCAS, resizing the intermediates if the output moved.
     pub fn render(
         &mut self,
@@ -325,12 +332,21 @@ impl Fsr1 {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: self.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            // `COPY_SRC` so a test - and, later, a capture - can read the
+            // result back. Neither pass ever copies, so this costs nothing but
+            // the flag.
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let bind_group = self.bind_group(device, &view);
-        Target { view, bind_group }
+        Target {
+            texture,
+            view,
+            bind_group,
+        }
     }
 
     fn bind_group(&self, device: &wgpu::Device, view: &wgpu::TextureView) -> wgpu::BindGroup {
@@ -494,6 +510,146 @@ mod tests {
             .expect("draining the queue");
 
         assert!(fsr.output().is_some(), "the sharpened target must exist");
+    }
+
+    /// Upscales a known picture and reads the result back.
+    ///
+    /// A pipeline that builds and draws proves only that nothing was rejected;
+    /// it would pass just as happily on a shader that wrote black everywhere,
+    /// which is the failure a botched gather ordering or a wrong constant
+    /// actually produces. This asserts on the picture.
+    ///
+    /// The input is a hard vertical edge - black left half, white right half -
+    /// which is the case an edge-adaptive resampler exists for, and the one
+    /// where it must visibly differ from a bilinear stretch.
+    ///
+    /// **Skips when there is no adapter.** Run it locally on real hardware.
+    #[test]
+    fn upscaling_a_hard_edge_keeps_the_edge_and_the_two_flat_sides() {
+        const IN: (u32, u32) = (64, 64);
+        const OUT: (u32, u32) = (128, 128);
+
+        let instance = wgpu::Instance::default();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                .expect("requesting the device");
+
+        // `Rgba8Unorm` throughout: this is a test about resampling arithmetic,
+        // and an sRGB round trip would put a transfer function between what is
+        // written and what is asserted for no gain.
+        let format = wgpu::TextureFormat::Rgba8Unorm;
+        let scene = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("edge"),
+            size: wgpu::Extent3d {
+                width: IN.0,
+                height: IN.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let mut pixels = vec![0u8; (IN.0 * IN.1 * 4) as usize];
+        for y in 0..IN.1 {
+            for x in 0..IN.0 {
+                let value = if x < IN.0 / 2 { 0 } else { 255 };
+                let at = ((y * IN.0 + x) * 4) as usize;
+                pixels[at..at + 4].copy_from_slice(&[value, value, value, 255]);
+            }
+        }
+        queue.write_texture(
+            scene.as_image_copy(),
+            &pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(IN.0 * 4),
+                rows_per_image: Some(IN.1),
+            },
+            scene.size(),
+        );
+        let source = scene.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut fsr = Fsr1::new(&device, format).expect("building the pipelines");
+        let mut encoder = device.create_command_encoder(&Default::default());
+        fsr.render(
+            &device,
+            &queue,
+            &mut encoder,
+            Frame {
+                source: &source,
+                input: IN,
+                output: OUT,
+                sharpness: Sharpness::DEFAULT,
+            },
+        );
+
+        let unpadded = (OUT.0 * 4) as usize;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+        let padded = unpadded.div_ceil(align) * align;
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("readback"),
+            size: (padded * OUT.1 as usize) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            fsr.output_texture().expect("an output").as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded as u32),
+                    rows_per_image: Some(OUT.1),
+                },
+            },
+            wgpu::Extent3d {
+                width: OUT.0,
+                height: OUT.1,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.submit(Some(encoder.finish()));
+        readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("draining the queue");
+        let mapped = readback.slice(..).get_mapped_range().expect("mapping");
+
+        let row = OUT.1 / 2;
+        let at = |x: u32| mapped[padded * row as usize + (x * 4) as usize];
+
+        // The flat sides survive. An upscaler that got its gather ordering or
+        // its constants wrong smears or shifts the edge, and either shows up
+        // here as a mid-grey well away from the seam.
+        assert_eq!(at(4), 0, "the black side is not black");
+        assert_eq!(at(OUT.0 - 5), 255, "the white side is not white");
+
+        // The edge lands where the geometry says it should - halfway - and is
+        // genuinely sharp: at twice the scale a bilinear stretch spreads a hard
+        // edge over about two output texels, and EASU plus RCAS must not do
+        // worse than that. Counting the texels that are neither side tests the
+        // thing the algorithm is for.
+        let middle = (0..OUT.0).filter(|&x| at(x) > 8 && at(x) < 247).count();
+        assert!(
+            middle <= 2,
+            "the edge spread over {middle} texels, which is not an upscale of a hard edge"
+        );
+        let first_white = (0..OUT.0).find(|&x| at(x) > 247).expect("a white side");
+        assert!(
+            first_white.abs_diff(OUT.0 / 2) <= 2,
+            "the edge landed at {first_white}, not near {}",
+            OUT.0 / 2
+        );
+
+        drop(mapped);
+        readback.unmap();
     }
 
     #[test]

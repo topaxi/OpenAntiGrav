@@ -51,15 +51,25 @@ use crate::display::{Brightness, Gamma, Scale};
 struct Grade {
     brightness: f32,
     exponent: f32,
-    padding: [f32; 2],
+    /// Whether the blit's source holds sRGB-encoded values the shader has to
+    /// decode itself, as `1.0` or `0.0`.
+    ///
+    /// Zero when the source is the offscreen target, which is bound through an
+    /// sRGB view and so arrives already decoded by the sampler. One when it is
+    /// an upscaler's output, which is deliberately *not* sRGB-formatted because
+    /// the upscaler works in perceptual space and a decode on every internal
+    /// read would be both wrong and paid twice. See `oag_render::post`.
+    decode: f32,
+    padding: f32,
 }
 
 impl Grade {
-    fn new(brightness: Brightness, gamma: Gamma) -> Self {
+    fn new(brightness: Brightness, gamma: Gamma, decode: bool) -> Self {
         Self {
             brightness: brightness.factor(),
             exponent: gamma.exponent(),
-            padding: [0.0; 2],
+            decode: f32::from(u8::from(decode)),
+            padding: 0.0,
         }
     }
 }
@@ -71,6 +81,14 @@ pub struct Framebuffer {
     sampler: wgpu::Sampler,
     texture: wgpu::Texture,
     view: wgpu::TextureView,
+    /// The same texels as [`Framebuffer::view`], seen through a non-sRGB view.
+    ///
+    /// Every stage draws through `view` and so keeps encoding on write exactly
+    /// as it would onto a window. An upscaler reads through this one instead,
+    /// which returns those encoded bytes without the hardware's decode -
+    /// perceptual space, which is what FSR 1's edge detection wants. See
+    /// [`oag_render::post`].
+    perceptual: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
     /// The grade the shader reads, and the copy of it that says whether a write
     /// is needed. Uploaded only when it changes: this is two floats a player
@@ -176,7 +194,7 @@ impl Framebuffer {
         // if the settings say otherwise: an untouched picture is what a fresh
         // install draws. Filled at creation rather than through the queue,
         // which keeps building a framebuffer a device-only operation.
-        let graded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL);
+        let graded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
         let grade = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("upscale grade"),
             size: std::mem::size_of::<Grade>() as u64,
@@ -190,13 +208,15 @@ impl Framebuffer {
             .copy_from_slice(bytemuck::bytes_of(&graded));
         grade.unmap();
 
-        let (texture, view, bind_group) = target(device, &layout, &sampler, &grade, format, size);
+        let (texture, view, perceptual, bind_group) =
+            target(device, &layout, &sampler, &grade, format, size);
         Ok(Self {
             pipeline,
             layout,
             sampler,
             texture,
             view,
+            perceptual,
             bind_group,
             grade,
             graded,
@@ -210,8 +230,14 @@ impl Framebuffer {
     /// Written only when it changes, which is when a player moves one of two
     /// menu rows. Cheap enough to call every frame, which is what the caller
     /// does - it has no other way to know the settings moved.
-    pub fn set_grade(&mut self, queue: &wgpu::Queue, brightness: Brightness, gamma: Gamma) {
-        let wanted = Grade::new(brightness, gamma);
+    pub fn set_grade(
+        &mut self,
+        queue: &wgpu::Queue,
+        brightness: Brightness,
+        gamma: Gamma,
+        decode: bool,
+    ) {
+        let wanted = Grade::new(brightness, gamma, decode);
         if wanted == self.graded {
             return;
         }
@@ -230,7 +256,7 @@ impl Framebuffer {
         if size == self.size {
             return false;
         }
-        let (texture, view, bind_group) = target(
+        let (texture, view, perceptual, bind_group) = target(
             device,
             &self.layout,
             &self.sampler,
@@ -240,6 +266,7 @@ impl Framebuffer {
         );
         self.texture = texture;
         self.view = view;
+        self.perceptual = perceptual;
         self.bind_group = bind_group;
         self.size = size;
         true
@@ -262,11 +289,29 @@ impl Framebuffer {
     /// The clear is what draws the aspect bars, so it happens here rather than
     /// in each stage: a stage now draws into a texture that *is* the game's
     /// rectangle and has no bars in it at all.
+    /// A blit source that is not the offscreen target - an upscaler's output.
+    ///
+    /// Built per frame rather than cached: an upscaler rebuilds its own targets
+    /// whenever the presentation rectangle moves, so a cached bind group would
+    /// need invalidating on a condition this type cannot see, and a bind group
+    /// is a cheap thing to make next to the two passes that produced the view.
+    #[must_use]
+    pub fn source(&self, device: &wgpu::Device, view: &wgpu::TextureView) -> wgpu::BindGroup {
+        bind(device, &self.layout, &self.sampler, &self.grade, view)
+    }
+
+    /// The non-sRGB view of the target, for an upscaler to read.
+    #[must_use]
+    pub fn perceptual(&self) -> &wgpu::TextureView {
+        &self.perceptual
+    }
+
     pub fn present(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         surface: &wgpu::TextureView,
         rect: (f32, f32, f32, f32),
+        source: Option<&wgpu::BindGroup>,
     ) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("upscale"),
@@ -286,7 +331,7 @@ impl Framebuffer {
         });
         pass.set_viewport(rect.0, rect.1, rect.2, rect.3, 0.0, 1.0);
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, Some(&self.bind_group), &[]);
+        pass.set_bind_group(0, Some(source.unwrap_or(&self.bind_group)), &[]);
         pass.draw(0..3, 0..1);
     }
 }
@@ -298,7 +343,19 @@ fn target(
     grade: &wgpu::Buffer,
     format: wgpu::TextureFormat,
     size: (u32, u32),
-) -> (wgpu::Texture, wgpu::TextureView, wgpu::BindGroup) {
+) -> (
+    wgpu::Texture,
+    wgpu::TextureView,
+    wgpu::TextureView,
+    wgpu::BindGroup,
+) {
+    // The non-sRGB twin is declared here so an upscaler can take a view in it
+    // later. Declaring a view format costs nothing when nobody asks for one,
+    // and on some backends it is the difference between a texture that can be
+    // reinterpreted at all and one that cannot - which is not a thing that can
+    // be retrofitted to an already-created texture.
+    let twin = format.remove_srgb_suffix();
+    let view_formats: &[wgpu::TextureFormat] = if twin == format { &[] } else { &[twin] };
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("upscale target"),
         size: wgpu::Extent3d {
@@ -311,16 +368,33 @@ fn target(
         dimension: wgpu::TextureDimension::D2,
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
+        view_formats,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    let perceptual = texture.create_view(&wgpu::TextureViewDescriptor {
+        label: Some("upscale target (perceptual)"),
+        format: Some(twin),
+        ..Default::default()
+    });
+    let bind_group = bind(device, layout, sampler, grade, &view);
+    (texture, view, perceptual, bind_group)
+}
+
+/// The blit's one bind group: a source view, the sampler and the grade.
+fn bind(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    grade: &wgpu::Buffer,
+    view: &wgpu::TextureView,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("upscale"),
         layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&view),
+                resource: wgpu::BindingResource::TextureView(view),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -331,8 +405,7 @@ fn target(
                 resource: grade.as_entire_binding(),
             },
         ],
-    });
-    (texture, view, bind_group)
+    })
 }
 
 /// How big the offscreen target should be for a viewport rectangle and a scale.
@@ -395,7 +468,7 @@ mod tests {
 
         let format = wgpu::TextureFormat::Rgba8Unorm;
         let mut framebuffer = Framebuffer::new(&device, format, (1, 1)).expect("the pipeline");
-        framebuffer.set_grade(&queue, brightness, gamma);
+        framebuffer.set_grade(&queue, brightness, gamma, false);
 
         let surface = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("grade readback"),
@@ -443,7 +516,7 @@ mod tests {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        framebuffer.present(&mut encoder, &surface_view, (0.0, 0.0, 1.0, 1.0));
+        framebuffer.present(&mut encoder, &surface_view, (0.0, 0.0, 1.0, 1.0), None);
         encoder.copy_texture_to_buffer(
             surface.as_image_copy(),
             wgpu::TexelCopyBufferInfo {
@@ -521,13 +594,30 @@ mod tests {
     #[test]
     fn the_neutral_grade_changes_nothing_and_fills_a_uniform_binding() {
         assert_eq!(std::mem::size_of::<Grade>(), 16);
-        let neutral = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL);
+        let neutral = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
         assert_eq!(neutral.brightness, 1.0);
         assert_eq!(neutral.exponent, 1.0);
-        assert_eq!(neutral.padding, [0.0; 2]);
+        assert_eq!(neutral.padding, 0.0);
         // And it is what `Default` gives, which is what an untouched settings
         // file loads as.
-        assert_eq!(Grade::new(Brightness::default(), Gamma::default()), neutral);
+        assert_eq!(
+            Grade::new(Brightness::default(), Gamma::default(), false),
+            neutral
+        );
+    }
+
+    /// The decode flag is what stops an upscaled frame being graded in the
+    /// wrong space, and it is a float in the uniform because WGSL has no
+    /// `bool` it can read from a buffer. Zero and one, not "anything truthy".
+    #[test]
+    fn the_decode_flag_is_zero_or_one_and_nothing_else() {
+        let plain = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
+        let decoded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, true);
+        assert_eq!(plain.decode, 0.0);
+        assert_eq!(decoded.decode, 1.0);
+        // And it is part of what `set_grade` compares, so flipping the source
+        // rewrites the uniform even when neither menu row moved.
+        assert_ne!(plain, decoded);
     }
 
     #[test]

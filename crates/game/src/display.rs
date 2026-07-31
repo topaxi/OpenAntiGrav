@@ -409,6 +409,77 @@ macro_rules! percentage {
     };
 }
 
+/// Which resampler carries the offscreen frame onto the surface.
+///
+/// This is the companion to [`Scale`], and only that pairing makes it mean
+/// anything: at 100 % there is nothing to upscale and the choice is between a
+/// blit and a sharpen. Below 100 % it is the whole point of the render-scale
+/// row - how much of what the lower resolution threw away can be argued back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum Upscaler {
+    /// One bilinear tap, which is what this always did.
+    ///
+    /// **The default**, and it stays the default until a screenshot comparison
+    /// says otherwise - the same discipline the animated-texture setting got.
+    /// A resampler that is better on paper and worse on this game's art would
+    /// be a regression shipped on reasoning, and the art here is 480x272-era
+    /// paletted raster with hard edges, which is not what FSR was tuned on.
+    #[default]
+    Bilinear,
+    /// AMD FidelityFX Super Resolution 1: EASU, then RCAS.
+    ///
+    /// Spatial, so it costs two fullscreen passes and needs nothing from the
+    /// renderer - no motion vectors, no jitter, no history. See
+    /// [`oag_render::post::fsr1`].
+    Fsr1,
+}
+
+impl Upscaler {
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Bilinear => "bilinear",
+            Self::Fsr1 => "fsr1",
+        }
+    }
+
+    /// Every choice, for the menus and for error messages.
+    pub const ALL: [Self; 2] = [Self::Bilinear, Self::Fsr1];
+}
+
+impl std::str::FromStr for Upscaler {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| format!("{text:?} is not an upscaler; try bilinear or fsr1"))
+    }
+}
+
+impl std::fmt::Display for Upscaler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl TryFrom<String> for Upscaler {
+    type Error = String;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        text.parse()
+    }
+}
+
+impl From<Upscaler> for String {
+    fn from(mode: Upscaler) -> Self {
+        mode.to_string()
+    }
+}
+
 /// How much of the viewport rectangle the game is actually rendered at, as a
 /// percentage.
 ///

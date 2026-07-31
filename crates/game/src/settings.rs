@@ -208,6 +208,11 @@ fn default_frustum_culling() -> bool {
     true
 }
 
+/// See [`Graphics::upscale_sharpness`]: upstream FidelityFX's own default.
+fn default_upscale_sharpness() -> f32 {
+    0.2
+}
+
 /// See [`Graphics::pvs_culling`]: on, having cleared the screenshot comparison.
 fn default_pvs_culling() -> bool {
     true
@@ -224,6 +229,21 @@ pub struct Graphics {
     /// [`crate::display::Scale`].
     #[serde(default)]
     pub render_scale: crate::display::Scale,
+    /// Which resampler carries the frame onto the surface: `bilinear` or
+    /// `fsr1`.
+    ///
+    /// Defaults to `bilinear`, which is what this always did. FSR 1 costs two
+    /// fullscreen passes and is a clear win on photographic art at a low render
+    /// scale; whether it is one on this game's hard-edged paletted art is a
+    /// screenshot comparison nobody has published yet, so it does not become
+    /// the default on the strength of the argument. See
+    /// [`crate::display::Upscaler`].
+    #[serde(default)]
+    pub upscaler: crate::display::Upscaler,
+    /// How hard FSR 1's RCAS pass sharpens, in stops: 0 is maximum and each
+    /// whole step halves it. Ignored unless `upscaler` is `fsr1`.
+    #[serde(default = "default_upscale_sharpness")]
+    pub upscale_sharpness: f32,
     /// Anisotropic filtering level for track and ship textures: `off`, `2x`,
     /// `4x`, `8x` or `16x`.
     ///
@@ -350,6 +370,8 @@ impl Default for Graphics {
     fn default() -> Self {
         Self {
             render_scale: crate::display::Scale::default(),
+            upscaler: crate::display::Upscaler::default(),
+            upscale_sharpness: default_upscale_sharpness(),
             anisotropy: Anisotropy::default(),
             fov: crate::display::Fov::default(),
             perf_overlay: crate::perf::Overlay::default(),

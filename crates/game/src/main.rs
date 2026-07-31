@@ -44,6 +44,7 @@ use oag_game::{
 use oag_input::Controls;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
+use oag_render::post::fsr1;
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -654,6 +655,7 @@ impl App {
         .context("building the performance overlay")?;
 
         Ok(Some(Session {
+            fsr1: None,
             gpu,
             framebuffer,
             stage,
@@ -1383,6 +1385,13 @@ struct Session {
     /// should be is a property of the window and the settings rather than of
     /// what happens to be on screen.
     framebuffer: upscale::Framebuffer,
+    /// FSR 1's two pipelines, built the first frame the setting asks for them.
+    ///
+    /// Lazy because most runs never select it, and the pipelines are two shader
+    /// compilations and two textures that a bilinear blit has no use for. The
+    /// `Result` is kept rather than unwrapped so a shader that will not compile
+    /// reports itself once and leaves the game running on the blit.
+    fsr1: Option<Result<fsr1::Fsr1>>,
     /// Set when a menu asks to quit, read by the event loop.
     quit: bool,
     /// What the menus need, when this run has menus at all.
@@ -1669,14 +1678,6 @@ impl Session {
             }
         }
 
-        // Cheap when nothing moved, which is almost every frame: the blit reads
-        // this and there is no event that says a menu row changed it.
-        self.framebuffer.set_grade(
-            &self.gpu.queue,
-            self.settings.display.brightness,
-            self.settings.display.gamma,
-        );
-
         // Each stage fills the target, and the target *is* the game's
         // rectangle: the bars are the surface the blit does not cover.
         let size = self.framebuffer.size();
@@ -1730,7 +1731,52 @@ impl Session {
             );
         }
 
-        self.framebuffer.present(&mut encoder, &view, rect);
+        // The upscaler resolves the offscreen target up to the rectangle the
+        // blit was going to stretch it into, and the blit then becomes a
+        // one-to-one copy that still owns the grade and the aspect bars. Its
+        // output is perceptual, which is what `upscaling` told the grade.
+        let upscaled = (self.settings.graphics.upscaler == display::Upscaler::Fsr1).then(|| {
+            let fsr = self
+                .fsr1
+                .get_or_insert_with(|| fsr1::Fsr1::new(&self.gpu.device, self.gpu.config.format));
+            let fsr = match fsr {
+                Ok(fsr) => fsr,
+                // A shader that will not compile is a build-time mistake, but
+                // it must not be a crash in a player's frame loop: say so once
+                // and carry on bilinear.
+                Err(why) => {
+                    eprintln!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
+                    return None;
+                }
+            };
+            fsr.render(
+                &self.gpu.device,
+                &self.gpu.queue,
+                &mut encoder,
+                fsr1::Frame {
+                    source: self.framebuffer.perceptual(),
+                    input: size,
+                    output: (rect.2 as u32, rect.3 as u32),
+                    sharpness: fsr1::Sharpness::stops(self.settings.graphics.upscale_sharpness),
+                },
+            );
+            fsr.output()
+                .map(|view| self.framebuffer.source(&self.gpu.device, view))
+        });
+        let upscaled = upscaled.flatten();
+
+        // Written here rather than earlier because the `decode` flag has to
+        // describe the source that is *actually* about to be bound. Asking the
+        // setting instead would grade an ungraded frame wrongly on the one
+        // frame the upscaler failed to build.
+        self.framebuffer.set_grade(
+            &self.gpu.queue,
+            self.settings.display.brightness,
+            self.settings.display.gamma,
+            upscaled.is_some(),
+        );
+        self.framebuffer
+            .present(&mut encoder, &view, rect, upscaled.as_ref());
         self.gpu.queue.submit(Some(encoder.finish()));
         self.gpu.queue.present(frame);
         Ok(())
