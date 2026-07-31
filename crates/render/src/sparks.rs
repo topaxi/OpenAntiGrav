@@ -31,31 +31,30 @@
 //! So this effect is still **authored** for its look - the same tier
 //! [`crate::exhaust`]'s `Trail` is - because the `.pob` asset itself, and
 //! therefore the actual particle count/size/colour/lifetime the original
-//! spawns, remain unrecovered. [`SEVERITY_SCALE`] and [`EJECTION_SCALE`]
-//! stay borrowed rather than replaced by `ShipCollisionFx_Trigger`'s own
-//! `intensity * 2.0 + 0.4` severity formula - not merely because the units
-//! differ, but because a follow-up pass **checked, with real numbers, and
-//! ruled it out**: the severity value is written to the freshly spawned
-//! particle instance's own field (confirmed instance state, not the shared
-//! `.pob` resource - `docs/formats/pob.md`), and a further read
-//! (`FUN_088f4910`) confirms it is consumed as an **unbounded multiplier**
-//! on several derived emission fields, with **no upper clamp anywhere on
-//! this path**. Reproducing `resolve_contact`'s own literal formula
-//! (`docs/ghidra/functions/psp-pulse/contact-response.md`) against this
-//! crate's actual impulse magnitudes shows why that number cannot be ported
-//! as-is: even a barely-perceptible `1` unit/s graze already produces an
-//! impulse of `1.39`, so `intensity * 2.0 + 0.4 = 3.18` - three times past
-//! any `[0, 1]` ceiling - and a realistic `50`-`119` unit/s impact reaches
-//! `69`-`165`. The formula is real and the arithmetic is right; what makes
-//! a `165x` multiplier read as a sensible burst rather than an explosion is
-//! the **base values it multiplies**, which live inside the resolved
-//! `.pob` resource and are still unrecovered. So this is not a units
-//! mismatch to paper over - it is confirmation that the severity number
-//! cannot be used correctly without the resource data it was designed to
-//! scale. The timing constant is different: [`COLLISION_COOLDOWN`] **is**
-//! ported, because it is a pure duration with no resource-dependent base
-//! value to multiply, and directly settles a real behavioural gap (see
-//! below).
+//! spawns, remain unrecovered. But `ShipCollisionFx_Trigger`'s severity
+//! formula, `intensity * 2.0 + 0.4`, **is now ported** ([`SEVERITY_SLOPE`],
+//! [`SEVERITY_FLOOR`]) - correcting a wrong conclusion from earlier the same
+//! session, worth recording because catching it needed a live capture, not
+//! more static reading. That earlier pass read `Ship_DispatchCollisionFx`'s
+//! `intensity` argument as the **raw, unscaled** impulse magnitude, and on
+//! that premise the formula looked unbounded and unusable: this crate's own
+//! `resolve_contact` gives impulses of `1.39`-`165` for realistic speeds, so
+//! `intensity * 2.0 + 0.4` would reach `69`-`165`, nowhere near a sane
+//! range. **The premise was wrong.** A live PPSSPP capture -
+//! `docs/reverse-engineering/ppsspp-debugger.md`'s methodology, breakpointed
+//! on `ShipCollisionFx_Trigger`'s own severity write during a real wall
+//! scrape - read six real `intensity` values (`0.011`-`0.070`, at craft
+//! speeds `21.7`-`112.4` units/s) that are flatly incompatible with an
+//! unscaled, unclamped impulse read. Re-reading `FUN_088418e0` fresh (not
+//! trusting the earlier pass's paraphrase) found the actual line:
+//! `fVar21 = min(|impulse| * 0.0125, 1.0)` - **`intensity` is already
+//! clamped to `[0, 1]` before `Ship_DispatchCollisionFx` ever sees it**, the
+//! same `0.0125` this module's own [`SEVERITY_SCALE`] already borrows. So
+//! `intensity * 2.0 + 0.4` ranges over a sane, bounded `[0.4, 2.4]` - never
+//! unbounded - and the capture's own numbers confirm it landing there.
+//! [`COLLISION_COOLDOWN`] was already ported for the same reason this now
+//! is: both are usable without the still-undecoded `.pob` resource data,
+//! once the actual inputs are read correctly.
 //!
 //! # Two halves, deliberately
 //!
@@ -147,15 +146,26 @@ pub const EJECTION_VARIATION: (f32, f32) = (0.5, 1.5);
 /// the rest of a scrape.
 pub const COLLISION_COOLDOWN: f32 = 0.8;
 
-/// Converts a contact's impact speed into `[0, 1]` burst severity.
+/// Converts a contact's impact speed into `[0, 1]` intensity.
 ///
-/// **Borrowed, not recovered.** `FUN_088418e0` clamps the same per-contact
-/// impulse magnitude to `[0, 1]` as `min(|impulse| * 0.0125, 1.0)` for its own
-/// camera-shake amplitude (`docs/ghidra/functions/psp-pulse/contact-response.md`).
-/// Reusing that exact curve here means a spark burst and the camera shake it
-/// coincides with read as the same hit, even though nothing ties the two
-/// together in the original beyond both reading the same impulse.
+/// **Recovered - this is the exact literal `FUN_088418e0` uses**:
+/// `fVar21 = min(|impulse| * 0.0125, 1.0)`, the value `Ship_DispatchCollisionFx`
+/// and then `ShipCollisionFx_Trigger` receive as `intensity`
+/// (`docs/ghidra/functions/psp-pulse/contact-response.md`). Confirmed by a
+/// live capture reading the real value at a real wall hit - see the module
+/// doc comment. This module's own input is `speed`, not the original's
+/// impulse magnitude, so the *scale* is still borrowed across a unit
+/// difference; the coefficient and the clamp are not.
 pub const SEVERITY_SCALE: f32 = 0.0125;
+
+/// The multiplier `ShipCollisionFx_Trigger` applies to [`SEVERITY_SCALE`]'s
+/// clamped intensity. **Recovered**, from the same `intensity * 2.0 + 0.4`
+/// literal.
+pub const SEVERITY_SLOPE: f32 = 2.0;
+
+/// The floor `ShipCollisionFx_Trigger` adds on top of [`SEVERITY_SLOPE`] - a
+/// hit is never zero severity, only ever `0.4` at its gentlest. **Recovered.**
+pub const SEVERITY_FLOOR: f32 = 0.4;
 
 /// Converts a contact's impact speed into an ejection speed, world units per
 /// second.
@@ -231,7 +241,13 @@ impl Sparks {
     /// particle nearest the end of its life - a burst under pressure replaces
     /// what is about to disappear anyway rather than dropping the new one.
     pub fn spawn(&mut self, point: Vec3, normal: Vec3, speed: f32, rng: &mut Rng) {
-        let severity = (speed * SEVERITY_SCALE).clamp(0.0, 1.0);
+        let intensity = (speed * SEVERITY_SCALE).clamp(0.0, 1.0);
+        // ShipCollisionFx_Trigger's own recovered shape, intensity*2.0+0.4,
+        // renormalized from its [0.4, 2.4] range back to [0, 1] so it still
+        // drives this module's own count interpolation - see the module doc
+        // comment for why this is now safe to port.
+        let severity =
+            (intensity * SEVERITY_SLOPE + SEVERITY_FLOOR) / (SEVERITY_SLOPE + SEVERITY_FLOOR);
         let count =
             MIN_BURST_COUNT + (severity * (BURST_COUNT - MIN_BURST_COUNT) as f32).round() as usize;
         let ejection_speed = speed * EJECTION_SCALE;
@@ -558,19 +574,33 @@ mod tests {
     fn a_full_severity_impact_spawns_the_full_burst() {
         let mut sparks = Sparks::new();
         let mut r = rng();
-        // 1.0 / SEVERITY_SCALE saturates severity to 1.0.
+        // 1.0 / SEVERITY_SCALE saturates intensity to 1.0, which is also
+        // where the recovered severity formula reaches its own ceiling
+        // (2.4), so the normalized severity is 1.0 either way.
         sparks.spawn(Vec3::ZERO, Vec3::Y, 1.0 / SEVERITY_SCALE, &mut r);
         let alive = sparks.particles.iter().filter(|p| p.alive()).count();
         assert_eq!(alive, BURST_COUNT);
     }
 
+    /// Not [`MIN_BURST_COUNT`] exactly - the recovered severity formula has a
+    /// `0.4` floor even at zero intensity (`docs/ghidra/functions/psp-pulse/
+    /// contact-response.md`), so a zero-speed "impact" normalizes to
+    /// `0.4 / 2.4` rather than `0.0`, landing above the pool's own minimum.
     #[test]
-    fn a_gentle_impact_still_spawns_the_minimum_burst() {
+    fn a_gentle_impact_still_spawns_above_the_pools_own_minimum() {
         let mut sparks = Sparks::new();
         let mut r = rng();
         sparks.spawn(Vec3::ZERO, Vec3::Y, 0.0, &mut r);
         let alive = sparks.particles.iter().filter(|p| p.alive()).count();
-        assert_eq!(alive, MIN_BURST_COUNT);
+        let expected = MIN_BURST_COUNT
+            + (SEVERITY_FLOOR / (SEVERITY_SLOPE + SEVERITY_FLOOR)
+                * (BURST_COUNT - MIN_BURST_COUNT) as f32)
+                .round() as usize;
+        assert_eq!(alive, expected);
+        assert!(
+            alive > MIN_BURST_COUNT,
+            "the floor should read as more than nothing"
+        );
     }
 
     #[test]

@@ -332,15 +332,18 @@ shape instead.
 - **The field layout inside a resolved record.** A string-bearing record is
   `{ NUL-terminated string, small parameter block }`; a non-string record is
   a run of floats of a similar general shape. Neither has decoded field
-  boundaries. **Now has a concrete reason to matter beyond completeness**:
+  boundaries. **Has a concrete reason to matter beyond completeness**:
   [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
   found that `ShipCollisionFx_Trigger`'s recovered severity value
-  (`intensity * 2.0 + 0.4`) is consumed as an **unbounded multiplier**
-  (`FUN_088f4910`) against base values read from the resolved resource -
-  confirmed by computing real impulse magnitudes through this project's own
-  `resolve_contact` (`69`-`165` for a realistic impact), which only reads as
-  a sane particle burst if the resource's own base values are small. Without
-  those base values, the severity number cannot be used for anything.
+  (`intensity * 2.0 + 0.4`, `intensity` already clamped to `[0, 1]` -
+  correcting an earlier, wrong reading in the same pass that assumed it
+  wasn't) is consumed by `FUN_088f4910` as a multiplier against six derived
+  fields (`+0x58`/`+0x5c`/`+0x60`/`+0x64`/`+0x68`/`+0x6c`), computed from base
+  values read off the resolved resource (`iVar1`). The severity number itself
+  is now recovered and ported (`oag_render::sparks::SEVERITY_SLOPE`/
+  `SEVERITY_FLOOR`) - it did not need this format decoded. What still does:
+  the six derived fields' own meaning (spawn count? colour? velocity spread?)
+  and the resource-side base values `FUN_088f4910` reads them from.
 - **What a slot's *position* in the table means**, if anything - the
   attribute-mapper-class-per-index hypothesis is unverified.
 - **What a shared target (several slots resolving to the identical offset)

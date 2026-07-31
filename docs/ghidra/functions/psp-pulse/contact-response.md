@@ -325,28 +325,32 @@ below.
 
 For each record in the contact ring (`body + 0x170 + n*0x40`, `n < body+0x370`),
 the loop computes `|p|` - the impulse magnitude `Body_RecordContact` stored -
-and feeds it to:
+and feeds it, scaled three separate ways, to three reactions. **The scaling
+for reaction #1 is a clamp, and this took two passes to get right** - see the
+correction below the list, which replaces an earlier wrong reading of what
+`Ship_DispatchCollisionFx` actually receives.
 
 1. **`Ship_DispatchCollisionFx` (`0x0883de90`)**, called as
-   `FUN_0883de90(fVar21, param_2, piVar17)`, only when a squared distance to
-   a stored world position
-   (`DAT_08ab10b0 + 0x70`, read as a camera-ish anchor) is in `(0, 10000)` -
-   i.e. gated by proximity. **Decompiled in full this pass.** It finds the
+   `FUN_0883de90(fVar21, param_2, piVar17)` where **`fVar21 = min(|p| * 0.0125,
+   1.0)`** - clamped, not raw - only when a squared distance to a stored world
+   position (`DAT_08ab10b0 + 0x70`, read as a camera-ish anchor) is in `(0,
+   10000)` - i.e. gated by proximity. **Decompiled in full.** It finds the
    nearest of up to 10 `Ship Collision Fx` (`0x3d0`) instances attached to the
    craft (`param_2 + 0xc80` list, distance to the hit point at `param_3+0x10`),
-   then unconditionally calls `ShipCollisionFx_Trigger(|p|, thatInstance, 0,
+   then unconditionally calls `ShipCollisionFx_Trigger(fVar21, thatInstance, 0,
    depth > 0.0)` - **this is the spark spawn**, not a camera effect. Only
    *after* that, if the reacting craft is the local player
    (`FUN_0883e64c(param_2) == 1`), it separately plays an audio cue via
-   `FUN_08878750(|p| * 0.0125, ...)` - a proximity-scaled sound, one of two
-   variants depending on whether the hit point is in front of or behind the
-   craft. Nothing in this function's body calls a camera API; the "camera
-   shake" reading this page previously carried was a guess from the `0.0125`
-   scale alone and is **retracted**. Confidence **80** on the control flow
-   (nearest-instance search, unconditional spark dispatch, gated sound); **40**
-   on what `FUN_08878750` actually does with its arguments (sound cue is the
-   likely reading given `PTR_s_...COLLISIONS...`-shaped sound calls elsewhere
-   on this path, but the function itself is unread).
+   `FUN_08878750(fVar21 * DAT_08ab0dfc, ...)` - `fVar21` scaled *again* by a
+   second, still-unread constant, one of two sound variants depending on
+   whether the hit point is in front of or behind the craft. Nothing in this
+   function's body calls a camera API; the "camera shake" reading this page
+   previously carried was a guess from the `0.0125` scale alone and is
+   **retracted**. Confidence **80** on the control flow (nearest-instance
+   search, unconditional spark dispatch, gated sound); **40** on what
+   `FUN_08878750` actually does with its arguments (sound cue is the likely
+   reading given `PTR_s_...COLLISIONS...`-shaped sound calls elsewhere on this
+   path, but the function itself is unread).
 2. **Hull damage**, `FUN_088439ac(|p| * 0.05 * 0.7, param_2, hitSide, 0, 0)`.
    **Decompiled in full this pass.** It decrements the ship's shield/energy
    (`FUN_0883e6f4(shield - amount, ...)`), accumulates per-kind telemetry
@@ -407,12 +411,11 @@ Reached from reaction #1 above. **Decompiled in full.** It takes
    variants** (LEACHBEAM and COLL_SPARK_DAMAGE) - written as the last field of
    a small stack buffer passed into `FUN_088f44d8` right after the spawned
    instance is looked back up by hash. `WO_SHIP_COLL_SPARK_NODAMAGE` and
-   `WO_WEAPON_ABSORB` never receive this value at all, so the collision-only
-   read is: **for a track-contact hit at `damaged == true`, the recovered
-   parameter is `|p| * 2.0 + 0.4`, in the same impulse-magnitude units this
-   page already established** (`|p| * 0.0125` for the proximity sound,
-   `|p| * 0.05 * 0.7` for hull damage) - the caller passes the raw,
-   pre-scaling contact impulse magnitude straight through.
+   `WO_WEAPON_ABSORB` never receive this value at all. `intensity` here is
+   `ShipCollisionFx_Trigger`'s own first argument, i.e. **the same
+   already-clamped `fVar21 = min(|p| * 0.0125, 1.0)` reaction #1 receives, not
+   raw `|p|`** - see the correction below the reaction list, which is the
+   important part of this entry.
 4. **A `"COLLISIONS"` sound cue** (`FUN_089392b0(1.0, ..., "COLLISIONS", ...)`),
    fired once per surviving kind-0/1 call, separate from and in addition to
    the proximity cue `Ship_DispatchCollisionFx` itself plays.
@@ -421,42 +424,61 @@ Confidence **85**: unambiguous, branch-clear decompile with three literal
 string names pinning the variant selection and clean, self-contained
 arithmetic for both the cooldown and the severity formula. Not runtime-traced.
 
-**Follow-up pass, same session: the severity target is now identified, and
-found not to be portable for a different reason than expected.**
-`FUN_088f443c`/`FUN_088f44d8` (read in full) are a symmetric getter/setter
-pair copying seven words between a stack buffer and offsets `+0x28..+0x40`
-of `iVar2` - the object `FUN_088f24d0` looks up **by the handle the trigger
-just wrote from the freshly spawned instance**, not the shared `.pob`
-resource. So the severity write is confirmed **instance state**, at field
-`+0x34` specifically (buffer index 3, disassembly-confirmed:
-`swc1 f20,0xc(sp)` writes the same `f20` the `intensity * 2.0 + 0.4`
-computation produced, into the middle of the getter-filled buffer, right
-before the setter writes it all back). That object is the generic
-`ParticleSystem` (`0x3c4`) node the `.pob` resource resolves into, reached
-through `FUN_08916200` - a much larger, general-purpose constructor this
-pass did not fully read, since doing so is the general-particle-system
-decode the project's own collision-sparks plan scoped out, not a
-collision-sparks-specific question.
+**Follow-up pass, same session, in two parts - the second corrects the
+first.**
 
-One read past that, `FUN_088f4910`, settles what the field is *for*:
-`+0x34` is loaded once and used as a plain multiplier (`fVar2`) against six
-derived fields (`+0x58`, `+0x5c`, `+0x60`, `+0x64`, `+0x68`, `+0x6c`),
-computed from base values read off a *different* pointer (`iVar1`, likely
-the resource or a resolved child record) together with two sibling instance
-fields (`+0x28`, `+0x2c`). **No clamp appears anywhere on this path.** That
-matters: reproducing `resolve_contact`'s own formula
-([rigid-body.md](rigid-body.md), confidence 90) against this crate's actual
-impulse magnitudes gives `1.39` for a `1` unit/s graze and `69`-`165` for a
-realistic `50`-`119` unit/s impact - so `intensity * 2.0 + 0.4` evaluates to
-`3.18`-`165.6` for any real contact, never anywhere near a `[0, 1]` range.
-The formula is genuinely an unbounded intensity multiplier, and what turns a
-`165x` multiplier into a sane-looking burst is the **base values it
-multiplies** - which live in the resolved `.pob` resource
-([`docs/formats/pob.md`](../../../formats/pob.md)) and remain unrecovered.
-So the severity number is confirmed unusable *as a value*, not merely
-unit-mismatched; `oag_render::sparks` documents this and does not port it,
-while porting [`COLLISION_COOLDOWN`](../../../../crates/render/src/sparks.rs)
-(a pure duration, with no resource-dependent base value) instead.
+*First part.* `FUN_088f443c`/`FUN_088f44d8` (read in full) are a symmetric
+getter/setter pair copying seven words between a stack buffer and offsets
+`+0x28..+0x40` of `iVar2` - the object `FUN_088f24d0` looks up **by the
+handle the trigger just wrote from the freshly spawned instance**, not the
+shared `.pob` resource. So the severity write is confirmed **instance
+state**, at field `+0x34` specifically (buffer index 3, disassembly-confirmed:
+`swc1 f20,0xc(sp)` writes the same `f20` the `intensity * 2.0 + 0.4`
+computation produced). That object is the generic `ParticleSystem` (`0x3c4`)
+node the `.pob` resource resolves into, reached through `FUN_08916200` - a
+much larger, general-purpose constructor this pass did not fully read, since
+doing so is the general-particle-system decode the project's own
+collision-sparks plan scoped out. One read past that, `FUN_088f4910`, shows
+`+0x34` used as a plain multiplier against six derived fields
+(`+0x58`/`+0x5c`/`+0x60`/`+0x64`/`+0x68`/`+0x6c`), computed from a *different*
+pointer (`iVar1`) together with two sibling instance fields (`+0x28`,
+`+0x2c`), with **no clamp anywhere on that path**.
+
+*This is where the first pass went wrong.* It reproduced `resolve_contact`'s
+own formula against this crate's actual impulse magnitudes - `1.39` for a `1`
+unit/s graze, `69`-`165` for a realistic `50`-`119` unit/s impact - and read
+`intensity * 2.0 + 0.4` as therefore unbounded and unusable without the
+resource's own base values. **That used the wrong `intensity`.** It assumed
+`ShipCollisionFx_Trigger`'s `intensity` argument was the raw impulse
+magnitude `Ship_DispatchCollisionFx` receives unscaled - but the correction
+above the reaction list already establishes that argument is
+`fVar21 = min(|p| * 0.0125, 1.0)`, clamped to `[0, 1]` **before**
+`Ship_DispatchCollisionFx` or `ShipCollisionFx_Trigger` ever see it. Once that
+clamp is accounted for, `intensity * 2.0 + 0.4` ranges over a sane, bounded
+`[0.4, 2.4]` - nowhere near unbounded.
+
+*What caught it.* Not more static reading - a live PPSSPP capture
+(`docs/reverse-engineering/ppsspp-debugger.md`'s methodology), breakpointed
+on `ShipCollisionFx_Trigger`'s own stack write during a real standing-start
+crash into a wall on Talon's Junction. Six real hits, craft speed `21.7`-
+`112.4` units/s, read real `intensity` values of `0.011`-`0.070` - an order of
+magnitude below `1.0`, let alone the `69`-`165` the wrong premise predicted.
+That contradiction is what sent this pass back to re-read `FUN_088418e0` from
+scratch rather than trust the earlier paraphrase, and found the `min(...,
+1.0)` clamp sitting right there in the decompile. The six live values are
+also internally consistent - `intensity / speed` holds to `0.00052`-`0.00062`
+across a 5x speed range - which is exactly the shape a clamped, roughly
+linear-in-impulse quantity should have well below its own ceiling.
+
+**So the severity formula is now genuinely ported**, not merely re-scoped:
+`oag_render::sparks::SEVERITY_SLOPE` (`2.0`) and `SEVERITY_FLOOR` (`0.4`)
+apply the recovered shape on top of the already-recovered
+`SEVERITY_SCALE` (`0.0125`) clamp, replacing what was previously an authored
+severity curve with the literal one. `COLLISION_COOLDOWN` was already ported
+in the first pass for the same reason this now is: both are usable without
+the still-undecoded `.pob` resource data
+([`docs/formats/pob.md`](../../../formats/pob.md)), once the actual inputs
+are read correctly.
 
 The two non-spark callers below are recorded for completeness, not chased
 further:
