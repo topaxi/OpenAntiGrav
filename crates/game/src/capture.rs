@@ -290,7 +290,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                     render_scale: options.settings.graphics.render_scale,
                     presentation: crate::upscale::Presentation {
                         upscaler: options.settings.graphics.upscaler,
-                        sharpness: options.settings.graphics.upscale_sharpness,
+                        sharpness: options.settings.graphics.upscale_sharpness.stops(),
                         brightness: options.settings.display.brightness,
                         gamma: options.settings.display.gamma,
                     },

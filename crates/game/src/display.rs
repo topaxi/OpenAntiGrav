@@ -409,6 +409,114 @@ macro_rules! percentage {
     };
 }
 
+/// How hard FSR 1's RCAS pass sharpens, in **tenths of a stop**.
+///
+/// Stops are upstream FidelityFX's own unit and they run backwards: zero is
+/// maximum sharpening and each whole step halves it. That is worth carrying
+/// rather than quietly rescaling, because every FSR document and every other
+/// game's setting is in these units, and a value a player reads about elsewhere
+/// should mean the same thing here.
+///
+/// Tenths, and an integer, so a menu row round-trips exactly. A bare `f32`
+/// setting would have to format and re-parse to the same text every time or the
+/// row would fail to find its own current value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "SharpnessRepr", into = "String")]
+pub struct Sharpness(u32);
+
+/// What a settings file is allowed to say, which includes what an older one
+/// already says.
+///
+/// This shipped as a bare `f32` for one commit, so a file written by that build
+/// holds `upscale_sharpness = 0.2` and would otherwise fail to load with
+/// "invalid type: floating point". The same twenty lines, and the same
+/// reasoning, as [`crate::perf::Vsync`]'s: the canonical rewrite normalises it
+/// to a string on the next run, so the compatibility does not accumulate.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum SharpnessRepr {
+    Stops(f32),
+    Name(String),
+}
+
+impl TryFrom<SharpnessRepr> for Sharpness {
+    type Error = String;
+
+    fn try_from(repr: SharpnessRepr) -> Result<Self, Self::Error> {
+        match repr {
+            SharpnessRepr::Stops(stops) => stops.to_string().parse(),
+            SharpnessRepr::Name(name) => name.parse(),
+        }
+    }
+}
+
+impl Sharpness {
+    /// Upstream's own default, 0.2 stops.
+    pub const DEFAULT: Self = Self(2);
+
+    /// The widest range upstream documents, zero to two stops.
+    pub const RANGE: std::ops::RangeInclusive<u32> = 0..=20;
+
+    /// The values the menus offer: maximum, upstream's default, then halving.
+    pub const OFFERED: [Self; 5] = [Self(0), Self(2), Self(5), Self(10), Self(20)];
+
+    /// The setting in stops, which is what the upscaler wants.
+    #[must_use]
+    pub fn stops(self) -> f32 {
+        self.0 as f32 / 10.0
+    }
+}
+
+impl Default for Sharpness {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl std::str::FromStr for Sharpness {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let stops: f32 = text
+            .trim()
+            .parse()
+            .map_err(|e| format!("{text:?} is not a sharpness: {e}"))?;
+        // Rounded rather than truncated so `0.25` lands on a value rather than
+        // silently becoming `0.2`, and so the round trip is stable.
+        let tenths = (stops * 10.0).round();
+        if !tenths.is_finite() || tenths < 0.0 {
+            return Err(format!("a sharpness of {stops} is not a number of stops"));
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "checked finite and non-negative just above"
+        )]
+        let tenths = tenths as u32;
+        if Self::RANGE.contains(&tenths) {
+            Ok(Self(tenths))
+        } else {
+            Err(format!(
+                "a sharpness of {stops} stops is outside {}-{}",
+                *Self::RANGE.start() as f32 / 10.0,
+                *Self::RANGE.end() as f32 / 10.0
+            ))
+        }
+    }
+}
+
+impl std::fmt::Display for Sharpness {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.0 / 10, self.0 % 10)
+    }
+}
+
+impl From<Sharpness> for String {
+    fn from(value: Sharpness) -> Self {
+        value.to_string()
+    }
+}
+
 /// Which resampler carries the offscreen frame onto the surface.
 ///
 /// This is the companion to [`Scale`], and only that pairing makes it mean

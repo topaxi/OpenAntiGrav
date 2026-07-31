@@ -40,7 +40,7 @@ the release rather than of this project:
 | TEAM | `oag_formats::handling::TEAMS`, pinned to the eight shipped `handlingstats.xml` files by a test |
 | SPEED CLASS | `oag_physics::SpeedClass::ALL` |
 | MONITOR | winit's own monitor list, read every time the menus open |
-| WINDOW MODE / SIZE / ASPECT / RENDER SCALE / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
+| WINDOW MODE / SIZE / ASPECT / RENDER SCALE / UPSCALER / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 | PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_game::perf`, pinned the same way |
 
 MONITOR is the one supplied row that is a property of **the desk** rather than
@@ -319,7 +319,17 @@ the renderer would notice**:
 | | Rows | What they have in common |
 | --- | --- | --- |
 | DISPLAY | MONITOR, WINDOW MODE, WINDOW SIZE, ASPECT RATIO, VSYNC, FRAME LIMIT, BRIGHTNESS, GAMMA | The picture's container, and how a finished frame reaches a screen |
-| GRAPHICS | RENDER SCALE, ANISOTROPIC FILTERING, FIELD OF VIEW, PERFORMANCE OVERLAY | How the picture is drawn |
+| GRAPHICS | RENDER SCALE, UPSCALER, UPSCALER SHARPNESS, ANISOTROPIC FILTERING, FIELD OF VIEW, PERFORMANCE OVERLAY | How the picture is drawn |
+
+UPSCALER sits directly under RENDER SCALE because only the pairing means
+anything: at 100 % there is nothing to upscale and the choice is between a blit
+and a sharpen. UPSCALER SHARPNESS is greyed out on the bilinear path, which has
+no sharpen to adjust - greyed rather than hidden, for the reason FRAME LIMIT is:
+a row that vanishes gives a player no way to find out what took it away. Its
+unit is **stops**, upstream FidelityFX's own, where zero is maximum and each
+whole step halves it; that runs the opposite way to what a reader expects and is
+kept anyway, because a number a player reads about elsewhere should mean the
+same thing here.
 
 Turning vsync off changes nothing about the frame that is drawn, only about when
 it is shown; halving the render scale changes the frame itself. That test is

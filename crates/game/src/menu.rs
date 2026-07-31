@@ -1474,6 +1474,26 @@ mod tests {
             "the render-scale rows and `Scale::OFFERED` must be one list"
         );
 
+        let upscalers: Vec<crate::display::Upscaler> = values("graphics.upscaler")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            upscalers,
+            crate::display::Upscaler::ALL,
+            "the upscaler rows and `Upscaler::ALL` must be one list"
+        );
+
+        let sharpness: Vec<crate::display::Sharpness> = values("graphics.upscale_sharpness")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            sharpness,
+            crate::display::Sharpness::OFFERED,
+            "the sharpness rows and `Sharpness::OFFERED` must be one list"
+        );
+
         let sizes: Vec<Size> = values("display.window_size")
             .iter()
             .map(|name| name.parse::<Size>().unwrap_or_else(|e| panic!("{e}")))

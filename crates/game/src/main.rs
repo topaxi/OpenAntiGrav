@@ -576,7 +576,7 @@ fn run_race(
                     render_scale: settings.graphics.render_scale,
                     presentation: oag_game::upscale::Presentation {
                         upscaler: settings.graphics.upscaler,
-                        sharpness: settings.graphics.upscale_sharpness,
+                        sharpness: settings.graphics.upscale_sharpness.stops(),
                         brightness: settings.display.brightness,
                         gamma: settings.display.gamma,
                     },
@@ -1788,7 +1788,7 @@ impl Session {
             rect,
             &upscale::Presentation {
                 upscaler: self.settings.graphics.upscaler,
-                sharpness: self.settings.graphics.upscale_sharpness,
+                sharpness: self.settings.graphics.upscale_sharpness.stops(),
                 brightness: self.settings.display.brightness,
                 gamma: self.settings.display.gamma,
             },
@@ -2093,6 +2093,25 @@ impl Session {
                 // Applied by the next frame: `frame` sizes the target from this
                 // every time and rebuilds it when the answer changes.
                 Ok(scale) => self.settings.graphics.render_scale = scale,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "graphics.upscaler" => match text.parse::<display::Upscaler>() {
+                // Applied by the next frame. Choosing `fsr1` for the first time
+                // builds its two pipelines inside that frame, which is a shader
+                // compilation a player may notice once and never again.
+                Ok(upscaler) => self.settings.graphics.upscaler = upscaler,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "graphics.upscale_sharpness" => match text.parse::<display::Sharpness>() {
+                // Applied by the next frame: it is one float in the upscaler's
+                // uniform, rewritten only when it moves.
+                Ok(sharpness) => self.settings.graphics.upscale_sharpness = sharpness,
                 Err(e) => {
                     eprintln!("ignoring {setting} = {text:?}: {e}");
                     return;

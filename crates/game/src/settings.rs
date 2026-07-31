@@ -208,11 +208,6 @@ fn default_frustum_culling() -> bool {
     true
 }
 
-/// See [`Graphics::upscale_sharpness`]: upstream FidelityFX's own default.
-fn default_upscale_sharpness() -> f32 {
-    0.2
-}
-
 /// See [`Graphics::pvs_culling`]: on, having cleared the screenshot comparison.
 fn default_pvs_culling() -> bool {
     true
@@ -242,8 +237,8 @@ pub struct Graphics {
     pub upscaler: crate::display::Upscaler,
     /// How hard FSR 1's RCAS pass sharpens, in stops: 0 is maximum and each
     /// whole step halves it. Ignored unless `upscaler` is `fsr1`.
-    #[serde(default = "default_upscale_sharpness")]
-    pub upscale_sharpness: f32,
+    #[serde(default)]
+    pub upscale_sharpness: crate::display::Sharpness,
     /// Anisotropic filtering level for track and ship textures: `off`, `2x`,
     /// `4x`, `8x` or `16x`.
     ///
@@ -371,7 +366,7 @@ impl Default for Graphics {
         Self {
             render_scale: crate::display::Scale::default(),
             upscaler: crate::display::Upscaler::default(),
-            upscale_sharpness: default_upscale_sharpness(),
+            upscale_sharpness: crate::display::Sharpness::default(),
             anisotropy: Anisotropy::default(),
             fov: crate::display::Fov::default(),
             perf_overlay: crate::perf::Overlay::default(),
@@ -555,6 +550,14 @@ pub fn menu_seeds(
         (
             "graphics.render_scale",
             text(&settings.graphics.render_scale.to_string()),
+        ),
+        (
+            "graphics.upscaler",
+            text(&settings.graphics.upscaler.to_string()),
+        ),
+        (
+            "graphics.upscale_sharpness",
+            text(&settings.graphics.upscale_sharpness.to_string()),
         ),
         ("graphics.anisotropy", text(&anisotropy.to_string())),
         ("graphics.fov", text(&settings.graphics.fov.to_string())),

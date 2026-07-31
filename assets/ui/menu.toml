@@ -261,6 +261,27 @@ label = "RENDER SCALE"
 setting = "graphics.render_scale"
 values = ["50", "75", "100", "125", "150", "200"]
 
+# Which resampler carries the frame onto the surface. Directly below the render
+# scale because only that pairing means anything: at 100 % there is nothing to
+# upscale and the choice is between a blit and a sharpen. Applies from the next
+# frame; the pipelines are built the first time `fsr1` is chosen.
+[[page.entry]]
+kind = "choice"
+label = "UPSCALER"
+setting = "graphics.upscaler"
+values = ["bilinear", "fsr1"]
+
+# How hard FSR 1's RCAS pass sharpens, in **stops**: 0 is maximum and each whole
+# step halves it, which is upstream FidelityFX's own scale and runs the opposite
+# way to what a reader expects. Greyed out on the bilinear path, which has no
+# sharpen to adjust.
+[[page.entry]]
+kind = "choice"
+label = "UPSCALER SHARPNESS"
+setting = "graphics.upscale_sharpness"
+values = ["0.0", "0.2", "0.5", "1.0", "2.0"]
+disabled_by = { setting = "graphics.upscaler", value = "bilinear" }
+
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.
 [[page.entry]]
