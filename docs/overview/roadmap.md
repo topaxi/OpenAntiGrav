@@ -732,16 +732,24 @@ recipe and its three traps.
       (unlimited, or up to 1000), and a performance overlay that shows the rate,
       the mean, the 99th percentile and a per-frame graph - because an average
       frame rate is exactly what hides uneven frames. `oag_game::perf`.
-      HDR, VRR, FSR and Steam Input are still open -
+      **Spatial upscaling is in**: FSR 1 (EASU then RCAS), ported to WGSL from
+      AMD's MIT source, behind `[graphics] upscaler` and off by default until a
+      wider screenshot comparison earns the change. It runs only where it is
+      magnifying. `oag_render::post::fsr1`.
+      HDR, VRR, temporal upscaling and Steam Input are still open -
       [modern features](modern-features.md).
 - [ ] Save data
 - [ ] Replay
 - [ ] PS2 asset path at parity with PSP
-- [ ] Modern features: ultrawide, unlocked frame rate, HDR, VRR, dynamic
-      resolution, upscaling (FSR 3.1, with FSR4 via the driver), Steam Input,
-      optional ahead-of-time FMV upscaling - licensing status and the
-      architectural prerequisites to decide early are recorded in
-      [modern features](modern-features.md)
+- [~] Modern features: ultrawide, unlocked frame rate, HDR, VRR, dynamic
+      resolution, upscaling, Steam Input, optional ahead-of-time FMV upscaling -
+      licensing status and the architectural prerequisites are recorded in
+      [modern features](modern-features.md). **Spatial upscaling (FSR 1) is
+      done**; FSR 3.1 is a WGSL port per
+      [ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
+      and still wants motion vectors, a readable depth buffer, camera jitter and
+      a scene with no UI in it. **FSR4 is not a plan**: it ships as signed DLLs
+      and its driver upgrade path does not reach a native Linux build
 
 **Exit criterion:** Pulse is feature complete, start to finish, on both asset
 paths.

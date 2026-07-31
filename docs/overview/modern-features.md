@@ -3,50 +3,74 @@
 Desired long-term features recorded ahead of time, because each one has a
 licensing question ("this must remain an OSS project") and one or two cheap
 architectural decisions that are much easier to make early than to retrofit.
-All of this is M7-scoped ("modern features") or later; nothing here blocks
-current work. Licence statements are as of 2026-07 - re-verify them when M7
-actually opens, especially FSR4's.
+Upscaling is no longer only planning: FSR 1 is built, and the route for FSR 3.1
+is decided in
+[ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md).
+The rest is M7-scoped ("modern features") or later and blocks nothing. Licence
+statements were re-verified 2026-07-31; re-verify them again before acting on
+them, because FSR4's changed once already and the change mattered.
 
-## Upscaling: FSR 3.1, with FSR4 arriving via the driver
+## Upscaling: FSR 3.1, ported to WGSL
 
-**Licensing.** AMD's FidelityFX SDK - the FSR 2/3.1 upscalers and FSR3 frame
-generation - is MIT-licensed C++/HLSL. Fully compatible with this project;
-the shader source may legally be vendored or ported. **FSR4 is not**: it is
-the ML-based generation, shipped at launch as a closed binary distributed
-through AMD's driver, upgrading games that expose the FSR 3.1 API surface
-(3.1 deliberately decoupled its interface from the implementation for
-exactly this). AMD has signalled open-sourcing intent, but plan as if it
-stays closed.
+**Licensing, re-verified 2026-07-31.** AMD's FidelityFX SDK - the FSR 2/3.1
+upscalers and FSR3 frame generation - is MIT-licensed C++/HLSL, with a Vulkan
+backend. Fully compatible with this project; the shader source may legally be
+vendored or ported, and FSR 1's has been.
 
-**Strategy: implement FSR 3.1 properly and never touch FSR4 code.** On
-capable hardware and drivers the user gets FSR4 through the driver-side
-upgrade path without this project shipping or linking anything proprietary.
-Do not hard-code anything FSR4-specific.
+**The FSR4 correction.** This section used to say FSR4 was a closed binary
+distributed *through AMD's driver*, upgrading any game that exposed the FSR 3.1
+API surface, and built its whole strategy on inheriting that upgrade for free.
+That is no longer the shape of it, and on this project's first-tier platforms it
+never pays out:
 
-**Integration cost is technical, not legal.** The SDK targets Vulkan and
-DX12 natively; this project renders through wgpu. Two routes, undecided:
+- FSR4 ships as **prebuilt, signed DLLs in FidelityFX SDK 2.0** (August 2025),
+  with no source. A brief accidental source publication was withdrawn. SDK 2.2
+  ("Redstone") adds FSR Upscaling 4.1 and Ray Regeneration on the same terms.
+- The driver-side upgrade path is a **Windows/Adrenalin** mechanism. For a
+  native Linux ELF it does not exist; on Linux it reaches only *Windows* games,
+  through Proton's DLL substitution.
 
-1. Drive the SDK's Vulkan backend through wgpu-hal's `as_hal` escape hatches
-   (unsafe interop, keeps upstream's tested implementation), or
-2. port the upscaler shaders to WGSL (legal under MIT; a large but
-   self-contained effort - community WGSL ports of FSR1's two spatial passes
-   exist and are a sensible first rung).
+So **FSR 3.1 has to be worth having on its own merits** - it is - and no design
+decision should be shaped around inheriting FSR4. Still hard-code nothing
+FSR4-specific: if that path ever does reach a native build, exposing the 3.1 API
+surface remains the way to inherit it.
 
-**Frame generation is deliberately out of scope.** FSR3 FG wants to
-interpose on presentation, which wgpu does not expose - and the simulation
-is fixed 60 Hz with unlocked-frame-rate presentation planned via state
-interpolation, so the renderer can produce real frames at any rate.
-Interpolated fake frames plus their latency buy little for a racing game.
+**The route is decided: port to WGSL.**
+[ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md) has
+the reasoning. In short, driving the SDK's Vulkan backend through `wgpu-hal`'s
+`as_hal` would cost lifting `unsafe_code = "deny"` for the first time, a C++
+toolchain against ADR-0008's precedent, an `ash`/`wgpu-hal` version coupling,
+and Vulkan-only support - to inherit an upgrade that does not reach here.
 
-**What to decide early, in `oag-render`, when its pipelines grow beyond the
-current mesh/ribbon stage** - temporal upscalers have prerequisites that are
-nearly free to design in and expensive to retrofit:
+**Frame generation is deliberately out of scope.** FSR3 FG wants to interpose on
+presentation, which wgpu does not expose - and the simulation is fixed 60 Hz
+with unlocked-frame-rate presentation planned via state interpolation, so the
+renderer can produce real frames at any rate. Interpolated fake frames plus
+their latency buy little for a racing game.
 
-- every draw must be able to emit per-pixel **motion vectors**;
-- a real **depth buffer** the upscaler can consume;
-- **camera jitter** support (sub-pixel projection offsets per frame);
-- **render resolution decoupled from presentation resolution** (dynamic
-  resolution is already on the M7 list, so this aligns with existing plans).
+**What is built.** FSR 1 (EASU then RCAS) is ported and shipped behind
+`[graphics] upscaler`, defaulting off, and only runs where it is actually
+magnifying - it is a magnifier, and asked to minify it undoes the supersampling
+it was handed. It is also the middle rung of FSR 3.1's fallback chain, for
+adapters that cannot supply the storage-texture features the temporal path
+needs. See [`oag_render::post`](../../crates/render/src/post/mod.rs) for the
+colour-space arrangement, which is the part most easily got wrong.
+
+**What FSR 3.1 still needs**, none of which exists yet - the prerequisites this
+section has always listed, now with their status:
+
+| Prerequisite | State |
+| --- | --- |
+| Render resolution decoupled from presentation | **Done** - the render scale, and the offscreen target it draws into |
+| A depth buffer the upscaler can consume | Exists, but written `StoreOp::Discard` into a texture without `TEXTURE_BINDING` |
+| Per-pixel motion vectors from every draw | **Absent** - no previous-frame matrices are stored anywhere |
+| Camera jitter, sub-pixel per frame | **Absent** - and it must not perturb the culling frustum, which shares the matrix |
+| A scene without UI in it | **Absent** - the HUD and the perf overlay draw into the same target, at the render scale |
+
+That last row is the expensive one, and it is not on the original list because
+it only becomes visible once something downstream needs a scene it can reason
+about. FSR must consume a frame with no UI in it, and the UI must then be
+composited at presentation resolution.
 
 ## Steam Input
 
@@ -127,8 +151,9 @@ be most of the win for a fraction of the machinery.
 
 | Feature | Licence status | Early decision |
 | --- | --- | --- |
-| FSR 3.1 upscaling | MIT, open | Design `oag-render` for motion vectors, depth, jitter, decoupled render resolution |
+| FSR 1 upscaling | MIT, ported | **Built.** `oag_render::post::fsr1`, off by default, magnification only |
+| FSR 3.1 upscaling | MIT, open | Port to WGSL ([ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)); still needs motion vectors, readable depth, jitter and a UI-free scene |
 | FSR3 frame generation | MIT, open | Skip - interpolated presentation from the 60 Hz simulation is the better fit |
-| FSR4 | Closed binary via driver (re-check at M7) | Expose the FSR 3.1 API surface; let drivers upgrade it; ship nothing proprietary |
+| FSR4 | Signed DLLs, no source; driver upgrade is Windows-only | Ship nothing proprietary and hard-code nothing FSR4-specific. Do not plan around inheriting it |
 | Steam Input | Proprietary SDK | `gilrs`/SDL baseline in `oag-input`; optional non-vendored `steamworks` feature; keep the input layer action-shaped |
 | FMV upscaling | Open models exist (mind the weights licences) | None - ADR-0008's cache design already leaves the door open; output stays in `data/`, never committed |
