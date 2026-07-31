@@ -574,11 +574,13 @@ fn run_race(
                 frustum_culling: settings.graphics.frustum_culling,
                 pvs_culling: settings.graphics.pvs_culling,
                 animated_textures: settings.graphics.animated_textures,
+                anti_aliasing: settings.graphics.anti_aliasing,
                 presented: cli.presented.then_some(race::Presented {
                     render_scale: settings.graphics.render_scale,
                     presentation: oag_game::upscale::Presentation {
                         upscaler: settings.graphics.upscaler,
                         sharpness: settings.graphics.upscale_sharpness.stops(),
+                        anti_aliasing: settings.graphics.anti_aliasing,
                         brightness: settings.display.brightness,
                         gamma: settings.display.gamma,
                     },
@@ -688,7 +690,13 @@ impl App {
             };
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
-            Stage::race(&gpu, loaded, framebuffer.size(), self.anisotropy)?
+            Stage::race(
+                &gpu,
+                loaded,
+                framebuffer.size(),
+                self.anisotropy,
+                self.settings.graphics.anti_aliasing,
+            )?
         } else if let Some(loaded) = self.boot.take() {
             Stage::frontend(&gpu, loaded, self.video_format, self.trace)?
         } else {
@@ -1216,6 +1224,7 @@ impl Stage {
         loaded: race::Loaded,
         size: (u32, u32),
         anisotropy: Anisotropy,
+        anti_aliasing: display::AntiAliasing,
     ) -> Result<Self> {
         let race::Loaded {
             setup,
@@ -1240,6 +1249,7 @@ impl Stage {
             size,
             anisotropy,
             visibility,
+            anti_aliasing,
         )?;
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.
@@ -1830,9 +1840,11 @@ impl Session {
             // A depth attachment whose size does not match the colour one is a
             // validation error, so the race's has to follow.
             if let Stage::Race(stage) = &mut self.stage {
-                stage
-                    .scene
-                    .resize(&self.gpu.device, self.framebuffer.size());
+                stage.scene.resize(
+                    &self.gpu.device,
+                    self.gpu.config.format,
+                    self.framebuffer.size(),
+                );
             }
         }
 
@@ -1900,6 +1912,7 @@ impl Session {
             &upscale::Presentation {
                 upscaler: self.settings.graphics.upscaler,
                 sharpness: self.settings.graphics.upscale_sharpness.stops(),
+                anti_aliasing: self.settings.graphics.anti_aliasing,
                 brightness: self.settings.display.brightness,
                 gamma: self.settings.display.gamma,
             },
@@ -1965,6 +1978,38 @@ impl Session {
             .collect();
         if !model.in_effect("graphics.renderer", &in_use) {
             eprintln!("note: nothing in the menus defers graphics.renderer");
+        }
+        // What the row is set to comes from the settings file; what a race on
+        // screen is actually *drawing* with can only come from its own
+        // `Scene`, built once when that race started. Silent on the front end
+        // and the menus, where no race exists yet to compare against - see
+        // `Restart::in_effect`.
+        //
+        // **Not a single value.** Unlike the renderer, only the MSAA half of
+        // this row is baked into the scene's pipelines - `upscale::Framebuffer::resolve`
+        // reads FXAA/SMAA/off fresh every frame, the same way it already
+        // reads the upscaler. So every mode that shares the built scene's
+        // sample count is equally "in effect": a race built at `off` can move
+        // to `fxaa` or back with no restart note, and only moving to or
+        // between an MSAA tier the scene was not built with earns one.
+        if let Stage::Race(stage) = &self.stage {
+            let built = stage.scene.anti_aliasing();
+            let live_equivalent: &[display::AntiAliasing] = if built.msaa_samples() == 1 {
+                &[
+                    display::AntiAliasing::Off,
+                    display::AntiAliasing::Fxaa,
+                    display::AntiAliasing::Smaa,
+                ]
+            } else {
+                std::slice::from_ref(&built)
+            };
+            let in_use: Vec<menu::Value> = live_equivalent
+                .iter()
+                .map(|mode| menu::Value::Text(mode.to_string()))
+                .collect();
+            if !model.in_effect("graphics.anti_aliasing", &in_use) {
+                eprintln!("note: nothing in the menus defers graphics.anti_aliasing");
+            }
         }
 
         // **The movie planes are asked for only when there is a movie to put in
@@ -2260,6 +2305,21 @@ impl Session {
                     return;
                 }
             },
+            // `off`, `fxaa` and `smaa` are applied by the next frame, the
+            // same as the upscaler: `Framebuffer::resolve` reads this fresh
+            // and builds FXAA's pipeline lazily, the same way it does FSR 1's.
+            // **Only moving to or between the two MSAA levels waits for the
+            // next race**, because that is what rebuilds the scene pipelines
+            // MSAA's sample count is baked into - see `race::Scene::new`. The
+            // row's restart note distinguishes the two cases; see
+            // `Session::open_menus`.
+            "graphics.anti_aliasing" => match text.parse::<display::AntiAliasing>() {
+                Ok(mode) => self.settings.graphics.anti_aliasing = mode,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.fov" => match text.parse::<display::Fov>() {
                 // Applied by the next frame the race draws, which builds its
                 // projection from this every time. Nothing else uses it: the
@@ -2337,7 +2397,13 @@ impl Session {
         for line in &loaded.report {
             println!("{line}");
         }
-        self.stage = Stage::race(&self.gpu, loaded, self.framebuffer.size(), self.anisotropy)?;
+        self.stage = Stage::race(
+            &self.gpu,
+            loaded,
+            self.framebuffer.size(),
+            self.anisotropy,
+            self.settings.graphics.anti_aliasing,
+        )?;
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())
     }

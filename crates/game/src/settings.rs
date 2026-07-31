@@ -254,6 +254,19 @@ pub struct Graphics {
     /// whole step halves it. Ignored unless `upscaler` is `fsr1`.
     #[serde(default)]
     pub upscale_sharpness: crate::display::Sharpness,
+    /// Which anti-aliasing the scene draws with: `off`, `fxaa`, `smaa` or
+    /// `msaa4x`.
+    ///
+    /// Defaults to `off`. **Only `msaa4x` is baked into the scene's
+    /// pipelines when a race starts** - `off`, `fxaa` and `smaa` are read
+    /// fresh every frame by `upscale::Framebuffer::resolve`, the same as
+    /// `upscaler` is, and moving among those three takes effect the frame
+    /// they were chosen on. Moving to or from `msaa4x` takes effect the next
+    /// time a race is launched, because that is what rebuilds the pipelines
+    /// it is a property of. See [`crate::display::AntiAliasing`] and
+    /// `docs/architecture/adr/0013-anti-aliasing-architecture.md`.
+    #[serde(default)]
+    pub anti_aliasing: crate::display::AntiAliasing,
     /// Anisotropic filtering level for track and ship textures: `off`, `2x`,
     /// `4x`, `8x` or `16x`.
     ///
@@ -383,6 +396,7 @@ impl Default for Graphics {
             render_scale: crate::display::Scale::default(),
             upscaler: crate::display::Upscaler::default(),
             upscale_sharpness: crate::display::Sharpness::default(),
+            anti_aliasing: crate::display::AntiAliasing::default(),
             anisotropy: Anisotropy::default(),
             fov: crate::display::Fov::default(),
             perf_overlay: crate::perf::Overlay::default(),
@@ -578,6 +592,10 @@ pub fn menu_seeds(
         (
             "graphics.upscale_sharpness",
             text(&settings.graphics.upscale_sharpness.to_string()),
+        ),
+        (
+            "graphics.anti_aliasing",
+            text(&settings.graphics.anti_aliasing.to_string()),
         ),
         ("graphics.anisotropy", text(&anisotropy.to_string())),
         ("graphics.fov", text(&settings.graphics.fov.to_string())),

@@ -165,7 +165,7 @@ pub fn capture_from(
         vertex_buffer,
         index_buffer,
         texture_binds,
-    } = build(&device, &queue, model, format, anisotropy)?;
+    } = build(&device, &queue, model, format, anisotropy, 1)?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniforms"),
@@ -452,12 +452,17 @@ pub struct Built {
 /// both draw through the one pipeline. The returned `BindGroup` is a
 /// placeholder bound to an empty buffer; a real uniform buffer and bind group
 /// must be created against `pipeline.get_bind_group_layout(0)` by the caller.
+///
+/// `sample_count` must match the render pass's colour and depth attachments -
+/// 1 outside a race, or `[graphics] anti_aliasing`'s MSAA count inside one.
+/// See `race::Scene::new`.
 pub fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model: &Model,
     format: wgpu::TextureFormat,
     anisotropy: Anisotropy,
+    sample_count: u32,
 ) -> Result<Built> {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("mesh"),
@@ -542,7 +547,10 @@ pub fn build(
             stencil: Default::default(),
             bias: Default::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview_mask: None,
         cache: None,
     });
@@ -585,7 +593,10 @@ pub fn build(
             stencil: Default::default(),
             bias: Default::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview_mask: None,
         cache: None,
     });
@@ -633,7 +644,10 @@ pub fn build(
             stencil: Default::default(),
             bias: Default::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview_mask: None,
         cache: None,
     });

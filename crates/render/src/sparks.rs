@@ -351,9 +351,11 @@ pub struct Pipeline {
 impl Pipeline {
     /// Builds the pipeline.
     ///
-    /// `format` must be the target the caller's render pass writes.
+    /// `format` must be the target the caller's render pass writes, and
+    /// `sample_count` must match its multisample state - see
+    /// `mesh_render::build`.
     #[must_use]
-    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, sample_count: u32) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("sparks"),
             source: wgpu::ShaderSource::Wgsl(include_str!("sparks.wgsl").into()),
@@ -418,7 +420,10 @@ impl Pipeline {
                 stencil: Default::default(),
                 bias: Default::default(),
             }),
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                ..Default::default()
+            },
             multiview_mask: None,
             cache: None,
         });

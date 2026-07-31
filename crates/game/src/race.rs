@@ -1915,6 +1915,7 @@ impl Drawable {
         model: Model,
         format: wgpu::TextureFormat,
         anisotropy: Anisotropy,
+        sample_count: u32,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -1924,7 +1925,7 @@ impl Drawable {
             vertex_buffer: vertices,
             index_buffer: indices,
             texture_binds: textures,
-        } = mesh_render::build(device, queue, &model, format, anisotropy)?;
+        } = mesh_render::build(device, queue, &model, format, anisotropy, sample_count)?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("race uniforms"),
@@ -2098,6 +2099,25 @@ pub struct Scene {
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
     depth: wgpu::Texture,
+    /// The colour attachment every pipeline here actually draws into, and its
+    /// sample count.
+    ///
+    /// `Some` for `[graphics] anti_aliasing`'s two MSAA levels: every pipeline
+    /// above is built at `sample_count`, and [`Scene::render`] draws them into
+    /// this multisampled target and resolves it into the caller's own view at
+    /// the end of the one pass. `None` at sample count 1, where there is
+    /// nothing to resolve and the pipelines draw straight into the caller's
+    /// view - see [`Scene::render`].
+    ///
+    /// Baked in at [`Scene::new`] rather than read from settings each frame:
+    /// every pipeline's `multisample` state is fixed at the moment it is
+    /// built, so changing this setting mid-race would need every pipeline
+    /// above rebuilt, not just this texture. See
+    /// [`crate::display::AntiAliasing::msaa_samples`].
+    msaa_color: Option<wgpu::Texture>,
+    /// What this scene's pipelines were actually built with, for the
+    /// GRAPHICS menu's restart note - see `Session::open_menus` in `main.rs`.
+    anti_aliasing: crate::display::AntiAliasing,
     /// Where the far plane goes, from the track's own extent.
     far: f32,
 }
@@ -2124,24 +2144,31 @@ impl Scene {
         size: (u32, u32),
         anisotropy: Anisotropy,
         visibility: Option<TrackVisibility>,
+        anti_aliasing: crate::display::AntiAliasing,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
         // waste the depth range on empty space.
         let far = track_model.radius * 4.0;
-        let track = Drawable::new(device, queue, track_model, format, anisotropy)?;
-        let ship = Drawable::new(device, queue, ship_model, format, anisotropy)?;
+        let sample_count = anti_aliasing.msaa_samples();
+        let track = Drawable::new(device, queue, track_model, format, anisotropy, sample_count)?;
+        let ship = Drawable::new(device, queue, ship_model, format, anisotropy, sample_count)?;
         let collision = collision_model
-            .map(|model| Drawable::new(device, queue, model, format, anisotropy))
+            .map(|model| Drawable::new(device, queue, model, format, anisotropy, sample_count))
             .transpose()?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
         let noise = noise.unwrap_or_else(|| FlareTexture::placeholder(64));
         let exhaust = std::cell::RefCell::new(exhaust::Pipeline::new(
-            device, queue, format, &flare, &noise,
+            device,
+            queue,
+            format,
+            &flare,
+            &noise,
+            sample_count,
         ));
-        let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format));
+        let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format, sample_count));
 
         Ok(Self {
             track,
@@ -2150,17 +2177,29 @@ impl Scene {
             collision,
             exhaust,
             sparks,
-            depth: depth_texture(device, size),
+            depth: depth_texture(device, size, sample_count),
+            msaa_color: msaa_color_texture(device, format, size, sample_count),
+            anti_aliasing,
             far,
         })
     }
 
-    /// Rebuilds the depth buffer for a new viewport size.
+    /// Rebuilds the depth buffer, and the MSAA colour target if there is one,
+    /// for a new viewport size.
     ///
-    /// A depth attachment whose size does not match the colour attachment is a
+    /// A colour or depth attachment whose size does not match the others is a
     /// validation error, so this is not optional on resize.
-    pub fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
-        self.depth = depth_texture(device, size);
+    pub fn resize(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat, size: (u32, u32)) {
+        let sample_count = self.anti_aliasing.msaa_samples();
+        self.depth = depth_texture(device, size, sample_count);
+        self.msaa_color = msaa_color_texture(device, format, size, sample_count);
+    }
+
+    /// What this scene's pipelines were actually built with, for the restart
+    /// note - see [`Self::msaa_color`].
+    #[must_use]
+    pub fn anti_aliasing(&self) -> crate::display::AntiAliasing {
+        self.anti_aliasing
     }
 
     /// Draws one frame into `view`.
@@ -2245,12 +2284,24 @@ impl Scene {
         let depth_view = self
             .depth
             .create_view(&wgpu::TextureViewDescriptor::default());
+        // MSAA draws into its own multisampled attachment and resolves into
+        // `view` at the end of this one pass; everything else draws straight
+        // into `view`, exactly as before this setting existed. See
+        // `Self::msaa_color`.
+        let msaa_view = self
+            .msaa_color
+            .as_ref()
+            .map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default()));
+        let (attachment_view, resolve_target) = match &msaa_view {
+            Some(msaa_view) => (msaa_view, Some(view)),
+            None => (view, None),
+        };
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("race"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
+                view: attachment_view,
                 depth_slice: None,
-                resolve_target: None,
+                resolve_target,
                 ops: wgpu::Operations {
                     // Black rather than the near-black blue this used to clear
                     // to. The clear covers the whole attachment and the scene is
@@ -2296,7 +2347,7 @@ impl Scene {
     }
 }
 
-fn depth_texture(device: &wgpu::Device, size: (u32, u32)) -> wgpu::Texture {
+fn depth_texture(device: &wgpu::Device, size: (u32, u32), sample_count: u32) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
         label: Some("race depth"),
         size: wgpu::Extent3d {
@@ -2305,11 +2356,40 @@ fn depth_texture(device: &wgpu::Device, size: (u32, u32)) -> wgpu::Texture {
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
-        sample_count: 1,
+        sample_count,
         dimension: wgpu::TextureDimension::D2,
         format: mesh_render::DEPTH_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+    })
+}
+
+/// The multisampled colour attachment MSAA draws into, resolved into the
+/// caller's own target at the end of [`Scene::render`]'s one pass.
+///
+/// `None` at `sample_count` 1: a single-sample scene draws straight into the
+/// caller's view and there is nothing here to resolve.
+fn msaa_color_texture(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    size: (u32, u32),
+    sample_count: u32,
+) -> Option<wgpu::Texture> {
+    (sample_count > 1).then(|| {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("race msaa colour"),
+            size: wgpu::Extent3d {
+                width: size.0.max(1),
+                height: size.1.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
     })
 }
 
@@ -2370,6 +2450,10 @@ pub struct CaptureOptions {
     /// gets checked against the running original, and that check is the whole
     /// reason the setting exists.
     pub animated_textures: bool,
+    /// Which anti-aliasing the scene draws with. Honoured for the same reason
+    /// the two culling tiers are: a capture is how `[graphics] anti_aliasing`
+    /// gets compared against itself off and against the running original.
+    pub anti_aliasing: crate::display::AntiAliasing,
     /// Capture the frame the way a **window** presents it, rather than the
     /// scene the way it is drawn.
     ///
@@ -2490,6 +2574,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         scene_size,
         options.anisotropy,
         visibility,
+        options.anti_aliasing,
     )?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {

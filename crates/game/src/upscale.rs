@@ -46,9 +46,9 @@
 
 use anyhow::{Context, Result};
 
-use oag_render::post::fsr1;
+use oag_render::post::{fsr1, fxaa, smaa};
 
-use crate::display::{Brightness, Gamma, Scale, Upscaler};
+use crate::display::{AntiAliasing, Brightness, Gamma, Scale, Upscaler};
 
 /// Everything the blit needs that a player chose, gathered so the window's
 /// frame loop and a capture can be handed the same thing.
@@ -58,6 +58,11 @@ pub struct Presentation {
     pub upscaler: Upscaler,
     /// FSR 1's RCAS sharpness in stops. Ignored by the bilinear path.
     pub sharpness: f32,
+    /// FXAA or SMAA, run before the upscaler - see [`Framebuffer::resolve`]
+    /// and [ADR-0013](../../../docs/architecture/adr/0013-anti-aliasing-architecture.md).
+    /// MSAA is not read here: its sample count is baked into the scene's own
+    /// pipelines rather than being a blit-time choice - see `race::Scene`.
+    pub anti_aliasing: AntiAliasing,
     pub brightness: Brightness,
     pub gamma: Gamma,
 }
@@ -123,6 +128,13 @@ pub struct Framebuffer {
     /// `Result` is kept rather than unwrapped so a shader that will not compile
     /// reports itself once and leaves the game running on the blit.
     fsr1: Option<Result<fsr1::Fsr1>>,
+    /// FXAA's one pipeline, built the first frame `[graphics] anti_aliasing`
+    /// asks for it. Lazy for the same reason `fsr1` is.
+    fxaa: Option<Result<fxaa::Fxaa>>,
+    /// SMAA's three pipelines and its two lookup textures, built the first
+    /// frame `[graphics] anti_aliasing` asks for them. Lazy for the same
+    /// reason `fsr1` is.
+    smaa: Option<Result<smaa::Smaa>>,
     size: (u32, u32),
     format: wgpu::TextureFormat,
 }
@@ -249,6 +261,8 @@ impl Framebuffer {
             grade,
             graded,
             fsr1: None,
+            fxaa: None,
+            smaa: None,
             size,
             format,
         })
@@ -285,6 +299,11 @@ impl Framebuffer {
     ///
     /// **An upscaler only runs when it is actually upscaling** - see
     /// [`magnifies`].
+    ///
+    /// **FXAA/SMAA run before the upscaler, not after**, reading `self.perceptual`
+    /// at the scene's own size and handing their output on as what the
+    /// upscaler reads instead - see [ADR-0013](../../../docs/architecture/adr/0013-anti-aliasing-architecture.md)
+    /// for why the order is the reverse of a generic post-process-AA diagram.
     pub fn resolve(
         &mut self,
         device: &wgpu::Device,
@@ -294,37 +313,104 @@ impl Framebuffer {
         rect: (f32, f32, f32, f32),
         presentation: &Presentation,
     ) {
-        let source = (presentation.upscaler == Upscaler::Fsr1
-            && magnifies(self.size, (rect.2 as u32, rect.3 as u32)))
-        .then(|| {
-            let fsr = self
-                .fsr1
-                .get_or_insert_with(|| fsr1::Fsr1::new(device, self.format));
-            let fsr = match fsr {
-                Ok(fsr) => fsr,
-                // A shader that will not compile is a build-time mistake, but
-                // it must not be a crash in a player's frame loop: say so once
-                // and carry on bilinear.
-                Err(why) => {
-                    eprintln!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
-                    return None;
+        let output_size = (rect.2 as u32, rect.3 as u32);
+
+        let post_process: Option<&wgpu::TextureView> = match presentation.anti_aliasing {
+            AntiAliasing::Fxaa => {
+                let fxaa = self
+                    .fxaa
+                    .get_or_insert_with(|| fxaa::Fxaa::new(device, self.format));
+                match fxaa {
+                    Ok(fxaa) => {
+                        fxaa.render(
+                            device,
+                            queue,
+                            encoder,
+                            fxaa::Frame {
+                                source: &self.perceptual,
+                                size: self.size,
+                            },
+                        );
+                        fxaa.output()
+                    }
+                    // A shader that will not compile is a build-time mistake,
+                    // but it must not be a crash in a player's frame loop: say
+                    // so once and carry on unfiltered.
+                    Err(why) => {
+                        eprintln!("the FXAA pipeline did not build ({why:#}); staying unfiltered");
+                        None
+                    }
                 }
-            };
-            fsr.render(
-                device,
-                queue,
-                encoder,
-                fsr1::Frame {
-                    source: &self.perceptual,
-                    input: self.size,
-                    output: (rect.2 as u32, rect.3 as u32),
-                    sharpness: fsr1::Sharpness::stops(presentation.sharpness),
-                },
-            );
-            fsr.output()
-                .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
-        });
-        let source = source.flatten();
+            }
+            AntiAliasing::Smaa => {
+                let smaa = self
+                    .smaa
+                    .get_or_insert_with(|| smaa::Smaa::new(device, queue, self.format));
+                match smaa {
+                    Ok(smaa) => {
+                        smaa.render(
+                            device,
+                            queue,
+                            encoder,
+                            smaa::Frame {
+                                source: &self.perceptual,
+                                size: self.size,
+                            },
+                        );
+                        smaa.output()
+                    }
+                    // A shader that will not compile is a build-time mistake,
+                    // but it must not be a crash in a player's frame loop: say
+                    // so once and carry on unfiltered.
+                    Err(why) => {
+                        eprintln!("the SMAA pipelines did not build ({why:#}); staying unfiltered");
+                        None
+                    }
+                }
+            }
+            AntiAliasing::Off | AntiAliasing::Msaa4x => None,
+        };
+        let upscale_source = post_process.unwrap_or(&self.perceptual);
+
+        let source = (presentation.upscaler == Upscaler::Fsr1 && magnifies(self.size, output_size))
+            .then(|| {
+                let fsr = self
+                    .fsr1
+                    .get_or_insert_with(|| fsr1::Fsr1::new(device, self.format));
+                let fsr = match fsr {
+                    Ok(fsr) => fsr,
+                    // A shader that will not compile is a build-time mistake, but
+                    // it must not be a crash in a player's frame loop: say so once
+                    // and carry on bilinear.
+                    Err(why) => {
+                        eprintln!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
+                        return None;
+                    }
+                };
+                fsr.render(
+                    device,
+                    queue,
+                    encoder,
+                    fsr1::Frame {
+                        source: upscale_source,
+                        input: self.size,
+                        output: output_size,
+                        sharpness: fsr1::Sharpness::stops(presentation.sharpness),
+                    },
+                );
+                fsr.output()
+                    .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
+            })
+            .flatten()
+            // The upscaler did not run - off, not magnifying, or its own
+            // pipelines failed to build - but FXAA/SMAA already produced a
+            // frame in the same non-sRGB space an upscaler's output would be:
+            // bind that directly rather than falling back to the untouched
+            // target.
+            .or_else(|| {
+                post_process
+                    .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
+            });
 
         self.set_grade(
             queue,

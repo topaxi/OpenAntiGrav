@@ -326,6 +326,42 @@ setting = "graphics.upscale_sharpness"
 values = ["0.0", "0.2", "0.5", "1.0", "2.0"]
 disabled_by = { setting = "graphics.upscaler", value = "off" }
 
+# Which anti-aliasing the scene draws with. MSAA, FXAA and SMAA are three
+# different classes - rasterization, and two spatial post-process passes - not
+# three quality tiers of one thing; see
+# `docs/architecture/adr/0013-anti-aliasing-architecture.md`. There is no `taa`
+# choice: temporal reconstruction needs motion vectors, jitter and a history
+# buffer that do not exist yet.
+#
+# `off`, `fxaa` and `smaa` take effect the frame they are chosen, the same as
+# UPSCALER: `Framebuffer::resolve` reads this fresh every frame. Only moving
+# to or between the two MSAA levels waits for the next race, because that is
+# what rebuilds the scene pipelines MSAA's sample count is baked into.
+# `restart_required` is the same mechanism RENDERER uses, told from what the
+# race on screen was actually built with rather than from the device - see
+# `Session::open_menus` for how it tells the two cases above apart, which is
+# why the message names a race instead of the game.
+#
+# Warned rather than greyed against the upscaler, for the same reason UPSCALER
+# above warns against RENDER SCALE: FXAA and SMAA are spatial passes that blur
+# before FSR 1's edge-adaptive EASU ever sees the picture, fighting the very
+# edges it reasons about. The two render scales named are exactly the ones
+# `upscale::magnifies` runs FSR 1 at - see
+# `the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at` for the
+# equivalent pinning on the row above. MSAA is not named here: it resolves
+# before any of this runs and composes with FSR 1 rather than fighting it.
+[[page.entry]]
+kind = "choice"
+label = "ANTI-ALIASING"
+setting = "graphics.anti_aliasing"
+values = ["off", "fxaa", "smaa", "msaa4x"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+warn_when = { message = "FIGHTS THE UPSCALER'S EDGE-ADAPTIVE RESAMPLE BELOW RENDER SCALE 100", all = [
+    { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
+    { setting = "graphics.upscaler", value = "fsr1" },
+    { setting = "graphics.render_scale", values = ["50", "75"] },
+] }
+
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.
 [[page.entry]]

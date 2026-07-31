@@ -31,3 +31,5 @@
 //! encoding is a per-upscaler decision rather than a setting made once.
 
 pub mod fsr1;
+pub mod fxaa;
+pub mod smaa;

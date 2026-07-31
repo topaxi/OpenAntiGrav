@@ -782,13 +782,15 @@ impl Pipeline {
     /// `flare` is RGBA8, normally
     /// `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` decoded by
     /// `oag_formats::texture`. `format` must be the target the caller's render
-    /// pass writes.
+    /// pass writes, and `sample_count` must match its multisample state - see
+    /// `mesh_render::build`.
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         flare: &FlareTexture,
         noise: &FlareTexture,
+        sample_count: u32,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("exhaust"),
@@ -876,7 +878,10 @@ impl Pipeline {
                 stencil: Default::default(),
                 bias: Default::default(),
             }),
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                ..Default::default()
+            },
             multiview_mask: None,
             cache: None,
         });

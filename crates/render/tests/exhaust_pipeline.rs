@@ -51,7 +51,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
     let flare = FlareTexture::placeholder(32);
     assert_eq!(flare.rgba.len(), 32 * 32 * 4, "placeholder must be RGBA8");
     let noise = FlareTexture::placeholder(16);
-    let mut pipeline = exhaust::Pipeline::new(&device, &queue, FORMAT, &flare, &noise);
+    let mut pipeline = exhaust::Pipeline::new(&device, &queue, FORMAT, &flare, &noise, 1);
 
     // A lit exhaust, so there is something to draw rather than an empty buffer.
     let mut state = Exhaust::new();

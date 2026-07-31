@@ -25,6 +25,12 @@
 *.img
 *.gcm
 
+# SMAA's own precomputed lookup textures (AreaTex/SearchTex), MIT-licensed
+# third-party shader data - not extracted disc content. See
+# scripts/check-leakage.py's ALLOWED_TRACKED, which must stay in sync.
+!/crates/render/src/post/smaa_area.bin
+!/crates/render/src/post/smaa_search.bin
+
 # Reproductions this project itself writes, not just source content: a
 # `--screenshot` is a rendering of the disc's models and textures, and the
 # movie cache demuxes to these four formats (crates/game/src/movie.rs). See

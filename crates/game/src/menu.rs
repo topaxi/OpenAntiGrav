@@ -1853,6 +1853,16 @@ mod tests {
             "the sharpness rows and `Sharpness::OFFERED` must be one list"
         );
 
+        let anti_aliasing: Vec<crate::display::AntiAliasing> = values("graphics.anti_aliasing")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            anti_aliasing,
+            crate::display::AntiAliasing::ALL,
+            "the anti-aliasing rows and `AntiAliasing::ALL` must be one list"
+        );
+
         let sizes: Vec<Size> = values("display.window_size")
             .iter()
             .map(|name| name.parse::<Size>().unwrap_or_else(|e| panic!("{e}")))
@@ -2027,6 +2037,76 @@ mod tests {
                 !magnifies,
                 warned.contains(&scale),
                 "{scale}: the guard and the warning disagree"
+            );
+        }
+    }
+
+    /// The anti-aliasing row warns against FXAA/SMAA at exactly the scales
+    /// FSR 1 actually magnifies at - the same set the row above is pinned to
+    /// above. Below that render scale a spatial post-process pass blurs the
+    /// scene before EASU ever reads it, fighting the very edges it reasons
+    /// about; at 100 % and above FSR 1 does not run at all (see the test
+    /// above) and there is nothing to fight.
+    #[test]
+    fn anti_aliasing_warns_against_the_upscaler_at_exactly_the_scales_it_fights_it_at() {
+        let definition = built_in();
+        let entry = definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .find(|entry| entry.setting() == Some("graphics.anti_aliasing"))
+            .expect("nothing edits graphics.anti_aliasing");
+        let warning = entry.warning().expect("anti-aliasing warns");
+
+        let own = warning
+            .all
+            .iter()
+            .find(|c| c.setting == "graphics.anti_aliasing")
+            .expect("the warning must name anti-aliasing's own offending values");
+        let warned_modes: Vec<crate::display::AntiAliasing> = own
+            .values
+            .iter()
+            .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        // Every value named must actually be a spatial post-process pass, and
+        // every spatial post-process pass must be named - not a subset either
+        // way, or the warning would mislead about MSAA or miss FXAA/SMAA.
+        for mode in crate::display::AntiAliasing::ALL {
+            assert_eq!(
+                mode.is_spatial_post_process(),
+                warned_modes.contains(&mode),
+                "{mode}: the warning and `is_spatial_post_process` disagree"
+            );
+        }
+
+        let upscaler = warning
+            .all
+            .iter()
+            .find(|c| c.setting == "graphics.upscaler")
+            .expect("the warning must require the upscaler to be fsr1");
+        assert_eq!(
+            upscaler.values,
+            vec![Value::Text(crate::display::Upscaler::Fsr1.to_string())]
+        );
+
+        let scales = warning
+            .all
+            .iter()
+            .find(|c| c.setting == "graphics.render_scale")
+            .expect("the warning must name the scales fsr1 fights at");
+        let warned_scales: Vec<crate::display::Scale> = scales
+            .values
+            .iter()
+            .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        let rect = (1000, 1000);
+        for scale in crate::display::Scale::OFFERED {
+            let scene = crate::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), scale, 8192);
+            let magnifies = crate::upscale::magnifies(scene, rect);
+            assert_eq!(
+                magnifies,
+                warned_scales.contains(&scale),
+                "{scale}: the guard and the anti-aliasing warning disagree"
             );
         }
     }
@@ -2246,9 +2326,17 @@ disabled_by = { setting = "a.vsync", value = true }
             "the message has to say the word: {:?}",
             restart.message
         );
-        // Every other row on the two settings pages applies this run. A second
+        // Every other row on the two settings pages applies this run. A third
         // one appearing here is not necessarily wrong, but it is a claim about
         // what the game can do live and it should be made deliberately.
+        //
+        // `graphics.anti_aliasing` is the second, and deliberately: `off`,
+        // `fxaa` and `smaa` are live, the same as every other row, but moving
+        // to or between the two MSAA levels rebuilds every scene pipeline, so
+        // that half of the row genuinely cannot apply this frame. See
+        // ADR-0013 and `Session::open_menus`, which tells the two cases
+        // apart by sample count rather than treating the whole row as
+        // deferred.
         let deferred: Vec<&str> = definition
             .pages
             .iter()
@@ -2256,7 +2344,7 @@ disabled_by = { setting = "a.vsync", value = true }
             .filter(|entry| entry.restart().is_some())
             .filter_map(Entry::setting)
             .collect();
-        assert_eq!(deferred, ["graphics.renderer"]);
+        assert_eq!(deferred, ["graphics.renderer", "graphics.anti_aliasing"]);
     }
 
     /// The note is about what the *game* is doing, not about what the settings

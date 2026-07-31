@@ -314,11 +314,13 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 frustum_culling: options.settings.graphics.frustum_culling,
                 pvs_culling: options.settings.graphics.pvs_culling,
                 animated_textures: options.settings.graphics.animated_textures,
+                anti_aliasing: options.settings.graphics.anti_aliasing,
                 presented: options.presented.then_some(race::Presented {
                     render_scale: options.settings.graphics.render_scale,
                     presentation: crate::upscale::Presentation {
                         upscaler: options.settings.graphics.upscaler,
                         sharpness: options.settings.graphics.upscale_sharpness.stops(),
+                        anti_aliasing: options.settings.graphics.anti_aliasing,
                         brightness: options.settings.display.brightness,
                         gamma: options.settings.display.gamma,
                     },
