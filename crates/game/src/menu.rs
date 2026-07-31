@@ -298,8 +298,18 @@ impl Condition {
 /// combination that is pointless.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Warning {
-    /// When to show it.
-    pub condition: Condition,
+    /// When to show it: **every** one of these must hold.
+    ///
+    /// A list because a conflict is between settings, plural. A single
+    /// condition can only say "while that row holds this", which describes a
+    /// row that is *always* pointless under some other value - and that is a
+    /// row that should not exist rather than one that needs a warning. What is
+    /// worth warning about is a *combination*, and saying so takes at least two
+    /// conditions: one naming this row's own offending value, one naming the
+    /// other row's. Getting that wrong is not subtle - the first version of
+    /// this warned at every render scale of 100 % and above whether or not the
+    /// upscaler was even selected.
+    pub all: Vec<Condition>,
     /// What to tell the player. Shown under the rows, once, for the first
     /// warned row on the page.
     pub message: String,
@@ -626,14 +636,13 @@ mod raw {
         pub values: Option<Vec<toml::Value>>,
     }
 
-    /// `warn_when = { setting = "...", values = [...], message = "..." }`.
+    /// `warn_when = { message = "...", all = [{ ... }, { ... }] }`.
     ///
     /// The message is not optional: a marker with nothing to read is a puzzle,
-    /// not a warning.
+    /// not a warning. Neither is the second condition - see [`super::Warning`].
     #[derive(Deserialize)]
     pub struct Warning {
-        #[serde(flatten)]
-        pub condition: Condition,
+        pub all: Vec<Condition>,
         pub message: String,
     }
 }
@@ -751,7 +760,7 @@ impl Definition {
                 for condition in entry
                     .disabled_by()
                     .into_iter()
-                    .chain(entry.warning().map(|warning| &warning.condition))
+                    .chain(entry.warning().into_iter().flat_map(|w| w.all.iter()))
                 {
                     self.check_condition(condition, &context)?;
                 }
@@ -949,8 +958,19 @@ fn condition_from(raw: &raw::Condition, context: &str) -> Result<Condition, Erro
 }
 
 fn warning_from(raw: &raw::Warning, context: &str) -> Result<Warning, Error> {
+    if raw.all.len() < 2 {
+        return Err(Error::BadEntry {
+            context: context.to_string(),
+            problem: "a warn_when needs at least two conditions: a warning about                       one setting alone describes a row that should not exist"
+                .to_string(),
+        });
+    }
     Ok(Warning {
-        condition: condition_from(&raw.condition, context)?,
+        all: raw
+            .all
+            .iter()
+            .map(|condition| condition_from(condition, context))
+            .collect::<Result<Vec<_>, _>>()?,
         message: raw.message.clone(),
     })
 }
@@ -1207,8 +1227,9 @@ impl Menu {
     pub fn warning<'a>(&self, entry: &'a Entry) -> Option<&'a Warning> {
         entry.warning().filter(|warning| {
             warning
-                .condition
-                .matches(self.held(&warning.condition.setting).as_ref())
+                .all
+                .iter()
+                .all(|condition| condition.matches(self.held(&condition.setting).as_ref()))
         })
     }
 
@@ -1805,10 +1826,24 @@ mod tests {
             .find(|entry| entry.setting() == Some("graphics.upscaler"))
             .expect("nothing edits graphics.upscaler");
         let warning = entry.warning().expect("the upscaler warns");
-        assert_eq!(warning.condition.setting, "graphics.render_scale");
+        // One condition names this row's own offending value, the other the
+        // scales. Without the first, the warning fires with the upscaler off.
+        let own = warning
+            .all
+            .iter()
+            .find(|c| c.setting == "graphics.upscaler")
+            .expect("the warning must name the upscaler's own value");
+        assert_eq!(
+            own.values,
+            vec![Value::Text(crate::display::Upscaler::Fsr1.to_string())]
+        );
+        let scales = warning
+            .all
+            .iter()
+            .find(|c| c.setting == "graphics.render_scale")
+            .expect("the warning must name the scales");
 
-        let warned: Vec<crate::display::Scale> = warning
-            .condition
+        let warned: Vec<crate::display::Scale> = scales
             .values
             .iter()
             .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))

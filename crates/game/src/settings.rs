@@ -224,10 +224,10 @@ pub struct Graphics {
     /// [`crate::display::Scale`].
     #[serde(default)]
     pub render_scale: crate::display::Scale,
-    /// Which resampler carries the frame onto the surface: `bilinear` or
+    /// Which resampler carries the frame onto the surface: `off` or
     /// `fsr1`.
     ///
-    /// Defaults to `bilinear`, which is what this always did. FSR 1 costs two
+    /// Defaults to `off`, which is what this always did. FSR 1 costs two
     /// fullscreen passes and is a clear win on photographic art at a low render
     /// scale; whether it is one on this game's hard-edged paletted art is a
     /// screenshot comparison has now been run, and at 50 % on one frame of one

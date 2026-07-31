@@ -331,8 +331,17 @@ live and the *combination* is pointless. It draws as an amber `!` in the margin
 and one line of amber text under the rows, on its own colour channel because the
 three the rows already use mean selected, normal and inert.
 
-`warn_when` takes the same condition shape as `disabled_by`, and both now accept
-`values = [...]` as well as `value = ...`: "the upscaler does nothing" is true at
+A warning takes **several** conditions, all of which must hold, because a
+conflict is between settings plural: one names this row's own offending value,
+one names the other row's. A single condition would describe a row that is
+always pointless under some other value, and that is a row that should not exist
+rather than one needing a warning - the loader refuses fewer than two for
+exactly that reason. It is not a hypothetical: the first version of the upscaler
+warning named only the render scale and so fired at every scale of 100 % and
+above whether or not the upscaler was even selected.
+
+The conditions themselves take the same shape as `disabled_by`, and both now
+accept `values = [...]` as well as `value = ...`: "the upscaler does nothing" is true at
 four of the six scales RENDER SCALE offers, and a one-valued condition could not
 say so. The loader rejects a condition naming a value its row cannot hold, and a
 test pins the warning's list to `upscale::magnifies` from the other side, so the
@@ -341,8 +350,8 @@ cannot drift apart.
 
 UPSCALER sits directly under RENDER SCALE because only the pairing means
 anything: at 100 % there is nothing to upscale and the choice is between a blit
-and a sharpen. UPSCALER SHARPNESS is greyed out on the bilinear path, which has
-no sharpen to adjust - greyed rather than hidden, for the reason FRAME LIMIT is:
+and a sharpen. UPSCALER SHARPNESS is greyed out when the upscaler is off, which
+leaves no sharpen to adjust - greyed rather than hidden, for the reason FRAME LIMIT is:
 a row that vanishes gives a player no way to find out what took it away. Its
 unit is **stops**, upstream FidelityFX's own, where zero is maximum and each
 whole step halves it; that runs the opposite way to what a reader expects and is

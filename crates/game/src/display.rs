@@ -526,7 +526,14 @@ impl From<Sharpness> for String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum Upscaler {
-    /// One bilinear tap, which is what this always did.
+    /// No upscaler: the blit's own single bilinear tap, which is what this
+    /// always did.
+    ///
+    /// Spelled `off` rather than `bilinear` because the row is called UPSCALER
+    /// and "off" is what a player choosing one means. There is no third state
+    /// hiding behind the name - something has to resample a frame that is not
+    /// the size of the rectangle it goes into, and the blit's sampler is
+    /// bilinear - so `off` and "bilinear" are one option, not two.
     ///
     /// **The default.** The comparison that would move it has been run once,
     /// at 50 % on one frame of one track, and FSR 1 won it clearly - but one
@@ -536,7 +543,7 @@ pub enum Upscaler {
     /// paletted raster and glyphs off a coverage atlas, and a sharpener rings
     /// on those in a way it does not on track geometry. See HANDOVER.
     #[default]
-    Bilinear,
+    Off,
     /// AMD FidelityFX Super Resolution 1: EASU, then RCAS.
     ///
     /// Spatial, so it costs two fullscreen passes and needs nothing from the
@@ -550,23 +557,29 @@ impl Upscaler {
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
-            Self::Bilinear => "bilinear",
+            Self::Off => "off",
             Self::Fsr1 => "fsr1",
         }
     }
 
     /// Every choice, for the menus and for error messages.
-    pub const ALL: [Self; 2] = [Self::Bilinear, Self::Fsr1];
+    pub const ALL: [Self; 2] = [Self::Off, Self::Fsr1];
 }
 
 impl std::str::FromStr for Upscaler {
     type Err = String;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
+        // `bilinear` was this option's name for two commits and is in settings
+        // files already written; it means the same thing and is accepted
+        // silently, with the canonical rewrite normalising it on the next run.
+        if text.eq_ignore_ascii_case("bilinear") {
+            return Ok(Self::Off);
+        }
         Self::ALL
             .into_iter()
             .find(|mode| mode.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| format!("{text:?} is not an upscaler; try bilinear or fsr1"))
+            .ok_or_else(|| format!("{text:?} is not an upscaler; try off or fsr1"))
     }
 }
 

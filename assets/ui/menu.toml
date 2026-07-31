@@ -281,13 +281,11 @@ values = ["50", "75", "100", "125", "150", "200"]
 kind = "choice"
 label = "UPSCALER"
 setting = "graphics.upscaler"
-values = ["bilinear", "fsr1"]
-warn_when = { setting = "graphics.render_scale", values = [
-    "100",
-    "125",
-    "150",
-    "200",
-], message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE" }
+values = ["off", "fsr1"]
+warn_when = { message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE", all = [
+    { setting = "graphics.upscaler", value = "fsr1" },
+    { setting = "graphics.render_scale", values = ["100", "125", "150", "200"] },
+] }
 
 # How hard FSR 1's RCAS pass sharpens, in **stops**: 0 is maximum and each whole
 # step halves it, which is upstream FidelityFX's own scale and runs the opposite
@@ -298,7 +296,7 @@ kind = "choice"
 label = "UPSCALER SHARPNESS"
 setting = "graphics.upscale_sharpness"
 values = ["0.0", "0.2", "0.5", "1.0", "2.0"]
-disabled_by = { setting = "graphics.upscaler", value = "bilinear" }
+disabled_by = { setting = "graphics.upscaler", value = "off" }
 
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.

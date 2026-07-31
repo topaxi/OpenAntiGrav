@@ -121,7 +121,7 @@ play-screenshots out="/tmp":
 compare-upscalers image scale="50" out="/tmp":
     #!/usr/bin/env bash
     set -euo pipefail
-    for upscaler in bilinear fsr1; do
+    for upscaler in off fsr1; do
         cargo run -q --release -p oag-game -- "{{image}}" --race \
             --screenshot "{{out}}/oag-upscale-{{scale}}-$upscaler.png" \
             --ticks 300 --hold cross --presented \
