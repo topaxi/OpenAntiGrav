@@ -541,22 +541,25 @@ live-captured outputs to the same printed precision:
 
 This is an end-to-end, byte-exact chain from file bytes through to the
 values the spawn actually produces - the strongest evidence tier available
-without a second binary. What it is **not** is a decoded meaning: the
-`(0x58, 0x5c, 0x60)` group reads like a small 3-vector (direction? velocity
-bias?) and `(0x64, 0x68)` like a 2-component pair, both plausible fits for
-`sparks.rs`'s still-authored ejection/spread constants, but the magnitude
-(~0.014 for the largest component) doesn't self-evidently correspond to any
-unit this project's own physics or render code uses, and nothing downstream
-of `FUN_088f4910` - i.e. whatever actually turns these six numbers into a
-drawn particle - has been traced yet. Per the correction earlier in this
-same section, porting a number without a confirmed unit is exactly the
-mistake to avoid twice in one session; these six fields are recorded as a
-located, reproducible finding, not as new `sparks.rs` inputs. Confidence
-**90** for the offsets, the `iVar1 == resource_base` identity and the
-input-to-output arithmetic (live capture and static file read agree
-byte-exact, and the full derivation reproduces six independently-captured
-outputs) - all on a single file and a single captured hit, not corpus-wide.
-**0** for what any of the twelve numbers (six inputs, six outputs) mean.
+without a second binary. Confidence **90** for the offsets, the
+`iVar1 == resource_base` identity and the input-to-output arithmetic (live
+capture and static file read agree byte-exact, and the full derivation
+reproduces six independently-captured outputs).
+
+**The meanings, left at confidence 0 above, were recovered the next day
+(2026-08-01)** by tracing every consumer of the derived fields -
+[particle-system.md](particle-system.md) is the full record, and the
+function is renamed `ParticleSystem_DeriveScaledParams`. In one line each:
+`+0x58/+0x5c/+0x60` are the severity-scaled emitter extents,
+`+0x64/+0x68` the severity-scaled ejection-speed centre and spread in
+world units per tick, `+0x6c` a flag-gated gravity, `+0x70` a
+playback-rate multiplier on the system's `dt`; severity also multiplies
+each particle's drawn size per tick. The waiting-for-a-unit discipline
+this paragraph recorded paid off exactly as intended - the numbers went
+into `oag_render::sparks::EMITTERS` only after their consumers were read
+and the units confirmed, and the file turned out to hold a four-emitter
+tree ([pob.md](../../../formats/pob.md#the-collision-spark-file-is-a-four-emitter-tree))
+of which these six fields describe only the root.
 
 The two non-spark callers below are recorded for completeness, not chased
 further:

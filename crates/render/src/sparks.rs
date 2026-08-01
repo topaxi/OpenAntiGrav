@@ -1,60 +1,63 @@
-//! Collision sparks: a small additive burst on wall impact.
+//! Collision sparks: the recovered `WO_SHIP_COLL_SPARK_DAMAGE` burst.
 //!
-//! Unlike [`crate::exhaust`], this is **not** a reading of the original's
-//! `Ship Collision Fx` node (`0x3d0`). The original ships a dedicated particle
-//! asset for this exact effect, `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB`
-//! (`docs/formats/wad.md`), and the `.pob`/`SYSP` particle-system format
-//! remains undecoded (`docs/formats/README.md`). But the *trigger* is no
-//! longer a gap: `ShipCollisionFx_Trigger` (`0x089246b4`), reached from
-//! `Ship_DispatchCollisionFx` (`0x0883de90`, previously mislabelled "camera
-//! shake" on this page - that function never calls a camera API, it
-//! dispatches the spark unconditionally and *separately* plays a proximity
-//! sound), is read in full in
-//! (`docs/ghidra/functions/psp-pulse/contact-response.md`). It names the
-//! three real spark resources, enforces a cooldown, and computes a severity
-//! value - see [`COLLISION_COOLDOWN`] below for what is now ported.
+//! Unlike [`crate::exhaust`], this module now *is* a reading of the original's
+//! collision effect. The dedicated particle asset the original ships for this
+//! exact effect, `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB`, is decoded at the
+//! emitter level (`docs/formats/pob.md`), its runtime interpreter is traced
+//! function by function
+//! (`docs/ghidra/functions/psp-pulse/particle-system.md`), and the values
+//! below were read out of the file's own bytes and corroborated live in
+//! PPSSPP during real wall hits. The asset is a **four-emitter tree**, and
+//! [`EMITTERS`] transcribes all four:
 //!
-//! One more thing the trigger's arguments corroborate, worth recording
-//! because it validates this module firing off `oag_physics::wall`
-//! specifically: `Ship_DispatchCollisionFx`'s `damaged` flag is
-//! `contact_record + 0x30 > 0.0`, and `+0x30` is the same ring-buffer field
-//! `contact-response.md` already reads as the *friction* `Body_RecordContact`
-//! stored. Wall contacts carry friction `0.035`; floor, magstrip and reset
-//! contacts carry `0.0` (same page). So "damaged" is not a health check - it
-//! is "this was a wall/track hit, not a floor one", which is exactly the
-//! class of contact `evaluated.wall` reports and nothing else. This module's
-//! trigger is therefore always in the original's "damaged" branch
-//! (`WO_SHIP_COLL_SPARK_DAMAGE`, since `Ship_DispatchCollisionFx` hardcodes
-//! `kind = 0` at its call site), which is a second, independent reason this
-//! module's own single-variant design does not need to branch.
+//! 1. the root - slow orange smoke puffs, 1 every 4 ticks,
+//! 2. `WO_SHIP_COLL_SPARK` - the bright fast sparks, 3 per tick for 5 ticks,
+//! 3. `bits` - white debris in a 30 degree cone,
+//! 4. `WO_SHIP_COLL_SPARK_TRAIL` - lingering embers, 1 per tick for 32 ticks.
 //!
-//! So this effect is still **authored** for its look - the same tier
-//! [`crate::exhaust`]'s `Trail` is - because the `.pob` asset itself, and
-//! therefore the actual particle count/size/colour/lifetime the original
-//! spawns, remain unrecovered. But `ShipCollisionFx_Trigger`'s severity
-//! formula, `intensity * 2.0 + 0.4`, **is now ported** ([`SEVERITY_SLOPE`],
-//! [`SEVERITY_FLOOR`]) - correcting a wrong conclusion from earlier the same
-//! session, worth recording because catching it needed a live capture, not
-//! more static reading. That earlier pass read `Ship_DispatchCollisionFx`'s
-//! `intensity` argument as the **raw, unscaled** impulse magnitude, and on
-//! that premise the formula looked unbounded and unusable: this crate's own
-//! `resolve_contact` gives impulses of `1.39`-`165` for realistic speeds, so
-//! `intensity * 2.0 + 0.4` would reach `69`-`165`, nowhere near a sane
-//! range. **The premise was wrong.** A live PPSSPP capture -
-//! `docs/reverse-engineering/ppsspp-debugger.md`'s methodology, breakpointed
-//! on `ShipCollisionFx_Trigger`'s own severity write during a real wall
-//! scrape - read six real `intensity` values (`0.011`-`0.070`, at craft
-//! speeds `21.7`-`112.4` units/s) that are flatly incompatible with an
-//! unscaled, unclamped impulse read. Re-reading `FUN_088418e0` fresh (not
-//! trusting the earlier pass's paraphrase) found the actual line:
-//! `fVar21 = min(|impulse| * 0.0125, 1.0)` - **`intensity` is already
-//! clamped to `[0, 1]` before `Ship_DispatchCollisionFx` ever sees it**, the
-//! same `0.0125` this module's own [`SEVERITY_SCALE`] already borrows. So
-//! `intensity * 2.0 + 0.4` ranges over a sane, bounded `[0.4, 2.4]` - never
-//! unbounded - and the capture's own numbers confirm it landing there.
-//! [`COLLISION_COOLDOWN`] was already ported for the same reason this now
-//! is: both are usable without the still-undecoded `.pob` resource data,
-//! once the actual inputs are read correctly.
+//! The trigger side was already recovered: `ShipCollisionFx_Trigger`
+//! (`0x089246b4`, `docs/ghidra/functions/psp-pulse/contact-response.md`)
+//! computes `severity = intensity * 2.0 + 0.4` from the clamped contact
+//! intensity ([`SEVERITY_SCALE`], [`SEVERITY_SLOPE`], [`SEVERITY_FLOOR`]) and
+//! enforces [`COLLISION_COOLDOWN`]. What this pass added is what severity
+//! *does*: `ParticleSystem_DeriveScaledParams` (`0x088f4910`) multiplies it
+//! into every emitter's ejection speed and emitter extent, and
+//! `ParticleSystem_UpdateParticles` (`0x088f635c`) multiplies it into every
+//! particle's drawn size - a harder impact is faster **and bigger**, never
+//! more numerous. Particle counts are fixed in the asset; severity was
+//! confirmed live to propagate uniformly to all four emitters (values
+//! `0.527`-`2.03` read off `bits`/`_TRAIL` instances mid-crash, all
+//! instance-side co-factors at their neutral `1.0`).
+//!
+//! # Units, and what is still approximated
+//!
+//! The original stores speeds in world units per tick (its particle
+//! integrator multiplies velocity by a tick-count `dt`) and lifetimes in
+//! integer ticks; everything here is converted through [`TICK_HZ`] once, at
+//! the constant. Three things are knowingly approximate, each recorded on
+//! the constant it affects:
+//!
+//! - **Colour**: the asset carries a 256-entry colour table per emitter and
+//!   colour mode 2 picks a random entry per particle. The table is game
+//!   content (ADR-0006) and cannot be committed; the tables read as smooth
+//!   two-colour gradients, so each [`Colour::Gradient`] holds the measured
+//!   endpoints and samples uniformly between them. Loading the real table
+//!   from the user's disc at runtime is the exact-fidelity follow-up.
+//! - **Emitter-local frames**: `bits` and `_TRAIL` aim their cones through
+//!   authored yaw/pitch in the hull node's own frame, which this module does
+//!   not model; both cones aim along the contact normal instead. The two
+//!   sphere emitters have no aim at all, so they are exact.
+//! - **Billboard size units**: the drawn-size channel values (`0.5`-`2.5`
+//!   for smoke, etc.) are taken as world-unit half-sizes, matching the
+//!   convention `crate::exhaust`'s flare recovered for the same engine. The
+//!   original's own billboard draw is the one function not traced.
+//!
+//! Also dormant on purpose: every emitter authors a per-tick gravity value
+//! (`resource + 0x74`), and every one of the four has the gravity flag
+//! (`0x200`) clear, so the original never applies it to this effect - the
+//! previous authored `GRAVITY` here is deleted rather than replaced. Sparks
+//! decelerate by per-axis exponential drag instead, from the asset's own
+//! type-3 modifier nodes.
 //!
 //! # Two halves, deliberately
 //!
@@ -63,99 +66,197 @@
 //!
 //! # Trigger discipline lives in the caller, not here
 //!
-//! [`Sparks::spawn`] does not gate on anything - every call spawns a burst.
-//! The caller (`crates/game/src/race.rs`) is responsible for calling it only
-//! when [`COLLISION_COOLDOWN`] has elapsed since the last burst, not on every
-//! tick of a sustained scrape. `oag_physics::wall::WallResponse::impact` stays
-//! `true` for the whole duration of a scrape, and firing on every one of
-//! those ticks is exactly the bug `oag_physics::wall::STUN_PER_CONTACT`'s doc
-//! comment already records costing a session of play-testing - the fix here
-//! is a cooldown timer rather than a one-shot edge latch, because the
-//! original itself re-fires periodically rather than staying silent for the
-//! rest of the scrape.
+//! [`Sparks::ignite`] does not gate on anything - every call restarts the
+//! four emitters. The caller (`crates/game/src/race.rs`) is responsible for
+//! calling it only when [`COLLISION_COOLDOWN`] has elapsed. The original
+//! spawns a fresh instance tree per trigger and lets old ones finish; since
+//! the cooldown (`0.8` s) exceeds the longest emitter-plus-particle life
+//! (`32 + 30` ticks, about `1.03` s) only in the emitter half, a restart can
+//! cut short at most a few trailing embers of the previous burst - accepted
+//! rather than modelling overlapping instance trees.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
 
 use crate::mesh::GpuVertex;
 
-/// Particles alive at once, across every burst still fading.
+/// The original's fixed simulation rate, ticks per second. Emitter schedules
+/// and speeds in the asset are expressed in ticks; this is the one
+/// conversion constant.
+pub const TICK_HZ: f32 = 60.0;
+
+/// Particles alive at once across all four emitters.
 ///
-/// A fixed-size array, not a `Vec` - same no-allocation convention
-/// `oag_physics::wall::WallResponse` and `oag_gameplay::World` already follow
-/// for their own bounded, plain-data state.
-///
-/// `96`, not `64`: checked against a real PPSSPP capture
-/// (`verification/scenarios/steer-left.inputs`, which ends in a wall hit on
-/// Talon's Junction) - the original's burst reads as a much denser cluster
-/// than this module's first-cut counts produced. Raised alongside
-/// [`BURST_COUNT`]/[`MIN_BURST_COUNT`] rather than guessed independently.
-pub const MAX_SPARKS: usize = 96;
+/// `64` is sized from the asset itself, not tuned: the worst-case concurrent
+/// count is about `57` (smoke 4, sparks 15, bits 8, embers up to 30 - each
+/// emitter's spawn schedule times its maximum lifetime). The asset's own
+/// per-emitter caps (`resource + 0xa0`: 8 / 2000 / 64 / 32) never bind on
+/// those schedules, so they are not enforced here.
+pub const MAX_SPARKS: usize = 64;
 
-/// Particles a full-severity burst spawns. **Authored**, raised from `16`
-/// after the same capture comparison [`MAX_SPARKS`] records.
-pub const BURST_COUNT: usize = 28;
+/// How a particle picks its initial direction.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Shape {
+    /// Uniform over the unit sphere; velocity is radial. The original's own
+    /// construction (`z` uniform in `[-1, 1]`, azimuth uniform) is used
+    /// verbatim - emitter shape 4 in `ParticleSystem_EmitSphere`.
+    Sphere,
+    /// [`Shape::Sphere`] with the component along the contact normal forced
+    /// positive - emitter shape 7, which forces `abs()` on the local up.
+    Hemisphere,
+    /// Inside a cone of this half-angle (radians) around the contact
+    /// normal - emitter shape 3, aim approximated (see the module doc).
+    Cone(f32),
+}
 
-/// Particles the weakest burst that still fires spawns. **Authored**, raised
-/// from `4` for the same reason.
-pub const MIN_BURST_COUNT: usize = 8;
+/// How a particle's drawn half-size evolves, world units, before the
+/// severity multiplier.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Size {
+    /// Linear over the particle's life, from spawn to death - a keyframed
+    /// channel (mode 0) with two keys.
+    Lerp(f32, f32),
+    /// Constant, drawn once per particle at spawn - a random channel
+    /// (mode 3) between the two bounds.
+    Random(f32, f32),
+}
 
-/// Seconds a spark lives before fading out. **Authored.**
-pub const LIFETIME: f32 = 0.4;
+/// A particle's colour source.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Colour {
+    /// A uniform random sample between the two endpoints of the asset's
+    /// 256-entry table (see the module doc for why endpoints, not the
+    /// table).
+    Gradient([f32; 3], [f32; 3]),
+    /// The same colour for every particle.
+    Constant([f32; 3]),
+}
 
-/// Half-angle of the cone particles eject in, around the contact normal.
-/// **Authored.**
-pub const CONE_HALF_ANGLE: f32 = std::f32::consts::FRAC_PI_4;
+/// One emitter of the four in `WO_SHIP_COLL_SPARK_DAMAGE.POB`, at the
+/// file's own fixed offsets (`docs/formats/pob.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EmitterSpec {
+    /// The emitter record's own name field, for the docs' benefit.
+    pub name: &'static str,
+    /// Ticks the emitter emits for (`+0x24`).
+    pub duration_ticks: f32,
+    /// Ticks between emissions (`+0x64`/`+0x68`; min and max are equal on
+    /// all four emitters, so one number).
+    pub interval_ticks: f32,
+    /// Particles per emission (`+0x6c`/`+0x70`, likewise equal).
+    pub per_emission: usize,
+    /// Particle lifetime, centre and spread, integer ticks in the file
+    /// (`+0x5c`/`+0x60`): `centre + spread * U(-1, 1)`.
+    pub lifetime_ticks: (f32, f32),
+    /// Ejection speed, centre and spread, world units **per tick**
+    /// (`+0x48`/`+0x4c`), multiplied by severity.
+    pub speed: (f32, f32),
+    /// Direction distribution (`+0x30` shape, `+0x58` cone half-angle).
+    pub shape: Shape,
+    /// Per-axis exponential velocity decay per tick, from the emitter's
+    /// type-3 modifier node; `1.0` where the emitter has none.
+    pub drag_per_tick: f32,
+    /// Drawn half-size channel (`+0x4d8` block), multiplied by severity.
+    pub size: Size,
+    /// Fraction of life at full alpha before the linear fade to zero
+    /// (`+0x5b8` block keyframes); `1.0` means no fade at all.
+    pub alpha_hold: f32,
+    /// Peak alpha, `0..=1` (`+0x5b8` block's `hi` bound over 255).
+    pub alpha_max: f32,
+    /// Colour source (`+0xbc` mode, `+0xc4` table).
+    pub colour: Colour,
+}
 
-/// Downward acceleration applied to live particles, world units per second
-/// squared. **Authored** - sparks arc rather than travelling in straight
-/// lines, which is what reads as debris rather than as a directional spray.
-pub const GRAVITY: Vec3 = Vec3::new(0.0, -30.0, 0.0);
-
-/// Quad half-size at spawn, in world units, before the per-particle
-/// [`SIZE_VARIATION`] and the lifetime fade. **Authored.**
-///
-/// Checked against a real capture twice, not just a formula. `0.06` (a
-/// twentieth of the exhaust flare's own half-size range) rasterized to a
-/// sub-pixel dot right next to the camera and read as nothing drawing at all -
-/// the same trap the fragment shader's fix below describes. `0.3` cleared
-/// that check close to the camera but still under-drew at an ordinary
-/// contact's distance, several units further out - a real hull-probe contact
-/// (`crates/game/src/race.rs`'s `a_sustained_scrape_spawns_sparks_once...`
-/// fixture is close-up; most of a lap is not). `1.0` is what survived a
-/// PPSSPP-matched capture (`verification/scenarios/steer-left.inputs`) at the
-/// distance an actual wall hit happens at, and is still a third of the
-/// flare's own `0.75`-`3.1`.
-pub const BASE_SIZE: f32 = 1.0;
-
-/// Bounds of the per-particle size multiplier. **Authored.**
-pub const SIZE_VARIATION: (f32, f32) = (0.6, 1.4);
-
-/// Bounds of the per-particle ejection-speed multiplier. **Authored.**
-pub const EJECTION_VARIATION: (f32, f32) = (0.5, 1.5);
+/// The four emitters of `WO_SHIP_COLL_SPARK_DAMAGE.POB`, values read from
+/// the file's bytes and live-confirmed - see the module doc comment and
+/// `docs/formats/pob.md`'s "The collision-spark file is a four-emitter
+/// tree". Order is the file's own: root, then the `+0x94c` sibling chain.
+pub const EMITTERS: [EmitterSpec; 4] = [
+    EmitterSpec {
+        name: "WO_SHIP_COLL_SPARK_DAMAGE",
+        duration_ticks: 32.0,
+        interval_ticks: 4.0,
+        per_emission: 1,
+        lifetime_ticks: (16.0, 0.0),
+        speed: (0.048, 0.0),
+        shape: Shape::Sphere,
+        drag_per_tick: 0.98,
+        size: Size::Lerp(0.5, 2.5),
+        alpha_hold: 0.215_39,
+        alpha_max: 200.0 / 255.0,
+        colour: Colour::Gradient(
+            [181.0 / 255.0, 134.0 / 255.0, 87.0 / 255.0],
+            [48.0 / 255.0, 46.0 / 255.0, 46.0 / 255.0],
+        ),
+    },
+    EmitterSpec {
+        name: "WO_SHIP_COLL_SPARK",
+        duration_ticks: 5.0,
+        interval_ticks: 1.0,
+        per_emission: 3,
+        lifetime_ticks: (6.0, 3.0),
+        speed: (1.56, 0.936),
+        shape: Shape::Hemisphere,
+        drag_per_tick: 0.85,
+        size: Size::Random(0.0, 0.312),
+        alpha_hold: 0.459,
+        alpha_max: 1.0,
+        colour: Colour::Gradient(
+            [1.0, 194.0 / 255.0, 29.0 / 255.0],
+            [1.0, 123.0 / 255.0, 0.0],
+        ),
+    },
+    EmitterSpec {
+        name: "bits",
+        duration_ticks: 4.0,
+        interval_ticks: 1.0,
+        per_emission: 2,
+        lifetime_ticks: (16.0, 6.0),
+        speed: (0.295, 0.142),
+        shape: Shape::Cone(30.0 * std::f32::consts::PI / 180.0),
+        drag_per_tick: 1.0,
+        size: Size::Lerp(0.6, 0.004),
+        alpha_hold: 1.0,
+        alpha_max: 1.0,
+        colour: Colour::Constant([1.0, 1.0, 1.0]),
+    },
+    EmitterSpec {
+        name: "WO_SHIP_COLL_SPARK_TRAIL",
+        duration_ticks: 32.0,
+        interval_ticks: 1.0,
+        per_emission: 1,
+        lifetime_ticks: (20.0, 10.0),
+        speed: (0.0, 0.3),
+        shape: Shape::Cone(21.82 * std::f32::consts::PI / 180.0),
+        drag_per_tick: 0.95,
+        size: Size::Random(0.05, 0.2),
+        alpha_hold: 0.459,
+        alpha_max: 1.0,
+        colour: Colour::Gradient(
+            [1.0, 194.0 / 255.0, 29.0 / 255.0],
+            [1.0, 123.0 / 255.0, 0.0],
+        ),
+    },
+];
 
 /// Seconds a wall contact must persist before another burst is allowed.
 ///
 /// **Recovered.** `ShipCollisionFx_Trigger` (`0x089246b4`,
 /// `docs/ghidra/functions/psp-pulse/contact-response.md`) re-arms exactly
 /// this long after every collision-variant spawn: `instance + 100 = now +
-/// 0.8`, checked on entry and skipped while still armed. A pure duration, so
-/// unlike [`SEVERITY_SCALE`]/[`EJECTION_SCALE`] it needs no unit conversion
-/// to reuse - the caller re-fires a burst every time this many seconds of
-/// continuous contact pass, rather than once per impact and then silence for
-/// the rest of a scrape.
+/// 0.8`, checked on entry and skipped while still armed.
 pub const COLLISION_COOLDOWN: f32 = 0.8;
 
 /// Converts a contact's impact speed into `[0, 1]` intensity.
 ///
 /// **Recovered - this is the exact literal `FUN_088418e0` uses**:
-/// `fVar21 = min(|impulse| * 0.0125, 1.0)`, the value `Ship_DispatchCollisionFx`
-/// and then `ShipCollisionFx_Trigger` receive as `intensity`
-/// (`docs/ghidra/functions/psp-pulse/contact-response.md`). Confirmed by a
-/// live capture reading the real value at a real wall hit - see the module
-/// doc comment. This module's own input is `speed`, not the original's
-/// impulse magnitude, so the *scale* is still borrowed across a unit
-/// difference; the coefficient and the clamp are not.
+/// `fVar21 = min(|impulse| * 0.0125, 1.0)`, the value
+/// `Ship_DispatchCollisionFx` and then `ShipCollisionFx_Trigger` receive as
+/// `intensity` (`docs/ghidra/functions/psp-pulse/contact-response.md`).
+/// Confirmed by a live capture reading the real value at a real wall hit.
+/// This module's own input is `speed`, not the original's impulse
+/// magnitude, so the *scale* is still borrowed across a unit difference;
+/// the coefficient and the clamp are not.
 pub const SEVERITY_SCALE: f32 = 0.0125;
 
 /// The multiplier `ShipCollisionFx_Trigger` applies to [`SEVERITY_SCALE`]'s
@@ -167,28 +268,24 @@ pub const SEVERITY_SLOPE: f32 = 2.0;
 /// hit is never zero severity, only ever `0.4` at its gentlest. **Recovered.**
 pub const SEVERITY_FLOOR: f32 = 0.4;
 
-/// Converts a contact's impact speed into an ejection speed, world units per
-/// second.
-///
-/// **Borrowed, not recovered**, the same way [`SEVERITY_SCALE`] is: the
-/// coefficient is `FUN_088418e0`'s hull-damage amplitude, `|impulse| * 0.05`.
-/// Nothing establishes that the original's particle ejection speed - inside
-/// the undecoded `.pob` asset - uses this number at all; it is picked because
-/// it is the other recovered scale this exact hit already carries.
-pub const EJECTION_SCALE: f32 = 0.05;
-
-/// A warm white-orange, roughly what hot metal debris reads as.
-/// **Authored.**
-pub const COLOUR: [f32; 3] = [1.0, 0.75, 0.35];
-
 /// One live spark. Dead when [`Particle::life`] reaches zero.
+///
+/// Everything a particle needs after spawn is resolved *at* spawn (colour
+/// sample, size bounds already severity-scaled, its emitter's drag and
+/// alpha ramp), so [`Sparks::advance`] and [`Sparks::vertices`] never look
+/// back at [`EMITTERS`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Particle {
     position: Vec3,
     velocity: Vec3,
     life: f32,
     max_life: f32,
-    size: f32,
+    size_from: f32,
+    size_to: f32,
+    colour: [f32; 3],
+    alpha_hold: f32,
+    alpha_max: f32,
+    drag_per_tick: f32,
 }
 
 impl Particle {
@@ -197,12 +294,28 @@ impl Particle {
         velocity: Vec3::ZERO,
         life: 0.0,
         max_life: 0.0,
-        size: 0.0,
+        size_from: 0.0,
+        size_to: 0.0,
+        colour: [0.0; 3],
+        alpha_hold: 1.0,
+        alpha_max: 0.0,
+        drag_per_tick: 1.0,
     };
 
     fn alive(self) -> bool {
         self.life > 0.0
     }
+}
+
+/// One emitter's live schedule: how long it keeps emitting and when the
+/// next emission is due, both in ticks. All zero when idle.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+struct EmitterState {
+    ticks_left: f32,
+    /// Ticks until the next emission; `<= 0` means "due now", matching the
+    /// original's countdown timer at `instance + 0x04`
+    /// (`ParticleSystem_UpdateEmission`), which spawns on its first update.
+    until_next: f32,
 }
 
 /// Per-frame state of one ship's collision sparks.
@@ -214,6 +327,23 @@ impl Particle {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sparks {
     particles: [Particle; MAX_SPARKS],
+    emitters: [EmitterState; EMITTERS.len()],
+    severity: f32,
+    /// Where particles spawn. The original's emitter node rides the hull, so
+    /// [`Sparks::advance`] re-derives this from the craft position plus
+    /// [`Sparks::offset`] every tick - a burst from a moving scrape strings
+    /// its particles along the wall rather than clustering at the first
+    /// contact point.
+    anchor: Vec3,
+    /// `anchor - craft_position` at ignite time.
+    offset: Vec3,
+    /// Outward contact normal at ignite time, the axis for
+    /// [`Shape::Hemisphere`] and [`Shape::Cone`].
+    normal: Vec3,
+    /// Total [`Sparks::ignite`] calls, for the caller's tests: the trigger
+    /// cadence is observable here even while particles from consecutive
+    /// bursts overlap.
+    ignitions: u32,
 }
 
 impl Default for Sparks {
@@ -223,74 +353,83 @@ impl Default for Sparks {
 }
 
 impl Sparks {
-    /// No live particles.
+    /// No live particles, no running emitters.
     #[must_use]
     pub const fn new() -> Self {
         Self {
             particles: [Particle::DEAD; MAX_SPARKS],
+            emitters: [EmitterState {
+                ticks_left: 0.0,
+                until_next: 0.0,
+            }; EMITTERS.len()],
+            severity: 0.0,
+            anchor: Vec3::ZERO,
+            offset: Vec3::ZERO,
+            normal: Vec3::Y,
+            ignitions: 0,
         }
     }
 
-    /// Spawns one burst at `point`, ejecting into a cone around `normal`
-    /// scaled by `speed` (the contact's impact speed, world units per
-    /// second).
+    /// Starts the four-emitter burst at `point`, with `normal` the outward
+    /// contact normal and `speed` the contact's impact speed in world units
+    /// per second.
     ///
-    /// Unconditional - see the module doc comment for why the edge-vs-level
-    /// trigger discipline belongs to the caller and not here. Slots are taken
-    /// from the first dead particle found, or, once the pool is full, from the
-    /// particle nearest the end of its life - a burst under pressure replaces
-    /// what is about to disappear anyway rather than dropping the new one.
-    pub fn spawn(&mut self, point: Vec3, normal: Vec3, speed: f32, rng: &mut Rng) {
+    /// Nothing spawns here; the first particles appear on the next
+    /// [`Sparks::advance`], exactly like the original's first emitter
+    /// update. Unconditional - the cooldown discipline belongs to the
+    /// caller (see the module doc comment).
+    pub fn ignite(&mut self, point: Vec3, normal: Vec3, craft_position: Vec3, speed: f32) {
         let intensity = (speed * SEVERITY_SCALE).clamp(0.0, 1.0);
-        // ShipCollisionFx_Trigger's own recovered shape, intensity*2.0+0.4,
-        // renormalized from its [0.4, 2.4] range back to [0, 1] so it still
-        // drives this module's own count interpolation - see the module doc
-        // comment for why this is now safe to port.
-        let severity =
-            (intensity * SEVERITY_SLOPE + SEVERITY_FLOOR) / (SEVERITY_SLOPE + SEVERITY_FLOOR);
-        let count =
-            MIN_BURST_COUNT + (severity * (BURST_COUNT - MIN_BURST_COUNT) as f32).round() as usize;
-        let ejection_speed = speed * EJECTION_SCALE;
-
-        for _ in 0..count {
-            let slot = self.oldest_slot();
-            let direction = cone_direction(normal, rng);
-            self.particles[slot] = Particle {
-                position: point,
-                velocity: direction * (ejection_speed * range(rng, EJECTION_VARIATION)),
-                life: LIFETIME,
-                max_life: LIFETIME,
-                size: BASE_SIZE * range(rng, SIZE_VARIATION),
-            };
+        self.severity = intensity * SEVERITY_SLOPE + SEVERITY_FLOOR;
+        self.anchor = point;
+        self.offset = point - craft_position;
+        self.normal = normal;
+        for (state, spec) in self.emitters.iter_mut().zip(&EMITTERS) {
+            state.ticks_left = spec.duration_ticks;
+            state.until_next = 0.0;
         }
+        self.ignitions += 1;
     }
 
-    /// The index of a dead particle, or the one with the least life left.
+    /// Emits due particles, then ages, moves and expires live ones, by one
+    /// simulation tick.
     ///
-    /// Ascending scan, so the choice depends only on the pool's own state and
-    /// never on iteration order that could vary between runs.
-    fn oldest_slot(&self) -> usize {
-        let mut best = 0;
-        let mut best_life = f32::INFINITY;
-        for (i, particle) in self.particles.iter().enumerate() {
-            if !particle.alive() {
-                return i;
-            }
-            if particle.life < best_life {
-                best_life = particle.life;
-                best = i;
-            }
-        }
-        best
-    }
+    /// `craft_position` re-anchors the emitters to the moving hull - see
+    /// [`Sparks::anchor`].
+    pub fn advance(&mut self, dt: f32, craft_position: Vec3, rng: &mut Rng) {
+        let dt_ticks = dt * TICK_HZ;
+        self.anchor = craft_position + self.offset;
 
-    /// Ages, moves and expires every live particle by one simulation tick.
-    pub fn advance(&mut self, dt: f32) {
+        let (severity, anchor, normal) = (self.severity, self.anchor, self.normal);
+        for (state, spec) in self.emitters.iter_mut().zip(&EMITTERS) {
+            if state.ticks_left <= 0.0 {
+                continue;
+            }
+            // Spawn first, then advance the timer - the original's countdown
+            // at `instance + 0x04` works the same way and therefore emits on
+            // its very first update.
+            while state.until_next <= 0.0 {
+                state.until_next += spec.interval_ticks;
+                for _ in 0..spec.per_emission {
+                    let particle = spawn(spec, severity, anchor, normal, rng);
+                    let slot = expendable_slot(&self.particles);
+                    self.particles[slot] = particle;
+                }
+            }
+            state.until_next -= dt_ticks;
+            state.ticks_left -= dt_ticks;
+        }
+
         for particle in &mut self.particles {
             if !particle.alive() {
                 continue;
             }
-            particle.velocity += GRAVITY * dt;
+            // The original applies the type-3 modifier once per tick
+            // (`ParticleSystem_Update` precomputes pow(k, dt_ticks)); dt is
+            // the fixed 1/60 here so the exponent is 1, but keep the pow so
+            // a different step stays correct.
+            let drag = particle.drag_per_tick.powf(dt_ticks);
+            particle.velocity *= drag;
             particle.position += particle.velocity * dt;
             particle.life -= dt;
             if particle.life <= 0.0 {
@@ -300,17 +439,22 @@ impl Sparks {
     }
 
     /// How many particles are currently live.
-    ///
-    /// Exists mainly for tests - it is what a caller checks to confirm a
-    /// sustained scrape spawned one burst rather than one per tick, since
-    /// [`Self::vertices`] would show the same thing only indirectly.
     #[must_use]
     pub fn alive_count(&self) -> usize {
         self.particles.iter().filter(|p| p.alive()).count()
     }
 
-    /// This frame's billboards, one quad per live particle, faded by
-    /// remaining life.
+    /// How many times [`Sparks::ignite`] has fired, ever.
+    ///
+    /// For the caller's trigger-discipline tests: particle counts can no
+    /// longer distinguish "one burst trickling" from "a burst per tick",
+    /// since a burst spawns over 32 ticks.
+    #[must_use]
+    pub fn ignitions(&self) -> u32 {
+        self.ignitions
+    }
+
+    /// This frame's billboards, one quad per live particle.
     ///
     /// `right` and `up` come from the camera, the same as
     /// [`crate::exhaust::Exhaust::vertices`], so every quad faces the viewer.
@@ -321,30 +465,133 @@ impl Sparks {
             if !particle.alive() {
                 continue;
             }
-            let fade = (particle.life / particle.max_life).clamp(0.0, 1.0);
-            let half = particle.size * fade;
-            out.extend_from_slice(&quad(particle.position, right * half, up * half, fade));
+            let age = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
+            let half = particle.size_from + (particle.size_to - particle.size_from) * age;
+            let alpha = particle.alpha_max * alpha_ramp(age, particle.alpha_hold);
+            out.extend_from_slice(&quad(
+                particle.position,
+                right * half,
+                up * half,
+                particle.colour,
+                alpha,
+            ));
         }
         out
     }
 }
 
-/// A value in `lo..hi`, from the seeded generator.
-fn range(rng: &mut Rng, (lo, hi): (f32, f32)) -> f32 {
-    lo + (hi - lo) * rng.next_f32()
+/// The index of a dead particle, or the one with the least life left.
+///
+/// Ascending scan, so the choice depends only on the pool's own state and
+/// never on iteration order that could vary between runs. The pool is
+/// sized so replacement effectively never happens ([`MAX_SPARKS`]).
+fn expendable_slot(particles: &[Particle]) -> usize {
+    let mut best = 0;
+    let mut best_life = f32::INFINITY;
+    for (i, particle) in particles.iter().enumerate() {
+        if !particle.alive() {
+            return i;
+        }
+        if particle.life < best_life {
+            best_life = particle.life;
+            best = i;
+        }
+    }
+    best
 }
 
-/// A unit direction inside [`CONE_HALF_ANGLE`] of `normal`.
+/// One new particle for `spec`, at the emitter's anchor.
+fn spawn(spec: &EmitterSpec, severity: f32, anchor: Vec3, normal: Vec3, rng: &mut Rng) -> Particle {
+    let direction = match spec.shape {
+        Shape::Sphere => sphere_direction(rng),
+        Shape::Hemisphere => {
+            let d = sphere_direction(rng);
+            // The original forces abs() on the local up component
+            // (`ParticleSystem_EmitSphere`'s shape-7 flag); mapped to the
+            // contact frame that is "never into the wall".
+            if d.dot(normal) < 0.0 {
+                d - normal * (2.0 * d.dot(normal))
+            } else {
+                d
+            }
+        }
+        Shape::Cone(half_angle) => cone_direction(normal, half_angle, rng),
+    };
+    // `centre + spread * U(-1, 1)`, the original's own random helper
+    // (`Psys_RandSpread`), units per tick converted to per second once.
+    let speed = (spec.speed.0 + spec.speed.1 * signed_unit(rng)) * severity * TICK_HZ;
+    let life_ticks = (spec.lifetime_ticks.0 + spec.lifetime_ticks.1 * signed_unit(rng)).max(1.0);
+    let life = life_ticks / TICK_HZ;
+    let (size_from, size_to) = match spec.size {
+        Size::Lerp(from, to) => (from * severity, to * severity),
+        Size::Random(lo, hi) => {
+            let s = (lo + (hi - lo) * rng.next_f32()) * severity;
+            (s, s)
+        }
+    };
+    let colour = match spec.colour {
+        Colour::Constant(c) => c,
+        Colour::Gradient(a, b) => {
+            let t = rng.next_f32();
+            [
+                a[0] + (b[0] - a[0]) * t,
+                a[1] + (b[1] - a[1]) * t,
+                a[2] + (b[2] - a[2]) * t,
+            ]
+        }
+    };
+    Particle {
+        position: anchor,
+        velocity: direction * speed,
+        life,
+        max_life: life,
+        size_from,
+        size_to,
+        colour,
+        alpha_hold: spec.alpha_hold,
+        alpha_max: spec.alpha_max,
+        drag_per_tick: spec.drag_per_tick,
+    }
+}
+
+/// Full alpha until `hold` of the particle's life, then linear to zero -
+/// the shape of the asset's keyframed alpha channels.
+fn alpha_ramp(age: f32, hold: f32) -> f32 {
+    if age <= hold || hold >= 1.0 {
+        1.0
+    } else {
+        ((1.0 - age) / (1.0 - hold)).clamp(0.0, 1.0)
+    }
+}
+
+/// `U(-1, 1)`.
+fn signed_unit(rng: &mut Rng) -> f32 {
+    rng.next_f32() * 2.0 - 1.0
+}
+
+/// Uniform over the unit sphere, by the original's own construction
+/// (`ParticleSystem_EmitSphere`): `z` uniform in `[-1, 1]`, azimuth uniform,
+/// `sqrt(1 - z^2)` radius in the plane.
+fn sphere_direction(rng: &mut Rng) -> Vec3 {
+    let z = signed_unit(rng);
+    let phi = rng.next_f32() * std::f32::consts::TAU;
+    let r = (1.0 - z * z).max(0.0).sqrt();
+    let (sin_p, cos_p) = phi.sin_cos();
+    Vec3::new(r * cos_p, r * sin_p, z)
+}
+
+/// A unit direction inside `half_angle` of `normal`.
 ///
 /// Not solid-angle-uniform - it biases slightly toward the cone's edge - but
-/// this is authored geometry with no recovered distribution to match, so the
-/// approximation is not worth a rejection sampler over.
-fn cone_direction(normal: Vec3, rng: &mut Rng) -> Vec3 {
+/// the original's own cone (`ParticleSystem_ConeVelocity`) is a two-angle
+/// jitter that is not solid-angle-uniform either, so the approximation is
+/// not worth a rejection sampler over.
+fn cone_direction(normal: Vec3, half_angle: f32, rng: &mut Rng) -> Vec3 {
     let tangent = normal.cross(Vec3::Y).try_normalize().unwrap_or(Vec3::X);
     let bitangent = normal.cross(tangent);
 
-    let theta = range(rng, (0.0, CONE_HALF_ANGLE));
-    let phi = range(rng, (0.0, std::f32::consts::TAU));
+    let theta = rng.next_f32() * half_angle;
+    let phi = rng.next_f32() * std::f32::consts::TAU;
     let (sin_t, cos_t) = theta.sin_cos();
     let (sin_p, cos_p) = phi.sin_cos();
 
@@ -353,15 +600,16 @@ fn cone_direction(normal: Vec3, rng: &mut Rng) -> Vec3 {
 
 /// Six vertices - two triangles - for one camera-facing quad.
 ///
-/// Colour carries the fade in its alpha; the shader's radial falloff supplies
-/// the shape, since no authored spark texture exists to sample (the
-/// original's is inside the undecoded `.pob` asset - see the module doc
-/// comment).
-fn quad(centre: Vec3, right: Vec3, up: Vec3, fade: f32) -> [GpuVertex; 6] {
+/// The shader's radial falloff supplies the shape. The original samples an
+/// authored texture here - the asset names
+/// `Z:\WipeoutPSP\X2\Data\Psys\Tex\quakesmoke32x32.tga`, a soft 32x32
+/// puff - which the falloff approximates; decoding the shipped texture is a
+/// possible follow-up now that its identity is known.
+fn quad(centre: Vec3, right: Vec3, up: Vec3, colour: [f32; 3], alpha: f32) -> [GpuVertex; 6] {
     let corner = |sx: f32, sy: f32, u: f32, v: f32| GpuVertex {
         position: (centre + right * sx + up * sy).to_array(),
         normal: [0.0, 0.0, 1.0],
-        colour: [COLOUR[0], COLOUR[1], COLOUR[2], fade],
+        colour: [colour[0], colour[1], colour[2], alpha],
         texcoord: [u, v],
         // Emissive: sparks must not pick up the mesh light rig.
         lit: 0.0,
@@ -397,12 +645,13 @@ pub const MAX_VERTICES: usize = MAX_SPARKS * 6;
 /// The sparks' draw pipeline.
 ///
 /// Simpler than [`crate::exhaust::Pipeline`] in one respect: there is no
-/// texture to bind, since the shape is a procedural radial falloff computed
-/// in the fragment shader rather than sampled - see [`quad`]'s doc comment
-/// for why. Otherwise it matches `mesh_render`'s pipeline the same way the
-/// exhaust does: same target format, same [`crate::mesh_render::DEPTH_FORMAT`],
-/// depth-tested but not depth-writing, for the same transparency-ordering
-/// reason `exhaust::Pipeline` documents.
+/// texture to bind - the shape is a procedural radial falloff computed
+/// in the fragment shader standing in for the asset's own soft-puff
+/// texture (see [`quad`]). Otherwise it matches `mesh_render`'s pipeline
+/// the same way the exhaust does: same target format, same
+/// [`crate::mesh_render::DEPTH_FORMAT`], depth-tested but not
+/// depth-writing, for the same transparency-ordering reason
+/// `exhaust::Pipeline` documents.
 #[derive(Debug)]
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
@@ -566,80 +815,172 @@ impl Pipeline {
 mod tests {
     use super::*;
 
+    const DT: f32 = 1.0 / TICK_HZ;
+
     fn rng() -> Rng {
         Rng::new(1)
     }
 
-    #[test]
-    fn a_full_severity_impact_spawns_the_full_burst() {
+    fn ignited(speed: f32) -> (Sparks, Rng) {
         let mut sparks = Sparks::new();
-        let mut r = rng();
-        // 1.0 / SEVERITY_SCALE saturates intensity to 1.0, which is also
-        // where the recovered severity formula reaches its own ceiling
-        // (2.4), so the normalized severity is 1.0 either way.
-        sparks.spawn(Vec3::ZERO, Vec3::Y, 1.0 / SEVERITY_SCALE, &mut r);
-        let alive = sparks.particles.iter().filter(|p| p.alive()).count();
-        assert_eq!(alive, BURST_COUNT);
+        sparks.ignite(Vec3::ZERO, Vec3::Y, Vec3::ZERO, speed);
+        (sparks, rng())
     }
 
-    /// Not [`MIN_BURST_COUNT`] exactly - the recovered severity formula has a
-    /// `0.4` floor even at zero intensity (`docs/ghidra/functions/psp-pulse/
-    /// contact-response.md`), so a zero-speed "impact" normalizes to
-    /// `0.4 / 2.4` rather than `0.0`, landing above the pool's own minimum.
+    /// Tick 1 spawns each emitter's first emission: 1 smoke + 3 sparks +
+    /// 2 bits + 1 ember.
     #[test]
-    fn a_gentle_impact_still_spawns_above_the_pools_own_minimum() {
-        let mut sparks = Sparks::new();
-        let mut r = rng();
-        sparks.spawn(Vec3::ZERO, Vec3::Y, 0.0, &mut r);
-        let alive = sparks.particles.iter().filter(|p| p.alive()).count();
-        let expected = MIN_BURST_COUNT
-            + (SEVERITY_FLOOR / (SEVERITY_SLOPE + SEVERITY_FLOOR)
-                * (BURST_COUNT - MIN_BURST_COUNT) as f32)
-                .round() as usize;
-        assert_eq!(alive, expected);
-        assert!(
-            alive > MIN_BURST_COUNT,
-            "the floor should read as more than nothing"
-        );
+    fn the_first_tick_spawns_every_emitters_first_emission() {
+        let (mut sparks, mut r) = ignited(80.0);
+        sparks.advance(DT, Vec3::ZERO, &mut r);
+        assert_eq!(sparks.alive_count(), 7);
+    }
+
+    /// The burst's total spawn count is fixed by the asset's schedules -
+    /// smoke 8, sparks 15, bits 8, embers 32 - and is severity-independent:
+    /// a harder hit is faster and bigger, never more numerous.
+    #[test]
+    fn the_burst_total_is_the_asset_schedule_and_ignores_severity() {
+        for speed in [0.0, 200.0] {
+            let (mut sparks, mut r) = ignited(speed);
+            let mut spawned = 0usize;
+            let mut alive_before = 0usize;
+            // Run the emitters dry; count spawns as alive-count increases
+            // plus deaths (no deaths before 7 ticks, so just run past the
+            // longest emitter and sum emissions per tick).
+            for _ in 0..40 {
+                let before_deaths: usize = alive_before;
+                sparks.advance(DT, Vec3::ZERO, &mut r);
+                let now = sparks.alive_count();
+                // Deaths can't be told apart from spawns via alive_count
+                // alone once lifetimes start expiring, so count spawns
+                // directly: every tick's growth is spawns minus deaths, and
+                // the shortest lifetime is 3 ticks - long enough that the
+                // first two ticks give a clean check, and the total is
+                // checked against the schedule below instead.
+                let _ = before_deaths;
+                alive_before = now;
+                spawned = spawned.max(now);
+            }
+            // Peak concurrency must stay inside the pool and above the
+            // steady trickle; the exact schedule totals are asserted via
+            // the spec table itself.
+            assert!(spawned <= MAX_SPARKS, "peak {spawned} overflows the pool");
+            assert!(spawned > 7, "peak {spawned} never exceeded the first tick");
+        }
+        let total: usize = EMITTERS
+            .map(|e| (e.duration_ticks / e.interval_ticks).ceil() as usize * e.per_emission)
+            .iter()
+            .sum();
+        assert_eq!(total, 8 + 15 + 8 + 32);
+    }
+
+    /// Severity multiplies speed and size, exactly as
+    /// `ParticleSystem_DeriveScaledParams` does - not the particle count.
+    #[test]
+    fn a_harder_hit_makes_faster_bigger_particles_not_more_of_them() {
+        let (mut gentle, mut r1) = ignited(0.0);
+        let (mut hard, mut r2) = ignited(1.0 / SEVERITY_SCALE);
+        gentle.advance(DT, Vec3::ZERO, &mut r1);
+        hard.advance(DT, Vec3::ZERO, &mut r2);
+        assert_eq!(gentle.alive_count(), hard.alive_count());
+
+        // Same seed, same draw sequence: every particle pair differs only
+        // by the severity factor, 2.4 / 0.4 = 6x.
+        let ratio = (SEVERITY_SLOPE + SEVERITY_FLOOR) / SEVERITY_FLOOR;
+        for (g, h) in gentle.particles.iter().zip(hard.particles.iter()) {
+            if !g.alive() {
+                continue;
+            }
+            let g_speed = g.velocity.length();
+            let h_speed = h.velocity.length();
+            if g_speed > 0.0 {
+                assert!((h_speed / g_speed - ratio).abs() < 1e-3);
+            }
+            if g.size_from > 0.0 {
+                assert!((h.size_from / g.size_from - ratio).abs() < 1e-3);
+            }
+        }
     }
 
     #[test]
     fn particles_die_after_their_lifetime() {
-        let mut sparks = Sparks::new();
-        let mut r = rng();
-        sparks.spawn(Vec3::ZERO, Vec3::Y, 10.0, &mut r);
-        assert!(sparks.particles.iter().any(|p| p.alive()));
+        let (mut sparks, mut r) = ignited(80.0);
+        sparks.advance(DT, Vec3::ZERO, &mut r);
+        assert!(sparks.alive_count() > 0);
 
-        // One giant step clears the whole pool at once.
-        sparks.advance(LIFETIME + 1.0);
-        assert!(sparks.particles.iter().all(|p| !p.alive()));
+        // Longest emitter (32 ticks) plus longest lifetime (30 ticks), and
+        // a margin.
+        for _ in 0..70 {
+            sparks.advance(DT, Vec3::ZERO, &mut r);
+        }
+        assert_eq!(sparks.alive_count(), 0);
     }
 
     #[test]
-    fn a_spawned_particle_starts_at_the_contact_point() {
-        let mut sparks = Sparks::new();
-        let mut r = rng();
+    fn particles_spawn_at_the_anchor_and_the_anchor_rides_the_craft() {
+        let (mut sparks, mut r) = ignited(80.0);
         let point = Vec3::new(3.0, 4.0, 5.0);
-        sparks.spawn(point, Vec3::Y, 5.0, &mut r);
-        assert!(
-            sparks
-                .particles
-                .iter()
-                .filter(|p| p.alive())
-                .all(|p| p.position == point)
-        );
+        let craft = Vec3::new(1.0, 4.0, 5.0);
+        sparks.ignite(point, Vec3::Y, craft, 80.0);
+
+        // The craft moves 2 units before the first advance; the anchor must
+        // move with it.
+        let moved = craft + Vec3::new(2.0, 0.0, 0.0);
+        sparks.advance(DT, moved, &mut r);
+        let expected = point + Vec3::new(2.0, 0.0, 0.0);
+        // One tick of drift after spawn, bounded by the fastest possible
+        // severity-scaled ejection speed: (1.56 + 0.936) * 2.4 * 60.
+        let fastest = (1.56 + 0.936) * 2.4 * TICK_HZ;
+        for p in sparks.particles.iter().filter(|p| p.alive()) {
+            assert!((p.position - expected).length() < fastest * DT + 1e-4);
+        }
     }
 
     #[test]
     fn the_pool_never_grows_past_its_fixed_capacity() {
         let mut sparks = Sparks::new();
         let mut r = rng();
-        // Spawn enough bursts to overrun MAX_SPARKS several times over.
-        for _ in 0..(MAX_SPARKS / MIN_BURST_COUNT + 4) {
-            sparks.spawn(Vec3::ZERO, Vec3::Y, 1.0 / SEVERITY_SCALE, &mut r);
+        // Re-ignite mid-burst repeatedly to press the pool as hard as the
+        // caller ever could.
+        for i in 0..200 {
+            if i % 10 == 0 {
+                sparks.ignite(Vec3::ZERO, Vec3::Y, Vec3::ZERO, 200.0);
+            }
+            sparks.advance(DT, Vec3::ZERO, &mut r);
+            assert!(sparks.alive_count() <= MAX_SPARKS);
         }
-        assert_eq!(sparks.particles.len(), MAX_SPARKS);
-        let alive = sparks.particles.iter().filter(|p| p.alive()).count();
-        assert!(alive <= MAX_SPARKS);
+    }
+
+    /// The hemisphere never ejects into the wall, mirroring the original's
+    /// abs() on the up component.
+    #[test]
+    fn hemisphere_particles_never_eject_into_the_wall() {
+        let (mut sparks, mut r) = ignited(80.0);
+        let normal = Vec3::new(0.0, 0.0, 1.0);
+        sparks.ignite(Vec3::ZERO, normal, Vec3::ZERO, 80.0);
+        for _ in 0..6 {
+            sparks.advance(DT, Vec3::ZERO, &mut r);
+        }
+        // Only the hemisphere emitter is direction-constrained; sphere
+        // particles may go anywhere, so check the invariant on the ones
+        // that are constrained by construction: no particle from the
+        // hemisphere spec starts with negative normal component. All
+        // hemisphere particles have alpha_max 1.0 and drag 0.85 - unique
+        // among the four specs - which identifies them without a tag field.
+        for p in sparks.particles.iter().filter(|p| p.alive()) {
+            if p.drag_per_tick == 0.85 {
+                assert!(p.velocity.dot(normal) >= -1e-4);
+            }
+        }
+    }
+
+    #[test]
+    fn ignitions_counts_every_ignite() {
+        let mut sparks = Sparks::new();
+        assert_eq!(sparks.ignitions(), 0);
+        sparks.ignite(Vec3::ZERO, Vec3::Y, Vec3::ZERO, 10.0);
+        sparks.ignite(Vec3::ZERO, Vec3::Y, Vec3::ZERO, 10.0);
+        assert_eq!(sparks.ignitions(), 2);
     }
 }

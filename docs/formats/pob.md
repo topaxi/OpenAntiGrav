@@ -234,12 +234,105 @@ resource's fields at **fixed offsets from `resource_base`**: `+0x944`,
 the same three offsets read once before, in a dead end from an earlier
 pass), and `+0x9a0` is unpacked as two `u16` halves of a `u32`, with both
 halves' reciprocals computed as floats immediately after - plausibly a
-sprite-atlas grid dimension pair, but that is a single-site inference with no
-corpus check behind it, not a claim. None of this has been read against real
-file bytes yet, and going further (`FUN_088f79b4`, which walks a
-`+0x9a4`/`+0x9a8` list next) is its own investigation rather than a quick
-follow-up - left here as a located, not-yet-pursued lead rather than chased
-into a general node-struct decoding project.
+sprite-atlas grid dimension pair, but that was at the time a single-site
+inference with no corpus check behind it. **That investigation has since
+been run (2026-08-01)** - the sprite-atlas reading was right (`+0x9a0`
+grid, `+0x9ac` frame count), `+0x944`/`+0x948`/`+0x94c` really are a
+child/sibling tree, and the whole interpreter downstream is traced and
+documented in
+[particle-system.md](../ghidra/functions/psp-pulse/particle-system.md);
+the emitter-record layout it recovered is the next section.
+
+### The emitter record layout is decoded
+
+**2026-08-01.** The "second, fixed-offset field block" below stopped being an
+isolated curiosity: tracing its consumers through the runtime interpreter
+([particle-system.md](../ghidra/functions/psp-pulse/particle-system.md))
+decoded the whole emitter-level record. All offsets are relative to
+`resource_base` (or to a nested sibling record's own base - see the next
+section); values in parentheses are `WO_SHIP_COLL_SPARK_DAMAGE`'s root
+emitter, read from file bytes and matched byte-exact against the loaded
+resource in a live PPSSPP session:
+
+| offset | type | meaning |
+| --- | --- | --- |
+| `+0x00` | char[] | NUL-terminated emitter name |
+| `+0x20` | u32 | flags (`0x0400001e`): `0x2` emit in world space, `0x4` random initial roll, `0x8` random rotation sign, `0x20` sub-frame spread along emitter motion, `0x200` **gravity enable**, `0x800` immortal particles, `0x800000` repeat-count mode, `0x4000000` random atlas frame |
+| `+0x24` | f32 | emitter duration, ticks (32.0) |
+| `+0x28`,`+0x2c` | f32 | unknown pair (-0.0057292 both) |
+| `+0x30` | u32 | emitter shape: 0 point, 3 cone, 4 sphere, 6 box, 7 hemisphere (4) |
+| `+0x34`,`+0x38`,`+0x40` | f32 | emitter extent per axis, world units, severity-scaled (0.0144, -0.0003575, 0) |
+| `+0x3c` | u32 | radius shaping: 0 exact, 1 spread, 2 `* sin(U(0,π/2))` (2) |
+| `+0x44` | u32 | velocity mode: 0/2 cone, 1 aimed, 2 tangent on spheres (1) |
+| `+0x48`,`+0x4c` | f32 | ejection speed centre, spread - units/**tick**, severity-scaled (0.048, 0) |
+| `+0x50`,`+0x54` | f32 | aim yaw, pitch, radians (0, 0) |
+| `+0x58` | f32 | cone half-angle, **degrees** (0) |
+| `+0x5c`,`+0x60` | i32 | particle lifetime centre, spread - integer **ticks** (16, 0) |
+| `+0x64`,`+0x68` | i32 | emission interval min, max - ticks (4, 4) |
+| `+0x6c`,`+0x70` | i32 | particles per emission min, max (1, 1) |
+| `+0x74` | f32 | gravity, units/tick², dormant unless flag `0x200` (-0.011232) |
+| `+0xa0` | i32 | live-particle cap (8) |
+| `+0xb8` | u32 | blend-mode table index (2) |
+| `+0xbc` | u32 | colour mode: 2 = random table entry per particle; else over-life walk (2) |
+| `+0xc4` | u32[256] | RGBA colour table - a gradient, orange `(181,134,87,200)` → ember `(48,46,46,0)` here |
+| `+0x4cc` | f32 | playback-rate base (1.0) |
+| `+0x4d0` | f32 | child velocity-inherit scale (1.0) |
+| `+0x4d4` | f32 | child spawn probability (0.1) |
+| `+0x4d8`,`+0x5b8`,`+0x698`,`+0x858` | block | channel blocks: size, alpha, rotation speed, emission scale - each `{period f32, mode u32 (0 keyframed / 2 constant / 3 random), key count i32, lo f32, hi f32, (time,value) f32 pairs}` |
+| `+0x93c`,`+0x940` | i32, ptr | animated-attribute array (count, records of 0xec bytes) - re-derives the severity-scaled params per tick when present (0, null) |
+| `+0x944`,`+0x948`,`+0x94c` | ptr | on-death child system, per-particle child system, **next sibling emitter** (0, 0, `base+0xd20`) |
+| `+0x9a0` | u16,u16 | sprite-atlas grid (1, 1) |
+| `+0x9ac` | i32 | atlas frame count (1) |
+| `+0x9b4` | ptr | modifier list; node = `{f32 params, type u32 at +0x24, next ptr at +0x30}`, type 3 = per-axis exponential drag per tick (→ `(0.98, 0.98, 0.98)`) |
+| `+0x9f0`, `+0xa70`, `+0xc70` | scratch | zero in the file; the loader bakes the channel blocks into them (keyframe times, per-segment rates, spawn values) - confirmed by a live read of the loaded resource |
+
+Two units fall straight out of the interpreter and matter for any port:
+speeds are world units per **tick** (the integrator multiplies by a
+tick-count `dt`), and lifetimes are integer ticks - `sparks.rs` converts
+both through one `TICK_HZ` constant. Severity (the instance's `+0x34`,
+`intensity * 2.0 + 0.4` for collision sparks) scales ejection speed,
+emitter extent **and drawn particle size**; particle *counts* are fixed in
+the file.
+
+Confidence **85** for the table as a whole: every row is grounded in a full
+decompile of its consumer, and the parenthesised values were confirmed
+byte-exact live; single-file corpus, and the rows marked unknown are
+unknown. See [particle-system.md](../ghidra/functions/psp-pulse/particle-system.md)
+for the per-function evidence.
+
+### The collision-spark file is a four-emitter tree
+
+`+0x94c` chains **nested sibling emitter records inside the same file**,
+each a full record of the same layout with its own name, schedule, palette
+and modifiers. `WO_SHIP_COLL_SPARK_DAMAGE.POB` carries four - and a live
+breakpoint run on the emit functions during a real wall crash confirmed
+all four emitting, with the *nested* records' addresses (root `+0x0`,
+`+0xd20`, `+0x2320`, `+0x2fe0`), not the standalone files of the same
+names:
+
+| emitter | role | schedule | lifetime | speed (u/tick) | shape | drag/tick | size | colour |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `WO_SHIP_COLL_SPARK_DAMAGE` | smoke puffs | 1 every 4 ticks for 32 | 16 | 0.048 | sphere | 0.98 | grows 0.5→2.5 | orange→ember gradient, α 200 hold 21.5% |
+| `WO_SHIP_COLL_SPARK` | bright sparks | 3 per tick for 5 | 6±3 | 1.56±0.936 | hemisphere | 0.85 | random 0–0.312 | yellow→orange gradient, α 255 hold 45.9% |
+| `bits` | white debris | 2 per tick for 4 | 16±6 | 0.295±0.142 | cone 30° | none | shrinks 0.6→0.004 | white, constant α |
+| `WO_SHIP_COLL_SPARK_TRAIL` | lingering embers | 1 per tick for 32 | 20±10 | 0±0.3 | cone 21.8° | 0.95 | random 0.05–0.2 | yellow→orange gradient, α 255 hold 45.9% |
+
+Severity was confirmed live to propagate to all four (identical `+0x34`
+across siblings of one burst, `0.527`-`2.03` observed). All four leave the
+gravity flag clear. The root's slot table also resolves the emitter's
+texture: slot site `0x4c4` →
+`Z:\WipeoutPSP\X2\Data\Psys\Tex\quakesmoke32x32.tga`, a soft 32x32 puff.
+The per-emitter parameter values themselves are shipped tuning data; the
+table above and `oag_render::sparks::EMITTERS` transcribe the recovered
+*behavioural* constants the same way every other recovered constant in this
+project is recorded, but the 256-entry colour tables stay out per
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) - the
+committed port samples their measured endpoints, and loading the real
+tables from the user's own disc at runtime is the recorded follow-up.
+
+Confidence **90** for the sibling-tree mechanism and the four emitters'
+schedules (file bytes plus two independent live captures agree); **85** for
+the per-emitter parameter semantics (they inherit the table above).
 
 ### A second, fixed-offset field block sits right after the name - no fixup needed
 
@@ -282,18 +375,14 @@ instance, to the same precision, with the two undetermined co-factor inputs
 the values driving `ShipCollisionFx_Trigger`'s spawn - not just a pointer
 match.
 
-**What this does not yet give**: usable units. The three-float group
-(`0.0144`, `-0.00035750002`, `0.0`) reads like a small vector - direction,
-velocity, or acceleration bias - but its magnitude (~0.014) does not obviously
-correspond to any of `oag_render::sparks`'s existing constants (ejection
-speed, size, cone angle) without knowing what world-space or engine-internal
-unit it is expressed in, or whether a further scale factor is applied
-downstream of `FUN_088f4910` before the instance data reaches whatever
-actually renders a particle. Porting a number whose unit is unconfirmed
-repeats the mistake corrected earlier in the same investigation (see
-contact-response.md's "Follow-up pass" section) - this offset block is
-recorded here as a located, format-level finding, not as a source for new
-`sparks.rs` constants.
+**Superseded the next day (2026-08-01): the units are now known.** The
+three-float group is the emitter extent per axis (world units), `+0x48` is
+the ejection-speed centre in world units per tick, and the full decode is
+the emitter-record table above - see "The emitter record layout is
+decoded". The caution this paragraph recorded did its job: nothing was
+ported until the consumers were read, and the port
+(`oag_render::sparks::EMITTERS`) now carries recovered units rather than
+guessed ones.
 
 This is a genuinely separate structure from the slot table and from the
 `+0x944`/`+0x948`/`+0x94c`/`+0x9a0` tree-and-atlas fields the previous
@@ -369,9 +458,13 @@ unverified. **90** for the fixed-offset scalar block at `resource_base +
 {0x34, 0x38, 0x40, 0x48, 0x4c, 0x74}` existing and being un-fixed-up authored
 data - a live trace and a static file read agree byte-exact on all six
 values, and the full consumer arithmetic (`FUN_088f4910`) reproduces the
-live-captured *derived* outputs from those same six values, both on a single
-file only. **0** for what those six values, or the derived outputs, mean
-semantically or what unit they are expressed in.
+live-captured *derived* outputs from those same six values. **85** for what
+those values and the rest of the emitter record mean - the 2026-08-01
+interpreter trace ("The emitter record layout is decoded" above,
+[particle-system.md](../ghidra/functions/psp-pulse/particle-system.md)),
+which retired the previous **0** here; on the collision-spark file only,
+not corpus-wide. **90** for the `+0x94c` sibling-emitter tree (file bytes
+plus two live breakpoint captures).
 
 **Validated against two discs**, `pulse-psp-usa` and `pulse-ps2-eu`. Not
 checked against Pure's UMD, or PS2's `WADSP.WAD`/`PRERACE.WAD`.
@@ -398,26 +491,14 @@ shape instead.
 
 ## Not determined
 
-- **The field layout inside a resolved record.** A string-bearing record is
-  `{ NUL-terminated string, small parameter block }`; a non-string record is
-  a run of floats of a similar general shape. Neither has decoded field
-  boundaries. **Has a concrete reason to matter beyond completeness**:
-  [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
-  found that `ShipCollisionFx_Trigger`'s recovered severity value
-  (`intensity * 2.0 + 0.4`, `intensity` already clamped to `[0, 1]` -
-  correcting an earlier, wrong reading in the same pass that assumed it
-  wasn't) is consumed by `FUN_088f4910` as a multiplier against six derived
-  fields (`+0x58`/`+0x5c`/`+0x60`/`+0x64`/`+0x68`/`+0x6c`), computed from base
-  values read off the resolved resource (`iVar1`). The severity number itself
-  is now recovered and ported (`oag_render::sparks::SEVERITY_SLOPE`/
-  `SEVERITY_FLOOR`) - it did not need this format decoded. The resource-side
-  base values are now also recovered - see "A second, fixed-offset field
-  block sits right after the name" above - and their consumption arithmetic
-  is fully reconstructed byte-for-byte. What is still open is narrower than
-  either of those: what the six derived fields and their file-side inputs
-  *mean* (a velocity bias? a size/spread pair?) and therefore what unit
-  they're expressed in - not decoded, and not safely portable to
-  `sparks.rs` until it is.
+- **The field layout inside a *slot-resolved* record.** A string-bearing
+  record is `{ NUL-terminated string, small parameter block }`; a
+  non-string record is a run of floats. The *emitter-level* layout that
+  used to head this list is decoded ("The emitter record layout is
+  decoded" above) and ported to `oag_render::sparks::EMITTERS` with
+  confirmed units - what remains undecoded is the slot-table targets'
+  own internals (beyond "site `0x4c4` resolves the texture path") and the
+  scratch regions the loader bakes into (`+0x9c8`/`+0x9cc` targets).
 - **What a slot's *position* in the table means**, if anything - the
   attribute-mapper-class-per-index hypothesis is unverified.
 - **What a shared target (several slots resolving to the identical offset)
@@ -428,11 +509,10 @@ shape instead.
   refuses any other value rather than silently accepting an unrecognised
   header, the same choice `sblk.rs` makes for its own version field.
 - **Where the interpreter that reads a resolved record lives in the
-  executable.** Partially resolved: the collision-spark spawn path reaches
-  `FUN_088f58a4` and `FUN_088f4910`, which read fixed offsets on the
-  resolved resource and a spawned instance respectively (see "An
-  interpreter is now located" above and
-  [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md)).
-  Neither reads far enough to name a field.
+  executable.** Resolved on 2026-08-01: the whole runtime chain is traced
+  and named in
+  [particle-system.md](../ghidra/functions/psp-pulse/particle-system.md).
+  Still unread there: the shape-3 cone placement (`FUN_088fc634`), shapes
+  1/2/8, modifier types other than 3, and the billboard draw itself.
 - **Whether `WO_SHIP_COLL_SPARK`, `_TRAIL` and `_TRAIL_SMOKE` exist on PS2**
   outside `WADS2.WAD`.

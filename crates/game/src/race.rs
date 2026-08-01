@@ -1352,6 +1352,7 @@ impl Race {
         // rather than spawn once and go silent.
         self.sparks_cooldown = (self.sparks_cooldown - self.dt).max(0.0);
         let can_fire = evaluated.wall.impact && self.sparks_cooldown <= 0.0;
+        let craft_position = self.ship().physics.body.position;
         if can_fire && let Some(contact) = evaluated.wall.resolved {
             // `contact.point` is deliberately the *penetrating* hull sample
             // point, not the wall surface - see its doc comment on
@@ -1364,17 +1365,20 @@ impl Race {
             // correction `resolve_contact`'s `escape` vector already applies
             // to push the hull back out to the surface.
             let surface = contact.point + contact.normal * contact.depth;
-            self.sparks.spawn(
+            self.sparks.ignite(
                 surface,
                 contact.normal,
+                craft_position,
                 evaluated.wall.impact_speed,
-                &mut self.sparks_rng,
             );
             self.sparks_cooldown = sparks::COLLISION_COOLDOWN;
         }
-        // Unconditional, like the exhaust: already-live particles keep ageing
-        // even on a tick with no fresh impact.
-        self.sparks.advance(self.dt);
+        // Unconditional, like the exhaust: the emitters keep trickling and
+        // already-live particles keep ageing even on a tick with no fresh
+        // impact. The craft position re-anchors the burst to the hull, the
+        // way the original's emitter node rides the ship.
+        self.sparks
+            .advance(self.dt, craft_position, &mut self.sparks_rng);
 
         evaluated
     }
@@ -3269,15 +3273,27 @@ mod tests {
             evaluated.wall.impact,
             "the fixture never reaches the wall - not what this test means to check"
         );
-        let after_first_impact = race.sparks().alive_count();
-        assert!(after_first_impact > 0, "the first impact spawned no sparks");
+        assert_eq!(
+            race.sparks().ignitions(),
+            1,
+            "the first impact never ignited"
+        );
+        assert!(
+            race.sparks().alive_count() > 0,
+            "the first impact spawned no sparks"
+        );
 
+        // A live particle count cannot distinguish one burst from many any
+        // more - a single burst trickles new particles for 32 ticks by
+        // design - so the trigger cadence is asserted on the ignition
+        // counter directly.
         for tick in 0..10 {
             push_toward_wall(&mut race);
             race.tick(&InputSnapshot::default());
-            assert!(
-                race.sparks().alive_count() <= after_first_impact,
-                "tick {tick} of the same scrape spawned another burst before the cooldown elapsed"
+            assert_eq!(
+                race.sparks().ignitions(),
+                1,
+                "tick {tick} of the same scrape ignited another burst before the cooldown elapsed"
             );
         }
     }
@@ -3285,11 +3301,10 @@ mod tests {
     /// The other half of the firehose-trap guard: unlike a one-shot edge
     /// latch, `ShipCollisionFx_Trigger`'s recovered behaviour is a periodic
     /// re-fire - `oag_render::sparks::COLLISION_COOLDOWN` (`0.8` s) after the
-    /// last burst, for as long as contact continues. A spark's own
-    /// `oag_render::sparks::LIFETIME` (`0.4` s) is shorter than the cooldown,
-    /// so the pool is provably empty again by the time the second burst is
-    /// due - `alive_count` going `> 0` after a stretch of `0` is an
-    /// unambiguous signal of a fresh burst, not a leftover from the first.
+    /// last burst, for as long as contact continues. A burst's own trailing
+    /// embers can outlive the cooldown (up to `32 + 30` ticks, about
+    /// `1.03` s), so an empty pool is *not* a precondition of the re-fire
+    /// any more - the ignition counter is the unambiguous signal.
     #[test]
     fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
         let handling = hulled_handling();
@@ -3312,33 +3327,19 @@ mod tests {
             evaluated.wall.impact,
             "the fixture never reaches the wall - not what this test means to check"
         );
+        assert_eq!(race.sparks().ignitions(), 1);
 
-        // Run past the spark lifetime but short of the cooldown: the first
-        // burst must have fully faded, and no second one is due yet.
-        let midpoint_ticks = ((oag_render::sparks::LIFETIME
-            + (oag_render::sparks::COLLISION_COOLDOWN - oag_render::sparks::LIFETIME) / 2.0)
-            / dt)
-            .ceil() as usize;
-        for _ in 0..midpoint_ticks {
+        // Run past the cooldown: a second burst must have ignited, and only
+        // one.
+        let ticks = (oag_render::sparks::COLLISION_COOLDOWN / dt).ceil() as usize + 1;
+        for _ in 0..ticks {
             push_toward_wall(&mut race);
             race.tick(&InputSnapshot::default());
         }
         assert_eq!(
-            race.sparks().alive_count(),
-            0,
-            "the first burst should have fully faded by the cooldown's midpoint"
-        );
-
-        // Run past the cooldown itself: a second burst must have fired.
-        let remaining_ticks =
-            ((oag_render::sparks::COLLISION_COOLDOWN / dt).ceil() as usize + 1) - midpoint_ticks;
-        for _ in 0..remaining_ticks {
-            push_toward_wall(&mut race);
-            race.tick(&InputSnapshot::default());
-        }
-        assert!(
-            race.sparks().alive_count() > 0,
-            "no second burst fired after the cooldown elapsed"
+            race.sparks().ignitions(),
+            2,
+            "no second burst ignited after the cooldown elapsed"
         );
     }
 

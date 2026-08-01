@@ -28,6 +28,7 @@ Maintained as pages are added, sorted by subsystem.
 | Collision | [psp-pulse/collision.md](psp-pulse/collision.md) | - |
 | Camera views | [psp-pulse/camera.md](psp-pulse/camera.md) | [ps2-pulse/camera.md](ps2-pulse/camera.md) |
 | Ship exhaust (`Engine Flare`, `Trail`) | [psp-pulse/exhaust.md](psp-pulse/exhaust.md) | - |
+| Particle system (`Psys`, `.pob` interpreter) | [psp-pulse/particle-system.md](psp-pulse/particle-system.md) | - |
 | Craft update and handling stats | [psp-pulse/engine.md](psp-pulse/engine.md) | [ps2-pulse/handling-xml.md](ps2-pulse/handling-xml.md) (loader), [ps2-pulse/craft-update.md](ps2-pulse/craft-update.md) (hover, damping, integrator) |
 | Video and the Movie widget | [psp-pulse/frontend-video.md](psp-pulse/frontend-video.md) | - |
 | Library and import symbols | [psp-pulse/imports.md](psp-pulse/imports.md) | [ps2-pulse/libc.md](ps2-pulse/libc.md) |
