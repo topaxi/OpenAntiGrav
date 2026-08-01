@@ -272,8 +272,9 @@ resource in a live PPSSPP session:
 | `+0x6c`,`+0x70` | i32 | particles per emission min, max (1, 1) |
 | `+0x74` | f32 | gravity, units/tick², dormant unless flag `0x200` (-0.011232) |
 | `+0xa0` | i32 | live-particle cap (8) |
-| `+0xb8` | u32 | blend-mode table index (2) |
+| `+0xb8` | u32 | render-mode index into the blend table at `DAT_08ab2260`; the entry's top nibble is the draw class - 3 rotating billboard, 6/7 two-point streak (2 → class 3 here) |
 | `+0xbc` | u32 | colour mode: 2 = random table entry per particle; else over-life walk (2) |
+| `+0xc0` | u32 | blend class, dispatched by `ParticleSystem_ApplyBlendClass`: 2 additive, 3 alpha-over (3) |
 | `+0xc4` | u32[256] | RGBA colour table - a gradient, orange `(181,134,87,200)` → ember `(48,46,46,0)` here |
 | `+0x4cc` | f32 | playback-rate base (1.0) |
 | `+0x4d0` | f32 | child velocity-inherit scale (1.0) |
@@ -310,12 +311,21 @@ all four emitting, with the *nested* records' addresses (root `+0x0`,
 `+0xd20`, `+0x2320`, `+0x2fe0`), not the standalone files of the same
 names:
 
-| emitter | role | schedule | lifetime | speed (u/tick) | shape | drag/tick | size | colour |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `WO_SHIP_COLL_SPARK_DAMAGE` | smoke puffs | 1 every 4 ticks for 32 | 16 | 0.048 | sphere | 0.98 | grows 0.5→2.5 | orange→ember gradient, α 200 hold 21.5% |
-| `WO_SHIP_COLL_SPARK` | bright sparks | 3 per tick for 5 | 6±3 | 1.56±0.936 | hemisphere | 0.85 | random 0–0.312 | yellow→orange gradient, α 255 hold 45.9% |
-| `bits` | white debris | 2 per tick for 4 | 16±6 | 0.295±0.142 | cone 30° | none | shrinks 0.6→0.004 | white, constant α |
-| `WO_SHIP_COLL_SPARK_TRAIL` | lingering embers | 1 per tick for 32 | 20±10 | 0±0.3 | cone 21.8° | 0.95 | random 0.05–0.2 | yellow→orange gradient, α 255 hold 45.9% |
+| emitter | role | schedule | lifetime | speed (u/tick) | shape | drag/tick | size | colour | draw |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `WO_SHIP_COLL_SPARK_DAMAGE` | smoke puffs | 1 every 4 ticks for 32 | 16 | 0.048 | sphere | 0.98 | grows 0.5→2.5 | orange→ember gradient, α 200 hold 21.5% | rotating billboard (mode 3), **alpha-over**, `quakesmoke32x32.tga` |
+| `WO_SHIP_COLL_SPARK` | bright sparks | 3 per tick for 5 | 6±3 | 1.56±0.936 | hemisphere | 0.85 | random 0–0.312 | yellow→orange gradient, α 255 hold 45.9% | streak **from spawn point** (mode 6 + flag `0x2000000`), additive, `orange_glow2.tga` |
+| `bits` | white debris | 2 per tick for 4 | 16±6 | 0.295±0.142 | cone 30° | none | shrinks 0.6→0.004 | white, constant α | per-tick motion streak (mode 6), additive, `orange_glow2.tga` |
+| `WO_SHIP_COLL_SPARK_TRAIL` | lingering embers | 1 per tick for 32 | 20±10 | 0±0.3 | cone 21.8° | 0.95 | random 0.05–0.2 | yellow→orange gradient, α 255 hold 45.9% | per-tick streak (mode 7), additive, `orange_glow2.tga` |
+
+The draw column comes from the second-pass trace of the draw layer
+(`ParticleSystem_DrawParticle` and its helpers,
+[particle-system.md](../ghidra/functions/psp-pulse/particle-system.md#the-draw-layer-added-2026-08-01-second-pass)):
+the blend split is what makes the smoke a dark translucent puff (alpha-over)
+while the bright emitters add light, and the spawn-anchored streak class is
+what makes the sparks read as rays radiating from the impact. Each emitter
+names its own texture through its slot region - the smoke's soft puff and
+one shared glow for the bright three.
 
 Severity was confirmed live to propagate to all four (identical `+0x34`
 across siblings of one burst, `0.527`-`2.03` observed). All four leave the

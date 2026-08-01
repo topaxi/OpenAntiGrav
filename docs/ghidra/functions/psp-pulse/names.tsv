@@ -272,3 +272,6 @@
 0x088f8d94	function	Psys_RandFloatRange	90	particle-system.md
 0x088f8dd0	function	Psys_RandSpread	90	particle-system.md
 0x08985e30	function	powf	85	particle-system.md
+0x089186bc	function	ParticleSystem_DrawParticle	85	particle-system.md
+0x08916820	function	ParticleSystem_DrawStreak	80	particle-system.md
+0x0891653c	function	ParticleSystem_ApplyBlendClass	85	particle-system.md

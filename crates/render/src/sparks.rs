@@ -47,10 +47,14 @@
 //!   authored yaw/pitch in the hull node's own frame, which this module does
 //!   not model; both cones aim along the contact normal instead. The two
 //!   sphere emitters have no aim at all, so they are exact.
-//! - **Billboard size units**: the drawn-size channel values (`0.5`-`2.5`
-//!   for smoke, etc.) are taken as world-unit half-sizes, matching the
-//!   convention `crate::exhaust`'s flare recovered for the same engine. The
-//!   original's own billboard draw is the one function not traced.
+//! - **Streak end caps**: `ParticleSystem_DrawStreak` (`0x08916820`)
+//!   extends the quad past both points by a per-system stretch factor
+//!   times the size; the factor's resource field is untraced, so this
+//!   module uses the size itself - which also keeps a zero-length streak
+//!   drawing a size-sized glow, the same degenerate case the original
+//!   handles. (The size channel's *unit* is no longer approximate: the
+//!   draw dispatch's inline quad path spans `position ± size` in view
+//!   space, confirming world-unit half-sizes.)
 //!
 //! Also dormant on purpose: every emitter authors a per-tick gravity value
 //! (`resource + 0x74`), and every one of the four has the gravity flag
@@ -132,6 +136,40 @@ pub enum Colour {
     Constant([f32; 3]),
 }
 
+/// How a particle is turned into geometry - the render-mode class from the
+/// blend table at `DAT_08ab2260`, indexed by `resource + 0xb8` and decoded
+/// in the billboard draw dispatch (`0x089186bc`,
+/// `docs/ghidra/functions/psp-pulse/particle-system.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Render {
+    /// A camera-facing quad at one point - table mode `0x3`, drawn by the
+    /// one-position helper with the particle's roll angle.
+    Billboard,
+    /// A quad spanned between the particle's **spawn point** and its
+    /// current position - table mode `0x6` with resource flag `0x2000000`
+    /// set, which stops `ParticleSystem_UpdateParticles` from refreshing
+    /// the second point per tick. The streaks radiate outward from the
+    /// impact: the spiky look.
+    StreakFromSpawn,
+    /// A quad spanned over the last tick of motion - table modes `0x6`/`0x7`
+    /// with the flag clear, so the stored point is refreshed every tick.
+    StreakPerTick,
+}
+
+/// A particle's blend class - `resource + 0xc0`, dispatched by the GE state
+/// selector at `0x0891653c`: class `2` calls `BlendFunc(ADD, SRC_ALPHA,
+/// FIX 0xffffff)`, class `3` calls `BlendFunc(ADD, SRC_ALPHA,
+/// ONE_MINUS_SRC_ALPHA)`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Blend {
+    /// Class 2: `src_alpha, one` - what every bright emitter uses.
+    Additive,
+    /// Class 3: `src_alpha, one_minus_src_alpha` - what the smoke uses,
+    /// which is why a dark smoke colour is visible at all: added, it would
+    /// vanish against any background.
+    AlphaOver,
+}
+
 /// One emitter of the four in `WO_SHIP_COLL_SPARK_DAMAGE.POB`, at the
 /// file's own fixed offsets (`docs/formats/pob.md`).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -165,6 +203,10 @@ pub struct EmitterSpec {
     pub alpha_max: f32,
     /// Colour source (`+0xbc` mode, `+0xc4` table).
     pub colour: Colour,
+    /// Geometry class (`+0xb8` via the blend table, plus flag `0x2000000`).
+    pub render: Render,
+    /// Blend class (`+0xc0`).
+    pub blend: Blend,
 }
 
 /// The four emitters of `WO_SHIP_COLL_SPARK_DAMAGE.POB`, values read from
@@ -188,6 +230,8 @@ pub const EMITTERS: [EmitterSpec; 4] = [
             [181.0 / 255.0, 134.0 / 255.0, 87.0 / 255.0],
             [48.0 / 255.0, 46.0 / 255.0, 46.0 / 255.0],
         ),
+        render: Render::Billboard,
+        blend: Blend::AlphaOver,
     },
     EmitterSpec {
         name: "WO_SHIP_COLL_SPARK",
@@ -205,6 +249,8 @@ pub const EMITTERS: [EmitterSpec; 4] = [
             [1.0, 194.0 / 255.0, 29.0 / 255.0],
             [1.0, 123.0 / 255.0, 0.0],
         ),
+        render: Render::StreakFromSpawn,
+        blend: Blend::Additive,
     },
     EmitterSpec {
         name: "bits",
@@ -219,6 +265,8 @@ pub const EMITTERS: [EmitterSpec; 4] = [
         alpha_hold: 1.0,
         alpha_max: 1.0,
         colour: Colour::Constant([1.0, 1.0, 1.0]),
+        render: Render::StreakPerTick,
+        blend: Blend::Additive,
     },
     EmitterSpec {
         name: "WO_SHIP_COLL_SPARK_TRAIL",
@@ -236,6 +284,8 @@ pub const EMITTERS: [EmitterSpec; 4] = [
             [1.0, 194.0 / 255.0, 29.0 / 255.0],
             [1.0, 123.0 / 255.0, 0.0],
         ),
+        render: Render::StreakPerTick,
+        blend: Blend::Additive,
     },
 ];
 
@@ -278,6 +328,12 @@ pub const SEVERITY_FLOOR: f32 = 0.4;
 struct Particle {
     position: Vec3,
     velocity: Vec3,
+    /// The streak's other end: the spawn point for
+    /// [`Render::StreakFromSpawn`] (never updated), the previous tick's
+    /// position for [`Render::StreakPerTick`] (refreshed each tick) - the
+    /// particle-row-`+0x50` mechanism of `ParticleSystem_UpdateParticles`.
+    /// Unused by [`Render::Billboard`].
+    origin: Vec3,
     life: f32,
     max_life: f32,
     size_from: f32,
@@ -286,12 +342,15 @@ struct Particle {
     alpha_hold: f32,
     alpha_max: f32,
     drag_per_tick: f32,
+    render: Render,
+    blend: Blend,
 }
 
 impl Particle {
     const DEAD: Self = Self {
         position: Vec3::ZERO,
         velocity: Vec3::ZERO,
+        origin: Vec3::ZERO,
         life: 0.0,
         max_life: 0.0,
         size_from: 0.0,
@@ -300,6 +359,8 @@ impl Particle {
         alpha_hold: 1.0,
         alpha_max: 0.0,
         drag_per_tick: 1.0,
+        render: Render::Billboard,
+        blend: Blend::Additive,
     };
 
     fn alive(self) -> bool {
@@ -329,14 +390,13 @@ pub struct Sparks {
     particles: [Particle; MAX_SPARKS],
     emitters: [EmitterState; EMITTERS.len()],
     severity: f32,
-    /// Where particles spawn. The original's emitter node rides the hull, so
-    /// [`Sparks::advance`] re-derives this from the craft position plus
-    /// [`Sparks::offset`] every tick - a burst from a moving scrape strings
-    /// its particles along the wall rather than clustering at the first
-    /// contact point.
+    /// Where particles spawn, world space. The caller passes the current
+    /// value to every [`Sparks::advance`] - the original's emitter node
+    /// rides the hull (a `Ship Collision Fx` locator), so the anchor is the
+    /// caller's to move, and a burst from a moving scrape strings its
+    /// particles along the wall rather than clustering at the first contact
+    /// point.
     anchor: Vec3,
-    /// `anchor - craft_position` at ignite time.
-    offset: Vec3,
     /// Outward contact normal at ignite time, the axis for
     /// [`Shape::Hemisphere`] and [`Shape::Cone`].
     normal: Vec3,
@@ -364,7 +424,6 @@ impl Sparks {
             }; EMITTERS.len()],
             severity: 0.0,
             anchor: Vec3::ZERO,
-            offset: Vec3::ZERO,
             normal: Vec3::Y,
             ignitions: 0,
         }
@@ -378,11 +437,10 @@ impl Sparks {
     /// [`Sparks::advance`], exactly like the original's first emitter
     /// update. Unconditional - the cooldown discipline belongs to the
     /// caller (see the module doc comment).
-    pub fn ignite(&mut self, point: Vec3, normal: Vec3, craft_position: Vec3, speed: f32) {
+    pub fn ignite(&mut self, point: Vec3, normal: Vec3, speed: f32) {
         let intensity = (speed * SEVERITY_SCALE).clamp(0.0, 1.0);
         self.severity = intensity * SEVERITY_SLOPE + SEVERITY_FLOOR;
         self.anchor = point;
-        self.offset = point - craft_position;
         self.normal = normal;
         for (state, spec) in self.emitters.iter_mut().zip(&EMITTERS) {
             state.ticks_left = spec.duration_ticks;
@@ -394,11 +452,11 @@ impl Sparks {
     /// Emits due particles, then ages, moves and expires live ones, by one
     /// simulation tick.
     ///
-    /// `craft_position` re-anchors the emitters to the moving hull - see
-    /// [`Sparks::anchor`].
-    pub fn advance(&mut self, dt: f32, craft_position: Vec3, rng: &mut Rng) {
+    /// `anchor` is the emitters' current world position - see
+    /// [`Sparks::anchor`] for whose job moving it is.
+    pub fn advance(&mut self, dt: f32, anchor: Vec3, rng: &mut Rng) {
         let dt_ticks = dt * TICK_HZ;
-        self.anchor = craft_position + self.offset;
+        self.anchor = anchor;
 
         let (severity, anchor, normal) = (self.severity, self.anchor, self.normal);
         for (state, spec) in self.emitters.iter_mut().zip(&EMITTERS) {
@@ -423,6 +481,13 @@ impl Sparks {
         for particle in &mut self.particles {
             if !particle.alive() {
                 continue;
+            }
+            // Refresh the streak's trailing end before integrating - the
+            // same order `ParticleSystem_UpdateParticles` copies position
+            // into the particle's row +0x50. Spawn-anchored streaks skip
+            // this, which is what makes them radiate.
+            if particle.render == Render::StreakPerTick {
+                particle.origin = particle.position;
             }
             // The original applies the type-3 modifier once per tick
             // (`ParticleSystem_Update` precomputes pow(k, dt_ticks)); dt is
@@ -454,13 +519,19 @@ impl Sparks {
         self.ignitions
     }
 
-    /// This frame's billboards, one quad per live particle.
+    /// This frame's geometry, one quad per live particle, split by blend
+    /// class: `(additive, alpha_over)` - the two GE blend configurations
+    /// the original's state selector (`0x0891653c`) switches between.
     ///
     /// `right` and `up` come from the camera, the same as
-    /// [`crate::exhaust::Exhaust::vertices`], so every quad faces the viewer.
+    /// [`crate::exhaust::Exhaust::vertices`]. Billboards face the viewer;
+    /// streaks span their two stored points with a camera-perpendicular
+    /// width, following the streak-quad builder at `0x08916820`.
     #[must_use]
-    pub fn vertices(&self, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
-        let mut out = Vec::with_capacity(MAX_SPARKS * 6);
+    pub fn vertices(&self, right: Vec3, up: Vec3) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
+        let forward = right.cross(up);
+        let mut additive = Vec::with_capacity(MAX_SPARKS * 6);
+        let mut alpha_over = Vec::new();
         for particle in &self.particles {
             if !particle.alive() {
                 continue;
@@ -468,15 +539,31 @@ impl Sparks {
             let age = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
             let half = particle.size_from + (particle.size_to - particle.size_from) * age;
             let alpha = particle.alpha_max * alpha_ramp(age, particle.alpha_hold);
-            out.extend_from_slice(&quad(
-                particle.position,
-                right * half,
-                up * half,
-                particle.colour,
-                alpha,
-            ));
+            let out = match particle.blend {
+                Blend::Additive => &mut additive,
+                Blend::AlphaOver => &mut alpha_over,
+            };
+            let (centre, axis_a, axis_b) = match particle.render {
+                Render::Billboard => (particle.position, right * half, up * half),
+                Render::StreakFromSpawn | Render::StreakPerTick => {
+                    let centre = (particle.position + particle.origin) * 0.5;
+                    let along = particle.position - particle.origin;
+                    let length = along.length();
+                    let dir = if length > 1e-6 { along / length } else { up };
+                    // Perpendicular to the streak in the camera plane -
+                    // the view-space `(dir.y, -dir.x)` of the original,
+                    // done in world space. Degenerate when the streak
+                    // points straight at the camera; fall back to `right`.
+                    let perp = dir.cross(forward).try_normalize().unwrap_or(right);
+                    // Half the span plus a size-sized cap at each end, the
+                    // way the original extends the quad past both points -
+                    // a zero-length streak still draws a `half`-sized glow.
+                    (centre, dir * (length * 0.5 + half), perp * half)
+                }
+            };
+            out.extend_from_slice(&quad(centre, axis_a, axis_b, particle.colour, alpha));
         }
-        out
+        (additive, alpha_over)
     }
 }
 
@@ -543,6 +630,7 @@ fn spawn(spec: &EmitterSpec, severity: f32, anchor: Vec3, normal: Vec3, rng: &mu
     Particle {
         position: anchor,
         velocity: direction * speed,
+        origin: anchor,
         life,
         max_life: life,
         size_from,
@@ -551,6 +639,8 @@ fn spawn(spec: &EmitterSpec, severity: f32, anchor: Vec3, normal: Vec3, rng: &mu
         alpha_hold: spec.alpha_hold,
         alpha_max: spec.alpha_max,
         drag_per_tick: spec.drag_per_tick,
+        render: spec.render,
+        blend: spec.blend,
     }
 }
 
@@ -622,10 +712,11 @@ fn quad(centre: Vec3, right: Vec3, up: Vec3, colour: [f32; 3], alpha: f32) -> [G
     [bl, br, tl, br, tr, tl]
 }
 
-/// The additive blend, the same shape [`crate::exhaust::BLEND`] uses: sparks
-/// are the same kind of small, bright, emissive point the flare is, and
-/// additive is what keeps overlapping ones reading as *brighter* rather than
-/// as one occluding another.
+/// The additive blend - the original's blend class 2, `BlendFunc(ADD,
+/// SRC_ALPHA, FIX 0xffffff)`, used by the three bright emitters. The same
+/// shape [`crate::exhaust::BLEND`] uses, and for the same reason: additive
+/// keeps overlapping sparks reading as *brighter* rather than as one
+/// occluding another.
 pub const BLEND: wgpu::BlendState = wgpu::BlendState {
     color: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::SrcAlpha,
@@ -639,10 +730,28 @@ pub const BLEND: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
+/// The over blend - the original's blend class 3, `BlendFunc(ADD, SRC_ALPHA,
+/// ONE_MINUS_SRC_ALPHA)`, used by the smoke. This is what lets a *dark*
+/// smoke colour darken the scene behind it; drawn additively it would be
+/// nearly invisible, which is exactly how the missing smoke bug looked.
+pub const BLEND_ALPHA_OVER: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
 /// The maximum vertices [`Pipeline`]'s buffer holds: one quad per [`MAX_SPARKS`].
 pub const MAX_VERTICES: usize = MAX_SPARKS * 6;
 
-/// The sparks' draw pipeline.
+/// The sparks' draw pipeline - two of them, one per blend class, sharing
+/// the shader and layout.
 ///
 /// Simpler than [`crate::exhaust::Pipeline`] in one respect: there is no
 /// texture to bind - the shape is a procedural radial falloff computed
@@ -654,16 +763,19 @@ pub const MAX_VERTICES: usize = MAX_SPARKS * 6;
 /// `exhaust::Pipeline` documents.
 #[derive(Debug)]
 pub struct Pipeline {
-    pipeline: wgpu::RenderPipeline,
+    additive: wgpu::RenderPipeline,
+    alpha_over: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    vertices: wgpu::Buffer,
+    additive_vertices: wgpu::Buffer,
+    alpha_vertices: wgpu::Buffer,
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
-    count: u32,
+    additive_count: u32,
+    alpha_count: u32,
 }
 
 impl Pipeline {
-    /// Builds the pipeline.
+    /// Builds the pipeline pair.
     ///
     /// `format` must be the target the caller's render pass writes, and
     /// `sample_count` must match its multisample state - see
@@ -695,52 +807,56 @@ impl Pipeline {
             immediate_size: 0,
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("sparks"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                        4 => Float32
-                    ],
-                })],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(BLEND),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                // A camera-facing quad has no meaningful winding: the basis it
-                // is built from flips as the camera orbits.
-                cull_mode: None,
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: crate::mesh_render::DEPTH_FORMAT,
-                depth_write_enabled: Some(false),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: sample_count,
-                ..Default::default()
-            },
-            multiview_mask: None,
-            cache: None,
-        });
+        let build = |label: &str, blend: wgpu::BlendState| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[Some(wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![
+                            0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                            4 => Float32
+                        ],
+                    })],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: Some(blend),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    // A camera-facing quad has no meaningful winding: the
+                    // basis it is built from flips as the camera orbits.
+                    cull_mode: None,
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: crate::mesh_render::DEPTH_FORMAT,
+                    depth_write_enabled: Some(false),
+                    depth_compare: Some(wgpu::CompareFunction::Less),
+                    stencil: Default::default(),
+                    bias: Default::default(),
+                }),
+                multisample: wgpu::MultisampleState {
+                    count: sample_count,
+                    ..Default::default()
+                },
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let additive = build("sparks additive", BLEND);
+        let alpha_over = build("sparks alpha-over", BLEND_ALPHA_OVER);
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("sparks uniforms"),
@@ -757,31 +873,40 @@ impl Pipeline {
             }],
         });
 
-        let vertices = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("sparks vertices"),
-            size: (MAX_VERTICES * std::mem::size_of::<GpuVertex>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let buffer = |label: &str| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: (MAX_VERTICES * std::mem::size_of::<GpuVertex>()) as u64,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        };
+        let additive_vertices = buffer("sparks additive vertices");
+        let alpha_vertices = buffer("sparks alpha-over vertices");
 
         Self {
-            pipeline,
+            additive,
+            alpha_over,
             uniforms,
             bind_group,
-            vertices,
-            count: 0,
+            additive_vertices,
+            alpha_vertices,
+            additive_count: 0,
+            alpha_count: 0,
         }
     }
 
-    /// Uploads this frame's camera matrix and geometry.
+    /// Uploads this frame's camera matrix and both blend classes' geometry,
+    /// as [`Sparks::vertices`] returns them.
     ///
-    /// Takes `&mut self` only for the vertex count; both writes go through
+    /// Takes `&mut self` only for the vertex counts; the writes go through
     /// `queue`, the same split [`crate::exhaust::Pipeline::upload`] uses.
     pub fn upload(
         &mut self,
         queue: &wgpu::Queue,
         view_projection: &[[f32; 4]; 4],
-        vertices: &[GpuVertex],
+        additive: &[GpuVertex],
+        alpha_over: &[GpuVertex],
     ) {
         let mut block = [[0.0f32; 4]; 8];
         block[..4].copy_from_slice(view_projection);
@@ -791,23 +916,44 @@ impl Pipeline {
         block[7] = [0.0, 0.0, 0.0, 1.0];
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
-        let n = vertices.len().min(MAX_VERTICES);
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices[..n]));
-        self.count = n as u32;
+        let n = additive.len().min(MAX_VERTICES);
+        queue.write_buffer(
+            &self.additive_vertices,
+            0,
+            bytemuck::cast_slice(&additive[..n]),
+        );
+        self.additive_count = n as u32;
+
+        let n = alpha_over.len().min(MAX_VERTICES);
+        queue.write_buffer(
+            &self.alpha_vertices,
+            0,
+            bytemuck::cast_slice(&alpha_over[..n]),
+        );
+        self.alpha_count = n as u32;
     }
 
     /// Draws into a pass the caller already opened.
     ///
     /// Must be issued **after** the opaque geometry, for the same
-    /// depth-write-off reason as [`crate::exhaust::Pipeline::draw`].
+    /// depth-write-off reason as [`crate::exhaust::Pipeline::draw`]. The
+    /// alpha-over smoke draws first, then the additive sparks on top -
+    /// the original interleaves them in particle order, which two batched
+    /// draws cannot reproduce exactly; additive-last is the closer
+    /// approximation since adding light commutes.
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if self.count == 0 {
-            return;
+        if self.alpha_count > 0 {
+            pass.set_pipeline(&self.alpha_over);
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.set_vertex_buffer(0, self.alpha_vertices.slice(..));
+            pass.draw(0..self.alpha_count, 0..1);
         }
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.bind_group, &[]);
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
-        pass.draw(0..self.count, 0..1);
+        if self.additive_count > 0 {
+            pass.set_pipeline(&self.additive);
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.set_vertex_buffer(0, self.additive_vertices.slice(..));
+            pass.draw(0..self.additive_count, 0..1);
+        }
     }
 }
 
@@ -823,7 +969,7 @@ mod tests {
 
     fn ignited(speed: f32) -> (Sparks, Rng) {
         let mut sparks = Sparks::new();
-        sparks.ignite(Vec3::ZERO, Vec3::Y, Vec3::ZERO, speed);
+        sparks.ignite(Vec3::ZERO, Vec3::Y, speed);
         (sparks, rng())
     }
 
@@ -917,24 +1063,55 @@ mod tests {
         assert_eq!(sparks.alive_count(), 0);
     }
 
+    /// The caller owns the anchor: particles spawn wherever the current
+    /// [`Sparks::advance`] call says the emitter node is, not where the
+    /// ignite happened - a burst from a moving scrape strings out along the
+    /// hull's path.
     #[test]
-    fn particles_spawn_at_the_anchor_and_the_anchor_rides_the_craft() {
+    fn particles_spawn_at_the_anchor_the_caller_moves() {
         let (mut sparks, mut r) = ignited(80.0);
         let point = Vec3::new(3.0, 4.0, 5.0);
-        let craft = Vec3::new(1.0, 4.0, 5.0);
-        sparks.ignite(point, Vec3::Y, craft, 80.0);
+        sparks.ignite(point, Vec3::Y, 80.0);
 
-        // The craft moves 2 units before the first advance; the anchor must
-        // move with it.
-        let moved = craft + Vec3::new(2.0, 0.0, 0.0);
-        sparks.advance(DT, moved, &mut r);
-        let expected = point + Vec3::new(2.0, 0.0, 0.0);
+        // The hull node has moved 2 units by the first advance.
+        let anchor = point + Vec3::new(2.0, 0.0, 0.0);
+        sparks.advance(DT, anchor, &mut r);
         // One tick of drift after spawn, bounded by the fastest possible
         // severity-scaled ejection speed: (1.56 + 0.936) * 2.4 * 60.
         let fastest = (1.56 + 0.936) * 2.4 * TICK_HZ;
         for p in sparks.particles.iter().filter(|p| p.alive()) {
-            assert!((p.position - expected).length() < fastest * DT + 1e-4);
+            assert!((p.position - anchor).length() < fastest * DT + 1e-4);
+            assert_eq!(
+                p.origin, anchor,
+                "a streak's trailing end starts at its own spawn point"
+            );
         }
+    }
+
+    /// The blend split is what makes the smoke visible at all: the smoke
+    /// emitter is the one alpha-over member of the tree, everything bright
+    /// is additive, and the streak classes follow the recovered flag
+    /// (sparks radiate from spawn, bits/embers streak per tick).
+    #[test]
+    fn the_smoke_is_alpha_over_and_the_bright_emitters_are_additive_streaks() {
+        assert_eq!(EMITTERS[0].blend, Blend::AlphaOver);
+        assert_eq!(EMITTERS[0].render, Render::Billboard);
+        for spec in &EMITTERS[1..] {
+            assert_eq!(spec.blend, Blend::Additive, "{}", spec.name);
+        }
+        assert_eq!(EMITTERS[1].render, Render::StreakFromSpawn);
+        assert_eq!(EMITTERS[2].render, Render::StreakPerTick);
+        assert_eq!(EMITTERS[3].render, Render::StreakPerTick);
+
+        // And the split reaches the geometry: after a few ticks both vertex
+        // classes are non-empty.
+        let (mut sparks, mut r) = ignited(80.0);
+        for _ in 0..3 {
+            sparks.advance(DT, Vec3::ZERO, &mut r);
+        }
+        let (additive, alpha_over) = sparks.vertices(Vec3::X, Vec3::Y);
+        assert!(!additive.is_empty());
+        assert!(!alpha_over.is_empty());
     }
 
     #[test]
@@ -945,7 +1122,7 @@ mod tests {
         // caller ever could.
         for i in 0..200 {
             if i % 10 == 0 {
-                sparks.ignite(Vec3::ZERO, Vec3::Y, Vec3::ZERO, 200.0);
+                sparks.ignite(Vec3::ZERO, Vec3::Y, 200.0);
             }
             sparks.advance(DT, Vec3::ZERO, &mut r);
             assert!(sparks.alive_count() <= MAX_SPARKS);
@@ -958,7 +1135,7 @@ mod tests {
     fn hemisphere_particles_never_eject_into_the_wall() {
         let (mut sparks, mut r) = ignited(80.0);
         let normal = Vec3::new(0.0, 0.0, 1.0);
-        sparks.ignite(Vec3::ZERO, normal, Vec3::ZERO, 80.0);
+        sparks.ignite(Vec3::ZERO, normal, 80.0);
         for _ in 0..6 {
             sparks.advance(DT, Vec3::ZERO, &mut r);
         }
@@ -979,8 +1156,8 @@ mod tests {
     fn ignitions_counts_every_ignite() {
         let mut sparks = Sparks::new();
         assert_eq!(sparks.ignitions(), 0);
-        sparks.ignite(Vec3::ZERO, Vec3::Y, Vec3::ZERO, 10.0);
-        sparks.ignite(Vec3::ZERO, Vec3::Y, Vec3::ZERO, 10.0);
+        sparks.ignite(Vec3::ZERO, Vec3::Y, 10.0);
+        sparks.ignite(Vec3::ZERO, Vec3::Y, 10.0);
         assert_eq!(sparks.ignitions(), 2);
     }
 }

@@ -270,6 +270,14 @@ pub struct Setup {
     /// `docs/ghidra/functions/psp-pulse/exhaust.md`. One nozzle, centred, not one
     /// per visible engine.
     pub nozzle: Option<Vec3>,
+    /// The `Ship Collision Fx` locators, in the ship model's own space.
+    ///
+    /// The original attaches up to 10 and `Ship_DispatchCollisionFx`
+    /// (`docs/ghidra/functions/psp-pulse/contact-response.md`) triggers the
+    /// one **nearest the contact**; the spark burst then emits from that
+    /// node as it rides the hull. Empty means the model authors none, and
+    /// the burst falls back to anchoring at the contact point itself.
+    pub collision_fx: Vec<Vec3>,
 }
 
 /// A [`Setup`] plus the geometry to draw it with.
@@ -331,6 +339,19 @@ fn engine_flare(ship_blob: &[u8]) -> Option<Vec3> {
         .into_iter()
         .next()?;
     Some(Vec3::new(m[12], m[13], m[14]))
+}
+
+/// Every `Ship Collision Fx` locator's position in the ship model's own
+/// space - the same 4x4-payload decode as [`engine_flare`], kept all rather
+/// than first: the original picks the nearest to each contact.
+fn collision_fx_locators(ship_blob: &[u8]) -> Vec<Vec3> {
+    let Ok(nodes) = vex::nodes(ship_blob) else {
+        return Vec::new();
+    };
+    vex::class_world_transforms(ship_blob, &nodes, vex::CLASS_SHIP_COLLISION_FX)
+        .into_iter()
+        .map(|m| Vec3::new(m[12], m[13], m[14]))
+        .collect()
 }
 
 /// Decodes a `.mip` texture out of the archive set.
@@ -581,6 +602,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
         )),
     }
 
+    let collision_fx = collision_fx_locators(&ship_blob);
+    report.push(if collision_fx.is_empty() {
+        format!("{ship_name}: no Ship Collision Fx nodes - sparks anchor at the contact point")
+    } else {
+        format!(
+            "{ship_name}: {} Ship Collision Fx locator(s) for the spark anchor",
+            collision_fx.len()
+        )
+    });
+
     let noise = match mip_texture(&mut archives, NOISE_TEXTURE) {
         Ok((texture, note)) => {
             report.push(note);
@@ -617,6 +648,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             handling,
             chase,
             nozzle,
+            collision_fx,
         },
         hud,
         track_model,
@@ -1159,6 +1191,16 @@ pub struct Race {
     /// re-fires periodically rather than going silent for the rest of the
     /// scrape.
     sparks_cooldown: f32,
+    /// The `Ship Collision Fx` locators in model space - see
+    /// [`Setup::collision_fx`].
+    collision_fx: Vec<Vec3>,
+    /// The burst's emitter anchor, **model space**: the `Ship Collision Fx`
+    /// locator nearest the last impact, or the contact point itself mapped
+    /// into model space when the model authors no locators. Transformed
+    /// through the ship's current matrix every tick, so the burst rides the
+    /// hull - rotation included - the way the original's scene-graph node
+    /// does.
+    sparks_anchor: Option<Vec3>,
 }
 
 /// Ticks a `Reset` contact is ignored for after a respawn.
@@ -1195,6 +1237,7 @@ impl Race {
             handling,
             chase,
             nozzle,
+            collision_fx,
             ..
         } = setup;
 
@@ -1229,11 +1272,13 @@ impl Race {
             exhaust: Exhaust::new(),
             exhaust_rng: Rng::new(EXHAUST_SEED),
             nozzle,
+            collision_fx,
             sparks: Sparks::new(),
             sparks_rng: Rng::new(SPARKS_SEED),
             // No sync frame to be mid-scrape on, so the first tick's contact -
             // if any - is always read as a fresh impact.
             sparks_cooldown: 0.0,
+            sparks_anchor: None,
         }
     }
 
@@ -1352,7 +1397,7 @@ impl Race {
         // rather than spawn once and go silent.
         self.sparks_cooldown = (self.sparks_cooldown - self.dt).max(0.0);
         let can_fire = evaluated.wall.impact && self.sparks_cooldown <= 0.0;
-        let craft_position = self.ship().physics.body.position;
+        let model_matrix = self.ship_model_matrix();
         if can_fire && let Some(contact) = evaluated.wall.resolved {
             // `contact.point` is deliberately the *penetrating* hull sample
             // point, not the wall surface - see its doc comment on
@@ -1365,20 +1410,37 @@ impl Race {
             // correction `resolve_contact`'s `escape` vector already applies
             // to push the hull back out to the surface.
             let surface = contact.point + contact.normal * contact.depth;
-            self.sparks.ignite(
-                surface,
-                contact.normal,
-                craft_position,
-                evaluated.wall.impact_speed,
-            );
+            // The original triggers the `Ship Collision Fx` locator nearest
+            // the contact and the burst emits from that node from then on
+            // (`Ship_DispatchCollisionFx`); with no locators authored, the
+            // surface point itself is mapped into model space so it still
+            // rides the hull with rotation.
+            let anchor_model = self
+                .collision_fx
+                .iter()
+                .copied()
+                .min_by(|a, b| {
+                    let da = (model_matrix.transform_point3(*a) - surface).length_squared();
+                    let db = (model_matrix.transform_point3(*b) - surface).length_squared();
+                    da.total_cmp(&db)
+                })
+                .unwrap_or_else(|| model_matrix.inverse().transform_point3(surface));
+            self.sparks_anchor = Some(anchor_model);
+            self.sparks
+                .ignite(surface, contact.normal, evaluated.wall.impact_speed);
             self.sparks_cooldown = sparks::COLLISION_COOLDOWN;
         }
         // Unconditional, like the exhaust: the emitters keep trickling and
         // already-live particles keep ageing even on a tick with no fresh
-        // impact. The craft position re-anchors the burst to the hull, the
-        // way the original's emitter node rides the ship.
-        self.sparks
-            .advance(self.dt, craft_position, &mut self.sparks_rng);
+        // impact. The anchor is the chosen hull locator under the ship's
+        // *current* transform, the way the original's scene-graph node rides
+        // the craft.
+        let anchor = self
+            .sparks_anchor
+            .map_or(self.ship().physics.body.position, |local| {
+                model_matrix.transform_point3(local)
+            });
+        self.sparks.advance(self.dt, anchor, &mut self.sparks_rng);
 
         evaluated
     }
@@ -2283,10 +2345,12 @@ impl Scene {
             &vertices,
             &trail,
         );
+        let (spark_additive, spark_alpha) = race.sparks().vertices(right, up);
         self.sparks.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),
-            &race.sparks().vertices(right, up),
+            &spark_additive,
+            &spark_alpha,
         );
 
         let depth_view = self
@@ -2952,10 +3016,12 @@ mod tests {
                 spring_horiz: 4.0,
                 spring_vert: 2.0,
             },
-            // A synthetic setup has no ship model, so no locator either. The
+            // A synthetic setup has no ship model, so no locators either. The
             // exhaust still ticks; it just has nowhere to be drawn, which is the
-            // same path a model with no `Engine Flare` node takes.
+            // same path a model with no `Engine Flare` node takes. Sparks
+            // likewise fall back to anchoring at the contact point.
             nozzle: None,
+            collision_fx: Vec::new(),
         }
     }
 

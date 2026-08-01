@@ -219,6 +219,73 @@ alpha/size/rotation channel block is keyframed (mode 0)", `DAT_08b6206c`
 keys off the blend-mode table index at `res+0xb8`, `DAT_08b62070` is the
 atlas frame count as a float.
 
+## The draw layer (added 2026-08-01, second pass)
+
+Prompted by three visual mismatches the user reported against the running
+original - invisible smoke, insufficiently spiky sparks, and bursts not
+tracking the hull - the draw dispatch turned out to be findable through the
+blend table's own xrefs, and it resolves all three.
+
+### The blend table at `DAT_08ab2260`, decoded
+
+Eight `u32` entries, `entry = (index + 1) << 28 | low_byte`. The top nibble
+is the **render-mode class**; `ParticleSystem_CacheModeFlags` derives its
+booleans from it (`DAT_08b62060` = mode 6 or 7, `DAT_08b6206c` = mode 3),
+and the per-particle draw dispatch switches on it directly.
+
+### `ParticleSystem_DrawParticle` (`0x089186bc`)
+
+Confidence **85**. Per particle: pushes the view matrix, binds the emitter's
+texture state, applies `Gu_TexScale`/`Gu_TexOffset` for the sprite-atlas
+frame, calls `ParticleSystem_ApplyBlendClass`, transforms the particle's
+position **and its second stored point** (the row-`+0x50` value) to view
+space, then dispatches on the blend-table mode:
+
+- **mode 7** → `FUN_08916d00(size, colour, &second_point, &position, ...)` -
+  a two-point draw (unread internally; same signature as mode 6's);
+- **mode 6** → `ParticleSystem_DrawStreak` (`0x08916820`, below) - the
+  streak quad;
+- **mode 3** → `FUN_08916610(roll, size, colour, &position, ...)` - a
+  one-point rotating billboard (unread internally; takes the roll field
+  streaks do not);
+- **modes 1/2** → an inline camera-facing quad at `position ± size` in view
+  space - which also settles the size channel's **unit**: view-space (and
+  therefore world-space) half-extent.
+
+Combined with `ParticleSystem_UpdateParticles`' handling of the second
+point - refreshed to the current position every tick *unless* resource flag
+`0x2000000` is set, in which case it stays at the spawn position - the two
+streak classes fall out: `WO_SHIP_COLL_SPARK` (flag set) draws rays
+radiating from the impact point, `bits`/`_TRAIL` (flag clear) draw
+last-tick motion streaks.
+
+### `ParticleSystem_DrawStreak` (`0x08916820`)
+
+Confidence **80**. Both view-space points are first scaled onto the nearer
+of the two depths (keeping the quad screen-parallel), then a triangle-strip
+quad is built along the 2D direction between them: half-width
+`size` perpendicular, and the ends extended along the axis by
+`stretch * size` (the stretch factor comes from the draw record; a
+zero-length streak still draws a glow). Colour is flat across all four
+corners.
+
+### `ParticleSystem_ApplyBlendClass` (`0x0891653c`)
+
+Confidence **85**. Switches on the draw-state word copied from the
+resource's `+0xc0`:
+
+- class 2: `BlendFunc(ADD, SRC_ALPHA, FIX 0xffffff)` - **additive**;
+- class 3: `BlendFunc(ADD, SRC_ALPHA, ONE_MINUS_SRC_ALPHA)` - **alpha
+  over**;
+- class 1: alpha-test path, no blend.
+
+The factor decode leans on the sceGu blend-factor enum (`2 = SRC_ALPHA`,
+`3 = ONE_MINUS_SRC_ALPHA`, `10 = FIX`) matching the GE wrapper's argument
+shape; the collision-spark file uses class 3 for the smoke root and class 2
+for its three siblings, which is why the smoke is a dark translucent puff
+in the original and was invisible in this project's previously all-additive
+port.
+
 ## The three live captures
 
 1. **Loaded-resource read** (CPU paused, memory search for the resource
@@ -243,9 +310,10 @@ atlas frame count as a float.
   `oag_render::sparks` approximates shape 3 spawn position as the anchor
   (the authored extents are at most 0.1 units - sub-pixel at any race
   camera distance).
-- The billboard **draw** function (whatever consumes the drawn-size and
-  roll fields into GU vertices) is untraced; `sparks.rs` takes the size
-  channel as world-unit half-sizes on the strength of the exhaust flare's
-  same-engine convention.
+- Inside the draw layer: `FUN_08916d00` (the mode-7 two-point draw) and
+  `FUN_08916610` (the mode-3 rotating billboard) are dispatched with known
+  arguments but unread internally, and the exact stretch factor
+  `ParticleSystem_DrawStreak` receives is not traced back to a resource
+  field.
 - Modifier types other than 3, the `+0x9c8`/`+0x9cc` slot targets, and the
   emitter-local frame of the aimed cones.
