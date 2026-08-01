@@ -303,12 +303,15 @@ impl FrameLimit {
 
     /// The limits the menus offer: unlimited, then the refresh rates displays
     /// are actually built at, then the ceiling.
-    pub const OFFERED: [Self; 12] = [
+    pub const OFFERED: [Self; 15] = [
         Self::UNLIMITED,
         Self(30),
         Self(60),
+        Self(70),
         Self(72),
+        Self(75),
         Self(90),
+        Self(100),
         Self(120),
         Self(144),
         Self(165),
@@ -873,7 +876,10 @@ mod tests {
         assert!("1001".parse::<FrameLimit>().is_err());
         assert!("-1".parse::<FrameLimit>().is_err());
         assert!("fast".parse::<FrameLimit>().is_err());
-        assert_eq!("1000".parse(), Ok(FrameLimit::OFFERED[11]));
+        assert_eq!(
+            "1000".parse(),
+            Ok(FrameLimit::OFFERED[FrameLimit::OFFERED.len() - 1])
+        );
     }
 
     /// The default has to be one of the values the menus offer, or the row
