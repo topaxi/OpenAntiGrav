@@ -61,14 +61,38 @@ across the track and 0.8 up, with the slot's heading within 1.2 degrees of the
 craft's. It is pinned by `the_authored_slot_matches_the_captured_start` in
 `crates/game/tests/race_ground_truth.rs`.
 
-**Confidence 55.** The distance is real but it is one capture of one circuit, and
-whatever lays a grid out is unread code. What would retire it: that code, or a
-capture on a second circuit showing the same offset.
+**Confidence 65**, and the two halves of that are different kinds of claim:
 
-Getting this wrong is visible rather than subtle. Placing the line at the slot -
-which is what the first implementation did - makes the counter tick over partway
-down the starting straight instead of at the end of it, and that is how the error
-was found: by driving a time trial on Moa Therma.
+- **The distance is measured**, on one capture of one circuit - Talon's Junction.
+- **That it generalises is observed, not measured.** Moa Therma, a different
+  circuit with no capture, counts its laps in the right place with this constant.
+  That was checked by driving it. It rules out the offset being a property of the
+  one circuit it came from, which was the live worry; it does not rule out a
+  per-track offset that happens to be close on both, because a player's eye is not
+  an instrument.
+
+Whatever lays a grid out is still unread code. What would retire the constant:
+that code, a capture on a second circuit, or the path-boundary lead below.
+
+Getting this wrong is visible rather than subtle, which is the one convenient
+thing about it. Placing the line at the slot - which the first implementation did
+- makes the counter tick over partway down the starting straight instead of at the
+end of it, and that is how the error was found: by driving a time trial on Moa
+Therma and watching it happen.
+
+### The lead that would replace it
+
+`Course::path_boundaries` reports where one path hands over to the next, and the
+load report prints it beside the start line. On `16_Track` the ring is two paths
+and the boundaries are `[0, 1752]` against a start line at `3415` - the same
+neighbourhood as the offset on one side, nowhere near it on the other, so the
+answer is not simply "the boundary is the line".
+
+If a boundary does land on the visible line across several circuits, the start
+line is **authored per track** and comes out of `Path::exit` / `Junction` at the
+same confidence 88 as the traversal - no single-capture constant, and it
+generalises to all 40 circuits by construction. Checking it costs one look at the
+load report per track.
 
 ## A lap is a wrap, gated
 

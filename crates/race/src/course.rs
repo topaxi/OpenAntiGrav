@@ -115,11 +115,27 @@ impl Course {
     /// Measured **along the ring**, not in a straight line, so it follows a
     /// curving start straight.
     ///
-    /// Confidence **55**. The distance is measured rather than guessed, but it is
-    /// measured on **one** capture of **one** circuit, and whatever lays the grid
-    /// out is unread code (`docs/formats/track.md`, "How a ship gets its grid
-    /// slot"). What would retire it: the code that places a grid, or captures on a
-    /// second circuit showing the same offset.
+    /// Confidence **65**, and the two halves of that are worth separating.
+    ///
+    /// - **The distance is measured**, on one capture of one circuit: Talon's
+    ///   Junction.
+    /// - **That it generalises is observed, not measured.** Moa Therma - a
+    ///   different circuit, no capture - counts its laps in the right place with
+    ///   this constant, checked by driving it and watching the counter. That rules
+    ///   out the offset being a property of Talon's Junction alone, which was the
+    ///   live worry, but "the counter ticks where it looks like it should" is a
+    ///   player's eye rather than an instrument, and it would not catch a
+    ///   per-track offset that happens to be close on both.
+    ///
+    /// So: no longer suspected of being circuit-specific, still a single
+    /// hard number standing in for whatever the original computes. Whatever lays
+    /// the grid out is unread code (`docs/formats/track.md`, "How a ship gets its
+    /// grid slot").
+    ///
+    /// What would retire it: that code, or a capture on a second circuit, or
+    /// [`Self::path_boundaries`] turning out to land on the line across circuits -
+    /// which would make the start line authored data at confidence 88 rather than
+    /// a constant at 65.
     pub const START_LINE_OFFSET: f32 = 137.9;
 
     /// Walks a decoded spline graph into a closed ring.
