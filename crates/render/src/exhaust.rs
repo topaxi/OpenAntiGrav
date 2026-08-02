@@ -146,6 +146,17 @@ pub const TRAIL_DIRECTION_SCALE: f32 = 200_000.0;
 /// this crate deliberately depends on nothing but `oag-core` and `wgpu`.
 pub const CRAFT_ROW_SCALE: f32 = 0.75;
 
+/// The GE's u16 texcoord convention doubles the bake's intended fractions.
+///
+/// `Trail_BakeVertexColours` writes texcoords as `(u16)(fraction * 65535)`,
+/// but the GE decodes 16-bit texcoords as `value / 32768` (unsigned - PPSSPP's
+/// `Step_TcU16ToFloat`, `* (1.0f / 32768.0f)`), so every baked fraction lands
+/// on screen at just under twice its written value: the noise tiles
+/// `0.2 * texscale` per sample along the ribbon and wraps **twice** around the
+/// four-fin tube, not once. The scroll offsets are exempt - `sceGuTexOffset`
+/// is applied after the decode, undoubled.
+pub const TEXCOORD_U16_GAIN: f32 = 65535.0 / 32768.0;
+
 /// Fins per segment: the ribbon is a diamond tube, not a flat quad.
 ///
 /// `Trail_DrawRibbon`'s 10-vertex strip walks the rim `+up, +right, -up,
@@ -518,11 +529,11 @@ impl Exhaust {
                 let fade_b = ramp * trail_fade(k + 1);
                 let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
                 let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
-                let ua = k as f32 * TRAIL_FADE_STEP * su + ou;
-                let ub = (k + 1) as f32 * TRAIL_FADE_STEP * su + ou;
+                let ua = k as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
+                let ub = (k + 1) as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 for fin in 0..TRAIL_FINS {
-                    let va = fin as f32 * 0.25 + ov;
-                    let vb = (fin + 1) as f32 * 0.25 + ov;
+                    let va = fin as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
+                    let vb = (fin + 1) as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
                     let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va);
                     let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb);
                     let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va);

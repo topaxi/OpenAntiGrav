@@ -441,9 +441,52 @@ Three consequences, each of which corrects an earlier claim on this page:
    `Gu_DrawArray` commands each).
 
 What the list does **not** set is the texture function (`0xc9`): the ribbon
-inherits whatever `TFX` the frame left. The GE reset default is modulate and the
-result on screen (colour-tinted noise) is consistent with modulate; recorded at
-confidence 60 rather than assumed silently.
+inherits whatever `TFX` the frame left. **Now pinned at confidence 90 rather
+than presumed** (2026-08-02, second live pass): scanning a full frame's command
+stream at the `Trail_DrawRibbon` breakpoint - main list *and* all 53-64 CALLed
+sub-lists - found **zero** `0xc9` commands, so the texfunc is set once and
+carried; the one-time set is `Gfx_Init`'s (`FUN_0891f320`)
+`sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA)` (`FUN_0881141c(0, 1)`), and the
+driver's shadow state read live confirms it never moved:
+`ctx+0xe8 = 0` (modulate), `ctx+0xec = 1` (RGBA), **`ctx+0xe4 = 0` - the
+colour-double / `GU_FRAGMENT_2X` bit is off**, with enable-shadow bit 21 clear.
+Three other registers the ribbon depends on were pinned the same way:
+`MATERIALEMISSIVE` (`0x54`) has **no emitter anywhere in the binary** (the only
+`lui 0x5400` candidates are absent), so it holds the GE reset value 0 forever;
+the material ambient/diffuse/specular/alpha last written before the ribbon are
+all white (`ffffff`/`ff`, read out of the live stream); and the state display
+list itself read back from `0x08b65700` **byte-identical to the static
+decode** - including `df0000aa`/`e0ffffff`/`e1ffffff` (the pure-additive
+blend), `dd020000` (stencil op REPLACE), `e7000001` (depth write off) and the
+`0x44/0x47` viewport-z words that resolve the `0xfdb2/0x3e9` pair as
+`sceGuDepthRange`, confirming `FUN_0891e988`'s reading.
+
+**One decode subtlety with a visible consequence:** the bake writes u16
+texcoords as `fraction * 65535`, but the GE decodes 16-bit texcoords as
+`value / 32768`, *unsigned* (PPSSPP `Step_TcU16ToFloat`). Every baked fraction
+therefore lands at just under **twice** its written value: the noise advances
+`0.2 * texscale` per sample and wraps twice around the four-fin tube. The
+scroll offsets are exempt (`sceGuTexOffset` applies after the decode).
+`oag_render::exhaust` carries this as `TEXCOORD_U16_GAIN`.
+
+### Why the ribbon can saturate on screen without any hidden gain
+
+Worth recording, because chasing a "missing brightness factor" here cost a
+pass: with every register above pinned, the per-fragment contribution really is
+`ramp x baked colour x noise`, and its theoretical per-quad maximum
+(`~(0.94, 0.56, 1.19)` summed over three layers at the noise texture's own
+maximum - `Engine_noise` measures **mean grey 0.325**, max 0.94) cannot reach
+broad white saturation. The original's big saturated plumes come from
+**additive stacking, not amplitude**: at low speed the ten samples sit almost
+on top of each other on screen (at 23 units/s the whole ring spans ~4 world
+units), so up to nine segment quads x two tube surfaces x three layers add
+into the same pixels; a hard corner does the same by curling the ribbon across
+itself; and a boost (pads sit on the racing line) both widens the flare by
+`boost_timer * 8` and reveals the additive `<Team>boost.vex` plume. A
+straight-line, mid-intensity frame with none of those - captured live at
+94 km/h - shows the same compact glow and thin subtle trail the
+reimplementation draws. Comparing trail prominence across *different* speeds
+measures segment overlap, not fidelity.
 
 ### The baked vertex colours: the authored colours are alive, and they fade
 
@@ -822,9 +865,10 @@ next reader does not go looking for a class `0` handler.
   gameplay code, most likely reached when M5 opens the pads. Until then a
   reimplementation has the full visual consequence of boost and nothing that
   triggers it.
-- **The ribbon's texture function.** The state list sets everything except
-  `TFX`; modulate is the GE default and matches the screen, confidence 60. A GE
-  frame dump would settle it.
+- ~~The ribbon's texture function~~ - **closed 2026-08-02** at 90: modulate /
+  `TCC_RGBA` / colour-double off, set once by `Gfx_Init` and confirmed
+  unchanged by a full-frame command-stream scan plus the driver's live shadow
+  state. See the GE-state section.
 - Two callees identified from use rather than from their bodies, hence `_q`:
   `Ship_ThrustInput_q` (`0x0883d850`, read as thrust) and `Gfx_ViewDepth_q`
   (`0x0890486c`, read as a view depth).
