@@ -314,8 +314,15 @@ later. So it is **the boost visual, parented to the engine-flare node**.
 
 | | |
 | --- | --- |
-| **Addresses** | update `0x0892a450`, draw `0x0892a588`, init `0x0892a2b0`, push `0x08929958`, ribbon draw `0x0892acc8` |
-| **Confidence** | 78 |
+| **Addresses** | update `0x0892a450`, draw `0x0892a588`, init `0x0892a2b0`, push `0x08929958`, ribbon draw `0x0892acc8`, preset table `0x0892a724`, vertex-colour bake `0x08929c8c`, state list recorder `0x089296f8` |
+| **Confidence** | 90 |
+
+Confidence was 78 while the width array, layer count and `+0x1c` scale were read
+as shapes only. A 2026-08-02 pass decompiled the preset table, the vertex-colour
+bake and the ribbon's own GE state display list, then confirmed the lot against
+a live PPSSPP race (breakpoint on `Trail_DrawRibbon`, ring at `0x09a2ad40`,
+craft at roughly half intensity) - every recovered value below that has a live
+column was read back from the running game and matched.
 
 A genuine position-history ribbon, and a general-purpose class rather than a
 ship-specific one.
@@ -330,24 +337,130 @@ count saturating at capacity, `+0x10` write index wrapping at capacity, points a
 `+0x5c` with **stride 0x20 = two vec4s, `{position, direction}`**.
 
 **`Trail_DrawRibbon` (`0x0892acc8`)** draws only when the ring is **full**
-(`count >= capacity`) and `count > 1`. It walks the ring backwards from the write
-index, newest to oldest, and for each sample offsets it as `position + direction *
-w[i]` (`w` from the array at `+0x138`). Per sample it emits, for each of
-`self+0x64` layers:
+(`count >= capacity`), a camera exists (`DAT_08ab10b0 != 0`) and `count > 1` -
+those three conditions are its *only* gates; an earlier note here about a
+`& 0x20` flag was wrong (nothing in the function tests one). It walks the ring
+backwards from the write index, newest to oldest, and for each sample offsets it
+as `position + direction * w[i]` (`w` from the array at `+0x138`). Per sample it
+emits, for each of `self+0x64` layers:
 
 - 10 vertices, `Gu_DrawArray(GU_TRIANGLE_STRIP, 0x1fe, 10, ...)`, stride 0x20 -
   `0x1fe` decodes as `GU_TEXTURE_16BIT | GU_COLOR_8888 | GU_NORMAL_32BITF |
   GU_VERTEX_32BITF` = 4 + 4 + 12 + 12 = **32 bytes**, matching the `0x140` =
   10 x 0x20 per-segment stride the loop steps by. A second format cross-check of
   the same kind that validated the flare quad.
-- a width from `self[+0x78 + layer*0x30] * self+0x1c`, applied to the camera
-  basis read from `DAT_08ab10b0 + 0x40/0x44/0x50/0x54/0x60/0x64` - so each
-  segment is **camera-facing**.
+- **The 10 vertices per segment are a four-fin cross, not one flat quad.** The
+  strip alternates the two sample centres offset by `+up`, `+right`, `-up`,
+  `-right` and closes back on `+up`: two quads through the trail line,
+  perpendicular to each other, both scaled by the same width. `up` and `right`
+  are columns 0 and 1 of the camera matrix at `DAT_08ab10b0 + 0x40..0x64`, so
+  the cross is camera-aligned. An earlier version of this page read the
+  geometry as a single camera-facing quad per segment.
+- a width of `layer_width * self+0x1c * taper(i)`. **`self+0x1c` is not the
+  constant `1.0` `Trail_InitRing` leaves there**: `Exhaust_Update` overwrites it
+  every frame with `intensity * 0.35 + 0.2` (the write this page previously
+  described as "child +0x7c", which is the same address), so a racing ship's
+  ribbon runs at `0.2`..`0.55` of the authored widths. Live: `0.3737` at
+  intensity `0.497`.
 - one of the **three** `Engine_noise` texture slots, indexed per layer:
   `Gfx_BindTexture(g_engine_noise_texture[*(iVar24+4)])`. This is why
-  `Texture_LoadEngineNoise` writes `0x08b657c0`, `c4` and `c8`.
+  `Texture_LoadEngineNoise` writes `0x08b657c0`, `c4` and `c8` - all three hold
+  the same handle.
 - a scrolling UV offset, `u += du * K * 3.0` and `v += dv * K`, each wrapped to
   `[0,1]` and applied with `sceGuTexOffset`.
+- **a flat per-layer colour, sent as GE state rather than as vertex data**: the
+  layer's RGBA at block `+0x20` is packed to ABGR8888 and handed to
+  `Gu_Ambient` (`0x0881125c`, GE commands `0x5c`/`0x5d` = `sceGuAmbient`). See
+  the pipeline section below for why that colours anything at all.
+
+### The ribbon's GE state, from its own display list
+
+`Texture_LoadEngineNoise` records a 0xc0-byte display list into `DAT_08b65700`
+at load time (via `Gu_Start`/`Trail_BuildStateList`/`sceGuFinish`), and
+`Trail_DrawRibbon` plays it before drawing any layer. Decoded from
+`Trail_BuildStateList` (`0x089296f8`), whose helpers each write one named GE
+command - the command bytes are in the helpers' own bodies, so this is not an
+argument-pattern guess:
+
+```
+sceGuSetMatrix(GU_MODEL, identity)        0x08a907a0 is an identity matrix:
+                                          the ribbon is submitted in world space
+disable FOG, CULL_FACE, LIGHTING, STENCIL_TEST, ALPHA_TEST
+enable  TEXTURE_2D
+sceGuPixelMask(0)
+sceGuStencilOp(KEEP, KEEP, REPLACE)
+enable  DEPTH_TEST;  sceGuDepthFunc(GU_GREATER);  sceGuDepthMask(off)
+sceGuDepthRange(0xfdb2, 0x3e9)            the transparent layer's range, the
+                                          same pair Vex_LoadModel passes
+enable  BLEND
+sceGuBlendFunc(GU_ADD, GU_FIX 0xffffff, GU_FIX 0xffffff)
+sceGuTexWrap(GU_REPEAT, GU_REPEAT)
+enable  LIGHTING;  disable LIGHT0..LIGHT3
+```
+
+Three consequences, each of which corrects an earlier claim on this page:
+
+1. **The ribbon's blend is `dst + src` - pure additive, not weighted by source
+   alpha.** Both factors are `GU_FIX` white. The flare's
+   `src.rgb * src.a + dst` reading stands for the flare; it was wrong to assume
+   the ribbon shared it. Alpha contributes nothing to the ribbon's colour.
+2. **Lighting is *enabled* with all four lights disabled.** That routes the GE's
+   lit-colour path: fragment colour = material emissive + ambient light colour x
+   material ambient, with every per-light term zero. `Gu_Ambient`'s per-layer
+   colour is the *ambient light*; the per-vertex colours are the *material*
+   (the first `sceGuStart` of every frame emits `sceGuColorMaterial(7)` -
+   `Gu_Start` at `0x0881018c` does it when `DAT_08adc368` is clear - so vertex
+   colour feeds all material components). The ribbon's colour is therefore
+   `ramp x vertex colour x texture`, **linear in the ramp**. The earlier
+   "contribution goes as the ramp squared" reading assumed the flare's blend
+   and no vertex colour; both premises were wrong.
+3. **What this page previously called an alpha-test ramp is a stencil ramp.**
+   The per-segment stepped value feeds `Gu_StencilFunc` (`0x08811914`, command
+   `0xdc` = `sceGuStencilFunc`), with func `1` = `GU_ALWAYS` - so it tests
+   nothing and, with `StencilOp REPLACE`, only writes the stepped value into
+   the framebuffer's alpha/stencil bits. Destination-alpha bookkeeping,
+   visually inert for the ribbon itself. Its base `ring+0x20` is not the zero
+   `Trail_InitRing` leaves either: `Exhaust_Update` writes
+   `intensity * 0.5 * 0.9` there every frame (live: `0.2233` at intensity
+   `0.497`). Only the innermost layer (layer 0, drawn last, per-segment
+   `Gu_DrawArray` calls) steps it; layers 1 and 2 replay prebuilt per-layer
+   display lists (`Trail_ApplyPreset` records them via `0x08929c00`, nine
+   `Gu_DrawArray` commands each).
+
+What the list does **not** set is the texture function (`0xc9`): the ribbon
+inherits whatever `TFX` the frame left. The GE reset default is modulate and the
+result on screen (colour-tinted noise) is consistent with modulate; recorded at
+confidence 60 rather than assumed silently.
+
+### The baked vertex colours: the authored colours are alive, and they fade
+
+`Trail_ApplyPreset` (`0x0892a724`) fills the per-layer vertex buffers once at
+init via `Trail_BakeVertexColours` (`0x08929c8c`), and the bake writes each
+sample's colour as
+
+```
+vertex_rgba(i) = authored_layer_colour * powf(1.0 - fade_step * i, 1.0 / 0.3)
+```
+
+with `fade_step` = `ring+0x08` = **0.1** for preset 2 (a field the earlier
+reading skipped) and the exponent's `0.3` the global `DAT_08ac00a0`
+(`1/0.3 = 3.333`, computed once into `DAT_08af28a4`; `0x0897f6cc` is libm
+`powf`). Head to tail that curve runs
+
+```
+1.0, 0.70, 0.475, 0.30, 0.18, 0.099, 0.047, 0.018, 0.0047, 0.0005
+```
+
+so **the back half of the ribbon is essentially invisible** - this, more than
+any other single value, is why the original's exhaust reads as a compact bloom
+rather than a streamer. Live confirmation: the white layer's baked vertex
+colours at segments 0/2/4/6/8 read `0xd2`, `0x63`, `0x26`, `0x09`, `0x00` -
+`210/210, 99/210, 38/210, 9/210, 0` - exactly the curve.
+
+The bake also writes the texcoords: `u` advances `fade_step` per sample (u16,
+`0`, `6553`, ... = 0.1 steps, before `sceGuTexScale`'s per-layer 7.5/6.0/4.5),
+and `v` runs `0, 0.25, 0.5, 0.75, 1.0` across the five vertex pairs - **once
+around the four-fin cross**, not across a flat width.
 
 **The ribbon tapers in width, and does not fade in alpha.** Both readings here were
 wrong at first and the correction came from the instructions rather than the
@@ -368,18 +481,23 @@ position component, which is why it read as nonsense: **the first lane of a trai
 point is this scalar and the position occupies the other three**, which also explains
 `Trail_PushPoint`'s apparently jumbled field order.
 
-The value stepped down toward the tail from `ring+0x20` feeds `sceGuAlphaFunc` - an
-alpha *test* reference - and **preset 2 never sets `ring+0x20`**, so
-`Trail_InitRing`'s zero stands and the test passes everything. There is no
-per-segment alpha fade for a racing craft.
+The value stepped down toward the tail from `ring+0x20` feeds `Gu_StencilFunc`
+with func `GU_ALWAYS` - a stencil ramp, not the alpha test an earlier version of
+this page called it, and visually inert either way (see the GE-state section
+above). **The visible fade toward the tail is real, but it is the baked vertex
+colour curve**, `powf(1 - 0.1 i, 3.333)` - see the bake section above. "There is
+no per-segment alpha fade for a racing craft" was true of the *alpha channel*
+and wrong as a statement about the picture.
 
-`Trail_BuildOffsetTable`'s weights, evaluated, come out at `2.6e-6` per sample over
-ten, so the displacement along the exhaust direction is **numerically nil**. The
-ribbon's shape is purely its position history.
-
-Confidence is 78 rather than 85 because the width array, the layer count and the
-`+0x1c` scale are all read as *shapes* - nothing pins their authored values, and
-whether a ship node supplies them or the class defaults them is unread.
+`Trail_BuildOffsetTable`'s weights come out at `2.6e-6` per sample - but the
+direction vector they multiply is **not unit length**. `Exhaust_Update` writes
+`child+0xa0` as `-(craft matrix row 2) * 200000.0` (`DAT_08a84c40`), and the
+craft's row 2 carries the global `0.75` model scale, so the stored vector's
+magnitude is about **150,000** (live: `150,080`). The displacement at sample `i`
+is `150000 * (1 - exp(-i * dt / 80)) / 80` - `0` at the head rising to about
+**3.5 world units** at the tail. A modest backwards stretch, weighted toward
+the tail; "numerically nil" was an error from evaluating the weights without
+the vector's magnitude.
 
 ## Textures
 
@@ -439,13 +557,39 @@ gains a `_q` suffix, below 50 is not renamed at all. Mirrored in
 | `0x0892a588` | function | `Trail_Draw` | 80 |
 | `0x0892a2b0` | function | `Trail_Init` | 75 |
 | `0x08929958` | function | `Trail_PushPoint` | 85 |
-| `0x0892acc8` | function | `Trail_DrawRibbon` | 78 |
+| `0x0892acc8` | function | `Trail_DrawRibbon` | 90 |
 | `0x08905210` | function | `Texture_LoadEngineFlare` | 85 |
 | `0x0892a5a4` | function | `Texture_LoadEngineNoise` | 85 |
 | `0x08928460` | function | `Gfx_BindTexture` | 75 |
+| `0x0892a724` | function | `Trail_ApplyPreset` | 88 |
+| `0x08929c8c` | function | `Trail_BakeVertexColours` | 88 |
+| `0x089296f8` | function | `Trail_BuildStateList` | 85 |
+| `0x08929a74` | function | `Trail_BuildOffsetTable` | 80 |
+| `0x0892a050` | function | `Trail_InitPreset` | 80 |
+| `0x0881018c` | function | `Gu_Start` | 88 |
+| `0x0881125c` | function | `Gu_Ambient` | 90 |
+| `0x08811914` | function | `Gu_StencilFunc` | 88 |
+| `0x08811948` | function | `Gu_StencilOp` | 88 |
+| `0x0881197c` | function | `Gu_BlendFunc` | 90 |
+| `0x08811484` | function | `Gu_TexWrap` | 88 |
+| `0x08811874` | function | `Gu_DepthMask` | 85 |
+| `0x08811850` | function | `Gu_DepthFunc` | 85 |
+| `0x08810db8` | function | `Gu_Enable` | 90 |
+| `0x08810e10` | function | `Gu_Disable` | 90 |
+| `0x08810a60` | function | `Gu_ColorMaterial` | 85 |
+| `0x08810e6c` | function | `Gu_SetMatrix` | 88 |
 | `0x08b62908` | data | `g_engine_flare_texture` | 88 |
 | `0x08b657c0` | data | `g_engine_noise_textures` | 80 |
+| `0x08b65700` | data | `g_trail_state_list` | 85 |
 | `0x08ab2370` | data | `g_vex_class_table` | 92 |
+
+The `Gu_*` helpers carry 85-90 because their bodies write the GE command byte
+directly (`cmd << 24 | args` into the current list) - the command numbers are
+the PSP GE's own, so the mapping is read, not inferred from call sites. The
+2026-07-31 caveat about `0x08810db8`/`0x08810e10` being identified "by the
+argument pattern rather than by their bodies" is retired: both bodies are now
+read (they maintain a shadow enable-bit word at `DAT_08adc3a8` and emit through
+`0x08811b58`), and the state indices are `sceGu`'s own enum.
 | `0x0891e35c` | function | `Gfx_Enqueue` | 65 |
 | `0x0890486c` | function | `Gfx_ViewDepth` | 60 |
 | `0x0883d850` | function | `Ship_ThrustInput` | 55 |
@@ -454,10 +598,12 @@ gains a `_q` suffix, below 50 is not renamed at all. Mirrored in
 already named by earlier passes; `Gu_DrawArray` (`0x08810e98`) and `Gu_CallList`
 (`0x08810598`) likewise, via [`vex.md`](../../../formats/vex.md).
 
-Not renamed, deliberately: `0x0892a050` (the flame child's constructor),
-`0x08810e10` / `0x08810db8` (the GU enable/disable pair - see the blend-state
-caveat above; the argument pattern is suggestive but the bodies are unread, and
-ADR-0005 puts a guess dressed as a name below the bar).
+Not renamed, deliberately: `0x08929c00` (the per-layer draw-list recorder; nine
+`Gu_DrawArray` commands, too thin a body to earn a name over its caller's), and
+`0x0897f6cc` (libm `powf` by structure - errno handling, subnormal paths - but
+library identification is a different bar; the bake section cites it by
+address). The earlier entries here for `0x0892a050` and the enable/disable pair
+are superseded: all three are now read and named above.
 
 ## What the shipped data actually contains
 
@@ -516,7 +662,9 @@ node the parser does not decode. Against the PSP disc's `Data.wad`:
 | Field | Value | Reading |
 | --- | --- | --- |
 | `ring+0x04` | 10 | ring capacity, in samples |
-| `ring+0x1c` | 1.0 | width scale, applied to every layer width |
+| `ring+0x08` | 0.1 | **per-sample colour fade step** for the vertex bake (a field the first reading skipped; presets 0/1 use 1/12 and 0.125) |
+| `ring+0x1c` | 1.0 at init | width scale - **overwritten every frame** by `Exhaust_Update` with `intensity * 0.35 + 0.2` (live: `0.3737` at intensity `0.497`), so the shipped `1.0` never survives a race tick |
+| `ring+0x20` | 0 at init | stencil ramp base - overwritten every frame with `intensity * 0.5 * 0.9` (live: `0.2233`); visually inert |
 | `ring+0x2c` | -4.5 | **taper rate**, derived as `-(ring[0x24] / (capacity * dt)) * 0.75` |
 | `ring+0x24` | 1.0 | **width taper at the head** |
 | `ring+0x64` | 3 | layer count |
@@ -561,20 +709,30 @@ three addresses `Exhaust_Update` writes**. That match is what ties the staggered
 ramps to the ribbon rather than to three concentric quads, which is how they were
 first read.
 
-**The preset's own colours are dead on arrival for a racing craft**, and this is
-worth recording because they look meaningful: layer 0 is a deep blue
-`(0, 0.031, 0.502)`, layer 1 a magenta `(0.608, 0, 0.486)`, layer 2 a near-white
-`(0.824, 0.824, 0.824)`. `Exhaust_Update` overwrites **all four channels of all
-three** every frame with that layer's staggered ramp, multiplied by a tint at
-`flare+0x68`..`+0x74` that it sets to `(1, 1, 1, 1)` in the same breath. So the
-ribbon a racing ship draws is greyscale, and the authored colours only matter to
-whatever else uses this preset - or to a tint that is always white here and is a
-hook for something unfound.
+**The preset's own colours are alive, and an earlier version of this page
+declared them dead.** Layer 0 is a deep blue `(0, 0.031, 0.502)`, layer 1 a
+magenta `(0.608, 0, 0.486)`, layer 2 a near-white `(0.824, 0.824, 0.824)` (all
+three authored alphas are `0`, which the pure-additive blend ignores).
+`Exhaust_Update` does overwrite all four channels of all three ring colour
+fields every frame with the staggered grey ramp - that part of the old reading
+stands, and the tint at `flare+0x68`..`+0x74` it multiplies in is confirmed
+written `(1, 1, 1, 1)` in the same function, every frame. What the old reading
+missed is that **`Trail_BakeVertexColours` copied the authored colours into the
+per-vertex data at init, before `Exhaust_Update` ever ran**, and the GE
+multiplies the two: the per-frame ring value goes out as `sceGuAmbient` (the
+grey intensity ramp), the baked authored colour rides in the vertices (the
+material, via `sceGuColorMaterial(7)`), and the fragment is their product. The
+ribbon is a blue outer / magenta middle / white core, each scaled by its grey
+ramp - which is exactly the violet-white bloom the 2026-07-30 reference frame
+shows. Live: ring colours read `(0.347, 0.347, 0.347, 0.347)` /
+`(0.229, ...)` / `(0.0, ...)` at intensity `0.497` - the ramp formula to four
+digits - while the baked vertex colours still held the authored values times
+the fade curve.
 
-That `Exhaust_Update` writes the ramp into **rgb as well as alpha** matters to the
-result: with the additive blend weighting rgb by alpha, the contribution goes as the
-ramp *squared*. Writing `(1, 1, 1, ramp)` instead gives a linear falloff and a
-visibly hotter, flatter plume.
+The "contribution goes as the ramp squared" paragraph that used to stand here
+is retracted: it assumed the flare's `src.a`-weighted blend applied to the
+ribbon, and the ribbon's own display list sets `GU_FIX`/`GU_FIX` white instead.
+The ramp contributes **linearly**, once, through the ambient register.
 
 `Trail_BuildOffsetTable` (`0x08929a74`), called with `80.0`, fills `ring+0x138`
 with the per-sample offset weights `Trail_DrawRibbon` indexes: `+0x28 = -1/80` and
@@ -632,16 +790,28 @@ next reader does not go looking for a class `0` handler.
   precedent: `vex.md:110` records `gate` as exactly that. Not resolved. Note
   `exitglow` *is* authored 13 times on `16_Track`, so an unregistered class can
   still have instances.
-- **`Trail`'s authored parameters** - the per-layer width array, the layer count
-  and the `+0x1c` scale. Now readable, since `shipwreck.vex` supplies two real
-  instances; not read in this pass because the wreck is out of scope for it.
+- **The two authored `Trail` nodes on `shipwreck.vex`** still carry unread
+  payload parameters. The racing ship's preset-2 values are now fully recovered
+  (above); the wreck's authored ones are a separate, still-open read, out of
+  scope while the wreck itself is.
 - **Whether `Trail` appears outside `shipwreck.vex`.** Four files checked. A sweep
   over every `.vex` entry by index - names are unknown for most of `Data.wad`'s
   1,142 entries - would settle it.
 - **The five teams whose `Ship.vex` does not resolve by name.** A `mine-names`
   job, not a format one.
 - **What writes `self+0x84`** the `1` and `2` values that gate submit and update.
-- **`Trail`'s authored parameters** - width array, layer count, `+0x1c` scale.
+- **What arms the boost timer (`flare+0xb8`).** Everything downstream of it is
+  recovered - `Exhaust_UpdateEngineSound` decays it, `engine_on` reads it
+  against `0.2`, the half-size adds `boost_timer * 8.0`, and `Exhaust_Update`
+  reveals the `<Team>boost.vex` model while it exceeds `0.2` (hiding it again
+  once `flare+0x88` passes `1.5` s). The *writer* - a boost-start, pad contact
+  or pickup - was searched for by store-offset and not found this pass; it is
+  gameplay code, most likely reached when M5 opens the pads. Until then a
+  reimplementation has the full visual consequence of boost and nothing that
+  triggers it.
+- **The ribbon's texture function.** The state list sets everything except
+  `TFX`; modulate is the GE default and matches the screen, confidence 60. A GE
+  frame dump would settle it.
 - Two callees identified from use rather than from their bodies, hence `_q`:
   `Ship_ThrustInput_q` (`0x0883d850`, read as thrust) and `Gfx_ViewDepth_q`
   (`0x0890486c`, read as a view depth).

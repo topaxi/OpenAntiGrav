@@ -45,9 +45,14 @@
 //! constant that departs is [`HALF_SIZE_TO_WORLD`], which carries its own
 //! reasoning and its own confidence score rather than being folded in silently.
 //!
-//! The ribbon's *length* scale ([`TRAIL_LENGTH`]) is the other departure, for the
-//! same kind of reason - the original's offset table is dimensionless as far as
-//! this reading goes. Both are named constants with confidence scores.
+//! The ribbon itself is recovered end to end (2026-08-02, static read plus a
+//! live PPSSPP capture; see exhaust.md's GE-state and vertex-bake sections):
+//! a four-fin cross around the position history, vertex colours baked as
+//! *authored* blue/magenta/white times a steep [`trail_fade`] toward the tail,
+//! multiplied per frame by the grey intensity ramp, drawn **pure additive**
+//! (`dst + src`, not weighted by alpha). The fade curve is why the original's
+//! exhaust reads as a compact bloom: the back half of the ribbon is
+//! numerically invisible.
 //!
 //! `Trail` is *also* authored twice on `shipwreck.vex` (`trail_con_left_wing`,
 //! `trail_con_right_wing`); the wreck is out of scope here.
@@ -75,11 +80,79 @@ pub const TRAIL_SAMPLES: usize = 10;
 /// preset 2.
 ///
 /// **Absolute, not a multiple of the flare's half-size.** `Trail_DrawRibbon`
-/// computes a layer's width as `LAYER_WIDTH[n] * ring+0x1c`, and `Trail_InitRing`
-/// sets `ring+0x1c` to `1.0`, so these values *are* the widths. Scaling them by
-/// [`Exhaust::half_size`] as well - which an earlier version of this module did -
-/// makes the ribbon roughly 2.5x too wide and it covers the track.
+/// computes a layer's width as `LAYER_WIDTH[n] * ring+0x1c`. `Trail_InitRing`
+/// sets `ring+0x1c` to `1.0`, but that value never survives a race tick:
+/// `Exhaust_Update` overwrites it every frame with
+/// `intensity * `[`TRAIL_WIDTH_GAIN`]` + `[`TRAIL_WIDTH_BASE`] - live-confirmed
+/// `0.3737` at intensity `0.497` - so the drawn widths are these times a
+/// `0.2..0.55` scale, not these directly. Treating the init-time `1.0` as the
+/// scale, which this module did until 2026-08-02, drew the ribbon roughly
+/// 2-3x too wide.
 pub const LAYER_WIDTH: [f32; LAYERS] = [1.0, 0.7, 0.5];
+
+/// Base of the runtime width scale `Exhaust_Update` writes into `ring+0x1c`.
+pub const TRAIL_WIDTH_BASE: f32 = 0.2;
+
+/// Intensity gain of the runtime width scale: `intensity * 0.35 + 0.2`.
+pub const TRAIL_WIDTH_GAIN: f32 = 0.35;
+
+/// The authored per-layer colours from `Trail_ApplyPreset`'s preset 2, as the
+/// exact `N/255` values the shipped floats encode.
+///
+/// **These are alive, and an earlier reading declared them dead.**
+/// `Trail_BakeVertexColours` bakes them into the ring's vertex data at init -
+/// before `Exhaust_Update` ever overwrites the ring's own colour fields - and
+/// the GE multiplies them by the per-frame grey ramp (lighting on, lights off,
+/// `sceGuColorMaterial(7)`: vertex colour is the material, `sceGuAmbient` the
+/// light). Outer layer deep blue, middle magenta, core near-white: the
+/// original's violet-white bloom.
+pub const LAYER_COLOUR: [[f32; 3]; LAYERS] = [
+    [0.0, 8.0 / 255.0, 128.0 / 255.0],
+    [155.0 / 255.0, 0.0, 124.0 / 255.0],
+    [210.0 / 255.0, 210.0 / 255.0, 210.0 / 255.0],
+];
+
+/// Per-sample step of the baked colour fade, `ring+0x08` at preset 2.
+///
+/// Also the per-sample `u` texcoord step the bake writes (`0.1` per sample,
+/// before the per-layer `sceGuTexScale`).
+pub const TRAIL_FADE_STEP: f32 = 0.1;
+
+/// Shape constant of the baked colour fade, the global `DAT_08ac00a0`.
+///
+/// The bake computes `powf(1.0 - TRAIL_FADE_STEP * i, 1.0 / TRAIL_FADE_SHAPE)`
+/// per sample - an exponent of `3.333`, so the curve runs
+/// `1.0, 0.70, 0.475, 0.30, 0.18, 0.099, 0.047, 0.018, 0.005, 0.0005` and the
+/// back half of the ribbon contributes nothing visible. Live-confirmed against
+/// the baked vertex bytes (`0xd2, 0x63, 0x26, 0x09, 0x00` on the white layer at
+/// samples 0/2/4/6/8).
+pub const TRAIL_FADE_SHAPE: f32 = 0.3;
+
+/// Scale of the stored per-sample exhaust direction, `DAT_08a84c40`.
+///
+/// `Exhaust_Update` stores `-(craft matrix row 2) * 200000.0` as each trail
+/// point's direction, and the craft's row carries the global `0.75` model scale
+/// ([`CRAFT_ROW_SCALE`]), so the vector's magnitude is ~150,000 (live:
+/// `150,080`). The offset table's tiny weights multiply *this*, which is why
+/// "the displacement is numerically nil" was wrong: the tail stretches about
+/// 3.5 world units backwards. See [`trail_stretch`].
+pub const TRAIL_DIRECTION_SCALE: f32 = 200_000.0;
+
+/// The craft world matrix's global scale, carried by the row
+/// [`TRAIL_DIRECTION_SCALE`] multiplies.
+///
+/// The same `0.75` the collider and hover-height reads recovered
+/// (`hover::TARGET_GLOBAL_SCALE` in `oag-physics`); duplicated here because
+/// this crate deliberately depends on nothing but `oag-core` and `wgpu`.
+pub const CRAFT_ROW_SCALE: f32 = 0.75;
+
+/// Fins per segment: the ribbon is a diamond tube, not a flat quad.
+///
+/// `Trail_DrawRibbon`'s 10-vertex strip walks the rim `+up, +right, -up,
+/// -right, +up` (camera columns), closing the loop - four quads through the
+/// trail line per segment, with the `v` texcoord running once around the rim
+/// in steps of `0.25`.
+pub const TRAIL_FINS: usize = 4;
 
 /// Width at the head of the trail, `ring+0x24` at preset 2.
 pub const TRAIL_HEAD_TAPER: f32 = 1.0;
@@ -90,13 +163,6 @@ pub const TRAIL_HEAD_TAPER: f32 = 1.0;
 /// The `0.75` is preset 2's own `fVar7`. Kept as the derivation rather than as the
 /// product so the three presets stay distinguishable.
 pub const TRAIL_TAPER_RATE: f32 = -(TRAIL_HEAD_TAPER / (TRAIL_SAMPLES as f32 * SUBSTEP_DT)) * 0.75;
-
-/// The ring's width scale, `ring+0x1c` from `Trail_InitRing`.
-///
-/// Named rather than folded into [`LAYER_WIDTH`] because it is a separate recovered
-/// value that happens to be unity, and a reader should not have to wonder whether
-/// the widths were pre-multiplied.
-pub const TRAIL_WIDTH_SCALE: f32 = 1.0;
 
 /// Per-layer `u` scroll rate, from `ring+0x88` / `+0xb8` / `+0xe8` at preset 2.
 ///
@@ -385,82 +451,71 @@ impl Exhaust {
         })
     }
 
-    /// The ribbon's vertices: three layers of camera-facing quads.
+    /// The ribbon's vertices: three layers of four-fin diamond tubes.
     ///
-    /// Empty until [`Exhaust::trail_ready`]. Each layer runs the full history at
-    /// its own [`LAYER_WIDTH`], scroll and tiling, coloured by its own staggered
-    /// alpha from [`Exhaust::layer_alphas`], and fades linearly from the head to
-    /// the tail - `Trail_DrawRibbon` steps its alpha down by
-    /// `head / (capacity - 1)` per segment.
+    /// Empty until [`Exhaust::trail_ready`]. Per segment the rim runs
+    /// `+up, +right, -up, -right` and closes - `Trail_DrawRibbon`'s own
+    /// 10-vertex strip, built from the camera matrix's first two columns, so
+    /// the cross is camera-aligned. Each layer runs the full history at its own
+    /// [`LAYER_WIDTH`] times the runtime width scale
+    /// (`intensity * 0.35 + 0.2`), scroll and tiling.
     ///
-    /// Each sample is displaced along the direction it was recorded with, weighted
-    /// by [`trail_weight`], so the plume eases away from the nozzle rather than
-    /// trailing off linearly.
+    /// The colour per vertex is `authored layer colour x grey ramp x baked
+    /// fade`, premultiplied here because the ribbon's recovered blend is pure
+    /// additive (`dst + src.rgb`, both factors `GU_FIX` white): the alpha
+    /// channel is set to `1.0` and contributes nothing, exactly as the GE
+    /// ignores it. The flare's per-frame alpha flicker does **not** apply to
+    /// the ribbon - the original's flicker lands only on the flare quad's
+    /// colour (`flare+0xc8`).
+    ///
+    /// Each sample is displaced along the direction it was recorded with by
+    /// [`trail_stretch`] - about 3.5 world units at the tail.
     #[must_use]
     pub fn trail_vertices(&self, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
         if !self.trail_ready() {
             return Vec::new();
         }
-        let alphas = self.layer_alphas();
+        let ramps = self.layer_alphas();
         let samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
-        let last = samples.len().saturating_sub(1).max(1) as f32;
+        let width_scale = self.intensity * TRAIL_WIDTH_GAIN + TRAIL_WIDTH_BASE;
 
-        let mut out = Vec::with_capacity(LAYERS * (TRAIL_SAMPLES - 1) * 6);
+        let mut out = Vec::with_capacity(MAX_TRAIL_VERTICES);
+        // The rim, in `Trail_DrawRibbon`'s own order. The fifth entry closes
+        // the tube; `v` runs 0..1 once around it in quarters.
+        let rim = [up, right, -up, -right, up];
         for layer in 0..LAYERS {
-            let layer_alpha = alphas[layer] * self.alpha;
-            let base_width = LAYER_WIDTH[layer] * TRAIL_WIDTH_SCALE;
-            // Toward the viewer, from the camera's own basis. Widening each segment
-            // perpendicular to *both* this and the segment's direction is what
-            // makes the ribbon face the camera along its whole length instead of
-            // edge-on wherever the trail happens to run toward the eye.
-            let view = right.cross(up);
+            let ramp = ramps[layer];
+            let base_width = LAYER_WIDTH[layer] * width_scale;
+            let colour = LAYER_COLOUR[layer];
+            // The texture scale and scroll are baked into the texcoords rather
+            // than set as pipeline state, because all three layers share one
+            // draw. `sceGuTexScale(su, 1.0)` plus `sceGuTexOffset(u, v)` is the
+            // same thing: tile `su` times along the ribbon, shifted. The bake
+            // steps `u` by `TRAIL_FADE_STEP` per sample, not by `1/(n-1)`.
+            let su = LAYER_TEX_SCALE_U[layer];
+            let [ou, ov] = self.scroll[layer];
             for k in 0..samples.len() - 1 {
                 let (a, back_a) = samples[k];
                 let (b, back_b) = samples[k + 1];
-                let ta = k as f32 / last;
-                let tb = (k + 1) as f32 / last;
-                let pa = a + back_a * trail_weight(ta);
-                let pb = b + back_b * trail_weight(tb);
-
-                let along = pb - pa;
-                let unit = along
-                    .cross(view)
-                    .try_normalize()
-                    // Degenerate: the craft has not moved between samples, or the
-                    // segment points straight at the eye. Fall back to the camera's
-                    // right so the quad stays a quad rather than collapsing.
-                    .unwrap_or(right);
-                // Tapered per end, not per segment: this is the silhouette.
-                let across_a = unit * (base_width * trail_taper(k));
-                let across_b = unit * (base_width * trail_taper(k + 1));
-
-                // **No per-segment alpha fade.** `Trail_DrawRibbon` does step a value
-                // down from `ring+0x20` toward the tail, but it feeds
-                // `sceGuAlphaFunc` - an alpha *test* reference - and preset 2 never
-                // sets `ring+0x20`, so `Trail_InitRing`'s zero stands and the test
-                // passes everything. The falloff a viewer sees is the width taper
-                // above. Fading alpha here as well, which this did at first, dims
-                // the tail twice.
-                let aa = layer_alpha;
-                let ab = layer_alpha;
-
-                // The texture scale and scroll are baked into the texcoords rather
-                // than set as pipeline state, because all three layers share one
-                // draw. `sceGuTexScale(su, 1.0)` plus `sceGuTexOffset(u, v)` is the
-                // same thing: tile `su` times along the ribbon, shifted.
-                let su = LAYER_TEX_SCALE_U[layer];
-                let [ou, ov] = self.scroll[layer];
-                out.extend_from_slice(&segment(
-                    pa,
-                    pb,
-                    across_a,
-                    across_b,
-                    aa,
-                    ab,
-                    ta * su + ou,
-                    tb * su + ou,
-                    ov,
-                ));
+                let pa = a + back_a * trail_stretch(k);
+                let pb = b + back_b * trail_stretch(k + 1);
+                let wa = base_width * trail_taper(k);
+                let wb = base_width * trail_taper(k + 1);
+                let fade_a = ramp * trail_fade(k);
+                let fade_b = ramp * trail_fade(k + 1);
+                let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
+                let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
+                let ua = k as f32 * TRAIL_FADE_STEP * su + ou;
+                let ub = (k + 1) as f32 * TRAIL_FADE_STEP * su + ou;
+                for fin in 0..TRAIL_FINS {
+                    let va = fin as f32 * 0.25 + ov;
+                    let vb = (fin + 1) as f32 * 0.25 + ov;
+                    let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va);
+                    let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb);
+                    let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va);
+                    let b1 = rib_vertex(pb + rim[fin + 1] * wb, cb, ub, vb);
+                    out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
+                }
             }
         }
         out
@@ -580,53 +635,38 @@ fn range(rng: &mut Rng, (lo, hi): (f32, f32)) -> f32 {
     lo + (hi - lo) * rng.next_f32()
 }
 
-/// How far back the plume spreads over the whole history, in world units.
-///
-/// **Now recovered as effectively zero, confidence 85** - it was a guess at 50
-/// until `Trail_BuildOffsetTable`'s weights were evaluated. Those weights come out
-/// at `2.6e-6` per sample over the ship's ten, so the displacement along the
-/// exhaust direction is numerically nil and the ribbon's shape is purely its
-/// position history. Zero here is the original's answer, not a tuning choice.
-///
-/// Note this is *not* the trail's length - the position history supplies that, and
-/// at racing speed ten ticks already span some 17 units. This is only the extra
-/// stretch each sample takes along its own exhaust direction, so it belongs on the
-/// scale of a hull rather than of the whole ribbon. Set to 10 at first, which
-/// stacked on top of the history and produced a plume long enough to cover the
-/// track.
-///
-/// **Zero, and that is the point.** This is the only displacement along the exhaust
-/// direction, and it is entirely invented: the values once used here as per-layer
-/// position offsets turned out to be [`LAYER_SCROLL_U`] rates, so **nothing
-/// recovered pushes a sample backwards at all**. The 2026-07-30 PPSSPP reference
-/// shows a far more compact plume than ours, and of the candidate causes this is the
-/// only one that is not a recovered value - so it goes first, and to zero rather
-/// than to a smaller guess.
-///
-/// The ribbon's length is therefore now exactly its position history: ten ticks of
-/// where the nozzle actually was. [`trail_weight`] is kept, and still carries the
-/// recovered curve shape, so that if a matched comparison ever calls for a stretch
-/// the shape to apply it with is already here.
-pub const TRAIL_LENGTH: f32 = 0.0;
-
-/// Displacement along the exhaust direction for a sample at fraction `t` of the
-/// history, in world units.
+/// Displacement along the exhaust direction for the sample at index `i`, in
+/// world units. **Fully recovered, confidence 88** - no free scale remains.
 ///
 /// `Trail_BuildOffsetTable` fills its table with
-/// `w = (-1/K) * (exp(-t/K) - 1)` for `K = `[`TRAIL_EASE`]` = 80`, which rises
-/// from zero and flattens - an exponential ease rather than a linear trail-off.
-/// **That shape is the original's and is reproduced exactly**; normalised here so
-/// `t = 0` gives 0 and `t = 1` gives [`TRAIL_LENGTH`].
-///
-/// **The scale is not recovered, confidence 50.** The original's table is indexed
-/// by a value advancing at a per-frame constant (`_DAT_08a889d0`, unestablished)
-/// and its weights multiply a stored per-sample direction vector that is not
-/// necessarily unit-length, so the raw table value is dimensionless as far as this
-/// reading goes. Normalising and scaling is therefore a choice, isolated in
-/// [`TRAIL_LENGTH`] so it cannot be mistaken for a recovered value.
+/// `w(t) = (-1/K) * (exp(-t/K) - 1)` for `K = `[`TRAIL_EASE`]` = 80` and
+/// `t = i * dt`, and `Trail_DrawRibbon` multiplies each sample's *stored
+/// direction* by it. An earlier reading evaluated the weights (`~2.6e-6` per
+/// sample), called the displacement "numerically nil" and pinned a
+/// `TRAIL_LENGTH` of zero here - missing that the stored direction is
+/// `-(craft row 2) * 200000` ([`TRAIL_DIRECTION_SCALE`]), magnitude ~150,000
+/// once the row's own `0.75` scale is in. The product is a real, modest
+/// backwards stretch: `0` at the head, `~3.5` units at the tail, eased rather
+/// than linear. Live-confirmed: the stored vector read back at magnitude
+/// `150,080`.
 #[must_use]
-pub fn trail_weight(t: f32) -> f32 {
-    trail_ease(t) * TRAIL_LENGTH
+pub fn trail_stretch(sample: usize) -> f32 {
+    let t = sample as f32 * SUBSTEP_DT;
+    let w = -(1.0 / TRAIL_EASE) * ((-t / TRAIL_EASE).exp() - 1.0);
+    w * TRAIL_DIRECTION_SCALE * CRAFT_ROW_SCALE
+}
+
+/// The baked per-sample colour fade: `powf(1 - 0.1 i, 3.333)`.
+///
+/// `Trail_BakeVertexColours` writes this into the ring's vertex colours once at
+/// init; the exponent is `1 / `[`TRAIL_FADE_SHAPE`]. The steepness is the
+/// single biggest reason the original's exhaust reads as a compact bloom - the
+/// curve is under `0.05` by sample 6 of 10.
+#[must_use]
+pub fn trail_fade(sample: usize) -> f32 {
+    (1.0 - TRAIL_FADE_STEP * sample as f32)
+        .max(0.0)
+        .powf(1.0 / TRAIL_FADE_SHAPE)
 }
 
 /// The per-sample width multiplier: **1.0 at the head, 0.325 at the tail**.
@@ -653,59 +693,21 @@ pub fn trail_taper(sample: usize) -> f32 {
     (TRAIL_HEAD_TAPER + TRAIL_TAPER_RATE * sample as f32 * SUBSTEP_DT).max(0.0)
 }
 
-/// The recovered ease curve, normalised to `0.0` at `t = 0` and `1.0` at `t = 1`.
-///
-/// Split out from [`trail_weight`] so the **shape** - which is the original's - stays
-/// testable independently of the **scale** - which is ours and is currently zero.
-/// Folding the two together made the shape untestable the moment the scale went to
-/// zero, which is the wrong way round: the recovered half should be the durable half.
-#[must_use]
-pub fn trail_ease(t: f32) -> f32 {
-    // With the argument scaled by K the exponent is just -t, so the curve is
-    // `1 - exp(-t)`: zero at the head, 0.632 at the tail.
-    let raw = 1.0 - (-t).exp();
-    let full = 1.0 - (-1.0f32).exp();
-    raw / full
-}
-
-/// Six vertices for one ribbon segment, widened by `across` at both ends.
-///
-/// **`u` runs along the trail and `v` spans the width**, which is the way round the
-/// recovered `sceGuTexScale(su, 1.0)` requires: `su` is 7.5 at the inner layer and
-/// scales `u`, so `u` has to be the axis that tiles. Swapping the two - which this
-/// did at first - tiles the noise *across* a one-unit-wide ribbon and stretches a
-/// single column of it down the whole trail.
-#[allow(clippy::too_many_arguments)]
-fn segment(
-    a: Vec3,
-    b: Vec3,
-    across_a: Vec3,
-    across_b: Vec3,
-    alpha_a: f32,
-    alpha_b: f32,
-    u_a: f32,
-    u_b: f32,
-    v_offset: f32,
-) -> [GpuVertex; 6] {
-    // Greyscale, not white-with-alpha. `Exhaust_Update` writes the layer's ramp
-    // into all four of its colour channels, so the contribution is the ramp
-    // *squared* once the additive blend weights rgb by alpha. Writing
-    // `[1, 1, 1, ramp]` instead - which this did at first - gives a linear falloff
-    // and a visibly hotter, flatter plume.
-    let at = |p: Vec3, u: f32, v: f32, ramp: f32| GpuVertex {
+/// One ribbon vertex: the rgb already carries `authored colour x ramp x fade`,
+/// and the alpha channel is inert under the ribbon's pure-additive blend
+/// ([`TRAIL_BLEND`]).
+fn rib_vertex(p: Vec3, rgb: [f32; 3], u: f32, v: f32) -> GpuVertex {
+    GpuVertex {
         position: p.to_array(),
         normal: [0.0, 0.0, 1.0],
-        colour: [ramp, ramp, ramp, ramp],
+        // Alpha 1.0: under [`TRAIL_BLEND`] both factors are One, so the shader's
+        // alpha output never reaches the colour result - same as the GE.
+        colour: [rgb[0], rgb[1], rgb[2], 1.0],
         texcoord: [u, v],
         // Emissive, like the flare: no light rig.
         lit: 0.0,
         v_cycles: 0.0,
-    };
-    let al = at(a - across_a, u_a, v_offset, alpha_a);
-    let ar = at(a + across_a, u_a, v_offset + 1.0, alpha_a);
-    let bl = at(b - across_b, u_b, v_offset, alpha_b);
-    let br = at(b + across_b, u_b, v_offset + 1.0, alpha_b);
-    [al, ar, bl, ar, br, bl]
+    }
 }
 
 /// The blend the original's display list sets, as `wgpu` spells it.
@@ -730,6 +732,28 @@ pub const BLEND: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
+/// The ribbon's blend, which is **not** the flare's.
+///
+/// `Trail_BuildStateList` records
+/// `sceGuBlendFunc(GU_ADD, GU_FIX 0xffffff, GU_FIX 0xffffff)` - both factors
+/// fixed white, so the ribbon composites as `dst + src` with alpha contributing
+/// nothing. The fade a viewer sees is entirely in the vertex rgb
+/// ([`trail_fade`]); weighting by source alpha as well - which this module did
+/// while it assumed the flare's blend - double-counts every fade and was part
+/// of why no tuning of the old constants converged.
+pub const TRAIL_BLEND: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
 /// The maximum vertices [`Pipeline`]'s buffer holds: one ship's worth of layers.
 ///
 /// Sized as a constant rather than grown on demand because
@@ -737,8 +761,9 @@ pub const BLEND: wgpu::BlendState = wgpu::BlendState {
 /// included, precisely so this never has to resize.
 pub const MAX_VERTICES: usize = LAYERS * 6;
 
-/// The ribbon's vertex budget: three layers of `TRAIL_SAMPLES - 1` quads.
-pub const MAX_TRAIL_VERTICES: usize = LAYERS * (TRAIL_SAMPLES - 1) * 6;
+/// The ribbon's vertex budget: three layers of `TRAIL_SAMPLES - 1` segments,
+/// each a four-quad diamond tube.
+pub const MAX_TRAIL_VERTICES: usize = LAYERS * (TRAIL_SAMPLES - 1) * TRAIL_FINS * 6;
 
 /// The flare's draw pipeline: the first blended, depth-tested pipeline in this
 /// crate.
@@ -760,6 +785,10 @@ pub const MAX_TRAIL_VERTICES: usize = LAYERS * (TRAIL_SAMPLES - 1) * 6;
 #[derive(Debug)]
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
+    /// The ribbon's own pipeline: identical but for [`TRAIL_BLEND`], because
+    /// the original's trail display list sets a different blend than the
+    /// flare's (`GU_FIX`/`GU_FIX` against `GU_SRC_ALPHA`/`GU_FIX`).
+    trail_pipeline: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     texture: wgpu::BindGroup,
@@ -839,52 +868,57 @@ impl Pipeline {
             immediate_size: 0,
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("exhaust"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                        4 => Float32
-                    ],
-                })],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(BLEND),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                // A camera-facing quad has no meaningful winding: the basis it is
-                // built from flips as the camera orbits.
-                cull_mode: None,
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: crate::mesh_render::DEPTH_FORMAT,
-                depth_write_enabled: Some(false),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: sample_count,
-                ..Default::default()
-            },
-            multiview_mask: None,
-            cache: None,
-        });
+        let build_pipeline = |label: &str, blend: wgpu::BlendState| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[Some(wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![
+                            0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                            4 => Float32
+                        ],
+                    })],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: Some(blend),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    // A camera-facing quad has no meaningful winding: the basis it
+                    // is built from flips as the camera orbits. The original
+                    // disables cull for both the flare and the ribbon.
+                    cull_mode: None,
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: crate::mesh_render::DEPTH_FORMAT,
+                    depth_write_enabled: Some(false),
+                    depth_compare: Some(wgpu::CompareFunction::Less),
+                    stencil: Default::default(),
+                    bias: Default::default(),
+                }),
+                multisample: wgpu::MultisampleState {
+                    count: sample_count,
+                    ..Default::default()
+                },
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let pipeline = build_pipeline("exhaust", BLEND);
+        let trail_pipeline = build_pipeline("exhaust trail", TRAIL_BLEND);
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("exhaust uniforms"),
@@ -915,11 +949,12 @@ impl Pipeline {
             mapped_at_creation: false,
         });
 
-        let texture = flare.bind(device, queue, &texture_layout, "engine flare");
-        let noise = noise.bind(device, queue, &texture_layout, "engine noise");
+        let texture = flare.bind(device, queue, &texture_layout, "engine flare", false);
+        let noise = noise.bind(device, queue, &texture_layout, "engine noise", true);
 
         Self {
             pipeline,
+            trail_pipeline,
             uniforms,
             bind_group,
             texture,
@@ -974,19 +1009,22 @@ impl Pipeline {
         if self.count == 0 && self.trail_count == 0 {
             return;
         }
-        pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
 
-        // Ribbon first, nozzle sprite second. The blend is additive so the order
-        // does not change the result, but drawing the large translucent thing
-        // before the small bright one matches how the original's depth sort orders
-        // them and keeps the sprite reading as the hottest part of the plume.
+        // Ribbon first, nozzle sprite second. Both blends are additive so the
+        // order does not change the result, but drawing the large translucent
+        // thing before the small bright one matches how the original's depth
+        // sort orders them and keeps the sprite reading as the hottest part of
+        // the plume. The ribbon uses its own pipeline: its recovered blend is
+        // `dst + src`, not the flare's alpha-weighted one.
         if self.trail_count > 0 {
+            pass.set_pipeline(&self.trail_pipeline);
             pass.set_bind_group(1, &self.noise, &[]);
             pass.set_vertex_buffer(0, self.trail_vertices.slice(..));
             pass.draw(0..self.trail_count, 0..1);
         }
         if self.count > 0 {
+            pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(1, &self.texture, &[]);
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             pass.draw(0..self.count, 0..1);
@@ -1043,6 +1081,7 @@ impl FlareTexture {
         queue: &wgpu::Queue,
         layout: &wgpu::BindGroupLayout,
         label: &str,
+        wrap_v: bool,
     ) -> wgpu::BindGroup {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
@@ -1078,18 +1117,21 @@ impl FlareTexture {
             },
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        // `u` repeats, `v` clamps.
-        //
-        // The flare quad samples exactly 0..1 in both, so either mode suits it. The
-        // ribbon does not: its `u` runs `0..LAYER_TEX_SCALE_U` along the trail plus
-        // a scroll offset, which is the whole point of the tiling, so clamping it
-        // would smear one column of the noise down the entire length. `v` spans the
-        // width once, and clamping there keeps the soft edge from wrapping onto
-        // itself.
+        // The ribbon's state list sets `sceGuTexWrap(GU_REPEAT, GU_REPEAT)`, and
+        // it needs both: `u` tiles `LAYER_TEX_SCALE_U` times along the trail
+        // plus a scroll offset, and `v` runs once around the diamond tube plus
+        // its own scroll, so either coordinate routinely leaves `[0, 1]`. The
+        // flare quad samples exactly 0..1 and keeps `v` clamped so its soft
+        // edge cannot bleed the opposite row in under bilinear filtering.
+        let v_mode = if wrap_v {
+            wgpu::AddressMode::Repeat
+        } else {
+            wgpu::AddressMode::ClampToEdge
+        };
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(label),
             address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: v_mode,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
@@ -1410,47 +1452,66 @@ mod tests {
         assert!(e.trail_vertices(Vec3::X, Vec3::Y).is_empty());
     }
 
-    /// The ribbon tapers in width from head to tail, and does **not** fade in alpha.
+    /// The ribbon tapers in width from head to tail, and its colour fades on
+    /// the recovered `powf(1 - 0.1 i, 1/0.3)` curve.
     ///
-    /// Both halves matter. The taper is the silhouette - `1.0 - 0.075 * i`, reaching
-    /// 0.325 at sample 9 - and it was missed at first, which is most of why our
-    /// plume read as a uniform slab. The absent alpha fade is the other half: an
-    /// earlier version faded alpha *as well*, dimming the tail twice.
+    /// Both halves matter, and both were misread once: the taper (`1 - 0.075 i`,
+    /// 0.325 at sample 9) was missed entirely at first, and the colour fade was
+    /// declared absent while it sat baked in the ring's vertex colours.
     #[test]
-    fn the_ribbon_tapers_in_width_and_does_not_fade_in_alpha() {
+    fn the_ribbon_tapers_in_width_and_fades_in_colour() {
         let mut e = Exhaust::new();
         let mut r = rng();
         for _ in 0..600 {
             e.advance(1.0 / 60.0, 100.0, 200.0, &mut r);
         }
-        // A straight run, so every segment shares one `across` direction and the
-        // only thing varying along it is the taper.
+        // A straight run down -z, so widths read directly off the vertex spans.
         for k in 0..TRAIL_SAMPLES {
             e.push_trail(Vec3::new(0.0, 0.0, -(k as f32) * 3.0), -Vec3::Z);
         }
         let v = e.trail_vertices(Vec3::X, Vec3::Y);
 
-        let per_layer = (TRAIL_SAMPLES - 1) * 6;
-        let width_at = |vertex: usize| (v[vertex + 1].position[0] - v[vertex].position[0]).abs();
+        let per_segment = TRAIL_FINS * 6;
+        let per_layer = (TRAIL_SAMPLES - 1) * per_segment;
 
-        // First segment's head end against the last segment's tail end.
-        let head = width_at(0);
-        let tail = width_at(per_layer - 6 + 2);
+        // Fin 0's first two vertices sit at head+up*w and head+right*w, so the
+        // rim radius reads off either component. Head against last segment's
+        // tail end (its `b`-side vertices, offset 2 within the fin).
+        let radius = |vertex: usize| {
+            let p = v[vertex].position;
+            (p[0].powi(2) + p[1].powi(2)).sqrt()
+        };
+        let head = radius(0);
+        let tail = radius(per_layer - per_segment + 2);
         assert!(head > tail, "head {head} must be wider than tail {tail}");
 
-        // The recovered ratio: 0.325 / 1.0 at the extremes.
+        // The recovered taper ratio at the extremes.
         let ratio = trail_taper(TRAIL_SAMPLES - 1) / trail_taper(0);
         assert!((ratio - 0.325).abs() < 1e-3, "taper ratio {ratio}");
 
-        // Alpha is uniform along the layer - the falloff is width, not opacity.
-        let alpha = v[0].colour[3];
-        for (n, vert) in v[..per_layer].iter().enumerate() {
-            assert!(
-                (vert.colour[3] - alpha).abs() < 1e-6,
-                "vertex {n} alpha {} differs from {alpha}",
-                vert.colour[3]
-            );
-        }
+        // The head width is the layer width times the runtime scale - the
+        // intensity-driven `0.2..0.55`, saturated here - never the authored
+        // width alone.
+        let scale = 1.0 * TRAIL_WIDTH_GAIN + TRAIL_WIDTH_BASE;
+        assert!(
+            (head - LAYER_WIDTH[0] * scale).abs() < 1e-4,
+            "head {head} vs {}",
+            LAYER_WIDTH[0] * scale
+        );
+
+        // Colour fades along the ribbon on the baked curve; alpha stays 1.0
+        // because the additive blend ignores it.
+        let head_lum = v[0].colour[2];
+        let tail_lum = v[per_layer - per_segment + 2].colour[2];
+        assert!(
+            tail_lum < head_lum * 0.01,
+            "tail colour {tail_lum} must be under 1% of head {head_lum}"
+        );
+        assert!(v.iter().all(|vert| vert.colour[3] == 1.0));
+
+        // Layer 0 is the authored deep blue times the ramp: red stays zero.
+        assert_eq!(v[0].colour[0], 0.0);
+        assert!(v[0].colour[2] > v[0].colour[1], "blue must dominate green");
     }
 
     /// The taper is monotonic and never negative.
@@ -1466,27 +1527,35 @@ mod tests {
         assert!((trail_taper(0) - 1.0).abs() < 1e-6);
     }
 
-    /// The offset ease is monotonic, starts at zero and spans `TRAIL_LENGTH`.
+    /// The baked fade matches the live-captured vertex bytes.
     ///
-    /// The shape is the original's (`1 - exp(-t)`); only the scale is ours, so this
-    /// pins the shape rather than the magnitude.
+    /// The white layer's baked colours at samples 0/2/4/6/8 read
+    /// `0xd2 0x63 0x26 0x09 0x00` in the emulator - `210, 99, 38, 9, 0` - and
+    /// the bake is `authored * fade * 255` truncated. Reproducing those bytes
+    /// pins both the curve and its exponent against ground truth.
     #[test]
-    fn the_trail_ease_is_monotonic_over_its_span() {
-        // The recovered shape, asserted on its own so it survives the scale being
-        // whatever a comparison ends up calling for - zero, at present.
-        assert_eq!(trail_ease(0.0), 0.0);
-        assert!((trail_ease(1.0) - 1.0).abs() < 1e-6);
+    fn the_fade_reproduces_the_live_captured_vertex_bytes() {
+        let authored = LAYER_COLOUR[2][0];
+        let baked: Vec<u32> = (0..TRAIL_SAMPLES)
+            .step_by(2)
+            .map(|i| (authored * trail_fade(i) * 255.0) as u32)
+            .collect();
+        assert_eq!(baked, vec![210, 99, 38, 9, 0]);
+    }
+
+    /// The backwards stretch is zero at the head and about 3.5 units at the
+    /// tail - the recovered `w(t) * 200000 * 0.75`, no free scale.
+    #[test]
+    fn the_trail_stretch_is_recovered_end_to_end() {
+        assert_eq!(trail_stretch(0), 0.0);
         let mut last = -1.0;
-        for i in 0..=20 {
-            let w = trail_ease(i as f32 / 20.0);
+        for i in 0..TRAIL_SAMPLES {
+            let w = trail_stretch(i);
             assert!(w > last, "not monotonic at {i}");
             last = w;
         }
-        // Eased, not linear: half way along it is already past half the span.
-        assert!(trail_ease(0.5) > 0.5, "{}", trail_ease(0.5));
-
-        // And the scale is applied on top, whatever it is.
-        assert!((trail_weight(1.0) - TRAIL_LENGTH).abs() < 1e-4);
+        let tail = trail_stretch(TRAIL_SAMPLES - 1);
+        assert!((tail - 3.51).abs() < 0.02, "tail stretch {tail}");
     }
 
     /// The flare is emissive, so it must not take the mesh shader's light rig.
