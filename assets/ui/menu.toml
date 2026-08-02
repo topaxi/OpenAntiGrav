@@ -53,6 +53,17 @@ action = "quit"
 id = "race"
 title = "RACE"
 
+# Mode first, because it is the thing that decides what the other rows mean: a
+# zone run ignores the lap count a time trial is built around. The values are
+# `oag_race::Mode::ALL`'s own tokens and a test pins this list to that array, so
+# a mode added to the enum and forgotten here fails the build rather than
+# quietly not being offered.
+[[page.entry]]
+kind = "choice"
+label = "MODE"
+setting = "race.mode"
+values = ["time_trial", "speed_lap", "zone"]
+
 # Speed class, team and track are the three things `race::Options` actually
 # carries, so all three are live rather than decorative. The values are the
 # ones `SpeedClass::from_name` and the disc's own directory layout accept; a

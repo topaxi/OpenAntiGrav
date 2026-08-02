@@ -71,6 +71,7 @@ use oag_gameplay::{
 };
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
+use oag_race::{Course, Mode, RaceState};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::collision as render_collision;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
@@ -210,6 +211,11 @@ pub struct Options {
     pub team: String,
     /// Speed class the handling parameters are read for.
     pub class: SpeedClass,
+    /// Which mode's rules the race runs under.
+    ///
+    /// Also selects the HUD layout: a Zone run draws `Zone_HUD.xml`, the other
+    /// two share `TimeTrial_HUD.xml`. See [`hud_layout`].
+    pub mode: Mode,
     /// Draw the driveable ribbon instead of the track's art meshes.
     ///
     /// **A development view, not a style.** The ribbon is the geometry the
@@ -233,6 +239,7 @@ impl Default for Options {
             track: DEFAULT_TRACK.to_string(),
             team: DEFAULT_TEAM.to_string(),
             class: SpeedClass::Venom,
+            mode: Mode::default(),
             ribbon: false,
             collision: false,
             lod: mesh::Lod::Both,
@@ -246,10 +253,19 @@ impl Default for Options {
 /// disc, and run a whole race against it on a machine with no graphics driver.
 #[derive(Debug, Clone)]
 pub struct Setup {
+    /// Which mode's rules the race runs under.
+    pub mode: Mode,
     /// The decoded spline graph, as the file has it.
     pub ai: AiTrack,
     /// The spline resampled for locating a ship, and for placing it.
     pub spline: Spline,
+    /// Zone mode's speed law and recharge, when the source carries them.
+    pub zone: Option<oag_formats::handling::Zone>,
+    /// The same graph walked into a closed ring, for lap counting.
+    ///
+    /// `None` when the primary chain does not close, which means this track gets
+    /// no lap counter rather than a wrong one. The load report says so.
+    pub course: Option<Course>,
     /// The track's own authored grid slot, when it has one.
     ///
     /// `None` is not a broken track: it means this source's file carries no
@@ -461,6 +477,29 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once
     // and this is not the place it happens.
     let handling = handling_for(&stats, options.class);
+    // Zone mode's three numbers, out of the engine-wide `Data\XML\HandlingStats.xml`
+    // rather than this team's file - see `handling::GLOBAL_ENTRY`. Read only when
+    // the mode needs them: on a time trial the file's absence is not worth a line,
+    // and on a Zone run it is the whole mode.
+    let zone = if options.mode == Mode::Zone {
+        let found = read(&mut archives, handling::GLOBAL_ENTRY)
+            .ok()
+            .and_then(|blob| handling::global_from_blob(&blob).ok())
+            .flatten();
+        match found {
+            Some(zone) => report.push(format!(
+                "<Zone>: start {}, increment {} per zone, recharge {}",
+                zone.start, zone.increment, zone.recharge
+            )),
+            None => report.push(format!(
+                "{} carries no <Global><Zone/>; this run has no auto-speed",
+                handling::GLOBAL_ENTRY
+            )),
+        }
+        found
+    } else {
+        None
+    };
     let far = stats.external_camera_far;
     let chase = ChaseParams {
         fov: far.fov,
@@ -637,12 +676,35 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
-    let hud = load_hud(&mut archives, &mut report);
+    let hud = load_hud(&mut archives, options.mode, &mut report);
+
+    // The ring the lap counter runs on. Reported either way: "this track has no
+    // lap counting" is exactly the kind of thing that otherwise gets discovered
+    // as a HUD that never counts past one.
+    let course = Course::from_track(&ai, start_position.as_ref().map(|s| Vec3::from(s.position)));
+    match &course {
+        Some(course) => report.push(format!(
+            "course: {} points over {:.0} units, start line at point {}, path \
+             boundaries at {:?}",
+            course.len(),
+            course.length(),
+            course.start_index(),
+            course.path_boundaries()
+        )),
+        None => report.push(
+            "course: the spline's primary chain does not close, so this track has no lap \
+             counting"
+                .to_string(),
+        ),
+    }
 
     Ok(Loaded {
         setup: Setup {
+            mode: options.mode,
+            zone,
             ai,
             spline,
+            course,
             start_position,
             collision,
             handling,
@@ -661,32 +723,43 @@ pub fn load(options: &Options) -> Result<Loaded> {
     })
 }
 
-/// Which layout a race uses.
+/// Which layout a mode draws its HUD from.
 ///
-/// **Time trial, and that is a placeholder rather than a choice.** A race has no
-/// mode concept yet - `Options` carries a track, a team and a speed class and
-/// nothing that says "single race" or "eliminator" - so there is nothing to select
-/// on. Time trial is the smallest layout that carries every widget with a real
-/// source, and it is the mode every reference capture in this project was taken
-/// in. When modes exist this becomes a lookup; the four other entries are in
-/// [`crate::hud::layouts`] already.
-const HUD_LAYOUT: &str = crate::hud::layouts::TIME_TRIAL;
+/// Time trial and speed lap share one: `TimeTrial_HUD.xml` carries both, which
+/// is why `docs/ui/hud.md` counts five layouts for six modes and why the disc has
+/// no `SpeedLap_HUD.xml`. Zone has its own.
+///
+/// The two layouts this does not reach - `Arcade_HUD.xml` and
+/// `Elimination_HUD.xml` - are in [`crate::hud::layouts`] waiting for the modes
+/// that use them.
+#[must_use]
+pub const fn hud_layout(mode: Mode) -> &'static str {
+    match mode {
+        Mode::TimeTrial | Mode::SpeedLap => crate::hud::layouts::TIME_TRIAL,
+        Mode::Zone => crate::hud::layouts::ZONE,
+    }
+}
 
 /// Reads the HUD's layout, atlas, fonts and strings.
 ///
 /// Every piece degrades on its own and says so. The report matters more here than
 /// it looks: a HUD drawn in the 5x7 fallback font looks like a rendering bug, and
 /// a silent fallback would send someone looking in the shader.
-fn load_hud(archives: &mut pulse::Archives, report: &mut Vec<String>) -> crate::hud::Assets {
+fn load_hud(
+    archives: &mut pulse::Archives,
+    mode: Mode,
+    report: &mut Vec<String>,
+) -> crate::hud::Assets {
+    let entry = hud_layout(mode);
     let layout = match archives
-        .read_name(HUD_LAYOUT)
+        .read_name(entry)
         .map_err(|e| e.to_string())
         .and_then(|blob| oag_formats::fexml::expand(&blob).map_err(|e| e.to_string()))
     {
         Ok(xml) => {
             let layout = crate::hud::Layout::from_xml(&xml);
             report.push(format!(
-                "HUD {HUD_LAYOUT}: {} sprite(s), {} fill(s), {} label(s), {} model(s)",
+                "HUD {entry}: {} sprite(s), {} fill(s), {} label(s), {} model(s)",
                 layout.sprites.len(),
                 layout.fills.len(),
                 layout.labels.len(),
@@ -698,7 +771,7 @@ fn load_hud(archives: &mut pulse::Archives, report: &mut Vec<String>) -> crate::
             Some(layout)
         }
         Err(why) => {
-            report.push(format!("HUD {HUD_LAYOUT} unavailable ({why}); no HUD"));
+            report.push(format!("HUD {entry} unavailable ({why}); no HUD"));
             None
         }
     };
@@ -1139,6 +1212,11 @@ pub struct Race {
     pub world: World,
     collision: CollisionWorld,
     spline: Spline,
+    /// The lap counter's ring, or `None` on a track whose chain does not close.
+    course: Option<Course>,
+    /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on
+    /// a source whose `handlingstats.xml` carries no `<Global><Zone/>`.
+    zone: Option<oag_formats::handling::Zone>,
     chase_params: ChaseParams,
     camera: Chase,
     dt: f32,
@@ -1231,7 +1309,10 @@ impl Race {
     #[must_use]
     pub fn start(setup: Setup) -> Self {
         let Setup {
+            mode,
+            zone,
             spline,
+            course,
             start_position,
             collision,
             handling,
@@ -1242,11 +1323,16 @@ impl Race {
         } = setup;
 
         let mut world = World::new(SEED);
+        world.race = RaceState::new(mode);
         let ship = &mut world.ships[0];
         ship.active = true;
         ship.handling = handling;
         ship.physics.body.mass = handling.physical.mass;
         ship.physics.body.inertia = box_inertia();
+        // The pool starts full. Nothing drains it yet - see `Ship::shield` - so
+        // this is what the bar reads all race, and what Zone's perfect-zone
+        // recharge clamps back up to.
+        ship.shield = handling.dimensions.shield;
         if let Some(pose) = spawn_pose(&spline, start_position.as_ref(), &collision, &handling) {
             ship.place_at(pose);
         }
@@ -1258,6 +1344,10 @@ impl Race {
             world,
             collision,
             spline,
+            course,
+            // Only Zone reads these, so the other two modes carry `None` and the
+            // engine keeps its ordinary throttle path.
+            zone: zone.filter(|_| mode == Mode::Zone),
             chase_params: chase,
             camera,
             // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
@@ -1343,9 +1433,17 @@ impl Race {
             ship.segment = u16::try_from(index).unwrap_or(u16::MAX);
         }
 
+        // Zone's auto-speed, from the zone the run has reached. Read before the
+        // step, from the zone the last tick left behind, because that is the
+        // order the original runs in: `Zone_Update` assigns the counter into the
+        // craft and `Ship_UpdateEngine` reads it on the following craft update.
+        let auto_speed = self
+            .zone
+            .map(|zone| oag_race::zone::thrust(zone.start, zone.increment, self.world.race.zone));
         let env = Environment {
             track_sample,
             track_sample_next,
+            auto_speed,
             ..Environment::default()
         };
         let before = ship.physics.body.position;
@@ -1370,6 +1468,36 @@ impl Race {
         }
 
         self.world.tick += 1;
+
+        // The race rules run last of the simulation, on the position the step
+        // produced and the tick it produced it on. Running them before the step
+        // would test last tick's position against this tick's clock, which is a
+        // whole tick of error on a quantity whose job is to be exact at one
+        // instant. A track with no closed ring simply has no lap counter; the
+        // load report already said so.
+        if let Some(course) = &self.course {
+            let position = self.world.ships[0].physics.body.position;
+            // The same flag the collision sparks fire on, so "the HUD says that
+            // zone was not clean" and "sparks came off the hull" cannot disagree.
+            let contact = evaluated.wall.impact;
+            let outcome =
+                self.world
+                    .race
+                    .update(course, position, self.world.tick, self.dt, contact);
+
+            // A zone survived without touching anything pays shield back, clamped
+            // to the ship's own pool. `Ship_SetShield` (`0x0883e6f4`) does the
+            // same clamp against the stat block's maximum, so a full ship gains
+            // nothing and the bar cannot overfill.
+            if outcome.perfect_zone
+                && let Some(zone) = self.zone
+            {
+                let ship = &mut self.world.ships[0];
+                let max = ship.handling.dimensions.shield;
+                ship.shield = (ship.shield + zone.recharge).min(max);
+            }
+        }
+
         let target = target_of(&self.world.ships[0]);
         self.camera.advance(target, &self.chase_params, self.dt);
 
@@ -1567,27 +1695,39 @@ impl Race {
     #[must_use]
     pub fn readout(&self) -> crate::hud::Readout {
         let ship = self.ship();
+        let race = &self.world.race;
+        // Zero still means "unknown", and a track with no closed ring still has
+        // no lap counter - the widget is omitted rather than reading 1 of 3 on a
+        // course that cannot tell.
+        let counted = self.course.is_some();
         crate::hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length()
                 * oag_render::exhaust::SPEED_TO_KMH,
             speed_full_kmh: crate::hud::DEFAULT_SPEED_FULL_KMH,
-            // The pool the ship started with. Nothing depletes it: there are no
-            // weapons, and track-contact damage is unrecovered - so the bar reads
-            // full for the whole race, deliberately.
-            shield: ship.handling.dimensions.shield,
+            // Nothing depletes this yet - no weapons, and track-contact damage is
+            // unrecovered - so the bar reads full for the whole race. It is the
+            // ship's own pool rather than the parameter now, because Zone's
+            // perfect-zone recharge writes it.
+            shield: ship.shield,
             shield_max: ship.handling.dimensions.shield,
-            // Lap counting is an open M5 question; zero means "unknown" and the
-            // widget is omitted. `docs/formats/track.md#where-is-lap-counting`.
-            lap: 0,
-            laps: 0,
+            lap: if counted { race.lap } else { 0 },
+            // A speed lap and a Zone run have no lap target. Zero is what the HUD
+            // already reads as "unknown" and it omits the "of N" half.
+            laps: race.laps_target.filter(|_| counted).unwrap_or(0),
             // One ship on the grid until grid formation is recovered: seven of the
             // eight slots are laid out by unread code.
             place: 0,
             ships: u32::from(self.world.ship_count),
             race_ticks: self.world.tick,
-            lap_ticks: self.world.tick,
-            best_lap_ticks: None,
+            lap_ticks: if counted {
+                race.lap_ticks(self.world.tick)
+            } else {
+                self.world.tick
+            },
+            best_lap_ticks: race.best_lap_ticks,
             wrong_way: self.wrong_way(),
+            zone: race.zone.into(),
+            score: race.score,
         }
     }
 
@@ -2997,9 +3137,19 @@ mod tests {
     fn setup(handling: Handling) -> Setup {
         let ai = straight_track();
         let spline = Spline::from_track(&ai);
+        // A straight is not a loop, so there is no ring and no lap counter. That
+        // is the point for these tests: they are about the force law and the
+        // camera, and a `None` course is the honest state for the track they run
+        // on rather than a stub that counts laps on a line.
+        let course = Course::from_track(&ai, None);
         Setup {
+            mode: Mode::TimeTrial,
+            // A time trial does not read it, and these tests never run a Zone
+            // race: the numbers are the disc's and there is no disc here.
+            zone: None,
             ai,
             spline,
+            course,
             // The synthetic track has no authored slot, which is the fallback
             // path: every assertion below is about a ship placed on the spline.
             start_position: None,

@@ -1,0 +1,137 @@
+# Race modes
+
+Three single-ship modes are implemented: **time trial**, **speed lap** and
+**Zone**. None of them needs opponents, weapons or a grid, which is why they came
+first - they are the part of the race layer that can be finished rather than
+stubbed.
+
+The rules live in `crates/race`; how a lap is decided at all is
+[lap counting](lap-counting.md), and it is a convention rather than a recovery.
+
+Selected on the RACE menu page, which opens on the time trial, or with
+`--mode time_trial|speed_lap|zone` on the command line. `--race` skips the menus,
+so the flag is the only way in on that path.
+
+## What each mode is
+
+| | Time trial | Speed lap | Zone |
+| --- | --- | --- | --- |
+| Laps | 3 | unlimited | unlimited |
+| Throttle | the player's | the player's | the mode's |
+| Ends by itself | after lap 3 | never | **not implemented** - see below |
+| HUD layout | `TimeTrial_HUD.xml` | `TimeTrial_HUD.xml` | `Zone_HUD.xml` |
+
+Time trial and speed lap sharing a layout is the disc's arrangement, not a
+shortcut: there is no `SpeedLap_HUD.xml`, which is why
+[the HUD page](../ui/hud.md) counts five layouts for six modes.
+
+## Time trial
+
+**Three laps.** Observed rather than invented: the original's own counter reads
+`Lap 1 of 3`, and a run that drives past the third lap starts a fresh attempt with
+the best time cleared. See
+[the PPSSPP debugger notes](../reverse-engineering/ppsspp-debugger.md).
+
+The count is *configuration* in the original rather than a constant - the
+race-setup format string carries `laps="%d"` - so three is what a time trial was
+seen configured with, not a limit of the format. `Mode::TIME_TRIAL_LAPS`.
+
+Weapons and AI fall out of the mode rather than being set: selecting TIME TRIAL on
+the original's Custom Race screen flips WEAPONS to OFF and AI DIFFICULTY to N/A on
+its own. Neither exists here yet, so nothing had to be turned off.
+
+**Not implemented:** the fresh-attempt-behind-you behaviour. The run stops at the
+end of lap 3.
+
+## Speed lap
+
+Unlimited laps, chasing one fast lap; it never ends on its own and escape leaves.
+Everything about it is the time trial without the lap target, which is how it is
+implemented - `Mode::laps_target` returns `None`.
+
+**This mode is not documented anywhere in the original's data that has been read.**
+It appears in no mode enumeration in this repository's notes and has no HUD layout
+of its own. It is here because it is a trivially correct subset of the time trial,
+and if a recovered speed lap turns out to differ, this is the one to re-check.
+
+## Zone
+
+Recovered, and recovered late: the evidence is
+[zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md), which reads
+`Zone_Update` (`0x0882f5cc`) end to end. The identification itself is now
+confidence **84** rather than the 50 it sat at - the mode factory picks the Zone
+constructor with the byte-identical selector `Ship_UpdateEngine` uses for its
+four-corner branch.
+
+What runs:
+
+- **The zone number steps every 10.0 seconds of accumulated frame time**, and on
+  nothing else - not distance, not laps, not score. Confidence **84**. At the
+  fixed 60 Hz of [ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)
+  that is every 600 ticks.
+- **The accumulator resets to zero rather than subtracting the step**, so each
+  zone discards the frame overshoot and the zone clock runs fractionally slow.
+  Confidence **82**. This is behaviour, and there is a test asserting it so nobody
+  tidies it away as a rounding artefact.
+- **Thrust is `start + increment * zone`**, replacing the throttle entirely: a
+  Zone craft accelerates with nothing held down. Uncapped - the ordinary engine
+  branch clamps against `0.5 * speed + accelcap` and this one does not.
+- **Score** rises by one every tick, plus 500 for a zone completed without
+  touching anything, which also restores shield.
+
+### Zone's numbers are not in this repository
+
+`start`, `increment` and `recharge` are read at runtime from
+`<Handling><Global><Zone/></Global>` in `Data\XML\HandlingStats.xml` on the
+player's own disc, exactly as the original reads them - see
+[handling stats](../formats/handling-stats.md). Nothing is invented and nothing is
+committed, which is what
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) requires.
+
+A source without that file races Zone with no auto-speed, and the load report
+says so rather than substituting numbers.
+
+### Two approximations, both deliberate
+
+- **The gate on the speed law.** The original applies it only when
+  `(flags & 1) && !(flags & 2)` on the undecoded `craft+0x1c0`, and writes `0.0`
+  when the test fails. Bit 0 is known to be the ground-contact bit - it is the
+  same bit that gates the brakes - so groundedness stands in for it. Bit 1 is not
+  decoded and is treated as always clear.
+- **The shield recharge is inert.** It is implemented, it clamps to the ship's
+  maximum the way `Ship_SetShield` does, and nothing depletes the pool - so a
+  clean zone recharges a full ship to full. Collision damage is M5 work; see
+  the [roadmap](../overview/roadmap.md).
+
+### Zone has no ending, and that is on purpose
+
+The original ends a run on **bit 12 of `entity+0x860`**, and *what sets that bit
+was not found*. The `sw ...,0x860(...)` sites that were read set `0x200000` and
+`0x400000`, never `0x1000`. The same bit ends every other mode's run, which makes
+it a generic "this craft is done" flag rather than a Zone rule.
+
+Confidence is **60** for "craft eliminated" and only **25** for specifically
+"shield reached zero". Shield depletion is separately unimplemented across the
+project.
+
+So a Zone run keeps going until you leave. Inventing a damage rule to manufacture
+an ending would have been the one guess in an otherwise fully recovered mode, and
+it would have been the guess most likely to be wrong in a way nobody noticed.
+
+**Also out of scope:** the `Zone_Bar_*` widgets and the `IG_HUD_PERF_ZONE` /
+`IG_HUD_NEW_ZONE_RECORD` banners. Their writers were not found, and the
+zone-specific graphics were scoped out of this work.
+
+## What no mode has yet
+
+A countdown. `ReadyText`, `GoText`, `CountdownTime` and the `<Mode3D>` models all
+parse and nothing drives them, and the original's false-start stall - which
+silently kills the engine if you hold thrust before the lights - is unimplemented
+too. A race begins the moment it loads.
+
+## See also
+
+- [lap counting](lap-counting.md)
+- [zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md) - the Ghidra evidence
+- [the HUD](../ui/hud.md) - which widgets have a source
+- `crates/race/`

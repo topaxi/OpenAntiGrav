@@ -1,17 +1,29 @@
 # Gameplay
 
-> **Not yet started.** Milestone M5. This directory will hold documentation of
-> race rules, modes, progression and the things that make Pulse Pulse rather
-> than a generic racer.
+> **Started.** Milestone M5. The three single-ship modes run; everything that
+> needs a grid, opponents or weapons does not.
+
+## Pages
+
+- [race modes](race-modes.md) - time trial, speed lap and Zone: what each one
+  does, what is recovered and what is approximated.
+- [lap counting](lap-counting.md) - how a lap is decided, and why that is **our
+  convention** rather than a recovery.
 
 ## Scope
 
-- Race rules: grid order, laps, positions, finishing conditions
-- Game modes: single race, tournament, time trial, Zone, Eliminator
-- Speed classes and how they scale handling and top speed
-- Teams and their stat differences
-- Progression and unlocks
-- Shield energy, absorb, and the risk/reward loop around holding a weapon
+- [x] Laps and finishing conditions, for the single-ship modes
+- [x] Game modes: time trial, Zone, speed lap
+- [ ] Race rules: grid order, positions
+- [ ] Game modes: single race, tournament, Eliminator
+- [ ] Speed classes and how they scale handling and top speed
+- [ ] Teams and their stat differences
+- [ ] Progression and unlocks
+- [ ] Shield energy, absorb, and the risk/reward loop around holding a weapon
+
+Shield is the one to watch: the pool exists on the ship and Zone's perfect-zone
+recharge writes it, but **nothing depletes it**, so it reads full all race. See
+[race modes](race-modes.md).
 
 ## Prerequisites
 

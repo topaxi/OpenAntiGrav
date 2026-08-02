@@ -225,6 +225,13 @@ struct Cli {
     #[arg(long, default_value = "venom")]
     class: String,
 
+    /// The race mode: time_trial, speed_lap or zone.
+    ///
+    /// Needed on the `--race` path in particular, which skips the menus and so
+    /// has no other way to pick one.
+    #[arg(long, default_value = "time_trial")]
+    mode: String,
+
     /// Development view: draw the driveable ribbon instead of the track's art
     /// meshes.
     ///
@@ -307,6 +314,15 @@ fn main() -> Result<()> {
             cli.class
         )
     })?;
+    // Parsed here for the same reason as the speed class: `--race` goes straight
+    // to a track, so a misspelled mode has to be a message about the command
+    // line rather than a race that quietly runs under different rules.
+    let mode = oag_race::Mode::from_name(&cli.mode).with_context(|| {
+        format!(
+            "{:?} is not a race mode; try time_trial, speed_lap or zone",
+            cli.mode
+        )
+    })?;
     // Resolved once, before anything opens it: both ways in need a source, and
     // "no disc image found" is a message about the command line, not something to
     // discover eight seconds of intro later.
@@ -317,6 +333,7 @@ fn main() -> Result<()> {
         track: cli.track.clone(),
         team: cli.team.clone(),
         class,
+        mode,
         ribbon: cli.ribbon,
         collision: cli.collision,
         lod: settings.graphics.lod,
@@ -2102,6 +2119,13 @@ impl Session {
                 if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {
                     self.race_options.class = class;
                 }
+                // Same shape as the speed class above: an unrecognised token
+                // leaves the previous mode in place rather than substituting
+                // one, so a settings file from a build with a mode this one
+                // does not have still races.
+                if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
+                    self.race_options.mode = mode;
+                }
                 println!("\nloading {}", self.race_options.track);
                 match self.launch_race() {
                     Ok(()) => println!("\n{RACE_KEYS}{ESC_TO_MENU}"),
@@ -2373,6 +2397,7 @@ impl Session {
                     return;
                 }
             },
+            "race.mode" => self.settings.race.mode = text,
             "race.class" => self.settings.race.class = text,
             "race.team" => self.settings.race.team = text,
             "race.track" => self.settings.race.track = text,

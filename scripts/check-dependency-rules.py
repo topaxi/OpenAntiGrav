@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # it is added. oag-core is included too: oag-render also depends on it, so it
 # is not exclusive to the gameplay branch, but a forbidden dependency landing
 # there would reach oag-gameplay just as surely as one added directly.
-GAMEPLAY_CRATES = {"oag-core", "oag-gameplay", "oag-physics"}
+GAMEPLAY_CRATES = {"oag-core", "oag-gameplay", "oag-physics", "oag-race"}
 FORBIDDEN_FOR_GAMEPLAY = {"oag-render", "oag-audio", "oag-input", "winit", "wgpu"}
 
 # Rule 2: no crate may depend on the composition root.

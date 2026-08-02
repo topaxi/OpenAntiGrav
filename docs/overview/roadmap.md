@@ -429,7 +429,17 @@ seen from the authoring side.
 
 ## M5 - Full race
 
-- [ ] Race rules, grid, lap timing, positions
+- [~] Race rules, grid, lap timing, positions. **Lap timing and the three
+      single-ship modes are done**, in the new `oag-race` crate: time trial,
+      speed lap and Zone, selectable on the RACE menu page. Lap counting is a
+      wrap of a travel-ordered ring walked from the track's junction graph -
+      the loop's shape is the original's own traversal at confidence 88, but
+      *where the lap begins* is ours at 55, so read
+      [lap counting](../gameplay/lap-counting.md) before trusting a lap time.
+      Zone's ten-second step and its speed law are recovered
+      ([zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md)) and its
+      numbers are read off the disc. **Grid and positions are untouched**, and
+      Zone has no end condition because the bit that ends a run is unidentified.
 - [~] HUD. **The disc's own layout is parsed and drawn.** All five
       `Data\XML\*_HUD.xml` layouts decode - exact rectangles, atlas UVs, colour
       constants, font roles - and a race draws the speed and shield bars, the lap

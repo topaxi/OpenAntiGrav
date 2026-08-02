@@ -1,0 +1,609 @@
+//! The track as a closed loop with a distance along it.
+//!
+//! # Why this exists
+//!
+//! Nothing in the original tells us where a lap begins. `gate` (`.vex` class
+//! `0x3ca`) has no runtime class registration, and no lap or split logic was
+//! found anywhere in the executable - see
+//! `docs/formats/track.md#where-is-lap-counting`. The track file does carry a
+//! `Start Position`, but that is a **grid slot**, not a start line: it sits 3.3
+//! and 20.5 units off the spline's own centreline, and a real time trial was
+//! measured starting 139.7 units away from it.
+//!
+//! So a lap is defined here rather than recovered, and this module is where that
+//! definition lives. See `docs/gameplay/lap-counting.md` for the confidence score
+//! and for what would retire it.
+//!
+//! # What is recovered
+//!
+//! The *shape* of the loop is not invented. `AiTrack` stores paths joined by
+//! 2-in/2-out junctions, and the original's own traversal - recovered at
+//! confidence 88, `docs/formats/track.md:365-381` - follows `next_primary` and
+//! only takes `next_alternate` when an `excluded_path` argument says to:
+//!
+//! ```text
+//! Path *next = path->exit->next_primary;
+//! if (path->exit->next_alternate && index(next) == excluded_path)
+//!     next = path->exit->next_alternate;   // branch selection
+//! ```
+//!
+//! [`Course`] therefore walks the **primary** chain and nothing else. Alternate
+//! paths are shortcuts and are deliberately off the ring: on `05_Track`, the one
+//! shipped track with a genuine split, the two branches "share both endpoints, so
+//! they are two lines over the same stretch rather than a geographic detour", so
+//! a ship on the shortcut still projects onto the ring at a sensible distance.
+
+use oag_core::math::Vec3;
+use oag_formats::track::AiTrack;
+
+/// A track walked into a closed ring, with cumulative distance along it.
+///
+/// A flat `Vec` scanned in order, not a spatial index: the nearest-point
+/// comparison feeds simulation state, so the order it happens in must not vary
+/// between runs, and ties go to the earlier point. Same rule, and the same
+/// reason, as `Spline::nearest` in the composition root. See
+/// `docs/architecture/determinism.md`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Course {
+    /// Ring points, in travel order.
+    positions: Vec<Vec3>,
+    /// Which path each point came from, parallel to [`Self::positions`].
+    paths: Vec<u16>,
+    /// Distance from `positions[0]` to each point, parallel to it and
+    /// non-decreasing. Element 0 is always `0.0`.
+    distance: Vec<f32>,
+    /// The full way round, including the closing step from the last point back
+    /// to the first.
+    length: f32,
+    /// The point distance is measured from - the start line.
+    start_index: usize,
+    /// The widest half-width anywhere on the ring.
+    max_half_width: f32,
+}
+
+/// Where a position sits on the course.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Located {
+    /// Index of the nearest ring point.
+    pub index: usize,
+    /// Distance from the start line, in track units, in `0.0..length`.
+    pub progress: f32,
+    /// How far the position is from that ring point.
+    ///
+    /// A ship well inside this is on the track; a large value means the nearest
+    /// point is not meaningful and the caller should not trust `progress`.
+    pub offset: f32,
+}
+
+impl Course {
+    /// Samples per control-point interval.
+    ///
+    /// The same four `Spline::from_track` and `oag_render::track` use, so the
+    /// ring, the locator table and the drawn ribbon all agree about where the
+    /// track is.
+    pub const STEPS_PER_SEGMENT: usize = 4;
+
+    /// Ring points searched either side of the hint before giving up on it.
+    ///
+    /// At four samples per control-point interval and roughly six units between
+    /// control points, 64 points is around 96 units of track either side - far
+    /// more than a ship covers in one tick at any speed class, and still a
+    /// hundredth of the scan a full pass costs.
+    pub const WINDOW: usize = 64;
+
+    /// How many track half-widths past the nearest windowed point counts as
+    /// "the window lost it", triggering a full scan.
+    ///
+    /// The scale comes from the track's own widest half-width rather than from a
+    /// number somebody picked, so it travels between circuits.
+    pub const REACQUIRE_HALF_WIDTHS: f32 = 4.0;
+
+    /// How far along the track the start line sits from the authored grid slot.
+    ///
+    /// **The grid slot is not the start line, and it is not close to it.** The
+    /// slot is *upstream*: a captured time trial's craft begins **137.9 units
+    /// along the slot's own forward**, plus 22.4 across the track and 0.8 up. Those
+    /// three numbers are asserted in `the_authored_slot_matches_the_captured_start`
+    /// (`crates/game/tests/race_ground_truth.rs`), which also pins the slot's
+    /// heading to within 1.2 degrees of the craft's - so this is a real separation
+    /// along the track, not a misread matrix.
+    ///
+    /// Putting the line at the slot instead makes a lap tick over partway down the
+    /// starting straight rather than at the end of it, which is exactly how it was
+    /// first noticed - on Moa Therma, by driving one.
+    ///
+    /// Measured **along the ring**, not in a straight line, so it follows a
+    /// curving start straight.
+    ///
+    /// Confidence **55**. The distance is measured rather than guessed, but it is
+    /// measured on **one** capture of **one** circuit, and whatever lays the grid
+    /// out is unread code (`docs/formats/track.md`, "How a ship gets its grid
+    /// slot"). What would retire it: the code that places a grid, or captures on a
+    /// second circuit showing the same offset.
+    pub const START_LINE_OFFSET: f32 = 137.9;
+
+    /// Walks a decoded spline graph into a closed ring.
+    ///
+    /// `start_near` is the track's authored `Start Position`, when it has one.
+    /// The nearest ring point to it becomes distance zero. Pass `None` and the
+    /// ring's own first point is used instead, which claims nothing beyond "the
+    /// loop starts somewhere".
+    ///
+    /// Returns `None` when the primary chain does not close - an open track, or
+    /// a graph this walk does not understand. `None` is deliberate rather than a
+    /// best-effort ring: a lap counter running on a course that is not a loop
+    /// would produce plausible, wrong numbers.
+    #[must_use]
+    pub fn from_track(ai: &AiTrack, start_near: Option<Vec3>) -> Option<Self> {
+        let ring = primary_ring(ai)?;
+
+        let mut positions = Vec::new();
+        let mut paths = Vec::new();
+        let mut max_half_width = 0.0f32;
+        for &path_index in &ring {
+            let path = ai.paths.get(path_index)?;
+            for segment in 0..path.points.len() {
+                for step in 0..Self::STEPS_PER_SEGMENT {
+                    let t = step as f32 / Self::STEPS_PER_SEGMENT as f32;
+                    if let Some(sample) = path.sample(segment, t) {
+                        positions.push(Vec3::from_array(sample.pos));
+                        paths.push(u16::try_from(path_index).unwrap_or(u16::MAX));
+                        max_half_width = max_half_width
+                            .max(sample.half_width_left)
+                            .max(sample.half_width_right);
+                    }
+                }
+            }
+        }
+        if positions.len() < 2 {
+            return None;
+        }
+
+        let mut distance = Vec::with_capacity(positions.len());
+        let mut running = 0.0f32;
+        distance.push(running);
+        for pair in positions.windows(2) {
+            running += (pair[1] - pair[0]).length();
+            distance.push(running);
+        }
+        // The closing step back to the first point is part of the way round, but
+        // is not a table entry: there is no point to attach it to.
+        let last = positions.len() - 1;
+        let length = running + (positions[0] - positions[last]).length();
+        // Not `!(length > 0.0)`: written out so the NaN case is deliberate rather
+        // than a side effect of negating a partial order. A degenerate track whose
+        // points all coincide, or one carrying a NaN coordinate, has no course.
+        if !length.is_finite() || length <= 0.0 {
+            return None;
+        }
+
+        let mut course = Self {
+            positions,
+            paths,
+            distance,
+            length,
+            start_index: 0,
+            max_half_width,
+        };
+        if let Some(start) = start_near
+            && let Some((slot, _)) = course.nearest_global(start)
+        {
+            // The slot is upstream of the line by [`Self::START_LINE_OFFSET`],
+            // so walk that far along the ring rather than measuring from the slot.
+            course.start_index = course.advance(slot, Self::START_LINE_OFFSET);
+        }
+        Some(course)
+    }
+
+    /// How many points the ring holds.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.positions.len()
+    }
+
+    /// Whether the ring is empty. Never true for a `Course` that exists -
+    /// [`Self::from_track`] refuses one - but clippy asks for it beside `len`.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.positions.is_empty()
+    }
+
+    /// The full way round, in track units.
+    #[must_use]
+    pub fn length(&self) -> f32 {
+        self.length
+    }
+
+    /// The ring point distance is measured from.
+    #[must_use]
+    pub fn start_index(&self) -> usize {
+        self.start_index
+    }
+
+    /// The widest half-width anywhere on the ring.
+    #[must_use]
+    pub fn max_half_width(&self) -> f32 {
+        self.max_half_width
+    }
+
+    /// Which path the point at `index` came from.
+    #[must_use]
+    pub fn path_of(&self, index: usize) -> Option<u16> {
+        self.paths.get(index).copied()
+    }
+
+    /// The ring point at `index`.
+    #[must_use]
+    pub fn position(&self, index: usize) -> Option<Vec3> {
+        self.positions.get(index).copied()
+    }
+
+    /// Distance from the start line to the ring point at `index`.
+    #[must_use]
+    pub fn progress_at(&self, index: usize) -> Option<f32> {
+        let raw = self.distance.get(index)?;
+        let start = self.distance.get(self.start_index)?;
+        Some((raw - start).rem_euclid(self.length))
+    }
+
+    /// Locates `position` on the ring.
+    ///
+    /// `hint` is the index this caller got last tick. The search starts there and
+    /// widens to the whole ring only when the windowed answer is implausibly far
+    /// away, which is what keeps a track that passes over itself from reading as
+    /// a lap: the bridge above is hundreds of points away in the table but a few
+    /// units away in space, and a global scan would happily jump to it.
+    #[must_use]
+    pub fn locate(&self, position: Vec3, hint: Option<usize>) -> Option<Located> {
+        let (index, offset) = match hint {
+            Some(hint) if hint < self.positions.len() => {
+                let (index, offset) = self.nearest_within(position, hint);
+                if offset > self.max_half_width * Self::REACQUIRE_HALF_WIDTHS {
+                    self.nearest_global(position)?
+                } else {
+                    (index, offset)
+                }
+            }
+            _ => self.nearest_global(position)?,
+        };
+        Some(Located {
+            index,
+            progress: self.progress_at(index)?,
+            offset,
+        })
+    }
+
+    /// Ring indices where one path hands over to the next.
+    ///
+    /// **A lead, not a mechanism.** If the authored path boundaries turn out to
+    /// sit on the visible start line across several circuits, then the start line
+    /// is authored per track and [`Self::START_LINE_OFFSET`] - a single-capture
+    /// constant applied to all 40 circuits - can be replaced by something at the
+    /// same confidence 88 as the traversal itself. On `16_Track` the boundary is
+    /// in the same neighbourhood as the offset but not on it, which is exactly
+    /// why this is reported rather than used.
+    #[must_use]
+    pub fn path_boundaries(&self) -> Vec<usize> {
+        let count = self.paths.len();
+        (0..count)
+            .filter(|&i| self.paths[i] != self.paths[(i + count - 1) % count])
+            .collect()
+    }
+
+    /// The ring point `by` units further along than `from`.
+    ///
+    /// Walks point to point rather than doing arithmetic on the cumulative table,
+    /// because the table does not include the closing step back to point zero and
+    /// a walk crosses it without a special case. Wraps, and stops early if it ever
+    /// gets all the way round - a `by` longer than the lap is a caller bug, not a
+    /// reason to loop forever.
+    #[must_use]
+    pub fn advance(&self, from: usize, by: f32) -> usize {
+        let count = self.positions.len();
+        if count == 0 {
+            return from;
+        }
+        let mut index = from % count;
+        let mut walked = 0.0f32;
+        for _ in 0..count {
+            let next = (index + 1) % count;
+            let step = (self.positions[next] - self.positions[index]).length();
+            if walked + step > by {
+                // Whichever end of this segment lands nearer the target.
+                return if by - walked < walked + step - by {
+                    index
+                } else {
+                    next
+                };
+            }
+            walked += step;
+            index = next;
+        }
+        index
+    }
+
+    /// The nearest ring point to `position`, scanning everything.
+    fn nearest_global(&self, position: Vec3) -> Option<(usize, f32)> {
+        let mut best: Option<(usize, f32)> = None;
+        for (index, point) in self.positions.iter().enumerate() {
+            let distance = (*point - position).length();
+            // Strictly nearer, so a tie keeps the earlier point.
+            if best.is_none_or(|(_, previous)| distance < previous) {
+                best = Some((index, distance));
+            }
+        }
+        best
+    }
+
+    /// The nearest ring point within [`Self::WINDOW`] either side of `around`.
+    ///
+    /// The window **wraps**, because the ring does: a ship on the start line is a
+    /// few points from both ends of the table.
+    fn nearest_within(&self, position: Vec3, around: usize) -> (usize, f32) {
+        let count = self.positions.len();
+        let span = Self::WINDOW.min(count / 2);
+        let mut best: Option<(usize, f32)> = None;
+        for step in 0..=(span * 2) {
+            // `+ count` keeps the subtraction on the non-negative side before the
+            // modulo, which `usize` needs and which also makes the wrap explicit.
+            let index = (around + count + step - span) % count;
+            let distance = (self.positions[index] - position).length();
+            if best.is_none_or(|(_, previous)| distance < previous) {
+                best = Some((index, distance));
+            }
+        }
+        best.unwrap_or((around, f32::INFINITY))
+    }
+}
+
+/// The paths of the primary chain, in travel order, or `None` if it never closes.
+///
+/// Every path is tried as a starting point, in file order, because path 0 is not
+/// guaranteed to be on the primary chain at all: on `05_Track` paths 0 and 1 are
+/// the two sides of a split and only one of them is primary. Trying them in file
+/// order keeps the answer the same on every run, which a `HashSet` walk would
+/// not.
+///
+/// **The longest closing chain wins, not the first one found.** A malformed
+/// graph can contain a short cycle that closes perfectly well while covering
+/// almost none of the track - a path whose exit junction points back at itself
+/// is a one-path ring, and taking the first hit would accept it and race on a
+/// tenth of the circuit. Ties go to the lowest starting path, so the answer does
+/// not depend on iteration luck.
+fn primary_ring(ai: &AiTrack) -> Option<Vec<usize>> {
+    // A single path with no junctions is the whole track and closes on itself.
+    // Not a shipped case on Pulse, but a driveable-ribbon build is exactly this
+    // and there is no reason for it to have no lap counter.
+    if ai.paths.len() == 1 && ai.junctions.is_empty() {
+        return Some(vec![0]);
+    }
+
+    let mut best: Option<Vec<usize>> = None;
+    for start in 0..ai.paths.len() {
+        let Some(ring) = walk_from(ai, start) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|found| ring.len() > found.len()) {
+            best = Some(ring);
+        }
+    }
+    best
+}
+
+/// Follows `next_primary` from `start` until it returns there.
+fn walk_from(ai: &AiTrack, start: usize) -> Option<Vec<usize>> {
+    let mut seen = vec![false; ai.paths.len()];
+    let mut ring = Vec::new();
+    let mut current = start;
+    loop {
+        if seen.get(current).copied()? {
+            // Back somewhere we have already been, and it is not the start: this
+            // chain runs into a loop that does not include where we set off.
+            return None;
+        }
+        seen[current] = true;
+        ring.push(current);
+
+        let exit = ai.paths.get(current)?.exit?;
+        let next = ai.junctions.get(exit)?.next[0]?;
+        if next == start {
+            return Some(ring);
+        }
+        current = next;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Course, primary_ring};
+    use crate::testing::square_track;
+    use oag_core::math::Vec3;
+    use oag_formats::track::{AiTrack, Junction, Path};
+
+    #[test]
+    fn a_two_path_ring_walks_in_travel_order() {
+        let ai = square_track(2);
+        assert_eq!(primary_ring(&ai), Some(vec![0, 1]));
+    }
+
+    #[test]
+    fn a_four_path_ring_walks_all_four() {
+        let ai = square_track(4);
+        assert_eq!(primary_ring(&ai), Some(vec![0, 1, 2, 3]));
+    }
+
+    #[test]
+    fn a_single_path_with_no_junctions_is_its_own_ring() {
+        let mut ai = square_track(1);
+        ai.junctions.clear();
+        ai.paths[0].entry = None;
+        ai.paths[0].exit = None;
+        assert_eq!(primary_ring(&ai), Some(vec![0]));
+    }
+
+    #[test]
+    fn a_chain_that_never_returns_is_not_a_ring() {
+        let mut ai = square_track(2);
+        // Path 1's exit leads nowhere, so no walk ever comes home.
+        ai.junctions[1].next[0] = None;
+        assert_eq!(primary_ring(&ai), None);
+    }
+
+    #[test]
+    fn a_degenerate_self_loop_does_not_beat_the_real_ring() {
+        // Four paths: 0 -> 1 -> 2 -> 0 is the circuit, and path 3's exit points
+        // back at itself. Both close. Taking the first hit in file order would
+        // still find the circuit here, so the test also checks the case that
+        // actually bites: a self-loop on a *lower* index than the circuit.
+        let mut ai = square_track(4);
+        ai.junctions[2].next[0] = Some(0);
+        ai.junctions[3].next[0] = Some(3);
+        assert_eq!(primary_ring(&ai), Some(vec![0, 1, 2]));
+
+        let mut ai = square_track(4);
+        ai.junctions[0].next[0] = Some(0);
+        ai.junctions[3].next[0] = Some(1);
+        assert_eq!(
+            primary_ring(&ai),
+            Some(vec![1, 2, 3]),
+            "the one-path self-loop at index 0 was preferred over the circuit"
+        );
+    }
+
+    #[test]
+    fn an_alternate_branch_is_left_off_the_ring() {
+        // Three paths: 0 and 1 are the two sides of a split, 2 is the merge.
+        // Junction 0 leaves path 2 and splits to 0 (primary) and 1 (alternate);
+        // junction 1 merges 0 and 1 back into 2. That is `05_Track`'s shape.
+        let base = square_track(3);
+        let ai = AiTrack {
+            version: 1,
+            paths: vec![
+                Path {
+                    entry: Some(0),
+                    exit: Some(1),
+                    ..base.paths[0].clone()
+                },
+                Path {
+                    entry: Some(0),
+                    exit: Some(1),
+                    ..base.paths[1].clone()
+                },
+                Path {
+                    entry: Some(1),
+                    exit: Some(0),
+                    ..base.paths[2].clone()
+                },
+            ],
+            junctions: vec![
+                Junction {
+                    prev: [Some(2), None],
+                    next: [Some(0), Some(1)],
+                },
+                Junction {
+                    prev: [Some(0), Some(1)],
+                    next: [Some(2), None],
+                },
+            ],
+        };
+
+        let ring = primary_ring(&ai).expect("the primary chain closes");
+        assert!(ring.contains(&0), "the primary branch is on the ring");
+        assert!(ring.contains(&2), "the merge path is on the ring");
+        assert!(
+            !ring.contains(&1),
+            "the alternate branch is a shortcut, not the line"
+        );
+    }
+
+    #[test]
+    fn distance_is_non_decreasing_and_starts_at_zero() {
+        let course = Course::from_track(&square_track(2), None).expect("a ring");
+        assert_eq!(course.progress_at(0), Some(0.0));
+        assert!(course.length() > 0.0);
+
+        let mut previous = 0.0;
+        for index in 0..course.len() {
+            let progress = course.progress_at(index).expect("in range");
+            assert!(
+                progress >= previous,
+                "distance went backwards at {index}: {progress} after {previous}"
+            );
+            assert!(progress < course.length(), "distance reached the full lap");
+            previous = progress;
+        }
+    }
+
+    #[test]
+    fn the_ring_is_about_as_long_as_the_shape_it_was_built_from() {
+        let course = Course::from_track(&square_track(2), None).expect("a ring");
+        // A 30x30 square is 120 units round. The B-spline does not pass through
+        // its control points, so it cuts every corner and comes out shorter;
+        // what matters is that it is the right order of magnitude and closed.
+        assert!(
+            (60.0..=130.0).contains(&course.length()),
+            "ring length {} is not a plausible 30x30 loop",
+            course.length()
+        );
+    }
+
+    #[test]
+    fn the_start_line_moves_to_the_point_nearest_the_grid_slot() {
+        let ai = square_track(2);
+        let plain = Course::from_track(&ai, None).expect("a ring");
+        assert_eq!(plain.start_index(), 0);
+
+        // The far corner of the square, which is nowhere near point 0.
+        let moved = Course::from_track(&ai, Some(Vec3::new(30.0, 0.0, 30.0))).expect("a ring");
+        assert_ne!(moved.start_index(), 0);
+        assert_eq!(moved.progress_at(moved.start_index()), Some(0.0));
+    }
+
+    #[test]
+    fn locating_a_point_on_the_ring_returns_its_own_distance() {
+        let course = Course::from_track(&square_track(2), None).expect("a ring");
+        for index in [0, 3, 11, course.len() - 1] {
+            let position = course.position(index).expect("in range");
+            let located = course.locate(position, None).expect("on the ring");
+            assert_eq!(located.index, index);
+            assert_eq!(located.progress, course.progress_at(index).unwrap());
+            assert!(
+                located.offset < 1e-3,
+                "offset {} is not zero",
+                located.offset
+            );
+        }
+    }
+
+    #[test]
+    fn a_hint_finds_the_same_point_a_full_scan_does() {
+        let course = Course::from_track(&square_track(2), None).expect("a ring");
+        for index in 0..course.len() {
+            let position = course.position(index).expect("in range");
+            let global = course.locate(position, None).expect("on the ring");
+            let hinted = course.locate(position, Some(index)).expect("on the ring");
+            assert_eq!(global.index, hinted.index, "hint disagreed at {index}");
+        }
+    }
+
+    #[test]
+    fn the_window_wraps_around_the_start_of_the_table() {
+        let course = Course::from_track(&square_track(2), None).expect("a ring");
+        let last = course.len() - 1;
+        // Standing on the last point with the hint still on the first one: the
+        // window has to wrap backwards to find it.
+        let position = course.position(last).expect("in range");
+        let located = course.locate(position, Some(0)).expect("on the ring");
+        assert_eq!(located.index, last);
+    }
+
+    #[test]
+    fn a_stale_hint_far_from_the_ship_reacquires_globally() {
+        let course = Course::from_track(&square_track(2), None).expect("a ring");
+        let target = course.len() / 2;
+        let position = course.position(target).expect("in range");
+        // A hint on the opposite side of the loop, well outside the window.
+        let located = course.locate(position, Some(0)).expect("on the ring");
+        assert_eq!(located.index, target, "the stale hint was not dropped");
+    }
+}

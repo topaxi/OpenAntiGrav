@@ -1761,6 +1761,60 @@ mod tests {
             oag_physics::SpeedClass::ALL.len(),
             "every speed class should be offerable"
         );
+
+        assert_eq!(
+            values("race.mode"),
+            oag_race::Mode::ALL
+                .iter()
+                .map(|mode| mode.name())
+                .collect::<Vec<_>>(),
+            "the mode rows and Mode::ALL must be one list, in the same order"
+        );
+    }
+
+    /// `every_settings_row_is_one_the_game_seeds` skips any page that is not
+    /// `display` or `graphics`, so the race rows are not covered by it. The mode
+    /// row is the one that would break silently: a `choice` whose setting nothing
+    /// seeds opens on whatever the file happens to hold rather than on the saved
+    /// value.
+    #[test]
+    fn the_mode_row_is_seeded_by_the_settings_module() {
+        let settings = crate::settings::Settings::default();
+        let seeds =
+            crate::settings::menu_seeds(&settings, oag_render::mesh_render::Anisotropy::default());
+        assert!(
+            seeds.iter().any(|(key, _)| *key == "race.mode"),
+            "nothing seeds race.mode, so the menu cannot open on the saved mode"
+        );
+    }
+
+    /// The RACE page opens on a time trial, and that is what the row's *first*
+    /// value plus the settings default together have to say. Either one alone
+    /// would leave the other free to drift.
+    #[test]
+    fn the_mode_row_starts_on_the_time_trial() {
+        let definition = built_in();
+        let race = definition
+            .pages
+            .iter()
+            .find(|page| page.id == "race")
+            .expect("a race page");
+        let first = race
+            .entries
+            .iter()
+            .find_map(|entry| match entry {
+                Entry::Choice {
+                    setting, values, ..
+                } if setting == "race.mode" => values.first().map(|value| value.value.clone()),
+                _ => None,
+            })
+            .expect("a mode row");
+        assert_eq!(first, oag_race::Mode::TimeTrial.name());
+        assert_eq!(
+            crate::settings::Race::default().mode,
+            oag_race::Mode::TimeTrial.name(),
+            "the row opens on a time trial but the saved default is something else"
+        );
     }
 
     /// Anisotropy's values have to be exactly what `Anisotropy` parses - a typo

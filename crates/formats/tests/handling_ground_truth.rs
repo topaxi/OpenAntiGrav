@@ -247,3 +247,74 @@ fn every_ps2_team_carries_the_same_complete_set() {
 
     check_every_team(&blobs);
 }
+
+/// What `<Handling>`'s children actually are, on both releases.
+///
+/// `Handling_ParseStats` (`0x0883a2f0`) walks them looking for two names -
+/// `<Global>`, which it hands to `Xml_ReadGlobalSettings`, and `<Stats>`. Whether
+/// the shipped files carry the first is a question about the discs rather than
+/// about the decoder, and this is where a question like that gets answered.
+///
+/// Deliberately a **report, not an assertion** on `<Global>`: it names what it
+/// found so the answer is in the test output either way. Only `<Stats>` is
+/// asserted, because the decoder already requires it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn which_top_level_elements_handlingstats_carries() {
+    for (image, archive) in [
+        ("pulse-psp-usa.chd", PSP_ARCHIVE),
+        ("pulse-ps2-eu.chd", PS2_ARCHIVE),
+    ] {
+        let Some(blobs) = ship_blobs(image, archive) else {
+            continue;
+        };
+
+        for (name, blob) in &blobs {
+            let expanded = if oag_formats::fexml::is_fexml(blob) {
+                oag_formats::fexml::expand(blob).expect("expands")
+            } else {
+                String::from_utf8_lossy(blob).into_owned()
+            };
+            let root = oag_formats::fexml::parse(&expanded);
+
+            fn find<'a>(
+                node: &'a oag_formats::fexml::Node,
+                want: &str,
+            ) -> Option<&'a oag_formats::fexml::Node> {
+                if node.name.eq_ignore_ascii_case(want) {
+                    return Some(node);
+                }
+                node.children.iter().find_map(|c| find(c, want))
+            }
+
+            let handling = find(&root, "Handling").expect("a <Handling> root");
+            let children: Vec<&str> = handling.children.iter().map(|c| c.name.as_str()).collect();
+            println!("{image} {name}: <Handling> holds {children:?}");
+
+            assert!(
+                children.iter().any(|c| c.eq_ignore_ascii_case("Stats")),
+                "{image} {name}: no <Stats>"
+            );
+
+            // The finding this test exists to pin: a per-team file carries
+            // `<Stats>` and nothing else. `<Global>` goes through the same parser
+            // in the original, but it lives in `handling::GLOBAL_ENTRY`
+            // (`Data\XML\HandlingStats.xml`), which is a different file passed by
+            // a different caller. Sixteen files agree - eight teams on each disc.
+            //
+            // If this ever fails, `handling::parse` should start looking for
+            // `<Global>` again and the module docs are wrong.
+            assert!(
+                !children.iter().any(|c| c.eq_ignore_ascii_case("Global")),
+                "{image} {name}: carries <Global>, which was measured to live only \
+                 in {}",
+                handling::GLOBAL_ENTRY
+            );
+            assert_eq!(
+                handling::parse_global(&expanded),
+                Ok(None),
+                "{image} {name}: a per-team file yielded Zone settings"
+            );
+        }
+    }
+}

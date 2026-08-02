@@ -550,6 +550,14 @@ pub struct Readout {
     pub best_lap_ticks: Option<u32>,
     /// Whether the ship is pointing back down the track.
     pub wrong_way: bool,
+    /// The zone number, Zone mode only.
+    ///
+    /// Zero outside Zone mode and before the first step, which is also what the
+    /// original starts it at: the mode object zeroes its counter in the
+    /// constructor and the first step happens ten seconds in.
+    pub zone: u32,
+    /// Zone mode's score.
+    pub score: i32,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.
@@ -727,6 +735,17 @@ fn text_for(
             u64::from(readout.best_lap_ticks.unwrap_or(0)),
             Precision::Hundredths,
         )),
+
+        // Zone mode. The number and the score are the two widgets with a real
+        // source; `Zone_Bar_*` is the mode's own graphic and nothing was found
+        // that writes it, so it stays off the list. See
+        // `docs/ghidra/functions/psp-pulse/zone-mode.md`.
+        //
+        // Drawn from zone 1 onward: the counter is zero for the first ten
+        // seconds of a run, and a HUD reading `ZONE 0` would be reporting a zone
+        // the player is not in yet.
+        "Zone" => (readout.zone > 0).then(|| readout.zone.to_string()),
+        "Score" => (readout.zone > 0).then(|| readout.score.to_string()),
 
         // Separators, authored as literals. Drawn only when both sides have a
         // value: a lone `/` between two blanks reads as a rendering fault, and

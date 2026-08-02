@@ -1322,6 +1322,7 @@ dependencies = [
  "oag-gameplay",
  "oag-input",
  "oag-physics",
+ "oag-race",
  "oag-render",
  "pollster",
  "serde",
@@ -1338,6 +1339,7 @@ dependencies = [
  "oag-core",
  "oag-formats",
  "oag-physics",
+ "oag-race",
 ]
 
 [[package]]
@@ -1354,6 +1356,14 @@ name = "oag-physics"
 version = "0.1.0"
 dependencies = [
  "oag-core",
+]
+
+[[package]]
+name = "oag-race"
+version = "0.1.0"
+dependencies = [
+ "oag-core",
+ "oag-formats",
 ]
 
 [[package]]

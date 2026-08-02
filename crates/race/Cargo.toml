@@ -1,0 +1,21 @@
+[package]
+name = "oag-race"
+description = "Race rules: modes, lap timing and track progress"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `oag-physics` is deliberately absent. The one thing this crate needs from the
+# force law is how hard the ship hit a wall, and it takes that as a plain `f32`
+# the caller extracts from `Evaluated::wall`. Passing the `WallResponse` type
+# instead would couple race rules to the integrator's reporting struct for no
+# gain. Every renderer, audio and windowing crate is absent for the reason
+# `docs/architecture/workspace-layout.md` gives: this is a gameplay crate.
+[dependencies]
+oag-core.workspace = true
+oag-formats.workspace = true
+
+[lints]
+workspace = true

@@ -22,6 +22,32 @@
 //! </Handling>
 //! ```
 //!
+//! # There is a second file with the same root element
+//!
+//! `Handling_ParseStats` (`0x0883a2f0`) has **two** callers, and they pass
+//! different files:
+//!
+//! - `0x088c291c` builds `%s\handlingstats.xml` per team - the schema above.
+//! - `0x0894f6a8` passes the literal [`GLOBAL_ENTRY`],
+//!   `Data\XML\HandlingStats.xml`, once at system-root creation.
+//!
+//! Both go through the same parser, which walks `<Handling>`'s children looking
+//! for `<Stats>` *and* for `<Global>`, handing the latter to
+//! `Xml_ReadGlobalSettings` (`0x0883a970`). `<Global>` carries engine-wide
+//! statics: Zone mode's speed law, the speed-pad and weapon-pad tunables,
+//! per-class gravity, the start boost and three camera pitch modifiers.
+//!
+//! **Which file carries which is measured, not assumed.** The ground-truth test
+//! `which_top_level_elements_handlingstats_carries` reads all sixteen shipped
+//! per-team files - eight teams on each of the PSP and PS2 discs - and every one
+//! holds `<Stats>` and nothing else. So `<Global>` belongs to the global file
+//! alone, and [`parse`] does not look for it. [`global_from_blob`] reads it.
+//!
+//! Only `<Zone>` is decoded out of `<Global>` so far, because it is the only part
+//! this project has a consumer for. The rest is named in
+//! `docs/ghidra/functions/psp-pulse/engine.md` and can be added when something
+//! needs it.
+//!
 //! The files are stored as [shortened XML](crate::fexml), so they go through
 //! [`fexml::expand`] before they can be read: [`from_blob`] does both steps and
 //! is what a caller holding an archive entry wants.
@@ -372,6 +398,47 @@ impl Misc {
             easyshield: number(node, e, "easyshield")?,
             width: number(node, e, "width")?,
             weight_distribution: number(node, e, "weight_distribution")?,
+        })
+    }
+}
+
+/// Zone mode's speed law and its reward. `<Zone start increment recharge/>`.
+///
+/// Lives under `<Handling><Global>`, beside `<Special>`, `<GlobalClass>` and
+/// `<StartBoost>` - a sibling of `<Stats>`, not a child of it. `Handling_ParseStats`
+/// (`0x0883a2f0`) dispatches the `<Global>` subtree to `Xml_ReadGlobalSettings`
+/// (`0x0883a970`), which is where these three attributes are read. Confidence
+/// **84**.
+///
+/// The two speed values land in `g_autospeed_base` (`0x08b36be0`) and
+/// `g_autospeed_step` (`0x08b36be4`), which `Ship_UpdateEngine`'s four-corner
+/// branch reads as `base + step * (float)(uint32)zone`. `recharge` goes to
+/// `0x08b34360` and is added to the shield when a zone is completed without
+/// touching anything.
+///
+/// **Global despite living in a per-team file.** All eight teams carry a copy;
+/// which one the game reads is whichever ship it happened to load. Nothing here
+/// makes the copies agree, and if they ever disagree that is a fact about the
+/// disc worth surfacing rather than averaging away.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Zone {
+    /// The target speed at zone zero.
+    pub start: f32,
+    /// Added to that target for every zone survived.
+    pub increment: f32,
+    /// Shield restored for a zone completed with no contact.
+    pub recharge: f32,
+}
+
+impl Zone {
+    const ELEMENT: &'static str = "Zone";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        let e = Self::ELEMENT;
+        Ok(Self {
+            start: number(node, e, "start")?,
+            increment: number(node, e, "increment")?,
+            recharge: number(node, e, "recharge")?,
         })
     }
 }
@@ -738,6 +805,46 @@ pub fn parse(expanded: &str) -> Result<Stats> {
         fe: Fe::from_node(child(stats, Fe::ELEMENT)?)?,
         classes: classes(stats)?,
     })
+}
+
+/// The archive entry holding `<Global>`, engine-wide rather than per team.
+///
+/// A literal in the executable at `0x08a8a270`, passed to `Handling_ParseStats`
+/// by `0x0894f6a8`. Being a literal means the WAD lookup is an exact
+/// [`wad::hash_name`](crate::wad::hash_name) hit rather than a mined candidate.
+pub const GLOBAL_ENTRY: &str = r"Data\XML\HandlingStats.xml";
+
+/// Reads `<Handling><Global><Zone/></Global>` out of an **already expanded**
+/// document.
+///
+/// `Ok(None)` when the document parses but carries no `<Global>` or no `<Zone>` -
+/// which is what every per-team file does, and is not an error. `Err` only when
+/// the root is missing or a `<Zone>` that *is* present is malformed: a mode
+/// configured with three-quarters of its numbers is worse than one configured
+/// with none.
+pub fn parse_global(expanded: &str) -> Result<Option<Zone>> {
+    let root = fexml::parse(expanded);
+    let handling = descendant(&root, "Handling").ok_or(Error::MissingElement {
+        element: "Handling",
+    })?;
+    let Ok(global) = child(handling, "Global") else {
+        return Ok(None);
+    };
+    match child(global, Zone::ELEMENT) {
+        Ok(node) => Ok(Some(Zone::from_node(node)?)),
+        Err(_) => Ok(None),
+    }
+}
+
+/// [`parse_global`] over raw archive bytes, expanding them if they need it.
+///
+/// The same PSP-shortened / PS2-plaintext dispatch [`from_blob`] documents.
+pub fn global_from_blob(data: &[u8]) -> Result<Option<Zone>> {
+    if fexml::is_fexml(data) {
+        parse_global(&fexml::expand(data)?)
+    } else {
+        parse_global(std::str::from_utf8(data).map_err(|_| fexml::Error::NotText)?)
+    }
 }
 
 /// Reads an archive blob, expanding it first if it needs it.

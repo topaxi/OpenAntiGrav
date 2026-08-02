@@ -22,6 +22,11 @@ rule here follows from it.
 | `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track-ribbon builder, cameras. Owns no window, so the viewer and the game can each keep their own. |
 | `oag-view` | `crates/view` | wgpu asset viewer. The first crate with a window. |
 | `oag-assets` | `crates/assets` | Runtime asset access: a WAD read from a path or straight out of a disc image, by index, name or name hash. |
+| `oag-trace` | `crates/trace` | Trace capture and comparison against the original. |
+| `oag-input` | `crates/input` | Input mapping and the per-tick input snapshot. |
+| `oag-physics` | `crates/physics` | Ship dynamics and collision. |
+| `oag-race` | `crates/race` | Race rules, lap timing, track progress. |
+| `oag-gameplay` | `crates/gameplay` | The `World` struct and the input snapshot the simulation consumes. |
 | `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. |
 
 ## Crates that do not exist yet
@@ -31,11 +36,6 @@ crate created before its shape is understood tends to get the wrong shape.
 
 | Crate | Milestone | Purpose |
 | --- | --- | --- |
-| `oag-trace` | M3 | Trace capture and comparison against the original. |
-| `oag-input` | M4 | Input mapping and the per-tick input snapshot. |
-| `oag-physics` | M4 | Ship dynamics and collision. |
-| `oag-gameplay` | M4 | The `World` struct and the tick function. |
-| `oag-race` | M5 | Race rules, lap timing, positions. |
 | `oag-weapons` | M5 | Pickups, projectiles, damage. |
 | `oag-ai` | M5 | Opponent behaviour. |
 | `oag-audio` | M5 | Mixing and playback. |

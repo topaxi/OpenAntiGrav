@@ -312,6 +312,20 @@ pub struct Environment {
     pub class_gravity_scale: f32,
     /// The ship's own collider index, so its probes do not hit itself.
     pub self_collider: Option<u32>,
+    /// Zone mode's auto-speed target, replacing the throttle entirely.
+    ///
+    /// `Some` selects the four-corner branch of `Ship_UpdateEngine`
+    /// (`0x0884c834`): the value is used as the engine's output directly, the
+    /// throttle is not read, and the `0.5 * speed + accelcap` clamp does **not**
+    /// apply. The caller computes it as `base + step * zone` from the disc's own
+    /// `<Zone start increment/>`; see `oag_race::zone::thrust`.
+    ///
+    /// An input rather than something this crate derives, for the same reason
+    /// [`Self::class_gravity_scale`] is: the selector is a game mode, and this
+    /// crate does not know modes exist. `None` is the ordinary throttle path and
+    /// is bit-for-bit what it always was, which is what keeps the determinism
+    /// reference unmoved.
+    pub auto_speed: Option<f32>,
 }
 
 impl Default for Environment {
@@ -321,6 +335,7 @@ impl Default for Environment {
             track_sample_next: None,
             class_gravity_scale: 1.0,
             self_collider: None,
+            auto_speed: None,
         }
     }
 }
@@ -478,7 +493,13 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let mut acc = Accumulators::default();
 
     // 1. Engine, into the local force accumulator.
-    let engine_force = engine::engine(state, handling, control_grounded, cached_speed);
+    let engine_force = engine::engine(
+        state,
+        handling,
+        control_grounded,
+        cached_speed,
+        env.auto_speed,
+    );
     acc.local_force += engine_force.as_local_force();
 
     // 2. Brakes. Called only while the contact flag is set, so groundedness gates the

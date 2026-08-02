@@ -349,6 +349,7 @@ pub fn engine(
     handling: &Handling,
     grounded: f32,
     forward_speed: f32,
+    auto_speed: Option<f32>,
 ) -> EngineForce {
     // The prologue's early return, at `0x0884c634`. A stunned or leaping craft gets
     // no thrust and no lift at all - the original writes nothing to either
@@ -362,6 +363,25 @@ pub fn engine(
     // function of `&ShipState` is worth more than a cosmetic store.
     if state.stun_timer > 0.0 || state.leap_timer > 0.0 {
         return EngineForce::default();
+    }
+
+    // The four-corner branch, at `0x0884c834`. It replaces the whole throttle
+    // path: the target is used as the output directly, and the `0.5 * speed +
+    // accelcap` clamp below does not apply to it - the ordinary branch computes
+    // that `min`, this one simply overwrites the slot.
+    //
+    // **The gate is approximated.** The original tests `(flags & 1) && !(flags &
+    // 2)` on the undecoded `craft+0x1c0` and writes `0.0` when it fails. Bit 0 is
+    // known to mean ground contact - it is the same bit that gates `brakes` - so
+    // groundedness stands in for it here. Bit 1 is not decoded, and treating it
+    // as always clear is the assumption; the effect is that a Zone craft here
+    // always gets its auto-speed on the ground where the original might not.
+    if let Some(target) = auto_speed {
+        let thrust = if grounded > 0.0 { target } else { 0.0 };
+        return EngineForce {
+            thrust: thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
+            lift: 0.0,
+        };
     }
 
     let throttle = state.thrust;
@@ -580,7 +600,7 @@ mod tests {
         let mut state = ship_moving_forward(40.0);
         state.thrust = 100.0;
 
-        let force = engine(&state, &handling, 1.0, 40.0).as_local_force();
+        let force = engine(&state, &handling, 1.0, 40.0, None).as_local_force();
         // Body forward is -Z.
         assert!(force.z < 0.0, "force was {force:?}");
         assert_eq!(force.x, 0.0);
@@ -596,14 +616,17 @@ mod tests {
         let mut state = ship_moving_forward(24.0);
         state.thrust = 100.0;
 
-        let running = engine(&state, &handling, 1.0, 24.0);
+        let running = engine(&state, &handling, 1.0, 24.0, None);
         assert!(
             running.thrust > 0.0,
             "the un-stunned baseline must be non-zero"
         );
 
         state.stun_timer = 0.5;
-        assert_eq!(engine(&state, &handling, 1.0, 24.0), EngineForce::default());
+        assert_eq!(
+            engine(&state, &handling, 1.0, 24.0, None),
+            EngineForce::default()
+        );
     }
 
     /// The gate is `> 0`, so a timer that has counted exactly to zero is running
@@ -615,7 +638,7 @@ mod tests {
         state.thrust = 100.0;
         state.stun_timer = 0.0;
 
-        assert!(engine(&state, &handling, 1.0, 24.0).thrust > 0.0);
+        assert!(engine(&state, &handling, 1.0, 24.0, None).thrust > 0.0);
     }
 
     /// The same early return has a second arm, on the leap timer.
@@ -626,14 +649,17 @@ mod tests {
         state.thrust = 100.0;
         state.leap_timer = 1.0;
 
-        assert_eq!(engine(&state, &handling, 1.0, 24.0), EngineForce::default());
+        assert_eq!(
+            engine(&state, &handling, 1.0, 24.0, None),
+            EngineForce::default()
+        );
     }
 
     #[test]
     fn no_throttle_is_no_thrust() {
         let handling = test_handling();
         let state = ship_moving_forward(40.0);
-        assert_eq!(engine(&state, &handling, 1.0, 40.0).thrust, 0.0);
+        assert_eq!(engine(&state, &handling, 1.0, 40.0, None).thrust, 0.0);
     }
 
     /// An airborne ship keeps a fifth of its thrust, and a half-grounded one lands
@@ -651,9 +677,9 @@ mod tests {
         let mut state = ship_moving_forward(0.0);
         state.thrust = 100.0;
 
-        let grounded = engine(&state, &handling, 1.0, 0.0).thrust;
-        let airborne = engine(&state, &handling, 0.0, 0.0).thrust;
-        let half = engine(&state, &handling, 0.5, 0.0).thrust;
+        let grounded = engine(&state, &handling, 1.0, 0.0, None).thrust;
+        let airborne = engine(&state, &handling, 0.0, 0.0, None).thrust;
+        let half = engine(&state, &handling, 0.5, 0.0, None).thrust;
 
         assert_eq!(airborne, grounded * ENGINE_AIR_THRUST);
         assert!(half > airborne && half < grounded);
@@ -667,8 +693,8 @@ mod tests {
         let mut state = ship_moving_forward(0.0);
         state.thrust = 100.0;
 
-        let stationary = engine(&state, &handling, 1.0, 0.0).thrust;
-        let fast = engine(&state, &handling, 1.0, 200.0).thrust;
+        let stationary = engine(&state, &handling, 1.0, 0.0, None).thrust;
+        let fast = engine(&state, &handling, 1.0, 200.0, None).thrust;
         assert!(fast > stationary, "{fast} was not above {stationary}");
     }
 
@@ -681,8 +707,8 @@ mod tests {
         state.thrust = 100.0;
 
         assert_eq!(
-            engine(&state, &handling, 1.0, 60.0).thrust,
-            engine(&state, &handling, 1.0, -60.0).thrust
+            engine(&state, &handling, 1.0, 60.0, None).thrust,
+            engine(&state, &handling, 1.0, -60.0, None).thrust
         );
     }
 
@@ -690,7 +716,7 @@ mod tests {
     fn a_zero_parameter_engine_produces_nothing() {
         let mut state = ship_moving_forward(40.0);
         state.thrust = 100.0;
-        assert_eq!(engine(&state, &Handling::ZERO, 1.0, 40.0).thrust, 0.0);
+        assert_eq!(engine(&state, &Handling::ZERO, 1.0, 40.0, None).thrust, 0.0);
     }
 
     #[test]
@@ -892,5 +918,68 @@ mod tests {
         let before = pitch(&controls, &handling, true);
         handling.pitch.pitch_damping *= 10.0;
         assert_eq!(pitch(&controls, &handling, true), before);
+    }
+}
+
+#[cfg(test)]
+mod auto_speed_tests {
+    use super::{ENGINE_OUTPUT_DOUBLE, ENGINE_OUTPUT_SCALE, engine};
+    use crate::params::Handling;
+    use crate::ship::ShipState;
+
+    /// A ship with the throttle released, which is the interesting case: Zone
+    /// mode accelerates with nothing held down.
+    fn grounded_ship() -> ShipState {
+        ShipState {
+            thrust: 0.0,
+            ..ShipState::default()
+        }
+    }
+
+    #[test]
+    fn the_auto_speed_branch_ignores_the_throttle_entirely() {
+        let mut state = grounded_ship();
+        let handling = Handling::ZERO;
+
+        // Throttle at zero, and yet there is thrust: that is the point of the
+        // mode. A Zone craft accelerates with nothing held down.
+        let idle = engine(&state, &handling, 1.0, 0.0, Some(50.0)).thrust;
+        state.thrust = 100.0;
+        let full = engine(&state, &handling, 1.0, 0.0, Some(50.0)).thrust;
+        assert_eq!(idle, full, "the throttle changed the auto-speed output");
+        assert_eq!(idle, 50.0 * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE);
+    }
+
+    #[test]
+    fn the_auto_speed_branch_is_not_capped_by_accelcap() {
+        // The ordinary branch clamps against `0.5 * speed + accelcap`, and
+        // `Handling::ZERO` makes that clamp zero. The four-corner branch has no
+        // clamp at all, so a large target survives it.
+        let state = grounded_ship();
+        let force = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(10_000.0)).thrust;
+        assert!(force > 0.0, "the cap bound a branch that has no cap");
+    }
+
+    #[test]
+    fn an_airborne_zone_craft_gets_nothing() {
+        // The gate: the original writes `0.0` when the contact bit is clear.
+        let state = grounded_ship();
+        let force = engine(&state, &Handling::ZERO, 0.0, 0.0, Some(50.0)).thrust;
+        assert_eq!(force, 0.0);
+    }
+
+    #[test]
+    fn without_a_target_the_ordinary_path_is_untouched() {
+        let mut state = grounded_ship();
+        state.thrust = 100.0;
+        let handling = Handling::ZERO;
+        assert_eq!(
+            engine(&state, &handling, 1.0, 40.0, None),
+            engine(&state, &handling, 1.0, 40.0, None)
+        );
+        // `Handling::ZERO` has no engine amount, so the ordinary path is zero and
+        // the auto-speed path is not. That difference is the whole branch.
+        assert_eq!(engine(&state, &handling, 1.0, 40.0, None).thrust, 0.0);
+        assert!(engine(&state, &handling, 1.0, 40.0, Some(50.0)).thrust > 0.0);
     }
 }

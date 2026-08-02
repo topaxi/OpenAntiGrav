@@ -337,6 +337,35 @@ Whether the two releases ship the same *values* is still open, and deliberately
 so: answering it would mean putting a comparison or a fingerprint of shipped design
 data in the repository.
 
+## A second file shares the parser: `Data\XML\HandlingStats.xml`
+
+`Handling_ParseStats` (`0x0883a2f0`) has **two** callers and they open different
+files:
+
+| Caller | File | Carries |
+| --- | --- | --- |
+| `0x088c291c` | `%s\handlingstats.xml`, per team | `<Stats>` |
+| `0x0894f6a8` | `Data\XML\HandlingStats.xml`, once | `<Global>` |
+
+Both documents have a `<Handling>` root, and the parser walks its children
+looking for `<Stats>` *and* for `<Global>`, handing the latter to
+`Xml_ReadGlobalSettings` (`0x0883a970`). `<Global>` configures the engine rather
+than a ship: Zone mode's speed law and shield recharge, the speed-pad and
+weapon-pad tunables, per-class gravity, the start boost, and three camera pitch
+modifiers.
+
+**Which file carries which is measured rather than assumed.** All sixteen shipped
+per-team files - eight teams on each of the PSP and PS2 discs - hold `<Stats>` and
+nothing else, asserted by `which_top_level_elements_handlingstats_carries` in
+`crates/formats/tests/handling_ground_truth.rs`. So `oag_formats::handling::parse`
+does not look for `<Global>`; `global_from_blob` reads it out of the global file.
+
+Only `<Zone start increment recharge/>` is decoded so far, because Zone mode is
+the only consumer. Confidence **84**; the rest of `<Global>` is named in
+[engine.md](../ghidra/functions/psp-pulse/engine.md) and can be added when
+something needs it. Its values are read at runtime from the player's own disc and
+are not reproduced here, for the reason the next section up gives.
+
 ## Related files
 
 Located alongside, same naming pattern, not yet decoded:

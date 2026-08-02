@@ -676,8 +676,11 @@ if (normal mode) {
     if (throttle > 100.0)  cap = throttle * 0.01 * cap
     if (flags & 0x0008)    cap = 1e10                   // uncapped
     T = min(T, cap)
-} else {                                                // four-corner mode
-    T = g_autospeed_base + g_autospeed_step * (float)craft+0x28c
+} else {                                                // four-corner mode = Zone
+    if ((flags & 1) && !(flags & 2))
+        T = g_autospeed_base + g_autospeed_step * (float)(uint32)craft+0x28c
+    else
+        T = 0.0                                         // branch-likely delay slot
 }
 
 if (flags & 0x0004)  T *= craft+0x2a0                   // the speed-up pickup, 1.2
@@ -1915,8 +1918,30 @@ three lines: it calls `Ship_HoverFourCorner` under exactly that condition and
 `Ship_HoverTwoPoint` otherwise, then `Ship_UpdateMagLock` unconditionally. The
 same condition gates the brakes off and swaps the engine for an auto-speed law
 driven by a counter at `craft+0x28c`, which reads like a game mode rather than a
-ship or track property. Confidence **84** for the selector, **50** for it being
-a specific mode, so the globals are labelled but not interpreted.
+ship or track property. Confidence **84** for the selector.
+
+**The mode is Zone**, confidence **84** - raised from the 50 this paragraph used
+to carry. The mode factory `Race_CreateModeObject` (`0x0882112c`) selects on
+`(DAT_08ab07e3 == 0) ? DAT_08b31048 : 0`, and its `case 6:` allocates the object
+whose constructor loads `Data\XML\Zone_HUD.xml`. That is the byte-identical
+expression, so the four-corner hover, the disabled brakes and the auto-speed law
+all belong to Zone. The counter at `craft+0x28c` is the zone number, **assigned**
+into the craft by `Zone_Update` (`0x0882f5cc`) every ten seconds. See
+[zone-mode.md](zone-mode.md).
+
+Two corrections to the law as written above, both read from the instruction
+stream at confidence **84**:
+
+- **It is gated.** `(flags & 1) && !(flags & 2)`, with `T = 0.0` in the
+  branch-likely delay slot when the test fails. Bit 0 is the ground-contact bit,
+  the same one that gates the brakes.
+- **The conversion is unsigned.** `bgez` plus `lui 0x4f80` is the standard
+  `(float)(u32)` idiom, so it is `(float)(uint32)craft+0x28c`. The PS2 page
+  already wrote `(uint)`; this page was the odd one out.
+
+Both `g_autospeed_base` and `g_autospeed_step` are `.bss` and hold nothing in the
+file: they are parsed at runtime from `<Handling><Global><Zone/></Global>` in
+`Data\XML\HandlingStats.xml`.
 
 **Groundedness is one frame stale for every control term.** That page records
 `0.75 * grounded_prev + 0.25` for the hover spring's load factor, so the lag was

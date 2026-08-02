@@ -321,6 +321,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         handling: *handling,
         segment: 0,
         active: true,
+        ..Ship::default()
     };
     world.ship_count = 1;
 
@@ -444,6 +445,7 @@ pub fn drive<R: Raycaster + ?Sized>(
         handling: *handling,
         segment: 0,
         active: true,
+        ..Ship::default()
     };
     world.ship_count = 1;
 

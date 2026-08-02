@@ -97,6 +97,13 @@ pub struct Settings {
 /// place to configure a race from.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Race {
+    /// Which mode's rules run: `time_trial`, `speed_lap` or `zone`.
+    ///
+    /// One of `oag_race::Mode::ALL`'s tokens. A file carrying anything else
+    /// leaves the mode at the default rather than failing the boot, the same way
+    /// an unknown speed class does.
+    #[serde(default = "default_mode")]
+    pub mode: String,
     /// Speed class: `venom`, `flash`, `rapier` or `phantom`.
     #[serde(default = "default_class")]
     pub class: String,
@@ -113,6 +120,11 @@ pub struct Race {
     pub track: String,
 }
 
+/// Time trial: the mode the RACE page opens on, and the one the reference
+/// captures under `data/traces/` were taken in.
+fn default_mode() -> String {
+    oag_race::Mode::TimeTrial.name().to_string()
+}
 fn default_class() -> String {
     "venom".to_string()
 }
@@ -128,6 +140,7 @@ fn default_track() -> String {
 impl Default for Race {
     fn default() -> Self {
         Self {
+            mode: default_mode(),
             class: default_class(),
             team: default_team(),
             track: default_track(),
@@ -604,6 +617,7 @@ pub fn menu_seeds(
             text(&settings.graphics.perf_overlay.to_string()),
         ),
         ("graphics.lod", text(&settings.graphics.lod.to_string())),
+        ("race.mode", text(&settings.race.mode)),
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),
         ("race.track", text(&settings.race.track)),
