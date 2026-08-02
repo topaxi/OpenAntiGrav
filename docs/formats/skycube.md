@@ -18,7 +18,7 @@ scores below are about *what the data is*, not about how the original draws it.
 | A `Skycube` payload has the same layout as a `Mesh` `0x125` payload | **90** |
 | Every track file authors exactly one, parented to the world node | **95** |
 | The sky's textures are the track file's own, by the same ordinals | **90** |
-| A `fogCube` payload is a 64-byte 4x4 then two `{rgb, 0, near, far}` sets | **85** |
+| A `fogCube` payload is a 64-byte 4x4 then two `{rgb, 0, near, far}` sets | **92** |
 | `Data\Defaults\Skycube.vex` is an unreferenced version-4 legacy asset | **90** |
 | How the original draws either one | **not recovered** |
 
@@ -104,7 +104,9 @@ also implies non-default sky texture sets, which is what the per-track skies are
 | `+0x00` | 64-byte row-major 4x4, same convention as `Transform` |
 | `+0x40` | `f32[3]` colour, `f32` zero, `f32` near, `f32` far |
 | `+0x58` | a second set of the same six floats |
-| `+0x70` | `u32` unread, `f32` `500.0` on every track, then eight zero bytes |
+| `+0x70` | `f32` overlap tiebreak - smallest wins when volumes nest |
+| `+0x74` | `f32` `500.0` on every track: the **cube's edge length** |
+| `+0x78` | eight zero bytes |
 
 The matrix's last row is a position with `w == 1.0`, which is what identifies the
 first 64 bytes as a matrix rather than as more parameters. Its rows 0 to 2 are
@@ -130,7 +132,11 @@ Two findings a loader has to handle:
   in the ground-truth test rather than assumed, so it surfaces as a count that
   moved if it was ever a name-resolution miss.
 - **The two colour/near/far sets are byte-identical on 28 of the 36** and differ
-  on the rest, `01_Track` among them. What the second set is *for* is open.
+  on the rest, `01_Track` among them. **They are the two ends of a linear
+  interpolation across the volume's local Z**, so colour, near and far all slide
+  as the camera moves through the box - identical sets mean uniform fog, differing
+  sets mean graded fog. Recovered from `FogCube_Sample` (`0x089069b0`); see
+  [`fog.md`](../ghidra/functions/psp-pulse/fog.md).
 
 ## What this engine does with it
 
@@ -154,7 +160,10 @@ obvious and is wrong:
   already assumed for a skybox.
 
 Fog is **not implemented**. A sky without it reads wrong where the horizon meets
-the track, and that is a known gap.
+the track, and that is a known gap - but it is no longer a research gap: the
+whole runtime path is recovered in
+[`fog.md`](../ghidra/functions/psp-pulse/fog.md), down to the interpolation and
+the GE commands.
 
 ## Open
 
@@ -175,10 +184,13 @@ the track, and that is a known gap.
   count - five being a cube with no floor - but triangle counts do not vary with
   it and no payload field distinguishes the groups. Comparing each group's
   texture content, or reading the geometry's face normals, would settle it.
-- **`fogCube`'s second parameter set**, and the `u32` at `+0x70`.
-- **The fog curve.** [`roadmap.md`](../overview/roadmap.md) records the
-  original's fog as a specific curve rather than a linear ramp, while PSP GE fog
-  is a linear near/far ramp in hardware. Unreconciled.
+- **The float at `+0x70`.** `Fog_FindVolume` picks the smallest when volumes
+  nest, and the shipped values (1.6e9, 2.5e9, 7.8e9) are large enough to be a
+  volume or a squared extent - but the units are not established.
+- ~~The fog curve.~~ **Resolved.** The GE ramp is linear within a frame, and its
+  parameters are re-interpolated every frame from where the camera sits in the fog
+  volume. A linear ramp is correct and must not be "fixed" into a curve. See
+  [`fog.md`](../ghidra/functions/psp-pulse/fog.md).
 - **`cloudCube` `0x3d8`, `cloudGroup` `0x3d9`, `weatherPos` `0x3da`.** Present in
   the census - `05_Track` alone authors 5 clouds and 3 cloud groups, and
   `weatherPos` runs 1 to 21 per track with a zero-length payload - and undecoded.

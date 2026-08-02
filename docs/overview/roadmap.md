@@ -652,8 +652,13 @@ change how this list should be read:
       The **payload is decoded** (a 64-byte 4x4 defining a box volume, then two
       `{rgb, 0, near, far}` sets; 36 of the 40 track files author one, and
       `06_Track` authors none) and the per-track colours corroborate the sky
-      decode independently. Nothing draws it yet, which is why a race now has its
-      authored sky and a hard horizon
+      decode independently. **The runtime path is now fully recovered too** -
+      `FogCube_RegisterClass`/`_Init`/`_Sample`, `Fog_FindVolume`, `Fog_Apply`
+      and `Gu_Fog`, in
+      [`fog.md`](../ghidra/functions/psp-pulse/fog.md) - including that the two
+      parameter sets are the ends of a lerp across the volume's local Z. Nothing
+      draws it yet, which is why a race now has its authored sky and a hard
+      horizon
 - [ ] `cloudCube` `0x3d8` and `cloudGroup` `0x3d9`
 - [ ] `sea` `0x3d5`, `seareflect` `0x3d7`, `seaweed` `0x3d6`
 - [ ] `weatherPos` `0x3da`
@@ -710,7 +715,12 @@ matters here. Some of the original's look comes from its *limitations*, and wher
 such an artefact is part of the game's identity rather than an accident it gets
 reproduced deliberately and documented as a choice.
 
-- [ ] The fog curve, which is a specific curve rather than a linear ramp
+- [x] The fog curve - **resolved, and it is not a curve in the ramp**. `Gu_Fog`
+      (`0x08811748`) is flatly linear; what varies is its *parameters*, which
+      `FogCube_Sample` re-interpolates every frame from the camera's position
+      across the fog volume's local Z. Reproducing the look needs the volume and
+      the lerp, not a shaping function - see
+      [`fog.md`](../ghidra/functions/psp-pulse/fog.md)
 - [ ] Bloom and the bright-pass on the exhaust and lights
 - [ ] Colour grading
 - [ ] Motion blur / speed streaking. Visible in the reference frames captured for

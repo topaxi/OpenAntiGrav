@@ -311,3 +311,12 @@
 0x0881a1c8	function	Hud_SetEnergyBar	75	zone-mode.md
 0x088c291c	function	Ship_LoadHandlingStats	84	zone-mode.md
 0x0894f6a8	function	SystemRoot_Create	78	zone-mode.md
+0x08811748	function	Gu_Fog	95	fog.md
+0x0891ea14	function	Fog_Apply	85	fog.md
+0x0891e9b4	function	Fog_Disable	90	fog.md
+0x08906b60	function	FogCube_RegisterClass	95	fog.md
+0x089068f8	function	FogCube_Init	92	fog.md
+0x089069b0	function	FogCube_Sample	92	fog.md
+0x08887764	function	Fog_FindVolume	88	fog.md
+0x08906720	function	FogCube_Construct	85	fog.md
+0x088879d4	function	World_CollectNodeLists	80	fog.md
