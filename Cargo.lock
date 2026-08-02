@@ -1401,6 +1401,7 @@ dependencies = [
  "oag-formats",
  "oag-gameplay",
  "oag-physics",
+ "oag-race",
  "thiserror 2.0.19",
 ]
 

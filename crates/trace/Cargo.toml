@@ -25,5 +25,12 @@ anyhow.workspace = true
 clap.workspace = true
 thiserror.workspace = true
 
+# `oag-race` is a dev-dependency only: the comparison engine has no notion of a
+# lap, and `lap_ground_truth.rs` is the one place this crate needs one - it
+# replays a captured lap through the lap counter to check that the counter agrees
+# with the original about how many laps the capture contains.
+[dev-dependencies]
+oag-race.workspace = true
+
 [lints]
 workspace = true
