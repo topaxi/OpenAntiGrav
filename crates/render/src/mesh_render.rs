@@ -165,7 +165,7 @@ pub fn capture_from(
         vertex_buffer,
         index_buffer,
         texture_binds,
-    } = build(&device, &queue, model, format, anisotropy, 1)?;
+    } = build(&device, &queue, model, format, anisotropy, 1, Depth::Scene)?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniforms"),
@@ -446,6 +446,32 @@ pub struct Built {
     pub texture_binds: Vec<wgpu::BindGroup>,
 }
 
+/// Which depth state [`build`] gives a model's pipelines.
+///
+/// The race pass clears depth to 1.0 and everything else compares `Less`, so a
+/// sky drawn at the far plane would fail the test and be invisible. Rather than
+/// place it in depth at all, [`Depth::Sky`] takes it out of the question: drawn
+/// first, comparing `Always` and writing nothing, so it fills the frame and then
+/// every later draw covers it wherever there is geometry. That also means the
+/// sky needs no far plane large enough to contain it, which matters because its
+/// authored cube is tens of units across while a track is thousands.
+///
+/// **The one size constraint that remains: a sky's half-extent must exceed the
+/// near plane.** Taking depth out of the question does not take *clipping* out
+/// of it, and a cube centred on the eye whose faces fall inside the near plane is
+/// clipped away entirely. Pulse's shipped skies have radii of 18.4 to 61.7
+/// against a near plane of 1.0, so the margin is wide - but that is a property of
+/// the data rather than of this code, and it is why the sky is never scaled down
+/// to fit anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Depth {
+    /// Scene geometry: test `Less`, write depth.
+    #[default]
+    Scene,
+    /// The sky: occludes nothing and is occluded by everything.
+    Sky,
+}
+
 /// Builds the pipeline, geometry and texture bindings for `model`.
 ///
 /// Shared by the offscreen capture path and the interactive orbit window, so
@@ -463,7 +489,15 @@ pub fn build(
     format: wgpu::TextureFormat,
     anisotropy: Anisotropy,
     sample_count: u32,
+    depth: Depth,
 ) -> Result<Built> {
+    // The blended pipeline never writes depth whichever role this is; the rest
+    // is what [`Depth`] chooses between.
+    let (depth_write, depth_compare) = match depth {
+        Depth::Scene => (true, wgpu::CompareFunction::Less),
+        Depth::Sky => (false, wgpu::CompareFunction::Always),
+    };
+
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("mesh"),
         source: wgpu::ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
@@ -542,8 +576,8 @@ pub fn build(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
-            depth_write_enabled: Some(true),
-            depth_compare: Some(wgpu::CompareFunction::Less),
+            depth_write_enabled: Some(depth_write),
+            depth_compare: Some(depth_compare),
             stencil: Default::default(),
             bias: Default::default(),
         }),
@@ -588,8 +622,8 @@ pub fn build(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
-            depth_write_enabled: Some(true),
-            depth_compare: Some(wgpu::CompareFunction::Less),
+            depth_write_enabled: Some(depth_write),
+            depth_compare: Some(depth_compare),
             stencil: Default::default(),
             bias: Default::default(),
         }),
@@ -640,7 +674,7 @@ pub fn build(
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
             depth_write_enabled: Some(false),
-            depth_compare: Some(wgpu::CompareFunction::Less),
+            depth_compare: Some(depth_compare),
             stencil: Default::default(),
             bias: Default::default(),
         }),

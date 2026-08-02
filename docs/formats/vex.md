@@ -142,9 +142,17 @@ still have instances, the same way `gate` does. Details and per-file censuses in
 [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md).
 
 `oag-view --nodes <entry>` prints every node with its class, name and payload
-size, plus a per-class census; `--class 0x3bf` filters to one. That is the tool
-these censuses come from, and it exists because nothing could previously print a
-node the parser does not decode.
+size, plus a per-class census; `--class 0x3bf` filters to one, and `--payload`
+hex-dumps each shown node's bytes (`--payload-bytes 0` for all of them). That is
+the tool these censuses come from, and it exists because nothing could previously
+print a node the parser does not decode. The `--payload` half is what settled
+`Skycube`: a size tells a locator from a parameter block, and only the bytes tell
+a parameter block from a mesh.
+
+`Skycube` `0x3c6` and `fogCube` `0x3d3` are decoded in
+[`skycube.md`](skycube.md). The finding that matters for reading this table: a
+`Skycube` payload **is a `Mesh` payload**, so a class having its own id does not
+mean it has its own layout.
 
 `section` is a **visibility partition**, not the lap structure, and the spline
 lives in `WO Track`; `gate` is never registered as a runtime class at all. Those

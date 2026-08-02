@@ -309,6 +309,13 @@ pub struct Loaded {
     pub ship_model: Model,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,
+    /// The track's `Skycube`, when it authors one.
+    ///
+    /// Built from the same blob as [`Self::track_model`] and indexing the same
+    /// textures, but kept separate because it is drawn camera-centred and out of
+    /// depth. `None` for a driveable-ribbon build, which has no art meshes at
+    /// all, and for any track that authors no sky.
+    pub sky_model: Option<Model>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` when the track declares no `section` nodes - a driveable-ribbon
@@ -565,6 +572,25 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
         track_model
     };
+    // The ribbon build draws an invented surface rather than the disc's art, so
+    // it gets no sky either: the two belong to the same "show what shipped"
+    // mode.
+    let sky_model = if options.ribbon {
+        None
+    } else {
+        let sky = mesh::build_sky(&options.track, &track_blob)?;
+        if sky.indices.is_empty() {
+            report.push("the track authors no Skycube; the sky stays black".to_string());
+            None
+        } else {
+            report.push(format!(
+                "drawing the track's sky: {} triangle(s), {} material(s)",
+                sky.indices.len() / 3,
+                sky.draws.len() + sky.alpha_tested_draws.len() + sky.transparent_draws.len(),
+            ));
+            Some(sky)
+        }
+    };
     report.push(format!(
         "drawing the track's {}: {} triangle(s), radius {:.0}",
         if options.ribbon {
@@ -715,6 +741,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         hud,
         track_model,
         collision_model,
+        sky_model,
         ship_model,
         visibility,
         flare,
@@ -2126,6 +2153,7 @@ impl Drawable {
         format: wgpu::TextureFormat,
         anisotropy: Anisotropy,
         sample_count: u32,
+        depth: mesh_render::Depth,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -2135,7 +2163,15 @@ impl Drawable {
             vertex_buffer: vertices,
             index_buffer: indices,
             texture_binds: textures,
-        } = mesh_render::build(device, queue, &model, format, anisotropy, sample_count)?;
+        } = mesh_render::build(
+            device,
+            queue,
+            &model,
+            format,
+            anisotropy,
+            sample_count,
+            depth,
+        )?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("race uniforms"),
@@ -2288,6 +2324,14 @@ fn anim_phase(tick: u64) -> f32 {
 #[derive(Debug)]
 pub struct Scene {
     track: Drawable,
+    /// The track's `Skycube`, drawn camera-centred before anything else.
+    ///
+    /// `None` when the file authors no sky, which is every Pure track and every
+    /// non-track `.vex`. Its own [`mesh_render::Depth::Sky`] pipelines compare
+    /// `Always` and write no depth, so it fills the frame and everything drawn
+    /// after covers it - see [`Scene::render`] for why it is not scaled to the
+    /// far plane instead.
+    sky: Option<Drawable>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` for a track with no `section` nodes - every Pure track - and the
@@ -2348,6 +2392,7 @@ impl Scene {
         track_model: Model,
         ship_model: Model,
         collision_model: Option<Model>,
+        sky_model: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         format: wgpu::TextureFormat,
@@ -2361,10 +2406,51 @@ impl Scene {
         // waste the depth range on empty space.
         let far = track_model.radius * 4.0;
         let sample_count = anti_aliasing.msaa_samples();
-        let track = Drawable::new(device, queue, track_model, format, anisotropy, sample_count)?;
-        let ship = Drawable::new(device, queue, ship_model, format, anisotropy, sample_count)?;
+        let scene_depth = mesh_render::Depth::Scene;
+        let sky = sky_model
+            .filter(|model| !model.indices.is_empty())
+            .map(|model| {
+                Drawable::new(
+                    device,
+                    queue,
+                    model,
+                    format,
+                    anisotropy,
+                    sample_count,
+                    mesh_render::Depth::Sky,
+                )
+            })
+            .transpose()?;
+        let track = Drawable::new(
+            device,
+            queue,
+            track_model,
+            format,
+            anisotropy,
+            sample_count,
+            scene_depth,
+        )?;
+        let ship = Drawable::new(
+            device,
+            queue,
+            ship_model,
+            format,
+            anisotropy,
+            sample_count,
+            scene_depth,
+        )?;
         let collision = collision_model
-            .map(|model| Drawable::new(device, queue, model, format, anisotropy, sample_count))
+            .map(|model| {
+                Drawable::new(
+                    device,
+                    queue,
+                    model,
+                    format,
+                    anisotropy,
+                    sample_count,
+                    scene_depth,
+                )
+            })
             .transpose()?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
@@ -2385,6 +2471,7 @@ impl Scene {
             visibility,
             ship,
             collision,
+            sky,
             exhaust,
             sparks,
             depth: depth_texture(device, size, sample_count),
@@ -2455,6 +2542,21 @@ impl Scene {
         // animated_textures` exists to test the *inferred* track entries
         // against a capture, and the ship's behaviour is not inferred.
         let track_scroll = if animated_textures { scroll } else { 0.0 };
+        // The sky rides with the eye. Translating it to the camera is what makes
+        // an authored cube tens of units across stand in for a horizon: the
+        // camera sits permanently at its centre, so the faces never approach and
+        // never need to enclose the track. `race.view()` is the full view
+        // matrix, roll included, so the horizon rolls with the ship through a
+        // barrel roll exactly as `camera::chase` describes the original's
+        // external view doing.
+        if let Some(sky) = &self.sky {
+            sky.write(
+                queue,
+                view_projection,
+                Mat4::from_translation(race.camera_position()),
+                0.0,
+            );
+        }
         self.track
             .write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         self.ship
@@ -2538,6 +2640,21 @@ impl Scene {
             multiview_mask: None,
         });
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
+        // First, and that ordering is as load-bearing as the exhaust's being
+        // last. The sky writes no depth and compares `Always`, so it paints the
+        // whole viewport and every later draw covers it wherever the track has
+        // geometry; drawn at any other point it would overwrite what is already
+        // there. Neither culling tier is offered it: a skybox is never outside
+        // the frustum and belongs to no visibility section, which is the
+        // behaviour ADR-0011 already assumes for it.
+        //
+        // Its draw calls are deliberately **not** added to `stats`. Being exempt
+        // from both tiers, folding them in would shift the denominator that
+        // ADR-0011's and the roadmap's PVS effectiveness figures are quoted
+        // against - a silently moved percentage nobody would think to question.
+        if let Some(sky) = &self.sky {
+            let _ = sky.draw(&mut pass, None, None, None);
+        }
         let mut stats = self.track.draw(
             &mut pass,
             self.visibility.as_ref().map(|v| &v.sections),
@@ -2717,6 +2834,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         track_model,
         ship_model,
         collision_model,
+        sky_model,
         visibility,
         flare,
         noise,
@@ -2780,6 +2898,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         track_model,
         ship_model,
         collision_model,
+        sky_model,
         flare,
         noise,
         format,

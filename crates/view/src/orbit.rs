@@ -182,7 +182,15 @@ impl Session {
             vertex_buffer,
             index_buffer,
             texture_binds,
-        } = mesh_render::build(&device, &queue, &model, config.format, anisotropy, 1)?;
+        } = mesh_render::build(
+            &device,
+            &queue,
+            &model,
+            config.format,
+            anisotropy,
+            1,
+            mesh_render::Depth::Scene,
+        )?;
         let _ = placeholder_bind_group;
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

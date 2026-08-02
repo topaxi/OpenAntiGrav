@@ -636,8 +636,24 @@ change how this list should be read:
 
 ### Environment
 
-- [ ] `Skycube` `0x3c6`
-- [ ] `fogCube` `0x3d3`, and the fog *curve* separately - see the look below
+- [x] `Skycube` `0x3c6` - **done at confidence 90**, and cheaper than expected:
+      the payload turned out to be a `Mesh` `0x125` payload, so
+      `vex::mesh_materials`/`mesh_batches` read it unchanged and
+      `oag_render::mesh::build_sky` is the mesh builder pointed at a different
+      class id. Every circuit authors exactly one, parented to the world node,
+      with its geometry and texture ordinals inline; material counts are 1, 5 or
+      6 and are **not** face counts - geometry is 474-553 triangles whichever it
+      is, so what separates the groups is still open. Drawn first in the race pass, camera-centred, `depth_compare:
+      Always` with no depth write, exempt from both culling tiers. Validated over
+      all 40 sky nodes on the disc. **The handler is still unrecovered**, so the
+      GE state is chosen rather than measured. See
+      [`skycube.md`](../formats/skycube.md)
+- [ ] `fogCube` `0x3d3`, and the fog *curve* separately - see the look below.
+      The **payload is decoded** (a 64-byte 4x4 defining a box volume, then two
+      `{rgb, 0, near, far}` sets; 36 of the 40 track files author one, and
+      `06_Track` authors none) and the per-track colours corroborate the sky
+      decode independently. Nothing draws it yet, which is why a race now has its
+      authored sky and a hard horizon
 - [ ] `cloudCube` `0x3d8` and `cloudGroup` `0x3d9`
 - [ ] `sea` `0x3d5`, `seareflect` `0x3d7`, `seaweed` `0x3d6`
 - [ ] `weatherPos` `0x3da`

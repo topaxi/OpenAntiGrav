@@ -26,8 +26,11 @@
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which
-- Environment: `Skycube`, `fogCube`, the cloud and sea classes - none implemented,
-  which is why a race currently has a black sky
+- Environment: `Skycube` (**done** - the payload is a `Mesh` payload, recovered in
+  [`skycube.md`](../formats/skycube.md) and drawn camera-centred and out of depth
+  by `oag_render::mesh::build_sky`). `fogCube` is **decoded but not drawn**, so a
+  race has its authored sky and no fog, which reads wrong at the horizon. The
+  cloud and sea classes are not implemented
 - Particle effects: thrust (**done** - the `Engine Flare` class, recovered in
   [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md) and implemented in
   `oag_render::exhaust`) and collision sparks (**done**, `oag_render::sparks` -

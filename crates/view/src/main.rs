@@ -86,6 +86,16 @@ struct Cli {
     #[arg(long)]
     mesh: Option<String>,
 
+    /// Render a track's `Skycube` instead of its art meshes, by the `.vex` name
+    /// in the archive.
+    ///
+    /// The sky is a separate model from the track's geometry even though it
+    /// lives in the same file, because the game draws it camera-centred and
+    /// without depth. Seeing it alone is how you tell a five-faced cube from a
+    /// six-faced one.
+    #[arg(long)]
+    sky: Option<String>,
+
     /// Skin a `--mesh` from an external texture set, by entry index or
     /// `0x`-prefixed name hash.
     ///
@@ -163,6 +173,45 @@ struct Cli {
     /// Restrict `--nodes` to one class, by decimal id or `0x`-prefixed hex.
     #[arg(long)]
     class: Option<String>,
+
+    /// Hex-dump each shown node's payload under it, for classes nothing decodes.
+    ///
+    /// `--nodes` prints a payload's *size*, which is enough to tell a locator
+    /// from a parameter block but not enough to read either. Pair with `--class`
+    /// or the dump runs to the whole file.
+    #[arg(long)]
+    payload: bool,
+
+    /// Stop each `--payload` dump after this many bytes. 0 dumps all of it.
+    #[arg(long, default_value_t = 256)]
+    payload_bytes: usize,
+}
+
+/// Hex-dumps one node payload, 16 bytes to a line with an ASCII gutter.
+///
+/// Deliberately the classic `hexdump -C` shape rather than anything cleverer:
+/// the point is to diff two payloads by eye and to spot floats and embedded
+/// strings, and every other tool a reader might paste this into expects it.
+fn hexdump(bytes: &[u8], limit: usize) {
+    let shown = if limit == 0 {
+        bytes
+    } else {
+        &bytes[..bytes.len().min(limit)]
+    };
+    for (offset, chunk) in shown.chunks(16).enumerate() {
+        let hex: Vec<String> = chunk.iter().map(|b| format!("{b:02x}")).collect();
+        let text: String = chunk
+            .iter()
+            .map(|&b| if b.is_ascii_graphic() { b as char } else { '.' })
+            .collect();
+        println!("      {:04x}  {:<47}  {text}", offset * 16, hex.join(" "));
+    }
+    if shown.len() < bytes.len() {
+        println!(
+            "      ... {} more byte(s); raise --payload-bytes to see them",
+            bytes.len() - shown.len()
+        );
+    }
 }
 
 /// Prints a `.vex` file's node tree, and a per-class census under it.
@@ -170,7 +219,7 @@ struct Cli {
 /// The census is the part worth reading: a count per class says what a file *is*
 /// in one screen, and an unnamed class ID is a prompt to go back to the table in
 /// [`oag_formats::vex::class_name`] rather than a defect.
-fn report_nodes(data: &[u8], label: &str, only: Option<u32>) -> Result<()> {
+fn report_nodes(data: &[u8], label: &str, only: Option<u32>, payload: Option<usize>) -> Result<()> {
     let nodes = vex::nodes(data).with_context(|| format!("walking {label}"))?;
     println!("{label}: {} node(s)", nodes.len());
 
@@ -205,6 +254,9 @@ fn report_nodes(data: &[u8], label: &str, only: Option<u32>) -> Result<()> {
              {} byte(s), {} child(ren), parent {:?}",
             node.class_id, node.data_size, node.child_count, node.parent,
         );
+        if let Some(limit) = payload {
+            hexdump(&data[node.payload()], limit);
+        }
     }
 
     // Census over the whole file, not over the filtered view: the point of it is
@@ -329,7 +381,7 @@ fn main() -> Result<()> {
             ),
         };
         let data = mesh::read_blob(&cli.archive, name)?;
-        return report_nodes(&data, name, only);
+        return report_nodes(&data, name, only, cli.payload.then_some(cli.payload_bytes));
     }
 
     if let Some(name) = &cli.collision {
@@ -430,6 +482,36 @@ fn main() -> Result<()> {
         let pitch = cli.pitch.unwrap_or(1.15);
         if let Some(path) = &cli.screenshot {
             mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch, cli.anisotropy)?;
+            println!("wrote {}", path.display());
+            return Ok(());
+        }
+        println!("arrows orbit, +/- (or PageUp/PageDown) zoom, escape quits");
+        orbit::run(model, cli.yaw, pitch, cli.anisotropy)?;
+        return Ok(());
+    }
+
+    if let Some(name) = &cli.sky {
+        let data = mesh::read_blob(&cli.archive, name)?;
+        let model = mesh::build_sky(name, &data)?;
+        println!(
+            "{}: {} sky node(s), {} vertices, {} triangles, radius {:.2}",
+            model.label,
+            model.mesh_count,
+            model.vertices.len(),
+            model.indices.len() / 3,
+            model.radius
+        );
+        if model.mesh_count == 0 {
+            println!("no Skycube node; this file authors no sky");
+            return Ok(());
+        }
+        // Inside a sky cube looking out, which is where the camera always is.
+        // The orbit viewer's default framing puts the camera outside the
+        // bounding sphere, and from there a sky is a small box with its back
+        // faces towards you.
+        let pitch = cli.pitch.unwrap_or(0.0);
+        if let Some(path) = &cli.screenshot {
+            mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch, cli.anisotropy)?;
             println!("wrote {}", path.display());
             return Ok(());
         }

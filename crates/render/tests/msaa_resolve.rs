@@ -99,8 +99,16 @@ fn render_and_resolve(
         index_buffer,
         texture_binds,
         ..
-    } = mesh_render::build(device, queue, model, FORMAT, Anisotropy::Off, sample_count)
-        .expect("building the mesh pipeline");
+    } = mesh_render::build(
+        device,
+        queue,
+        model,
+        FORMAT,
+        Anisotropy::Off,
+        sample_count,
+        mesh_render::Depth::Scene,
+    )
+    .expect("building the mesh pipeline");
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("msaa_resolve uniforms"),

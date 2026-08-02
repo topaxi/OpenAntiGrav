@@ -415,6 +415,39 @@ pub fn build_with_textures(
     external: Option<Vec<Option<ModelTexture>>>,
     lod: Lod,
 ) -> Result<Model> {
+    build_class(label, data, external, lod, vex::CLASS_MESH)
+}
+
+/// The track's sky, as a model in its own right.
+///
+/// A [`vex::CLASS_SKYCUBE`] node's payload *is* a mesh payload - same header,
+/// same bounding-box pair, same material array - so this is
+/// [`build_with_textures`] pointed at a different class, not a second decoder.
+/// The sky comes out separate from [`build`]'s track model on purpose: it is
+/// drawn camera-centred and without depth, which is a different draw rather than
+/// a different mesh.
+///
+/// The sky's textures are the track file's own, indexed by the same ordinals, so
+/// this must be built from the same `data` the track model was.
+///
+/// Returns a model with no meshes when the file authors no sky. That is not an
+/// error: 4 of the 40 PSP track files have no `fogCube` and a `.vex` that is not
+/// a track has neither.
+pub fn build_sky(label: &str, data: &[u8]) -> Result<Model> {
+    build_class(label, data, None, Lod::Both, vex::CLASS_SKYCUBE)
+}
+
+/// Flattens every node of one class into one buffer pair.
+///
+/// The class is a parameter because `Skycube` and `Mesh` share a payload layout
+/// exactly; see [`build_sky`].
+fn build_class(
+    label: &str,
+    data: &[u8],
+    external: Option<Vec<Option<ModelTexture>>>,
+    lod: Lod,
+    class_id: u32,
+) -> Result<Model> {
     if !vex::has_magic(data) {
         bail!("{label} is not a .vex file (no VEXX magic)");
     }
@@ -510,7 +543,7 @@ pub fn build_with_textures(
     for (index, node) in nodes
         .iter()
         .enumerate()
-        .filter(|(i, n)| n.class_id == vex::CLASS_MESH && !skip.contains(i))
+        .filter(|(i, n)| n.class_id == class_id && !skip.contains(i))
     {
         let payload = &data[node.payload()];
         let to_world = world[index];

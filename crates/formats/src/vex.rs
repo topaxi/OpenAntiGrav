@@ -152,6 +152,31 @@ pub const CLASS_SHIP_MUZZLE: u32 = 0x3e2;
 /// Class ID of an `Airbrake` node.
 pub const CLASS_AIRBRAKE: u32 = 0x3c5;
 
+/// Class ID of a `Skycube` node: the track's sky.
+///
+/// **Its payload is a [`CLASS_MESH`] payload**, so [`mesh_materials`] and
+/// [`mesh_batches`] decode it unchanged - same header words, same bounding-box
+/// pair at `+0x10`/`+0x20`, same stride-`0x14` material array at `+0x30`. That
+/// is measured rather than assumed: see
+/// `crates/formats/tests/skycube_ground_truth.rs`, which checks it against all
+/// 40 sky nodes on the PSP disc.
+///
+/// Every track file authors exactly one, parented to the world node, with its
+/// geometry inline. Materials run 1, 5 or 6 - six being a full cube, five the
+/// same cube without the face nobody sees, and one the Zone variants.
+/// `Data\Defaults\Skycube.vex` also exists on the disc but is a **version-4**
+/// file in a version-6 archive, so no shipped track can reference it; treat it
+/// as a legacy fallback, not as the thing to load.
+pub const CLASS_SKYCUBE: u32 = 0x3c6;
+
+/// Class ID of a `fogCube` node: a track's fog volume and parameters.
+///
+/// 128 bytes on every track that has one - a 64-byte row-major 4x4 in the same
+/// convention [`CLASS_TRANSFORM`] uses, then two `{rgb, 0, near, far}` sets of
+/// six floats, then eight bytes not yet read. 36 of the 40 track files author
+/// one, so a loader must handle its absence.
+pub const CLASS_FOGCUBE: u32 = 0x3d3;
+
 /// The `.vex` class-ID to name table, as the shipped executable carries it.
 ///
 /// Read out of `BOOT.BIN` at `0x08ab2370` - stride 12, `{u32 id, char *name,
