@@ -117,6 +117,12 @@ Four claims, each read from the instruction stream rather than the decompiler:
 1. **The zone steps every 10.0 seconds of accumulated frame time**, and on
    nothing else - not distance, not laps, not score. The `10.0` is the immediate
    `lui a1,0x4120` at `0x0882f5e4`. Confidence **84**.
+
+   **Independently corroborated by the disc's own text**, which is unusual enough
+   to note: `MSC_EVENT_ZONE` describes the mode as one where *"the top speed
+   increases after every ten second period, called a zone"*. Instruction stream
+   and shipped English agree, and they were read a day apart from different
+   places.
 2. **`craft+0x28c` is assigned, not incremented.** The mode object owns the
    counter; the craft field is a copy for the engine to read. Confidence **84**.
 3. **The accumulator resets to `0`**, not `-= 10.0`, so each step discards the
@@ -193,19 +199,30 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
 
 ## Not determined
 
-1. **What ends a run.** `Zone_UpdateRacing` tests bit 12 (`0x1000`) of
-   `entity+0x860` and moves the mode to state 3 on it. **What sets bit 12 was not
-   found**: the `sw ...,0x860(...)` sites that were read set `0x200000` and
-   `0x400000`, never `0x1000`, so it is composed somewhere not resolved. The same
-   bit ends every other mode's run, which makes it a generic "this craft is done"
-   flag rather than anything Zone-specific. Confidence **60** for "craft
-   eliminated", **25** for specifically "shield reached zero". **Do not implement
-   it as shield depletion on this evidence.**
+1. **What *sets* bit 12.** `Zone_UpdateRacing` tests bit 12 (`0x1000`) of
+   `entity+0x860` and moves the mode to state 3 on it, but the `sw ...,0x860(...)`
+   sites that were read set `0x200000` and `0x400000`, never `0x1000`, so the
+   write is composed somewhere not resolved.
+
+   **What the bit *means* is no longer open**, and the evidence is the disc's own
+   text rather than the instruction stream. `ER_ZONE_DEST` reads
+   `"Ship destroyed on zone"`, and `MSC_EVENT_ZONE` describes the mode as
+   *"survive for as long as possible before crashing out"*. So a run ends when the
+   craft is destroyed - confidence **80**, up from the **25** this page first gave
+   "shield reached zero", which was a guess and is now corroborated.
+
+   Still not implemented, but the reason has changed: it needs a shield pool that
+   depletes, which is unimplemented project-wide, rather than more reverse
+   engineering.
 2. **What raises `IG_HUD_PERF_ZONE`, `IG_HUD_NEW_ZONE_RECORD` and
    `IG_HUD_NEW_SCORE_RECORD`**, and what drives the `Zone_Bar_*` widgets. The
    strings exist but are `idstring` values consumed by the HUD-XML loader, not
    referenced from mode code, so the trigger is inside the widget system.
 3. **The milestone table's sound-ID column**, which reads as zero for every entry.
+4. **The per-event target zone count.** `MSC_EVENT_ZONE` ends *"Clear the target
+   number of zones to win the event"*, so a target exists and belongs to the event
+   rather than to the mode. Where it is stored was not looked for - it is
+   progression data, and progression is M7.
 
 ## What is implemented
 

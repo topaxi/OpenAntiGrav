@@ -126,6 +126,10 @@ fn menu_page(
             .collect::<Vec<_>>(),
     );
     model.supply(
+        crate::menu::ValueSource::RaceModes,
+        &crate::menu::mode_choices(strings),
+    );
+    model.supply(
         crate::menu::ValueSource::Languages,
         &languages
             .iter()

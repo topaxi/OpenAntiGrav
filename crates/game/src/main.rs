@@ -446,6 +446,7 @@ fn main() -> Result<()> {
     // shipped content and only ever lives in memory.
     let shell = Shell {
         definition,
+        modes: menu::mode_choices(&loaded.strings),
         tracks: loaded
             .tracks
             .iter()
@@ -1628,6 +1629,12 @@ struct Shell {
     /// Every language this source offers, valued by its English name and
     /// labelled in itself.
     languages: Vec<menu::Choice>,
+    /// The race modes, valued by their token and labelled off the disc.
+    ///
+    /// Resolved once here rather than each time the menus open, the same way the
+    /// circuits are: the strings do not change while the game runs, and the
+    /// string table is not kept past boot.
+    modes: Vec<menu::Choice>,
     font: oag_game::font::Atlas,
     sprites: oag_game::sprite::Sheet,
 }
@@ -1962,6 +1969,7 @@ impl Session {
             .collect();
         model.supply(menu::ValueSource::Tracks, &tracks);
         model.supply(menu::ValueSource::Languages, &shell.languages);
+        model.supply(menu::ValueSource::RaceModes, &shell.modes);
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.

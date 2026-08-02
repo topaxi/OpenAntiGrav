@@ -308,3 +308,51 @@ fn the_picker_draws_every_language_in_its_own_name() {
         );
     }
 }
+
+/// Which string-table entries name a race mode.
+///
+/// The menu shows the player a mode name, and that name must come off the disc
+/// rather than out of this repository - the same rule the circuit rows already
+/// follow. This finds the ids, so the menu can ask for them by name.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_string_table_names_the_race_modes() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives =
+        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("archives");
+    let entries = oag_assets::pulse::names::language_entries("PI012");
+    let blob = archives
+        .read_name(&entries)
+        .expect("the English string table");
+    let xml = oag_formats::fexml::expand(&blob).expect("expands");
+
+    let wanted = [
+        "time trial",
+        "speed lap",
+        "zone",
+        "single race",
+        "eliminator",
+    ];
+    let mut hits = 0;
+    for line in xml.split("<Entry").skip(1) {
+        let Some(id) = line.split("ID=\"").nth(1).and_then(|r| r.split('"').next()) else {
+            continue;
+        };
+        let Some(text) = line
+            .split("String=\"")
+            .nth(1)
+            .and_then(|r| r.split('"').next())
+        else {
+            continue;
+        };
+        let lower = text.to_ascii_lowercase();
+        if wanted.iter().any(|w| lower == *w || lower.contains(w)) {
+            println!("  {id}  =  {text:?}");
+            hits += 1;
+        }
+    }
+    println!("{hits} mode-ish entries in {entries}");
+    assert!(hits > 0, "the string table names no race mode at all");
+}

@@ -54,15 +54,17 @@ id = "race"
 title = "RACE"
 
 # Mode first, because it is the thing that decides what the other rows mean: a
-# zone run ignores the lap count a time trial is built around. The values are
-# `oag_race::Mode::ALL`'s own tokens and a test pins this list to that array, so
-# a mode added to the enum and forgotten here fails the build rather than
-# quietly not being offered.
+# zone run ignores the lap count a time trial is built around.
+#
+# `values_from` rather than a list, even though the set is fixed at
+# `oag_race::Mode::ALL`: what the row *shows* is the front end's own event text
+# off the player's disc, in their language, so it cannot be spelled here. The
+# stored values are still the mode tokens.
 [[page.entry]]
 kind = "choice"
 label = "MODE"
 setting = "race.mode"
-values = ["time_trial", "speed_lap", "zone"]
+values_from = "race_modes"
 
 # Speed class, team and track are the three things `race::Options` actually
 # carries, so all three are live rather than decorative. The values are the

@@ -103,20 +103,35 @@ says so rather than substituting numbers.
   clean zone recharges a full ship to full. Collision damage is M5 work; see
   the [roadmap](../overview/roadmap.md).
 
-### Zone has no ending, and that is on purpose
+### Zone has no ending yet, and now we know what it should be
 
-The original ends a run on **bit 12 of `entity+0x860`**, and *what sets that bit
-was not found*. The `sw ...,0x860(...)` sites that were read set `0x200000` and
-`0x400000`, never `0x1000`. The same bit ends every other mode's run, which makes
-it a generic "this craft is done" flag rather than a Zone rule.
+**A Zone run ends when the ship is destroyed.** The disc says so: `ER_ZONE_DEST`
+reads `"Ship destroyed on zone"`, and `MSC_EVENT_ZONE` describes the mode as
+*"survive for as long as possible before crashing out"*. Confidence **80**.
 
-Confidence is **60** for "craft eliminated" and only **25** for specifically
-"shield reached zero". Shield depletion is separately unimplemented across the
-project.
+That is a change of footing rather than of behaviour.
+[`zone-mode.md`](../ghidra/functions/psp-pulse/zone-mode.md) first recorded only
+that a run ends on bit 12 of `entity+0x860`, with 25 confidence that the bit meant
+shield depletion - a guess, and the reason the ending was left out. The string
+table corroborates it.
 
-So a Zone run keeps going until you leave. Inventing a damage rule to manufacture
-an ending would have been the one guess in an otherwise fully recovered mode, and
-it would have been the guess most likely to be wrong in a way nobody noticed.
+It is still not implemented, because it needs a **shield pool that depletes** and
+nothing depletes shield anywhere in this project yet. So a Zone run keeps going
+until you leave. What blocks it now is collision damage, not reverse engineering.
+
+`MSC_EVENT_ZONE` also ends *"Clear the target number of zones to win the event"*,
+so a Zone event has a target zone count. That is progression data - M7 - and is
+not modelled.
+
+### The string table also settles why shield does not matter in the other two
+
+`MAN_P3_PG1_ENER`: *"The Time Trial and Speed Lap events will recover your ship
+energy automatically."* `MSC_EVENT_TT` and `MSC_EVENT_SL` each repeat it. So a
+depleting shield was never going to end those two modes, and the missing pool
+costs them nothing.
+
+Both also grant *"a free turbo pickup once per lap"*, which is **not**
+implemented: `Engine::turbo` is read into `Handling` and never applied.
 
 **Also out of scope:** the `Zone_Bar_*` widgets and the `IG_HUD_PERF_ZONE` /
 `IG_HUD_NEW_ZONE_RECORD` banners. Their writers were not found, and the

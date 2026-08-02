@@ -148,6 +148,14 @@ pub enum ValueSource {
     /// offering something that cannot be selected. `default` is always first,
     /// so there is a way back from a screen that has since been unplugged.
     Monitors,
+    /// The race modes, labelled from the disc's own string table.
+    ///
+    /// The list itself is fixed - it is `oag_race::Mode::ALL` - so unlike the
+    /// other sources this one is not supplied because the set is unknown. It is
+    /// supplied because the *labels* are: what a player reads is the front end's
+    /// own event text off their disc, in their own language, and so it cannot be
+    /// spelled in a definition file that ships in this repository.
+    RaceModes,
     /// The adapters this machine can present with, which is the other property
     /// of the desk rather than of the disc.
     ///
@@ -168,6 +176,7 @@ impl ValueSource {
             Self::Tracks => "tracks",
             Self::Monitors => "monitors",
             Self::Renderers => "renderers",
+            Self::RaceModes => "race_modes",
         }
     }
 
@@ -179,9 +188,46 @@ impl ValueSource {
             "tracks" => Some(Self::Tracks),
             "monitors" => Some(Self::Monitors),
             "renderers" => Some(Self::Renderers),
+            "race_modes" => Some(Self::RaceModes),
             _ => None,
         }
     }
+}
+
+/// What a race mode's row shows, out of the disc's own string table.
+///
+/// The front end has no short "Time Trial" string - checked across the whole
+/// English table - but it does have an event *description* per mode, and each
+/// one opens with the mode's name followed by a colon. So the name is the head
+/// of `MSC_EVENT_*`, and taking it is a substring of shipped text rather than a
+/// translation written here.
+///
+/// Falls back to [`oag_race::Mode::fallback_label`] when the table has no such
+/// entry, and **also when the text does not look like a name**: no colon, or a
+/// head long enough to be prose rather than a label. A localisation that
+/// punctuates differently then reads a little plainer instead of putting a
+/// paragraph in a menu row.
+#[must_use]
+pub fn mode_label(mode: oag_race::Mode, strings: &crate::language::StringTable) -> String {
+    /// Longest a head can be and still be a name rather than a sentence.
+    const MAX: usize = 24;
+
+    strings
+        .get(mode.string_id())
+        .and_then(|text| text.split(':').next())
+        .map(str::trim)
+        .filter(|head| !head.is_empty() && head.chars().count() <= MAX)
+        .unwrap_or(mode.fallback_label())
+        .to_string()
+}
+
+/// Every race mode as a row, labelled from `strings`.
+#[must_use]
+pub fn mode_choices(strings: &crate::language::StringTable) -> Vec<Choice> {
+    oag_race::Mode::ALL
+        .iter()
+        .map(|mode| Choice::labelled(mode.name(), mode_label(*mode, strings)))
+        .collect()
 }
 
 /// One frame of the looping picture the rows are drawn on top of.
@@ -1761,14 +1807,66 @@ mod tests {
             oag_physics::SpeedClass::ALL.len(),
             "every speed class should be offerable"
         );
+    }
 
+    /// The mode row is supplied rather than spelled, so what it must agree with
+    /// is `mode_choices`, not a list in the definition file.
+    #[test]
+    fn the_supplied_mode_rows_are_exactly_the_modes_the_game_has() {
+        let strings = crate::language::StringTable::default();
+        let stored: Vec<String> = super::mode_choices(&strings)
+            .into_iter()
+            .map(|choice| choice.value)
+            .collect();
         assert_eq!(
-            values("race.mode"),
+            stored,
             oag_race::Mode::ALL
                 .iter()
-                .map(|mode| mode.name())
+                .map(|mode| mode.name().to_string())
                 .collect::<Vec<_>>(),
-            "the mode rows and Mode::ALL must be one list, in the same order"
+            "the supplied rows and Mode::ALL must be one list, in the same order"
+        );
+    }
+
+    #[test]
+    fn a_mode_label_is_the_head_of_the_discs_event_text() {
+        let strings = crate::language::StringTable::from_xml(
+            r#"<StringTable>
+                 <Entry ID="MSC_EVENT_ZONE" String="Zone: your ship accelerates automatically and the top speed increases."></Entry>
+               </StringTable>"#,
+        );
+        assert_eq!(super::mode_label(oag_race::Mode::Zone, &strings), "Zone");
+    }
+
+    /// Three ways the disc can fail to yield a label, all of which have to end
+    /// with a readable row rather than a paragraph or a blank.
+    #[test]
+    fn a_mode_label_falls_back_rather_than_printing_prose() {
+        let absent = crate::language::StringTable::default();
+        assert_eq!(
+            super::mode_label(oag_race::Mode::TimeTrial, &absent),
+            oag_race::Mode::TimeTrial.fallback_label()
+        );
+
+        let no_colon = crate::language::StringTable::from_xml(
+            r#"<StringTable>
+                 <Entry ID="MSC_EVENT_TT" String="Beat the clock in this solo race and make every corner count"></Entry>
+               </StringTable>"#,
+        );
+        assert_eq!(
+            super::mode_label(oag_race::Mode::TimeTrial, &no_colon),
+            oag_race::Mode::TimeTrial.fallback_label(),
+            "a description with no colon put its whole first clause in the row"
+        );
+
+        let empty = crate::language::StringTable::from_xml(
+            r#"<StringTable>
+                 <Entry ID="MSC_EVENT_SL" String=": focus all your efforts"></Entry>
+               </StringTable>"#,
+        );
+        assert_eq!(
+            super::mode_label(oag_race::Mode::SpeedLap, &empty),
+            oag_race::Mode::SpeedLap.fallback_label()
         );
     }
 
@@ -1799,17 +1897,29 @@ mod tests {
             .iter()
             .find(|page| page.id == "race")
             .expect("a race page");
-        let first = race
+        let source = race
             .entries
             .iter()
             .find_map(|entry| match entry {
                 Entry::Choice {
-                    setting, values, ..
-                } if setting == "race.mode" => values.first().map(|value| value.value.clone()),
+                    setting, source, ..
+                } if setting == "race.mode" => Some(*source),
                 _ => None,
             })
             .expect("a mode row");
-        assert_eq!(first, oag_race::Mode::TimeTrial.name());
+        assert_eq!(
+            source,
+            Some(ValueSource::RaceModes),
+            "the mode row spells its values instead of taking them off the disc"
+        );
+
+        let strings = crate::language::StringTable::default();
+        assert_eq!(
+            super::mode_choices(&strings)
+                .first()
+                .map(|choice| choice.value.clone()),
+            Some(oag_race::Mode::TimeTrial.name().to_string())
+        );
         assert_eq!(
             crate::settings::Race::default().mode,
             oag_race::Mode::TimeTrial.name(),

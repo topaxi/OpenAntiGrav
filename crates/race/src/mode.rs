@@ -80,6 +80,42 @@ impl Mode {
         }
     }
 
+    /// The string-table id whose text names this mode.
+    ///
+    /// **The disc names the modes; this repository does not.** These entries are
+    /// the front end's event descriptions and each one opens with the mode's own
+    /// name followed by a colon - `"Zone: your ship accelerates automatically
+    /// and the top speed increases after every ten second period..."` - so the
+    /// name is the part before that colon. See
+    /// `oag_game::menu::mode_label`, which does the splitting, and
+    /// `the_string_table_names_the_race_modes` in
+    /// `crates/game/tests/boot_ground_truth.rs`, which is where the ids were
+    /// found.
+    ///
+    /// Localised for free: a French disc's table answers the same ids in French.
+    #[must_use]
+    pub const fn string_id(self) -> &'static str {
+        match self {
+            Self::TimeTrial => "MSC_EVENT_TT",
+            Self::SpeedLap => "MSC_EVENT_SL",
+            Self::Zone => "MSC_EVENT_ZONE",
+        }
+    }
+
+    /// What to show when the disc has nothing to say.
+    ///
+    /// Only reached on a source whose string table is missing or does not carry
+    /// [`Self::string_id`]. Not a translation and not authored content - it is
+    /// the settings token, spaced out, so a row is never blank.
+    #[must_use]
+    pub const fn fallback_label(self) -> &'static str {
+        match self {
+            Self::TimeTrial => "TIME TRIAL",
+            Self::SpeedLap => "SPEED LAP",
+            Self::Zone => "ZONE",
+        }
+    }
+
     /// Whether the mode drives the throttle itself.
     ///
     /// Zone does: the original replaces the engine's thrust with an auto-speed
