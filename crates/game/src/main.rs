@@ -1251,6 +1251,7 @@ impl Stage {
             ship_model,
             collision_model,
             sky_model,
+            fog_volumes,
             visibility,
             flare,
             noise,
@@ -1270,6 +1271,7 @@ impl Stage {
             anisotropy,
             visibility,
             anti_aliasing,
+            fog_volumes,
         )?;
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.

@@ -159,11 +159,18 @@ obvious and is wrong:
   [ADR-0011](../architecture/adr/0011-authored-pvs-before-frustum-culling.md)
   already assumed for a skybox.
 
-Fog is **not implemented**. A sky without it reads wrong where the horizon meets
-the track, and that is a known gap - but it is no longer a research gap: the
-whole runtime path is recovered in
-[`fog.md`](../ghidra/functions/psp-pulse/fog.md), down to the interpolation and
-the GE commands.
+Fog **is** implemented. `oag_formats::fog` decodes the volumes and reimplements
+`FogCube_Sample`; `race::Scene` samples them at the camera each frame and writes
+`oag_render::mesh_render::Fog` into bind group 2, which `mesh.wgsl` applies as
+the same linear ramp `Gu_Fog` sends. The sky is deliberately left unfogged - it
+rides on the camera at a radius of 18 to 62 units while fog starts at 30 to 250,
+so fogging it would drown it, and the original's sky geometry is authored
+`_nolight` and stands in for infinity.
+
+**One known divergence:** the shader measures *radial* distance from the eye
+where the hardware uses view-space depth. The two differ by up to `1/cos(fov/2)`
+- about 15 % at the screen corners. The view matrix is not in the uniform block
+that would be needed to fix it; recorded rather than silently accepted.
 
 ## Open
 

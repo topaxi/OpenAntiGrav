@@ -91,6 +91,76 @@ pub fn write_uniforms(
 /// Size, in bytes, of the uniform buffer `write_uniforms` expects.
 pub const UNIFORMS_SIZE: u64 = std::mem::size_of::<Uniforms>() as u64;
 
+/// The fog block `mesh.wgsl` reads from bind group 2.
+///
+/// Deliberately **not** part of [`Uniforms`]. That struct is mirrored by every
+/// pipeline in this crate and by the asset viewer, so growing it means moving
+/// four `.wgsl` declarations and `oag-view`'s own buffer sizing in lockstep;
+/// only the pipelines that fog need these fields.
+///
+/// The field order is the WGSL declaration's, and the padding is real: a WGSL
+/// `vec3` aligns to 16 bytes, so the `f32` after each one occupies the slot that
+/// alignment would otherwise waste.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Fog {
+    /// Fog colour, linear.
+    pub colour: [f32; 3],
+    /// Distance at which fog starts.
+    pub near: f32,
+    /// Eye position, so the fragment stage can measure distance.
+    pub camera: [f32; 3],
+    /// Distance at which fog is total.
+    pub far: f32,
+    /// `1.0` to fog, `0.0` to pass colour through untouched.
+    pub enabled: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
+}
+
+impl Fog {
+    /// Fog that does nothing.
+    ///
+    /// What the sky, the asset viewer and a track with no `fogCube` bind. It is
+    /// a value rather than an unbound group because WGSL has no optional
+    /// bindings: the alternative is a second pipeline per fog state.
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            colour: [0.0; 3],
+            near: 0.0,
+            camera: [0.0; 3],
+            far: 1.0,
+            enabled: 0.0,
+            _pad0: 0.0,
+            _pad1: 0.0,
+            _pad2: 0.0,
+        }
+    }
+
+    /// Fog from one sampled [`oag_formats::fog::FogParams`] and the eye it was
+    /// sampled at.
+    #[must_use]
+    pub fn new(params: &oag_formats::fog::FogParams, camera: [f32; 3]) -> Self {
+        Self {
+            colour: params.colour,
+            near: params.near,
+            camera,
+            // A degenerate range would divide by zero in the shader; the shader
+            // clamps the span, and this keeps the ordering sane regardless.
+            far: params.far.max(params.near + f32::EPSILON),
+            enabled: 1.0,
+            _pad0: 0.0,
+            _pad1: 0.0,
+            _pad2: 0.0,
+        }
+    }
+}
+
+/// Size, in bytes, of the fog uniform buffer.
+pub const FOG_SIZE: u64 = std::mem::size_of::<Fog>() as u64;
+
 /// Renders one frame of `model` to a PNG from a given orbit angle.
 ///
 /// `pitch` near zero looks along the ground; near `PI / 2` looks straight down,
@@ -165,6 +235,8 @@ pub fn capture_from(
         vertex_buffer,
         index_buffer,
         texture_binds,
+        fog_bind,
+        fog_buffer: _,
     } = build(&device, &queue, model, format, anisotropy, 1, Depth::Scene)?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -245,6 +317,10 @@ pub fn capture_from(
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
+        // Group 2 never changes within a pass and survives `set_pipeline`, so it
+        // is bound once here rather than per draw call. The capture path leaves
+        // it at `Fog::off`.
+        pass.set_bind_group(2, &fog_bind, &[]);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
@@ -444,6 +520,11 @@ pub struct Built {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub texture_binds: Vec<wgpu::BindGroup>,
+    /// Bind group 2, holding [`Fog`]. Bound by every draw; write
+    /// [`Built::fog_buffer`] to change it.
+    pub fog_bind: wgpu::BindGroup,
+    /// The buffer behind [`Built::fog_bind`], initialised to [`Fog::off`].
+    pub fog_buffer: wgpu::Buffer,
 }
 
 /// Which depth state [`build`] gives a model's pipelines.
@@ -539,9 +620,43 @@ pub fn build(
         ],
     });
 
+    let fog_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("fog"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+
+    // Every pipeline gets a fog buffer, initialised to `Fog::off`. A caller that
+    // never writes it therefore renders exactly as it did before fog existed,
+    // which is what keeps the asset viewer and the offscreen capture path
+    // unchanged without either of them knowing fog is there.
+    let fog_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("fog"),
+        size: FOG_SIZE,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Fog::off()));
+    let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("fog"),
+        layout: &fog_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: fog_buffer.as_entire_binding(),
+        }],
+    });
+
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("mesh"),
-        bind_group_layouts: &[Some(&layout), Some(&texture_layout)],
+        bind_group_layouts: &[Some(&layout), Some(&texture_layout), Some(&fog_layout)],
         immediate_size: 0,
     });
 
@@ -796,6 +911,8 @@ pub fn build(
     });
 
     Ok(Built {
+        fog_bind,
+        fog_buffer,
         pipeline,
         alpha_test_pipeline,
         blend_pipeline,

@@ -98,6 +98,7 @@ fn render_and_resolve(
         vertex_buffer,
         index_buffer,
         texture_binds,
+        fog_bind,
         ..
     } = mesh_render::build(
         device,
@@ -211,6 +212,10 @@ fn render_and_resolve(
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
+        // Group 2 is fog, left at `Fog::off`. The pipeline layout requires it
+        // bound even when it does nothing, which is what this line is for - and
+        // the first run of this test after fog landed is what caught that.
+        pass.set_bind_group(2, &fog_bind, &[]);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         pass.set_bind_group(1, &texture_binds[0], &[]);

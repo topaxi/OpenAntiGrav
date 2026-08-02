@@ -71,6 +71,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_disc::DiscImage;
+use oag_formats::fog;
 use oag_formats::vex;
 use oag_formats::wad::{self, Compression, Directory};
 
@@ -204,6 +205,25 @@ fn vex_files(disc: &mut DiscImage, archive_path: &str) -> Vec<VexFile> {
             bytes,
             tree,
         });
+    }
+    out
+}
+
+/// World position of a volume's centre, from its world-to-local matrix.
+///
+/// Only the translation is inverted, which is enough: the local origin maps to
+/// `-t * R^-1`, and the rows are orthogonal up to their own scale, so dividing
+/// each dot product by that row's squared length recovers it without a general
+/// inverse.
+fn invert_translation(m: &[f32; 16]) -> [f32; 3] {
+    let t = [m[12], m[13], m[14]];
+    let mut out = [0.0f32; 3];
+    for (axis, o) in out.iter_mut().enumerate() {
+        let row = [m[axis * 4], m[axis * 4 + 1], m[axis * 4 + 2]];
+        let len2 = row[0] * row[0] + row[1] * row[1] + row[2] * row[2];
+        if len2 > 0.0 {
+            *o = -(t[0] * row[0] + t[1] * row[1] + t[2] * row[2]) / len2;
+        }
     }
     out
 }
@@ -415,6 +435,7 @@ fn a_fogcube_is_a_matrix_and_two_colour_range_sets() {
 
     let mut fogcubes = 0;
     let mut sets_agree = 0;
+    let mut edges = Vec::new();
 
     for file in vex_files(&mut disc, &data_wad) {
         for node in file.tree.iter().filter(|n| n.class_id == CLASS_FOGCUBE) {
@@ -471,11 +492,56 @@ fn a_fogcube_is_a_matrix_and_two_colour_range_sets() {
             if sets[0] == sets[1] {
                 sets_agree += 1;
             }
+
+            // The typed decoder must agree with the hand-read offsets above, and
+            // must place the two sets at the ends of its own gradient. Sampling
+            // the centre of the box is the check with teeth: it exercises the
+            // matrix, the edge length and the interpolation at once, and a
+            // volume whose own centre is outside itself is a decoder that has
+            // the box wrong.
+            let volume = fog::FogVolume::parse(payload)
+                .unwrap_or_else(|| panic!("{}: fogCube did not decode", file.label));
+            assert_eq!(volume.near_end.colour, sets[0].0, "{}", file.label);
+            assert_eq!(volume.near_end.near, sets[0].1, "{}", file.label);
+            assert_eq!(volume.far_end.far, sets[1].2, "{}", file.label);
+            assert!(
+                volume.edge > 0.0 && volume.edge.is_finite(),
+                "{}: edge length {}",
+                file.label,
+                volume.edge
+            );
+            edges.push(volume.edge);
+
+            // The volume's own centre in world space: the point the local-space
+            // origin maps back to. It must be inside, by construction.
+            let centre = invert_translation(&volume.to_local);
+            let at_centre = volume.sample(centre).unwrap_or_else(|| {
+                panic!("{}: the volume does not contain its own centre", file.label)
+            });
+            for (axis, c) in at_centre.colour.iter().enumerate() {
+                assert!(
+                    (0.0..=1.0).contains(c),
+                    "{}: sampled channel {axis} = {c}",
+                    file.label
+                );
+            }
+            assert!(
+                at_centre.near < at_centre.far,
+                "{}: sampled range {}..{}",
+                file.label,
+                at_centre.near,
+                at_centre.far
+            );
             fogcubes += 1;
         }
     }
 
-    println!("fogcubes {fogcubes}, both sets identical on {sets_agree}");
+    edges.sort_by(f32::total_cmp);
+    println!(
+        "fogcubes {fogcubes}, both sets identical on {sets_agree}, edges {:?}..{:?}",
+        edges.first(),
+        edges.last()
+    );
     assert_eq!(
         fogcubes, PSP_FOGCUBES,
         "the fogCube count moved; some circuit gained or lost its fog"

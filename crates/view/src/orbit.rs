@@ -128,6 +128,9 @@ struct Session {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     texture_binds: Vec<wgpu::BindGroup>,
+    /// Bind group 2. The viewer never fogs, so this stays at
+    /// [`mesh_render::Fog::off`] for the session's lifetime.
+    fog_bind: wgpu::BindGroup,
     model: Model,
     orbit: Orbit,
     held: Held,
@@ -182,6 +185,8 @@ impl Session {
             vertex_buffer,
             index_buffer,
             texture_binds,
+            fog_bind,
+            fog_buffer: _,
         } = mesh_render::build(
             &device,
             &queue,
@@ -226,6 +231,7 @@ impl Session {
             vertex_buffer,
             index_buffer,
             texture_binds,
+            fog_bind,
             model,
             orbit,
             held: Held::default(),
@@ -330,6 +336,9 @@ impl Session {
             });
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
+            // The asset viewer never fogs: it shows what is on the disc, and fog
+            // is a property of the race the asset sits in, not of the asset.
+            pass.set_bind_group(2, &self.fog_bind, &[]);
             pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 

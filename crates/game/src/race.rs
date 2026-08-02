@@ -309,6 +309,9 @@ pub struct Loaded {
     pub ship_model: Model,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,
+    /// The track's authored `fogCube` volumes, for [`Scene`] to sample per
+    /// frame at the camera.
+    pub fog_volumes: Vec<oag_formats::fog::FogVolume>,
     /// The track's `Skycube`, when it authors one.
     ///
     /// Built from the same blob as [`Self::track_model`] and indexing the same
@@ -572,6 +575,27 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
         track_model
     };
+    // The track's authored fog volumes. Empty for a ribbon build, and empty for
+    // the four circuits that author no `fogCube` at all - both ordinary, and
+    // both meaning the race renders unfogged.
+    let fog_volumes = if options.ribbon {
+        Vec::new()
+    } else {
+        let nodes = oag_formats::vex::nodes(&track_blob).unwrap_or_default();
+        let volumes = oag_formats::fog::volumes(&track_blob, &nodes);
+        report.push(match volumes.first() {
+            None => "the track authors no fogCube; the race is unfogged".to_string(),
+            Some(v) => format!(
+                "fog: {} volume(s), {:.0} units across, {:.0}..{:.0} at the near end",
+                volumes.len(),
+                v.edge,
+                v.near_end.near,
+                v.near_end.far,
+            ),
+        });
+        volumes
+    };
+
     // The ribbon build draws an invented surface rather than the disc's art, so
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
@@ -742,6 +766,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         track_model,
         collision_model,
         sky_model,
+        fog_volumes,
         ship_model,
         visibility,
         flare,
@@ -2134,6 +2159,12 @@ struct Drawable {
     uniforms: wgpu::Buffer,
     uniform_bind: wgpu::BindGroup,
     textures: Vec<wgpu::BindGroup>,
+    /// Bind group 2: the fog this drawable is rendered with.
+    fog_bind: wgpu::BindGroup,
+    /// The buffer behind it. Rewritten each frame from the track's `fogCube`,
+    /// or left at [`mesh_render::Fog::off`] for the sky and for a track that
+    /// authors no fog.
+    fog: wgpu::Buffer,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -2163,6 +2194,8 @@ impl Drawable {
             vertex_buffer: vertices,
             index_buffer: indices,
             texture_binds: textures,
+            fog_bind,
+            fog_buffer,
         } = mesh_render::build(
             device,
             queue,
@@ -2198,6 +2231,8 @@ impl Drawable {
             uniforms,
             uniform_bind,
             textures,
+            fog_bind,
+            fog: fog_buffer,
         })
     }
 
@@ -2244,6 +2279,9 @@ impl Drawable {
         }
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &[]);
+        // Bound once for the whole drawable: fog is per-frame, not per draw call,
+        // and group 2 survives the `set_pipeline` calls below.
+        pass.set_bind_group(2, &self.fog_bind, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
@@ -2324,6 +2362,11 @@ fn anim_phase(tick: u64) -> f32 {
 #[derive(Debug)]
 pub struct Scene {
     track: Drawable,
+    /// The track's authored fog volumes, sampled at the camera each frame.
+    ///
+    /// Empty for a track that authors no `fogCube` - four of the forty - and the
+    /// race then renders unfogged, which is what the original does too.
+    fog_volumes: Vec<oag_formats::fog::FogVolume>,
     /// The track's `Skycube`, drawn camera-centred before anything else.
     ///
     /// `None` when the file authors no sky, which is every Pure track and every
@@ -2400,6 +2443,7 @@ impl Scene {
         anisotropy: Anisotropy,
         visibility: Option<TrackVisibility>,
         anti_aliasing: crate::display::AntiAliasing,
+        fog_volumes: Vec<oag_formats::fog::FogVolume>,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
@@ -2472,6 +2516,7 @@ impl Scene {
             ship,
             collision,
             sky,
+            fog_volumes,
             exhaust,
             sparks,
             depth: depth_texture(device, size, sample_count),
@@ -2542,6 +2587,29 @@ impl Scene {
         // animated_textures` exists to test the *inferred* track entries
         // against a capture, and the ship's behaviour is not inferred.
         let track_scroll = if animated_textures { scroll } else { 0.0 };
+        // Fog, sampled where the eye is. `oag_formats::fog::sample` reimplements
+        // `FogCube_Sample`: the camera is transformed into the volume's space,
+        // rejected if outside, and all six parameters interpolated across the
+        // box's local Z. Outside every volume - or on a track with none - this
+        // is `None` and the drawables keep `Fog::off`.
+        //
+        // The sky is deliberately left unfogged. It rides on the camera at a
+        // radius of 18 to 62 units while fog starts at 30 to 250, so fogging it
+        // would drown it in fog colour; the original's sky geometry is authored
+        // `_nolight` and stands in for infinity, which is behind the fog rather
+        // than inside it.
+        let eye = race.camera_position();
+        let fog = oag_formats::fog::sample(&self.fog_volumes, eye.to_array())
+            .map_or_else(mesh_render::Fog::off, |p| {
+                mesh_render::Fog::new(&p, eye.to_array())
+            });
+        for drawable in [Some(&self.track), Some(&self.ship), self.collision.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&fog));
+        }
+
         // The sky rides with the eye. Translating it to the camera is what makes
         // an authored cube tens of units across stand in for a horizon: the
         // camera sits permanently at its centre, so the faces never approach and
@@ -2835,6 +2903,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         ship_model,
         collision_model,
         sky_model,
+        fog_volumes,
         visibility,
         flare,
         noise,
@@ -2906,6 +2975,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         options.anisotropy,
         visibility,
         options.anti_aliasing,
+        fog_volumes,
     )?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
