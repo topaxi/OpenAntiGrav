@@ -272,6 +272,17 @@ pub const FLICKER: (f32, f32) = (0.75, 1.25);
 /// fractions of full opacity.
 pub const ALPHA_FLICKER: (f32, f32) = (200.0 / 255.0, 1.0);
 
+/// The flare quad's on-screen width-to-height ratio: `480 / 272`.
+///
+/// `ExhaustFlare_Draw` writes equal extents, `x = cx +/- half_size` and
+/// `y = cy +/- half_size`, in the post-projection space it submits in, and the
+/// PSP viewport maps a unit of NDC `x` onto 240 pixels against 136 for `y`.
+/// The shipped flare is therefore drawn **1.76x wider than tall on screen**,
+/// and the `128x64` flare texture is authored for exactly that stretch.
+/// Drawing the quad square, which this module did until 2026-08-02, compressed
+/// the art's horizontal lobes and read visibly narrower than the original.
+pub const FLARE_ASPECT: f32 = 480.0 / 272.0;
+
 /// Converts the recovered half-size into world units.
 ///
 /// **This is the one number here that is not the original's.** The original's
@@ -281,18 +292,20 @@ pub const ALPHA_FLICKER: (f32, f32) = (200.0 / 255.0, 1.0);
 /// needs the size in world units, for which no conversion factor exists anywhere
 /// in the executable to read.
 ///
-/// `1.0` is used, i.e. the recovered value is taken as world units directly. The
-/// argument for it is a sanity check rather than a derivation: the recovered
-/// half-size spans roughly `0.75` to `3.1`, and a team hull measures about 13
-/// units nose to tail (`z -6.36..6.54` on Feisar, `docs/formats/pure-status.md`).
-/// That puts the flare at a fifth to a half of hull length, which is the right
-/// order for an exhaust plume. A factor ten either way would be obviously wrong
-/// in a screenshot, and is not.
+/// `2.15`, **measured**, replacing the earlier sanity-check `1.0`
+/// (2026-08-02). Method: two intensity-saturated frames - a live PPSSPP race
+/// at 83 km/h and our capture at 459 km/h - both cameras at their recovered
+/// speed-independent distance, comparing the bloom's visible-core width as a
+/// fraction of the hull's on-screen width (the same `128x64` art on both
+/// sides, so core-to-hull ratios compare quad sizes directly). Original:
+/// `~0.56` hull widths; ours at `1.0`: `~0.26`; ratio `2.15`.
 ///
-/// **Confidence 55.** It is a fitted-looking constant, so it is named, isolated
-/// and scored rather than multiplied into [`HALF_SIZE_GAIN`] where it would
-/// silently corrupt a recovered value.
-pub const HALF_SIZE_TO_WORLD: f32 = 1.0;
+/// **Confidence 65.** Better than the old sanity check but still a fit: the
+/// measurement rides on the visible-core threshold and on our camera's field
+/// of view matching the original's, neither of which is pinned. It stays
+/// named and isolated rather than multiplied into [`HALF_SIZE_GAIN`], where
+/// it would silently corrupt a recovered value.
+pub const HALF_SIZE_TO_WORLD: f32 = 2.15;
 
 /// Per-frame state of one ship's exhaust.
 ///
@@ -606,27 +619,26 @@ impl Exhaust {
         out
     }
 
-    /// The flare's vertices, innermost layer first.
+    /// The flare's vertices: **one** quad, as `ExhaustFlare_Draw` draws it.
     ///
     /// `nozzle` is the `engine_flare` locator in world space; `right` and `up`
-    /// come from the camera, which is what makes each quad face the viewer.
-    /// Layers at zero opacity are still emitted, so the vertex count per ship is
-    /// constant and the buffer never needs resizing - the additive blend makes a
-    /// zero-alpha quad free.
+    /// come from the camera, which is what makes the quad face the viewer. The
+    /// `right` extent is stretched by [`FLARE_ASPECT`], reproducing the
+    /// original's post-projection square rendering 1.76x wider than tall
+    /// through the PSP viewport.
     ///
-    /// Outer layers are drawn larger, which is what makes three coincident quads
-    /// read as a plume rather than one brighter quad.
+    /// The colour is white with the flickered alpha and nothing else - all four
+    /// of the original's vertices take the single colour at `flare+0xc8`. The
+    /// three staggered layer ramps do **not** touch the flare; they are the
+    /// ribbon's per-layer colours, and an earlier version of this module drew
+    /// three concentric flare quads from them, which was an invention. The
+    /// flare's intensity response is entirely in its *size*
+    /// (`(intensity * 0.6 + 0.4) * 2.5`), so an idle engine shows a small
+    /// glow rather than nothing - as the original does on the start line.
     #[must_use]
     pub fn vertices(&self, nozzle: Vec3, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
-        let alphas = self.layer_alphas();
-        let mut out = Vec::with_capacity(LAYERS * 6);
-        for (n, layer_alpha) in alphas.iter().enumerate() {
-            let scale = 1.0 + n as f32 * 0.5;
-            let half = self.half_size * scale;
-            let alpha = layer_alpha * self.alpha;
-            out.extend_from_slice(&quad(nozzle, right * half, up * half, alpha));
-        }
-        out
+        let half = self.half_size;
+        quad(nozzle, right * (half * FLARE_ASPECT), up * half, self.alpha).to_vec()
     }
 }
 
@@ -754,12 +766,11 @@ pub const TRAIL_BLEND: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
-/// The maximum vertices [`Pipeline`]'s buffer holds: one ship's worth of layers.
+/// The maximum vertices [`Pipeline`]'s buffer holds: the flare's one quad.
 ///
-/// Sized as a constant rather than grown on demand because
-/// [`Exhaust::vertices`] emits a fixed count every frame - zero-opacity layers
-/// included, precisely so this never has to resize.
-pub const MAX_VERTICES: usize = LAYERS * 6;
+/// One, not one per layer: the three staggered ramps are the ribbon's, and
+/// `ExhaustFlare_Draw` writes exactly four vertices sharing one colour.
+pub const MAX_VERTICES: usize = 6;
 
 /// The ribbon's vertex budget: three layers of `TRAIL_SAMPLES - 1` segments,
 /// each a four-quad diamond tube.
@@ -1156,11 +1167,10 @@ impl FlareTexture {
 
 /// Six vertices - two triangles - for one camera-facing quad.
 ///
-/// Wound as an explicit triangle list rather than a strip: the exhaust shares a
-/// pass and a pipeline with nothing else, and a list means the layers concatenate
-/// into one buffer with no degenerate joining vertices between them.
+/// Wound as an explicit triangle list rather than a strip, matching how the
+/// rest of this module fills its buffers.
 ///
-/// The colour's alpha carries the layer's opacity, which the additive blend then
+/// The colour's alpha carries the flicker, which the additive blend then
 /// weights by - `src.rgb * src.a + dst.rgb`, recovered from
 /// `ExhaustFlare_BuildDisplayList`.
 fn quad(centre: Vec3, right: Vec3, up: Vec3, alpha: f32) -> [GpuVertex; 6] {
@@ -1298,13 +1308,36 @@ mod tests {
         assert_eq!(e.intensity(), 0.0);
     }
 
-    /// A cold engine draws nothing, however wide the flicker makes the quad.
+    /// An idle engine draws a small glow, not nothing.
+    ///
+    /// The flare's intensity response is entirely in its size - the colour is
+    /// white at the flickered alpha regardless - so at intensity 0 the quad
+    /// runs at `0.4` of its saturated base. The original shows exactly this on
+    /// the start line before the countdown ends. (The *ribbon* still vanishes
+    /// cold: the layer ramps are its colours.)
     #[test]
-    fn a_cold_engine_is_fully_transparent() {
-        let e = Exhaust::new();
+    fn an_idle_engine_glows_small_rather_than_vanishing() {
+        let mut e = Exhaust::new();
+        let mut r = rng();
         assert_eq!(e.layer_alphas(), [0.0, 0.0, 0.0]);
-        let v = e.vertices(Vec3::ZERO, Vec3::X, Vec3::Y);
-        assert!(v.iter().all(|v| v.colour[3] == 0.0));
+        e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+        assert!(e.alpha() >= ALPHA_FLICKER.0 - 1e-6);
+        let idle = e.half_size();
+        assert!(idle > 0.0);
+
+        // Saturate and compare: the size ratio is the recovered 0.4 base
+        // against the full 1.0, within the flicker's spread.
+        for _ in 0..600 {
+            e.advance(SUBSTEP_DT, 100.0, 0.0, &mut r);
+        }
+        let hot = e.half_size();
+        let ratio = idle / hot;
+        let bound = (HALF_SIZE_BASE / (HALF_SIZE_SPAN + HALF_SIZE_BASE))
+            * (FLICKER.1 / FLICKER.0).max(FLICKER.0 / FLICKER.1);
+        assert!(
+            ratio < bound + 1e-3,
+            "idle {idle} vs hot {hot}: ratio {ratio} above {bound}"
+        );
     }
 
     /// `snap` puts a thrusting craft straight at full intensity, and does not
@@ -1349,9 +1382,9 @@ mod tests {
                 e.alpha()
             );
         }
-        // At full intensity the unflickered half-size is 2.5, so the flicker
-        // bounds it by 0.75 and 1.25 of that.
-        let steady = HALF_SIZE_GAIN;
+        // At full intensity the unflickered half-size is 2.5 times the world
+        // conversion, so the flicker bounds it by 0.75 and 1.25 of that.
+        let steady = HALF_SIZE_GAIN * HALF_SIZE_TO_WORLD;
         assert!(
             e.half_size() >= steady * FLICKER.0 - 1e-3
                 && e.half_size() <= steady * FLICKER.1 + 1e-3,
@@ -1374,7 +1407,7 @@ mod tests {
         assert!(e.half_size() > steady, "{} vs {steady}", e.half_size());
     }
 
-    /// Every layer is emitted every frame, so the vertex count never changes.
+    /// The flare is one quad, emitted every frame, so the count never changes.
     #[test]
     fn the_vertex_count_is_constant() {
         let mut e = Exhaust::new();
@@ -1383,25 +1416,33 @@ mod tests {
         for _ in 0..300 {
             e.advance(1.0 / 60.0, 100.0, 200.0, &mut r);
         }
-        assert_eq!(cold, LAYERS * 6);
+        assert_eq!(cold, MAX_VERTICES);
         assert_eq!(e.vertices(Vec3::ZERO, Vec3::X, Vec3::Y).len(), cold);
     }
 
-    /// Outer layers are drawn larger, which is what makes three quads a plume.
+    /// The flare renders wider than tall by the PSP viewport's 480:272.
+    ///
+    /// Equal post-projection extents through a 480x272 viewport is the
+    /// original's own stretch; a square flare - which this module drew at
+    /// first - compresses the wide-authored `128x64` art and reads visibly
+    /// narrower than the running game.
     #[test]
-    fn outer_layers_are_larger_than_inner_ones() {
+    fn the_flare_is_wider_than_tall_by_the_viewport_aspect() {
         let mut e = Exhaust::new();
         let mut r = rng();
         for _ in 0..600 {
             e.advance(1.0 / 60.0, 100.0, 200.0, &mut r);
         }
         let v = e.vertices(Vec3::ZERO, Vec3::X, Vec3::Y);
-        let width = |layer: usize| {
-            let base = layer * 6;
-            (v[base + 1].position[0] - v[base].position[0]).abs()
-        };
-        assert!(width(0) < width(1), "{} vs {}", width(0), width(1));
-        assert!(width(1) < width(2), "{} vs {}", width(1), width(2));
+        let width = v.iter().map(|v| v.position[0]).fold(f32::MIN, f32::max)
+            - v.iter().map(|v| v.position[0]).fold(f32::MAX, f32::min);
+        let height = v.iter().map(|v| v.position[1]).fold(f32::MIN, f32::max)
+            - v.iter().map(|v| v.position[1]).fold(f32::MAX, f32::min);
+        assert!(
+            (width / height - FLARE_ASPECT).abs() < 1e-5,
+            "aspect {} vs {FLARE_ASPECT}",
+            width / height
+        );
     }
 
     /// The quad is built from the camera basis, so it faces the viewer.

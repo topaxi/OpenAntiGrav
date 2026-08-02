@@ -156,6 +156,19 @@ format, which is why the confidence is 90 rather than 75:
 The quad is rebuilt from scratch every draw. **There is no history buffer here** -
 the flare is a nozzle sprite, and the ribbon is the separate `Trail` class.
 
+**The equal `+/- half_size` extents do not mean a square on screen.** The quad
+is submitted in post-projection space, and the PSP viewport maps a unit of `x`
+onto 240 pixels against 136 for `y`, so the flare renders `480/272 = 1.76x`
+wider than tall - which is also the aspect the `128x64` flare texture is
+authored for. A reimplementation that draws the quad square compresses the
+art's horizontal lobes and reads visibly narrower than the running game
+(observed against a live capture, 2026-08-02; `oag_render::exhaust` carries
+the stretch as `FLARE_ASPECT`). All four vertices take the **single** colour
+at `self+0xc8` - white, flickered alpha - so the flare has no per-layer
+structure at all; the three staggered ramps belong to the `Trail` below, and
+mapping them onto three concentric flare quads (an early reading this project
+implemented) is an invention with no counterpart in the function.
+
 ### The blend state, from the display list
 
 `0x08904c18` builds the 0x200-byte display list at `self+0x180`:
