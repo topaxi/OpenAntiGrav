@@ -230,6 +230,15 @@ pub struct Options {
     /// Whether ship and track models draw every child of an authored
     /// `LodGroup`, or only the higher-detail first one. See [`mesh::Lod`].
     pub lod: mesh::Lod,
+    /// Put the craft here instead of on its grid slot, facing `yaw` radians off
+    /// the track's own direction at that point.
+    ///
+    /// **A capture aid, not a spawn.** See
+    /// [`oag_gameplay::spawn::Pose::from_position_on_sample`]: the point is that
+    /// two circuits, or a frame of ours and a frame of the original, can be
+    /// photographed from the same place instead of by running the same number of
+    /// ticks and hoping. `None` spawns normally.
+    pub pose: Option<(Vec3, f32)>,
 }
 
 impl Default for Options {
@@ -243,6 +252,7 @@ impl Default for Options {
             ribbon: false,
             collision: false,
             lod: mesh::Lod::Both,
+            pose: None,
         }
     }
 }
@@ -312,6 +322,9 @@ pub struct Setup {
     /// belong to the simulation half rather than to [`Loaded`], because a
     /// headless race has to be able to trigger a pad without a GPU.
     pub speedup_pads: Vec<oag_formats::pads::PadVolume>,
+    /// Where [`Options::pose`] asked for the craft to start, already resolved
+    /// against the spline. `None` uses the ordinary spawn.
+    pub pose_override: Option<Pose>,
 }
 
 /// A [`Setup`] plus the geometry to draw it with.
@@ -869,6 +882,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ),
     }
 
+    // Resolved here rather than in `Race::start` because the spline is what
+    // supplies the attitude, and `load` is where the spline is.
+    let pose_override = options.pose.and_then(|(position, yaw)| {
+        let (_, sample, distance) = spline.nearest(position)?;
+        report.push(format!(
+            "pose override: {position:?} yaw {:.1} deg, attitude from the spline sample \
+             {distance:.1} units away",
+            yaw.to_degrees()
+        ));
+        Some(Pose::from_position_on_sample(sample, position, yaw))
+    });
+
     Ok(Loaded {
         setup: Setup {
             mode: options.mode,
@@ -884,6 +909,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             collision_fx,
             speedup_pads,
             class_gravity_scale,
+            pose_override,
         },
         hud,
         track_model,
@@ -1560,6 +1586,7 @@ impl Race {
             collision_fx,
             speedup_pads,
             class_gravity_scale,
+            pose_override,
             ..
         } = setup;
 
@@ -1574,7 +1601,12 @@ impl Race {
         // this is what the bar reads all race, and what Zone's perfect-zone
         // recharge clamps back up to.
         ship.shield = handling.dimensions.shield;
-        if let Some(pose) = spawn_pose(&spline, start_position.as_ref(), &collision, &handling) {
+        // The override wins outright rather than being an offset from the grid
+        // slot: it exists to put the craft at a position read off somewhere
+        // else, and anything added to that would make the two disagree.
+        if let Some(pose) = pose_override
+            .or_else(|| spawn_pose(&spline, start_position.as_ref(), &collision, &handling))
+        {
             ship.place_at(pose);
         }
         world.ship_count = 1;
@@ -3770,6 +3802,9 @@ mod tests {
             // A synthetic track authors no pads, which is also what every Pure
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
+            // These tests run on a synthetic straight and want the ordinary
+            // spawn; `--pose` is a capture aid with nothing to say here.
+            pose_override: None,
             // The identity, so every assertion below is about the force law and
             // not about a scale. This is also what a race gets when the
             // engine-wide file is unreadable.
