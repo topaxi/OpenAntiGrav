@@ -44,7 +44,7 @@
 //! alone, and [`parse`] does not look for it. [`global_from_blob`] reads it.
 //!
 //! Only the parts this project has a consumer for are decoded out of `<Global>`:
-//! `<Zone>` and `<GlobalClass><SpeedupPads/></GlobalClass>`. The rest is named on
+//! `<Zone>`, and `<SpeedupPads>` and `<GravityMul>` under `<GlobalClass>`. The rest is named on
 //! [`Global`] and in `docs/ghidra/functions/psp-pulse/engine.md`, and can be added
 //! when something needs it.
 //!
@@ -491,6 +491,60 @@ impl SpeedupPads {
     }
 }
 
+/// The per-speed-class gravity scale. `<GravityMul airborne/>`.
+///
+/// Sits beside [`SpeedupPads`] under `<GlobalClass>`, and
+/// `Xml_ReadGlobalSettings` (`0x0883a970`) stores it verbatim into
+/// `g_class_gravity_scale` (`0x08ab0dcc`), indexed by `g_handling_parse_class`.
+/// Confidence **90**.
+///
+/// # The attribute is named `airborne` and it scales the *grounded* term
+///
+/// This is the one thing about this element worth reading twice, and it was
+/// settled instruction by instruction rather than inferred. The table has exactly
+/// three references: this write, and two reads in `Ship_UpdateCraft`'s gravity
+/// term at `0x08849b40`/`0x08849b48`. That term builds four VFPU pairs and
+/// multiplies them together:
+///
+/// ```text
+/// C600 = (class+0xf8, class+0xfc) = (normal_gravity, flight_gravity)
+/// C610 = (g_class_gravity_scale[class], 1.0)      ; viim.s S611, 1
+/// C620 = (mass, mass)
+/// C630 = (craft+0x2b0, 1 - craft+0x2b0)           ; vocp.s S631, S630
+/// worldForce.y += -(C600 * C610 * C620 * C630).x + .y
+/// ```
+///
+/// Lane 0 carries `normal_gravity`, is multiplied by `grounded`, **and is the
+/// lane the scale lands on**. Lane 1 - the airborne one - is multiplied by a
+/// literal `1.0`. So despite the attribute's name, this scales how heavy a craft
+/// is **on the ground**, and the air term is unscaled.
+///
+/// The two class-block offsets are not read off this page's guess either:
+/// `HandlingXml_ParsePhysical` (`0x08838f50`) stores `normal_gravity` to `+0xf8`
+/// and `flight_gravity` to `+0xfc`, with a `0x80` stride per class that matches
+/// the `sll a0, a0, 0x7` at the gravity site.
+///
+/// Whether "airborne" describes an intent the code does not implement, or a
+/// renaming nobody propagated, is **not** answered here. What is established is
+/// which term the number reaches.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct GravityMul {
+    /// The multiplier on `<Physical normal_gravity>`, despite this name.
+    ///
+    /// See the type's docs: it rides the grounded lane of the gravity term.
+    pub airborne: f32,
+}
+
+impl GravityMul {
+    const ELEMENT: &'static str = "GravityMul";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        Ok(Self {
+            airborne: number(node, Self::ELEMENT, "airborne")?,
+        })
+    }
+}
+
 /// The engine-wide `<Global>` block, out of [`GLOBAL_ENTRY`].
 ///
 /// Only the parts this project has a consumer for are decoded. `<Special>`,
@@ -500,20 +554,19 @@ impl SpeedupPads {
 /// in `docs/ghidra/functions/psp-pulse/engine.md` and can be added when something
 /// needs them. Two are worth knowing about because they touch code that exists:
 ///
-/// - `<GravityMul airborne>` fills `g_class_gravity_scale`, which is
-///   `oag_physics::forces::Environment::class_gravity_scale` - today an input
-///   defaulting to the identity with its table "not read". It **is** readable,
-///   from here, and decoding it would change how every ship falls, so it is left
-///   for a change that can carry that on its own.
 /// - `<Special speedpad_jump>` fills `0x08b36bec`, the constant on the one branch
 ///   of the boost this project deliberately does not implement - see the
 ///   speed-pad term in `oag_physics::forces`.
+/// - `<WeaponPad>` fills two more per-class tables and has no consumer here,
+///   because nothing hands out a weapon yet.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Global {
     /// `<Zone/>`.
     pub zone: Zone,
     /// `<GlobalClass><SpeedupPads/></GlobalClass>`, indexed by [`SpeedClass`].
     pub speedup_pads: [SpeedupPads; 4],
+    /// `<GlobalClass><GravityMul/></GlobalClass>`, indexed by [`SpeedClass`].
+    pub gravity_mul: [GravityMul; 4],
 }
 
 impl Global {
@@ -521,6 +574,12 @@ impl Global {
     #[must_use]
     pub fn speedup_pads(&self, class: SpeedClass) -> SpeedupPads {
         self.speedup_pads[class as usize]
+    }
+
+    /// The gravity scale for one class.
+    #[must_use]
+    pub fn gravity_mul(&self, class: SpeedClass) -> GravityMul {
+        self.gravity_mul[class as usize]
     }
 }
 
@@ -910,9 +969,11 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
     let Ok(global) = child(handling, "Global") else {
         return Ok(None);
     };
+    let (speedup_pads, gravity_mul) = global_classes(global)?;
     Ok(Some(Global {
         zone: Zone::from_node(child(global, Zone::ELEMENT)?)?,
-        speedup_pads: global_classes(global)?,
+        speedup_pads,
+        gravity_mul,
     }))
 }
 
@@ -939,9 +1000,9 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
 /// **This holds only while `VECTOR` is first.** Authored last it would corrupt
 /// `PHANTOM` in the original and not here, which is a difference worth knowing
 /// about rather than one worth emulating.
-fn global_classes(global: &Node) -> Result<[SpeedupPads; 4]> {
+fn global_classes(global: &Node) -> Result<([SpeedupPads; 4], [GravityMul; 4])> {
     const ELEMENT: &str = "GlobalClass";
-    let mut found: [Option<SpeedupPads>; 4] = [None; 4];
+    let mut found: [Option<(SpeedupPads, GravityMul)>; 4] = [None; 4];
 
     for node in global.children_named(ELEMENT) {
         let name = node.value("name").ok_or(Error::MissingAttribute {
@@ -956,7 +1017,10 @@ fn global_classes(global: &Node) -> Result<[SpeedupPads; 4]> {
         if slot.is_some() {
             return Err(Error::DuplicateGlobalClass { class });
         }
-        *slot = Some(SpeedupPads::from_node(child(node, SpeedupPads::ELEMENT)?)?);
+        *slot = Some((
+            SpeedupPads::from_node(child(node, SpeedupPads::ELEMENT)?)?,
+            GravityMul::from_node(child(node, GravityMul::ELEMENT)?)?,
+        ));
     }
 
     for class in SpeedClass::ALL {
@@ -965,7 +1029,8 @@ fn global_classes(global: &Node) -> Result<[SpeedupPads; 4]> {
         }
     }
 
-    Ok(found.map(|pads| pads.expect("every slot filled above")))
+    let found = found.map(|block| block.expect("every slot filled above"));
+    Ok((found.map(|(pads, _)| pads), found.map(|(_, mul)| mul)))
 }
 
 /// [`parse_global`] over raw archive bytes, expanding them if they need it.
@@ -1414,7 +1479,7 @@ mod tests {
                 format!(
                     r#"<GlobalClass name="{name}"><SpeedupPads amount="{n}" time="{}"/>"#,
                     n * 10
-                ) + r#"<GravityMul airborne="99"/></GlobalClass>"#
+                ) + &format!(r#"<GravityMul airborne="{}"/></GlobalClass>"#, n * 100)
             })
             .collect();
         format!(
@@ -1442,6 +1507,14 @@ mod tests {
                 SpeedupPads {
                     amount: n,
                     time: n * 10.0
+                }
+            );
+            // Read from the same block, so a reader that took the pads from one
+            // `<GlobalClass>` and the gravity from another would show up here.
+            assert_eq!(
+                global.gravity_mul(class),
+                GravityMul {
+                    airborne: n * 100.0
                 }
             );
         }
@@ -1506,6 +1579,14 @@ mod tests {
             parse_global(&no_pads),
             Err(Error::MissingElement {
                 element: "SpeedupPads"
+            })
+        );
+
+        let no_gravity = global_document(&FOUR).replace(r#"<GravityMul airborne="100"/>"#, "");
+        assert_eq!(
+            parse_global(&no_gravity),
+            Err(Error::MissingElement {
+                element: "GravityMul"
             })
         );
     }

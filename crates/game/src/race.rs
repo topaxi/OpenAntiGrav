@@ -276,6 +276,13 @@ pub struct Setup {
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.
     pub handling: Handling,
+    /// The per-class scale on grounded gravity, from `<GlobalClass><GravityMul/>`.
+    ///
+    /// `1.0` when the engine-wide file could not be read, which leaves gravity
+    /// exactly as it was before this was decoded. On the sim half deliberately:
+    /// it reaches `oag_physics::forces::Environment` every tick and a headless
+    /// race must fall the same way a drawn one does.
+    pub class_gravity_scale: f32,
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
     /// The `engine_flare` locator, in the ship model's own space.
@@ -572,6 +579,27 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once
     // and this is not the place it happens, and `<SpeedupPads>` is not one of them.
     let handling = handling_for(&stats, options.class, pad_tunables);
+    // The per-class scale on grounded gravity, `g_class_gravity_scale`. **The
+    // fallback is the identity, not zero**, unlike the pad tunables above: a
+    // missing boost is a missing feature, but a zero here would leave a grounded
+    // craft weightless, which is not a degraded race - it is a broken one.
+    //
+    // Named `airborne` in the XML and applied to the *grounded* term; see
+    // `oag_formats::handling::GravityMul`, which reads the VFPU pair chain out.
+    let class_gravity_scale = match global {
+        Some(global) => {
+            let scale = global.gravity_mul(to_format_class(options.class)).airborne;
+            report.push(format!(
+                "<GravityMul>: grounded gravity scaled by {scale} for the {:?} class",
+                options.class
+            ));
+            scale
+        }
+        None => {
+            report.push("gravity is unscaled this run".to_string());
+            1.0
+        }
+    };
     let zone = if options.mode == Mode::Zone {
         match global {
             Some(global) => report.push(format!(
@@ -855,6 +883,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             nozzle,
             collision_fx,
             speedup_pads,
+            class_gravity_scale,
         },
         hud,
         track_model,
@@ -1419,6 +1448,8 @@ pub struct Race {
     /// The `Ship Collision Fx` locators in model space - see
     /// [`Setup::collision_fx`].
     collision_fx: Vec<Vec3>,
+    /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
+    class_gravity_scale: f32,
     /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
     speedup_pads: Vec<oag_formats::pads::PadVolume>,
     /// Distance from the ship to each pad, one entry per pad, in track units.
@@ -1528,6 +1559,7 @@ impl Race {
             nozzle,
             collision_fx,
             speedup_pads,
+            class_gravity_scale,
             ..
         } = setup;
 
@@ -1583,6 +1615,7 @@ impl Race {
             // distance nothing has computed yet.
             pad_distance: vec![0.0; speedup_pads.len()],
             speedup_pads,
+            class_gravity_scale,
             pad_current: None,
             pad_previous_position: None,
             boost_kick: 0.0,
@@ -1684,6 +1717,7 @@ impl Race {
             track_sample_next,
             auto_speed,
             pad_hit,
+            class_gravity_scale: self.class_gravity_scale,
             ..Environment::default()
         };
         let evaluated = oag_physics::step(
@@ -3736,6 +3770,10 @@ mod tests {
             // A synthetic track authors no pads, which is also what every Pure
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
+            // The identity, so every assertion below is about the force law and
+            // not about a scale. This is also what a race gets when the
+            // engine-wide file is unreadable.
+            class_gravity_scale: 1.0,
         }
     }
 
@@ -3841,6 +3879,52 @@ mod tests {
             0.0,
             "the timer never expired"
         );
+    }
+
+    /// `<GravityMul airborne>` must reach the gravity term, and it must reach the
+    /// **grounded** half of it.
+    ///
+    /// The name says airborne and the VFPU pair chain puts it on the grounded
+    /// lane - see `oag_formats::handling::GravityMul`. So this asserts the
+    /// counter-intuitive half: a heavier scale changes a ship resting on the
+    /// ground, and the identity leaves the term exactly as it was before the
+    /// value was decoded.
+    #[test]
+    fn the_class_gravity_scale_reaches_the_grounded_half_of_gravity() {
+        fn settled_gravity(scale: f32) -> f32 {
+            let mut handling = hulled_handling();
+            // A non-zero `normal_gravity`, or the scale has nothing to multiply.
+            handling.physical.normal_gravity = 10.0;
+            let mut setup = setup_with(
+                handling,
+                vec![plane(1, 0.0, oag_physics::Surface::Floor, 0)],
+            );
+            setup.class_gravity_scale = scale;
+            let mut race = Race::start(setup);
+
+            // Several ticks, not one: gravity reads the *previous* frame's
+            // groundedness, so the first tick sees zero contacts however solidly
+            // the ship is resting on the floor.
+            let mut evaluated = race.tick(&InputSnapshot::default());
+            for _ in 0..20 {
+                evaluated = race.tick(&InputSnapshot::default());
+            }
+            assert!(
+                race.ship().physics.grounded > 0.0,
+                "the ship never found the floor, so the grounded lane is not under test"
+            );
+            evaluated.gravity.y
+        }
+
+        let identity = settled_gravity(1.0);
+        let heavier = settled_gravity(2.0);
+        assert!(identity < 0.0, "gravity must pull down");
+        assert!(
+            heavier < identity,
+            "doubling the scale must pull harder: {heavier} against {identity}"
+        );
+        // And the term is linear in it, which is what a *scale* means.
+        assert!((heavier - identity * 2.0).abs() < 1e-3);
     }
 
     /// The flare and the force must let go together.

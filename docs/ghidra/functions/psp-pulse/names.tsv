@@ -162,7 +162,7 @@
 0x0884d604	function	Body_AddTorqueWorld	74	engine.md
 0x08848dc4	function	Ship_ApplyWeathervaneTorque	74	engine.md
 0x08b36bfc	data	g_handling_parse_class	85	engine.md
-0x08ab0dcc	data	g_class_gravity_scale	78	engine.md
+0x08ab0dcc	data	g_class_gravity_scale	90	engine.md
 
 # Camera: the player-selectable in-race views and the on-disc parameter blocks.
 0x0883c0cc	function	Camera_UpdatePlayerView	88	camera.md

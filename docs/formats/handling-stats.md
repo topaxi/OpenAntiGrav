@@ -388,15 +388,46 @@ not reproduced here, for the reason the next section up gives.
 
 Two consequences worth having in one place:
 
-- **`<GravityMul airborne>` fills `g_class_gravity_scale`**, which is
-  `oag_physics::forces::Environment::class_gravity_scale` - a field whose own docs
-  say the table "was not read" and whose value is the identity awaiting M3. It
-  **is** readable, from here. Left alone deliberately: decoding it changes how
-  every ship falls, and that belongs to a change that can carry the argument on
-  its own rather than riding along with the speed pads.
+- **`<GravityMul airborne>` fills `g_class_gravity_scale`** (`0x08ab0dcc`), which
+  is `oag_physics::forces::Environment::class_gravity_scale`. Decoded, and the
+  table's confidence goes from 78 to **90**: it now has a read writer and two read
+  readers. See the subsection below, because the attribute's name is misleading.
 - **`<Special speedpad_jump>` fills `0x08b36bec`**, the constant on the one branch
   of the boost this project does not implement. See
   `oag_physics::engine::speedup_pad`.
+
+### `<GravityMul airborne>` scales the *grounded* gravity term
+
+The attribute is named `airborne`. It is applied to the term that acts **on the
+ground**, and the airborne term is multiplied by a literal `1.0`.
+
+`0x08ab0dcc` has exactly three references - one write in
+`Xml_ReadGlobalSettings` and two reads in `Ship_UpdateCraft` at
+`0x08849b40`/`0x08849b48` - so there is no second table to confuse it with. The
+gravity term builds four VFPU pairs and multiplies them:
+
+```text
+C600 = (class+0xf8, class+0xfc) = (normal_gravity, flight_gravity)
+C610 = (g_class_gravity_scale[class], 1.0)      ; viim.s S611, 1
+C620 = (mass, mass)
+C630 = (craft+0x2b0, 1 - craft+0x2b0)           ; vocp.s S631, S630
+worldForce.y += -(C600 * C610 * C620 * C630) summed over both lanes
+```
+
+Lane 0 carries `normal_gravity`, is multiplied by the grounded fraction, and is
+the lane the scale lands on. Confidence **90**.
+
+The two class-block offsets are not this page's guess either:
+`HandlingXml_ParsePhysical` (`0x08838f50`) stores `flight_gravity` to `+0xfc`,
+`mass` to `+0xf4`, `normal_gravity` to `+0xf8` and `track_gravity` to `+0x100`,
+with a `0x80` stride per class that matches the `sll a0, a0, 0x7` at the gravity
+site. That independently confirms the `Physical` row in
+[engine.md](../ghidra/functions/psp-pulse/engine.md), which recorded the same
+four offsets, and confirms `track_gravity` takes no part in gravity at all.
+
+Whether "airborne" describes an intent the code does not implement, or a rename
+nobody propagated, is **not** answered. What is established is which term the
+number reaches.
 
 ### There are five `<GlobalClass>` blocks and only four speed classes
 

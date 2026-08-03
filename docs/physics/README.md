@@ -437,6 +437,7 @@ tuning, per the [roadmap](../overview/roadmap.md).
 | Airbrake ramps, slide, lateral force, yaw, sideshift impulse, lateral grip | [`airbrake.rs`](../../crates/physics/src/airbrake.rs) | both |
 | Four accumulators, the fifteen-step term order, and the stale/fresh groundedness split | [`forces.rs`](../../crates/physics/src/forces.rs) | engine.md |
 | The speed-pad boost, step 15: the re-armed timer, the ramp-then-flat force law and its unscaled per-class tunables | [`engine.rs`](../../crates/physics/src/engine.rs) | engine.md, [pads](../ghidra/functions/psp-pulse/pads.md) |
+| The per-class gravity scale, `g_class_gravity_scale`, supplied from the disc rather than defaulted | [`passive.rs`](../../crates/physics/src/passive.rs) | engine.md, [handling stats](../formats/handling-stats.md) |
 | Segment-triangle narrowphase as a plane sign change plus three edge half-space tests | [`collide.rs`](../../crates/physics/src/collide.rs) | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | The magstrip hold: blend ramp, mag-floor probe, two-sample axis blend, reposition, velocity projection and the **kinematic basis rewrite** | [`maglock.rs`](../../crates/physics/src/maglock.rs) | engine.md |
 
@@ -445,16 +446,44 @@ evidence records that the term exists and not how large it is. That is deliberat
 plausible-looking number would be indistinguishable from a recovered one later.
 
 - The engine's `craft+0x294` output multiplier (identity).
-- The per-class gravity scale from the table at `0x08ab0dcc` (identity, and an input
-  rather than a constant, since it belongs to the speed class - the shipped table
-  reads `1.0` for all four, so the identity is also the value).
 
-Two names have left this list. `K2`, the hover target's global scale, was read at
+Three names have left this list. `K2`, the hover target's global scale, was read at
 `0.75`. The grounded **downforce** was read at `track_gravity * mass * grounded`,
 and it was carrying more than its own weight: because the spring's damper is a
 multiplier on the spring magnitude, the missing downforce was also the missing
 pitch damping - see
 [angular-velocity-column.md](angular-velocity-column.md#resolved-the-missing-49-is-the-hover-downforce).
+The third is the per-class gravity scale, read out of
+`<GlobalClass><GravityMul airborne/>` - and **the shipped table is not the
+identity**, which two pages including that one had assumed. See the correction
+below.
+
+### Correction: the per-class gravity scale is not `1.0` for every class
+
+This page used to record that "the shipped table reads `1.0` for all four, so the
+identity is also the value", and
+[angular-velocity-column.md](angular-velocity-column.md) repeats the same
+parenthetical inside a derivation. **Both are wrong.** The table is filled from
+`<GlobalClass><GravityMul airborne/>` in the engine-wide
+`Data\XML\HandlingStats.xml`, the four classes carry four different values, and
+the class the reference captures were taken in is **not** one of the ones holding
+`1.0`. The values themselves stay off this page per
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md).
+
+Two consequences:
+
+- **`angular-velocity-column.md`'s rest-compression derivation needs re-deriving.**
+  It computes `z = (normal_gravity * classScale + track_gravity) / (...)` with
+  `classScale = 1.0` and matches a live probe read to `1 %`. With the real scale
+  the predicted `z` moves, and whether the agreement survives is an open question
+  rather than a settled one. The **live probe read is unaffected** - it was taken
+  off the running original, which was always using the real value - so it is the
+  derivation that has to move, not the measurement.
+- **The measured effect on a race is small.** A headless `--race --hold cross` run
+  on `01_Track` in the class the captures use moves the reported height above the
+  spline by `0.01` units and leaves speed unchanged to two decimal places at every
+  logged tick. So this is not a regression hiding in the fits; it is a term that
+  was being applied at the wrong strength by a modest factor.
 
 **Deliberately not implemented, and why:**
 

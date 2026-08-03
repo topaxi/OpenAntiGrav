@@ -171,8 +171,10 @@ pub struct Physical {
     /// for gravity, per `docs/ghidra/functions/psp-pulse/engine.md`. Keeping the two
     /// equal is the integration layer's job.
     pub mass: f32,
-    /// Gravity along world down while grounded, additionally scaled by a per-class
-    /// factor; see [`crate::forces::Environment::class_gravity_scale`].
+    /// Gravity along world down while grounded, additionally scaled by the
+    /// per-class factor in [`crate::forces::Environment::class_gravity_scale`] -
+    /// which is authored under an attribute named `airborne`, and does not scale
+    /// the airborne term. Class-block offset `+0xf8`.
     pub normal_gravity: f32,
     /// Gravity along the track's own up axis, which is what makes inversions work.
     ///

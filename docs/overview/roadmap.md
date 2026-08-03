@@ -481,6 +481,11 @@ seen from the authoring side.
       unidentified bits: the `speedpad_jump` tilt and the `craft+0x2cc` fade-in.
       The field-of-view kick is an **authored** effect, not a recovered one -
       `[graphics] boost_fov_kick` turns it off.
+- [x] **Per-class gravity.** `<GlobalClass><GravityMul airborne/>` fills
+      `g_class_gravity_scale`, read off the disc rather than defaulted to the
+      identity. Despite the attribute's name it scales the **grounded** term;
+      see [handling stats](../formats/handling-stats.md). This corrected two
+      physics pages that recorded the shipped table as `1.0` for every class.
 - [ ] Weapons and pickups, including `Weapon Pad` `0x3be` - which decodes today
       alongside the speedup pads, but has nothing to hand out
 - [ ] Shield and energy

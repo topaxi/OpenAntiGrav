@@ -303,13 +303,25 @@ pub struct Environment {
     /// `None` is the original's `-1024.0` sentinel at the second record's `+0x40`,
     /// which `AiTrack_UpdateCursor` writes when it has no second sample to report.
     pub track_sample_next: Option<crate::maglock::TrackSample>,
-    /// The per-speed-class scale on `normal_gravity`, from the table at
-    /// `0x08ab0dcc`.
+    /// The per-speed-class scale on `normal_gravity`, `g_class_gravity_scale`
+    /// (`0x08ab0dcc`).
     ///
-    /// **The table's values were not read**, so the identity is the default, and it
-    /// is an input rather than a constant because it belongs to the speed class,
-    /// which this crate does not otherwise know about. Confidence 78 that the table
-    /// exists and is indexed by class; what is in it is a guess awaiting M3.
+    /// **Read off the disc now, not a placeholder.** It is
+    /// `<GlobalClass><GravityMul airborne/>` in the engine-wide
+    /// `Data\XML\HandlingStats.xml`, and the table has one writer and two
+    /// readers, all three read. Confidence **90**.
+    ///
+    /// **The XML attribute is named `airborne` and this scales the *grounded*
+    /// term.** The gravity site's VFPU pair chain puts the table value on the lane
+    /// carrying `normal_gravity * grounded` and a literal `1.0` on the airborne
+    /// lane; see `oag_formats::handling::GravityMul`, which reads the chain out
+    /// instruction by instruction. Do not "fix" this onto `flight_gravity`.
+    ///
+    /// An input rather than something this crate looks up, for the same reason
+    /// [`Self::auto_speed`] is: it belongs to the speed class, and this crate does
+    /// not otherwise know classes exist. The default is the identity, which is
+    /// also what a caller that cannot read the file should pass - a zero here
+    /// leaves a grounded craft weightless.
     pub class_gravity_scale: f32,
     /// The ship's own collider index, so its probes do not hit itself.
     pub self_collider: Option<u32>,

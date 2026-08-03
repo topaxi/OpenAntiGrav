@@ -1589,7 +1589,32 @@ worldForce.y += -( normal_gravity * g_class_gravity_scale[class] * mass * ground
 as a single `vmul.p` pair chain with a source prefix negating both lanes.
 `normal_gravity` applies on the ground and `flight_gravity` in the air, blended
 by the same 0/0.5/1 grounded fraction, and only `normal_gravity` gets the
-per-class scale from `0x08ab0dcc`. `mass` is read from `body+0x374`, not from the
+per-class scale from `0x08ab0dcc`.
+
+The chain was read register by register when the table was decoded, and it is
+worth writing out because it is what settles which lane the scale rides:
+
+```text
+0x08849b48  C600 = (class+0xf8, class+0xfc) = (normal_gravity, flight_gravity)
+0x08849b94  S610 = g_class_gravity_scale[class]
+0x08849b98  S611 = 1.0                          ; viim.s
+0x08849ba0  C620 = (mass, mass)                 ; body+0x374, splatted by vmov.s
+0x08849bac  S630 = craft+0x2b0                  ; the grounded fraction
+0x08849bb8  S631 = 1 - S630                     ; vocp.s, one's complement
+0x08849bb0  vpfxs -X,-Y,-Z,0                    ; negates the next source
+0x08849bb4  C600 *= C610
+0x08849bbc  C600 *= C620
+0x08849bc0  C600 *= C630
+0x08849bc4  worldForce.y += S600 + S601
+```
+
+**The scale lands on lane 0 - the grounded lane - and the airborne lane is
+multiplied by a literal `1.0`**, even though the XML attribute that fills the
+table is named `airborne`. `0x08ab0dcc` has exactly three references in the whole
+binary (this pair of reads and one write in `Xml_ReadGlobalSettings`), so there is
+no adjacent table to have confused it with. Confidence **90**, raised from 78:
+the table now has a read writer and read readers, and the `Physical` offsets it
+indexes against were confirmed independently out of `HandlingXml_ParsePhysical`. `mass` is read from `body+0x374`, not from the
 XML `mass` at `+0xf4`; how the two relate is not determined.
 
 The negation matters and is checkable without trusting the prefix encoding: the
@@ -2145,7 +2170,7 @@ stored**. Same conclusion, now with the location.
 | `0x0884d604` | `Body_AddTorqueWorld` | 74 |
 | `0x08848dc4` | `Ship_ApplyWeathervaneTorque` | 74 |
 | `0x08b36bfc` | `g_handling_parse_class` | 85 |
-| `0x08ab0dcc` | `g_class_gravity_scale` | 78 |
+| `0x08ab0dcc` | `g_class_gravity_scale` | 90 |
 
 ## Cross-platform
 
@@ -2294,6 +2319,14 @@ here and `docs/formats/handling-stats.md` needs to say which is which.
 
 ## History
 
+- 2026-08-03, third pass: **`g_class_gravity_scale` (`0x08ab0dcc`) raised 78 -> 90**
+  and decoded end to end. Its writer is `<GlobalClass><GravityMul airborne/>` and
+  its two readers are the gravity term here, whose `vmul.p` chain is now written
+  out above. The finding worth carrying: **the attribute is named `airborne` and
+  the scale is applied to the grounded term.** Also **corrects two physics pages**
+  which recorded the shipped table as `1.0` for every class - it is not, and
+  `angular-velocity-column.md`'s rest-compression derivation used the wrong scale
+  as a result.
 - 2026-08-03, second pass: **`craft+0x2cc` corrected**. It was going to be
   implemented as a contact ratio at confidence 60; it is an unbounded accumulator
   of seconds since flag `0x200`, and the scale it gates is not ported. Also

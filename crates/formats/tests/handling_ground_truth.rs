@@ -418,6 +418,27 @@ fn the_global_file_carries_a_complete_set_of_speed_pad_tunables() {
             !all_same,
             "{image_name}: every class got the same tunables, so the index is suspect"
         );
+
+        // `<GravityMul>` comes out of the same `<GlobalClass>` blocks. A zero
+        // would leave a grounded craft weightless, and a negative one would push
+        // it off the track, so the sign is worth asserting even though the
+        // magnitude stays off the page.
+        for class in SpeedClass::ALL {
+            assert!(
+                global.gravity_mul(class).airborne > 0.0,
+                "{image_name} {class}: a non-positive gravity scale is not a ship"
+            );
+        }
+        // The finding this decode exists to correct: two physics pages recorded
+        // the table as `1.0` for every class. It is not.
+        let gravity_all_same = SpeedClass::ALL
+            .into_iter()
+            .all(|c| global.gravity_mul(c) == global.gravity_mul(SpeedClass::Venom));
+        assert!(
+            !gravity_all_same,
+            "{image_name}: every class got the same gravity scale, which is what \
+             docs/physics/README.md used to claim and this test exists to refute"
+        );
         checked += 1;
     }
     println!("{checked} release(s) carry a complete <Global> block");

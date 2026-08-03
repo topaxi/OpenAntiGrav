@@ -631,11 +631,24 @@ z = (normal_gravity * classScale + track_gravity)
     / (2 * 0.3 * HOVER_K * (normal_gravity + track_gravity)) = 1.25
 ```
 
-(the per-class scale at `0x08ab0dcc` is `1.0` for all four classes), which is
+(this used `classScale = 1.0`, which is **wrong** - see the correction below), which is
 **17x** more. The damping that was `0.40` at the recovered spacing becomes `6.6`,
 and the `4.9` this page went looking for is the difference. Nothing was fitted:
 `0.1`, `rebound`, `0.3`, `HOVER_K`, `+/-4.5` and the two gravities are all read
 values, and `1.25` follows from them.
+
+> **Correction, 2026-08-03.** The parenthetical above is wrong. `0x08ab0dcc` is
+> `g_class_gravity_scale`, filled from `<GlobalClass><GravityMul airborne/>` in
+> `Data\XML\HandlingStats.xml`, and the four classes carry **four different
+> values** - the class these captures were taken in is not one holding `1.0`. So
+> the `1.25` below was derived with the wrong scale and has to be re-derived. The
+> value itself stays out of this repository per
+> [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md); the arithmetic
+> is reproducible from the reader's own disc. **The live probe read is
+> unaffected** - it came off the running original, which was always using the real
+> scale - so what moves is the prediction, not the measurement, and whether the
+> `1 %` agreement survives is now an open question. See
+> [README.md](README.md#correction-the-per-class-gravity-scale-is-not-10-for-every-class).
 
 **The live probe read is the independent check.** `craft+0x308` measured `2.8878`
 on the start line against a `craft+0x2f0` of `4.125` - `1.237` compressed, `1 %`
