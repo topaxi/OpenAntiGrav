@@ -820,6 +820,52 @@ full, the trail needs 10 ticks of history before it appears at all.**
   ship. So it is scenery and tunnel glow, and the earlier guess that it might be
   part of the ship exhaust is wrong.
 
+### What a boost actually changes, and what this crate is missing
+
+Read out of `Exhaust_Update` (`0x089058b0`) in full, prompted by a report that
+our flare looks too strong while our trail does not react at all. Both halves of
+that report are explained, and only one of them is a bug.
+
+**`boost_timer` (`self+0xb8`) reaches exactly two things.** Nothing else in the
+function reads it:
+
+1. the flare's half-size, `self+0xc4`, and
+2. the reveal of the `<Team>boost.vex` plume.
+
+**The `Trail` gets nothing from a boost.** Its two per-frame parameters and all
+three layer colours come from `intensity` (`self+0xbc`) alone:
+
+```c
+trail->0x7c = intensity * 0.35 + 0.2;          // ring+0x1c, the width scale
+trail->0x80 = intensity * 0.5  * 0.9;          // ring+0x20, the stencil ramp base
+a0 = clamp(intensity          * 0.7, 0, 1);    // layer 0 colour multiplier
+a1 = clamp((intensity - 0.25) * 1.33 * 0.7, 0, 1);
+a2 = clamp((intensity - 0.5)  * 2.0  * 0.7, 0, 1);
+```
+
+So **the ribbon not reacting to a pad is faithful**, and at racing speed
+`intensity` is already saturated, so it cannot react. Confidence **90** - an
+exhaustive read of the one function that writes these fields.
+
+**The size law is confirmed exactly**, which retires any doubt about the four
+constants `oag_render::exhaust` carries:
+
+```c
+self->0xc4 = (intensity * 0.6 + 0.4) * 2.5 + boost_timer * 8.0;
+```
+
+At `intensity = 1` that is `2.5` at rest and `8.9` at the pad's armed `0.8`, so
+the original's flare really is **3.56x** wider during a boost. The ratio is the
+original's; only `oag_render::exhaust::HALF_SIZE_TO_WORLD` is ours, and it was
+fitted on a *resting* frame.
+
+**The conclusion for the renderer.** The original spends a boost across two
+visuals - a much bigger flare *and* an additive plume - and this crate draws only
+the first. So the flare carries the whole effect, which is exactly the reported
+symptom. **Detuning `HALF_SIZE_TO_WORLD` would be the wrong fix**: it would break
+the resting case to compensate for a mesh that is not being drawn. The fix is to
+draw `<Team>boost.vex`.
+
 ### The boost visual, and two mount points
 
 `Ship.vex` carries two `Transform` locators named `boost_flare` and
@@ -830,6 +876,22 @@ that it composites additively, agreeing with the blend function recovered from
 `ExhaustFlare_BuildDisplayList`. The name pairing is strong but nothing traced
 the locators to the meshes at instruction level, so treat the mounting as
 **confidence 60**.
+
+**Raised to 75 by an independent observation.** A player describing the original
+from memory, without having seen any of this, reported the boost as "expanding to
+almost the width of the ship, flaring along the wings at the back" and asked
+whether more than one trail was being drawn. Two wing-spread additive flares is
+what two locators and two meshes predict, and it is *not* what the single
+camera-facing flare quad or the single-ribbon `Trail` would look like. That is a
+behavioural prediction of the asset structure being confirmed from the other
+direction, which is worth more than another read of the same names - but it is
+still not instruction-level, so it stays below 85.
+
+`ExhaustFlare_Init` (`0x08905308`) is where it is loaded, and the path really is
+built per team: it formats `"%s\%sboost.vex"` (`0x08a84ccc`) and calls
+`Vex_LoadModel(child, path, 0x4d000000, 0xfdb2, 0x3e9, 0)`, then immediately
+**clears the visibility bit** (`+0x2c &= ~4`), so the plume is hidden from birth
+and only `Exhaust_Update` ever shows it.
 
 `shipboost.vex` and `shipshield.vex` also each carry three class-`0x000` nodes
 named `ViewCompass`, `UniversalManip` and `UniversalManip1`, with zero-byte

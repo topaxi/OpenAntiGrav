@@ -274,8 +274,13 @@ pub const BOOST_GATE: f32 = 0.2;
 /// look. Tying the two together is the obvious-looking mistake and the original
 /// does not do it - see `oag_game::race`'s pad trigger.
 ///
-/// At [`BOOST_GATE`] the `<Team>boost.vex` plume is revealed, so that model shows
-/// for the first `0.6 s` of these `0.8`.
+/// **This is only half of what a boost changes.** `boost_timer` reaches exactly
+/// two things in `Exhaust_Update`: this size, and the reveal of the additive
+/// `<Team>boost.vex` plume once the timer passes [`BOOST_GATE`]. The plume then
+/// runs on **its own** 1.5-second timer (`self+0x88`, reset at the reveal), so it
+/// long outlives the `0.8` here. This crate does not draw it, which means the
+/// flare is carrying the whole of a boost's visual weight where the original
+/// splits it in two - see this module's docs.
 pub const BOOST_SECONDS: f32 = 0.8;
 
 /// Intensity gain per second while the engine is on.

@@ -216,9 +216,11 @@ Two more details a reader will otherwise trip over:
   places. The decay `boost_timer = max(0, boost_timer - dt)` lives in
   `Exhaust_UpdateEngineSound` (`0x08904cf4`). The sound function owning the
   visual's timer looks like a mistake and is not one.
-- `<Team>boost.vex` is revealed while the timer is above `0.2`
-  ([exhaust.md](exhaust.md)), so the plume shows for the first `0.6` of the
-  `0.8` seconds.
+- `<Team>boost.vex` is revealed **once** the timer passes `0.2`, and then runs on
+  a **separate** 1.5-second timer (`flare+0x88`, zeroed at the reveal), so the
+  plume long outlives this `0.8`. The reveal is also latched on its own visibility
+  bit, so re-entering a pad while the plume is up does not extend it. See
+  [exhaust.md](exhaust.md).
 
 ### The sound, and a mode constant that is not Zone's
 
