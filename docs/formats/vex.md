@@ -1059,6 +1059,9 @@ That is good news for M4.
 | `0x08883794` | `World_LoadTrack` | 85 |
 | `0x08843258` | `Ship_LoadModel` | 87 |
 
+`Ship_LoadModel` picks between `Ship.vex` and `Zone.vex` on the race-mode
+selector - see [zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md#the-ship-model-is-not-the-players-own-hull).
+
 Applied, from
 [names.tsv](../ghidra/functions/psp-pulse/names.tsv). See
 [ADR-0005](../architecture/adr/0005-ghidra-conventions.md).

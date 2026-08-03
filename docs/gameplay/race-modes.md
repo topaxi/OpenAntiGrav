@@ -79,6 +79,15 @@ What runs:
 - **Score** rises by one every tick, plus 500 for a zone completed without
   touching anything, which also restores shield.
 
+### The ship model is fixed, the livery is not
+
+`Ship_LoadModel` loads `<Team>\Zone.vex` instead of `<Team>\Ship.vex` under the
+same selector, and every team's `Zone.vex` decodes to the same hull - see
+[zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md#the-ship-model-is-not-the-players-own-hull).
+Confidence 84. `oag_game::race::ship_entry_name` picks the model this way, and
+the menu greys the TEAM row while MODE is Zone so a player is not offered a
+choice that no longer changes the shape drawn - only the colour it is drawn in.
+
 ### Zone's numbers are not in this repository
 
 `start`, `increment` and `recharge` are read at runtime from

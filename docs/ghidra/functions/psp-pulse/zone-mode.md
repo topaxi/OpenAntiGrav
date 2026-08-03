@@ -27,6 +27,42 @@ the factory uses** to pick the constructor that loads the Zone HUD. That closes
 it: the four-corner hover variant, the disabled brakes and the auto-speed law all
 belong to Zone.
 
+## The ship model is not the player's own hull
+
+`Ship_LoadModel` (`0x08843258`) switches on `local_38`, set to `DAT_08b31048`
+when `DAT_08ab07e3 == 0` and to `0` otherwise - **the same expression** this
+page's identification section already fixes at confidence 84. Every other
+case builds the ordinary `%s\%s\%s.vex` or `%s\Ship.vex` path, but:
+
+```c
+case 6:
+    local_40 = (char *)0x0;
+    FUN_08972550(auStack_100, s__s_Zone_vex_08a7ba4c,
+                 *(undefined4 *)(*(int *)(param_1 + 0x370) + 0x94));
+    break;
+```
+
+`case 6` builds `%s\Zone.vex` instead, and the same `local_38 == 6` guard
+further down swaps `%s\%swreck.vex` for `%s\zonewreck.vex`. Confidence **84**
+for the branch itself: decompilation only, capped by the
+[confidence rubric](../../../reverse-engineering/confidence-rubric.md), but
+using the identical selector this page already verified end-to-end rather than
+a second inference.
+
+**The model this loads is not a per-team hull.** Rendered with `oag-view
+--mesh` against the PSP disc, `AG_Systems\Zone.vex`, `Assegai\Zone.vex` and
+`Feisar\Zone.vex` all decode to the same 8 meshes / 1213 vertices / 1149
+triangles / radius 6.97, where their three `Ship.vex` files disagree on every
+one of those numbers. `oag-wad list`'s directory sizes agree across all eight
+shipped teams too: every `Zone.vex` is exactly 76944 bytes, where `Ship.vex`
+ranges from 74112 to 80080. So Zone mode flies one shared hull regardless of
+team - the per-team folder only supplies that hull's livery, the same way
+`Ship.vex`'s livery differs from team to team on the same underlying rig
+elsewhere in the format. Not checked against the PS2 disc (a different WAD
+layout, `WADS2.WAD` rather than `Data.wad`), so this is PSP-only for now.
+
+Implemented in [`oag_game::race::ship_entry_name`](../../../../crates/game/src/race.rs).
+
 ## A speed pad is worth 100 points
 
 `Zone_Update` (`0x0882f5cc`) consumes a flag that only `Ship_ApplySpeedupPad`

@@ -176,9 +176,18 @@ pub const SPARKS_SEED: u64 = 0x5_9a_2b_00;
 ///
 /// Assembled the way the loader assembles it, with backslashes, which is what the
 /// name hash needs.
+///
+/// A [`Mode::Zone`] run loads `Zone.vex` instead of `Ship.vex`. That is not a
+/// livery swap of convenience: `Ship_LoadModel` (`0x08843258`) switches on the
+/// same `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established
+/// as the Zone selector (see `docs/ghidra/functions/psp-pulse/zone-mode.md`),
+/// and only that case builds the `%s\Zone.vex` path. Every team's `Zone.vex`
+/// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
+/// itself is shared - only the livery painted on it still varies by team.
 #[must_use]
-pub fn ship_entry_name(team: &str) -> String {
-    format!(r"Data\Ships\{team}\Ship.vex")
+pub fn ship_entry_name(team: &str, mode: Mode) -> String {
+    let model = if mode == Mode::Zone { "Zone" } else { "Ship" };
+    format!(r"Data\Ships\{team}\{model}.vex")
 }
 
 /// Reads and decodes a model's external PS2 texture set, from the archive
@@ -647,7 +656,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         chase.fov, far.pos_length, chase.pos_height, chase.pos_length
     ));
 
-    let ship_name = ship_entry_name(&options.team);
+    let ship_name = ship_entry_name(&options.team, options.mode);
     let ship_blob = read(&mut archives, &ship_name)?;
     let mut ship_model = mesh::build_with_textures(&ship_name, &ship_blob, None, options.lod)?;
     // The PS2 signature: `Texture` nodes exist (the model wants textures) but

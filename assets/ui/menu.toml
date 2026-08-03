@@ -77,6 +77,9 @@ label = "SPEED CLASS"
 setting = "race.class"
 values = ["venom", "flash", "rapier", "phantom"]
 
+# Zone forces the shared Zone hull regardless of team (see
+# `oag_game::race::ship_entry_name`), so the row is greyed rather than
+# offered as if it still picked the drawn model.
 [[page.entry]]
 kind = "choice"
 label = "TEAM"
@@ -91,6 +94,7 @@ values = [
     "Qirex",
     "Triakis",
 ]
+disabled_by = { setting = "race.mode", value = "zone" }
 
 # The circuits come from the source, not from this file, and so do their names:
 # `values_from = "tracks"` reads `Data\Plugins\PI001\Definition.xml` for what
