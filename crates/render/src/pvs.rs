@@ -50,7 +50,7 @@
 
 use oag_core::math::Vec3;
 use oag_core::math::frustum::Frustum;
-use oag_formats::pvs::{ALL_VISIBLE, TrackPvs};
+use oag_formats::pvs::{ALL_VISIBLE, MAX_SECTIONS, TrackPvs};
 use oag_formats::track::AiTrack;
 
 use crate::mesh::{DrawCall, Model};
@@ -171,6 +171,160 @@ impl DrawSections {
     }
 }
 
+/// Section pairs authored as alternatives of each other: never named
+/// together by any single visibility mask, while their geometry occupies
+/// overlapping space.
+///
+/// This is the LOD-swap relation, recovered from data rather than named by
+/// it: nothing on the disc says "section 62 is section 50's far-LOD copy",
+/// but the two facts that make the swap work are both authored - the copy
+/// coincides with the detail, and no viewpoint's mask ever shows both. The
+/// original can never violate the exclusion because it culls with exactly
+/// one mask; [`VisibleSet::around`] builds a union for a camera the original
+/// does not have, and uses this table to keep the union from re-admitting an
+/// alternative the primary mask already decided against.
+///
+/// Geometry overlap means **shared vertex positions**, not shared space. Two
+/// weaker tests were tried and both misfire. Bounding boxes *touching* made
+/// 155 pairs of one 58-section circuit and cut its visible set by a third -
+/// almost all of them mask-exclusive sections whose boxes merely graze.
+/// Boxes *mostly containing each other* still cannot tell a stacked copy
+/// from an interior nested inside an exterior - a tunnel's section shares
+/// its box with the mountain it runs through, and the two are rightly
+/// mask-exclusive without being alternatives; filtering that pair would pop
+/// the mountain out of a straddling camera's view for nothing, since nested
+/// surfaces do not fight. What only true alternatives share is *geometry*:
+/// bit-identical vertex positions, thousands of them on a real copy (the
+/// same authored surface, exported twice), and none at all on a nesting.
+/// [`Self::SHARED_POSITIONS`] is the guard against numerical accidents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwapConflicts {
+    partners: [u64; MAX_SECTIONS],
+}
+
+impl Default for SwapConflicts {
+    fn default() -> Self {
+        Self::none()
+    }
+}
+
+impl SwapConflicts {
+    /// How many bit-identical vertex positions two exclusive sections must
+    /// share before they count as alternatives.
+    ///
+    /// The two populations sit far apart: measured stacked copies share
+    /// hundreds to thousands of positions (Moa Therma's loop pair shares
+    /// ~4,900), unrelated sections share none - exclusive pairs are never
+    /// spline neighbours, so not even seam vertices connect them. Four is a
+    /// guard against a stray coincidence, not a tuning value; there is no
+    /// recovered number to match, because the original never unions masks
+    /// and needs no such table.
+    pub const SHARED_POSITIONS: usize = 4;
+
+    /// No conflicts - every contribution unions freely, as before.
+    #[must_use]
+    pub fn none() -> Self {
+        Self {
+            partners: [0; MAX_SECTIONS],
+        }
+    }
+
+    /// Finds the swap pairs of one track.
+    ///
+    /// `sections` is the authored placement of `model`'s draw calls
+    /// ([`DrawSections::place`]); only draws governed by a single declared
+    /// section contribute to the per-section boxes, which is exactly the set
+    /// a mask can hide.
+    #[must_use]
+    pub fn find(pvs: &TrackPvs, sections: &DrawSections, model: &Model) -> Self {
+        // Which sections have a vertex at each exact position. A `BTreeMap`
+        // rather than a hash map so the walk below is ordered and the result
+        // is identical across platforms, which the screenshot comparisons
+        // rely on.
+        let mut sections_at: std::collections::BTreeMap<[u32; 3], u64> =
+            std::collections::BTreeMap::new();
+        let lists = [
+            (&sections.opaque, &model.draws),
+            (&sections.alpha_tested, &model.alpha_tested_draws),
+            (&sections.transparent, &model.transparent_draws),
+        ];
+        for (masks, draws) in lists {
+            for (mask, draw) in masks.iter().zip(draws) {
+                if mask.count_ones() != 1 {
+                    continue;
+                }
+                for index in draw.range.clone() {
+                    let Some(&vertex) = model.indices.get(index as usize) else {
+                        continue;
+                    };
+                    let Some(v) = model.vertices.get(vertex as usize) else {
+                        continue;
+                    };
+                    let key = [
+                        v.position[0].to_bits(),
+                        v.position[1].to_bits(),
+                        v.position[2].to_bits(),
+                    ];
+                    *sections_at.entry(key).or_default() |= mask;
+                }
+            }
+        }
+
+        // Shared positions per section pair.
+        let mut shared = std::collections::BTreeMap::<(u8, u8), usize>::new();
+        for &at in sections_at.values() {
+            if at.count_ones() < 2 {
+                continue;
+            }
+            let bits: Vec<u8> = oag_formats::pvs::set_bits(at).collect();
+            for (i, &a) in bits.iter().enumerate() {
+                for &b in &bits[i + 1..] {
+                    *shared.entry((a, b)).or_default() += 1;
+                }
+            }
+        }
+
+        // Which pairs any single authored mask names together.
+        let ids: Vec<u8> = pvs.ids().collect();
+        let named_together = |a: u8, b: u8| -> bool {
+            let both = (1u64 << a) | (1u64 << b);
+            ids.iter().any(|&id| pvs.visible_from(id) & both == both)
+        };
+
+        let mut partners = [0u64; MAX_SECTIONS];
+        for ((a, b), count) in shared {
+            if count >= Self::SHARED_POSITIONS && !named_together(a, b) {
+                partners[usize::from(a)] |= 1u64 << b;
+                partners[usize::from(b)] |= 1u64 << a;
+            }
+        }
+        Self { partners }
+    }
+
+    /// Every section that is an alternative of some section in `mask`.
+    ///
+    /// [`ALL_VISIBLE`] short-circuits to zero: an unknown viewpoint already
+    /// draws everything, and a filter derived from "every section at once"
+    /// would be meaningless.
+    #[must_use]
+    pub fn partners_of(&self, mask: u64) -> u64 {
+        if mask == ALL_VISIBLE {
+            return 0;
+        }
+        oag_formats::pvs::set_bits(mask).fold(0, |acc, id| acc | self.partners[usize::from(id)])
+    }
+
+    /// How many swap pairs were found, for the load report.
+    #[must_use]
+    pub fn pair_count(&self) -> usize {
+        self.partners
+            .iter()
+            .map(|p| p.count_ones() as usize)
+            .sum::<usize>()
+            / 2
+    }
+}
+
 /// Where the camera and the craft are, and what that makes visible.
 ///
 /// Built once a frame, before the draw loop. Everything expensive about it -
@@ -212,29 +366,41 @@ impl VisibleSet {
     ///   [`oag_formats::pvs::TrackPvs::visible_from`] answers all-ones and this
     ///   degrades to drawing everything.
     ///
-    /// **Padding contributes the neighbours' own bits, never their masks.**
-    /// The two real viewpoints - craft and camera - contribute everything
-    /// they can see; a spline neighbour contributes only its own geometry, so
-    /// crossing into it never shows a blank section. Unioning the neighbours'
-    /// *masks* was tried first and is wrong in a way the artists get to
-    /// define: masks encode LOD swaps - Moa Therma's start-valley sections
-    /// see a far-LOD copy of the circuit (section 62) precisely while *not*
-    /// seeing the detailed sections the copy coincides with, and no shipped
-    /// mask names both. The original never unions masks (it culls by the
-    /// craft's section alone), so it can never draw a copy over its original;
-    /// a mask-union across that authored boundary drew both, and the two
-    /// z-fought - the Moa Therma magstrip artifact, second cause. What a
-    /// newly-entered section *sees* still arrives the moment it becomes the
-    /// craft's or the camera's own, one frame later at most.
+    /// **The union is ordered, and later sources cannot override an authored
+    /// exclusion.** The original culls with exactly one mask - the craft's -
+    /// so it can never draw both halves of a LOD swap: masks encode swaps by
+    /// mutual exclusion (Moa Therma's start-valley sections see the far-LOD
+    /// copy, section 62, precisely while *not* seeing the detailed sections
+    /// the copy coincides with, and no shipped mask names both). Every
+    /// source this adds on top of the craft's mask exists for a camera the
+    /// original does not cull to, and each is filtered against the swap
+    /// partners of what is already in the set:
+    ///
+    /// 1. **The craft's mask**, whole - the authoritative source, the one
+    ///    the original uses.
+    /// 2. **The camera's mask**, minus alternatives of anything accepted so
+    ///    far. While craft and camera straddle a swap boundary, the union
+    ///    would otherwise show both copies for those frames and they would
+    ///    z-fight exactly like the placement bug did.
+    /// 3. **The padding bits** - the spline neighbours' own geometry, never
+    ///    their masks (a neighbour's mask is authored against a viewpoint
+    ///    nothing is at; unioning it re-admitted Moa Therma's far-LOD from
+    ///    two hops away) - again minus alternatives of anything accepted.
+    ///
+    /// What a newly-entered section *sees* still arrives the moment it
+    /// becomes the craft's or the camera's own, one frame later at most.
     #[must_use]
     pub fn around(
         pvs: &TrackPvs,
         adjacency: &SectionPadding,
+        swaps: &SwapConflicts,
         craft_section: u8,
         camera_section: u8,
     ) -> Self {
+        let mut mask = pvs.visible_from(craft_section);
+        mask |= pvs.visible_from(camera_section) & !swaps.partners_of(mask);
         let near = adjacency.near(craft_section) | adjacency.near(camera_section);
-        let mask = pvs.visible_from(craft_section) | pvs.visible_from(camera_section) | near;
+        mask |= near & !swaps.partners_of(mask);
         Self { mask }
     }
 
@@ -487,7 +653,7 @@ mod tests {
     fn an_unknown_section_makes_the_visible_set_everything() {
         let pvs = pvs(&[(0, [0.0; 3], [1.0; 3])]);
         let padding = SectionPadding::default();
-        let set = VisibleSet::around(&pvs, &padding, UNPLACED, UNPLACED);
+        let set = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), UNPLACED, UNPLACED);
         assert!(set.is_everything(), "neither section is declared");
         assert_eq!(set.section_count(), 64);
         assert!(set.allows(1 << 40));
@@ -499,10 +665,10 @@ mod tests {
         let pvs = pvs(&[(0, [0.0; 3], [1.0; 3]), (1, [0.0; 3], [1.0; 3])]);
         let padding = SectionPadding::default();
 
-        let alone = VisibleSet::around(&pvs, &padding, 0, 0);
+        let alone = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 0, 0);
         assert_eq!(alone.mask(), 1, "just section 0");
 
-        let split = VisibleSet::around(&pvs, &padding, 0, 1);
+        let split = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 0, 1);
         assert_eq!(split.mask(), 0b11, "the camera's section is drawn too");
         assert!(split.allows(1) && split.allows(0b10) && !split.allows(0b100));
     }
@@ -543,7 +709,7 @@ mod tests {
         let padding = SectionPadding::from_track(&track);
         assert!(padding.near(0) & 0b10 != 0, "1 is next door to 0");
 
-        let set = VisibleSet::around(&pvs, &padding, 0, 0);
+        let set = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 0, 0);
         assert_eq!(
             set.mask(),
             0b11,
@@ -552,8 +718,98 @@ mod tests {
         );
 
         // Once the craft is actually in section 1, its mask applies whole.
-        let entered = VisibleSet::around(&pvs, &padding, 1, 1);
+        let entered = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 1, 1);
         assert!(entered.allows(1 << 40));
+    }
+
+    /// A LOD swap in miniature: sections 0 and 1 are ordinary neighbours
+    /// (each names the other), 2 is the detail and 3 the coincident copy -
+    /// named by disjoint viewpoints, never together. The draws of sections
+    /// 1, 2 and 3 share bit-identical vertex positions; section 0's geometry
+    /// is elsewhere.
+    fn swap_fixture() -> (TrackPvs, SwapConflicts) {
+        let pvs = pvs_with_masks(&[
+            (0, 0b0110), // sees 1 and the detail 2
+            (1, 0b1001), // sees 0 and the copy 3
+            (2, 0b0001),
+            (3, 0b0010),
+        ]);
+        let governing = vec![Some(0), Some(1), Some(2), Some(3)];
+        let mut model = model_of(vec![
+            draw_of_node(Some(0)),
+            draw_of_node(Some(1)),
+            draw_of_node(Some(2)),
+            draw_of_node(Some(3)),
+        ]);
+        let vertex = |x: f32| crate::mesh::GpuVertex {
+            position: [x, 0.0, 0.0],
+            normal: [0.0, 1.0, 0.0],
+            colour: [1.0; 4],
+            texcoord: [0.0; 2],
+            lit: 1.0,
+            v_cycles: 0.0,
+        };
+        model.indices.clear();
+        for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {
+            let start = model.vertices.len() as u32;
+            for i in 0..SwapConflicts::SHARED_POSITIONS {
+                model.vertices.push(vertex(base_x + i as f32));
+            }
+            let end = model.vertices.len() as u32;
+            model.indices.extend(start..end);
+            model.draws[draw].range = start..end;
+        }
+        let (sections, _) = DrawSections::place(&model, &governing, &pvs);
+        let swaps = SwapConflicts::find(&pvs, &sections, &model);
+        (pvs, swaps)
+    }
+
+    /// Only mask-exclusive pairs with overlapping geometry are swaps. Here
+    /// that is 2/3 alone: 1's geometry coincides with both, but mask 0 names
+    /// 1 with 2 and mask 1 names 1 with 3, so neither is exclusive - and 0
+    /// is exclusive with nothing that shares its space.
+    #[test]
+    fn only_coincident_exclusive_pairs_are_swaps() {
+        let (_, swaps) = swap_fixture();
+        assert_eq!(swaps.pair_count(), 1, "the detail and its copy");
+        assert_eq!(swaps.partners_of(1 << 2), 1 << 3);
+        assert_eq!(swaps.partners_of(1 << 3), 1 << 2);
+        assert_eq!(swaps.partners_of(1 << 1), 0, "named together is not a swap");
+        assert_eq!(swaps.partners_of(1 << 0), 0, "distant geometry never pairs");
+        assert_eq!(SwapConflicts::none().partners_of(ALL_VISIBLE), 0);
+        assert_eq!(
+            swaps.partners_of(ALL_VISIBLE),
+            0,
+            "unknown draws everything"
+        );
+    }
+
+    /// The straddle: craft already across the boundary (sees the detail),
+    /// camera still behind (sees the copy). The craft's mask wins and the
+    /// copy stays hidden; the rest of the camera's mask still contributes.
+    #[test]
+    fn the_crafts_mask_outranks_the_cameras_across_a_swap() {
+        let (pvs, swaps) = swap_fixture();
+        let padding = SectionPadding::default();
+
+        let straddle = VisibleSet::around(&pvs, &padding, &swaps, 0, 1);
+        assert!(straddle.allows(1 << 2), "the craft's detail is drawn");
+        assert!(
+            !straddle.allows(1 << 3),
+            "the camera's copy of it is not - the authored exclusion holds"
+        );
+        assert!(
+            straddle.allows(1 << 0) && straddle.allows(1 << 1),
+            "the camera's non-conflicting geometry still contributes"
+        );
+
+        // The same straddle without the table is the bug this exists for.
+        let unfiltered = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 0, 1);
+        assert!(unfiltered.allows(1 << 2) && unfiltered.allows(1 << 3));
+
+        // And from the other side of the boundary the swap flips whole.
+        let flipped = VisibleSet::around(&pvs, &padding, &swaps, 1, 0);
+        assert!(flipped.allows(1 << 3) && !flipped.allows(1 << 2));
     }
 
     /// Sections without boxes but with authored visibility masks.

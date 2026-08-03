@@ -574,6 +574,49 @@ fn far_lod_sections() {
         "the racing section now sees the far-LOD section, so the original would \
          z-fight too and this file's whole explanation is wrong"
     );
+
+    // The straddle, on real data: the racing line crosses from section 51
+    // (whose mask includes the far-LOD copy) into section 26 (whose mask
+    // includes the detail) just before the loop, and while the craft leads
+    // the camera across that boundary a plain union of their masks shows
+    // both halves of the swap. The swap table keeps the craft's side.
+    let governing = oag_formats::pvs::governing_sections(&blob, &nodes).expect("governance");
+    let (sections, _) = oag_render::pvs::DrawSections::place(&model, &governing, &pvs);
+    let swaps = oag_render::pvs::SwapConflicts::find(&pvs, &sections, &model);
+    println!("{} LOD-swap pair(s) on this track", swaps.pair_count());
+    assert!(
+        swaps.partners_of(1u64 << far_lod) != 0,
+        "the far-LOD section no longer registers as anyone's swap partner"
+    );
+
+    let (craft, camera) = (26u8, 51u8);
+    assert!(pvs.visible_from(camera) & (1u64 << far_lod) != 0);
+    let padding = oag_render::pvs::SectionPadding::default();
+    let unfiltered = oag_render::pvs::VisibleSet::around(
+        &pvs,
+        &padding,
+        &oag_render::pvs::SwapConflicts::none(),
+        craft,
+        camera,
+    );
+    let detail_bits: u64 = base_sections
+        .iter()
+        .flatten()
+        .fold(0, |acc, &id| acc | (1u64 << id));
+    assert!(
+        unfiltered.allows(1u64 << far_lod) && unfiltered.allows(detail_bits),
+        "the unfiltered straddle no longer shows both halves; if this stops \
+         holding, the swap table may be dead weight"
+    );
+    let filtered = oag_render::pvs::VisibleSet::around(&pvs, &padding, &swaps, craft, camera);
+    assert!(
+        !filtered.allows(1u64 << far_lod),
+        "the swap table no longer keeps the far-LOD copy out of the straddle set"
+    );
+    assert!(
+        filtered.allows(detail_bits),
+        "the craft's own detail must survive the filter"
+    );
 }
 
 #[test]

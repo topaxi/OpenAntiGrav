@@ -47,7 +47,7 @@ use std::path::{Path, PathBuf};
 use oag_formats::pvs::TrackPvs;
 use oag_formats::{track, vex};
 use oag_render::mesh::{self, Lod};
-use oag_render::pvs::{DrawSections, SectionPadding, UNPLACED, VisibleSet};
+use oag_render::pvs::{DrawSections, SectionPadding, SwapConflicts, UNPLACED, VisibleSet};
 
 /// Track directories to probe. Named the way the front end names them, via the
 /// `location` attribute plus the binary's `%s\%strack%s.vex` template - see
@@ -75,10 +75,11 @@ fn track_entry_name(track: &str, variant: &str) -> String {
     format!(r"Data\Environments\{track}\{variant}")
 }
 
-fn image() -> Option<PathBuf> {
+fn image(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
+        .join("data/images")
+        .join(name);
 
     if path.exists() {
         return Some(path);
@@ -95,7 +96,19 @@ fn image() -> Option<PathBuf> {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_authored_boxes_place_most_of_a_tracks_geometry() {
-    let Some(image) = image() else { return };
+    // Both discs: the game renders PS2 tracks through the same placement, so
+    // the sibling-group rule has to hold there too, not just on the platform
+    // it was discovered on. The per-file expectations are identical; only
+    // the file count differs (40 PSP, 59 PS2 - reversed circuits share
+    // directories on PSP but not everywhere on PS2).
+    for (disc, minimum) in [("pulse-psp-usa.chd", 30), ("pulse-ps2-eu.chd", 40)] {
+        let Some(image) = image(disc) else { continue };
+        println!("==== {disc}");
+        sweep(&image, minimum);
+    }
+}
+
+fn sweep(image: &Path, minimum: usize) {
     let mut archives =
         oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
 
@@ -125,6 +138,7 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
             let governing =
                 oag_formats::pvs::governing_sections(&blob, &nodes).expect("deriving governance");
             let (sections, placement) = DrawSections::place(&model, &governing, &pvs);
+            let swaps = SwapConflicts::find(&pvs, &sections, &model);
             let lists = [
                 (&sections.opaque, &model.draws),
                 (&sections.alpha_tested, &model.alpha_tested_draws),
@@ -156,13 +170,13 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
             let mut apart_total = 0usize;
             let mut worst = 0usize;
             for &id in &ids {
-                together_total += survivors(&VisibleSet::around(&pvs, &padding, id, id));
+                together_total += survivors(&VisibleSet::around(&pvs, &padding, &swaps, id, id));
                 // The camera trails into a neighbour: the lowest-numbered section
                 // adjacent to this one that is not itself.
                 let neighbour = oag_formats::pvs::set_bits(padding.near(id) & !(1u64 << id))
                     .next()
                     .unwrap_or(id);
-                let apart = survivors(&VisibleSet::around(&pvs, &padding, id, neighbour));
+                let apart = survivors(&VisibleSet::around(&pvs, &padding, &swaps, id, neighbour));
                 apart_total += apart;
                 worst = worst.max(apart);
             }
@@ -171,10 +185,11 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
 
             println!(
                 "== {name}: {total} draw calls, {} governed by a section ({:.1}%), \
-             {} always drawn",
+             {} always drawn, {} LOD-swap pair(s)",
                 placement.placed,
                 placement.placed_fraction() * 100.0,
                 placement.unplaced,
+                swaps.pair_count(),
             );
             println!(
                 "   over all {} sections: camera trailing the craft (the live case) \
@@ -203,7 +218,7 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
 
             // The safety property, on real data rather than on a fixture: an
             // unplaced draw call must survive even a mask that hides everything.
-            let hides_everything = VisibleSet::around(&pvs, &padding, UNPLACED, UNPLACED);
+            let hides_everything = VisibleSet::around(&pvs, &padding, &swaps, UNPLACED, UNPLACED);
             assert!(
                 hides_everything.is_everything(),
                 "{name}: an unknown section must make everything visible"
@@ -219,8 +234,8 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
         }
     }
     assert!(
-        measured >= 30,
-        "only {measured} track file(s) found; the PSP disc has 40"
+        measured >= minimum,
+        "only {measured} track file(s) found; expected at least {minimum} on this disc"
     );
     println!(
         "== measured {measured} track file(s); best {} at {:.1}% surviving, \

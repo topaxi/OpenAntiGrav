@@ -6,7 +6,10 @@ Accepted. Supersedes two parts of
 [ADR-0011](0011-authored-pvs-before-frustum-culling.md): its decision item 6
 (geometric multi-section placement) and the mask-union padding in decision
 item 2. Everything else in ADR-0011 - PVS before frustum, the authored set,
-spline-based adjacency, unknown-means-everything - stands.
+spline-based adjacency, unknown-means-everything - stands. Decision item 2's
+plain union is itself refined by
+[ADR-0015](0015-ordered-visible-set-union.md), which orders the sources and
+keeps authored alternatives from rejoining across them.
 
 ## Context
 

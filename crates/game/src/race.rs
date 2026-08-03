@@ -77,7 +77,9 @@ use oag_render::collision as render_collision;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
 use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::Anisotropy;
-use oag_render::pvs::{DrawSections, PlacementStats, SectionPadding, UNPLACED, VisibleSet};
+use oag_render::pvs::{
+    DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
+};
 use oag_render::sparks::{self, Sparks};
 use oag_render::{mesh, mesh_render, track as track_render};
 
@@ -777,11 +779,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     match &visibility {
         Some(visibility) => report.push(format!(
             "{} authored visibility section(s); {} of {} draw call(s) governed by one \
-             ({:.1}%), the rest always drawn",
+             ({:.1}%), the rest always drawn; {} LOD-swap pair(s)",
             visibility.pvs.len(),
             visibility.placement.placed,
             visibility.placement.total(),
             visibility.placement.placed_fraction() * 100.0,
+            visibility.swap_pairs(),
         )),
         None if options.ribbon => {}
         None => report.push(
@@ -2452,6 +2455,10 @@ pub struct TrackVisibility {
     pvs: oag_formats::pvs::TrackPvs,
     padding: SectionPadding,
     sections: DrawSections,
+    /// Mask-exclusive section pairs with overlapping geometry - authored
+    /// LOD swaps, which the per-frame union must never re-join. See
+    /// [`SwapConflicts`].
+    swaps: SwapConflicts,
     /// What the association rule managed, for the load report.
     pub placement: PlacementStats,
 }
@@ -2475,18 +2482,27 @@ impl TrackVisibility {
         // real one - see `oag_render::pvs`.
         let governing = oag_formats::pvs::governing_sections(blob, &nodes).ok()?;
         let (sections, placement) = DrawSections::place(model, &governing, &pvs);
+        let swaps = SwapConflicts::find(&pvs, &sections, model);
         Some(Self {
             pvs,
             padding: SectionPadding::from_track(ai),
             sections,
+            swaps,
             placement,
         })
+    }
+
+    /// How many authored LOD-swap pairs the track carries, for the load
+    /// report.
+    #[must_use]
+    pub fn swap_pairs(&self) -> usize {
+        self.swaps.pair_count()
     }
 
     /// What may be drawn with the craft in `craft` and the camera in `camera`.
     #[must_use]
     fn set(&self, craft: u8, camera: u8) -> VisibleSet {
-        VisibleSet::around(&self.pvs, &self.padding, craft, camera)
+        VisibleSet::around(&self.pvs, &self.padding, &self.swaps, craft, camera)
     }
 }
 
@@ -4236,7 +4252,10 @@ mod tests {
         let pvs = oag_formats::pvs::TrackPvs::empty();
         let padding = SectionPadding::default();
         let (craft, camera) = race.visibility_sections();
-        assert!(VisibleSet::around(&pvs, &padding, craft, camera).is_everything());
+        assert!(
+            VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), craft, camera)
+                .is_everything()
+        );
     }
 
     /// A parameter set with a real hull, so the reset probes have something to
