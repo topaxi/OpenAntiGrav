@@ -172,6 +172,17 @@ struct Cli {
     #[arg(long, default_value_t = Anisotropy::default())]
     anisotropy: Anisotropy,
 
+    /// What `--mesh` does with an authored `LodGroup`: draw `both` children the
+    /// way the original does, or keep only the higher-detail `single` one.
+    ///
+    /// Not a quality setting. `both` is what the original draws and it means
+    /// two differently-tessellated copies of the same surface occupy the same
+    /// space; `single` is this project's own choice and removes that. Seeing
+    /// the two side by side is the only way to judge what the duplication costs
+    /// - see [`mesh::Lod`].
+    #[arg(long, default_value_t = mesh::Lod::default())]
+    lod: mesh::Lod,
+
     /// Print every node of a `.vex` file - class, name, size, tree position -
     /// and exit, drawing nothing.
     ///
@@ -575,9 +586,10 @@ fn main() -> Result<()> {
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
-        // Both tiers, always: an asset inspector's job is to show what is on
-        // the disc, not to apply a performance divergence from it.
-        let model = mesh::build_with_textures(name, &data, external, mesh::Lod::Both)?;
+        // Both tiers by default: an asset inspector's job is to show what is on
+        // the disc, not to apply a performance divergence from it. `--lod
+        // single` is how you see what the duplication is costing.
+        let model = mesh::build_with_textures(name, &data, external, cli.lod)?;
         println!(
             "{}: {} meshes, {} vertices, {} triangles, radius {:.2}",
             model.label,

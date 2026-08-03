@@ -261,6 +261,17 @@ struct Cli {
     #[arg(long)]
     anisotropy: Option<Anisotropy>,
 
+    /// What an authored `LodGroup` draws: `both` children, the way the original
+    /// does, or only the higher-detail `single` one.
+    ///
+    /// Overrides `[graphics] lod` in the settings file (`settings::path`) for
+    /// this run only; the file on disk is not changed. Here for the same reason
+    /// `--anisotropy` is: `both` means two differently-tessellated copies of the
+    /// same surface occupy the same space, and two captures differing only by
+    /// this flag are how you see what that costs.
+    #[arg(long)]
+    lod: Option<oag_render::mesh::Lod>,
+
     /// Which resampler carries the frame onto the surface: bilinear or fsr1.
     ///
     /// Overrides `[graphics] upscaler` in the settings file (`settings::path`)
@@ -336,7 +347,7 @@ fn main() -> Result<()> {
         mode,
         ribbon: cli.ribbon,
         collision: cli.collision,
-        lod: settings.graphics.lod,
+        lod: cli.lod.unwrap_or(settings.graphics.lod),
     };
 
     // Before `boot::load`, deliberately: the front end's load parses the front-end
