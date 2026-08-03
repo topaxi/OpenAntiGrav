@@ -1942,30 +1942,28 @@ impl Race {
             }
         }
 
-        // Re-armed every tick inside a pad, **not** on the entry edge, so the
-        // flare and `ShipState::pad_timer` are handed the same duration from the
-        // same tick and therefore expire together. `Exhaust::boost` takes a
-        // maximum, which is what makes calling it repeatedly extend the flare
-        // rather than restart it. On the edge instead, the flare would run `time`
-        // from entry while the force runs `time` from exit, and the two would
-        // drift apart by however long the crossing took - a pad is about 9.6
-        // units long, so at racing speed that is a few ticks and at a crawl the
-        // flare would go out with the ship still on the pad.
-        if hit.is_some() {
-            self.exhaust
-                .boost(self.world.ships[0].handling.speedup_pads.time);
-        }
-
-        // The score, by contrast, *is* the edge, and it is deliberately outside
-        // the loop: two pads overlapping on one tick is one entry, not two,
-        // matching the original's single `craft+0x1d0` slot and its single
-        // `DAT_08b3435c` flag, which `Zone_Update` (`0x0882f5cc`) consumes and
-        // clears once per tick.
+        // Everything below is the *edge*, and it is deliberately outside the loop:
+        // two pads overlapping on one tick is one entry, not two, matching the
+        // original's single `craft+0x1d0` slot and its single `DAT_08b3435c` flag,
+        // which `Zone_Update` (`0x0882f5cc`) consumes and clears once per tick.
         let entered = hit.map(|(index, _)| index);
         if entered != self.pad_current {
             self.pad_current = entered;
-            if entered.is_some() && self.world.race.mode == Mode::Zone {
-                self.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
+            if entered.is_some() {
+                // Zone mode only. `Ship_ApplySpeedupPad` raises its flag under
+                // the mode selector `zone-mode.md` identifies.
+                if self.world.race.mode == Mode::Zone {
+                    self.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
+                }
+                // The visual, on the same edge and with the same **fixed**
+                // duration the original uses. `ExhaustFlare_OnSpeedupPad`
+                // (`0x08904f10`) is called from exactly here in
+                // `Ship_ApplySpeedupPad`, inside its new-pad branch, and stores a
+                // code literal - **not** `<SpeedupPads time>`. So the flare
+                // outlives the force rather than expiring with it; see
+                // `oag_render::exhaust::BOOST_SECONDS`, which is where the reason
+                // is written down.
+                self.exhaust.boost(exhaust::BOOST_SECONDS);
             }
         }
 
@@ -3927,26 +3925,31 @@ mod tests {
         assert!((heavier - identity * 2.0).abs() < 1e-3);
     }
 
-    /// The flare and the force must let go together.
+    /// The flare **outlives** the force, and it is armed with a fixed duration.
     ///
-    /// They only do because `Exhaust::boost` is re-armed on every tick inside the
-    /// pad rather than on the entry edge: armed once at entry, the flare would
-    /// count `time` from entry while the force counts `time` from exit, and the
-    /// two would drift apart by the length of the crossing. Pinned with a pad the
-    /// ship crosses *slowly*, which is where an edge-armed flare goes out first
-    /// and where a screenshot taken at racing speed would notice nothing.
+    /// This is the opposite of what an earlier revision asserted. The original
+    /// arms the flare on the entry edge with a code literal
+    /// ([`exhaust::BOOST_SECONDS`]), while the force runs for the speed class's
+    /// own `<SpeedupPads time>` - a fraction of it on every shipped class. So a
+    /// pad is a short shove and a long look, and tying the two together is the
+    /// obvious-looking mistake this pins against.
     #[test]
-    fn the_flare_lasts_as_long_as_the_boost_does() {
+    fn the_flare_outlives_the_force_and_ignores_the_class_tunable() {
         let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
-        // Far longer than the pad's own `time`, so an entry-armed flare has ample
-        // room to expire while the ship is still inside.
-        for _ in 0..120 {
-            race.tick(&InputSnapshot::default());
-            assert!(
-                race.exhaust().boost_timer() > 0.0,
-                "the flare went out while the ship was still on the pad"
-            );
-        }
+        // Well under the flare's fixed duration, so the two are distinguishable.
+        assert!(
+            race.ship().handling.speedup_pads.time < exhaust::BOOST_SECONDS,
+            "the fixture must make the flare the longer of the two"
+        );
+
+        race.tick(&InputSnapshot::default());
+        // Armed with the constant, not with the class's `time`.
+        assert!(
+            (race.exhaust().boost_timer() - (exhaust::BOOST_SECONDS - race.dt())).abs() < 1e-4,
+            "the flare was armed with {} rather than {}",
+            race.exhaust().boost_timer(),
+            exhaust::BOOST_SECONDS
+        );
 
         race.speedup_pads.clear();
         let mut force_ticks = 0;
@@ -3957,8 +3960,9 @@ mod tests {
             flare_ticks += u32::from(race.exhaust().boost_timer() > 0.0);
         }
         assert!(
-            force_ticks.abs_diff(flare_ticks) <= 2,
-            "the boost ran {force_ticks} tick(s) and the flare {flare_ticks}"
+            flare_ticks > force_ticks,
+            "the flare ran {flare_ticks} tick(s) and the force {force_ticks}; the \
+             flare must outlast it"
         );
     }
 

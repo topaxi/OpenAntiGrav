@@ -260,6 +260,24 @@ pub const BOOST_DECAY: f32 = 0.1;
 /// Boost-timer threshold above which the engine counts as on regardless of thrust.
 pub const BOOST_GATE: f32 = 0.2;
 
+/// How long a speed pad lights the flare for, in seconds.
+///
+/// **A literal in the code, not a tunable.** `ExhaustFlare_OnSpeedupPad`
+/// (`0x08904f10`) builds `0x3f4ccccd` with a `lui`/`ori` pair and stores it
+/// straight to `self+0xb8`; there is no XML path and no per-class table.
+/// Confidence **90** - one caller, one literal, and the store sits in a delay
+/// slot so it happens even when the flare has no craft.
+///
+/// **It is deliberately not `<SpeedupPads time>`.** The *force* runs for the
+/// speed class's own duration, which is a fraction of this on every shipped
+/// class, so the flare outlives the shove by design: a short push and a long
+/// look. Tying the two together is the obvious-looking mistake and the original
+/// does not do it - see `oag_game::race`'s pad trigger.
+///
+/// At [`BOOST_GATE`] the `<Team>boost.vex` plume is revealed, so that model shows
+/// for the first `0.6 s` of these `0.8`.
+pub const BOOST_SECONDS: f32 = 0.8;
+
 /// Intensity gain per second while the engine is on.
 pub const INTENSITY_RISE: f32 = 0.25;
 

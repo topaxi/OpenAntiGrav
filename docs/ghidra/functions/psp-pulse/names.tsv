@@ -130,6 +130,7 @@
 0x088866bc	function	Pad_ContainsPoint	85	pads.md
 0x0888686c	function	Pad_SweptTest	65	pads.md
 0x08887144	function	Pads_TestCraft	65	pads.md
+0x08904f10	function	ExhaustFlare_OnSpeedupPad	88	pads.md
 0x0883f274	function	Ship_ApplyCollisionImpulse	85	engine.md
 0x0884d850	function	Body_SetMass	88	engine.md
 0x0884da24	function	Body_ClearAccumulators	85	engine.md
