@@ -18,9 +18,11 @@
 //! texture per step. This test is the measurement that decides it, and it says
 //! the suspect is innocent at the place the artifact was photographed.
 //!
-//! The quantity is **world units per whole texture repeat**, per triangle, along
-//! the direction the texture is stretched furthest: `1 / sigma_min` of the UV
-//! Jacobian taken in the triangle's own tangent plane. That is the number a
+//! The quantity is **world units per whole texture repeat along V**, per
+//! triangle: `1 / |grad V|` with the gradient taken in the triangle's own
+//! tangent plane. V rather than the smaller singular value of the whole
+//! Jacobian, because `_surface6_1.tga` is uniform along its columns - stretching
+//! it in U paints nothing different and cannot widen a marking. That is the
 //! marking's width is proportional to - the texture paints a one-texel line
 //! `repeat / 64` world units wide - and it is the right instrument where a
 //! whole-draw affine fit is not: a road strip curves, so a fit over one is
@@ -99,12 +101,11 @@ fn norm(a: [f64; 3]) -> f64 {
     dot(a, a).sqrt()
 }
 
-/// World units covered by one whole texture repeat across this triangle, along
-/// whichever direction the texture is stretched furthest.
+/// World units covered by one whole texture repeat **across** this triangle -
+/// that is, along V, the axis the road texture varies on.
 ///
-/// `None` for a triangle with no area, or one whose texture coordinates do not
-/// vary at all - both of which say nothing about width rather than saying it is
-/// infinite.
+/// `None` for a triangle with no area, or one whose V does not vary at all -
+/// both of which say nothing about width rather than saying it is infinite.
 fn triangle_repeat(p: [[f32; 3]; 3], uv: [[f32; 2]; 3]) -> Option<f64> {
     let e1 = sub(p[1], p[0]);
     let e2 = sub(p[2], p[0]);
@@ -145,15 +146,14 @@ fn triangle_repeat(p: [[f32; 3]; 3], uv: [[f32; 2]; 3]) -> Option<f64> {
         ],
     ];
 
-    // Singular values of the 2x2 `j`, via the eigenvalues of `j j^T`.
-    let m00 = j[0][0] * j[0][0] + j[0][1] * j[0][1];
-    let m01 = j[0][0] * j[1][0] + j[0][1] * j[1][1];
-    let m11 = j[1][0] * j[1][0] + j[1][1] * j[1][1];
-    let trace = m00 + m11;
-    let det = m00 * m11 - m01 * m01;
-    let spread = (trace * trace / 4.0 - det).max(0.0).sqrt();
-    let smallest = (trace / 2.0 - spread).max(0.0).sqrt();
-    (smallest > 1e-9).then(|| 1.0 / smallest)
+    // The V row alone, not the smaller singular value of the whole Jacobian.
+    // `_surface6_1.tga` is **uniform along its columns** - every row is one
+    // constant tone, and the dark centre line is rows 3 to 7 - so stretching in
+    // U paints nothing different and cannot widen a marking. Only `|grad V|`
+    // can, and mixing the axes reports a stretch along the track as though it
+    // were a stretch across it.
+    let gradient_v = (j[1][0] * j[1][0] + j[1][1] * j[1][1]).sqrt();
+    (gradient_v > 1e-9).then(|| 1.0 / gradient_v)
 }
 
 fn quantile(sorted: &[f64], q: f64) -> f64 {
@@ -244,32 +244,32 @@ fn measure(blob: &[u8], model: &Model) -> Road {
     road
 }
 
-/// The band the median road triangle's repeat has to fall in, on every circuit
-/// that ships the texture.
+/// The band every circuit's median road triangle falls in, except Moa Therma.
 ///
-/// The measured medians run 20.40 to 20.72 on six of them and 23.06 on Moa
-/// Therma - so the authored road mapping is one scale, laid down once and
-/// reused, and a one-texel line is about a third of a world unit wide
-/// everywhere. That uniformity is the finding: it is what says the reported
-/// "Moa Therma's markings are wider than other circuits'" cannot be the
-/// authored mapping - certainly not the roughly threefold difference the frames
+/// Six of the seven measure 20.36 to 20.70 world units per whole repeat across
+/// the road - so the authored road mapping is one scale, laid down once and
+/// reused, and a one-texel line is about a third of a world unit wide on all of
+/// them. That uniformity is the finding: it is what says the reported "Moa
+/// Therma's markings are wider than other circuits'" cannot be the authored
+/// mapping, certainly not the roughly threefold difference the frames
 /// suggested.
 ///
-/// Moa Therma's 23.06 is a real 13%, and it is worth being precise about where
-/// it comes from, because it is the one place the census does separate this
-/// circuit from the rest. It is **not** the `0x139` outlier tail: that
-/// population's median is 20.87, ordinary. It is the `0x13b` road, median 23.85
-/// against 20.33 to 20.71 everywhere else. But it is not at the reported corner
-/// either - the corner's own `0x13b` median is 20.42 - so whatever is 16%
-/// coarser sits on some other stretch of the circuit, and does not explain the
-/// artifact.
+/// Deliberately tight. A band wide enough to swallow Moa Therma's 23.04 would
+/// also swallow any regression worth catching, and would hide the one real
+/// per-circuit difference this census found - see [`MOA_THERMA_REPEAT`].
+const REPEAT_BAND: std::ops::Range<f64> = 20.0..21.0;
+
+/// Moa Therma's own median, which is genuinely 13% above everyone else's.
 ///
-/// Taken over each circuit's whole road, not per vertex type. Both encodings
-/// agree wherever a circuit has enough of each to compare, but a circuit can
-/// carry a sliver of one - `06_Track` has 126 `0x13b` triangles against 4,942
-/// `0x139` ones - and a median over a sliver describes those few surfaces
-/// rather than that circuit's road.
-const REPEAT_BAND: std::ops::Range<f64> = 18.0..26.0;
+/// A named exception rather than a wider [`REPEAT_BAND`], because it is a real
+/// difference and the point of this file is that it is **not** the reported
+/// artifact. It is not the `0x139` outlier tail, whose median is an ordinary
+/// 20.87; it is the `0x13b` road, median 23.85 against 20.33 to 20.71
+/// everywhere else. And it is not at the reported corner either - that stretch
+/// measures 20.40, indistinguishable from Talon's Junction - so whatever is
+/// coarser sits elsewhere on the circuit and does not explain what was
+/// photographed.
+const MOA_THERMA_REPEAT: std::ops::Range<f64> = 22.5..23.5;
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -305,10 +305,15 @@ fn every_circuit_lays_the_road_texture_down_at_the_same_scale() {
             "{circuit}_Track: {} road triangle(s), repeat p50 {median:.2}",
             all.len()
         );
+        let (band, whose) = if circuit == MOA_THERMA {
+            (MOA_THERMA_REPEAT, "Moa Therma's own")
+        } else {
+            (REPEAT_BAND, "the shared")
+        };
         assert!(
-            REPEAT_BAND.contains(&median),
-            "{circuit}_Track: median repeat {median:.2} is outside {REPEAT_BAND:?}, so this \
-             circuit lays the shared road texture down at a different scale from the rest"
+            band.contains(&median),
+            "{circuit}_Track: median repeat {median:.2} is outside {whose} band {band:?}, so \
+             this circuit no longer lays the road texture down at the scale it did"
         );
     }
     assert!(
@@ -353,6 +358,8 @@ fn moa_therma_paints_the_reported_corner_from_f32_texture_coordinates() {
         vec![0x13b],
         "the reported corner is no longer painted only from f32 texture coordinates"
     );
+    // The corner sits in the *shared* band, not Moa Therma's own wider one -
+    // which is the point: this circuit's 13% lives somewhere else entirely.
     let median = quantile(&road.corner, 0.5);
     assert!(
         REPEAT_BAND.contains(&median),
