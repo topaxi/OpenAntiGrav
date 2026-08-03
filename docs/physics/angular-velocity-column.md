@@ -631,24 +631,44 @@ z = (normal_gravity * classScale + track_gravity)
     / (2 * 0.3 * HOVER_K * (normal_gravity + track_gravity)) = 1.25
 ```
 
-(this used `classScale = 1.0`, which is **wrong** - see the correction below), which is
+(this used `classScale = 1.0`, which is **wrong** - see the correction below,
+where the real scale gives `1.2390` and the agreement gets *better*), which is
 **17x** more. The damping that was `0.40` at the recovered spacing becomes `6.6`,
 and the `4.9` this page went looking for is the difference. Nothing was fitted:
 `0.1`, `rebound`, `0.3`, `HOVER_K`, `+/-4.5` and the two gravities are all read
 values, and `1.25` follows from them.
 
-> **Correction, 2026-08-03.** The parenthetical above is wrong. `0x08ab0dcc` is
-> `g_class_gravity_scale`, filled from `<GlobalClass><GravityMul airborne/>` in
-> `Data\XML\HandlingStats.xml`, and the four classes carry **four different
-> values** - the class these captures were taken in is not one holding `1.0`. So
-> the `1.25` below was derived with the wrong scale and has to be re-derived. The
-> value itself stays out of this repository per
-> [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md); the arithmetic
-> is reproducible from the reader's own disc. **The live probe read is
-> unaffected** - it came off the running original, which was always using the real
-> scale - so what moves is the prediction, not the measurement, and whether the
-> `1 %` agreement survives is now an open question. See
-> [README.md](README.md#correction-the-per-class-gravity-scale-is-not-10-for-every-class).
+> **Correction, 2026-08-03, and the agreement improves.** The parenthetical above
+> is wrong. `0x08ab0dcc` is `g_class_gravity_scale`, filled from
+> `<GlobalClass><GravityMul airborne/>` in `Data\XML\HandlingStats.xml`, and the
+> four classes carry **four different values** - the class these captures were
+> taken in is not one holding `1.0`. The scale itself stays out of this
+> repository per
+> [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md); it is one
+> attribute on the reader's own disc and the arithmetic below is otherwise
+> unchanged.
+>
+> Re-deriving `z` with the real value:
+>
+> | `classScale` | predicted `z` | against the measured `1.237` |
+> | --- | ---: | ---: |
+> | `1.0`, as this page assumed | `1.2500` | `1.05 %` |
+> | the class's real scale | **`1.2390`** | **`0.16 %`** |
+>
+> **The error falls by a factor of 6.6.** The live probe read is unaffected - it
+> came off the running original, which was always using the real value - so this
+> is the prediction moving onto a measurement that never moved, which is the
+> direction that counts as evidence.
+>
+> **It also discriminates *which term* the scale applies to**, independently of
+> the disassembly. `z` is a *resting* compression and contains `normal_gravity`
+> and `track_gravity` only; `flight_gravity` does not appear in it. So had the
+> scale gone on the airborne term - which is what its attribute name,
+> `airborne`, suggests - `z` would have stayed at `1.2500` and the `1.05 %` gap
+> would have stayed with it. A measurement taken before either fact was known
+> therefore picks the same lane the `vmul.p` chain does. See
+> [README.md](README.md#correction-the-per-class-gravity-scale-is-not-10-for-every-class)
+> and [handling stats](../formats/handling-stats.md).
 
 **The live probe read is the independent check.** `craft+0x308` measured `2.8878`
 on the start line against a `craft+0x2f0` of `4.125` - `1.237` compressed, `1 %`

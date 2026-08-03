@@ -429,6 +429,24 @@ Whether "airborne" describes an intent the code does not implement, or a rename
 nobody propagated, is **not** answered. What is established is which term the
 number reaches.
 
+**A capture agrees, and it was taken before any of this was known.**
+[angular-velocity-column.md](../physics/angular-velocity-column.md) predicts the
+craft's resting suspension compression from read constants and checks it against
+a live `craft+0x308` read of `1.237` off the running original. That prediction
+contains `normal_gravity` and `track_gravity` and **not** `flight_gravity`,
+because it is a *resting* quantity:
+
+| `classScale` used | predicted | error |
+| --- | ---: | ---: |
+| `1.0`, before this table was decoded | `1.2500` | `1.05 %` |
+| the class's real scale | **`1.2390`** | **`0.16 %`** |
+
+Two things follow. The scale is real and is not the identity, since applying it
+improves an independent measurement by a factor of `6.6`. And it goes on the
+**grounded** term, since putting it on the airborne one would leave a resting
+compression untouched and the `1.05 %` gap with it. That is the same answer the
+`vmul.p` chain gives, from evidence that knew nothing about it.
+
 ### There are five `<GlobalClass>` blocks and only four speed classes
 
 Both discs author **`VECTOR` first**, then the four. No per-team file has a

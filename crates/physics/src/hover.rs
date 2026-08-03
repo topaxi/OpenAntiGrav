@@ -45,14 +45,20 @@
 //! ```text
 //! 2 * 0.3 * HOVER_K * (normal_gravity + track_gravity) * compression
 //!     = normal_gravity * classScale + track_gravity
-//! compression = 1.25                          ; classScale is 1.0 for every class
 //! ```
 //!
-//! `mass` cancels and so do the gravities, so **every craft in the game rests
-//! `1.25` units into its travel**, with as much again above it before a probe
-//! loses the ground. That symmetry is what makes the recovered geometry work, and
-//! it is measured rather than argued: the original's live `craft+0x308` reads
-//! `2.8878` against a `4.125` target.
+//! `mass` cancels. The gravities **almost** cancel: they would exactly, and every
+//! craft in the game would rest at `1.25`, if `classScale` were `1.0`. It is not -
+//! it is `<GlobalClass><GravityMul airborne/>`, four different values for the four
+//! speed classes, and this module's docs said `1.0` until that was decoded. With
+//! the real scale the class the reference capture was taken in rests at `1.2390`,
+//! against the original's own live `craft+0x308` reading of `2.8878` on a `4.125`
+//! target - `1.237` compressed, which is `0.16 %` away where the `1.25` was
+//! `1.05 %` away.
+//!
+//! So the resting point is *near* half the travel for every craft rather than
+//! exactly half, and the symmetry that makes the recovered geometry work survives.
+//! See `docs/physics/angular-velocity-column.md`.
 //!
 //! Two earlier readings of this same question are kept as recorded history,
 //! because both were wrong in instructive ways. The first had the target equal to
@@ -491,14 +497,20 @@ pub const BANK_TO_YAW_GAIN: f32 = 30.0;
 /// compression the spring settles at,
 ///
 /// ```text
-/// compression = (normal_gravity + track_gravity) / (0.8 * (normal_gravity + track_gravity)) = 1.25
+/// compression = (normal_gravity * classScale + track_gravity)
+///             / (0.8 * (normal_gravity + track_gravity))
 /// ```
 ///
-/// (`0.8` is two probes times `0.3 * HOVER_K`, and the class gravity scale at
-/// `0x08ab0dcc` reads `1.0` for all four classes), is what the live probe read on
+/// (`0.8` is two probes times `0.3 * HOVER_K`), is what the live probe read on
 /// the start line measured at **1.237** - a number that made no sense while the
 /// downforce was zero, and which is why the recovered probe geometry looked
-/// refuted. See [`probe_offsets`] and
+/// refuted.
+///
+/// **`classScale` is not `1.0`**, which this doc comment claimed until
+/// `g_class_gravity_scale` (`0x08ab0dcc`) was decoded out of
+/// `<GlobalClass><GravityMul airborne/>`. With the real value the prediction is
+/// `1.2390` rather than `1.25`, i.e. `0.16 %` from the measurement instead of
+/// `1.05 %`. See [`probe_offsets`] and
 /// `docs/physics/angular-velocity-column.md`.
 pub const DOWNFORCE_SCALE: f32 = 1.0;
 

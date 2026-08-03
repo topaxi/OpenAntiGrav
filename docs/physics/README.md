@@ -470,20 +470,31 @@ the class the reference captures were taken in is **not** one of the ones holdin
 `1.0`. The values themselves stay off this page per
 [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md).
 
-Two consequences:
+Three consequences, and the first is the interesting one:
 
-- **`angular-velocity-column.md`'s rest-compression derivation needs re-deriving.**
-  It computes `z = (normal_gravity * classScale + track_gravity) / (...)` with
-  `classScale = 1.0` and matches a live probe read to `1 %`. With the real scale
-  the predicted `z` moves, and whether the agreement survives is an open question
-  rather than a settled one. The **live probe read is unaffected** - it was taken
-  off the running original, which was always using the real value - so it is the
-  derivation that has to move, not the measurement.
+- **Re-deriving `angular-velocity-column.md`'s rest compression with the real
+  scale makes it agree *better*.** That page computes
+  `z = (normal_gravity * classScale + track_gravity) / (...)` and checks it
+  against a live probe read of `1.237` taken off the running original:
+
+  | `classScale` | predicted `z` | error |
+  | --- | ---: | ---: |
+  | `1.0`, as that page assumed | `1.2500` | `1.05 %` |
+  | the class's real scale | **`1.2390`** | **`0.16 %`** |
+
+  The error falls by a factor of `6.6`, and the measurement did not move - only
+  the prediction did.
+- **That also picks the lane, independently of the disassembly.** `z` is a
+  *resting* compression, so it contains `normal_gravity` and `track_gravity` and
+  not `flight_gravity`. Had the scale gone on the airborne term - which is what
+  the attribute's name suggests - `z` would have stayed at `1.2500` and the
+  `1.05 %` gap with it. A capture taken long before this table was decoded
+  therefore agrees with the `vmul.p` chain about which term the number reaches.
 - **The measured effect on a race is small.** A headless `--race --hold cross` run
   on `01_Track` in the class the captures use moves the reported height above the
   spline by `0.01` units and leaves speed unchanged to two decimal places at every
-  logged tick. So this is not a regression hiding in the fits; it is a term that
-  was being applied at the wrong strength by a modest factor.
+  logged tick. So this was never a regression hiding in the fits; it is a term
+  that was being applied at slightly the wrong strength.
 
 **Deliberately not implemented, and why:**
 
