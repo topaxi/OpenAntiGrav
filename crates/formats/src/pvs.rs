@@ -51,15 +51,16 @@
 //!    airborne over a gap - from watching the world disappear. [`ALL_VISIBLE`]
 //!    reproduces it.
 //!
-//! # What is *not* authored, and is therefore not in this module
+//! # Which geometry a section governs
 //!
-//! The payload says which sections are visible from which. It does not say
-//! **which section a given render mesh belongs to**, and no read of the
-//! original has recovered that yet: sections attach to spline control points
-//! (`track::SplinePoint::section_id`), not to `Mesh` nodes. Assigning draw
-//! calls to sections is consequently an engine decision rather than a
-//! reproduction, and it lives in `oag_render::pvs` where it can be labelled as
-//! one.
+//! The payload says which sections are visible from which; **which geometry
+//! belongs to a section is structural**: a `section` node governs its
+//! parent's whole subtree, because tracks are authored as sibling groups -
+//! one transform per group holding the `section` and the group's meshes.
+//! [`governing_sections`] derives it, and
+//! `docs/formats/track.md` holds the evidence, including the far-LOD case
+//! that proves membership is not spatial. Turning that into per-draw-call
+//! masks is `oag_render::pvs`'s business.
 
 use crate::vex::{self, Node};
 use std::fmt;
@@ -352,6 +353,67 @@ impl TrackPvs {
     }
 }
 
+/// The authored section governing each node of a scene tree, or `None` for a
+/// node no section governs.
+///
+/// The association is structural, not spatial: **a `section` node governs its
+/// parent's whole subtree.** On disc a track is authored as sibling groups -
+/// one transform per group, whose first child is the `section` and whose
+/// remaining children are the group's geometry:
+///
+/// ```text
+/// Transform
+/// +-- section  (id, PVS mask, box)
+/// +-- Transform -- Mesh
+/// +-- Transform -- Mesh
+/// ...
+/// ```
+///
+/// Every one of Moa Therma's 64 sections has exactly this shape, and it is
+/// what makes a far-LOD copy of the track disappear while racing on the real
+/// one: the copy's group carries a section only a handful of distant vantage
+/// sections list in their masks, even though its *geometry* occupies the same
+/// world-space boxes as the sections the craft is in. A spatial rule places it
+/// with the craft; the authored rule hides it. See
+/// `docs/formats/track.md` and
+/// `crates/render/tests/pvs_placement_ground_truth.rs`.
+///
+/// A node above every section group - the world root, or a group transform
+/// with no `section` child on the path up - answers `None`, which callers
+/// must treat as "always visible", never as "never visible".
+///
+/// If several sections share one parent the lowest node index wins; shipped
+/// data has no such group, so the tie-break is a determinism guard rather
+/// than a behaviour anyone relies on.
+pub fn governing_sections(data: &[u8], nodes: &[Node]) -> Result<Vec<Option<u8>>> {
+    // parent node index -> the id of its section child.
+    let mut section_of_parent: Vec<Option<u8>> = vec![None; nodes.len()];
+    for (at, node) in nodes.iter().enumerate() {
+        if node.class_id != vex::CLASS_SECTION {
+            continue;
+        }
+        let section = parse_section(data, node, at)?;
+        if let Some(parent) = node.parent
+            && section_of_parent[parent].is_none()
+        {
+            section_of_parent[parent] = Some(section.index);
+        }
+    }
+
+    Ok((0..nodes.len())
+        .map(|index| {
+            let mut current = Some(index);
+            while let Some(i) = current {
+                if let Some(id) = section_of_parent[i] {
+                    return Some(id);
+                }
+                current = nodes[i].parent;
+            }
+            None
+        })
+        .collect())
+}
+
 /// Sections reachable within a few control points along the spline.
 ///
 /// The padding the renderer applies is "also draw what is next door", and
@@ -594,6 +656,49 @@ mod tests {
             data.extend_from_slice(p);
         }
         TrackPvs::from_nodes(&data, &nodes)
+    }
+
+    fn tree_node(class_id: u32, offset: usize, len: usize, parent: Option<usize>) -> Node {
+        Node {
+            class_id,
+            offset,
+            header_size: 0,
+            data_size: len,
+            child_count: 0,
+            unk_0x0e: 0,
+            name: None,
+            depth: 0,
+            parent,
+        }
+    }
+
+    /// A section node governs its parent's whole subtree, and nothing above
+    /// or beside it.
+    #[test]
+    fn a_section_governs_its_parents_subtree() {
+        let section = payload(7, 0, 0, None);
+        let data = section.clone();
+        // 0 root
+        // +-- 1 group transform
+        // |   +-- 2 section id 7
+        // |   +-- 3 mesh
+        // |   +-- 4 transform
+        // |       +-- 5 mesh
+        // +-- 6 mesh, in no group
+        let nodes = vec![
+            tree_node(0x6e, 0, 0, None),
+            tree_node(0x6e, 0, 0, Some(0)),
+            tree_node(vex::CLASS_SECTION, 0, section.len(), Some(1)),
+            tree_node(vex::CLASS_MESH, 0, 0, Some(1)),
+            tree_node(0x6e, 0, 0, Some(1)),
+            tree_node(vex::CLASS_MESH, 0, 0, Some(4)),
+            tree_node(vex::CLASS_MESH, 0, 0, Some(0)),
+        ];
+        let governing = governing_sections(&data, &nodes).expect("derive");
+        assert_eq!(
+            governing,
+            vec![None, Some(7), Some(7), Some(7), Some(7), Some(7), None]
+        );
     }
 
     /// The two mask words are one 64-bit value, low word first.

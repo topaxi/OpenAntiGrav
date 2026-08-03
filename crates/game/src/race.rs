@@ -776,14 +776,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     };
     match &visibility {
         Some(visibility) => report.push(format!(
-            "{} authored visibility section(s); {} of {} draw call(s) placed \
-             ({:.1}%), {} spanning more than one, {:.1} section(s) each on average",
+            "{} authored visibility section(s); {} of {} draw call(s) governed by one \
+             ({:.1}%), the rest always drawn",
             visibility.pvs.len(),
             visibility.placement.placed,
             visibility.placement.total(),
             visibility.placement.placed_fraction() * 100.0,
-            visibility.placement.spanning,
-            visibility.placement.mean_sections(),
         )),
         None if options.ribbon => {}
         None => report.push(
@@ -2466,11 +2464,17 @@ impl TrackVisibility {
     /// The caller then draws with no first tier, exactly as before.
     #[must_use]
     pub fn build(model: &Model, blob: &[u8], ai: &AiTrack) -> Option<Self> {
-        let pvs = oag_formats::pvs::TrackPvs::parse(blob).ok()?;
+        let nodes = oag_formats::vex::nodes(blob).ok()?;
+        let pvs = oag_formats::pvs::TrackPvs::from_nodes(blob, &nodes).ok()?;
         if pvs.is_empty() {
             return None;
         }
-        let (sections, placement) = DrawSections::place(model, &pvs);
+        // The authored association: a `section` node governs its parent's
+        // whole subtree, so each draw call inherits its scene node's group.
+        // This is what hides a far-LOD copy of the track while racing on the
+        // real one - see `oag_render::pvs`.
+        let governing = oag_formats::pvs::governing_sections(blob, &nodes).ok()?;
+        let (sections, placement) = DrawSections::place(model, &governing, &pvs);
         Some(Self {
             pvs,
             padding: SectionPadding::from_track(ai),

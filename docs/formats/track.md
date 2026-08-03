@@ -152,6 +152,47 @@ from each node's explicit `index` field rather than from its position, and a
 consumer must not assume `id < count`. The out-of-range branch in the lookup
 exists for a reason.
 
+### Which geometry a section governs: its parent's subtree
+
+The association between sections and render geometry is structural, and it is
+on the disc. A track is authored as **sibling groups**: one transform per
+group, whose children are the `section` node and the group's geometry.
+
+```text
+Transform
++-- section  (id, PVS mask, box)
++-- Transform -- Mesh
++-- Transform -- Mesh
+...
+```
+
+Every one of Moa Therma's 64 sections has exactly this shape - every
+`section` node's parent is a transform whose other children are the meshes it
+governs - and the sibling-group rule assigns a governing section to 97-100%
+of the draw calls of all 40 PSP track files
+([`pvs_placement_ground_truth.rs`](../../crates/render/tests/pvs_placement_ground_truth.rs)).
+Implemented as
+[`oag_formats::pvs::governing_sections`](../../crates/formats/src/pvs.rs).
+
+Confidence **75**: the tree shape and coverage are measured on every PSP
+track, and behaviour matches - hiding by group is the only rule that
+reproduces the original's handling of the case below - but the original's
+loader has not been read doing the walk.
+
+**The case that proves membership is structural, not spatial**: Moa Therma
+ships a coarse far-LOD copy of its track surface, coincident with the real
+geometry but mapped differently (`0..1` against the strip's
+`2/128..125/128`). Its group is governed by section 62, which only four
+distant vantage sections list in their masks - and **no shipped mask names
+both 62 and a detailed section the copy coincides with**, so from any single
+viewpoint the artists show either the copy or the detail, never both. A
+spatial rule places the copy with the racing sections whose boxes it sits in,
+draws it coincident with the detailed strip, and the z-fight chops the
+magstrip's painted lines into sideways-stepping segments
+([`magstrip_ground_truth.rs`](../../crates/render/tests/magstrip_ground_truth.rs)).
+See [ADR-0014](../architecture/adr/0014-authored-section-placement.md) for
+what the renderer does with this.
+
 ## `WO Track`: the spline graph
 
 ### The file layout

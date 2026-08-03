@@ -22,8 +22,7 @@
 //!
 //! - The **base strip**, pass `0x1021`/`0x1001`, maps the texture `2/128 ..
 //!   125/128` on both axes, ping-ponging U (the along-track axis) every tile.
-//! - One **overlay copy**, pass `0x0021` - the only magstrip batches on any
-//!   circuit without bit `0x1000` - maps the *same* geometry `0 .. 1`
+//! - One **overlay copy**, pass `0x0021`, maps the *same* geometry `0 .. 1`
 //!   (`0/128 .. 128/128`), coarser: one quad across where the base has five
 //!   rows.
 //!
@@ -37,17 +36,20 @@
 //! (sub-pixel line shifts only). Both were established by A/B captures at
 //! `--pose 88.2,97.1,-462.3` - see `HANDOVER.md`.
 //!
-//! Moa Therma is the only circuit that ships the overlay, which is why it is
-//! the only circuit that looks wrong.
+//! # Why the original never shows it
 //!
-//! # What it does not establish
-//!
-//! What the original engine *does* with pass `0x0021` - most plausibly it is
-//! drawn as a separate effect pass (the animated magstrip glow) with state
-//! that cannot z-fight, or with texture scale/offset that reconciles the
-//! mappings: `base_uv = overlay_uv * 123/128 + 2/128` exactly. Until that is
-//! read out of the binary, the renderer keeps drawing it wrong; do not "fix"
-//! this by silently dropping the pass.
+//! The overlay is not an effect: it is the track's **far-LOD copy**, and the
+//! original hides it with the authored PVS. The copy's meshes live in a
+//! sibling group governed by their `section` node
+//! ([`oag_formats::pvs::governing_sections`]) - id 62 on this track, named
+//! `_59_TRACK_07_LOD` - and no section the craft races through lists 62 in
+//! its visibility mask; only four distant vantage sections do. Our renderer
+//! used to place draw calls in sections *geometrically*, and the copy sits
+//! inside the racing sections' boxes, so it could never be hidden that way;
+//! placement by the authored group reproduces the original's behaviour, and
+//! [`far_lod_sections`] pins the data this rests on. The
+//! quantisation-vs-master truncation measured below is real but sub-pixel -
+//! the honest residual difference between the builds, not the artifact.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -490,6 +492,88 @@ fn moa_therma_alone_draws_its_magstrip_twice_and_the_copies_disagree() {
             );
         }
     }
+}
+
+/// The far-LOD story, pinned: the overlay's group is governed by a section
+/// no racing section can see, while its geometry sits inside the racing
+/// sections' boxes - which is exactly why placement must be authored, not
+/// spatial.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn far_lod_sections() {
+    let Some(psp) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = open(&psp);
+    let (blob, model) = track(&mut archives, MOA_THERMA).expect("reading Moa Therma");
+    let nodes = vex::nodes(&blob).expect("decoding nodes");
+    let pvs = oag_formats::pvs::TrackPvs::from_nodes(&blob, &nodes).expect("parsing sections");
+    let governing = oag_formats::pvs::governing_sections(&blob, &nodes).expect("governance");
+
+    // Every overlay batch's node is governed by one section; the base strip's
+    // nodes are governed by others.
+    let mut overlay_sections = std::collections::BTreeSet::new();
+    let mut base_sections = std::collections::BTreeSet::new();
+    for (index, node) in nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.class_id == 0x125)
+    {
+        let payload = &blob[node.payload()];
+        let materials = vex::mesh_materials(payload);
+        for list in [0u8, 1u8] {
+            for batch in vex::mesh_batches(payload, list).expect("decoding batches") {
+                let texture = materials
+                    .get(usize::from(batch.material_index))
+                    .copied()
+                    .flatten()
+                    .map(|m| m.texture as usize);
+                if !is_magstrip(&model, texture) {
+                    continue;
+                }
+                if batch.pass_mask == OVERLAY_PASS {
+                    overlay_sections.insert(governing[index]);
+                } else {
+                    base_sections.insert(governing[index]);
+                }
+            }
+        }
+    }
+    println!("overlay groups governed by {overlay_sections:?}, base by {base_sections:?}");
+    assert_eq!(
+        overlay_sections.len(),
+        1,
+        "the far-LOD copy no longer sits in one authored group"
+    );
+    let far_lod = overlay_sections
+        .into_iter()
+        .next()
+        .flatten()
+        .expect("the far-LOD group has a governing section");
+    assert!(pvs.declares(far_lod));
+    assert!(
+        !base_sections.contains(&Some(far_lod)),
+        "the base strip shares the far-LOD group's section, so hiding one hides both"
+    );
+
+    // The trap that broke geometric placement: the far-LOD section's own box
+    // *contains* the loop pose...
+    let bounds = pvs.bounds_of(far_lod).expect("the far-LOD section's box");
+    assert!(
+        bounds.contains(LOOP),
+        "the far-LOD box no longer overlaps the loop; the geometric-placement \
+         trap this file documents is gone"
+    );
+    // ...while the section the craft is actually in cannot see it.
+    let racing = pvs.section_at(LOOP).expect("a section at the loop pose");
+    println!("racing section {racing}, far-LOD section {far_lod}");
+    assert_ne!(racing, far_lod);
+    assert_eq!(
+        pvs.visible_from(racing) & (1u64 << far_lod),
+        0,
+        "the racing section now sees the far-LOD section, so the original would \
+         z-fight too and this file's whole explanation is wrong"
+    );
 }
 
 #[test]

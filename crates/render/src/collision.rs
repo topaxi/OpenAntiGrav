@@ -242,6 +242,7 @@ pub fn build_model(
             centre,
             radius: bounds_radius,
         },
+        node: None,
     }];
     Model {
         label: label.to_string(),

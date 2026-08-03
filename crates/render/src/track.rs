@@ -143,6 +143,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
                 .sum::<f32>()
                 .sqrt(),
         },
+        node: None,
     }];
 
     Model {

@@ -19,16 +19,18 @@
 //! `oag-formats`' `pvs_ground_truth`. That is the ceiling on what the first
 //! tier can exclude.
 //!
-//! The unknown one is ours: **what fraction of a track's draw calls an authored
-//! box actually contains.** A draw call inside no box is deliberately never
-//! culled (see `oag_render::pvs`), so it passes tier one and still costs a
-//! frustum test. If that fraction were small, the ordering argument would be
-//! sound and the saving would still be nearly nothing - the first tier would be
-//! excluding sections that hold hardly any geometry.
+//! The unknown one is ours: **what fraction of a track's draw calls a
+//! section governs.** Placement is authored - a `section` node governs its
+//! parent's whole subtree, and a draw call inherits its scene node's group
+//! (see `oag_formats::pvs::governing_sections`). A draw call outside every
+//! group is deliberately never culled, so it passes tier one and still costs
+//! a frustum test. If the governed fraction were small, the ordering argument
+//! would be sound and the saving would still be nearly nothing - the first
+//! tier would be excluding sections that hold hardly any geometry.
 //!
 //! So this walks real tracks and reports, per track:
 //!
-//! - how many draw calls an authored box places, and how many it does not;
+//! - how many draw calls a section governs, and how many it does not;
 //! - the mean fraction of draw calls surviving tier one, taken over **every
 //!   section in turn as the camera's section** rather than one hand-picked
 //!   viewpoint, which is the honest average rather than a best case.
@@ -120,7 +122,9 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
             let ai = track::parse(&blob[ai_node.payload()]).expect("parsing the spline");
             let padding = SectionPadding::from_track(&ai);
 
-            let (sections, placement) = DrawSections::place(&model, &pvs);
+            let governing =
+                oag_formats::pvs::governing_sections(&blob, &nodes).expect("deriving governance");
+            let (sections, placement) = DrawSections::place(&model, &governing, &pvs);
             let lists = [
                 (&sections.opaque, &model.draws),
                 (&sections.alpha_tested, &model.alpha_tested_draws),
@@ -166,13 +170,11 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
             let mean_survivors = apart_total as f64 / ids.len() as f64;
 
             println!(
-                "== {name}: {total} draw calls, {} placed ({:.1}%), {} unplaced, \
-             {} spanning more than one section, {:.1} sections each on average",
+                "== {name}: {total} draw calls, {} governed by a section ({:.1}%), \
+             {} always drawn",
                 placement.placed,
                 placement.placed_fraction() * 100.0,
                 placement.unplaced,
-                placement.spanning,
-                placement.mean_sections(),
             );
             println!(
                 "   over all {} sections: camera trailing the craft (the live case) \
@@ -185,17 +187,17 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
                 together * 100.0 / total as f64,
             );
 
-            // Not a performance target - a design check. If the authored boxes
-            // placed almost nothing, the first tier would be excluding sections
+            // Not a performance target - a design check. If the authored groups
+            // governed almost nothing, the first tier would be excluding sections
             // that hold no geometry, and the ordering argument would be sound but
             // pointless. Half is a low bar deliberately: it fails only if the
             // association rule is broadly not working.
             assert!(
                 placement.placed_fraction() > 0.5,
-                "{name}: authored boxes place only {:.1}% of draw calls, so PVS \
+                "{name}: authored groups govern only {:.1}% of draw calls, so PVS \
              culling would barely reduce what the frustum test sees - the \
-             association rule in oag_render::pvs needs revisiting before \
-             ADR-0011 is accepted",
+             sibling-group rule in oag_formats::pvs::governing_sections needs \
+             revisiting",
                 placement.placed_fraction() * 100.0
             );
 

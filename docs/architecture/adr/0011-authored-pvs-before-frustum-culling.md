@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted.
+Accepted, with two rules superseded by
+[ADR-0014](0014-authored-section-placement.md): decision item 6 (a draw call
+belongs to every section its bounds touch - placement is now by the authored
+sibling group) and the mask-union padding in decision item 2 (padding now
+contributes the neighbours' bits, not their masks). The ordering, the
+authored set, the spline adjacency and the unknown-means-everything fallback
+all stand.
 
 Built and on by default. The authored set is decoded and validated
 ([`oag_formats::pvs`](../../../crates/formats/src/pvs.rs)), the draw-call
