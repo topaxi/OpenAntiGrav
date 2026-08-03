@@ -27,6 +27,24 @@ the factory uses** to pick the constructor that loads the Zone HUD. That closes
 it: the four-corner hover variant, the disabled brakes and the auto-speed law all
 belong to Zone.
 
+## A speed pad is worth 100 points
+
+`Zone_Update` (`0x0882f5cc`) consumes a flag that only `Ship_ApplySpeedupPad`
+sets, and only under this page's own selector:
+
+```c
+if (DAT_08b3435c != '\0') { DAT_08b3435c = '\0'; score += 100; }
+```
+
+`Ship_ApplySpeedupPad` sets `DAT_08b3435c` when a craft enters a **new** pad and
+`DAT_08ab07e3 == 0 && DAT_08b31048 == 6` - so the bonus is Zone-only, once per
+pad rather than once per tick on it. Confidence **85**: `Zone_Update`'s three
+other constants (1 per tick, 500 per zone, 500 for a clean zone) are the ones
+`crates/race/src/zone.rs` already carries from unrelated evidence, and all three
+agree, which is what identifies `+0x1a1c` as the score in the first place.
+
+See [pads.md](pads.md) and [engine.md](engine.md).
+
 ## Named here
 
 | Address | Kind | Name | Confidence |

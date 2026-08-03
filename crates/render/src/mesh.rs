@@ -437,6 +437,29 @@ pub fn build_sky(label: &str, data: &[u8]) -> Result<Model> {
     build_class(label, data, None, Lod::Both, vex::CLASS_SKYCUBE)
 }
 
+/// The track's speedup pads, as a model in their own right.
+///
+/// A [`vex::CLASS_SPEEDUP_PAD`] node's payload is a mesh payload for the same
+/// reason a `Skycube`'s is (the pad's bind handler calls the `Mesh` bind first),
+/// so this is [`build_with_textures`] pointed at a third class, not a third
+/// decoder. See [`oag_formats::pads`] for the trigger volume that shares those
+/// bytes.
+///
+/// Separate from [`build`]'s track model on purpose, and not because it is a
+/// different kind of draw: it is the same pipeline and the same textures. The
+/// track model's draw calls are what [`crate::pvs`] indexes its per-section
+/// visibility against, and pads belong to no `section`, so folding them in would
+/// put geometry into that mapping that the mapping cannot describe.
+///
+/// The textures are the track file's own, indexed by the same ordinals, so this
+/// must be built from the same `data` the track model was.
+///
+/// Returns a model with no meshes when the file authors no pads, which is
+/// ordinary: every Pure track and every `.vex` that is not a track.
+pub fn build_pads(label: &str, data: &[u8]) -> Result<Model> {
+    build_class(label, data, None, Lod::Both, vex::CLASS_SPEEDUP_PAD)
+}
+
 /// Flattens every node of one class into one buffer pair.
 ///
 /// The class is a parameter because `Skycube` and `Mesh` share a payload layout

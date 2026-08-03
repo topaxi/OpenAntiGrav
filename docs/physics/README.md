@@ -467,8 +467,11 @@ pitch damping - see
 - **The four-corner hover variant and its auto-speed law.** The selector is now *known* -
   `DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, confidence 84 - and the same condition gates
   the brakes off, but what the mode *is* sits at confidence 50.
-- **The track-section force** (`FUN_08848f9c`), a guess at confidence 45 as to what it
-  even is.
+- **The speed-pad boost** (`Ship_ApplySpeedupPad`, `0x08848f9c`). No longer a guess: the
+  function is read at confidence 85 and the trigger side with it (see
+  [pads.md](../ghidra/functions/psp-pulse/pads.md)). `crates/formats` decodes the pads and
+  the renderer draws them; what is still missing is the force term itself and the
+  `<GlobalClass><SpeedupPads amount time/>` tunables it needs.
 - **The per-team in-air pitch bias** at `stats_base + 0x90`, which is outside every class
   block and whose XML element is unknown, so there is no field to read it from.
 - **The gate on pitch input** (`FUN_088492bc`), not decoded, so pitch applies

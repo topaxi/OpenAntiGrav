@@ -177,6 +177,27 @@ pub const CLASS_SKYCUBE: u32 = 0x3c6;
 /// one, so a loader must handle its absence.
 pub const CLASS_FOGCUBE: u32 = 0x3d3;
 
+/// Class ID of a `Speedup Pad` node: a boost pad on the track surface.
+///
+/// **Its payload is a [`CLASS_MESH`] payload**, for the same reason
+/// [`CLASS_SKYCUBE`]'s is: the pad's bind handler (`0x089264f4`) calls the
+/// `Mesh` bind (`0x0890e998`) first and only then reads its own fields. So a pad
+/// carries its own geometry, and the bounding-box pair at `+0x10`/`+0x20` is
+/// both the mesh's bounds and the pad's trigger volume. Confidence 85; see
+/// [`pads`](crate::pads) and `docs/formats/pads.md`.
+///
+/// `01_Track` authors nine, each an instance of one shared payload under a
+/// different [`CLASS_TRANSFORM`] parent, so a pad's placement is entirely in its
+/// transform chain and its volume is entirely in local space.
+pub const CLASS_SPEEDUP_PAD: u32 = 0x3bd;
+
+/// Class ID of a `Weapon Pad` node: a pickup pad on the track surface.
+///
+/// Shares [`CLASS_SPEEDUP_PAD`]'s base vtable, so the payload is decoded the
+/// same way. Nothing consumes one yet - there is no pickup system - but the
+/// geometry decodes and is asserted against the disc alongside the speedup pads.
+pub const CLASS_WEAPON_PAD: u32 = 0x3be;
+
 /// The `.vex` class-ID to name table, as the shipped executable carries it.
 ///
 /// Read out of `BOOT.BIN` at `0x08ab2370` - stride 12, `{u32 id, char *name,

@@ -945,6 +945,46 @@ speed the wrong way. The lead is closed.
 The tables are `.bss` and hold nothing in the image, so the per-class numbers are
 shipped data and are not recorded here.
 
+##### Two corrections to the pseudocode above
+
+Both were found by reading the trigger side; see
+[`pads.md`](pads.md), which supersedes them here.
+
+**`FUN_08887144` does not return a track "section", and `+0x20` is not a
+"direction" field.** It returns the **matrix** of the pad that was hit, at node
+`+0x30`, in the row-major translation-in-row-3 layout every `.vex` matrix uses.
+So `+0x20` is floats 8 to 10 - **row 2**, the pad's local `+Z` axis. The boost
+pushes along the pad's own forward direction, which is why the reading still
+works out to "along the track": the pads are authored aligned with it. The
+function is now `Pads_TestCraft_q` (`0x08887144`, confidence 65), and the
+containment it delegates to is `Pad_ContainsPoint` (`0x088866bc`, 85).
+
+**The `if (section changed)` block is not lap and sector counting.** It bumps
+pad-visit statistics: `racer+0x8d0` counts pads taken, and
+`racer+0x994 + (lap-1)*0x10` counts them per lap for the up-to-20 laps at
+`racer+0xac8`. Lap counting is still unfound - see
+[`track.md`](../../../formats/track.md).
+
+The one real gameplay consequence in that block is Zone mode's:
+
+```c
+if (DAT_08ab07e3 == '\0' && DAT_08b31048 == 6) DAT_08b3435c = 1;
+```
+
+That condition is this repository's already-established **Zone-mode selector**
+(see [`zone-mode.md`](zone-mode.md), confidence 84), and `Zone_Update`
+(`0x0882f5cc`) consumes and clears the flag:
+
+```c
+if (DAT_08b3435c != '\0') { DAT_08b3435c = '\0'; score += 100; }
+```
+
+So **a speed pad is worth 100 points in Zone mode**, and only in Zone mode.
+Confidence **85**: `Zone_Update`'s other three constants - 1 point per tick, 500
+per zone, 500 for a clean zone - are the ones `crates/race/src/zone.rs` already
+carries from unrelated evidence, and all three agree, which is what identifies
+`+0x1a1c` as the score.
+
 #### Two damping terms in `Body_Integrate` that no page had recorded
 
 Re-reading `Body_Integrate` (`0x0015d088`, PS2) for this turned up a pair of terms
@@ -2202,6 +2242,12 @@ here and `docs/formats/handling-stats.md` needs to say which is which.
 
 ## History
 
+- 2026-08-03: two readings in the speed-pad section corrected from the trigger
+  side (see [pads.md](pads.md)). What `FUN_08887144` returns is a pad's
+  **matrix**, not a track "section", so the push direction is row 2 of that
+  matrix rather than a "direction" field; and the block guarded by "section
+  changed" is pad-visit statistics, not lap and sector counting. Its one real
+  consequence, a **+100 Zone score per pad**, recovered at 85 via `Zone_Update`.
 - 2026-07-26: first pass. Parameter block layout 90 from the XML loader; force
   law 74-85 from decompilation; nothing runtime-verified.
 - 2026-07-27: the angular sign convention resolved from the PS2 integrator, with

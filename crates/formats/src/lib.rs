@@ -33,6 +33,7 @@ pub mod handling;
 pub mod ipf;
 pub mod ivf;
 pub mod lzss;
+pub mod pads;
 pub mod pmf;
 pub mod png;
 pub mod pob;

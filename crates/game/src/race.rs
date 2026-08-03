@@ -294,6 +294,17 @@ pub struct Setup {
     /// node as it rides the hull. Empty means the model authors none, and
     /// the burst falls back to anchoring at the contact point itself.
     pub collision_fx: Vec<Vec3>,
+    /// The track's speedup pads, as trigger volumes.
+    ///
+    /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*
+    /// rather than for what they look like: an oriented box in each pad's own
+    /// space, plus the world matrix that places it and gives the push its
+    /// direction. Empty for a track that authors none.
+    ///
+    /// Nothing consumes these yet - the boost is the next milestone - but they
+    /// belong to the simulation half rather than to [`Loaded`], because a
+    /// headless race has to be able to trigger a pad without a GPU.
+    pub speedup_pads: Vec<oag_formats::pads::PadVolume>,
 }
 
 /// A [`Setup`] plus the geometry to draw it with.
@@ -319,6 +330,13 @@ pub struct Loaded {
     /// depth. `None` for a driveable-ribbon build, which has no art meshes at
     /// all, and for any track that authors no sky.
     pub sky_model: Option<Model>,
+    /// The track's `Speedup Pad` geometry, when it authors any.
+    ///
+    /// Built from the same blob as [`Self::track_model`] and drawn on the same
+    /// pipeline, but kept separate because pads belong to no visibility
+    /// `section` and the track model's draw calls are what the PVS indexes.
+    /// `None` for a driveable-ribbon build and for any track that authors none.
+    pub pad_model: Option<Model>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` when the track declares no `section` nodes - a driveable-ribbon
@@ -480,6 +498,34 @@ pub fn load(options: &Options) -> Result<Loaded> {
             .sum::<usize>()
     ));
 
+    // The pads' trigger volumes, from the same blob the geometry comes from.
+    // Reported with the distance from the grid to the nearest one, because that
+    // is the number anyone testing a pad needs and there is nowhere else to get
+    // it: a pad is a plate on the track surface with nothing to distinguish it
+    // in a screenshot.
+    let speedup_pads = oag_formats::vex::nodes(&track_blob)
+        .map(|nodes| {
+            oag_formats::pads::volumes(&track_blob, &nodes, oag_formats::vex::CLASS_SPEEDUP_PAD)
+        })
+        .unwrap_or_default();
+    if speedup_pads.is_empty() {
+        report.push("the track authors no Speedup Pad trigger volumes".to_string());
+    } else {
+        let nearest = start_position.map(|slot| {
+            speedup_pads
+                .iter()
+                .map(|pad| Vec3::from_array(slot.position).distance(Vec3::from_array(pad.centre())))
+                .fold(f32::INFINITY, f32::min)
+        });
+        report.push(match nearest {
+            Some(d) => format!(
+                "{} speedup pad trigger volume(s), nearest {d:.0} units from the grid",
+                speedup_pads.len()
+            ),
+            None => format!("{} speedup pad trigger volume(s)", speedup_pads.len()),
+        });
+    }
+
     let stats_name = handling::entry_name(&options.team);
     let stats_blob = read(&mut archives, &stats_name)?;
     let stats =
@@ -613,6 +659,25 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 sky.draws.len() + sky.alpha_tested_draws.len() + sky.transparent_draws.len(),
             ));
             Some(sky)
+        }
+    };
+
+    // Same reasoning as the sky: a ribbon build shows an invented surface, so it
+    // shows none of the disc's art meshes, pads included.
+    let pad_model = if options.ribbon {
+        None
+    } else {
+        let pads = mesh::build_pads(&options.track, &track_blob)?;
+        if pads.indices.is_empty() {
+            report.push("the track authors no Speedup Pad geometry".to_string());
+            None
+        } else {
+            report.push(format!(
+                "drawing the track's speedup pads: {} triangle(s), {} material(s)",
+                pads.indices.len() / 3,
+                pads.draws.len() + pads.alpha_tested_draws.len() + pads.transparent_draws.len(),
+            ));
+            Some(pads)
         }
     };
     report.push(format!(
@@ -761,11 +826,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
             chase,
             nozzle,
             collision_fx,
+            speedup_pads,
         },
         hud,
         track_model,
         collision_model,
         sky_model,
+        pad_model,
         fog_volumes,
         ship_model,
         visibility,
@@ -2375,6 +2442,13 @@ pub struct Scene {
     /// after covers it - see [`Scene::render`] for why it is not scaled to the
     /// far plane instead.
     sky: Option<Drawable>,
+    /// The track's `Speedup Pad` geometry, drawn with the track.
+    ///
+    /// Same pipeline, same textures, same fog, same world matrix as
+    /// [`Self::track`]; separate only because a pad belongs to no visibility
+    /// `section`, so it is offered frustum culling but not the PVS. `None` when
+    /// the track authors none.
+    pads: Option<Drawable>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` for a track with no `section` nodes - every Pure track - and the
@@ -2436,6 +2510,7 @@ impl Scene {
         ship_model: Model,
         collision_model: Option<Model>,
         sky_model: Option<Model>,
+        pad_model: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         format: wgpu::TextureFormat,
@@ -2496,6 +2571,20 @@ impl Scene {
                 )
             })
             .transpose()?;
+        let pads = pad_model
+            .filter(|model| !model.indices.is_empty())
+            .map(|model| {
+                Drawable::new(
+                    device,
+                    queue,
+                    model,
+                    format,
+                    anisotropy,
+                    sample_count,
+                    scene_depth,
+                )
+            })
+            .transpose()?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -2516,6 +2605,7 @@ impl Scene {
             ship,
             collision,
             sky,
+            pads,
             fog_volumes,
             exhaust,
             sparks,
@@ -2603,9 +2693,14 @@ impl Scene {
             .map_or_else(mesh_render::Fog::off, |p| {
                 mesh_render::Fog::new(&p, eye.to_array())
             });
-        for drawable in [Some(&self.track), Some(&self.ship), self.collision.as_ref()]
-            .into_iter()
-            .flatten()
+        for drawable in [
+            Some(&self.track),
+            Some(&self.ship),
+            self.collision.as_ref(),
+            self.pads.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
         {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&fog));
         }
@@ -2631,6 +2726,9 @@ impl Scene {
             .write(queue, view_projection, race.ship_model_matrix(), scroll);
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
+        }
+        if let Some(pads) = &self.pads {
+            pads.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         }
 
         // The camera's own axes, read out of the view matrix: for a view matrix
@@ -2729,6 +2827,14 @@ impl Scene {
             visible_set.as_ref(),
             frustum.as_ref(),
         );
+        // After the track, so a pad sitting flush on the surface wins the depth
+        // test rather than z-fighting whatever it was authored on top of.
+        // Frustum culling applies; the PVS does not, because a pad carries no
+        // `section` id to look up - the same exemption the sky takes, for a
+        // different reason.
+        if let Some(pads) = &self.pads {
+            stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
+        }
         stats.add(self.ship.draw(&mut pass, None, None, None));
         if let Some(collision) = &self.collision {
             stats.add(collision.draw(&mut pass, None, None, None));
@@ -2903,6 +3009,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         ship_model,
         collision_model,
         sky_model,
+        pad_model,
         fog_volumes,
         visibility,
         flare,
@@ -2968,6 +3075,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         ship_model,
         collision_model,
         sky_model,
+        pad_model,
         flare,
         noise,
         format,
@@ -3361,6 +3469,9 @@ mod tests {
             // likewise fall back to anchoring at the contact point.
             nozzle: None,
             collision_fx: Vec::new(),
+            // A synthetic track authors no pads, which is also what every Pure
+            // track does: an empty set is an ordinary state, not a stub.
+            speedup_pads: Vec::new(),
         }
     }
 

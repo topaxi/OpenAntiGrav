@@ -96,6 +96,18 @@ struct Cli {
     #[arg(long)]
     sky: Option<String>,
 
+    /// Render a track's `Speedup Pad` geometry instead of its art meshes, by the
+    /// `.vex` name in the archive.
+    ///
+    /// A pad is a `Mesh` subclass, so its geometry sits in the track file
+    /// alongside everything else and is invisible in the art-mesh view - nothing
+    /// distinguishes it once drawn. Seeing the pads alone is how you check that
+    /// the transform chain placed them apart from each other and around a
+    /// circuit, which is the half of the decode a screenshot of a race cannot
+    /// show.
+    #[arg(long)]
+    pads: Option<String>,
+
     /// Skin a `--mesh` from an external texture set, by entry index or
     /// `0x`-prefixed name hash.
     ///
@@ -510,6 +522,35 @@ fn main() -> Result<()> {
         // bounding sphere, and from there a sky is a small box with its back
         // faces towards you.
         let pitch = cli.pitch.unwrap_or(0.0);
+        if let Some(path) = &cli.screenshot {
+            mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch, cli.anisotropy)?;
+            println!("wrote {}", path.display());
+            return Ok(());
+        }
+        println!("arrows orbit, +/- (or PageUp/PageDown) zoom, escape quits");
+        orbit::run(model, cli.yaw, pitch, cli.anisotropy)?;
+        return Ok(());
+    }
+
+    if let Some(name) = &cli.pads {
+        let data = mesh::read_blob(&cli.archive, name)?;
+        let model = mesh::build_pads(name, &data)?;
+        println!(
+            "{}: {} Speedup Pad node(s), {} vertices, {} triangles, radius {:.2}",
+            model.label,
+            model.mesh_count,
+            model.vertices.len(),
+            model.indices.len() / 3,
+            model.radius
+        );
+        if model.mesh_count == 0 {
+            println!("no Speedup Pad node; this file authors no pads");
+            return Ok(());
+        }
+        // Pads ring a circuit rather than filling a volume, so the informative
+        // view is from above: looking along the ground puts them all edge-on to
+        // each other.
+        let pitch = cli.pitch.unwrap_or(1.4);
         if let Some(path) = &cli.screenshot {
             mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch, cli.anisotropy)?;
             println!("wrote {}", path.display());

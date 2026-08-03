@@ -546,13 +546,23 @@ Every claim in this section is asserted in
 
 ## Pads
 
-`Speedup Pad` carries an AABB at `+0x10`, expanded vertically at load
-(`min.y -= 2.0`, `max.y += 8.0`), followed by **eight zeroed words** — one per
-racer, almost certainly per-ship trigger latches. `Weapon Pad` shares the base
-vtable, so it is very likely identical. Confidence **80**.
+**Moved to [`pads.md`](pads.md)**, which now carries the layout, the census
+across all 40 track files and the reimplementation. The short version, and the
+two corrections to what this section used to say:
 
-Note that the vertical expansion is asymmetric in `+y`, which is consistent with
-`+y` being up and a pad being triggered from above.
+`Speedup Pad` is a **`Mesh` subclass** - its bind handler calls the `Mesh` bind
+first - so its payload is a mesh payload and the box at `+0x10`/`+0x20` is the
+mesh's own bounding-box pair, two `vec4`s rather than a bare AABB. It is expanded
+vertically at load (`min.y -= 2.0`, `max.y += 8.0`); the expansion is asymmetric
+in `+y`, which is consistent with `+y` being up and a pad being triggered from
+above. `Weapon Pad` shares the base vtable and decodes identically. Confidence
+**85**.
+
+The **eight zeroed words are not on the payload and are not trigger latches**.
+They sit at object `+0x1d0`, are zeroed at bind, and hold each racer's cached
+distance to this pad, decremented by how far that racer moved - an optimisation
+so the containment test only runs once a craft could have reached the pad. See
+[`pads.md`](../ghidra/functions/psp-pulse/pads.md) for `Pad_SweptTest_q`.
 
 ## Open questions
 

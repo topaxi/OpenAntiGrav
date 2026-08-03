@@ -126,6 +126,10 @@
 0x08849618	function	Ship_UpdateCraft	82	engine.md
 0x08849354	function	Ship_InitCraft	88	engine.md
 0x08848f9c	function	Ship_ApplySpeedupPad	85	engine.md
+0x089264f4	function	Pad_Bind	85	pads.md
+0x088866bc	function	Pad_ContainsPoint	85	pads.md
+0x0888686c	function	Pad_SweptTest	65	pads.md
+0x08887144	function	Pads_TestCraft	65	pads.md
 0x0883f274	function	Ship_ApplyCollisionImpulse	85	engine.md
 0x0884d850	function	Body_SetMass	88	engine.md
 0x0884da24	function	Body_ClearAccumulators	85	engine.md

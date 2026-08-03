@@ -470,7 +470,14 @@ seen from the authoring side.
       A **graphics-menu row** for it is still open; today it is a flag only.
       What still makes a race look unlike the original is authored lighting, sky
       and fog, and those are [M6](#m6---rendering-fidelity).
-- [ ] Weapons and pickups
+- [ ] **Speed pads.** The pads themselves are decoded, placed and drawn -
+      `Speedup Pad` `0x3bd` is a `Mesh` subclass, so its geometry ships inside
+      the track file (see [pads](../formats/pads.md)). What is left is the
+      boost: the force term from `Ship_ApplySpeedupPad`, the
+      `<GlobalClass><SpeedupPads amount time/>` tunables it reads off the disc,
+      arming `Exhaust::boost`, and Zone mode's +100 per pad.
+- [ ] Weapons and pickups, including `Weapon Pad` `0x3be` - which decodes today
+      alongside the speedup pads, but has nothing to hand out
 - [ ] Shield and energy
 - [ ] AI
 - [ ] Audio, including the **positional** classes a track authors:
