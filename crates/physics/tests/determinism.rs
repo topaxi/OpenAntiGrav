@@ -70,24 +70,38 @@ use oag_physics::{Environment, ShipState, step};
 ///   3,600-tick hashes moved; the 600-tick `Corridor` entry is untouched
 ///   because that scenario never reaches a wall in 600 ticks, which is the
 ///   expected shape of a change scoped to contact geometry.
+/// - **Regenerated 2026-08-03**, and **no behaviour changed**. `ShipState` gained
+///   `pad_timer` and `pad_direction` for the speed-pad boost
+///   (`crates/physics/src/engine.rs`, `speedup_pad`), so `probe::hash_state`
+///   writes four more `f32`s per tick and the FNV-1a stream is longer. The boost
+///   itself cannot have run: `probe::run` drives every script with
+///   `Environment::default()`, whose `pad_hit` is `None`, and with no hit the
+///   timer never leaves `0.0` and the term returns `Vec3::ZERO` before touching
+///   an accumulator. So the two fields hold their defaults for all 3,600 ticks of
+///   every script and contribute a *constant* run of bytes.
+///
+///   **All three rows moved this time, including the 600-tick `Corridor`**, which
+///   is the tell that this is a hash-input change rather than a force-law one: a
+///   change to behaviour reaches the scenarios that exercise it, a change to what
+///   is hashed reaches all of them equally.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x878c_7299_c74c_9024,
-        0x7b01_4d1c_40fc_e927,
+        0x5d2b_1bd5_46e7_f924,
+        0xb3e9_2384_7b0d_fd27,
     ),
     (
         3_600,
         Script::Corridor,
-        0xa3fb_793d_3418_2764,
-        0xe4ee_634e_31e3_4181,
+        0xee6c_9074_2507_6064,
+        0x6666_f093_b1fd_7ec1,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x7000_de92_de16_423a,
-        0x165a_2466_dcde_d5ff,
+        0x63fc_a62a_369e_40ba,
+        0xf669_7ed1_c0ae_23ff,
     ),
 ];
 
@@ -187,6 +201,8 @@ fn every_hashed_field_reaches_the_hash() {
         ("sideshift_timers[1]", |s| s.sideshift_timers[1] = 1.0),
         ("time_since_landing", |s| s.time_since_landing = 2.0),
         ("mag_lock_blend", |s| s.mag_lock_blend = 1.0),
+        ("pad_timer", |s| s.pad_timer = 1.0),
+        ("pad_direction", |s| s.pad_direction.z = 1.0),
         // The zeroed contact is the case the discriminant byte exists for: it
         // is byte-identical to `None` in every field it has.
         ("mag_contact", |s| {
@@ -244,6 +260,13 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
             state.body.position.is_finite() && state.body.linear_velocity.is_finite(),
             "tick {tick}: the fixture run went non-finite, so the hashes mean nothing"
         );
+        // The claim the 2026-08-03 regeneration rests on: the boost is inert
+        // here, so its two fields hold their defaults for the whole run and the
+        // hashes moved only because the stream got longer. Asserted rather than
+        // asserted-in-prose, because a future `Environment` default carrying a
+        // pad hit would quietly turn that history note into a lie.
+        assert_eq!(state.pad_timer, 0.0, "tick {tick}: the boost armed");
+        assert_eq!(state.pad_direction, Vec3::ZERO);
     }
 
     assert!(was_grounded, "the run never found the floor");

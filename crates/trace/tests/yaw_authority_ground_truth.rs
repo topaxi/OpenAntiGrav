@@ -111,7 +111,9 @@ fn shipped_handling() -> Handling {
     let blob = archives.read_name(&name).expect("read handlingstats.xml");
     let stats = handling::from_blob(&blob).expect("parse handlingstats.xml");
 
-    handling_for(&stats, CLASS)
+    // Zero: neither of these scenarios crosses a speed pad, so the boost must
+    // contribute nothing and a non-zero magnitude could only mask that.
+    handling_for(&stats, CLASS, handling::SpeedupPads::default())
 }
 
 /// The yaw rate the recording actually shows, differentiated out of the captured

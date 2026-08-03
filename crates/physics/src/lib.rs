@@ -61,7 +61,7 @@
 //!
 //! Everything that would need a trigger nobody has decoded: turbo and the boost lift,
 //! the four-corner hover variant and the auto-speed law behind its selector,
-//! the track-section force, and the flag-gated engine and steering
+//! and the flag-gated engine and steering
 //! variants. `docs/physics/README.md`'s "what is implemented" section is the full
 //! list, and the still-open section is where each sign and reading that had to be
 //! picked is recorded.

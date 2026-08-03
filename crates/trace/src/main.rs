@@ -1007,7 +1007,24 @@ fn load(
         .with_context(|| format!("reading {stats_name} out of {where_from}"))?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
-    let handling = handling_for(&stats, class);
+    // The speed-pad tunables are engine-wide rather than per team, so they come
+    // out of a second file. A capture that crosses a pad is compared against a
+    // force law that has them; without this the replay would be missing step 15
+    // entirely and the difference would be read as a fit error somewhere else.
+    let pad_tunables = archives
+        .read_name(handling::GLOBAL_ENTRY)
+        .ok()
+        .and_then(|blob| handling::global_from_blob(&blob).ok())
+        .flatten()
+        .map(|global| global.speedup_pads(oag_gameplay::to_format_class(class)))
+        .unwrap_or_else(|| {
+            eprintln!(
+                "{}: unreadable, so this replay applies no speed-pad boost",
+                handling::GLOBAL_ENTRY
+            );
+            handling::SpeedupPads::default()
+        });
+    let handling = handling_for(&stats, class, pad_tunables);
     eprintln!(
         "{stats_name}: team {:?}, {class:?} class, mass {}, ride_height {}",
         stats.team, handling.physical.mass, handling.antigrav.ride_height

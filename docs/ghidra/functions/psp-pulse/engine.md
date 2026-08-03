@@ -985,6 +985,58 @@ per zone, 500 for a clean zone - are the ones `crates/race/src/zone.rs` already
 carries from unrelated evidence, and all three agree, which is what identifies
 `+0x1a1c` as the score.
 
+**One more gate, found when the block was re-read for the implementation:** the
+whole of it - both statistics counters *and* the Zone flag - is wrapped in
+`if (*(int *)(racer + 0x368) == 0)`. `racer+0x368` is unidentified. So a pad taken
+by whatever that flag describes scores nothing and is not counted. Confidence 90
+that the gate is there (it is one branch); **0 on what it selects**, and it is not
+reimplemented for that reason.
+
+##### `craft+0x2cc` is not the contact ratio, and the scale it gates is not ported
+
+The pseudocode's `if (craft+0x2cc < 1.0) f *= craft+0x2cc` reads naturally as
+"scale the boost by how grounded the craft is", and an earlier plan for the
+implementation took it that way at confidence 60. **That reading is wrong**, and
+finding out cost one instruction search.
+
+`craft+0x2cc` has exactly two writers on a craft base: `Ship_InitCraft`
+(`0x08849524`) sets it once, and `Ship_UpdateEngine`'s own prologue
+(`0x0884c5ec`-`0x0884c5f4`) does this every frame:
+
+```c
+craft+0x2cc = (craft+0x1c0 & 0x200) ? 0.0 : craft+0x2cc + dt;
+```
+
+That is an **accumulator of seconds**, reset while flag `0x200` is set, and an
+unbounded one - it cannot be a `0..1` groundedness. What it holds is *time since
+flag `0x200` was last set*, and `0x200` is one of the eleven undecoded bits of
+`craft+0x1c0` (see the bottom of this page). So the term is a **one-second
+fade-in after some unidentified state ends**, not a contact scale.
+
+`crates/physics/src/engine.rs`'s `speedup_pad` therefore leaves it out rather than
+guessing, on the same standing as the `controls->0x24 & 1` jump branch beside it.
+That is also what the measurement wants: `docs/physics/cornering-ground-truth.md`
+records five pad crossings at full magnitude, so `0x200` is evidently not set
+during ordinary racing and the gate would be inert anyway.
+
+##### The two tables are filled unscaled, and the timer is re-armed every tick
+
+Two more details the implementation needed and the pseudocode above does not make
+plain, both read this pass:
+
+- **No load-time scale.** `Xml_ReadGlobalSettings` stores
+  `Xml_AttributeAsFloat`'s return value straight into `0x08b36bc0[class]` and
+  `0x08b36bd0[class]` with nothing in between, unlike the four fields
+  `HandlingXml_ParseEngine`/`ParseBrakes`/`ParseAirbrake` pre-multiply. The
+  factor of ten in the force law is the force law's own. Confidence **90**.
+- **`craft+0x298` is assigned, not triggered.** The `else` arm runs on *every*
+  tick the craft is inside a pad, so the timer is refreshed to `time` for as long
+  as the ship is on the pad and only starts counting down when it leaves. That is
+  what makes a slow crossing boost for longer, and it is why
+  `oag_physics::forces::Environment::pad_hit` is a per-tick containment answer
+  rather than an entry edge. The decrement is likewise **before** the force is
+  read off the timer, which lowers the peak by one `dt` of ramp.
+
 #### Two damping terms in `Body_Integrate` that no page had recorded
 
 Re-reading `Body_Integrate` (`0x0015d088`, PS2) for this turned up a pair of terms
@@ -2242,6 +2294,16 @@ here and `docs/formats/handling-stats.md` needs to say which is which.
 
 ## History
 
+- 2026-08-03, second pass: **`craft+0x2cc` corrected**. It was going to be
+  implemented as a contact ratio at confidence 60; it is an unbounded accumulator
+  of seconds since flag `0x200`, and the scale it gates is not ported. Also
+  established this pass, both at 90: the two speed-pad tables are filled
+  **unscaled**, and `craft+0x298` is **re-armed every tick inside a pad** rather
+  than set on entry. A third gate on the statistics block, `racer+0x368 == 0`,
+  recorded but not reimplemented - nothing identifies what it selects. Step 15 of
+  `Ship_UpdateCraft` is now implemented in `crates/physics`; this page's "it
+  cannot be the missing resistance, the lead is closed" still stands, and closing
+  the lead is not the same as leaving the term out.
 - 2026-08-03: two readings in the speed-pad section corrected from the trigger
   side (see [pads.md](pads.md)). What `FUN_08887144` returns is a pad's
   **matrix**, not a track "section", so the push direction is row 2 of that

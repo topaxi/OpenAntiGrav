@@ -29,7 +29,9 @@
 //! one frame.
 
 use crate::collide::{Surface, TriangleSoup};
-use crate::params::{Airbrake, Antigrav, Brakes, Dimensions, Engine, Physical, Pitch, Turning};
+use crate::params::{
+    Airbrake, Antigrav, Brakes, Dimensions, Engine, Physical, Pitch, SpeedupPads, Turning,
+};
 use crate::{
     Body, CollisionWorld, Environment, Handling, ShipControls, ShipState, Sideshift, step,
 };
@@ -190,6 +192,12 @@ pub fn handling() -> Handling {
             easyshield: 120.0,
             weight_distribution: 0.5,
         },
+        // Non-zero on purpose, even though no probe script crosses a pad: if a
+        // future script does, it must boost rather than silently do nothing.
+        speedup_pads: SpeedupPads {
+            amount: 50.0,
+            time: 0.5,
+        },
     }
 }
 
@@ -308,6 +316,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         sideshift_timers,
         time_since_landing,
         mag_lock_blend,
+        pad_timer,
+        pad_direction,
         mag_contact,
     } = *state;
 
@@ -327,6 +337,12 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_f32(sideshift_timers[1]);
     hasher.write_f32(time_since_landing);
     hasher.write_f32(mag_lock_blend);
+    // Both stay at their defaults through every probe script - none crosses a
+    // pad - so these two contribute a fixed run of bytes per tick and nothing
+    // else. That is why adding them moved the committed hashes without any
+    // behaviour changing; see the history note in `tests/determinism.rs`.
+    hasher.write_f32(pad_timer);
+    hasher.write_vec3(pad_direction);
     // A discriminant byte, or "no contact" hashes the same as a contact at the
     // origin with a zero normal.
     match mag_contact {

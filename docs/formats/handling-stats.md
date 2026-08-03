@@ -360,11 +360,64 @@ nothing else, asserted by `which_top_level_elements_handlingstats_carries` in
 `crates/formats/tests/handling_ground_truth.rs`. So `oag_formats::handling::parse`
 does not look for `<Global>`; `global_from_blob` reads it out of the global file.
 
-Only `<Zone start increment recharge/>` is decoded so far, because Zone mode is
-the only consumer. Confidence **84**; the rest of `<Global>` is named in
+Two parts are decoded, because they are the two with consumers:
+
+```text
+<Global>
+  <Special roll_cost roll_speed roll_turbotime speedpad_jump turbo_jump/>
+  <Zone start increment recharge/>                       <- decoded
+  <GlobalClass name="VECTOR|VENOM|FLASH|RAPIER|PHANTOM">
+    <SpeedupPads amount time/>                           <- decoded
+    <GravityMul airborne/>
+    <WeaponPad refresh_time elimination_refresh_time/>
+  </GlobalClass>                                          x5
+  <ExternalCloseCamPitchMod/> <ExternalFarCamPitchMod/> <ReplayCamPitchMod/>
+  <CameraSideOffset/> <StartBoost/>
+</Global>
+```
+
+`<Zone>` is confidence **84**; `<SpeedupPads>` is **90**, because
+`Xml_ReadGlobalSettings` was read to the store instruction: both attributes go
+through `Xml_AttributeAsFloat` into the per-class tables at `0x08b36bc0`
+(`amount`) and `0x08b36bd0` (`time`) **verbatim, with no load-time scale** -
+unlike the four in `oag_gameplay::handling::SCALED_FIELDS`.
+The rest is named in
 [engine.md](../ghidra/functions/psp-pulse/engine.md) and can be added when
-something needs it. Its values are read at runtime from the player's own disc and
-are not reproduced here, for the reason the next section up gives.
+something needs it. Values are read at runtime from the player's own disc and are
+not reproduced here, for the reason the next section up gives.
+
+Two consequences worth having in one place:
+
+- **`<GravityMul airborne>` fills `g_class_gravity_scale`**, which is
+  `oag_physics::forces::Environment::class_gravity_scale` - a field whose own docs
+  say the table "was not read" and whose value is the identity awaiting M3. It
+  **is** readable, from here. Left alone deliberately: decoding it changes how
+  every ship falls, and that belongs to a change that can carry the argument on
+  its own rather than riding along with the speed pads.
+- **`<Special speedpad_jump>` fills `0x08b36bec`**, the constant on the one branch
+  of the boost this project does not implement. See
+  `oag_physics::engine::speedup_pad`.
+
+### There are five `<GlobalClass>` blocks and only four speed classes
+
+Both discs author **`VECTOR` first**, then the four. No per-team file has a
+`<Class name="VECTOR">`, and `SpeedClass` has no such variant.
+
+**The original does not recognise it either.** `Xml_ReadGlobalSettings` matches
+`name` against a four-entry table and, on no match, simply leaves
+`g_handling_parse_class` holding whatever the previous match left there - it is a
+global and nothing resets it per element. So `VECTOR`'s numbers are written into
+some other class's slot and then overwritten by the four blocks that follow,
+because `VECTOR` comes first. `oag_formats::handling::global_classes` skips
+unrecognised names, which reproduces the outcome without reproducing the
+accident. Confidence **88**.
+
+**This holds only while `VECTOR` is authored first.** Authored last it would
+corrupt `PHANTOM` in the original and not here.
+
+Whether a fifth class exists anywhere else in Pulse - Wipeout HD's class ladder
+does begin at Vector - is **not** answered by this file and is not chased here.
+It is an open question on [HANDOVER.md](../../HANDOVER.md), not a finding.
 
 ## Related files
 

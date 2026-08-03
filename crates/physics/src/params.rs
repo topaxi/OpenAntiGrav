@@ -227,6 +227,24 @@ pub struct Dimensions {
     pub weight_distribution: f32,
 }
 
+/// The speed-pad boost, per speed class. From `<GlobalClass><SpeedupPads/>`.
+///
+/// The one member of [`Handling`] that does **not** come from the ship's own
+/// `handlingstats.xml`: it lives in the engine-wide `Data\XML\HandlingStats.xml`
+/// instead, and is per speed class rather than per team. It is here anyway
+/// because it is a tunable the force law reads for one ship in one class, which
+/// is what [`Handling`] is; where the number was authored is the format's
+/// business, not this crate's.
+///
+/// Neither value is pre-scaled - see `oag_gameplay::handling::SCALED_FIELDS`.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct SpeedupPads {
+    /// The force magnitude the boost settles at, `0x08b36bc0[class]`.
+    pub amount: f32,
+    /// How long the boost lasts, in seconds, `0x08b36bd0[class]`.
+    pub time: f32,
+}
+
 /// Everything the force law reads for one ship in one speed class.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Handling {
@@ -246,6 +264,8 @@ pub struct Handling {
     pub pitch: Pitch,
     /// `<Misc/>`, which is shared by all four of a ship's classes.
     pub dimensions: Dimensions,
+    /// `<GlobalClass><SpeedupPads/>`, which is shared by all eight teams.
+    pub speedup_pads: SpeedupPads,
 }
 
 impl Handling {
@@ -309,6 +329,10 @@ impl Handling {
             shield: 0.0,
             easyshield: 0.0,
             weight_distribution: 0.0,
+        },
+        speedup_pads: SpeedupPads {
+            amount: 0.0,
+            time: 0.0,
         },
     };
 }

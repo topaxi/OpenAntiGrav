@@ -436,6 +436,7 @@ tuning, per the [roadmap](../overview/roadmap.md).
 | Quadratic drag with all four coefficients, rolling resistance, weathervane, angular damping, vertical damping, gravity | [`passive.rs`](../../crates/physics/src/passive.rs) | engine.md |
 | Airbrake ramps, slide, lateral force, yaw, sideshift impulse, lateral grip | [`airbrake.rs`](../../crates/physics/src/airbrake.rs) | both |
 | Four accumulators, the fifteen-step term order, and the stale/fresh groundedness split | [`forces.rs`](../../crates/physics/src/forces.rs) | engine.md |
+| The speed-pad boost, step 15: the re-armed timer, the ramp-then-flat force law and its unscaled per-class tunables | [`engine.rs`](../../crates/physics/src/engine.rs) | engine.md, [pads](../ghidra/functions/psp-pulse/pads.md) |
 | Segment-triangle narrowphase as a plane sign change plus three edge half-space tests | [`collide.rs`](../../crates/physics/src/collide.rs) | [collision](../ghidra/functions/psp-pulse/collision.md) |
 | The magstrip hold: blend ramp, mag-floor probe, two-sample axis blend, reposition, velocity projection and the **kinematic basis rewrite** | [`maglock.rs`](../../crates/physics/src/maglock.rs) | engine.md |
 
@@ -467,11 +468,14 @@ pitch damping - see
 - **The four-corner hover variant and its auto-speed law.** The selector is now *known* -
   `DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, confidence 84 - and the same condition gates
   the brakes off, but what the mode *is* sits at confidence 50.
-- **The speed-pad boost** (`Ship_ApplySpeedupPad`, `0x08848f9c`). No longer a guess: the
-  function is read at confidence 85 and the trigger side with it (see
-  [pads.md](../ghidra/functions/psp-pulse/pads.md)). `crates/formats` decodes the pads and
-  the renderer draws them; what is still missing is the force term itself and the
-  `<GlobalClass><SpeedupPads amount time/>` tunables it needs.
+- **Two branches of the speed-pad boost** (`Ship_ApplySpeedupPad`, `0x08848f9c`). The term
+  itself is implemented - see the entry in the implemented list - but two of its arms are
+  not, and both for the same reason as the entries above: they are gated on bits nothing
+  has identified. `if (controls->0x24 & 1) dir += craft+0x160 * speedpad_jump` tilts the
+  push upward while some input is held; `if (craft+0x2cc < 1.0) f *= craft+0x2cc` fades
+  the boost in over a second after flag `0x200` clears. **`craft+0x2cc` is not the contact
+  ratio**, which an earlier plan assumed: `Ship_UpdateEngine`'s prologue accumulates `dt`
+  into it, so it is unbounded and cannot be a `0..1` groundedness.
 - **The per-team in-air pitch bias** at `stats_base + 0x90`, which is outside every class
   block and whose XML element is unknown, so there is no field to read it from.
 - **The gate on pitch input** (`FUN_088492bc`), not decoded, so pitch applies

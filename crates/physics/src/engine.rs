@@ -547,6 +547,97 @@ pub fn pitch(controls: &ShipControls, handling: &Handling, grounded: bool) -> f3
     controls.steer_y * crate::controls::CONTROL_RANGE * gain
 }
 
+/// Below this many seconds left, the boost stops ramping and holds flat.
+///
+/// `Ship_ApplySpeedupPad`'s `0.1`. Its reciprocal is [`PAD_RAMP_RATE`], which is
+/// what makes the two branches meet exactly rather than step: at the crossover
+/// `amount * 10 * 0.1 == amount`. Worth stating because a reader meeting two
+/// magic numbers in a ternary has no way to see that they are one number.
+pub const PAD_RAMP_FLOOR: f32 = 0.1;
+
+/// How fast the boost decays once the pad is behind the ship, per second.
+///
+/// `Ship_ApplySpeedupPad`'s `10.0`, and `1.0 / PAD_RAMP_FLOOR`. Applied to the
+/// *remaining* time, so the force falls linearly from `amount * 10 * time` at the
+/// moment of the last contact to `amount` at [`PAD_RAMP_FLOOR`] and then holds.
+pub const PAD_RAMP_RATE: f32 = 10.0;
+
+/// The speed-pad boost, into the **world** force accumulator.
+///
+/// `Ship_ApplySpeedupPad` (`0x08848f9c`), step 15 of `Ship_UpdateCraft` and the
+/// last one this crate was missing. Confidence **85** on the force law, which was
+/// read whole; **90** on the tunables being stored unscaled, from
+/// `Xml_ReadGlobalSettings`.
+///
+/// ```text
+/// if (inside a pad) { timer = time[class]; amount = amount[class]; dir = pad row 2 }
+/// if (timer > 0) {
+///     timer -= dt
+///     f = (timer > 0.1) ? amount * 10 * timer : amount
+///     if (craft+0x2cc < 1.0) f *= craft+0x2cc
+///     worldForce += dir * f
+/// }
+/// ```
+///
+/// The decrement comes **before** the force is read off the timer. That is the
+/// original's ordering and it is not cosmetic: it lowers the peak by one `dt` of
+/// ramp, about 6 % at 60 Hz, and `docs/physics/cornering-ground-truth.md` measured
+/// five pad crossings on one lap closely enough to prefer it.
+///
+/// # Two branches of the original are deliberately not here
+///
+/// Both are gated on bits this project has not identified, and
+/// `crate::controls`' module docs give the standing reason: a guessed binding is
+/// worse than a missing feature, because it produces behaviour that looks
+/// deliberate.
+///
+/// - **The jump term.** `if (controls->0x24 & 1) dir += craft+0x160 * 0.1`, the
+///   `0.1` being `<Special speedpad_jump>`. Bit 0 of the control word at
+///   `entity+0x78 + 0x24` is unidentified, and `craft+0x160` is a hull axis this
+///   crate does not otherwise read. Its effect is to tilt the boost upward while
+///   some input is held.
+/// - **The `craft+0x2cc` scale.** `if (craft+0x2cc < 1.0) f *= craft+0x2cc`, a
+///   one-second fade-in. `craft+0x2cc` is written in exactly one place -
+///   `Ship_UpdateEngine`'s prologue, as `flags & 0x200 ? 0.0 : craft+0x2cc + dt` -
+///   so it is **seconds since flag `0x200` was last set**, and bit `0x200` is one
+///   of the eleven undecoded bits of `craft+0x1c0`. It is emphatically *not* the
+///   contact ratio, which an earlier reading of this function assumed: an
+///   unbounded accumulator cannot be a `0..1` groundedness. Leaving it out means
+///   the boost is at full strength from its first tick, which is what the trace
+///   measures anyway - `0x200` is evidently not set during ordinary racing, or the
+///   captured peaks would have been scaled down.
+pub fn speedup_pad(
+    state: &mut ShipState,
+    handling: &Handling,
+    pad_hit: Option<Vec3>,
+    dt: f32,
+) -> Vec3 {
+    // Assignment, not a maximum: standing on a pad holds the timer at full and
+    // the countdown effectively starts when the ship leaves.
+    if let Some(direction) = pad_hit {
+        state.pad_timer = handling.speedup_pads.time;
+        state.pad_direction = direction;
+    }
+
+    if state.pad_timer <= 0.0 {
+        return Vec3::ZERO;
+    }
+
+    // The original lets this go slightly negative and gates on `> 0.0` next
+    // frame; clamping is the same behaviour with a tidier state hash, since the
+    // only other writer assigns.
+    state.pad_timer = (state.pad_timer - dt).max(0.0);
+
+    let amount = handling.speedup_pads.amount;
+    let force = if state.pad_timer > PAD_RAMP_FLOOR {
+        amount * PAD_RAMP_RATE * state.pad_timer
+    } else {
+        amount
+    };
+
+    state.pad_direction * force
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -981,5 +1072,113 @@ mod auto_speed_tests {
         // the auto-speed path is not. That difference is the whole branch.
         assert_eq!(engine(&state, &handling, 1.0, 40.0, None).thrust, 0.0);
         assert!(engine(&state, &handling, 1.0, 40.0, Some(50.0)).thrust > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod speedup_pad_tests {
+    use super::{PAD_RAMP_FLOOR, PAD_RAMP_RATE, speedup_pad};
+    use crate::params::{Handling, SpeedupPads};
+    use crate::ship::ShipState;
+    use oag_core::math::Vec3;
+
+    /// Round invented numbers. `time` is deliberately well above
+    /// [`PAD_RAMP_FLOOR`] so both branches of the law are reachable.
+    fn padded_handling() -> Handling {
+        Handling {
+            speedup_pads: SpeedupPads {
+                amount: 2.0,
+                time: 0.5,
+            },
+            ..Handling::ZERO
+        }
+    }
+
+    const DT: f32 = 1.0 / 60.0;
+
+    #[test]
+    fn a_ship_that_has_touched_no_pad_gets_no_boost() {
+        let mut state = ShipState::default();
+        assert_eq!(
+            speedup_pad(&mut state, &padded_handling(), None, DT),
+            Vec3::ZERO
+        );
+        assert_eq!(state.pad_timer, 0.0);
+    }
+
+    /// The shape of the law: `amount * 10 * remaining` while there is more than
+    /// [`PAD_RAMP_FLOOR`] left, flat `amount` after that, and **the decrement
+    /// happens first** - so the very first tick is already one `dt` down the ramp
+    /// rather than at `amount * 10 * time`.
+    #[test]
+    fn the_boost_ramps_down_and_then_holds_flat() {
+        let handling = padded_handling();
+        let mut state = ShipState::default();
+
+        let first = speedup_pad(&mut state, &handling, Some(Vec3::NEG_Z), DT);
+        let peak = handling.speedup_pads.amount * PAD_RAMP_RATE * (handling.speedup_pads.time - DT);
+        assert!((first.length() - peak).abs() < 1e-3, "{first} vs {peak}");
+        assert!(
+            first.length()
+                < handling.speedup_pads.amount * PAD_RAMP_RATE * handling.speedup_pads.time,
+            "reading the force before the decrement would give the larger value"
+        );
+
+        // Falls monotonically while the ramp branch is live.
+        let mut previous = first.length();
+        while state.pad_timer > PAD_RAMP_FLOOR {
+            let now = speedup_pad(&mut state, &handling, None, DT).length();
+            assert!(now < previous, "{now} is not below {previous}");
+            previous = now;
+        }
+
+        // And then holds flat at `amount` until the timer runs out.
+        while state.pad_timer > 0.0 {
+            let now = speedup_pad(&mut state, &handling, None, DT).length();
+            assert!((now - handling.speedup_pads.amount).abs() < 1e-6, "{now}");
+        }
+        assert_eq!(
+            speedup_pad(&mut state, &handling, None, DT),
+            Vec3::ZERO,
+            "an expired boost applies nothing"
+        );
+    }
+
+    /// The two branches meet rather than step, which is the whole reason the
+    /// constants are a reciprocal pair.
+    #[test]
+    fn the_ramp_and_the_flat_branch_meet_at_the_crossover() {
+        assert_eq!(PAD_RAMP_RATE * PAD_RAMP_FLOOR, 1.0);
+    }
+
+    /// Standing on a pad re-arms the timer every tick, so the force does not
+    /// decay while the ship is still inside the volume. This is what makes a slow
+    /// crossing boost for longer than a fast one, and it is why
+    /// `Environment::pad_hit` is a per-tick containment answer rather than an
+    /// entry edge.
+    #[test]
+    fn staying_inside_a_pad_holds_the_boost_at_its_peak() {
+        let handling = padded_handling();
+        let mut state = ShipState::default();
+
+        let first = speedup_pad(&mut state, &handling, Some(Vec3::NEG_Z), DT).length();
+        for _ in 0..120 {
+            let now = speedup_pad(&mut state, &handling, Some(Vec3::NEG_Z), DT).length();
+            assert!((now - first).abs() < 1e-6, "{now} drifted from {first}");
+        }
+    }
+
+    /// Leaving the pad does not re-aim the remaining boost. A ship that turns
+    /// after crossing keeps being pushed the way the pad faced, which is the
+    /// original holding `craft+0x1b0` rather than recomputing it.
+    #[test]
+    fn the_push_direction_is_held_after_the_pad_is_behind_the_ship() {
+        let handling = padded_handling();
+        let mut state = ShipState::default();
+
+        speedup_pad(&mut state, &handling, Some(Vec3::X), DT);
+        let later = speedup_pad(&mut state, &handling, None, DT);
+        assert_eq!(later.normalize(), Vec3::X);
+        assert_eq!(state.pad_direction, Vec3::X);
     }
 }

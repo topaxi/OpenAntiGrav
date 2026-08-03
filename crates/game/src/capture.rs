@@ -318,6 +318,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 frustum_culling: options.settings.graphics.frustum_culling,
                 pvs_culling: options.settings.graphics.pvs_culling,
                 animated_textures: options.settings.graphics.animated_textures,
+                boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 anti_aliasing: options.settings.graphics.anti_aliasing,
                 presented: options.presented.then_some(race::Presented {
                     render_scale: options.settings.graphics.render_scale,

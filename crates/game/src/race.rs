@@ -67,7 +67,7 @@ use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
 use oag_formats::{collision, handling};
 use oag_gameplay::{
-    InputSnapshot, Pose, Ship, World, collision_world, handling_for, ship_controls,
+    InputSnapshot, Pose, Ship, World, collision_world, handling_for, ship_controls, to_format_class,
 };
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
@@ -530,29 +530,38 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let stats_blob = read(&mut archives, &stats_name)?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
-    // Nothing is scaled here: the four pre-scaled fields are converted exactly once
-    // and this is not the place it happens.
-    let handling = handling_for(&stats, options.class);
-    // Zone mode's three numbers, out of the engine-wide `Data\XML\HandlingStats.xml`
-    // rather than this team's file - see `handling::GLOBAL_ENTRY`. Read only when
-    // the mode needs them: on a time trial the file's absence is not worth a line,
-    // and on a Zone run it is the whole mode.
-    let zone = if options.mode == Mode::Zone {
-        let found = read(&mut archives, handling::GLOBAL_ENTRY)
-            .ok()
-            .and_then(|blob| handling::global_from_blob(&blob).ok())
-            .flatten();
-        match found {
-            Some(zone) => report.push(format!(
-                "<Zone>: start {}, increment {} per zone, recharge {}",
-                zone.start, zone.increment, zone.recharge
-            )),
-            None => report.push(format!(
-                "{} carries no <Global><Zone/>; this run has no auto-speed",
+    // The engine-wide block, out of `Data\XML\HandlingStats.xml` rather than this
+    // team's file - see `handling::GLOBAL_ENTRY`. Read on **every** mode now, not
+    // only Zone: the speed-pad tunables live here too and every mode has pads.
+    let global = read(&mut archives, handling::GLOBAL_ENTRY)
+        .ok()
+        .and_then(|blob| handling::global_from_blob(&blob).ok())
+        .flatten();
+    // An absent or unreadable file means no boost and no auto-speed rather than
+    // invented numbers. Said out loud, because a speed pad that quietly does
+    // nothing reads as a physics bug and gets looked for in the force law.
+    let pad_tunables = match global {
+        Some(global) => global.speedup_pads(to_format_class(options.class)),
+        None => {
+            report.push(format!(
+                "{} is unreadable; speed pads apply no boost this run",
                 handling::GLOBAL_ENTRY
-            )),
+            ));
+            handling::SpeedupPads::default()
         }
-        found
+    };
+    // Nothing is scaled here: the four pre-scaled fields are converted exactly once
+    // and this is not the place it happens, and `<SpeedupPads>` is not one of them.
+    let handling = handling_for(&stats, options.class, pad_tunables);
+    let zone = if options.mode == Mode::Zone {
+        match global {
+            Some(global) => report.push(format!(
+                "<Zone>: start {}, increment {} per zone, recharge {}",
+                global.zone.start, global.zone.increment, global.zone.recharge
+            )),
+            None => report.push("this run has no auto-speed".to_string()),
+        }
+        global.map(|g| g.zone)
     } else {
         None
     };
@@ -1391,6 +1400,41 @@ pub struct Race {
     /// The `Ship Collision Fx` locators in model space - see
     /// [`Setup::collision_fx`].
     collision_fx: Vec<Vec3>,
+    /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
+    speedup_pads: Vec<oag_formats::pads::PadVolume>,
+    /// Distance from the ship to each pad, one entry per pad, in track units.
+    ///
+    /// The original's `pad+0x1d0`, reimplemented as a broadphase rather than as
+    /// the latch `docs/formats/track.md` used to guess it was: `Pad_SweptTest_q`
+    /// (`0x0888686c`) subtracts how far the craft moved from each entry every
+    /// tick and only runs the real containment test on entries that reach zero,
+    /// then stores the freshly measured distance back. A ship 900 units from a pad
+    /// moving 2 units a tick is skipped for 450 ticks for the cost of one
+    /// subtraction.
+    ///
+    /// **One slot per pad, not eight.** The original keeps a slot per racer;
+    /// there is one ship here, and widening this is part of whatever change adds
+    /// the other seven rather than something to carry unexercised.
+    pad_distance: Vec<f32>,
+    /// Which pad the ship was inside last tick, the original's `craft+0x1d0`.
+    ///
+    /// `None` outside every pad. Only a *change* of value counts as entering a new
+    /// pad, which is what gates the Zone score - standing still on one pad does
+    /// not pay repeatedly.
+    pad_current: Option<usize>,
+    /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
+    ///
+    /// Render-only state, on `Race` rather than in `World` for the same reason
+    /// [`Self::exhaust`] is. See [`BOOST_FOV_GAIN`], which is where the
+    /// "authored, not recovered" argument for the whole effect lives.
+    boost_kick: f32,
+    /// Whether the kick is driven at all. `[graphics] boost_fov_kick`.
+    boost_fov_kick: bool,
+    /// Where the ship was at the end of last tick, for the swept test.
+    ///
+    /// `None` on the first tick, which is the original's own "no previous
+    /// position" case in `Pads_TestCraft_q` and takes the single-point path.
+    pad_previous_position: Option<Vec3>,
     /// The burst's emitter anchor, **model space**: the `Ship Collision Fx`
     /// locator nearest the last impact, or the contact point itself mapped
     /// into model space when the model authors no locators. Transformed
@@ -1399,6 +1443,32 @@ pub struct Race {
     /// does.
     sparks_anchor: Option<Vec3>,
 }
+
+/// How much wider the view opens at the top of the boost's kick, as a fraction
+/// of the tangent of the half-angle.
+///
+/// **An authored effect, not a recovered one** - the same standing this project
+/// gives `oag_render::sparks`. Nothing in either binary has been read that widens
+/// the field of view on a speed pad; this exists because a boost the player
+/// cannot feel is a boost that reads as nothing happening, and the force term it
+/// rides on *is* recovered. It is called out here rather than left to be
+/// mistaken for a finding, and `[graphics] boost_fov_kick` turns it off.
+///
+/// Scales the tangent rather than the angle, which is what
+/// [`crate::display::Fov::apply`] does and for the reason that function gives.
+/// Note that `<ExternalCameraFar fov>`'s own unit is itself unrecovered - this
+/// project reads it as degrees - so the absolute field this widens is not a
+/// settled quantity either.
+pub const BOOST_FOV_GAIN: f32 = 0.08;
+
+/// How fast the kick opens, per second, as an exponential approach.
+///
+/// Faster than [`BOOST_FOV_CLOSE_RATE`] on purpose: the boost should arrive as a
+/// shove and let go slowly. Authored, like [`BOOST_FOV_GAIN`].
+pub const BOOST_FOV_OPEN_RATE: f32 = 9.0;
+
+/// How fast the kick closes again, per second. See [`BOOST_FOV_OPEN_RATE`].
+pub const BOOST_FOV_CLOSE_RATE: f32 = 3.5;
 
 /// Ticks a `Reset` contact is ignored for after a respawn.
 ///
@@ -1438,6 +1508,7 @@ impl Race {
             chase,
             nozzle,
             collision_fx,
+            speedup_pads,
             ..
         } = setup;
 
@@ -1488,6 +1559,30 @@ impl Race {
             // if any - is always read as a fresh impact.
             sparks_cooldown: 0.0,
             sparks_anchor: None,
+            // Every pad starts due for a real test. `Pad_Bind` zeroes the same
+            // cache at load, so the first tick measures rather than trusting a
+            // distance nothing has computed yet.
+            pad_distance: vec![0.0; speedup_pads.len()],
+            speedup_pads,
+            pad_current: None,
+            pad_previous_position: None,
+            boost_kick: 0.0,
+            boost_fov_kick: true,
+        }
+    }
+
+    /// Turns the boost's field-of-view kick on or off. `[graphics]
+    /// boost_fov_kick`.
+    ///
+    /// A setter rather than a [`Setup`] field because the kick is a display
+    /// choice and `Setup` is what a headless race needs; threading a graphics
+    /// setting through the loader would put it in front of every caller that has
+    /// no screen. Off leaves [`Race::projection`] bit-identical to what it
+    /// returned before the effect existed.
+    pub fn set_boost_fov_kick(&mut self, enabled: bool) {
+        self.boost_fov_kick = enabled;
+        if !enabled {
+            self.boost_kick = 0.0;
         }
     }
 
@@ -1541,7 +1636,6 @@ impl Race {
             .and_then(|index| self.spline.sample(index + 1))
             .map(Spline::track_sample);
 
-        let ship = &mut self.world.ships[0];
         if let Some(index) = index {
             // An index into this module's own sample table, which is *not* what
             // `Ship::segment` documents: that field means a per-path control-point
@@ -1549,7 +1643,7 @@ impl Race {
             // that keeps no note of where it was is the thing that has to be replaced
             // when the brute-force scan does. Converting the one into the other needs
             // a lap-counting convention nobody has recovered.
-            ship.segment = u16::try_from(index).unwrap_or(u16::MAX);
+            self.world.ships[0].segment = u16::try_from(index).unwrap_or(u16::MAX);
         }
 
         // Zone's auto-speed, from the zone the run has reached. Read before the
@@ -1559,13 +1653,20 @@ impl Race {
         let auto_speed = self
             .zone
             .map(|zone| oag_race::zone::thrust(zone.start, zone.increment, self.world.race.zone));
+        let before = self.world.ships[0].physics.body.position;
+        // Step 15's input, measured before the step because that is when the
+        // original measures it: `Ship_ApplySpeedupPad` runs inside the same craft
+        // update as the other fourteen terms, all of them against the position the
+        // tick started at, and the integrator moves the body afterwards.
+        let pad_hit = self.test_speedup_pads(before);
+        let ship = &mut self.world.ships[0];
         let env = Environment {
             track_sample,
             track_sample_next,
             auto_speed,
+            pad_hit,
             ..Environment::default()
         };
-        let before = ship.physics.body.position;
         let evaluated = oag_physics::step(
             &mut ship.physics,
             &controls,
@@ -1630,6 +1731,27 @@ impl Race {
         self.exhaust
             .advance(self.dt, thrust, speed, &mut self.exhaust_rng);
 
+        // Open while the boost's own timer runs, close once it has expired, both
+        // as an exponential approach so neither edge is a step. Driven from
+        // `pad_timer` rather than from the exhaust, because the exhaust's boost
+        // is a `max` that other things may one day also arm and this must follow
+        // the pad specifically.
+        if self.boost_fov_kick {
+            let boosting = self.world.ships[0].physics.pad_timer > 0.0;
+            let (target, rate) = if boosting {
+                (1.0, BOOST_FOV_OPEN_RATE)
+            } else {
+                (0.0, BOOST_FOV_CLOSE_RATE)
+            };
+            self.boost_kick += (target - self.boost_kick) * rate * self.dt;
+            // Snapped, so a closed kick is *exactly* zero and `projection` takes
+            // its bit-identical path rather than an `atan(tan(x))` round trip
+            // that never quite settles.
+            if !boosting && self.boost_kick < 1.0e-3 {
+                self.boost_kick = 0.0;
+            }
+        }
+
         // One sample per tick, which is what `Trail_Update` does per frame - it
         // takes no `dt` at all. The direction is the nozzle's own backwards axis so
         // a segment keeps the orientation the craft had when it was laid down,
@@ -1690,6 +1812,106 @@ impl Race {
         self.sparks.advance(self.dt, anchor, &mut self.sparks_rng);
 
         evaluated
+    }
+
+    /// Below this much movement in a tick, the pad test is swept instead of a
+    /// point.
+    ///
+    /// `Pad_SweptTest_q`'s `25.0`. It reads backwards at first - the *slow* case
+    /// gets the more careful test - and the reason is that the interpolation is
+    /// only worth anything when the step is short enough that four samples cover
+    /// it. Past this the ship has moved further than a pad is deep and four points
+    /// would not close the gap either, so the original stops paying for them.
+    /// Confidence 65: the threshold is read off the call site rather than out of a
+    /// named constant.
+    const PAD_SWEEP_LIMIT: f32 = 25.0;
+
+    /// How many interpolated points the swept test checks.
+    ///
+    /// `Pad_SweptTest_q` walks `t = 0.25, 0.5, 0.75, 1.0` - the destination is
+    /// included and the origin is not, because the origin was this test's
+    /// destination last tick.
+    const PAD_SWEEP_STEPS: u32 = 4;
+
+    /// Which way the speed pad under the ship pushes, or `None` if there is none.
+    ///
+    /// Reimplements `Pads_TestCraft_q` (`0x08887144`) and the two functions under
+    /// it. Called once a tick with the position the tick *starts* at, and returns
+    /// the direction `oag_physics`' step-15 term needs; see
+    /// [`oag_physics::forces::Environment::pad_hit`], which is deliberately a
+    /// per-tick containment answer rather than an entry edge.
+    ///
+    /// Also does the two things that happen on **entering a new** pad, because
+    /// both are edges on the same value the original latches at `craft+0x1d0`:
+    /// the Zone score, and arming the exhaust flare.
+    fn test_speedup_pads(&mut self, position: Vec3) -> Option<Vec3> {
+        if self.speedup_pads.is_empty() {
+            return None;
+        }
+
+        // How far the ship travelled since this test last ran, which is what the
+        // broadphase spends and what decides swept versus single-point.
+        let previous = self.pad_previous_position.replace(position);
+        let moved = previous.map_or(f32::INFINITY, |from| position.distance(from));
+
+        // The swept path, destination last. A stationary ship and a long jump both
+        // fall through to the single point: interpolating a zero-length step adds
+        // nothing, and interpolating a long one does not close the gap.
+        let sweep: Vec<Vec3> = match previous {
+            Some(from) if (0.0..Self::PAD_SWEEP_LIMIT).contains(&moved) && moved > 0.0 => (1
+                ..=Self::PAD_SWEEP_STEPS)
+                .map(|step| from.lerp(position, step as f32 / Self::PAD_SWEEP_STEPS as f32))
+                .collect(),
+            _ => vec![position],
+        };
+
+        let mut hit = None;
+        for (index, pad) in self.speedup_pads.iter().enumerate() {
+            // The broadphase. Spend the distance travelled, and skip until it is
+            // used up. `moved` is infinite on the first tick, so every pad is
+            // measured once before any of them is skipped.
+            self.pad_distance[index] -= moved;
+            if self.pad_distance[index] > 0.0 {
+                continue;
+            }
+
+            // Measured from the destination, which is where the cache has to be
+            // correct from for the next tick's subtraction to mean anything.
+            self.pad_distance[index] = pad.distance(position.to_array());
+
+            // First pad wins. The cache above is still updated for every pad whose
+            // turn it was, or a skipped one would keep a stale distance forever.
+            if hit.is_none()
+                && sweep.iter().any(|point| pad.contains(point.to_array()))
+                && let Some(direction) = pad.direction()
+            {
+                hit = Some((index, Vec3::from_array(direction)));
+            }
+        }
+
+        // Everything below is the *edge*, and it is deliberately outside the loop:
+        // two pads overlapping on one tick is one entry, not two, matching the
+        // original's single `craft+0x1d0` slot and its single `DAT_08b3435c` flag.
+        let entered = hit.map(|(index, _)| index);
+        if entered != self.pad_current {
+            self.pad_current = entered;
+            if entered.is_some() {
+                // Zone mode only, and only on a new pad. `Ship_ApplySpeedupPad`
+                // raises a flag that `Zone_Update` (`0x0882f5cc`) consumes and
+                // clears once per tick, so this cannot pay twice in one tick even
+                // where two pads overlap.
+                if self.world.race.mode == Mode::Zone {
+                    self.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
+                }
+                // The visual, on the same edge the original fires its effect on.
+                // `Exhaust::boost` takes a maximum, so re-arming while still lit
+                // extends the flare rather than restarting it.
+                self.exhaust
+                    .boost(self.world.ships[0].handling.speedup_pads.time);
+            }
+        }
+
+        hit.map(|(_, direction)| direction)
     }
 
     /// Whether this tick ended in contact with `Reset` geometry.
@@ -1990,7 +2212,18 @@ impl Race {
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: crate::display::Fov) -> Mat4 {
         let authored = setting.apply(self.chase_params.fov.to_radians());
-        let fov = oag_render::camera::fit_vertical_fov(authored, AUTHORED_ASPECT, aspect);
+        // Composed *after* the setting, so a player who has widened the field
+        // gets the same proportional kick rather than a fixed number of degrees.
+        // The zero case returns the input untouched rather than through
+        // `atan(tan(x))`, for the reason `Fov::apply` gives: every capture taken
+        // before this effect existed has to stay bit-identical.
+        let kicked = if self.boost_kick == 0.0 {
+            authored
+        } else {
+            let widen = 1.0 + self.boost_kick * BOOST_FOV_GAIN;
+            2.0 * ((authored * 0.5).tan() * widen).atan()
+        };
+        let fov = oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect);
         oag_render::camera::projection(fov, aspect, 1.0, far)
     }
 
@@ -2953,6 +3186,12 @@ pub struct CaptureOptions {
     /// gets checked against the running original, and that check is the whole
     /// reason the setting exists.
     pub animated_textures: bool,
+    /// Whether the boost's field-of-view kick runs. Honoured for a sharper
+    /// version of the same reason: the effect is **authored**, so a capture meant
+    /// to be compared against the running original wants it off, and that
+    /// comparison is the only way anyone will find out whether the original has
+    /// something like it.
+    pub boost_fov_kick: bool,
     /// Which anti-aliasing the scene draws with. Honoured for the same reason
     /// the two culling tiers are: a capture is how `[graphics] anti_aliasing`
     /// gets compared against itself off and against the running original.
@@ -3017,6 +3256,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         ..
     } = loaded;
     let mut race = Race::start(setup);
+    race.set_boost_fov_kick(options.boost_fov_kick);
 
     let mut held = HeldButtons::new(options.held);
     for _ in 0..options.ticks {
@@ -3473,6 +3713,193 @@ mod tests {
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
         }
+    }
+
+    /// A pad whose volume is `half` units across in every direction, centred on
+    /// `at`, pushing along world `+z`.
+    ///
+    /// The identity basis is what makes the push direction readable: row 2 of an
+    /// identity matrix is `+z`, so the boost the assertions look for is `+z`.
+    fn pad_at(at: Vec3, half: f32) -> oag_formats::pads::PadVolume {
+        let mut to_world = [0.0f32; 16];
+        to_world[0] = 1.0;
+        to_world[5] = 1.0;
+        to_world[10] = 1.0;
+        to_world[15] = 1.0;
+        to_world[12] = at.x;
+        to_world[13] = at.y;
+        to_world[14] = at.z;
+        oag_formats::pads::PadVolume {
+            to_world,
+            min: [-half; 3],
+            max: [half; 3],
+            disabled: 0.0,
+        }
+    }
+
+    /// A race whose ship is inside a pad from its first tick, and one that is
+    /// nowhere near one, so a test can difference them.
+    fn race_with_pads(mode: Mode, pads: Vec<oag_formats::pads::PadVolume>) -> Race {
+        let mut handling = hulled_handling();
+        // Invented, and large enough that the boost is unmistakable against the
+        // rest of the force law rather than lost in it.
+        handling.speedup_pads = oag_physics::params::SpeedupPads {
+            amount: 100.0,
+            time: 0.5,
+        };
+        let mut setup = setup(handling);
+        setup.mode = mode;
+        setup.speedup_pads = pads;
+        Race::start(setup)
+    }
+
+    /// A pad big enough to hold the ship wherever `spawn_pose` puts it, so the
+    /// test is about the trigger rather than about the spawn.
+    fn enveloping_pad() -> Vec<oag_formats::pads::PadVolume> {
+        vec![pad_at(Vec3::ZERO, 1.0e6)]
+    }
+
+    #[test]
+    fn a_track_with_no_pads_never_boosts() {
+        let mut race = race_with_pads(Mode::TimeTrial, Vec::new());
+        for _ in 0..120 {
+            let evaluated = race.tick(&InputSnapshot::default());
+            assert_eq!(evaluated.speedup_pad, Vec3::ZERO);
+        }
+        assert_eq!(race.ship().physics.pad_timer, 0.0);
+    }
+
+    /// The whole chain, end to end: containment in `oag_formats::pads`, the
+    /// direction off the pad's matrix, `Environment::pad_hit`, and the force term
+    /// in `oag_physics`. It is deliberately one test, because each link is
+    /// worthless without the others and a failure anywhere reads the same way.
+    #[test]
+    fn a_ship_inside_a_pad_is_pushed_along_the_pads_own_axis() {
+        let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
+        let evaluated = race.tick(&InputSnapshot::default());
+
+        assert_ne!(evaluated.speedup_pad, Vec3::ZERO, "no boost was applied");
+        assert_eq!(
+            evaluated.speedup_pad.normalize(),
+            Vec3::Z,
+            "the boost must follow row 2 of the pad's matrix"
+        );
+        assert!(race.ship().physics.pad_timer > 0.0);
+    }
+
+    /// Leaving the pad does not end the boost, it starts the countdown. This is
+    /// the re-arm semantics `ShipState::pad_timer` documents, seen from outside.
+    #[test]
+    fn the_boost_outlives_the_pad_and_then_expires() {
+        let mut race = race_with_pads(Mode::TimeTrial, vec![pad_at(Vec3::ZERO, 1.0e6)]);
+        race.tick(&InputSnapshot::default());
+        assert!(race.ship().physics.pad_timer > 0.0);
+
+        // Take the pad away, which is the same to the trigger as driving off it.
+        race.speedup_pads.clear();
+        let mut boosted_ticks = 0;
+        for _ in 0..120 {
+            if race.tick(&InputSnapshot::default()).speedup_pad != Vec3::ZERO {
+                boosted_ticks += 1;
+            }
+        }
+        // `time` is 0.5 s at 60 Hz, so about thirty ticks - asserted as a range
+        // rather than a count, because the exact tick the timer crosses zero on
+        // is float arithmetic and not the thing under test.
+        assert!(
+            (25..=35).contains(&boosted_ticks),
+            "{boosted_ticks} ticks of boost after leaving the pad"
+        );
+        assert_eq!(
+            race.ship().physics.pad_timer,
+            0.0,
+            "the timer never expired"
+        );
+    }
+
+    /// Zone pays for a pad **once**, on entry, no matter how long the ship sits
+    /// on it - `Zone_Update` consumes and clears a flag rather than counting.
+    #[test]
+    fn zone_scores_once_for_entering_a_pad_and_not_again_while_inside() {
+        const TICKS: u32 = 90;
+        let mut padded = race_with_pads(Mode::Zone, enveloping_pad());
+        let mut bare = race_with_pads(Mode::Zone, Vec::new());
+        for _ in 0..TICKS {
+            padded.tick(&InputSnapshot::default());
+            bare.tick(&InputSnapshot::default());
+        }
+        assert_eq!(
+            padded.world.race.score - bare.world.race.score,
+            oag_race::zone::SPEEDUP_PAD_SCORE,
+            "a pad held for {TICKS} ticks must pay exactly once"
+        );
+    }
+
+    /// And the other modes pay nothing at all, which is the `DAT_08b31048 == 6`
+    /// gate on the flag's only writer.
+    #[test]
+    fn only_zone_mode_scores_for_a_speed_pad() {
+        for mode in [Mode::TimeTrial, Mode::SpeedLap] {
+            let mut race = race_with_pads(mode, enveloping_pad());
+            for _ in 0..90 {
+                race.tick(&InputSnapshot::default());
+            }
+            assert!(
+                race.ship().physics.pad_timer > 0.0,
+                "{mode:?}: the pad did not fire at all, so the score assertion proves nothing"
+            );
+            assert_eq!(race.world.race.score, 0, "{mode:?} scored for a pad");
+        }
+    }
+
+    /// The authored kick widens the view while the boost runs and closes again
+    /// afterwards, and **turning it off leaves the projection bit-identical** to
+    /// what it was before the effect existed. That second half is the one that
+    /// matters: it is what makes the setting usable for a comparison against a
+    /// capture of the original.
+    #[test]
+    fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
+        use crate::display::Fov;
+
+        fn x_scale(m: Mat4) -> f32 {
+            m.to_cols_array()[0]
+        }
+
+        let mut kicked = race_with_pads(Mode::TimeTrial, enveloping_pad());
+        let mut off = race_with_pads(Mode::TimeTrial, enveloping_pad());
+        off.set_boost_fov_kick(false);
+
+        let resting = kicked.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
+        for _ in 0..30 {
+            kicked.tick(&InputSnapshot::default());
+            off.tick(&InputSnapshot::default());
+        }
+
+        let open = kicked.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
+        assert!(
+            x_scale(open) < x_scale(resting),
+            "a wider field means a smaller x scale, and this one did not move"
+        );
+        assert_eq!(
+            off.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED)
+                .to_cols_array(),
+            resting.to_cols_array(),
+            "with the kick off the matrix must be exactly the pre-effect one"
+        );
+
+        // Take the pad away and let the boost expire; the kick must return to
+        // *exactly* the resting matrix rather than to something near it.
+        kicked.speedup_pads.clear();
+        for _ in 0..600 {
+            kicked.tick(&InputSnapshot::default());
+        }
+        assert_eq!(
+            kicked
+                .projection(16.0 / 9.0, 1000.0, Fov::AUTHORED)
+                .to_cols_array(),
+            resting.to_cols_array(),
+            "the kick never fully closed"
+        );
     }
 
     /// The field-of-view setting has to reach the matrix, and its default has

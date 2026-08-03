@@ -603,6 +603,7 @@ fn run_race(
                 frustum_culling: settings.graphics.frustum_culling,
                 pvs_culling: settings.graphics.pvs_culling,
                 animated_textures: settings.graphics.animated_textures,
+                boost_fov_kick: settings.graphics.boost_fov_kick,
                 anti_aliasing: settings.graphics.anti_aliasing,
                 presented: cli.presented.then_some(race::Presented {
                     render_scale: settings.graphics.render_scale,
@@ -725,6 +726,7 @@ impl App {
                 framebuffer.size(),
                 self.anisotropy,
                 self.settings.graphics.anti_aliasing,
+                self.settings.graphics.boost_fov_kick,
             )?
         } else if let Some(loaded) = self.boot.take() {
             Stage::frontend(&gpu, loaded, self.video_format, self.trace)?
@@ -1254,6 +1256,7 @@ impl Stage {
         size: (u32, u32),
         anisotropy: Anisotropy,
         anti_aliasing: display::AntiAliasing,
+        boost_fov_kick: bool,
     ) -> Result<Self> {
         let race::Loaded {
             setup,
@@ -1290,9 +1293,11 @@ impl Stage {
         // the HUD is composited into the offscreen target which shares it.
         let overlay = oag_game::hud::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
             .context("building the HUD overlay")?;
+        let mut race = race::Race::start(setup);
+        race.set_boost_fov_kick(boost_fov_kick);
         Ok(Self::Race(Box::new(RaceStage {
             scene,
-            race: race::Race::start(setup),
+            race,
             hud: overlay,
         })))
     }
@@ -2453,6 +2458,7 @@ impl Session {
             self.framebuffer.size(),
             self.anisotropy,
             self.settings.graphics.anti_aliasing,
+            self.settings.graphics.boost_fov_kick,
         )?;
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())

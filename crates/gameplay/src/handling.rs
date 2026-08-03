@@ -41,7 +41,8 @@
 
 use oag_formats::handling::{self as fmt, SpeedClass as FmtClass};
 use oag_physics::params::{
-    Airbrake, Antigrav, Brakes, Dimensions, Engine, Handling, Physical, Pitch, SpeedClass, Turning,
+    Airbrake, Antigrav, Brakes, Dimensions, Engine, Handling, Physical, Pitch, SpeedClass,
+    SpeedupPads, Turning,
 };
 
 /// Load-time factor applied to `<Engine amount>`.
@@ -89,12 +90,27 @@ pub const SCALED_FIELDS: [&str; 4] = [
 /// enclosing [`fmt::Stats`] while everything else comes from the class block.
 /// That asymmetry is the format's, not ours.
 ///
+/// `speedup_pads` is an argument rather than a lookup for a sharper version of
+/// the same reason: it is authored in a **different file**,
+/// `Data\XML\HandlingStats.xml`, which [`fmt::Stats`] does not describe. Passing
+/// it in makes the caller decide what a ship gets when that file is unreadable,
+/// which is a decision worth being explicit about - a defaulted zero here would
+/// be a game whose speed pads silently do nothing.
+///
 /// The four pre-scaled fields are converted here; every other field is moved
-/// unchanged. See the module docs.
+/// unchanged, `speedup_pads` included. See the module docs.
 #[must_use]
-pub fn handling_for(stats: &fmt::Stats, class: SpeedClass) -> Handling {
+pub fn handling_for(
+    stats: &fmt::Stats,
+    class: SpeedClass,
+    speedup_pads: fmt::SpeedupPads,
+) -> Handling {
     let block = stats.class(to_format_class(class));
     Handling {
+        speedup_pads: SpeedupPads {
+            amount: speedup_pads.amount,
+            time: speedup_pads.time,
+        },
         engine: Engine {
             accelcap: block.engine.accelcap,
             amount: block.engine.amount * ENGINE_AMOUNT_SCALE,
@@ -187,6 +203,15 @@ mod tests {
     /// [`handling_for`] visible instead of harmless.
     fn stats() -> fmt::Stats {
         fmt::parse(&fixture()).expect("the fixture must parse")
+    }
+
+    /// Two more distinct invented numbers, well clear of the fixture's 1..=174
+    /// so a value that arrived from the wrong side is obvious.
+    fn pads() -> fmt::SpeedupPads {
+        fmt::SpeedupPads {
+            amount: 1000.0,
+            time: 2000.0,
+        }
     }
 
     /// Builds a document whose every numeric attribute is a distinct integer,
@@ -312,7 +337,7 @@ mod tests {
         let stats = stats();
         for class in SpeedClass::ALL {
             let block = stats.class(to_format_class(class));
-            let mapped = handling_for(&stats, class);
+            let mapped = handling_for(&stats, class, pads());
 
             assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
             assert_eq!(
@@ -386,9 +411,9 @@ mod tests {
     #[test]
     fn the_hull_is_shared_by_every_speed_class() {
         let stats = stats();
-        let venom = handling_for(&stats, SpeedClass::Venom).dimensions;
+        let venom = handling_for(&stats, SpeedClass::Venom, pads()).dimensions;
         for class in SpeedClass::ALL {
-            assert_eq!(handling_for(&stats, class).dimensions, venom);
+            assert_eq!(handling_for(&stats, class, pads()).dimensions, venom);
         }
         assert_eq!(venom.height, stats.misc.height);
         assert_eq!(venom.length, stats.misc.length);
@@ -402,7 +427,7 @@ mod tests {
         let stats = stats();
         let mapped: Vec<_> = SpeedClass::ALL
             .into_iter()
-            .map(|class| handling_for(&stats, class))
+            .map(|class| handling_for(&stats, class, pads()))
             .collect();
         for (i, a) in mapped.iter().enumerate() {
             for b in &mapped[i + 1..] {
@@ -423,7 +448,12 @@ mod tests {
             block.brakes.amount > 0.0,
             "the fixture's XML value is positive, or this test proves nothing"
         );
-        assert!(handling_for(&stats, SpeedClass::Venom).brakes.amount < 0.0);
+        assert!(
+            handling_for(&stats, SpeedClass::Venom, pads())
+                .brakes
+                .amount
+                < 0.0
+        );
     }
 
     /// `slidegrip` on `0..100` must land on `0..0.01`, because the grip term's
@@ -464,13 +494,31 @@ mod tests {
     fn the_siblings_of_the_scaled_fields_are_untouched() {
         let stats = stats();
         let block = stats.class(FmtClass::Venom);
-        let mapped = handling_for(&stats, SpeedClass::Venom);
+        let mapped = handling_for(&stats, SpeedClass::Venom, pads());
         assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
         assert_eq!(mapped.engine.turbo, block.engine.turbo);
         assert_eq!(mapped.airbrake.drag, block.airbrake.drag);
         assert_eq!(mapped.airbrake.turn, block.airbrake.turn);
         assert_eq!(mapped.airbrake.sideshift, block.airbrake.sideshift);
         assert_eq!(mapped.physical.mass, block.physical.mass);
+    }
+
+    /// The one parameter that does not come from `stats`. It must arrive
+    /// unscaled and untransposed, and it must be the same for every class the
+    /// caller asks for - the class is chosen when the caller looks the block up,
+    /// not here.
+    #[test]
+    fn the_speed_pad_tunables_arrive_from_the_argument_unscaled() {
+        let stats = stats();
+        for class in SpeedClass::ALL {
+            let mapped = handling_for(&stats, class, pads());
+            assert_eq!(mapped.speedup_pads.amount, pads().amount);
+            assert_eq!(mapped.speedup_pads.time, pads().time);
+        }
+        assert!(
+            !SCALED_FIELDS.iter().any(|f| f.starts_with("SpeedupPads")),
+            "if this ever becomes a scaled field the mapping above has to change"
+        );
     }
 
     #[test]

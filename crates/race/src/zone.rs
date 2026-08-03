@@ -35,6 +35,22 @@ pub const SCORE_PER_TICK: i32 = 1;
 /// **82**.
 pub const CLEAN_ZONE_BONUS: i32 = 500;
 
+/// Score added for entering a speed pad that is not the one already under the
+/// ship.
+///
+/// `*(int *)(obj + 0x1a1c) += 100` under `if (DAT_08b3435c) { DAT_08b3435c = 0; }`
+/// in `Zone_Update`. The flag has exactly one writer, `Ship_ApplySpeedupPad`
+/// (`0x08848f9c`), which raises it on entering a **new** pad and only when
+/// `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` - the same pair
+/// `docs/ghidra/functions/psp-pulse/zone-mode.md` identifies as the Zone-mode
+/// selector. Confidence **85**.
+///
+/// **A per-tick flag, not a counter.** `Zone_Update` clears it as it consumes it,
+/// so a ship straddling two pads on one tick scores this once. The trigger in
+/// `oag_game::race` reproduces that by scoring on a change of pad rather than per
+/// pad tested.
+pub const SPEEDUP_PAD_SCORE: i32 = 100;
+
 /// The engine's target speed in Zone mode, for zone number `zone`.
 ///
 /// `base + step * (float)(uint32)n`, from the four-corner branch of

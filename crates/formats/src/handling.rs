@@ -43,10 +43,10 @@
 //! holds `<Stats>` and nothing else. So `<Global>` belongs to the global file
 //! alone, and [`parse`] does not look for it. [`global_from_blob`] reads it.
 //!
-//! Only `<Zone>` is decoded out of `<Global>` so far, because it is the only part
-//! this project has a consumer for. The rest is named in
-//! `docs/ghidra/functions/psp-pulse/engine.md` and can be added when something
-//! needs it.
+//! Only the parts this project has a consumer for are decoded out of `<Global>`:
+//! `<Zone>` and `<GlobalClass><SpeedupPads/></GlobalClass>`. The rest is named on
+//! [`Global`] and in `docs/ghidra/functions/psp-pulse/engine.md`, and can be added
+//! when something needs it.
 //!
 //! The files are stored as [shortened XML](crate::fexml), so they go through
 //! [`fexml::expand`] before they can be read: [`from_blob`] does both steps and
@@ -200,6 +200,16 @@ pub enum Error {
         /// The class with no block.
         class: SpeedClass,
     },
+    /// Two `<GlobalClass>` blocks claim the same speed class.
+    DuplicateGlobalClass {
+        /// The class named twice.
+        class: SpeedClass,
+    },
+    /// One of the four speed classes has no `<GlobalClass>` block.
+    MissingGlobalClass {
+        /// The class with no block.
+        class: SpeedClass,
+    },
 }
 
 impl fmt::Display for Error {
@@ -221,6 +231,10 @@ impl fmt::Display for Error {
             Self::UnknownClass { name } => write!(f, "unknown speed class \"{name}\""),
             Self::DuplicateClass { class } => write!(f, "two <Class> blocks named {class}"),
             Self::MissingClass { class } => write!(f, "no <Class> block for {class}"),
+            Self::DuplicateGlobalClass { class } => {
+                write!(f, "two <GlobalClass> blocks named {class}")
+            }
+            Self::MissingGlobalClass { class } => write!(f, "no <GlobalClass> block for {class}"),
         }
     }
 }
@@ -440,6 +454,73 @@ impl Zone {
             increment: number(node, e, "increment")?,
             recharge: number(node, e, "recharge")?,
         })
+    }
+}
+
+/// The speed-pad boost, per speed class. `<SpeedupPads amount time/>`.
+///
+/// Lives under `<Handling><Global><GlobalClass name="...">`, beside
+/// `<WeaponPad>` and `<GravityMul>`. `Xml_ReadGlobalSettings` (`0x0883a970`)
+/// reads both attributes with `Xml_AttributeAsFloat` and stores them **verbatim**
+/// into the two per-class tables at `0x08b36bc0` (`amount`) and `0x08b36bd0`
+/// (`time`), indexed by `g_handling_parse_class`. Confidence **90**.
+///
+/// **Neither attribute is pre-scaled**, unlike the four in
+/// `oag_gameplay::handling::SCALED_FIELDS`: the store is the parser's return
+/// value with nothing in between. The factor of ten in the force law is the force
+/// law's own; see [`oag_physics::forces::evaluate`]'s speed-pad term.
+///
+/// [`oag_physics::forces::evaluate`]: https://docs.rs/oag-physics
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct SpeedupPads {
+    /// The force magnitude the boost settles at.
+    pub amount: f32,
+    /// How long the boost lasts, in seconds, from the last tick inside the pad.
+    pub time: f32,
+}
+
+impl SpeedupPads {
+    const ELEMENT: &'static str = "SpeedupPads";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        let e = Self::ELEMENT;
+        Ok(Self {
+            amount: number(node, e, "amount")?,
+            time: number(node, e, "time")?,
+        })
+    }
+}
+
+/// The engine-wide `<Global>` block, out of [`GLOBAL_ENTRY`].
+///
+/// Only the parts this project has a consumer for are decoded. `<Special>`,
+/// `<WeaponPad>`, `<GravityMul>`, the three camera pitch modifiers,
+/// `<CameraSideOffset>` and `<StartBoost>` are all read by the original's
+/// `Xml_ReadGlobalSettings` and are deliberately left alone here; they are named
+/// in `docs/ghidra/functions/psp-pulse/engine.md` and can be added when something
+/// needs them. Two are worth knowing about because they touch code that exists:
+///
+/// - `<GravityMul airborne>` fills `g_class_gravity_scale`, which is
+///   `oag_physics::forces::Environment::class_gravity_scale` - today an input
+///   defaulting to the identity with its table "not read". It **is** readable,
+///   from here, and decoding it would change how every ship falls, so it is left
+///   for a change that can carry that on its own.
+/// - `<Special speedpad_jump>` fills `0x08b36bec`, the constant on the one branch
+///   of the boost this project deliberately does not implement - see the
+///   speed-pad term in `oag_physics::forces`.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Global {
+    /// `<Zone/>`.
+    pub zone: Zone,
+    /// `<GlobalClass><SpeedupPads/></GlobalClass>`, indexed by [`SpeedClass`].
+    pub speedup_pads: [SpeedupPads; 4],
+}
+
+impl Global {
+    /// The speed-pad tunables for one class.
+    #[must_use]
+    pub fn speedup_pads(&self, class: SpeedClass) -> SpeedupPads {
+        self.speedup_pads[class as usize]
     }
 }
 
@@ -814,15 +895,14 @@ pub fn parse(expanded: &str) -> Result<Stats> {
 /// [`wad::hash_name`](crate::wad::hash_name) hit rather than a mined candidate.
 pub const GLOBAL_ENTRY: &str = r"Data\XML\HandlingStats.xml";
 
-/// Reads `<Handling><Global><Zone/></Global>` out of an **already expanded**
-/// document.
+/// Reads `<Handling><Global>` out of an **already expanded** document.
 ///
-/// `Ok(None)` when the document parses but carries no `<Global>` or no `<Zone>` -
-/// which is what every per-team file does, and is not an error. `Err` only when
-/// the root is missing or a `<Zone>` that *is* present is malformed: a mode
-/// configured with three-quarters of its numbers is worse than one configured
-/// with none.
-pub fn parse_global(expanded: &str) -> Result<Option<Zone>> {
+/// `Ok(None)` when the document parses but carries no `<Global>` at all - which
+/// is what all sixteen shipped per-team files do, and is not an error. Once
+/// `<Global>` *is* present every part [`Global`] names is required, for the reason
+/// the module docs give: a mode configured with three-quarters of its numbers is
+/// worse than one configured with none.
+pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
     let root = fexml::parse(expanded);
     let handling = descendant(&root, "Handling").ok_or(Error::MissingElement {
         element: "Handling",
@@ -830,16 +910,68 @@ pub fn parse_global(expanded: &str) -> Result<Option<Zone>> {
     let Ok(global) = child(handling, "Global") else {
         return Ok(None);
     };
-    match child(global, Zone::ELEMENT) {
-        Ok(node) => Ok(Some(Zone::from_node(node)?)),
-        Err(_) => Ok(None),
+    Ok(Some(Global {
+        zone: Zone::from_node(child(global, Zone::ELEMENT)?)?,
+        speedup_pads: global_classes(global)?,
+    }))
+}
+
+/// Collects `<GlobalClass><SpeedupPads/></GlobalClass>` into an array indexed by
+/// [`SpeedClass`].
+///
+/// The same one-pass shape as [`classes`], and for the same reasons, with **one
+/// deliberate difference: an unrecognised `name` is skipped rather than an
+/// [`Error::UnknownClass`]**. That is the only place in this module where an
+/// unknown name is not an error, so it is worth saying why.
+///
+/// Both shipped discs author **five** `<GlobalClass>` blocks - `VECTOR` first,
+/// then the four speed classes - while every per-team file authors exactly four
+/// `<Class>` blocks and no `VECTOR`. Erroring here would fail on real data.
+///
+/// The original discards it too, and by accident rather than by design.
+/// `Xml_ReadGlobalSettings` (`0x0883a970`) matches `name` against a four-entry
+/// table and, on no match, leaves `g_handling_parse_class` holding whatever the
+/// last match left there - it is a global and is never reset per element. So
+/// `VECTOR`'s numbers land in some other class's slot and are then overwritten by
+/// the four blocks that follow it, because `VECTOR` is authored first. Skipping it
+/// reproduces the outcome without reproducing the accident. Confidence **88**.
+///
+/// **This holds only while `VECTOR` is first.** Authored last it would corrupt
+/// `PHANTOM` in the original and not here, which is a difference worth knowing
+/// about rather than one worth emulating.
+fn global_classes(global: &Node) -> Result<[SpeedupPads; 4]> {
+    const ELEMENT: &str = "GlobalClass";
+    let mut found: [Option<SpeedupPads>; 4] = [None; 4];
+
+    for node in global.children_named(ELEMENT) {
+        let name = node.value("name").ok_or(Error::MissingAttribute {
+            element: "GlobalClass",
+            attribute: "name",
+        })?;
+        let Some(class) = SpeedClass::from_name(name.trim()) else {
+            continue;
+        };
+
+        let slot = &mut found[class as usize];
+        if slot.is_some() {
+            return Err(Error::DuplicateGlobalClass { class });
+        }
+        *slot = Some(SpeedupPads::from_node(child(node, SpeedupPads::ELEMENT)?)?);
     }
+
+    for class in SpeedClass::ALL {
+        if found[class as usize].is_none() {
+            return Err(Error::MissingGlobalClass { class });
+        }
+    }
+
+    Ok(found.map(|pads| pads.expect("every slot filled above")))
 }
 
 /// [`parse_global`] over raw archive bytes, expanding them if they need it.
 ///
 /// The same PSP-shortened / PS2-plaintext dispatch [`from_blob`] documents.
-pub fn global_from_blob(data: &[u8]) -> Result<Option<Zone>> {
+pub fn global_from_blob(data: &[u8]) -> Result<Option<Global>> {
     if fexml::is_fexml(data) {
         parse_global(&fexml::expand(data)?)
     } else {
@@ -1267,5 +1399,114 @@ mod tests {
     fn entry_names_are_built_the_way_the_loader_builds_them() {
         assert_eq!(entry_name("Feisar"), r"Data\Ships\Feisar\handlingstats.xml");
         assert_eq!(TEAMS.len(), 8);
+    }
+
+    /// A `<Global>` document with `classes` as its `<GlobalClass>` names, in the
+    /// order given. Every number is invented and none is the game's; the two
+    /// `<SpeedupPads>` attributes count from the block's position so a test can
+    /// tell the slots apart.
+    fn global_document(classes: &[&str]) -> String {
+        let blocks: String = classes
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let n = i + 1;
+                format!(
+                    r#"<GlobalClass name="{name}"><SpeedupPads amount="{n}" time="{}"/>"#,
+                    n * 10
+                ) + r#"<GravityMul airborne="99"/></GlobalClass>"#
+            })
+            .collect();
+        format!(
+            r#"<Handling><Global><Zone start="1" increment="2" recharge="3"/>{blocks}</Global></Handling>"#
+        )
+    }
+
+    const FOUR: [&str; 4] = ["VENOM", "FLASH", "RAPIER", "PHANTOM"];
+
+    #[test]
+    fn a_per_team_file_carries_no_global_block_and_that_is_not_an_error() {
+        assert_eq!(parse_global(&all_four()), Ok(None));
+    }
+
+    #[test]
+    fn each_global_class_lands_in_its_own_slot() {
+        let global = parse_global(&global_document(&FOUR))
+            .expect("parses")
+            .expect("has a <Global>");
+        assert_eq!(global.zone.start, 1.0);
+        for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
+            let n = (index + 1) as f32;
+            assert_eq!(
+                global.speedup_pads(class),
+                SpeedupPads {
+                    amount: n,
+                    time: n * 10.0
+                }
+            );
+        }
+    }
+
+    /// The finding this reader is shaped around: both shipped discs author a
+    /// fifth `<GlobalClass name="VECTOR">` **first**, and it must neither be an
+    /// error nor shift the four that follow into the wrong slots. Position
+    /// indexing would put every class one slot out and produce a boost that is
+    /// wrong by a plausible-looking amount on all four.
+    #[test]
+    fn an_unrecognised_global_class_is_skipped_without_shifting_the_others() {
+        let with_vector = ["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"];
+        let shifted = parse_global(&global_document(&with_vector))
+            .expect("parses")
+            .expect("has a <Global>");
+        assert_eq!(shifted.speedup_pads(SpeedClass::Venom).amount, 2.0);
+        assert_eq!(shifted.speedup_pads(SpeedClass::Phantom).amount, 5.0);
+
+        // And the same four names without it keep the same *relative* order, so
+        // the assertion above is about the skip rather than about the numbering.
+        let without = parse_global(&global_document(&FOUR))
+            .expect("parses")
+            .expect("has a <Global>");
+        assert_eq!(without.speedup_pads(SpeedClass::Venom).amount, 1.0);
+        assert_eq!(without.speedup_pads(SpeedClass::Phantom).amount, 4.0);
+    }
+
+    #[test]
+    fn a_global_block_missing_a_speed_class_is_an_error() {
+        assert_eq!(
+            parse_global(&global_document(&["VENOM", "FLASH", "RAPIER"])),
+            Err(Error::MissingGlobalClass {
+                class: SpeedClass::Phantom
+            })
+        );
+        assert_eq!(
+            parse_global(&global_document(&[
+                "VENOM", "VENOM", "FLASH", "RAPIER", "PHANTOM"
+            ])),
+            Err(Error::DuplicateGlobalClass {
+                class: SpeedClass::Venom
+            })
+        );
+    }
+
+    /// `<Global>` present but incomplete is an error rather than `Ok(None)`,
+    /// which is the tightening this reader makes over the `<Zone>`-only one it
+    /// replaced. Half a configuration is worse than none: the boost would be
+    /// silently absent on whichever class lost its block.
+    #[test]
+    fn a_global_block_missing_its_zone_or_its_pads_is_an_error() {
+        let no_zone =
+            global_document(&FOUR).replace(r#"<Zone start="1" increment="2" recharge="3"/>"#, "");
+        assert_eq!(
+            parse_global(&no_zone),
+            Err(Error::MissingElement { element: "Zone" })
+        );
+
+        let no_pads = global_document(&FOUR).replace(r#"<SpeedupPads amount="1" time="10"/>"#, "");
+        assert_eq!(
+            parse_global(&no_pads),
+            Err(Error::MissingElement {
+                element: "SpeedupPads"
+            })
+        );
     }
 }

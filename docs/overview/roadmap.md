@@ -470,12 +470,17 @@ seen from the authoring side.
       A **graphics-menu row** for it is still open; today it is a flag only.
       What still makes a race look unlike the original is authored lighting, sky
       and fog, and those are [M6](#m6---rendering-fidelity).
-- [ ] **Speed pads.** The pads themselves are decoded, placed and drawn -
-      `Speedup Pad` `0x3bd` is a `Mesh` subclass, so its geometry ships inside
-      the track file (see [pads](../formats/pads.md)). What is left is the
-      boost: the force term from `Ship_ApplySpeedupPad`, the
-      `<GlobalClass><SpeedupPads amount time/>` tunables it reads off the disc,
-      arming `Exhaust::boost`, and Zone mode's +100 per pad.
+- [x] **Speed pads**, decoded, placed, drawn and boosting. `Speedup Pad` `0x3bd`
+      is a `Mesh` subclass, so its geometry ships inside the track file (see
+      [pads](../formats/pads.md)); the trigger is `oag_game::race`'s reimplementation
+      of the original's per-racer distance cache, and the force is step 15 of
+      `Ship_UpdateCraft` in `oag_physics::engine::speedup_pad`, reading
+      `<GlobalClass><SpeedupPads amount time/>` off the player's own disc. Zone
+      pays +100 per new pad, and `Exhaust::boost` is armed on the same edge.
+      **Two branches of the original are deliberately absent**, both gated on
+      unidentified bits: the `speedpad_jump` tilt and the `craft+0x2cc` fade-in.
+      The field-of-view kick is an **authored** effect, not a recovered one -
+      `[graphics] boost_fov_kick` turns it off.
 - [ ] Weapons and pickups, including `Weapon Pad` `0x3be` - which decodes today
       alongside the speedup pads, but has nothing to hand out
 - [ ] Shield and energy

@@ -394,10 +394,27 @@ pub struct Graphics {
     /// though this read shows it is not a UV offset.
     #[serde(default = "default_animated_textures")]
     pub animated_textures: bool,
+    /// Whether crossing a speed pad widens the field of view for a moment.
+    ///
+    /// **On by default, and an authored effect rather than a recovered one.**
+    /// Nothing read out of either binary widens the view on a boost; the force it
+    /// rides on *is* recovered, and this exists so the player can feel it. It is
+    /// a setting rather than a constant precisely because it is invented -
+    /// somebody comparing against a capture of the original wants it off. See
+    /// `oag_game::race::BOOST_FOV_GAIN`, and `oag_render::sparks` for the same
+    /// standing applied to the collision burst.
+    #[serde(default = "default_boost_fov_kick")]
+    pub boost_fov_kick: bool,
 }
 
 /// See [`Graphics::animated_textures`]: **off**, because a debugger read of the
 /// original found no texture-coordinate offset submitted for any track surface.
+/// See [`Graphics::boost_fov_kick`]: **on**, so the boost is felt. Off is for
+/// comparing against a capture of the original, which has no such effect.
+fn default_boost_fov_kick() -> bool {
+    true
+}
+
 fn default_animated_textures() -> bool {
     false
 }
@@ -417,6 +434,7 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             lod: Lod::default(),
             animated_textures: default_animated_textures(),
+            boost_fov_kick: default_boost_fov_kick(),
         }
     }
 }

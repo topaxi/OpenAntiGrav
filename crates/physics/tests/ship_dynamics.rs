@@ -20,7 +20,7 @@ use std::cell::Cell;
 use oag_core::math::Vec3;
 use oag_physics::collide::{Ray, RaycastHit, Surface, TriangleSoup};
 use oag_physics::params::{
-    Airbrake, Antigrav, Brakes, Dimensions, Engine, Physical, Pitch, Turning,
+    Airbrake, Antigrav, Brakes, Dimensions, Engine, Physical, Pitch, SpeedupPads, Turning,
 };
 use oag_physics::{
     Body, CollisionWorld, Environment, Handling, Raycaster, ShipControls, ShipState, Sideshift,
@@ -114,6 +114,10 @@ fn fixture() -> Handling {
             width: 2.0,
             ..Dimensions::default()
         },
+        // Zero on purpose: nothing in this file hands `evaluate` a pad hit, and a
+        // non-zero magnitude here could only mask a boost that fired when it
+        // should not have.
+        speedup_pads: SpeedupPads::default(),
     }
 }
 

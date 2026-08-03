@@ -47,9 +47,10 @@
 //! runs inside step 8 and writes the body directly.
 //!
 //! **Absent**, each because implementing it would mean inventing a trigger nobody
-//! has decoded: the track-section force (`FUN_08848f9c`, a guess at confidence 45),
-//! the four-corner hover variant and the auto-speed law behind its selector, turbo,
-//! and every flag-gated engine and steering variant. See
+//! has decoded: the four-corner hover variant and the auto-speed law behind its
+//! selector, turbo, every flag-gated engine and steering variant, and two arms of
+//! the speed-pad boost whose own term *is* here (see
+//! [`crate::engine::speedup_pad`]). See
 //! `docs/physics/README.md`'s "what is implemented" section for the full list.
 
 use oag_core::math::Vec3;
@@ -326,6 +327,24 @@ pub struct Environment {
     /// is bit-for-bit what it always was, which is what keeps the determinism
     /// reference unmoved.
     pub auto_speed: Option<f32>,
+    /// The push direction of the speed pad the ship is inside this tick.
+    ///
+    /// `Some` on **every** tick the hull is inside a pad's trigger volume, not
+    /// only the tick it enters one: `Ship_ApplySpeedupPad` (`0x08848f9c`) re-arms
+    /// the timer each time, so an entry-only signal would cut the boost short on
+    /// anything but the fastest crossing. See [`ShipState::pad_timer`].
+    ///
+    /// The vector is the pad's own local `+Z` axis in world space - row 2 of its
+    /// `.vex` node matrix, which is why the boost pushes along the track: the pads
+    /// are authored aligned with it. Expected to be unit length; nothing here
+    /// normalises it, so a caller that hands over an unnormalised direction gets a
+    /// boost scaled by its length.
+    ///
+    /// An input rather than something this crate derives, for the same reason
+    /// [`Self::auto_speed`] is: finding it means owning the track's pad volumes,
+    /// and this crate does not know tracks exist. `oag_formats::pads` does the
+    /// geometry and `oag_game::race` runs the test.
+    pub pad_hit: Option<Vec3>,
 }
 
 impl Default for Environment {
@@ -336,6 +355,7 @@ impl Default for Environment {
             class_gravity_scale: 1.0,
             self_collider: None,
             auto_speed: None,
+            pad_hit: None,
         }
     }
 }
@@ -424,6 +444,8 @@ pub struct Evaluated {
     pub rolling_resistance: Vec3,
     /// Vertical damping, as a world-space force.
     pub vertical_damping: Vec3,
+    /// The speed-pad boost, as a world-space force. Zero on most ticks.
+    pub speedup_pad: Vec3,
     /// The weathervane torque, world angular.
     pub weathervane: Vec3,
     /// Angular damping, body-local angular.
@@ -597,8 +619,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     // 11. Weathervane, 12. angular damping, 13. rolling resistance, 14. vertical
     //     damping. Step 10 is the dead in-air roll-levelling branch and is
-    //     deliberately not ported; step 15 is the track-section force, which is not
-    //     implemented.
+    //     deliberately not ported.
     let weathervane = passive::weathervane(forward, velocity, contact);
     // `Ship_ApplyAngularDamping` loads `body+0x160`, which is angular **momentum**,
     // and multiplies it by `(-pitch_damping, -5, -2)`. So what the damping reads is
@@ -615,6 +636,11 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     acc.local_angular += angular_damping;
     acc.world_force += rolling_resistance;
     acc.world_force += vertical_damping;
+
+    // 15. The speed-pad boost, the last of the fifteen. Its own timer, so it runs
+    //     on long after the tick that armed it.
+    let speedup_pad = engine::speedup_pad(state, handling, env.pad_hit, dt);
+    acc.world_force += speedup_pad;
 
     drain(state, &acc);
 
@@ -634,6 +660,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         drag,
         rolling_resistance,
         vertical_damping,
+        speedup_pad,
         weathervane,
         angular_damping,
         steering,

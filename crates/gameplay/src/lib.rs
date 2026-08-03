@@ -22,7 +22,7 @@ pub mod world;
 
 pub use collision::collision_world;
 pub use controls::ship_controls;
-pub use handling::handling_for;
+pub use handling::{handling_for, to_format_class};
 pub use input::InputSnapshot;
 pub use spawn::Pose;
 pub use world::{MAX_SHIPS, Ship, World};

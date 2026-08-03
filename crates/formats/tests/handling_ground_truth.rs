@@ -318,3 +318,161 @@ fn which_top_level_elements_handlingstats_carries() {
         }
     }
 }
+
+/// Reads one named entry out of one archive on one disc, decompressing if it
+/// needs it.
+///
+/// [`ship_blobs`] does the same walk for the eight per-team files; this exists
+/// because the engine-wide `<Global>` file is a different entry in the same
+/// archive and duplicating the walk is cheaper than generalising it.
+fn global_blob(image_name: &str, archive_path: &str) -> Option<Vec<u8>> {
+    let path = image(image_name)?;
+    let mut disc = DiscImage::open(&path).expect("open");
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == archive_path)
+        .unwrap_or_else(|| panic!("{archive_path} present"))
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, Directory::directory_len(count))
+        .expect("directory");
+    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    let hash = wad::hash_name(handling::GLOBAL_ENTRY);
+    let entry = dir
+        .entries
+        .iter()
+        .find(|e| e.name_hash == hash)
+        .unwrap_or_else(|| {
+            panic!(
+                "{image_name}: {} is not in {archive_path}",
+                handling::GLOBAL_ENTRY
+            )
+        });
+
+    let raw = disc
+        .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
+        .expect("blob");
+    Some(match entry.compression {
+        Compression::None => raw,
+        Compression::Lzss => {
+            oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize).expect("lzss")
+        }
+        Compression::Zlib => panic!("unexpected zlib entry"),
+    })
+}
+
+/// The engine-wide file must decode on both releases, with a complete set of
+/// speed-pad tunables.
+///
+/// The decoder requires every attribute, so a successful parse *is* the
+/// completeness claim - the same argument [`check_every_team`] rests on. What is
+/// added here is that the two releases agree on the **schema** for a file only
+/// one caller ever opens, which is the check the per-team tests cannot make.
+///
+/// No value is asserted or printed, per
+/// `docs/architecture/adr/0006-no-copyrighted-content.md`. What *is* asserted is
+/// that the four blocks are four distinct slots, so a reader that filled one and
+/// copied it cannot pass.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_global_file_carries_a_complete_set_of_speed_pad_tunables() {
+    let mut checked = 0;
+    for (image_name, archive) in [
+        ("pulse-psp-usa.chd", PSP_ARCHIVE),
+        ("pulse-ps2-eu.chd", PS2_ARCHIVE),
+    ] {
+        let Some(blob) = global_blob(image_name, archive) else {
+            continue;
+        };
+        let global = handling::global_from_blob(&blob)
+            .unwrap_or_else(|e| panic!("{image_name}: {e}"))
+            .unwrap_or_else(|| panic!("{image_name}: the global file carries no <Global>"));
+
+        for class in SpeedClass::ALL {
+            let pads = global.speedup_pads(class);
+            assert!(
+                pads.amount > 0.0,
+                "{image_name} {class}: a speed pad with no magnitude does nothing"
+            );
+            assert!(
+                pads.time > 0.0,
+                "{image_name} {class}: a boost with no duration never applies"
+            );
+        }
+        // Not all four distinct - the discs need not tune every class apart -
+        // but not all four *identical* either, or the per-class table is being
+        // filled from one block and the `VECTOR` skip could be shifting slots
+        // without anything noticing.
+        let all_same = SpeedClass::ALL
+            .into_iter()
+            .all(|c| global.speedup_pads(c) == global.speedup_pads(SpeedClass::Venom));
+        assert!(
+            !all_same,
+            "{image_name}: every class got the same tunables, so the index is suspect"
+        );
+        checked += 1;
+    }
+    println!("{checked} release(s) carry a complete <Global> block");
+}
+
+/// The finding `oag_formats::handling::global_classes` is shaped around: the
+/// shipped file authors a **fifth** `<GlobalClass>`, named `VECTOR`, and it is
+/// **first**.
+///
+/// Both halves matter. That it exists is why an unknown name must not be an
+/// error. That it is first is why skipping it is equivalent to what the original
+/// does, which leaves its numbers in a stale slot that the four following blocks
+/// then overwrite - see `docs/formats/handling-stats.md`. If this ever fails
+/// because the order changed, the equivalence argument on that page is void.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_global_file_authors_a_fifth_class_and_authors_it_first() {
+    for (image_name, archive) in [
+        ("pulse-psp-usa.chd", PSP_ARCHIVE),
+        ("pulse-ps2-eu.chd", PS2_ARCHIVE),
+    ] {
+        let Some(blob) = global_blob(image_name, archive) else {
+            continue;
+        };
+        let expanded = if oag_formats::fexml::is_fexml(&blob) {
+            oag_formats::fexml::expand(&blob).expect("expands")
+        } else {
+            String::from_utf8_lossy(&blob).into_owned()
+        };
+
+        let names: Vec<String> = expanded
+            .match_indices("<GlobalClass")
+            .filter_map(|(at, _)| {
+                let rest = &expanded[at..];
+                let open = rest.find("name=\"")? + 6;
+                let close = rest[open..].find('"')? + open;
+                Some(rest[open..close].to_string())
+            })
+            .collect();
+
+        println!("{image_name}: <GlobalClass> names {names:?}");
+        assert_eq!(
+            names.len(),
+            SpeedClass::ALL.len() + 1,
+            "{image_name}: expected the four speed classes plus one more"
+        );
+        assert!(
+            SpeedClass::from_name(&names[0]).is_none(),
+            "{image_name}: the first block is a speed class, so the skip is no longer harmless"
+        );
+        for class in SpeedClass::ALL {
+            assert!(
+                names.iter().any(|n| n.eq_ignore_ascii_case(class.as_str())),
+                "{image_name}: no <GlobalClass> for {class}"
+            );
+        }
+    }
+}

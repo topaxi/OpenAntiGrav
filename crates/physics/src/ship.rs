@@ -303,6 +303,29 @@ pub struct ShipState {
     ///
     /// Driven by [`crate::maglock::ramp`], `0.2` a frame in either direction.
     pub mag_lock_blend: f32,
+    /// Seconds left on the speed-pad boost, `craft+0x298`.
+    ///
+    /// **Re-armed, not triggered.** `Ship_ApplySpeedupPad` (`0x08848f9c`) assigns
+    /// the class's `<SpeedupPads time>` on *every* tick the craft is inside a pad
+    /// volume, then decrements by `dt` further down the same function. So the
+    /// boost runs for `time` seconds counted from the last tick inside the pad,
+    /// not from the tick it was entered, and a ship crossing a pad slowly is
+    /// boosted for longer. [`crate::forces::Environment::pad_hit`] being `Some`
+    /// every such tick is what reproduces that.
+    ///
+    /// Counted down in [`crate::forces::evaluate`] **before** the force is read
+    /// off it, which is the original's ordering and is worth a sentence because
+    /// the two orderings differ by one `dt` of ramp at the peak - about 6 % - and
+    /// `docs/physics/cornering-ground-truth.md` measured the pad crossings
+    /// precisely enough to tell them apart.
+    pub pad_timer: f32,
+    /// The world-space direction the speed-pad boost pushes, `craft+0x1b0`.
+    ///
+    /// Refreshed from the pad on every tick inside it, and then held while
+    /// [`Self::pad_timer`] runs down - so leaving a pad does not change where the
+    /// remaining boost pushes, even as the ship turns. Unit length when it comes
+    /// from a pad; zero on a ship that has never touched one.
+    pub pad_direction: Vec3,
     /// The **last** mag-floor hit the probe found, `craft+0x250` and `+0x260`.
     ///
     /// Carried between frames rather than recomputed, because the original does:
@@ -333,6 +356,8 @@ impl Default for ShipState {
             // landing window, so it starts outside it.
             time_since_landing: 1.0,
             mag_lock_blend: 0.0,
+            pad_timer: 0.0,
+            pad_direction: Vec3::ZERO,
             mag_contact: None,
         }
     }
