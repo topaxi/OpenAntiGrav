@@ -604,6 +604,17 @@ impl Exhaust {
         self.boost_accumulator
     }
 
+    /// Seconds left on the boost, which is what the flare's size actually reads.
+    ///
+    /// Exposed so a caller that arms [`Self::boost`] can check the flare lets go
+    /// when whatever armed it does. [`Self::boost_accumulator`] is **not** that
+    /// quantity - it tracks the throttle ramp as well, so it is non-zero on an
+    /// ordinary accelerating ship.
+    #[must_use]
+    pub fn boost_timer(&self) -> f32 {
+        self.boost_timer
+    }
+
     /// Half-size of the flare quad, in world units.
     #[must_use]
     pub fn half_size(&self) -> f32 {

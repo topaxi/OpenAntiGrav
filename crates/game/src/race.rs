@@ -533,20 +533,39 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The engine-wide block, out of `Data\XML\HandlingStats.xml` rather than this
     // team's file - see `handling::GLOBAL_ENTRY`. Read on **every** mode now, not
     // only Zone: the speed-pad tunables live here too and every mode has pads.
-    let global = read(&mut archives, handling::GLOBAL_ENTRY)
-        .ok()
-        .and_then(|blob| handling::global_from_blob(&blob).ok())
-        .flatten();
+    // Three distinct failures, reported as three distinct lines. The decoder was
+    // deliberately tightened so an incomplete `<Global>` names the element,
+    // attribute or class that is missing rather than returning a zero, and
+    // collapsing that into one "unreadable" would throw the whole point away -
+    // especially now that `<Zone>` and `<SpeedupPads>` share one result, so a
+    // malformed pad block would otherwise be reported as a missing Zone law.
+    let global = match read(&mut archives, handling::GLOBAL_ENTRY) {
+        Err(e) => {
+            report.push(format!("{}: {e}", handling::GLOBAL_ENTRY));
+            None
+        }
+        Ok(blob) => match handling::global_from_blob(&blob) {
+            Err(e) => {
+                report.push(format!("{}: {e}", handling::GLOBAL_ENTRY));
+                None
+            }
+            Ok(None) => {
+                report.push(format!(
+                    "{} carries no <Global> block",
+                    handling::GLOBAL_ENTRY
+                ));
+                None
+            }
+            Ok(some) => some,
+        },
+    };
     // An absent or unreadable file means no boost and no auto-speed rather than
     // invented numbers. Said out loud, because a speed pad that quietly does
     // nothing reads as a physics bug and gets looked for in the force law.
     let pad_tunables = match global {
         Some(global) => global.speedup_pads(to_format_class(options.class)),
         None => {
-            report.push(format!(
-                "{} is unreadable; speed pads apply no boost this run",
-                handling::GLOBAL_ENTRY
-            ));
+            report.push("speed pads apply no boost this run".to_string());
             handling::SpeedupPads::default()
         }
     };
@@ -1889,25 +1908,30 @@ impl Race {
             }
         }
 
-        // Everything below is the *edge*, and it is deliberately outside the loop:
-        // two pads overlapping on one tick is one entry, not two, matching the
-        // original's single `craft+0x1d0` slot and its single `DAT_08b3435c` flag.
+        // Re-armed every tick inside a pad, **not** on the entry edge, so the
+        // flare and `ShipState::pad_timer` are handed the same duration from the
+        // same tick and therefore expire together. `Exhaust::boost` takes a
+        // maximum, which is what makes calling it repeatedly extend the flare
+        // rather than restart it. On the edge instead, the flare would run `time`
+        // from entry while the force runs `time` from exit, and the two would
+        // drift apart by however long the crossing took - a pad is about 9.6
+        // units long, so at racing speed that is a few ticks and at a crawl the
+        // flare would go out with the ship still on the pad.
+        if hit.is_some() {
+            self.exhaust
+                .boost(self.world.ships[0].handling.speedup_pads.time);
+        }
+
+        // The score, by contrast, *is* the edge, and it is deliberately outside
+        // the loop: two pads overlapping on one tick is one entry, not two,
+        // matching the original's single `craft+0x1d0` slot and its single
+        // `DAT_08b3435c` flag, which `Zone_Update` (`0x0882f5cc`) consumes and
+        // clears once per tick.
         let entered = hit.map(|(index, _)| index);
         if entered != self.pad_current {
             self.pad_current = entered;
-            if entered.is_some() {
-                // Zone mode only, and only on a new pad. `Ship_ApplySpeedupPad`
-                // raises a flag that `Zone_Update` (`0x0882f5cc`) consumes and
-                // clears once per tick, so this cannot pay twice in one tick even
-                // where two pads overlap.
-                if self.world.race.mode == Mode::Zone {
-                    self.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
-                }
-                // The visual, on the same edge the original fires its effect on.
-                // `Exhaust::boost` takes a maximum, so re-arming while still lit
-                // extends the flare rather than restarting it.
-                self.exhaust
-                    .boost(self.world.ships[0].handling.speedup_pads.time);
+            if entered.is_some() && self.world.race.mode == Mode::Zone {
+                self.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
             }
         }
 
@@ -3742,9 +3766,11 @@ mod tests {
     fn race_with_pads(mode: Mode, pads: Vec<oag_formats::pads::PadVolume>) -> Race {
         let mut handling = hulled_handling();
         // Invented, and large enough that the boost is unmistakable against the
-        // rest of the force law rather than lost in it.
+        // rest of the force law rather than lost in it. Deliberately **not** a
+        // round hundred: the shipped `amount` is one, and ADR-0006 keeps shipped
+        // values out of this repository even where they would read as arbitrary.
         handling.speedup_pads = oag_physics::params::SpeedupPads {
-            amount: 100.0,
+            amount: 37.0,
             time: 0.5,
         };
         let mut setup = setup(handling);
@@ -3814,6 +3840,41 @@ mod tests {
             race.ship().physics.pad_timer,
             0.0,
             "the timer never expired"
+        );
+    }
+
+    /// The flare and the force must let go together.
+    ///
+    /// They only do because `Exhaust::boost` is re-armed on every tick inside the
+    /// pad rather than on the entry edge: armed once at entry, the flare would
+    /// count `time` from entry while the force counts `time` from exit, and the
+    /// two would drift apart by the length of the crossing. Pinned with a pad the
+    /// ship crosses *slowly*, which is where an edge-armed flare goes out first
+    /// and where a screenshot taken at racing speed would notice nothing.
+    #[test]
+    fn the_flare_lasts_as_long_as_the_boost_does() {
+        let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
+        // Far longer than the pad's own `time`, so an entry-armed flare has ample
+        // room to expire while the ship is still inside.
+        for _ in 0..120 {
+            race.tick(&InputSnapshot::default());
+            assert!(
+                race.exhaust().boost_timer() > 0.0,
+                "the flare went out while the ship was still on the pad"
+            );
+        }
+
+        race.speedup_pads.clear();
+        let mut force_ticks = 0;
+        let mut flare_ticks = 0;
+        for _ in 0..120 {
+            let evaluated = race.tick(&InputSnapshot::default());
+            force_ticks += u32::from(evaluated.speedup_pad != Vec3::ZERO);
+            flare_ticks += u32::from(race.exhaust().boost_timer() > 0.0);
+        }
+        assert!(
+            force_ticks.abs_diff(flare_ticks) <= 2,
+            "the boost ran {force_ticks} tick(s) and the flare {flare_ticks}"
         );
     }
 
