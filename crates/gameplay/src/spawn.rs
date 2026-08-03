@@ -70,6 +70,33 @@ impl Pose {
         }
     }
 
+    /// A pose at an arbitrary world position, taking its attitude from `sample`.
+    ///
+    /// **A capture and comparison aid, not a spawn.** Nothing in the original
+    /// puts a ship at an arbitrary point; this exists so a frame can be
+    /// reproduced from a position read out of a debugger, or so two circuits can
+    /// be photographed from the same place. `position` is used exactly as given -
+    /// no lift, no probe, no snapping to the surface - because a pose that
+    /// silently moved would defeat the point.
+    ///
+    /// Attitude comes from the spline rather than from world up, so a banked
+    /// corner or a loop reads correctly instead of leaving the ship flat inside
+    /// the geometry. `yaw`, in radians about the sample's own up axis, turns the
+    /// ship away from the sample's tangent; `0.0` faces the way the track runs.
+    #[must_use]
+    pub fn from_position_on_sample(sample: &Sample, position: Vec3, yaw: f32) -> Self {
+        let up = -Vec3::from_array(sample.down);
+        let forward = Vec3::from_array(sample.tangent);
+        let forward = up
+            .try_normalize()
+            .map_or(forward, |axis| Quat::from_axis_angle(axis, yaw) * forward);
+
+        Self {
+            position,
+            orientation: orientation_from_axes(forward, up),
+        }
+    }
+
     /// A pose from the track's own authored grid slot, lifted off the surface.
     ///
     /// [`oag_formats::track::StartPosition`] is where the exporter put a ship and

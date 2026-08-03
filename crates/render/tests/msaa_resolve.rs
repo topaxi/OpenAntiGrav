@@ -67,6 +67,7 @@ fn triangle_model() -> Model {
                 centre: [0.0, 0.0, 0.0],
                 radius: 1.5,
             },
+            node: None,
         }],
         alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),

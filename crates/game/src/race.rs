@@ -77,7 +77,9 @@ use oag_render::collision as render_collision;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
 use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::Anisotropy;
-use oag_render::pvs::{DrawSections, PlacementStats, SectionPadding, UNPLACED, VisibleSet};
+use oag_render::pvs::{
+    DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
+};
 use oag_render::sparks::{self, Sparks};
 use oag_render::{mesh, mesh_render, track as track_render};
 
@@ -230,6 +232,15 @@ pub struct Options {
     /// Whether ship and track models draw every child of an authored
     /// `LodGroup`, or only the higher-detail first one. See [`mesh::Lod`].
     pub lod: mesh::Lod,
+    /// Put the craft here instead of on its grid slot, facing `yaw` radians off
+    /// the track's own direction at that point.
+    ///
+    /// **A capture aid, not a spawn.** See
+    /// [`oag_gameplay::spawn::Pose::from_position_on_sample`]: the point is that
+    /// two circuits, or a frame of ours and a frame of the original, can be
+    /// photographed from the same place instead of by running the same number of
+    /// ticks and hoping. `None` spawns normally.
+    pub pose: Option<(Vec3, f32)>,
 }
 
 impl Default for Options {
@@ -243,6 +254,7 @@ impl Default for Options {
             ribbon: false,
             collision: false,
             lod: mesh::Lod::Both,
+            pose: None,
         }
     }
 }
@@ -312,6 +324,9 @@ pub struct Setup {
     /// belong to the simulation half rather than to [`Loaded`], because a
     /// headless race has to be able to trigger a pad without a GPU.
     pub speedup_pads: Vec<oag_formats::pads::PadVolume>,
+    /// Where [`Options::pose`] asked for the craft to start, already resolved
+    /// against the spline. `None` uses the ordinary spawn.
+    pub pose_override: Option<Pose>,
 }
 
 /// A [`Setup`] plus the geometry to draw it with.
@@ -763,14 +778,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     };
     match &visibility {
         Some(visibility) => report.push(format!(
-            "{} authored visibility section(s); {} of {} draw call(s) placed \
-             ({:.1}%), {} spanning more than one, {:.1} section(s) each on average",
+            "{} authored visibility section(s); {} of {} draw call(s) governed by one \
+             ({:.1}%), the rest always drawn; {} LOD-swap pair(s)",
             visibility.pvs.len(),
             visibility.placement.placed,
             visibility.placement.total(),
             visibility.placement.placed_fraction() * 100.0,
-            visibility.placement.spanning,
-            visibility.placement.mean_sections(),
+            visibility.swap_pairs(),
         )),
         None if options.ribbon => {}
         None => report.push(
@@ -869,6 +883,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ),
     }
 
+    // Resolved here rather than in `Race::start` because the spline is what
+    // supplies the attitude, and `load` is where the spline is.
+    let pose_override = options.pose.and_then(|(position, yaw)| {
+        let (_, sample, distance) = spline.nearest(position)?;
+        report.push(format!(
+            "pose override: {position:?} yaw {:.1} deg, attitude from the spline sample \
+             {distance:.1} units away",
+            yaw.to_degrees()
+        ));
+        Some(Pose::from_position_on_sample(sample, position, yaw))
+    });
+
     Ok(Loaded {
         setup: Setup {
             mode: options.mode,
@@ -884,6 +910,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             collision_fx,
             speedup_pads,
             class_gravity_scale,
+            pose_override,
         },
         hud,
         track_model,
@@ -1560,6 +1587,7 @@ impl Race {
             collision_fx,
             speedup_pads,
             class_gravity_scale,
+            pose_override,
             ..
         } = setup;
 
@@ -1574,7 +1602,12 @@ impl Race {
         // this is what the bar reads all race, and what Zone's perfect-zone
         // recharge clamps back up to.
         ship.shield = handling.dimensions.shield;
-        if let Some(pose) = spawn_pose(&spline, start_position.as_ref(), &collision, &handling) {
+        // The override wins outright rather than being an offset from the grid
+        // slot: it exists to put the craft at a position read off somewhere
+        // else, and anything added to that would make the two disagree.
+        if let Some(pose) = pose_override
+            .or_else(|| spawn_pose(&spline, start_position.as_ref(), &collision, &handling))
+        {
             ship.place_at(pose);
         }
         world.ship_count = 1;
@@ -2420,6 +2453,10 @@ pub struct TrackVisibility {
     pvs: oag_formats::pvs::TrackPvs,
     padding: SectionPadding,
     sections: DrawSections,
+    /// Mask-exclusive section pairs with overlapping geometry - authored
+    /// LOD swaps, which the per-frame union must never re-join. See
+    /// [`SwapConflicts`].
+    swaps: SwapConflicts,
     /// What the association rule managed, for the load report.
     pub placement: PlacementStats,
 }
@@ -2432,23 +2469,38 @@ impl TrackVisibility {
     /// The caller then draws with no first tier, exactly as before.
     #[must_use]
     pub fn build(model: &Model, blob: &[u8], ai: &AiTrack) -> Option<Self> {
-        let pvs = oag_formats::pvs::TrackPvs::parse(blob).ok()?;
+        let nodes = oag_formats::vex::nodes(blob).ok()?;
+        let pvs = oag_formats::pvs::TrackPvs::from_nodes(blob, &nodes).ok()?;
         if pvs.is_empty() {
             return None;
         }
-        let (sections, placement) = DrawSections::place(model, &pvs);
+        // The authored association: a `section` node governs its parent's
+        // whole subtree, so each draw call inherits its scene node's group.
+        // This is what hides a far-LOD copy of the track while racing on the
+        // real one - see `oag_render::pvs`.
+        let governing = oag_formats::pvs::governing_sections(blob, &nodes).ok()?;
+        let (sections, placement) = DrawSections::place(model, &governing, &pvs);
+        let swaps = SwapConflicts::find(&pvs, &sections, model);
         Some(Self {
             pvs,
             padding: SectionPadding::from_track(ai),
             sections,
+            swaps,
             placement,
         })
+    }
+
+    /// How many authored LOD-swap pairs the track carries, for the load
+    /// report.
+    #[must_use]
+    pub fn swap_pairs(&self) -> usize {
+        self.swaps.pair_count()
     }
 
     /// What may be drawn with the craft in `craft` and the camera in `camera`.
     #[must_use]
     fn set(&self, craft: u8, camera: u8) -> VisibleSet {
-        VisibleSet::around(&self.pvs, &self.padding, craft, camera)
+        VisibleSet::around(&self.pvs, &self.padding, &self.swaps, craft, camera)
     }
 }
 
@@ -3768,6 +3820,9 @@ mod tests {
             // A synthetic track authors no pads, which is also what every Pure
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
+            // These tests run on a synthetic straight and want the ordinary
+            // spawn; `--pose` is a capture aid with nothing to say here.
+            pose_override: None,
             // The identity, so every assertion below is about the force law and
             // not about a scale. This is also what a race gets when the
             // engine-wide file is unreadable.
@@ -4201,7 +4256,10 @@ mod tests {
         let pvs = oag_formats::pvs::TrackPvs::empty();
         let padding = SectionPadding::default();
         let (craft, camera) = race.visibility_sections();
-        assert!(VisibleSet::around(&pvs, &padding, craft, camera).is_everything());
+        assert!(
+            VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), craft, camera)
+                .is_everything()
+        );
     }
 
     /// A parameter set with a real hull, so the reset probes have something to

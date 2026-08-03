@@ -1,64 +1,56 @@
 //! Placing render geometry into the track's authored visibility sections.
 //!
-//! **This module is an engine decision, not a reproduction**, and the
-//! distinction is the whole reason it lives here rather than in
-//! [`oag_formats::pvs`]. That module reads what the artists authored: the
-//! partition, the per-section masks, the boxes. What no read of either original
-//! binary has recovered is **which section a given `Mesh` node belongs to** -
-//! sections attach to spline control points, not to meshes, and the class-table
-//! walk that produced the layout says nothing about the association.
+//! # The rule: a draw call belongs to its authored section
 //!
-//! So the association is invented here, and labelled as invented. It is
-//! packaged the way `[graphics] frustum_culling` is - config-file only, no menu
-//! row - and defaults on, having cleared the same bar: thirty captures across
-//! three tracks and every combination of the two tiers, all byte-identical to
-//! culling nothing. See
-//! `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md`.
+//! The association is on the disc after all: **a `section` node governs its
+//! parent's whole subtree** - a track is authored as sibling groups, one
+//! transform per group with the `section` as one child and the group's
+//! geometry as the rest. [`oag_formats::pvs::governing_sections`] derives it;
+//! each draw call carries its source node
+//! ([`crate::mesh::DrawCall::node`]), so its mask is the single bit of its
+//! group's section. A draw call whose node no section governs - or that has
+//! no node at all - gets [`ALWAYS`] and draws every frame, because the error
+//! has to point towards drawing too much.
 //!
-//! # The rule: a draw call belongs to every section it touches
+//! **Placement is structural, not spatial, and that is the finding rather
+//! than a convenience.** This module used to intersect each draw call's
+//! bounding sphere with every authored box and give it the mask of all
+//! sections it touched. That is the natural rule if the association is
+//! unknown, and it is *incapable of hiding what the artists hid*: Moa Therma
+//! ships a coarse far-LOD copy of its track in a group whose section only
+//! four distant vantage sections list in their masks, and the copy occupies
+//! the same world-space boxes as the sections the craft races through.
+//! Spatial placement put it in the racing sections, it drew coincident with
+//! the detailed track, and the z-fight chopped the magstrip's painted lines
+//! into sideways-stepping segments - the artifact
+//! `crates/render/tests/magstrip_ground_truth.rs` pins down. Authored
+//! placement hides it exactly as the original does.
 //!
-//! Each draw call gets its **own 64-bit mask** of the sections whose authored
-//! box its bounding sphere intersects, and it is drawn when that mask and the
-//! frame's visible set share a bit. A draw call touching no box gets
-//! [`ALWAYS`], all ones, and is drawn every frame.
+//! **The still-cheaper rule was also wrong, and first.** Placing a draw call
+//! in the single section containing its bounding-sphere *centre* lost
+//! background scenery: a ridge line spans a dozen sections, its centre lands
+//! in one, and the mesh vanished whenever that one left the set - 212,808
+//! differing bytes in a screenshot comparison. Under authored placement a
+//! big mesh again has one section, but now it is the one the artists placed
+//! it in, and the *masks* were authored against that same assignment - which
+//! is why one bit is correct here and was wrong when the bit was guessed
+//! from geometry. See
+//! `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md` and
+//! its successor for the full history.
 //!
-//! **The obvious cheaper rule is wrong, and it was tried first.** Placing a
-//! draw call in the single section containing its bounding-sphere *centre*
-//! costs one `u8` instead of a `u64` and makes the test a shift-and-and. It
-//! also loses background scenery: a long building or a ridge line spans a dozen
-//! sections, its centre lands in exactly one, and the whole mesh disappears the
-//! moment that one section drops out of the set - while remaining plainly in
-//! shot. A screenshot comparison at 600 ticks on the default track caught it:
-//! 212,808 differing bytes, a ridge line and a large building missing down the
-//! left of the frame. Recorded here because the failure is invisible in
-//! aggregate statistics - centre placement reports a *lower* count of draw
-//! calls surviving, which reads as better culling and is simply wrong.
-//!
-//! So the extra 56 bits per draw call are not an optimisation that was skipped;
-//! they are what makes the association correct for geometry larger than a
-//! section. At ~2,000 draw calls a track that is 16 KB.
-//!
-//! **Expect a modest saving.** Because a `DrawCall` is one material run, a
-//! batch typically reaches 6 to 14 of the 64 sections, so the first tier
-//! removes 22% to 66% of the frustum test's input depending on the track -
-//! about half on a median one - and nothing at all from the worst section of
-//! most of them. The authored data is
-//! far more selective than that; our batching is what caps it. The ADR has the
-//! per-track table and what would lift the ceiling.
+//! Packaged the way `[graphics] frustum_culling` is - config-file only, no
+//! menu row - and defaults on.
 //!
 //! # What this does not do yet
 //!
-//! Draw calls are tested one at a time. Sorting the lists by section at load
-//! and walking only the visible ranges would make an excluded batch cost
-//! nothing rather than one mask test. It is not done here because a draw call
-//! now belongs to *several* sections, so there is no single key to sort by
-//! without duplicating entries - and because the transparent list is drawn in
-//! authored order, where blending makes reordering change the picture. The ADR
-//! records this as the next step.
+//! Draw calls are tested one at a time. With a single section per draw call,
+//! sorting the lists by section at load and walking only the visible ranges
+//! became possible in principle; the transparent list is still drawn in
+//! authored order, where blending makes reordering change the picture.
 
 use oag_core::math::Vec3;
 use oag_core::math::frustum::Frustum;
-use oag_formats::pvs::{ALL_VISIBLE, Aabb, TrackPvs};
+use oag_formats::pvs::{ALL_VISIBLE, MAX_SECTIONS, TrackPvs};
 use oag_formats::track::AiTrack;
 
 use crate::mesh::{DrawCall, Model};
@@ -96,17 +88,12 @@ pub struct DrawSections {
 /// Reported rather than asserted. A low placement rate is not a failure - it
 /// means more geometry always draws, which is slower and still correct - but it
 /// is the number that says whether the association rule is worth keeping.
-///
-/// `spanning` is the count that matters for correctness rather than for speed:
-/// draw calls touching more than one section are exactly the ones a
-/// centre-based rule got wrong.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PlacementStats {
+    /// Draw calls governed by a declared section.
     pub placed: usize,
+    /// Draw calls no declared section governs; they always draw.
     pub unplaced: usize,
-    pub spanning: usize,
-    /// Sections touched, summed over placed draw calls, for a mean.
-    pub sections_touched: usize,
 }
 
 impl PlacementStats {
@@ -116,8 +103,7 @@ impl PlacementStats {
         self.placed + self.unplaced
     }
 
-    /// Fraction of draw calls an authored box touched, `0.0` when there are
-    /// none.
+    /// Fraction of draw calls a section governs, `0.0` when there are none.
     #[must_use]
     pub fn placed_fraction(&self) -> f32 {
         if self.total() == 0 {
@@ -125,37 +111,44 @@ impl PlacementStats {
         }
         self.placed as f32 / self.total() as f32
     }
-
-    /// Mean sections touched by a placed draw call, `0.0` when there are none.
-    #[must_use]
-    pub fn mean_sections(&self) -> f32 {
-        if self.placed == 0 {
-            return 0.0;
-        }
-        self.sections_touched as f32 / self.placed as f32
-    }
 }
 
 impl DrawSections {
-    /// Places every draw call of `model` into `pvs`'s authored sections.
+    /// Places every draw call of `model` in its authored section.
+    ///
+    /// `governing` is [`oag_formats::pvs::governing_sections`] over the same
+    /// file the model was built from: the section id governing each scene
+    /// node, by the sibling-group rule. A draw call maps to the single bit of
+    /// its node's section; one with no node, no governing section, or a
+    /// governing section `pvs` does not declare gets [`ALWAYS`]. The
+    /// undeclared case matters: a mask can only hide what it can also show,
+    /// and a bit no mask ever sets would hide the geometry from every frame -
+    /// the error must point towards drawing too much instead.
     #[must_use]
-    pub fn place(model: &Model, pvs: &TrackPvs) -> (Self, PlacementStats) {
+    pub fn place(
+        model: &Model,
+        governing: &[Option<u8>],
+        pvs: &TrackPvs,
+    ) -> (Self, PlacementStats) {
         let mut stats = PlacementStats::default();
         let mut place_all = |draws: &[DrawCall]| -> Vec<u64> {
             draws
                 .iter()
                 .map(|draw| {
-                    let touched = place(draw, pvs);
-                    if touched == 0 {
-                        stats.unplaced += 1;
-                        return ALWAYS;
+                    let section = draw
+                        .node
+                        .and_then(|node| governing.get(node as usize).copied().flatten())
+                        .filter(|&id| pvs.declares(id));
+                    match section {
+                        Some(id) => {
+                            stats.placed += 1;
+                            1u64 << id
+                        }
+                        None => {
+                            stats.unplaced += 1;
+                            ALWAYS
+                        }
                     }
-                    stats.placed += 1;
-                    stats.sections_touched += touched.count_ones() as usize;
-                    if touched.count_ones() > 1 {
-                        stats.spanning += 1;
-                    }
-                    touched
                 })
                 .collect()
         };
@@ -167,7 +160,7 @@ impl DrawSections {
         (sections, stats)
     }
 
-    /// The sections the `index`-th draw call of one list touches.
+    /// The sections the `index`-th draw call of one list belongs to.
     ///
     /// Out of range answers [`ALWAYS`] rather than panicking: the lists are
     /// built index-parallel, and if they ever drift the failure should be
@@ -178,34 +171,158 @@ impl DrawSections {
     }
 }
 
-/// Every section whose authored box `draw`'s bounding sphere reaches, as a
-/// mask. Zero when it reaches none.
-fn place(draw: &DrawCall, pvs: &TrackPvs) -> u64 {
-    let mut mask = 0u64;
-    for id in pvs.ids() {
-        let Some(bounds) = pvs.bounds_of(id) else {
-            continue;
-        };
-        if sphere_touches_box(draw.bounds.centre, draw.bounds.radius, bounds) {
-            mask |= 1u64 << id;
-        }
-    }
-    mask
+/// Section pairs authored as alternatives of each other: never named
+/// together by any single visibility mask, while their geometry occupies
+/// overlapping space.
+///
+/// This is the LOD-swap relation, recovered from data rather than named by
+/// it: nothing on the disc says "section 62 is section 50's far-LOD copy",
+/// but the two facts that make the swap work are both authored - the copy
+/// coincides with the detail, and no viewpoint's mask ever shows both. The
+/// original can never violate the exclusion because it culls with exactly
+/// one mask; [`VisibleSet::around`] builds a union for a camera the original
+/// does not have, and uses this table to keep the union from re-admitting an
+/// alternative the primary mask already decided against.
+///
+/// Geometry overlap means **shared vertex positions**, not shared space. Two
+/// weaker tests were tried and both misfire. Bounding boxes *touching* made
+/// 155 pairs of one 58-section circuit and cut its visible set by a third -
+/// almost all of them mask-exclusive sections whose boxes merely graze.
+/// Boxes *mostly containing each other* still cannot tell a stacked copy
+/// from an interior nested inside an exterior - a tunnel's section shares
+/// its box with the mountain it runs through, and the two are rightly
+/// mask-exclusive without being alternatives; filtering that pair would pop
+/// the mountain out of a straddling camera's view for nothing, since nested
+/// surfaces do not fight. What only true alternatives share is *geometry*:
+/// bit-identical vertex positions, thousands of them on a real copy (the
+/// same authored surface, exported twice), and none at all on a nesting.
+/// [`Self::SHARED_POSITIONS`] is the guard against numerical accidents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwapConflicts {
+    partners: [u64; MAX_SECTIONS],
 }
 
-/// Whether a sphere reaches an axis-aligned box.
-///
-/// The standard test: clamp the centre into the box on each axis, and compare
-/// the squared distance to the clamped point against the squared radius. A
-/// centre inside the box clamps to itself and gives zero, so containment is the
-/// degenerate case rather than a separate branch.
-fn sphere_touches_box(centre: [f32; 3], radius: f32, bounds: Aabb) -> bool {
-    let mut squared = 0.0f32;
-    for (axis, &c) in centre.iter().enumerate() {
-        let d = c - c.clamp(bounds.min[axis], bounds.max[axis]);
-        squared += d * d;
+impl Default for SwapConflicts {
+    fn default() -> Self {
+        Self::none()
     }
-    squared <= radius * radius
+}
+
+impl SwapConflicts {
+    /// How many bit-identical vertex positions two exclusive sections must
+    /// share before they count as alternatives.
+    ///
+    /// The two populations sit far apart: measured stacked copies share
+    /// hundreds to thousands of positions (Moa Therma's loop pair shares
+    /// ~4,900), unrelated sections share none - exclusive pairs are never
+    /// spline neighbours, so not even seam vertices connect them. Four is a
+    /// guard against a stray coincidence, not a tuning value; there is no
+    /// recovered number to match, because the original never unions masks
+    /// and needs no such table.
+    pub const SHARED_POSITIONS: usize = 4;
+
+    /// No conflicts - every contribution unions freely, as before.
+    #[must_use]
+    pub fn none() -> Self {
+        Self {
+            partners: [0; MAX_SECTIONS],
+        }
+    }
+
+    /// Finds the swap pairs of one track.
+    ///
+    /// `sections` is the authored placement of `model`'s draw calls
+    /// ([`DrawSections::place`]); only draws governed by a single declared
+    /// section contribute to the per-section boxes, which is exactly the set
+    /// a mask can hide.
+    #[must_use]
+    pub fn find(pvs: &TrackPvs, sections: &DrawSections, model: &Model) -> Self {
+        // Which sections have a vertex at each exact position. A `BTreeMap`
+        // rather than a hash map so the walk below is ordered and the result
+        // is identical across platforms, which the screenshot comparisons
+        // rely on.
+        let mut sections_at: std::collections::BTreeMap<[u32; 3], u64> =
+            std::collections::BTreeMap::new();
+        let lists = [
+            (&sections.opaque, &model.draws),
+            (&sections.alpha_tested, &model.alpha_tested_draws),
+            (&sections.transparent, &model.transparent_draws),
+        ];
+        for (masks, draws) in lists {
+            for (mask, draw) in masks.iter().zip(draws) {
+                if mask.count_ones() != 1 {
+                    continue;
+                }
+                for index in draw.range.clone() {
+                    let Some(&vertex) = model.indices.get(index as usize) else {
+                        continue;
+                    };
+                    let Some(v) = model.vertices.get(vertex as usize) else {
+                        continue;
+                    };
+                    let key = [
+                        v.position[0].to_bits(),
+                        v.position[1].to_bits(),
+                        v.position[2].to_bits(),
+                    ];
+                    *sections_at.entry(key).or_default() |= mask;
+                }
+            }
+        }
+
+        // Shared positions per section pair.
+        let mut shared = std::collections::BTreeMap::<(u8, u8), usize>::new();
+        for &at in sections_at.values() {
+            if at.count_ones() < 2 {
+                continue;
+            }
+            let bits: Vec<u8> = oag_formats::pvs::set_bits(at).collect();
+            for (i, &a) in bits.iter().enumerate() {
+                for &b in &bits[i + 1..] {
+                    *shared.entry((a, b)).or_default() += 1;
+                }
+            }
+        }
+
+        // Which pairs any single authored mask names together.
+        let ids: Vec<u8> = pvs.ids().collect();
+        let named_together = |a: u8, b: u8| -> bool {
+            let both = (1u64 << a) | (1u64 << b);
+            ids.iter().any(|&id| pvs.visible_from(id) & both == both)
+        };
+
+        let mut partners = [0u64; MAX_SECTIONS];
+        for ((a, b), count) in shared {
+            if count >= Self::SHARED_POSITIONS && !named_together(a, b) {
+                partners[usize::from(a)] |= 1u64 << b;
+                partners[usize::from(b)] |= 1u64 << a;
+            }
+        }
+        Self { partners }
+    }
+
+    /// Every section that is an alternative of some section in `mask`.
+    ///
+    /// [`ALL_VISIBLE`] short-circuits to zero: an unknown viewpoint already
+    /// draws everything, and a filter derived from "every section at once"
+    /// would be meaningless.
+    #[must_use]
+    pub fn partners_of(&self, mask: u64) -> u64 {
+        if mask == ALL_VISIBLE {
+            return 0;
+        }
+        oag_formats::pvs::set_bits(mask).fold(0, |acc, id| acc | self.partners[usize::from(id)])
+    }
+
+    /// How many swap pairs were found, for the load report.
+    #[must_use]
+    pub fn pair_count(&self) -> usize {
+        self.partners
+            .iter()
+            .map(|p| p.count_ones() as usize)
+            .sum::<usize>()
+            / 2
+    }
 }
 
 /// Where the camera and the craft are, and what that makes visible.
@@ -248,18 +365,42 @@ impl VisibleSet {
     /// - **Either section may be unknown**, in which case
     ///   [`oag_formats::pvs::TrackPvs::visible_from`] answers all-ones and this
     ///   degrades to drawing everything.
+    ///
+    /// **The union is ordered, and later sources cannot override an authored
+    /// exclusion.** The original culls with exactly one mask - the craft's -
+    /// so it can never draw both halves of a LOD swap: masks encode swaps by
+    /// mutual exclusion (Moa Therma's start-valley sections see the far-LOD
+    /// copy, section 62, precisely while *not* seeing the detailed sections
+    /// the copy coincides with, and no shipped mask names both). Every
+    /// source this adds on top of the craft's mask exists for a camera the
+    /// original does not cull to, and each is filtered against the swap
+    /// partners of what is already in the set:
+    ///
+    /// 1. **The craft's mask**, whole - the authoritative source, the one
+    ///    the original uses.
+    /// 2. **The camera's mask**, minus alternatives of anything accepted so
+    ///    far. While craft and camera straddle a swap boundary, the union
+    ///    would otherwise show both copies for those frames and they would
+    ///    z-fight exactly like the placement bug did.
+    /// 3. **The padding bits** - the spline neighbours' own geometry, never
+    ///    their masks (a neighbour's mask is authored against a viewpoint
+    ///    nothing is at; unioning it re-admitted Moa Therma's far-LOD from
+    ///    two hops away) - again minus alternatives of anything accepted.
+    ///
+    /// What a newly-entered section *sees* still arrives the moment it
+    /// becomes the craft's or the camera's own, one frame later at most.
     #[must_use]
     pub fn around(
         pvs: &TrackPvs,
         adjacency: &SectionPadding,
+        swaps: &SwapConflicts,
         craft_section: u8,
         camera_section: u8,
     ) -> Self {
+        let mut mask = pvs.visible_from(craft_section);
+        mask |= pvs.visible_from(camera_section) & !swaps.partners_of(mask);
         let near = adjacency.near(craft_section) | adjacency.near(camera_section);
-        let mut mask = pvs.visible_from(craft_section) | pvs.visible_from(camera_section);
-        for id in oag_formats::pvs::set_bits(near) {
-            mask |= pvs.visible_from(id);
-        }
+        mask |= near & !swaps.partners_of(mask);
         Self { mask }
     }
 
@@ -386,6 +527,7 @@ mod tests {
             range: 0..3,
             texture: None,
             bounds: Bounds { centre, radius },
+            node: None,
         }
     }
 
@@ -420,81 +562,16 @@ mod tests {
         TrackPvs::from_nodes(&data, &nodes).expect("parse")
     }
 
-    #[test]
-    fn a_small_draw_call_touches_only_the_box_it_sits_in() {
-        let pvs = pvs(&[
-            (0, [0.0, 0.0, 0.0], [10.0, 10.0, 10.0]),
-            (3, [20.0, 0.0, 0.0], [30.0, 10.0, 10.0]),
-        ]);
-        assert_eq!(place(&draw_at([5.0, 5.0, 5.0], 0.5), &pvs), 1 << 0);
-        assert_eq!(place(&draw_at([25.0, 5.0, 5.0], 0.5), &pvs), 1 << 3);
-    }
-
-    /// **The regression that made this rule what it is.** A mesh wider than a
-    /// section - a ridge line, a terminal building - has its centre in one
-    /// section and its geometry in several. Placing it by its centre alone made
-    /// it vanish whenever that one section dropped out of the visible set,
-    /// while it was still plainly in shot.
-    #[test]
-    fn a_draw_call_wider_than_a_section_touches_every_section_it_spans() {
-        let pvs = pvs(&[
-            (0, [0.0, 0.0, 0.0], [10.0, 10.0, 10.0]),
-            (1, [10.0, 0.0, 0.0], [20.0, 10.0, 10.0]),
-            (2, [20.0, 0.0, 0.0], [30.0, 10.0, 10.0]),
-        ]);
-        // Centred in section 1, but 15 units of radius reaches all three.
-        let sections = place(&draw_at([15.0, 5.0, 5.0], 15.0), &pvs);
-        assert_eq!(sections, 0b111);
-
-        // And it survives a set that can only see section 0 - which is exactly
-        // what the centre-based rule got wrong.
-        let sees_only_0 = VisibleSet { mask: 1 };
-        assert!(sees_only_0.allows(sections));
-    }
-
-    /// The direction the error has to point: geometry no box touches keeps
-    /// drawing rather than vanishing.
-    #[test]
-    fn a_draw_call_touching_no_box_always_draws() {
-        let pvs = pvs(&[(0, [0.0, 0.0, 0.0], [10.0, 10.0, 10.0])]);
-        assert_eq!(place(&draw_at([100.0, 100.0, 100.0], 1.0), &pvs), 0);
-
-        let (sections, stats) =
-            DrawSections::place(&model_of(vec![draw_at([100.0, 100.0, 100.0], 1.0)]), &pvs);
-        assert_eq!(sections.opaque, vec![ALWAYS], "unplaced becomes all ones");
-        assert_eq!(stats.unplaced, 1);
-
-        let hides_all_declared = VisibleSet { mask: 1 };
-        assert!(
-            hides_all_declared.allows(ALWAYS),
-            "unplaced geometry survives any non-empty set"
-        );
-    }
-
-    /// A sphere that only reaches the face of a box still touches it. The
-    /// clamped-distance test makes containment the degenerate case rather than
-    /// a separate branch, so this is the case a `contains`-only rule missed.
-    #[test]
-    fn a_sphere_reaching_a_face_from_outside_touches_the_box() {
-        let box_ = Aabb {
-            min: [0.0; 3],
-            max: [10.0, 10.0, 10.0],
-        };
-        assert!(
-            sphere_touches_box([15.0, 5.0, 5.0], 5.0, box_),
-            "just reaches"
-        );
-        assert!(
-            !sphere_touches_box([15.0, 5.0, 5.0], 4.9, box_),
-            "just misses"
-        );
-        assert!(
-            sphere_touches_box([5.0, 5.0, 5.0], 0.0, box_),
-            "centre inside"
-        );
-        // A corner, where all three axes contribute to the distance.
-        assert!(!sphere_touches_box([13.0, 13.0, 13.0], 5.0, box_));
-        assert!(sphere_touches_box([13.0, 13.0, 13.0], 5.2, box_));
+    fn draw_of_node(node: Option<u32>) -> DrawCall {
+        DrawCall {
+            range: 0..3,
+            texture: None,
+            bounds: Bounds {
+                centre: [0.0; 3],
+                radius: 1.0,
+            },
+            node,
+        }
     }
 
     fn model_of(draws: Vec<DrawCall>) -> Model {
@@ -512,42 +589,71 @@ mod tests {
         }
     }
 
+    /// Placement is structural: a governed draw call gets its group's one
+    /// bit, whatever its bounds - which is exactly what lets a far-LOD copy
+    /// sitting *inside* the racing sections' boxes stay hidden while racing.
     #[test]
-    fn placing_a_model_counts_what_it_placed() {
+    fn a_governed_draw_call_gets_its_sections_single_bit() {
         let pvs = pvs(&[
             (0, [0.0, 0.0, 0.0], [10.0, 10.0, 10.0]),
-            (1, [10.0, 0.0, 0.0], [20.0, 10.0, 10.0]),
+            (3, [0.0, 0.0, 0.0], [10.0, 10.0, 10.0]),
         ]);
-        let mut model = model_of(vec![
-            draw_at([5.0, 5.0, 5.0], 0.5),  // section 0 only
-            draw_at([10.0, 5.0, 5.0], 3.0), // spans 0 and 1
-            draw_at([90.0, 5.0, 5.0], 1.0), // nowhere
-        ]);
-        model
-            .alpha_tested_draws
-            .push(draw_at([15.0, 5.0, 5.0], 0.5));
+        // Nodes 0..3, where node 1 belongs to section 0's group and node 2 to
+        // section 3's - the two groups' boxes overlap entirely.
+        let governing = vec![None, Some(0), Some(3), None];
+        let mut model = model_of(vec![draw_of_node(Some(1)), draw_of_node(Some(2))]);
+        model.alpha_tested_draws.push(draw_of_node(Some(2)));
 
-        let (sections, stats) = DrawSections::place(&model, &pvs);
-        assert_eq!(sections.opaque, vec![0b01, 0b11, ALWAYS]);
-        assert_eq!(sections.alpha_tested, vec![0b10]);
+        let (sections, stats) = DrawSections::place(&model, &governing, &pvs);
+        assert_eq!(sections.opaque, vec![1 << 0, 1 << 3]);
+        assert_eq!(sections.alpha_tested, vec![1 << 3]);
         assert_eq!(sections.transparent, Vec::<u64>::new());
         assert_eq!(stats.placed, 3);
-        assert_eq!(stats.unplaced, 1);
-        assert_eq!(stats.spanning, 1);
-        assert_eq!(stats.total(), 4);
-        assert!((stats.placed_fraction() - 0.75).abs() < 1e-6);
-        // 1 + 2 + 1 sections over 3 placed draw calls.
-        assert!((stats.mean_sections() - 4.0 / 3.0).abs() < 1e-6);
-        assert_eq!(PlacementStats::default().placed_fraction(), 0.0);
-        assert_eq!(PlacementStats::default().mean_sections(), 0.0);
+        assert_eq!(stats.unplaced, 0);
+        assert_eq!(stats.total(), 3);
+        assert!((stats.placed_fraction() - 1.0).abs() < 1e-6);
         assert_eq!(DrawSections::at(&sections.opaque, 99), ALWAYS);
+
+        let sees_only_0 = VisibleSet { mask: 1 };
+        assert!(sees_only_0.allows(sections.opaque[0]));
+        assert!(
+            !sees_only_0.allows(sections.opaque[1]),
+            "the coincident group in the unseen section is hidden"
+        );
+    }
+
+    /// The direction the error has to point, three ways: no node, no
+    /// governing section, and a governing section the track does not declare
+    /// all draw every frame rather than never.
+    #[test]
+    fn an_ungoverned_draw_call_always_draws() {
+        let pvs = pvs(&[(0, [0.0, 0.0, 0.0], [10.0, 10.0, 10.0])]);
+        let governing = vec![None, Some(0), Some(9)];
+        let model = model_of(vec![
+            draw_of_node(None),     // synthetic geometry
+            draw_of_node(Some(0)),  // node no section governs
+            draw_of_node(Some(2)),  // governed by undeclared section 9
+            draw_of_node(Some(50)), // node index past the governance table
+        ]);
+
+        let (sections, stats) = DrawSections::place(&model, &governing, &pvs);
+        assert_eq!(sections.opaque, vec![ALWAYS; 4]);
+        assert_eq!(stats.placed, 0);
+        assert_eq!(stats.unplaced, 4);
+        assert_eq!(PlacementStats::default().placed_fraction(), 0.0);
+
+        let hides_all_declared = VisibleSet { mask: 1 };
+        assert!(
+            hides_all_declared.allows(ALWAYS),
+            "unplaced geometry survives any non-empty set"
+        );
     }
 
     #[test]
     fn an_unknown_section_makes_the_visible_set_everything() {
         let pvs = pvs(&[(0, [0.0; 3], [1.0; 3])]);
         let padding = SectionPadding::default();
-        let set = VisibleSet::around(&pvs, &padding, UNPLACED, UNPLACED);
+        let set = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), UNPLACED, UNPLACED);
         assert!(set.is_everything(), "neither section is declared");
         assert_eq!(set.section_count(), 64);
         assert!(set.allows(1 << 40));
@@ -559,17 +665,17 @@ mod tests {
         let pvs = pvs(&[(0, [0.0; 3], [1.0; 3]), (1, [0.0; 3], [1.0; 3])]);
         let padding = SectionPadding::default();
 
-        let alone = VisibleSet::around(&pvs, &padding, 0, 0);
+        let alone = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 0, 0);
         assert_eq!(alone.mask(), 1, "just section 0");
 
-        let split = VisibleSet::around(&pvs, &padding, 0, 1);
+        let split = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 0, 1);
         assert_eq!(split.mask(), 0b11, "the camera's section is drawn too");
         assert!(split.allows(1) && split.allows(0b10) && !split.allows(0b100));
     }
 
     /// Padding pulls in the neighbours' *masks*, not merely the neighbours.
     #[test]
-    fn padding_unions_what_the_neighbours_can_see() {
+    fn padding_draws_the_neighbours_but_not_what_they_see() {
         use oag_formats::track::{AiTrack, Path, SplinePoint};
         let point = |section_id| SplinePoint {
             pos: [0.0; 3],
@@ -594,16 +700,139 @@ mod tests {
             }],
             junctions: Vec::new(),
         };
-        let pvs = pvs(&[(0, [0.0; 3], [1.0; 3]), (1, [0.0; 3], [1.0; 3])]);
+        // Section 1's mask names a far-away section 40 - the LOD-swap shape:
+        // what a neighbour sees is authored against *its* viewpoint, and
+        // pulling it in early is how a far-LOD copy got drawn over the
+        // detailed track it duplicates (Moa Therma's magstrip artifact,
+        // second cause).
+        let pvs = pvs_with_masks(&[(0, 0), (1, 1 << 40)]);
         let padding = SectionPadding::from_track(&track);
         assert!(padding.near(0) & 0b10 != 0, "1 is next door to 0");
 
-        let set = VisibleSet::around(&pvs, &padding, 0, 0);
+        let set = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 0, 0);
         assert_eq!(
             set.mask(),
             0b11,
-            "the neighbour is drawn before it is entered"
+            "the neighbour itself is drawn before it is entered, and what \
+             only the neighbour can see is not"
         );
+
+        // Once the craft is actually in section 1, its mask applies whole.
+        let entered = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 1, 1);
+        assert!(entered.allows(1 << 40));
+    }
+
+    /// A LOD swap in miniature: sections 0 and 1 are ordinary neighbours
+    /// (each names the other), 2 is the detail and 3 the coincident copy -
+    /// named by disjoint viewpoints, never together. The draws of sections
+    /// 1, 2 and 3 share bit-identical vertex positions; section 0's geometry
+    /// is elsewhere.
+    fn swap_fixture() -> (TrackPvs, SwapConflicts) {
+        let pvs = pvs_with_masks(&[
+            (0, 0b0110), // sees 1 and the detail 2
+            (1, 0b1001), // sees 0 and the copy 3
+            (2, 0b0001),
+            (3, 0b0010),
+        ]);
+        let governing = vec![Some(0), Some(1), Some(2), Some(3)];
+        let mut model = model_of(vec![
+            draw_of_node(Some(0)),
+            draw_of_node(Some(1)),
+            draw_of_node(Some(2)),
+            draw_of_node(Some(3)),
+        ]);
+        let vertex = |x: f32| crate::mesh::GpuVertex {
+            position: [x, 0.0, 0.0],
+            normal: [0.0, 1.0, 0.0],
+            colour: [1.0; 4],
+            texcoord: [0.0; 2],
+            lit: 1.0,
+            v_cycles: 0.0,
+        };
+        model.indices.clear();
+        for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {
+            let start = model.vertices.len() as u32;
+            for i in 0..SwapConflicts::SHARED_POSITIONS {
+                model.vertices.push(vertex(base_x + i as f32));
+            }
+            let end = model.vertices.len() as u32;
+            model.indices.extend(start..end);
+            model.draws[draw].range = start..end;
+        }
+        let (sections, _) = DrawSections::place(&model, &governing, &pvs);
+        let swaps = SwapConflicts::find(&pvs, &sections, &model);
+        (pvs, swaps)
+    }
+
+    /// Only mask-exclusive pairs with overlapping geometry are swaps. Here
+    /// that is 2/3 alone: 1's geometry coincides with both, but mask 0 names
+    /// 1 with 2 and mask 1 names 1 with 3, so neither is exclusive - and 0
+    /// is exclusive with nothing that shares its space.
+    #[test]
+    fn only_coincident_exclusive_pairs_are_swaps() {
+        let (_, swaps) = swap_fixture();
+        assert_eq!(swaps.pair_count(), 1, "the detail and its copy");
+        assert_eq!(swaps.partners_of(1 << 2), 1 << 3);
+        assert_eq!(swaps.partners_of(1 << 3), 1 << 2);
+        assert_eq!(swaps.partners_of(1 << 1), 0, "named together is not a swap");
+        assert_eq!(swaps.partners_of(1 << 0), 0, "distant geometry never pairs");
+        assert_eq!(SwapConflicts::none().partners_of(ALL_VISIBLE), 0);
+        assert_eq!(
+            swaps.partners_of(ALL_VISIBLE),
+            0,
+            "unknown draws everything"
+        );
+    }
+
+    /// The straddle: craft already across the boundary (sees the detail),
+    /// camera still behind (sees the copy). The craft's mask wins and the
+    /// copy stays hidden; the rest of the camera's mask still contributes.
+    #[test]
+    fn the_crafts_mask_outranks_the_cameras_across_a_swap() {
+        let (pvs, swaps) = swap_fixture();
+        let padding = SectionPadding::default();
+
+        let straddle = VisibleSet::around(&pvs, &padding, &swaps, 0, 1);
+        assert!(straddle.allows(1 << 2), "the craft's detail is drawn");
+        assert!(
+            !straddle.allows(1 << 3),
+            "the camera's copy of it is not - the authored exclusion holds"
+        );
+        assert!(
+            straddle.allows(1 << 0) && straddle.allows(1 << 1),
+            "the camera's non-conflicting geometry still contributes"
+        );
+
+        // The same straddle without the table is the bug this exists for.
+        let unfiltered = VisibleSet::around(&pvs, &padding, &SwapConflicts::none(), 0, 1);
+        assert!(unfiltered.allows(1 << 2) && unfiltered.allows(1 << 3));
+
+        // And from the other side of the boundary the swap flips whole.
+        let flipped = VisibleSet::around(&pvs, &padding, &swaps, 1, 0);
+        assert!(flipped.allows(1 << 3) && !flipped.allows(1 << 2));
+    }
+
+    /// Sections without boxes but with authored visibility masks.
+    fn pvs_with_masks(sections: &[(u8, u64)]) -> TrackPvs {
+        let mut data = Vec::new();
+        let mut nodes = Vec::new();
+        for &(index, mask) in sections {
+            nodes.push(oag_formats::vex::Node {
+                class_id: oag_formats::vex::CLASS_SECTION,
+                offset: data.len(),
+                header_size: 0,
+                data_size: 0x10,
+                child_count: 0,
+                unk_0x0e: 0,
+                name: None,
+                depth: 0,
+                parent: None,
+            });
+            data.extend([index, 0, 0, 0, 0, 0, 0, 0]);
+            data.extend((mask as u32).to_le_bytes());
+            data.extend(((mask >> 32) as u32).to_le_bytes());
+        }
+        TrackPvs::from_nodes(&data, &nodes).expect("parse")
     }
 
     /// The ordering claim, made executable: with no frustum at all, the mask

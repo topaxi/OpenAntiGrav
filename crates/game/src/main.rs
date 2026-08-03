@@ -30,7 +30,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use clap::Parser;
 use oag_core::{TickClock, TickRate};
 
@@ -292,6 +292,41 @@ struct Cli {
     /// command produce one image of a comparison.
     #[arg(long)]
     render_scale: Option<u32>,
+
+    /// Start the craft at this world position instead of on its grid slot:
+    /// `x,y,z` or `x,y,z,yaw`, `yaw` in degrees off the track's own direction
+    /// there.
+    ///
+    /// **A capture aid, not a spawn.** Two circuits photographed from the same
+    /// place, or one of our frames lined up with a position read out of an
+    /// emulator's debugger, instead of running a guessed number of ticks and
+    /// comparing whatever comes up. The position is used exactly as given -
+    /// nothing lifts or snaps it - while attitude comes from the nearest spline
+    /// sample, so a banked corner or a loop reads right rather than leaving the
+    /// craft flat inside the geometry.
+    #[arg(long, value_name = "X,Y,Z[,YAW]")]
+    pose: Option<String>,
+}
+
+/// Parses `--pose`: three or four comma-separated numbers, the fourth a yaw in
+/// degrees.
+fn parse_pose(text: &str) -> Result<(oag_core::math::Vec3, f32)> {
+    let parts: Vec<&str> = text.split(',').map(str::trim).collect();
+    ensure!(
+        matches!(parts.len(), 3 | 4),
+        "--pose takes x,y,z or x,y,z,yaw, not {} value(s)",
+        parts.len()
+    );
+    let mut values = [0.0f32; 4];
+    for (slot, text) in values.iter_mut().zip(&parts) {
+        *slot = text
+            .parse()
+            .with_context(|| format!("--pose component {text:?} is not a number"))?;
+    }
+    Ok((
+        oag_core::math::Vec3::new(values[0], values[1], values[2]),
+        values[3].to_radians(),
+    ))
 }
 
 fn main() -> Result<()> {
@@ -348,6 +383,7 @@ fn main() -> Result<()> {
         ribbon: cli.ribbon,
         collision: cli.collision,
         lod: cli.lod.unwrap_or(settings.graphics.lod),
+        pose: cli.pose.as_deref().map(parse_pose).transpose()?,
     };
 
     // Before `boot::load`, deliberately: the front end's load parses the front-end

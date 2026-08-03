@@ -58,6 +58,16 @@ pub struct DrawCall {
     /// culling - not the whole model's, which would defeat the point on a
     /// track where one `Model` is the entire circuit.
     pub bounds: Bounds,
+    /// Index of the scene-tree node this draw call came from, into the
+    /// `vex::nodes` of the file the model was built from, or `None` for
+    /// synthetic geometry (ribbons, collision overlays, fixtures).
+    ///
+    /// This is what lets `oag_render::pvs` place a draw call in its *authored*
+    /// section - the section node sharing its ancestor group - instead of
+    /// guessing from world-space bounds. Only meaningful while the model maps
+    /// to one file; [`merge`] keeps the per-source values, which are ambiguous
+    /// across sources.
+    pub node: Option<u32>,
 }
 
 /// How many whole V sweeps of the blink-light palette pass per
@@ -668,6 +678,7 @@ fn build_class(
                         range: first_index..last_index,
                         texture,
                         bounds: Bounds { centre, radius },
+                        node: Some(index as u32),
                     });
                 }
             }
@@ -811,6 +822,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             range: (d.range.start + index_base)..(d.range.end + index_base),
             texture: d.texture.map(|t| t + texture_base),
             bounds: d.bounds,
+            node: d.node,
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
         out.alpha_tested_draws
@@ -868,6 +880,7 @@ mod merge_tests {
                     centre: [0.0; 3],
                     radius: 1.0,
                 },
+                node: None,
             }],
             alpha_tested_draws: Vec::new(),
             transparent_draws: Vec::new(),
