@@ -165,6 +165,26 @@ ship, not only the boost plume. That is a much bigger blast radius than this
 page's scope (see "What is still not recovered" below) and needs its own
 screenshot-driven verification before any project-wide change.
 
+**That verification was tried, once, informally, and the result is a
+rejection - not committed, but worth recording so nobody repeats it
+expecting a different answer.** `mesh_render::TRANSPARENT_BLEND` was swapped
+locally from its `SrcAlpha`/`OneMinusSrcAlpha` lerp to the pure-additive
+`One`/`One` this page recovers, and 01_Track's start straight (the same
+`--race --track 'Data\Environments\01_Track\track.vex' --hold cross --ticks
+205` capture `MESH_BLEND_ALPHA_PLAN.md` used) was re-rendered. The tilted
+glass canopy panels either side of the track - a `transparent_draws` batch,
+correctly classified - go from a readable tinted-glass look with visible
+interior detail to a blown-out, nearly solid white/cyan glow. Reverted
+immediately; never landed. This is exactly what the "is `GU_BLEND` actually
+enabled" open question above predicts if that particular batch does *not*
+have blending enabled in the original: forcing an always-summing blend onto
+content that the real hardware may draw closer to a plain overwrite would
+produce precisely this kind of blow-out. Not proof - a single content
+example, at confidence 60 as a data point rather than a finding - but a real
+regression on real content, and reason enough on its own not to flip the
+constant without first reading the two `Gu_CallList` lists this page already
+names as the cheapest way to settle blend-enable.
+
 ## What is still not recovered
 
 - **Whether `GU_BLEND` is enabled when the additive branch runs.**

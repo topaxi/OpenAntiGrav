@@ -37,6 +37,24 @@ points at it. Prune again rather than appending indefinitely.
   gitignored, it does not travel into a worktree or a restricted sandbox.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
+- **A screenshot comparison against the original (2026-08-04) found rendering
+  fidelity gaps that are mostly not bugs.** Bloom, colour grading and every
+  authored light class (`AmbientLight`/`DirectionalLight`/etc.) are still
+  unchecked M6 roadmap items - the flat/dark look this produces is a known,
+  documented gap, not something to guess-fix from a screenshot. One real
+  regression *was* tried and rejected: swapping `mesh_render::TRANSPARENT_BLEND`
+  to the pure-additive equation `mesh-draw.md` recovers blows out 01_Track's
+  glass canopy panels (see that page's own record of it) - don't retry without
+  first reading the two `Gu_CallList` lists that page names as the way to
+  settle whether `GU_BLEND` is actually enabled on that branch. Separately, a
+  specific track-side sign (`col_banners2_ADD.tga` on `16_Track`, visible
+  near the Talon's Junction start line) renders as a blown-out white block in
+  ours; its own texture data is confirmed **not** white (a dark, low-alpha
+  ticker-font strip), ruling out a bad decode, and the blend-equation swap
+  above changed nothing about it either - so whatever draws that specific
+  quad white is still unidentified. Needs node-level isolation (hide
+  everything else and confirm which draw call it actually is) rather than
+  another guess from the texture name.
 - **Gate status:** green at 1,049 tests, `audit-leakage` clean. `just test-data`
   is 1039 of 1040 (with `--no-fail-fast`; without it, the failure below stops
   the run at 362), and **the one failure is the machine rather than the code**:
