@@ -76,3 +76,23 @@ Record the SHA-256 of every image you use in
 [`docs/reverse-engineering/source-images.md`](../docs/reverse-engineering/source-images.md).
 Hashes are fine to commit; content is not.
 
+## DLC (`data/dlc/`)
+
+Four PSN DLC packages for Wipeout Pulse EU, as downloaded (`.zip`, each
+containing a `UCES00465/` folder): the Auricom, Harimau, Icaras and Mirage
+ship packs. Each is `PACKn.edat`, three `PACKn_UIn.edat` files, and one
+`PARAM.pbp`.
+
+**Despite the extension, `PACKn.edat` is not encrypted.** It reads directly
+as an ordinary `oag-wad`-format archive (32-33 entries, LZSS-compressed,
+consistent offset chain) - `cargo run -p oag-tools --bin oag-wad -- list
+<extracted PACKn.edat>` lists it like any other WAD. Checked against Ghidra
+before assuming otherwise: the game's only NpDrm import,
+`sceNpDrmEdataSetupKey`, is called with no key argument and
+`sceNpDrmSetLicenseeKey` (which would supply one) is never imported at all -
+consistent with there being no per-title secret to find, though what (if
+anything) supplies a key at the OS level was not chased further once the file
+itself proved to be plaintext. `PARAM.pbp` is the standard, unencrypted PBP
+(title/icon metadata for the XMB). No decryption work was needed or done -
+the `PACKn_UIn.edat` files (front-end UI assets, presumably the same shape)
+have not been checked yet but are expected to match.
