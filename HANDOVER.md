@@ -559,6 +559,19 @@ the past.
 - **A niri screenshot piped through `wl-paste` can return the PREVIOUS clipboard
   image.** One lap "verification" shot came out as a menu from an earlier
   session. Check the image is what it claims before citing it.
+- **`apply-ghidra-names.py` can report a rename as applied when it did not
+  land.** Sweeping `psp-pulse-eu` (2026-08-05), the script printed `4 applied,
+  0 skipped, 1 failed` for a five-row batch, but `get_function_by_address`
+  right after showed only the one row it called a *failure* had actually been
+  renamed - the four it called successes were all still `FUN_*`. Calling
+  `rename_function_by_address` directly through the MCP bridge, one address
+  at a time, worked every time; only the script's own tight sequential loop
+  (no delay between calls) showed this. A new instance of the same class of
+  bridge flakiness already noted above for `delete_file`/`close_program`, this
+  time hitting renames rather than file lifecycle. **Verify with
+  `get_function_by_address` after running the script - do not trust its own
+  applied/skipped/failed count**, and if in doubt, rename through the MCP
+  tool directly rather than retrying the script.
 
 **PPSSPP** - the rest is in
 [`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md), worth
