@@ -3,7 +3,7 @@
 # **Run this with `--scheme novice`.** Under veteran it does nothing at all -
 # there is no sideshift button in that scheme, `l` is the left airbrake, and the
 # stick input is just steering. That is not a flaw in the scenario; it is what
-# the two schemes are. See `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+# the two schemes are. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 #
 # The gesture is three states, and all three are load-bearing:
 #

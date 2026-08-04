@@ -4,7 +4,7 @@
 //! mean `activate`, which is cross, and Z and Backspace both mean `cancel`,
 //! which is circle. Keeping the names rather than the buttons is what will make
 //! remapping and region-specific swaps straightforward later. See
-//! `docs/ghidra/functions/psp-pulse/input.md`.
+//! `docs/ghidra/functions/psp-pulse-usa/input.md`.
 //!
 //! Movement is bound to **WASD**, not the arrow keys - both still work, since
 //! the arrows cost nothing to keep and some players will reach for them out of

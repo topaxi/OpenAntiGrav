@@ -2,7 +2,7 @@
 #
 # The gesture is `L` pressed twice inside 0.25 s - 15 ticks at 60 Hz - which is
 # what `Ship_UpdateSideshiftInput_q`'s button branch tests. See
-# `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+# `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 #
 # Written to be *decidable against a straight line*: everything here is
 # symmetric about the track's centre except the two taps, so any lateral

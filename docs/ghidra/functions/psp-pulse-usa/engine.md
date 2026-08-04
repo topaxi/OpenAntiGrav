@@ -357,7 +357,7 @@ of travel only under the negated convention.
 
 Read the derivation and its confidence split - 88 for the PS2 build, 80 for the
 claim generalising here - in
-[ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md#the-angular-sign-convention-w_game---w_physics).
+[ps2-pulse-eu/craft-update.md](../ps2-pulse-eu/craft-update.md#the-angular-sign-convention-w_game---w_physics).
 **This page's own 84 ceiling is a methodology cap on decompilation alone, and it
 does not bind that result**, which rests on raw disassembly, a vendor ISA manual
 and this runtime measurement together. What is being raised is specifically the
@@ -477,7 +477,7 @@ settling the question; the integrator was not examined.
 **Their sign convention is determined, though**, from the PS2 integrator plus the
 steering measurement below: whichever of the two they hold, they hold it with the
 sign of `-w_physics`. See
-[ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md#the-angular-sign-convention-w_game---w_physics).
+[ps2-pulse-eu/craft-update.md](../ps2-pulse-eu/craft-update.md#the-angular-sign-convention-w_game---w_physics).
 The torque-versus-acceleration question does not disturb it - an inertia tensor
 is positive definite and cannot invert a sign.
 
@@ -1041,7 +1041,7 @@ plain, both read this pass:
 
 Re-reading `Body_Integrate` (`0x0015d088`, PS2) for this turned up a pair of terms
 missing from [physics](../../../physics/README.md) and from
-[craft-update.md](../ps2-pulse/craft-update.md). Inside the sub-step loop, after
+[craft-update.md](../ps2-pulse-eu/craft-update.md). Inside the sub-step loop, after
 both force accumulators are applied:
 
 ```c
@@ -1858,7 +1858,7 @@ torque and the bank-to-yaw term:
 scale of any kind** - the coefficient is `1`. Confidence **92**: every
 instruction is in address order with nothing elided, and the PS2 four-corner
 twin computes the same product through a different base pointer
-([craft-update.md](../ps2-pulse/craft-update.md#the-rest-of-the-four-corner-path)).
+([craft-update.md](../ps2-pulse-eu/craft-update.md#the-rest-of-the-four-corner-path)).
 
 Two things fall out that had been open on this page for three passes:
 
@@ -2198,7 +2198,7 @@ stored**. Same conclusion, now with the location.
 | Platform | Notes |
 | --- | --- |
 | PSP (Pulse) | This page |
-| PS2 (Pulse) | **Located, and it agrees.** See [ps2-pulse/handling-xml.md](../ps2-pulse/handling-xml.md) |
+| PS2 (Pulse) | **Located, and it agrees.** See [ps2-pulse-eu/handling-xml.md](../ps2-pulse-eu/handling-xml.md) |
 | PSP (Pure) | Not located |
 
 | Function | PSP | PS2 (`SCES_547.48`) |
@@ -2225,7 +2225,7 @@ stored**. Same conclusion, now with the location.
 | the enclosing per-entity update | `0x0884f70c`, not renamed | `World_StepBodies` `0x0015ded8` |
 
 Part of the craft path has now been read in the PS2 build; see
-[ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md). What it corroborates:
+[ps2-pulse-eu/craft-update.md](../ps2-pulse-eu/craft-update.md). What it corroborates:
 
 - **The angular damping triple.** `(-pitch_damping, -5.0, k)` with `k = -5.0` in
   mode 0 and `-2.0` otherwise, reading `pitch_damping` from the same

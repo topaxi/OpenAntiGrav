@@ -224,7 +224,7 @@ fn the_three_ps2_only_teams_have_no_psp_boost_plume() {
     }
 }
 
-/// Pins the finding in `docs/ghidra/functions/psp-pulse/mesh-draw.md`:
+/// Pins the finding in `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`:
 /// every PSP team's `shipboost.vex` batches take `Mesh_SetBatchDrawState`'s
 /// pure-additive (`Batch::is_additive_blend`) branch, never the "replace"
 /// one. A separate one-off measurement during that pass found the same true
@@ -263,7 +263,7 @@ fn every_psp_teams_boost_plume_batches_are_additive_blend() {
                         "{name}: a batch (pass_mask {:#06x}, header_flags {:#04x}) takes \
                          Mesh_SetBatchDrawState's \"replace\" branch - exhaust::TRAIL_BLEND \
                          is no longer the right override for this model, see \
-                         docs/ghidra/functions/psp-pulse/mesh-draw.md",
+                         docs/ghidra/functions/psp-pulse-usa/mesh-draw.md",
                         batch.pass_mask,
                         batch.header_flags
                     );

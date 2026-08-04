@@ -13,7 +13,7 @@ nodes, under five class IDs. It is an **indexed triangle soup**: no BSP, no
 quadtree, no heightfield, and **not the render mesh**. The function behaviour
 behind it - the broadphase, the raycasts, the contact rules - is documented
 separately in
-[the Ghidra page](../ghidra/functions/psp-pulse/collision.md); this page is the
+[the Ghidra page](../ghidra/functions/psp-pulse-usa/collision.md); this page is the
 file format and what shipped data says about it.
 
 Three things that would be reasonable guesses and are wrong:
@@ -178,7 +178,7 @@ scraping a wall loses exactly that fraction of its speed every frame - the
 [force-balance-ground-truth.md](../physics/force-balance-ground-truth.md). The
 values and the sentinel rule on this page were right; only the field's name was
 wrong. See
-[contact-response.md](../ghidra/functions/psp-pulse/contact-response.md).
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md).
 
 ## The same format is in Wipeout Pure
 
@@ -234,7 +234,7 @@ outright that a failure there is a **finding**, not a bug.
 
 Collision vertices are world space: every node sits at depth 1 with an identity
 world transform, on both discs.
-[The sweep-and-prune reading](../ghidra/functions/psp-pulse/collision.md#two-level-sweep-and-prune)
+[The sweep-and-prune reading](../ghidra/functions/psp-pulse-usa/collision.md#two-level-sweep-and-prune)
 packs endpoints as `bits[0:11] = ((int)coord + 0x400) * 2`. Twelve bits hold
 `0..4095`, so `coord + 1024` runs `0..2047`: the packing covers a **2048-unit
 window, centred on the origin**, quantised to one unit.
@@ -325,7 +325,7 @@ and the 1024-id cap are properties of the original's index, not of the format.
 One loose end is recorded rather than resolved: the two clamp bounds are globals
 at `0x08ab0c50`/`0x08ab0c60` that are **all zero in shipped `.data`, with no
 writer anywhere in the image**. See
-[collision.md](../ghidra/functions/psp-pulse/collision.md#the-packing-subtracts-no-base-and-the-range-is-enforced-by-a-clamp)
+[collision.md](../ghidra/functions/psp-pulse-usa/collision.md#the-packing-subtracts-no-base-and-the-range-is-enforced-by-a-clamp)
 for what was checked; confidence **45** on the constant, **90** on the clamp
 being there. Nothing above depends on which value it holds.
 

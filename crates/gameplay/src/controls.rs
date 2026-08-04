@@ -4,7 +4,7 @@
 //! only place where "cross means thrust" is written down, and it is the sort of
 //! binding that would otherwise end up asserted differently in three files. The
 //! button *names* come from the original's own front-end XML vocabulary; see
-//! `docs/ghidra/functions/psp-pulse/input.md`.
+//! `docs/ghidra/functions/psp-pulse-usa/input.md`.
 
 use oag_physics::ship::{ShipControls, Sideshift};
 
@@ -16,7 +16,7 @@ use crate::input::{InputSnapshot, button};
 /// *actions* rather than buttons, and the scheme decides which of them exist.
 /// `Options_LoadControlMapping` (`0x08836a48`) picks it from the `Control_Type`
 /// profile setting, and the row the options page shows changes with it. See
-/// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ControlScheme {
     /// `R` is both airbrakes at once and `L` is a dedicated sideshift button:
@@ -49,7 +49,7 @@ impl ControlScheme {
     /// **The original's own words**, read out of the `strcasecmp` chains in
     /// `Options_LoadControlMapping` (`0x08836a48`) and
     /// `Options_BuildControlSchemeRows` (`0x0889b468`) - not names this project
-    /// picked. See `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    /// picked. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {

@@ -33,7 +33,7 @@ form, and Ghidra's string search will return all three.
 
 ```sh
 scripts/apply-ghidra-names.py --program SCES_547.48 \
-    docs/ghidra/functions/ps2-pulse/names.tsv
+    docs/ghidra/functions/ps2-pulse-eu/names.tsv
 ```
 
 One symbol scores below 70 and carries a `_q`: `g_lzss_encoder_tree`
@@ -51,19 +51,19 @@ names but the agreements and the disagreements.
 
 | Claim | PSP page | How the PS2 agrees |
 | --- | --- | --- |
-| The 32-field handling block, `0x94`..`0x114`, stride `0x80` | [engine.md](../psp-pulse/engine.md) | Every attribute lands on the same offset, from seven separate parsers |
-| Four handling parameters are pre-scaled at load | [engine.md](../psp-pulse/engine.md) | Same four fields, same `1e-3` / `-1e-2` / `1e-4` / `1e-4` factors |
-| `AirbrakeGraphics.amount` is degrees, scaled by `pi/180` | [camera.md](../psp-pulse/camera.md) | Same conversion, same `0x6c`/`0x70`/`0x74` triple |
-| The 27-float camera block, and `<BackwardCamera headtilt>` being dead | [camera.md](../psp-pulse/camera.md) | Same offsets, same four-attribute parser that drops `headtilt` |
-| The WAD name hash: CRC-32 reflected, **initialised to 0**, `\`-to-`/`, uppercase folded, `#`-hex escape hatch | [wad-subsystem.md](../psp-pulse/wad-subsystem.md) | Two independent implementations in this binary, both matching |
-| `size_in == size_out` is the outer test, not the compression flag | [wad-subsystem.md](../psp-pulse/wad-subsystem.md) | It is the only test `Wad_Open` makes when choosing a stream |
+| The 32-field handling block, `0x94`..`0x114`, stride `0x80` | [engine.md](../psp-pulse-usa/engine.md) | Every attribute lands on the same offset, from seven separate parsers |
+| Four handling parameters are pre-scaled at load | [engine.md](../psp-pulse-usa/engine.md) | Same four fields, same `1e-3` / `-1e-2` / `1e-4` / `1e-4` factors |
+| `AirbrakeGraphics.amount` is degrees, scaled by `pi/180` | [camera.md](../psp-pulse-usa/camera.md) | Same conversion, same `0x6c`/`0x70`/`0x74` triple |
+| The 27-float camera block, and `<BackwardCamera headtilt>` being dead | [camera.md](../psp-pulse-usa/camera.md) | Same offsets, same four-attribute parser that drops `headtilt` |
+| The WAD name hash: CRC-32 reflected, **initialised to 0**, `\`-to-`/`, uppercase folded, `#`-hex escape hatch | [wad-subsystem.md](../psp-pulse-usa/wad-subsystem.md) | Two independent implementations in this binary, both matching |
+| `size_in == size_out` is the outer test, not the compression flag | [wad-subsystem.md](../psp-pulse-usa/wad-subsystem.md) | It is the only test `Wad_Open` makes when choosing a stream |
 | The 8-byte WAD header and 16-byte entries, `{hash, offset, size_out, size_in}` | [formats/wad.md](../../../formats/wad.md) | `Wad_MountArchive` reads exactly that shape |
 | The whole LZSS bit layout: 13-bit absolute position, 4-bit length, `+3` bias, 8192-byte ring, cursor at 1, MSB first | [formats/lzss.md](../../../formats/lzss.md) | `Lzss_Decode` reads the same fields in the same order; an independent transcription of it agrees byte for byte with ours. See [lzss.md](lzss.md) |
 | The `<code>` short-name dictionary: per file, 18 codes, keyed on the first letter | [formats/fexml.md](../../../formats/fexml.md) | `Xml_OpenFile` builds an 18-slot table on the document from a `code` element, keyed by `name[0] - 'a'`. Inferred from data there, read off the parser here. See [xml-reader.md](xml-reader.md) |
-| The surface-alignment gain `-400` and the angular damping triple `(-pitch_damping, -5, k)` | [physics/README.md](../../../physics/README.md), [engine.md](../psp-pulse/engine.md) | Both appear verbatim in the PS2 build, so `-400` is **not** a transcription error. See [craft-update.md](craft-update.md) |
-| The four-corner hover selector, the body accumulator offsets, and the craft update's vtable dispatch shape | [engine.md](../psp-pulse/engine.md) | Same globals, same magic value 6, same `+0x100`/`+0x120`/`+0x130`, same `{i16 adjust, fn}` pair with `+0x370` cleared before the call |
-| The abstract button layer and its four edge masks | [input.md](../psp-pulse/input.md) | Same raw masks, same indices, same `pressed = held & ~last` derivation |
-| Three player camera views cycling `OPT_INT` -> `OPT_CLOSE` -> `OPT_FAR` on SELECT | [camera.md](../psp-pulse/camera.md) | Same three literals, same rotation, same hide-own-ship flag pattern |
+| The surface-alignment gain `-400` and the angular damping triple `(-pitch_damping, -5, k)` | [physics/README.md](../../../physics/README.md), [engine.md](../psp-pulse-usa/engine.md) | Both appear verbatim in the PS2 build, so `-400` is **not** a transcription error. See [craft-update.md](craft-update.md) |
+| The four-corner hover selector, the body accumulator offsets, and the craft update's vtable dispatch shape | [engine.md](../psp-pulse-usa/engine.md) | Same globals, same magic value 6, same `+0x100`/`+0x120`/`+0x130`, same `{i16 adjust, fn}` pair with `+0x370` cleared before the call |
+| The abstract button layer and its four edge masks | [input.md](../psp-pulse-usa/input.md) | Same raw masks, same indices, same `pressed = held & ~last` derivation |
+| Three player camera views cycling `OPT_INT` -> `OPT_CLOSE` -> `OPT_FAR` on SELECT | [camera.md](../psp-pulse-usa/camera.md) | Same three literals, same rotation, same hide-own-ship flag pattern |
 
 ### Where the two builds disagree
 
@@ -81,7 +81,7 @@ These are findings, not noise, and none of them has been reconciled.
 ### Answered here, open on the PSP side
 
 **`stats_base + 0x90` is `<Misc weight_distribution>`.**
-[engine.md](../psp-pulse/engine.md) records that offset as "a per-team scalar
+[engine.md](../psp-pulse-usa/engine.md) records that offset as "a per-team scalar
 outside every class block; its element is not determined". The PS2 binary has a
 `<Misc>` element the PSP page never mentions, and its parser writes `0x90`
 directly. See [handling-xml.md](handling-xml.md).
@@ -106,10 +106,10 @@ rule or because the hypothesis is untested.
 ## Not attempted
 
 No PS2 counterpart was looked for on
-[main-loop.md](../psp-pulse/main-loop.md),
-[collision.md](../psp-pulse/collision.md),
-[frontend-video.md](../psp-pulse/frontend-video.md), or the `Ship_Update*` force
-terms in [engine.md](../psp-pulse/engine.md). The force terms are the obvious
+[main-loop.md](../psp-pulse-usa/main-loop.md),
+[collision.md](../psp-pulse-usa/collision.md),
+[frontend-video.md](../psp-pulse-usa/frontend-video.md), or the `Ship_Update*` force
+terms in [engine.md](../psp-pulse-usa/engine.md). The force terms are the obvious
 next target: the parameter block is now confirmed to be laid out identically,
 so the PS2 consumers read the same offsets, and a second reading of the craft
 frame would raise the whole of `engine.md` out of its decompilation-only cap.

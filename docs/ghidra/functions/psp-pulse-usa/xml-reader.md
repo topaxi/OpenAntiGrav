@@ -4,7 +4,7 @@ Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Wipeout Pulse, PSP, UCUS-98712), image
 base `0x08804000`.
 
 This is the PSP half of the reader documented on
-[ps2-pulse/xml-reader.md](../ps2-pulse/xml-reader.md), located from
+[ps2-pulse-eu/xml-reader.md](../ps2-pulse-eu/xml-reader.md), located from
 `Movie_ParseAttributes`'s callees. It is the parser every data-driven subsystem
 goes through: [handling stats](engine.md), the [camera blocks](camera.md), the
 front end and everything else that reads
@@ -275,7 +275,7 @@ resolves an indirection, anything else parses as a literal number - and
 `0x08889048` resolves the constant. Both literals were read out of this binary,
 not carried over from the PS2. So the PSP front end has **the same
 `value="FEGlobals->Something"` indirection**, now documented on
-[ps2-pulse/fe-globals.md](../ps2-pulse/fe-globals.md) and in
+[ps2-pulse-eu/fe-globals.md](../ps2-pulse-eu/fe-globals.md) and in
 [fexml.md](../../../formats/fexml.md). The PSP functions are still **not
 renamed**: their registry and float variant were not traced here.
 

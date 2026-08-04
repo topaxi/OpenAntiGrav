@@ -268,7 +268,7 @@ original's main menu - carries a `Movie` widget naming
 `Data\Movies\Backdrop.PMF`, and a cold boot under PPSSPP with `MoviePlayer_Open`
 armed from reset opens exactly two movies in ten minutes: the intro, and this
 one. See [frontend boot](frontend-boot.md) and
-[`frontend-video.md`](../ghidra/functions/psp-pulse/frontend-video.md). The menu
+[`frontend-video.md`](../ghidra/functions/psp-pulse-usa/frontend-video.md). The menu
 *tree* is ours; what it sits on is the disc's, and citing which widget names it
 is what keeps the two apart.
 

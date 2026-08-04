@@ -1,4 +1,4 @@
-# Applied symbol names for pulse-ps2 SCES_547.48 (image base 0x00100000).
+# Applied symbol names for pulse-ps2-eu SCES_547.48 (image base 0x00100000).
 #
 # The evidence lives in the page named in the last column; this file exists so
 # the names can be re-applied to a fresh Ghidra database without hand-editing.
@@ -11,7 +11,7 @@
 # SCES_547.48 open:
 #
 #   scripts/apply-ghidra-names.py --program SCES_547.48 \
-#       docs/ghidra/functions/ps2-pulse/names.tsv
+#       docs/ghidra/functions/ps2-pulse-eu/names.tsv
 #
 # kind is `function` or `data`. Confidence below 70 gets a `_q` suffix applied,
 # below 50 is skipped. Recovered library symbols keep their real names rather

@@ -357,8 +357,8 @@ body is only skimmed here.
 ## Cross-platform
 
 The PS2 build has been read against this page; see
-[ps2-pulse/camera.md](../ps2-pulse/camera.md) and, for the parameter blocks,
-[ps2-pulse/handling-xml.md](../ps2-pulse/handling-xml.md).
+[ps2-pulse-eu/camera.md](../ps2-pulse-eu/camera.md) and, for the parameter blocks,
+[ps2-pulse-eu/handling-xml.md](../ps2-pulse-eu/handling-xml.md).
 
 | Function | PSP | PS2 (`SCES_547.48`) |
 | --- | --- | --- |

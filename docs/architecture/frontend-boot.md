@@ -37,8 +37,8 @@ Every one of those names is a **string literal from the original**, not one we
 invented. `"LogoFMV"` is a screen in the disc's front-end XML, and so is its
 `Movie` widget's `src`; `"Language Selection"` and `"Launch Game"` are the two
 states boot chooses between depending on `0x08ab07e3`. See
-[main loop](../ghidra/functions/psp-pulse/main-loop.md) and
-[frontend video](../ghidra/functions/psp-pulse/frontend-video.md).
+[main loop](../ghidra/functions/psp-pulse-usa/main-loop.md) and
+[frontend video](../ghidra/functions/psp-pulse-usa/frontend-video.md).
 
 `--reel` boots a second, **off-path** leg instead:
 
@@ -108,7 +108,7 @@ either side of them. Rendering those frames shows why:
 
 So the two-second holds are the publisher card and the developer card, held in
 turn. That reading was an inference at confidence **82** in
-[frontend video](../ghidra/functions/psp-pulse/frontend-video.md); it is now
+[frontend video](../ghidra/functions/psp-pulse-usa/frontend-video.md); it is now
 **95**, from the picture itself. `Data\Movies\Intro.PMF` is the negative control
 and it fails cleanly: it is moving at all three frames, with a mean interframe
 luma delta of 5.57 against the reels' 0.15.
@@ -493,7 +493,7 @@ The teardown is a consequence of the transition, not a peer of it, which is the
 ordering the original's exit path has. `LogoFMV` has no such indirection: the
 disc gives it five plain `Redirect` widgets, one per button.
 
-Input is the [abstract button layer](../ghidra/functions/psp-pulse/input.md)
+Input is the [abstract button layer](../ghidra/functions/psp-pulse-usa/input.md)
 reproduced as-is: bit indices, not masks, with `activate` mapped to cross and
 `cancel` to circle. START is index `0xe`, and reading that as a mask would test
 up and down instead, which is why there is

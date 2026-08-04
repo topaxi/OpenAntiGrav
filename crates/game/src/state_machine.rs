@@ -5,7 +5,7 @@
 //! against the current name; 31 call sites fire transitions that way. Screens
 //! nest, and a child is named `"Parent->Child"`: the intro state's `OnEnter`
 //! caches `"DevPubRedirect"` and `"Intro Screen->IntroMovie1"` by name. See
-//! `docs/ghidra/functions/psp-pulse/main-loop.md`.
+//! `docs/ghidra/functions/psp-pulse-usa/main-loop.md`.
 //!
 //! Keeping that shape has a practical payoff beyond fidelity: transitions
 //! recovered from the executable and from the front-end XML can be written down

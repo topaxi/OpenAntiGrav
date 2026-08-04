@@ -18,13 +18,13 @@ built with. See the last two sections.
 The two questions this answers were both open, and both were open in a way that
 static reading could not close:
 
-- **Sign.** [The PS2 craft update](../ghidra/functions/ps2-pulse/craft-update.md)
+- **Sign.** [The PS2 craft update](../ghidra/functions/ps2-pulse-eu/craft-update.md)
   derives `w_game = -w_physics` from the integrator on three independent legs.
   That is a result about the *accumulators*; whether the stored velocity carries
   the same convention was the obvious reading rather than a measured one.
 - **Frame.** The same page names `body+0x160` `angularVelocityLocal` and then
   lists which frame it is expressed in as unresolved, and
-  [engine.md](../ghidra/functions/psp-pulse/engine.md) caps the local/world split
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) caps the local/world split
   of the angular accumulators at confidence **74**.
 
 ## The measurement
@@ -115,7 +115,7 @@ unscaled.
 
 ## This resolves the 22x yaw discrepancy, and vindicates the law
 
-[engine.md](../ghidra/functions/psp-pulse/engine.md) closes its
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md) closes its
 "torque or angular acceleration" question by observing that steering and damping
 land in **one** accumulator (`craft+0x340` -> `body+0x120`), so any common factor
 - the inertia tensor included - cancels at equilibrium, leaving
@@ -201,7 +201,7 @@ So the per-axis factor this page fitted is the diagonal of `I`, the negative sig
 is the `w_game = -w_physics` convention, and the roadmap's "do the angular
 accumulators hold torque or angular acceleration" is answered: **torque**.
 Confidence **88**; evidence in
-[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#body0x160-is-angular-momentum-body0x40-is-the-inverse-inertia-tensor).
+[rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md#body0x160-is-angular-momentum-body0x40-is-the-inverse-inertia-tensor).
 
 ## The tensor's writer is now read, and the constant is retired
 
@@ -219,7 +219,7 @@ I = m * (y^2 + z^2) / 12  ->  (15.6, 21.6, 15.6) on (right, up, forward)
 against this page's fitted `~(15, 21.2, 15)`. `YAW_DRIVE_CALIBRATION` is gone;
 `oag_physics::forces::YAW_INVERSE_INERTIA` is `12 / (0.9 * (12^2 + 12^2))` =
 `0.046296`, against the fit's `0.0452`. Confidence **92**; evidence in
-[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md).
+[rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md).
 
 **This page's measurement did more than corroborate the read - it discriminated
 the mass.** The constructor sets `0.9` and `Ship_UpdateCraft` overwrites the
@@ -514,7 +514,7 @@ instruction by instruction and every element of the standing transcription
 holds - `cross(up, avgNormal) * -400`, the right-axis component removed by a
 `vdot.t`/`vscl.q`/`vsub.q` triple, into the world accumulator, at confidence
 **92**. See
-[engine.md](../ghidra/functions/psp-pulse/engine.md#the-alignment-torque-the-projection-is-real).
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-alignment-torque-the-projection-is-real).
 The term levels roll and yaw and contributes nothing to pitch, exactly as
 implemented. Nothing was lost in transcription, so **the ringing is not this
 term**, and no change to it can be the fix.
@@ -551,7 +551,7 @@ fitted stiffnesses is
 
 against `(6.5 / 4.5)^2 = 2.09` for the crate's `<Misc length>`-derived spacing
 measured against the `+/-4.5` literal
-[engine.md](../ghidra/functions/psp-pulse/engine.md#the-probe-geometry-is-a-code-literal-like-the-inertia-tensor)
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-probe-geometry-is-a-code-literal-like-the-inertia-tensor)
 recovers from `Ship_InitCraft`. **Agreement to 8 %, from a capture that knows
 nothing about the binary and a literal that knows nothing about the capture.**
 That is a second, independent leg under the recovered spacing - the same shape of
@@ -601,7 +601,7 @@ The search was for a rate-feedback term nobody had found. There is none. What wa
 missing is a **static** force - the grounded downforce, `-track_gravity * mass *
 grounded * (1 - magLockBlend)` along the averaged contact normal, read
 instruction by instruction at
-[engine.md](../ghidra/functions/psp-pulse/engine.md#the-grounded-downforce-read-instruction-by-instruction)
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-grounded-downforce-read-instruction-by-instruction)
 (confidence 92, two binaries) and implemented in this crate as a shape with a
 **deliberately zero** coefficient because an earlier pass recorded its magnitude
 as unrecovered. It was recorded, in two places, all along.
@@ -741,7 +741,7 @@ above, but landing it alone regresses every measured number, and
 half-landed force term is worse than none. The vertical drop and the shortened
 raycast that come with it in the binary are, separately, **refuted by the
 captures** - see
-[engine.md](../ghidra/functions/psp-pulse/engine.md#resolved-neither-reading-was-refuted-the-load-was).
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md#resolved-neither-reading-was-refuted-the-load-was).
 The order that makes sense is to find the missing damping first, then land the
 geometry into a model that can hold it.
 

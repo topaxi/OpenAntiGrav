@@ -36,7 +36,7 @@ the first look at one:
 
 Widgets are registered by name with a vtable, and their XML attributes are
 parsed into fields. The `Movie` widget is fully mapped in
-[frontend-video.md](../ghidra/functions/psp-pulse/frontend-video.md), and is the
+[frontend-video.md](../ghidra/functions/psp-pulse-usa/frontend-video.md), and is the
 worked example of how any widget is wired.
 
 Many front-end XML blobs are stored with element names replaced by two-letter
@@ -44,7 +44,7 @@ codes and a `<code as="Values" bs="Screen" cs="Mode3D">` dictionary element
 mapping them back. That is a size optimisation, not encryption.
 
 Input is bound by **name** (`activate`, `cancel`, `start`), not by button. See
-[input](../ghidra/functions/psp-pulse/input.md).
+[input](../ghidra/functions/psp-pulse-usa/input.md).
 
 ## Assets
 

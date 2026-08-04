@@ -82,7 +82,7 @@ inferred from call position rather than decompiled.
 ## Cross-platform
 
 The PS2 build has been read against this page; see
-[ps2-pulse/input.md](../ps2-pulse/input.md).
+[ps2-pulse-eu/input.md](../ps2-pulse-eu/input.md).
 
 | Function | PSP | PS2 (`SCES_547.48`) |
 | --- | --- | --- |

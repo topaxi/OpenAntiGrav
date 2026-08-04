@@ -45,7 +45,7 @@
 //!
 //! Only the parts this project has a consumer for are decoded out of `<Global>`:
 //! `<Zone>`, and `<SpeedupPads>` and `<GravityMul>` under `<GlobalClass>`. The rest is named on
-//! [`Global`] and in `docs/ghidra/functions/psp-pulse/engine.md`, and can be added
+//! [`Global`] and in `docs/ghidra/functions/psp-pulse-usa/engine.md`, and can be added
 //! when something needs it.
 //!
 //! The files are stored as [shortened XML](crate::fexml), so they go through
@@ -551,7 +551,7 @@ impl GravityMul {
 /// `<WeaponPad>`, `<GravityMul>`, the three camera pitch modifiers,
 /// `<CameraSideOffset>` and `<StartBoost>` are all read by the original's
 /// `Xml_ReadGlobalSettings` and are deliberately left alone here; they are named
-/// in `docs/ghidra/functions/psp-pulse/engine.md` and can be added when something
+/// in `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be added when something
 /// needs them. Two are worth knowing about because they touch code that exists:
 ///
 /// - `<Special speedpad_jump>` fills `0x08b36bec`, the constant on the one branch

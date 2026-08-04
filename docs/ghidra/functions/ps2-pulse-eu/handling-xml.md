@@ -4,8 +4,8 @@ Functions in `SCES_547.48` (Wipeout Pulse, PS2, SCES-54748), image base
 `0x00100000`.
 
 This is the PS2 counterpart of the parameter-block half of
-[psp-pulse/engine.md](../psp-pulse/engine.md) and of the camera-block half of
-[psp-pulse/camera.md](../psp-pulse/camera.md). It is the most valuable page in
+[psp-pulse-usa/engine.md](../psp-pulse-usa/engine.md) and of the camera-block half of
+[psp-pulse-usa/camera.md](../psp-pulse-usa/camera.md). It is the most valuable page in
 this directory, because it reproduces **every offset those two pages derived
 from the PSP binary, exactly**, in a binary built by a different compiler for a
 different ISA.
@@ -71,7 +71,7 @@ store sites:
 `HandlingXml_ParseAirbrakeGraphics` (`0x0014de78`) stores `amount *
 0.017453294` at `0x6c` on the stats base and `up_speed`/`down_speed` raw at
 `0x70`/`0x74` - the fifth pre-scaled parameter, and the degrees-to-radians
-conversion that [psp-pulse/camera.md](../psp-pulse/camera.md) found, reproduced
+conversion that [psp-pulse-usa/camera.md](../psp-pulse-usa/camera.md) found, reproduced
 to seven digits.
 
 The camera block is likewise identical:
@@ -99,7 +99,7 @@ now**, and its Cross-platform note has been updated to say so.
 ## What the PS2 answers that the PSP page left open
 
 **`stats_base + 0x90` is `<Misc weight_distribution>`.**
-[psp-pulse/engine.md](../psp-pulse/engine.md) records that `Ship_UpdatePitch`
+[psp-pulse-usa/engine.md](../psp-pulse-usa/engine.md) records that `Ship_UpdatePitch`
 reads "`stats_base + 0x90`, a per-team scalar outside every class block; its
 element is not determined". The PS2 binary has an element the PSP page never
 mentions, `<Misc>`, parsed by `HandlingXml_ParseMisc` (`0x0014db08`), and it

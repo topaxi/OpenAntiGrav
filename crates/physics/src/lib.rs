@@ -10,7 +10,7 @@
 //! # What is specification and what is measurement
 //!
 //! The model implemented here comes from `docs/physics/README.md` and
-//! `docs/ghidra/functions/psp-pulse/engine.md`, both of which are **static analysis of
+//! `docs/ghidra/functions/psp-pulse-usa/engine.md`, both of which are **static analysis of
 //! the original that has never been run**. The *structure* is what this crate
 //! reproduces: the clamped delta, the three explicit Euler sub-steps of `dt/3`, two
 //! raycast probes as spring-dampers along the ship's own up axis, four accumulators
@@ -53,7 +53,7 @@
 //! | [`reset`] | Contact with `Reset` trigger geometry | `collision.md` |
 //! | [`forces`] | Assembly, and the four accumulators | `engine.md` |
 //!
-//! `engine.md` is `docs/ghidra/functions/psp-pulse/engine.md` and is the authority
+//! `engine.md` is `docs/ghidra/functions/psp-pulse-usa/engine.md` and is the authority
 //! where it and `docs/physics/README.md` disagree; it corrected that page on
 //! `ride_height`, on the `slidegrip` reading, on the gravity assembly and on which
 //! frame's groundedness each term sees.

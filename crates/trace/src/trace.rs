@@ -156,7 +156,7 @@ pub const ANGULAR_RATE_COLUMNS: [&str; 3] = ["omega_x", "omega_y", "omega_z"];
 /// camera's right or its left, and whether `cam_fwd` is the look direction or
 /// its negation, is settled by rendering from a captured pose, not assumed
 /// here. The eye is stored **un-negated**: the node's `+0x30` holds the negated
-/// eye position (`docs/ghidra/functions/psp-pulse/camera.md`), and the capture
+/// eye position (`docs/ghidra/functions/psp-pulse-usa/camera.md`), and the capture
 /// flips the sign at write time so this file's `cam_pos_*` is a world position
 /// like `pos_*`.
 pub const CAMERA_COLUMNS: [&str; 12] = [
@@ -852,14 +852,14 @@ pub const BASIS_TOLERANCE: f32 = 1e-4;
 /// Two independent binary questions, so four readings, and **neither is settled
 /// by static reading**:
 ///
-/// - **Sign.** `docs/ghidra/functions/ps2-pulse/craft-update.md` derives
+/// - **Sign.** `docs/ghidra/functions/ps2-pulse-eu/craft-update.md` derives
 ///   `w_game = -w_physics` from the PS2 integrator on three independent legs, so
 ///   the engine's angular velocity is the negative of the physical one. That is a
 ///   result about the *accumulators*; whether the stored velocity carries the
 ///   same convention is the obvious reading and not a measured one.
 /// - **Frame.** The same page names `body+0x160` `angularVelocityLocal` and then
 ///   lists "which frame `body+0x150` and `body+0x160` are each expressed in" as
-///   unresolved, and `docs/ghidra/functions/psp-pulse/engine.md` caps the
+///   unresolved, and `docs/ghidra/functions/psp-pulse-usa/engine.md` caps the
 ///   local/world split of the angular accumulators at confidence 74.
 ///
 /// So this is a switch, for the same reason [`crate::replay::Basis`] is: it is
@@ -1440,7 +1440,7 @@ grounded,dt,tick
 
     /// The recorded yaw rate the captures actually show, in rad/s: holding left
     /// gives `+1.51` about row 1 on 199 of 199 ticks, per
-    /// `docs/ghidra/functions/psp-pulse/engine.md`. Used as the fixture's signal
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`. Used as the fixture's signal
     /// so the numbers in these tests are the size of the real ones.
     const YAW_RATE: f32 = 1.51;
 

@@ -477,7 +477,7 @@ mechanism depends on the `+0x20` axis being what this page says it is.
   point with `sample+0x00 - 3.0 * that` - the exact inverse of this page's
   `pos -= 3.0 * down` lift, which only closes if `+0x20` points into the surface.
   See
-  [engine.md](../ghidra/functions/psp-pulse/engine.md#0xb10-is-splineptdown-and-the-whole-record-is-a-located-spline-sample).
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#0xb10-is-splineptdown-and-the-whole-record-is-a-located-spline-sample).
 
 ## `Start Position`
 
@@ -498,7 +498,7 @@ else on this page. Confidence **92**.
 
 `cross(row0, row1) = row2` holds **exactly on all 40 PSP track files** — the
 same identity the recorded craft basis satisfies on 200 of 200 ticks (see
-[engine.md](../ghidra/functions/psp-pulse/engine.md)). Row 1 is up, so rows 0 and
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md)). Row 1 is up, so rows 0 and
 2 are the remaining two axes in the same order the craft carries them, and the
 data agrees axis for axis with the track's own frame:
 
@@ -603,7 +603,7 @@ The **eight zeroed words are not on the payload and are not trigger latches**.
 They sit at object `+0x1d0`, are zeroed at bind, and hold each racer's cached
 distance to this pad, decremented by how far that racer moved - an optimisation
 so the containment test only runs once a craft could have reached the pad. See
-[`pads.md`](../ghidra/functions/psp-pulse/pads.md) for `Pad_SweptTest_q`.
+[`pads.md`](../ghidra/functions/psp-pulse-usa/pads.md) for `Pad_SweptTest_q`.
 
 ## Open questions
 

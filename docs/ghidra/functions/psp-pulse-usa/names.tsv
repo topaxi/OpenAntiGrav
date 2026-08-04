@@ -1,4 +1,4 @@
-# Applied symbol names for pulse-psp BOOT.BIN (image base 0x08804000).
+# Applied symbol names for pulse-psp-usa BOOT.BIN (image base 0x08804000).
 #
 # The evidence lives in the page named in the last column; this file exists so
 # the names can be re-applied to a fresh Ghidra database without hand-editing.

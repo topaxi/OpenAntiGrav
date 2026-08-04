@@ -1,7 +1,7 @@
 //! Zone mode's numbers, as read out of the executable.
 //!
 //! Everything here is recovered rather than chosen. The evidence is
-//! `docs/ghidra/functions/psp-pulse/zone-mode.md`; the short version is that
+//! `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`; the short version is that
 //! `Zone_Update` (`0x0882f5cc`) accumulates the frame delta, steps the zone
 //! number every ten seconds, and **assigns** that number into the craft at
 //! `+0x28c`, where the engine's auto-speed law reads it.
@@ -42,7 +42,7 @@ pub const CLEAN_ZONE_BONUS: i32 = 500;
 /// in `Zone_Update`. The flag has exactly one writer, `Ship_ApplySpeedupPad`
 /// (`0x08848f9c`), which raises it on entering a **new** pad and only when
 /// `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` - the same pair
-/// `docs/ghidra/functions/psp-pulse/zone-mode.md` identifies as the Zone-mode
+/// `docs/ghidra/functions/psp-pulse-usa/zone-mode.md` identifies as the Zone-mode
 /// selector. Confidence **85**.
 ///
 /// **A per-tick flag, not a counter.** `Zone_Update` clears it as it consumes it,

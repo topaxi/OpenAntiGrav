@@ -6,8 +6,8 @@ surface that boost a craft or hand it a pickup.
 Decoded by `crates/formats/src/pads.rs`, drawn by `oag_render::mesh::build_pads`,
 asserted against the disc by `crates/formats/tests/pads_ground_truth.rs`. The
 runtime side - bind, containment, the swept test - is
-[`docs/ghidra/functions/psp-pulse/pads.md`](../ghidra/functions/psp-pulse/pads.md);
-the force is in [`engine.md`](../ghidra/functions/psp-pulse/engine.md).
+[`docs/ghidra/functions/psp-pulse-usa/pads.md`](../ghidra/functions/psp-pulse-usa/pads.md);
+the force is in [`engine.md`](../ghidra/functions/psp-pulse-usa/engine.md).
 
 ## A pad is a `Mesh`
 

@@ -47,7 +47,7 @@
 //!   original's own frame and sweeping: the RMSE minimum lands on the authored
 //!   value, bounded to about two degrees. One ship, one view, so the load
 //!   report still prints the value read; see
-//!   `docs/ghidra/functions/psp-pulse/camera.md` and
+//!   `docs/ghidra/functions/psp-pulse-usa/camera.md` and
 //!   `docs/tools/frame-compare.md` for the measurement.
 //!
 //! Nothing in this module tunes, scales or corrects a physics value. The four
@@ -185,7 +185,7 @@ pub const SPARKS_SEED: u64 = 0x5_9a_2b_00;
 /// A [`Mode::Zone`] run loads `Zone.vex` instead of `Ship.vex`. That is not a
 /// livery swap of convenience: `Ship_LoadModel` (`0x08843258`) switches on the
 /// same `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established
-/// as the Zone selector (see `docs/ghidra/functions/psp-pulse/zone-mode.md`),
+/// as the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
 /// and only that case builds the `%s\Zone.vex` path. Every team's `Zone.vex`
 /// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
 /// itself is shared - only the livery painted on it still varies by team.
@@ -365,13 +365,13 @@ pub struct Setup {
     /// `None` means the model carries no `Engine Flare` node, and the exhaust is
     /// then not drawn rather than guessed at. Every team whose `Ship.vex`
     /// resolves by name has **exactly one**, a direct child of `world` - see
-    /// `docs/ghidra/functions/psp-pulse/exhaust.md`. One nozzle, centred, not one
+    /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`. One nozzle, centred, not one
     /// per visible engine.
     pub nozzle: Option<Vec3>,
     /// The `Ship Collision Fx` locators, in the ship model's own space.
     ///
     /// The original attaches up to 10 and `Ship_DispatchCollisionFx`
-    /// (`docs/ghidra/functions/psp-pulse/contact-response.md`) triggers the
+    /// (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`) triggers the
     /// one **nearest the contact**; the spark burst then emits from that
     /// node as it rides the hull. Empty means the model authors none, and
     /// the burst falls back to anchoring at the contact point itself.
@@ -765,7 +765,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 // The plume's own batches take `Mesh_SetBatchDrawState`'s
                 // pure-additive branch (`is_additive_blend()`, confidence 75
                 // for this model specifically - see
-                // `docs/ghidra/functions/psp-pulse/mesh-draw.md`), the same
+                // `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`), the same
                 // `dst + src` equation `exhaust::TRAIL_BLEND` already encodes
                 // for the ribbon. That blend ignores alpha as a weight
                 // entirely, so the baked falloff has to live in the vertex
@@ -1668,7 +1668,7 @@ pub struct Race {
     ///
     /// `amount` is already radians here: `oag_gameplay::airbrake_graphics_for`
     /// applies the loader's own degrees-to-radians scale, recovered at
-    /// confidence 92 - see `docs/ghidra/functions/psp-pulse/camera.md`.
+    /// confidence 92 - see `docs/ghidra/functions/psp-pulse-usa/camera.md`.
     flap_graphics: oag_gameplay::AirbrakeGraphics,
     /// Which control scheme maps the snapshot. `[controls] scheme`.
     ///
@@ -1676,7 +1676,7 @@ pub struct Race {
     /// *gesture* a sideshift takes, and the gesture is read by the simulation
     /// out of `ShipControls` - so this is what decides which of
     /// `ship_controls`' two field groups gets filled. See
-    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     scheme: ControlScheme,
     /// Where the ship was at the end of last tick, for the swept test.
     ///
@@ -2260,7 +2260,7 @@ impl Race {
     ///
     /// # This pose is a guess, not a reading
     ///
-    /// `docs/ghidra/functions/psp-pulse/collision.md` records **that** a `Reset`
+    /// `docs/ghidra/functions/psp-pulse-usa/collision.md` records **that** a `Reset`
     /// contact respawns the ship, at confidence 86. **Where it respawns it is not
     /// recorded anywhere**, and searching the RE tree for it found nothing - which
     /// is itself the finding. So this reuses the initial spawn: the racing line at
@@ -3278,7 +3278,7 @@ impl Scene {
         // `GU_FIX`/`GU_FIX` branch (`is_additive_blend()`), the same
         // `dst + src` equation as the ribbon, not the flare's
         // alpha-weighted one - see
-        // `docs/ghidra/functions/psp-pulse/mesh-draw.md`. The baked alpha
+        // `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`. The baked alpha
         // falloff is premultiplied into the vertex RGB above, since this
         // blend ignores alpha as a weight entirely.
         let boost = boost_model

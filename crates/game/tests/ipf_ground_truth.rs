@@ -217,7 +217,7 @@ fn both_ipf_files_decode_through_the_movie_cache() {
 /// carries its extension on PS2, so appending `.PMF` asked for
 /// `Data\Movies\Backdrop.ipf.PMF`; and the name is not a filename at all -
 /// `Movie_ResolveSourcePath` maps it onto the region's cut. See
-/// `docs/ghidra/functions/ps2-pulse/movie-paths.md`.
+/// `docs/ghidra/functions/ps2-pulse-eu/movie-paths.md`.
 #[test]
 #[ignore = "needs data/images/"]
 fn the_front_ends_own_backdrop_name_resolves_to_the_pal_cut() {

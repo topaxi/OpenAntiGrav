@@ -328,7 +328,7 @@ same way. Noted there.
 - **The PSP equivalent.** The generic reader is not documented on the PSP side,
   so every Cross-platform row below is "not located". What *is* documented is a
   **consumer**: `Movie_ParseAttributes` (`0x088ba284`, confidence 95, on
-  [frontend-video.md](../psp-pulse/frontend-video.md)), which reads the `<Movie>`
+  [frontend-video.md](../psp-pulse-usa/frontend-video.md)), which reads the `<Movie>`
   widget's nine attributes. That makes finding the PSP reader cheap - its
   callees are the attribute accessors - and the `"code"` literal plus a
   160-byte stack cursor are the other two anchors.

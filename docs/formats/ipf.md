@@ -131,7 +131,7 @@ recorded as an observation rather than a layout.
 hardware the picture is handed to the GS at the display's own rate.
 
 The pairing comes from the executable.
-[`Movie_ResolveSourcePath`](../ghidra/functions/ps2-pulse/movie-paths.md)
+[`Movie_ResolveSourcePath`](../ghidra/functions/ps2-pulse-eu/movie-paths.md)
 (`0x0019b168`, confidence 90) rewrites the front-end XML's
 `Data\Movies\Backdrop.ipf` to `Data\Movies\bg512.ipf` or `bg640.ipf` on the
 **same global** (`0x0027a85c`) and with the same sense as it picks

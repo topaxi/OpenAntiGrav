@@ -43,12 +43,12 @@ sign and the frame of the recorded angular-velocity column against five captures
 own basis derivatives, and finds the yaw axis carrying a factor of `21.2`,
 arrived at with no simulation and no fit against our own physics. The tensor's
 writer has since been read - a hard-coded solid box, see
-[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md) - and it gives
+[rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md) - and it gives
 `21.6`, so `oag_physics::forces::YAW_INVERSE_INERTIA` is now a recovered value
 rather than the fitted `YAW_DRIVE_CALIBRATION` that stood there.
 
 **This page no longer covers the whole force law.**
-[Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse/engine.md) was read
+[Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse-usa/engine.md) was read
 out of `BOOT.BIN` afterwards, and it is the authority wherever the two disagree: it was
 read from the XML loader and the craft update path directly, with addresses and a
 per-component enumeration of every accumulator write. It **corrected five things on this
@@ -140,7 +140,7 @@ Several details are counter-intuitive and worth calling out:
 - ~~**`ride_height` never appears in the force law.**~~ **Corrected.** It is the
   raycast length *and* the primary term of the hover spring's target height. The offset
   chain from the parser to the spring is traced in
-  [engine.md](../ghidra/functions/psp-pulse/engine.md) at confidence **88**:
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) at confidence **88**:
   `target = (ride_height + craft+0x74 - min(leapTimer, 4)) * (1 + 0.2 * magLockBlend) * K2`.
   What writes the additive `craft+0x74` was not found, so the composition is still open;
   `antigrav_height_adjust` is the obvious suspect and nothing was found that copies it
@@ -166,7 +166,7 @@ bank-to-yaw coupling of `+30 * right.y`; and a downforce along the ground normal
 opposing the hover spring, whose magnitude is
 `track_gravity * mass * grounded * (1 - magLockBlend)` - read at instruction
 level in
-[engine.md](../ghidra/functions/psp-pulse/engine.md#the-grounded-downforce-read-instruction-by-instruction),
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-grounded-downforce-read-instruction-by-instruction),
 where the coefficient is `1` and the term turns out to be what the spring's
 `normal_gravity + track_gravity` calibration is calibrated *for*.
 
@@ -204,7 +204,7 @@ second of simulated time at 60 Hz, which is the signature of anti-alignment rath
 than of a mistuned gain.
 
 **A second term has since turned out to have the same shape, and that changes the best
-explanation.** [engine.md](../ghidra/functions/psp-pulse/engine.md)'s weathervane torque
+explanation.** [engine.md](../ghidra/functions/psp-pulse-usa/engine.md)'s weathervane torque
 is `cross(forward, velocity) * (grounded ? -0.1 : -0.3)`, described two lines later as
 "what turns the nose toward the direction of travel" - the identical pattern, a negative
 coefficient on a cross product that the same identity says must be positive for the
@@ -243,7 +243,7 @@ look nearly twice as mild as it is, and then asked M3 to settle three open quest
 a trace. A trace has since answered two of them, and the third turned out to need a
 different kind of evidence than a trace at all. What follows is corrected; see
 [oag_physics::hover::ALIGNMENT_GAIN](../../crates/physics/src/hover.rs) and
-[docs/ghidra/functions/ps2-pulse/craft-update.md](../ghidra/functions/ps2-pulse/craft-update.md)
+[docs/ghidra/functions/ps2-pulse-eu/craft-update.md](../ghidra/functions/ps2-pulse-eu/craft-update.md)
 for the full evidence trail.
 
 First, this **closes an earlier observation**, made while implementing from this page
@@ -337,14 +337,14 @@ angAccelLocal.y += speed * turn * (R - L) * 0.001
   `(right, up, forward)` frame the pair becomes `(L - R)`, so braking one side
   turns the nose toward that side and pushes the body the other way. Transcribed
   literally, both terms run backwards; see
-  [engine.md](../ghidra/functions/psp-pulse/engine.md#ship_updateairbrakes-force-block-read-end-to-end)
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#ship_updateairbrakes-force-block-read-end-to-end)
   for the measurement (`airbrake-left-only`, 33/33 wall-free ticks) and
   `crates/physics/src/airbrake.rs` for where the negation lives.
 - **Airbrakes produce no direct roll torque.** Confidence **85** on this negative,
   established by checking every write to the angular accumulators. Visible roll must come
   from the surface-alignment and bank-coupling terms, or from graphics-only state.
 - **Narrowed.** This page used to add "no Z component is ever written", which
-  [engine.md](../ghidra/functions/psp-pulse/engine.md) showed was too strong. The precise
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) showed was too strong. The precise
   claim is that **no control input writes an angular Z**: not the engine, the brakes, the
   steering, the airbrakes or the pitch axis, so roll is never *commanded*. Angular Z is
   written in exactly two places and both are passive - `Ship_ApplyAngularDamping` and the
@@ -353,12 +353,12 @@ angAccelLocal.y += speed * turn * (R - L) * 0.001
 - `sideshift` is a **world-space force** applied straight to the body, bypassing
   the craft accumulator, for the `0.2 s` its per-side timer runs and **only while
   the craft is in contact**. Read at instruction level in
-  [engine.md](../ghidra/functions/psp-pulse/engine.md#the-sideshift-is-a-force-and-its-direction-is-read-rather-than-guessed),
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-sideshift-is-a-force-and-its-direction-is-read-rather-than-guessed),
   which also settles the direction: a craft shifts toward the side it was
   flicked. **What arms the timer** is one of two gestures - a stick flick on the
   novice scheme, a double-tapped airbrake on the veteran one - with a `1.0 s`
   lockout common to both; see
-  [input-bindings.md](../ghidra/functions/psp-pulse/input-bindings.md).
+  [input-bindings.md](../ghidra/functions/psp-pulse-usa/input-bindings.md).
 
 Lateral grip:
 
@@ -371,7 +371,7 @@ lateral += grip_air    * dot(vel, right) * k * (1 - grounded)
 With the load scaling, `slidegrip` reads as **percent of grip retained at full
 airbrake**, 0 to 100: at 0 grip vanishes and the ship drifts freely, at 100 it is
 unchanged. Confidence **86**, and now **90**, because
-[engine.md](../ghidra/functions/psp-pulse/engine.md) found the load-time factor that
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md) found the load-time factor that
 makes the pseudocode above and this reading the same statement: the parser stores
 `slidegrip * 1e-4`, so an XML 0..100 is 0..0.01 in memory, `(0.01 - slidegrip)` runs from
 `0.01` down to exactly `0`, and the control states run 0..100 rather than 0..1.
@@ -411,7 +411,7 @@ always-on quadratic drag and a constant `-2.0 * unit(v)` rolling resistance.
 
 Magstrip surfaces are **ordinary floor geometry with a tag** (surface type 3
 rather than 1), not a distinct mechanism. See
-[collision](../ghidra/functions/psp-pulse/collision.md).
+[collision](../ghidra/functions/psp-pulse-usa/collision.md).
 
 When a dedicated probe detects one, a 0-to-1 blend fades out the ordinary
 suspension: spring, damping and lift are all scaled by `(1 - blend)` while a
@@ -421,7 +421,7 @@ physics was not decoded.
 ## What is implemented
 
 [`oag-physics`](../../crates/physics/src/lib.rs) transcribes this page and
-[engine.md](../ghidra/functions/psp-pulse/engine.md). It is structure only: no constant
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md). It is structure only: no constant
 was invented, nothing was tuned, and every test in that crate asserts a structural
 invariant rather than a speed, a height or a turn rate. M3's
 [verification protocol](../reverse-engineering/verification-protocol.md) comes before any
@@ -439,9 +439,9 @@ tuning, per the [roadmap](../overview/roadmap.md).
 | Quadratic drag with all four coefficients, rolling resistance, weathervane, angular damping, vertical damping, gravity | [`passive.rs`](../../crates/physics/src/passive.rs) | engine.md |
 | Airbrake ramps, slide, lateral force, yaw, sideshift impulse, lateral grip | [`airbrake.rs`](../../crates/physics/src/airbrake.rs) | both |
 | Four accumulators, the fifteen-step term order, and the stale/fresh groundedness split | [`forces.rs`](../../crates/physics/src/forces.rs) | engine.md |
-| The speed-pad boost, step 15: the re-armed timer, the ramp-then-flat force law and its unscaled per-class tunables | [`engine.rs`](../../crates/physics/src/engine.rs) | engine.md, [pads](../ghidra/functions/psp-pulse/pads.md) |
+| The speed-pad boost, step 15: the re-armed timer, the ramp-then-flat force law and its unscaled per-class tunables | [`engine.rs`](../../crates/physics/src/engine.rs) | engine.md, [pads](../ghidra/functions/psp-pulse-usa/pads.md) |
 | The per-class gravity scale, `g_class_gravity_scale`, supplied from the disc rather than defaulted | [`passive.rs`](../../crates/physics/src/passive.rs) | engine.md, [handling stats](../formats/handling-stats.md) |
-| Segment-triangle narrowphase as a plane sign change plus three edge half-space tests | [`collide.rs`](../../crates/physics/src/collide.rs) | [collision](../ghidra/functions/psp-pulse/collision.md) |
+| Segment-triangle narrowphase as a plane sign change plus three edge half-space tests | [`collide.rs`](../../crates/physics/src/collide.rs) | [collision](../ghidra/functions/psp-pulse-usa/collision.md) |
 | The magstrip hold: blend ramp, mag-floor probe, two-sample axis blend, reposition, velocity projection and the **kinematic basis rewrite** | [`maglock.rs`](../../crates/physics/src/maglock.rs) | engine.md |
 
 **Implemented as a shape with the coefficient left at the identity or zero**, because the
@@ -557,7 +557,7 @@ Three consequences, and the first is the interesting one:
   yaw out by whatever the axis scale was wrong by - is falsified.** The axis scale is
   right and `Turning.amount` really is stored verbatim, yet yaw still comes out about
   **22x** too strong. Dividing by the control range "fixes" it to 4.7x too weak. See
-  [engine.md](../ghidra/functions/psp-pulse/engine.md#steering) for the instruction-level
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#steering) for the instruction-level
   reading and `oag_physics::forces::YAW_INVERSE_INERTIA` for what closes it -
   **the yaw entry of the body's inverse inertia tensor**, recovered from
   `Body_SetBoxInertia`, applied to the whole body-local yaw axis because the
@@ -584,7 +584,7 @@ Three consequences, and the first is the interesting one:
   the reason no force could be found is that **there is no force**: `Ship_UpdateMagLock`
   writes the body's position, velocity and basis directly and never touches an
   accumulator. See [`maglock.rs`](../../crates/physics/src/maglock.rs) and
-  [engine.md](../ghidra/functions/psp-pulse/engine.md#ship_updatemaglock-rewrites-the-basis-directly-and-that-is-the-missing-mechanism).
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#ship_updatemaglock-rewrites-the-basis-directly-and-that-is-the-missing-mechanism).
 - **The hover target's additive offset**, `craft+0x74`. Nothing was found that writes it,
   and `antigrav_height_adjust` is only a suspect (a search for readers of that field found
   none, a weak negative at confidence 50). It matters more than it looks: with the offset
@@ -620,7 +620,7 @@ Three consequences, and the first is the interesting one:
   trigger gestures, one per control scheme, and both are ported. The
   tap-history path above them was never a sideshift trigger at all; it is the
   barrel roll. See
-  [input-bindings.md](../ghidra/functions/psp-pulse/input-bindings.md). What is
+  [input-bindings.md](../ghidra/functions/psp-pulse-usa/input-bindings.md). What is
   still open here is only a *measurement*: no capture of either gesture off the
   original exists, so the timings are static analysis with no runtime leg.
 - **Which speed the airbrake terms use.** This page writes only "speed"; the craft caches

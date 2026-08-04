@@ -456,7 +456,7 @@ fn the_collision_geometry_is_under_the_spline() {
 /// `Collision_BoxAgainstMesh` (`0x08815cd4`) does not flip a triangle normal; it
 /// *rejects* the sample point when `dot(boxCentre - sample, n) <= 0`, so the raw
 /// winding normal is what reaches the contact - see
-/// `docs/ghidra/functions/psp-pulse/collision.md`. `oag_physics::wall` flips
+/// `docs/ghidra/functions/psp-pulse-usa/collision.md`. `oag_physics::wall` flips
 /// instead, which is safe under either winding and is why nobody has had to know
 /// this. Reproducing the original's rejection is only correct if the shipped
 /// walls actually face the circuit, and nothing in `docs/` says they do.

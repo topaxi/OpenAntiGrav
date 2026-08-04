@@ -150,7 +150,7 @@ def steer_for(state, line, index, args):
     has three positions and the scripted format is a list of button names.
 
     The airbrake on the inside of a turn is what a player does and what
-    `docs/ghidra/functions/psp-pulse/engine.md`'s force law rewards: it is added
+    `docs/ghidra/functions/psp-pulse-usa/engine.md`'s force law rewards: it is added
     only past a wider threshold than the steering's, so a straight is never
     braked.
     """

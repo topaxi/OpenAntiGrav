@@ -117,7 +117,7 @@ fn shipped_handling() -> Handling {
 }
 
 /// The yaw rate the recording actually shows, differentiated out of the captured
-/// basis exactly the way `docs/ghidra/functions/psp-pulse/engine.md` measured it
+/// basis exactly the way `docs/ghidra/functions/psp-pulse-usa/engine.md` measured it
 /// on hardware: `dot(cross(fwd_t, fwd_t+1), up) / dt`.
 fn recorded_yaw(capture: &str) -> Vec<(f32, f32, f32)> {
     let path = workspace(&format!("data/traces/talons-junction-{capture}.csv"));

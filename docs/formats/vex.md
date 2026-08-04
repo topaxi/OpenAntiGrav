@@ -139,7 +139,7 @@ Neither `engine_fire` nor `exitglow` has a registration site - neither appears
 between `Engine Flare` and `fogCube` where alphabetical order would put it - yet
 `exitglow` is authored **13 times** on `16_Track`. So an unregistered class can
 still have instances, the same way `gate` does. Details and per-file censuses in
-[`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md).
+[`exhaust.md`](../ghidra/functions/psp-pulse-usa/exhaust.md).
 
 `oag-view --nodes <entry>` prints every node with its class, name and payload
 size, plus a per-class census; `--class 0x3bf` filters to one, and `--payload`
@@ -216,7 +216,7 @@ two platforms agreeing on structure, not one.
 
 ### The runtime never reads any of it
 
-**Confidence 88.** `docs/ghidra/functions/psp-pulse/exhaust.md` already
+**Confidence 88.** `docs/ghidra/functions/psp-pulse-usa/exhaust.md` already
 established the class table's structure and the trap in reading it: the
 table's third field is a *runtime slot* `Vex_RegisterClass` (`0x08908eb8`)
 fills at boot from one of 46 per-class static initialisers, not a shared
@@ -853,7 +853,7 @@ producing a blink-tagged draw call.
 > five candidate palettes were byte-static over the same window. Whatever makes
 > these lights pulse, it is neither a texture-coordinate offset nor a CLUT
 > scroll. An animated per-draw **colour** is the untested candidate that fits.
-> See [`texture-animation.md`](../ghidra/functions/psp-pulse/texture-animation.md).
+> See [`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md).
 > Read the section below as the survey of the texture's contents - which is what
 > it is good for - not as a recovered mechanism.
 
@@ -1003,7 +1003,7 @@ surfaces by moving texture coordinates**, so `[graphics] animated_textures`
 defaults **off** and turning it on is a departure. The selection above is kept
 because the geometry behind it is a real measurement that whatever the true
 mechanism turns out to be will want. See
-[`texture-animation.md`](../ghidra/functions/psp-pulse/texture-animation.md).
+[`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md).
 
 Two readings are ruled out rather than untested. There is **no authored scroll
 rate**: material `+0x0c..0x14` is zero on every material of every circuit. And
@@ -1060,10 +1060,10 @@ That is good news for M4.
 | `0x08843258` | `Ship_LoadModel` | 87 |
 
 `Ship_LoadModel` picks between `Ship.vex` and `Zone.vex` on the race-mode
-selector - see [zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md#the-ship-model-is-not-the-players-own-hull).
+selector - see [zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md#the-ship-model-is-not-the-players-own-hull).
 
 Applied, from
-[names.tsv](../ghidra/functions/psp-pulse/names.tsv). See
+[names.tsv](../ghidra/functions/psp-pulse-usa/names.tsv). See
 [ADR-0005](../architecture/adr/0005-ghidra-conventions.md).
 
 ## Not determined
@@ -1077,7 +1077,7 @@ Applied, from
 - Whether the alternate vertex block overlaps or follows the primary one.
 - Batch `+0x14`, and the `.x`/`.z` components of the s16 bounding box.
 - **Collision mesh representation**: see
-  [collision](../ghidra/functions/psp-pulse/collision.md), now decoded.
+  [collision](../ghidra/functions/psp-pulse-usa/collision.md), now decoded.
 - Exact `pass_mask` bit meanings. Partial: `0x800` means the batch has its own
   display list, `0xc0` relates to alpha, `0x2000` to an extra pass.
 - Whether the 16-byte file header carries anything beyond the version.

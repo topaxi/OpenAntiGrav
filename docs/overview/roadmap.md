@@ -119,15 +119,15 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
       [Allegrex and the VFPU](../psp/allegrex-vfpu.md#on-the-value)
 - [x] Load `SCES_547.48` (PS2) into Ghidra: 5,234 functions, `r5900:LE:32:default`,
       image base `0x00100000`, 28 overlay spaces. See
-      [`docs/ghidra/functions/ps2-pulse/`](../ghidra/functions/ps2-pulse/README.md)
+      [`docs/ghidra/functions/ps2-pulse-eu/`](../ghidra/functions/ps2-pulse-eu/README.md)
 - [x] [Main loop and frame pacing](../psp/frame-pacing.md); state machine outline
 - [x] Simulation timestep resolved: the original uses **variable** delta, not a
       fixed step. See [ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)
 - [x] WAD subsystem: hash, lookup, mount, read, decompressors
-- [x] [Input](../ghidra/functions/psp-pulse/input.md), [collision](../ghidra/functions/psp-pulse/collision.md),
-      [video](../ghidra/functions/psp-pulse/frontend-video.md), [physics model](../physics/README.md)
+- [x] [Input](../ghidra/functions/psp-pulse-usa/input.md), [collision](../ghidra/functions/psp-pulse-usa/collision.md),
+      [video](../ghidra/functions/psp-pulse-usa/frontend-video.md), [physics model](../physics/README.md)
 - [x] Physics is float, not fixed-point; integrator is 3 sub-steps of dt/3
-- [x] [Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse/engine.md):
+- [x] [Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse-usa/engine.md):
       the craft update frame, every control force term, and all 32 handling
       parameters placed with the block's byte accounting closing exactly
 - [ ] Memory management and the heap layout
@@ -140,7 +140,7 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 functions documented to the standard in
 [`ghidra/function-template.md`](../ghidra/function-template.md).
 
-The function count is met: [names.tsv](../ghidra/functions/psp-pulse/names.tsv)
+The function count is met: [names.tsv](../ghidra/functions/psp-pulse-usa/names.tsv)
 carries **120** documented symbols, each refused by
 `scripts/apply-ghidra-names.py` unless its address and name are still on an
 evidence page. The memory map is what remains.
@@ -193,7 +193,7 @@ runtime confirmations that were previously static readings, including one
 that settles a claim by counting: `craft+0x2ec` matches the **previous**
 frame's `|dot(velocity, forward)|` on 199 of 199 samples and the current
 frame's on 137, which is the one-frame staleness
-[engine](../ghidra/functions/psp-pulse/engine.md) derived from the frame
+[engine](../ghidra/functions/psp-pulse-usa/engine.md) derived from the frame
 ordering. See also [frame pacing](../psp/frame-pacing.md).
 
 ---
@@ -216,13 +216,13 @@ ordering. See also [frame pacing](../psp/frame-pacing.md).
 - [x] Ship physics **implemented, none of it verified**: thrust, steering, brakes,
       airbrakes, pitch, the air cushion, grip, drag and the passive torques, from
       [physics](../physics/README.md) and
-      [engine](../ghidra/functions/psp-pulse/engine.md). Every magnitude is
+      [engine](../ghidra/functions/psp-pulse-usa/engine.md). Every magnitude is
       transcribed static analysis; only two cross-product signs are settled, and
       those by arithmetic rather than by measurement.
 - [x] Collision against track and walls: the [triangle soup](../formats/collision.md)
       decoded and validated on both discs, queried by a segment-triangle
       narrowphase behind an AABB reject. The sweep-and-prune broadphase is not
-      implemented, and [the origin its coordinate packing subtracts](../ghidra/functions/psp-pulse/collision.md)
+      implemented, and [the origin its coordinate packing subtracts](../ghidra/functions/psp-pulse-usa/collision.md)
       should be settled before it is - measurement has ruled out the geometry, so
       what is left is a code read.
 
@@ -437,7 +437,7 @@ seen from the authoring side.
       *where the lap begins* is ours at 55, so read
       [lap counting](../gameplay/lap-counting.md) before trusting a lap time.
       Zone's ten-second step and its speed law are recovered
-      ([zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md)) and its
+      ([zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md)) and its
       numbers are read off the disc. **Grid and positions are untouched**, and
       Zone has no end condition because the bit that ends a run is unidentified.
 - [~] HUD. **The disc's own layout is parsed and drawn.** All five
@@ -506,7 +506,7 @@ seen from the authoring side.
         in full (2026-07-31): it names the three real spark resources by
         string and computes a usable severity formula from the same contact
         impulse magnitude `contact-response.md` already recovers - see
-        [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function).
+        [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function).
         `oag_render::sparks` still triggers off our own physics contact data
         (`oag_physics::wall::WallResponse`) rather than this class, and has
         not yet been retuned against the newly recovered formula - see that
@@ -519,7 +519,7 @@ seen from the authoring side.
       - Shield hit response, whose model is `Data\Ships\<Team>\<Team>shield.vex`
       - [x] `shipboost.vex`, the boost ship state - **the additive plume a
         speed pad reveals**, recovered and drawn (2026-08-04); see
-        [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md)'s "boost
+        [`exhaust.md`](../ghidra/functions/psp-pulse-usa/exhaust.md)'s "boost
         visual" section and `oag_game::race::Loaded::boost_model`. Two meshes,
         drawn once in ship space with no locator mounting - the file's own
         node tree carries no `Transform` for either mesh to mount on.
@@ -679,7 +679,7 @@ change how this list should be read:
       decode independently. **The runtime path is now fully recovered too** -
       `FogCube_RegisterClass`/`_Init`/`_Sample`, `Fog_FindVolume`, `Fog_Apply`
       and `Gu_Fog`, in
-      [`fog.md`](../ghidra/functions/psp-pulse/fog.md) - including that the two
+      [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) - including that the two
       parameter sets are the ends of a lerp across the volume's local Z. Nothing
       draws it yet, which is why a race now has its authored sky and a hard
       horizon
@@ -695,7 +695,7 @@ change how this list should be read:
       behind `[graphics] animated_textures`**: the geometry and texture content
       are measured, but no capture has confirmed the original animates these
       surfaces. See [`vex.md`](../formats/vex.md) and
-      [`texture-animation.md`](../ghidra/functions/psp-pulse/texture-animation.md)
+      [`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md)
 - [x] Confirm those eight against the running original - **done, and negative**.
       `Gu_TexOffset` never carries a non-zero offset except from
       `Trail_DrawRibbon`, on a circuit carrying two of them, and five candidate
@@ -721,7 +721,7 @@ change how this list should be read:
       **not** the force law's `gain`/`falloff`. What is *not* recovered is the
       rotation axis: the node's payload is zero bytes and its class descriptor
       carries no handler, so it is chosen and flagged as chosen. See
-      [`ship-parts.md`](../ghidra/functions/psp-pulse/ship-parts.md)
+      [`ship-parts.md`](../ghidra/functions/psp-pulse-usa/ship-parts.md)
 - [ ] `engine_fire` `0x3e5` and `exitglow` `0x3e4` - both authored, neither
       registered; see the caution above
 - [ ] Livery and team variants across all thirteen teams. Five teams'
@@ -750,7 +750,7 @@ reproduced deliberately and documented as a choice.
       `FogCube_Sample` re-interpolates every frame from the camera's position
       across the fog volume's local Z. Reproducing the look needs the volume and
       the lerp, not a shaping function - see
-      [`fog.md`](../ghidra/functions/psp-pulse/fog.md)
+      [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md)
 - [ ] Bloom and the bright-pass on the exhaust and lights
 - [ ] Colour grading
 - [ ] Motion blur / speed streaking. Visible in the reference frames captured for
@@ -857,10 +857,10 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 | --- | --- | --- |
 | Where is lap counting? `gate` has no runtime class at all. | M5 | [track data](../formats/track.md) |
 | How is a ship assigned a grid slot? **Narrowed, and half of it is answered**: the authored `Start Position` node is decoded and a ship now starts on it, its heading confirmed against the original's own craft to 1.12 degrees. But there is exactly **one** node per track on all 40 files, 3.2-20.5 units off the centreline and 137.9 units behind where a time trial starts - so the grid is laid out by code, not data, and what lays it out is unread. | M5 | [track data](../formats/track.md) |
-| What does the per-vertex collision scalar mean? **Not answerable from assets**: all 602,086 are exactly `1.0`, so only the consumer can say. | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
-| How does the sweep-and-prune packing hold coordinates beyond +/-1024, when real tracks reach 1,554? **Narrowed by survey**: all 16 environments measured; 7 reach past ±1024, but nothing on either disc *spans* more than 2,048 (widest 2026.6057, `10_Track`, 98.96% of the window). So the geometry is not at fault and the packed input cannot be raw world space - the open part is reading `Sap_Init` (`0x0882f8f4`) for the base it must subtract. | M4 | [collision](../ghidra/functions/psp-pulse/collision.md) |
+| What does the per-vertex collision scalar mean? **Not answerable from assets**: all 602,086 are exactly `1.0`, so only the consumer can say. | M4 | [collision](../ghidra/functions/psp-pulse-usa/collision.md) |
+| How does the sweep-and-prune packing hold coordinates beyond +/-1024, when real tracks reach 1,554? **Narrowed by survey**: all 16 environments measured; 7 reach past ±1024, but nothing on either disc *spans* more than 2,048 (widest 2026.6057, `10_Track`, 98.96% of the window). So the geometry is not at fault and the packed input cannot be raw world space - the open part is reading `Sap_Init` (`0x0882f8f4`) for the base it must subtract. | M4 | [collision](../ghidra/functions/psp-pulse-usa/collision.md) |
 | What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
-| What are the coordinate conventions? **Handedness answered**: `cross(row0, row1) = row2` exactly on 200/200 ticks, so the basis is positively oriented under ordinary component arithmetic - and turning left rotates forward toward `+row0`, so **row 0 is left, not right**. Units and angles still open. | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |
-| ~~What calls `Ship_UpdateCraft`?~~ **Answered**: `0x0884ff70`, a virtual call through slot `0x70` of the vtable at `object+0x38`, inside a per-entity update loop beginning at `0x0884f70c`. | M4 | [engine](../ghidra/functions/psp-pulse/engine.md) |
-| ~~Do the angular accumulators hold torque or angular acceleration?~~ **Answered: torque.** `body+0x120`/`+0x130` integrate into `body+0x160` with no inertia division - `+0x160` is body-frame angular *momentum*, and the inertia is applied once in the `L -> omega` map (`omega = I_world^-1 * L`, rebuilt per sub-step). `body+0x40` is the body-space inverse inertia tensor, and its writer is now read too - `Body_SetBoxInertia` (`0x0884e1ac`), a solid box with the literal dimensions `(12, 8, 12)` and the constructor's mass `0.9`, giving `I = (15.6, 21.6, 15.6)` against the captures' fitted `~(15, 21.2, 15)`. `YAW_DRIVE_CALIBRATION` is retired for the recovered `oag_physics::forces::YAW_INVERSE_INERTIA`. | M4 | [rigid-body](../ghidra/functions/psp-pulse/rigid-body.md) |
+| What are the coordinate conventions? **Handedness answered**: `cross(row0, row1) = row2` exactly on 200/200 ticks, so the basis is positively oriented under ordinary component arithmetic - and turning left rotates forward toward `+row0`, so **row 0 is left, not right**. Units and angles still open. | M4 | [engine](../ghidra/functions/psp-pulse-usa/engine.md) |
+| ~~What calls `Ship_UpdateCraft`?~~ **Answered**: `0x0884ff70`, a virtual call through slot `0x70` of the vtable at `object+0x38`, inside a per-entity update loop beginning at `0x0884f70c`. | M4 | [engine](../ghidra/functions/psp-pulse-usa/engine.md) |
+| ~~Do the angular accumulators hold torque or angular acceleration?~~ **Answered: torque.** `body+0x120`/`+0x130` integrate into `body+0x160` with no inertia division - `+0x160` is body-frame angular *momentum*, and the inertia is applied once in the `L -> omega` map (`omega = I_world^-1 * L`, rebuilt per sub-step). `body+0x40` is the body-space inverse inertia tensor, and its writer is now read too - `Body_SetBoxInertia` (`0x0884e1ac`), a solid box with the literal dimensions `(12, 8, 12)` and the constructor's mass `0.9`, giving `I = (15.6, 21.6, 15.6)` against the captures' fitted `~(15, 21.2, 15)`. `YAW_DRIVE_CALIBRATION` is retired for the recovered `oag_physics::forces::YAW_INVERSE_INERTIA`. | M4 | [rigid-body](../ghidra/functions/psp-pulse-usa/rigid-body.md) |
 | Why does the US PSP disc carry a directory named for the *European* serial? | nothing yet | [PSP disc layout](../psp/pulse-disc-layout.md) |

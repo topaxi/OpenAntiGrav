@@ -68,7 +68,7 @@ WO_SHURIKEN_HEAD, WO_SHURIKEN_TRAIL, WO_SNOW, WO_WEAPON_ABSORB
 `WO_SHIP_COLL_SPARK`, `WO_SHIP_COLL_SPARK_DAMAGE` and
 `WO_SHIP_COLL_SPARK_NODAMAGE` are three distinct, separately authored
 particle systems for the effect `oag_render::sparks` currently authors by
-hand (see [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md)
+hand (see [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md)
 and the `HANDOVER.md` open thread), and `WO_SHIP_COLL_SPARK_TRAIL` and
 `WO_SHIP_COLL_SPARK_TRAIL_SMOKE` are two more in the same family.
 
@@ -226,7 +226,7 @@ the loader (which this pass did not attempt) is the next live one.
 ### An interpreter is now located, but its field semantics are not
 
 Following the collision-spark spawn path documented in
-[contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
 (`ShipCollisionFx_Trigger` -> `FUN_08915484` -> `FUN_08916200` ->
 `FUN_088f3174` -> `FUN_088f58a4`) does reach code that reads a resolved SYSP
 resource's fields at **fixed offsets from `resource_base`**: `+0x944`,
@@ -240,14 +240,14 @@ been run (2026-08-01)** - the sprite-atlas reading was right (`+0x9a0`
 grid, `+0x9ac` frame count), `+0x944`/`+0x948`/`+0x94c` really are a
 child/sibling tree, and the whole interpreter downstream is traced and
 documented in
-[particle-system.md](../ghidra/functions/psp-pulse/particle-system.md);
+[particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md);
 the emitter-record layout it recovered is the next section.
 
 ### The emitter record layout is decoded
 
 **2026-08-01.** The "second, fixed-offset field block" below stopped being an
 isolated curiosity: tracing its consumers through the runtime interpreter
-([particle-system.md](../ghidra/functions/psp-pulse/particle-system.md))
+([particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md))
 decoded the whole emitter-level record. All offsets are relative to
 `resource_base` (or to a nested sibling record's own base - see the next
 section); values in parentheses are `WO_SHIP_COLL_SPARK_DAMAGE`'s root
@@ -298,7 +298,7 @@ the file.
 Confidence **85** for the table as a whole: every row is grounded in a full
 decompile of its consumer, and the parenthesised values were confirmed
 byte-exact live; single-file corpus, and the rows marked unknown are
-unknown. See [particle-system.md](../ghidra/functions/psp-pulse/particle-system.md)
+unknown. See [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md)
 for the per-function evidence.
 
 ### The collision-spark file is a four-emitter tree
@@ -320,7 +320,7 @@ names:
 
 The draw column comes from the second-pass trace of the draw layer
 (`ParticleSystem_DrawParticle` and its helpers,
-[particle-system.md](../ghidra/functions/psp-pulse/particle-system.md#the-draw-layer-added-2026-08-01-second-pass)):
+[particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md#the-draw-layer-added-2026-08-01-second-pass)):
 the blend split is what makes the smoke a dark translucent puff (alpha-over)
 while the bright emitters add light, and the spawn-anchored streak class is
 what makes the sparks read as rays radiating from the impact. Each emitter
@@ -348,7 +348,7 @@ the per-emitter parameter semantics (they inherit the table above).
 
 `FUN_088f4910` (the function `ShipCollisionFx_Trigger`'s spawned particle
 instance reaches to derive its emission parameters, see
-[contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#fun_088f4910-derives-six-instance-fields-from-a-plain-scalar-block))
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#fun_088f4910-derives-six-instance-fields-from-a-plain-scalar-block))
 reads `instance+0x20` as a pointer (`iVar1`) and then reads six plain floats
 off it at `+0x34`, `+0x38`, `+0x40`, `+0x48`, `+0x4c` and `+0x74`. This
 looked, before this pass, like it might be yet another indirection through
@@ -471,7 +471,7 @@ values, and the full consumer arithmetic (`FUN_088f4910`) reproduces the
 live-captured *derived* outputs from those same six values. **85** for what
 those values and the rest of the emitter record mean - the 2026-08-01
 interpreter trace ("The emitter record layout is decoded" above,
-[particle-system.md](../ghidra/functions/psp-pulse/particle-system.md)),
+[particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md)),
 which retired the previous **0** here; on the collision-spark file only,
 not corpus-wide. **90** for the `+0x94c` sibling-emitter tree (file bytes
 plus two live breakpoint captures).
@@ -521,7 +521,7 @@ shape instead.
 - **Where the interpreter that reads a resolved record lives in the
   executable.** Resolved on 2026-08-01: the whole runtime chain is traced
   and named in
-  [particle-system.md](../ghidra/functions/psp-pulse/particle-system.md).
+  [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md).
   Still unread there: the shape-3 cone placement (`FUN_088fc634`), shapes
   1/2/8, modifier types other than 3, and the billboard draw itself.
 - **Whether `WO_SHIP_COLL_SPARK`, `_TRAIL` and `_TRAIL_SMOKE` exist on PS2**

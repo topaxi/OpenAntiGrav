@@ -44,7 +44,7 @@ attribute name - so `as="Values"` keys on `a` and the trailing `s` is not read.
 one character in `a`..`r`. The table lives on the document, so per-file scope is
 not a convention but the only thing expressible. Details, including three traps
 for anyone writing these files, are on
-[the PS2 XML reader page](../ghidra/functions/ps2-pulse/xml-reader.md).
+[the PS2 XML reader page](../ghidra/functions/ps2-pulse-eu/xml-reader.md).
 
 That the 18 slots in the reader match the 18 codes counted across `FEData.wad`
 by two unrelated routes is the strongest evidence on this page.
@@ -90,7 +90,7 @@ Recovered from expanded files, not exhaustive:
 | `Mode3D`, `Viewport` | 3D preview embedded in a menu |
 | `Model` | A `.vex` model, with `Src`, position and rotation |
 | `Image` | A texture |
-| `Movie` | Video playback; see [frontend-video](../ghidra/functions/psp-pulse/frontend-video.md) |
+| `Movie` | Video playback; see [frontend-video](../ghidra/functions/psp-pulse-usa/frontend-video.md) |
 | `Redirect`, `goto` | State transitions |
 | `Entry`, `Class`, `Difficulty` | Menu and mode data |
 | `LoadXML` | Includes another XML file |
@@ -136,7 +136,7 @@ Widgets can also *publish* their own value as a global, which is what makes the
 live form useful: one widget's state drives another widget's attribute.
 
 Mechanism, addresses and the registry layout are on
-[ps2-pulse/fe-globals.md](../ghidra/functions/ps2-pulse/fe-globals.md); the PSP
+[ps2-pulse-eu/fe-globals.md](../ghidra/functions/ps2-pulse-eu/fe-globals.md); the PSP
 build has the same three-way test and the same two literals. **Which attributes
 accept the indirection is not enumerated** - only `Color` on a text widget's
 `<Values>` is confirmed, out of 26 call sites.
@@ -156,8 +156,8 @@ accept the indirection is not enumerated** - only `Color` on a text widget's
 ## Parser behaviour worth knowing
 
 From the reader itself, documented on both builds
-([PSP](../ghidra/functions/psp-pulse/xml-reader.md),
-[PS2](../ghidra/functions/ps2-pulse/xml-reader.md)) and structurally identical
+([PSP](../ghidra/functions/psp-pulse-usa/xml-reader.md),
+[PS2](../ghidra/functions/ps2-pulse-eu/xml-reader.md)) and structurally identical
 between them. It applies to anything that writes these files as well as anything
 that reads them:
 

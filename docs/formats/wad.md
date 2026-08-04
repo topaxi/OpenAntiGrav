@@ -88,7 +88,7 @@ uncompressed and stored sizes, in that order. That is
 
 It also corroborates the **compression rule's outer test**: the size-equality
 question comes first, and no bit-31 flag test appears at this level at all. See
-[the PS2 WAD subsystem page](../ghidra/functions/ps2-pulse/wad-subsystem.md#mount-lookup-and-the-archive-layout)
+[the PS2 WAD subsystem page](../ghidra/functions/ps2-pulse-eu/wad-subsystem.md#mount-lookup-and-the-archive-layout)
 for the full reading; confidence **88** on the lookup and mount functions there.
 
 **One genuine divergence, and it is not in the layout.** The PSP's `Wad_Open`
@@ -180,7 +180,7 @@ for byte in name.bytes() {
 ```
 
 Recovered from `Wad_HashName` at `0x08940d0c`; see
-[the WAD subsystem page](../ghidra/functions/psp-pulse/wad-subsystem.md).
+[the WAD subsystem page](../ghidra/functions/psp-pulse-usa/wad-subsystem.md).
 Implemented as [`oag_formats::wad::hash_name`](../../crates/formats/src/wad.rs).
 
 Verified against 176 real entries across four archives. Worked examples:
@@ -213,7 +213,7 @@ PSP does, while `Wad_HashName` uses a precomputed 256-byte lowercase table
 (`g_tolower_table`, `0x002c6d98`) and tests for the separator *after* folding,
 which is equivalent because `\` is unaffected by case folding. Details and the
 address correspondence are on
-[the PS2 WAD subsystem page](../ghidra/functions/ps2-pulse/wad-subsystem.md#hashing).
+[the PS2 WAD subsystem page](../ghidra/functions/ps2-pulse-eu/wad-subsystem.md#hashing).
 
 Do not confuse it with `crc32` (`0x002068c8`), an ordinary CRC-32 with initial
 value `0xFFFFFFFF`, no normalisation and a statically initialised table. The zero
@@ -261,7 +261,7 @@ literals.
 [LZSS](lzss.md), selected when bit 31 of the uncompressed-size field is clear
 **and** the two size fields differ. Equal sizes mean the blob is stored, whatever
 bit 31 says: see
-[the compression rule](../ghidra/functions/psp-pulse/wad-subsystem.md#compression).
+[the compression rule](../ghidra/functions/psp-pulse-usa/wad-subsystem.md#compression).
 Implemented and verified against all 6,053 compressed entries across both PS2
 archives. The game also supports zlib behind that bit, but no shipped archive
 sets it.

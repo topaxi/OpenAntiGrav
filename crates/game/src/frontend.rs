@@ -33,7 +33,7 @@
 //! fire in ten minutes; the only movies opened are `Data\Movies\Intro.PMF` and
 //! `Data\Movies\Backdrop.PMF`. So the reel leg is real, evidenced code whose
 //! trigger is simply unknown, and it is reachable here through `--reel` rather
-//! than at boot. See `docs/ghidra/functions/psp-pulse/frontend-video.md` and
+//! than at boot. See `docs/ghidra/functions/psp-pulse-usa/frontend-video.md` and
 //! `docs/architecture/frontend-boot.md`.
 //!
 //! # Where it knowingly differs

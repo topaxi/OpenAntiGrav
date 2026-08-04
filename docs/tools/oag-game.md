@@ -35,7 +35,7 @@ of a race **discards** it; there is no pause and re-entering loads a fresh one.
 The whole rule is on the [menus](../architecture/menus.md#what-escape-does) page.
 
 The keys are the same
-[abstract button layer](../ghidra/functions/psp-pulse/input.md) the front end uses;
+[abstract button layer](../ghidra/functions/psp-pulse-usa/input.md) the front end uses;
 there is one mapping from a keyboard to a snapshot and both halves go through it,
 one set of devices for the whole session, so a key held across the handoff stays
 held.
@@ -381,7 +381,7 @@ Three parts of it are read off the original, and the rest is not:
   and combined by a rule that forces zero when either side is a sentinel. See
   [collision.md](../formats/collision.md#surface-types-and-the-friction-sentinel).
 - **Contact generation is box-against-triangle**, as
-  [the RE page](../ghidra/functions/psp-pulse/collision.md#raycasts) records.
+  [the RE page](../ghidra/functions/psp-pulse-usa/collision.md#raycasts) records.
 
 **The response law itself is an implementation choice, not a reading.** The
 original's contact *generation* is documented - a per-triangle separating-axis
@@ -430,7 +430,7 @@ implemented.
 
 `Reset Collision` geometry is a trigger, not a surface: touching it puts the ship
 back on the track.
-[collision.md](../ghidra/functions/psp-pulse/collision.md#surface-types-in-practice)
+[collision.md](../ghidra/functions/psp-pulse-usa/collision.md#surface-types-in-practice)
 records that at confidence **86**, and that is the whole of what is recovered -
 **where** the ship respawns to is not recorded anywhere.
 
@@ -566,7 +566,7 @@ magstrip magnetic hold is not decoded and not implemented (see
 
 **The sideshift used to be listed here and no longer is.** Its binding is
 recovered - see
-[input-bindings.md](../ghidra/functions/psp-pulse/input-bindings.md) - and the
+[input-bindings.md](../ghidra/functions/psp-pulse-usa/input-bindings.md) - and the
 manoeuvre works in a race: **double-tap `Q` or `E`**, the keyboard's left and
 right airbrakes, within a quarter of a second. That is the *veteran* scheme,
 which is also the original's shipped default.

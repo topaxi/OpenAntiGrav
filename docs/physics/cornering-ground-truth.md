@@ -79,7 +79,7 @@ possible and it is cheap.
 
 `stun_timer` and `timer_2e0` reading zero on all 3,146 ticks also closes, by
 columns rather than argument, the escape hatch that
-[engine.md](../ghidra/functions/psp-pulse/engine.md) keeps open for both
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md) keeps open for both
 `Ship_UpdateEngine`'s and `Ship_ApplyLateralGrip`'s early returns: neither fires
 anywhere in this lap, so the grip measurement below is of the ungated term.
 
@@ -382,7 +382,7 @@ Three results, in descending order of how firmly the data holds them:
    **retires the last of the "22x" story at the accumulator level**: the
    accumulator obeys the documented law exactly, and everything that made the
    observed yaw rate differ from it lives in the inertia tensor, as
-   [rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md) concluded.
+   [rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md) concluded.
    Confidence **92**.
 2. **The yaw damping is `-5`** - `-5.0387 +/- 0.0097`, against a `viim_s(5)`
    read from the instruction stream, and measured on the *momentum* rather than
@@ -568,7 +568,7 @@ explicit Gram-Schmidt re-orthonormalisation. It is not a torque, it touches no
 accumulator, and it therefore **cannot** appear in the momentum column: exactly
 the shape of the (B) break measured above, in exactly the place a mag-strip
 holds a craft inverted. Evidence and listing in
-[engine.md](../ghidra/functions/psp-pulse/engine.md#ship_updatemaglock-rewrites-the-basis-directly-and-that-is-the-missing-mechanism);
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md#ship_updatemaglock-rewrites-the-basis-directly-and-that-is-the-missing-mechanism);
 the attribution goes from 45 to **90**, measurement and instruction reading
 arrived at independently and agreeing.
 

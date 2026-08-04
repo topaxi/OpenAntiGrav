@@ -1,6 +1,6 @@
 //! Detecting contact with `Reset Collision` geometry.
 //!
-//! `docs/ghidra/functions/psp-pulse/collision.md` records two facts about the
+//! `docs/ghidra/functions/psp-pulse-usa/collision.md` records two facts about the
 //! `Reset` class at confidence **86**: it is excluded from ordinary raycasts, and
 //! **a contact with it triggers a respawn**. This module is the first half of
 //! that - the detection. It deliberately does nothing about the respawn, because

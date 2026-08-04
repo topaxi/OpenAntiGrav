@@ -48,7 +48,7 @@ import os
 import statistics
 
 # Confirmed identical in both binaries, delay slots included; see
-# `docs/ghidra/functions/psp-pulse/engine.md`, "The passive terms".
+# `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The passive terms".
 DRAG_GROUND = 0.005
 ROLLING_RESISTANCE = 2.0
 

@@ -122,7 +122,7 @@ pub const CLASS_LOD_GROUP: u32 = 0x2ee;
 /// Class ID of an `Engine Flare` node: the ship's exhaust.
 ///
 /// Its runtime handler is read at instruction level in
-/// `docs/ghidra/functions/psp-pulse/exhaust.md`: an additive camera-facing quad
+/// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`: an additive camera-facing quad
 /// at the nozzle, plus the `~ENGINE` sound and the `<Team>boost.vex` model.
 pub const CLASS_ENGINE_FLARE: u32 = 0x3bf;
 
@@ -203,7 +203,7 @@ pub const CLASS_WEAPON_PAD: u32 = 0x3be;
 /// Read out of `BOOT.BIN` at `0x08ab2370` - stride 12, `{u32 id, char *name,
 /// ptr}`, names at `0x08a84d40`, terminated by `id == -1`. The third field is a
 /// runtime slot that `Vex_RegisterClass` fills at boot, **not** a shared vtable.
-/// `docs/ghidra/functions/psp-pulse/exhaust.md` carries the evidence and the
+/// `docs/ghidra/functions/psp-pulse-usa/exhaust.md` carries the evidence and the
 /// confidence score (95, because ten of these IDs were already in this file from
 /// unrelated evidence and every one agrees).
 ///
@@ -717,7 +717,7 @@ impl Batch {
     /// whether a given model's batches actually read additive, and whether
     /// `GU_BLEND` is actually *enabled* when they do, are separate,
     /// lower-confidence claims. See
-    /// `docs/ghidra/functions/psp-pulse/mesh-draw.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
     #[must_use]
     pub fn is_additive_blend(&self) -> bool {
         self.header_flags & 0x10 == 0

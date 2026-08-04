@@ -91,10 +91,10 @@
 //! `Body_ResolveContact` (`0x0884e968`) was read: the resolver takes restitution
 //! from `body+0x388` and uses the combined `collider+0x64` only to scale the
 //! contact's tangential relative velocity. It is a **friction coefficient**. See
-//! `docs/ghidra/functions/psp-pulse/contact-response.md`.
+//! `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 //!
 //! See `docs/formats/collision.md` for the evidence and
-//! `docs/ghidra/functions/psp-pulse/collision.md` for the addresses.
+//! `docs/ghidra/functions/psp-pulse-usa/collision.md` for the addresses.
 
 use std::fmt;
 use std::ops::Range;

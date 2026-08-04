@@ -5,7 +5,7 @@ Functions in `SCES_547.48` (Wipeout Pulse, PS2, SCES-54748), image base
 
 The format itself is documented in [formats/wad.md](../../../formats/wad.md);
 the PSP side of the same subsystem is
-[psp-pulse/wad-subsystem.md](../psp-pulse/wad-subsystem.md). This page records
+[psp-pulse-usa/wad-subsystem.md](../psp-pulse-usa/wad-subsystem.md). This page records
 where it lives in the PS2 executable and, more usefully, **which of the PSP
 page's claims a second binary agrees with**.
 

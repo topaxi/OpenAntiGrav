@@ -17,7 +17,7 @@ This page records a first-principles measurement of what force the
 original actually applies along a craft's forward axis, taken from captured
 traces rather than from decompilation. It exists because the same discrepancy has
 now been diagnosed three different ways in
-[engine.md](../ghidra/functions/psp-pulse/engine.md), and two of those diagnoses
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md), and two of those diagnoses
 are refuted here **by measurement, not by argument**.
 
 Reproduce everything below with:
@@ -288,7 +288,7 @@ a claim that the crate is missing a term is a claim about the crate, and
 nothing here had checked it against the crate.
 
 The force block has since been read end to end (`0x0884ccb4`-`0x0884cf94`, see
-[engine.md](../ghidra/functions/psp-pulse/engine.md)), which settles two things
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md)), which settles two things
 this section had left open or stated loosely:
 
 - **The sign. It accelerates.** `sp+0x10` is written fresh at `0x0884cdb8` and
@@ -393,7 +393,7 @@ the same pass:
 | `Body_Integrate` `0x0884e230` damping | `velocity -= velocity * h * body+0x384`, `body+0x384 == 0.01` | `-0.01 * fs`, i.e. `0.23` | 88 |
 | `Ship_UpdateMagLock` `0x0884ba0c` | rewrites `body+0x140` to `normalize(v - blend*dot(v,m)*m) * \|v\|` | **speed-preserving by construction**, and gated on `craft+0x280 != 0` | 85 |
 
-The integrator reading is on [rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md);
+The integrator reading is on [rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md);
 the sub-stepping does **not** multiply the `0.01` damping up, because
 `(1 - (dt/N)*c)^N` is `1 - dt*c` to first order.
 
@@ -424,7 +424,7 @@ lack - settles the whole blocker, and does it twice over.
 > acceleration 32.69 on its third tick** against this page's 32.52 and the
 > predicted 31.8, and a contact-friction floor never crossed in 114 contact
 > ticks - see
-> [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#re-measured-2026-07-29-on-an-independent-capture).
+> [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#re-measured-2026-07-29-on-an-independent-capture).
 
 ## The recovered force law reproduces the launch to `0.13` units of force
 
@@ -457,7 +457,7 @@ rolling resistance and the `-0.005` grounded drag are **all confirmed
 simultaneously and end to end**, on real data, with no decompilation in the
 chain. At `fs = 0.56` the measured acceleration is `32.52` against a predicted
 `2 * accelcap - 2 = 31.8`, which is the zero-model-assumption thrust check
-[engine.md](../ghidra/functions/psp-pulse/engine.md) asked for.
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md) asked for.
 
 ## Then the ship hits a wall, and never leaves it
 
@@ -496,7 +496,7 @@ This is the finding, and it is why enumerating the force path could never have
 found the mechanism.
 
 `speed` is `body+0x398`, which
-[rigid-body.md](../ghidra/functions/psp-pulse/rigid-body.md#body0x398-is-linear-velocity)
+[rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md#body0x398-is-linear-velocity)
 shows `Body_Integrate` writes as `sqrt(dot(v, v))` **from the same register it
 stores as the velocity**, four instructions apart. The two are the same number by
 construction. So whenever a trace samples `speed` above `|velocity|`, something
@@ -581,7 +581,7 @@ zero if either is negative. A wall's is `0.05`; the craft's own box collider is
 given `0.02` by the ship-entity constructor. **So a craft scraping a wall loses
 `(0.05 + 0.02) / 2 = 3.5 %` of its tangential speed every frame.** Full evidence
 in
-[contact-response.md](../ghidra/functions/psp-pulse/contact-response.md).
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md).
 
 **The measurement is a one-sided test of that prediction, which is stronger than
 the asymptote match it looks like.** The normal impulse can only *add* loss on top

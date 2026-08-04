@@ -181,7 +181,7 @@ struct Cli {
     /// two differ only in how a sideshift is asked for - veteran double-taps an
     /// airbrake, novice holds the sideshift button and flicks the stick - and
     /// they are the original's own `Control_Type` values. See
-    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     #[arg(long)]
     scheme: Option<ControlScheme>,
 

@@ -591,7 +591,7 @@ rather than a constructor, on the instruction pattern alone.
 ## Where the PS2 build diverges, and why this crate follows the PSP
 
 The PS2 twin was read independently, and
-[ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md) records it: six passes
+[ps2-pulse-eu/craft-update.md](../ps2-pulse-eu/craft-update.md) records it: six passes
 per frame in `World_StepBodies` (`0x0015ded8`), with contact collection and
 `Body_ResolveContactPair` (`0x0015e600`) in pass 6, after `Body_Integrate` and
 before the next frame's `Ship_UpdateCraft`. **That is instruction-level

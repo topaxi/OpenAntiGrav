@@ -3,7 +3,7 @@
 //! **The response law here is read out of the original**, from
 //! `Body_ResolveContact` (`0x0884e968`) and `Body_ApplyImpulseAtPoint`
 //! (`0x0884d64c`); see
-//! `docs/ghidra/functions/psp-pulse/contact-response.md`. What the original does
+//! `docs/ghidra/functions/psp-pulse-usa/contact-response.md`. What the original does
 //! to a body per contact, in one pass, is
 //!
 //! ```text
@@ -24,7 +24,7 @@
 //! terms. See [`WALL_FRICTION`] and `docs/physics/force-balance-ground-truth.md`.
 //!
 //! The contact *inputs* are read too, in
-//! `docs/ghidra/functions/psp-pulse/collision.md#contact-generation`:
+//! `docs/ghidra/functions/psp-pulse-usa/collision.md#contact-generation`:
 //! `Collider_BoxSamplePoints` (`0x08818a00`) builds **ten** points on the hull
 //! box, and `Collision_BoxAgainstMesh` (`0x08815cd4`) tests the segment from the
 //! box **centre** to each of them against every candidate triangle. That is a
@@ -153,7 +153,7 @@ pub const SHIP_FRICTION: Option<f32> = Some(0.02);
 /// `Body_ResolveContactPair` (`0x0015e600`) hardcodes a `-1.1` numerator rather
 /// than reading a per-body field. PSP is the target, so `0.4` it is; see the
 /// divergence table in
-/// `docs/ghidra/functions/psp-pulse/contact-response.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 pub const BODY_RESTITUTION: f32 = 0.4;
 
 /// How much of a contact's angular impulse actually reaches the body.
@@ -208,7 +208,7 @@ pub const MIN_HULL_EXTENT: f32 = 1e-4;
 /// `craft+0x290 += 0.5` in `Ship_ApplyCollisionImpulse` (`0x0883f274`).
 /// **Added, not assigned**, so a ship that keeps being hit accumulates stun
 /// rather than holding a flat half second. Confidence 85; see
-/// `docs/ghidra/functions/psp-pulse/engine.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
 ///
 /// # Nothing in this crate arms it, and that is a correction
 ///
@@ -327,7 +327,7 @@ pub struct WallResponse {
     /// to a positive magnitude - `0.0` if [`Self::impact`] is `false`.
     ///
     /// **Reporting only.** Not a recovered quantity by itself; `FUN_088418e0`
-    /// (`docs/ghidra/functions/psp-pulse/contact-response.md`) scales the same
+    /// (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`) scales the same
     /// per-contact impulse magnitude by `0.05` and `0.0125` for its own
     /// (non-visual) reactions, which is the anchor a spark effect's intensity
     /// curve borrows.
@@ -562,7 +562,7 @@ fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> App
     // **The PS2 build does gate it**, returning early from
     // `Body_ResolveContactPair` (`0x0015e600`) when `vn > 0`. PSP is what this
     // crate targets, so the gate stays out; see the divergence table in
-    // `docs/ghidra/functions/psp-pulse/contact-response.md`.
+    // `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
     let mut impulse = normal * (-(1.0 + BODY_RESTITUTION) * normal_speed / denominator);
 
     // The tangential impulse, and the headline. `-friction * v_t` is a raw
@@ -1414,7 +1414,7 @@ mod tests {
     /// twice.
     ///
     /// `Collision_BoxAgainstMesh` de-duplicates nothing - see
-    /// `docs/ghidra/functions/psp-pulse/collision.md#how-many-contacts-a-craft-vs-track-frame-makes`,
+    /// `docs/ghidra/functions/psp-pulse-usa/collision.md#how-many-contacts-a-craft-vs-track-frame-makes`,
     /// which works the same arithmetic the other way round to conclude that the
     /// recorded scrape must have been *one* contact per frame. A nearest-hit
     /// query could not express this at all.

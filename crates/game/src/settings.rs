@@ -169,7 +169,7 @@ pub struct Controls {
     /// The two differ in *how a sideshift is asked for*, not in what the ship
     /// does: veteran double-taps an airbrake, novice holds a dedicated button
     /// and flicks the stick. See
-    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     #[serde(default = "default_scheme")]
     pub scheme: String,
 }
@@ -423,7 +423,7 @@ pub struct Graphics {
     /// of the table's entries, and the track was plainly rendering throughout.
     /// Five candidate palettes were byte-static over the same window, so a CLUT
     /// scroll is not the explanation either. See
-    /// `docs/ghidra/functions/psp-pulse/texture-animation.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
     ///
     /// So **the original does not animate track surfaces by moving texture
     /// coordinates**, and turning this on is a departure rather than a

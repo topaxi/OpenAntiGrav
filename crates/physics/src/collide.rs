@@ -8,7 +8,7 @@
 //! is the track's collision soup.
 //!
 //! Evidence for the shape of all of this is in
-//! `docs/ghidra/functions/psp-pulse/collision.md`.
+//! `docs/ghidra/functions/psp-pulse-usa/collision.md`.
 
 use oag_core::math::Vec3;
 
@@ -17,7 +17,7 @@ use oag_core::math::Vec3;
 /// All five collision node classes in the original share one vtable; the class
 /// ID only selects this enum and a friction constant, which is why a magstrip
 /// is not special geometry but ordinary floor with a different tag. Confidence
-/// 92; see `docs/ghidra/functions/psp-pulse/collision.md`.
+/// 92; see `docs/ghidra/functions/psp-pulse-usa/collision.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Surface {
@@ -67,7 +67,7 @@ impl Surface {
     /// becomes - only to scale the *tangential* relative velocity. So the disc's
     /// `0.05` is a friction coefficient, and it is the whole of the sustained
     /// speed loss a scraping craft suffers. See
-    /// `docs/ghidra/functions/psp-pulse/contact-response.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
     ///
     /// This deliberately duplicates `oag_formats::collision::SurfaceKind::
     /// friction`, because this crate must not depend on `oag-formats` - the
@@ -164,7 +164,7 @@ pub trait Raycaster {
     /// nearest-hit query cannot express that, and it also lets a floor triangle
     /// standing in front of a wall suppress the wall entirely - neither of which
     /// the original does. See
-    /// `docs/ghidra/functions/psp-pulse/collision.md#contact-generation`.
+    /// `docs/ghidra/functions/psp-pulse-usa/collision.md#contact-generation`.
     ///
     /// # The default implementation is a trap worth knowing about
     ///
@@ -309,7 +309,7 @@ pub struct SegmentTriangleHit {
 ///
 /// The returned normal follows the vertex winding, and **which winding the
 /// track data uses is not established** - the collision chunk format is decoded
-/// (`docs/ghidra/functions/psp-pulse/collision.md`) but the handedness of its
+/// (`docs/ghidra/functions/psp-pulse-usa/collision.md`) but the handedness of its
 /// triangles is not, and neither is the coordinate convention generally. The
 /// hover path treats this normal as pointing out of the surface, so if the
 /// parser turns out to emit the opposite winding, floors will report downward

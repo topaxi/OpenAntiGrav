@@ -41,7 +41,7 @@
 //! implementing for fidelity, and it is still zero in every capture available,
 //! but nothing hangs on it.
 //!
-//! From `docs/ghidra/functions/psp-pulse/engine.md`, "The passive terms" and the
+//! From `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The passive terms" and the
 //! gravity paragraph. Confidence 74 to 80, decompilation only, nothing
 //! runtime-verified - **except the four drag coefficients**, which have since
 //! been read straight out of the PSP `BOOT.BIN` instruction stream in
@@ -113,7 +113,7 @@ pub const ROLLING_RESISTANCE: f32 = 2.0;
 ///
 /// # Why this is `+0.1` where the page writes `-0.1`
 ///
-/// `docs/ghidra/functions/psp-pulse/engine.md` writes
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` writes
 /// `angularWorld += cross(forward, velocity) * (grounded ? -0.1 : -0.3)` and describes
 /// the term, two lines later, as "what turns the nose toward the direction of travel".
 /// In **this crate's** right-handed frame those two statements are incompatible, by
@@ -327,7 +327,7 @@ pub fn angular_damping(handling: &Handling, local_angular_momentum: Vec3) -> Vec
 /// `Ship_ApplyVerticalDamping` (`0x00159e78`) instead of inlining it: same
 /// `-0.25`, same `dot(up, velocity)`, same `1 - grounded` (there
 /// `craft+0x2e0`), on a different ISA and compiler. See
-/// `docs/ghidra/functions/ps2-pulse/craft-update.md`.
+/// `docs/ghidra/functions/ps2-pulse-eu/craft-update.md`.
 ///
 /// One difference between the builds that this crate follows the **PSP** on,
 /// deliberately, since that is what it targets: the PS2 *returns early* when

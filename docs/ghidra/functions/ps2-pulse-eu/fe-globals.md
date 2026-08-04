@@ -266,7 +266,7 @@ read directly rather than assumed, and the `"FE"` fast-path prefix is at
 The PSP counterparts are structurally identical - same three-way prefix test,
 same `buf + 11` / `buf + 9` skips - but their registry and float variant were
 not traced, so they are **not renamed**. See
-[psp-pulse/xml-reader.md](../psp-pulse/xml-reader.md).
+[psp-pulse-usa/xml-reader.md](../psp-pulse-usa/xml-reader.md).
 
 ## History
 

@@ -78,7 +78,7 @@ leg for confidence scoring (see the
 behavioural divergence is implemented PSP-side and *documented* as a
 divergence, never offered as an alternative or averaged away. Examples on
 record: the vertical-damping half-contact handling
-([craft-update.md](../ghidra/functions/ps2-pulse/craft-update.md)), PS2's
+([craft-update.md](../ghidra/functions/ps2-pulse-eu/craft-update.md)), PS2's
 whole-mask `Input_ConsumePress`, and the non-rotating WAD lookup cursor.
 
 Explicitly **out of scope**: Wipeout (1995), 2097/XL, 64, 3, Fusion. They predate

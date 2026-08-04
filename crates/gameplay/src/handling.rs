@@ -21,12 +21,12 @@
 //! `xml * -0.01`, and both `Airbrake.amount` and `Airbrake.slidegrip` as
 //! `xml * 0.0001`. Recovered from `HandlingXml_ParseEngine`,
 //! `HandlingXml_ParseBrakes` and `HandlingXml_ParseAirbrake` at confidence 88;
-//! see `docs/ghidra/functions/psp-pulse/engine.md`.
+//! see `docs/ghidra/functions/psp-pulse-usa/engine.md`.
 //!
 //! The fifth is `AirbrakeGraphics.amount`, stored as `xml * 0.017453292` -
 //! `pi/180`, so the parameter is an **angle in radians** and not the bare number
 //! the document holds. `HandlingXml_ParseAirbrakeGraphics` at confidence 92; see
-//! `docs/ghidra/functions/psp-pulse/camera.md`, which found it while mapping the
+//! `docs/ghidra/functions/psp-pulse-usa/camera.md`, which found it while mapping the
 //! camera block it sits directly after. It is converted by
 //! [`airbrake_graphics_for`] rather than by [`handling_for`], because the flaps
 //! are graphics and the physics parameter set has no business holding them.
@@ -89,7 +89,7 @@ pub const SLIDEGRIP_SCALE: f32 = 0.0001;
 /// `up_speed` and `down_speed` beside it are stored raw. Read out of the loader
 /// and corroborated against the live block, which holds one team's authored `25`
 /// as `0.4363323`. Confidence **92**; see
-/// `docs/ghidra/functions/psp-pulse/camera.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/camera.md`.
 pub const AIRBRAKE_GRAPHICS_AMOUNT_SCALE: f32 = 0.017_453_292;
 
 /// The five fields that are not stored verbatim, for grepping.

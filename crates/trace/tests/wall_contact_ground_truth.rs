@@ -19,7 +19,7 @@
 //! (2026-07-30):** `Ship_InitCraft` (`0x08841360`-`0x0884139c`) scales all three
 //! by `hover::TARGET_GLOBAL_SCALE` (`0.75`, the same global the hover target
 //! height uses) before building the box - see
-//! `docs/ghidra/functions/psp-pulse/collision.md`. Applying that scale is not
+//! `docs/ghidra/functions/psp-pulse-usa/collision.md`. Applying that scale is not
 //! optional and the evidence for `0.75` itself is not in question - it is read
 //! three independent ways (the global's own bit pattern, the multiply
 //! instructions in `Ship_InitCraft`, and the argument order reaching
@@ -186,7 +186,7 @@ fn first_contact_on_the_recorded_line(
 /// a given tick, on the recorded pose.
 ///
 /// `WallContact::point` is the sample point itself, not the triangle
-/// intersection (`docs/ghidra/functions/psp-pulse/collision.md`), so it should
+/// intersection (`docs/ghidra/functions/psp-pulse-usa/collision.md`), so it should
 /// land exactly on one of the ten - matched by nearest distance rather than
 /// equality to stay robust to float noise carried through the resolve call.
 fn firing_probe_index(

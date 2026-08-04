@@ -6,7 +6,7 @@
 #     |airbrake_l - airbrake_r| * Airbrake.drag * |steer| * 0.01 * fs
 #
 # gated on `fs > 0` (confidence 85, see
-# docs/ghidra/functions/psp-pulse/engine.md). Every capture taken before this
+# docs/ghidra/functions/psp-pulse-usa/engine.md). Every capture taken before this
 # file existed holds both airbrakes at zero for its whole length, so the term is
 # **identically zero in all of them** - it has never been observed doing
 # anything, in either direction, and a force-balance measurement taken from

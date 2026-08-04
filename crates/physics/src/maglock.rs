@@ -26,7 +26,7 @@
 //!
 //! Read instruction by instruction from the decompilation of `0x0884ba0c`;
 //! confidence **90** on the writes, see
-//! `docs/ghidra/functions/psp-pulse/engine.md`.
+//! `docs/ghidra/functions/psp-pulse-usa/engine.md`.
 //!
 //! ```text
 //! blend  = craft+0x240 ? min(blend + 0.2, 1) : max(blend - 0.2, 0)   ; per FRAME
@@ -381,7 +381,7 @@ pub fn update(
     state.body.position += hold.translation;
 
     // The velocity is projected off the axis and renormalised to the magnitude it
-    // had. `docs/ghidra/functions/psp-pulse/rigid-body.md` already ruled this out
+    // had. `docs/ghidra/functions/psp-pulse-usa/rigid-body.md` already ruled this out
     // as the source of the missing linear resistance for exactly that reason: it
     // turns the velocity, it never shortens it.
     let velocity = state.body.linear_velocity;

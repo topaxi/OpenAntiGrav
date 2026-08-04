@@ -39,7 +39,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_INPUTS = [
-    ROOT / "docs" / "ghidra" / "functions" / "psp-pulse" / "names.tsv",
+    ROOT / "docs" / "ghidra" / "functions" / "psp-pulse-usa" / "names.tsv",
     ROOT / "data" / "ghidra" / "psp-imports.tsv",
 ]
 
@@ -149,7 +149,7 @@ def check_evidence(rows: list[Row]) -> list[str]:
     not that the page is.
 
     Evidence paths are relative to the TSV that carries the row, not to one
-    fixed directory: psp-pulse and ps2-pulse each own their own names.tsv.
+    fixed directory: psp-pulse-usa and ps2-pulse-eu each own their own names.tsv.
     """
     complaints = []
     cache: dict[Path, str] = {}

@@ -30,7 +30,7 @@
 //! | engine, brakes, pitch, quadratic drag, gravity, hover's own load factor | last frame |
 //! | lateral grip, weathervane torque | this frame |
 //!
-//! Confidence 84, from `docs/ghidra/functions/psp-pulse/engine.md`. The obvious
+//! Confidence 84, from `docs/ghidra/functions/psp-pulse-usa/engine.md`. The obvious
 //! reimplementation - resolve contacts, then apply forces - gets a different answer
 //! on every takeoff and landing frame, in five terms simultaneously. So [`evaluate`]
 //! binds the two values to separately named locals and every call site takes one
@@ -39,7 +39,7 @@
 //! # What is here and what is deliberately absent
 //!
 //! Present: the control force law from
-//! `docs/ghidra/functions/psp-pulse/engine.md` (engine, brakes, steering, pitch and
+//! `docs/ghidra/functions/psp-pulse-usa/engine.md` (engine, brakes, steering, pitch and
 //! the passive terms), the two-probe air cushion from `docs/physics/README.md`, and
 //! the airbrakes with lateral grip and the sideshift.
 //!
@@ -163,7 +163,7 @@ pub const INERTIA_MASS: f32 = 0.9;
 ///
 /// The original damps **angular momentum**, not angular velocity:
 /// `Ship_ApplyAngularDamping` (`0x08848ed0`) loads `body+0x160` at `0x08848f08`,
-/// which `docs/ghidra/functions/psp-pulse/rigid-body.md` establishes is `L`, and
+/// which `docs/ghidra/functions/psp-pulse-usa/rigid-body.md` establishes is `L`, and
 /// multiplies it by `(-pitch_damping, -5, -2)`. So the original's yaw axis is
 ///
 /// ```text
@@ -1142,7 +1142,7 @@ mod tests {
     /// `integrate`, not away from it. A unit-level assertion on
     /// `engine::steering`'s return value alone would not catch a sign error
     /// introduced anywhere downstream in how the accumulators are drained onto the
-    /// body, which is exactly the layer `docs/ghidra/functions/psp-pulse/engine.md`
+    /// body, which is exactly the layer `docs/ghidra/functions/psp-pulse-usa/engine.md`
     /// left as an open question until it was traced for this fix.
     #[test]
     fn holding_right_turns_the_ship_toward_its_own_right_axis() {

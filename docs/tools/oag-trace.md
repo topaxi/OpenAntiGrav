@@ -299,7 +299,7 @@ every committed scenario.
 | `pitch-both-ways.inputs` | **360 ticks of pitch, stationary on the start line, no thrust.** The cleanest capture in `data/traces/` - `speed/|velocity|` reads `1.0000` on 360 of 360 ticks - and the first with any pitch input at all |
 | `pitch-hold-thrust.inputs` | Thrust and a held nose-up off the line. Clean to tick 128 at 84 units/s, and dirty after |
 | `standing-start.inputs` | **300 ticks of held thrust from the start line.** Two measurements in one: a clean launch to tick 186, then a sustained scrape at speed. The force-balance regression test - see [below](#the-standing-start-and-what-it-regression-tests) |
-| `sideshift-double-tap.inputs` | **The veteran sideshift**: 180 ticks to reach racing speed, then `L` tapped twice inside the `0.25 s` window. Symmetric about the centre line apart from the two taps, so it is decidable against a control that drops them - measured at **11.7 units of leftward displacement** for **1.2 units** of extra path. Not captured from the original yet; see `docs/ghidra/functions/psp-pulse/input-bindings.md` for the recipe |
+| `sideshift-double-tap.inputs` | **The veteran sideshift**: 180 ticks to reach racing speed, then `L` tapped twice inside the `0.25 s` window. Symmetric about the centre line apart from the two taps, so it is decidable against a control that drops them - measured at **11.7 units of leftward displacement** for **1.2 units** of extra path. Not captured from the original yet; see `docs/ghidra/functions/psp-pulse-usa/input-bindings.md` for the recipe |
 | `sideshift-flick.inputs` | **The novice sideshift**, and it needs `--scheme novice`. Holds the sideshift button with the stick already over (which must fire nothing), centres to arm, then flicks. Its control is *the same file under `--scheme veteran`*, where the held button is one airbrake tap and no shift fires - so the steering is identical by construction. The two agree to the printed precision through tick 200 and are **4.0 units apart at tick 210**, inside the shift's own `0.2 s`. Also uncaptured |
 | `talons-junction-time-trial-lap.inputs` | **3,146 ticks: one completed lap of Talon's Junction White.** Not hand-authored - see below, and note it no longer flies clean open-loop |
 
@@ -697,13 +697,13 @@ angular velocity it damps.
 
 **Its sign and its frame are both open**, and the raw value is what is recorded:
 
-- *Sign.* [`craft-update.md`](../ghidra/functions/ps2-pulse/craft-update.md)
+- *Sign.* [`craft-update.md`](../ghidra/functions/ps2-pulse-eu/craft-update.md)
   derives `w_game = -w_physics` on three independent legs. That is a result about
   the accumulators; that the stored velocity carries the same convention is the
   obvious reading and not a measured one.
 - *Frame.* The same page names the field `angularVelocityLocal` and then lists
   which frame it is expressed in as unresolved;
-  [`engine.md`](../ghidra/functions/psp-pulse/engine.md) caps the local/world
+  [`engine.md`](../ghidra/functions/psp-pulse-usa/engine.md) caps the local/world
   split of the angular accumulators at confidence 74.
 
 Two binary questions, so `--angular` takes four values: `negated-local` (the
@@ -943,7 +943,7 @@ position against 423 - which is the switch doing its job.
 **Neither speed column is the velocity's length.** `speed_cached` on the craft is
 **the previous tick's `dot(velocity, forward)`** - the forward-projected speed -
 which is what
-[`engine.md`](../ghidra/functions/psp-pulse/engine.md#the-cached-speed-and-its-staleness-measured)
+[`engine.md`](../ghidra/functions/psp-pulse-usa/engine.md#the-cached-speed-and-its-staleness-measured)
 already had at confidence 95 and what a shorter pass here wrongly recorded as a
 stale magnitude. This capture corroborates the page and tightens it: over 200
 ticks the residual is a mean of 3.3e-6 and a max of 9.7e-6, which at a speed of
@@ -1223,14 +1223,14 @@ contact geometry, two were trajectory.
 on record.** `Ship_InitCraft` (`0x08841360`-`0x0884139c`) scales `<Misc width
 height length>` by the same `0.75` global the hover target height uses
 (`hover::TARGET_GLOBAL_SCALE`, `0x08ab0e1c`) before building the ship's box
-collider - `docs/ghidra/functions/psp-pulse/collision.md#the-dimensions-feeding-the-collider-are-scaled-not-the-authored-misc-values`
+collider - `docs/ghidra/functions/psp-pulse-usa/collision.md#the-dimensions-feeding-the-collider-are-scaled-not-the-authored-misc-values`
 has the full argument trace, which also settles `hull_sample_points`'
 axis-to-dimension mapping (confidence **88 -> 95**: `Body_SetBoxInertia`'s
 literal box is square in `x` and `z` and could never distinguish width from
 length; the argument order into `Body_SetBoxDimensions` does).
 `crates/physics/src/wall.rs::hull_sample_points`/`hull_extent` never applied
 that scale, so the hull box was a third larger in every dimension than the
-original's - and `docs/ghidra/functions/psp-pulse/rigid-body.md` had already
+original's - and `docs/ghidra/functions/psp-pulse-usa/rigid-body.md` had already
 noted the same `0.75` scale in passing, two days earlier, while establishing
 that the inertia tensor is a code literal. It just never reached the collision
 code; see HANDOVER's working rules on sibling-doc staleness.

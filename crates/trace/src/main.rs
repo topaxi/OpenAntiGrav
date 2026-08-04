@@ -175,7 +175,7 @@ enum Command {
         /// rather than tapping them and never centres the stick while holding
         /// one, so neither gesture ever fires. The flag is here for the day a
         /// capture of a *sideshift* exists, which is what
-        /// `docs/ghidra/functions/psp-pulse/input-bindings.md` gives the recipe
+        /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md` gives the recipe
         /// for.
         #[arg(long, default_value_t = ControlScheme::default())]
         scheme: ControlScheme,
@@ -251,7 +251,7 @@ enum Command {
         /// Only the sideshift gesture differs, so a scenario that never asks for
         /// one runs identically under either. `novice` is what makes a
         /// hold-and-flick scenario mean anything. See
-        /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+        /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
         #[arg(long, default_value_t = ControlScheme::default())]
         scheme: ControlScheme,
     },

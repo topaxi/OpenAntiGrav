@@ -5,7 +5,7 @@ Functions in `SCES_547.48` (Wipeout Pulse, PS2, SCES-54748), image base
 
 Unlike the PSP build, whose library calls go through NID-hashed import stubs
 resolved by [`scripts/resolve-psp-imports.py`](../../../../scripts/resolve-psp-imports.py)
-(see [psp-pulse/imports.md](../psp-pulse/imports.md)), the PS2 executable is
+(see [psp-pulse-usa/imports.md](../psp-pulse-usa/imports.md)), the PS2 executable is
 statically linked: the C library is compiled in and indistinguishable from game
 code until it is identified by shape. These are the few routines that had to be
 identified to read the subsystems documented in this directory, and they keep

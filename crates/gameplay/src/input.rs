@@ -5,7 +5,7 @@
 //! (`0x0894eec4`) translates hardware bits into its own layout and everything
 //! after that refers to **bit indices**, not masks, with `Input_ParseButtonName`
 //! (`0x0894f2a0`) mapping the names the front-end XML uses. See
-//! `docs/ghidra/functions/psp-pulse/input.md`.
+//! `docs/ghidra/functions/psp-pulse-usa/input.md`.
 //!
 //! The indirection is worth keeping rather than flattening: `activate` is cross
 //! and `cancel` is circle *by convention*, so this layer is where a region

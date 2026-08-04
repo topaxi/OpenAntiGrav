@@ -168,7 +168,7 @@ pub struct Options {
     /// that does not tap `l`/`r` or hold the sideshift button runs identically
     /// under either. It is a field rather than a constant because a *gesture*
     /// scenario is only meaningful under the scheme that has that gesture - see
-    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub scheme: ControlScheme,
     /// Put the ship back on the recording's own state every this many ticks.
     ///
@@ -461,7 +461,7 @@ pub struct DriveOptions {
     /// that does not tap `l`/`r` or hold the sideshift button runs identically
     /// under either. It is a field rather than a constant because a *gesture*
     /// scenario is only meaningful under the scheme that has that gesture - see
-    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub scheme: ControlScheme,
 }
 
@@ -1083,7 +1083,7 @@ mod tests {
 
     /// The recorded yaw rate the captures show with the stick held over, and the
     /// signal the angular-velocity column was added to compare against:
-    /// `+1.51 rad/s`, `docs/ghidra/functions/psp-pulse/engine.md`.
+    /// `+1.51 rad/s`, `docs/ghidra/functions/psp-pulse-usa/engine.md`.
     const RECORDED_YAW_RATE: f32 = 1.51;
 
     /// Tick 0 is an initial condition, not a measurement - the same thing that is

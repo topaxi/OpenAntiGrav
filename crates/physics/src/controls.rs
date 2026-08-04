@@ -5,7 +5,7 @@
 //! at rates from the parameter set. Three of the five ramps are live. The
 //! throttle's is not: see [`crate::params::Engine::falloff`].
 //!
-//! Evidence: `docs/ghidra/functions/psp-pulse/engine.md`, sections "Engine",
+//! Evidence: `docs/ghidra/functions/psp-pulse-usa/engine.md`, sections "Engine",
 //! "Brakes" and "Steering".
 
 use crate::params::Handling;

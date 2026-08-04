@@ -187,7 +187,7 @@ pub struct ShipControls {
     /// While it is, the steering axis returning inside
     /// [`crate::airbrake::SIDESHIFT_FLICK_THRESHOLD`] arms a flick and crossing
     /// back out of it fires one. See
-    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub shift_modifier: bool,
     /// The veteran scheme's left airbrake (`OPT_CTRL_LAB`, action 5) was
     /// **pressed** this tick - an edge, not a level.
@@ -254,7 +254,7 @@ pub struct ShipState {
     /// suppressed: a struck ship coasts and slides. `Ship_UpdateEngine` returns from
     /// its prologue without writing to either accumulator, and
     /// `Ship_ApplyLateralGrip` returns after decrementing this. See
-    /// `docs/ghidra/functions/psp-pulse/engine.md`, "The engine has an early return
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The engine has an early return
     /// that produces no thrust at all"; confidence 88 on the gate, 85 on reading the
     /// field as a collision stun.
     ///
@@ -303,7 +303,7 @@ pub struct ShipState {
     /// engine, the brakes, quadratic drag, gravity and pitch all see the *previous*
     /// frame's groundedness, while lateral grip and the weathervane torque - which
     /// run after hover - see this frame's. Confidence 84; see
-    /// `docs/ghidra/functions/psp-pulse/engine.md`. The obvious reimplementation,
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`. The obvious reimplementation,
     /// resolving contacts and then applying forces, gets a different answer on
     /// every takeoff and landing frame in five terms at once.
     pub grounded_prev: f32,
@@ -314,7 +314,7 @@ pub struct ShipState {
     /// down by `dt`, and drives one craft flag from each - so both can run at once
     /// and the two forces then cancel. Recovered from
     /// `Ship_UpdateSideshiftInput_q` (`0x08846a54`); see
-    /// `docs/ghidra/functions/psp-pulse/engine.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
     pub sideshift_timers: [f32; 2],
     /// Seconds left on each side's double-tap window, left then right.
     ///
@@ -322,7 +322,7 @@ pub struct ShipState {
     /// airbrake opens its side's window at
     /// [`crate::airbrake::SIDESHIFT_TAP_WINDOW`]; a second press while the
     /// window is still open fires the shift instead of reopening it. Veteran
-    /// scheme only. See `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    /// scheme only. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub shift_tap_windows: [f32; 2],
     /// Whether a novice-scheme flick is armed (`entity+0x860 & 0x400`).
     ///

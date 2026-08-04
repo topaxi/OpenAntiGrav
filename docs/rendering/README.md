@@ -29,23 +29,23 @@
 - Environment: `Skycube` (**done** - the payload is a `Mesh` payload, recovered in
   [`skycube.md`](../formats/skycube.md) and drawn camera-centred and out of depth
   by `oag_render::mesh::build_sky`). `fogCube` is **done** too - the runtime is
-  recovered in [`fog.md`](../ghidra/functions/psp-pulse/fog.md) and applied by
+  recovered in [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) and applied by
   `oag_formats::fog` plus `mesh.wgsl`'s own bind group. The cloud and sea classes
   are not implemented
 - Particle effects: thrust (**done** - the `Engine Flare` class plus its
   `Trail` ribbon and the `<Team>boost.vex` plume a speed pad reveals, all
-  recovered in [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md) and
+  recovered in [`exhaust.md`](../ghidra/functions/psp-pulse-usa/exhaust.md) and
   implemented in `oag_render::exhaust` and `oag_game::race::Loaded::boost_model`.
   The plume's mesh batches draw with `exhaust::TRAIL_BLEND`, not the flare's
   own `exhaust::BLEND` - they take the ordinary mesh draw path's pure-additive
   blend branch, the same equation the ribbon already uses, not the flare's
   alpha-weighted one; see
-  [`mesh-draw.md`](../ghidra/functions/psp-pulse/mesh-draw.md))
+  [`mesh-draw.md`](../ghidra/functions/psp-pulse-usa/mesh-draw.md))
   and collision sparks (**done**, `oag_render::sparks` -
   currently **authored, not recovered**: the actual spark-spawn trigger,
   `ShipCollisionFx_Trigger`, has since been found and read in full, naming
   the three real spark resources and a usable severity formula - see
-  [contact-response.md](../ghidra/functions/psp-pulse/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
+  [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
   and the open thread on `HANDOVER.md` for whether `oag_render::sparks` gets
   retuned against it), then the general `ParticleSystem`
   `0x3c4` and weapon effects. The weapon effects are M5's, being

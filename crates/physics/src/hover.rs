@@ -17,7 +17,7 @@
 //!   the height where the spring is zero the damping is zero too.
 //! - **The reach is the spring's own target, and the target comes from
 //!   `ride_height`.** `docs/physics/README.md` said `ride_height` "never appears
-//!   in the force law"; `docs/ghidra/functions/psp-pulse/engine.md` traced the
+//!   in the force law"; `docs/ghidra/functions/psp-pulse-usa/engine.md` traced the
 //!   offset chain from the parser through `craft+0x70` and `craft+0x2f0` into the
 //!   spring, and `Ship_CastHoverProbes` ends its ray at
 //!   `probe - up * craft+0x2f0`. So the probes reach exactly as far as the height
@@ -147,7 +147,7 @@ pub const LEAP_ADJUST_MAX: f32 = 4.0;
 /// ```
 ///
 /// **`ride_height` is the primary term.** `docs/physics/README.md` said it "never
-/// appears in the force law"; `docs/ghidra/functions/psp-pulse/engine.md` traced the
+/// appears in the force law"; `docs/ghidra/functions/psp-pulse-usa/engine.md` traced the
 /// chain - the parser stores it at `+0x94`, `craft+0x70` points at it,
 /// `Ship_UpdateCraft` builds `craft+0x2f0` from it, and `Ship_HoverTwoPoint` springs
 /// against that - at confidence 88. It is still *also* the raycast length, so a ship
@@ -248,7 +248,7 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// a negative coefficient on a cross product that must be positive for the behaviour
 /// the same evidence page describes - and two independent transcription errors of one
 /// shape is a poor explanation where a systematic frame difference is a good one.
-/// `docs/ghidra/functions/psp-pulse/engine.md` lists handedness as not determined. If
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` lists handedness as not determined. If
 /// that is what this is, the original's expression is correct as written *in its own
 /// frame*, nothing is a typo, and this crate is simply obliged to flip every cross
 /// product it inherits from that path. Which is a prediction, and a cheap one to
@@ -403,7 +403,7 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// accumulator, at `0x0884ad24`. **Every element of what this module implements
 /// is what the binary has**, at confidence 92, so the crate's under-damped pitch
 /// is not this term and no change to it can be the fix. See
-/// `docs/ghidra/functions/psp-pulse/engine.md`, "The alignment torque: the
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The alignment torque: the
 /// projection is real", and `docs/physics/angular-velocity-column.md` for where
 /// the ringing actually comes from.
 ///
@@ -445,7 +445,7 @@ pub const ALIGNMENT_GAIN: f32 = 400.0;
 /// The bank-to-yaw coupling gain, grounded only.
 ///
 /// `angularLocal.y += 30 * right.y * (1 - magLockBlend)`. The magstrip factor comes
-/// from `docs/ghidra/functions/psp-pulse/engine.md`'s per-component enumeration of
+/// from `docs/ghidra/functions/psp-pulse-usa/engine.md`'s per-component enumeration of
 /// the hover epilogue's writes; `docs/physics/README.md` records the term without it.
 pub const BANK_TO_YAW_GAIN: f32 = 30.0;
 
@@ -482,7 +482,7 @@ pub const BANK_TO_YAW_GAIN: f32 = 30.0;
 /// Confidence **92** on the PSP instructions, and it has a second binary: the PS2
 /// build's four-corner twin computes `-track_gravity * mass` along the same
 /// averaged normal through a different base pointer
-/// ([ps2-pulse/craft-update.md](../../../docs/ghidra/functions/ps2-pulse/craft-update.md)).
+/// ([ps2-pulse-eu/craft-update.md](../../../docs/ghidra/functions/ps2-pulse-eu/craft-update.md)).
 /// So the coefficient is `1.0` - there is no scale - and this constant exists
 /// only to keep the name the rest of the tree refers to.
 ///
@@ -609,7 +609,7 @@ pub const PROBE_HALF_SPACING_RAW: f32 = 6.0;
 /// (`0x08849354`) writes `(0, -1.5, +/-6)` as immediates and scales both by the
 /// same `0.75` global that [`TARGET_GLOBAL_SCALE`] is, in the ship-entity
 /// constructor that calls it. Confidence 92; see
-/// `docs/ghidra/functions/psp-pulse/engine.md`, "The probe geometry is a code
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The probe geometry is a code
 /// literal, like the inertia tensor". No handling parameter enters it, so the
 /// old `<Misc length>`-derived `+/-6.5` was deriving the spacing from the wrong
 /// thing whatever factor it picked - the hull dimensions go to the *collider*,
@@ -729,7 +729,7 @@ pub fn probe<R: Raycaster + ?Sized>(
     // convention, so `basis * (r x -omega)` is `basis * (omega x r)` - the
     // conventional form, which is what this line computes. The recorded sign and
     // the recorded frame cancel. See
-    // `docs/ghidra/functions/psp-pulse/engine.md`, "The damper's point velocity
+    // `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The damper's point velocity
     // is the conventional `omega x r`".
     let velocity = body.velocity_at(point);
     let normal_velocity = velocity.dot(hit.normal);
@@ -1394,7 +1394,7 @@ mod tests {
     }
 
     /// `ride_height` is the primary term of the hover target, which is the correction
-    /// `docs/ghidra/functions/psp-pulse/engine.md` made to `docs/physics/README.md` -
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md` made to `docs/physics/README.md` -
     /// and, since the `craft+0x74` offset was dropped, the *only* term.
     ///
     /// `antigrav_height_adjust` is left set in the fixture deliberately: the assertion

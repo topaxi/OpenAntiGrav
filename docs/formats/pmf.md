@@ -62,7 +62,7 @@ many bytes of optional fields.
 Video comes out as **H.264 in Annex B form**, Main profile: the intro's first
 NAL units are an access unit delimiter then an SPS with `profile_idc` 77 and
 `level_idc` 21. Audio is ATRAC3+, which `sceMpegAtracDecode` handles on hardware;
-see [frontend video](../ghidra/functions/psp-pulse/frontend-video.md).
+see [frontend video](../ghidra/functions/psp-pulse-usa/frontend-video.md).
 
 ## What pins the layout down
 
@@ -137,7 +137,7 @@ byte-identically on *Wipeout Pure*'s USA disc, so the disc's region cannot be
 what picks one, and the mechanism is unread. Nor is it settled what plays them
 at all - the state whose counters they fit is never entered during boot. See
 [frontend boot](../architecture/frontend-boot.md#the-devpub-reel) and
-[frontend video](../ghidra/functions/psp-pulse/frontend-video.md).
+[frontend video](../ghidra/functions/psp-pulse-usa/frontend-video.md).
 
 ## Not determined
 

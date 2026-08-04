@@ -316,7 +316,7 @@ ELF program headers.
 the state machine, and the machine's current state name is an inline character
 buffer at `+0x18c`. Reading it every second is a text-mode view of the front end,
 which is what makes blind navigation practical. See
-[main-loop.md](../ghidra/functions/psp-pulse/main-loop.md) for the corrected
+[main-loop.md](../ghidra/functions/psp-pulse-usa/main-loop.md) for the corrected
 layout and the state names observed at runtime.
 
 ## Walking the menus without a human

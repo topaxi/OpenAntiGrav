@@ -189,7 +189,7 @@ pub fn load(options: &Options) -> Result<Boot> {
 /// `Data\Movies\Backdrop.PMF`, and a cold boot under PPSSPP with
 /// `MoviePlayer_Open` armed from reset opens exactly two movies in ten minutes:
 /// the intro, and this. See [`DEFAULT_BOOT_MOVIE`] and
-/// `docs/ghidra/functions/psp-pulse/frontend-video.md`. Our menu tree is ours;
+/// `docs/ghidra/functions/psp-pulse-usa/frontend-video.md`. Our menu tree is ours;
 /// what it sits on is the disc's.
 ///
 /// Three differences from [`load_movie`], each of which is why this is its own
@@ -497,7 +497,7 @@ pub fn load_strings(
 /// the latter being the looping backdrop of the `FE Screen` that comes after.
 ///
 /// See `docs/architecture/frontend-boot.md` and
-/// `docs/ghidra/functions/psp-pulse/frontend-video.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/frontend-video.md`.
 pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
 
 /// What `--reel` defaults to: the European cut of the dev/pub reel.

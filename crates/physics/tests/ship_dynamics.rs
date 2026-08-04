@@ -898,7 +898,7 @@ fn a_sideshift_is_a_grounded_force_that_lasts_its_own_timer() {
 ///
 /// The test that used to live here asserted an inverted ship stayed on its ceiling. It
 /// was asserting behaviour the recovered force law does not have, and
-/// `docs/ghidra/functions/psp-pulse/engine.md` is what showed that: the inline gravity
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` is what showed that: the inline gravity
 /// term writes **world `.y` only**, `track_gravity` reaches the force law solely through
 /// the hover spring's *magnitude*, and the hover spring always pushes the ship *away*
 /// from the surface it found. So nothing in what has been recovered pulls a ship toward

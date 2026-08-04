@@ -17,7 +17,7 @@
 //!
 //! The schema is documented in `docs/formats/handling-stats.md`; how each field
 //! is consumed is in `docs/physics/README.md` and
-//! `docs/ghidra/functions/psp-pulse/engine.md`, which is the authority where the
+//! `docs/ghidra/functions/psp-pulse-usa/engine.md`, which is the authority where the
 //! two disagree. Per `docs/architecture/adr/0006-no-copyrighted-content.md` no
 //! values are reproduced here or anywhere else in the repository.
 //!
@@ -46,7 +46,7 @@
 /// Engine response. `<Engine accelcap amount falloff gain turbo/>`.
 ///
 /// Offsets `0xb8..0xcc` of the class block; see
-/// `docs/ghidra/functions/psp-pulse/engine.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Engine {
     /// Base of the thrust ceiling: `cap = 0.5 * speed + accelcap`.
@@ -151,7 +151,7 @@ pub struct Antigrav {
     /// hover spring's target height**.
     ///
     /// `docs/physics/README.md` originally said this "never appears in the force
-    /// law". `docs/ghidra/functions/psp-pulse/engine.md` traced the offset chain and
+    /// law". `docs/ghidra/functions/psp-pulse-usa/engine.md` traced the offset chain and
     /// showed otherwise, at confidence 88: the parser stores it at `+0x94`,
     /// `craft+0x70` points at it, and `Ship_UpdateCraft` builds the spring target
     /// `craft+0x2f0` from it. See [`crate::hover::target_height`].
@@ -168,7 +168,7 @@ pub struct Physical {
     /// **Every force term in the original reads the mass at `body+0x374` instead**,
     /// and how the two relate was not traced. This crate reads this field for the
     /// hover spring, per `docs/physics/README.md`, and [`crate::ship::Body::mass`]
-    /// for gravity, per `docs/ghidra/functions/psp-pulse/engine.md`. Keeping the two
+    /// for gravity, per `docs/ghidra/functions/psp-pulse-usa/engine.md`. Keeping the two
     /// equal is the integration layer's job.
     pub mass: f32,
     /// Gravity along world down while grounded, additionally scaled by the

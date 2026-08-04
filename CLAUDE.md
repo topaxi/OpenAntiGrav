@@ -171,7 +171,7 @@ Consequences that affect how you name and touch things in Ghidra / decompiled co
 - Every rename needs a doc page under `docs/ghidra/functions/<binary>/` (address, purpose,
   args, confidence, evidence) - the docs are authoritative if they and the Ghidra database
   ever disagree. See [ADR-0005](docs/architecture/adr/0005-ghidra-conventions.md).
-- **Every name you recover also goes in `docs/ghidra/functions/psp-pulse/names.tsv`, in the
+- **Every name you recover also goes in `docs/ghidra/functions/psp-pulse-usa/names.tsv`, in the
   same change that recovers it.** The Ghidra project is not committed, so a fresh import
   starts at `FUN_08940d0c` again; that file is the only thing that makes the database
   reproducible from the repository, and `just apply-names` replays it. Rows are

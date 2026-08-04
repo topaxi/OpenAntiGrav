@@ -178,7 +178,7 @@ def main():
         "breakpoint every tick - two live breakpoints cannot coexist, only the "
         "most recently added one fires. The node's stored position is the "
         "negated eye and is negated back here, so cam_pos_* is a world "
-        "position like pos_*. See docs/ghidra/functions/psp-pulse/camera.md.",
+        "position like pos_*. See docs/ghidra/functions/psp-pulse-usa/camera.md.",
     )
     parser.add_argument(
         "--shot-every",

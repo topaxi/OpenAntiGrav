@@ -11,7 +11,7 @@ the address book.
 underscore in it.)
 """
 
-# Ship_UpdateCraft, docs/ghidra/functions/psp-pulse/engine.md. **The craft is a0
+# Ship_UpdateCraft, docs/ghidra/functions/psp-pulse-usa/engine.md. **The craft is a0
 # and the body is a1**, not a1/a2 as that page's signature says: at a breakpoint
 # on entry, `craft+0x1cc` holds exactly the value in a1, dt at `craft+0x1c8`
 # reads as a plausible frame time and `grounded` at `craft+0x2b0` as 1.0, while
@@ -100,7 +100,7 @@ BODY_FIELDS = [
 ]
 
 # The player camera, captured only under `psp-trace.py --camera`. Method from
-# docs/ghidra/functions/psp-pulse/camera.md: break at 0x0883c13c inside
+# docs/ghidra/functions/psp-pulse-usa/camera.md: break at 0x0883c13c inside
 # Camera_UpdatePlayerView (0x0883c0cc), read s7, and the camera node is
 # *(s7 + 0x3c) - a 4x4 with rows at +0x00/+0x10/+0x20. Its +0x30 holds the
 # **negated** eye position; the capture negates it back at write time, so the

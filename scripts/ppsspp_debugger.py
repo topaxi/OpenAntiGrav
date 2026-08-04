@@ -23,7 +23,7 @@ from websocket import create_connection
 
 PSP_CLOCK_HZ = 222_000_000
 
-# Set by `Game_Bootstrap`; see docs/ghidra/functions/psp-pulse/main-loop.md.
+# Set by `Game_Bootstrap`; see docs/ghidra/functions/psp-pulse-usa/main-loop.md.
 # The address holds a *pointer* to the state machine, not the machine itself.
 G_STATE_MACHINE = 0x08B31784
 STATE_NAME_OFFSET = 0x18C

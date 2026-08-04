@@ -136,7 +136,7 @@ Two findings a loader has to handle:
   interpolation across the volume's local Z**, so colour, near and far all slide
   as the camera moves through the box - identical sets mean uniform fog, differing
   sets mean graded fog. Recovered from `FogCube_Sample` (`0x089069b0`); see
-  [`fog.md`](../ghidra/functions/psp-pulse/fog.md).
+  [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md).
 
 ## What this engine does with it
 
@@ -177,7 +177,7 @@ that would be needed to fix it; recorded rather than silently accepted.
 - **Neither handler is recovered.** No address, no method table. The route is the
   46 `Vex_RegisterClass` (`0x08908eb8`) call sites, alphabetical by class name
   with method tables `0x88` apart - see [`vex.md`](vex.md) and
-  [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md). Note that
+  [`exhaust.md`](../ghidra/functions/psp-pulse-usa/exhaust.md). Note that
   `engine_fire`, `exitglow` and `gate` have no registration site yet are
   authored, so `Skycube` may have none either.
 - **The GE state the original draws the sky with** - depth func, depth range,
@@ -197,7 +197,7 @@ that would be needed to fix it; recorded rather than silently accepted.
 - ~~The fog curve.~~ **Resolved.** The GE ramp is linear within a frame, and its
   parameters are re-interpolated every frame from where the camera sits in the fog
   volume. A linear ramp is correct and must not be "fixed" into a curve. See
-  [`fog.md`](../ghidra/functions/psp-pulse/fog.md).
+  [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md).
 - **`cloudCube` `0x3d8`, `cloudGroup` `0x3d9`, `weatherPos` `0x3da`.** Present in
   the census - `05_Track` alone authors 5 clouds and 3 cloud groups, and
   `weatherPos` runs 1 to 21 per track with a zero-length payload - and undecoded.

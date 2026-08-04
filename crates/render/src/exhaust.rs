@@ -2,7 +2,7 @@
 //!
 //! Recovered at instruction level from the PSP executable's `Engine Flare` node
 //! class (`0x3bf`). The evidence, the addresses and a confidence score per claim
-//! are in `docs/ghidra/functions/psp-pulse/exhaust.md`; this module implements
+//! are in `docs/ghidra/functions/psp-pulse-usa/exhaust.md`; this module implements
 //! what that page describes and cites it rather than restating it.
 //!
 //! # What the original does, in one paragraph

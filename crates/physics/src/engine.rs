@@ -1,6 +1,6 @@
 //! Engine, brakes, steering and pitch: the control force law.
 //!
-//! All four are transcribed from `docs/ghidra/functions/psp-pulse/engine.md`, which
+//! All four are transcribed from `docs/ghidra/functions/psp-pulse-usa/engine.md`, which
 //! read them out of `BOOT.BIN`. Nothing here is runtime-verified; the page caps
 //! itself at 84 for exactly that reason.
 //!
@@ -36,7 +36,7 @@ use crate::ship::{ShipControls, ShipState};
 /// `T = T * craft+0x294 * 2.0`, unconditionally, at the end of
 /// `Ship_UpdateEngine`. **`craft+0x294` is now recovered**, and it is the
 /// start-line boost multiplier rather than a hidden global gain - see
-/// `docs/ghidra/functions/psp-pulse/engine.md`, "The two engine multipliers are
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The two engine multipliers are
 /// recovered". Three writers agree it is `1.0` outside the start-line window:
 /// the craft constructor `Ship_InitCraft` (`0x08849354`), the per-race reset
 /// `Race_ResetCraftBoosts_q` (`0x088271b4`), and `Ship_UpdateStartBoost`
@@ -308,7 +308,7 @@ impl EngineForce {
         // so a positive thrust pushes along the craft's forward axis. This crate's
         // body forward is `-Z` (see `Body::forward`), which is where the negation
         // comes from; it is a convention difference, not a sign finding. Handedness
-        // itself is no longer open - `docs/ghidra/functions/psp-pulse/engine.md`
+        // itself is no longer open - `docs/ghidra/functions/psp-pulse-usa/engine.md`
         // measured the original's basis as positively oriented under the ordinary
         // cross product, the same arithmetic this crate uses - but that measurement
         // says nothing about this particular row-to-axis mapping.
@@ -460,7 +460,7 @@ pub fn brakes(state: &ShipState, handling: &Handling) -> Vec3 {
 ///
 /// # Why the literal `steer * Turning.amount` is negated here
 ///
-/// `docs/ghidra/functions/psp-pulse/engine.md` ("The basis is positively
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` ("The basis is positively
 /// oriented, and row 0 points left") measured this off a running race: holding
 /// right yaws at a mean `-1.42 rad/s` about the up axis, holding left `+1.51
 /// rad/s`, mirror-symmetric in both sign and magnitude. The measured law is
@@ -862,7 +862,7 @@ mod tests {
     /// convention needs a **negative** `local_angular.y` contribution - see the
     /// weathervane direction test in `crate::passive` for the same identity
     /// applied to a different term, and the measured law in
-    /// `docs/ghidra/functions/psp-pulse/engine.md` this pins against. A test that
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md` this pins against. A test that
     /// only checked `right == -left` would pass whether or not the whole thing
     /// were inverted, which is exactly the bug this pins.
     #[test]

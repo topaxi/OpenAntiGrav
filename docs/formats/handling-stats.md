@@ -96,7 +96,7 @@ attribute the table lists has a typed field:
 The camera rows were 60 until the five blocks were traced through the loader and
 read back out of a running race; what they mean, which of them a player can
 select, and the sign convention of the two `ExternalCamera` blocks are all in
-[camera.md](../ghidra/functions/psp-pulse/camera.md). Note the finding there that
+[camera.md](../ghidra/functions/psp-pulse-usa/camera.md). Note the finding there that
 `<BackwardCamera headtilt>` is parsed by the file's own schema and then **not
 stored**, and that `<AirbrakeGraphics amount>` is converted to radians at load,
 which the Units section below does not yet cover.
@@ -158,8 +158,8 @@ as `1.53`. Same defect, opposite-looking answers depending on where the `.` is.
 There is no error and no clamp.
 
 This is confirmed on **both** builds - `Xml_AttributeAsFloat` at `0x0895379c`
-on the [PSP](../ghidra/functions/psp-pulse/xml-reader.md) and `0x00203868` on
-the [PS2](../ghidra/functions/ps2-pulse/xml-reader.md) - and on the PSP every
+on the [PSP](../ghidra/functions/psp-pulse-usa/xml-reader.md) and `0x00203868` on
+the [PS2](../ghidra/functions/ps2-pulse-eu/xml-reader.md) - and on the PSP every
 `HandlingXml_Parse*` function calls it directly, so it is not something a
 future build might have fixed. A correct `strtod`-based accessor exists in the
 same parser, but nothing in this file goes through it.
@@ -212,12 +212,12 @@ other two.
 Three things follow, and they are why this element is worth its own section.
 
 **`weight_distribution` is the scalar the PSP's `Ship_UpdatePitch` reads.**
-[psp-pulse/engine.md](../ghidra/functions/psp-pulse/engine.md) recorded
+[psp-pulse-usa/engine.md](../ghidra/functions/psp-pulse-usa/engine.md) recorded
 `stats_base + 0x90` as "a per-team scalar outside every class block; its element
 is not determined" - it is this one, and it is the only stats-base field that page
 named without an element. The PS2 `Ship_UpdatePitch` reads the same offset through
 the stats pointer at `craft+0x8c`; see
-[ps2-pulse/craft-update.md](../ghidra/functions/ps2-pulse/craft-update.md).
+[ps2-pulse-eu/craft-update.md](../ghidra/functions/ps2-pulse-eu/craft-update.md).
 
 **The stats base is now accounted for with no gap.** `<Misc>` fills `0x78`
 through `0x90`, which is exactly the range between `AirbrakeGraphics`
@@ -231,7 +231,7 @@ Confidence **88**, up from the 80 this page gave `<Misc>` on the strength of its
 attribute names alone. It is a direct read of the writing parser, corroborated by
 `Ship_UpdatePitch` consuming `0x90` on both platforms, and capped below 95 because
 nothing has been observed loading a file at runtime. Full reading and addresses:
-[ps2-pulse/handling-xml.md](../ghidra/functions/ps2-pulse/handling-xml.md#what-the-ps2-answers-that-the-psp-page-left-open).
+[ps2-pulse-eu/handling-xml.md](../ghidra/functions/ps2-pulse-eu/handling-xml.md#what-the-ps2-answers-that-the-psp-page-left-open).
 
 **One caveat, narrower than it was.** The PS2 page flags that the *PSP binary*
 was not re-checked for a `<Misc>` parser, leaving open whether the element is
@@ -382,7 +382,7 @@ through `Xml_AttributeAsFloat` into the per-class tables at `0x08b36bc0`
 (`amount`) and `0x08b36bd0` (`time`) **verbatim, with no load-time scale** -
 unlike the five in `oag_gameplay::handling::SCALED_FIELDS`.
 The rest is named in
-[engine.md](../ghidra/functions/psp-pulse/engine.md) and can be added when
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md) and can be added when
 something needs it. Values are read at runtime from the player's own disc and are
 not reproduced here, for the reason the next section up gives.
 
@@ -422,7 +422,7 @@ The two class-block offsets are not this page's guess either:
 `mass` to `+0xf4`, `normal_gravity` to `+0xf8` and `track_gravity` to `+0x100`,
 with a `0x80` stride per class that matches the `sll a0, a0, 0x7` at the gravity
 site. That independently confirms the `Physical` row in
-[engine.md](../ghidra/functions/psp-pulse/engine.md), which recorded the same
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md), which recorded the same
 four offsets, and confirms `track_gravity` takes no part in gravity at all.
 
 Whether "airborne" describes an intent the code does not implement, or a rename
@@ -494,7 +494,7 @@ Located alongside, same naming pattern, not yet decoded:
   radians by `HandlingXml_ParseAirbrakeGraphics` (`0x08839c68`) at load. That is
   a fact about the unit and not about any team's value, so it belongs here.
   Confidence 92; see
-  [camera.md](../ghidra/functions/psp-pulse/camera.md), which found it while
+  [camera.md](../ghidra/functions/psp-pulse-usa/camera.md), which found it while
   mapping the camera block the parameter sits immediately after.
 - **Camera semantics.** Every camera attribute parses, but the meanings in the
   table above are read off the names, not off the rendering code. Confidence 60.

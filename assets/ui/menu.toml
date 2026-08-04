@@ -492,7 +492,7 @@ button = "r"
 # and the reason the bindings above differ between the two - veteran spends both
 # shoulders on the separate airbrakes, novice gives one of them to the sideshift
 # and puts both airbrakes on the other. See
-# `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+# `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 #
 # The values are the binary's own tokens, not labels this project chose, so a
 # `custom` third value is deliberately absent: in the original that is a

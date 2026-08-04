@@ -739,7 +739,7 @@ fn text_for(
         // Zone mode. The number and the score are the two widgets with a real
         // source; `Zone_Bar_*` is the mode's own graphic and nothing was found
         // that writes it, so it stays off the list. See
-        // `docs/ghidra/functions/psp-pulse/zone-mode.md`.
+        // `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`.
         //
         // Drawn from zone 1 onward: the counter is zero for the first ten
         // seconds of a run, and a HUD reading `ZONE 0` would be reporting a zone

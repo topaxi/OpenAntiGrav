@@ -5,7 +5,7 @@
 //! exact effect, `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB`, is decoded at the
 //! emitter level (`docs/formats/pob.md`), its runtime interpreter is traced
 //! function by function
-//! (`docs/ghidra/functions/psp-pulse/particle-system.md`), and the values
+//! (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`), and the values
 //! below were read out of the file's own bytes and corroborated live in
 //! PPSSPP during real wall hits. The asset is a **four-emitter tree**, and
 //! [`EMITTERS`] transcribes all four:
@@ -16,7 +16,7 @@
 //! 4. `WO_SHIP_COLL_SPARK_TRAIL` - lingering embers, 1 per tick for 32 ticks.
 //!
 //! The trigger side was already recovered: `ShipCollisionFx_Trigger`
-//! (`0x089246b4`, `docs/ghidra/functions/psp-pulse/contact-response.md`)
+//! (`0x089246b4`, `docs/ghidra/functions/psp-pulse-usa/contact-response.md`)
 //! computes `severity = intensity * 2.0 + 0.4` from the clamped contact
 //! intensity ([`SEVERITY_SCALE`], [`SEVERITY_SLOPE`], [`SEVERITY_FLOOR`]) and
 //! enforces [`COLLISION_COOLDOWN`]. What this pass added is what severity
@@ -139,7 +139,7 @@ pub enum Colour {
 /// How a particle is turned into geometry - the render-mode class from the
 /// blend table at `DAT_08ab2260`, indexed by `resource + 0xb8` and decoded
 /// in the billboard draw dispatch (`0x089186bc`,
-/// `docs/ghidra/functions/psp-pulse/particle-system.md`).
+/// `docs/ghidra/functions/psp-pulse-usa/particle-system.md`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Render {
     /// A camera-facing quad at one point - table mode `0x3`, drawn by the
@@ -292,7 +292,7 @@ pub const EMITTERS: [EmitterSpec; 4] = [
 /// Seconds a wall contact must persist before another burst is allowed.
 ///
 /// **Recovered.** `ShipCollisionFx_Trigger` (`0x089246b4`,
-/// `docs/ghidra/functions/psp-pulse/contact-response.md`) re-arms exactly
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`) re-arms exactly
 /// this long after every collision-variant spawn: `instance + 100 = now +
 /// 0.8`, checked on entry and skipped while still armed.
 pub const COLLISION_COOLDOWN: f32 = 0.8;
@@ -302,7 +302,7 @@ pub const COLLISION_COOLDOWN: f32 = 0.8;
 /// **Recovered - this is the exact literal `FUN_088418e0` uses**:
 /// `fVar21 = min(|impulse| * 0.0125, 1.0)`, the value
 /// `Ship_DispatchCollisionFx` and then `ShipCollisionFx_Trigger` receive as
-/// `intensity` (`docs/ghidra/functions/psp-pulse/contact-response.md`).
+/// `intensity` (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`).
 /// Confirmed by a live capture reading the real value at a real wall hit.
 /// This module's own input is `speed`, not the original's impulse
 /// magnitude, so the *scale* is still borrowed across a unit difference;

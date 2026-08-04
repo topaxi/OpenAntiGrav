@@ -946,7 +946,7 @@ mod tests {
 
     /// The recorded yaw rate the captures show when the stick is held over:
     /// `+1.51 rad/s` about row 1 on 199 of 199 ticks,
-    /// `docs/ghidra/functions/psp-pulse/engine.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
     const RECORDED_YAW_RATE: f32 = 1.51;
 
     /// What `YAW_INVERSE_INERTIA` stands in for: the recovered steering law is

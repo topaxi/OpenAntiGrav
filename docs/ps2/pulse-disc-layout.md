@@ -163,7 +163,7 @@ Two resolutions of each, 512 and 640 wide:
 
 **Both containers are picked between by one function, and it is the same one
 for both.**
-[`Movie_ResolveSourcePath`](../ghidra/functions/ps2-pulse/movie-paths.md)
+[`Movie_ResolveSourcePath`](../ghidra/functions/ps2-pulse-eu/movie-paths.md)
 (`0x0019b168`, confidence 90, formerly `FUN_0019b168`) rewrites a `Movie`
 widget's `src` in place: `Data\Movies\Intro.pss` becomes `Intro512.pss` or
 `Intro640.pss`, and `Data\Movies\Backdrop.ipf` becomes `bg512.ipf` or

@@ -13,10 +13,10 @@ camera-model difference and never an accumulation of physics divergence.
 What it has already settled, first: **the camera fov unit is degrees**
 (measured at the RMSE minimum of a sweep against the original's own frame,
 bounded to about two degrees -
-[camera.md](../ghidra/functions/psp-pulse/camera.md#the-fov-unit-is-degrees-measured-against-the-originals-own-frame)),
+[camera.md](../ghidra/functions/psp-pulse-usa/camera.md#the-fov-unit-is-degrees-measured-against-the-originals-own-frame)),
 and **the camera node stores its rotation transposed**, which the one-shot
 probe that discovered the node could not see
-([camera.md](../ghidra/functions/psp-pulse/camera.md#the-live-pose-is-capturable-per-tick-and-the-node-stores-it-transposed)).
+([camera.md](../ghidra/functions/psp-pulse-usa/camera.md#the-live-pose-is-capturable-per-tick-and-the-node-stores-it-transposed)).
 
 ## The pieces
 

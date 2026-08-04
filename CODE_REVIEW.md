@@ -9,7 +9,7 @@ drift.
 way: `crates/physics/src/wall.rs`,
 `crates/physics/tests/determinism.rs`,
 `crates/trace/tests/wall_contact_ground_truth.rs`,
-`docs/ghidra/functions/psp-pulse/collision.md` and that binary's `names.tsv`
+`docs/ghidra/functions/psp-pulse-usa/collision.md` and that binary's `names.tsv`
 picked up uncommitted edits partway through (204 insertions, 130 deletions),
 matching HANDOVER's "our hull meets the wall six ticks early" thread and its
 named next step of reading `Collider_BoxSamplePoints`. That work is **in flight

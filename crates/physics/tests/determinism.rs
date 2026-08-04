@@ -66,7 +66,7 @@ use oag_physics::{Environment, ShipState, step};
 ///   (`crates/physics/src/wall.rs`) now scale `<Misc>` hull dimensions by
 ///   `hover::TARGET_GLOBAL_SCALE` (`0.75`) before building the collision box,
 ///   matching `Ship_InitCraft`'s box-collider setup read at instruction level -
-///   see `docs/ghidra/functions/psp-pulse/collision.md`. Only the two
+///   see `docs/ghidra/functions/psp-pulse-usa/collision.md`. Only the two
 ///   3,600-tick hashes moved; the 600-tick `Corridor` entry is untouched
 ///   because that scenario never reaches a wall in 600 ticks, which is the
 ///   expected shape of a change scoped to contact geometry.
@@ -88,7 +88,7 @@ use oag_physics::{Environment, ShipState, step};
 ///   `shift_tap_windows`, `shift_armed` and `shift_lockout` for the two sideshift
 ///   gestures the original triggers on (`crates/physics/src/airbrake.rs`,
 ///   `advance_sideshift`; see
-///   `docs/ghidra/functions/psp-pulse/input-bindings.md`), so `probe::hash_state`
+///   `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`), so `probe::hash_state`
 ///   writes three more `f32`s and a `u8` per tick.
 ///
 ///   All three rows moved again, same tell as above. This time it was also

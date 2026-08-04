@@ -3,7 +3,7 @@
 Functions in `SCES_547.48` (Wipeout Pulse, PS2, SCES-54748), image base
 `0x00100000`.
 
-The PSP counterpart is [psp-pulse/camera.md](../psp-pulse/camera.md), which
+The PSP counterpart is [psp-pulse-usa/camera.md](../psp-pulse-usa/camera.md), which
 established the three player views, the SELECT cycle and the sign convention of
 the on-disc offsets, most of it against the running game. This page records the
 PS2 equivalent and confirms the cycle in a second binary.

@@ -34,7 +34,7 @@ Vec4 *point)`. Confidence **88**.
 
 **The cross product is `cross(force, r)`, not the textbook `cross(r, force)`.**
 That is the same negated convention the PS2 integrator shows in
-[craft-update.md](../ps2-pulse/craft-update.md#the-angular-sign-convention-w_game---w_physics),
+[craft-update.md](../ps2-pulse-eu/craft-update.md#the-angular-sign-convention-w_game---w_physics),
 and it is a second, independent witness for it on the PSP side: the engine's
 angular quantities are `-w_physics` throughout, so a hover spring pushing up at
 the nose produces a torque with the sign this engine expects and nothing needs a
@@ -159,7 +159,7 @@ already settles it as `e x w`, and this page does not disturb that.
 `body+0x150` is written after the loop as `E600 * body+0x160` (`0x0884e39c`),
 i.e. the angular velocity carried through a matrix built from `+0x40` and the
 basis - which is the `+0x160`-to-`+0x150` mapping
-[craft-update.md](../ps2-pulse/craft-update.md) records as a lead. **What that
+[craft-update.md](../ps2-pulse-eu/craft-update.md) records as a lead. **What that
 matrix is, and therefore what each field means, is settled below.**
 
 ### `body+0x160` is angular momentum, `body+0x40` is the inverse inertia tensor
@@ -461,7 +461,7 @@ Body_RecordContact(body, c, impulse, c->flags(+0x20));   /* 0884eee4 */
 
 Confidence **88**. Every line is a decoded VFPU instruction or a short run of
 them, and the shape matches the PS2 `Body_ResolveContactPair` (`0x0015e600`)
-that [ps2-pulse/craft-update.md](../ps2-pulse/craft-update.md) records - same
+that [ps2-pulse-eu/craft-update.md](../ps2-pulse-eu/craft-update.md) records - same
 relative-velocity-at-the-point construction, same `-(1 + e)` numerator, same
 invMass denominator, same deferred friction using the contact's `+0x34`.
 

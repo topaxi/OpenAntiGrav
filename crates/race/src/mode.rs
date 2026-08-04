@@ -120,7 +120,7 @@ impl Mode {
     ///
     /// Zone does: the original replaces the engine's thrust with an auto-speed
     /// law and disables the brakes entirely. See
-    /// `docs/ghidra/functions/psp-pulse/engine.md`.
+    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
     #[must_use]
     pub const fn is_auto_throttle(self) -> bool {
         matches!(self, Self::Zone)

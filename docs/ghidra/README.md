@@ -20,9 +20,9 @@ restores them:
 just apply-names
 ```
 
-It reads [names.tsv](functions/psp-pulse/names.tsv) and re-derives the import
+It reads [names.tsv](functions/psp-pulse-usa/names.tsv) and re-derives the import
 stubs from the binary, then applies both through the MCP bridge. See
-[the rename summary](functions/psp-pulse/README.md#renames).
+[the rename summary](functions/psp-pulse-usa/README.md#renames).
 
 ## The rule
 

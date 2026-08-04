@@ -185,7 +185,7 @@ zeroed in the code read so far, confidence 50.
 ## Cross-platform
 
 The PS2 build has been read against this page; see
-[ps2-pulse/wad-subsystem.md](../ps2-pulse/wad-subsystem.md) for the evidence.
+[ps2-pulse-eu/wad-subsystem.md](../ps2-pulse-eu/wad-subsystem.md) for the evidence.
 
 | Function | PSP | PS2 (`SCES_547.48`) |
 | --- | --- | --- |

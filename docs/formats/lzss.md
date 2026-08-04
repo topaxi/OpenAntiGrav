@@ -58,11 +58,11 @@ Okumura `N - F` convention, which would be 8174 and corrupts 1,358 of 1,503.
 
 Read from `Lzss_Decode` at `0x089419d8` in the PSP `BOOT.BIN`, with the bit
 reader at `0x08941c84`. See
-[the WAD subsystem page](../ghidra/functions/psp-pulse/wad-subsystem.md).
+[the WAD subsystem page](../ghidra/functions/psp-pulse-usa/wad-subsystem.md).
 
 **And, independently, from `Lzss_Decode` at `0x00214080` in the PS2
 `SCES_547.48`**, with the bit reader at `0x00213f70`. See
-[the PS2 LZSS page](../ghidra/functions/ps2-pulse/lzss.md). Every parameter in
+[the PS2 LZSS page](../ghidra/functions/ps2-pulse-eu/lzss.md). Every parameter in
 the table above is visible there: the `& 0x1fff` on each ring index, the write
 cursor seeded to `1`, the 13-bit position used as a direct ring index with
 nothing subtracted, the 4-bit length stored biased by two into a loop that runs
@@ -205,7 +205,7 @@ and a decompressor does not.
 So the retail build carries the encoder's workspace allocation with the encoder
 itself compiled out, and its size independently pins the window at 8192 without
 reference to any decode path. Details on
-[the PS2 LZSS page](../ghidra/functions/ps2-pulse/lzss.md).
+[the PS2 LZSS page](../ghidra/functions/ps2-pulse-eu/lzss.md).
 
 ## Not implemented
 

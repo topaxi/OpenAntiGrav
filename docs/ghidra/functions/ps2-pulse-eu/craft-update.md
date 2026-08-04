@@ -57,7 +57,7 @@ vtable = *(int *)(body + 0x38);
 (**(code **)(vtable + 0x74))(dt, body + *(short *)(vtable + 0x70), entity);
 ```
 
-[engine.md](../psp-pulse/engine.md) records the PSP call site as a vtable at
+[engine.md](../psp-pulse-usa/engine.md) records the PSP call site as a vtable at
 `object+0x38` whose entries are 8 bytes of `{i16 this-adjust, void *fn}`, with
 `sw zero,0x370(a0)` clearing a field on the entity immediately before the call.
 **Same vtable base, same entry layout, same `+0x370` clear, same slot region.**
@@ -75,7 +75,7 @@ else                                          Ship_HoverTwoPoint(craft);
 Ship_UpdateMagLock(craft);
 ```
 
-[engine.md](../psp-pulse/engine.md) gives the PSP selector as
+[engine.md](../psp-pulse-usa/engine.md) gives the PSP selector as
 `DAT_08ab07e3 == 0 && DAT_08b31048 == 6`. **Both globals, both comparisons and
 the magic value 6 survive the port**, which corroborates that page's confidence-84
 reading of the four-corner selector and fixes the two-point/four-corner identities
@@ -304,7 +304,7 @@ not a sign.
 This is **not** a handedness result, and the two pages that reached for
 handedness were right to reject it. `Body_Integrate`'s orthonormaliser
 (`0x0015d5f4`..`0x0015d630`) rebuilds the basis as `row0 = row1 x row2`, which is
-cyclically the same statement as [engine.md](../psp-pulse/engine.md)'s
+cyclically the same statement as [engine.md](../psp-pulse-usa/engine.md)'s
 runtime-measured `cross(row0, row1) = row2` on 200 of 200 ticks. PS2 code and PSP
 measurement agree the basis is positively oriented under the ordinary
 component-wise cross product. Handedness is not the variable. The sign of `w`
@@ -316,15 +316,15 @@ is, and it is a separate question that was being conflated with it.
   which maps `+0x160` onto `+0x150`, does not flip a sign. It is built from the
   orthonormalised basis, so it is a rotation and its determinant is `+1`. Which
   frame `+0x150` and `+0x160` are each expressed in is **not** settled here, and
-  [engine.md](../psp-pulse/engine.md)'s deliberate confidence-74 cap on the
+  [engine.md](../psp-pulse-usa/engine.md)'s deliberate confidence-74 cap on the
   local/world split of the angular accumulators stands untouched.
-- *[engine.md](../psp-pulse/engine.md)'s weathervane term* needs no assumption at
+- *[engine.md](../psp-pulse-usa/engine.md)'s weathervane term* needs no assumption at
   all: `angularWorld += cross(forward, velocity) * (grounded ? -0.1 : -0.3)`,
   with the coefficients as hardcoded literals and the intended effect - turning
   the nose toward the direction of travel - already stated there. That is
   backwards under the textbook convention and correct under this one, from a
   third term arrived at independently of the other two.
-- *[engine.md](../psp-pulse/engine.md)'s steering measurement* is end-to-end,
+- *[engine.md](../psp-pulse-usa/engine.md)'s steering measurement* is end-to-end,
   accumulator sign in and observed rotation sign out, so it bypasses every
   intermediate transform including the one the first leg assumes about. Holding
   left puts `craft+0x2c0` at about `-96`, `angularLocal.y = steer *
@@ -381,7 +381,7 @@ angularLocal += ( -pitch_damping * w.x,
 `pitch_damping` is read from `*(craft+0x90) + 0x78`, and `craft+0x90` is the
 cached pointer to the handling block. Block-relative `0x78` is absolute `0x10c`,
 which [handling-xml.md](handling-xml.md) fixes as `pitch_damping`. Everything
-here matches [engine.md](../psp-pulse/engine.md) term for term: yaw damping is a
+here matches [engine.md](../psp-pulse-usa/engine.md) term for term: yaw damping is a
 hard `-5.0` for every craft in the game, roll damping is `-5.0` in mode 0 and
 `-2.0` otherwise, and only the pitch axis is per ship.
 
@@ -568,7 +568,7 @@ Body_AddTorqueWorld(craft->body, torque);
 ```
 
 `-0.3` is `0xbe99999a` and `-0.1` is `0xbdcccccd`, both as `lui` immediates.
-[engine.md](../psp-pulse/engine.md) gives
+[engine.md](../psp-pulse-usa/engine.md) gives
 `angularWorld += cross(forward, velocity) * (grounded ? -0.1 : -0.3)`.
 **Both coefficients, the grounded selector and the operand order all match**, so
 `craft+0x1a0` is forward and `craft+0x1b0` is velocity in the PS2 layout.
@@ -596,12 +596,12 @@ worldForce += velocity * craft+0x320 * k;
 
 Three of the four coefficients, the `-0.2` reverse threshold, the grounded
 selector and the whole shape are **identical** to
-[engine.md](../psp-pulse/engine.md). `craft+0x320` is the cached forward speed
+[engine.md](../psp-pulse-usa/engine.md). `craft+0x320` is the cached forward speed
 in the PS2 layout (the PSP's `craft+0x2ec`); note that `+0x320` is the *local
 force accumulator* on the PSP, so the craft struct is laid out differently
 between builds and offsets must not be carried across.
 
-**The PS2 function has no `-0.9` branch.** [engine.md](../psp-pulse/engine.md)
+**The PS2 function has no `-0.9` branch.** [engine.md](../psp-pulse-usa/engine.md)
 records `k = -0.9` when `craft+0x2a4 == 0`, described there as multiplying drag
 by roughly 180x in that mode. Nothing in `Ship_ApplyQuadraticDrag` tests a mode
 enum and no `-0.9` immediate reaches it. Recorded as a **difference, not a
@@ -625,7 +625,7 @@ Body_AddForceWorld(body, g_along_one_axis);
 
 `normal_gravity` and `flight_gravity` are read through the cached block pointer
 at `craft+0x90` at block-relative `0x64` and `0x68`, which are absolute `0xf8`
-and `0xfc` - exactly where [engine.md](../psp-pulse/engine.md)'s parser table
+and `0xfc` - exactly where [engine.md](../psp-pulse-usa/engine.md)'s parser table
 puts them. `grounded` is `craft+0x2e0` and `magLockBlend` is `craft+0x2b0`, both
 already fixed by other terms on this page. So the *structure* corroborates.
 Two details do not:
@@ -644,7 +644,7 @@ actually belong to - that needs the PSP function re-read, not this one.
 
 ### The track-section force - structurally identical, still unnamed
 
-`FUN_0015a300` is [engine.md](../psp-pulse/engine.md)'s `FUN_08848f9c`, and it
+`FUN_0015a300` is [engine.md](../psp-pulse-usa/engine.md)'s `FUN_08848f9c`, and it
 is **left unnamed here for the same reason it is left unnamed there**: what the
 force is *for* is a guess at confidence 45, and ADR-0005 says a guess dressed as
 a name stops other people from looking.
@@ -669,7 +669,7 @@ impulse re-armed every frame, not a flat continuous push.
 ### The controls pointer is `craft+0x98`
 
 Every control term reaches its input through `*(craft+0x98)`, with the same
-member offsets [engine.md](../psp-pulse/engine.md) records for the PSP's
+member offsets [engine.md](../psp-pulse-usa/engine.md) records for the PSP's
 `craft+0x78`: `+0x00` steering, `+0x04` thrust, `+0x10` pitch, `+0x44` buttons.
 **The struct pointer moved between builds; the struct did not.**
 
@@ -688,7 +688,7 @@ Body_AddTorqueLocal(body, (p, 0, 0));               /* angularLocal.x += p */
 
 `pitch_air` and `pitch_ground` are read at block-relative `0x70` and `0x74`,
 absolute `0x104` and `0x108` - exactly
-[engine.md](../psp-pulse/engine.md)'s parser table, and the grounded branch
+[engine.md](../psp-pulse-usa/engine.md)'s parser table, and the grounded branch
 picks `pitch_ground` as that page says. The in-air bias is read from
 `stats_base + 0x90`, which the same page identifies as `weight_distribution`
 from the PS2 `<Misc>` element.
@@ -702,7 +702,7 @@ fields.
 
 `Ship_UpdateEngine` (`0x0015c448`), found by the `1e10` immediate
 (`lui at,0x5015`), which is unique in the executable. Every element of
-[engine.md](../psp-pulse/engine.md)'s pseudocode reproduces, with the parameter
+[engine.md](../psp-pulse-usa/engine.md)'s pseudocode reproduces, with the parameter
 block read at block-relative `0x24`/`0x28`/`0x2c`/`0x30`/`0x34` - absolute
 `0xb8`/`0xbc`/`0xc0`/`0xc4`/`0xc8`, i.e. `gain`/`amount`/`falloff`/`accelcap`/
 `turbo`, in the order that table gives them.
@@ -791,7 +791,7 @@ if ((flags & 0x40) && *(craft+0x1e4) + 0x3f8 == 0)
 Body_AddTorqueLocal(body, (0, yaw, 0));
 ```
 
-**Every element of [engine.md](../psp-pulse/engine.md)'s Steering section
+**Every element of [engine.md](../psp-pulse-usa/engine.md)'s Steering section
 reproduces**, including the asymmetric gain/falloff on both sides of zero, the
 exact-zero clamp, the mode 5/6 lockout, the additive steering bias, and the
 0-to-1 reverse-controls blend with its `> 1.0` full-inversion case. The
@@ -825,7 +825,7 @@ body->localForce += lateral * ga * k * (1 - grounded);
 
 `grip_ground` and `grip_air` sit at block-relative `0x10`/`0x14`, absolute
 `0xa4`/`0xa8`; `slidegrip` at `0x58`, absolute `0xec`. All three are where
-[engine.md](../psp-pulse/engine.md)'s parser table puts them.
+[engine.md](../psp-pulse-usa/engine.md)'s parser table puts them.
 
 **This is the strongest single corroboration on the page.** engine.md derives
 `(0.01 - slidegrip)` and the `-1` floor from the load-time `1e-4` scaling and
@@ -852,7 +852,7 @@ a guess at confidence 40 and the bit is left unnamed.
 and `+0x130`, writing `1.0` into each `w` lane. Together with
 `Ship_UpdateEngine` and `Ship_ApplyLateralGrip` writing `body+0x110` directly,
 this says the PS2 **drops the four craft-side mirror accumulators entirely** and
-has every term accumulate onto the body. [engine.md](../psp-pulse/engine.md)
+has every term accumulate onto the body. [engine.md](../psp-pulse-usa/engine.md)
 describes the PSP zeroing `craft+0x320`/`+0x330`/`+0x340`/`+0x350` at the top of
 `Ship_UpdateCraft` and draining them at the bottom.
 
@@ -865,7 +865,7 @@ craft-struct layout across. Confidence **88**.
 
 `Ship_UpdateCraft` makes eighteen calls. Sixteen of them are the force pass, and
 listing them in program order against
-[engine.md](../psp-pulse/engine.md)'s ordering table gives an **exact,
+[engine.md](../psp-pulse-usa/engine.md)'s ordering table gives an **exact,
 in-sequence match on every one of the fifteen terms**:
 
 | # | PSP term | PS2 call site | PS2 target |
@@ -894,7 +894,7 @@ neighbours in a sequence where every other slot lands exactly.
 
 Two consequences:
 
-- **[engine.md](../psp-pulse/engine.md)'s ordering table is corroborated**, and
+- **[engine.md](../psp-pulse-usa/engine.md)'s ordering table is corroborated**, and
   with it the consequence that page draws from it: groundedness is one frame
   stale for the engine, brakes, drag, gravity and pitch, because hover is step 8
   and those five run before it. That was the single most behaviourally
@@ -906,7 +906,7 @@ Two consequences:
 `Ship_ApplyVerticalDamping` (`0x00159e78`) is confirmed twice over: it is slot 14
 positionally, **and** it holds the only other `-0.25` immediate
 (`lui at,0xbe80`) in the craft path, which is the coefficient
-[engine.md](../psp-pulse/engine.md) gives for that term.
+[engine.md](../psp-pulse-usa/engine.md) gives for that term.
 
 **Its body has now been read, and it raises the confidence to 92 while settling a
 question the PSP side got wrong.** The whole function is 37 instructions, and
@@ -1064,7 +1064,7 @@ if (brake > 0) {
 }
 ```
 
-Every element of [engine.md](../psp-pulse/engine.md)'s Brakes section
+Every element of [engine.md](../psp-pulse-usa/engine.md)'s Brakes section
 reproduces, including the both-airbrakes-at-once trigger, the `100.0` clamp and
 the `speed < 10` fade. It also fixes `controls+0x08` and `+0x0c` as the two
 airbrake axes. Confidence **90**.
@@ -1090,7 +1090,7 @@ if (forwardSpeed > 0) {
 ```
 
 The `2.0` magnitude, the `forwardSpeed > 0` gate and the negation all match
-[engine.md](../psp-pulse/engine.md). **The negation is explicit here** - a
+[engine.md](../psp-pulse-usa/engine.md). **The negation is explicit here** - a
 `0 - v` subtraction rather than a source prefix - which is a second-binary leg
 for the other half of that page's confidence-55 prefix concern.
 
@@ -1128,15 +1128,15 @@ unit(v)` would apply a 2-unit shove to a nearly stationary ship. Confidence
   The matrix at `body+0xc0`..`+0xf0` is not the site: it is built as the
   adjugate of the basis scaled by `1/det` (`0x0015d478`..`0x0015d4f0`), i.e. its
   inverse, which for the orthonormal basis is the transpose - exactly what
-  [engine.md](../psp-pulse/engine.md)'s runtime dump measured element for
+  [engine.md](../psp-pulse-usa/engine.md)'s runtime dump measured element for
   element. A rotation inverse has determinant `+1` and cannot flip a sign.
 - **`Ship_UpdateAirbrakes_q`'s body was never read.** It is slot 3 of fifteen
   and nothing else fits there, but it is the one name on this page resting on
-  position alone. [engine.md](../psp-pulse/engine.md) makes substantive claims
+  position alone. [engine.md](../psp-pulse-usa/engine.md) makes substantive claims
   about that term - the `sideshift` write straight to the body, the airbrake
   `turn` and `drag` contributions - and **none of them are corroborated here.**
   This is the cheapest remaining item on the page.
-- **`FUN_00159fe0`**, slot 10, which is [engine.md](../psp-pulse/engine.md)'s
+- **`FUN_00159fe0`**, slot 10, which is [engine.md](../psp-pulse-usa/engine.md)'s
   "inline dead branch". It is a real call on the PS2, so **it may not be dead
   here**; that page's finding that the in-air roll-levelling term computes a
   value and never stores it needs re-checking against this build rather than
@@ -1145,7 +1145,7 @@ unit(v)` would apply a 2-unit shove to a nearly stationary ship. Confidence
   sequence, one before it and one after the accumulator clear. Not examined.
 - **Whether the PS2 has the PSP's dead in-air roll-levelling branch**, and
   whether `Ship_UpdateMagLock` writes an angular Z component. Both are open on
-  [engine.md](../psp-pulse/engine.md) too.
+  [engine.md](../psp-pulse-usa/engine.md) too.
 - **Whether the angular accumulators hold torque or angular acceleration.**
   `Body_Integrate` divides the force accumulator by a mass term at
   `body+0x370+8` but applies the angular accumulator through the `+0xc0` matrix
@@ -1178,14 +1178,14 @@ unit(v)` would apply a 2-unit shove to a nearly stationary ship. Confidence
   unaffected.
 - 2026-07-27, fourth pass: nine of `Ship_UpdateCraft`'s sixteen callees
   identified by constant fingerprint and checked term by term against
-  [engine.md](../psp-pulse/engine.md). Engine, pitch, steering, lateral grip,
+  [engine.md](../psp-pulse-usa/engine.md). Engine, pitch, steering, lateral grip,
   weathervane and the track-section force corroborate that page **completely**,
   including its dead-`Engine.gain`/`falloff` finding and its derived
   `(0.01 - slidegrip)` grip coefficient. Drag matches on three of four
   coefficients and gravity differs in two details, both recorded as differences
   rather than corrections.
 - 2026-07-27, fifth pass: the call order read, and **all fifteen terms match
-  [engine.md](../psp-pulse/engine.md)'s ordering table exactly and in
+  [engine.md](../psp-pulse-usa/engine.md)'s ordering table exactly and in
   sequence**, which corroborates that page's stale-groundedness consequence.
   Brakes and rolling resistance confirmed by content, settling both halves of
   that page's confidence-55 VFPU-prefix concern; vertical damping confirmed by

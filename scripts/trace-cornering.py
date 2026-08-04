@@ -58,7 +58,7 @@ import math
 import statistics
 
 # Read from the instruction stream, identical in both binaries; see
-# `docs/ghidra/functions/psp-pulse/engine.md`, "The passive terms".
+# `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The passive terms".
 DRAG_GROUND = 0.005
 ROLLING_RESISTANCE = 2.0
 # `Body_Integrate`'s linear velocity damping, `body+0x384`.

@@ -3,7 +3,7 @@
 Functions in `SCES_547.48` (Wipeout Pulse, PS2, SCES-54748), image base
 `0x00100000`.
 
-The PSP counterpart is [psp-pulse/input.md](../psp-pulse/input.md). The
+The PSP counterpart is [psp-pulse-usa/input.md](../psp-pulse-usa/input.md). The
 abstract button layer survives the port essentially unchanged, which makes this
 the second-strongest corroboration in this directory after the handling loader
 - and it also contains the one place where the two builds genuinely disagree.

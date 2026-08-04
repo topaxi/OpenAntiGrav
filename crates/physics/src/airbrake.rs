@@ -2,7 +2,7 @@
 //!
 //! The force law is from `docs/physics/README.md`; which accumulator each term
 //! writes, and which frame it is expressed in, is from
-//! `docs/ghidra/functions/psp-pulse/engine.md`. The two things this module exists to
+//! `docs/ghidra/functions/psp-pulse-usa/engine.md`. The two things this module exists to
 //! keep honest:
 //!
 //! - **`amount` is a lateral force gain, not a drag.** An earlier revision of this
@@ -30,7 +30,7 @@
 //!   move, so a test pins the absence.
 //!
 //!   The wider claim that *nothing* writes an angular Z is too strong, and
-//!   `docs/ghidra/functions/psp-pulse/engine.md` narrowed it: **no control input** writes
+//!   `docs/ghidra/functions/psp-pulse-usa/engine.md` narrowed it: **no control input** writes
 //!   one, so roll is never commanded, but the angular damping and the surface-alignment
 //!   torque both do, passively. Confidence 80 on the narrowed version, lower because
 //!   `Ship_UpdateMagLock` was not scanned.
@@ -98,7 +98,7 @@ pub fn lateral_grip_coefficient(handling: &Handling, left: f32, right: f32) -> f
 /// `speed` is the craft's cached speed, `|dot(velocity, forward)|`, rather than
 /// `|velocity|`. That used to be a pick; it is now read: every one of the three
 /// terms loads `craft+0x2ec`, which
-/// `docs/ghidra/functions/psp-pulse/engine.md` establishes as the `vabs.s`-ed
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` establishes as the `vabs.s`-ed
 /// dot product.
 ///
 /// Lateral grip is **not** here: it is a separate function in the original, running
@@ -164,7 +164,7 @@ pub fn lateral_grip_coefficient(handling: &Handling, left: f32, right: f32) -> f
 ///
 /// The transcription above is in the original's frame, and **two conversions
 /// separate that frame from this crate's**, both settled in
-/// `docs/ghidra/functions/psp-pulse/engine.md` ("The basis is positively
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` ("The basis is positively
 /// oriented, and row 0 points left"):
 ///
 /// - **The lateral axis.** `craft+0x170` is `body+0x00`, row 0, and row 0 is the
@@ -274,7 +274,7 @@ pub fn evaluate(
 /// ```
 ///
 /// Two things distinguish this from the rest of the airbrake path, both from
-/// `docs/ghidra/functions/psp-pulse/engine.md`:
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`:
 ///
 /// - It writes the **body-local** force accumulator directly rather than the world
 ///   one, which is the only reason we know that accumulator's `.x` is the right axis.
@@ -299,7 +299,7 @@ pub fn lateral_grip(state: &ShipState, handling: &Handling, grounded: f32) -> Ve
 /// (`0x08846a54`) writes into whichever of its two per-side timers fired. The
 /// timers count down by `dt` and the craft flag - and therefore the force - lasts
 /// exactly as long as the timer does. Confidence **80**; see
-/// `docs/ghidra/functions/psp-pulse/engine.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
 pub const SIDESHIFT_DURATION: f32 = 0.2;
 
 /// How long after a sideshift before another can be triggered, in seconds.
@@ -308,7 +308,7 @@ pub const SIDESHIFT_DURATION: f32 = 0.2;
 /// `entity+0x8ac` on every tick either side's timer is running. That timer
 /// counts down by `dt` and gates the whole trigger block, so it is a second
 /// measured from the *end* of a shift. Confidence **85**; see
-/// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 pub const SIDESHIFT_LOCKOUT: f32 = 1.0;
 
 /// How long a first airbrake press stays a candidate for a double tap, in
@@ -354,7 +354,7 @@ pub const SIDESHIFT_FLICK_THRESHOLD: f32 = 0.1;
 /// # The direction, which was an unevidenced coin flip
 ///
 /// `craft+0x170` is the basis's **row 0**, which is the ship's *left*
-/// (`docs/ghidra/functions/psp-pulse/engine.md`, measured - the same convention
+/// (`docs/ghidra/functions/psp-pulse-usa/engine.md`, measured - the same convention
 /// that inverted the airbrakes). So the `0x800` branch pushes left and the
 /// `0x1000` branch pushes right, and which flick sets which is read in
 /// `Ship_UpdateSideshiftInput_q`: the steering axis crossing `+10` arms
@@ -371,7 +371,7 @@ pub const SIDESHIFT_FLICK_THRESHOLD: f32 = 0.1;
 /// Both of the original's gestures are in [`advance_sideshift`] now. They are
 /// per-craft state in the original and so they are per-craft state here; the
 /// input layer supplies buttons, not decisions. See
-/// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 #[must_use]
 pub fn sideshift_force(state: &ShipState, handling: &Handling, grounded: f32) -> Vec3 {
     if grounded <= 0.0 {
@@ -403,7 +403,7 @@ pub fn sideshift_force(state: &ShipState, handling: &Handling, grounded: f32) ->
 ///
 /// The original ships **two control schemes** and the sideshift is a different
 /// gesture in each - see
-/// `docs/ghidra/functions/psp-pulse/input-bindings.md`, which reads the options
+/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`, which reads the options
 /// module that decides between them.
 ///
 /// - **Novice** holds one dedicated button (`OPT_CTRL_SS`, bound to `L` by

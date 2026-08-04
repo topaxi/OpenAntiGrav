@@ -3,7 +3,7 @@
 //! The payload is 128 bytes and every field in it is recovered - the layout from
 //! shipped data, the meaning from the runtime. See
 //! [`skycube.md`](../../../docs/formats/skycube.md) for the data side and
-//! [`fog.md`](../../../docs/ghidra/functions/psp-pulse/fog.md) for
+//! [`fog.md`](../../../docs/ghidra/functions/psp-pulse-usa/fog.md) for
 //! `FogCube_Init` (`0x089068f8`) and `FogCube_Sample` (`0x089069b0`), which this
 //! module reimplements.
 //!
