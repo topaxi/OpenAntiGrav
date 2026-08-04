@@ -83,17 +83,32 @@ hash-images:
 # picture. See docs/architecture/frontend-boot.md.
 
 # Run the game: intro video, the Language Selection menu, then a race.
-# Boots the PSP disc by default (oag-game's own search order - see
-# `oag_game::source`). A first argument of `pulse-ps2` or `ps2` swaps in the
-# PS2 disc instead; anything else is passed straight through, so
-# `just play data/images/foo.chd --ticks 5` still works unchanged.
+# Boots the EU PSP disc (pulse-psp-eu.chd) by default - a British game, EU
+# build. `psp-usa`/`pulse-psp-usa`/`usa` swaps in the USA disc (the
+# reverse-engineering target of record - see source-images.md); `ps2`/
+# `pulse-ps2` swaps in the PS2 disc (EU). A bare flag (`--ticks 5`) still
+# gets the EU default; anything else (a path or `image:entry` spec) is
+# passed straight through unchanged, so `just play data/images/foo.chd
+# --ticks 5` still works.
 play *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
     args=({{ARGS}})
-    if [ "${args:-}" = "pulse-ps2" ] || [ "${args:-}" = "ps2" ]; then
-        args=("data/images/pulse-ps2-eu.chd" "${args[@]:1}")
-    fi
+    first="${args[0]:-}"
+    case "$first" in
+        ""|--*)
+            args=("data/images/pulse-psp-eu.chd" "${args[@]}")
+            ;;
+        pulse-psp-eu|psp-eu|eu)
+            args=("data/images/pulse-psp-eu.chd" "${args[@]:1}")
+            ;;
+        pulse-psp-usa|psp-usa|usa)
+            args=("data/images/pulse-psp-usa.chd" "${args[@]:1}")
+            ;;
+        pulse-ps2|ps2)
+            args=("data/images/pulse-ps2-eu.chd" "${args[@]:1}")
+            ;;
+    esac
     cargo run -q --release -p oag-game -- "${args[@]}"
 
 # Capture the boot sequence, the menu and the race it launches, without a display

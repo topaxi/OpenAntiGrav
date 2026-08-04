@@ -15,6 +15,7 @@ data/
     psp/        Files extracted from a PSP UMD image
     ps2/        Files extracted from a PS2 DVD image
   cache/        Assets converted from your originals, rebuilt on demand
+  dlc/          PSN DLC packages, as downloaded - see below
   ghidra/       Ghidra project directory (shared analysis, not versioned)
   tools/        Built third-party tooling, e.g. the Allegrex Ghidra extension
   traces/       Runtime traces captured from PPSSPP / PCSX2
@@ -44,10 +45,17 @@ Tooling looks for these names. Copy your own images here and rename:
 | --- | --- | --- | --- |
 | `pulse-psp-usa.chd` | Wipeout Pulse | PSP | USA |
 | `pulse-ps2-eu.chd` | Wipeout Pulse | PS2 | Europe |
+| `pulse-psp-eu.chd` | Wipeout Pulse | PSP | Europe/Australia |
 | `pure-psp-usa.chd` | Wipeout Pure | PSP | USA |
 | `hdfury-ps3-eu.iso` | WipEout HD / Fury | PS3 | Europe |
 
 `.iso` works anywhere `.chd` does; the tools sniff the container.
+
+`pulse-psp-eu.chd` is not one of `oag-game`'s auto-detected `IMAGE_NAMES` (it
+is a reverse-engineering reference disc, not the played-from target) - point
+tools at it explicitly by path. It is a genuinely different `BOOT.BIN` from
+`pulse-psp-usa.chd`'s, not a re-labelled copy - see
+[source-images.md](../docs/reverse-engineering/source-images.md).
 
 **Pure and HD/Fury are read-only format targets today, not playable ones.**
 `oag-view`/`oag-unpack`/`oag-wad` read them opportunistically per
@@ -67,3 +75,4 @@ cargo run -p oag-tools --bin oag-unpack -- info data/images/pulse-psp-usa.chd
 Record the SHA-256 of every image you use in
 [`docs/reverse-engineering/source-images.md`](../docs/reverse-engineering/source-images.md).
 Hashes are fine to commit; content is not.
+

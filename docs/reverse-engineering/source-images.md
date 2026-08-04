@@ -11,6 +11,7 @@ against exactly the same data.
 | File | SHA-256 | Platform | Serial | Volume date |
 | --- | --- | --- | --- | --- |
 | `pulse-psp-usa.chd` | `65d8c19edaa4a65025a18346a2ccfe212a88053a5737a95d78c406efb69d02a9` | PSP | `UCUS-98712` | 2008-01-04 09:58:46 |
+| `pulse-psp-eu.chd` | `314e01f6100cd0cd76686ec4f29674f855d7be2e604db112276b121204f0e18a` | PSP | `UCES-00465` | 2007-11-06 14:42:47 |
 | `pulse-ps2-eu.chd` | `9b352295d4e35e3a4275ad2c1167aa3c2ab8bb7eb4b3abc877fd4b936b39e2fe` | PS2 | `SCES-54748` | 2009-05-15 17:11:10 |
 | `pure-psp-usa.chd` | `851075e2a894524bd89703f2f930098c99302a488424328cf77ec33da325a3f1` | PSP | `UCUS-98612` | 2005-06-02 14:29:23 |
 | `hdfury-ps3-eu.iso` | `6702a1b064c966e30ad878f7dded9a787bbab459ed4a7232007f6f1e7870f987` | PS3 | unknown | 2009-08-28 10:02:56 |
@@ -37,8 +38,44 @@ unencrypted ELF.
 
 Note the publisher: **SCEE**, Sony Computer Entertainment *Europe*, on a US
 disc. Combined with the [`UCES00465` directory](../psp/pulse-disc-layout.md)
-also present, this suggests the US build was derived from a European master.
-Interesting but not currently actionable.
+also present, this suggests the US build was derived from a European master -
+now directly checkable, see `pulse-psp-eu.chd` below.
+
+### `pulse-psp-eu.chd` - Wipeout Pulse, PSP, EU/Australia
+
+```
+container      CHD, 223072 sectors (436 MiB capacity)
+platform       PSP
+serial         UCES-00465
+boot           PSP_GAME/SYSDIR/EBOOT.BIN
+identified by  UCES-00465|91769C25134BAD9B|0001|G
+volume id      SCEE
+publisher      SCEE
+contents       23 files in 9 directories, 354 MiB
+```
+
+Acquired 2026-08-04 specifically to close the "region asymmetry" gap noted
+below - the PSP disc this project had was US, the PS2 disc EU, so every
+PSP-versus-PS2 comparison was also confounded with a US-versus-EU one. This
+does not remove that confound (it is still a PSP-versus-PS2 pair with no
+common region), but it does let the earlier "the US disc's executable looks
+like it was derived from a European master" observation be checked directly
+against a real EU build rather than only inferred from strings.
+
+**`PSP_GAME/SYSDIR/BOOT.BIN` is a genuinely different binary from
+`pulse-psp-usa.chd`'s**, not the same executable under a different disc
+wrapper: 3,844,732 bytes here versus 3,854,564 on the USA disc, different
+SHA-256. So the USA disc's boot strings claiming an EU build does not mean
+byte-identical code - it is a distinct build, not yet diffed against the
+primary target. One hypothesis, unconfirmed: the difference is mostly in
+networking code, since PSP Wipeout Pulse's multiplayer used region-specific
+services. Not yet checked against the binary.
+
+Not the reverse-engineering target of record - `pulse-psp-usa.chd` keeps that
+role, and this project's whole Ghidra database (`docs/ghidra/functions/psp-pulse-usa/`)
+is address-keyed to it. This disc's `BOOT.BIN` is imported into Ghidra as a
+**separate, second program** (`pulse-psp-eu`) for corroboration and future
+diffing, not as a replacement.
 
 ### `pulse-ps2-eu.chd` - Wipeout Pulse, PS2
 
@@ -92,8 +129,14 @@ that's expected, not a bug. Not otherwise explored yet.
 
 ## Region asymmetry
 
-**The PSP copy is US and the PS2 copy is EU.** Every PSP-versus-PS2 comparison
-is therefore also a US-versus-EU comparison.
+**The PSP copy used as the reverse-engineering target is US and the PS2 copy
+is EU.** Every PSP-versus-PS2 comparison is therefore also a US-versus-EU
+comparison. `pulse-psp-eu.chd` (acquired 2026-08-04, see above) is a second
+PSP copy, but it is EU too, so it does not by itself resolve this - a
+PSP-versus-PS2 comparison still has no matching-region pair to compare from.
+What it does give: a same-platform US-versus-EU pair (`pulse-psp-usa.chd` vs
+`pulse-psp-eu.chd`) to isolate region-only differences from platform-only
+ones, which was not previously possible at all.
 
 Before attributing any difference to the platform, rule out the region. A
 matching-region pair, or a second copy of either release, would remove the
