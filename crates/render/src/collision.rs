@@ -490,6 +490,22 @@ mod tests {
         assert!(!is_collidable(SurfaceKind::Cage));
     }
 
+    /// Zero nodes is a real input - every `.vex` on the Pure disc, and any
+    /// Pulse file that is not a track - so the model has to come back empty
+    /// rather than half-built. The draw call is still emitted, with an empty
+    /// range, because a caller that hands the model to a renderer needs the
+    /// shape of it either way; the emptiness is what the render paths and
+    /// `oag-view` test, `wgpu::Buffer::slice` panicking on a zero-length
+    /// buffer.
+    #[test]
+    fn no_nodes_gives_an_empty_model() {
+        for style in [Style::Solid, Style::Wireframe] {
+            let model = build_model("t", &[], style, true);
+            assert!(model.vertices.is_empty());
+            assert!(model.indices.is_empty());
+        }
+    }
+
     #[test]
     fn a_solid_triangle_becomes_exactly_one_triangle() {
         let model = build_model("t", &[node(SurfaceKind::Wall, 1)], Style::Solid, false);

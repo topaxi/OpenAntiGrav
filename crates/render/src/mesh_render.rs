@@ -324,41 +324,48 @@ pub fn capture_from(
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        // Group 2 never changes within a pass and survives `set_pipeline`, so it
-        // is bound once here rather than per draw call. The capture path leaves
-        // it at `Fog::off`.
-        pass.set_bind_group(2, &fog_bind, &[]);
-        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        // `Buffer::slice` panics on a zero-length buffer, so a model with no
+        // geometry has to skip every command below rather than binding one. The
+        // pass still runs, so the clear above lands and a valid frame comes out;
+        // deciding whether an empty model is worth capturing at all belongs to
+        // the caller, not here.
+        if !model.vertices.is_empty() && !model.indices.is_empty() {
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            // Group 2 never changes within a pass and survives `set_pipeline`, so it
+            // is bound once here rather than per draw call. The capture path leaves
+            // it at `Fog::off`.
+            pass.set_bind_group(2, &fog_bind, &[]);
+            pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-        // One draw per material run. Slot 0 is the white fallback, so a texture
-        // index of n binds slot n + 1.
-        for draw in &model.draws {
-            let slot = draw.texture.map_or(0, |t| t + 1);
-            pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
-        }
+            // One draw per material run. Slot 0 is the white fallback, so a texture
+            // index of n binds slot n + 1.
+            for draw in &model.draws {
+                let slot = draw.texture.map_or(0, |t| t + 1);
+                pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            }
 
-        // Second pipeline, same pass: `Model::alpha_tested_draws` wants a
-        // cutout, not a hardcoded alpha of 1.0 - see `fs_main_alpha_test`.
-        pass.set_pipeline(&alpha_test_pipeline);
-        for draw in &model.alpha_tested_draws {
-            let slot = draw.texture.map_or(0, |t| t + 1);
-            pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
-        }
+            // Second pipeline, same pass: `Model::alpha_tested_draws` wants a
+            // cutout, not a hardcoded alpha of 1.0 - see `fs_main_alpha_test`.
+            pass.set_pipeline(&alpha_test_pipeline);
+            for draw in &model.alpha_tested_draws {
+                let slot = draw.texture.map_or(0, |t| t + 1);
+                pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            }
 
-        // Third pipeline, same pass: `Model::transparent_draws` is meant to be
-        // blended rather than replace, and drawn last so opaque and cutout
-        // depth is already resolved. See `crate::exhaust::Pipeline` for the
-        // precedent of pairing an opaque and a blended pipeline this way.
-        pass.set_pipeline(&blend_pipeline);
-        for draw in &model.transparent_draws {
-            let slot = draw.texture.map_or(0, |t| t + 1);
-            pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            // Third pipeline, same pass: `Model::transparent_draws` is meant to be
+            // blended rather than replace, and drawn last so opaque and cutout
+            // depth is already resolved. See `crate::exhaust::Pipeline` for the
+            // precedent of pairing an opaque and a blended pipeline this way.
+            pass.set_pipeline(&blend_pipeline);
+            for draw in &model.transparent_draws {
+                let slot = draw.texture.map_or(0, |t| t + 1);
+                pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            }
         }
     }
     encoder.copy_texture_to_buffer(
@@ -941,4 +948,62 @@ pub fn build(
         index_buffer,
         texture_binds,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A model with no geometry must write a frame rather than panic.
+    ///
+    /// `wgpu::Buffer::slice` panics on a zero-length buffer, which is how
+    /// `oag-view --collision` died on any `.vex` with no recognised collision
+    /// class - see `docs/formats/pure-status.md`. Worth knowing if this ever
+    /// regresses: `create_buffer(size: 0)` and `write_buffer(&[])` both
+    /// *succeed*, so the death is two frames later at `set_vertex_buffer`, and
+    /// clamping the buffer to a nonzero size is the fix that looks right and
+    /// still crashes.
+    ///
+    /// Deliberately not `#[ignore]`d, unlike `tests/collision_capture.rs`: that
+    /// one exists to produce a picture, this one guards a regression, and an
+    /// `#[ignore]`d regression test is a test nobody runs. The adapter probe is
+    /// the pattern `post::fxaa` and `post::fsr1` already use, so a machine
+    /// without a GPU skips instead of failing.
+    #[test]
+    fn an_empty_model_captures_a_frame_instead_of_panicking() {
+        // Probed here rather than left to `capture_from`, which reports a
+        // missing adapter as an error - indistinguishable, from the test's
+        // side, from the guard not working.
+        let instance = wgpu::Instance::default();
+        if pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .is_err()
+        {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        }
+
+        // Built the way the bug arrived rather than hand-assembled: a `.vex`
+        // with no recognised collision class decodes to zero nodes, and
+        // `build_model` over zero nodes is what reached the render pass.
+        let model =
+            crate::collision::build_model("empty", &[], crate::collision::Style::Wireframe, true);
+        assert!(model.vertices.is_empty() && model.indices.is_empty());
+
+        let path = std::env::temp_dir().join("oag-empty-model.png");
+        capture_from(&model, &path, 64, 64, 0.9, 0.85, Anisotropy::default())
+            .expect("capturing an empty model");
+
+        // Checked through the PNG header rather than the pixels: reaching this
+        // line at all is the regression, since the old code panicked inside the
+        // render pass and never wrote a file. Byte length carries no signal -
+        // `oag_formats::png` emits stored deflate blocks, so every 64x64 frame
+        // is the same ~16 KB whatever is in it.
+        let bytes = std::fs::read(&path).expect("reading the capture back");
+        assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "not a PNG");
+        assert_eq!(
+            &bytes[16..24],
+            &[0, 0, 0, 64, 0, 0, 0, 64],
+            "wrong IHDR size"
+        );
+    }
 }

@@ -335,50 +335,55 @@ impl Session {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            // The asset viewer never fogs: it shows what is on the disc, and fog
-            // is a property of the race the asset sits in, not of the asset.
-            pass.set_bind_group(2, &self.fog_bind, &[]);
-            pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            // `Buffer::slice` panics on a zero-length buffer, so a model with no
+            // geometry skips every command below and the frame is the clear
+            // colour alone. Matches the guard in `mesh_render::capture_from`.
+            if !self.model.vertices.is_empty() && !self.model.indices.is_empty() {
+                pass.set_pipeline(&self.pipeline);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                // The asset viewer never fogs: it shows what is on the disc, and fog
+                // is a property of the race the asset sits in, not of the asset.
+                pass.set_bind_group(2, &self.fog_bind, &[]);
+                pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-            // One draw per material run. Slot 0 is the white fallback, so a
-            // texture index of n binds slot n + 1. Matches `mesh_render::capture_from`.
-            for draw in &self.model.draws {
-                let slot = draw.texture.map_or(0, |t| t + 1);
-                pass.set_bind_group(
-                    1,
-                    &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
-                    &[],
-                );
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
-            }
+                // One draw per material run. Slot 0 is the white fallback, so a
+                // texture index of n binds slot n + 1. Matches `mesh_render::capture_from`.
+                for draw in &self.model.draws {
+                    let slot = draw.texture.map_or(0, |t| t + 1);
+                    pass.set_bind_group(
+                        1,
+                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
+                        &[],
+                    );
+                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                }
 
-            // Second pipeline, same pass: alpha-tested batches, cutout. See
-            // `mesh_render::Built::alpha_test_pipeline`.
-            pass.set_pipeline(&self.alpha_test_pipeline);
-            for draw in &self.model.alpha_tested_draws {
-                let slot = draw.texture.map_or(0, |t| t + 1);
-                pass.set_bind_group(
-                    1,
-                    &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
-                    &[],
-                );
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
-            }
+                // Second pipeline, same pass: alpha-tested batches, cutout. See
+                // `mesh_render::Built::alpha_test_pipeline`.
+                pass.set_pipeline(&self.alpha_test_pipeline);
+                for draw in &self.model.alpha_tested_draws {
+                    let slot = draw.texture.map_or(0, |t| t + 1);
+                    pass.set_bind_group(
+                        1,
+                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
+                        &[],
+                    );
+                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                }
 
-            // Third pipeline, same pass: transparent batches, blended. See
-            // `mesh_render::Built::blend_pipeline`.
-            pass.set_pipeline(&self.blend_pipeline);
-            for draw in &self.model.transparent_draws {
-                let slot = draw.texture.map_or(0, |t| t + 1);
-                pass.set_bind_group(
-                    1,
-                    &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
-                    &[],
-                );
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                // Third pipeline, same pass: transparent batches, blended. See
+                // `mesh_render::Built::blend_pipeline`.
+                pass.set_pipeline(&self.blend_pipeline);
+                for draw in &self.model.transparent_draws {
+                    let slot = draw.texture.map_or(0, |t| t + 1);
+                    pass.set_bind_group(
+                        1,
+                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
+                        &[],
+                    );
+                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                }
             }
         }
         self.queue.submit(Some(encoder.finish()));

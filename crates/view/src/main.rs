@@ -470,6 +470,27 @@ fn main() -> Result<()> {
             soup
         };
 
+        // Tested on the merged model rather than on `nodes`, because
+        // `--with-spline` can supply geometry a file with no collision class of
+        // its own still has. Every `.vex` on the Pure disc reaches this, and so
+        // does any Pulse file that is not a track - see
+        // `docs/formats/pure-status.md`. An error rather than a blank frame: the
+        // render path tolerates an empty model, but a screenshot of nothing is
+        // not what the command was asked for, and a scripted caller wants the
+        // non-zero exit.
+        if model.vertices.is_empty() || model.indices.is_empty() {
+            let cage_would_help =
+                !cli.cage && nodes.iter().any(|n| !collision::is_collidable(n.kind));
+            anyhow::bail!(
+                "{label}: nothing to draw - no collision geometry{}",
+                if cage_would_help {
+                    ", only cage nodes (pass --cage to see them)"
+                } else {
+                    ""
+                }
+            );
+        }
+
         // Tracks are flat and wide, so look down at them rather than along.
         let pitch = cli.pitch.unwrap_or(1.15);
         if let Some(path) = &cli.screenshot {

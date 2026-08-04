@@ -228,14 +228,32 @@ not a bug. Confidence **92**, from a direct schema diff of the two files.
 
 ## Tooling defects this probe surfaced
 
-Neither is a format overfit; both are missing guards on paths that had only
-ever seen Pulse data.
+Neither is a format overfit; both were missing guards on paths that had only
+ever seen Pulse data. The first is fixed, the second is expected behaviour.
 
-- **`oag-view --collision` panics on a file with no collision nodes.** It
-  correctly reports `0 collision node(s)` and prints an empty per-class table,
-  then hands an empty vertex buffer to wgpu and dies inside
+- **`oag-view --collision` panicked on a file with no collision nodes. Fixed
+  2026-08-04.** It correctly reported `0 collision node(s)` and printed an empty
+  per-class table, then handed an empty vertex buffer to wgpu and died inside
   `buffer.rs`: `buffer slice can not be empty`. Any `.vex` without a
-  recognised collision class reaches this, which on Pure is every file.
+  recognised collision class reached this, which on Pure is every file. The
+  backtrace put it at `wgpu::api::buffer::BufferSlice::size_expect_nonzero`
+  under `set_vertex_buffer`, not at buffer creation - `create_buffer(size: 0)`
+  and `write_buffer(&[])` both succeed, so clamping the buffer size would not
+  have fixed it. Two changes: `mesh_render::capture_from` and `oag_view::orbit`
+  now skip every draw command when the model has no geometry, so the pass emits
+  the clear colour rather than panicking; and `oag-view --collision` bails with
+  `nothing to draw - no collision geometry` before it gets there, because a
+  screenshot of an empty frame is not what the command was asked for and a
+  scripted caller wants the non-zero exit. Reproduce the former state with
+  `oag-view <image>:<Data.wad> --collision 'n\Feisar\Ship.vex'`. Covered by
+  `mesh_render::tests::an_empty_model_captures_a_frame_instead_of_panicking`,
+  which probes for an adapter and skips without one rather than being
+  `#[ignore]`d, so it runs in plain `just` wherever a GPU exists; the `orbit`
+  guard needs a window and has none. One consequence worth knowing: `--mesh`
+  on a model with no geometry now writes a blank PNG and exits 0 where it
+  previously panicked, so a scripted caller gets a silent no-op rather than a
+  crash. Only `--collision` refuses; the mesh path has no equivalent bail
+  because a `.vex` that decodes to no geometry at all has not been seen.
 - **`oag-trace drive --source <pure>` fails on a hard-coded Pulse track path.**
   Expected, and recorded only for completeness: the asset layer resolves by
   name against the source's own directory, so this is the scenario naming a
@@ -247,9 +265,9 @@ Ordered by cost, from the measurements above:
 
 1. **Browsing Pure's models and textures: about a day.** A per-title class-ID
    table selected by the file's version word, plus honouring the pre-swizzle
-   flag in `vex::textures`, plus the empty-model guard in `oag-view`. Every
-   other line of the geometry path already works, on 2.1 M vertices of
-   evidence.
+   flag in `vex::textures`. The empty-model guard this list also asked for is
+   done, so it is no longer part of the estimate. Every other line of the
+   geometry path already works, on 2.1 M vertices of evidence.
 2. **Tracks: a day on top of that**, and mostly the same change - the `WO
    Track` payload already decodes exactly under one more class ID.
 3. **Collision: unknown, and the first real research.** Three candidate classes
