@@ -151,6 +151,56 @@ fn every_psp_teams_boost_plume_decodes_with_two_meshes_and_its_texture() {
     }
 }
 
+/// Pins the boost plume's baked vertex alpha as bimodal - `0.0` or `1.0`
+/// only, never a partial value - across every PSP team, not just the
+/// Assegai sample `MESH_BLEND_ALPHA_PLAN.md` measured by hand (63 vertices
+/// at `[1,1,1,1]`, 58 at `[1.0, 0.384, 0.0196, 0.0]`). Guards against a
+/// future re-export of the asset changing this shape and silently
+/// re-breaking the falloff `mesh.wgsl`'s `lit_texel` alpha fix depends on.
+///
+/// Exact float equality is safe here: `GpuVertex::colour` is decoded as
+/// `byte as f32 / 255.0` (`oag_render::mesh`'s batch builder), which is
+/// exact at both `0` and `255`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_psp_teams_boost_plume_vertex_alpha_is_bimodal() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives =
+        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+
+    for team in TEAMS {
+        let name = format!(r"Data\Ships\{team}\shipboost.vex");
+        let blob = archives
+            .read_name(&name)
+            .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+        let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+            .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
+
+        let (mut zero, mut one, mut other) = (0usize, 0usize, Vec::new());
+        for v in &model.vertices {
+            match v.colour[3] {
+                0.0 => zero += 1,
+                1.0 => one += 1,
+                a => other.push(a),
+            }
+        }
+        assert!(
+            other.is_empty(),
+            "{name}: {} vertex/vertices carry a partial baked alpha (e.g. {:?}), not just \
+             0.0/1.0 - the plume's falloff shape has changed since this test was written",
+            other.len(),
+            &other[..other.len().min(5)]
+        );
+        assert!(
+            zero > 0 && one > 0,
+            "{name}: expected both a fully-transparent and a fully-opaque baked vertex \
+             bucket, got {zero} at 0.0 and {one} at 1.0"
+        );
+    }
+}
+
 /// The three PS2-only teams have no `shipboost.vex` on the PSP disc - not a
 /// decode failure, an absent entry, which is what `Loaded::boost_model`'s
 /// `None` path exists for.

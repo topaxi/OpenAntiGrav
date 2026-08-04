@@ -116,8 +116,11 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let light = mix(1.0, rig, in.lit);
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
-    // Vertex colour modulates the texture, as the GE's texture-env does.
-    return vec4<f32>(texel.rgb * in.colour.rgb * light, texel.a);
+    // Vertex colour modulates the texture on all four channels, as the GE's
+    // texture-env does - RGB and alpha alike, not RGB alone. See
+    // MESH_BLEND_ALPHA_PLAN.md finding 1: dropping the vertex colour's own
+    // alpha here is what made the boost plume's baked falloff vanish.
+    return vec4<f32>(texel.rgb * in.colour.rgb * light, texel.a * in.colour.a);
 }
 
 @fragment
@@ -125,17 +128,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
     // This pipeline is opaque (`blend: None`), so the alpha channel is never
     // blended with - but it is still written to whatever render target is
-    // bound, so it stays a hardcoded 1.0 here rather than the texture's own
-    // alpha, matching every prior opaque render exactly. `fs_main_blend`
-    // below is the one that actually reads the texture's alpha.
+    // bound, so it stays a hardcoded 1.0 here rather than the texture's and
+    // vertex colour's combined alpha, matching every prior opaque render
+    // exactly. `fs_main_blend` below is the one that actually reads it.
     return vec4<f32>(fogged(shaded.rgb, in.world), 1.0);
 }
 
 // Used only by the blended pipeline - see
 // `oag_render::mesh::Model::transparent_draws`. Identical to `fs_main` except
-// it outputs the texture's own alpha instead of a hardcoded 1.0, which is what
-// lets the blend state built around this entry point actually blend rather
-// than replace.
+// it outputs the texture's alpha times the vertex colour's alpha instead of a
+// hardcoded 1.0, which is what lets the blend state built around this entry
+// point actually blend rather than replace.
 @fragment
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
@@ -156,7 +159,12 @@ const ALPHA_TEST_THRESHOLD: f32 = 0.5;
 // blended - `discard` is what lets the pixels below the threshold contribute
 // neither colour nor depth, so surfaces behind a cutout's "empty" corners
 // still show through and still get occluded correctly by whatever the
-// cutout's solid pixels do draw.
+// cutout's solid pixels do draw. `shaded.a` is now the texture's alpha times
+// the vertex colour's, per `lit_texel` above; confirmed against every
+// alpha-tested batch on `01_Track`/`16_Track` that no vertex reference in
+// this path carries baked alpha below `ALPHA_TEST_THRESHOLD` (see
+// MESH_BLEND_ALPHA_PLAN.md), so this fold-in does not newly discard any
+// fragment that used to pass on real track data.
 @fragment
 fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
