@@ -12,6 +12,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [WAD subsystem](wad-subsystem.md) | Name hash, lookup, mount, read, LZSS and zlib decoders |
 | [Main loop](main-loop.md) | Frame pacing, timestep, state machine |
 | [Input](input.md) | Pad polling, the abstract button layer, deadzone and gain |
+| [Ship parts](ship-parts.md) | The `Airbrake` flaps' hinged subtree, `<AirbrakeGraphics>`'s units, and why a tagged part has no per-class handler to find |
 | [Input bindings](input-bindings.md) | The eight abstract actions, the novice/veteran schemes, the default mapping, both sideshift gestures and the barrel roll |
 | [Collision](collision.md) | Triangle soup, sweep and prune, surface types |
 | [Rigid body](rigid-body.md) | Construction, force application, the integrator, the contact resolver |

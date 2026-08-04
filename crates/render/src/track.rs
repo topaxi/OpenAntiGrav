@@ -147,6 +147,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
     }];
 
     Model {
+        airbrakes: [None, None],
         label: label.to_string(),
         vertices,
         indices,

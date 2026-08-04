@@ -713,9 +713,15 @@ change how this list should be read:
 
 ### Ship visual state
 
-- [ ] `Airbrake` `0x3c5` - the airbrakes visibly deploy in the original and the
-      simulation already tracks `airbrake_left`/`airbrake_right` on the
-      `0..=100` scale, so this is a model animation driven by state that exists
+- [x] `Airbrake` `0x3c5` - **done**, and the file turned out to say more than
+      this entry assumed. The class sits between the hinge `Transform` and the
+      flap `Mesh` in every playable team's `Ship.vex`, with the two locators
+      mirrored in X, so it is a real hinged subtree rather than a marker;
+      `<AirbrakeGraphics>` supplies the deflection and two rates that are
+      **not** the force law's `gain`/`falloff`. What is *not* recovered is the
+      rotation axis: the node's payload is zero bytes and its class descriptor
+      carries no handler, so it is chosen and flagged as chosen. See
+      [`ship-parts.md`](../ghidra/functions/psp-pulse/ship-parts.md)
 - [ ] `engine_fire` `0x3e5` and `exitglow` `0x3e4` - both authored, neither
       registered; see the caution above
 - [ ] Livery and team variants across all thirteen teams. Five teams'

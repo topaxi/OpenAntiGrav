@@ -298,6 +298,12 @@ pub struct Setup {
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.
     pub handling: Handling,
+    /// How far and how fast the airbrake flaps move, from the same document.
+    ///
+    /// Separate from [`Self::handling`] because it is per *team* rather than
+    /// per speed class, and because no force term reads it - see
+    /// `oag_gameplay::airbrake_graphics_for`.
+    pub airbrake_graphics: oag_gameplay::AirbrakeGraphics,
     /// The per-class scale on grounded gravity, from `<GlobalClass><GravityMul/>`.
     ///
     /// `1.0` when the engine-wide file could not be read, which leaves gravity
@@ -616,6 +622,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once
     // and this is not the place it happens, and `<SpeedupPads>` is not one of them.
     let handling = handling_for(&stats, options.class, pad_tunables);
+    // `<AirbrakeGraphics>` is the fifth pre-scaled field and it *is* converted
+    // here, by its own function: it is per team rather than per class, and it
+    // is graphics, so it deliberately never enters `Handling`.
+    let airbrake_graphics = oag_gameplay::airbrake_graphics_for(&stats);
     // The per-class scale on grounded gravity, `g_class_gravity_scale`. **The
     // fallback is the identity, not zero**, unlike the pad tunables above: a
     // missing boost is a missing feature, but a zero here would leave a grounded
@@ -973,6 +983,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             start_position,
             collision,
             handling,
+            airbrake_graphics,
             chase,
             nozzle,
             collision_fx,
@@ -1577,6 +1588,27 @@ pub struct Race {
     boost_kick: f32,
     /// How strong the kick is, `0` off. `[graphics] boost_fov_kick`.
     boost_fov_kick: crate::display::BoostFovKick,
+    /// How far each airbrake flap has swung, left then right, on `0..=100`.
+    ///
+    /// The airbrake's own scale rather than an angle, because that is the
+    /// scale `up_speed`/`down_speed` ramp on - see the tick that advances it.
+    /// [`Self::airbrake_flaps`] is what turns it into radians.
+    ///
+    /// **Render-only state**, on `Race` rather than in `World` for the same
+    /// reason [`Self::boost_kick`] is - and here the separation is the
+    /// original's own, not this crate's convenience. `<AirbrakeGraphics>`
+    /// carries `up_speed` and `down_speed` *beside* `<Airbrake>`'s `gain` and
+    /// `falloff`, which is the game saying outright that the flap the pilot
+    /// sees and the airbrake the force law applies ramp at different rates.
+    /// Putting these two floats in `ShipState` would move the determinism
+    /// hashes every time somebody adjusted an animation.
+    flaps: [f32; 2],
+    /// The authored deflection and the two rates, from `<AirbrakeGraphics>`.
+    ///
+    /// `amount` is already radians here: `oag_gameplay::airbrake_graphics_for`
+    /// applies the loader's own degrees-to-radians scale, recovered at
+    /// confidence 92 - see `docs/ghidra/functions/psp-pulse/camera.md`.
+    flap_graphics: oag_gameplay::AirbrakeGraphics,
     /// Which control scheme maps the snapshot. `[controls] scheme`.
     ///
     /// On `Race` and not on the input layer because the schemes differ in which
@@ -1714,6 +1746,8 @@ impl Race {
             pad_previous_position: None,
             boost_kick: 0.0,
             boost_fov_kick: crate::display::BoostFovKick::DEFAULT,
+            flaps: [0.0, 0.0],
+            flap_graphics: setup.airbrake_graphics,
             scheme: ControlScheme::default(),
         }
     }
@@ -1727,6 +1761,17 @@ impl Race {
     /// mid-race would leave a half-finished gesture armed in `ShipState`.
     pub fn set_control_scheme(&mut self, scheme: ControlScheme) {
         self.scheme = scheme;
+    }
+
+    /// How far each airbrake flap has swung, left then right, in **radians**.
+    ///
+    /// Read by the renderer once a frame. Render-only state - see
+    /// [`Self::flaps`], which holds the same thing on the airbrake's `0..=100`
+    /// scale, and note the rates driving it are **not** the force law's.
+    #[must_use]
+    pub fn airbrake_flaps(&self) -> [f32; 2] {
+        self.flaps
+            .map(|level| self.flap_graphics.amount * level / 100.0)
     }
 
     /// Which scheme this race is being driven with.
@@ -1932,6 +1977,49 @@ impl Race {
         if let Some(nozzle) = self.nozzle() {
             let back = -self.ship().physics.body.forward();
             self.exhaust.push_trail(nozzle, back);
+        }
+
+        // The flaps, on the fixed tick beside the camera and the exhaust, and
+        // for the same reason: a headless capture calls only `tick`, so an
+        // animation advanced in the frame loop would be at a different angle in
+        // a screenshot than in a window at the same tick count.
+        //
+        // Two rates, not one. `up_speed` and `down_speed` are authored beside
+        // each other in `<AirbrakeGraphics>` and are *not* the force law's
+        // `gain`/`falloff`, so a flap deploys and returns at its own pace while
+        // the airbrake it depicts ramps at another. The state it chases is the
+        // ramped `airbrake_left`/`airbrake_right` on `0..=100` rather than the
+        // raw input, so a flap follows the airbrake the ship actually has.
+        //
+        // **The rates are on the airbrake's own `0..=100` scale**, per second,
+        // which is why `self.flaps` holds a level rather than an angle. Not
+        // read out of the binary - no consumer of `<AirbrakeGraphics>` was
+        // located - but not a coin flip either: every team authors
+        // `up_speed = 500` against a `down_speed` of 80 to 120, and on this
+        // reading that is a flap that snaps out in 0.2 s and folds back over
+        // about a second, which is what an airbrake does. Read as *fractions*
+        // of full deflection per second instead, 500 would be full travel in
+        // two milliseconds and the parameter would not be worth authoring.
+        // It is also the convention `<Airbrake gain/falloff>` already uses on
+        // the same scale, one element away.
+        let ship = &self.world.ships[0].physics;
+        for (flap, level) in self
+            .flaps
+            .iter_mut()
+            .zip([ship.airbrake_left, ship.airbrake_right])
+        {
+            let target = level.clamp(0.0, 100.0);
+            let (rate, rising) = if target > *flap {
+                (self.flap_graphics.up_speed, true)
+            } else {
+                (self.flap_graphics.down_speed, false)
+            };
+            let step = rate * self.dt;
+            *flap = if rising {
+                (*flap + step).min(target)
+            } else {
+                (*flap - step).max(target)
+            };
         }
 
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
@@ -2765,6 +2853,52 @@ impl Drawable {
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
 
+    /// Swings this model's airbrake flaps to `left` and `right` radians.
+    ///
+    /// Rewrites the two flaps' own vertices in place rather than giving them a
+    /// transform of their own. The alternative - pulling each flap into its own
+    /// `Drawable`, the way the boost plume is one - would duplicate the ship's
+    /// whole eight-texture set for two meshes of forty vertices, and a
+    /// per-draw-call matrix would need a fourth bind group set on every draw
+    /// call of every track. This costs two `write_buffer`s of about a kilobyte
+    /// and no GPU state at all, and `exhaust.rs` already rewrites a vertex
+    /// buffer every frame, so a mutable one is not a new idea here.
+    ///
+    /// A no-op on a model with no flaps, which is every track, the sky, the
+    /// collision overlay and any ship whose file does not carry them.
+    fn deflect_airbrakes(&self, queue: &wgpu::Queue, left: f32, right: f32) {
+        for (flap, angle) in self.model.airbrakes.iter().zip([left, right]) {
+            let Some(flap) = flap else { continue };
+            let swing = flap.deflect(angle);
+            let span = flap.vertices.start as usize..flap.vertices.end as usize;
+            let Some(base) = self.model.vertices.get(span.clone()) else {
+                continue;
+            };
+            // From the model's own vertices every time, never from the last
+            // frame's: accumulating rotations would drift, and worse, would
+            // make the rest position depend on how the ship got there.
+            let moved: Vec<mesh::GpuVertex> = base
+                .iter()
+                .map(|v| {
+                    let mut out = *v;
+                    out.position = swing
+                        .transform_point3(Vec3::from_array(v.position))
+                        .to_array();
+                    out.normal = swing
+                        .transform_vector3(Vec3::from_array(v.normal))
+                        .to_array();
+                    out
+                })
+                .collect();
+            let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
+            queue.write_buffer(
+                &self.vertices,
+                span.start as u64 * stride,
+                bytemuck::cast_slice(&moved),
+            );
+        }
+    }
+
     /// Draws every list, in pipeline order, and reports what it submitted.
     ///
     /// `frustum` is `None` for the ship and the collision overlay: both draw a
@@ -3225,6 +3359,14 @@ impl Scene {
             .write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         self.ship
             .write(queue, view_projection, race.ship_model_matrix(), scroll);
+        // The flaps move in *model* space, before the ship's own matrix, so
+        // this is a vertex write and not a second uniform - see
+        // `Drawable::deflect_airbrakes`. Unconditional rather than
+        // change-gated: two kilobytes a frame is cheaper than the state needed
+        // to know they have not moved, and a gate would have to be invalidated
+        // by anything that ever rebuilds the buffer.
+        let [left, right] = race.airbrake_flaps();
+        self.ship.deflect_airbrakes(queue, left, right);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -3803,6 +3945,7 @@ mod tests {
     /// A model declaring `slots` texture slots of which the first `decoded` filled.
     fn model(slots: usize, decoded: usize) -> Model {
         Model {
+            airbrakes: [None, None],
             label: "Ship.vex".to_string(),
             vertices: Vec::new(),
             indices: vec![0; 6],
@@ -4024,6 +4167,11 @@ mod tests {
         // on rather than a stub that counts laps on a line.
         let course = Course::from_track(&ai, None);
         Setup {
+            airbrake_graphics: oag_gameplay::AirbrakeGraphics {
+                amount: 0.4363323,
+                up_speed: 30.0,
+                down_speed: 30.0,
+            },
             mode: Mode::TimeTrial,
             // A time trial does not read it, and these tests never run a Zone
             // race: the numbers are the disc's and there is no disc here.

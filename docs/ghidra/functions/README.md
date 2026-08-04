@@ -25,6 +25,7 @@ Maintained as pages are added, sorted by subsystem.
 | Front-end globals (`FEGlobals->`) | covered by the PS2 page | [ps2-pulse/fe-globals.md](ps2-pulse/fe-globals.md) |
 | Main loop | [psp-pulse/main-loop.md](psp-pulse/main-loop.md) | - |
 | Input | [psp-pulse/input.md](psp-pulse/input.md) | [ps2-pulse/input.md](ps2-pulse/input.md) |
+| Ship parts (`Airbrake` flaps) | [psp-pulse/ship-parts.md](psp-pulse/ship-parts.md) | - |
 | Input bindings and control schemes | [psp-pulse/input-bindings.md](psp-pulse/input-bindings.md) | - |
 | Collision | [psp-pulse/collision.md](psp-pulse/collision.md) | - |
 | Camera views | [psp-pulse/camera.md](psp-pulse/camera.md) | [ps2-pulse/camera.md](ps2-pulse/camera.md) |

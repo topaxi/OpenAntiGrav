@@ -245,6 +245,7 @@ pub fn build_model(
         node: None,
     }];
     Model {
+        airbrakes: [None, None],
         label: label.to_string(),
         vertices,
         indices,

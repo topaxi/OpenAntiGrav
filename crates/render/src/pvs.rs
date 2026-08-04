@@ -576,6 +576,7 @@ mod tests {
 
     fn model_of(draws: Vec<DrawCall>) -> Model {
         Model {
+            airbrakes: [None, None],
             label: "test".into(),
             vertices: Vec::new(),
             indices: vec![0, 1, 2],

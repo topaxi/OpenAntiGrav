@@ -58,6 +58,7 @@ fn triangle_model() -> Model {
         },
     ];
     Model {
+        airbrakes: [None, None],
         label: "msaa_resolve test triangle".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
