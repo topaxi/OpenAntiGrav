@@ -14,6 +14,7 @@ against exactly the same data.
 | `pulse-psp-eu.chd` | `314e01f6100cd0cd76686ec4f29674f855d7be2e604db112276b121204f0e18a` | PSP | `UCES-00465` | 2007-11-06 14:42:47 |
 | `pulse-ps2-eu.chd` | `9b352295d4e35e3a4275ad2c1167aa3c2ab8bb7eb4b3abc877fd4b936b39e2fe` | PS2 | `SCES-54748` | 2009-05-15 17:11:10 |
 | `pure-psp-usa.chd` | `851075e2a894524bd89703f2f930098c99302a488424328cf77ec33da325a3f1` | PSP | `UCUS-98612` | 2005-06-02 14:29:23 |
+| `pure-psp-eu.chd` | `9390d1ff457be45c518bff4aa66974b3c4cf4c4f0d0c2388d770600b41ec264f` | PSP | `UCES-00001` | 2005-06-29 14:18:53 |
 | `hdfury-ps3-eu.iso` | `6702a1b064c966e30ad878f7dded9a787bbab459ed4a7232007f6f1e7870f987` | PS3 | unknown | 2009-08-28 10:02:56 |
 
 Reproduce with `just hash-images`.
@@ -114,6 +115,27 @@ Not a target in its own right yet. It is here as the **format ancestor**: it
 uses the same `Data.wad` / `FE.wad` / `FEData.wad` structure as Pulse, with the
 same container header shape. Where a Pulse format is ambiguous, Pure's simpler
 version of it is often the faster way to understand it.
+
+### `pure-psp-eu.chd` - Wipeout Pure, PSP, EU
+
+```
+container      CHD, 172224 sectors (336 MiB capacity)
+platform       PSP
+serial         UCES-00001
+boot           PSP_GAME/SYSDIR/EBOOT.BIN
+identified by  UCES-00001|381EA7A814902283|0001|G
+volume id      SCEE
+publisher      SCEE
+contents       82 files in 18 directories, 308 MiB
+```
+
+Acquired 2026-08-04, the same pass that acquired `pulse-psp-eu.chd`, for the
+same reason: `pure-psp-usa.chd` above is the only Pure disc this project had,
+and a second region gives a same-title comparison pair the way it did for
+Pulse. `UCES-00001` is a very low serial - Pure was one of the PSP's EU
+launch titles. Not otherwise explored; not a reverse-engineering target
+(Pure isn't one at all yet, per ADR-0009) and no Ghidra import was done for
+it, unlike the Pulse EU disc.
 
 ### `hdfury-ps3-eu.iso` - Wipeout HD / Fury, PS3
 

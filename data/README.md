@@ -47,6 +47,7 @@ Tooling looks for these names. Copy your own images here and rename:
 | `pulse-ps2-eu.chd` | Wipeout Pulse | PS2 | Europe |
 | `pulse-psp-eu.chd` | Wipeout Pulse | PSP | Europe/Australia |
 | `pure-psp-usa.chd` | Wipeout Pure | PSP | USA |
+| `pure-psp-eu.chd` | Wipeout Pure | PSP | Europe |
 | `hdfury-ps3-eu.iso` | WipEout HD / Fury | PS3 | Europe |
 
 `.iso` works anywhere `.chd` does; the tools sniff the container.
@@ -78,16 +79,18 @@ Hashes are fine to commit; content is not.
 
 ## DLC (`data/dlc/`)
 
-Four PSN DLC packages for Wipeout Pulse EU, as downloaded (`.zip`, each
-containing a `UCES00465/` folder): the Auricom, Harimau, Icaras and Mirage
-ship packs. Each is `PACKn.edat`, three `PACKn_UIn.edat` files, and one
-`PARAM.pbp`.
+PSN DLC packages, as downloaded (`.zip`), for two titles. **The two titles'
+packs are packaged differently and land on opposite sides of the encryption
+question - checked by reading the actual bytes in both cases, not assumed
+from the extension either way.**
 
-**Despite the extension, `PACKn.edat` is not encrypted.** It reads directly
-as an ordinary `oag-wad`-format archive (32-33 entries, LZSS-compressed,
-consistent offset chain) - `cargo run -p oag-tools --bin oag-wad -- list
-<extracted PACKn.edat>` lists it like any other WAD. Checked against Ghidra
-before assuming otherwise: the game's only NpDrm import,
+**Wipeout Pulse EU** (`UCES00465/` folder, four packs: Auricom, Harimau,
+Icaras, Mirage): each is `PACKn.edat`, three `PACKn_UIn.edat` files, and one
+`PARAM.pbp`. **Despite the extension, `PACKn.edat` is not encrypted.** It
+reads directly as an ordinary `oag-wad`-format archive (32-33 entries,
+LZSS-compressed, consistent offset chain) - `cargo run -p oag-tools --bin
+oag-wad -- list <extracted PACKn.edat>` lists it like any other WAD. Checked
+against Ghidra before assuming otherwise: the game's only NpDrm import,
 `sceNpDrmEdataSetupKey`, is called with no key argument and
 `sceNpDrmSetLicenseeKey` (which would supply one) is never imported at all -
 consistent with there being no per-title secret to find, though what (if
@@ -96,3 +99,18 @@ itself proved to be plaintext. `PARAM.pbp` is the standard, unencrypted PBP
 (title/icon metadata for the XMB). No decryption work was needed or done -
 the `PACKn_UIn.edat` files (front-end UI assets, presumably the same shape)
 have not been checked yet but are expected to match.
+
+**Wipeout Pure EU** (per-pack folders like `UCES00001DDELTAPAK/`, seven
+packs: A7, Delta, Gamma 1, GamesRadar, Oblivion, Omega, Voice of Cod): each
+holds `ICON0.png`, `PARAM.sfo`, `PIC1.png`, a 16-byte `TEST.bin`, and the
+actual payload, `pi.wad`. **`pi.wad` genuinely is encrypted or otherwise
+unstructured** - measured entropy 8.0000 bits/byte across the whole file (a
+plain WAD, by contrast, sits well below that; Pulse's `PACKn.edat` above does
+too), no recognisable magic, no readable strings anywhere sampled, and
+`oag-wad` refuses it outright (`unknown WAD version 2858143392`). Unlike
+Pulse's DLC, this has not been reverse-engineered - nothing here established
+whether Pure's NpDrm usage matches Pulse's (single-argument
+`sceNpDrmEdataSetupKey`, no per-title key) or differs; Pure is a different
+executable and was not checked. `PARAM.sfo` is Sony's standard, unencrypted
+metadata format (same `\0PSF` magic as the disc's own `PARAM.SFO`). No
+decryption attempted.
