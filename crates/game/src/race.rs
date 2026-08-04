@@ -349,6 +349,18 @@ pub struct Loaded {
     pub track_model: Model,
     /// What to draw for the ship.
     pub ship_model: Model,
+    /// What to draw for the boost plume, additively, while
+    /// [`Exhaust::plume_visible`] is true.
+    ///
+    /// `Data\Ships\<Team>\shipboost.vex`, loaded beside [`Self::ship_model`].
+    /// `None` when the source carries no entry under that name for this
+    /// team - reported rather than failing the race, since the PS2 set may
+    /// not carry it under the same name as the PSP one does. Two meshes,
+    /// already spread apart in the file's own space (confirmed by rendering
+    /// it with `oag-view --mesh` and by its node tree having no `Transform`
+    /// between `World` and the two `Mesh` nodes), so this is drawn once in
+    /// ship space rather than mounted on a locator.
+    pub boost_model: Option<Model>,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,
     /// The track's authored `fogCube` volumes, for [`Scene`] to sample per
@@ -676,6 +688,37 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ship_model.radius
     ));
 
+    // `Data\Ships\<Team>\shipboost.vex` - the plume `ExhaustFlare_Init` reveals
+    // once `boost_timer` passes `exhaust::BOOST_GATE`. Absence is reported
+    // rather than failing the race: the PS2 set may not carry it under the
+    // same name the PSP one does, and a missing boost plume is a missing
+    // feature, not a broken load.
+    let boost_name = format!(r"Data\Ships\{}\shipboost.vex", options.team);
+    let boost_model = match archives.read_name(&boost_name) {
+        Ok(blob) => match mesh::build_with_textures(&boost_name, &blob, None, options.lod) {
+            Ok(model) => {
+                report.push(format!(
+                    "{boost_name}: {} triangle(s) - drawn additively while the plume is up",
+                    model.indices.len() / 3
+                ));
+                Some(model)
+            }
+            Err(e) => {
+                report.push(format!(
+                    "{boost_name}: {} bytes, does not parse ({e}) - no boost plume this run",
+                    blob.len()
+                ));
+                None
+            }
+        },
+        Err(e) => {
+            report.push(format!(
+                "{boost_name}: not in the archive set ({e}) - no boost plume this run"
+            ));
+            None
+        }
+    };
+
     let track_model = if options.ribbon {
         track_render::build_model(&label, &ai)
     } else {
@@ -928,6 +971,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         pad_model,
         fog_volumes,
         ship_model,
+        boost_model,
         visibility,
         flare,
         noise,
@@ -2594,6 +2638,7 @@ impl std::fmt::Debug for Drawable {
 }
 
 impl Drawable {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -2602,6 +2647,7 @@ impl Drawable {
         anisotropy: Anisotropy,
         sample_count: u32,
         depth: mesh_render::Depth,
+        blend: wgpu::BlendState,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -2621,6 +2667,7 @@ impl Drawable {
             anisotropy,
             sample_count,
             depth,
+            blend,
         )?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
@@ -2805,11 +2852,20 @@ pub struct Scene {
     /// first tier is then skipped entirely rather than approximated.
     visibility: Option<TrackVisibility>,
     ship: Drawable,
+    /// The boost plume: an ordinary `Drawable` with its blend pipeline
+    /// overridden to [`exhaust::BLEND`] instead of
+    /// [`mesh_render::TRANSPARENT_BLEND`].
+    ///
+    /// `None` when the source carries no `shipboost.vex` under this team's
+    /// name - see `Loaded::boost_model`. Drawn only while
+    /// [`Exhaust::plume_visible`] is true, with the ship's own model matrix,
+    /// since the original parents it to the craft rather than to the flare.
+    boost: Option<Drawable>,
     /// The collision soup overlay, present only when `Options::collision` asked
     /// for it. Drawn with the identity transform, same as the track: the
     /// collision geometry is already in world space.
     collision: Option<Drawable>,
-    /// The engine flare: the one blended pipeline in the frame.
+    /// The engine flare and the boost plume: the frame's blended pipelines.
     ///
     /// `RefCell` because its per-frame upload needs `&mut` while [`Scene::render`]
     /// stays `&self`. That signature is worth keeping: the alternative threads
@@ -2861,6 +2917,7 @@ impl Scene {
         collision_model: Option<Model>,
         sky_model: Option<Model>,
         pad_model: Option<Model>,
+        boost_model: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         format: wgpu::TextureFormat,
@@ -2887,6 +2944,7 @@ impl Scene {
                     anisotropy,
                     sample_count,
                     mesh_render::Depth::Sky,
+                    mesh_render::TRANSPARENT_BLEND,
                 )
             })
             .transpose()?;
@@ -2898,6 +2956,7 @@ impl Scene {
             anisotropy,
             sample_count,
             scene_depth,
+            mesh_render::TRANSPARENT_BLEND,
         )?;
         let ship = Drawable::new(
             device,
@@ -2907,6 +2966,7 @@ impl Scene {
             anisotropy,
             sample_count,
             scene_depth,
+            mesh_render::TRANSPARENT_BLEND,
         )?;
         let collision = collision_model
             .map(|model| {
@@ -2918,6 +2978,7 @@ impl Scene {
                     anisotropy,
                     sample_count,
                     scene_depth,
+                    mesh_render::TRANSPARENT_BLEND,
                 )
             })
             .transpose()?;
@@ -2932,6 +2993,30 @@ impl Scene {
                     anisotropy,
                     sample_count,
                     scene_depth,
+                    mesh_render::TRANSPARENT_BLEND,
+                )
+            })
+            .transpose()?;
+        // The boost plume, drawn additively. It is real geometry (a `.vex`
+        // mesh, not a camera-facing quad), so it needs depth testing and a
+        // model matrix, which is what `Drawable` already gives every other
+        // mesh here rather than a third thing beside `exhaust::Pipeline`.
+        // `exhaust::BLEND` in place of `TRANSPARENT_BLEND` is the one thing
+        // that has to differ - the model's texture is named `_ADD`, and
+        // drawing it with the ordinary lerp blend looks plausible and is
+        // wrong; see `docs/ghidra/functions/psp-pulse/exhaust.md`.
+        let boost = boost_model
+            .filter(|model| !model.indices.is_empty())
+            .map(|model| {
+                Drawable::new(
+                    device,
+                    queue,
+                    model,
+                    format,
+                    anisotropy,
+                    sample_count,
+                    scene_depth,
+                    exhaust::BLEND,
                 )
             })
             .transpose()?;
@@ -2953,6 +3038,7 @@ impl Scene {
             track,
             visibility,
             ship,
+            boost,
             collision,
             sky,
             pads,
@@ -3054,6 +3140,11 @@ impl Scene {
         {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&fog));
         }
+        // `self.boost` is deliberately left out of this list, at `Fog::off`
+        // from `mesh_render::build`. Whether the original fogs the plume is
+        // unrecovered - it is scene geometry like the ship, but additive like
+        // the flare, and the flare's own post-projection draw is not answered
+        // by fog either way. Left unfogged rather than guessed.
 
         // The sky rides with the eye. Translating it to the camera is what makes
         // an authored cube tens of units across stand in for a horizon: the
@@ -3074,6 +3165,15 @@ impl Scene {
             .write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         self.ship
             .write(queue, view_projection, race.ship_model_matrix(), scroll);
+        // Same model matrix as the ship: the original parents the plume to the
+        // craft, not to the flare - see `Loaded::boost_model`. Skipped while
+        // hidden rather than written and left undrawn, since there is nothing
+        // for the stale buffer contents to affect either way.
+        if let Some(boost) = &self.boost
+            && race.exhaust().plume_visible()
+        {
+            boost.write(queue, view_projection, race.ship_model_matrix(), 0.0);
+        }
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         }
@@ -3186,6 +3286,14 @@ impl Scene {
             stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
         }
         stats.add(self.ship.draw(&mut pass, None, None, None));
+        // After the ship, so the hull's depth is already in the buffer: the
+        // plume's own blend pipeline writes no depth, the same reasoning as
+        // the flare below.
+        if let Some(boost) = &self.boost
+            && race.exhaust().plume_visible()
+        {
+            stats.add(boost.draw(&mut pass, None, None, None));
+        }
         if let Some(collision) = &self.collision {
             stats.add(collision.draw(&mut pass, None, None, None));
         }
@@ -3366,6 +3474,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         collision_model,
         sky_model,
         pad_model,
+        boost_model,
         fog_volumes,
         visibility,
         flare,
@@ -3433,6 +3542,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         collision_model,
         sky_model,
         pad_model,
+        boost_model,
         flare,
         noise,
         format,

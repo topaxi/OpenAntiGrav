@@ -32,9 +32,11 @@
   recovered in [`fog.md`](../ghidra/functions/psp-pulse/fog.md) and applied by
   `oag_formats::fog` plus `mesh.wgsl`'s own bind group. The cloud and sea classes
   are not implemented
-- Particle effects: thrust (**done** - the `Engine Flare` class, recovered in
-  [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md) and implemented in
-  `oag_render::exhaust`) and collision sparks (**done**, `oag_render::sparks` -
+- Particle effects: thrust (**done** - the `Engine Flare` class plus its
+  `Trail` ribbon and the `<Team>boost.vex` plume a speed pad reveals, all
+  recovered in [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md) and
+  implemented in `oag_render::exhaust` and `oag_game::race::Loaded::boost_model`)
+  and collision sparks (**done**, `oag_render::sparks` -
   currently **authored, not recovered**: the actual spark-spawn trigger,
   `ShipCollisionFx_Trigger`, has since been found and read in full, naming
   the three real spark resources and a usable severity formula - see

@@ -260,6 +260,14 @@ pub const BOOST_DECAY: f32 = 0.1;
 /// Boost-timer threshold above which the engine counts as on regardless of thrust.
 pub const BOOST_GATE: f32 = 0.2;
 
+/// How long the revealed `<Team>boost.vex` plume stays up, `flare+0x88`'s
+/// hide threshold at preset 2.
+///
+/// Independent of [`BOOST_SECONDS`]: the plume's own accumulator only resets
+/// at the reveal, so once up it runs this full span regardless of how long
+/// `boost_timer` stays above [`BOOST_GATE`].
+pub const PLUME_SECONDS: f32 = 1.5;
+
 /// How long a speed pad lights the flare for, in seconds.
 ///
 /// **A literal in the code, not a tunable.** `ExhaustFlare_OnSpeedupPad`
@@ -274,13 +282,16 @@ pub const BOOST_GATE: f32 = 0.2;
 /// look. Tying the two together is the obvious-looking mistake and the original
 /// does not do it - see `oag_game::race`'s pad trigger.
 ///
-/// **This is only half of what a boost changes.** `boost_timer` reaches exactly
-/// two things in `Exhaust_Update`: this size, and the reveal of the additive
-/// `<Team>boost.vex` plume once the timer passes [`BOOST_GATE`]. The plume then
-/// runs on **its own** 1.5-second timer (`self+0x88`, reset at the reveal), so it
-/// long outlives the `0.8` here. This crate does not draw it, which means the
-/// flare is carrying the whole of a boost's visual weight where the original
-/// splits it in two - see this module's docs.
+/// **This is only a third of what a boost changes.** `boost_timer` reaches
+/// exactly three things in `Exhaust_Update`: this size, the reveal of the
+/// additive `<Team>boost.vex` plume once the timer passes [`BOOST_GATE`], and
+/// the `engine_on` flag - with thrust off, `boost_timer > `[`BOOST_GATE`]
+/// alone keeps the engine counted as on, which feeds the engine sound and the
+/// intensity ramp. The plume then runs on **its own** [`PLUME_SECONDS`] timer
+/// (`self+0x88`, reset at the reveal), so it long outlives the `0.8` here.
+/// This module tracks that timer ([`Exhaust::plume_visible`]) but does not
+/// draw the mesh itself - `oag-game` owns loading and drawing
+/// `<Team>boost.vex` beside the ship.
 pub const BOOST_SECONDS: f32 = 0.8;
 
 /// Intensity gain per second while the engine is on.
@@ -358,6 +369,8 @@ pub struct Exhaust {
     engine_on: bool,
     half_size: f32,
     alpha: f32,
+    plume_timer: f32,
+    plume_visible: bool,
     /// Position history, newest at `write - 1`.
     trail: [Vec3; TRAIL_SAMPLES],
     /// The exhaust direction at each sample, so a ribbon segment keeps the
@@ -387,6 +400,8 @@ impl Exhaust {
             engine_on: false,
             half_size: 0.0,
             alpha: 0.0,
+            plume_timer: 0.0,
+            plume_visible: false,
             trail: [Vec3::ZERO; TRAIL_SAMPLES],
             trail_back: [Vec3::ZERO; TRAIL_SAMPLES],
             trail_len: 0,
@@ -405,6 +420,10 @@ impl Exhaust {
     /// Order matters and follows the original: the boost timer decays, then
     /// intensity moves, then the size and alpha are drawn from the new intensity.
     pub fn advance(&mut self, dt: f32, thrust: f32, speed: f32, rng: &mut Rng) {
+        // Accumulates every tick regardless of visibility, matching the
+        // original adding to `flare+0x88` at the top of the frame.
+        self.plume_timer += dt;
+
         self.speed_kmh = speed * SPEED_TO_KMH;
         let ramp = ((self.speed_kmh - RAMP_FLOOR_KMH) / RAMP_SPAN_KMH).clamp(0.0, 1.0);
 
@@ -422,6 +441,20 @@ impl Exhaust {
             .max(ramp * RAMP_FLOOR_SHARE);
 
         self.engine_on = thrust > 0.0 || self.boost_timer > BOOST_GATE;
+
+        // Reveal is edge-triggered on the visibility bit being clear, so
+        // crossing a second pad while the plume is up neither restarts nor
+        // extends it. Hidden separately and after: a pad crossed late enough
+        // that `boost_timer` is still above `BOOST_GATE` when the `1.5 s`
+        // expires re-reveals on the very next tick rather than staying latched
+        // shut, which is the original's own per-tick check, not a one-shot.
+        if self.engine_on && self.boost_timer > BOOST_GATE && !self.plume_visible {
+            self.plume_visible = true;
+            self.plume_timer = 0.0;
+        }
+        if self.plume_visible && self.plume_timer >= PLUME_SECONDS {
+            self.plume_visible = false;
+        }
 
         // `Exhaust_UpdateEngineSound` is where the original keeps this ramp - it
         // drives the engine note's volume - but the three layer alphas and the
@@ -648,6 +681,12 @@ impl Exhaust {
     #[must_use]
     pub fn alpha(&self) -> f32 {
         self.alpha
+    }
+
+    /// Whether the `<Team>boost.vex` plume should be drawn this tick.
+    #[must_use]
+    pub fn plume_visible(&self) -> bool {
+        self.plume_visible
     }
 
     /// Per-layer opacity, innermost first.
@@ -1650,5 +1689,102 @@ mod tests {
         let e = Exhaust::new();
         let v = e.vertices(Vec3::ZERO, Vec3::X, Vec3::Y);
         assert!(v.iter().all(|v| v.lit == 0.0));
+    }
+
+    /// Ticks after the arming tick until the plume hides, with no further
+    /// boosts crossed in between.
+    ///
+    /// Derived rather than hardcoded from [`PLUME_SECONDS`]`/`[`SUBSTEP_DT`]:
+    /// `plume_timer` is an `f32` accumulator, and repeated addition of
+    /// [`SUBSTEP_DT`] does not land on exactly `90 * SUBSTEP_DT` after 90
+    /// additions, so a test asserting an exact tick index against the rounded
+    /// division was off by one. The tests below only ever compare two runs
+    /// driven by this same accumulation, never a hardcoded index, so they do
+    /// not depend on where the boundary actually falls.
+    fn plume_hide_tick() -> usize {
+        let mut e = Exhaust::new();
+        let mut r = rng();
+        e.boost(BOOST_SECONDS);
+        e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+        assert!(e.plume_visible(), "did not reveal on the arming tick");
+        for tick in 1..200 {
+            e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+            if !e.plume_visible() {
+                return tick;
+            }
+        }
+        panic!("plume never hid within 200 ticks");
+    }
+
+    /// The plume is latched: crossing a second pad while it is up neither
+    /// restarts nor extends its own 1.5 s countdown.
+    #[test]
+    fn a_second_boost_mid_plume_does_not_extend_it() {
+        let baseline = plume_hide_tick();
+
+        let mut e = Exhaust::new();
+        let mut r = rng();
+        e.boost(BOOST_SECONDS);
+        e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+        assert!(e.plume_visible());
+
+        for tick in 1..=baseline {
+            if tick == baseline / 2 {
+                // Still visible: re-arming the boost timer here must not
+                // reset the plume's own countdown.
+                e.boost(BOOST_SECONDS);
+            }
+            e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+            let should_be_hidden = tick == baseline;
+            assert_eq!(
+                e.plume_visible(),
+                !should_be_hidden,
+                "wrong visibility at tick {tick}, expected relative to \
+                 baseline hide tick {baseline}"
+            );
+        }
+    }
+
+    /// A pad crossed late enough that `boost_timer` is still above
+    /// `BOOST_GATE` when the plume's own `1.5 s` expires produces a deferred
+    /// back-to-back second plume: hide this tick, reveal the next. A
+    /// one-shot latch that swallowed the second boost would be wrong - see
+    /// this module's `BOOST_SECONDS` doc comment.
+    #[test]
+    fn a_late_pad_re_reveals_the_plume_the_tick_after_it_hides() {
+        let baseline = plume_hide_tick();
+
+        let mut e = Exhaust::new();
+        let mut r = rng();
+        e.boost(BOOST_SECONDS);
+        e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+        assert!(e.plume_visible());
+
+        for _ in 1..baseline {
+            e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+        }
+        assert!(
+            e.plume_visible(),
+            "still up one tick before its own deadline"
+        );
+
+        // Cross a second pad one tick before the deadline, freshly arming
+        // `boost_timer` so it is still comfortably above `BOOST_GATE` once
+        // the plume's own deadline hits.
+        e.boost(BOOST_SECONDS);
+
+        // Crosses the deadline: hides, without re-revealing on the same tick
+        // even though `boost_timer` is high again.
+        e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+        assert!(!e.plume_visible(), "did not hide at its own deadline");
+
+        // The very next tick: the latch is clear again and `boost_timer` is
+        // still above the gate, so it reveals again.
+        e.advance(SUBSTEP_DT, 0.0, 0.0, &mut r);
+        assert!(
+            e.plume_visible(),
+            "did not re-reveal the tick after hiding, though boost_timer \
+             was still armed"
+        );
     }
 }

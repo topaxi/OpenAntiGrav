@@ -237,7 +237,16 @@ pub fn capture_from(
         texture_binds,
         fog_bind,
         fog_buffer: _,
-    } = build(&device, &queue, model, format, anisotropy, 1, Depth::Scene)?;
+    } = build(
+        &device,
+        &queue,
+        model,
+        format,
+        anisotropy,
+        1,
+        Depth::Scene,
+        TRANSPARENT_BLEND,
+    )?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniforms"),
@@ -511,7 +520,8 @@ pub struct Built {
     /// a second `set_pipeline` in the same render pass as `pipeline`, before
     /// `blend_pipeline`.
     pub alpha_test_pipeline: wgpu::RenderPipeline,
-    /// Blended pass: depth write off, [`TRANSPARENT_BLEND`]. Draws
+    /// Blended pass: depth write off, the `blend` the caller passed to
+    /// [`build`] - [`TRANSPARENT_BLEND`] for ordinary scene geometry. Draws
     /// [`Model::transparent_draws`] last, as a third `set_pipeline` in the
     /// same render pass - see [`crate::exhaust::Pipeline`] for the precedent
     /// of pairing an opaque and a blended pipeline this way.
@@ -563,6 +573,14 @@ pub enum Depth {
 /// `sample_count` must match the render pass's colour and depth attachments -
 /// 1 outside a race, or `[graphics] anti_aliasing`'s MSAA count inside one.
 /// See `race::Scene::new`.
+///
+/// `blend` is the state [`Built::blend_pipeline`] draws
+/// [`Model::transparent_draws`] with. Almost every caller wants
+/// [`TRANSPARENT_BLEND`]; the one exception is the boost plume, which reuses
+/// this same opaque/cutout/blend machinery but needs `crate::exhaust::BLEND`
+/// instead, because its `_ADD` texture is additive rather than a lerp - see
+/// `race::Scene`'s `boost` field.
+#[allow(clippy::too_many_arguments)]
 pub fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -571,6 +589,7 @@ pub fn build(
     anisotropy: Anisotropy,
     sample_count: u32,
     depth: Depth,
+    blend: wgpu::BlendState,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -753,9 +772,10 @@ pub fn build(
     // Third pipeline for `Model::transparent_draws` (list B): same shader
     // module, bind group layouts and vertex layout, blended instead of
     // replaced and with depth write off so an overlapping transparent draw
-    // cannot occlude one drawn after it - see `TRANSPARENT_BLEND` and
-    // `crate::exhaust::Pipeline`, which established this opaque/blended
-    // pairing first.
+    // cannot occlude one drawn after it - see `crate::exhaust::Pipeline`,
+    // which established this opaque/blended pairing first. `blend` is almost
+    // always `TRANSPARENT_BLEND`; see this function's own doc comment for the
+    // one caller that passes something else.
     let blend_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("mesh blend"),
         layout: Some(&pipeline_layout),
@@ -777,7 +797,7 @@ pub fn build(
             entry_point: Some("fs_main_blend"),
             targets: &[Some(wgpu::ColorTargetState {
                 format,
-                blend: Some(TRANSPARENT_BLEND),
+                blend: Some(blend),
                 write_mask: wgpu::ColorWrites::ALL,
             })],
             compilation_options: Default::default(),

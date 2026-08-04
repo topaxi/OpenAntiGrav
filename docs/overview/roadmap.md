@@ -516,9 +516,15 @@ seen from the authoring side.
         authored asset for whoever picks this up on the PS2 side
       - `Quake` `0x3c7` - the quake weapon's track deformation
       - Shield hit response, whose model is `Data\Ships\<Team>\<Team>shield.vex`
-      - `shipwreck.vex` and `shipboost.vex`, the damage and boost ship states.
-        **Note the naming trap**: those resolve through the FE team-model name,
-        whose default is the literal `"ship"`, so it is `shipwreck.vex` and not
+      - [x] `shipboost.vex`, the boost ship state - **the additive plume a
+        speed pad reveals**, recovered and drawn (2026-08-04); see
+        [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md)'s "boost
+        visual" section and `oag_game::race::Loaded::boost_model`. Two meshes,
+        drawn once in ship space with no locator mounting - the file's own
+        node tree carries no `Transform` for either mesh to mount on.
+      - `shipwreck.vex`, the damage ship state, still open. **Note the naming
+        trap**: both resolve through the FE team-model name, whose default is
+        the literal `"ship"`, so it is `shipwreck.vex` and not
         `Assegaiwreck.vex` - guessing the team name into the template 404s
 
 **A default run should be the production run**, and the defaults were audited

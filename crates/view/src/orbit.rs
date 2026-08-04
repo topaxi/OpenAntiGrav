@@ -195,6 +195,7 @@ impl Session {
             anisotropy,
             1,
             mesh_render::Depth::Scene,
+            mesh_render::TRANSPARENT_BLEND,
         )?;
         let _ = placeholder_bind_group;
 

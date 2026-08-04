@@ -820,17 +820,23 @@ full, the trail needs 10 ticks of history before it appears at all.**
   ship. So it is scenery and tunnel glow, and the earlier guess that it might be
   part of the ship exhaust is wrong.
 
-### What a boost actually changes, and what this crate is missing
+### What a boost actually changes
 
 Read out of `Exhaust_Update` (`0x089058b0`) in full, prompted by a report that
 our flare looks too strong while our trail does not react at all. Both halves of
 that report are explained, and only one of them is a bug.
 
-**`boost_timer` (`self+0xb8`) reaches exactly two things.** Nothing else in the
-function reads it:
+**`boost_timer` (`self+0xb8`) reaches exactly three things.** Nothing else in
+the function reads it:
 
-1. the flare's half-size, `self+0xc4`, and
-2. the reveal of the `<Team>boost.vex` plume.
+1. the flare's half-size, `self+0xc4`,
+2. the reveal of the `<Team>boost.vex` plume, and
+3. the `engine_on` flag (`self+0x94`) - with thrust off, `boost_timer > 0.2`
+   alone keeps the engine counted as on, which feeds the engine sound and the
+   intensity ramp. `oag_render::exhaust::Exhaust::advance` already implements
+   this third use (the `engine_on` line); only the "exactly two" phrasing here
+   and in `oag_render::exhaust::BOOST_SECONDS`'s doc comment was off by one,
+   corrected 2026-08-04.
 
 **The `Trail` gets nothing from a boost.** Its two per-frame parameters and all
 three layer colours come from `intensity` (`self+0xbc`) alone:
@@ -859,45 +865,101 @@ the original's flare really is **3.56x** wider during a boost. The ratio is the
 original's; only `oag_render::exhaust::HALF_SIZE_TO_WORLD` is ours, and it was
 fitted on a *resting* frame.
 
-**The conclusion for the renderer.** The original spends a boost across two
-visuals - a much bigger flare *and* an additive plume - and this crate draws only
-the first. So the flare carries the whole effect, which is exactly the reported
-symptom. **Detuning `HALF_SIZE_TO_WORLD` would be the wrong fix**: it would break
-the resting case to compensate for a mesh that is not being drawn. The fix is to
-draw `<Team>boost.vex`.
+**The conclusion for the renderer, and its resolution.** The original spends a
+boost across two visuals - a much bigger flare *and* an additive plume - and
+until 2026-08-04 this crate drew only the first. So the flare carried the whole
+effect, which was exactly the reported symptom. **Detuning `HALF_SIZE_TO_WORLD`
+would have been the wrong fix**: it would have broken the resting case to
+compensate for a mesh that was not being drawn. The actual fix, now shipped,
+is drawing `<Team>boost.vex`: `oag_render::exhaust::Exhaust` tracks the
+plume's own 1.5 s reveal timer (`plume_timer`/`plume_visible`,
+`PLUME_SECONDS`) beside the flare's, and `oag_game::race::Loaded::boost_model`
+loads `Data\Ships\<Team>\shipboost.vex` for `Race::Scene` to draw additively
+alongside the ship, model-matrix and all, whenever `plume_visible()` is true.
 
-### The boost visual, and two mount points
+### The boost visual, and settling the mount question
 
 `Ship.vex` carries two `Transform` locators named `boost_flare` and
 `boost_flare1`, children of `world`, 64 bytes each. `shipboost.vex` carries
 exactly two meshes, **`bflare1Shape`** and `bflare2Shape`, textured
 `Data/Tex/pulse_boost2_ADD.tga` - and the `_ADD` suffix is the artists' own note
 that it composites additively, agreeing with the blend function recovered from
-`ExhaustFlare_BuildDisplayList`. The name pairing is strong but nothing traced
-the locators to the meshes at instruction level, so treat the mounting as
-**confidence 60**.
+`ExhaustFlare_BuildDisplayList`. The name pairing looked strong, but nothing
+traced the locators to the meshes at instruction level, so the mounting sat at
+**confidence 60**, then 75 once a player's independent description of the
+original ("expanding to almost the width of the ship, flaring along the wings
+at the back") confirmed two wing-spread flares was the right shape rather than
+one.
 
-**Raised to 75 by an independent observation.** A player describing the original
-from memory, without having seen any of this, reported the boost as "expanding to
-almost the width of the ship, flaring along the wings at the back" and asked
-whether more than one trail was being drawn. Two wing-spread additive flares is
-what two locators and two meshes predict, and it is *not* what the single
-camera-facing flare quad or the single-ribbon `Trail` would look like. That is a
-behavioural prediction of the asset structure being confirmed from the other
-direction, which is worth more than another read of the same names - but it is
-still not instruction-level, so it stays below 85.
+**Settled at 80, from two more angles, neither of them instruction-level but
+both converging on the same answer.** First: `BOOT.BIN`'s string table has no
+`boost_flare` string anywhere in it - only `StartBoost`, `boostMul`,
+`boostimg`, the HUD label and the `%s\%sboost.vex` path template - and this
+engine finds scene nodes through class-name strings (`"Engine Flare"` is
+present as one), so no code path looks a `boost_flare` locator up by name. If a
+mount exists at all it would have to be data-driven inside the `.vex` itself,
+not driven from `BOOT.BIN`. Second, and decisively: rendering
+`shipboost.vex` (`oag-view --mesh 'Data\Ships\Assegai\shipboost.vex'`) and
+walking its node tree (`oag-view --nodes`) shows `bflare1Shape` and
+`bflare2Shape` as **direct children of `World`, with no `Transform` node
+between them** - the file's own scene graph carries no positioning layer for
+either mesh to mount on. The two meshes are already spread apart at wing
+width in their own baked vertex data, visible in the render without any
+locator applied. So the `boost_flare`/`boost_flare1` locators are very likely
+unused for this purpose, or used by something this crate does not yet reach
+(a different node, another file); either way, mounting the plume through them
+would be inventing a transform chain the format does not carry. **This is why
+the renderer draws `shipboost.vex` once, in ship space, with no per-locator
+mounting.**
 
 `ExhaustFlare_Init` (`0x08905308`) is where it is loaded, and the path really is
 built per team: it formats `"%s\%sboost.vex"` (`0x08a84ccc`) and calls
 `Vex_LoadModel(child, path, 0x4d000000, 0xfdb2, 0x3e9, 0)`, then immediately
 **clears the visibility bit** (`+0x2c &= ~4`), so the plume is hidden from birth
-and only `Exhaust_Update` ever shows it.
+and only `Exhaust_Update` ever shows it. `child+0x8 = *(flare+0xc0)` and
+`Attach(*(flare+0xc0), child)` right after - `flare+0xc0` is the flare's
+ancestor matching the ship class, the same pointer `Exhaust_Update` reads
+thrust through - so **the plume is parented to the craft, not to the flare**,
+sitting at the craft origin as a sibling of the hull rather than at the
+nozzle. Had it been parented to the flare it would need the flare's own world
+position; parented to the craft, the ship's own model matrix is the right one,
+which is what `Race::Scene` uses to draw it.
+
+**Two of the eight PSP teams carry extra junk beside the three `0x000` nodes
+every team has** (below): Assegai has one extra `Airbrake` node
+(`ship:cockpit_etc:Airbrake_Left`, class `0x3c5`, 64 bytes), and Goteki has
+one `Transform` (`ship:cockpit_etc:screen`, class `0x6e`) plus *two*
+`Airbrake` nodes. All are direct children of `World`, siblings of the two
+`Mesh` nodes rather than ancestors of either, so they do not disturb the
+"no `Transform` between `World` and a `Mesh`" reading above. Measured across
+all eight teams with `oag-view --nodes`, unfiltered - an earlier pass here
+generalised from Assegai alone and got the shape wrong for the other seven.
+Left unexplained rather than invented an origin for: none of it affects the
+decode, since `mesh::build_with_textures` only reads `Mesh` and `Texture`
+nodes.
 
 `shipboost.vex` and `shipshield.vex` also each carry three class-`0x000` nodes
 named `ViewCompass`, `UniversalManip` and `UniversalManip1`, with zero-byte
-payloads. Those are **Maya viewport furniture exported by accident** - the
-manipulator gizmos and the view compass - not a decode failure. Recorded so the
-next reader does not go looking for a class `0` handler.
+payloads, on every team. Those are **Maya viewport furniture exported by
+accident** - the manipulator gizmos and the view compass - not a decode
+failure. Recorded so the next reader does not go looking for a class `0`
+handler.
+
+**Not every team ships one.** `Auricom`, `Harimau` and `Icaras` carry no
+`Ship.vex` - and so no `shipboost.vex` - on the PSP disc at all, and are
+confirmed PS2-only (they resolve there - see `ps2_source_ground_truth.rs`'s
+own `TEAMS`). Two more candidate names, `Mirage` and `Van_Uber`, resolve on
+**neither** disc under this project's current name-mining - an open gap,
+not evidence either way about which platform ships them - which is why the
+split above ("eight teams whose `Ship.vex` resolves by name") is phrased as
+eight of *thirteen* candidates, not eight of eleven; `docs/formats/handling-stats.md`
+counts the same eight independently, over `handlingstats.xml` rather than
+`Engine Flare`. `Loaded::boost_model` is `None` for a team with no entry
+rather than a load failure, and `crates/game/tests/boost_plume_ground_truth.rs`
+pins what is actually established: the eight PSP teams' `shipboost.vex`
+decoding with exactly two meshes, a resolved texture and all four batches
+landing in the transparent-draw list `exhaust::BLEND` needs to reach, and the
+three *confirmed* PS2-only teams having no PSP entry to find.
 
 ## Open
 
@@ -918,15 +980,22 @@ next reader does not go looking for a class `0` handler.
 - **The five teams whose `Ship.vex` does not resolve by name.** A `mine-names`
   job, not a format one.
 - **What writes `self+0x84`** the `1` and `2` values that gate submit and update.
-- **What arms the boost timer (`flare+0xb8`).** Everything downstream of it is
-  recovered - `Exhaust_UpdateEngineSound` decays it, `engine_on` reads it
-  against `0.2`, the half-size adds `boost_timer * 8.0`, and `Exhaust_Update`
-  reveals the `<Team>boost.vex` model while it exceeds `0.2` (hiding it again
-  once `flare+0x88` passes `1.5` s). The *writer* - a boost-start, pad contact
-  or pickup - was searched for by store-offset and not found this pass; it is
-  gameplay code, most likely reached when M5 opens the pads. Until then a
-  reimplementation has the full visual consequence of boost and nothing that
-  triggers it.
+- **What arms `boost_timer` (`flare+0xb8`) in the *original binary*.**
+  Everything downstream of it is recovered - `Exhaust_UpdateEngineSound` decays
+  it, `engine_on` reads it against `0.2`, the half-size adds
+  `boost_timer * 8.0`, and `Exhaust_Update` reveals the `<Team>boost.vex`
+  model while it exceeds `0.2` (hiding it again once `flare+0x88` passes
+  `1.5` s). The *writer* - a boost-start, pad contact or pickup - was searched
+  for by store-offset and not found this pass; it is gameplay code, most
+  likely reached at the same site as `ExhaustFlare_OnSpeedupPad`
+  (`0x08904f10`, see `BOOST_SECONDS`'s doc comment). **This reimplementation's
+  own trigger is settled and shipped**, independently of finding that
+  original writer: `Race::test_speedup_pads` calls
+  `self.exhaust.boost(exhaust::BOOST_SECONDS)` on the same edge
+  `ExhaustFlare_OnSpeedupPad` fires on, and the plume now draws off that timer
+  end to end. What remains open here is purely the RE question of where in
+  `BOOT.BIN` the equivalent store happens, not whether the visual is
+  triggered.
 - ~~The ribbon's texture function~~ - **closed 2026-08-02** at 90: modulate /
   `TCC_RGBA` / colour-double off, set once by `Gfx_Init` and confirmed
   unchanged by a full-frame command-stream scan plus the driver's live shadow

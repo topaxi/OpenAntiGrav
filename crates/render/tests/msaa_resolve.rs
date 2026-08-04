@@ -109,6 +109,7 @@ fn render_and_resolve(
         Anisotropy::Off,
         sample_count,
         mesh_render::Depth::Scene,
+        mesh_render::TRANSPARENT_BLEND,
     )
     .expect("building the mesh pipeline");
 
