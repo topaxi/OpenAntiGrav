@@ -49,6 +49,15 @@ Tooling looks for these names. Copy your own images here and rename:
 
 `.iso` works anywhere `.chd` does; the tools sniff the container.
 
+**Pure and HD/Fury are read-only format targets today, not playable ones.**
+`oag-view`/`oag-unpack`/`oag-wad` read them opportunistically per
+[ADR-0009](../docs/architecture/adr/0009-multi-game-fanout.md). Pointing
+`oag-game` at either fails fast with a named error (`Error::WrongTitle` for
+Pure's PSP disc, since its archives share Pulse's own filenames; PS3
+identification doesn't exist yet, so HD/Fury falls back to the archive's own
+"nothing matched" error) rather than silently loading the wrong game -
+playable second-title support is tracked at roadmap M8.
+
 Confirm what you have with:
 
 ```sh

@@ -50,9 +50,12 @@ pub enum Error {
 
     /// Nothing in the source is an archive any known layout names.
     ///
-    /// Lists every candidate rather than only the platform's own, because the
-    /// commonest cause is a source that is not a Pulse disc at all, and a
-    /// message naming one file makes that look like a missing file instead.
+    /// Lists every candidate rather than only the platform's own, since the
+    /// commonest cause of an *unidentified* source is one that is not a Pulse
+    /// disc at all, and a message naming one file makes that look like a
+    /// missing file instead. A source that positively identifies as a
+    /// *different, known* title gets [`WrongTitle`](Error::WrongTitle)
+    /// instead, before archive matching ever runs.
     #[error("{looked_in} ({platform}) holds none of: {}", looked_for.join(", "))]
     NoArchive {
         /// The disc image or directory looked in.
@@ -64,6 +67,30 @@ pub enum Error {
         platform: String,
         /// Every archive name tried.
         looked_for: Vec<String>,
+    },
+
+    /// The disc identifies as a Studio Liverpool title this project does not
+    /// play.
+    ///
+    /// Wipeout Pure ships PSP archives byte-identical in name to Pulse's
+    /// (`Data.wad`, `FE.wad`), so without this check
+    /// [`pulse::Layout::resolve`] would open a Pure disc exactly as if it
+    /// were Pulse - archive-name matching alone cannot tell the two apart.
+    /// Raised only when the disc's own serial is positively known to belong
+    /// to another title; an extracted directory with no header (ADR-0004),
+    /// or an uncatalogued serial, gets no verdict here and falls through to
+    /// [`NoArchive`](Error::NoArchive) if nothing then matches.
+    #[error(
+        "{looked_in} identifies as {serial} ({title}), not Wipeout Pulse. \
+         {title} support is tracked for M8 - Beyond Pulse; see docs/overview/roadmap.md."
+    )]
+    WrongTitle {
+        /// The disc image or directory looked in.
+        looked_in: String,
+        /// The serial read off the disc.
+        serial: String,
+        /// The title that serial is known to belong to.
+        title: String,
     },
 
     /// No entry in the archive has that name hash.

@@ -480,6 +480,29 @@ the past.
   id is authored three times over on four tracks, and 116 PS2 control points
   name a section their file lacks. All benign; all would be "corruption" to a
   parser that assumed otherwise. See `docs/formats/track.md`.
+- **`DEVPUB_REEL` (`crates/game/src/boot.rs`) is not disc misidentification.**
+  It is easy to misread as "a Pure disc booted as though it were Pulse" -
+  the doc comment's "looked like the wrong game" line invites exactly that -
+  but the actual bug was `--movie`/`DEFAULT_BOOT_MOVIE` selecting the wrong
+  *entry hash* inside an already-opened, correctly-identified Pulse archive.
+  That entry's three regional cuts just happen to ship byte-identical on
+  Wipeout Pure's own disc too (no Pulse branding, shared dev/pub content), so
+  the wrong movie *looked* like the wrong game. `oag_assets::Error::WrongTitle`
+  (2026-08, `Layout::resolve` rejecting a disc whose serial identifies as a
+  known non-Pulse title) is unrelated to this bug and does not fix it - it
+  guards a different failure, a source that never should have opened as
+  Pulse at all. Do not conflate the two in docs; an earlier draft of that
+  error's own doc comment did, and was corrected before landing.
+- **`oag_assets::pulse::OTHER_TITLES` is a deny-list, not an allow-list, on
+  purpose.** The two Pulse serials this project has verified (`UCUS-98712`,
+  `SCES-54748`) are not the full universe of legitimate pressings - the
+  disc's own executable strings already imply an unconfirmed EU PSP release,
+  `UCES-00465` (see `hashes::DEVPUB_REEL_SCEE`'s doc comment). Allow-listing
+  known-good serials would hard-reject a real player's own legitimately-owned
+  disc, which is worse than not checking at all. The table only records
+  serials positively proven to belong to a *different* title (one entry
+  today: Pure's `UCUS-98612`); an unrecognised serial gets no verdict and
+  still falls through to ordinary archive-name matching.
 
 **Measuring a renderer change:**
 

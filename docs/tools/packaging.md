@@ -217,11 +217,17 @@ is the answer, and the first hit wins:
 | 4 | the AppImage's own directory, then `images/` in it | **portable mode**: copy the AppImage and the image into one folder |
 | 5 | `~/.local/share/oag/images/` | a stable per-user location |
 
-Within a directory, `pulse-psp-usa.chd` and `pulse-ps2-eu.chd` are tried by name
-first (the normalised names from [`data/README.md`](../../data/README.md)), then
-any `.chd` or `.iso` in alphabetical order - so an image under whatever name the
-player's own dump has still works, and two runs in the same directory always
-open the same one.
+Within a directory, the four normalised names from
+[`data/README.md`](../../data/README.md) are tried first, in this order:
+`pulse-psp-usa.chd`, `pulse-ps2-eu.chd`, `pure-psp-usa.chd`, then
+`hdfury-ps3-eu.iso`. Pulse's own two names come first because that is the
+platform the implementation follows; the other two are recognised so a
+directory holding only one of them is found by name rather than by
+alphabetical luck, not because `oag-game` can play them yet - opening one
+fails with a clear error naming the title instead of silently loading it as
+Pulse. After the known names, any `.chd` or `.iso` in alphabetical order is
+tried - so an image under whatever name the player's own dump has still
+works, and two runs in the same directory always open the same one.
 
 Portable mode reads **`$APPIMAGE`'s directory**, the AppImage file's own
 location. `$APPDIR`, the mounted read-only package, is deliberately never

@@ -161,6 +161,39 @@ pub mod hashes {
 /// back from the archive rather than trusted.
 pub const LANGUAGE_PLUGINS: &[&str] = &["PI008", "PI009", "PI010", "PI011", "PI012"];
 
+/// Serials positively identified as a Studio Liverpool title other than
+/// Wipeout Pulse, each backed by an owned disc recorded in
+/// `docs/reverse-engineering/source-images.md`.
+///
+/// **Not the inverse of a Pulse allow-list.** The two Pulse serials this
+/// project has actually verified (`UCUS-98712`, `SCES-54748`) are not the
+/// full universe of legitimate Pulse pressings - an unconfirmed EU PSP
+/// release (`UCES-00465`) is already implied by evidence recorded on
+/// [`hashes::DEVPUB_REEL_SCEE`]'s doc comment. Allow-listing would hard-reject
+/// a real player's own legitimately-owned disc, which is worse than not
+/// checking at all. So this table only rules a source *out*: a serial absent
+/// from it gets no verdict and still has to find its own archive by name,
+/// same as before this table existed.
+const OTHER_TITLES: &[(&str, &str)] = &[("UCUS-98612", "Wipeout Pure")];
+
+/// `Err(Error::WrongTitle)` when `serial` is positively known to belong to a
+/// title other than Wipeout Pulse.
+///
+/// Called from [`survey`], before archive-name matching runs, so a Pure disc
+/// never reaches [`Layout::resolve`]'s `Data.wad`/`FE.wad` search - it ships
+/// those under the identical names Pulse does, so name matching alone would
+/// open it exactly as if it were Pulse.
+fn reject_other_title(looked_in: &str, serial: &str) -> Result<()> {
+    if let Some((_, title)) = OTHER_TITLES.iter().find(|(known, _)| *known == serial) {
+        return Err(Error::WrongTitle {
+            looked_in: looked_in.to_string(),
+            serial: serial.to_string(),
+            title: (*title).to_string(),
+        });
+    }
+    Ok(())
+}
+
 /// Where one source keeps its archives.
 ///
 /// The two releases name their archives differently and put them in different
@@ -172,7 +205,8 @@ pub const LANGUAGE_PLUGINS: &[&str] = &["PI008", "PI009", "PI010", "PI011", "PI0
 /// order against the source's own file list, so a disc that identifies as
 /// neither console still opens if it holds an archive one of them would
 /// recognise, and a PS2 pressing whose serial directory is not `54748/` needs no
-/// change here.
+/// change here. This is unrelated to [`reject_other_title`]: that check runs on
+/// the disc's *serial* in [`survey`], before this layer's name matching starts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
     /// What the source says it is, or what its archives imply when it says
@@ -408,8 +442,11 @@ pub fn read_loose_file(source: &str, candidates: &[&str]) -> Result<Option<(Stri
 
 /// Every file in `source`, and what `source` says it is.
 ///
-/// A disc is asked directly; a directory is walked, and identified from the
-/// files it turned out to hold.
+/// A disc is asked directly, and rejected with [`Error::WrongTitle`] if its
+/// serial positively identifies it as a title other than Pulse. A directory
+/// is walked and identified from the files it turned out to hold - it carries
+/// no disc serial to check, which is intentional: ADR-0004's "load from your
+/// own already-unpacked originals" workflow stays permitted unconditionally.
 fn survey(source: &str) -> Result<(Platform, Vec<String>)> {
     let path = std::path::Path::new(source);
     if path.is_dir() {
@@ -423,14 +460,17 @@ fn survey(source: &str) -> Result<(Platform, Vec<String>)> {
     }
 
     let mut disc = DiscImage::open(source)?;
-    let platform = disc.identify()?.platform;
+    let info = disc.identify()?;
+    if let Some(serial) = &info.serial {
+        reject_other_title(source, serial)?;
+    }
     let files = disc
         .entries()?
         .iter()
         .filter(|entry| !entry.is_directory)
         .map(|entry| entry.path.clone())
         .collect();
-    Ok((platform, files))
+    Ok((info.platform, files))
 }
 
 /// Every file under `dir`, as paths relative to the walk's root.
@@ -571,6 +611,52 @@ mod tests {
             layout.fe.as_deref(),
             Some(format!("{source}/PSP_GAME/USRDIR/FE.wad").as_str())
         );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn wipeout_pure_s_serial_is_rejected_by_name() {
+        let error = reject_other_title("pure-psp-usa.chd", "UCUS-98612").unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("UCUS-98612"), "{message}");
+        assert!(message.contains("Wipeout Pure"), "{message}");
+        assert!(message.contains("M8"), "{message}");
+    }
+
+    #[test]
+    fn an_unrecognised_serial_is_not_rejected() {
+        // The deny-list only rules a source *out*; an uncatalogued serial is
+        // not assumed to be Pulse either, so it gets no verdict here and is
+        // left to archive-name matching, same as before this check existed.
+        assert!(reject_other_title("some.chd", "ULUS-99999").is_ok());
+    }
+
+    #[test]
+    fn pulse_s_own_serials_are_not_rejected() {
+        // Regression guard: this table must never grow a Pulse serial by
+        // mistake, or a legitimately-owned disc would hard-reject.
+        for serial in ["UCUS-98712", "SCES-54748"] {
+            assert!(reject_other_title("pulse.chd", serial).is_ok(), "{serial}");
+        }
+    }
+
+    #[test]
+    fn an_extracted_directory_is_never_checked_against_a_title() {
+        // An extract carries no disc header, so it has no serial to reject -
+        // ADR-0004's "load from your own already-unpacked originals" stays
+        // permitted unconditionally, even for a title `OTHER_TITLES` names.
+        let root = extract(
+            "no-title-check",
+            &[
+                "UMD_DATA.BIN",
+                "PSP_GAME/USRDIR/Data.wad",
+                "PSP_GAME/USRDIR/FE.wad",
+            ],
+        );
+        let source = root.to_str().unwrap();
+
+        assert!(Layout::resolve(source).is_ok());
 
         std::fs::remove_dir_all(&root).ok();
     }

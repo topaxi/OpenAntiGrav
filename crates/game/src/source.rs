@@ -37,9 +37,19 @@ pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-usa.chd";
 
 /// Names a disc image is looked for under, in order.
 ///
-/// The normalised names from `data/README.md`. PSP first: it is the platform
-/// the implementation follows, and the PS2 release is corroboration.
-pub const IMAGE_NAMES: [&str; 2] = ["pulse-psp-usa.chd", "pulse-ps2-eu.chd"];
+/// The normalised names from `data/README.md`. Pulse PSP first: it is the
+/// platform the implementation follows, and the PS2 release is corroboration.
+/// Pure and HD/Fury are listed too, purely so a directory holding only one of
+/// them is found by name rather than by alphabetical luck - `oag-game` does
+/// not yet play either; opening one now fails with a clear error naming the
+/// title instead of silently loading it as Pulse. See ADR-0009 and roadmap
+/// M8.
+pub const IMAGE_NAMES: [&str; 4] = [
+    "pulse-psp-usa.chd",
+    "pulse-ps2-eu.chd",
+    "pure-psp-usa.chd",
+    "hdfury-ps3-eu.iso",
+];
 
 /// Container extensions a directory scan will accept, lowercase.
 const EXTENSIONS: [&str; 2] = ["chd", "iso"];
@@ -230,6 +240,32 @@ mod tests {
         let directory = temp_dir("known-name");
         std::fs::write(directory.join("aaa-other.iso"), b"").unwrap();
         std::fs::write(directory.join(IMAGE_NAMES[0]), b"").unwrap();
+
+        assert_eq!(
+            first_image(&directory).unwrap().file_name().unwrap(),
+            std::ffi::OsStr::new(IMAGE_NAMES[0])
+        );
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    /// `IMAGE_NAMES[0]` is interpolated into the not-found hint text, and the
+    /// module doc's "PSP first" rationale depends on this order.
+    #[test]
+    fn image_names_starts_with_pulse_psp_matching_the_hint_text() {
+        assert_eq!(IMAGE_NAMES[0], "pulse-psp-usa.chd");
+        assert_eq!(IMAGE_NAMES[1], "pulse-ps2-eu.chd");
+    }
+
+    /// The maintainer's actual `data/images/` holds all four documented
+    /// names at once - this is the check that extending `IMAGE_NAMES` to
+    /// recognise Pure and HD/Fury by name does not change which file that
+    /// directory resolves to.
+    #[test]
+    fn a_known_pulse_name_still_wins_when_every_documented_name_is_present() {
+        let directory = temp_dir("all-four-names");
+        for name in IMAGE_NAMES {
+            std::fs::write(directory.join(name), b"").unwrap();
+        }
 
         assert_eq!(
             first_image(&directory).unwrap().file_name().unwrap(),
