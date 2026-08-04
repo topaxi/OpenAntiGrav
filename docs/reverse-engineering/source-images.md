@@ -74,8 +74,9 @@ services. Not yet checked against the binary.
 Not the reverse-engineering target of record - `pulse-psp-usa.chd` keeps that
 role, and this project's whole Ghidra database (`docs/ghidra/functions/psp-pulse-usa/`)
 is address-keyed to it. This disc's `BOOT.BIN` is imported into Ghidra as a
-**separate, second program** (`pulse-psp-eu`) for corroboration and future
-diffing, not as a replacement.
+**separate, second program** (`/psp-pulse-eu/BOOT2.BIN` - see `HANDOVER.md`
+for the naming wart and an open question about its function count) for
+corroboration and future diffing, not as a replacement.
 
 ### `pulse-ps2-eu.chd` - Wipeout Pulse, PS2
 

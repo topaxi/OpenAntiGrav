@@ -177,7 +177,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("inputs", nargs="*", type=Path, help="names TSVs (default: both known sets)")
     ap.add_argument("--url", default="http://127.0.0.1:8089", help="GhidraMCP bridge URL")
-    ap.add_argument("--program", default="BOOT.BIN", help="program name in the Ghidra project")
+    ap.add_argument(
+        "--program",
+        default="/psp-pulse-usa/BOOT.BIN",
+        help="program path in the Ghidra project",
+    )
     ap.add_argument("--dry-run", action="store_true", help="print what would change, send nothing")
     ap.add_argument("--no-save", action="store_true", help="leave the program unsaved")
     args = ap.parse_args()
