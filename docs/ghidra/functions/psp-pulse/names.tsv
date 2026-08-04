@@ -325,3 +325,4 @@
 0x08887764	function	Fog_FindVolume	88	fog.md
 0x08906720	function	FogCube_Construct	85	fog.md
 0x088879d4	function	World_CollectNodeLists	80	fog.md
+0x0890d994	function	Mesh_SetBatchDrawState	85	mesh-draw.md

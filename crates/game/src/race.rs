@@ -696,11 +696,26 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let boost_name = format!(r"Data\Ships\{}\shipboost.vex", options.team);
     let boost_model = match archives.read_name(&boost_name) {
         Ok(blob) => match mesh::build_with_textures(&boost_name, &blob, None, options.lod) {
-            Ok(model) => {
+            Ok(mut model) => {
                 report.push(format!(
                     "{boost_name}: {} triangle(s) - drawn additively while the plume is up",
                     model.indices.len() / 3
                 ));
+                // The plume's own batches take `Mesh_SetBatchDrawState`'s
+                // pure-additive branch (`is_additive_blend()`, confidence 75
+                // for this model specifically - see
+                // `docs/ghidra/functions/psp-pulse/mesh-draw.md`), the same
+                // `dst + src` equation `exhaust::TRAIL_BLEND` already encodes
+                // for the ribbon. That blend ignores alpha as a weight
+                // entirely, so the baked falloff has to live in the vertex
+                // RGB instead - premultiply here, mirroring
+                // `exhaust::rib_vertex`'s own comment on the same blend.
+                for v in &mut model.vertices {
+                    v.colour[0] *= v.colour[3];
+                    v.colour[1] *= v.colour[3];
+                    v.colour[2] *= v.colour[3];
+                    v.colour[3] = 1.0;
+                }
                 Some(model)
             }
             Err(e) => {
@@ -2853,7 +2868,7 @@ pub struct Scene {
     visibility: Option<TrackVisibility>,
     ship: Drawable,
     /// The boost plume: an ordinary `Drawable` with its blend pipeline
-    /// overridden to [`exhaust::BLEND`] instead of
+    /// overridden to [`exhaust::TRAIL_BLEND`] instead of
     /// [`mesh_render::TRANSPARENT_BLEND`].
     ///
     /// `None` when the source carries no `shipboost.vex` under this team's
@@ -3001,10 +3016,17 @@ impl Scene {
         // mesh, not a camera-facing quad), so it needs depth testing and a
         // model matrix, which is what `Drawable` already gives every other
         // mesh here rather than a third thing beside `exhaust::Pipeline`.
-        // `exhaust::BLEND` in place of `TRANSPARENT_BLEND` is the one thing
-        // that has to differ - the model's texture is named `_ADD`, and
-        // drawing it with the ordinary lerp blend looks plausible and is
-        // wrong; see `docs/ghidra/functions/psp-pulse/exhaust.md`.
+        // `exhaust::TRAIL_BLEND` in place of `TRANSPARENT_BLEND` is the one
+        // thing that has to differ - the model's texture is named `_ADD`,
+        // and drawing it with the ordinary lerp blend looks plausible and is
+        // wrong. It is `TRAIL_BLEND`, not the flare's own `exhaust::BLEND`:
+        // the plume's batches take `Mesh_SetBatchDrawState`'s pure-additive
+        // `GU_FIX`/`GU_FIX` branch (`is_additive_blend()`), the same
+        // `dst + src` equation as the ribbon, not the flare's
+        // alpha-weighted one - see
+        // `docs/ghidra/functions/psp-pulse/mesh-draw.md`. The baked alpha
+        // falloff is premultiplied into the vertex RGB above, since this
+        // blend ignores alpha as a weight entirely.
         let boost = boost_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -3016,7 +3038,7 @@ impl Scene {
                     anisotropy,
                     sample_count,
                     scene_depth,
-                    exhaust::BLEND,
+                    exhaust::TRAIL_BLEND,
                 )
             })
             .transpose()?;

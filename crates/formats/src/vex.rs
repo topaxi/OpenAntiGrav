@@ -632,6 +632,15 @@ pub struct Batch {
     /// is scaled here the same way positions are. On PS2 it is `f32` at `+0x20`
     /// and `+0x30`, already in the space the positions are in.
     pub bounds: ([f32; 3], [f32; 3]),
+    /// Byte 3 of the on-disk batch header, read the same way on PSP and PS2
+    /// (both share this header layout). Bit `0x40` selects the
+    /// extended/alternate header block already accounted for by
+    /// [`declared_vertex_count`]'s own doc comment; bit `0x10` is decoded by
+    /// [`is_additive_blend`](Self::is_additive_blend), confirmed against the
+    /// PSP draw path only. The remaining bits are otherwise undecoded here.
+    ///
+    /// [`declared_vertex_count`]: Self::declared_vertex_count
+    pub header_flags: u8,
 }
 
 /// GU primitive type for a triangle list.
@@ -693,6 +702,25 @@ impl Batch {
     #[must_use]
     pub fn is_culled(&self) -> bool {
         self.pass_mask & 0x0020 != 0
+    }
+
+    /// Whether the PSP draw path's shared per-batch state setup
+    /// (`Mesh_SetBatchDrawState`) takes its pure-additive blend branch
+    /// (`Gu_BlendFunc(GU_ADD, GU_FIX 0xffffff, GU_FIX 0xffffff)`, i.e.
+    /// `dst + src`) rather than its "replace" branch (`GU_FIX 0xffffff,
+    /// GU_FIX 0`, i.e. `src` alone, discarding `dst`). Selected by
+    /// `header_flags & 0x10`, clear for additive.
+    ///
+    /// Confidence 85 for what this method decodes: the branch selection and
+    /// blend-equation decode are confirmed against a live Ghidra decompile.
+    /// That number is not a claim about any specific batch's real value -
+    /// whether a given model's batches actually read additive, and whether
+    /// `GU_BLEND` is actually *enabled* when they do, are separate,
+    /// lower-confidence claims. See
+    /// `docs/ghidra/functions/psp-pulse/mesh-draw.md`.
+    #[must_use]
+    pub fn is_additive_blend(&self) -> bool {
+        self.header_flags & 0x10 == 0
     }
 }
 
@@ -1307,6 +1335,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             vertices,
             declared_vertex_count: u16_at(payload, at + 4),
             bounds,
+            header_flags: flags,
         });
 
         // `payload_size` covers the vertex data only, so a batch is its header
@@ -2411,6 +2440,7 @@ mod tests {
             ],
             declared_vertex_count: u16::try_from(vertex_count).unwrap_or(u16::MAX),
             bounds: ([0.0; 3], [0.0; 3]),
+            header_flags: 0,
         }
     }
 
@@ -2457,11 +2487,32 @@ mod tests {
             vertices: Vec::new(),
             declared_vertex_count: 0,
             bounds: ([0.0; 3], [0.0; 3]),
+            header_flags: 0,
         };
         assert!(batch(0x0101).is_transparent());
         assert!(!batch(0x0021).is_transparent());
         assert!(batch(0x0801).is_alpha_tested());
         assert!(batch(0x0021).is_culled());
         assert!(!batch(0x0001).is_culled());
+    }
+
+    #[test]
+    fn decodes_the_additive_blend_flag() {
+        let batch = |header_flags| Batch {
+            pass_mask: 1,
+            material_index: 0,
+            primitive_type: 3,
+            vertex_type: 0x100,
+            scale: 1.0,
+            vertices: Vec::new(),
+            declared_vertex_count: 0,
+            bounds: ([0.0; 3], [0.0; 3]),
+            header_flags,
+        };
+        assert!(batch(0x00).is_additive_blend());
+        assert!(!batch(0x10).is_additive_blend());
+        // The extended-header bit (0x40) is independent of the blend bit.
+        assert!(batch(0x40).is_additive_blend());
+        assert!(!batch(0x50).is_additive_blend());
     }
 }

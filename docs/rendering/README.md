@@ -35,7 +35,12 @@
 - Particle effects: thrust (**done** - the `Engine Flare` class plus its
   `Trail` ribbon and the `<Team>boost.vex` plume a speed pad reveals, all
   recovered in [`exhaust.md`](../ghidra/functions/psp-pulse/exhaust.md) and
-  implemented in `oag_render::exhaust` and `oag_game::race::Loaded::boost_model`)
+  implemented in `oag_render::exhaust` and `oag_game::race::Loaded::boost_model`.
+  The plume's mesh batches draw with `exhaust::TRAIL_BLEND`, not the flare's
+  own `exhaust::BLEND` - they take the ordinary mesh draw path's pure-additive
+  blend branch, the same equation the ribbon already uses, not the flare's
+  alpha-weighted one; see
+  [`mesh-draw.md`](../ghidra/functions/psp-pulse/mesh-draw.md))
   and collision sparks (**done**, `oag_render::sparks` -
   currently **authored, not recovered**: the actual spark-spawn trigger,
   `ShipCollisionFx_Trigger`, has since been found and read in full, naming

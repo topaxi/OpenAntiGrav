@@ -27,7 +27,7 @@
 //! It also pins that those transparent-draw batches are what they need to be
 //! for `race::Scene`'s additive blend override to matter at all: if the
 //! authored `pass_mask` had classified them opaque or alpha-tested instead,
-//! `exhaust::BLEND` would never run and the plume would draw with no
+//! `exhaust::TRAIL_BLEND` would never run and the plume would draw with no
 //! blending, silently, rather than with the wrong one. Measured, not
 //! inferred from how a screenshot looked: every team's four batches land in
 //! `Model::transparent_draws`, none in the other two lists.
@@ -63,6 +63,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_assets::pulse;
+use oag_formats::vex;
 use oag_render::mesh;
 
 fn image() -> Option<PathBuf> {
@@ -134,17 +135,17 @@ fn every_psp_teams_boost_plume_decodes_with_two_meshes_and_its_texture() {
             model.textures.iter().filter(|t| t.is_some()).count(),
             model.textures.len()
         );
-        // `race::Scene`'s boost `Drawable` only reaches `exhaust::BLEND`
+        // `race::Scene`'s boost `Drawable` only reaches `exhaust::TRAIL_BLEND`
         // through `blend_pipeline`, which draws `Model::transparent_draws`.
         // If the authored `pass_mask` classified this model's batches as
-        // opaque or alpha-tested instead, `exhaust::BLEND` never runs and the
-        // plume draws through the ordinary opaque pipeline with no blending
-        // at all - not merely the wrong (lerp) blend the plan's trap warns
-        // about, but none.
+        // opaque or alpha-tested instead, `exhaust::TRAIL_BLEND` never runs
+        // and the plume draws through the ordinary opaque pipeline with no
+        // blending at all - not merely the wrong (lerp) blend the plan's
+        // trap warns about, but none.
         assert!(
             !model.transparent_draws.is_empty(),
             "{name}: {} opaque / {} cutout / 0 transparent draw(s) - \
-             exhaust::BLEND never runs for this model",
+             exhaust::TRAIL_BLEND never runs for this model",
             model.draws.len(),
             model.alpha_tested_draws.len()
         );
@@ -153,8 +154,8 @@ fn every_psp_teams_boost_plume_decodes_with_two_meshes_and_its_texture() {
 
 /// Pins the boost plume's baked vertex alpha as bimodal - `0.0` or `1.0`
 /// only, never a partial value - across every PSP team, not just the
-/// Assegai sample `MESH_BLEND_ALPHA_PLAN.md` measured by hand (63 vertices
-/// at `[1,1,1,1]`, 58 at `[1.0, 0.384, 0.0196, 0.0]`). Guards against a
+/// Assegai sample an earlier pass measured by hand (63 vertices at
+/// `[1,1,1,1]`, 58 at `[1.0, 0.384, 0.0196, 0.0]`). Guards against a
 /// future re-export of the asset changing this shape and silently
 /// re-breaking the falloff `mesh.wgsl`'s `lit_texel` alpha fix depends on.
 ///
@@ -220,5 +221,56 @@ fn the_three_ps2_only_teams_have_no_psp_boost_plume() {
             "{name} resolved on the PSP disc; the eight-team PSP roster in \
              this file's TEAMS needs updating"
         );
+    }
+}
+
+/// Pins the finding in `docs/ghidra/functions/psp-pulse/mesh-draw.md`:
+/// every PSP team's `shipboost.vex` batches take `Mesh_SetBatchDrawState`'s
+/// pure-additive (`Batch::is_additive_blend`) branch, never the "replace"
+/// one. A separate one-off measurement during that pass found the same true
+/// for a `Ship.vex` per team and both `01_Track`/`16_Track` - so this is not
+/// plume-specific, but only the plume's blend pipeline choice
+/// (`race::Scene`'s `exhaust::TRAIL_BLEND` override) depends on it, which is
+/// why only the plume gets a permanent regression test. If a future
+/// re-export ever ships a "replace"-branch batch here, that override stops
+/// being correct for it and this test is what should catch that, not a
+/// screenshot.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_psp_teams_boost_plume_batches_are_additive_blend() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives =
+        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+
+    for team in TEAMS {
+        let name = format!(r"Data\Ships\{team}\shipboost.vex");
+        let blob = archives
+            .read_name(&name)
+            .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+        let nodes = vex::nodes(&blob).expect("nodes");
+
+        let mut checked = 0usize;
+        for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+            let payload = &blob[node.payload()];
+            for list in 0..2u8 {
+                let batches = vex::mesh_batches(payload, list)
+                    .unwrap_or_else(|e| panic!("{name}: decoding batch list {list}: {e}"));
+                for batch in batches {
+                    assert!(
+                        batch.is_additive_blend(),
+                        "{name}: a batch (pass_mask {:#06x}, header_flags {:#04x}) takes \
+                         Mesh_SetBatchDrawState's \"replace\" branch - exhaust::TRAIL_BLEND \
+                         is no longer the right override for this model, see \
+                         docs/ghidra/functions/psp-pulse/mesh-draw.md",
+                        batch.pass_mask,
+                        batch.header_flags
+                    );
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 0, "{name}: decoded zero batches to check");
     }
 }

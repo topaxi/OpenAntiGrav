@@ -117,9 +117,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
     // Vertex colour modulates the texture on all four channels, as the GE's
-    // texture-env does - RGB and alpha alike, not RGB alone. See
-    // MESH_BLEND_ALPHA_PLAN.md finding 1: dropping the vertex colour's own
-    // alpha here is what made the boost plume's baked falloff vanish.
+    // texture-env does - RGB and alpha alike, not RGB alone. Dropping the
+    // vertex colour's own alpha here is what made the boost plume's baked
+    // falloff vanish; see `every_psp_teams_boost_plume_vertex_alpha_is_bimodal`
+    // in `crates/game/tests/boost_plume_ground_truth.rs`.
     return vec4<f32>(texel.rgb * in.colour.rgb * light, texel.a * in.colour.a);
 }
 
@@ -160,11 +161,11 @@ const ALPHA_TEST_THRESHOLD: f32 = 0.5;
 // neither colour nor depth, so surfaces behind a cutout's "empty" corners
 // still show through and still get occluded correctly by whatever the
 // cutout's solid pixels do draw. `shaded.a` is now the texture's alpha times
-// the vertex colour's, per `lit_texel` above; confirmed against every
+// the vertex colour's, per `lit_texel` above; measured directly against every
 // alpha-tested batch on `01_Track`/`16_Track` that no vertex reference in
-// this path carries baked alpha below `ALPHA_TEST_THRESHOLD` (see
-// MESH_BLEND_ALPHA_PLAN.md), so this fold-in does not newly discard any
-// fragment that used to pass on real track data.
+// this path carries baked alpha below `ALPHA_TEST_THRESHOLD`, so this
+// fold-in does not newly discard any fragment that used to pass on real
+// track data.
 @fragment
 fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
