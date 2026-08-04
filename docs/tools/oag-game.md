@@ -583,9 +583,25 @@ without it the ship ends **28 units further to its left**. It is also much
 slower, and that is not a bug: `q` is one key for both the airbrake *axis* and
 the sideshift *button*, so pulsing it pulses the aerodynamic brake as well.
 
-The *novice* gesture - hold the sideshift button and flick the stick - is
-implemented in `oag_physics` and unit-tested, but nothing here can select a
-scheme yet, so it is unreachable from this mode.
+The *novice* gesture is `--scheme novice`, or `[controls] scheme = "novice"` in
+the settings file: hold `Q`, centre the stick, flick. The flick has to arm - the
+stick must be near centre while the button goes down - so a pilot already
+holding it over gets nothing, which is the original's own latch and not a
+deadzone.
+
+The scheme is resolved once at startup and not re-read, deliberately: swapping
+mid-race would leave a half-finished gesture armed in `ShipState`. That is also
+why the `SIDESHIFT` row on the CONTROLS page applies to the **next** race rather
+than the one being driven, the way `BOOST FOV KICK` does.
+
+`--race --hold cross,l --press left --scheme novice` against the same run under
+`veteran` puts the ship somewhere else, which is how the flag was checked
+against the real loop rather than only in tests. **Do not read a displacement
+off that pair** - the ship is steering hard and nearly stopped on the airbrake,
+so the two runs differ in heading as well as in position. The measured novice
+number is `oag-trace drive`'s, on `verification/scenarios/sideshift-flick.inputs`:
+**4.0 units inside the shift's own 0.2 s**, against the same file under the other
+scheme, where the steering is identical by construction.
 
 ## Two things `oag-render` could grow
 

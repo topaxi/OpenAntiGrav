@@ -33,6 +33,59 @@ pub enum ControlScheme {
     Veteran,
 }
 
+impl ControlScheme {
+    /// Every scheme, in the order a menu should offer them.
+    ///
+    /// Two, not three. The original's `Control_Type` also takes `custom`, which
+    /// is not a third scheme but a *rebinding* of whichever one is live -
+    /// `Options_LoadControlMapping` copies a saved eight-entry table over the
+    /// built-in one and leaves the gesture branch alone. Rebinding is not
+    /// implemented, so offering the word would promise something that does
+    /// nothing.
+    pub const ALL: [Self; 2] = [Self::Veteran, Self::Novice];
+
+    /// The token this scheme is stored and configured as.
+    ///
+    /// **The original's own words**, read out of the `strcasecmp` chains in
+    /// `Options_LoadControlMapping` (`0x08836a48`) and
+    /// `Options_BuildControlSchemeRows` (`0x0889b468`) - not names this project
+    /// picked. See `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Novice => "novice",
+            Self::Veteran => "veteran",
+        }
+    }
+
+    /// The scheme a token names, or `None` if nothing does.
+    ///
+    /// `None` rather than a default, for the reason `oag_race::Mode::from_name`
+    /// gives: a settings file naming a scheme this build does not have should be
+    /// visible to the caller, not silently become the default.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|scheme| scheme.name() == name)
+    }
+}
+
+impl std::fmt::Display for ControlScheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl std::str::FromStr for ControlScheme {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_name(&s.to_ascii_lowercase()).ok_or_else(|| {
+            let names: Vec<_> = Self::ALL.iter().map(|s| s.name()).collect();
+            format!("{s:?} is not a control scheme; try {}", names.join(" or "))
+        })
+    }
+}
+
 /// Maps one tick of input onto ship controls.
 ///
 /// The snapshot's axes are used as they are, having already been clamped by
@@ -210,6 +263,23 @@ mod tests {
         for scheme in [ControlScheme::Novice, ControlScheme::Veteran] {
             assert_eq!(ship_controls(&snapshot, scheme).sideshift, Sideshift::None);
         }
+    }
+
+    /// The tokens are the game's own, and they round-trip.
+    ///
+    /// Worth a test rather than being obvious: these strings are what a settings
+    /// file and a `--scheme` flag carry, so a rename here silently invalidates
+    /// every saved profile. They are also `Control_Type`'s literal values in the
+    /// binary, which is the reason they are not `Beginner`/`Expert` or anything
+    /// else that reads better.
+    #[test]
+    fn every_scheme_round_trips_through_its_token() {
+        for scheme in ControlScheme::ALL {
+            assert_eq!(ControlScheme::from_name(scheme.name()), Some(scheme));
+            assert_eq!(scheme.to_string().parse(), Ok(scheme));
+        }
+        assert_eq!(ControlScheme::from_name("custom"), None, "not a scheme");
+        assert_eq!(ControlScheme::ALL[0], ControlScheme::default());
     }
 
     #[test]

@@ -42,6 +42,8 @@ pub struct Options {
     /// needs two presses - skip the intro, then pick a language - needs the
     /// button to be let go of in between.
     pub pressed: u32,
+    /// Which control scheme the race this hands off to is driven with.
+    pub scheme: oag_gameplay::ControlScheme,
     /// Print exits as well as entries.
     pub trace: bool,
     /// The race `Launch Game` hands off to, if this capture should follow it
@@ -311,6 +313,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 ticks: options.ticks.saturating_sub(ticks),
                 held: options.held,
                 pressed: options.pressed,
+                scheme: options.scheme,
                 size: (width, height),
                 log_every: options.log_every,
                 anisotropy: options.anisotropy,

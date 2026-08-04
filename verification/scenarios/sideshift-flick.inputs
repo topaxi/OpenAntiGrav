@@ -1,0 +1,48 @@
+# A novice-scheme sideshift: hold the sideshift button, centre, flick right.
+#
+# **Run this with `--scheme novice`.** Under veteran it does nothing at all -
+# there is no sideshift button in that scheme, `l` is the left airbrake, and the
+# stick input is just steering. That is not a flaw in the scenario; it is what
+# the two schemes are. See `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+#
+# The gesture is three states, and all three are load-bearing:
+#
+#   1. hold `l` (action 7, `OPT_CTRL_SS`) with the stick inside +/-10 on the
+#      original's +/-100 axis - this is what *arms* the flick;
+#   2. push the stick past +10, which fires;
+#   3. let go, which is the only way to arm the next one.
+#
+# Skipping step 1 is the interesting failure: a pilot already holding the stick
+# over when they press the button gets nothing, because the latch never armed.
+# The first block below is exactly that case, held long enough that a missing
+# latch would show as an early displacement rather than as a late one.
+#
+# Measured 2026-08-04, Assegai/Venom on 16_Track, the same file driven under both
+# schemes - which is a better control than a second file, because the steering is
+# then identical by construction:
+#
+#   - through tick 200 the two runs agree to the printed precision, so the 30
+#     ticks of held button with the stick already over fired **nothing**;
+#   - at tick 210, ten ticks after the flick and inside the shift's own 0.2 s,
+#     novice is 4.0 units further +Z than veteran - to its right, which is the
+#     way it was flicked.
+#
+# Under veteran the same file is a *single* airbrake tap: `l` is held, so there
+# is one pressed edge and never a second, the 0.25 s window expires, and no shift
+# fires. That is why it works as the control.
+
+# Reach racing speed on the opening straight.
+150 cross
+
+# Stick already hard over, button held: this must NOT fire. If the armed latch
+# is ever dropped, the ship leaves the centre line here instead of at tick 200.
+30 cross l stick_x=1.0
+
+# Centre the stick, still holding the button: the flick arms.
+20 cross l stick_x=0.0
+
+# Flick right. One tick is enough - the test is the crossing, not the duration.
+1 cross l stick_x=1.0
+
+# Release and hold the line through the shift and the lockout that follows it.
+100 cross

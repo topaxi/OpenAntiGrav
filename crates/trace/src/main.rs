@@ -24,6 +24,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use oag_assets::pulse;
 use oag_core::math::Vec3;
 use oag_formats::{collision, handling, track};
+use oag_gameplay::ControlScheme;
 use oag_gameplay::input::button_from_name;
 use oag_gameplay::spawn::{Pose, box_inertia, spawn_height};
 use oag_gameplay::{Ship, collision_world, handling_for};
@@ -159,6 +160,14 @@ enum Command {
         /// basis derivative without needing a run at all.
         #[arg(long, value_enum, default_value_t = AngularArg::NegatedLocal)]
         angular: AngularArg,
+        /// Control scheme: `veteran` or `novice`.
+        ///
+        /// Only the sideshift gesture differs, so a scenario that never asks for
+        /// one runs identically under either. `novice` is what makes a
+        /// hold-and-flick scenario mean anything. See
+        /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+        #[arg(long, default_value_t = ControlScheme::default())]
+        scheme: ControlScheme,
         /// Ignore the track's collision geometry: a ship with nothing to hover on.
         #[arg(long)]
         no_collision: bool,
@@ -226,6 +235,14 @@ enum Command {
         /// Which reading the angular-velocity column is written in.
         #[arg(long, value_enum, default_value_t = AngularArg::NegatedLocal)]
         angular: AngularArg,
+        /// Control scheme: `veteran` or `novice`.
+        ///
+        /// Only the sideshift gesture differs, so a scenario that never asks for
+        /// one runs identically under either. `novice` is what makes a
+        /// hold-and-flick scenario mean anything. See
+        /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+        #[arg(long, default_value_t = ControlScheme::default())]
+        scheme: ControlScheme,
     },
     /// Dump a track's driveable spline as CSV, one row per resampled point.
     ///
@@ -399,6 +416,7 @@ fn main() -> Result<()> {
             no_collision,
             basis,
             angular,
+            scheme,
         } => drive_scenario(DriveArgs {
             script,
             script_lead,
@@ -412,6 +430,7 @@ fn main() -> Result<()> {
             no_collision,
             basis,
             angular,
+            scheme,
         }),
         Command::Compare {
             recorded,
@@ -440,6 +459,7 @@ fn main() -> Result<()> {
             reseed,
             basis,
             angular,
+            scheme,
             no_collision,
             tolerances,
         } => run(RunArgs {
@@ -459,6 +479,7 @@ fn main() -> Result<()> {
             reseed,
             basis,
             angular,
+            scheme,
             no_collision,
             tolerances,
         }),
@@ -480,6 +501,7 @@ struct DriveArgs {
     no_collision: bool,
     basis: BasisArg,
     angular: AngularArg,
+    scheme: ControlScheme,
 }
 
 /// Runs a scenario through our physics from the track's own start line.
@@ -564,6 +586,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
         dt: FIXED_DT,
         basis: args.basis.into(),
         angular: args.angular.into(),
+        scheme: args.scheme,
     };
     println!(
         "{}: {} tick(s) at {} Hz, {} on {}, {:?} class",
@@ -830,6 +853,7 @@ struct RunArgs {
     reseed: Option<NonZeroUsize>,
     basis: BasisArg,
     angular: AngularArg,
+    scheme: ControlScheme,
     no_collision: bool,
     tolerances: ToleranceArgs,
 }
@@ -873,6 +897,7 @@ fn run(args: RunArgs) -> Result<()> {
         },
         basis: args.basis.into(),
         angular: args.angular.into(),
+        scheme: args.scheme,
         reseed: args.reseed,
     };
     if args.fixed_dt {

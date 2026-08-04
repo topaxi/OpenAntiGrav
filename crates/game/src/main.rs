@@ -42,6 +42,7 @@ use oag_game::{
     adapter, boot, capture, catalogue, display, menu, movie, perf, race, report, settings, source,
     upscale,
 };
+use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
@@ -173,6 +174,16 @@ struct Cli {
     /// aerodynamic brake. That is a real pilot's gesture, not an artefact.
     #[arg(long)]
     press: Option<String>,
+
+    /// Control scheme: `veteran` or `novice`.
+    ///
+    /// Overrides `[controls] scheme` for this run without writing it back. The
+    /// two differ only in how a sideshift is asked for - veteran double-taps an
+    /// airbrake, novice holds the sideshift button and flicks the stick - and
+    /// they are the original's own `Control_Type` values. See
+    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    #[arg(long)]
+    scheme: Option<ControlScheme>,
 
     /// Draw a frame counter over the intro.
     ///
@@ -455,6 +466,8 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    let scheme = resolve_scheme(&cli, &settings);
+
     // A source with no intro reel at all - which is every PS2 source, whose
     // intro is an MPEG-2 program stream outside the archives - has no video
     // format either, and the front end draws without one.
@@ -470,6 +483,7 @@ fn main() -> Result<()> {
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
+                scheme,
                 trace: cli.trace,
                 race: Some(race_options),
                 log_every: cli.log_every,
@@ -535,6 +549,7 @@ fn main() -> Result<()> {
         trace: cli.trace,
         log_every: cli.log_every,
         anisotropy,
+        scheme,
         settings,
         shell: Some(shell),
         state: None,
@@ -547,6 +562,26 @@ fn main() -> Result<()> {
 ///
 /// Unknown names are skipped rather than fatal: `none` is a real value in the
 /// game's own XML and means no button.
+/// The control scheme this run uses: `--scheme` over `[controls] scheme`.
+///
+/// An unrecognised token in the settings file is **reported and ignored**
+/// rather than fatal, matching how `race.mode` and `race.class` behave: a
+/// profile written by a build that had a scheme this one does not should still
+/// boot. The flag cannot be unrecognised - clap rejects it at parse time
+/// through `ControlScheme`'s `FromStr`, which is why its error message names
+/// the valid values.
+fn resolve_scheme(cli: &Cli, settings: &settings::Settings) -> ControlScheme {
+    if let Some(scheme) = cli.scheme {
+        return scheme;
+    }
+    let token = &settings.controls.scheme;
+    ControlScheme::from_name(token).unwrap_or_else(|| {
+        let fallback = ControlScheme::default();
+        eprintln!("ignoring [controls] scheme = {token:?}; using {fallback}");
+        fallback
+    })
+}
+
 fn button_mask(names: Option<&str>) -> u32 {
     names.map_or(0, |list| {
         list.split(',')
@@ -631,6 +666,8 @@ fn run_race(
         return Ok(());
     }
 
+    let scheme = resolve_scheme(cli, settings);
+
     if let Some(path) = cli.screenshot.clone() {
         return race::capture(
             loaded,
@@ -639,6 +676,7 @@ fn run_race(
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
+                scheme,
                 size: parse_size(&cli.size)?,
                 log_every: cli.log_every,
                 aspect: settings.display.aspect,
@@ -677,6 +715,7 @@ fn run_race(
         trace: cli.trace,
         log_every: cli.log_every,
         anisotropy,
+        scheme,
         settings: settings.clone(),
         // `--race` opens a window straight onto a track: no front end, so no
         // font and no sprite sheet, so no menu tree and no circuit list. The
@@ -701,6 +740,9 @@ struct App {
     trace: bool,
     log_every: u32,
     anisotropy: Anisotropy,
+    /// The control scheme resolved once at startup: `--scheme` over
+    /// `[controls] scheme`. See [`Session::scheme`].
+    scheme: ControlScheme,
     /// The persisted settings, which the menus edit and write straight back.
     settings: settings::Settings,
     /// What the menus need, absent on the `--race` path.
@@ -772,6 +814,7 @@ impl App {
                 self.anisotropy,
                 self.settings.graphics.anti_aliasing,
                 self.settings.graphics.boost_fov_kick,
+                self.scheme,
             )?
         } else if let Some(loaded) = self.boot.take() {
             Stage::frontend(&gpu, loaded, self.video_format, self.trace)?
@@ -812,6 +855,7 @@ impl App {
             next_frame: std::time::Instant::now(),
             race_options: self.race_options.clone(),
             log_every: self.log_every,
+            scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,
             settings: self.settings.clone(),
@@ -1302,6 +1346,7 @@ impl Stage {
         anisotropy: Anisotropy,
         anti_aliasing: display::AntiAliasing,
         boost_fov_kick: display::BoostFovKick,
+        scheme: ControlScheme,
     ) -> Result<Self> {
         let race::Loaded {
             setup,
@@ -1342,6 +1387,7 @@ impl Stage {
             .context("building the HUD overlay")?;
         let mut race = race::Race::start(setup);
         race.set_boost_fov_kick(boost_fov_kick);
+        race.set_control_scheme(scheme);
         Ok(Self::Race(Box::new(RaceStage {
             scene,
             race,
@@ -1634,6 +1680,13 @@ struct Session {
     race_options: race::Options,
     log_every: u32,
     anisotropy: Anisotropy,
+    /// The control scheme every race this session starts is driven with.
+    ///
+    /// Resolved once, at startup, from `--scheme` over `[controls] scheme`, and
+    /// not re-read afterwards. Deliberate: a scheme changed mid-race would leave
+    /// a half-finished gesture armed in `ShipState`, so the `CONTROLS` row says
+    /// the change applies to the next race the way `BOOST FOV KICK` does.
+    scheme: ControlScheme,
     /// Set the first time `Launch Game` starts a race, so a load that fails is
     /// reported once rather than on every frame.
     launched: bool,
@@ -2490,6 +2543,20 @@ impl Session {
                     return;
                 }
             },
+            // The scheme the *next* race starts with. Not applied to a race
+            // already running: `Race::set_control_scheme` is called once before
+            // the first tick, and swapping mid-race would leave a half-finished
+            // gesture armed in `ShipState`.
+            "controls.scheme" => match text.parse::<ControlScheme>() {
+                Ok(scheme) => {
+                    self.settings.controls.scheme = scheme.name().to_string();
+                    self.scheme = scheme;
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "race.mode" => self.settings.race.mode = text,
             "race.class" => self.settings.race.class = text,
             "race.team" => self.settings.race.team = text,
@@ -2522,6 +2589,7 @@ impl Session {
             self.anisotropy,
             self.settings.graphics.anti_aliasing,
             self.settings.graphics.boost_fov_kick,
+            self.scheme,
         )?;
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())

@@ -72,6 +72,8 @@ pub struct Settings {
     pub source: Source,
     #[serde(default)]
     pub race: Race,
+    #[serde(default)]
+    pub controls: Controls,
     /// The language picked last time, by the XML's own English name
     /// (`English`, `French`).
     ///
@@ -144,6 +146,45 @@ impl Default for Race {
             class: default_class(),
             team: default_team(),
             track: default_track(),
+        }
+    }
+}
+
+/// How the pilot's buttons reach the ship.
+///
+/// One setting today, and it is the original's own `Control_Type`, minus the
+/// `custom` value it also takes - see `oag_gameplay::ControlScheme::ALL`. It lives in its
+/// own section rather than under `[race]` because it is a pilot preference that
+/// outlives any one race, the way `[display]` is.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Controls {
+    /// Control scheme: `veteran` or `novice`.
+    ///
+    /// A **token**, not a typed enum, for the reason [`Race::mode`] is: a bad
+    /// value in this file must not fail the boot, and `load` propagates a serde
+    /// error rather than falling back. An unrecognised scheme is reported and
+    /// the default is used - see [`crate::race::Loaded`]'s caller.
+    ///
+    /// The two differ in *how a sideshift is asked for*, not in what the ship
+    /// does: veteran double-taps an airbrake, novice holds a dedicated button
+    /// and flicks the stick. See
+    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    #[serde(default = "default_scheme")]
+    pub scheme: String,
+}
+
+/// Veteran, because it is what the original ships unless a profile says
+/// `novice` - `Options_LoadControlMapping`'s fall-through sets the scheme flag
+/// and the built-in mapping blob carries the same value. Confidence 75; the
+/// value a never-configured profile holds was not read.
+fn default_scheme() -> String {
+    oag_gameplay::ControlScheme::default().name().to_string()
+}
+
+impl Default for Controls {
+    fn default() -> Self {
+        Self {
+            scheme: default_scheme(),
         }
     }
 }
@@ -600,6 +641,7 @@ pub fn menu_seeds(
             "display.window_size",
             text(&settings.display.window_size.to_string()),
         ),
+        ("controls.scheme", text(&settings.controls.scheme)),
         ("display.aspect", text(&settings.display.aspect.to_string())),
         ("display.vsync", text(&settings.display.vsync.to_string())),
         (

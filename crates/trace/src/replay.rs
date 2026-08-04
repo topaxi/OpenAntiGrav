@@ -162,6 +162,14 @@ pub struct Options {
     /// What the recorded angular-velocity column means, which decides both how
     /// the body's rotation is seeded and how ours is written back out.
     pub angular: AngularReading,
+    /// Which control scheme maps the script's buttons.
+    ///
+    /// Only the sideshift gesture differs between the two, so every scenario
+    /// that does not tap `l`/`r` or hold the sideshift button runs identically
+    /// under either. It is a field rather than a constant because a *gesture*
+    /// scenario is only meaningful under the scheme that has that gesture - see
+    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    pub scheme: ControlScheme,
     /// Put the ship back on the recording's own state every this many ticks.
     ///
     /// `None` - the default - seeds tick 0 and never again, which is what every
@@ -369,7 +377,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         speed_cached = state.body.linear_velocity.dot(state.body.forward());
 
         let snapshot = snapshot_for(recorded, &mut buttons, &options.inputs, index);
-        let controls = ship_controls(&snapshot, ControlScheme::default());
+        let controls = ship_controls(&snapshot, options.scheme);
         let ship = &mut world.ships[0];
         oag_physics::step(
             &mut ship.physics,
@@ -404,6 +412,14 @@ pub struct DriveOptions {
     pub basis: Basis,
     /// Which reading the angular-velocity column is written in.
     pub angular: AngularReading,
+    /// Which control scheme maps the script's buttons.
+    ///
+    /// Only the sideshift gesture differs between the two, so every scenario
+    /// that does not tap `l`/`r` or hold the sideshift button runs identically
+    /// under either. It is a field rather than a constant because a *gesture*
+    /// scenario is only meaningful under the scheme that has that gesture - see
+    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    pub scheme: ControlScheme,
 }
 
 impl Default for DriveOptions {
@@ -413,6 +429,7 @@ impl Default for DriveOptions {
             dt: 1.0 / 60.0,
             basis: Basis::default(),
             angular: AngularReading::default(),
+            scheme: ControlScheme::default(),
         }
     }
 }
@@ -462,6 +479,7 @@ pub fn drive<R: Raycaster + ?Sized>(
         dt: DeltaSource::Fixed(options.dt),
         basis: options.basis,
         angular: options.angular,
+        scheme: options.scheme,
         // A scenario run has no recording to be put back onto.
         reseed: None,
     };
@@ -485,7 +503,7 @@ pub fn drive<R: Raycaster + ?Sized>(
             &frame_options.inputs,
             index,
         );
-        let controls = ship_controls(&snapshot, ControlScheme::default());
+        let controls = ship_controls(&snapshot, options.scheme);
         let ship = &mut world.ships[0];
         oag_physics::step(
             &mut ship.physics,

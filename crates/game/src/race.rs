@@ -1577,6 +1577,14 @@ pub struct Race {
     boost_kick: f32,
     /// How strong the kick is, `0` off. `[graphics] boost_fov_kick`.
     boost_fov_kick: crate::display::BoostFovKick,
+    /// Which control scheme maps the snapshot. `[controls] scheme`.
+    ///
+    /// On `Race` and not on the input layer because the schemes differ in which
+    /// *gesture* a sideshift takes, and the gesture is read by the simulation
+    /// out of `ShipControls` - so this is what decides which of
+    /// `ship_controls`' two field groups gets filled. See
+    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    scheme: ControlScheme,
     /// Where the ship was at the end of last tick, for the swept test.
     ///
     /// `None` on the first tick, which is the original's own "no previous
@@ -1706,7 +1714,25 @@ impl Race {
             pad_previous_position: None,
             boost_kick: 0.0,
             boost_fov_kick: crate::display::BoostFovKick::DEFAULT,
+            scheme: ControlScheme::default(),
         }
+    }
+
+    /// Chooses which control scheme maps the pilot's buttons.
+    ///
+    /// A setter for the same reason `set_boost_fov_kick` is one: it is a
+    /// preference read from the settings file, and `Setup` is what a *headless*
+    /// race needs. Unlike the kick it changes what the simulation sees, so it is
+    /// set once before the first tick and not touched again - a scheme swapped
+    /// mid-race would leave a half-finished gesture armed in `ShipState`.
+    pub fn set_control_scheme(&mut self, scheme: ControlScheme) {
+        self.scheme = scheme;
+    }
+
+    /// Which scheme this race is being driven with.
+    #[must_use]
+    pub fn control_scheme(&self) -> ControlScheme {
+        self.scheme
     }
 
     /// Sets how strong the boost's field-of-view kick is. `[graphics]
@@ -1761,7 +1787,7 @@ impl Race {
     /// The snapshot is mapped through [`oag_gameplay::ship_controls`], which is the
     /// one place "cross is thrust" is written down.
     pub fn tick(&mut self, snapshot: &InputSnapshot) -> Evaluated {
-        let controls = ship_controls(snapshot, ControlScheme::default());
+        let controls = ship_controls(snapshot, self.scheme);
 
         // The two spline samples the magstrip hold reads. In the original these are
         // `AiTrack_LocatePosition`'s two output records on the ship entity; here
@@ -3397,6 +3423,12 @@ pub struct CaptureOptions {
     pub ticks: u32,
     /// Buttons held on every one of those ticks.
     pub held: u32,
+    /// Which control scheme maps the buttons. `[controls] scheme`.
+    ///
+    /// Here rather than left at the default because the novice sideshift is a
+    /// *gesture*, and a headless run is the only way to exercise one without a
+    /// window: `--scheme novice --hold cross,l --press left` is the flick.
+    pub scheme: ControlScheme,
     /// Buttons pressed and released on alternating ticks, for gestures that read
     /// an edge rather than a level.
     ///
@@ -3525,6 +3557,7 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     } = loaded;
     let mut race = Race::start(setup);
     race.set_boost_fov_kick(options.boost_fov_kick);
+    race.set_control_scheme(options.scheme);
 
     let mut held = HeldButtons::new(options.held);
     for tick in 0..options.ticks {
