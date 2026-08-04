@@ -162,10 +162,20 @@ enum Command {
         angular: AngularArg,
         /// Control scheme: `veteran` or `novice`.
         ///
-        /// Only the sideshift gesture differs, so a scenario that never asks for
-        /// one runs identically under either. `novice` is what makes a
-        /// hold-and-flick scenario mean anything. See
-        /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+        /// **Leave this alone unless you know the capture was taken under the
+        /// other one.** A script says `l`, not "left airbrake" or "sideshift
+        /// button", so the scheme decides what an `l` in the recording's own
+        /// script *means* - and a replay driven under a scheme the capture was
+        /// not taken under can only make the original disagree with itself.
+        ///
+        /// In practice nothing in `data/traces/` is affected: replaying
+        /// `talons-junction-clean-lap.csv` under both schemes is **byte-identical**
+        /// despite 58 uses of `l`/`r`, because the autopilot holds its airbrakes
+        /// rather than tapping them and never centres the stick while holding
+        /// one, so neither gesture ever fires. The flag is here for the day a
+        /// capture of a *sideshift* exists, which is what
+        /// `docs/ghidra/functions/psp-pulse/input-bindings.md` gives the recipe
+        /// for.
         #[arg(long, default_value_t = ControlScheme::default())]
         scheme: ControlScheme,
         /// Ignore the track's collision geometry: a ship with nothing to hover on.

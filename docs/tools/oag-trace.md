@@ -296,6 +296,17 @@ every committed scenario.
 | `sideshift-flick.inputs` | **The novice sideshift**, and it needs `--scheme novice`. Holds the sideshift button with the stick already over (which must fire nothing), centres to arm, then flicks. Its control is *the same file under `--scheme veteran`*, where the held button is one airbrake tap and no shift fires - so the steering is identical by construction. The two agree to the printed precision through tick 200 and are **4.0 units apart at tick 210**, inside the shift's own `0.2 s`. Also uncaptured |
 | `talons-junction-time-trial-lap.inputs` | **3,146 ticks: one completed lap of Talon's Junction White.** Not hand-authored - see below, and note it no longer flies clean open-loop |
 
+**`--scheme` belongs on `drive`, and on `run` it is a trap worth knowing about.**
+A script says `l`, not "left airbrake" or "sideshift button", so the scheme
+decides what an `l` in a recording's own script *means*. Replaying a capture
+under a scheme the original was not driven under can only make the original
+disagree with itself. Nothing committed is affected, and that is measured rather
+than assumed: replaying `talons-junction-clean-lap.csv` under both schemes is
+**byte-identical** despite 58 uses of `l`/`r`, because the autopilot holds its
+airbrakes rather than tapping them and never centres the stick while holding one,
+so neither gesture ever fires. The flag exists on `run` for the day a capture of a
+sideshift exists.
+
 `steer-both-ways` turns both ways on purpose. The sign of the yaw response is one
 of the things this harness exists to settle - row 0 of the recorded basis being
 the ship's *left* is an 84-confidence finding, and `--basis` exists because of it -

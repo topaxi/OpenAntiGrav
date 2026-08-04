@@ -163,7 +163,8 @@ pub struct Controls {
     /// A **token**, not a typed enum, for the reason [`Race::mode`] is: a bad
     /// value in this file must not fail the boot, and `load` propagates a serde
     /// error rather than falling back. An unrecognised scheme is reported and
-    /// the default is used - see [`crate::race::Loaded`]'s caller.
+    /// the default is used - that fallback lives in `main.rs`'s
+    /// `resolve_scheme`, which is also where `--scheme` overrides this.
     ///
     /// The two differ in *how a sideshift is asked for*, not in what the ship
     /// does: veteran double-taps an airbrake, novice holds a dedicated button
