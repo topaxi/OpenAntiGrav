@@ -75,8 +75,7 @@ services. Not yet checked against the binary.
 Not the reverse-engineering target of record - `pulse-psp-usa.chd` keeps that
 role, and this project's whole Ghidra database (`docs/ghidra/functions/psp-pulse-usa/`)
 is address-keyed to it. This disc's `BOOT.BIN` is imported into Ghidra as a
-**separate, second program** (`/psp-pulse-eu/BOOT2.BIN` - see `HANDOVER.md`
-for the naming wart and an open question about its function count) for
+**separate, second program** (`/psp-pulse-eu/BOOT.BIN`, 10,671 functions) for
 corroboration and future diffing, not as a replacement.
 
 ### `pulse-ps2-eu.chd` - Wipeout Pulse, PS2
@@ -114,7 +113,10 @@ contents       38 files in 4 directories, 241 MiB
 Not a target in its own right yet. It is here as the **format ancestor**: it
 uses the same `Data.wad` / `FE.wad` / `FEData.wad` structure as Pulse, with the
 same container header shape. Where a Pulse format is ambiguous, Pure's simpler
-version of it is often the faster way to understand it.
+version of it is often the faster way to understand it. `BOOT.BIN` is
+imported into Ghidra at `/psp-pure-usa/BOOT.BIN` (6,927 functions), purely for
+opportunistic corroboration alongside the format work above - not a claim
+that Pure's simulation is a target, which ADR-0009 still defers.
 
 ### `pure-psp-eu.chd` - Wipeout Pure, PSP, EU
 
@@ -133,9 +135,11 @@ Acquired 2026-08-04, the same pass that acquired `pulse-psp-eu.chd`, for the
 same reason: `pure-psp-usa.chd` above is the only Pure disc this project had,
 and a second region gives a same-title comparison pair the way it did for
 Pulse. `UCES-00001` is a very low serial - Pure was one of the PSP's EU
-launch titles. Not otherwise explored; not a reverse-engineering target
-(Pure isn't one at all yet, per ADR-0009) and no Ghidra import was done for
-it, unlike the Pulse EU disc.
+launch titles. Not a reverse-engineering target in the ADR-0009 sense (no
+simulation work is planned for Pure), but `BOOT.BIN` is imported into Ghidra
+at `/psp-pure-eu/BOOT.BIN` (6,934 functions - close to the USA disc's 6,927,
+unlike the large, unexplained gap on the Pulse EU import; see `HANDOVER.md`)
+for the same opportunistic-corroboration reason as the USA disc above.
 
 ### `hdfury-ps3-eu.iso` - Wipeout HD / Fury, PS3
 
