@@ -480,7 +480,8 @@ seen from the authoring side.
       **Two branches of the original are deliberately absent**, both gated on
       unidentified bits: the `speedpad_jump` tilt and the `craft+0x2cc` fade-in.
       The field-of-view kick is an **authored** effect, not a recovered one -
-      `[graphics] boost_fov_kick` turns it off.
+      `[graphics] boost_fov_kick` is a magnitude (0, 8, 16, 32), 0 turning it
+      off, with a `BOOST FOV KICK` row on the graphics menu page.
 - [x] **Per-class gravity.** `<GlobalClass><GravityMul airborne/>` fills
       `g_class_gravity_scale`, read off the disc rather than defaulted to the
       identity. Despite the attribute's name it scales the **grounded** term;

@@ -394,25 +394,28 @@ pub struct Graphics {
     /// though this read shows it is not a UV offset.
     #[serde(default = "default_animated_textures")]
     pub animated_textures: bool,
-    /// Whether crossing a speed pad widens the field of view for a moment.
+    /// How much crossing a speed pad widens the field of view for a moment.
     ///
-    /// **On by default, and an authored effect rather than a recovered one.**
-    /// Nothing read out of either binary widens the view on a boost; the force it
-    /// rides on *is* recovered, and this exists so the player can feel it. It is
-    /// a setting rather than a constant precisely because it is invented -
-    /// somebody comparing against a capture of the original wants it off. See
-    /// `oag_game::race::BOOST_FOV_GAIN`, and `oag_render::sparks` for the same
-    /// standing applied to the collision burst.
+    /// **[`crate::display::BoostFovKick::DEFAULT`] by default, and an authored
+    /// effect rather than a recovered one.** Nothing read out of either binary
+    /// widens the view on a boost; the force it rides on *is* recovered, and
+    /// this exists so the player can feel it. It is a magnitude rather than a
+    /// constant precisely because it is invented - somebody comparing against
+    /// a capture of the original wants [`crate::display::BoostFovKick::OFF`],
+    /// and somebody who finds the default too subtle wants a stronger tier.
+    /// See `oag_render::sparks` for the same standing applied to the
+    /// collision burst.
     #[serde(default = "default_boost_fov_kick")]
-    pub boost_fov_kick: bool,
+    pub boost_fov_kick: crate::display::BoostFovKick,
 }
 
 /// See [`Graphics::animated_textures`]: **off**, because a debugger read of the
 /// original found no texture-coordinate offset submitted for any track surface.
-/// See [`Graphics::boost_fov_kick`]: **on**, so the boost is felt. Off is for
-/// comparing against a capture of the original, which has no such effect.
-fn default_boost_fov_kick() -> bool {
-    true
+/// See [`Graphics::boost_fov_kick`]: **[`crate::display::BoostFovKick::DEFAULT`]**,
+/// so the boost is felt. Off is for comparing against a capture of the
+/// original, which has no such effect.
+fn default_boost_fov_kick() -> crate::display::BoostFovKick {
+    crate::display::BoostFovKick::DEFAULT
 }
 
 fn default_animated_textures() -> bool {
@@ -635,6 +638,10 @@ pub fn menu_seeds(
             text(&settings.graphics.perf_overlay.to_string()),
         ),
         ("graphics.lod", text(&settings.graphics.lod.to_string())),
+        (
+            "graphics.boost_fov_kick",
+            text(&settings.graphics.boost_fov_kick.to_string()),
+        ),
         ("race.mode", text(&settings.race.mode)),
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),

@@ -1292,7 +1292,7 @@ impl Stage {
         size: (u32, u32),
         anisotropy: Anisotropy,
         anti_aliasing: display::AntiAliasing,
-        boost_fov_kick: bool,
+        boost_fov_kick: display::BoostFovKick,
     ) -> Result<Self> {
         let race::Loaded {
             setup,
@@ -2095,6 +2095,12 @@ impl Session {
             if !model.in_effect("graphics.anti_aliasing", &in_use) {
                 eprintln!("note: nothing in the menus defers graphics.anti_aliasing");
             }
+            // Same story as MSAA above, but a single tier baked in at
+            // `Race::start` rather than a range of equivalent modes.
+            let in_use = [menu::Value::Text(stage.race.boost_fov_kick().to_string())];
+            if !model.in_effect("graphics.boost_fov_kick", &in_use) {
+                eprintln!("note: nothing in the menus defers graphics.boost_fov_kick");
+            }
         }
 
         // **The movie planes are asked for only when there is a movie to put in
@@ -2460,6 +2466,16 @@ impl Session {
                     self.anisotropy = level;
                     self.settings.graphics.anisotropy = level;
                 }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Baked into the race at `Race::start` (see `Self::race`), so a
+            // change here has no effect on the one already running - the same
+            // as `graphics.anti_aliasing`'s MSAA levels above.
+            "graphics.boost_fov_kick" => match text.parse::<display::BoostFovKick>() {
+                Ok(kick) => self.settings.graphics.boost_fov_kick = kick,
                 Err(e) => {
                     eprintln!("ignoring {setting} = {text:?}: {e}");
                     return;

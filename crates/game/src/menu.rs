@@ -1954,7 +1954,7 @@ mod tests {
     /// does nothing".
     #[test]
     fn the_two_settings_pages_offer_only_values_that_parse() {
-        use crate::display::{Aspect, Brightness, Fov, Gamma, Size, WindowMode};
+        use crate::display::{Aspect, BoostFovKick, Brightness, Fov, Gamma, Size, WindowMode};
         let definition = built_in();
         let values = |setting: &str| -> Vec<String> {
             definition
@@ -2095,6 +2095,16 @@ mod tests {
             fov,
             Fov::OFFERED,
             "the field-of-view rows and `Fov::OFFERED` must be one list"
+        );
+
+        let boost_fov_kick: Vec<BoostFovKick> = values("graphics.boost_fov_kick")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            boost_fov_kick,
+            BoostFovKick::OFFERED,
+            "the boost-fov-kick rows and `BoostFovKick::OFFERED` must be one list"
         );
     }
 
@@ -2501,6 +2511,11 @@ disabled_by = { setting = "a.vsync", value = true }
         // ADR-0013 and `Session::open_menus`, which tells the two cases
         // apart by sample count rather than treating the whole row as
         // deferred.
+        //
+        // `graphics.boost_fov_kick` is the third, for the same shape of
+        // reason as MSAA: `Race::set_boost_fov_kick` is only ever called once,
+        // at `Race::start`, so a race already running keeps whatever it was
+        // built with until the next one starts.
         let deferred: Vec<&str> = definition
             .pages
             .iter()
@@ -2508,7 +2523,14 @@ disabled_by = { setting = "a.vsync", value = true }
             .filter(|entry| entry.restart().is_some())
             .filter_map(Entry::setting)
             .collect();
-        assert_eq!(deferred, ["graphics.renderer", "graphics.anti_aliasing"]);
+        assert_eq!(
+            deferred,
+            [
+                "graphics.renderer",
+                "graphics.anti_aliasing",
+                "graphics.boost_fov_kick"
+            ]
+        );
     }
 
     /// The note is about what the *game* is doing, not about what the settings

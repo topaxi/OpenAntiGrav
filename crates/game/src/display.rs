@@ -12,6 +12,8 @@
 //!   with the leftover bars left black.
 //! - [`Scale`] is how many pixels that shape is actually rendered with.
 //! - [`Fov`] is how much of the world fits in it.
+//! - [`BoostFovKick`] is how much [`Fov`] itself moves for a moment on a
+//!   speed pad, an effect this project invented rather than recovered.
 //! - [`Brightness`] and [`Gamma`] are what happens to the finished picture on
 //!   its way to the surface.
 //!
@@ -1040,6 +1042,60 @@ percentage!(Brightness, NEUTRAL, "brightness");
 percentage!(Gamma, NEUTRAL, "gamma");
 percentage!(Fov, AUTHORED, "field of view");
 
+/// How much wider [`Fov`] opens for a moment when a boost pad fires, as a
+/// percentage of the tangent of the half-angle - the unit `Fov::apply` itself
+/// scales in, so this composes with a player's own field-of-view choice
+/// rather than fighting it. 0 turns the effect off.
+///
+/// **An authored effect, not a recovered one** - the same standing this
+/// project gives `oag_render::sparks`. Nothing in either binary has been read
+/// that widens the field of view on a speed pad; this exists because a boost
+/// the player cannot feel is a boost that reads as nothing happening, and the
+/// force term it rides on *is* recovered. See `crate::race::Race::projection`
+/// for where it is applied and `crate::race::BOOST_FOV_OPEN_RATE`/
+/// `BOOST_FOV_CLOSE_RATE` for how it moves.
+///
+/// **A number, the same idiom as [`Fov`] itself**, rather than a named tier:
+/// there is nothing to name that "twice as wide" does not already say. 8 was
+/// this project's original on/off toggle's "on", tuned to be felt rather than
+/// seen; measured against a player who could not tell it was there at all
+/// (see the conversation this type came out of), [`Self::DEFAULT`] ships at
+/// 16, one doubling up, with 32 kept as a stronger tier still and 8 kept as
+/// the subtler one for a player who wants the old feel back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct BoostFovKick(u32);
+
+impl BoostFovKick {
+    /// No kick at all. [`crate::race::Race::projection`] returns the input
+    /// bit-identical here, the same escape hatch [`Fov::AUTHORED`] is.
+    pub const OFF: Self = Self(0);
+
+    /// The original toggle's "on", kept as the subtlest non-zero tier.
+    pub const SUBTLE: Self = Self(8);
+
+    /// What a fresh install ships with - one doubling past [`Self::SUBTLE`],
+    /// which read as nothing happening to a player watching for it.
+    pub const DEFAULT: Self = Self(16);
+
+    /// The widest this may be. Past this the kick stops reading as a boost
+    /// and starts reading as a camera glitch - the same order-of-magnitude
+    /// ceiling [`Fov::RANGE`] enforces for its own effect.
+    pub const RANGE: std::ops::RangeInclusive<u32> = 0..=32;
+
+    /// The tiers the menus offer: off, then three doublings.
+    pub const OFFERED: [Self; 4] = [Self::OFF, Self::SUBTLE, Self::DEFAULT, Self(32)];
+
+    /// The multiplier [`crate::race::Race::projection`] widens the tangent by
+    /// at full boost.
+    #[must_use]
+    pub fn gain(self) -> f32 {
+        self.0 as f32 / 100.0
+    }
+}
+
+percentage!(BoostFovKick, DEFAULT, "boost field-of-view kick");
+
 /// Where a window of `size` goes to sit centred on a monitor whose own
 /// rectangle starts at `origin` and is `area` across, all in physical pixels.
 ///
@@ -1273,6 +1329,39 @@ mod tests {
         assert!(Brightness::OFFERED.contains(&Brightness::NEUTRAL));
         assert!(Gamma::OFFERED.contains(&Gamma::NEUTRAL));
         assert!(Fov::OFFERED.contains(&Fov::AUTHORED));
+        assert!(BoostFovKick::OFFERED.contains(&BoostFovKick::DEFAULT));
+    }
+
+    /// The same shape as [`every_percentage_round_trips_and_refuses_what_is_outside_its_range`],
+    /// pulled out on its own because `0` is one of *this* type's own valid
+    /// values rather than one of the bad ones every other percentage refuses.
+    #[test]
+    fn boost_fov_kick_round_trips_and_refuses_what_is_outside_its_range() {
+        assert_eq!("8".parse::<BoostFovKick>(), Ok(BoostFovKick::SUBTLE));
+        assert_eq!("16".parse::<BoostFovKick>(), Ok(BoostFovKick::DEFAULT));
+        assert_eq!("0".parse::<BoostFovKick>(), Ok(BoostFovKick::OFF));
+        assert_eq!(BoostFovKick::default(), BoostFovKick::DEFAULT);
+
+        for bad in ["33", "-1", "kick", ""] {
+            assert!(bad.parse::<BoostFovKick>().is_err(), "{bad}");
+        }
+
+        for value in BoostFovKick::OFFERED {
+            assert_eq!(value.to_string().parse::<BoostFovKick>(), Ok(value));
+        }
+    }
+
+    /// The point of turning the toggle into a magnitude: each tier has to be
+    /// an actually larger multiplier, not just a different label on the same
+    /// number.
+    #[test]
+    fn boost_fov_kick_tiers_increase() {
+        let gains: Vec<f32> = BoostFovKick::OFFERED.iter().map(|t| t.gain()).collect();
+        assert!(
+            gains.windows(2).all(|pair| pair[0] < pair[1]),
+            "the tiers must strictly increase: {gains:?}"
+        );
+        assert_eq!(BoostFovKick::OFF.gain(), 0.0);
     }
 
     /// The one place gamma could be the wrong way round: the setting names the

@@ -1570,11 +1570,12 @@ pub struct Race {
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason
-    /// [`Self::exhaust`] is. See [`BOOST_FOV_GAIN`], which is where the
-    /// "authored, not recovered" argument for the whole effect lives.
+    /// [`Self::exhaust`] is. See [`crate::display::BoostFovKick`], which is
+    /// where the "authored, not recovered" argument for the whole effect
+    /// lives.
     boost_kick: f32,
-    /// Whether the kick is driven at all. `[graphics] boost_fov_kick`.
-    boost_fov_kick: bool,
+    /// How strong the kick is, `0` off. `[graphics] boost_fov_kick`.
+    boost_fov_kick: crate::display::BoostFovKick,
     /// Where the ship was at the end of last tick, for the swept test.
     ///
     /// `None` on the first tick, which is the original's own "no previous
@@ -1589,27 +1590,10 @@ pub struct Race {
     sparks_anchor: Option<Vec3>,
 }
 
-/// How much wider the view opens at the top of the boost's kick, as a fraction
-/// of the tangent of the half-angle.
-///
-/// **An authored effect, not a recovered one** - the same standing this project
-/// gives `oag_render::sparks`. Nothing in either binary has been read that widens
-/// the field of view on a speed pad; this exists because a boost the player
-/// cannot feel is a boost that reads as nothing happening, and the force term it
-/// rides on *is* recovered. It is called out here rather than left to be
-/// mistaken for a finding, and `[graphics] boost_fov_kick` turns it off.
-///
-/// Scales the tangent rather than the angle, which is what
-/// [`crate::display::Fov::apply`] does and for the reason that function gives.
-/// Note that `<ExternalCameraFar fov>`'s own unit is itself unrecovered - this
-/// project reads it as degrees - so the absolute field this widens is not a
-/// settled quantity either.
-pub const BOOST_FOV_GAIN: f32 = 0.08;
-
 /// How fast the kick opens, per second, as an exponential approach.
 ///
 /// Faster than [`BOOST_FOV_CLOSE_RATE`] on purpose: the boost should arrive as a
-/// shove and let go slowly. Authored, like [`BOOST_FOV_GAIN`].
+/// shove and let go slowly. Authored, like [`crate::display::BoostFovKick`].
 pub const BOOST_FOV_OPEN_RATE: f32 = 9.0;
 
 /// How fast the kick closes again, per second. See [`BOOST_FOV_OPEN_RATE`].
@@ -1720,23 +1704,31 @@ impl Race {
             pad_current: None,
             pad_previous_position: None,
             boost_kick: 0.0,
-            boost_fov_kick: true,
+            boost_fov_kick: crate::display::BoostFovKick::DEFAULT,
         }
     }
 
-    /// Turns the boost's field-of-view kick on or off. `[graphics]
+    /// Sets how strong the boost's field-of-view kick is. `[graphics]
     /// boost_fov_kick`.
     ///
     /// A setter rather than a [`Setup`] field because the kick is a display
     /// choice and `Setup` is what a headless race needs; threading a graphics
     /// setting through the loader would put it in front of every caller that has
-    /// no screen. Off leaves [`Race::projection`] bit-identical to what it
-    /// returned before the effect existed.
-    pub fn set_boost_fov_kick(&mut self, enabled: bool) {
-        self.boost_fov_kick = enabled;
-        if !enabled {
+    /// no screen. [`crate::display::BoostFovKick::OFF`] leaves [`Race::projection`]
+    /// bit-identical to what it returned before the effect existed.
+    pub fn set_boost_fov_kick(&mut self, kick: crate::display::BoostFovKick) {
+        self.boost_fov_kick = kick;
+        if kick == crate::display::BoostFovKick::OFF {
             self.boost_kick = 0.0;
         }
+    }
+
+    /// What this race was actually built with, for the `BOOST FOV KICK` row's
+    /// restart note - see `Self::set_boost_fov_kick`, which is called once at
+    /// `Race::start` and does not track the settings file afterwards.
+    #[must_use]
+    pub fn boost_fov_kick(&self) -> crate::display::BoostFovKick {
+        self.boost_fov_kick
     }
 
     /// How many times a `Reset` contact has respawned the ship this race.
@@ -1890,7 +1882,7 @@ impl Race {
         // `pad_timer` rather than from the exhaust, because the exhaust's boost
         // is a `max` that other things may one day also arm and this must follow
         // the pad specifically.
-        if self.boost_fov_kick {
+        if self.boost_fov_kick != crate::display::BoostFovKick::OFF {
             let boosting = self.world.ships[0].physics.pad_timer > 0.0;
             let (target, rate) = if boosting {
                 (1.0, BOOST_FOV_OPEN_RATE)
@@ -2377,7 +2369,7 @@ impl Race {
         let kicked = if self.boost_kick == 0.0 {
             authored
         } else {
-            let widen = 1.0 + self.boost_kick * BOOST_FOV_GAIN;
+            let widen = 1.0 + self.boost_kick * self.boost_fov_kick.gain();
             2.0 * ((authored * 0.5).tan() * widen).atan()
         };
         let fov = oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect);
@@ -3433,12 +3425,12 @@ pub struct CaptureOptions {
     /// gets checked against the running original, and that check is the whole
     /// reason the setting exists.
     pub animated_textures: bool,
-    /// Whether the boost's field-of-view kick runs. Honoured for a sharper
+    /// How strong the boost's field-of-view kick is. Honoured for a sharper
     /// version of the same reason: the effect is **authored**, so a capture meant
-    /// to be compared against the running original wants it off, and that
-    /// comparison is the only way anyone will find out whether the original has
-    /// something like it.
-    pub boost_fov_kick: bool,
+    /// to be compared against the running original wants it at
+    /// [`crate::display::BoostFovKick::OFF`], and that comparison is the only
+    /// way anyone will find out whether the original has something like it.
+    pub boost_fov_kick: crate::display::BoostFovKick,
     /// Which anti-aliasing the scene draws with. Honoured for the same reason
     /// the two culling tiers are: a capture is how `[graphics] anti_aliasing`
     /// gets compared against itself off and against the running original.
@@ -4204,7 +4196,7 @@ mod tests {
     /// capture of the original.
     #[test]
     fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
-        use crate::display::Fov;
+        use crate::display::{BoostFovKick, Fov};
 
         fn x_scale(m: Mat4) -> f32 {
             m.to_cols_array()[0]
@@ -4212,7 +4204,7 @@ mod tests {
 
         let mut kicked = race_with_pads(Mode::TimeTrial, enveloping_pad());
         let mut off = race_with_pads(Mode::TimeTrial, enveloping_pad());
-        off.set_boost_fov_kick(false);
+        off.set_boost_fov_kick(BoostFovKick::OFF);
 
         let resting = kicked.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
         for _ in 0..30 {
@@ -4244,6 +4236,39 @@ mod tests {
                 .to_cols_array(),
             resting.to_cols_array(),
             "the kick never fully closed"
+        );
+    }
+
+    /// The three non-zero tiers are the point of turning the toggle into a
+    /// magnitude: a player who found [`BoostFovKick::DEFAULT`] too subtle to
+    /// notice needs the stronger rows to actually be stronger, not just
+    /// differently labelled.
+    #[test]
+    fn a_stronger_tier_widens_the_view_further() {
+        use crate::display::{BoostFovKick, Fov};
+
+        fn x_scale(m: Mat4) -> f32 {
+            m.to_cols_array()[0]
+        }
+
+        let widen_at = |tier: BoostFovKick| {
+            let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
+            race.set_boost_fov_kick(tier);
+            for _ in 0..30 {
+                race.tick(&InputSnapshot::default());
+            }
+            x_scale(race.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED))
+        };
+
+        let scales: Vec<f32> = BoostFovKick::OFFERED
+            .iter()
+            .copied()
+            .map(widen_at)
+            .collect();
+        // A wider field is a *smaller* x scale, so ascending tiers descend here.
+        assert!(
+            scales.windows(2).all(|pair| pair[0] > pair[1]),
+            "the tiers must widen monotonically: {scales:?}"
         );
     }
 

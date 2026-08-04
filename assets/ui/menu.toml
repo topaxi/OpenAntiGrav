@@ -402,6 +402,25 @@ label = "FIELD OF VIEW"
 setting = "graphics.fov"
 values = ["75", "90", "100", "110", "125", "150", "175"]
 
+# How much a boost pad widens the field of view for a moment. **Invented, not
+# recovered** - nothing read out of either binary does this; the force it
+# rides on is real, this is authored so the player can feel it. 0 turns it
+# off, for comparing against a capture of the original, which has no such
+# effect. 8 is the original on/off toggle's subtler "on"; the default is 16,
+# one tier stronger, because 8 read as nothing happening to a player not
+# already watching for it; 32 is stronger still - see
+# `oag_game::display::BoostFovKick`.
+#
+# `restart_required` here means the same thing it does on ANTI-ALIASING's MSAA
+# levels above: the running race already baked this into `Race::start` and
+# will not pick up a change until the next one does.
+[[page.entry]]
+kind = "choice"
+label = "BOOST FOV KICK"
+setting = "graphics.boost_fov_kick"
+values = ["0", "8", "16", "32"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
 # `fps` is one line of numbers; `pacing` adds the graph, which is the one that
 # shows uneven frames - an average frame rate is exactly what hides them.
 # `dev` adds a third line of scene counts (draw calls, triangles). Drawn over
