@@ -12,6 +12,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [WAD subsystem](wad-subsystem.md) | Name hash, lookup, mount, read, LZSS and zlib decoders |
 | [Main loop](main-loop.md) | Frame pacing, timestep, state machine |
 | [Input](input.md) | Pad polling, the abstract button layer, deadzone and gain |
+| [Input bindings](input-bindings.md) | The eight abstract actions, the novice/veteran schemes, the default mapping, both sideshift gestures and the barrel roll |
 | [Collision](collision.md) | Triangle soup, sweep and prune, surface types |
 | [Rigid body](rigid-body.md) | Construction, force application, the integrator, the contact resolver |
 | [Contact response](contact-response.md) | Where the contact friction comes from, and the frame order that hides it |

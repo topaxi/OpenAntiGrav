@@ -355,7 +355,10 @@ angAccelLocal.y += speed * turn * (R - L) * 0.001
   the craft is in contact**. Read at instruction level in
   [engine.md](../ghidra/functions/psp-pulse/engine.md#the-sideshift-is-a-force-and-its-direction-is-read-rather-than-guessed),
   which also settles the direction: a craft shifts toward the side it was
-  flicked.
+  flicked. **What arms the timer** is one of two gestures - a stick flick on the
+  novice scheme, a double-tapped airbrake on the veteran one - with a `1.0 s`
+  lockout common to both; see
+  [input-bindings.md](../ghidra/functions/psp-pulse/input-bindings.md).
 
 Lateral grip:
 
@@ -612,9 +615,14 @@ Three consequences, and the first is the interesting one:
   `(0, -1.125, +/-4.5)` after the `0.75` global, identical for every craft, and
   landed. `<Misc>` reaches the collider, not the probes.
 - ~~**Whether `sideshift` is an impulse or a velocity**~~ - **closed**: it is
-  neither, it is a force for `0.2 s`, so mass does divide it. What is still open
-  is the *trigger*: the stick-flick path is read, the tap-history path above it
-  is not, and `oag-input` produces no sideshift at all.
+  neither, it is a force for `0.2 s`, so mass does divide it. ~~What is still
+  open is the *trigger*~~ - **also closed, 2026-08-04**: the original has two
+  trigger gestures, one per control scheme, and both are ported. The
+  tap-history path above them was never a sideshift trigger at all; it is the
+  barrel roll. See
+  [input-bindings.md](../ghidra/functions/psp-pulse/input-bindings.md). What is
+  still open here is only a *measurement*: no capture of either gesture off the
+  original exists, so the timings are static analysis with no runtime leg.
 - **Which speed the airbrake terms use.** This page writes only "speed"; the craft caches
   `|dot(velocity, forward)|` and the engine reads it from there, so that is what the crate
   uses, rather than `|velocity|` as the brake does.

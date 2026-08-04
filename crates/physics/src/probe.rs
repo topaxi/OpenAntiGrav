@@ -314,6 +314,9 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         grounded,
         grounded_prev,
         sideshift_timers,
+        shift_tap_windows,
+        shift_armed,
+        shift_lockout,
         time_since_landing,
         mag_lock_blend,
         pad_timer,
@@ -335,6 +338,15 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_f32(grounded_prev);
     hasher.write_f32(sideshift_timers[0]);
     hasher.write_f32(sideshift_timers[1]);
+    // The gesture machines' own state. `Script::Aerobatic` fires a sideshift
+    // through `ShipControls::sideshift`, which bypasses the tap windows and the
+    // armed latch, so those two hold their defaults for every tick of every
+    // script; `shift_lockout` does not, because the direct request still
+    // refreshes it once the timer runs.
+    hasher.write_f32(shift_tap_windows[0]);
+    hasher.write_f32(shift_tap_windows[1]);
+    hasher.write_u8(u8::from(shift_armed));
+    hasher.write_f32(shift_lockout);
     hasher.write_f32(time_since_landing);
     hasher.write_f32(mag_lock_blend);
     // Both stay at their defaults through every probe script - none crosses a

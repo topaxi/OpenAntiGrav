@@ -163,6 +163,14 @@ struct Cli {
     /// `--press start,cross` is how the capture reaches `Launch Game`: START
     /// skips the intro, then cross picks a language. A held button only ever
     /// produces one rising edge, so two presses need two edges.
+    ///
+    /// It reaches the race too, not only the front end, which is what makes an
+    /// edge-triggered manoeuvre testable headlessly: `--race --hold cross
+    /// --press l` double-taps the left airbrake and sideshifts, repeatedly - a
+    /// tap every other tick is well inside the `0.25 s` window. Expect the ship
+    /// to be slow as well as displaced, because `q` is one key for both the
+    /// airbrake *axis* and the sideshift *button*, so pulsing it also pulses the
+    /// aerodynamic brake. That is a real pilot's gesture, not an artefact.
     #[arg(long)]
     press: Option<String>,
 
@@ -630,6 +638,7 @@ fn run_race(
                 path,
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
+                pressed: button_mask(cli.press.as_deref()),
                 size: parse_size(&cli.size)?,
                 log_every: cli.log_every,
                 aspect: settings.display.aspect,

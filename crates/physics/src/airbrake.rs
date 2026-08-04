@@ -302,6 +302,30 @@ pub fn lateral_grip(state: &ShipState, handling: &Handling, grounded: f32) -> Ve
 /// `docs/ghidra/functions/psp-pulse/engine.md`.
 pub const SIDESHIFT_DURATION: f32 = 0.2;
 
+/// How long after a sideshift before another can be triggered, in seconds.
+///
+/// The literal `1.0` that `Ship_UpdateSideshiftInput_q` writes into
+/// `entity+0x8ac` on every tick either side's timer is running. That timer
+/// counts down by `dt` and gates the whole trigger block, so it is a second
+/// measured from the *end* of a shift. Confidence **85**; see
+/// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+pub const SIDESHIFT_LOCKOUT: f32 = 1.0;
+
+/// How long a first airbrake press stays a candidate for a double tap, in
+/// seconds.
+///
+/// The literal `0.25` (`0x3e800000`) the veteran branch writes into
+/// `entity+0x89c`/`entity+0x8a0`. Confidence **85**.
+pub const SIDESHIFT_TAP_WINDOW: f32 = 0.25;
+
+/// How far the steering axis must move to arm and then fire a novice flick.
+///
+/// The original tests its `+/-100` axis against `+/-10`; this crate's
+/// [`ShipControls::steer_x`] is the same axis on `-1..=1`, so the threshold is
+/// `0.1`. Inside it the flick arms, outside it the flick fires. Confidence
+/// **85**.
+pub const SIDESHIFT_FLICK_THRESHOLD: f32 = 0.1;
+
 /// The sideshift, as a **world-space force** while its timer runs.
 ///
 /// # It was a one-shot velocity change, and that was the wrong shape
@@ -342,13 +366,12 @@ pub const SIDESHIFT_DURATION: f32 = 0.2;
 /// coin flip lands on the side the crate had guessed - a confirmation rather than
 /// a fix, and now it is evidence instead of a guess.
 ///
-/// # What is still not implemented
+/// # The trigger
 ///
-/// The *trigger*. The original fires a sideshift either from a held button plus a
-/// stick flick past `+/-10` (the axis has to return inside `+/-10` to re-arm), or
-/// from the two buttons bound to input actions 5 and 6, and that is `oag-input`'s
-/// business rather than this crate's. Here the [`Sideshift`] input stays the
-/// "fire now" edge, and firing refreshes the timer.
+/// Both of the original's gestures are in [`advance_sideshift`] now. They are
+/// per-craft state in the original and so they are per-craft state here; the
+/// input layer supplies buttons, not decisions. See
+/// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
 #[must_use]
 pub fn sideshift_force(state: &ShipState, handling: &Handling, grounded: f32) -> Vec3 {
     if grounded <= 0.0 {
@@ -368,19 +391,100 @@ pub fn sideshift_force(state: &ShipState, handling: &Handling, grounded: f32) ->
     force
 }
 
-/// Arms the timer a fired sideshift runs on, and counts both down by `dt`.
+/// Runs both sideshift gestures and the timers they arm.
 ///
-/// The countdown is the original's, in `Ship_UpdateSideshiftInput_q`; the arming
-/// is this crate's stand-in for a trigger that lives in the input layer. Firing
-/// while a timer runs refreshes it, as a second flick does there.
+/// Ported from `Ship_UpdateSideshiftInput_q` (`0x08846a54`) in the order that
+/// function has: count every timer down, run whichever gesture the pilot is
+/// making, then refresh the lockout from whatever ended up running. Doing the
+/// countdown first is what makes a shift last
+/// [`SIDESHIFT_DURATION`] rather than one tick more.
+///
+/// # The two gestures
+///
+/// The original ships **two control schemes** and the sideshift is a different
+/// gesture in each - see
+/// `docs/ghidra/functions/psp-pulse/input-bindings.md`, which reads the options
+/// module that decides between them.
+///
+/// - **Novice** holds one dedicated button (`OPT_CTRL_SS`, bound to `L` by
+///   default) and *flicks* the stick. The flick has to arm first, by the axis
+///   being inside [`SIDESHIFT_FLICK_THRESHOLD`], and fires when it crosses back
+///   out. **The craft shifts toward the side it was flicked.**
+/// - **Veteran** has no sideshift button - it spends `L` and `R` on the two
+///   airbrakes - and *double-taps* an airbrake instead, within
+///   [`SIDESHIFT_TAP_WINDOW`].
+///
+/// Both machines run here unconditionally, which is not the original's shape:
+/// there, the scheme flag picks one branch. It is safe because the input layer
+/// only ever fills the fields of the live scheme
+/// (`oag_gameplay::controls::ship_controls` takes the scheme and zeroes the
+/// other), so the dormant machine sees nothing to act on. Keeping the scheme
+/// out of this crate is deliberate: it is an options setting, not physics.
+///
+/// # What is deliberately not ported
+///
+/// The original also gates the whole block on `craft+0x1c0 & 2`, a flag bit
+/// nothing has identified (`engine.md` names eleven bits of that word and only
+/// bit 0 is established). It is left out rather than guessed at; the effect is
+/// that our sideshift is available in a state the original may withhold it in.
 pub fn advance_sideshift(state: &mut ShipState, input: &ShipControls, dt: f32) {
     for timer in &mut state.sideshift_timers {
         *timer = (*timer - dt).max(0.0);
     }
-    match input.sideshift {
-        Sideshift::None => {}
-        Sideshift::Left => state.sideshift_timers[0] = SIDESHIFT_DURATION,
-        Sideshift::Right => state.sideshift_timers[1] = SIDESHIFT_DURATION,
+    for window in &mut state.shift_tap_windows {
+        *window = (*window - dt).max(0.0);
+    }
+    state.shift_lockout = (state.shift_lockout - dt).max(0.0);
+
+    // `ShipControls::sideshift` is the direct request and bypasses the lockout;
+    // the two gestures do not. Both sides are tracked separately because the
+    // original arms two independent timers and lets the forces cancel rather
+    // than picking a winner.
+    let mut fire_left = input.sideshift == Sideshift::Left;
+    let mut fire_right = input.sideshift == Sideshift::Right;
+
+    if state.shift_lockout <= 0.0 {
+        if input.shift_modifier {
+            if state.shift_armed {
+                if input.steer_x > SIDESHIFT_FLICK_THRESHOLD {
+                    fire_right = true;
+                    state.shift_armed = false;
+                } else if input.steer_x < -SIDESHIFT_FLICK_THRESHOLD {
+                    fire_left = true;
+                    state.shift_armed = false;
+                }
+            } else if input.steer_x.abs() < SIDESHIFT_FLICK_THRESHOLD {
+                state.shift_armed = true;
+            }
+        }
+
+        // A tap is ignored outright while that side is already shifting, which
+        // is the original's own `timer <= 0` guard and not a second lockout.
+        if input.shift_tap_left && state.sideshift_timers[0] <= 0.0 {
+            if state.shift_tap_windows[0] > 0.0 {
+                fire_left = true;
+            } else {
+                state.shift_tap_windows[0] = SIDESHIFT_TAP_WINDOW;
+            }
+        }
+        if input.shift_tap_right && state.sideshift_timers[1] <= 0.0 {
+            if state.shift_tap_windows[1] > 0.0 {
+                fire_right = true;
+            } else {
+                state.shift_tap_windows[1] = SIDESHIFT_TAP_WINDOW;
+            }
+        }
+    }
+
+    if fire_left {
+        state.sideshift_timers[0] = SIDESHIFT_DURATION;
+    }
+    if fire_right {
+        state.sideshift_timers[1] = SIDESHIFT_DURATION;
+    }
+
+    if state.sideshift_timers[0] > 0.0 || state.sideshift_timers[1] > 0.0 {
+        state.shift_lockout = SIDESHIFT_LOCKOUT;
     }
 }
 
@@ -865,6 +969,156 @@ mod tests {
         assert_eq!(pushing, (SIDESHIFT_DURATION / dt).round() as u32 + 1);
     }
 
+    const DT: f32 = 1.0 / 60.0;
+
+    /// Novice: hold the sideshift button, centre the stick, flick.
+    fn flick(state: &mut ShipState, steer_x: f32) {
+        advance_sideshift(
+            state,
+            &ShipControls {
+                shift_modifier: true,
+                steer_x,
+                ..ShipControls::default()
+            },
+            DT,
+        );
+    }
+
+    /// Veteran: one press of an airbrake, then `gap` ticks of nothing.
+    fn tap(state: &mut ShipState, left: bool, gap: u32) {
+        advance_sideshift(
+            state,
+            &ShipControls {
+                shift_tap_left: left,
+                shift_tap_right: !left,
+                ..ShipControls::default()
+            },
+            DT,
+        );
+        for _ in 0..gap {
+            advance_sideshift(state, &ShipControls::default(), DT);
+        }
+    }
+
+    /// The flick has to arm before it can fire, and it fires toward the flick.
+    ///
+    /// The arming step is the whole reason the latch exists: a pilot already
+    /// holding the stick over when they press the button must not get a
+    /// sideshift for free, and must not get one every tick after that either.
+    #[test]
+    fn a_novice_flick_arms_inside_the_threshold_and_fires_outside_it() {
+        let mut state = ShipState::default();
+
+        // Stick already over: the modifier is held but nothing arms, so nothing
+        // fires however long it is held.
+        for _ in 0..30 {
+            flick(&mut state, 1.0);
+        }
+        assert!(!state.shift_armed, "an off-centre stick never arms");
+        assert_eq!(state.sideshift_timers, [0.0, 0.0]);
+
+        // Centre the stick to arm, then flick right.
+        flick(&mut state, 0.0);
+        assert!(state.shift_armed);
+        flick(&mut state, 1.0);
+        assert_eq!(state.sideshift_timers[1], SIDESHIFT_DURATION);
+        assert_eq!(state.sideshift_timers[0], 0.0, "the flick went right");
+        assert!(!state.shift_armed, "firing disarms");
+    }
+
+    /// A left flick is the mirror image, and the axis sign is the binding.
+    #[test]
+    fn a_novice_flick_left_shifts_left() {
+        let mut state = ShipState::default();
+        flick(&mut state, 0.0);
+        flick(&mut state, -1.0);
+        assert_eq!(state.sideshift_timers[0], SIDESHIFT_DURATION);
+        assert_eq!(state.sideshift_timers[1], 0.0);
+    }
+
+    /// Veteran: two taps inside the window shift, one tap does not.
+    ///
+    /// A single tap is an ordinary airbrake press and has to stay one - this is
+    /// the test that would catch a window left permanently open.
+    #[test]
+    fn a_veteran_double_tap_shifts_and_a_single_tap_does_not() {
+        let mut state = ShipState::default();
+
+        tap(&mut state, true, 4);
+        assert_eq!(state.sideshift_timers[0], 0.0, "one tap is not a shift");
+        assert!(state.shift_tap_windows[0] > 0.0, "the window is open");
+
+        tap(&mut state, true, 0);
+        assert_eq!(state.sideshift_timers[0], SIDESHIFT_DURATION);
+    }
+
+    /// The window closes, and a slow second tap opens a new one instead.
+    #[test]
+    fn a_veteran_tap_outside_the_window_is_a_first_tap_again() {
+        let mut state = ShipState::default();
+
+        let gap = (SIDESHIFT_TAP_WINDOW / DT).ceil() as u32 + 1;
+        tap(&mut state, false, gap);
+        assert_eq!(state.shift_tap_windows[1], 0.0, "the window expired");
+
+        tap(&mut state, false, 0);
+        assert_eq!(state.sideshift_timers[1], 0.0, "and this is tap one again");
+        assert!(state.shift_tap_windows[1] > 0.0);
+    }
+
+    /// One second between shifts, whichever gesture asked for the second one.
+    ///
+    /// The lockout is refreshed while the shift itself runs, so it is measured
+    /// from the end of the shift and the total gap is duration plus lockout.
+    #[test]
+    fn the_lockout_holds_off_the_next_gesture_for_a_second() {
+        let mut state = ShipState::default();
+        flick(&mut state, 0.0);
+        flick(&mut state, 1.0);
+        assert_eq!(state.sideshift_timers[1], SIDESHIFT_DURATION);
+
+        // Immediately try the other gesture, twice, well inside the lockout.
+        tap(&mut state, true, 2);
+        tap(&mut state, true, 0);
+        assert_eq!(state.sideshift_timers[0], 0.0, "locked out");
+
+        // Run out the shift and the lockout, then the same double tap works.
+        let ticks = ((SIDESHIFT_DURATION + SIDESHIFT_LOCKOUT) / DT).ceil() as u32 + 1;
+        for _ in 0..ticks {
+            advance_sideshift(&mut state, &ShipControls::default(), DT);
+        }
+        assert_eq!(state.shift_lockout, 0.0);
+        tap(&mut state, true, 2);
+        tap(&mut state, true, 0);
+        assert_eq!(state.sideshift_timers[0], SIDESHIFT_DURATION);
+    }
+
+    /// The dormant scheme's fields are inert, which is what lets both machines
+    /// run side by side.
+    ///
+    /// `oag_gameplay::controls::ship_controls` guarantees only one scheme's
+    /// fields are ever set; this pins that the other machine does nothing when
+    /// they are not.
+    #[test]
+    fn a_scheme_that_sends_nothing_produces_nothing() {
+        let mut state = ShipState::default();
+        for _ in 0..120 {
+            advance_sideshift(
+                &mut state,
+                &ShipControls {
+                    steer_x: 1.0,
+                    airbrake_left: 1.0,
+                    airbrake_right: 1.0,
+                    ..ShipControls::default()
+                },
+                DT,
+            );
+        }
+        assert_eq!(state.sideshift_timers, [0.0, 0.0]);
+        assert_eq!(state.shift_tap_windows, [0.0, 0.0]);
+        assert!(!state.shift_armed);
+    }
+
     #[test]
     fn a_zero_handling_ship_gets_nothing_from_the_airbrake_path() {
         let state = moving_ship();
@@ -875,6 +1129,11 @@ mod tests {
             airbrake_left: 1.0,
             airbrake_right: 0.0,
             sideshift: Sideshift::Right,
+            // Every gesture input on as well, so this asserts the airbrake path
+            // is inert on zero parameters rather than merely untriggered.
+            shift_modifier: true,
+            shift_tap_left: true,
+            shift_tap_right: true,
         };
         let forces = evaluate(&state, &input, &Handling::ZERO, 40.0);
         assert_eq!(forces.world_force, Vec3::ZERO);

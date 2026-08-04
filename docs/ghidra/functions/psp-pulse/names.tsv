@@ -326,3 +326,9 @@
 0x08906720	function	FogCube_Construct	85	fog.md
 0x088879d4	function	World_CollectNodeLists	80	fog.md
 0x0890d994	function	Mesh_SetBatchDrawState	85	mesh-draw.md
+0x088366bc	function	Options_ButtonForAction	90	input-bindings.md
+0x08836828	function	Options_ControlSchemeFlag	88	input-bindings.md
+0x08836714	function	Options_SetControlScheme	88	input-bindings.md
+0x0883672c	function	Options_LoadDefaultControlMapping	88	input-bindings.md
+0x08836a48	function	Options_LoadControlMapping	85	input-bindings.md
+0x0889b468	function	Options_BuildControlSchemeRows	82	input-bindings.md

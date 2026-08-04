@@ -21,8 +21,8 @@ pub mod spawn;
 pub mod world;
 
 pub use collision::collision_world;
-pub use controls::ship_controls;
-pub use handling::{handling_for, to_format_class};
+pub use controls::{ControlScheme, ship_controls};
+pub use handling::{AirbrakeGraphics, airbrake_graphics_for, handling_for, to_format_class};
 pub use input::InputSnapshot;
 pub use spawn::Pose;
 pub use world::{MAX_SHIPS, Ship, World};

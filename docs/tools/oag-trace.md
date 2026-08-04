@@ -292,6 +292,7 @@ every committed scenario.
 | `pitch-both-ways.inputs` | **360 ticks of pitch, stationary on the start line, no thrust.** The cleanest capture in `data/traces/` - `speed/|velocity|` reads `1.0000` on 360 of 360 ticks - and the first with any pitch input at all |
 | `pitch-hold-thrust.inputs` | Thrust and a held nose-up off the line. Clean to tick 128 at 84 units/s, and dirty after |
 | `standing-start.inputs` | **300 ticks of held thrust from the start line.** Two measurements in one: a clean launch to tick 186, then a sustained scrape at speed. The force-balance regression test - see [below](#the-standing-start-and-what-it-regression-tests) |
+| `sideshift-double-tap.inputs` | **The veteran sideshift**: 180 ticks to reach racing speed, then `L` tapped twice inside the `0.25 s` window. Symmetric about the centre line apart from the two taps, so it is decidable against a control that drops them - measured at **11.7 units of leftward displacement** for **1.2 units** of extra path. Not captured from the original yet; see `docs/ghidra/functions/psp-pulse/input-bindings.md` for the recipe |
 | `talons-junction-time-trial-lap.inputs` | **3,146 ticks: one completed lap of Talon's Junction White.** Not hand-authored - see below, and note it no longer flies clean open-loop |
 
 `steer-both-ways` turns both ways on purpose. The sign of the yaw response is one

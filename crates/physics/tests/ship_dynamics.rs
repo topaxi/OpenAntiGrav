@@ -412,6 +412,11 @@ fn a_zero_parameter_ship_at_rest_never_accelerates() {
         airbrake_left: 1.0,
         airbrake_right: 0.5,
         sideshift: Sideshift::Right,
+        // Both sideshift gestures driven too: a zero-parameter ship must not
+        // move for one either, and `Handling::ZERO` leaves `sideshift` at 0.0.
+        shift_modifier: true,
+        shift_tap_left: true,
+        shift_tap_right: true,
     };
 
     for _ in 0..600 {

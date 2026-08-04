@@ -560,10 +560,32 @@ diverges:
   denominator are both absent. That is the largest remaining gap between this crate's
   contact response and the original's.
 
-Two other known gaps, both expected: an **inverted ship falls off**, because the
+One other known gap, expected: an **inverted ship falls off**, because the
 magstrip magnetic hold is not decoded and not implemented (see
-[physics](../physics/README.md)), and there is **no sideshift**, because its button
-binding was never recovered.
+[physics](../physics/README.md)).
+
+**The sideshift used to be listed here and no longer is.** Its binding is
+recovered - see
+[input-bindings.md](../ghidra/functions/psp-pulse/input-bindings.md) - and the
+manoeuvre works in a race: **double-tap `Q` or `E`**, the keyboard's left and
+right airbrakes, within a quarter of a second. That is the *veteran* scheme,
+which is also the original's shipped default.
+
+Checked through the race loop rather than only in unit tests, because the
+race's edges come from a different producer than a scripted replay's:
+
+```sh
+just play --race --screenshot /tmp/shift.png --ticks 260 --log-every 260 --hold cross --press l
+```
+
+`--press` reaches the race now, not only the front end. Against the same run
+without it the ship ends **28 units further to its left**. It is also much
+slower, and that is not a bug: `q` is one key for both the airbrake *axis* and
+the sideshift *button*, so pulsing it pulses the aerodynamic brake as well.
+
+The *novice* gesture - hold the sideshift button and flick the stick - is
+implemented in `oag_physics` and unit-tested, but nothing here can select a
+scheme yet, so it is unreachable from this mode.
 
 ## Two things `oag-render` could grow
 

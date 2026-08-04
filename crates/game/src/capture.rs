@@ -310,6 +310,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 path: options.path.clone(),
                 ticks: options.ticks.saturating_sub(ticks),
                 held: options.held,
+                pressed: options.pressed,
                 size: (width, height),
                 log_every: options.log_every,
                 anisotropy: options.anisotropy,

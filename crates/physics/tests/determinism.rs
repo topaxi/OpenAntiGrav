@@ -84,24 +84,47 @@ use oag_physics::{Environment, ShipState, step};
 ///   is the tell that this is a hash-input change rather than a force-law one: a
 ///   change to behaviour reaches the scenarios that exercise it, a change to what
 ///   is hashed reaches all of them equally.
+/// - **Regenerated 2026-08-04**, and **no behaviour changed**. `ShipState` gained
+///   `shift_tap_windows`, `shift_armed` and `shift_lockout` for the two sideshift
+///   gestures the original triggers on (`crates/physics/src/airbrake.rs`,
+///   `advance_sideshift`; see
+///   `docs/ghidra/functions/psp-pulse/input-bindings.md`), so `probe::hash_state`
+///   writes three more `f32`s and a `u8` per tick.
+///
+///   All three rows moved again, same tell as above. This time it was also
+///   **checked directly** rather than argued from the shape: with exactly the
+///   four new writes deleted from `hash_state` and nothing else changed, the run
+///   reproduces the 2026-08-03 hashes bit for bit. So the trajectory is
+///   untouched and only the stream is longer. That is the check to repeat before
+///   pasting new constants in here - it is cheap, and it is the difference
+///   between "the hash moved because I added a field" and "the hash moved and I
+///   assumed that was why".
+///
+///   The reason behaviour cannot have changed: `probe::controls` never sets
+///   `shift_modifier` or either `shift_tap_*`, so no gesture can arm on any
+///   script, and the one `Sideshift::Left` at tick 1200 goes through
+///   `ShipControls::sideshift`, which is a direct request and deliberately
+///   bypasses `shift_lockout`. The 600-tick `Corridor` row does not even reach
+///   that tick, so on that row all four new fields hold their defaults for the
+///   whole run - and it moved anyway, which is the tell.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x5d2b_1bd5_46e7_f924,
-        0xb3e9_2384_7b0d_fd27,
+        0x8231_3864_e869_40f6,
+        0xa895_7fc2_7404_da03,
     ),
     (
         3_600,
         Script::Corridor,
-        0xee6c_9074_2507_6064,
-        0x6666_f093_b1fd_7ec1,
+        0xe58a_696d_c7ac_6e1c,
+        0x6399_e183_3107_c05b,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x63fc_a62a_369e_40ba,
-        0xf669_7ed1_c0ae_23ff,
+        0x0e9c_8963_d181_9c96,
+        0x7edd_5a23_56e3_966b,
     ),
 ];
 

@@ -16,12 +16,20 @@
 //!
 //! # Four fields are scaled, and that is not this layer taking a liberty
 //!
-//! The original's own XML parsers do not store four of these values verbatim:
+//! The original's own XML parsers do not store five of these values verbatim:
 //! `Engine.amount` is stored as `xml * 0.001`, `Brakes.amount` as
 //! `xml * -0.01`, and both `Airbrake.amount` and `Airbrake.slidegrip` as
 //! `xml * 0.0001`. Recovered from `HandlingXml_ParseEngine`,
 //! `HandlingXml_ParseBrakes` and `HandlingXml_ParseAirbrake` at confidence 88;
 //! see `docs/ghidra/functions/psp-pulse/engine.md`.
+//!
+//! The fifth is `AirbrakeGraphics.amount`, stored as `xml * 0.017453292` -
+//! `pi/180`, so the parameter is an **angle in radians** and not the bare number
+//! the document holds. `HandlingXml_ParseAirbrakeGraphics` at confidence 92; see
+//! `docs/ghidra/functions/psp-pulse/camera.md`, which found it while mapping the
+//! camera block it sits directly after. It is converted by
+//! [`airbrake_graphics_for`] rather than by [`handling_for`], because the flaps
+//! are graphics and the physics parameter set has no business holding them.
 //!
 //! So there are genuinely two forms of these numbers - the document's and the
 //! one the craft code reads - and the conversion has to happen somewhere. It
@@ -72,17 +80,65 @@ pub const AIRBRAKE_AMOUNT_SCALE: f32 = 0.0001;
 /// able to infer. `HandlingXml_ParseAirbrake`.
 pub const SLIDEGRIP_SCALE: f32 = 0.0001;
 
-/// The four fields that are not stored verbatim, for grepping.
+/// Load-time factor applied to `<AirbrakeGraphics amount>`: degrees to radians.
+///
+/// The odd one out, and the reason it is worth a constant of its own: the other
+/// four scales are unit-less magnitude conversions, and this one says the
+/// parameter is an **angle**. `HandlingXml_ParseAirbrakeGraphics` (`0x08839c68`)
+/// stores `amount * 0.017453292`, and the value is `pi/180` to seven digits;
+/// `up_speed` and `down_speed` beside it are stored raw. Read out of the loader
+/// and corroborated against the live block, which holds one team's authored `25`
+/// as `0.4363323`. Confidence **92**; see
+/// `docs/ghidra/functions/psp-pulse/camera.md`.
+pub const AIRBRAKE_GRAPHICS_AMOUNT_SCALE: f32 = 0.017_453_292;
+
+/// The five fields that are not stored verbatim, for grepping.
 ///
 /// Exists so that "which parameters are pre-scaled?" has one answer in the
-/// repository rather than four scattered constants, and so a test can assert the
+/// repository rather than five scattered constants, and so a test can assert the
 /// set has not silently grown.
-pub const SCALED_FIELDS: [&str; 4] = [
+pub const SCALED_FIELDS: [&str; 5] = [
     "Engine.amount",
     "Brakes.amount",
     "Airbrake.amount",
     "Airbrake.slidegrip",
+    "AirbrakeGraphics.amount",
 ];
+
+/// How far and how fast the airbrake flaps move, in the form the game holds.
+///
+/// The runtime twin of [`fmt::AirbrakeGraphics`], which describes the document.
+/// The one difference is the whole reason this type exists: `amount` here is
+/// **radians**, because that is what the original's loader stores.
+///
+/// Deliberately **not** part of `oag_physics::params::Handling`. The flaps are a
+/// model animation and touch no force term - `Ship_UpdateAirbrakes` never reads
+/// this block - so putting it in the physics parameter set would be claiming a
+/// coupling that is not there, and would make a graphics tweak move the
+/// determinism hashes.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AirbrakeGraphics {
+    /// Flap deflection at full airbrake, in **radians**.
+    pub amount: f32,
+    /// Rate the flap returns at. Stored raw.
+    pub down_speed: f32,
+    /// Rate the flap deploys at. Stored raw.
+    pub up_speed: f32,
+}
+
+/// Converts `<AirbrakeGraphics/>` into the form the game holds.
+///
+/// Separate from [`handling_for`] because the block is **per team**, on the
+/// enclosing [`fmt::Stats`], rather than per speed class - the same asymmetry
+/// `<Misc>` has - and because nothing in the physics parameter set wants it.
+#[must_use]
+pub fn airbrake_graphics_for(stats: &fmt::Stats) -> AirbrakeGraphics {
+    AirbrakeGraphics {
+        amount: stats.airbrake_graphics.amount * AIRBRAKE_GRAPHICS_AMOUNT_SCALE,
+        down_speed: stats.airbrake_graphics.down_speed,
+        up_speed: stats.airbrake_graphics.up_speed,
+    }
+}
 
 /// The physics parameter set for one team in one speed class.
 ///
@@ -473,17 +529,40 @@ mod tests {
     /// the force law ever also scales, this set is where somebody will look, so
     /// it must not drift.
     #[test]
-    fn exactly_four_fields_are_pre_scaled() {
-        assert_eq!(SCALED_FIELDS.len(), 4);
+    fn exactly_five_fields_are_pre_scaled() {
+        assert_eq!(SCALED_FIELDS.len(), 5);
         assert_eq!(
             SCALED_FIELDS,
             [
                 "Engine.amount",
                 "Brakes.amount",
                 "Airbrake.amount",
-                "Airbrake.slidegrip"
+                "Airbrake.slidegrip",
+                "AirbrakeGraphics.amount"
             ]
         );
+    }
+
+    /// The flap deflection is an angle, and the two rates beside it are not.
+    ///
+    /// The `25 -> 0.4363323` pair is the corroboration `camera.md` records off
+    /// the live block, so it is the one worth asserting rather than an arbitrary
+    /// input: if the scale is ever dropped or applied twice, this is the number
+    /// that moves.
+    #[test]
+    fn the_airbrake_flap_deflection_is_converted_to_radians() {
+        let mut stats = stats();
+        stats.airbrake_graphics.amount = 25.0;
+        let graphics = airbrake_graphics_for(&stats);
+
+        assert!(
+            (graphics.amount - 0.436_332_3).abs() < 1e-6,
+            "25 degrees should reach the game as {} rad, got {}",
+            0.436_332_3,
+            graphics.amount
+        );
+        assert_eq!(graphics.up_speed, stats.airbrake_graphics.up_speed);
+        assert_eq!(graphics.down_speed, stats.airbrake_graphics.down_speed);
     }
 
     /// Every field that is *not* in [`SCALED_FIELDS`] must arrive verbatim. The

@@ -174,9 +174,31 @@ pub struct ShipControls {
     pub airbrake_right: f32,
     /// A sideshift was requested this frame, and to which side.
     ///
-    /// A one-shot impulse rather than a held axis, so it is an edge and not a
-    /// level: the caller sets it on the frame the shoulder pair is tapped.
+    /// An edge and not a level. This is the *direct* request: a caller that has
+    /// already decided a shift should fire sets it, and
+    /// [`crate::airbrake::advance_sideshift`] arms the timer. The two gesture
+    /// machines below fire the same timers without going through it, so a
+    /// caller that maps real buttons leaves this at [`Sideshift::None`] and a
+    /// test or a probe that wants a shift on a given tick sets it.
     pub sideshift: Sideshift,
+    /// The novice scheme's sideshift button (`OPT_CTRL_SS`, action 7) is
+    /// **held**.
+    ///
+    /// While it is, the steering axis returning inside
+    /// [`crate::airbrake::SIDESHIFT_FLICK_THRESHOLD`] arms a flick and crossing
+    /// back out of it fires one. See
+    /// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    pub shift_modifier: bool,
+    /// The veteran scheme's left airbrake (`OPT_CTRL_LAB`, action 5) was
+    /// **pressed** this tick - an edge, not a level.
+    ///
+    /// Two presses inside [`crate::airbrake::SIDESHIFT_TAP_WINDOW`] are a left
+    /// sideshift. The original reads this off the pressed mask at
+    /// `*(craft+0x78) + 0x20`, which is why a held airbrake does not repeat.
+    pub shift_tap_left: bool,
+    /// The veteran scheme's right airbrake (`OPT_CTRL_RAB`, action 6) was
+    /// pressed this tick.
+    pub shift_tap_right: bool,
 }
 
 /// Which way a one-shot sideshift goes, if any.
@@ -294,6 +316,29 @@ pub struct ShipState {
     /// `Ship_UpdateSideshiftInput_q` (`0x08846a54`); see
     /// `docs/ghidra/functions/psp-pulse/engine.md`.
     pub sideshift_timers: [f32; 2],
+    /// Seconds left on each side's double-tap window, left then right.
+    ///
+    /// The original's `entity+0x89c` and `entity+0x8a0`. The first press of an
+    /// airbrake opens its side's window at
+    /// [`crate::airbrake::SIDESHIFT_TAP_WINDOW`]; a second press while the
+    /// window is still open fires the shift instead of reopening it. Veteran
+    /// scheme only. See `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+    pub shift_tap_windows: [f32; 2],
+    /// Whether a novice-scheme flick is armed (`entity+0x860 & 0x400`).
+    ///
+    /// Set while the sideshift button is held and the steering axis is inside
+    /// [`crate::airbrake::SIDESHIFT_FLICK_THRESHOLD`], cleared when a flick
+    /// fires. Without it a held-over axis would fire a shift every tick.
+    pub shift_armed: bool,
+    /// Seconds before another sideshift may be triggered (`entity+0x8ac`).
+    ///
+    /// Refreshed to [`crate::airbrake::SIDESHIFT_LOCKOUT`] on every tick either
+    /// sideshift timer is running, and gates *both* gesture machines - so it is
+    /// a second between the end of one shift and the earliest start of the
+    /// next, not a second between starts. It does not gate
+    /// [`ShipControls::sideshift`], which is a direct request rather than a
+    /// gesture.
+    pub shift_lockout: f32,
     /// Seconds since the ship last touched down, in seconds.
     ///
     /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
@@ -352,6 +397,9 @@ impl Default for ShipState {
             grounded: 0.0,
             grounded_prev: 0.0,
             sideshift_timers: [0.0, 0.0],
+            shift_tap_windows: [0.0, 0.0],
+            shift_armed: false,
+            shift_lockout: 0.0,
             // Starting at zero would put a freshly spawned ship inside the
             // landing window, so it starts outside it.
             time_since_landing: 1.0,

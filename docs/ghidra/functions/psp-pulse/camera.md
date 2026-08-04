@@ -158,11 +158,17 @@ next subsystem: `+0x6c`, `+0x70` and `+0x74` hold `<AirbrakeGraphics>`'s
 `up_speed` and `down_speed` beside it are stored raw. Read out of the loader,
 and corroborated by the live block holding one team's authored 25 as
 `0.4363323`. That is a **fifth** pre-scaled parameter to add to the four
-[engine.md](engine.md) found, it belongs in
-[handling-stats.md](../../../formats/handling-stats.md)'s Units note and in
-`oag_gameplay::handling::SCALED_FIELDS`, and it means `amount` is an **angle**,
-which [engine.md](engine.md)'s `AirbrakeGraphics` note (confidence 80, offsets
-only) did not say. Confidence **92**.
+[engine.md](engine.md) found, and it means `amount` is an **angle**, which
+[engine.md](engine.md)'s `AirbrakeGraphics` note (confidence 80, offsets only)
+did not say. Confidence **92**.
+
+**Applied 2026-08-04.** `oag_gameplay::handling::SCALED_FIELDS` now has five
+entries and `airbrake_graphics_for` does the conversion. It is a separate
+function from `handling_for` deliberately: the block is per team rather than per
+speed class, and the flaps are a model animation that no force term reads, so it
+stays out of `oag_physics::params::Handling` where it would move the determinism
+hashes for a graphics change. The `25 -> 0.4363323` pair above is what that
+crate's test asserts against.
 
 The camera block itself was confirmed by reading the live structure out of a running
 race: every camera field in memory equals the document's value **unscaled**, so

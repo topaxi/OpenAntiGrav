@@ -1,0 +1,43 @@
+# A veteran-scheme sideshift: build speed, then double-tap the left airbrake.
+#
+# The gesture is `L` pressed twice inside 0.25 s - 15 ticks at 60 Hz - which is
+# what `Ship_UpdateSideshiftInput_q`'s button branch tests. See
+# `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+#
+# Written to be *decidable against a straight line*: everything here is
+# symmetric about the track's centre except the two taps, so any lateral
+# displacement at the end is the sideshift and nothing else. Run it beside
+# `straight-line.inputs` and the difference is the manoeuvre.
+#
+# `l` is the button, not the axis: the airbrake axis is `airbrake_left=`, and
+# writing that instead would ramp the aerodynamic airbrake and never reach the
+# gesture, because the gesture reads the button's *pressed* edge. The two are
+# separate on purpose here - a real pilot's tap does both, and this script keeps
+# them apart so a lateral kick cannot be confused for airbrake drift.
+#
+# The taps are three ticks apart rather than adjacent so that the first one's
+# release is unambiguous; the window is 15 ticks, so this is well inside it.
+#
+# Measured 2026-08-04 against exactly that control (the same file with the two
+# `l` tokens dropped), Assegai/Venom on 16_Track: the ship ends **11.7 units
+# further -Z**, which is its left, having travelled 427.8 units along the path
+# against the control's 426.6. So the manoeuvre is lateral and costs no forward
+# progress, and it goes toward the airbrake that was tapped.
+#
+# This exercises the **veteran** gesture only. The novice flick needs
+# `ControlScheme::Novice`, and neither `oag-trace drive` nor `oag-game --race`
+# can select a scheme yet - see HANDOVER.
+
+# Reach racing speed on the opening straight.
+180 cross
+
+# Tap one: opens the left window.
+1 cross l
+3 cross
+
+# Tap two: fires the sideshift.
+1 cross l
+
+# The shift itself is 0.2 s, and then a second of lockout. Hold the line
+# through both so the displacement is measurable after it has settled.
+100 cross

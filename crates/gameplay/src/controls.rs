@@ -10,6 +10,29 @@ use oag_physics::ship::{ShipControls, Sideshift};
 
 use crate::input::{InputSnapshot, button};
 
+/// Which of the original's two control schemes the pilot is using.
+///
+/// Not a preference this project invented: the game binds eight abstract
+/// *actions* rather than buttons, and the scheme decides which of them exist.
+/// `Options_LoadControlMapping` (`0x08836a48`) picks it from the `Control_Type`
+/// profile setting, and the row the options page shows changes with it. See
+/// `docs/ghidra/functions/psp-pulse/input-bindings.md`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ControlScheme {
+    /// `R` is both airbrakes at once and `L` is a dedicated sideshift button:
+    /// hold it and flick the stick.
+    Novice,
+    /// `L` and `R` are the two airbrakes separately, and there is no sideshift
+    /// button - double-tap an airbrake instead.
+    ///
+    /// The default, at confidence **75**: two independent paths in
+    /// `Options_LoadControlMapping` select it and the value a never-configured
+    /// profile holds was not read. If a measurement overturns that, this
+    /// attribute moves and nothing else does.
+    #[default]
+    Veteran,
+}
+
 /// Maps one tick of input onto ship controls.
 ///
 /// The snapshot's axes are used as they are, having already been clamped by
@@ -18,16 +41,25 @@ use crate::input::{InputSnapshot, button};
 /// axes on the snapshot instead, which is a change to
 /// [`InputSnapshot`](crate::input::InputSnapshot) and not to this function.
 ///
-/// # What is not mapped
+/// # Sideshift
 ///
-/// **Sideshift.** The original's binding is not recovered: it is a one-shot
-/// impulse rather than a held axis, and which button combination fires it has
-/// not been read out of the binary. Rather than guess, this returns
-/// [`Sideshift::None`] always, so the manoeuvre is simply unavailable until
-/// somebody establishes the binding. A plausible-looking guess here would be
-/// worse than the gap, because it would look implemented.
+/// This function does **not** decide that a sideshift happens - it reports which
+/// buttons the gesture needs, and `oag_physics::airbrake::advance_sideshift`
+/// runs the gesture. That split is the original's: the tap windows and the
+/// flick's armed latch are per-craft state on the entity, not input state, so
+/// putting them here would mean a second copy of them per input device.
+///
+/// Only the live scheme's fields are filled. The other scheme's stay `false`,
+/// so the dormant gesture machine never sees an input - which is how one code
+/// path in the physics crate can carry both schemes without knowing what a
+/// scheme is.
+///
+/// [`ShipControls::sideshift`] stays [`Sideshift::None`] here always. It is the
+/// *direct* request, for a test or a probe that wants a shift on a named tick;
+/// a real pilot's shift arrives through the gesture.
 #[must_use]
-pub fn ship_controls(snapshot: &InputSnapshot) -> ShipControls {
+pub fn ship_controls(snapshot: &InputSnapshot, scheme: ControlScheme) -> ShipControls {
+    let novice = scheme == ControlScheme::Novice;
     ShipControls {
         steer_x: snapshot.stick_x,
         // Up on the stick pitches the nose DOWN, which is a binding and not a
@@ -48,6 +80,14 @@ pub fn ship_controls(snapshot: &InputSnapshot) -> ShipControls {
         airbrake_left: snapshot.airbrake_left,
         airbrake_right: snapshot.airbrake_right,
         sideshift: Sideshift::None,
+        // Action 7, `OPT_CTRL_SS`, bound to `L` by the shipped default mapping.
+        shift_modifier: novice && snapshot.buttons.is_held(button::L),
+        // Actions 5 and 6, `OPT_CTRL_LAB`/`OPT_CTRL_RAB`, bound to `L` and `R`.
+        // Read off the *pressed* mask rather than held, because the original
+        // reads the pressed mask at `*(craft+0x78) + 0x20` for this branch and
+        // a held airbrake must not repeat-fire a shift.
+        shift_tap_left: !novice && snapshot.buttons.is_pressed(button::L),
+        shift_tap_right: !novice && snapshot.buttons.is_pressed(button::R),
     }
 }
 
@@ -68,7 +108,10 @@ mod tests {
             buttons: held(button::CROSS),
             ..InputSnapshot::new()
         };
-        assert_eq!(ship_controls(&snapshot).thrust, 1.0);
+        assert_eq!(
+            ship_controls(&snapshot, ControlScheme::default()).thrust,
+            1.0
+        );
     }
 
     /// Cross is `activate` in the front end and thrust in a race. Circle is
@@ -79,7 +122,10 @@ mod tests {
             buttons: held(button::CIRCLE),
             ..InputSnapshot::new()
         };
-        assert_eq!(ship_controls(&snapshot).thrust, 0.0);
+        assert_eq!(
+            ship_controls(&snapshot, ControlScheme::default()).thrust,
+            0.0
+        );
     }
 
     /// Three of the four axes pass through, and the fourth is inverted.
@@ -97,30 +143,82 @@ mod tests {
             airbrake_right: 0.5,
             ..InputSnapshot::new()
         };
-        let controls = ship_controls(&snapshot);
+        let controls = ship_controls(&snapshot, ControlScheme::default());
         assert_eq!(controls.steer_x, -0.5);
         assert_eq!(controls.steer_y, -0.25, "stick up is nose down");
         assert_eq!(controls.airbrake_left, 1.0);
         assert_eq!(controls.airbrake_right, 0.5);
     }
 
-    /// Pins the gap rather than the behaviour: when somebody recovers the
-    /// binding, this test is what tells them where to add it.
+    /// The gesture fields are what a scheme selects, and they are exclusive.
+    ///
+    /// Holding `L` is a flick modifier on novice and a left-airbrake tap on
+    /// veteran, and it must never be both: the two gesture machines run side by
+    /// side in the physics crate and rely on this to stay dormant.
     #[test]
-    fn sideshift_is_never_produced_because_its_binding_is_unknown() {
+    fn a_scheme_fills_only_its_own_gesture_fields() {
+        let snapshot = InputSnapshot {
+            buttons: held(button::L),
+            ..InputSnapshot::new()
+        };
+
+        let novice = ship_controls(&snapshot, ControlScheme::Novice);
+        assert!(novice.shift_modifier, "L is the novice sideshift button");
+        assert!(!novice.shift_tap_left);
+        assert!(!novice.shift_tap_right);
+
+        let veteran = ship_controls(&snapshot, ControlScheme::Veteran);
+        assert!(!veteran.shift_modifier, "veteran has no sideshift button");
+        assert!(veteran.shift_tap_left, "L is the veteran left airbrake");
+        assert!(!veteran.shift_tap_right);
+    }
+
+    /// A held airbrake is one tap, not one per tick.
+    ///
+    /// `is_pressed` and not `is_held` is the whole of what stops a veteran
+    /// pilot leaning on an airbrake from sideshifting continuously.
+    #[test]
+    fn a_veteran_tap_is_an_edge_and_not_a_level() {
+        let mut buttons = Input::new();
+        buttons.begin_frame(1 << button::L);
+        let first = InputSnapshot {
+            buttons,
+            ..InputSnapshot::new()
+        };
+        assert!(ship_controls(&first, ControlScheme::Veteran).shift_tap_left);
+
+        buttons.begin_frame(1 << button::L);
+        let second = InputSnapshot {
+            buttons,
+            ..InputSnapshot::new()
+        };
+        assert!(!ship_controls(&second, ControlScheme::Veteran).shift_tap_left);
+    }
+
+    /// The direct request stays a caller's business, never a pilot's.
+    ///
+    /// A real shift arrives through the gesture machine in `oag_physics`, so
+    /// this field staying `None` is the boundary between the two and not a gap.
+    #[test]
+    fn no_scheme_produces_a_direct_sideshift_request() {
         let snapshot = InputSnapshot {
             buttons: held(button::L),
             airbrake_left: 1.0,
+            stick_x: 1.0,
             ..InputSnapshot::new()
         };
-        assert_eq!(ship_controls(&snapshot).sideshift, Sideshift::None);
+        for scheme in [ControlScheme::Novice, ControlScheme::Veteran] {
+            assert_eq!(ship_controls(&snapshot, scheme).sideshift, Sideshift::None);
+        }
     }
 
     #[test]
     fn no_input_produces_no_controls() {
-        assert_eq!(
-            ship_controls(&InputSnapshot::new()),
-            ShipControls::default()
-        );
+        for scheme in [ControlScheme::Novice, ControlScheme::Veteran] {
+            assert_eq!(
+                ship_controls(&InputSnapshot::new(), scheme),
+                ShipControls::default()
+            );
+        }
     }
 }

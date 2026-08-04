@@ -380,7 +380,7 @@ Two parts are decoded, because they are the two with consumers:
 `Xml_ReadGlobalSettings` was read to the store instruction: both attributes go
 through `Xml_AttributeAsFloat` into the per-class tables at `0x08b36bc0`
 (`amount`) and `0x08b36bd0` (`time`) **verbatim, with no load-time scale** -
-unlike the four in `oag_gameplay::handling::SCALED_FIELDS`.
+unlike the five in `oag_gameplay::handling::SCALED_FIELDS`.
 The rest is named in
 [engine.md](../ghidra/functions/psp-pulse/engine.md) and can be added when
 something needs it. Values are read at runtime from the player's own disc and are
@@ -488,6 +488,14 @@ Located alongside, same naming pattern, not yet decoded:
   make sense read together with [physics](../physics/README.md). The two
   magnitudes themselves are shipped data and are not written down here, which is
   why this note describes the ratio rather than the numbers.
+
+  **One attribute's unit is settled rather than open**, and it is the only one:
+  `<AirbrakeGraphics amount>` is a **flap angle in degrees**, converted to
+  radians by `HandlingXml_ParseAirbrakeGraphics` (`0x08839c68`) at load. That is
+  a fact about the unit and not about any team's value, so it belongs here.
+  Confidence 92; see
+  [camera.md](../ghidra/functions/psp-pulse/camera.md), which found it while
+  mapping the camera block the parameter sits immediately after.
 - **Camera semantics.** Every camera attribute parses, but the meanings in the
   table above are read off the names, not off the rendering code. Confidence 60.
   Settling them means finding the sites that consume the camera block.

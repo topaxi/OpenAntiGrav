@@ -67,7 +67,8 @@ use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
 use oag_formats::{collision, handling};
 use oag_gameplay::{
-    InputSnapshot, Pose, Ship, World, collision_world, handling_for, ship_controls, to_format_class,
+    ControlScheme, InputSnapshot, Pose, Ship, World, collision_world, handling_for, ship_controls,
+    to_format_class,
 };
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
@@ -1760,7 +1761,7 @@ impl Race {
     /// The snapshot is mapped through [`oag_gameplay::ship_controls`], which is the
     /// one place "cross is thrust" is written down.
     pub fn tick(&mut self, snapshot: &InputSnapshot) -> Evaluated {
-        let controls = ship_controls(snapshot);
+        let controls = ship_controls(snapshot, ControlScheme::default());
 
         // The two spline samples the magstrip hold reads. In the original these are
         // `AiTrack_LocatePosition`'s two output records on the ship entity; here
@@ -2438,6 +2439,25 @@ impl HeldButtons {
     /// One tick's snapshot.
     pub fn snapshot(&mut self) -> InputSnapshot {
         self.keyboard.snapshot()
+    }
+
+    /// Sets `mask`'s buttons down and clears them, on top of what is held.
+    ///
+    /// For a gesture that needs *edges* rather than a level. A held button
+    /// produces one rising edge and never another, so anything reading
+    /// `Input::is_pressed` - the veteran sideshift's double tap, for one - is
+    /// invisible to [`Self::new`]'s mask alone. Buttons in both masks stay down:
+    /// holding and pulsing the same button is a contradiction, and resolving it
+    /// toward held is the reading that does not silently drop a hold.
+    pub fn pulse(&mut self, mask: u32, held: u32, down: bool) {
+        for index in 0..32u8 {
+            if mask & (1u32 << index) == 0 || held & (1u32 << index) != 0 {
+                continue;
+            }
+            if let Some(key) = key_for_button(index) {
+                self.keyboard.set_key(&key, down);
+            }
+        }
     }
 }
 
@@ -3377,6 +3397,14 @@ pub struct CaptureOptions {
     pub ticks: u32,
     /// Buttons held on every one of those ticks.
     pub held: u32,
+    /// Buttons pressed and released on alternating ticks, for gestures that read
+    /// an edge rather than a level.
+    ///
+    /// The same convention the front-end capture uses, so `--press` means one
+    /// thing across the whole tool. A tap every other tick is well inside the
+    /// veteran sideshift's `0.25 s` window, which makes `--press l` a double-tap
+    /// generator.
+    pub pressed: u32,
     /// Image size.
     pub size: (u32, u32),
     /// Print a telemetry line every this many ticks. Zero prints none.
@@ -3499,7 +3527,8 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
     race.set_boost_fov_kick(options.boost_fov_kick);
 
     let mut held = HeldButtons::new(options.held);
-    for _ in 0..options.ticks {
+    for tick in 0..options.ticks {
+        held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
         let snapshot = held.snapshot();
         race.tick(&snapshot);
         if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
@@ -3848,10 +3877,48 @@ mod tests {
         }
     }
 
+    /// A pulsed button produces a *press* every other tick, a held one does not.
+    ///
+    /// The whole reason `pulse` exists: the veteran sideshift reads
+    /// `Input::is_pressed`, and `--press` was reaching only the front end, so
+    /// the manoeuvre could not be exercised in the mode a player uses. If this
+    /// ever reports one edge and then silence, `--press l` has quietly become a
+    /// hold again.
+    #[test]
+    fn a_pulsed_button_keeps_producing_edges_and_a_held_one_does_not() {
+        let mut pulsed = HeldButtons::new(0);
+        let mut held = HeldButtons::new(1 << button::L);
+        let (mut pulsed_edges, mut held_edges) = (0, 0);
+
+        for tick in 0..8u32 {
+            pulsed.pulse(1 << button::L, 0, tick.is_multiple_of(2));
+            if pulsed.snapshot().buttons.is_pressed(button::L) {
+                pulsed_edges += 1;
+            }
+            if held.snapshot().buttons.is_pressed(button::L) {
+                held_edges += 1;
+            }
+        }
+
+        assert_eq!(pulsed_edges, 4, "one rising edge every other tick");
+        assert_eq!(held_edges, 1, "a hold rises once and never again");
+    }
+
+    /// Holding and pulsing the same button resolves toward held.
+    ///
+    /// Otherwise `--hold q --press q` would silently drop the hold on every odd
+    /// tick, which reads as an airbrake that stutters for no visible reason.
+    #[test]
+    fn pulsing_a_button_that_is_also_held_leaves_it_down() {
+        let mut buttons = HeldButtons::new(1 << button::L);
+        buttons.pulse(1 << button::L, 1 << button::L, false);
+        assert!(buttons.snapshot().buttons.is_held(button::L));
+    }
+
     #[test]
     fn a_held_cross_becomes_thrust() {
         let mut held = HeldButtons::new(1 << button::CROSS);
-        let controls = ship_controls(&held.snapshot());
+        let controls = ship_controls(&held.snapshot(), ControlScheme::default());
         assert_eq!(controls.thrust, 1.0);
         assert_eq!(controls.steer_x, 0.0);
     }
@@ -3859,7 +3926,10 @@ mod tests {
     #[test]
     fn holding_left_steers_left() {
         let mut held = HeldButtons::new(1 << button::LEFT);
-        assert_eq!(ship_controls(&held.snapshot()).steer_x, -1.0);
+        assert_eq!(
+            ship_controls(&held.snapshot(), ControlScheme::default()).steer_x,
+            -1.0
+        );
     }
 
     /// A mask naming a button no key produces must not panic, and must not leak into
@@ -3868,7 +3938,7 @@ mod tests {
     fn a_button_with_no_key_is_ignored() {
         let mut held = HeldButtons::new(1 << button::START);
         assert_eq!(
-            ship_controls(&held.snapshot()),
+            ship_controls(&held.snapshot(), ControlScheme::default()),
             oag_physics::ShipControls::default()
         );
     }

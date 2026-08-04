@@ -48,7 +48,7 @@ use std::num::NonZeroUsize;
 
 use oag_core::math::{Mat3, Quat, Vec3};
 use oag_gameplay::input::{Input, button};
-use oag_gameplay::{InputSnapshot, Ship, World, ship_controls};
+use oag_gameplay::{ControlScheme, InputSnapshot, Ship, World, ship_controls};
 use oag_physics::controls::CONTROL_RANGE;
 use oag_physics::{Environment, Handling, Raycaster, ShipState};
 
@@ -369,7 +369,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         speed_cached = state.body.linear_velocity.dot(state.body.forward());
 
         let snapshot = snapshot_for(recorded, &mut buttons, &options.inputs, index);
-        let controls = ship_controls(&snapshot);
+        let controls = ship_controls(&snapshot, ControlScheme::default());
         let ship = &mut world.ships[0];
         oag_physics::step(
             &mut ship.physics,
@@ -485,7 +485,7 @@ pub fn drive<R: Raycaster + ?Sized>(
             &frame_options.inputs,
             index,
         );
-        let controls = ship_controls(&snapshot);
+        let controls = ship_controls(&snapshot, ControlScheme::default());
         let ship = &mut world.ships[0];
         oag_physics::step(
             &mut ship.physics,
