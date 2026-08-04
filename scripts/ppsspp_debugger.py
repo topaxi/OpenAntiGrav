@@ -122,19 +122,30 @@ class Debugger:
         carrying the pc it was already stopped at, so an event alone does not
         mean a breakpoint was hit. Only a matching pc does.
         """
+        return self.wait_for_break_any((address,), timeout=timeout)
+
+    def wait_for_break_any(self, addresses, timeout=30.0):
+        """Wait until the CPU stops at any address in `addresses`.
+
+        The same pc-matching rule as `wait_for_break`, over a set: the stepping
+        rebroadcast trap applies identically, so only a pc in the set counts.
+        """
+        addresses = set(addresses)
         end = time.time() + timeout
         queued, self.pending = self.pending, []
         for msg in queued:
-            if msg.get("event") == "cpu.stepping" and msg.get("pc") == address:
+            if msg.get("event") == "cpu.stepping" and msg.get("pc") in addresses:
                 return msg
         while time.time() < end:
             msg = self._recv()
             if msg is None:
                 continue
-            if msg.get("event") == "cpu.stepping" and msg.get("pc") == address:
+            if msg.get("event") == "cpu.stepping" and msg.get("pc") in addresses:
                 return msg
             self.pending.append(msg)
-        raise TimeoutError("never stopped at 0x%08x" % address)
+        raise TimeoutError(
+            "never stopped at any of %s" % ", ".join("0x%08x" % a for a in addresses)
+        )
 
     def each_hit(self, address, count, timeout=30.0):
         """Yield at every one of the next `count` hits of `address`.
@@ -142,19 +153,70 @@ class Debugger:
         The CPU is stopped inside the loop body, which is where reads are cheap,
         and resumed on the way to the next hit.
         """
+        for index, msg in self.each_hit_any((address,), count, timeout=timeout):
+            yield index, msg
+
+    def each_hit_any(self, addresses, count, timeout=30.0):
+        """Yield `(index, msg)` at each of the next `count` hits of any address.
+
+        The sibling of `each_hit` for more than one breakpoint; the pc that was
+        actually hit is `msg["pc"]`. The CPU is stopped inside the loop body and
+        every breakpoint is removed on the way out, however the loop ends.
+
+        **On v1.20.4 only the most recently added execution breakpoint ever
+        fires**, whatever `cpu.breakpoint.list` says: armed ship-then-camera, a
+        live race stops only at the camera address, and armed camera-then-ship
+        only at the ship address, both reproduced against a running Pulse while
+        each breakpoint alone fires every tick. So with more than one address
+        this loop is only useful for probes that expect one of them to be hit
+        at all, not for interleaving two streams - a capture that needs a
+        second structure per tick should learn its address from one hit and
+        read it from the surviving breakpoint instead, which is what
+        `psp-trace.py --camera` does.
+        """
         self.brk()
-        self.add_breakpoint(address)
+        for address in addresses:
+            self.add_breakpoint(address)
         try:
             for index in range(count):
                 self.call("cpu.resume")
-                yield index, self.wait_for_break(address, timeout=timeout)
+                yield index, self.wait_for_break_any(addresses, timeout=timeout)
         finally:
             self.brk()
-            self.remove_breakpoint(address)
+            for address in addresses:
+                self.remove_breakpoint(address)
 
     def read(self, address, size):
         reply = self.call("memory.read", address=address, size=size)
         return base64.b64decode(reply["base64"])
+
+    def write(self, address, data):
+        """Write raw bytes into emulated memory.
+
+        **An empty payload kills the emulator outright** (HANDOVER.md records
+        the corpse), so it is refused here rather than sent. Writes are only
+        meaningful while the CPU is stepping, like everything else in a
+        breakpoint-driven session; the proven precedent is the roll
+        step-response measurement in `crates/physics/src/hover.rs`, which
+        rewrote the rigid body's basis rows through this API.
+        """
+        if not data:
+            raise DebuggerError(
+                "refusing memory.write with an empty payload: it crashes PPSSPP"
+            )
+        self.call(
+            "memory.write",
+            address=address,
+            base64=base64.b64encode(bytes(data)).decode("ascii"),
+        )
+
+    def write_u32(self, address, value):
+        self.call("memory.write_u32", address=address, value=value)
+
+    def write_f32s(self, address, values):
+        """Write consecutive little-endian f32s starting at `address`."""
+        values = list(values)
+        self.write(address, struct.pack("<%df" % len(values), *values))
 
     def read_u32(self, address):
         return self.call("memory.read_u32", address=address)["value"]

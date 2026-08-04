@@ -38,8 +38,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import input_script
+from niri_shot import screenshot
 from ppsspp_debugger import Debugger
-from psp_trace_fields import BODY_FIELDS, CRAFT_FIELDS, SHIP_UPDATE_CRAFT
+from psp_trace_fields import (
+    BODY_FIELDS,
+    CAMERA_FIELDS,
+    CAMERA_NODE_OFFSET,
+    CAMERA_UPDATE_BREAK,
+    CRAFT_FIELDS,
+    SHIP_UPDATE_CRAFT,
+)
 
 # The craft's own address and the two structure layouts live in
 # `psp_trace_fields`, because `scripts/psp-autopilot.py` breaks on the same
@@ -161,7 +169,43 @@ def main():
         "this start line, so a target already passed would otherwise wait for a "
         "whole lap.",
     )
+    parser.add_argument(
+        "--camera",
+        action="store_true",
+        help="also record the player camera's pose per tick, as the cam_* "
+        "columns. The camera node's address is learned from one hit of a "
+        "breakpoint inside Camera_UpdatePlayerView, then read at the ship "
+        "breakpoint every tick - two live breakpoints cannot coexist, only the "
+        "most recently added one fires. The node's stored position is the "
+        "negated eye and is negated back here, so cam_pos_* is a world "
+        "position like pos_*. See docs/ghidra/functions/psp-pulse/camera.md.",
+    )
+    parser.add_argument(
+        "--shot-every",
+        type=int,
+        metavar="N",
+        help="screenshot the emulator's window at every Nth recorded tick, "
+        "named tick%%05d.png under --shot-dir. The CPU is stopped at the "
+        "breakpoint when the shot is taken, so shots are tick-addressable - but "
+        "they show the last *presented* frame, which lags the paused tick by a "
+        "constant measured in docs/tools/frame-compare.md, not by zero.",
+    )
+    parser.add_argument(
+        "--shot-dir",
+        type=Path,
+        help="where --shot-every writes its screenshots (derived game data: "
+        "keep it under data/shots/, which is gitignored)",
+    )
+    parser.add_argument(
+        "--shot-window",
+        type=int,
+        default=14,
+        help="niri window id of the emulator (`niri msg windows`)",
+    )
     args = parser.parse_args()
+
+    if args.shot_every is not None and not args.shot_dir:
+        parser.error("--shot-every needs --shot-dir")
 
     if args.script and args.hold:
         parser.error(
@@ -193,6 +237,21 @@ def main():
 
     dbg = Debugger(args.port)
     out = args.out.open("w") if args.out else sys.stdout
+
+    # The camera node is a stable heap object for the life of the race, so its
+    # address is learned once - from the one hit the camera breakpoint gets
+    # before it is removed again - and its 0x40 bytes are then read at the ship
+    # breakpoint each tick. Not a second live breakpoint: only the most
+    # recently added one ever fires (see Debugger.each_hit_any), a trap this
+    # capture found by recording 189 camera hits and no ship at all.
+    camera_node = None
+    if args.camera:
+        for _, _ in dbg.each_hit(CAMERA_UPDATE_BREAK, 1, timeout=60):
+            registers = dbg.call("cpu.getAllRegs")
+            gpr = next(c for c in registers["categories"] if c["name"] == "GPR")
+            s7 = dict(zip(gpr["registerNames"], gpr["uintValues"]))["s7"]
+            camera_node = dbg.read_u32(s7 + CAMERA_NODE_OFFSET)
+        print("camera node at 0x%08x" % camera_node, file=sys.stderr)
     # What the pad was last told, so a tick that changes nothing costs no
     # traffic. `None` means "nothing has been sent yet", which is not the same as
     # "nothing is held" - the first tick must always send.
@@ -229,6 +288,8 @@ def main():
             dbg.hold(**{button: False for button in args.warmup_hold})
 
         names = [name for name, _ in CRAFT_FIELDS] + [name for name, _ in BODY_FIELDS]
+        if args.camera:
+            names += [name for name, _ in CAMERA_FIELDS]
         print("tick," + ",".join(names), file=out)
 
         # A race updates every craft from the same function, so the breakpoint
@@ -294,7 +355,24 @@ def main():
 
             values = [struct.unpack("<f", craft_blob[at : at + 4])[0] for _, at in CRAFT_FIELDS]
             values += [struct.unpack("<f", body_blob[at : at + 4])[0] for _, at in BODY_FIELDS]
+            if camera_node is not None:
+                # Read at the ship stop: the node holds whatever the last
+                # camera update wrote, so its phase against this row is a
+                # constant fraction of a frame, absorbed by the calibration in
+                # docs/tools/frame-compare.md. The node's +0x30 holds the
+                # negated eye; the file stores the eye (camera.md has the
+                # evidence for the sign).
+                blob = dbg.read(camera_node, 0x40)
+                values += [
+                    -struct.unpack("<f", blob[at : at + 4])[0]
+                    if name.startswith("cam_pos_")
+                    else struct.unpack("<f", blob[at : at + 4])[0]
+                    for name, at in CAMERA_FIELDS
+                ]
             print("%d,%s" % (tick, ",".join("%.7g" % v for v in values)), file=out)
+
+            if args.shot_every is not None and tick % args.shot_every == 0:
+                screenshot(args.shot_window, args.shot_dir, "tick%05d" % tick)
 
             # The row above is the craft as this frame's update *found* it, and
             # the input set here is what drives the frame that produces the next

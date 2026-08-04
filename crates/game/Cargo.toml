@@ -26,6 +26,10 @@ oag-input.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true
 oag-render.workspace = true
+# The composition root is allowed to read a captured trace: `--pose-from`
+# renders one of our frames from a row of the original's capture, and the
+# column conventions live in one place, `oag-trace`, rather than twice.
+oag-trace.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }

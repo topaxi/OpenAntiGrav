@@ -255,6 +255,37 @@ autopilot *ARGS:
 trace-compare *ARGS:
     cargo run -q -p oag-trace -- {{ARGS}}
 
+# Where a track's speed/weapon pads are, with approach points for `just drive
+# place`. See docs/tools/frame-compare.md.
+#
+#   just pads --before 50 > /tmp/pads.csv
+#   just drive place --pads-csv /tmp/pads.csv --pad 3 --before 50 --speed 120
+[doc("Dump a track's pad trigger volumes, with approach points for teleports")]
+pads *ARGS:
+    cargo run -q -p oag-trace -- pads --source {{psp_image}} {{ARGS}}
+
+# One frame of ours, at PSP size, from a row of a capture: the ship pose always,
+# the recorded camera too when the capture was taken with `--camera`. The other
+# half of a comparison whose emulator half `psp-trace.py --shot-every` took.
+# See docs/tools/frame-compare.md.
+[doc("Render one frame from a captured pose at PSP size")]
+frame-shot trace tick out="/tmp/oag-frame.png" *ARGS:
+    cargo run -q --release -p oag-game -- --race --screenshot {{out}} \
+        --ticks 0 --size 480x272 --pose-from {{trace}} --pose-tick {{tick}} {{ARGS}}
+
+# `compare` exits nonzero whenever the images differ, which here is always -
+# hence the `|| true`; the diff image is the answer, not the exit code.
+[doc("Side-by-side and difference image of an emulator shot and one of ours")]
+frame-compare theirs ours out="/tmp":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v magick >/dev/null || { echo "frame-compare needs ImageMagick"; exit 1; }
+    magick "{{theirs}}" -resize '480x272!' "{{out}}/oag-theirs.png"
+    magick montage "{{out}}/oag-theirs.png" "{{ours}}" -tile 2x1 -geometry +2+2 "{{out}}/oag-side.png"
+    magick compare "{{out}}/oag-theirs.png" "{{ours}}" -compose src "{{out}}/oag-diff.png" || true
+    echo "side-by-side: {{out}}/oag-side.png"
+    echo "difference:   {{out}}/oag-diff.png"
+
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
 build-allegrex *ARGS:

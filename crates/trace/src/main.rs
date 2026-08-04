@@ -29,6 +29,7 @@ use oag_gameplay::input::button_from_name;
 use oag_gameplay::spawn::{Pose, box_inertia, spawn_height};
 use oag_gameplay::{Ship, collision_world, handling_for};
 use oag_physics::{CollisionWorld, Environment, Handling, Ray, Raycaster, SpeedClass};
+use oag_race::Course;
 use oag_trace::compare::Tolerances;
 use oag_trace::replay::{Basis, DeltaSource, DriveOptions, Held, Inputs, Options};
 use oag_trace::trace::AngularReading;
@@ -272,6 +273,25 @@ enum Command {
         #[arg(long, default_value_t = STEPS_PER_SEGMENT)]
         steps: usize,
     },
+    /// Dump a track's pad trigger volumes as CSV, one row per pad.
+    ///
+    /// Each row carries the pad's world-space centre, its push axis and its
+    /// arc-length progress along the course. `--before N` adds the on-spline
+    /// point N units *upstream* of the pad - position at hover height, tangent
+    /// and up - which is exactly the pose `scripts/psp-drive.py place` needs to
+    /// set a craft up for a run at the pad.
+    Pads {
+        /// A disc image, or a directory extracted with `oag-unpack`.
+        #[arg(long)]
+        source: String,
+        /// Archive entry name of the track's `.vex`.
+        #[arg(long, default_value = DEFAULT_TRACK)]
+        track: String,
+        /// Also emit the approach point this many units before each pad.
+        /// Repeatable: `--before 50 --before 120`.
+        #[arg(long = "before")]
+        before: Vec<f32>,
+    },
     /// Compare two traces that already exist.
     Compare {
         /// The recording, from the original.
@@ -413,6 +433,11 @@ fn main() -> Result<()> {
             track,
             steps,
         } => dump_track(&source, &track, steps),
+        Command::Pads {
+            source,
+            track,
+            before,
+        } => dump_pads(&source, &track, &before),
         Command::Drive {
             script,
             script_lead,
@@ -737,12 +762,15 @@ fn load_start_position(source: &str, name: &str) -> Result<Option<track::StartPo
 
 /// Reads a track's `WO Track` spline graph out of its `.vex`, for `track` and
 /// for `drive`.
-fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
+fn read_track_blob(source: &str, name: &str) -> Result<Vec<u8>> {
     let mut archives = pulse::Archives::open(source)?;
-    let blob = archives
+    archives
         .read_name(name)
-        .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))?;
-    let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
+        .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))
+}
+
+fn ai_of(blob: &[u8], name: &str) -> Result<track::AiTrack> {
+    let nodes = oag_formats::vex::nodes(blob).context("walking the node tree")?;
     let node = nodes
         .iter()
         .find(|n| n.class_id == oag_formats::vex::CLASS_WO_TRACK)
@@ -758,6 +786,10 @@ fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
         ai.point_count()
     );
     Ok(ai)
+}
+
+fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
+    ai_of(&read_track_blob(source, name)?, name)
 }
 
 /// Every path resampled, with the path each sample came from.
@@ -835,6 +867,109 @@ fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
         println!("{}", row.join(","));
     }
     eprintln!("{} sample(s) at {steps} per segment", samples.len());
+    Ok(())
+}
+
+/// Writes a track's pad trigger volumes to stdout as CSV.
+///
+/// One row per pad, speedup pads first then weapon pads, each numbered within
+/// its class - `pad 3` of class `speedup` is stable across runs because
+/// [`oag_formats::vex::nodes`] walks the file in file order. `progress` is
+/// arc-length distance from the start line along the course ring, and `offset`
+/// is how far the pad's centre sits from its nearest ring point - large means
+/// the pad is off the primary ring (a shortcut branch) and its `progress` and
+/// approach points should not be trusted.
+///
+/// Every `--before N` adds three column triples: the ring point N units
+/// upstream of the pad lifted to hover height (`beforeN_x/y/z`, where ships
+/// fly and where a teleported craft should be placed), the spline tangent
+/// there (`beforeN_tan_*`, the direction to face and to align velocity with)
+/// and the surface up (`beforeN_up_*`, the negated authored `down`).
+fn dump_pads(source: &str, name: &str, before: &[f32]) -> Result<()> {
+    let blob = read_track_blob(source, name)?;
+    let ai = ai_of(&blob, name)?;
+    let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
+
+    let start = nodes
+        .iter()
+        .find(|n| n.class_id == oag_formats::vex::CLASS_START_POSITION)
+        .and_then(|n| blob.get(n.payload()))
+        .and_then(track::start_position);
+    let course = Course::from_track(&ai, start.map(|s| Vec3::from_array(s.position)))
+        .context("the track's primary spline chain does not close into a ring")?;
+
+    // The same resampling the ring itself was built from, so a ring index maps
+    // back onto a full sample - tangent and down - by nearest position.
+    let samples = resample(&ai, Course::STEPS_PER_SEGMENT);
+
+    let mut header =
+        vec!["pad,class,centre_x,centre_y,centre_z,dir_x,dir_y,dir_z,progress,offset".to_owned()];
+    for n in before {
+        for triple in ["", "_tan", "_up"] {
+            for axis in ["x", "y", "z"] {
+                header.push(format!("before{n:.0}{triple}_{axis}"));
+            }
+        }
+    }
+    println!("{}", header.join(","));
+
+    let classes = [
+        ("speedup", oag_formats::vex::CLASS_SPEEDUP_PAD),
+        ("weapon", oag_formats::vex::CLASS_WEAPON_PAD),
+    ];
+    let mut total = 0usize;
+    for (label, class_id) in classes {
+        let volumes = oag_formats::pads::volumes(&blob, &nodes, class_id);
+        for (index, pad) in volumes.iter().enumerate() {
+            let centre = Vec3::from_array(pad.centre());
+            let direction = pad.direction().unwrap_or([0.0; 3]);
+            let located = course
+                .locate(centre, None)
+                .context("locating a pad on the course ring")?;
+
+            let mut row = vec![index.to_string(), label.to_owned()];
+            for v in [centre.to_array(), direction] {
+                row.extend(v.iter().map(|c| format!("{c:.7}")));
+            }
+            row.push(format!("{:.7}", located.progress));
+            row.push(format!("{:.7}", located.offset));
+
+            for n in before {
+                // "N units before" walks the long way round: forward by
+                // `length - N` is backward by N on a closed ring, and stays
+                // inside `advance`'s documented contract.
+                let upstream = course.advance(located.index, course.length() - n);
+                let point = course
+                    .position(upstream)
+                    .context("an advanced ring index is always in range")?;
+                let sample = samples
+                    .iter()
+                    .map(|(_, s)| s)
+                    .min_by(|a, b| {
+                        let da = point.distance_squared(Vec3::from_array(a.pos));
+                        let db = point.distance_squared(Vec3::from_array(b.pos));
+                        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .context("a course ring always has samples")?;
+                let lift = [
+                    point.x - track::HOVER_LIFT * sample.down[0],
+                    point.y - track::HOVER_LIFT * sample.down[1],
+                    point.z - track::HOVER_LIFT * sample.down[2],
+                ];
+                let up = [-sample.down[0], -sample.down[1], -sample.down[2]];
+                for v in [lift, sample.tangent, up] {
+                    row.extend(v.iter().map(|c| format!("{c:.7}")));
+                }
+            }
+            println!("{}", row.join(","));
+            total += 1;
+        }
+    }
+    eprintln!(
+        "{total} pad(s), course length {:.1}, start at ring index {}",
+        course.length(),
+        course.start_index()
+    );
     Ok(())
 }
 

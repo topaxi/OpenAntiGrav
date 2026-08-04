@@ -28,7 +28,7 @@ use oag_core::math::Vec3;
 /// column located in it - so a capture that grows a column stays readable.
 /// [`Trace::columns`] is what [`Trace::to_csv`] writes, which is this list
 /// filtered down to the columns the trace in hand actually carries.
-pub const COLUMNS: [&str; 33] = [
+pub const COLUMNS: [&str; 45] = [
     "tick",
     "dt",
     "grounded",
@@ -62,6 +62,18 @@ pub const COLUMNS: [&str; 33] = [
     "omega_x",
     "omega_y",
     "omega_z",
+    "cam_right_x",
+    "cam_right_y",
+    "cam_right_z",
+    "cam_up_x",
+    "cam_up_y",
+    "cam_up_z",
+    "cam_fwd_x",
+    "cam_fwd_y",
+    "cam_fwd_z",
+    "cam_pos_x",
+    "cam_pos_y",
+    "cam_pos_z",
 ];
 
 /// The columns every trace must carry, which is what the capture wrote before
@@ -103,7 +115,7 @@ pub const REQUIRED_COLUMNS: [&str; 25] = [
 ];
 
 /// The columns a trace may carry and an older one does not.
-pub const OPTIONAL_COLUMNS: [&str; 8] = [
+pub const OPTIONAL_COLUMNS: [&str; 20] = [
     "stun_timer",
     "timer_2e0",
     "avel_x",
@@ -112,6 +124,18 @@ pub const OPTIONAL_COLUMNS: [&str; 8] = [
     "omega_x",
     "omega_y",
     "omega_z",
+    "cam_right_x",
+    "cam_right_y",
+    "cam_right_z",
+    "cam_up_x",
+    "cam_up_y",
+    "cam_up_z",
+    "cam_fwd_x",
+    "cam_fwd_y",
+    "cam_fwd_z",
+    "cam_pos_x",
+    "cam_pos_y",
+    "cam_pos_z",
 ];
 
 /// The three columns of the angular **momentum** at `body+0x160`, which are all
@@ -122,6 +146,33 @@ pub const ANGULAR_COLUMNS: [&str; 3] = ["avel_x", "avel_y", "avel_z"];
 /// The three columns of the angular **velocity** at `body+0x150`, all present or
 /// all absent for the same reason as [`ANGULAR_COLUMNS`].
 pub const ANGULAR_RATE_COLUMNS: [&str; 3] = ["omega_x", "omega_y", "omega_z"];
+
+/// The twelve columns of the player camera node, written by
+/// `scripts/psp-trace.py --camera`: the node's three basis rows plus its eye
+/// position, all present or all absent - a partial pose is a broken capture,
+/// not an old one.
+///
+/// The rows are recorded as the node holds them; whether `cam_right` is the
+/// camera's right or its left, and whether `cam_fwd` is the look direction or
+/// its negation, is settled by rendering from a captured pose, not assumed
+/// here. The eye is stored **un-negated**: the node's `+0x30` holds the negated
+/// eye position (`docs/ghidra/functions/psp-pulse/camera.md`), and the capture
+/// flips the sign at write time so this file's `cam_pos_*` is a world position
+/// like `pos_*`.
+pub const CAMERA_COLUMNS: [&str; 12] = [
+    "cam_right_x",
+    "cam_right_y",
+    "cam_right_z",
+    "cam_up_x",
+    "cam_up_y",
+    "cam_up_z",
+    "cam_fwd_x",
+    "cam_fwd_y",
+    "cam_fwd_z",
+    "cam_pos_x",
+    "cam_pos_y",
+    "cam_pos_z",
+];
 
 /// One tick of ship state, as the original held it.
 ///
@@ -232,6 +283,25 @@ pub struct Frame {
     /// (ADR-0005). Recorded because a capture is the only thing that can say
     /// which of the two gates fired.
     pub timer_2e0: Option<f32>,
+    /// Row 0 of the player camera node's basis, or `None` for a capture taken
+    /// without `--camera`.
+    ///
+    /// Recorded as the node holds it; see [`CAMERA_COLUMNS`] for what is and is
+    /// not claimed about its sign. The ship's `right_*` trap ([`Frame::row0`])
+    /// does **not** transfer here: the camera node is a scene node, not the
+    /// rigid body, and its handedness is settled by rendering from a captured
+    /// pose.
+    pub camera_row0: Option<Vec3>,
+    /// Row 1 of the camera node's basis, or `None`.
+    pub camera_up: Option<Vec3>,
+    /// Row 2 of the camera node's basis, or `None`.
+    pub camera_forward: Option<Vec3>,
+    /// The camera eye in world space, or `None`.
+    ///
+    /// Already un-negated by the capture: the node's `+0x30` holds the negated
+    /// eye and `scripts/psp-trace.py` flips it before writing, so this compares
+    /// directly against a world position.
+    pub camera_position: Option<Vec3>,
 }
 
 impl Default for Frame {
@@ -256,6 +326,10 @@ impl Default for Frame {
             angular_rate: None,
             stun_timer: None,
             timer_2e0: None,
+            camera_row0: None,
+            camera_up: None,
+            camera_forward: None,
+            camera_position: None,
         }
     }
 }
@@ -341,6 +415,18 @@ impl Frame {
             "omega_z" => self.angular_rate?.z,
             "stun_timer" => self.stun_timer?,
             "timer_2e0" => self.timer_2e0?,
+            "cam_right_x" => self.camera_row0?.x,
+            "cam_right_y" => self.camera_row0?.y,
+            "cam_right_z" => self.camera_row0?.z,
+            "cam_up_x" => self.camera_up?.x,
+            "cam_up_y" => self.camera_up?.y,
+            "cam_up_z" => self.camera_up?.z,
+            "cam_fwd_x" => self.camera_forward?.x,
+            "cam_fwd_y" => self.camera_forward?.y,
+            "cam_fwd_z" => self.camera_forward?.z,
+            "cam_pos_x" => self.camera_position?.x,
+            "cam_pos_y" => self.camera_position?.y,
+            "cam_pos_z" => self.camera_position?.z,
             _ => return None,
         }))
     }
@@ -354,6 +440,10 @@ impl Frame {
             "omega_x" | "omega_y" | "omega_z" => self.angular_rate.is_some(),
             "stun_timer" => self.stun_timer.is_some(),
             "timer_2e0" => self.timer_2e0.is_some(),
+            "cam_right_x" | "cam_right_y" | "cam_right_z" => self.camera_row0.is_some(),
+            "cam_up_x" | "cam_up_y" | "cam_up_z" => self.camera_up.is_some(),
+            "cam_fwd_x" | "cam_fwd_y" | "cam_fwd_z" => self.camera_forward.is_some(),
+            "cam_pos_x" | "cam_pos_y" | "cam_pos_z" => self.camera_position.is_some(),
             other => REQUIRED_COLUMNS.contains(&other),
         }
     }
@@ -396,6 +486,18 @@ impl Frame {
             "omega_z" => self.angular_rate.get_or_insert(Vec3::ZERO).z = value,
             "stun_timer" => self.stun_timer = Some(value),
             "timer_2e0" => self.timer_2e0 = Some(value),
+            "cam_right_x" => self.camera_row0.get_or_insert(Vec3::ZERO).x = value,
+            "cam_right_y" => self.camera_row0.get_or_insert(Vec3::ZERO).y = value,
+            "cam_right_z" => self.camera_row0.get_or_insert(Vec3::ZERO).z = value,
+            "cam_up_x" => self.camera_up.get_or_insert(Vec3::ZERO).x = value,
+            "cam_up_y" => self.camera_up.get_or_insert(Vec3::ZERO).y = value,
+            "cam_up_z" => self.camera_up.get_or_insert(Vec3::ZERO).z = value,
+            "cam_fwd_x" => self.camera_forward.get_or_insert(Vec3::ZERO).x = value,
+            "cam_fwd_y" => self.camera_forward.get_or_insert(Vec3::ZERO).y = value,
+            "cam_fwd_z" => self.camera_forward.get_or_insert(Vec3::ZERO).z = value,
+            "cam_pos_x" => self.camera_position.get_or_insert(Vec3::ZERO).x = value,
+            "cam_pos_y" => self.camera_position.get_or_insert(Vec3::ZERO).y = value,
+            "cam_pos_z" => self.camera_position.get_or_insert(Vec3::ZERO).z = value,
             _ => {}
         }
     }
@@ -459,7 +561,8 @@ impl Trace {
     ///
     /// [`Error::Empty`] for a file with no header, [`Error::MissingColumn`] for a
     /// header that does not carry every column of [`REQUIRED_COLUMNS`] - or that
-    /// carries some of [`ANGULAR_COLUMNS`] and not all three - and
+    /// carries part of an all-or-nothing group ([`ANGULAR_COLUMNS`],
+    /// [`ANGULAR_RATE_COLUMNS`], [`CAMERA_COLUMNS`]) without the rest - and
     /// [`Error::Width`] or [`Error::NotANumber`] for a malformed row.
     pub fn parse(text: &str) -> Result<Self, Error> {
         let mut lines = text
@@ -478,11 +581,17 @@ impl Trace {
         // A vector arrives whole or not at all. A header with `avel_x` and no
         // `avel_y` is a truncated or edited file rather than an older capture,
         // and reading it as a rotation about one axis would be an invention.
-        for group in [ANGULAR_COLUMNS, ANGULAR_RATE_COLUMNS] {
+        // The camera pose is one twelve-column group for the same reason: a
+        // basis without its eye, or rows without a third, is not a pose.
+        for group in [
+            &ANGULAR_COLUMNS[..],
+            &ANGULAR_RATE_COLUMNS[..],
+            &CAMERA_COLUMNS[..],
+        ] {
             if group.iter().any(|c| header.contains(c)) {
                 for wanted in group {
-                    if !header.contains(&wanted) {
-                        return Err(Error::MissingColumn(wanted.to_owned()));
+                    if !header.contains(wanted) {
+                        return Err(Error::MissingColumn((*wanted).to_owned()));
                     }
                 }
             }
@@ -1039,9 +1148,11 @@ mod tests {
 tick,dt,grounded,throttle,brake,steer,airbrake_l,airbrake_r,speed_cached,\
 stun_timer,timer_2e0,\
 right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,\
-pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,avel_x,avel_y,avel_z,omega_x,omega_y,omega_z
-0,0.016683,1,100,0,0,0,0,21.98,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0
-1,0.016683,1,100,0,0,0,0,22,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0
+pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,avel_x,avel_y,avel_z,omega_x,omega_y,omega_z,\
+cam_right_x,cam_right_y,cam_right_z,cam_up_x,cam_up_y,cam_up_z,\
+cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z
+0,0.016683,1,100,0,0,0,0,21.98,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-45
+1,0.016683,1,100,0,0,0,0,22,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-44.6
 ";
 
     /// The same two ticks as a capture taken **before** the angular-velocity and
@@ -1080,7 +1191,7 @@ pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed
     fn header_the_capture_script_writes() -> Vec<String> {
         const SCRIPT: &str = include_str!("../../../scripts/psp_trace_fields.py");
         let mut columns = vec!["tick".to_owned()];
-        for list in ["CRAFT_FIELDS = [", "BODY_FIELDS = ["] {
+        for list in ["CRAFT_FIELDS = [", "BODY_FIELDS = [", "CAMERA_FIELDS = ["] {
             let start = SCRIPT
                 .find(list)
                 .unwrap_or_else(|| panic!("{list} is not in scripts/psp_trace_fields.py"))
@@ -1124,6 +1235,9 @@ pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed
             REQUIRED_COLUMNS.len() + OPTIONAL_COLUMNS.len()
         );
         for column in ANGULAR_COLUMNS {
+            assert!(OPTIONAL_COLUMNS.contains(&column));
+        }
+        for column in CAMERA_COLUMNS {
             assert!(OPTIONAL_COLUMNS.contains(&column));
         }
     }
@@ -1181,6 +1295,7 @@ grounded,dt,tick
         assert_eq!(frame.angular_velocity, None);
         assert_eq!(frame.stun_timer, None);
         assert_eq!(frame.timer_2e0, None);
+        assert_eq!(frame.camera_position, None);
         assert_ne!(frame.angular_velocity, Some(Vec3::ZERO));
     }
 
@@ -1207,8 +1322,8 @@ grounded,dt,tick
     fn the_new_columns_are_read_when_they_are_there() {
         let text = FIXTURE
             .replacen(
-                ",22,22,0,0,0,0,0,0\n",
-                ",22,22,0.25,-1.5,0.125,0.0625,-0.5,0.03125\n",
+                ",22,22,0,0,0,0,0,0,",
+                ",22,22,0.25,-1.5,0.125,0.0625,-0.5,0.03125,",
                 1,
             )
             .replacen("21.98,0,0,", "21.98,0.5,0.75,", 1);
@@ -1219,17 +1334,37 @@ grounded,dt,tick
         assert_eq!(frame.timer_2e0, Some(0.75));
     }
 
+    #[test]
+    fn the_camera_columns_are_read_when_they_are_there() {
+        let frame = Trace::parse(FIXTURE).unwrap().frames[0];
+        assert_eq!(frame.camera_row0, Some(Vec3::X));
+        assert_eq!(frame.camera_up, Some(Vec3::Y));
+        assert_eq!(frame.camera_forward, Some(Vec3::Z));
+        assert_eq!(frame.camera_position, Some(Vec3::new(10.0, 8.0, -45.0)));
+    }
+
     /// Two thirds of a vector is a truncated or edited file, not an older
     /// capture, and reading it as a rotation about one axis would be an
     /// invention.
     #[test]
     fn a_partial_angular_velocity_is_an_error() {
-        let text = FIXTURE
-            .replace(",avel_z", "")
-            .replace(",0,0,0,0,0,0\n", ",0,0,0,0,0\n");
+        // The header check fires before any row is read, so only the header
+        // needs editing; the rows' widths never come into it.
+        let text = FIXTURE.replace(",avel_z", "");
         assert_eq!(
             Trace::parse(&text),
             Err(Error::MissingColumn("avel_z".to_owned()))
+        );
+    }
+
+    /// A basis without its eye is not a pose, and reading one as a camera
+    /// would silently frame every comparison shot from the wrong place.
+    #[test]
+    fn a_partial_camera_pose_is_an_error() {
+        let text = FIXTURE.replace(",cam_pos_z", "");
+        assert_eq!(
+            Trace::parse(&text),
+            Err(Error::MissingColumn("cam_pos_z".to_owned()))
         );
     }
 

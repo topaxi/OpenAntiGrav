@@ -325,6 +325,35 @@ struct Cli {
     /// craft flat inside the geometry.
     #[arg(long, value_name = "X,Y,Z[,YAW]")]
     pose: Option<String>,
+
+    /// Start the craft at a captured trace row's exact pose: position and full
+    /// basis from the CSV, nothing recomputed from the spline.
+    ///
+    /// The other half of the comparison `--pose` was built for: an emulator
+    /// frame and one of ours, from the same state. When the capture carries
+    /// camera columns (`psp-trace.py --camera`), the frame is also rendered
+    /// from the recorded camera pose; without them the chase camera frames the
+    /// shot as usual.
+    #[arg(long, value_name = "TRACE.CSV", conflicts_with = "pose")]
+    pose_from: Option<std::path::PathBuf>,
+
+    /// Which tick of `--pose-from` to take the pose off.
+    #[arg(long, default_value_t = 0, requires = "pose_from")]
+    pose_tick: u64,
+
+    /// With `--pose-from`: ignore the capture's camera columns and keep the
+    /// chase camera.
+    #[arg(long, requires = "pose_from")]
+    no_camera: bool,
+
+    /// With `--pose-from`: render the recorded camera at this fov instead of
+    /// the disc's authored value, in the authored value's own (unrecovered,
+    /// read-as-degrees) unit.
+    ///
+    /// The calibration knob for that unit: iterate until our framing matches
+    /// the captured shot, and the value that matches is the measurement.
+    #[arg(long, requires = "pose_from")]
+    camera_fov: Option<f32>,
 }
 
 /// Parses `--pose`: three or four comma-separated numbers, the fourth a yaw in
@@ -346,6 +375,67 @@ fn parse_pose(text: &str) -> Result<(oag_core::math::Vec3, f32)> {
         oag_core::math::Vec3::new(values[0], values[1], values[2]),
         values[3].to_radians(),
     ))
+}
+
+/// Resolves `--pose-from`: one row of a capture into an exact ship pose, plus
+/// the recorded camera when the row carries one.
+///
+/// The ship's basis goes through [`oag_trace::replay::orientation_of`] under
+/// the measured reading - the capture's `right_*` columns are the ship's left,
+/// and that reconciliation must happen in the one crate that owns it rather
+/// than be restated here. The camera goes through
+/// [`oag_trace::replay::camera_orientation_of`], which has its own, weaker
+/// contract; see its docs.
+fn pose_from_trace(
+    path: &std::path::Path,
+    tick: u64,
+    no_camera: bool,
+    camera_fov: Option<f32>,
+) -> Result<(race::PoseRequest, Option<race::CameraOverride>)> {
+    use oag_trace::replay::{self, Basis};
+
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("reading {} for --pose-from", path.display()))?;
+    let trace = oag_trace::Trace::parse(&text)
+        .with_context(|| format!("{} is not a trace", path.display()))?;
+    let frame = trace
+        .frames
+        .iter()
+        .find(|frame| frame.tick == tick)
+        .with_context(|| {
+            format!(
+                "{} has no tick {tick}; it covers {:?}..={:?}",
+                path.display(),
+                trace.frames.first().map(|f| f.tick),
+                trace.frames.last().map(|f| f.tick)
+            )
+        })?;
+
+    let pose = race::PoseRequest::Exact(oag_gameplay::spawn::Pose {
+        position: frame.position,
+        orientation: replay::orientation_of(frame, Basis::LeftUpForward),
+    });
+    let camera = match (no_camera, replay::camera_orientation_of(frame)) {
+        (true, _) | (false, None) => {
+            if !no_camera {
+                eprintln!(
+                    "{}: no camera columns (captured without --camera); using the chase camera",
+                    path.display()
+                );
+            }
+            None
+        }
+        (false, Some(orientation)) => Some(race::CameraOverride {
+            // `camera_orientation_of` answered, so the pose group is present
+            // and the eye is too: the columns are all-or-nothing at parse.
+            eye: frame
+                .camera_position
+                .context("a parsed camera pose has an eye")?,
+            orientation,
+            fov_deg: camera_fov,
+        }),
+    };
+    Ok((pose, camera))
 }
 
 fn main() -> Result<()> {
@@ -393,6 +483,22 @@ fn main() -> Result<()> {
     // discover eight seconds of intro later.
     let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
 
+    let (pose, camera) = match &cli.pose_from {
+        Some(path) => {
+            let (pose, camera) =
+                pose_from_trace(path, cli.pose_tick, cli.no_camera, cli.camera_fov)?;
+            (Some(pose), camera)
+        }
+        None => (
+            cli.pose
+                .as_deref()
+                .map(parse_pose)
+                .transpose()?
+                .map(|(position, yaw)| race::PoseRequest::SplineAligned { position, yaw }),
+            None,
+        ),
+    };
+
     let race_options = race::Options {
         source: source.clone(),
         track: cli.track.clone(),
@@ -402,7 +508,8 @@ fn main() -> Result<()> {
         ribbon: cli.ribbon,
         collision: cli.collision,
         lod: cli.lod.unwrap_or(settings.graphics.lod),
-        pose: cli.pose.as_deref().map(parse_pose).transpose()?,
+        pose,
+        camera,
     };
 
     // Before `boot::load`, deliberately: the front end's load parses the front-end
@@ -2593,5 +2700,57 @@ impl Session {
         )?;
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A two-row capture in exactly the shape `psp-trace.py --camera` writes:
+    /// the required columns plus the all-or-nothing camera group. Hand-authored
+    /// like `oag_trace::trace`'s own fixtures - a real capture cannot be
+    /// committed.
+    const FIXTURE: &str = "\
+tick,dt,grounded,throttle,brake,steer,airbrake_l,airbrake_r,speed_cached,\
+right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,\
+pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,\
+cam_right_x,cam_right_y,cam_right_z,cam_up_x,cam_up_y,cam_up_z,\
+cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z
+5,0.016683,1,100,0,0,0,0,22,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,1,0,0,0,1,0,0,0,1,10,8,-45
+6,0.016683,1,100,0,0,0,0,22,1,0,0,0,1,0,0,0,1,10,2.5,-29.6,0,0,22,22,1,0,0,0,1,0,0,0,1,10,8,-44.6
+";
+
+    fn fixture_file(name: &str, text: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!("oag-game-pose-from-{name}.csv"));
+        std::fs::write(&path, text).expect("a writable temp dir");
+        path
+    }
+
+    #[test]
+    fn a_pose_from_a_trace_row_is_exact_and_carries_the_camera() {
+        let path = fixture_file("carries-camera", FIXTURE);
+        let (pose, camera) = pose_from_trace(&path, 5, false, Some(70.0)).expect("the fixture row");
+        let race::PoseRequest::Exact(pose) = pose else {
+            panic!("--pose-from must not re-derive the pose from the spline");
+        };
+        assert_eq!(pose.position, oag_core::math::Vec3::new(10.0, 2.5, -30.0));
+        let camera = camera.expect("the fixture has camera columns");
+        assert_eq!(camera.eye, oag_core::math::Vec3::new(10.0, 8.0, -45.0));
+        assert_eq!(camera.fov_deg, Some(70.0));
+    }
+
+    #[test]
+    fn no_camera_keeps_the_chase_camera_even_when_the_capture_has_one() {
+        let path = fixture_file("no-camera", FIXTURE);
+        let (_, camera) = pose_from_trace(&path, 5, true, None).expect("the fixture row");
+        assert!(camera.is_none());
+    }
+
+    #[test]
+    fn a_missing_tick_is_an_error_that_names_the_range() {
+        let path = fixture_file("missing-tick", FIXTURE);
+        let error = pose_from_trace(&path, 99, false, None).expect_err("tick 99 is not there");
+        assert!(error.to_string().contains("no tick 99"), "{error}");
     }
 }

@@ -15,22 +15,21 @@ path = "src/main.rs"
 # the same handling parameters and the same collision geometry the original was
 # running with, and both live on the player's own disc. Nothing in the comparison
 # engine itself touches a disc, so the library half stays usable without one.
+#
+# `oag-race` is here for `oag-trace pads` alone: projecting a pad onto the
+# course's arc-length ring is `Course`'s job and restating it here would be a
+# second copy of the ring walk. The comparison engine itself still has no
+# notion of a lap.
 [dependencies]
 oag-assets.workspace = true
 oag-core.workspace = true
 oag-formats.workspace = true
 oag-gameplay.workspace = true
 oag-physics.workspace = true
+oag-race.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 thiserror.workspace = true
-
-# `oag-race` is a dev-dependency only: the comparison engine has no notion of a
-# lap, and `lap_ground_truth.rs` is the one place this crate needs one - it
-# replays a captured lap through the lap counter to check that the counter agrees
-# with the original about how many laps the capture contains.
-[dev-dependencies]
-oag-race.workspace = true
 
 [lints]
 workspace = true

@@ -33,6 +33,13 @@ Traces are **derived game data**. They live under `data/traces/`, which
 `.gitignore` covers, and are never committed - so nothing here runs in CI, and
 every test in the crate works from a hand-authored fixture instead.
 
+A capture can also carry the **player camera's pose** (`psp-trace.py --camera`,
+twelve optional `cam_*` columns) and tick-aligned window screenshots, which is
+what lets one frame of the original be re-rendered by our own engine from the
+same state and diffed - including from a craft teleported to a chosen spot
+(`just drive place`, fed by `oag-trace pads`). That whole workflow has its own
+page: [frame comparison](frame-compare.md).
+
 ## Two commands, if you do not want the plumbing
 
 ```sh

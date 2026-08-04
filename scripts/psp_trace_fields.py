@@ -98,3 +98,20 @@ BODY_FIELDS = [
     ("avel_x", 0x160), ("avel_y", 0x164), ("avel_z", 0x168),
     ("omega_x", 0x150), ("omega_y", 0x154), ("omega_z", 0x158),
 ]
+
+# The player camera, captured only under `psp-trace.py --camera`. Method from
+# docs/ghidra/functions/psp-pulse/camera.md: break at 0x0883c13c inside
+# Camera_UpdatePlayerView (0x0883c0cc), read s7, and the camera node is
+# *(s7 + 0x3c) - a 4x4 with rows at +0x00/+0x10/+0x20. Its +0x30 holds the
+# **negated** eye position; the capture negates it back at write time, so the
+# CSV's `cam_pos_*` is a world position like `pos_*`. The offsets below are
+# into the node, not the craft.
+CAMERA_UPDATE_BREAK = 0x0883C13C
+CAMERA_NODE_OFFSET = 0x3C
+
+CAMERA_FIELDS = [
+    ("cam_right_x", 0x000), ("cam_right_y", 0x004), ("cam_right_z", 0x008),
+    ("cam_up_x", 0x010), ("cam_up_y", 0x014), ("cam_up_z", 0x018),
+    ("cam_fwd_x", 0x020), ("cam_fwd_y", 0x024), ("cam_fwd_z", 0x028),
+    ("cam_pos_x", 0x030), ("cam_pos_y", 0x034), ("cam_pos_z", 0x038),
+]

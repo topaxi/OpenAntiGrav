@@ -1324,6 +1324,7 @@ dependencies = [
  "oag-physics",
  "oag-race",
  "oag-render",
+ "oag-trace",
  "pollster",
  "serde",
  "thiserror 2.0.19",

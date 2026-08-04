@@ -405,3 +405,66 @@ different algorithm rather than as a second copy to read the answer off.
 - `<BonnetCamera>`, `<BackwardCamera>` and `<InternalCamera headtilt>` exist and
   are parsed; the SELECT cycle never reaches the first two, and
   `<BackwardCamera headtilt>` is not even stored.
+
+## The live pose is capturable per tick, and the node stores it transposed
+
+`scripts/psp-trace.py --camera` records the player camera's pose into every row
+of a capture, as twelve `cam_*` columns beside the ship's. Method, refined from
+the one-shot probe above (2026-08-04, PPSSPP v1.20.4, `UCUS98712`):
+
+- The camera node's **address** is learned once per run: one hit of a breakpoint
+  at `0x0883c13c`, read `s7`, node = `*(s7 + 0x3c)`. The breakpoint is then
+  removed and the node's 64 bytes are simply read at the ship breakpoint each
+  tick - the node is a stable heap object for the life of the race, and a
+  second live breakpoint is impossible anyway (see the debugger page: **only
+  the most recently added execution breakpoint fires**).
+- `+0x30` is negated on the way into the file, per the finding above, so the
+  CSV's `cam_pos_*` is a world-space eye like the ship's `pos_*`.
+
+**The node's rotation is stored transposed relative to the ship node.** The
+ship node's rows at `+0x00/+0x10/+0x20` are the ship's world axes; the camera
+node's rows are not the camera's. Measured on a live capture, external view,
+craft placed 50 units before a speedup pad:
+
+- the eye sits **11.64** units from the ship - the `OPT_CLOSE` distance the
+  table above measured, to three digits, which corroborates both captures;
+- the recorded `fwd` **row** points `dot = -0.333` off the ship, while the
+  negated third **column** `-(right_z, up_z, fwd_z)` points at it with
+  `dot = +0.987` - the residual matching the raised look-at point;
+- rendering our engine from the column reading reproduces the emulator's
+  framing; the row reading frames a different view of the same corridor.
+
+So the camera's world axes are the stored matrix's *columns*, look along the
+negated third column - i.e. the node holds a world-to-camera rotation, which
+with the separately-stored negated eye is the shape of a view matrix kept in
+two halves. Confidence **80**: one session, one view setting, but the
+competing reading is ruled out by sign, and the eye distance cross-checks
+against an independent capture. `oag_trace::replay::camera_orientation_of` is
+the one place the transposition is undone.
+
+## The fov unit is degrees, measured against the original's own frame
+
+The unrecovered fov unit (`crates/game/src/race.rs` reads it as degrees and
+says so) is now measured. Method: craft placed at rest, one tick captured with
+`--camera` plus a window screenshot, our engine rendered from the captured
+row's exact ship and camera pose at 480x272, and the fov swept while comparing
+frames by RMSE (`just frame-compare`). Sweeping 45-75 in fives and 56-64 in
+twos:
+
+| fov passed | RMSE against the original's frame |
+| ---: | ---: |
+| 56 | 8552 |
+| 58 | 8398 |
+| **60 (= the authored value, and the minimum)** | **8299** |
+| 62 | 8312 |
+| 64 | 8421 |
+
+**The authored `<ExternalCameraFar fov>` (60 for this ship), applied as the
+vertical fov in degrees at the authored 480x272 aspect, matches the original's
+projection at the RMSE minimum, bounded by the sweep to about two degrees.**
+Confidence **85**: one ship, one view, one track section - but the method is a
+direct pixel comparison against the original's own output, and a wrong unit
+(radians, or a half-angle) would sit nowhere near the minimum. The runtime
+**3/4 factor above does not enter the projection**: it scales the eye offset,
+which a recorded eye already contains, and this measurement says it does not
+also scale the fov. See `docs/tools/frame-compare.md` for the workflow.

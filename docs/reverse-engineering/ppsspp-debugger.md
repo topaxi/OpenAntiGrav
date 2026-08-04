@@ -876,3 +876,87 @@ the same path worked, and the difference appears to be that the earlier two ran
 while a second instance was still shutting down (`Secondary instance 2 -
 silencing audio` in the log). If it dies there, check nothing else is holding the
 port and start one instance at a time.
+
+## Memory writes are a committed tool now, and the two traps that ride along
+
+`memory.write` and `memory.write_u32` work on v1.20.4 and are wrapped in
+`scripts/ppsspp_debugger.py` (`write`, `write_u32`, `write_f32s`) since
+2026-08-04; the first committed consumer is `psp-drive.py place` below. Before
+that the only write this project ever sent was the ad-hoc roll perturbation the
+`ALIGNMENT_INERTIA` measurement in `crates/physics/src/hover.rs` records, so the
+mechanism itself has been proven since that pass.
+
+- **An empty base64 payload kills the emulator outright** (promoted here from
+  HANDOVER, where it cost a session). The wrapper refuses a zero-length write
+  rather than trusting every caller to remember.
+- Writes are only meaningful while the CPU is stepping, the same as reads:
+  everything `place` writes happens inside one breakpoint hit, so no frame ever
+  integrates a half-written body.
+
+## Only the most recently added execution breakpoint fires
+
+Two execution breakpoints cannot coexist on v1.20.4. Armed ship-then-camera, a
+live race stops **only** at the camera address, 189 consecutive hits with the
+ship's `Ship_UpdateCraft` never firing once; armed camera-then-ship, the same
+race stops only at the ship address; each breakpoint alone fires every tick,
+and `cpu.breakpoint.list` reports both `enabled=True` throughout. Confidence
+**90**: reproduced in both orders against a running race, but one emulator
+build and no read of PPSSPP's own source for the mechanism.
+
+Consequence for tooling: interleaving two per-tick streams with two breakpoints
+is impossible. The pattern that works - and what `psp-trace.py --camera` does -
+is to take **one** hit of the second breakpoint to learn a stable address out
+of a register, remove it, and read that address per tick from the surviving
+breakpoint. `Debugger.each_hit_any` stays for probes that expect one of a set
+to fire at all, and its docstring carries this warning.
+
+## Teleporting the craft works, and what a settle looks like
+
+`psp-drive.py place` writes the followed craft's rigid body inside one
+`Ship_UpdateCraft` hit: basis rows `+0x000/+0x010/+0x020` built as
+`row2 = tangent`, `row1 = up re-orthogonalised`, `row0 = cross(row1, row2)` (the
+recorded rows' own orientation identity), the transpose block at
+`+0x0c0/+0x0d0/+0x0e0`, position `+0x030`, velocity `+0x140` along the new
+forward, and zeros into `+0x150`/`+0x160`. Whether the transpose write is
+*necessary* was not isolated - the rows and the transpose were always written
+together - only that the pair is sufficient.
+
+Observed live (2026-08-04, Talon's Junction, Time Trial, three placements):
+
+- **The game accepts the pose.** No respawn, no snap-back: placed 50 units
+  before speedup pad 0 at 120 u/s, the craft simply drives on - it covered 55
+  units of the placed forward during a 30-tick settle, decaying 120 to 99 u/s
+  on a closed throttle, and on a second run **crossed the pad and took its
+  boost** (speed rose to 124), so triggers fire normally for a teleported
+  craft.
+- **The settle is real and must be waited out.** Hover height, `speed_cached`
+  and the camera spring all re-derive over the first dozens of ticks;
+  `--settle 30` at speed, or 60-90 at rest, left the craft flying normally.
+  Off-axis drift during a settle measured 7-15 units (track curvature and the
+  hover finding its height); `place` prints the settled pose so a capture uses
+  reality rather than the request.
+- The camera *snaps* with the craft rather than springing across the map - the
+  first captured frame after a settle already frames the new location.
+
+## Screenshots at the breakpoint, and the clipboard's one-shot lag
+
+`psp-trace.py --shot-every N --shot-dir D` screenshots the emulator window at
+every Nth recorded tick, through `scripts/niri_shot.py` (factored out of the
+autopilot). The CPU is stopped at the shot, so shots are tick-addressable. Two
+measured behaviours:
+
+- **niri's clipboard write lags the screenshot action**, reproducibly a full
+  shot behind at capture cadence: triggering the action again re-queues another
+  late write, so the fix is one action then polling `wl-paste` until the
+  content *changes* (up to 2 s). Before the fix, alternating shots were
+  byte-identical copies of their predecessor - HANDOVER's stale-clipboard trap,
+  now detected: a shot that cannot be told apart from the clipboard's previous
+  content is written as `.stale.png` rather than cited as evidence.
+- **The shot-vs-row offset is below measurement at low speed.** Matching window
+  shots of a coasting craft against our own renders of neighbouring captured
+  rows (`just frame-shot`, RMSE metric), rows within +/-2 of the shot's tick
+  differ by under 0.1 % of the cross-renderer RMSE floor - so the presented
+  frame is the current row's within about two ticks, and for a *stationary*
+  comparison the offset does not matter at all, which is how
+  `docs/tools/frame-compare.md` calibrates fov. A fast-moving per-tick capture
+  could pin it exactly; nothing needed it yet.

@@ -32,13 +32,13 @@ import argparse
 import csv
 import math
 import struct
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import input_script
+from niri_shot import screenshot
 from ppsspp_debugger import Debugger
 from psp_trace_fields import BODY_FIELDS, CRAFT_FIELDS, SHIP_UPDATE_CRAFT
 
@@ -130,32 +130,6 @@ class Line:
             if at == index:
                 break
         return self.points[at]
-
-
-def screenshot(window, directory, name):
-    """Grab the emulator's window through the compositor.
-
-    `gpu.buffer.screenshot` does not work on either PPSSPP path tried here (see
-    ppsspp-debugger.md), so the emulator's own HUD - which is the only place the
-    *game's* lap counter and lap times are legible - is read through niri. A
-    spline lap is this script's arithmetic; the HUD is the game's own answer, and
-    they are not the same claim.
-    """
-    if not directory:
-        return
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / ("%s.png" % name)
-    try:
-        subprocess.run(
-            ["niri", "msg", "action", "screenshot-window", "--id", str(window),
-             "--write-to-disk", "false"],
-            check=True, capture_output=True, timeout=10,
-        )
-        with path.open("wb") as out:
-            subprocess.run(["wl-paste", "-t", "image/png"], check=True, stdout=out, timeout=10)
-        print("shot %s" % path, file=sys.stderr, flush=True)
-    except Exception as error:  # noqa: BLE001 - a missing screenshot must not end a race
-        print("screenshot %s: %s" % (name, error), file=sys.stderr)
 
 
 def read_floats(blob, table):

@@ -42,9 +42,13 @@
 //!   the `<Misc>` derivation was `4.4x` out on roll. See [`box_inertia`].
 //! - **The magnetic hold is not implemented**, so an inverted ship falls off. That
 //!   is expected and documented in `docs/physics/README.md`.
-//! - **The camera's `fov` unit is unrecovered.** It is read as degrees and
-//!   converted explicitly in [`Race::projection`]; the value read is in the load
-//!   report so a reader can judge the assumption.
+//! - **The camera's `fov` unit is measured as degrees** - vertical, at the
+//!   authored 480x272 aspect - by rendering a captured pose beside the
+//!   original's own frame and sweeping: the RMSE minimum lands on the authored
+//!   value, bounded to about two degrees. One ship, one view, so the load
+//!   report still prints the value read; see
+//!   `docs/ghidra/functions/psp-pulse/camera.md` and
+//!   `docs/tools/frame-compare.md` for the measurement.
 //!
 //! Nothing in this module tunes, scales or corrects a physics value. The four
 //! pre-scaled handling fields are scaled exactly once, inside
@@ -61,7 +65,7 @@
 use anyhow::{Context, Result};
 use oag_assets::pulse;
 use oag_core::math::frustum::Frustum;
-use oag_core::math::{Mat4, Vec3};
+use oag_core::math::{Mat4, Quat, Vec3};
 use oag_core::{Rng, TickClock, TickRate};
 use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
@@ -242,15 +246,57 @@ pub struct Options {
     /// Whether ship and track models draw every child of an authored
     /// `LodGroup`, or only the higher-detail first one. See [`mesh::Lod`].
     pub lod: mesh::Lod,
-    /// Put the craft here instead of on its grid slot, facing `yaw` radians off
-    /// the track's own direction at that point.
+    /// Put the craft here instead of on its grid slot.
     ///
-    /// **A capture aid, not a spawn.** See
-    /// [`oag_gameplay::spawn::Pose::from_position_on_sample`]: the point is that
-    /// two circuits, or a frame of ours and a frame of the original, can be
-    /// photographed from the same place instead of by running the same number of
-    /// ticks and hoping. `None` spawns normally.
-    pub pose: Option<(Vec3, f32)>,
+    /// **A capture aid, not a spawn.** The point is that two circuits, or a
+    /// frame of ours and a frame of the original, can be photographed from the
+    /// same place instead of by running the same number of ticks and hoping.
+    /// `None` spawns normally.
+    pub pose: Option<PoseRequest>,
+    /// Render from this camera instead of the chase camera.
+    ///
+    /// The other half of the same capture aid: a ship pose replicates *what*
+    /// the original showed, and only a replicated camera replicates *how it was
+    /// framed*. `None` uses the chase camera as always.
+    pub camera: Option<CameraOverride>,
+}
+
+/// Where [`Options::pose`] puts the craft.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PoseRequest {
+    /// A position plus a yaw off the track's own direction there; pitch and
+    /// roll come from the nearest spline sample. What `--pose X,Y,Z[,YAW]`
+    /// always meant - see
+    /// [`oag_gameplay::spawn::Pose::from_position_on_sample`].
+    SplineAligned {
+        /// Where to put the craft, world space.
+        position: Vec3,
+        /// Radians off the spline tangent at that point.
+        yaw: f32,
+    },
+    /// A full pose, applied verbatim - a captured trace row's position and
+    /// basis, nothing recomputed from the spline.
+    Exact(Pose),
+}
+
+/// A camera pose imposed from outside, replacing the chase camera.
+///
+/// The one seam is [`Race::view`]: [`Race::camera_position`] derives from the
+/// view matrix, so the PVS culling eye and the fog eye follow the override
+/// without knowing it exists.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraOverride {
+    /// The camera eye, world space.
+    pub eye: Vec3,
+    /// The camera's orientation, in the same convention as the ship body's:
+    /// `-Z` is the look direction, `Y` is up. What
+    /// [`oag_trace::replay::camera_orientation_of`] produces.
+    pub orientation: Quat,
+    /// Replace the disc's authored fov (in the same unrecovered unit, read as
+    /// degrees) with this value. `None` keeps the authored one - the honest
+    /// default while the unit stands unrecovered, and the calibration knob for
+    /// settling it: iterate until the framing matches a captured shot.
+    pub fov_deg: Option<f32>,
 }
 
 impl Default for Options {
@@ -265,6 +311,7 @@ impl Default for Options {
             collision: false,
             lod: mesh::Lod::Both,
             pose: None,
+            camera: None,
         }
     }
 }
@@ -343,6 +390,9 @@ pub struct Setup {
     /// Where [`Options::pose`] asked for the craft to start, already resolved
     /// against the spline. `None` uses the ordinary spawn.
     pub pose_override: Option<Pose>,
+    /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
+    /// it rides in the simulation half even though only the renderer reads it.
+    pub camera_override: Option<CameraOverride>,
 }
 
 /// A [`Setup`] plus the geometry to draw it with.
@@ -963,14 +1013,22 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     // Resolved here rather than in `Race::start` because the spline is what
     // supplies the attitude, and `load` is where the spline is.
-    let pose_override = options.pose.and_then(|(position, yaw)| {
-        let (_, sample, distance) = spline.nearest(position)?;
-        report.push(format!(
-            "pose override: {position:?} yaw {:.1} deg, attitude from the spline sample \
-             {distance:.1} units away",
-            yaw.to_degrees()
-        ));
-        Some(Pose::from_position_on_sample(sample, position, yaw))
+    let pose_override = options.pose.and_then(|request| match request {
+        PoseRequest::SplineAligned { position, yaw } => {
+            let (_, sample, distance) = spline.nearest(position)?;
+            report.push(format!(
+                "pose override: {position:?} yaw {:.1} deg, attitude from the spline sample \
+                 {distance:.1} units away",
+                yaw.to_degrees()
+            ));
+            Some(Pose::from_position_on_sample(sample, position, yaw))
+        }
+        // Verbatim: the whole point of an exact pose is that nothing here
+        // second-guesses the recorded basis against the spline.
+        PoseRequest::Exact(pose) => {
+            report.push(format!("pose override: exact, at {:?}", pose.position));
+            Some(pose)
+        }
     });
 
     Ok(Loaded {
@@ -990,6 +1048,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             speedup_pads,
             class_gravity_scale,
             pose_override,
+            camera_override: options.camera,
         },
         hud,
         track_model,
@@ -1502,6 +1561,8 @@ pub struct Race {
     zone: Option<oag_formats::handling::Zone>,
     chase_params: ChaseParams,
     camera: Chase,
+    /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
+    camera_override: Option<CameraOverride>,
     dt: f32,
     /// Ticks left before a `Reset` contact can respawn again.
     ///
@@ -1681,6 +1742,7 @@ impl Race {
             speedup_pads,
             class_gravity_scale,
             pose_override,
+            camera_override,
             ..
         } = setup;
 
@@ -1717,6 +1779,7 @@ impl Race {
             zone: zone.filter(|_| mode == Mode::Zone),
             chase_params: chase,
             camera,
+            camera_override,
             // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
             // is one place the rate is decided.
             dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
@@ -2363,8 +2426,18 @@ impl Race {
     }
 
     /// Where the camera is and what it is aimed at, as a view matrix.
+    ///
+    /// This is the one place a [`CameraOverride`] takes effect: everything else
+    /// that needs the camera - the PVS eye, the fog eye - derives from this
+    /// matrix through [`Self::camera_position`], so overriding here overrides
+    /// everywhere at once, and a consumer that read the chase camera directly
+    /// instead would silently miss the override.
     #[must_use]
     pub fn view(&self) -> Mat4 {
+        if let Some(over) = &self.camera_override {
+            // A view matrix is the inverse of the camera's world transform.
+            return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
+        }
         self.camera.view(target_of(self.ship()), &self.chase_params)
     }
 
@@ -2475,7 +2548,16 @@ impl Race {
     /// z-fights in the distance.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: crate::display::Fov) -> Mat4 {
-        let authored = setting.apply(self.chase_params.fov.to_radians());
+        // An overridden fov stands in for the authored one and still passes
+        // through the player's setting, whose default is identity; it exists to
+        // calibrate the authored value's unrecovered unit against a captured
+        // frame, so it must sit at exactly the same point in the chain.
+        let authored_fov = self
+            .camera_override
+            .as_ref()
+            .and_then(|over| over.fov_deg)
+            .unwrap_or(self.chase_params.fov);
+        let authored = setting.apply(authored_fov.to_radians());
         // Composed *after* the setting, so a player who has widened the field
         // gets the same proportional kick rather than a fixed number of degrees.
         // The zero case returns the input untouched rather than through
@@ -4205,8 +4287,10 @@ mod tests {
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
             // These tests run on a synthetic straight and want the ordinary
-            // spawn; `--pose` is a capture aid with nothing to say here.
+            // spawn and the ordinary chase camera; `--pose` and its camera are
+            // capture aids with nothing to say here.
             pose_override: None,
+            camera_override: None,
             // The identity, so every assertion below is about the force law and
             // not about a scale. This is also what a race gets when the
             // engine-wide file is unreadable.
@@ -4520,6 +4604,59 @@ mod tests {
         assert!(
             scales.windows(2).all(|pair| pair[0] > pair[1]),
             "the tiers must widen monotonically: {scales:?}"
+        );
+    }
+
+    /// A camera override must move every reader of the camera at once: the
+    /// view matrix, and through it the derived eye that PVS culling and fog
+    /// sampling read. A consumer left on the chase camera would frame the
+    /// geometry from one place and cull it from another - wrong picture, no
+    /// error - which is why `Race::view` is the single seam.
+    #[test]
+    fn a_camera_override_moves_the_view_and_the_derived_eye_together() {
+        let eye = Vec3::new(12.0, 34.0, -56.0);
+        let orientation = Quat::from_rotation_y(0.83);
+        let mut setup = setup(Handling::default());
+        setup.camera_override = Some(CameraOverride {
+            eye,
+            orientation,
+            fov_deg: None,
+        });
+        let race = Race::start(setup);
+
+        assert!((race.camera_position() - eye).length() < 1e-4);
+        // The view maps the eye to the origin and world axes into camera axes:
+        // a point one unit along the camera's own -Z lands on (0, 0, -1).
+        let ahead = eye + orientation * Vec3::NEG_Z;
+        let mapped = race.view().transform_point3(ahead);
+        assert!((mapped - Vec3::NEG_Z).length() < 1e-4, "{mapped}");
+    }
+
+    /// The fov half of the override slots in exactly where the authored value
+    /// sits, so a calibrated value and the disc's own go through the same
+    /// setting and the same aspect fit.
+    #[test]
+    fn a_camera_fov_override_stands_in_for_the_authored_fov() {
+        use crate::display::Fov;
+
+        let mut with_override = setup(Handling::default());
+        with_override.camera_override = Some(CameraOverride {
+            eye: Vec3::ZERO,
+            orientation: Quat::IDENTITY,
+            fov_deg: Some(75.0),
+        });
+        let overridden = Race::start(with_override);
+
+        let mut same_authored = setup(Handling::default());
+        same_authored.chase = ChaseParams {
+            fov: 75.0,
+            ..same_authored.chase
+        };
+        let authored = Race::start(same_authored);
+
+        assert_eq!(
+            overridden.projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED),
+            authored.projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED)
         );
     }
 

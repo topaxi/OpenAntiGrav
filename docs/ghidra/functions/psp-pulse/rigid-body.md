@@ -583,3 +583,18 @@ exactly that, and the settling value is the predicted `0.035`.
   **88**, up from 55.
 - **`body+0x394`**, the scale `Body_ApplyImpulseAtPoint` applies to the angular
   half of an impulse. Still unread.
+
+## The body is writable from outside, and the craft flies on
+
+`scripts/psp-drive.py place` rewrites a live body wholesale - basis rows,
+transpose at `+0xc0`, position, velocity, zeros into `+0x150`/`+0x160` - inside
+one `Ship_UpdateCraft` entry, and the game integrates the written state as if
+it had always been there: no respawn, hover re-settles within tens of ticks,
+and a speedup pad crossed by the written velocity fires its boost normally
+(measured 2026-08-04, three placements; details on
+[the debugger page](../../../reverse-engineering/ppsspp-debugger.md#teleporting-the-craft-works-and-what-a-settle-looks-like)).
+That is consistent with everything above: nothing in the update reads a hidden
+copy of the pose, so state written between frames *is* the state. The rows and
+the `+0xc0` transpose were always written together, so whether the integrator's
+own post-loop rebuild would have covered the transpose alone was not isolated -
+the safe pair is what the tool writes.

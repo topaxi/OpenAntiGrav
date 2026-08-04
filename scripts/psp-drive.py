@@ -43,9 +43,14 @@ Subcommands:
               save-state command (see ppsspp-debugger.md).
     state     what the front end is doing, and where the craft is.
     drive     send a script, in real time, and log progress.
+    place     teleport the craft to a chosen track point - a pad approach from
+              `oag-trace pads`, or a raw pose - by writing the rigid body at a
+              breakpoint, for targeted captures and comparison screenshots.
 """
 
 import argparse
+import csv
+import math
 import struct
 import sys
 import threading
@@ -68,9 +73,18 @@ BODY_POINTER = 0x1CC
 CRAFT_THROTTLE = 0x2B8
 CRAFT_STEER = 0x2C0
 CRAFT_SPEED_CACHED = 0x2EC
+BODY_ROW0 = 0x000
+BODY_UP = 0x010
 BODY_FORWARD = 0x020
 BODY_POSITION = 0x030
+# The basis again, transposed. `Body_Integrate` rebuilds it after its own loop
+# (rigid-body.md), so writing it alongside the rows is for the reads that happen
+# earlier in the same frame - hover probes, the camera - not a claim that the
+# game would not fix it a tick later.
+BODY_TRANSPOSE = 0x0C0
 BODY_VELOCITY = 0x140
+BODY_OMEGA = 0x150
+BODY_AVEL = 0x160
 BODY_SPEED = 0x398
 
 # PSP cycles per displayed frame. The CPU counter runs at 222 MHz and the
@@ -575,6 +589,174 @@ def state(args):
     dbg.close()
 
 
+def _normalized(v):
+    n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    if n == 0.0:
+        raise SystemExit("a zero-length axis cannot orient a craft")
+    return (v[0] / n, v[1] / n, v[2] / n)
+
+
+def _cross(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def _parse_vec(text, flag):
+    parts = [p.strip() for p in text.split(",")]
+    if len(parts) != 3:
+        raise SystemExit("%s takes x,y,z, not %d value(s)" % (flag, len(parts)))
+    try:
+        return tuple(float(p) for p in parts)
+    except ValueError:
+        raise SystemExit("%s: %r is not three numbers" % (flag, text))
+
+
+def _pad_target(args):
+    """The (position, tangent, up) a pads CSV row asks for."""
+    prefix = "before%.0f" % args.before
+    with args.pads_csv.open() as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        raise SystemExit("%s holds no pads" % args.pads_csv)
+    if prefix + "_x" not in rows[0]:
+        befores = sorted(
+            {name[len("before") : -2] for name in rows[0] if name.startswith("before") and name.endswith("_x")}
+        )
+        raise SystemExit(
+            "%s has no --before %g column; it was generated with --before %s"
+            % (args.pads_csv, args.before, ", ".join(befores) or "(none)")
+        )
+    for row in rows:
+        if row["class"] == args.pad_class and int(row["pad"]) == args.pad:
+            vec = lambda stem: tuple(float(row[stem + "_" + axis]) for axis in "xyz")
+            offset = float(row["offset"])
+            if offset > 20.0:
+                print(
+                    "warning: pad %d sits %.1f units off the course ring, so its "
+                    "approach point may be on another branch" % (args.pad, offset),
+                    file=sys.stderr,
+                )
+            return vec(prefix), vec(prefix + "_tan"), vec(prefix + "_up")
+    raise SystemExit(
+        "%s has no %s pad %d" % (args.pads_csv, args.pad_class, args.pad)
+    )
+
+
+def place(args):
+    """Teleport the craft, by writing its rigid body at a breakpoint.
+
+    The mechanism is the proven one: the roll step-response measurement in
+    `crates/physics/src/hover.rs` rewrote basis rows through `memory.write` on
+    this same structure. What is written: the three basis rows and their
+    transpose, the position, the velocity (along the new forward), and zeros
+    into the angular pair - a craft carried sideways or spinning out of the
+    write would make every "settled" read a measurement of the accident
+    instead. Everything happens inside one breakpoint hit of the followed
+    craft, so no frame ever integrates a half-written body.
+    """
+    if args.pads_csv is not None:
+        if args.pad is None:
+            raise SystemExit("--pads-csv needs --pad N")
+        position, tangent, up = _pad_target(args)
+    elif args.pos is not None:
+        if args.tangent is None:
+            raise SystemExit("--pos needs --tangent (the direction to face)")
+        position = _parse_vec(args.pos, "--pos")
+        tangent = _parse_vec(args.tangent, "--tangent")
+        up = _parse_vec(args.up, "--up") if args.up else (0.0, 1.0, 0.0)
+    else:
+        raise SystemExit("give either --pads-csv/--pad/--before or --pos/--tangent")
+
+    # row2 = forward, row1 = up orthogonalised against it, row0 = up x forward.
+    # Built this way round so the recorded rows' own orientation identity -
+    # cross(row0, row1) = row2, measured on 200/200 ticks - holds for the
+    # written basis too, without ever naming row 0 left or right.
+    row2 = _normalized(tangent)
+    up = _normalized(up)
+    lean = up[0] * row2[0] + up[1] * row2[1] + up[2] * row2[2]
+    row1 = _normalized(
+        (up[0] - lean * row2[0], up[1] - lean * row2[1], up[2] - lean * row2[2])
+    )
+    row0 = _cross(row1, row2)
+    velocity = tuple(c * args.speed for c in row2)
+
+    dbg = Debugger(args.port)
+    try:
+        craft = args.craft or find_craft(dbg)
+        print("craft at 0x%08x" % craft, file=sys.stderr)
+
+        placed = False
+        settled = 0
+        # One hit to write, then --settle more of the followed craft's ticks so
+        # the hover, the cached speed and the render node all re-derive from
+        # the new pose before anything screenshots it. Budget: a race updates
+        # up to eight craft per tick.
+        budget = (args.settle + 2) * 8
+        for _, _ in dbg.each_hit(SHIP_UPDATE_CRAFT, budget, timeout=60):
+            registers = dbg.call("cpu.getAllRegs")
+            gpr = next(c for c in registers["categories"] if c["name"] == "GPR")
+            hit = dict(zip(gpr["registerNames"], gpr["uintValues"]))[CRAFT_REGISTER]
+            if hit != craft:
+                continue
+            if not placed:
+                body = dbg.read_u32(craft + BODY_POINTER)
+                dbg.write_f32s(body + BODY_ROW0, row0)
+                dbg.write_f32s(body + BODY_UP, row1)
+                dbg.write_f32s(body + BODY_FORWARD, row2)
+                dbg.write_f32s(body + BODY_POSITION, position)
+                # The transpose's columns are the rows' components, row-major
+                # at 0x10 stride like the rows themselves.
+                for slot in range(3):
+                    dbg.write_f32s(
+                        body + BODY_TRANSPOSE + 0x10 * slot,
+                        (row0[slot], row1[slot], row2[slot]),
+                    )
+                dbg.write_f32s(body + BODY_VELOCITY, velocity)
+                dbg.write_f32s(body + BODY_OMEGA, (0.0, 0.0, 0.0))
+                dbg.write_f32s(body + BODY_AVEL, (0.0, 0.0, 0.0))
+                placed = True
+                print(
+                    "placed at (%.2f, %.2f, %.2f), facing (%.3f, %.3f, %.3f), "
+                    "speed %.1f" % (*position, *row2, args.speed),
+                    file=sys.stderr,
+                )
+                continue
+            settled += 1
+            if settled >= args.settle:
+                break
+
+        after = read_progress(dbg, craft)
+        # A craft placed at speed drives on during the settle, so distance from
+        # the request measures nothing. What must stay small is the *off-axis*
+        # part: the displacement with its along-forward component removed.
+        moved = tuple(after["pos"][i] - position[i] for i in range(3))
+        along = sum(moved[i] * row2[i] for i in range(3))
+        off_axis = math.sqrt(max(0.0, sum(c * c for c in moved) - along * along))
+        print(
+            "settled after %d tick(s): at (%.2f, %.2f, %.2f), speed %.1f, "
+            "%.1f units along the placed forward, %.1f off it"
+            % (settled, *after["pos"], after["speed"], along, off_axis)
+        )
+        if off_axis > 15.0 or along < -5.0:
+            print(
+                "that looks like a respawn rather than a drive - the game may "
+                "have rejected the pose (off the track, or inside geometry)",
+                file=sys.stderr,
+            )
+        print("capture from here with:")
+        print(
+            "    uv run --with websocket-client scripts/psp-trace.py "
+            "--ticks 1 --camera --craft 0x%08x --out data/traces/placed.csv "
+            "--shot-every 1 --shot-dir data/shots/placed" % craft
+        )
+    finally:
+        dbg.resume()
+        dbg.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -630,6 +812,56 @@ def main():
         help="how often the probe thread samples the craft. 0 disables it.",
     )
     p.set_defaults(run=drive)
+
+    p = sub.add_parser(
+        "place",
+        help="teleport the craft to a pad approach or a raw pose, for targeted "
+        "captures",
+    )
+    p.add_argument(
+        "--pads-csv",
+        type=Path,
+        metavar="CSV",
+        help="the file `oag-trace pads --before N` wrote; --pad and --before "
+        "pick the row and the approach distance out of it",
+    )
+    p.add_argument("--pad", type=int, metavar="N", help="pad index within its class")
+    p.add_argument(
+        "--pad-class",
+        default="speedup",
+        choices=("speedup", "weapon"),
+        help="which class --pad indexes",
+    )
+    p.add_argument(
+        "--before",
+        type=float,
+        default=50.0,
+        metavar="UNITS",
+        help="which of the CSV's approach distances to use",
+    )
+    p.add_argument("--pos", metavar="X,Y,Z", help="raw target instead of a pad")
+    p.add_argument("--tangent", metavar="X,Y,Z", help="direction to face, with --pos")
+    p.add_argument(
+        "--up", metavar="X,Y,Z", help="surface up, with --pos; defaults to world up"
+    )
+    p.add_argument(
+        "--speed",
+        type=float,
+        default=0.0,
+        metavar="UNITS_PER_S",
+        help="initial speed along the new forward. 0 places it at rest; a pad "
+        "approach usually wants racing speed, 90-160 on Venom",
+    )
+    p.add_argument(
+        "--settle",
+        type=int,
+        default=30,
+        metavar="TICKS",
+        help="breakpoint-stepped ticks to let the hover and the camera re-derive "
+        "before reporting the settled pose",
+    )
+    p.add_argument("--craft", type=lambda v: int(v, 0), metavar="ADDRESS")
+    p.set_defaults(run=place)
 
     args = parser.parse_args()
     args.run(args)

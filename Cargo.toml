@@ -33,6 +33,7 @@ oag-input = { path = "crates/input" }
 oag-physics = { path = "crates/physics" }
 oag-race = { path = "crates/race" }
 oag-render = { path = "crates/render" }
+oag-trace = { path = "crates/trace" }
 
 anyhow = "1"
 thiserror = "2"

@@ -278,28 +278,71 @@ fn divide_or_zero(numerator: f32, denominator: f32) -> f32 {
 #[must_use]
 pub fn orientation_of(frame: &Frame, basis: Basis) -> Quat {
     let (right, up, forward) = basis.to_body(frame.row0, frame.up, frame.forward);
-    let (right, up, forward) = (
-        right.normalize_or_zero(),
-        up.normalize_or_zero(),
-        forward.normalize_or_zero(),
-    );
-    if right == Vec3::ZERO || up == Vec3::ZERO || forward == Vec3::ZERO {
+    let Some((x, y, z)) = look_columns(right, forward) else {
         return Quat::IDENTITY;
-    }
-    // Gram-Schmidt off the forward axis, which is the one the ship is aimed
-    // along: rounding is shared out rather than concentrated in whichever column
-    // happened to be last.
-    let z = -forward;
-    let x = (right - z * right.dot(z)).normalize_or_zero();
-    if x == Vec3::ZERO {
-        return Quat::IDENTITY;
-    }
-    let y = z.cross(x);
+    };
     debug_assert!(
-        (y - up).length() < 1e-2,
+        (y - up.normalize_or_zero()).length() < 1e-2,
         "the recorded basis is not the one this reading describes"
     );
     Quat::from_mat3(&Mat3::from_cols(x, y, z)).normalize()
+}
+
+/// The orthonormal columns of a rotation whose `-Z` is `forward` and whose `X`
+/// stays as close to `right` as orthonormality allows, or `None` for a
+/// degenerate input.
+///
+/// Gram-Schmidt off the forward axis, which is the one the frame is aimed
+/// along: rounding is shared out rather than concentrated in whichever column
+/// happened to be last. `Y` is derived, so the caller decides what to do when
+/// it disagrees with a recorded up axis - the ship reading asserts, the camera
+/// reading adapts.
+fn look_columns(right: Vec3, forward: Vec3) -> Option<(Vec3, Vec3, Vec3)> {
+    let (right, forward) = (right.normalize_or_zero(), forward.normalize_or_zero());
+    if right == Vec3::ZERO || forward == Vec3::ZERO {
+        return None;
+    }
+    let z = -forward;
+    let x = (right - z * right.dot(z)).normalize_or_zero();
+    if x == Vec3::ZERO {
+        return None;
+    }
+    Some((x, z.cross(x), z))
+}
+
+/// The orientation a recorded camera pose describes, in the same convention as
+/// [`orientation_of`]: `X = right`, `Y = up`, `-Z` = the look direction, so the
+/// result plugs straight into a look-down-negative-Z renderer.
+///
+/// **The camera node stores its rotation transposed relative to the ship
+/// node**: the camera's world axes are the *columns* of the recorded rows, and
+/// the look direction is the negated third column. Measured on a live
+/// `--camera` capture (2026-08-04, v1.20.4, `UCUS98712`): the eye sits 11.64
+/// units from the ship - camera.md's own `OPT_CLOSE` distance to three
+/// digits - and `-col2` points at the ship with `dot = +0.987` (the residual
+/// is the raised aim point), while the stored `cam_fwd` row points `-0.333`.
+/// A transposed store also explains the node's negated-eye field: rows that
+/// are world-to-camera and a negated translation are the two halves of a view
+/// matrix kept apart. Confidence 80: one session, one view setting, but the
+/// competing reading is ruled out by sign.
+///
+/// The third camera axis is **derived**, not read, so a rounding-level
+/// left-handedness cannot reach `Quat::from_mat3`; the [`Basis`] left/right
+/// switch is about the rigid body's rows and does not apply here.
+///
+/// `None` for a capture without camera columns or with a degenerate pose.
+#[must_use]
+pub fn camera_orientation_of(frame: &Frame) -> Option<Quat> {
+    let (row0, row1, row2) = (frame.camera_row0?, frame.camera_up?, frame.camera_forward?);
+    let col0 = Vec3::new(row0.x, row1.x, row2.x);
+    let col1 = Vec3::new(row0.y, row1.y, row2.y).normalize_or_zero();
+    let col2 = Vec3::new(row0.z, row1.z, row2.z);
+    let (mut x, mut y, z) = look_columns(col0, -col2)?;
+    if y.dot(col1) < 0.0 {
+        x = -x;
+        y = -y;
+    }
+    Some(Quat::from_mat3(&Mat3::from_cols(x, y, z)).normalize())
 }
 
 /// Runs our simulation over a recording's scenario and returns a trace of it.
@@ -552,6 +595,12 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         ),
         stun_timer: Some(state.stun_timer),
         timer_2e0: None,
+        // The replay simulates the ship, not the original's camera rig, so the
+        // camera pose is not compared rather than reported as agreement.
+        camera_row0: None,
+        camera_up: None,
+        camera_forward: None,
+        camera_position: None,
         tick,
         dt,
         grounded: state.grounded,
@@ -734,6 +783,43 @@ mod tests {
         let measured = orientation_of(&recorded, Basis::LeftUpForward) * Vec3::NEG_Z;
         let other = orientation_of(&recorded, Basis::RightUpBack) * Vec3::NEG_Z;
         assert!((measured + other).length() < 1e-6, "{measured} vs {other}");
+    }
+
+    /// The node stores the camera's rotation transposed - its world axes are
+    /// the recorded matrix's columns, look along the negated third one. This
+    /// fixture builds the stored rows from a known camera the way the
+    /// measured convention says the game does, and the reading must recover
+    /// that camera's look and up exactly.
+    #[test]
+    fn a_camera_pose_reads_the_transposed_store_back_into_look_and_up() {
+        let yaw = 0.37f32;
+        let (sin, cos) = yaw.sin_cos();
+        let look = Vec3::new(sin, -0.2, cos).normalize();
+        let back = -look;
+        let up = (Vec3::Y - back * Vec3::Y.dot(back)).normalize();
+        let right = up.cross(back);
+        // Stored rows are the transpose of the camera's world-axis columns
+        // (right, up, back).
+        let frame = Frame {
+            camera_row0: Some(Vec3::new(right.x, up.x, back.x)),
+            camera_up: Some(Vec3::new(right.y, up.y, back.y)),
+            camera_forward: Some(Vec3::new(right.z, up.z, back.z)),
+            camera_position: Some(Vec3::new(1.0, 2.0, 3.0)),
+            ..Frame::default()
+        };
+        let q = camera_orientation_of(&frame).expect("a full pose");
+        assert!((q * Vec3::NEG_Z - look).length() < 1e-6);
+        assert!((q * Vec3::Y - up).length() < 1e-6);
+        let (x, y, z) = (q * Vec3::X, q * Vec3::Y, q * Vec3::Z);
+        assert!(
+            (x.cross(y) - z).length() < 1e-5,
+            "a reflection, not a rotation"
+        );
+    }
+
+    #[test]
+    fn a_capture_without_a_camera_has_no_camera_orientation() {
+        assert_eq!(camera_orientation_of(&Frame::default()), None);
     }
 
     #[test]
