@@ -63,6 +63,48 @@ niri msg action screenshot-window --id N --write-to-disk false && wl-paste -t im
 exactly like the game hanging. Focus it (`niri msg action focus-window --id N`,
 or whatever the compositor offers) before timing anything.
 
+## Running without a real display: Xvfb works, no compositor needed
+
+Verified 2026-08-04, PPSSPP v1.20.4, `pulse-psp-usa.iso`, on a machine with no
+Wayland session running at all:
+
+```sh
+Xvfb :97 -screen 0 1280x720x24 &
+DISPLAY=:97 SDL_VIDEODRIVER=x11 setsid PPSSPPSDL --appendconfig=/tmp/debugger.ini \
+    --windowed data/cache/pulse-psp-usa.iso < /dev/null &
+DISPLAY=:97 import -window root shot.png   # ImageMagick, stands in for the compositor grab below
+```
+
+The SDL build boots normally under Xvfb: GPU probing finds a real Vulkan device
+(`AMD Radeon Graphics (RADV RENOIR)`) alongside the `llvmpipe` software
+fallback, the log reaches `Booted data/cache/pulse-psp-usa.iso...`, and the
+websocket debugger opens its port exactly as under a real session. `import
+-window root` pulled the whole virtual screen and returned a real in-game
+frame, not a black or blank one - so the compositor screenshot recipe above
+(`niri msg action screenshot-window`) is a convenience specific to a Wayland
+session, not a requirement: any X11 screenshot tool works once a `DISPLAY`
+exists, real or virtual.
+
+What this pass did **not** confirm, so treat as untested rather than ruled out:
+
+- **The focus-throttle trap above assumes a window manager** granting and
+  revoking focus. Xvfb has none, so whether PPSSPP throttles under it is
+  unknown either way.
+- **Only boot, GPU init, the debugger port and one screenshot were checked.**
+  The menu walk, scripted capture and save-state overlay were not re-run under
+  Xvfb in this pass; they are expected to carry over unchanged, since nothing
+  about them depends on a compositor being real, but that is an inference, not
+  a measurement.
+
+Confidence **75**: the parts exercised worked cleanly and repeatably in one
+session; the rest of this page's workflow is assumed rather than independently
+re-verified under Xvfb.
+
+A headless Wayland compositor (`sway`/`wlroots` with `WLR_BACKENDS=headless`)
+was considered as the alternative for reaching a truly compositor-driven
+screenshot path, but Xvfb already answered the feasibility question with tools
+already on the machine, so it was not installed or tried.
+
 **Multiple emulator instances in parallel are a hardware non-issue - the
 bottleneck is harness isolation, not CPU.** A workstation that runs one PPSSPP
 comfortably runs several, so concurrent capture work (two scenarios recorded at
