@@ -1,0 +1,20 @@
+# Applied symbol names for pure-psp-eu BOOT.BIN (image base 0x08804000).
+#
+# Not a reverse-engineering target (ADR-0009 defers Pure's simulation work);
+# this is the result of a small, honest sweep for cross-binary matches
+# against the documented psp-pulse-usa target, not independent derivation.
+# See corroboration.md for method and what did NOT match.
+#
+# There is no `just` recipe for this set yet; run the script directly, with
+# the program name and this file both given explicitly, against a bridge
+# that has /psp-pure-eu/BOOT.BIN open:
+#
+#   scripts/apply-ghidra-names.py --program /psp-pure-eu/BOOT.BIN \
+#       docs/ghidra/functions/psp-pure-eu/names.tsv
+#
+# kind is `function` or `data`. Confidence below 70 gets a `_q` suffix
+# applied, below 50 is skipped.
+#
+# address	kind	name	confidence	evidence
+
+0x088dfe9c	function	strcasecmp	78	corroboration.md

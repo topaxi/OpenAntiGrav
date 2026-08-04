@@ -13,6 +13,18 @@ Both directories group their pages by subsystem rather than one file per
 function: a subsystem's evidence is mostly shared between its functions, and
 splitting it leaves every page asserting what its neighbour proves.
 
+Three more directories hold **corroboration-only** names, not reverse
+engineering in their own right: each has a single `corroboration.md` page and
+a `names.tsv` of names carried over from `psp-pulse-usa` by cross-binary
+fuzzy matching (`find_similar_functions_fuzzy`), verified per function with
+`diff_functions` before anything was renamed.
+
+| Directory | Binary |
+| --- | --- |
+| [`psp-pulse-eu/`](psp-pulse-eu/) | `PSP_GAME/SYSDIR/BOOT.BIN` from Pulse PSP EU (UCES-00465) |
+| [`psp-pure-usa/`](psp-pure-usa/) | `BOOT.BIN` from Pure PSP (UCUS-98612), format ancestor only |
+| [`psp-pure-eu/`](psp-pure-eu/) | `BOOT.BIN` from Pure PSP EU (UCES-00001), format ancestor only |
+
 ## Index
 
 Maintained as pages are added, sorted by subsystem.

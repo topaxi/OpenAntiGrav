@@ -1,0 +1,24 @@
+# Applied symbol names for pulse-psp-eu BOOT.BIN (image base 0x08804000).
+#
+# Unlike psp-pulse-usa's names.tsv, every row here is a name carried over from
+# the USA binary via cross-binary fuzzy matching, not an independent
+# derivation - see corroboration.md for the method and the per-function diff
+# against its USA counterpart. Confidence is capped accordingly.
+#
+# There is no `just` recipe for this set yet; run the script directly, with
+# the program name and this file both given explicitly, against a bridge that
+# has /psp-pulse-eu/BOOT.BIN open:
+#
+#   scripts/apply-ghidra-names.py --program /psp-pulse-eu/BOOT.BIN \
+#       docs/ghidra/functions/psp-pulse-eu/names.tsv
+#
+# kind is `function` or `data`. Confidence below 70 gets a `_q` suffix
+# applied, below 50 is skipped.
+#
+# address	kind	name	confidence	evidence
+
+0x08953274	function	Xml_AttributeAsFloat	85	corroboration.md
+0x0884e0bc	function	Body_Integrate	85	corroboration.md
+0x08972b34	function	strcasecmp	80	corroboration.md
+0x08972cf8	function	strlen	75	corroboration.md
+0x08811658	function	Gu_Fog	68	corroboration.md
