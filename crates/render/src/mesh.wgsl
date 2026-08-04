@@ -91,7 +91,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 // no curve to reproduce here. What the original varies is the *parameters*,
 // re-sampled every frame from the camera's position inside the fog volume;
 // that happens on the CPU before this uniform is written. See
-// `docs/ghidra/functions/psp-pulse/fog.md`.
+// `docs/ghidra/functions/psp-pulse-usa/fog.md`.
 //
 // **Radial distance from the eye, where the hardware uses view-space depth.**
 // The two differ towards the screen edges, by up to `1 / cos(fov / 2)` - about

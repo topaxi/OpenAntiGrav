@@ -57,7 +57,7 @@ and if a recovered speed lap turns out to differ, this is the one to re-check.
 ## Zone
 
 Recovered, and recovered late: the evidence is
-[zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md), which reads
+[zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md), which reads
 `Zone_Update` (`0x0882f5cc`) end to end. The identification itself is now
 confidence **84** rather than the 50 it sat at - the mode factory picks the Zone
 constructor with the byte-identical selector `Ship_UpdateEngine` uses for its
@@ -83,7 +83,7 @@ What runs:
 
 `Ship_LoadModel` loads `<Team>\Zone.vex` instead of `<Team>\Ship.vex` under the
 same selector, and every team's `Zone.vex` decodes to the same hull - see
-[zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md#the-ship-model-is-not-the-players-own-hull).
+[zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md#the-ship-model-is-not-the-players-own-hull).
 Confidence 84. `oag_game::race::ship_entry_name` picks the model this way, and
 the menu greys the TEAM row while MODE is Zone so a player is not offered a
 choice that no longer changes the shape drawn - only the colour it is drawn in.
@@ -119,7 +119,7 @@ reads `"Ship destroyed on zone"`, and `MSC_EVENT_ZONE` describes the mode as
 *"survive for as long as possible before crashing out"*. Confidence **80**.
 
 That is a change of footing rather than of behaviour.
-[`zone-mode.md`](../ghidra/functions/psp-pulse/zone-mode.md) first recorded only
+[`zone-mode.md`](../ghidra/functions/psp-pulse-usa/zone-mode.md) first recorded only
 that a run ends on bit 12 of `entity+0x860`, with 25 confidence that the bit meant
 shield depletion - a guess, and the reason the ending was left out. The string
 table corroborates it.
@@ -156,6 +156,6 @@ too. A race begins the moment it loads.
 ## See also
 
 - [lap counting](lap-counting.md)
-- [zone-mode.md](../ghidra/functions/psp-pulse/zone-mode.md) - the Ghidra evidence
+- [zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md) - the Ghidra evidence
 - [the HUD](../ui/hud.md) - which widgets have a source
 - `crates/race/`

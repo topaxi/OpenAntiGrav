@@ -19,7 +19,7 @@
 //! from two binaries agreeing byte for byte on arbitrary input is evidence
 //! neither one can manufacture alone.
 //!
-//! See `docs/ghidra/functions/ps2-pulse/lzss.md` for the disassembly this is
+//! See `docs/ghidra/functions/ps2-pulse-eu/lzss.md` for the disassembly this is
 //! transcribed from.
 //!
 //! # What it does not cover
