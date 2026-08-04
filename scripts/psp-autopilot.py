@@ -38,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import input_script
-from niri_shot import screenshot
+from niri_shot import find_window, screenshot
 from ppsspp_debugger import Debugger
 from psp_trace_fields import BODY_FIELDS, CRAFT_FIELDS, SHIP_UPDATE_CRAFT
 
@@ -226,8 +226,8 @@ def main():
     parser.add_argument(
         "--shot-window",
         type=int,
-        default=14,
-        help="niri window id of the emulator (`niri msg windows`)",
+        help="niri window id of the emulator. Defaults to the first PPSSPPSDL "
+        "window (`niri msg windows` lists them), since ids change every launch.",
     )
     parser.add_argument(
         "--stall-ticks",
@@ -236,6 +236,14 @@ def main():
         help="give up after this many ticks with no progress along the spline",
     )
     args = parser.parse_args()
+
+    if args.shot_dir and args.shot_window is None:
+        args.shot_window = find_window()
+        if args.shot_window is None:
+            parser.error(
+                "no PPSSPPSDL window found to screenshot; pass --shot-window ID"
+            )
+        print("screenshotting niri window %d" % args.shot_window, file=sys.stderr)
 
     line = Line(args.spline, args.column)
     print(

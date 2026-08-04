@@ -17,9 +17,33 @@ A failed screenshot warns and returns rather than raising: a missing frame must
 not end the capture or the race that was producing it.
 """
 
+import json
 import subprocess
 import sys
 import time
+
+
+def find_window(app_id="PPSSPPSDL"):
+    """The niri window id of the first window running `app_id`, or `None`.
+
+    Window ids are assigned per compositor session, so a hardcoded id goes
+    stale on every relaunch; the app id is the stable name. `None` also covers
+    a machine without niri at all, so callers can turn it into their own
+    error message.
+    """
+    try:
+        out = subprocess.run(
+            ["niri", "msg", "--json", "windows"],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        ).stdout
+        for window in json.loads(out):
+            if window.get("app_id") == app_id:
+                return window.get("id")
+    except Exception:  # noqa: BLE001 - "not found" and "no niri" answer the same
+        return None
+    return None
 
 
 def _clipboard_png(timeout=10):
