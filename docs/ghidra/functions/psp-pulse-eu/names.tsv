@@ -72,3 +72,45 @@
 0x08953a98	function	Xml_CloseDocument	85	corroboration.md
 0x08972fcc	function	strrchr	85	corroboration.md
 0x08985854	function	Math_TransformVec4	85	corroboration.md
+
+# Lower-threshold sweep (2026-08-05, second pass): psp-pulse-usa/names.tsv's
+# full 304-row set checked against this binary with bulk_fuzzy_match at
+# threshold 0.8 (conservative 0.95 dropped genuine matches on this pair,
+# since psp-pulse-eu and psp-pulse-usa are the same build region-shifted -
+# only literal pools and relocated data move). Every row verified
+# individually with diff_functions before renaming. See corroboration.md for
+# the drift issue this pass found in psp-pulse-usa's live database, the
+# collision-check method, and why the confidences below trend lower than the
+# USA source (weaker fuzzy score / body-equal ratio, not weaker logic match).
+0x0884d39c	function	Body_AddForceAtPoint	85	corroboration.md
+0x0884d9ac	function	Body_SyncBoxCollider	85	corroboration.md
+0x08816774	function	Collision_AddContact	85	corroboration.md
+0x0884e73c	function	World_SetBodyMass	85	corroboration.md
+0x0884c830	function	Ship_UpdateAirbrakes	85	corroboration.md
+0x0884b898	function	Ship_UpdateMagLock	85	corroboration.md
+0x088875c0	function	Fog_FindVolume	83	corroboration.md
+0x0884e7f4	function	Body_ResolveContact	82	corroboration.md
+0x088365f8	function	Options_LoadDefaultControlMapping	79	corroboration.md
+0x088300ac	function	Sap_Update	78	corroboration.md
+0x0883fc9c	function	Ship_UpdateStartBoost	77	corroboration.md
+0x0883e53c	function	Ship_Shield	73	corroboration.md
+0x08953a50	function	Xml_GetRootElement	80	corroboration.md
+0x08953b7c	function	Xml_NextElement	80	corroboration.md
+0x08815be4	function	Collision_BoxAgainstMesh	80	corroboration.md
+0x0881637c	function	Collision_RaycastMesh	80	corroboration.md
+0x089409d8	function	Wad_DecompressLzssMem	78	corroboration.md
+0x0894098c	function	Wad_DecompressLzssStream	78	corroboration.md
+0x08929f2c	function	Trail_Update	78	corroboration.md
+0x0881188c	function	Gu_BlendFunc	66	corroboration.md
+0x08936d8c	function	Vex_ResolveClassId	65	corroboration.md
+0x088109c4	function	Gu_TexScale	65	corroboration.md
+0x0881116c	function	Gu_Ambient	65	corroboration.md
+0x0894ed4c	function	Input_ParseButtonName	65	corroboration.md
+0x089084e8	function	Vex_FindClassDescriptor	64	corroboration.md
+0x08811824	function	Gu_StencilFunc	64	corroboration.md
+0x08811858	function	Gu_StencilOp	64	corroboration.md
+0x08836588	function	Options_ButtonForAction	67	corroboration.md
+0x08811394	function	Gu_TexWrap	63	corroboration.md
+0x08810970	function	Gu_ColorMaterial	63	corroboration.md
+0x08811760	function	Gu_DepthFunc	61	corroboration.md
+0x08811784	function	Gu_DepthMask	61	corroboration.md
