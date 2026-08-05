@@ -572,6 +572,21 @@ the past.
   `get_function_by_address` after running the script - do not trust its own
   applied/skipped/failed count**, and if in doubt, rename through the MCP
   tool directly rather than retrying the script.
+- **The live `psp-pulse-usa` Ghidra database has a name `names.tsv` does not
+  agree with.** A function at `0x0884de5c` is live-named `Body_Integrate`,
+  but `psp-pulse-usa/names.tsv` documents that address as `Body_Init`
+  (confidence 85, `rigid-body.md`) and puts `Body_Integrate` at a different
+  address, `0x0884e230`. Found twice independently (2026-08-05) while
+  cross-binary fuzzy-sweeping `psp-pulse-eu` and `psp-pure-usa`/`psp-pure-eu`
+  against the documented USA function list: `bulk_fuzzy_match` surfaces the
+  live (wrong) name as a source, not the documented one. Per
+  [ADR-0005](docs/architecture/adr/0005-ghidra-conventions.md), the docs win
+  when they and the database disagree - **only rename-sweep off addresses
+  actually listed in `names.tsv`, never off a live Ghidra name**, or a stray
+  in-database rename propagates into every binary corroborated from it.
+  Not yet root-caused or fixed; whichever address is wrong needs a project
+  rename to match its doc page, or a doc correction if the live name turns
+  out to be right and the page is stale.
 
 **PPSSPP** - the rest is in
 [`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md), worth
