@@ -177,6 +177,37 @@ pub const CLASS_SKYCUBE: u32 = 0x3c6;
 /// one, so a loader must handle its absence.
 pub const CLASS_FOGCUBE: u32 = 0x3d3;
 
+/// Class ID of an `AmbientLight` node: a flat colour added everywhere.
+///
+/// A 16-byte payload, `{r, g, b, intensity}` as four `f32`, decoded by
+/// [`lighting::ambient_lights`](crate::lighting::ambient_lights). Placement
+/// comes from the node's own transform chain, the same way a pad's does -
+/// the payload itself carries no matrix. See `docs/formats/lighting.md`.
+pub const CLASS_AMBIENT_LIGHT: u32 = 0x12c;
+
+/// Class ID of a `DirectionalLight` node: a parallel light with no position.
+///
+/// Same 16-byte `{r, g, b, intensity}` payload shape as [`CLASS_AMBIENT_LIGHT`],
+/// decoded by
+/// [`lighting::directional_lights`](crate::lighting::directional_lights).
+pub const CLASS_DIRECTIONAL_LIGHT: u32 = 0x131;
+
+/// Class ID of a `PointLight` node: a light that falls off with distance.
+///
+/// A 32-byte payload: `{r, g, b, range}` as four `f32`, then four `u32`
+/// observed as `{1, 0, 0, 0}` on every shipped sample and otherwise undecoded.
+/// Decoded by [`lighting::point_lights`](crate::lighting::point_lights).
+pub const CLASS_POINT_LIGHT: u32 = 0x132;
+
+/// Class ID of a `Dynamic Point Light` node: presumably a moving light source
+/// (ships included), per the class name.
+///
+/// **No parser here.** Authored zero times on any of the 40 PSP track files in
+/// an earlier track-only census; the full-disc sweep in
+/// `crates/formats/tests/lighting_ground_truth.rs` rechecks that across all of
+/// `Data.wad` rather than assuming it holds off-track too.
+pub const CLASS_DYNAMIC_POINT_LIGHT: u32 = 0x3c2;
+
 /// Class ID of a `Speedup Pad` node: a boost pad on the track surface.
 ///
 /// **Its payload is a [`CLASS_MESH`] payload**, for the same reason

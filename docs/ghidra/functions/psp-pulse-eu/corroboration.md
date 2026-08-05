@@ -1,5 +1,31 @@
 # `/psp-pulse-eu/BOOT.BIN` - corroborated names
 
+**Reversed 2026-08-05.** Everything below this notice was written under the
+opposite policy - `psp-pulse-eu` treated as pure corroboration, `psp-pulse-usa`
+as the sole target of record - and that framing is now **wrong going
+forward**. As of this date, **`psp-pulse-eu` is the preferred first target
+for new investigation; `psp-pulse-usa` (and `ps2-pulse-eu` where relevant)
+are the cross-verification sources.** Rationale: the EU release is the more
+complete artefact of the two. Pulse PSP got DLC content only on the EU disc -
+the USA release never had any - and Pulse PS2 was a **EU-only release with no
+USA disc at all**, so `ps2-pulse-eu` is already this project's sole PS2
+reference by necessity; preferring `psp-pulse-eu` on PSP too keeps the two
+platforms' primary targets in the same region rather than split. The four sweeps recorded below are kept
+verbatim as history, not deleted or rewritten: they document a real, useful
+method (cross-binary fuzzy matching plus `diff_functions` verification) that
+remains valid for corroborating a name across binaries in *either* direction,
+and the 268 names they landed are unaffected - carried-over evidence doesn't
+stop being evidence because the preferred search order changed. New pages
+under this directory going forward may carry independently-derived findings
+at the normal confidence rubric, not just capped carryovers; see
+`HANDOVER.md`'s dated correction to the "Final Ghidra project layout" note
+for why.
+
+The rest of this page, unmodified below, is the record of the four sweeps
+that ran under the old policy.
+
+---
+
 `psp-pulse-eu` is not a reverse-engineering target of record - `psp-pulse-usa`
 keeps that role, see [source-images.md](../../../reverse-engineering/source-images.md#pulse-psp-euchd---wipeout-pulse-psp-euaustralia).
 These names are not independently derived: they are carried over from the

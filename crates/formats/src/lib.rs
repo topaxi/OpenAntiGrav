@@ -32,6 +32,7 @@ pub mod fog;
 pub mod handling;
 pub mod ipf;
 pub mod ivf;
+pub mod lighting;
 pub mod lzss;
 pub mod pads;
 pub mod pmf;

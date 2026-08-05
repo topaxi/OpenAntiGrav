@@ -10,6 +10,28 @@ Everything here was measured against PPSSPP **v1.20.4** and Pulse PSP
 (`UCUS98712`) on 2026-07-27. `scripts/ppsspp_debugger.py` encodes it;
 `scripts/psp-trace.py` is the capture tool built on top.
 
+**Never spawn a window into a developer's real desktop session.** This page's
+own advice below ("use the SDL build anyway") is about which PPSSPP *build*
+to run, not about where its window lands, and it has been misread that way
+before - an agent launched `PPSSPPSDL --windowed` straight at a live Wayland
+session and put a visible emulator window on the user's own screen. The
+preference order is:
+
+1. **`PPSSPPHeadless` first.** No window exists at all, so there is nothing to
+   spawn anywhere. It reaches the main menu and drives the same websocket
+   debugger API as the SDL build (see "both builds can reach the main menu"
+   below) - for anything that is memory reads and scripted input rather than
+   eyeballing a screenshot, it is sufficient and it is the default choice.
+2. **If the SDL build's speed or screenshot capability is genuinely needed**
+   (see below for why it sometimes is), run it under **Xvfb**, never against
+   the developer's actual `DISPLAY`/Wayland socket. See
+   ["Running without a real display"](#running-without-a-real-display-xvfb-works-no-compositor-needed):
+   confirmed to boot, reach the debugger port and produce real screenshots via
+   `import -window root`, with nothing rendered anywhere the user can see it.
+3. **A real windowed launch on the developer's own session is not a default
+   choice** - only do it if the human explicitly asks to watch the emulator
+   themselves.
+
 ## Getting a debugger you can connect to
 
 ```sh
@@ -48,20 +70,27 @@ every headless run, while the SDL build writes it once
 (`~/.config/ppsspp/PSP/SAVEDATA/UCES00465P0000` - note the **EU** save id, which
 is what this USA-serial disc writes) and later boots skip straight to the menu.
 
-**Use the SDL build anyway**, for two reasons that outweigh the profile: it
-renders fast enough to sit through menus at 30-60 fps rather than software
-rendering's crawl, and its window can be **screenshotted through the
-compositor**, which turns blind state-name navigation into sighted navigation.
-Pulse's menus are a hex grid whose state name stays `Cell Selection` across every
-cell, so a screenshot is the difference between navigating and guessing:
+**The SDL build is worth reaching for over headless** when either of two
+things matter: it renders fast enough to sit through menus at 30-60 fps rather
+than software rendering's crawl, and its window can be **screenshotted**,
+which turns blind state-name navigation into sighted navigation. Pulse's menus
+are a hex grid whose state name stays `Cell Selection` across every cell, so a
+screenshot is the difference between navigating and guessing. **Run it under
+Xvfb by default** (see below) - the screenshot recipe there
+(`import -window root`) works the same way against a virtual display as this
+one does against a real compositor:
 
 ```sh
+# only when driving a real, visible session the human asked to watch -
+# never as a default; see the preference order above
 niri msg action screenshot-window --id N --write-to-disk false && wl-paste -t image/png > /tmp/shot.png
 ```
 
 **The SDL build throttles hard when its window is not focused**, which looks
 exactly like the game hanging. Focus it (`niri msg action focus-window --id N`,
-or whatever the compositor offers) before timing anything.
+or whatever the compositor offers) before timing anything - this trap is
+specific to a real compositor session; see below for whether it also applies
+under Xvfb (not yet confirmed either way).
 
 ## Running without a real display: Xvfb works, no compositor needed
 

@@ -1,9 +1,13 @@
 # Applied symbol names for pulse-psp-eu BOOT.BIN (image base 0x08804000).
 #
-# Unlike psp-pulse-usa's names.tsv, every row here is a name carried over from
-# the USA binary via cross-binary fuzzy matching, not an independent
-# derivation - see corroboration.md for the method and the per-function diff
-# against its USA counterpart. Confidence is capped accordingly.
+# Reversed 2026-08-05: psp-pulse-eu is now the preferred first target for new
+# investigation, psp-pulse-usa the cross-verification source - see
+# corroboration.md's dated notice at the top. Rows added before that date are
+# names carried over from the USA binary via cross-binary fuzzy matching, not
+# an independent derivation - see corroboration.md for the method and the
+# per-function diff against its USA counterpart. Confidence on those rows is
+# capped accordingly. Rows added from 2026-08-05 onward may be independently
+# derived on this binary and follow the normal confidence rubric instead.
 #
 # There is no `just` recipe for this set yet; run the script directly, with
 # the program name and this file both given explicitly, against a bridge that
@@ -320,3 +324,7 @@
 0x002b9219	data	g_force_fixed_60	70	corroboration.md
 0x000874b8	data	g_engine_flare_texture	68	corroboration.md
 0x0008b000	data	g_decompress_staging_buffer	65	corroboration.md
+0x0892d960	function	AmbientLight_RegisterClass	90	lighting.md
+0x08934fc8	function	DirectionalLight_RegisterClass	90	lighting.md
+0x0890cea8	function	Mesh_ApplyMaterialLighting	78	lighting.md
+0x0890d8d4	function	Mesh_ApplyShinemapReflection_q	55	lighting.md
