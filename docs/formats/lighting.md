@@ -208,11 +208,17 @@ Summary, so this page doesn't go stale in place:
   genuine (non-identity, unscaled) rotation, which is a necessary condition
   for "direction = a rotation row" to be a meaningful reading at all - but it
   does not distinguish that reading from "direction = translation, normalised
-  toward the origin" or some other rule entirely. Flagged for the Ghidra pass
-  that recovers the three classes' `init` handlers: read the payload/`init`
-  reads to see which part of the matrix the runtime actually consumes, by
-  analogy with `Pad_Bind`'s own push-direction read at `matrix+0x20` (see
-  [`pads.md`](pads.md)).
+  toward the origin" or some other rule entirely. **New evidence, not yet a
+  full answer**: a live capture found a unit-length float vector at `+0x60`
+  in the *runtime* object (see
+  [`lighting.md`](../ghidra/functions/psp-pulse-eu/lighting.md#the-object-itself-and-three-passes-that-ruled-out-every-lead-but-one)),
+  16 bytes past the on-disk 16-byte payload the object copies in at
+  construction. Since the on-disk payload has no direction field, that
+  vector's mere existence confirms something computes a direction once, from
+  the node's world transform, at construction or load time - which row of
+  the matrix it reads is still open, and `DirectionalLight_Init`
+  (`0x08934cb0`) is now the concrete next place to look for that specific
+  read, rather than an unnamed `init` handler.
 - **The intensity range tension.** Real observed intensities and colour
   channels reach 5.7854, and `PointLight` range reaches 400. Neither is
   clamped in this decoder, on the reasoning that a clamp here would be

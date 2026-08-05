@@ -662,16 +662,20 @@ change how this list should be read:
       **live-verified collected into a real, correctly-populated track-load
       list** capped at exactly the hardware light count (4) - a breakpoint
       capture matched three independent per-class counts against the disc's
-      own authored data exactly. What is *not* found is anything downstream
-      reading that list; that search is open, bounded follow-up, not closed
-      out with the other two. Building a hardware-light-style GPU rig,
-      this item's original assumption, is not supported by the mesh-draw
-      evidence either way regardless of how that search ends: no mesh-draw
-      function this pass reached ever enables a `GU_LIGHT0..3` slot, so even
-      a confirmed `DirectionalLight` reader would consume the list some
-      other way, not through the hardware slots this item originally
-      assumed. See `HANDOVER.md`'s "M6 authored lighting" thread for the
-      full trail.
+      own authored data exactly. **Three passes (one live capture, two
+      Ghidra, one time-boxed and one broader) converged on not finding a
+      downstream reader** - the class-based lookup path is exhaustively
+      closed and every plausible one-hop consumer checked clean, leaving
+      only a direct trace of `World_LoadTrack`'s own 1,228 instructions
+      unexplored, twice judged not worth known tooling blind spots on that
+      function. A genuine converged negative, not an abandoned search.
+      Building a hardware-light-style GPU rig, this item's original
+      assumption, is not supported by the mesh-draw evidence either way
+      regardless of how that last thread ends: no mesh-draw function any
+      pass reached ever enables a `GU_LIGHT0..3` slot, so even a confirmed
+      `DirectionalLight` reader would consume the list some other way, not
+      through the hardware slots this item originally assumed. See
+      `HANDOVER.md`'s "M6 authored lighting" thread for the full trail.
 - [ ] `Dynamic Point Light` `0x3c2` - the moving lights, ships included
 - [ ] `Dynamic Shadow Occluder` `0x3c3` and `shadow` `0x3cb`
 - [ ] `lensflare` `0x3de`

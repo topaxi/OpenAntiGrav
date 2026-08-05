@@ -346,3 +346,7 @@
 0x002b90a0	data	g_loading_wave_phase	78	corroboration.md
 0x002b90a4	data	g_loading_wave_rates	78	corroboration.md
 0x0887a1c4	function	World_CollectMarkerLists	85	lighting.md
+0x08934d94	function	DirectionalLight_Construct	88	lighting.md
+0x08934cb0	function	DirectionalLight_Init	85	lighting.md
+0x0892d7ec	function	AmbientLight_Construct	88	lighting.md
+0x0892d708	function	AmbientLight_Init	85	lighting.md

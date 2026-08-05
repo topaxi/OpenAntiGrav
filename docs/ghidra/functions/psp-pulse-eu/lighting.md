@@ -323,6 +323,83 @@ having a real consumer that this project has found - stronger than "no
 consumer found" alone, and now stronger still given the collection itself
 is live-confirmed correct - but it is not yet the consumer itself.
 
+### The object itself, and three passes that ruled out every lead but one
+
+**A live capture dumped one of the three live `DirectionalLight` node
+pointers in full** (`world+0x7c`'s three non-null entries were
+`0x097a5c10`, `0x097a5d10`, `0x097a5e10`, spaced exactly `0x100` apart - a
+uniform pool, not inline structs). The third, dumped to 256 bytes,
+confirmed:
+
+- `+0x04` = `0x08a6b35c` - the `DirectionalLight` class stub, matching the
+  filter key `World_CollectMarkerLists` uses.
+- `+0x44` = `0x00000131` - the `DirectionalLight` class id, `0x131`.
+- `+0x60..0x6c` = a unit-length float vector, `(-0.967, -0.259, -0.024, 0)`.
+- `+0x70..0x7c` = `(0.193, 0.238, 0.290, 1.0)` - matches the documented
+  `{r, g, b, intensity}` payload shape exactly.
+
+**The object's real allocated size is `0x80` (128) bytes, not 256** -
+found via its constructor pair, `DirectionalLight_Construct` (`0x08934d94`,
+confidence 88) and `DirectionalLight_Init` (`0x08934cb0`, 85):
+`FUN_0894691c(0x80, ...)` allocates exactly 128 bytes, zeroes them, calls
+the init function, then tags `+4` with the class stub - the standard
+node-construction shape this project already knows from elsewhere (`Vex_LoadModel`'s own
+callers use the identical pattern). `AmbientLight` has the same pair,
+`AmbientLight_Construct`/`AmbientLight_Init` (`0x0892d7ec`/`0x0892d708`,
+88/85), allocating `0x70` (112) bytes - exactly 16 less, exactly the size
+of the direction vector `DirectionalLight` carries and `AmbientLight`
+doesn't. Both classes' payloads end precisely at their own allocation
+boundary; not a coincidence in one sample, the same pattern twice.
+
+**This retires the live capture's one ambiguous lead.** A breakpoint on
+`FUN_0890ed84` (the per-frame draw dispatcher) caught one hit whose `$a0`
+landed at `node_base + 0x90` on a live `DirectionalLight` node - past the
+documented payload, in what looked like unmapped territory. It is 16 bytes
+past the object's real 128-byte end: the 256-byte dump over-read into
+whatever the pool allocator placed next in that slot. The touch was real,
+the object it looked like it belonged to wasn't.
+
+**The direction vector at `+0x60..0x6c` is itself worth flagging to
+whoever owns [`docs/formats/lighting.md`](../../../formats/lighting.md)'s
+open "rotation row vs. translation row" question**: the on-disk payload
+`AmbientLight`/`DirectionalLight` share is 16 bytes,
+`{r, g, b, intensity}` - no direction field. A direction vector existing in
+the *runtime* object at all means something computes it once, at
+construction or track-load time, from the node's world transform - which
+is direct evidence a direction is read from the matrix, just not yet which
+row. `DirectionalLight_Init` is the obvious next place to look for that
+specific read, if this thread continues.
+
+**A second, unrelated structural finding surfaced along the way**:
+`FUN_08a6b5bc`/`FUN_08a6b5c8` (EU) looked like they might be more
+lighting-adjacent class stubs, since they sit in the same self-address-stub
+block. They are not - `FUN_08a6b5bc` keys the **World/marker-container
+object itself** (`FUN_0887a0fc` constructs one, zeroing exactly the fields
+`World_CollectMarkerLists` later fills: `+0x3c/0x40/0x44/0x48/0x4c/0x50/0x6cc`),
+and `FUN_08a6b5c8` keys a second, larger (`0xc80`-byte) child scene object
+`Race_CreateModeObject` builds right after, via `FUN_08886950` - which is
+itself the function that calls `World_LoadTrack`. Neither reads
+`DirectionalLight`'s fields; recorded here so a future pass doesn't
+re-open them expecting a lighting connection.
+
+**Exhaustively checked: `DirectionalLight`'s class stub (`0x08a6b35c`) has
+exactly 5 references in the whole binary**, all now read - the collector
+(`World_CollectMarkerLists`), the constructor pair above,
+`DirectionalLight_RegisterClass`, and the stub's own self-reference. No
+sixth reference exists anywhere that identifies a `DirectionalLight` node
+*by its class*. Combined with a one-hop check of `FUN_0890ed84` (no
+`+0x40`/`+0x7c` read, any depth) and every sibling display-list-builder
+function (`FUN_0890ca80`, `FUN_0890d004` and its own three previously
+unexpanded callees, `FUN_0890cbc8`, `FUN_0890d174`, `FUN_0890d240`,
+`FUN_0890d324` - none reads `+0xc4` or does an independent class-tagged
+tree walk either), three independent passes (one live capture, two Ghidra)
+have now ruled out every lead that doesn't require a direct, non-class-keyed
+read of `world+0x7c` - which puts the only remaining path back inside
+`World_LoadTrack`'s own 1,228 instructions, the trace this thread has
+twice judged not worth it given known tooling blind spots on that specific
+function. Recorded as a genuine, converged negative result, not an
+abandoned search.
+
 ## Open
 
 - **The global ambient RGB triple's writer is unfound, and the live capture
@@ -338,19 +415,25 @@ is live-confirmed correct - but it is not yet the consumer itself.
   input) was not separately live-tested and stays open on its own, since it
   gates *whether* the ambient branch runs at all, not what colour it uses -
   but the colour question, the one this pass opened to answer, is closed.
-- **`DirectionalLight`'s collection is now live-confirmed real; its final
-  consumer is still unfound.** `World_CollectMarkerLists` (raised to
-  confidence 85, `_q` dropped) builds a 4-entry `DirectionalLight` list at
-  track load from genuine authored data - live-verified against
-  `oag-view --nodes` ground truth on three independent class counts at once,
-  not just the one this investigation opened around. This is a materially
+- **`DirectionalLight`'s collection is live-confirmed real; its final
+  consumer is still unfound after three independent passes.** `World_CollectMarkerLists`
+  (confidence 85) builds a 4-entry `DirectionalLight` list at track load from
+  genuine authored data - live-verified against `oag-view --nodes` ground
+  truth on three independent class counts at once. This is a materially
   different status than `AmbientLight`/`PointLight`, both confirmed inert:
-  `DirectionalLight`'s *data pipeline* to the point of being sitting in
-  memory, correctly populated, is real. What's still missing is anything
-  reading `world+0x40`/`+0x7c` afterward - the same `World_LoadTrack`
-  tracing problem as before (1,228 instructions, 169 calls, known
-  `search_instructions` delay-slot blind spots), now worth pursuing given
-  the collection side is settled rather than presumed.
+  `DirectionalLight`'s *data pipeline*, to the point of sitting in memory
+  correctly populated, is real. What's still missing is anything reading
+  `world+0x40`/`+0x7c` afterward. One live capture and two Ghidra passes
+  (see "The object itself" above) have now exhausted every lead that
+  doesn't require tracing `World_LoadTrack`'s own 1,228 instructions
+  directly - the class-based lookup path is exhaustively closed (exactly 5
+  references to the class stub, all read), the per-frame draw dispatcher's
+  one ambiguous touch turned out to be an out-of-bounds artifact, and every
+  sibling display-list function was checked. **Converged, not abandoned**:
+  either the reader is inside `World_LoadTrack` itself (the trace this
+  thread has twice judged not worth the known tooling blind spots), or it
+  doesn't render-consume the list at all and the collection exists for some
+  other purpose this project hasn't identified.
 - **`world+0x44`/`world+0x48` read as `0` on the one track checked live**,
   but that doesn't settle what they're *for* - a zero on `16_Track` is
   consistent with either "these two classes are never authored on this
