@@ -254,3 +254,69 @@
 0x08956418	function	zlib_uncompress	79	corroboration.md
 0x08971fa8	function	atoi	82	corroboration.md
 0x0898568c	function	powf	74	corroboration.md
+
+# Structural sweep (2026-08-05, fourth pass): the 52 USA-documented functions
+# that had zero fuzzy candidate at threshold >= 0.6, resolved via call-graph
+# and positional corroboration (already-matched callers/callees, address
+# adjacency to already-matched neighbors) rather than a fuzzy score, then
+# still verified with diff_functions before renaming. Plus 10 data-kind
+# globals resolved by decompiling an already-matched referencing function and
+# reading the relocated address/offset directly. See corroboration.md for
+# method, the two rejected candidates, the six excluded as too-generic, and
+# Race_ResetCraftBoosts_q (evidence computed below 50, left unrenamed).
+0x08804ad4	function	Game_RenderFrame	71	corroboration.md
+0x08807198	function	Game_Bootstrap	73	corroboration.md
+0x08807204	function	Game_MainLoop	78	corroboration.md
+0x0881009c	function	Gu_Start	71	corroboration.md
+0x088104a8	function	Gu_CallList	73	corroboration.md
+0x08810cc8	function	Gu_Enable	73	corroboration.md
+0x08810d20	function	Gu_Disable	73	corroboration.md
+0x08810d7c	function	Gu_SetMatrix	71	corroboration.md
+0x08810da8	function	Gu_DrawArray	75	corroboration.md
+0x08811540	function	Gu_TexOffset	71	corroboration.md
+0x08813154	function	InGame_UpdatePauseInput	64	corroboration.md
+0x088182f8	function	CollisionMesh_Init	68	corroboration.md
+0x0882edb0	function	Zone_Create	67	corroboration.md
+0x0882f498	function	Zone_Update	67	corroboration.md
+0x088303a0	function	Sap_QueryAabb	77	corroboration.md
+0x08843108	function	Ship_LoadModel	70	corroboration.md
+0x0884d6f4	function	Body_SetOrientation	77	corroboration.md
+0x0884dce8	function	Body_Init	74	corroboration.md
+0x088835f0	function	World_LoadTrack	68	corroboration.md
+0x088866c8	function	Pad_SweptTest	54	corroboration.md
+0x08886fa0	function	Pads_TestCraft	54	corroboration.md
+0x08887830	function	World_CollectNodeLists	66	corroboration.md
+0x0889b290	function	Options_BuildControlSchemeRows	65	corroboration.md
+0x088b9d84	function	Movie_ParseAttributes	78	corroboration.md
+0x088c23fc	function	Ship_LoadHandlingStats	67	corroboration.md
+0x088f474c	function	ParticleSystem_CacheModeFlags	63	corroboration.md
+0x088fbe10	function	ParticleSystem_AimedVelocity	54	corroboration.md
+0x08903ec0	function	ExhaustFlare_Destroy	58	corroboration.md
+0x08904598	function	ExhaustFlare_BuildDisplayList	69	corroboration.md
+0x08904890	function	ExhaustFlare_OnSpeedupPad	71	corroboration.md
+0x08904b90	function	Texture_LoadEngineFlare	68	corroboration.md
+0x089060a0	function	FogCube_Construct	68	corroboration.md
+0x089064e0	function	FogCube_RegisterClass	74	corroboration.md
+0x08924190	function	ShipCollisionFx_Trigger	68	corroboration.md
+0x089291d4	function	Trail_BuildStateList	71	corroboration.md
+0x08929b2c	function	Trail_InitPreset	63	corroboration.md
+0x0892a080	function	Texture_LoadEngineNoise	68	corroboration.md
+0x08934820	function	Collision_RegisterNodeClasses	69	corroboration.md
+0x08940a4c	function	Wad_DecompressZlibStream	68	corroboration.md
+0x0894f20c	function	SystemRoot_Create	61	corroboration.md
+0x08953350	function	Xml_AttributeAsInt	71	corroboration.md
+0x089533b4	function	Xml_AttributeAsString	73	corroboration.md
+0x089533dc	function	Xml_AttributeAsIntHex	68	corroboration.md
+0x08953aec	function	Xml_InternString	71	corroboration.md
+0x08978afc	function	strtol	68	corroboration.md
+
+0x00022bac	data	g_wad_crc_table	78	corroboration.md
+0x002adaf0	data	g_vex_class_table	78	corroboration.md
+0x002ccf4c	data	g_wad_device_vtable	76	corroboration.md
+0x002ac3d0	data	g_sap_clamp_min	62	corroboration.md
+0x002ac3e0	data	g_sap_clamp_max	62	corroboration.md
+0x002b920c	data	g_force_fixed_30	68	corroboration.md
+0x002b9218	data	g_force_fixed_30_hide_hud	70	corroboration.md
+0x002b9219	data	g_force_fixed_60	70	corroboration.md
+0x000874b8	data	g_engine_flare_texture	68	corroboration.md
+0x0008b000	data	g_decompress_staging_buffer	65	corroboration.md

@@ -587,6 +587,43 @@ the past.
   Not yet root-caused or fixed; whichever address is wrong needs a project
   rename to match its doc page, or a doc correction if the live name turns
   out to be right and the page is stale.
+- **A second drift instance of the same pattern**: USA `0x08811630` is
+  live-named `Gu_Fog_q`, but `names.tsv` documents that address as
+  `Gu_TexOffset` (confidence 88, `texture-animation.md`) - `Gu_Fog` itself is
+  correctly at a different address, `0x08811748`. Found 2026-08-05 during the
+  structural sweep of `psp-pulse-eu`. Same rule applies: only sweep off the
+  address+name pair `names.tsv` records, never off whatever the live database
+  currently shows. Not investigated further, per the standing instruction not
+  to chase fixing these - just recording it so the next person doesn't
+  rediscover it.
+- **`psp-pulse-eu`'s `.data`/`.rodata`/BSS segments are not rebased to the
+  `0x088xxxxx`+ range the way its `.text`/code segment is - unlike every
+  function address in the binary, which does line up with USA's.** Found
+  2026-08-05 while resolving `psp-pulse-eu`'s `g_wad_crc_table`: USA's
+  `Wad_HashName` computes the table's address as `lui s1,0x8b0 / addiu
+  s1,s1,-0x4004` = `0x08afbffc` (the documented address), but EU's otherwise
+  byte-identical `Wad_HashName` computes `lui s1,0x2 / addiu s1,s1,0x2bac` =
+  `0x00022bac` - a completely different, low, non-`0x088`-prefixed address.
+  Every other EU data address resolved that session landed in the same kind
+  of low region (`0x0002xxxx`-`0x002xxxxx`, one at `0x0008b000`), across
+  multiple independently-decompiled functions, so this isn't a one-off
+  misread. Plausible explanation: EU's `BOOT.BIN` is genuinely smaller than
+  USA's (3,844,732 vs 3,854,564 bytes, see the EU-disc-acquisition entry
+  above), which shifts wherever the ELF loader places `.bss`/uninitialized
+  data if that placement isn't pinned to a fixed base the way the code
+  segment is. **Practical consequence**: don't assume a `psp-pulse-eu` data
+  symbol sits at "USA's address plus/minus a small relocation delta" the way
+  a function does - the deltas that work for code (tens to low-thousands of
+  bytes) do not apply to data, and a small-offset guess for a data address
+  will silently land on unrelated bytes rather than erroring. The only
+  reliable technique found so far is decompiling an already-matched
+  referencing function and reading the resolved `DAT_xxxxxxxx` symbol
+  Ghidra's decompiler already computed - see
+  [`psp-pulse-eu/corroboration.md`](docs/ghidra/functions/psp-pulse-eu/corroboration.md)'s
+  "Structural sweep" section for the ten data items resolved this way and
+  the fifteen still open. Not root-caused (why EU's `.bss` placement differs
+  from USA's specifically) and not fixed - just documented so the next data
+  pass doesn't rediscover it by trial and error.
 
 **PPSSPP** - the rest is in
 [`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md), worth

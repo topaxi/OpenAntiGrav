@@ -496,3 +496,293 @@ already-matched neighbours) the task allows for, not yet attempted.
 Total documented for `psp-pulse-eu` after this pass: **213** (81 before, 132
 added here). `psp-pulse-usa/names.tsv` documents 304; 91 functions plus 25
 data items remain unmatched.
+
+
+## Structural sweep (2026-08-05, fourth pass)
+
+The deep sweep above closed 132 of the 223-function/data gap using
+`bulk_fuzzy_match` at threshold 0.6. That left 91: 66 functions with no
+usable fuzzy candidate or a rejected/collision-prone one, and 25 `data`-kind
+globals the fuzzy/diff tooling doesn't address at all. This pass targets
+both, using call-graph and positional corroboration instead of a fuzzy
+score, per the task that opened it.
+
+**Reconciling the count first**: of the 66 leftover functions, 52 genuinely
+had zero fuzzy candidate at threshold >= 0.6; the other 14 are the
+already-accounted-for exclusions from the deep sweep (13 collision-prone,
+1 rejected - `MoviePlayer_Shutdown`) and are not reattempted here. This pass
+covers the 52, plus the 25 data items.
+
+### Method: functions
+
+For each of the 52, checked `find_similar_functions_fuzzy` at threshold 0.5
+first (lower than the deep sweep's 0.6 floor, since this set had already
+failed 0.6). Where that still returned nothing or only tied/generic
+candidates, used structural reasoning instead:
+
+- **Address adjacency to an already-matched neighbor.** `Game_RenderFrame`
+  (USA `0x08804ad4`) immediately follows the already-matched `Game_UpdateFrame`
+  (USA `0x08804978` -> EU `0x08804978`, a *zero-offset* match - EU's function
+  body occupies the identical address range as USA's). Checking EU
+  `0x08804ad4` directly found a real function there, confirmed by
+  `diff_functions`. The same held for `Game_Bootstrap`, which precedes
+  `Game_MainLoop` in both binaries.
+- **Callers'/callees' own diffs surfacing the missing name.** `diff_functions`
+  on an already-accepted pair reports `calls_only_in_a`/`calls_only_in_b` for
+  every callee that isn't itself named yet in EU - and when the USA side of
+  that list is a function from this 52-item gap, the EU side (still a bare
+  `FUN_` address) is a strong positional candidate for it, since both lists
+  preserve calling order. This is how `Gu_Start` (via `Game_RenderFrame`'s
+  diff), `SystemRoot_Create` (via `Game_MainLoop`'s diff), `Gu_Disable`/
+  `Gu_Enable` (via `Fog_Disable`/`Fog_Apply`'s diffs from the previous pass),
+  `Gu_SetMatrix` (via `ExhaustFlare_Draw`'s diff) and `strtol` (via `atoi`'s
+  diff) were found - in every case a 1:1 correspondence between one
+  unresolved USA callee and one unresolved EU callee at the same call site.
+- **Fixed local offset between two already-matched neighbors, applied to a
+  third.** Within a tight subsystem cluster (e.g. `CollisionMesh_BuildSap`'s
+  USA-EU address delta applied to the adjacent, still-unmatched
+  `CollisionMesh_Init`), the guessed EU address was checked against the
+  actual EU function table with `get_function_by_address` before accepting
+  it - if it didn't land exactly on a function's entry point, the guess was
+  discarded rather than diffed against a truncated/wrong function. This
+  found `FogCube_Construct`, `Texture_LoadEngineFlare`, `CollisionMesh_Init`
+  and `Texture_LoadEngineNoise`; the same technique also produced a
+  candidate for `Loading_ThreadMain`, which `diff_functions` then rejected
+  (see below) - landing on a function entry point confirms the address
+  arithmetic, not that it's the *right* function.
+
+**Every candidate from every technique still went through `diff_functions`
+before being trusted** - corroboration lowers the bar for which candidates
+are worth checking, it doesn't replace the check. Two candidates failed it:
+
+- **`Options_LoadControlMapping`** (USA `0x08836a48`) against its lone fuzzy
+  candidate (EU `0x08836914`, score 0.516): real divergence, not relocation.
+  USA has an extra 3-`jal`-call block with a conditional branch that EU's
+  version doesn't have, and a later branch does inline stores in EU where
+  USA calls a function; instruction count differs (118 vs 111) with the gap
+  concentrated in genuinely different code, not `lui`/`addiu` pairs.
+  Rejected.
+- **`Loading_ThreadMain`** (USA `0x0890b52c`) against the offset-interpolated
+  candidate (EU `0x0890aef0`): 411 vs 489 instructions, `body_added=188`,
+  `body_removed=110` - EU carries a large block (roughly 30 extra
+  instructions repeated three times, an unrolled variant of a loop USA
+  expresses more compactly) that has no USA counterpart. This is a real
+  structural difference far beyond anything the relocation pattern produces
+  elsewhere in this project, so the candidate is rejected. `Loading_ThreadMain`
+  is left undocumented; the true EU counterpart, if findable, needs a
+  different technique than local-offset interpolation.
+
+**Six more were excluded before ever reaching `diff_functions`**, because
+their own fuzzy candidate list showed the same three-way (or worse) exact
+score tie the project has already established as the signature of a
+too-generic function, not a real one-to-one correspondence: `Gfx_ViewDepth`
+(three candidates tied at 0.938 out of 1094 total matches), `Xml_AttributeAsFloatLibc`
+and `Xml_AttributeAsOwnedString` (tied at 0.55 out of 260/573 matches), and
+`strtod` (also tied three-way at 0.51, with no already-matched caller to
+corroborate through - its only caller, `atof`, is itself one of the deep
+sweep's collision exclusions). `Gu_SetMatrix` looked like a fifth case
+(three-way tie at 0.51) but was recovered separately through the
+callers'-diff technique above, so it is *not* in this excluded set - see
+the accepted table below. All other four are left undocumented.
+
+### Confidence: functions
+
+Since this pass's evidence is call-graph/positional corroboration plus a
+`diff_functions` check - not a fuzzy score - confidence is set from the
+diff's `body_equal`/`body_total` ratio, using a steeper discount than the
+fuzzy-based deep sweep to reflect the different (indirect) evidence source,
+capped below the USA source's own confidence throughout:
+
+- diff ratio <= 2%: USA confidence minus 11
+- diff ratio 2-8%: USA confidence minus 14
+- diff ratio 8-20%: USA confidence minus 17
+- diff ratio > 20%: USA confidence minus 21
+
+46 candidates were evaluated this way; 45 were renamed (24 of them below 70, getting `_q`) and one, `Race_ResetCraftBoosts_q`, computed below the 50 floor and was left un-renamed (below).
+
+**`Race_ResetCraftBoosts_q` computed to 46 (below the 50-confidence floor)
+and is deliberately left un-renamed** despite a clean diff (76/80 body-equal,
+all relocation): its USA source itself sits at only 60 confidence (already
+`_q`-suffixed there), and this pass's discount for an 8% diff ratio (-14)
+pushes any reasonable evidence-based number under 50. Per project rule,
+under 50 means don't rename, write the hypothesis down instead - which is
+what this is: `0x08827080` in EU is a strong candidate for
+`Race_ResetCraftBoosts_q` (USA `0x088271b4`) if anyone wants to revisit it
+with independent evidence, but the two sources of uncertainty (a
+low-confidence USA identification, corroborated only indirectly) compound
+rather than cancel.
+
+| USA function (USA confidence) | EU confidence | EU address | Body-equal ratio |
+| --- | --- | --- | --- |
+| `Game_MainLoop` (95) | 78 | `0x08807204` | 224/274 |
+| `Movie_ParseAttributes` (95) | 78 | `0x088b9d84` | 203/247 |
+| `Sap_QueryAabb` (88) | 77 | `0x088303a0` | 146/148 |
+| `Body_SetOrientation` (88) | 77 | `0x0884d6f4` | 84/85 |
+| `Gu_DrawArray` (92) | 75 | `0x08810da8` | 43/52 |
+| `Body_Init` (85) | 74 | `0x0884dce8` | 208/212 |
+| `FogCube_RegisterClass` (95) | 74 | `0x089064e0` | 14/23 |
+| `Game_Bootstrap` (90) | 73 | `0x08807198` | 22/27 |
+| `Gu_CallList` (90) | 73 | `0x088104a8` | 38/45 |
+| `Gu_Enable` (90) | 73 | `0x08810cc8` | 20/22 |
+| `Gu_Disable` (90) | 73 | `0x08810d20` | 21/23 |
+| `Xml_AttributeAsString` (90) | 73 | `0x089533b4` | 9/10 |
+| `Game_RenderFrame` (88) | 71 | `0x08804ad4` | 37/44 |
+| `Gu_Start` (88) | 71 | `0x0881009c` | 126/154 |
+| `Gu_SetMatrix` (88) | 71 | `0x08810d7c` | 10/11 |
+| `Gu_TexOffset` (88) | 71 | `0x08811540` | 14/17 |
+| `ExhaustFlare_OnSpeedupPad` (88) | 71 | `0x08904890` | 43/49 |
+| `Trail_BuildStateList` (85) | 71 | `0x089291d4` | 60/63 |
+| `Xml_AttributeAsInt` (88) | 71 | `0x08953350` | 10/11 |
+| `Xml_InternString` (85) | 71 | `0x08953aec` | 34/36 |
+| `Ship_LoadModel` (87) | 70 | `0x08843108` | 412/469 |
+| `ExhaustFlare_BuildDisplayList` (80) | 69 | `0x08904598` | 54/55 |
+| `Collision_RegisterNodeClasses` (90) | 69 | `0x08934820` | 29/56 |
+| `CollisionMesh_Init` (85) | 68 | `0x088182f8` | 16/18 |
+| `World_LoadTrack` (85) | 68 | `0x088835f0` | 1087/1228 |
+| `Texture_LoadEngineFlare` (85) | 68 | `0x08904b90` | 55/62 |
+| `FogCube_Construct` (85) | 68 | `0x089060a0` | 22/26 |
+| `ShipCollisionFx_Trigger` (85) | 68 | `0x08924190` | 264/289 |
+| `Texture_LoadEngineNoise` (85) | 68 | `0x0892a080` | 84/96 |
+| `Wad_DecompressZlibStream` (85) | 68 | `0x08940a4c` | 66/73 |
+| `Xml_AttributeAsIntHex` (85) | 68 | `0x089533dc` | 10/11 |
+| `strtol` (85) | 68 | `0x08978afc` | 10/11 |
+| `Zone_Create` (84) | 67 | `0x0882edb0` | 187/204 |
+| `Zone_Update` (84) | 67 | `0x0882f498` | 139/157 |
+| `Ship_LoadHandlingStats` (84) | 67 | `0x088c23fc` | 44/50 |
+| `World_CollectNodeLists` (80) | 66 | `0x08887830` | 87/89 |
+| `Options_BuildControlSchemeRows` (82) | 65 | `0x0889b290` | 108/131 |
+| `InGame_UpdatePauseInput` (85) | 64 | `0x08813154` | 44/57 |
+| `ParticleSystem_CacheModeFlags` (80) | 63 | `0x088f474c` | 92/110 |
+| `Trail_InitPreset` (80) | 63 | `0x08929b2c` | 46/52 |
+| `SystemRoot_Create` (78) | 61 | `0x0894f20c` | 145/167 |
+| `ExhaustFlare_Destroy` (75) | 58 | `0x08903ec0` | 33/40 |
+| `Pad_SweptTest` (65) | 54 | `0x088866c8` | 162/162 |
+| `Pads_TestCraft` (65) | 54 | `0x08886fa0` | 78/78 |
+| `ParticleSystem_AimedVelocity` (65) | 54 | `0x088fbe10` | 105/105 |
+| `Race_ResetCraftBoosts_q` (60) | 46 | `0x08827080` | 76/80 |
+
+### Method: data
+
+The 25 `data`-kind gap rows are globals (`g_wad_crc_table`, `g_game`,
+`_ctype_`, and similar). `diff_functions`/`find_similar_functions_fuzzy`
+are function-scoped tools, so these needed a different technique: find the
+USA global's referencing functions with `get_xrefs_to`, check whether any of
+those functions already has a confirmed EU match, then `decompile_function`
+the EU counterpart and read the actual relocated address or offset directly
+out of the decompiler output (Ghidra resolves the `lui`/`addiu` pair to a
+concrete `DAT_xxxxxxxx`/`_DAT_xxxxxxxx` symbol name in pseudo-C, which
+`diff_functions`' raw disassembly view normalizes away as `DATA_EXT`).
+
+**This surfaced a significant, previously-undocumented fact about the EU
+binary's memory layout**: EU's `.data`/`.rodata`/BSS segments are *not*
+rebased to the `0x088xxxxx`+ range the way the `.text`/code segment is.
+`Wad_HashName`'s EU disassembly computes `g_wad_crc_table`'s address as
+`lui s1,0x2` / `addiu s1,s1,0x2bac` = `0x00022bac` - compare USA's
+`lui s1,0x8b0` / `addiu s1,s1,-0x4004` = `0x08afbffc`, in the normal
+high-address data region. Every other data address resolved in this pass
+also landed in a low, non-`0x088`-prefixed region (`0x0002xxxx` to
+`0x002xxxxx`, one at `0x0008b000`), which is internally consistent across
+independently-decompiled functions - not a fluke of one lookup. This makes
+sense given `HANDOVER.md`'s existing note that EU's `BOOT.BIN` is genuinely
+smaller than USA's (3,844,732 vs 3,854,564 bytes): a smaller `.data`/`.rodata`
+region shifts where the loader/ELF places BSS, and unlike the code segment
+(which both binaries pin to a fixed base), these sections apparently aren't
+pinned the same way. **This is why the earlier fuzzy/diff-based sweeps never
+needed to know this**: `diff_functions` normalizes every data reference to
+the placeholder `DATA_EXT` regardless of its actual value, so a
+function-vs-function comparison never surfaces the underlying address at
+all - only `rename_data`/`decompile_function` on the data side exposes it.
+Recorded in `HANDOVER.md` as a finding for future data-symbol work on this
+binary, not something this pass tries to fully map.
+
+**`rename_data` was tried first and rejected every name** with
+`missing_hungarian_prefix` - the bridge polices global-variable names against
+a Hungarian-notation convention this project doesn't use (see
+`scripts/apply-ghidra-names.py`'s own comment on this exact issue, already
+documented from applying `psp-pulse-usa`'s names). `create_label` is the
+tool `apply-ghidra-names.py` uses for `data`-kind rows for exactly this
+reason, and it accepted every name unchanged; used here directly, then
+verified by re-decompiling the referencing function and confirming the
+symbolic name appears in place of the `DAT_`/`_DAT_` address.
+
+Ten of the 25 were resolved with enough confidence to apply; the other 15
+were not reached (either their referencing functions have a large,
+ambiguous fan-out of xrefs that makes picking the right symbol
+error-prone without more time, or - `_ctype_` - `get_xrefs_to` found no
+references to the USA address at all, and it wasn't investigated further):
+
+- **`g_wad_crc_table`** (EU `0x00022bac`): `Wad_HashName`'s EU disassembly
+  computes this address directly (see above); `get_xrefs_to` on it in EU
+  independently confirms 3 `DATA` reads inside `Wad_HashName` plus a `WRITE`
+  from the still-unnamed CRC-table constructor - the same reference shape
+  USA has.
+- **`g_vex_class_table`** (EU `0x002adaf0`): appears identically in *two*
+  independently-decompiled EU functions, `Vex_RegisterClass`
+  (`piVar2 = (int *)&DAT_002adaf0; iVar1 = _DAT_002adaf0;`) and
+  `Vex_FindClassDescriptor` (the same linked-list walk). Two-way
+  corroboration.
+- **`g_wad_device_vtable`** (EU `0x002ccf4c`): the same constant
+  (`*(undefined4 *)(param_1 + 0x30) = 0x2ccf4c;`) appears in both
+  `Wad_Unmount` and `Wad_MountArchive`'s EU decompiles, matching USA's
+  vtable-pointer-store pattern in both functions. Two-way corroboration.
+- **`g_sap_clamp_min`/`g_sap_clamp_max`** (EU `0x002ac3d0`/`0x002ac3e0`):
+  `Sap_Insert`'s EU decompile clamps a point against a three-float vector at
+  `...d0/d4/d8` (min bound) then a second at `...e0` (max bound) - a
+  `0x10`-byte gap matching USA's `0x08ab0c50`/`0x08ab0c60` gap exactly.
+- **`g_force_fixed_30`/`g_force_fixed_30_hide_hud`/`g_force_fixed_60`** (EU
+  `0x002b920c`/`0x002b9218`/`0x002b9219`): `Game_UpdateFrame`'s EU decompile
+  has the identical three-flag frame-timestep decision USA's page documents
+  - checks `hide_hud` first, then `fixed_60`, falling through to a
+  `fixed_30` check later in the same function - matched by logic shape, not
+  just address proximity. `hide_hud` and `fixed_60` are adjacent bytes in
+  both binaries.
+- **`g_engine_flare_texture`** (EU `0x000874b8`): `Texture_LoadEngineFlare`'s
+  EU decompile writes the loaded texture handle to this address in the same
+  position USA's version writes to `g_engine_flare_texture`; single-function
+  evidence, not cross-corroborated.
+- **`g_decompress_staging_buffer`** (EU `0x0008b000`): `Lzss_Decode`'s EU
+  decompile uses this literal address as a fixed staging buffer three times
+  within the function, matching USA's `g_decompress_staging_buffer` usage
+  shape; internally consistent across three sites within one function, not
+  cross-checked against a second function.
+
+| USA global (USA confidence) | EU confidence | EU address | Evidence |
+| --- | --- | --- | --- |
+| `g_wad_crc_table` (95) | 78 | `0x00022bac` | Direct address computation + xref count match |
+| `g_vex_class_table` (92) | 78 | `0x002adaf0` | Two independently-decompiled referencing functions agree |
+| `g_wad_device_vtable` (90) | 76 | `0x002ccf4c` | Two independently-decompiled referencing functions agree |
+| `g_sap_clamp_min` (75, `_q`) | 62 | `0x002ac3d0` | Vec3 pattern + exact `0x10`-byte gap to clamp_max, matching USA |
+| `g_sap_clamp_max` (75, `_q`) | 62 | `0x002ac3e0` | Same as above |
+| `g_force_fixed_30` (88, `_q`) | 68 | `0x002b920c` | Matches USA's three-flag decision logic shape |
+| `g_force_fixed_30_hide_hud` (88) | 70 | `0x002b9218` | Matches USA's decision logic; adjacent byte to `g_force_fixed_60` |
+| `g_force_fixed_60` (88) | 70 | `0x002b9219` | Matches USA's decision logic; adjacent byte to `g_force_fixed_30_hide_hud` |
+| `g_engine_flare_texture` (88, `_q`) | 68 | `0x000874b8` | Single-function write-site match |
+| `g_decompress_staging_buffer` (88, `_q`) | 65 | `0x0008b000` | Single-function, 3 internally-consistent usage sites |
+
+### What did not match
+
+`MoviePlayer_Shutdown` (USA `0x089145bc`), rejected in the deep sweep above
+against EU `0x089140a8`: confirmed here as a genuine logic divergence, not a
+wrong-candidate mismatch worth re-attempting. `diff_functions` shows a real
+4-instruction conditional block (`lui`/`lbu`/`bne` testing a byte at
+`param+0x1d8` before a cleanup call) present in USA and absent in EU -
+`body_added`/`body_removed` (8/12) don't balance the way a pure relocation
+diff's always does. A future sweep should not re-run this pair expecting a
+different result without new evidence (e.g. a different EU candidate
+address entirely).
+
+`Options_LoadControlMapping` and `Loading_ThreadMain` (this pass, above),
+and five too-generic exclusions (`Gfx_ViewDepth`, `strtod`,
+`Xml_AttributeAsFloatLibc`, `Xml_AttributeAsOwnedString`, plus
+`Race_ResetCraftBoosts_q` left un-renamed for falling under the confidence
+floor) remain unmatched; so do 15 of the 25 data items, `_ctype_` among them
+(`get_xrefs_to` found nothing referencing it in USA, so there was no
+referencing-function trail to follow in EU at all).
+
+Total documented for `psp-pulse-eu` after this pass: **268** (213 before,
+45 functions + 10 data items added here). `psp-pulse-usa/names.tsv`
+documents 279 functions plus 25 data items (304 rows total); the remaining
+gap is 21 functions (`Options_LoadControlMapping`, `Loading_ThreadMain`,
+`Race_ResetCraftBoosts_q`, `Gfx_ViewDepth`, `strtod`,
+`Xml_AttributeAsFloatLibc`, `Xml_AttributeAsOwnedString`, and the 13
+collision-prone plus 1 rejected from the deep sweep) and 15 data items.
