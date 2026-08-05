@@ -22,3 +22,53 @@
 0x08972b34	function	strcasecmp	80	corroboration.md
 0x08972cf8	function	strlen	75	corroboration.md
 0x08811658	function	Gu_Fog	68	corroboration.md
+
+# Full sweep (2026-08-05): every function psp-pulse-usa/names.tsv documents,
+# checked against this binary with find_similar_functions_fuzzy at threshold
+# 0.95 and verified individually with diff_functions before renaming. See
+# corroboration.md for what did NOT survive verification (collision-prone
+# targets, ambiguous multi-way matches) and was deliberately left out.
+0x08815b2c	function	Collision_GetContact	85	corroboration.md
+0x0881826c	function	CollisionMesh_AvgVertexScalar	85	corroboration.md
+0x08818864	function	Collider_SetBoxDimensions	85	corroboration.md
+0x08818874	function	Collider_SetBoxTransform	85	corroboration.md
+0x08818910	function	Collider_BoxSamplePoints	85	corroboration.md
+0x08818aec	function	Collision_SegmentTriangle	85	corroboration.md
+0x08818c68	function	Collision_SegmentHitsTriangle	85	corroboration.md
+0x08833b94	function	SapAxis_Update	85	corroboration.md
+0x0883d700	function	Ship_ThrustInput	55	corroboration.md
+0x08848614	function	Ship_UpdateSteering	82	corroboration.md
+0x08848864	function	Ship_UpdateBrakes	85	corroboration.md
+0x08848a04	function	Ship_ApplyLateralGrip	80	corroboration.md
+0x08848c50	function	Ship_ApplyWeathervaneTorque	85	corroboration.md
+0x08848cb4	function	Ship_ApplyQuadraticDrag	85	corroboration.md
+0x08848d5c	function	Ship_ApplyAngularDamping	85	corroboration.md
+0x08848dd8	function	Ship_ApplyRollingResistance	85	corroboration.md
+0x0884c454	function	Ship_UpdateEngine	78	corroboration.md
+0x0884d354	function	Body_AddForceWorld	85	corroboration.md
+0x0884d448	function	Body_AddTorqueLocal	85	corroboration.md
+0x0884d490	function	Body_AddTorqueWorld	85	corroboration.md
+0x0884d6cc	function	Body_SetPosition	85	corroboration.md
+0x0884d6dc	function	Body_SetMass	85	corroboration.md
+0x0884d884	function	Body_Translate	85	corroboration.md
+0x0884d908	function	Ship_SetColliderFriction	85	corroboration.md
+0x0884da80	function	Body_RecordContact	85	corroboration.md
+0x0884db58	function	Body_SetBoxDimensions	85	corroboration.md
+0x08880580	function	Camera_SetMode	85	corroboration.md
+0x08886518	function	Pad_ContainsPoint	85	corroboration.md
+0x088f4290	function	ParticleSystem_DeriveScaledParams	85	corroboration.md
+0x08904674	function	Exhaust_UpdateEngineSound	75	corroboration.md
+0x08906330	function	FogCube_Sample	85	corroboration.md
+0x0891de38	function	Gfx_Enqueue	65	corroboration.md
+0x08929434	function	Trail_PushPoint	85	corroboration.md
+0x08940f60	function	Wad_Close	85	corroboration.md
+0x0894143c	function	Lzss_InitFromFile	85	corroboration.md
+0x08941478	function	Lzss_InitFromMemory	85	corroboration.md
+0x0894ec78	function	Input_IsPressed	85	corroboration.md
+0x0894ecd8	function	Input_ConsumePress	75	corroboration.md
+0x089534ec	function	Xml_InitElement	85	corroboration.md
+0x08953598	function	Xml_BeginAttributes	85	corroboration.md
+0x089537a8	function	Xml_SetElementRange	85	corroboration.md
+0x08953a98	function	Xml_CloseDocument	85	corroboration.md
+0x08972fcc	function	strrchr	85	corroboration.md
+0x08985854	function	Math_TransformVec4	85	corroboration.md
