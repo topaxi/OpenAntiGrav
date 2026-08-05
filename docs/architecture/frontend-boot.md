@@ -460,6 +460,72 @@ now (see [fnt.md](../formats/fnt.md)), so `Français` draws with its own ç and
 `FE_CONFIRM_BUTTON` draws the game's own cross-button glyph. The 5x7 built-in
 font survives only as a fallback for a font that fails to decode.
 
+### The EU disc (`pulse-psp-eu.chd`)
+
+Compared byte-for-byte against `pulse-psp-usa.chd`'s `Data.wad`, per
+[source-images.md](../reverse-engineering/source-images.md):
+
+- **`Skin.xml` (hash `1f38aacf`) is identical for the Language Selection
+  screen.** The only diff anywhere in the file is on `Show Logo`: the EU disc
+  drops the US-only `BOOT_LEGAL` legal-text `Viewport` and shifts
+  `BOOT_PRESS_START`'s `y` from 220 to 230 to fill the gap. Every `Menu`,
+  `Text` and `DisplayLanguages` element on `Language Selection` itself -
+  position, scale, colour, font - is byte-identical. Confidence **97**: a
+  direct diff of the extracted file, not inferred.
+- **The EU disc has the same five languages, differently numbered.** French
+  (`PI008`), German (`PI009`), Spanish (`PI010`) and Italian (`PI011`) sit at
+  the same plugin ids as the USA disc and their `entries.xml` string tables
+  are the same translations (a sorted diff of French's 1,669-vs-1,671-entry
+  table shows only the same `BOOT_LEGAL` drop and two minor wording tweaks).
+  **English moves from `PI012` (USA) to `PI000` (EU)** - confirmed by hash
+  (`Data\Plugins\PI000\Definition.xml` = `e21d955a`,
+  `Data\Plugins\PI000\entries.xml` = `4438799d`, both present only on the EU
+  disc at exactly the sizes the two USA-absent EU-only WAD hashes turned out
+  to be) and by content (`Font Language="English"` inside). **The EU disc
+  drops two USA-only plugins**: `PI003` (a button-glyph substitution table,
+  still `Language="English"` internally) and `PI005` (a hidden Japanese
+  language plugin, present on the USA disc but never offered as a picker
+  choice there either). Confidence **90**.
+- **The boot-time plugin manifest confirms the same set from the executable
+  side.** `FUN_0888b980` (USA) walks an 11-pointer table at `0x08ab110c`
+  loading `PI012, PI010, PI008, PI009, PI011, PI001, PI004, grids, music,
+  loading, news` in that order (first entry = English, loaded first). Its EU
+  counterpart - found by positional correspondence through the already-matched
+  `Game_MainLoop`/`FUN_0888adcc`↔`FUN_0888ac28` chain (`diff_functions`:
+  258/277 and 65/70 instructions equal, every difference a relocated
+  immediate) - is `FUN_0888b7dc` at EU `0x0888b7dc`, whose own base-pointer
+  symbol and `strings_only_in_a/b` diff read `Data\Plugins\PI012` (USA) vs
+  `Data\Plugins\PI000` (EU): the executable's own manifest, not just the
+  disc's file layout, confirms English is `PI000` on EU and loads first.
+  Reading EU's manifest table directly (`08ab088c`, 11 pointers, `strings`
+  search) gives `PI000, PI008, PI009, PI010, PI011, PI001, PI004, grids,
+  music, loading, news` - same 11 entries, same first slot, French/German/
+  Spanish/Italian in a different sub-order than USA's. Confidence **80**
+  (`_q`-worthy evidence tier per the deep-sweep formula, but neither function
+  is yet formally renamed/documented under `psp-pulse-usa` or
+  `psp-pulse-eu` - that is left for a follow-up naming pass, see
+  `HANDOVER.md`).
+- **Live capture (PPSSPP, headless, cold boot, no input) shows the EU disc's
+  `Language Selection` state is entered and then unconditionally exits to
+  `LogoFMV` in under one frame** (516,292 of 222,000,000 PSP cycles/sec, ≈0.14
+  frames, measured via `cpu.status.ticks` at the two consecutive
+  `StateMachine_TransitionTo` hits) - and **holding `down` through the
+  transition did not change this**. This rules out "player input during the
+  capture window happened to redirect it" as an explanation. It does **not**
+  by itself explain why real EU hardware is documented (external knowledge,
+  not this project's own capture) to show a picker on first boot: the
+  likeliest reconciliation, not yet tested here, is that the redirect is
+  gated on PPSSPP's own configured PSP system language (`en_US` in this
+  environment's `ppsspp.ini`) matching an available plugin, auto-selecting
+  and skipping the picker the same way a real console with its system
+  language already set would - rather than on the number of on-disc
+  languages, which is 5 for both regions, not 1. **The existing HANDOVER.md
+  claim that USA "never shows the picker... because the build is
+  English-only" is not supported by this session's static findings** (the
+  USA manifest also lists 5 languages) and is corrected below. No screenshot
+  of a rendered picker was captured this session - the state never stayed up
+  long enough to reach one.
+
 **This screen was very likely carried over from Wipeout Pure with only its
 `FEGlobals` retuned.** Pure's own `Skin.xml` (`data/images/pure-psp-usa.chd`)
 has the same `Language Selection` screen: the same widget names

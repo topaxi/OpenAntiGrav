@@ -643,11 +643,32 @@ reading before a capture session rather than after:
   transition, three reproductions. The replay API is closed as an option.
 - Restore the savedata backup (move, do not delete) before concluding a session
   that touched `~/.config/ppsspp/PSP/SAVEDATA/UCES00465P0000`.
-- **The USA PSP disc never shows the Language Selection picker** - the build is
-  English-only and the front end skips it when there is one language to show.
-  Proving that costs about an hour. A live capture of it needs a EU PSP disc or
-  a PS2 BIOS in PCSX2, neither of which is available here; do not suggest
-  sourcing one.
+- **The EU PSP disc is now available here** (`data/images/pulse-psp-eu.chd`,
+  acquired 2026-08-04) - an earlier version of this note said one was
+  "neither... available here" and told readers not to suggest sourcing one;
+  that is stale. A 2026-08-05 pass compared it against the USA disc
+  statically (`Data.wad`/`Skin.xml`/plugin manifest - see
+  [frontend-boot.md](docs/architecture/frontend-boot.md#the-eu-disc-pulse-psp-euchd))
+  and captured its boot live under PPSSPP headless.
+- **The "USA disc is English-only, that's why the picker never shows" claim
+  above (this note, prior wording) is not supported by what the static
+  comparison found and should not be repeated as-is.** The USA executable's
+  own boot-time plugin manifest (`FUN_0888b980` at `0x08ab110c`) lists the
+  same five languages the EU disc has (English, French, German, Spanish,
+  Italian) - it is not a 1-language build. What both discs *do* share,
+  confirmed by live capture on the EU disc (headless, cold boot, breakpoints
+  on `StateMachine_TransitionTo` EU `0x08891064`): `Language Selection` is
+  entered and unconditionally exits to `LogoFMV` in well under one frame
+  (516,292/222,000,000 PSP cycles), and holding `down` through the transition
+  does not change that. So *something* skips the picker on both regions in
+  this capture environment, but "only one language" is the wrong explanation
+  for it - the more likely mechanism (not yet tested) is that the redirect is
+  gated on PPSSPP's configured PSP system language (`en_US` here) matching an
+  available plugin, the way a real console with its language already set
+  would auto-skip too. Live-capturing with PPSSPP's system language forced to
+  something *not* on the disc, to see whether the picker then stays up, is
+  the follow-up experiment that would settle this - not attempted this
+  session, out of time.
 
 ## Verification status: what to lean on
 
