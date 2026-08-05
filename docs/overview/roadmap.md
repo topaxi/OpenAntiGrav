@@ -649,7 +649,29 @@ change how this list should be read:
 
 ### Lighting and shadow
 
-- [ ] `AmbientLight` `0x12c`, `DirectionalLight` `0x131`, `PointLight` `0x132`
+- [~] `AmbientLight` `0x12c`, `DirectionalLight` `0x131`, `PointLight` `0x132` -
+      **decoded and investigated; not built as a render feature.** All three
+      payloads are parsed (`crates/formats/src/lighting.rs`,
+      [`lighting.md`](../formats/lighting.md)); a Ghidra pass
+      ([`lighting.md`](../ghidra/functions/psp-pulse-eu/lighting.md)) found
+      `PointLight` has no `Vex_RegisterClass` call site at all, and
+      `AmbientLight`'s decoded colour never reaches the render path
+      (live-verified against two tracks with sharply different authored
+      colours) - both confirmed inert on the original, not a gap to fill.
+      `DirectionalLight` is different from the other two: registered, and
+      **live-verified collected into a real, correctly-populated track-load
+      list** capped at exactly the hardware light count (4) - a breakpoint
+      capture matched three independent per-class counts against the disc's
+      own authored data exactly. What is *not* found is anything downstream
+      reading that list; that search is open, bounded follow-up, not closed
+      out with the other two. Building a hardware-light-style GPU rig,
+      this item's original assumption, is not supported by the mesh-draw
+      evidence either way regardless of how that search ends: no mesh-draw
+      function this pass reached ever enables a `GU_LIGHT0..3` slot, so even
+      a confirmed `DirectionalLight` reader would consume the list some
+      other way, not through the hardware slots this item originally
+      assumed. See `HANDOVER.md`'s "M6 authored lighting" thread for the
+      full trail.
 - [ ] `Dynamic Point Light` `0x3c2` - the moving lights, ships included
 - [ ] `Dynamic Shadow Occluder` `0x3c3` and `shadow` `0x3cb`
 - [ ] `lensflare` `0x3de`

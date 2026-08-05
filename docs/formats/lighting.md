@@ -5,9 +5,18 @@ decoder. `docs/formats/vex.md` has only ever recorded that `0x12c`, `0x131`
 and `0x132` *have* these names, from the class-ID table. No byte of any of
 the three payloads was documented before this page.
 
-Neither handler is recovered from the executable - see [Open](#open) - so,
-as with [`Skycube`/`fogCube`](skycube.md), the confidence scores below are
-about *what the data is*, not about how the original draws it.
+A Ghidra pass and a live capture (2026-08-05, see
+[Open](#open)) since answered most of "how the original draws it." Both
+handlers are now recovered (`AmbientLight_RegisterClass`,
+`DirectionalLight_RegisterClass`, confidence 90 each; see
+[`lighting.md`](../ghidra/functions/psp-pulse-eu/lighting.md)); what they
+lead to differs by class - `PointLight` has no registration site at all,
+`AmbientLight`'s decoded colour is live-verified to never reach the render
+path, and `DirectionalLight` is live-verified to be collected into a capped
+list at track load from real authored data, with its final reader still
+unfound. So, as with
+[`Skycube`/`fogCube`](skycube.md), the confidence scores below are about
+*what the data is*; the render-side confidence sits in the linked pages.
 
 ## Summary
 
@@ -17,7 +26,9 @@ about *what the data is*, not about how the original draws it.
 | `PointLight` payload is `{r, g, b, range}` then a `{1, 0, 0, 0}` trailer, 32 bytes | **86** |
 | Placement is the node's transform chain, not the payload | **85** |
 | `Dynamic Point Light` `0x3c2` is never authored anywhere on the PSP disc | **90** |
-| How the original draws any of the three, and which of an authored set of lights fill the PSP GE's 4 hardware slots | **not recovered** |
+| `PointLight` has no `Vex_RegisterClass` call site on either binary - authored but never handled | **90** (exhaustive: all 46 sites read, both binaries) |
+| `AmbientLight`'s decoded colour never reaches the one global its only two known consumers read - confirmed inert | **live-verified** |
+| `DirectionalLight` is live-verified collected into a 4-entry list at track load, matching real authored data exactly - the reader is still unfound | **live-verified (collection); reader not recovered** |
 
 Validated by `crates/formats/tests/lighting_ground_truth.rs` against every
 `.vex` file in the PSP disc's `Data.wad` (1142 entries, `just test-data`).
@@ -176,12 +187,16 @@ Summary, so this page doesn't go stale in place:
   answers this project's own reason for opening the Ghidra pass (`13_Track`'s
   8 authored lights against 4 hardware slots) with "the mesh path doesn't use
   the slots at all," not "here is the selector."
-- **Whether `AmbientLight`'s decoded colour ever reaches that global is
-  itself still open** - the global's own writer wasn't found by static
-  analysis on either binary (a genuine ceiling, not an under-investigated
-  gap: `get_xrefs_to` and a deeper data-region scan both return only the one
-  read each). A live PPSSPP capture to settle it is in progress as of this
-  writing; check `HANDOVER.md` for the outcome before assuming either way.
+- **Settled, and the answer is no.** A live PPSSPP capture (2026-08-05,
+  headless/Xvfb) read the global at five points across two tracks with
+  sharply different authored `AmbientLight` colours (Talon's Junction
+  `(0.169, 0.193, 0.207)`, Moa Therma `(0.297, 0.258, 0.217)`/
+  `(0.440, 0.375, 0.348)`) - it stayed at the compiled default `(0.2, 0.8,
+  1.0)` every time, fresh boot through five in-race checkpoints. So this
+  class's decoded colour is confirmed inert on the render side, the same
+  standing `PointLight` already has from its missing registration. See
+  [`lighting.md`](../ghidra/functions/psp-pulse-eu/lighting.md) for the full
+  capture record.
 - **The `PointLight` trailer's meaning.** Four `u32`, `{1, 0, 0, 0}` on every
   one of the 10 shipped samples. Constant across every sample is itself
   suspicious of a flag or an enabled-state word rather than a per-light

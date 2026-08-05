@@ -17,17 +17,22 @@ before - an agent launched `PPSSPPSDL --windowed` straight at a live Wayland
 session and put a visible emulator window on the user's own screen. The
 preference order is:
 
-1. **`PPSSPPHeadless` first.** No window exists at all, so there is nothing to
-   spawn anywhere. It reaches the main menu and drives the same websocket
-   debugger API as the SDL build (see "both builds can reach the main menu"
-   below) - for anything that is memory reads and scripted input rather than
-   eyeballing a screenshot, it is sufficient and it is the default choice.
-2. **If the SDL build's speed or screenshot capability is genuinely needed**
-   (see below for why it sometimes is), run it under **Xvfb**, never against
-   the developer's actual `DISPLAY`/Wayland socket. See
-   ["Running without a real display"](#running-without-a-real-display-xvfb-works-no-compositor-needed):
-   confirmed to boot, reach the debugger port and produce real screenshots via
-   `import -window root`, with nothing rendered anywhere the user can see it.
+1. **The SDL build under Xvfb first.** `PPSSPPHeadless` runs
+   `--graphics=software` unconditionally - there is no hardware-accelerated
+   headless mode - and software rendering is genuinely slow (the "about three
+   minutes" to reach the main menu below is that cost showing up on a single
+   boot; it compounds on anything longer). The SDL build under Xvfb gets a
+   real GPU backend (confirmed: `AMD Radeon Graphics (RADV RENOIR)` alongside
+   the `llvmpipe` fallback, see below) while staying exactly as invisible to
+   the developer as headless is - no window lands anywhere a human can see
+   it, since Xvfb is a virtual framebuffer, not a real display. Default to
+   this for anything beyond a single trivial read. See ["Running without a
+   real display"](#running-without-a-real-display-xvfb-works-no-compositor-needed).
+2. **Plain `PPSSPPHeadless`, no Xvfb, only when Xvfb itself isn't available**
+   or the task is a single quick read where the extra setup isn't worth it.
+   It still reaches the main menu and drives the same websocket debugger API
+   (see "both builds can reach the main menu" below) - it is correct, just
+   slow.
 3. **A real windowed launch on the developer's own session is not a default
    choice** - only do it if the human explicitly asks to watch the emulator
    themselves.
@@ -128,6 +133,44 @@ What this pass did **not** confirm, so treat as untested rather than ruled out:
 Confidence **75**: the parts exercised worked cleanly and repeatably in one
 session; the rest of this page's workflow is assumed rather than independently
 re-verified under Xvfb.
+
+**Two more traps found 2026-08-05, running a real capture (not just a
+screenshot) under Xvfb for longer than the pass above did:**
+
+- **`import -window root` can come back solid black even though it "worked"
+  the pass above.** Cause: with no window manager, SDL places its window
+  wherever it likes on the virtual screen - one run put it at `(967, 1200)`
+  on a `1280x720` canvas, entirely off-screen, so `root` captured empty space
+  around it. Fix: reposition the window onto the canvas before shooting,
+  with `python3-xlib`:
+  ```python
+  from Xlib import display
+  d = display.Display(":97")
+  root = d.screen().root
+  # find the SDL window (its name/class identifies it) via root.query_tree(),
+  # then:
+  window.configure(x=0, y=0)
+  d.sync()
+  ```
+  Confirm the window's actual position before trusting a screenshot is real;
+  a black image from `import -window root` under Xvfb means "check the window
+  position," not "the capture is broken."
+- **ImageMagick 7.1.2's `import -window <id-or-name>` (anything other than
+  literally `root`) fails outright here** with a misleading
+  `missing an image filename` error, regardless of whether the id is hex,
+  decimal, or the window's name. `-window root` plus repositioning (above) is
+  the only path that worked, not a fallback of convenience.
+
+**The menu walk is deliberately track-blind** (by design - it doesn't try to
+identify which circuit is loaded), so reaching a *specific* track needs manual
+navigation: pause -> quit race -> Racebox -> Custom Race -> Track Select,
+identified by screenshot (the state name doesn't change per track) rather than
+by state. **The menu's display name and the disc's directory name don't
+obviously match anywhere in `docs/formats/`** - e.g. "Moa Therma" is
+`03_Track`, found via a code comment (`crates/render/tests/road_uv_ground_truth.rs`)
+rather than a documented table. Worth a proper name-to-directory table
+somewhere in `docs/formats/track.md` if track selection by name becomes a
+recurring need.
 
 A headless Wayland compositor (`sway`/`wlroots` with `WLR_BACKENDS=headless`)
 was considered as the alternative for reaching a truly compositor-driven
@@ -347,6 +390,18 @@ buffer at `+0x18c`. Reading it every second is a text-mode view of the front end
 which is what makes blind navigation practical. See
 [main-loop.md](../ghidra/functions/psp-pulse-usa/main-loop.md) for the corrected
 layout and the state names observed at runtime.
+
+**This address is `psp-pulse-usa`-specific and does not carry over to
+`psp-pulse-eu`.** Confirmed live (2026-08-05): the EU binary's equivalent
+global (`Game_MainLoop`'s `_DAT_00058334` in Ghidra) is not reachable at
+runtime the same way - `memory.read_u32` on it returns `Invalid address` on a
+running EU capture, plausibly related to the EU image's data-segment
+rebasing `corroboration.md` already flags elsewhere. Since the project's
+Ghidra target of record is now EU (see `corroboration.md`), state-name-based
+menu walking (`psp-drive.py`'s approach, and the table below) needs its own
+EU address before it works there; until that's found, drive an EU capture by
+screenshot navigation under Xvfb instead (confirmed to work reliably) rather
+than assuming the USA recipe below carries over unchanged.
 
 ## Walking the menus without a human
 

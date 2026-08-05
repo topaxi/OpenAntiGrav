@@ -203,15 +203,31 @@ one flat global colour**, neither ever touches `GU_LIGHT0..3`.
 
 **Across every function in the mesh draw path that this pass could reach from
 `Gu_Ambient`'s own callers, the PSP GE's four hardware light slots are never
-enabled.** `AmbientLight` feeds a single active ambient term (a global RGB
-triple, not a per-instance value threaded through per light node - consistent
-with ~1.85 `AmbientLight` nodes authored per track file on average, per
-`docs/formats/lighting.md`'s density histogram: only one can be "active" at
-once through this mechanism). `DirectionalLight`, despite being genuinely
-registered (unlike `PointLight`), has **no consumer found in this pass** -
-open, not ruled out, since this pass followed `Gu_Ambient`'s xrefs rather than
-`DirectionalLight`'s own (unreachable, per the stub-pattern section above)
-init function.
+enabled.** The two consumers found - `Mesh_ApplyMaterialLighting` and
+`Mesh_ApplyShinemapReflection_q` - both read ambient from **the same flat
+global RGB triple**, not a per-instance value threaded through any light
+node. `DirectionalLight`, unlike `PointLight`, is not just registered but
+**live-confirmed to be collected into a real, correctly-populated per-track
+list** (`World_CollectMarkerLists`, below) - its final render-side consumer
+is still **not found in this pass**, open rather than ruled out, since this
+pass followed `Gu_Ambient`'s xrefs rather than `DirectionalLight`'s own
+(unreachable, per the stub-pattern section above) init function.
+
+**Live-verified (2026-08-05): `AmbientLight` does not feed that global at
+all.** A PPSSPP capture (headless/Xvfb, no window shown - see
+`docs/reverse-engineering/ppsspp-debugger.md`) read the global's three floats
+at five points across two structurally different tracks: fresh boot, three
+checkpoints racing Talon's Junction (`16_Track`), two checkpoints racing Moa
+Therma (`03_Track`). **Every single read came back `(0.2, 0.8, 1.0)` - the
+compiled-in static default, unchanged.** Talon's Junction authors `AmbientLight`
+`(0.169, 0.193, 0.207)`; Moa Therma authors `(0.297, 0.258, 0.217)` and
+`(0.440, 0.375, 0.348)` on its two instances - neither remotely close to what
+was actually read, on two tracks chosen precisely because their authored
+values differ sharply from both the default and each other. This retracts the
+weaker "AmbientLight feeds a single active ambient term" reading the static
+analysis alone supported: **the global is a fixed engine constant, not a sink
+for any authored `AmbientLight` data**, at the confidence rubric's runtime-trace
+tier rather than the decompilation-only tier the rest of this page sits at.
 
 **This reframes the M6 rendering question this pass was opened to answer.**
 The premise going in was "13_Track authors 8 lights against 4 hardware slots,
@@ -223,25 +239,129 @@ reading `DirectionalLight`/`PointLight` for something other than GE hardware
 lighting), but no such consumer was found, and the two real ambient consumers
 found instead are flat, single-value, and never touch the light slots.
 
+## `DirectionalLight` is actively collected at track load, capped at exactly 4
+
+Found by following a different thread than `Gu_Ambient`'s callers: the
+self-address-stub value each class's method table stores (see above) is not
+just inert bookkeeping - `World_CollectNodeLists` (documented separately)
+uses the exact same stub-return values as **class filter keys**, walking the
+node tree and comparing each node's stored method pointer against a known
+class's stub value to build a per-class instance list. The same pattern
+exists for lighting.
+
+### `World_CollectMarkerLists` (`0x0887a1c4`)
+
+| | |
+| --- | --- |
+| **Address** | `0x0887a1c4` (EU) |
+| **Confidence** | **85** |
+
+Called once from `World_LoadTrack` (`0x088835f0`, track-load time - the same
+timing `World_CollectNodeLists` uses for pads/fog). Builds **four** typed
+lists this way, each with its own fixed capacity:
+
+| Class (via its stub) | World field (count / list) | Capacity |
+| --- | --- | --- |
+| `AmbientLight` (`FUN_08a6b350`) | `+0x3c` / `+0x54` | 10 |
+| `DirectionalLight` (`FUN_08a6b35c`) | `+0x40` / `+0x7c` | **4** |
+| `0x3cf` "wopoint" (`FUN_08a6b368`) | `+0x4c` / `+0x8c` | 200 |
+| `0x3ce`, unidentified (`FUN_08a6b374`) | `+0x50` / `+0x3ac` | 200 |
+
+**`DirectionalLight`'s capacity is exactly 4 - the PSP GE's own hardware
+light-slot count.** Not a coincidence this page treats lightly: `AmbientLight`
+collected alongside it in the same function caps at 10, and the two unrelated
+marker classes cap at 200, so 4 is not a generic small-list default this
+function uses everywhere - it is specific to the one class whose count
+happens to match the hardware constraint this whole investigation opened
+around. This is real, positive evidence the original **does** track a
+bounded set of directional lights per track, in a shape a hardware-light
+consumer could use directly.
+
+**Live-verified 2026-08-05: the collection genuinely runs, on real per-track
+data.** A PPSSPP breakpoint at this function's entry (`0x0887a1c4`), reading
+`$a0` (the world pointer) and then the four count fields after the call
+returns, on Talon's Junction (`16_Track` - not `13_Track`; corrected below)
+produced:
+
+| Offset | Field | Live value | `oag-view --nodes` on `16_Track/track.vex` |
+| --- | --- | --- | --- |
+| `+0x3c` | `AmbientLight` count | **1** | **1** |
+| `+0x40` | `DirectionalLight` count | **3** | **3** |
+| `+0x44` | unaccounted (see Open) | 0 | - |
+| `+0x48` | unaccounted (see Open) | 0 | - |
+| `+0x4c` | `wopoint` count | **21** | **21** |
+| `+0x6cc` | sum of the above | 25 | 1+3+0+0+21+0 = 25 ✓ |
+
+Three independent per-class counts match the disc's own authored data
+exactly, not just the one this pass cares about - this is the strongest
+evidence tier this project's rubric has for "this function does what its
+decompile says," short of a second binary. Confidence raised from 65 (`_q`)
+to **85** and the name dropped its `_q`: what remains open is not whether
+this function collects real data (settled), but whether anything downstream
+*reads* the list it built. The breakpoint fired 9 times total during one
+track load, cycling through this function's two other call sites
+(`0x08900bb8`, `0x08900e1c`) as well as the primary `World_LoadTrack` one
+(`0x088848e4`) - the other two returned all-zero counts against different
+root-node pointers (front-end/menu scene graphs, not the raceable track),
+consistent with the same function being reused generically rather than
+being lighting-specific, which is also why the name stays
+`World_CollectMarkerLists` rather than something lighting-specific.
+
+**A capture trap worth recording**: breaking directly at the `jal`
+instruction (`0x088848e4`) and reading `$a0` immediately reads the stale
+pre-delay-slot value - MIPS o32 loads the argument in the delay slot
+(`move a0,a1`), which has not executed yet at that `pc`. Breaking at the
+*callee's* entry instead (`0x0887a1c4`) reads the correct, already-loaded
+`$a0`.
+
+`World_LoadTrack` itself is 1,228 instructions with 169 calls - tracing
+which of them reads world `+0x7c`/`+0x40` afterward, or whether a per-frame
+function reads it later (the collection happens once at load, not
+necessarily applied then), is real, bounded follow-up work this pass did
+not have room for. This is the strongest lead toward `DirectionalLight`
+having a real consumer that this project has found - stronger than "no
+consumer found" alone, and now stronger still given the collection itself
+is live-confirmed correct - but it is not yet the consumer itself.
+
 ## Open
 
-- **The global ambient RGB triple's writer is unfound.** `get_xrefs_to` on
-  both the EU (`_DAT_002b90c4`) and USA (`DAT_08abf494`) addresses returns
-  only the one read each already cited above - no writer xref, on either
-  binary. Likely written through a computed base+offset Ghidra's static
-  analysis doesn't trace (the same class of miss `Xml_ReadGlobalSettings`'s
-  table writes already produce elsewhere in this project), not evidence the
-  value is never written. Whether this global is populated from an
-  `AmbientLight` node's decoded colour, and by what selection rule if more
-  than one is authored per file, is the natural next step and the one that
-  would actually confirm (or refute) that the format-decoded `AmbientLight`
-  payload reaches this exact value.
-- **`DirectionalLight`'s consumer, if any, is unfound.** Registered but no
-  reader found by this pass's method (following `Gu_Ambient`'s xrefs, which
-  only surfaces ambient consumers by construction). A future pass following
-  `DirectionalLight_RegisterClass`'s method-table entries a different way -
-  or a live capture toggling a track's authored directional lights and
-  diffing the rendered frame - would settle whether it's consumed at all.
+- **The global ambient RGB triple's writer is unfound, and the live capture
+  above says there's nothing to find.** `get_xrefs_to` on both the EU
+  (`_DAT_002b90c4`) and USA (`DAT_08abf494`) addresses returns only the one
+  read each - no writer xref, on either binary. A live capture settled why:
+  it's genuinely never written past its compiled default, on two tracks with
+  sharply different authored `AmbientLight` colours, across a fresh boot and
+  five in-race checkpoints. Not a static-analysis miss (the class of thing
+  `Xml_ReadGlobalSettings`'s computed-offset table writes produce elsewhere
+  in this project) - closed, by the strongest evidence tier this project's
+  rubric has. `material+0x6c` (`Mesh_ApplyMaterialLighting`'s other, per-material
+  input) was not separately live-tested and stays open on its own, since it
+  gates *whether* the ambient branch runs at all, not what colour it uses -
+  but the colour question, the one this pass opened to answer, is closed.
+- **`DirectionalLight`'s collection is now live-confirmed real; its final
+  consumer is still unfound.** `World_CollectMarkerLists` (raised to
+  confidence 85, `_q` dropped) builds a 4-entry `DirectionalLight` list at
+  track load from genuine authored data - live-verified against
+  `oag-view --nodes` ground truth on three independent class counts at once,
+  not just the one this investigation opened around. This is a materially
+  different status than `AmbientLight`/`PointLight`, both confirmed inert:
+  `DirectionalLight`'s *data pipeline* to the point of being sitting in
+  memory, correctly populated, is real. What's still missing is anything
+  reading `world+0x40`/`+0x7c` afterward - the same `World_LoadTrack`
+  tracing problem as before (1,228 instructions, 169 calls, known
+  `search_instructions` delay-slot blind spots), now worth pursuing given
+  the collection side is settled rather than presumed.
+- **`world+0x44`/`world+0x48` read as `0` on the one track checked live**,
+  but that doesn't settle what they're *for* - a zero on `16_Track` is
+  consistent with either "these two classes are never authored on this
+  track" or "nothing ever writes them regardless of track." `World_CollectMarkerLists`
+  sums `+0x3c` (`AmbientLight`) + `+0x40` (`DirectionalLight`) + `+0x44` +
+  `+0x48` + `+0x4c` (wopoint) + its own local into `+0x6cc`, but never writes
+  `+0x44`/`+0x48` itself - two more per-class counts, populated (if at all)
+  by some other collector. A quick follow (self-address-stub search at
+  `0x08a6b380`, `0xc` bytes past the last used stub) led into
+  `FUN_08886950`, a much larger scene-setup function unrelated to this list
+  on first read; not chased further.
 - **`material+0x6c`'s own writer is unfound**, same class of gap as the global
   triple above - `Mesh_ApplyMaterialLighting`'s real per-frame call site reads
   it, but nothing in this pass traced where it's set.

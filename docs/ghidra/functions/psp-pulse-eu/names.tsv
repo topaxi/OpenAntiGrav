@@ -345,3 +345,4 @@
 0x002b9090	data	g_loading_start_time	78	corroboration.md
 0x002b90a0	data	g_loading_wave_phase	78	corroboration.md
 0x002b90a4	data	g_loading_wave_rates	78	corroboration.md
+0x0887a1c4	function	World_CollectMarkerLists	85	lighting.md

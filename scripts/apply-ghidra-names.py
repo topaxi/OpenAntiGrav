@@ -14,17 +14,26 @@ are enforced here rather than trusted:
 2. **Confidence is encoded in the name.** 70 and above is applied as written,
    50 to 69 gains a `_q` suffix, below 50 is skipped.
 
-The bridge must be running with the target program open; see
+The bridge must be running with every target program open; see
 docs/reverse-engineering/toolchain.md.
 
 Note that the bridge's own `dry_run` parameter is **not** honoured by the rename
 endpoints: it reports what it would do and then does it anyway. So `--dry-run`
 here is implemented locally and sends nothing.
 
+**Each binary owns its own `names.tsv` and its own Ghidra program.** A default
+run (no positional args) walks every `docs/ghidra/functions/<binary>/names.tsv`
+that exists and applies it to that binary's own program - `psp-pulse-eu` and
+`psp-pulse-usa` alike, not just whichever one used to be hardcoded here. When
+you pass explicit input paths instead, `--program` applies to all of them, the
+same single-target behaviour this script always had - use that for one-off
+runs against a binary with no `names.tsv` of its own yet, or to replay a
+subset.
+
 Usage:
-    scripts/apply-ghidra-names.py                       # every default input
+    scripts/apply-ghidra-names.py                       # every binary's own names.tsv
     scripts/apply-ghidra-names.py --dry-run
-    scripts/apply-ghidra-names.py path/to/names.tsv
+    scripts/apply-ghidra-names.py path/to/names.tsv --program /some/Binary
 """
 
 from __future__ import annotations
@@ -38,10 +47,36 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_INPUTS = [
-    ROOT / "docs" / "ghidra" / "functions" / "psp-pulse-usa" / "names.tsv",
-    ROOT / "data" / "ghidra" / "psp-imports.tsv",
-]
+FUNCTIONS_DIR = ROOT / "docs" / "ghidra" / "functions"
+
+# Directory name under docs/ghidra/functions/ -> Ghidra project program path.
+# The PS2 build's main executable isn't called BOOT.BIN, so this can't be
+# derived mechanically from the directory name; every other entry follows the
+# PSP convention. Add a line here when a names.tsv appears for a binary not
+# yet listed - the default run silently skips any names.tsv it can't map,
+# printing which one and why, rather than guessing a program path.
+BINARY_PROGRAMS = {
+    "psp-pulse-usa": "/psp-pulse-usa/BOOT.BIN",
+    "psp-pulse-eu": "/psp-pulse-eu/BOOT.BIN",
+    "psp-pure-usa": "/psp-pure-usa/BOOT.BIN",
+    "psp-pure-eu": "/psp-pure-eu/BOOT.BIN",
+    "ps2-pulse-eu": "/ps2-pulse-eu/SCES_547.48",
+}
+
+# (names.tsv, program) pairs used when no positional inputs are given. The
+# per-binary files are discovered from BINARY_PROGRAMS so a new binary's
+# names.tsv is picked up the moment it's added there; psp-imports.tsv is
+# resolve-imports' own output and has always been USA-specific (see its
+# `boot` default in the justfile), so it stays pinned to that one program
+# rather than joining the generic per-binary loop.
+def default_inputs() -> list[tuple[Path, str]]:
+    pairs = [
+        (FUNCTIONS_DIR / binary / "names.tsv", program)
+        for binary, program in BINARY_PROGRAMS.items()
+    ]
+    pairs.append((ROOT / "data" / "ghidra" / "psp-imports.tsv", BINARY_PROGRAMS["psp-pulse-usa"]))
+    return pairs
+
 
 QUALIFIED_MIN = 50
 CONFIDENT_MIN = 70
@@ -173,26 +208,11 @@ def check_evidence(rows: list[Row]) -> list[str]:
     return complaints
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("inputs", nargs="*", type=Path, help="names TSVs (default: both known sets)")
-    ap.add_argument("--url", default="http://127.0.0.1:8089", help="GhidraMCP bridge URL")
-    ap.add_argument(
-        "--program",
-        default="/psp-pulse-usa/BOOT.BIN",
-        help="program path in the Ghidra project",
-    )
-    ap.add_argument("--dry-run", action="store_true", help="print what would change, send nothing")
-    ap.add_argument("--no-save", action="store_true", help="leave the program unsaved")
-    args = ap.parse_args()
-
-    inputs = args.inputs or [p for p in DEFAULT_INPUTS if p.is_file()]
-    if not inputs:
-        print("nothing to apply. Run `just resolve-imports` first?", file=sys.stderr)
-        return 1
-
+def apply_group(paths: list[Path], program: str, args) -> int:
+    """Apply every row from `paths` to one Ghidra `program`. Returns an exit code."""
+    print(f"\n== {program} ==")
     rows: list[Row] = []
-    for path in inputs:
+    for path in paths:
         if not path.is_file():
             print(f"{path}: not found", file=sys.stderr)
             return 1
@@ -223,12 +243,12 @@ def main() -> int:
         )
         return 1
 
-    bridge = Bridge(args.url, args.program)
+    bridge = Bridge(args.url, program)
     if not args.dry_run:
         try:
             bridge.get("get_metadata")
         except (urllib.error.URLError, OSError) as e:
-            print(f"cannot reach the bridge at {args.url}: {e}", file=sys.stderr)
+            print(f"cannot reach the bridge at {args.url} for {program}: {e}", file=sys.stderr)
             return 1
 
     applied = skipped = failed = 0
@@ -266,12 +286,54 @@ def main() -> int:
             print(f"  FAIL  {row.address} {row.symbol}: {reply[:200]}")
             failed += 1
 
-    print(f"\n{applied} applied, {skipped} skipped, {failed} failed")
+    print(f"{applied} applied, {skipped} skipped, {failed} failed")
     if failed:
         return 1
     if not args.dry_run and not args.no_save:
         print(bridge.post("save_program").strip()[:160])
     return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument(
+        "inputs", nargs="*", type=Path, help="names TSVs (default: every binary's own)"
+    )
+    ap.add_argument("--url", default="http://127.0.0.1:8089", help="GhidraMCP bridge URL")
+    ap.add_argument(
+        "--program",
+        default=None,
+        help="program path in the Ghidra project - only used with explicit input paths, "
+        "since the default run maps each binary's names.tsv to its own program",
+    )
+    ap.add_argument("--dry-run", action="store_true", help="print what would change, send nothing")
+    ap.add_argument("--no-save", action="store_true", help="leave the program unsaved")
+    args = ap.parse_args()
+
+    if args.inputs:
+        program = args.program or "/psp-pulse-usa/BOOT.BIN"
+        return apply_group(args.inputs, program, args)
+
+    present = [(path, program) for path, program in default_inputs() if path.is_file()]
+    if not present:
+        print("nothing to apply. Run `just resolve-imports` first?", file=sys.stderr)
+        return 1
+
+    skipped_dirs = sorted(set(BINARY_PROGRAMS) - {p.parent.name for p, _ in present})
+    for binary in skipped_dirs:
+        print(f"skip  {binary}: no names.tsv yet")
+
+    # Merge files that target the same program (psp-pulse-usa's own names.tsv
+    # and psp-imports.tsv both do) so the duplicate-address check still sees
+    # them together, not just within one file.
+    by_program: dict[str, list[Path]] = {}
+    for path, program in present:
+        by_program.setdefault(program, []).append(path)
+
+    worst = 0
+    for program, paths in by_program.items():
+        worst = max(worst, apply_group(paths, program, args))
+    return worst
 
 
 if __name__ == "__main__":
