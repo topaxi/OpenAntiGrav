@@ -38,3 +38,41 @@ lookup table the function indexes into, consistent with a rebuilt binary's
 literal pool moving, not a logic change. This is standard PSP SDK libc, not
 game code, so the confidence here reflects "this is the same library
 function," not evidence about anything Pure-specific.
+
+## Full sweep (2026-08-05)
+
+The sample sweep above was ~20 of `psp-pulse-usa`'s 304 documented functions.
+Went back and ran `bulk_fuzzy_match` across all 10,703 `psp-pulse-usa`
+functions at threshold 0.8 (11 paginated calls, `offset` 0 through 10000),
+then cross-referenced every row `psp-pulse-usa/names.tsv` documents against
+the results - the same full-coverage method as the
+[`psp-pulse-eu` sweep](../psp-pulse-eu/corroboration.md#full-sweep-2026-08-05),
+at a lower threshold since this binary's one confirmed match (`strcasecmp`,
+above) only scores 0.8664. Only 7 named functions matched anything at all
+across the entire binary - confirming the "mostly did not hold" finding
+above at full coverage rather than a ~20-function sample.
+
+Two were excluded as collision-prone (an unrelated USA function matched the
+same target, the same signal used to exclude four names in the pulse-eu
+sweep): `Wad_BuildCrcTable` (`0x08940cb0` -> `0x0889483c`, also matched by
+`FUN_089458dc` and `FUN_08970e00` at the identical 0.8743 score) and
+`Xml_CloseDocument` (`0x08953fc0` -> `0x08977e4c`, also matched by
+`FUN_088c29e4`).
+
+The other five - `Options_LoadDefaultControlMapping`, `Body_Integrate`,
+`Ship_UpdateEngine`, `Ship_ApplyQuadraticDrag`, `Ship_ApplyAngularDamping` -
+landed on the *same* USA source functions and at the *same* fuzzy scores as
+this binary's `psp-pure-eu` sibling (expected: USA and EU Pure are the same
+build, region-shifted), so the full method, the per-function diff read, and
+the reasoning for why the four noisier ones were still applied despite
+falling short of the "literal-pool only" bar are written up once in
+[`psp-pure-eu/corroboration.md`](../psp-pure-eu/corroboration.md#full-sweep-2026-08-05)
+rather than duplicated here.
+
+| USA function (confidence) | USA address | Pure USA address | Fuzzy score | Body equal |
+| --- | --- | --- | --- | --- |
+| `Options_LoadDefaultControlMapping` (88) | `0x0883672c` | `0x0880bae8` | 0.8657 | 40/43 |
+| `Body_Integrate` (88) | `0x0884e230` | `0x089345e8` | 0.8013 | 115/150 |
+| `Ship_UpdateEngine` (84, `_q`) | `0x0884c5c8` | `0x0892f1f0` | 0.8118 | 105/279 |
+| `Ship_ApplyQuadraticDrag` (80, `_q`) | `0x08848e28` | `0x0892cba0` | 0.8076 | 17/35 |
+| `Ship_ApplyAngularDamping` (80, `_q`) | `0x08848ed0` | `0x0892cc2c` | 0.8318 | 15/26 |

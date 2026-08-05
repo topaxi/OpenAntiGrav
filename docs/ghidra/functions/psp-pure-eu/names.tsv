@@ -18,3 +18,15 @@
 # address	kind	name	confidence	evidence
 
 0x088dfe9c	function	strcasecmp	78	corroboration.md
+
+# Full sweep (2026-08-05): every function psp-pulse-usa/names.tsv documents,
+# checked against this binary with bulk_fuzzy_match at threshold 0.8 and
+# verified individually with diff_functions before renaming. See
+# corroboration.md for the two collision-prone matches left out and why the
+# _q-suffixed rows below still cleared the bar despite noisier diffs than
+# psp-pulse-eu's.
+0x0880b928	function	Options_LoadDefaultControlMapping	75	corroboration.md
+0x08933f84	function	Body_Integrate	70	corroboration.md
+0x0892eb8c	function	Ship_UpdateEngine	62	corroboration.md
+0x0892c53c	function	Ship_ApplyQuadraticDrag	60	corroboration.md
+0x0892c5c8	function	Ship_ApplyAngularDamping	60	corroboration.md
