@@ -100,6 +100,124 @@ pub struct Movie {
     pub no_picture_reason: Option<String>,
 }
 
+/// Pixel format a decoded [`VideoFrame`]'s planes are laid out in.
+///
+/// `I420` is the only variant produced by anything in this file today - see
+/// [`PIXEL_FORMAT`] - but a hardware decoder's native output is commonly
+/// `Nv12` (interleaved chroma), and this exists so a future [`VideoDecoder`]
+/// can report what it actually decoded instead of being forced to
+/// deinterleave before it can report anything. Nothing here converts one into
+/// the other: that is each implementation's own job, which is what keeps
+/// `video.wgsl` at one format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PixelFormat {
+    /// Planar 4:2:0: Y, then U, then V, each tightly packed.
+    #[default]
+    I420,
+    /// Semi-planar 4:2:0: Y, then interleaved UV, tightly packed. Not
+    /// produced by anything in this file yet.
+    Nv12,
+}
+
+/// One decoded frame: its pixel format, its shape, and its bytes.
+///
+/// Tightly packed in format order (`I420`: Y, U, V; `Nv12`: Y, UV) - no
+/// stride padding, matching what [`av1::FrameSource::frame`] has always
+/// produced. `Renderer::upload_frame` is the only reader.
+#[derive(Debug, Clone, Default)]
+pub struct VideoFrame {
+    /// How `bytes` is laid out.
+    pub format: PixelFormat,
+    /// Luma width in samples, and the frame width in pixels.
+    pub width: u32,
+    /// Luma height in samples, and the frame height in pixels.
+    pub height: u32,
+    /// Chroma plane width in samples.
+    pub chroma_width: u32,
+    /// Chroma plane height in samples.
+    pub chroma_height: u32,
+    /// The plane data.
+    pub bytes: Vec<u8>,
+}
+
+/// Something that can decode a movie's frames, in order, by index.
+///
+/// One implementation exists today, [`Av1CacheDecoder`] - a thin wrapper over
+/// [`av1::FrameSource`], so the AV1 cache pipeline's behaviour is unchanged.
+/// The trait exists so [`FrameStore`] can hold a decoder without knowing
+/// which one, the same way `oag-disc`'s `SectorSource` trait lets a
+/// `DiscImage` hold a sector source without knowing whether it is a CHD or a
+/// raw ISO.
+///
+/// `Debug` is a supertrait for the same reason `SectorSource` makes it one: a
+/// blanket `Debug` for `Box<dyn VideoDecoder>` would overlap the standard
+/// library's impl for `Box<T: Debug>`, so every implementor derives or writes
+/// its own instead. `Send` is a supertrait because [`Feed::spawn`] moves the
+/// decoder onto a worker thread.
+pub trait VideoDecoder: std::fmt::Debug + Send {
+    /// The frame shape this decoder produces.
+    fn geometry(&self) -> av1::Geometry;
+
+    /// How many frames the movie holds.
+    fn len(&self) -> usize;
+
+    /// Whether the movie holds no frames at all.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Decodes frame `index` into `out`.
+    ///
+    /// `out`'s format and geometry are set as soon as decoding starts, before
+    /// this can fail, so a caller that reuses one `VideoFrame` across many
+    /// calls never sees stale metadata beside a fresh error - only `out.bytes`
+    /// is unspecified when this returns `Err`.
+    ///
+    /// Playback here is always forwards, or a rewind to frame zero on a loop
+    /// (see [`frame_at`]), so an implementation is free to treat `index`
+    /// sequentially rather than supporting true random access.
+    fn frame(&mut self, index: usize, out: &mut VideoFrame) -> Result<()>;
+
+    /// Drops decoder state and starts again from frame zero.
+    fn rewind(&mut self);
+}
+
+/// Decodes the AV1 movie cache through [`VideoDecoder`].
+///
+/// A wrapper rather than an inherent impl so [`av1::FrameSource`] stays free
+/// of anything `oag-game` specific - `oag-formats` builds without `oag-game`
+/// in the tree.
+#[derive(Debug)]
+struct Av1CacheDecoder(av1::FrameSource);
+
+impl VideoDecoder for Av1CacheDecoder {
+    fn geometry(&self) -> av1::Geometry {
+        self.0.geometry()
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn frame(&mut self, index: usize, out: &mut VideoFrame) -> Result<()> {
+        // Set before the decode, which is what keeps this call's own error
+        // from leaving a caller that reuses `out` holding a previous frame's
+        // metadata beside whatever `bytes` was left in.
+        let geometry = self.0.geometry();
+        out.format = PixelFormat::I420;
+        out.width = geometry.width;
+        out.height = geometry.height;
+        out.chroma_width = geometry.chroma_width;
+        out.chroma_height = geometry.chroma_height;
+        self.0.frame(index, &mut out.bytes)?;
+        Ok(())
+    }
+
+    fn rewind(&mut self) {
+        self.0.rewind();
+    }
+}
+
 /// The cached movie, decoded a frame at a time.
 ///
 /// Playback is sequential, so this decodes forward and only rewinds when asked
@@ -113,7 +231,7 @@ pub struct Movie {
 #[derive(Debug)]
 pub struct FrameStore {
     path: PathBuf,
-    source: av1::FrameSource,
+    source: Box<dyn VideoDecoder>,
     /// How many frames the cache holds.
     pub len: usize,
     /// Bytes in the luma plane.
@@ -149,16 +267,16 @@ impl FrameStore {
             chroma_len: geometry.chroma_len(),
             chroma_width: geometry.chroma_width,
             chroma_height: geometry.chroma_height,
-            source,
+            source: Box::new(Av1CacheDecoder(source)),
             path,
         })
     }
 
-    /// Decodes frame `index` into `out`, which is resized to one frame.
-    pub fn read_frame(&mut self, index: usize, out: &mut Vec<u8>) -> Result<()> {
+    /// Decodes frame `index` into `out`.
+    pub fn read_frame(&mut self, index: usize, out: &mut VideoFrame) -> Result<()> {
         self.source
             .frame(index, out)
-            .map_err(|e| anyhow!("decoding frame {index} of {}: {e}", self.path.display()))
+            .with_context(|| format!("decoding frame {index} of {}", self.path.display()))
     }
 
     /// Where the cache file lives.
@@ -179,8 +297,8 @@ pub struct Frame {
     pub position: u64,
     /// Which frame of the movie it is, counting from zero.
     pub index: usize,
-    /// Tightly packed I420: luma, then both chroma planes.
-    pub bytes: Vec<u8>,
+    /// The decoded picture.
+    pub picture: VideoFrame,
 }
 
 /// Which frame of a `len`-frame movie is the picture at `position`.
@@ -546,8 +664,8 @@ fn decode_loop(shared: &Shared, mut store: FrameStore, len: usize, repeat: bool)
             continue;
         };
 
-        let mut bytes = Vec::new();
-        let decoded = store.read_frame(index, &mut bytes);
+        let mut picture = VideoFrame::default();
+        let decoded = store.read_frame(index, &mut picture);
 
         let mut state = lock();
         // Restarted while this was decoding: the frame belongs to playback that
@@ -561,7 +679,7 @@ fn decode_loop(shared: &Shared, mut store: FrameStore, len: usize, repeat: bool)
                 state.ring.push(Frame {
                     position,
                     index,
-                    bytes,
+                    picture,
                 });
                 state.next = position + 1;
             }
@@ -1484,7 +1602,10 @@ mod tests {
             position,
             index: position as usize,
             // One byte, standing in for a picture: the ring does not read them.
-            bytes: vec![position as u8],
+            picture: VideoFrame {
+                bytes: vec![position as u8],
+                ..VideoFrame::default()
+            },
         }
     }
 

@@ -1603,7 +1603,7 @@ impl MenuStage {
                     bail!("decoding the menu backdrop: {reason}");
                 }
                 if let Some(frame) = feed.take_upto(backdrop.player.position()) {
-                    self.renderer.upload_frame(&gpu.queue, &frame.bytes)?;
+                    self.renderer.upload_frame(&gpu.queue, &frame.picture)?;
                     backdrop.shown = Some(frame.index);
                 }
                 // The frame on screen, not the one the playhead names.
@@ -1687,7 +1687,7 @@ impl FrontendStage {
             // rather than a panic on `0 - 1`.
             let position = wanted.min(feed.len().saturating_sub(1)) as u64;
             if let Some(frame) = feed.take_upto(position) {
-                self.renderer.upload_frame(queue, &frame.bytes)?;
+                self.renderer.upload_frame(queue, &frame.picture)?;
                 self.shown = true;
             }
             if !self.shown {

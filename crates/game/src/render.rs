@@ -352,9 +352,21 @@ impl Renderer {
         self.video.as_ref().map(|v| v.format)
     }
 
-    /// Uploads one frame of yuv420p, laid out as three consecutive planes.
-    pub fn upload_frame(&self, queue: &wgpu::Queue, frame: &[u8]) -> Result<()> {
+    /// Uploads one decoded frame as three consecutive planes.
+    ///
+    /// Only [`crate::movie::PixelFormat::I420`] is implemented today; anything
+    /// else is rejected rather than silently misread.
+    pub fn upload_frame(
+        &self,
+        queue: &wgpu::Queue,
+        frame: &crate::movie::VideoFrame,
+    ) -> Result<()> {
         let video = self.video.as_ref().context("no video pipeline")?;
+        anyhow::ensure!(
+            frame.format == crate::movie::PixelFormat::I420,
+            "upload_frame only knows I420 today, got {:?}",
+            frame.format
+        );
         let luma = (video.format.width * video.format.height) as usize;
         let chroma = (video.format.chroma_width * video.format.chroma_height) as usize;
 
@@ -376,6 +388,7 @@ impl Renderer {
 
         for (index, range, width, height) in planes {
             let bytes = frame
+                .bytes
                 .get(range)
                 .context("frame is shorter than its declared planes")?;
             queue.write_texture(

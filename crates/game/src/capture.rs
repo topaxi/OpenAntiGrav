@@ -399,9 +399,9 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),
         video_frame(&list),
     ) {
-        let mut bytes = Vec::new();
-        frames.read_frame(wanted.min(frames.len - 1), &mut bytes)?;
-        renderer.upload_frame(&queue, &bytes)?;
+        let mut picture = crate::movie::VideoFrame::default();
+        frames.read_frame(wanted.min(frames.len - 1), &mut picture)?;
+        renderer.upload_frame(&queue, &picture)?;
     }
 
     let target = device.create_texture(&wgpu::TextureDescriptor {

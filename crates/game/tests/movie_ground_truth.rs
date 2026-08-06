@@ -154,12 +154,12 @@ fn the_cache_is_lossless() {
 
     let reference = reference_frames(&key, frame_len);
 
-    let mut decoded = Vec::new();
+    let mut decoded = movie::VideoFrame::default();
     for index in 0..FRAMES {
         frames.read_frame(index, &mut decoded).expect("decoding");
         let want = &reference[index * frame_len..(index + 1) * frame_len];
         assert_eq!(
-            decoded.as_slice(),
+            decoded.bytes.as_slice(),
             want,
             "frame {index} differs from what ffmpeg decodes: the transcode is not lossless"
         );
@@ -175,17 +175,17 @@ fn rewinding_a_real_movie_reproduces_its_frames() {
     let mut movie = loaded.movie.expect("the PSP disc carries the reel");
     let frames = movie.frames.as_mut().expect("the movie transcoded");
 
-    let (mut first, mut again) = (Vec::new(), Vec::new());
+    let (mut first, mut again) = (movie::VideoFrame::default(), movie::VideoFrame::default());
     frames.read_frame(3, &mut first).expect("decoding forwards");
     frames
-        .read_frame(FRAMES - 1, &mut Vec::new())
+        .read_frame(FRAMES - 1, &mut movie::VideoFrame::default())
         .expect("running to the end");
     // Behind the cursor now: this flushes the decoder and replays.
     frames
         .read_frame(3, &mut again)
         .expect("decoding backwards");
 
-    assert_eq!(first, again, "a rewind changed the picture");
+    assert_eq!(first.bytes, again.bytes, "a rewind changed the picture");
 }
 
 /// A [`movie::Feed`] must hand over the same frames, in the same order, that
@@ -205,11 +205,11 @@ fn a_feed_hands_over_the_frames_the_store_would() {
 
     // The reference, decoded synchronously the way the render thread used to.
     let mut reference = Vec::new();
-    let mut bytes = Vec::new();
+    let mut picture = movie::VideoFrame::default();
     let mut sync = store;
     for index in 0..FRAMES {
-        sync.read_frame(index, &mut bytes).expect("decoding");
-        reference.push(bytes.clone());
+        sync.read_frame(index, &mut picture).expect("decoding");
+        reference.push(picture.bytes.clone());
     }
 
     // `repeat`, so the position past the last frame is frame 0 again.
@@ -226,7 +226,7 @@ fn a_feed_hands_over_the_frames_the_store_would() {
             "position {position} named the wrong frame"
         );
         assert_eq!(
-            frame.bytes, reference[index],
+            frame.picture.bytes, reference[index],
             "the feed's picture at position {position} is not the store's frame {index}"
         );
     }
@@ -235,7 +235,7 @@ fn a_feed_hands_over_the_frames_the_store_would() {
     feed.restart();
     let frame = take_eventually(&mut feed, 0);
     assert_eq!(frame.index, 0, "a restarted feed begins again at frame 0");
-    assert_eq!(frame.bytes, reference[0]);
+    assert_eq!(frame.picture.bytes, reference[0]);
     assert!(feed.take_error().is_none(), "nothing failed to decode");
 }
 
