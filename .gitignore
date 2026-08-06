@@ -78,5 +78,9 @@
 __pycache__/
 *.pyc
 
-# Agents
-.claude/
+# Agents. Local agent state stays out, but the checked-in Claude Code on the
+# web setup does not: a re-included path cannot live under a wholly excluded
+# directory, so the directory is globbed and the two tracked paths negated.
+.claude/*
+!.claude/hooks/
+!.claude/settings.json

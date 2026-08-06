@@ -47,6 +47,13 @@ cargo install cargo-nextest --locked
 cargo install just --locked          # or: pacman -S just
 ```
 
+A [Claude Code on the web](https://code.claude.com/docs/en/web-quickstart)
+session provisions all of this by itself: `.claude/hooks/session-start.sh`
+installs `libudev-dev`, the pinned toolchain, `just` and `cargo-nextest`, then
+warms the build cache. It is a no-op on a normal checkout, where
+`CLAUDE_CODE_REMOTE` is unset. Disc images are not available in such a session,
+so ground-truth tests and every disc-backed tool are out of reach there.
+
 ### For working with disc images
 
 - **`chdman`** (from `mame-tools`) is the reference implementation used to
