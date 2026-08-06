@@ -111,6 +111,7 @@ Existing crates:
 | `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track ribbon, cameras. Owns no window. |
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
+| `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
 | `oag-game` | `crates/game` | Composition root; boots the front end. A thin `[[bin]]` over `[lib]` so boot logic is testable headlessly. |
 
 Later crates (`oag-weapons`, `oag-ai`, `oag-audio`,

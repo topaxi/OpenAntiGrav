@@ -8,11 +8,19 @@ specification: behaviour is studied, documented and then reimplemented with a
 modern architecture. The goal is that gameplay is indistinguishable from the
 original while the code underneath is something a contributor can read.
 
-> **Status: early.** Disc and archive tooling works, assets decode, and
-> `oag-view` displays them. There is no playable game yet. See
-> [`docs/overview/roadmap.md`](docs/overview/roadmap.md) for where this is going
-> and [`docs/psp/pulse-disc-layout.md`](docs/psp/pulse-disc-layout.md) for what
-> has actually been found so far.
+> **Status: M4, playable core.** `just play` boots the disc's own intro and
+> menus into a real single-ship time trial: a track and ship loaded off the
+> disc, physics simulated at a fixed 60 Hz, driven with a chase camera. The
+> physics model (thrust, steering, airbrakes, the air cushion, collision and
+> wall contact) is fully implemented from reverse-engineered instruction-level
+> evidence but not yet fully verified tick-for-tick against the original - see
+> [M4 in the roadmap](docs/overview/roadmap.md#m4---playable-core) for exactly
+> what's measured and what's still open. Earlier milestones (disc/archive
+> tooling, asset decoding, binary analysis, the trace-comparison harness) are
+> done or substantially done. See
+> [`docs/overview/roadmap.md`](docs/overview/roadmap.md) for the full milestone
+> breakdown and [`docs/psp/pulse-disc-layout.md`](docs/psp/pulse-disc-layout.md)
+> for what has been found on disc so far.
 
 ## Scope
 
@@ -75,13 +83,25 @@ sudo pacman -S mame-tools
   The Arch package installs the binary as `PPSSPPSDL`, not `ppsspp`.
 - **[PCSX2](https://pcsx2.net)** for the PS2 side.
 - **`binwalk`** (optional) for faster triage of unknown containers.
+- **[`uv`](https://docs.astral.sh/uv/)** to run the Python scripts that drive
+  a live PPSSPP over its websocket debugger (`just trace`, `just drive`,
+  `just autopilot`, `just scripted-emu`) - they declare their own
+  dependencies inline, so `uv run` is all that's needed.
 
 ```sh
-sudo pacman -S ghidra ppsspp pcsx2 binwalk
+sudo pacman -S ghidra ppsspp pcsx2 binwalk uv
 ```
 
 Setting up the Ghidra bridge is described in
 [`docs/reverse-engineering/toolchain.md`](docs/reverse-engineering/toolchain.md).
+
+### Optional, for the game itself
+
+- **`ffmpeg`** transcodes the disc's intro FMV the first time `just play` runs
+  (cached under `data/cache/`, gitignored). Without it the boot sequence still
+  plays, just without a picture.
+- **ImageMagick** (`magick`) is only needed for `just frame-compare`, which
+  diffs one of our renders against a PSP capture.
 
 ## Getting started
 
@@ -118,12 +138,23 @@ just wad list data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
 # Render a ship
 just view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
     --mesh 'Data\Ships\Feisar\Ship.vex' --screenshot /tmp/ship.png
+
+# Play it: the disc's own intro and menus into a real single-ship time trial.
+# `just play` alone boots the EU disc by default; `usa` picks the one just copied above.
+just play usa
+# or skip straight to the race
+just play usa --race
 ```
 
 `oag-view` opens a window; left and right browse, escape quits. Drop
 `--screenshot` from a `--mesh` or `--track` invocation and arrow keys orbit the
 model instead. Add `--screenshot out.png` to render headlessly, with no window
 at all.
+
+`oag-game` (what `just play` runs) also opens a window: WASD or arrow keys
+steer, X/Return thrusts, Q/E are the airbrakes. Escape backs out one level -
+race to menu, menu page to the one behind it - and quits only when there's
+nothing left behind. See [`docs/tools/oag-game.md`](docs/tools/oag-game.md).
 
 `just` on its own runs the full check: format, lint and test.
 
@@ -133,9 +164,17 @@ at all.
 crates/
   core/      deterministic math, fixed-timestep clock, seeded PRNG, state hashing
   disc/      CHD and raw ISO readers, ISO 9660 filesystem walker
-  formats/   WAD archives, LZSS, textures, front-end XML, PNG output
+  formats/   WAD archives, LZSS, textures, track data, front-end XML, PMF, fonts
+  assets/    runtime asset access: read a WAD by path or straight out of a disc image
   tools/     command line tools (oag-unpack, oag-wad)
+  physics/   ship dynamics and collision queries (depends on core only)
+  race/      race rules: modes, lap timing, track progress
+  gameplay/  the World struct, the InputSnapshot the simulation consumes
+  render/    the wgpu renderer: mesh pipeline, track ribbon, cameras (owns no window)
+  input/     maps real devices onto the abstract button layer
   view/      wgpu asset viewer
+  trace/     per-tick trace capture and comparison against the original
+  game/      composition root: boots the front end, then a race
 docs/        the primary deliverable, see docs/README.md
 data/        your disc images and extracted data (gitignored)
 ```
