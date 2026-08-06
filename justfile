@@ -306,6 +306,13 @@ frame-compare theirs ours out="/tmp":
 build-allegrex *ARGS:
     ./scripts/build-ghidra-allegrex.sh {{ARGS}}
 
+# Build the Emotion Engine (PS2) processor module against the installed
+# Ghidra. Stock Ghidra mis-decodes R5900 code as MIPS Release 6; see
+# docs/reverse-engineering/toolchain.md. Needs build-allegrex to have run at
+# least once - this borrows its Gradle wrapper.
+build-emotionengine *ARGS:
+    ./scripts/build-ghidra-emotionengine.sh {{ARGS}}
+
 # Resolve the PSP import stubs from the binary's own NID tables
 resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
     python3 scripts/resolve-psp-imports.py {{boot}} --modules -o data/ghidra/psp-imports.tsv
