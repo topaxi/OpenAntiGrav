@@ -108,6 +108,35 @@ one. Two habits keep this useful:
   run. Call `reanalyze` (it times out, which is normal for a 1.9 MiB binary and
   means analysis started) and poll `analysis_status` until `analyzing` goes
   false. Judge the import on the count *after* that.
+- **Analyse multiple large programs one at a time, never concurrently.**
+  Rebasing/analysing `SCES_547.48` alongside two `BOOT.BIN`s at once left
+  `analysis_status` reporting `analyzing: true` with the function count
+  frozen indefinitely (`SCES_547.48` stuck at 1, unmoving across 5+ minutes
+  of polling) - almost certainly decompiler-process contention. It converged
+  correctly (`5,234`, matching history exactly) the moment it was re-run
+  alone after a Ghidra restart. If a program you are polling shows
+  `analyzing: true` with an unchanging count for more than a couple of
+  minutes while anything else is mid-analysis, stop waiting - close the other
+  programs (or restart Ghidra; `close_program` does not reliably release a
+  program that is mid-analysis) and re-run the stuck one by itself.
+- **Both Pulse `BOOT.BIN`s reproducibly plateau well below their
+  previously-recorded function count, even run one at a time with nothing
+  else open.** `psp-pulse-usa/BOOT.BIN` settled at 7,933 functions and
+  `psp-pulse-eu/BOOT.BIN` at 7,932, both on Ghidra 12.1.2, both confirmed
+  across repeated independent imports (`reanalyze`/`run_analysis` report `0
+  new functions` on a further pass once there). The historical figures are
+  `10,683`-`10,703` for the USA binary and `10,671` for the EU one, recorded
+  in [`allegrex-vfpu.md`](../psp/allegrex-vfpu.md),
+  [source-images.md](../reverse-engineering/source-images.md) and
+  `HANDOVER.md`. This is unrelated to the concurrency bug above (it
+  reproduces perfectly serially) and unrelated to Pure - both Pure
+  `BOOT.BIN`s land within a handful of functions of their own historical
+  counts on a single default pass. Cause unresolved: something beyond a
+  default single-pass Auto Analyze (extra analyzer passes? a different
+  Ghidra/extension version at the time?) produced the historical Pulse
+  numbers. Always compare a fresh Pulse import's count against the reference
+  figure before treating it as complete or as evidence of a bad import - a
+  ~2,700-function gap here is the current known baseline, not a new failure.
 
 ### Reading the raw binary outside Ghidra
 
