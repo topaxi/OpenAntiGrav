@@ -199,7 +199,18 @@ fn menu_page(
 }
 
 /// Runs the sequence and writes one frame.
-pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -> Result<()> {
+///
+/// `audio` is stepped once per simulation tick, in the same loop the front end
+/// is stepped in. It is threaded through rather than made here because the
+/// handoff to [`race::capture`] continues into the *same* buffer: a
+/// `--dump-audio` run that reaches `Launch Game` would otherwise lose whichever
+/// leg made its own. The caller writes the file once, after both.
+pub fn run(
+    loaded: Boot,
+    video_format: Option<VideoFormat>,
+    options: &Options,
+    audio: &mut crate::audio::Audio,
+) -> Result<()> {
     let Boot {
         languages,
         strings,
@@ -277,6 +288,9 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         };
         input.begin_frame(options.held | pulse);
         let events = frontend.update(dt, &mut input);
+        // In the tick loop, next to the state machine it belongs to. See
+        // [`crate::audio`] for why nothing here is per frame.
+        audio.tick();
         crate::report(&events, options.trace);
         for note in frontend.take_notes() {
             println!("{note}");
@@ -338,6 +352,7 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                     },
                 }),
             },
+            audio,
         );
     }
 

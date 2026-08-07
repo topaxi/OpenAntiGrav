@@ -39,8 +39,8 @@ use oag_game::input;
 use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{
-    adapter, boot, capture, catalogue, display, menu, movie, perf, race, report, settings, source,
-    upscale,
+    adapter, audio, boot, capture, catalogue, display, menu, movie, perf, race, report, settings,
+    source, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -109,6 +109,24 @@ struct Cli {
     /// Render one frame to a PNG and exit, without opening a window.
     #[arg(long)]
     screenshot: Option<std::path::PathBuf>,
+
+    /// Write everything the mixer produced to a WAV instead of to a device.
+    ///
+    /// The audio counterpart of `--screenshot`, and for the same reason: this
+    /// project's runs are headless and CI has no sound card, so a file is the
+    /// only end-to-end evidence available that a sound was made at all.
+    ///
+    /// **Forces the null backend.** With a device attached `cpal`'s callback is
+    /// already draining the mixer from its own thread, and pulling the same
+    /// samples here would race it - so a run that dumps is silent on the
+    /// speakers by construction rather than by accident.
+    ///
+    /// Length is a function of the tick count alone: `--ticks 600` is ten
+    /// seconds whatever the machine's frame rate. **Requires `--screenshot`**:
+    /// the buffer grows for as long as the run does, and a capture is the only
+    /// route with an end.
+    #[arg(long, value_name = "FILE")]
+    dump_audio: Option<std::path::PathBuf>,
 
     /// With `--screenshot`, the image's size as `WIDTHxHEIGHT`.
     ///
@@ -488,10 +506,32 @@ fn main() -> Result<()> {
             cli.mode
         )
     })?;
+    // Refused rather than tolerated, and the reason is memory rather than
+    // tidiness: a dump accumulates every sample it renders, so a windowed run
+    // that a player leaves open grows the buffer for as long as they play - a
+    // quarter of a gigabyte in ten minutes, at 48 kHz stereo `f32`. A capture is
+    // bounded by `--ticks`, which is the only route that ends.
+    ensure!(
+        cli.dump_audio.is_none() || cli.screenshot.is_some(),
+        "--dump-audio needs --screenshot: the dump is as long as the run, and only \
+         a capture has an end. Add --screenshot FILE --ticks N."
+    );
+
     // Resolved once, before anything opens it: both ways in need a source, and
     // "no disc image found" is a message about the command line, not something to
     // discover eight seconds of intro later.
     let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+
+    // Opened before either way in, because both want sound and neither owns the
+    // other. The music is loaded here too rather than inside `boot::load`: a
+    // `--race` run never boots the front end and would otherwise be silent, and
+    // the archive it comes off is loose on the disc rather than in either WAD.
+    // `--dry-run` is the one case that skips it - reading 35 MiB to then print a
+    // report and exit is the opposite of what that flag is for.
+    let mut audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
+    if !cli.dry_run {
+        audio.start_music(&source);
+    }
 
     let (pose, camera) = match &cli.pose_from {
         Some(path) => {
@@ -526,7 +566,7 @@ fn main() -> Result<()> {
     // XML, every language plugin and a string table, and may shell out to `ffmpeg`
     // to transcode the intro. Going straight to a race needs none of it.
     if cli.race {
-        return run_race(&cli, race_options, &settings, anisotropy);
+        return run_race(&cli, race_options, &settings, anisotropy, audio);
     }
 
     let leg = if cli.reel {
@@ -591,7 +631,7 @@ fn main() -> Result<()> {
     let video_format = loaded.movie.as_ref().and_then(VideoFormat::of);
 
     if let Some(path) = cli.screenshot {
-        return capture::run(
+        capture::run(
             loaded,
             video_format,
             &capture::Options {
@@ -611,7 +651,12 @@ fn main() -> Result<()> {
                 settings: settings.clone(),
                 anisotropy,
             },
-        );
+            &mut audio,
+        )?;
+        // After both legs, and only here: the capture above may have handed off
+        // to a race that went on filling the same buffer, so writing inside
+        // either one would truncate the WAV to whichever leg wrote it.
+        return audio.finish();
     }
 
     // Parsed here rather than when the menus open, so a broken definition is a
@@ -669,10 +714,11 @@ fn main() -> Result<()> {
         scheme,
         settings,
         shell: Some(shell),
+        audio: Some(audio),
         state: None,
     };
     event_loop.run_app(&mut app)?;
-    Ok(())
+    app.finish_audio()
 }
 
 /// Turns a comma-separated list of abstract button names into a mask.
@@ -773,6 +819,7 @@ fn run_race(
     options: race::Options,
     settings: &settings::Settings,
     anisotropy: Anisotropy,
+    mut audio: audio::Audio,
 ) -> Result<()> {
     let loaded = race::load(&options)?;
     for line in &loaded.report {
@@ -786,7 +833,7 @@ fn run_race(
     let scheme = resolve_scheme(cli, settings);
 
     if let Some(path) = cli.screenshot.clone() {
-        return race::capture(
+        race::capture(
             loaded,
             &race::CaptureOptions {
                 path,
@@ -817,7 +864,9 @@ fn run_race(
                     },
                 }),
             },
-        );
+            &mut audio,
+        )?;
+        return audio.finish();
     }
 
     println!("\n{RACE_KEYS}{ESC_QUITS}");
@@ -840,10 +889,11 @@ fn run_race(
         // settings still apply, they just cannot be changed from here - which
         // is what makes escape quit on this route rather than back out.
         shell: None,
+        audio: Some(audio),
         state: None,
     };
     event_loop.run_app(&mut app)?;
-    Ok(())
+    app.finish_audio()
 }
 
 /// One application handler for both ways in, because there is one window.
@@ -865,6 +915,12 @@ struct App {
     settings: settings::Settings,
     /// What the menus need, absent on the `--race` path.
     shell: Option<Shell>,
+    /// The mixer and its device, waiting for the window that will step it.
+    ///
+    /// Taken by [`Session`] on the first resume, which is why it is an
+    /// `Option`: there is one of these per run, not one per window, and winit
+    /// may resume more than once.
+    audio: Option<audio::Audio>,
     state: Option<Session>,
 }
 
@@ -960,11 +1016,19 @@ impl App {
         )
         .context("building the performance overlay")?;
 
+        // Moved rather than cloned: there is one mixer per run, and a second
+        // one would either fight the first for the device or split a
+        // `--dump-audio` capture across two buffers.
+        let Some(audio) = self.audio.take() else {
+            return Ok(None);
+        };
+
         Ok(Some(Session {
             gpu,
             framebuffer,
             stage,
             controls,
+            audio,
             clock: TickClock::new(TickRate::DEFAULT),
             last: std::time::Instant::now(),
             meter: perf::Meter::new(),
@@ -982,6 +1046,30 @@ impl App {
             backdrop,
             backdrop_shape,
         }))
+    }
+
+    /// Writes the `--dump-audio` WAV once the event loop has returned.
+    ///
+    /// Here and not in a winit callback: `exiting` is not guaranteed to run on
+    /// every platform, and a capture that silently produced no file would be
+    /// indistinguishable from one that produced silence.
+    ///
+    /// Writes nothing today, because `--dump-audio` is refused without
+    /// `--screenshot` and a capture never opens a window. It is wired anyway so
+    /// that lifting that restriction is one edit rather than two, and so a
+    /// windowed run cannot become the one path that quietly drops its dump.
+    ///
+    /// # Errors
+    ///
+    /// Propagates a file that cannot be written.
+    fn finish_audio(&self) -> Result<()> {
+        match &self.state {
+            // The window opened, so `open` took the mixer and `Session` has it.
+            Some(session) => session.audio.finish(),
+            // It never did - a device that would not start, or a resume that
+            // never came. There is nothing to write and no reason to complain.
+            None => Ok(()),
+        }
     }
 }
 
@@ -1900,6 +1988,13 @@ struct Session {
     /// to what is on screen, so key state carries across the handoff and a focus
     /// loss releases everything whichever stage is running.
     controls: Controls,
+    /// The mixer, and the device behind it when this run has one.
+    ///
+    /// Beside `controls` because it is the same kind of thing: a device that
+    /// belongs to the run rather than to whatever is on screen, so a race
+    /// starting does not restart the music. Stepped from inside the fixed
+    /// timestep and never from the frame - see [`audio::Audio::tick`].
+    audio: audio::Audio,
     clock: TickClock,
     last: std::time::Instant,
     /// Recent frame times, for the performance overlay.
@@ -2181,6 +2276,15 @@ impl Session {
             // through `buttons_mut`, because it needs `consume_press` and a
             // snapshot is a value.
             let snapshot = self.controls.snapshot();
+            // The audio's whole tick, and it is inside this loop rather than
+            // beside it on purpose. Cue emission and mixer control are driven by
+            // the tick count, exactly as the exhaust and the chase camera are
+            // (see `race::Race::tick`), so a headless capture and a window
+            // produce the same sound at the same tick. There is deliberately no
+            // per-frame counterpart: with a device attached `cpal` drains the
+            // mixer from its own callback thread, and with none the offline
+            // dump below is the only reader.
+            self.audio.tick();
             match &mut self.stage {
                 Stage::Frontend(stage) => {
                     let events = stage.frontend.update(dt, self.controls.buttons_mut());
@@ -2701,6 +2805,20 @@ impl Session {
             },
             "display.gamma" => match text.parse::<display::Gamma>() {
                 Ok(gamma) => self.settings.display.gamma = gamma,
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Applied on the spot rather than by the next frame: a bus gain is
+            // read by whatever the mixer renders next, which on a device is
+            // already in flight. That is what makes the row audible while the
+            // player is standing on it, the way the two above are visible.
+            "audio.music_volume" => match text.parse::<audio::Volume>() {
+                Ok(volume) => {
+                    self.settings.audio.music_volume = volume;
+                    self.audio.apply(&self.settings.audio);
+                }
                 Err(e) => {
                     eprintln!("ignoring {setting} = {text:?}: {e}");
                     return;

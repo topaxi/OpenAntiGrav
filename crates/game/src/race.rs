@@ -3833,11 +3833,22 @@ pub struct Presented {
 /// [`crate::capture`] goes through the same renderer the front end's window does: a
 /// separate capture path would prove nothing about what a player sees.
 ///
+/// `audio` is advanced one step per simulation tick, in the same loop, so a
+/// `--dump-audio` capture is as long as the ticks it was given whatever the
+/// machine's speed. Writing the WAV is the caller's, not this function's: a
+/// capture reached from [`crate::capture::run`] has already accumulated the
+/// front end's ticks into the same buffer, and finishing here would truncate
+/// the file to the race leg.
+///
 /// # Errors
 ///
 /// Propagates adapter and device creation, pipeline building, the readback map and
 /// the file write.
-pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
+pub fn capture(
+    loaded: Loaded,
+    options: &CaptureOptions,
+    audio: &mut crate::audio::Audio,
+) -> Result<()> {
     let (width, height) = options.size;
     let Loaded {
         setup,
@@ -3863,6 +3874,12 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
         let snapshot = held.snapshot();
         race.tick(&snapshot);
+        // Inside the tick loop and not beside it, for the reason the exhaust
+        // and the chase camera are advanced from inside `Race::tick`: what a
+        // capture produces has to be a function of the tick count and nothing
+        // else, or the same command line gives a different file on a slower
+        // machine.
+        audio.tick();
         if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
             println!("{}", describe(&race.telemetry()));
         }

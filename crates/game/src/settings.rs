@@ -69,6 +69,8 @@ pub struct Settings {
     #[serde(default)]
     pub graphics: Graphics,
     #[serde(default)]
+    pub audio: Audio,
+    #[serde(default)]
     pub source: Source,
     #[serde(default)]
     pub race: Race,
@@ -188,6 +190,26 @@ impl Default for Controls {
             scheme: default_scheme(),
         }
     }
+}
+
+/// How loud each bus is.
+///
+/// One row today, and the buses are `oag_audio::Bus`'s own - so this section
+/// grows an entry per bus rather than per sound. A typed percentage rather than
+/// a bare `u32` for the reason [`crate::display::Brightness`] is one: a value
+/// out of range is a file that fails to load with a message, not a gain of 4000
+/// discovered by ear.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Audio {
+    /// How loud the music bus is, as a percentage. Defaults to 100.
+    ///
+    /// **Full by default on purpose.** At 100 the mixer's gain is exactly 1.0,
+    /// so a `--dump-audio` capture of the PS2 archive round-trips the disc's own
+    /// PCM sample-for-sample and can be compared against it byte for byte; any
+    /// other default would make the only evidence this project can gather about
+    /// its own audio approximate. See [`crate::audio::DUMP_SAMPLE_RATE`].
+    #[serde(default)]
+    pub music_volume: crate::audio::Volume,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -684,6 +706,10 @@ pub fn menu_seeds(
         (
             "graphics.boost_fov_kick",
             text(&settings.graphics.boost_fov_kick.to_string()),
+        ),
+        (
+            "audio.music_volume",
+            text(&settings.audio.music_volume.to_string()),
         ),
         ("race.mode", text(&settings.race.mode)),
         ("race.class", text(&settings.race.class)),

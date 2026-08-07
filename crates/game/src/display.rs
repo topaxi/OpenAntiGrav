@@ -474,6 +474,11 @@ impl From<Size> for String {
 /// wrong - and rather than four hand-written copies because copies are the kind
 /// of thing that drifts one edit at a time. Each type still declares its own
 /// `RANGE`, `OFFERED` and neutral value, which is all that actually differs.
+///
+/// Re-exported below for [`crate::audio::Volume`], which is the same shape and
+/// is not a display setting: a percentage row is a percentage row wherever the
+/// value ends up, and a second copy of this body in another module is exactly
+/// the drift the macro exists to prevent.
 macro_rules! percentage {
     ($type:ident, $neutral:ident, $what:literal) => {
         impl Default for $type {
@@ -1037,6 +1042,8 @@ impl Fov {
         self.0
     }
 }
+
+pub(crate) use percentage;
 
 percentage!(Scale, FULL, "render scale");
 percentage!(Brightness, NEUTRAL, "brightness");

@@ -24,6 +24,7 @@
 //! `docs/architecture/adr/0004-asset-pipeline.md`.
 
 pub mod adapter;
+pub mod audio;
 pub mod boot;
 pub mod capture;
 pub mod catalogue;

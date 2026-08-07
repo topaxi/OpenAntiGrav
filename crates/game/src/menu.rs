@@ -2101,6 +2101,16 @@ mod tests {
             "the gamma rows and `Gamma::OFFERED` must be one list"
         );
 
+        let music: Vec<crate::audio::Volume> = values("audio.music_volume")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            music,
+            crate::audio::Volume::OFFERED,
+            "the music-volume rows and `Volume::OFFERED` must be one list"
+        );
+
         let fov: Vec<Fov> = values("graphics.fov")
             .iter()
             .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
