@@ -26,6 +26,7 @@ out to be wrong.
 | [0013](0013-anti-aliasing-architecture.md) | Separate anti-aliasing by class, and gate spatial passes against the upscaler by render scale | Accepted |
 | [0014](0014-authored-section-placement.md) | Place draw calls by their authored section group, and pad with bits, not masks | Accepted; union rule refined by [ADR-0015](0015-ordered-visible-set-union.md) |
 | [0015](0015-ordered-visible-set-union.md) | Order the visible-set union, and never rejoin authored alternatives | Accepted |
+| [0016](0016-platform-native-h264-decode.md) | Platform-native H.264 decode as an accelerated path, on Linux first | Accepted |
 
 ## Format
 

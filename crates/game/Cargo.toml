@@ -41,5 +41,17 @@ dirs = "6"
 serde = { version = "1", features = ["derive"] }
 thiserror.workspace = true
 
+# Platform-native H.264 decode for the PSP `.PMF` path, behind the `vaapi`
+# feature: `just build`/`just check`/CI never touch libva, and a Linux build
+# that wants the accelerated path opts in explicitly. See
+# docs/architecture/adr/0016-platform-native-h264-decode.md. PS2 content
+# always uses the AV1 cache below, unaffected either way.
+[target.'cfg(target_os = "linux")'.dependencies]
+cros-libva = { version = "0.0.13", optional = true }
+h264-reader = { version = "0.8", optional = true }
+
+[features]
+vaapi = ["dep:cros-libva", "dep:h264-reader"]
+
 [lints]
 workspace = true
