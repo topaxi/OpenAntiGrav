@@ -27,10 +27,13 @@
 //! - [`sparks`] is the collision-spark burst: an authored effect, not a
 //!   reading of the original's (undecoded) particle asset - see that
 //!   module's doc comment.
+//! - [`loading`] is the loading screen's procedural heartbeat wave, recovered
+//!   rather than authored: there is no loading movie in either build.
 
 pub mod camera;
 pub mod collision;
 pub mod exhaust;
+pub mod loading;
 pub mod mesh;
 pub mod mesh_render;
 pub mod post;
