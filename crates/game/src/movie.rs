@@ -35,6 +35,8 @@
 //!
 //! See `docs/architecture/frontend-boot.md`.
 
+mod dpb;
+
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
