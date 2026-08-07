@@ -69,8 +69,10 @@ Decode the containers, then the assets inside them.
       container, PS-ADPCM waveforms, confidence 94/92) and
       [PS2 music](../formats/ps2-audio.md) (48 kHz stereo PCM, channel order
       and sample rate both cross-validated against the PSP's ATRAC3plus
-      masters). Per-sound boundaries within a bank and track names are still
-      open.
+      masters). The twelve non-circuit bank paths are recovered from the
+      executable and hash-confirmed against `Data.wad` on both the USA and EU
+      discs. Per-sound boundaries within a bank, and the 24 per-circuit bank
+      names, are still open.
 - [x] `oag-view`, a standalone asset viewer: textures, and models/tracks with
       an interactive orbit camera
 

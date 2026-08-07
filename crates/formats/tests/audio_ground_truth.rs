@@ -270,9 +270,13 @@ fn survey_banks(disc: &mut DiscImage, archive_path: &str, into: &mut BankSurvey)
 
         if !bank.name.is_empty() {
             into.named += 1;
-            // The field forces a NUL at byte 7, so only a name of 6 characters
-            // or fewer is certainly stored whole and can be expected to hash
-            // back. The longer ones are truncated and cannot.
+            // The field is a hand-chosen label, not the path stem: the
+            // executable gives `frontend.bnk` the label `FRNTEND` and
+            // `generaltrack.bnk` the label `gentrak`, neither of which is a
+            // prefix of its stem. So only the labels that happen to equal
+            // their stem can hash back, and on this corpus those are exactly
+            // the ones of 6 characters or fewer - a filter that holds by
+            // coincidence rather than by rule. See docs/formats/psp-audio.md.
             if bank.name.len() <= 6 {
                 into.name_candidates += 1;
                 let path = format!(r"Data\Sound\{}.bnk", bank.name);

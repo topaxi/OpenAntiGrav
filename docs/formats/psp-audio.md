@@ -74,20 +74,92 @@ as Wipeout Pulse content: `FRNTEND`, `HUD`, `SHIP`, `SHIP_ZM`, `SPEECH`,
 `moather`, `techder`, `dekonst`, `vertica`, `outpost`, `amphise`, `arcprim`,
 `platinu`, `fortcle`, `talonsj`.
 
-Those are truncated. Four banks have a name short enough to be stored whole -
-three distinct names, since `HUD` ships in both `FE.wad` and `Data.wad` - and
-for every one of them, `Data\Sound\<name>.bnk` hashes to that bank's own WAD
-entry hash: `HUD` twice, `SHIP`, `SPEECH`. That is the check that says the field is a
-name rather than a label, and it makes the field a
-[name-mining](wad.md#the-name-hash) source: recovering the full track names
-would resolve a dozen more archive entries.
+Four banks have a name short enough to be stored whole - three distinct names,
+since `HUD` ships in both `FE.wad` and `Data.wad` - and for every one of them,
+`Data\Sound\<name>.bnk` hashes to that bank's own WAD entry hash: `HUD` twice,
+`SHIP`, `SPEECH`. That is the check that says the field is a name rather than a
+label.
 
-It does not work yet for the truncated ones. An exhaustive search over
-completions up to four characters of `[a-z0-9_]` under `Data\Sound\` found
-nothing for any of them, so the track banks are not siblings of the three that
-do resolve - they are somewhere else in the tree, most likely under the
-per-track directory the [path templates](vex.md#path-templates) build at
-runtime, whose names are not in the executable.
+### The field is an abbreviation, not a truncation
+
+This page previously read the field as a *truncation* of the path stem, and
+treated it as a [name-mining](wad.md#the-name-hash) source: recover the full
+track names and a dozen more archive entries resolve. An exhaustive search over
+completions up to four characters of `[a-z0-9_]` found nothing, which was read
+as the track banks living elsewhere in the tree.
+
+**Both readings were wrong, and the executable settles it.** `psp-pulse-usa`
+`BOOT.BIN` contains exactly 14 `.bnk` path strings - the complete set, confirmed
+by a full string scan over the binary. Twelve are literal paths, and every one
+hashes to a real archive entry holding an `SBlk` bank, on **both** discs:
+
+| Path | String at | Hash | USA | EU | Bytes | Self-name |
+| --- | --- | --- | --- | --- | --: | --- |
+| `Data\Sound\frontend.bnk` | `0x08a88f2c` | `75a91641` | #856, FE #22 | #855, FE #22 | 24,416 | `FRNTEND` |
+| `Data\Sound\FRONT_END_VO.bnk` | `0x08a88f44` | `a3aada5f` | #857 | #856 | 409,568 | |
+| `Data\Sound\generaltrack.bnk` | `0x08a88f94` | `1cae70da` | #858, FE #24 | #857, FE #24 | 104,392 | `gentrak` |
+| `Data\Sound\hud.bnk` | `0x08a88f80` | `15632e8b` | #859, FE #23 | #858, FE #23 | 128,336 | `HUD` |
+| `Data\Sound\ship.bnk` | `0x08a7d0b8` | `cbd73678` | #860 | #859 | 247,348 | `SHIP` |
+| `Data\Sound\ship_zone.bnk` | `0x08a7d060` | `bf4670d6` | #861 | #860 | 561,584 | `SHIP_ZM` |
+| `Data\Sound\speech.bnk` | `0x08a7d11c` | `50796558` | #862 | #861 | 173,280 | `SPEECH` |
+| `Data\Sound\speech_elim.bnk` | `0x08a7d100` | `5f6a9e46` | #863 | #862 | 215,740 | `elim_vo` |
+| `Data\Sound\speech_results.bnk` | `0x08a88f60` | `7c778043` | #864 | #863 | 176,124 | |
+| `Data\Sound\speech_zone.bnk` | `0x08a7d09c` | `e66cdc25` | #865 | #864 | 155,656 | `zone_vo` |
+| `Data\Sound\weapons.bnk` | `0x08a7d0cc` | `01bec824` | #866 | #865 | 652,012 | |
+| `Data\Sound\ZONE_ENV.bnk` | `0x08a7d048` | `ca7270f1` | #867 | #866 | 166,544 | |
+
+The `String at` column is the `psp-pulse-usa` `BOOT.BIN` address, so the whole
+table is one Ghidra query away from being re-derived rather than rediscovered.
+The two remaining strings are the `%s` templates at `0x08a7d0e4` and
+`0x08a7d07c`.
+
+USA and EU indices are `Data.wad` entry numbers and differ by exactly one
+throughout - the EU archive has one fewer entry before this run - while every
+byte size is identical and the three `FE.wad` indices are unchanged. The hashes
+are derived from the name and so are region-independent by construction; the
+cross-disc agreement on sizes is the part that corroborates.
+
+**No Ghidra labels were created for these addresses**, so no
+[`names.tsv`](../ghidra/functions/psp-pulse-usa/names.tsv) rows are owed - the
+evidence is this table. Labelling them later would bring the ADR-0005
+obligation with it.
+
+Lining the self-names up against the paths shows why the completion search could
+never have worked. `FRNTEND` is not a prefix of `frontend` (that would be
+`fronten`); `gentrak` is not a prefix of `generaltrack` (`general`); `SHIP_ZM`
+is not a prefix of `ship_zone` (`ship_zo`); and `elim_vo` and `zone_vo` share no
+prefix at all with `speech_elim` and `speech_zone`. **The field is a short
+label chosen by hand, not the first seven bytes of anything.** The three that
+resolved did so because their label happens to equal their stem, not because
+truncation round-trips.
+
+Tested directly, that is exactly what happens: of the self-names, only `SPEECH`,
+`HUD` and `SHIP` hash to a real entry as `Data\Sound\<name>.bnk`. `FRNTEND`,
+`gentrak`, `elim_vo`, `zone_vo` and `SHIP_ZM` all miss - even though the table
+above proves those five banks *are* under `Data\Sound\`. The earlier inference
+that a failed completion meant the bank lived elsewhere in the tree does not
+hold.
+
+Confidence **95**: each path is a literal string in the executable *and* hashes
+to an archive entry whose payload is an `SBlk` bank, on both the USA and EU
+discs, which are independent confirmations of the same name.
+
+### What is still open
+
+The remaining two of the fourteen strings are `Data\Sound\speech_%s.bnk` and
+`Data\Sound\speech_zone_%s.bnk`, formatted with a language at runtime. **No
+expansion resolves on the EU disc** - twelve language names were tried
+(`english`, `french`, `spanish`, `german`, `italian`, `dutch`, `portuguese`,
+`russian`, `japanese`, `korean`, `chinese`, `usa`) and every one missed, so
+either this build ships only the unsuffixed banks or the token is not a plain
+language name.
+
+**The 24 per-circuit banks are not named by any executable string.** The full
+scan returns 14 `.bnk` paths and no `Data\Sound\%s.bnk`-style template, so the
+circuit banks are addressed some other way. The lead worth following is the
+`soundregister="N"` attribute the track `Definition.xml` carries, already parsed
+into context by `crates/game/src/catalogue.rs` with its meaning unrecorded -
+name mining from the self-name field is now known to be a dead end for them.
 
 ## The waveforms are PS-ADPCM
 
