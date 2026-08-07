@@ -1,0 +1,562 @@
+//! ATRAC3+, decoded out of process and cached.
+//!
+//! Almost every sound on the PSP disc is ATRAC3+ and nothing in this workspace
+//! can decode one. [ADR-0019](../../../docs/architecture/adr/0019-atrac3plus-out-of-process.md)
+//! settled how that is answered, and it is the answer H.264 already has in
+//! [`crate::movie`]: shell out to `ffmpeg` once, keep the result under
+//! `data/cache/`, read the cache every time after. GStreamer was measured first
+//! and cannot do it at all - not one of 1,401 installed elements advertises
+//! `atrac3plus` caps, because gst-libav's codec map has no entry for it.
+//!
+//! **A missing `ffmpeg` is never fatal.** It comes back as an error naming the
+//! tool, and the caller turns that into silence plus a line on stdout, exactly
+//! as a missing `ffmpeg` turns the intro into a black picture rather than a
+//! failed boot.
+//!
+//! # Two shapes go in, one comes out
+//!
+//! | Input | Where it comes from | What happens |
+//! | --- | --- | --- |
+//! | RIFF-wrapped `.at3` | A `Data.wad` entry | Handed to `ffmpeg` unaltered |
+//! | Bare ATRAC3+ frames | [`oag_formats::pmf::Demuxed::audio`] | Wrapped by [`riff`] first |
+//!
+//! The second shape exists because `ffmpeg`'s `mpegps` demuxer cannot see a
+//! `.PMF`'s audio track at all - probed to 50 MB on `Intro.PMF`, only the H.264
+//! video ever appears - so the frames have to come out of our own demuxer and
+//! be given a container `ffmpeg` will open.
+//!
+//! # What the cache is keyed by
+//!
+//! The **content** of the bytes handed to `ffmpeg`, not a name or an archive
+//! offset. [`crate::movie`] keys on `{name hash}-{size}` because a movie is
+//! always addressed by a WAD name; a sound may arrive wrapped, from a demux, or
+//! straight off the disc, and only the bytes themselves distinguish those. It
+//! also means changing [`riff`] invalidates every wrapped entry by itself,
+//! since the wrapper is part of what is hashed.
+
+use std::path::Path;
+
+use anyhow::{Context, Result, bail};
+use oag_core::hash::StateHasher;
+
+/// Decoded interleaved samples and what they are.
+///
+/// Shaped for [`oag_audio::Sound::new`], which takes exactly these three
+/// things: nothing here converts, resamples or mixes down.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pcm {
+    /// Signed 16-bit, interleaved, left first.
+    pub samples: Vec<i16>,
+    /// Channels per frame: 2 for the soundtrack, 1 for the voice clips.
+    pub channels: u16,
+    /// Frames per second. Every ATRAC3+ stream on the disc is 44,100.
+    pub sample_rate: u32,
+}
+
+/// The stream parameters the RIFF wrapper carries and the cache name records.
+///
+/// `block_align` is **per file** and must come from the stream. `SND0.AT3` and
+/// the soundtrack entries are 560 bytes a block; the 32 short mono clips at
+/// `Data.wad` indices 899-930 are 280. Copying one file's value onto another
+/// produces a decode that is wrong rather than one that fails.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Format {
+    /// Channels per frame.
+    pub channels: u16,
+    /// Frames per second.
+    pub sample_rate: u32,
+    /// Bytes per ATRAC3+ block.
+    pub block_align: u16,
+}
+
+/// ATRAC3+ samples per block, the `wValidBitsPerSample` field's meaning in a
+/// `WAVE_FORMAT_EXTENSIBLE` header for this codec.
+///
+/// Not a bit depth despite the field name: read off `SND0.AT3`, which stores
+/// 2048 there beside a `wBitsPerSample` of zero.
+const SAMPLES_PER_BLOCK: u16 = 2048;
+
+/// The `WAVE_FORMAT_EXTENSIBLE` subformat GUID that means ATRAC3+.
+///
+/// `E923AABF-CB58-4471-A119-FFFA01E4CE62`, in the mixed-endian byte order a
+/// `GUID` is stored in - which is why this is a byte array rather than the
+/// dashed form: the bytes are what goes in the file.
+const ATRAC3PLUS_GUID: [u8; 16] = [
+    0xbf, 0xaa, 0x23, 0xe9, 0x58, 0xcb, 0x71, 0x44, 0xa1, 0x19, 0xff, 0xfa, 0x01, 0xe4, 0xce, 0x62,
+];
+
+/// The 12 bytes of codec extra data that follow the GUID.
+///
+/// Copied verbatim from `SND0.AT3`, and the same on every `Data.wad` entry
+/// checked. What the four non-zero bytes mean is not established; `ffmpeg`'s
+/// decoder reads them, so they are reproduced rather than guessed at.
+const CODEC_EXTRA: [u8; 12] = [0x01, 0x00, 0x28, 0x45, 0, 0, 0, 0, 0, 0, 0, 0];
+
+/// Bytes in the `fmt ` chunk body this wrapper writes.
+///
+/// 52: the 16 of a `WAVEFORMATEX` core, 2 for `cbSize`, then the 34 `cbSize`
+/// declares - 2 for `wValidBitsPerSample`, 4 for `dwChannelMask`, 16 for the
+/// subformat GUID and 12 of codec extra data.
+const FMT_LEN: u32 = 52;
+
+/// Bytes [`riff`] writes before the first frame.
+///
+/// 80: the 12-byte RIFF/WAVE preamble, the 8-byte `fmt ` chunk header, its
+/// [`FMT_LEN`] body, and the 8-byte `data` chunk header.
+const HEADER_LEN: usize = 12 + 8 + FMT_LEN as usize + 8;
+
+/// Decodes a RIFF-wrapped ATRAC3+ file, through the cache.
+///
+/// This is a `Data.wad` entry exactly as it is stored - the disc's own
+/// container, handed to `ffmpeg` unaltered.
+///
+/// # Errors
+///
+/// A blob that is not a RIFF/WAVE with a readable `fmt ` chunk, an `ffmpeg`
+/// that is absent or fails, or a cache file that will not write or read back.
+pub fn decode(at3: &[u8], cache_dir: &Path) -> Result<Pcm> {
+    let format = read_format(at3)?;
+    decode_riff(at3, format, cache_dir)
+}
+
+/// Decodes bare ATRAC3+ frames, wrapping them first.
+///
+/// `format` has to be supplied because bare frames carry none of it: a `.PMF`'s
+/// PSMF header states the channel count and a frequency code, and the block
+/// size comes from the audio stream descriptor rather than from the frames.
+///
+/// Nothing calls this yet - movie sound and A/V sync are their own piece of
+/// work - but it is the half of ADR-0019 that the cache exists to serve, and
+/// the wrapper it depends on is pinned by a test below.
+///
+/// # Errors
+///
+/// As [`decode`], minus the parse: the wrapper this builds is always readable.
+pub fn decode_frames(frames: &[u8], format: Format, cache_dir: &Path) -> Result<Pcm> {
+    let wrapped = riff(frames, format);
+    decode_riff(&wrapped, format, cache_dir)
+}
+
+/// Wraps bare ATRAC3+ frames in the RIFF header `ffmpeg` opens.
+///
+/// The layout is read off `PSP_GAME/SND0.AT3`, whose own 52-byte `fmt ` chunk
+/// is the reference. Every field below is that file's, with `channels`,
+/// `sample_rate` and `block_align` taken from the caller instead:
+///
+/// ```text
+/// +0x00  "RIFF"  u32 size-8  "WAVE"
+/// +0x0c  "fmt "  u32 52
+/// +0x14  u16     wFormatTag          0xFFFE (WAVE_FORMAT_EXTENSIBLE)
+/// +0x16  u16     nChannels
+/// +0x18  u32     nSamplesPerSec
+/// +0x1c  u32     nAvgBytesPerSec
+/// +0x20  u16     nBlockAlign         per file - 560 or 280 on this disc
+/// +0x22  u16     wBitsPerSample      0
+/// +0x24  u16     cbSize              34
+/// +0x26  u16     wValidBitsPerSample 2048 (samples per block, not a depth)
+/// +0x28  u32     dwChannelMask       3
+/// +0x2c  u8[16]  SubFormat GUID
+/// +0x3c  u8[12]  codec extra data
+/// +0x48  "data"  u32 length
+/// ```
+///
+/// This is `ffmpeg`'s container rather than Wipeout's, which is why it is built
+/// here and not in `oag-formats` - the same argument [`crate::movie::ipum`]
+/// makes for the `ipum` header it writes for the PS2's IPU bitstreams.
+#[must_use]
+pub fn riff(frames: &[u8], format: Format) -> Vec<u8> {
+    // Derived rather than carried, because it is derivable: one block is
+    // `block_align` bytes and holds `SAMPLES_PER_BLOCK` samples per channel.
+    let avg_bytes_per_sec =
+        u32::from(format.block_align) * format.sample_rate / u32::from(SAMPLES_PER_BLOCK).max(1);
+
+    let mut out = Vec::with_capacity(HEADER_LEN + frames.len());
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&((HEADER_LEN - 8 + frames.len()) as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVE");
+
+    out.extend_from_slice(b"fmt ");
+    out.extend_from_slice(&FMT_LEN.to_le_bytes());
+    out.extend_from_slice(&0xfffe_u16.to_le_bytes());
+    out.extend_from_slice(&format.channels.to_le_bytes());
+    out.extend_from_slice(&format.sample_rate.to_le_bytes());
+    out.extend_from_slice(&avg_bytes_per_sec.to_le_bytes());
+    out.extend_from_slice(&format.block_align.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes());
+    out.extend_from_slice(&34u16.to_le_bytes());
+    out.extend_from_slice(&SAMPLES_PER_BLOCK.to_le_bytes());
+    out.extend_from_slice(&3u32.to_le_bytes());
+    out.extend_from_slice(&ATRAC3PLUS_GUID);
+    out.extend_from_slice(&CODEC_EXTRA);
+
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(frames.len() as u32).to_le_bytes());
+    out.extend_from_slice(frames);
+    out
+}
+
+/// Reads `channels`, `sample_rate` and `block_align` out of a RIFF `fmt `
+/// chunk.
+///
+/// Chunk-walked rather than read at a fixed offset: `Data.wad`'s entries carry
+/// `fact` and `smpl` chunks as well, in an order nothing guarantees.
+///
+/// Parsed here rather than in `oag-formats` because these three fields are all
+/// the transcoder needs and RIFF is not one of the disc's own formats - it is
+/// Microsoft's, and the only reason it appears is that Sony's encoder wrote it.
+fn read_format(blob: &[u8]) -> Result<Format> {
+    if blob.len() < 12 || !blob.starts_with(b"RIFF") || &blob[8..12] != b"WAVE" {
+        bail!("not a RIFF/WAVE file");
+    }
+
+    let mut at = 12usize;
+    while at + 8 <= blob.len() {
+        let id = &blob[at..at + 4];
+        let len = u32::from_le_bytes(blob[at + 4..at + 8].try_into().expect("four bytes")) as usize;
+        let body = blob
+            .get(at + 8..at + 8 + len)
+            .context("a RIFF chunk runs past the end of the file")?;
+
+        if id == b"fmt " {
+            // 16 is a bare `WAVEFORMATEX`; everything read below is inside it.
+            if body.len() < 16 {
+                bail!("the fmt chunk is {} bytes, too short to read", body.len());
+            }
+            return Ok(Format {
+                channels: u16::from_le_bytes(body[2..4].try_into().expect("two bytes")),
+                sample_rate: u32::from_le_bytes(body[4..8].try_into().expect("four bytes")),
+                block_align: u16::from_le_bytes(body[12..14].try_into().expect("two bytes")),
+            });
+        }
+
+        // RIFF pads every odd-length chunk to an even boundary, and the pad
+        // byte is not counted in the length.
+        at += 8 + len + (len & 1);
+    }
+    bail!("no fmt chunk");
+}
+
+/// Decodes a complete RIFF file, reading the cache when it is already there.
+fn decode_riff(riff: &[u8], format: Format, cache_dir: &Path) -> Result<Pcm> {
+    let key = content_key(riff);
+    // Geometry is in the **name**, so a cache file is self-describing and
+    // reading one back needs no sidecar and no header parse - the same reason
+    // `crate::movie` puts its codec in the filename rather than trusting the
+    // contents.
+    let out = cache_dir.join(format!(
+        "{key}-{}ch-{}hz.s16le",
+        format.channels, format.sample_rate
+    ));
+
+    if let Some(pcm) = read_cached(&out, format) {
+        return Ok(pcm);
+    }
+
+    std::fs::create_dir_all(cache_dir)
+        .with_context(|| format!("creating {}", cache_dir.display()))?;
+
+    // Written beside the cache because it is the exact input ffmpeg saw, so a
+    // decode that comes out wrong can be reproduced by hand against the same
+    // bytes. Same reasoning as `crate::movie::transcode`'s `.h264` file.
+    let source = cache_dir.join(format!("{key}.at3"));
+    std::fs::write(&source, riff).with_context(|| format!("writing {}", source.display()))?;
+
+    run_ffmpeg(&source, &out, format)?;
+
+    read_cached(&out, format)
+        .with_context(|| format!("{} decoded to nothing usable", source.display()))
+}
+
+/// Reads a cache file back, or `None` if it is missing or the wrong shape.
+///
+/// The shape check is a whole number of frames and not empty. It is cheap and
+/// it catches the case that actually happens: an `ffmpeg` killed partway
+/// through leaves a truncated file behind, and a truncated file must be
+/// re-decoded rather than played as a shorter track.
+fn read_cached(path: &Path, format: Format) -> Option<Pcm> {
+    from_s16le(&std::fs::read(path).ok()?, format)
+}
+
+/// Turns raw little-endian `s16le` into a [`Pcm`], or `None` if it is not a
+/// whole number of frames.
+///
+/// Split from [`read_cached`] so the shape rule is testable without a
+/// filesystem - the same split [`crate::movie::frame_at`] gets from its own
+/// loop.
+fn from_s16le(bytes: &[u8], format: Format) -> Option<Pcm> {
+    let per_frame = usize::from(format.channels) * 2;
+    if bytes.is_empty() || per_frame == 0 || !bytes.len().is_multiple_of(per_frame) {
+        return None;
+    }
+    let samples = bytes
+        .chunks_exact(2)
+        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    Some(Pcm {
+        samples,
+        channels: format.channels,
+        sample_rate: format.sample_rate,
+    })
+}
+
+/// FNV-1a over the bytes, as sixteen hex digits.
+///
+/// [`oag_core::hash::StateHasher`] rather than the standard library's default
+/// hasher, and the distinction is the whole point: `RandomState` is seeded per
+/// process, so a key built from it would name a different file every run and
+/// the cache would never be hit. This one is fixed for all time by
+/// construction - it is the determinism tripwire's own hasher.
+fn content_key(bytes: &[u8]) -> String {
+    let mut hasher = StateHasher::new();
+    hasher.write(bytes);
+    format!("{:016x}", hasher.finish())
+}
+
+/// Runs `ffmpeg` to decode `input` into raw interleaved `s16le` at `output`.
+///
+/// Raw rather than WAV on purpose: `oag_audio::wav` writes and does not read,
+/// so a WAV cache would mean carrying a RIFF parser just to get back to the
+/// samples that were already there.
+///
+/// `-ar` and `-ac` restate what the `fmt ` chunk declared, so the file always
+/// matches the geometry its own name records. Verified to be a no-op on
+/// `frontend1.at3`: forcing 2 channels at 44,100 Hz and letting `ffmpeg`
+/// choose produce byte-identical output.
+fn run_ffmpeg(input: &Path, output: &Path, format: Format) -> Result<()> {
+    eprintln!(
+        "decoding {} into {} (once; cached after this)",
+        input.display(),
+        output.display()
+    );
+
+    // Captured rather than inherited, unlike `crate::movie::run_ffmpeg`, and
+    // for a reason particular to this codec: the ATRAC3+ decoder hands the
+    // raw muxer one packet per block with a repeated dts, and ffmpeg logs
+    // "non monotonically increasing dts" at **error** level for every one of
+    // them - 638 lines for a 30-second track, none of which mean anything.
+    // `-loglevel error` cannot filter them out because that is the level they
+    // are at, so they are held and printed only if the run actually fails.
+    let result = std::process::Command::new("ffmpeg")
+        .arg("-hide_banner")
+        .args(["-loglevel", "error"])
+        .arg("-y")
+        .arg("-i")
+        .arg(input)
+        .args(["-vn"])
+        .args(["-acodec", "pcm_s16le"])
+        .args(["-ar", &format.sample_rate.to_string()])
+        .args(["-ac", &format.channels.to_string()])
+        .args(["-f", "s16le"])
+        .arg(output)
+        .output();
+
+    match result {
+        Ok(done) if done.status.success() => Ok(()),
+        Ok(done) => bail!(
+            "ffmpeg exited with {}: {}. If it reports an unknown decoder, this \
+             build of ffmpeg lacks atrac3plus",
+            done.status,
+            String::from_utf8_lossy(&done.stderr).trim()
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(
+            "ffmpeg is not on PATH. Install it to hear the PSP soundtrack; \
+             without it the game still runs, in silence"
+        ),
+        Err(e) => Err(e).context("running ffmpeg"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The layout in [`riff`]'s own doc comment, asserted field by field
+    /// against the bytes `SND0.AT3` stores. This is the evidence for the
+    /// wrapper: get one field wrong and `ffmpeg` decodes noise rather than
+    /// refusing, so it is pinned rather than left to the first movie that
+    /// tries it.
+    #[test]
+    fn the_wrapper_is_the_header_snd0_at3_carries() {
+        let format = Format {
+            channels: 2,
+            sample_rate: 44_100,
+            block_align: 560,
+        };
+        let wrapped = riff(&[0xab; 1120], format);
+
+        assert_eq!(&wrapped[0..4], b"RIFF");
+        assert_eq!(
+            u32::from_le_bytes(wrapped[4..8].try_into().unwrap()),
+            (HEADER_LEN - 8 + 1120) as u32
+        );
+        assert_eq!(&wrapped[8..12], b"WAVE");
+        assert_eq!(&wrapped[12..16], b"fmt ");
+        assert_eq!(u32::from_le_bytes(wrapped[16..20].try_into().unwrap()), 52);
+        assert_eq!(
+            u16::from_le_bytes(wrapped[20..22].try_into().unwrap()),
+            0xfffe,
+            "wFormatTag is WAVE_FORMAT_EXTENSIBLE"
+        );
+        assert_eq!(u16::from_le_bytes(wrapped[22..24].try_into().unwrap()), 2);
+        assert_eq!(
+            u32::from_le_bytes(wrapped[24..28].try_into().unwrap()),
+            44_100
+        );
+        assert_eq!(
+            u32::from_le_bytes(wrapped[28..32].try_into().unwrap()),
+            12_058,
+            "avg bytes/sec is 560 bytes per 2048 samples at 44.1 kHz, the value \
+             SND0.AT3 stores"
+        );
+        assert_eq!(
+            u16::from_le_bytes(wrapped[32..34].try_into().unwrap()),
+            560,
+            "blockAlign comes from the stream, never a constant"
+        );
+        assert_eq!(
+            u16::from_le_bytes(wrapped[34..36].try_into().unwrap()),
+            0,
+            "wBitsPerSample is zero for this codec"
+        );
+        assert_eq!(u16::from_le_bytes(wrapped[36..38].try_into().unwrap()), 34);
+        assert_eq!(
+            u16::from_le_bytes(wrapped[38..40].try_into().unwrap()),
+            2048,
+            "wValidBitsPerSample is samples per block, not a depth"
+        );
+        assert_eq!(u32::from_le_bytes(wrapped[40..44].try_into().unwrap()), 3);
+        assert_eq!(&wrapped[44..60], &ATRAC3PLUS_GUID);
+        assert_eq!(&wrapped[60..72], &CODEC_EXTRA);
+        assert_eq!(&wrapped[72..76], b"data");
+        assert_eq!(
+            u32::from_le_bytes(wrapped[76..80].try_into().unwrap()),
+            1120
+        );
+        assert_eq!(wrapped.len(), HEADER_LEN + 1120);
+        assert_eq!(HEADER_LEN, 0x50, "the frames start at 0x50");
+    }
+
+    /// A mono clip at the other block size the disc uses. `blockAlign` being
+    /// per file is the one thing about this header that is easy to get wrong
+    /// and impossible to notice by listening to the file it was copied from.
+    #[test]
+    fn a_mono_clip_carries_its_own_block_size() {
+        let wrapped = riff(
+            &[0; 280],
+            Format {
+                channels: 1,
+                sample_rate: 44_100,
+                block_align: 280,
+            },
+        );
+        assert_eq!(u16::from_le_bytes(wrapped[22..24].try_into().unwrap()), 1);
+        assert_eq!(u16::from_le_bytes(wrapped[32..34].try_into().unwrap()), 280);
+        assert_eq!(
+            u32::from_le_bytes(wrapped[28..32].try_into().unwrap()),
+            6_029
+        );
+    }
+
+    /// What [`riff`] writes is what [`read_format`] reads. The two are each
+    /// other's inverse and nothing else checks that they agree.
+    #[test]
+    fn the_wrapper_round_trips_through_the_reader() {
+        for format in [
+            Format {
+                channels: 2,
+                sample_rate: 44_100,
+                block_align: 560,
+            },
+            Format {
+                channels: 1,
+                sample_rate: 44_100,
+                block_align: 280,
+            },
+        ] {
+            let wrapped = riff(&[0; 560], format);
+            assert_eq!(read_format(&wrapped).unwrap(), format);
+        }
+    }
+
+    /// The `fmt ` chunk is found by walking, so it must still be found with
+    /// something in front of it - which is not hypothetical: `Data.wad`'s
+    /// entries carry `fact` and `smpl` chunks alongside it.
+    #[test]
+    fn the_format_is_found_past_an_intervening_chunk() {
+        let format = Format {
+            channels: 2,
+            sample_rate: 44_100,
+            block_align: 560,
+        };
+        let wrapped = riff(&[0; 560], format);
+
+        let mut shuffled = Vec::new();
+        shuffled.extend_from_slice(&wrapped[0..12]);
+        // An odd-length chunk, so the pad-byte rule is exercised too.
+        shuffled.extend_from_slice(b"fact");
+        shuffled.extend_from_slice(&5u32.to_le_bytes());
+        shuffled.extend_from_slice(&[0; 6]);
+        shuffled.extend_from_slice(&wrapped[12..]);
+
+        assert_eq!(read_format(&shuffled).unwrap(), format);
+    }
+
+    #[test]
+    fn a_blob_that_is_not_riff_is_refused() {
+        assert!(read_format(b"PSMF0015").is_err());
+        assert!(read_format(&[]).is_err());
+        // RIFF/WAVE with nothing in it at all.
+        let mut empty = Vec::from(*b"RIFF");
+        empty.extend_from_slice(&4u32.to_le_bytes());
+        empty.extend_from_slice(b"WAVE");
+        assert!(read_format(&empty).is_err());
+    }
+
+    /// The key has to be the same number in every process, or the cache is
+    /// written once per run and read never. Asserted against a literal rather
+    /// than against a second call: two calls in one process agree even under a
+    /// per-process seeded hasher, which is exactly the bug this guards.
+    #[test]
+    fn the_content_key_is_fixed_for_all_time() {
+        assert_eq!(content_key(b""), "cbf29ce484222325");
+        assert_eq!(content_key(b"RIFF"), "f3449c2c980f8250");
+        assert_ne!(content_key(b"RIFF"), content_key(b"RIFG"));
+    }
+
+    /// A truncated cache file is re-decoded rather than played short - the
+    /// shape an interrupted `ffmpeg` leaves behind.
+    #[test]
+    fn a_cache_file_that_is_not_whole_frames_is_rejected() {
+        let stereo = Format {
+            channels: 2,
+            sample_rate: 44_100,
+            block_align: 560,
+        };
+        assert!(from_s16le(&[1, 2, 3], stereo).is_none(), "half a frame");
+        assert!(from_s16le(&[], stereo).is_none(), "nothing at all");
+
+        let whole = from_s16le(&[0, 1, 2, 3], stereo).expect("one stereo frame");
+        assert_eq!(whole.samples, vec![0x0100_i16, 0x0302]);
+        assert_eq!(whole.sample_rate, 44_100);
+
+        // A byte count that is whole frames for one channel and not for two,
+        // which is the case the channel count has to be consulted for.
+        let mono = Format {
+            channels: 1,
+            ..stereo
+        };
+        assert!(from_s16le(&[0, 1], mono).is_some());
+        assert!(from_s16le(&[0, 1], stereo).is_none());
+    }
+
+    /// The cache file a run never wrote is a miss, not a panic.
+    #[test]
+    fn an_absent_cache_file_is_a_miss() {
+        let stereo = Format {
+            channels: 2,
+            sample_rate: 44_100,
+            block_align: 560,
+        };
+        assert!(read_cached(Path::new("no/such/cache.s16le"), stereo).is_none());
+    }
+}

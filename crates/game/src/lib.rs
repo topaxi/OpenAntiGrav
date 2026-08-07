@@ -19,11 +19,13 @@
 //! a ribbon and a menu have nothing in common but a surface. `--race` is the same
 //! race entered without booting the front end first.
 //!
-//! Nothing is written to the disc image, and the only thing written anywhere is
-//! the movie cache under `data/cache/`; see
-//! `docs/architecture/adr/0004-asset-pipeline.md`.
+//! Nothing is written to the disc image, and the only things written anywhere
+//! are the movie and audio caches under `data/cache/`; see
+//! `docs/architecture/adr/0004-asset-pipeline.md` and
+//! `docs/architecture/adr/0019-atrac3plus-out-of-process.md`.
 
 pub mod adapter;
+pub mod at3;
 pub mod audio;
 pub mod boot;
 pub mod capture;

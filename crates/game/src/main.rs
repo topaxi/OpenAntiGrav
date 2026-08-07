@@ -524,13 +524,13 @@ fn main() -> Result<()> {
 
     // Opened before either way in, because both want sound and neither owns the
     // other. The music is loaded here too rather than inside `boot::load`: a
-    // `--race` run never boots the front end and would otherwise be silent, and
-    // the archive it comes off is loose on the disc rather than in either WAD.
-    // `--dry-run` is the one case that skips it - reading 35 MiB to then print a
-    // report and exit is the opposite of what that flag is for.
+    // `--race` run never boots the front end and would otherwise be silent.
+    // `--dry-run` is the one case that skips it - reading 35 MiB, or shelling
+    // out to `ffmpeg`, to then print a report and exit is the opposite of what
+    // that flag is for.
     let mut audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
     if !cli.dry_run {
-        audio.start_music(&source);
+        audio.start_music(&source, &boot::default_audio_cache_dir());
     }
 
     let (pose, camera) = match &cli.pose_from {

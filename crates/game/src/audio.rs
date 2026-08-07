@@ -96,6 +96,19 @@ const PS2_MUSIC_PATH: &str = "54748/PS2MUSIC.WAD";
 /// a mapping that has not been established.
 const MUSIC_TRACK: usize = 0;
 
+/// The PSP front end's music, in `Data.wad`.
+///
+/// **Named, not guessed.** The executable builds this path at run time from the
+/// template at `0x08a88e94`, `Data\Music\FEMusic\frontend%d.at3` - see
+/// `docs/formats/vex.md` - and hashing the expansion finds an entry for every
+/// `%d` from 1 to 8 and none for 0, so the numbering starts at one. All eight
+/// are stereo ATRAC3+ at 44,100 Hz and about 28 seconds long.
+///
+/// Which of the eight belongs to which menu is **not** established, so the
+/// first is played, for the same reason [`MUSIC_TRACK`] is zero: it proves the
+/// path end to end without claiming a mapping nobody has recovered.
+const PSP_MUSIC_NAME: &str = r"Data\Music\FEMusic\frontend1.at3";
+
 /// The mixer, the device behind it, and what the composition root plays.
 ///
 /// One of these exists per run, made in `main` before either way in - the boot
@@ -194,30 +207,47 @@ impl Audio {
 
     /// Loads one music track off `source` and starts it looping.
     ///
+    /// The two releases keep their music in unrelated places and unrelated
+    /// formats, so both are tried in turn: the PS2's `PS2MUSIC.WAD` first,
+    /// because it is loose on the disc and needs nothing but a ranged read, and
+    /// then the PSP's `Data.wad`, whose ATRAC3+ has to go out to `ffmpeg` and
+    /// through the cache in [`crate::at3`]. A source answers exactly one of
+    /// them, so the order is only about doing the cheap check first.
+    ///
+    /// `cache_dir` is where a decoded PSP track lands - see
+    /// [`crate::boot::default_audio_cache_dir`]. It is unused by the PS2 path,
+    /// which needs no decoder.
+    ///
     /// **Never fatal.** A source with no decodable music says so on stdout and
     /// plays nothing, which is the same degradation the video path takes when
-    /// `ffmpeg` is missing: name what is absent and carry on. Today that is
-    /// every PSP source - its soundtrack is ATRAC3plus and this project has no
-    /// decoder for it - and the PS2 release is the only one with music that
-    /// plays.
-    pub fn start_music(&mut self, source: &str) {
+    /// `ffmpeg` is missing: name what is absent and carry on. A machine with no
+    /// `ffmpeg` on `PATH` is that case for a PSP disc, and the message names
+    /// the tool.
+    pub fn start_music(&mut self, source: &str, cache_dir: &Path) {
         if self.music.is_some() {
             return;
         }
-        match load_ps2_track(source, MUSIC_TRACK) {
-            Ok(Some(sound)) => {
+        let loaded = load_ps2_track(source, MUSIC_TRACK)
+            .map(|found| {
+                found.map(|sound| (sound, format!("{PS2_MUSIC_PATH} track {MUSIC_TRACK}")))
+            })
+            .and_then(|found| match found {
+                Some(found) => Ok(Some(found)),
+                None => load_psp_track(source, cache_dir)
+                    .map(|found| found.map(|sound| (sound, PSP_MUSIC_NAME.to_string()))),
+            });
+
+        match loaded {
+            Ok(Some((sound, what))) => {
                 let seconds = sound.seconds();
                 self.music = self
                     .output
                     .with_mixer(|mixer| mixer.play(Play::looping(Arc::new(sound), Bus::Music)));
-                println!(
-                    "audio: music track {MUSIC_TRACK} from {PS2_MUSIC_PATH}, {seconds:.1} s, \
-                     looping"
-                );
+                println!("audio: music {what}, {seconds:.1} s, looping");
             }
             Ok(None) => println!(
-                "audio: no {PS2_MUSIC_PATH} on this source, so no music. A PSP disc keeps its \
-                 soundtrack as ATRAC3plus, which needs a decoder this project does not have yet"
+                "audio: this source carries neither {PS2_MUSIC_PATH} nor {PSP_MUSIC_NAME}, so no \
+                 music"
             ),
             Err(error) => println!("audio: no music ({error:#})"),
         }
@@ -311,6 +341,42 @@ fn load_ps2_track(source: &str, index: usize) -> Result<Option<Sound>> {
         .collect();
     let sound = Sound::new(samples, ps2_music::CHANNELS, ps2_music::SAMPLE_RATE)
         .with_context(|| format!("track {index} of {PS2_MUSIC_PATH}"))?;
+    Ok(Some(sound))
+}
+
+/// Reads the PSP front end's music out of `Data.wad` and decodes it.
+///
+/// `Ok(None)` when the source holds no such entry, which is every PS2 source
+/// and any partially extracted directory - an ordinary outcome, not an error,
+/// the same way [`load_ps2_track`] treats a missing archive.
+///
+/// The whole entry is read rather than ranged, unlike the PS2 path: 349 KiB of
+/// ATRAC3+ is a fifth of a second's work and the whole thing has to go to
+/// `ffmpeg` anyway. It is the *decoded* form that is large - 5 MiB of PCM for
+/// 30 seconds - and that is what the cache exists to avoid paying twice.
+///
+/// # Errors
+///
+/// A source that will not open at all, an entry that is not a readable RIFF,
+/// or a decode that failed - including `ffmpeg` being absent, which the caller
+/// reports rather than treating as fatal.
+fn load_psp_track(source: &str, cache_dir: &Path) -> Result<Option<Sound>> {
+    // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
+    // path, so a directory somebody extracted with `oag-unpack` answers the
+    // same as a disc image does.
+    let Ok(mut archives) = oag_assets::pulse::Archives::open(source) else {
+        return Ok(None);
+    };
+    if archives.locate(PSP_MUSIC_NAME).is_none() {
+        return Ok(None);
+    }
+
+    let at3 = archives
+        .read_name(PSP_MUSIC_NAME)
+        .with_context(|| format!("reading {PSP_MUSIC_NAME}"))?;
+    let pcm = crate::at3::decode(&at3, cache_dir)
+        .with_context(|| format!("decoding {PSP_MUSIC_NAME}"))?;
+    let sound = Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).context(PSP_MUSIC_NAME)?;
     Ok(Some(sound))
 }
 
