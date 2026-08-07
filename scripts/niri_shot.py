@@ -18,9 +18,17 @@ not end the capture or the race that was producing it.
 """
 
 import json
+import os
 import subprocess
 import sys
 import time
+
+# When set (e.g. ":97"), the emulator runs under Xvfb on that X display and
+# shots are taken with ImageMagick's `import -window root` instead of the niri
+# clipboard dance below. That path has neither window ids nor the stale-paste
+# trap: the grab is synchronous and lands in the file directly. See
+# docs/reverse-engineering/ppsspp-debugger.md, "Running without a real display".
+SHOT_DISPLAY = os.environ.get("OAG_SHOT_DISPLAY")
 
 
 def find_window(app_id="PPSSPPSDL"):
@@ -29,8 +37,11 @@ def find_window(app_id="PPSSPPSDL"):
     Window ids are assigned per compositor session, so a hardcoded id goes
     stale on every relaunch; the app id is the stable name. `None` also covers
     a machine without niri at all, so callers can turn it into their own
-    error message.
+    error message. Under `OAG_SHOT_DISPLAY` there are no window ids at all;
+    `0` stands in so callers' "found a window" checks pass.
     """
+    if SHOT_DISPLAY:
+        return 0
     try:
         out = subprocess.run(
             ["niri", "msg", "--json", "windows"],
@@ -73,6 +84,17 @@ def screenshot(window, directory, name):
         return None
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / ("%s.png" % name)
+    if SHOT_DISPLAY:
+        try:
+            subprocess.run(
+                ["import", "-display", SHOT_DISPLAY, "-window", "root", str(path)],
+                check=True, capture_output=True, timeout=15,
+            )
+            print("shot %s" % path, file=sys.stderr, flush=True)
+            return path
+        except Exception as error:  # noqa: BLE001 - a missing screenshot must not end a race
+            print("screenshot %s: %s" % (name, error), file=sys.stderr)
+            return None
     try:
         before = _clipboard_png()
         # One action, then poll the clipboard until its content changes: the
