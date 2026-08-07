@@ -1,4 +1,4 @@
-//! The boot sequence: the intro movie, then the language picker.
+//! The boot sequence: the intro movie, the language picker, then PRESS START.
 //!
 //! This is the part worth testing, so it holds no GPU handles, opens no files
 //! and reads no clock. It takes a delta and an input snapshot and emits a draw
@@ -12,7 +12,7 @@
 //! [`Leg::LogoFmv`] is the one that is, and it is the default. `LogoFMV` is a
 //! screen in the disc's front-end XML: a black `Image`, a `Movie` widget with
 //! `src="Data\Movies\Intro"`, `autostart`, `repeat="false"` and `autoredirect`,
-//! an `AutoRedirect` to its own `Show Logo` child, and five more redirects -
+//! an `AutoRedirect` to `Show Logo`, and five more redirects -
 //! start, circle, square, triangle and cross - all going to
 //! `LogoFMVRedirectScreen`. So the movie plays straight through and any of five
 //! buttons skips it. **There are no frame holds on this leg**, because the
@@ -44,10 +44,24 @@
 //! order is recorded in [`Frontend::language_auto_redirect`] and reported at
 //! startup so the difference is visible rather than buried.
 //!
-//! `LogoFMV`'s own exits also differ. On the disc the movie finishing fires
-//! `AutoRedirect` to `LogoFMV->Show Logo` - the Pulse logo and PRESS START - and
-//! a button fires `LogoFMVRedirectScreen`, which goes to the same place. Here
-//! both go to the picker, because the picker is what this build has next.
+//! `LogoFMV`'s own exits also differ, though less than they used to. On the disc
+//! the movie finishing fires `AutoRedirect` to `Show Logo` - the Pulse logo and
+//! PRESS START - and any of start, circle, square, triangle or cross fires
+//! [`states::LOGO_FMV_REDIRECT`], which goes to the same place. Both hops are
+//! modelled here and both still land on the picker rather than on
+//! [`states::SHOW_LOGO`], because the picker is what this build has next; only
+//! start and cross are read, because those are the buttons the abstract layer
+//! carries.
+//!
+//! [`states::SHOW_LOGO`] itself **is** on the boot path now, one state later than
+//! the disc puts it: `LogoFMV` -> picker -> `Show Logo` -> `Launch Game`. That
+//! keeps the disc's own relative order of the three screens this build has -
+//! `Show Logo` after both the movie and the picker, and immediately before the
+//! menus - which is as close as the picker/movie swap above allows. What the
+//! disc has between `Show Logo` and its main menu is `RemoveMemoryStickWarning`,
+//! `NameSetup2FromBoot`, `TagSetup2FromBoot` and `CreateFromBoot`, four screens
+//! that exist to serve Memory Stick mechanics this build deliberately does not
+//! have; they are skipped rather than unimplemented. See `HANDOVER.md`.
 //!
 //! And [`states::LAUNCH_GAME`] goes straight into a race. The original has a main
 //! menu in between - the root XML's `LoadXML` list pulls in
@@ -82,6 +96,28 @@ pub mod states {
     /// The one-shot redirect the reel state fires when it finishes or is
     /// skipped.
     pub const DEV_PUB_REDIRECT: &str = "DevPubRedirect";
+    /// The one-shot redirect `LogoFMV`'s five skip buttons fire.
+    ///
+    /// A real screen in the front-end XML, and it holds nothing but a single
+    /// `Redirect` with `forward="none"` - so its whole job is to leave, the
+    /// same shape as [`DEV_PUB_REDIRECT`]. On the disc it goes to
+    /// [`SHOW_LOGO`], which is where `LogoFMV`'s own `AutoRedirect` goes too;
+    /// here it goes to [`LANGUAGE_SELECTION`], because the picker is what this
+    /// build has next. See the module docs.
+    pub const LOGO_FMV_REDIRECT: &str = "LogoFMVRedirectScreen";
+    /// The Pulse logo and PRESS START.
+    ///
+    /// **Spelled bare rather than as a path, and that is evidence rather than
+    /// convenience.** In the XML this screen is nested three deep, at
+    /// `Top FE Screen->FE Screen->Show Logo`, but the running machine's own
+    /// current-state buffer reads `"Show Logo"`: at `0x08d0a820+0x18c` it was
+    /// caught holding `"Show Logo\0election\0"`, the shorter name overwriting
+    /// `"Language Selection"` in place. Every `goto` that reaches it spells it
+    /// bare as well. Confidence **95**, runtime-observed - see
+    /// `docs/ghidra/functions/psp-pulse-usa/main-loop.md`. What the buffer does
+    /// with a name that genuinely needs its parents is not established, so
+    /// nothing here concludes that the original's states are flat.
+    pub const SHOW_LOGO: &str = "Show Logo";
     /// The language picker.
     pub const LANGUAGE_SELECTION: &str = "Language Selection";
     /// Where picking a language goes, and where a race starts.
@@ -140,6 +176,23 @@ impl Align {
     }
 }
 
+/// Which of the front end's two movies a [`Draw::Video`] wants a frame of.
+///
+/// The sequence plays both, one after the other, and they are **different files
+/// with their own plane geometry** - so a caller that reads a frame out of the
+/// wrong one gets a picture rather than an error. That is precisely the failure
+/// [`crate::capture`] already carries a warning about for `--menu-page`, so the
+/// draw says which movie it means instead of leaving it to be inferred from the
+/// current state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Video {
+    /// `Data\Movies\Intro.PMF`, played once through by `LogoFMV`.
+    Intro,
+    /// `Data\Movies\Backdrop.PMF`, looped by `FE Screen` under
+    /// [`states::SHOW_LOGO`].
+    Backdrop,
+}
+
 /// One thing to draw, in the PSP's 480x272 screen space.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Draw {
@@ -150,12 +203,14 @@ pub enum Draw {
         /// Colour.
         color: [f32; 4],
     },
-    /// The movie's current frame, stretched to `rect`.
+    /// A movie's current frame, stretched to `rect`.
     Video {
         /// Rectangle.
         rect: [f32; 4],
         /// Which frame to show.
         frame: usize,
+        /// Which movie the frame belongs to.
+        source: Video,
     },
     /// One of the front end's own images, from the sprite sheet.
     Sprite {
@@ -263,6 +318,11 @@ pub struct Frontend {
     video_aspect: (u32, u32),
     /// Whether a picture is available at all.
     has_picture: bool,
+    /// The looping backdrop `FE Screen` plays under `Show Logo`, and where it
+    /// goes on screen. `None` on a source that has no backdrop, under
+    /// `--no-video`, and when its plane geometry does not match the intro's -
+    /// see [`Frontend::set_backdrop`], which is the only thing that sets it.
+    backdrop: Option<(crate::movie::Player, [f32; 4])>,
     /// Whether to draw the frame counter over the intro.
     overlay: bool,
     hold: Hold,
@@ -324,6 +384,8 @@ impl Frontend {
             states::INTRO,
             states::INTRO_MOVIE,
             states::DEV_PUB_REDIRECT,
+            states::LOGO_FMV_REDIRECT,
+            states::SHOW_LOGO,
             states::LANGUAGE_SELECTION,
             states::LAUNCH_GAME,
         ]);
@@ -354,6 +416,7 @@ impl Frontend {
             player: crate::movie::Player::new(frames, false, movie_frame_rate),
             video_aspect,
             has_picture,
+            backdrop: None,
             // Without a picture the movie is a black screen for as long as it
             // runs - forty seconds for the disc's own intro - so the counter is
             // the only sign it is running. With one it is clutter, and the
@@ -373,6 +436,43 @@ impl Frontend {
     /// Draws or hides the intro's frame counter.
     pub fn set_overlay(&mut self, on: bool) {
         self.overlay = on;
+    }
+
+    /// Gives the sequence the looping backdrop `Show Logo` sits on.
+    ///
+    /// **`Show Logo` is a child of `FE Screen`, and `FE Screen` is what owns
+    /// `Data\Movies\Backdrop`** - so on hardware the Pulse logo and PRESS START
+    /// are drawn over the moving menu backdrop, not over black. That nesting is
+    /// read off `Skin.xml` (confidence 98), the boot capture confirms
+    /// `Backdrop.PMF` opening during boot rather than when the menus open, and a
+    /// player who has run the original confirms the picture. Before all three
+    /// agreed this was left as a documented gap; it is not a gap now.
+    ///
+    /// Optional because it is optional on the data: a source with no backdrop,
+    /// `--no-video` and a missing `ffmpeg` all end with this never being called,
+    /// and then `Show Logo` draws on black exactly as it did.
+    ///
+    /// `repeat` is `true`, which is the whole difference between this movie and
+    /// the intro, and it is the widget's own attribute rather than a choice
+    /// here. The playhead runs from the moment the sequence starts rather than
+    /// from the moment `Show Logo` is entered: the movie is `autostart` on a
+    /// screen the boot reaches long before this build draws it, and the capture
+    /// showing it open ~15 s in - while the state is still `LogoFMV` - is what
+    /// says it is already running by then rather than starting fresh.
+    pub fn set_backdrop(&mut self, frames: usize, frame_rate: (u64, u64), aspect: (u32, u32)) {
+        if frames == 0 {
+            return;
+        }
+        self.backdrop = Some((
+            crate::movie::Player::new(frames, true, frame_rate),
+            pillarbox(SCREEN, aspect),
+        ));
+    }
+
+    /// The backdrop's playhead, for tests.
+    #[must_use]
+    pub fn backdrop(&self) -> Option<&crate::movie::Player> {
+        self.backdrop.as_ref().map(|(player, _)| player)
     }
 
     /// The state machine, for tests and tracing.
@@ -440,16 +540,29 @@ impl Frontend {
     /// Returns the transitions that happened, in order, so a caller can log them
     /// or a test can assert on them.
     pub fn update(&mut self, dt: f64, input: &mut Input) -> Vec<Event> {
+        // Advanced whatever state the sequence is in, and deliberately: the
+        // widget is `autostart` on a screen whose movie the boot opens well
+        // before this build draws it, so by the time `Show Logo` is reached the
+        // loop is already somewhere in the middle of itself rather than at frame
+        // zero. It repeats, so there is no end to run off.
+        if let Some((player, _)) = &mut self.backdrop {
+            player.update(dt);
+        }
+
         if self.machine.is(states::LOGO_FMV) {
             self.update_logo_fmv(dt, input);
         } else if self.machine.is(states::INTRO_MOVIE) {
             self.update_intro(dt, input);
-        } else if self.machine.is(states::DEV_PUB_REDIRECT) {
-            // A redirect state's whole job is to leave. The front-end XML does
-            // the same thing with `LogoFMVRedirectScreen`.
+        } else if self.machine.is(states::DEV_PUB_REDIRECT)
+            || self.machine.is(states::LOGO_FMV_REDIRECT)
+        {
+            // A redirect state's whole job is to leave. Both of these are real
+            // screens with nothing in them but one `forward="none"` redirect.
             self.machine.fire(states::LANGUAGE_SELECTION);
         } else if self.machine.is(states::LANGUAGE_SELECTION) {
             self.update_language_selection(input);
+        } else if self.machine.is(states::SHOW_LOGO) {
+            self.update_show_logo(input);
         }
 
         let events = self.machine.apply();
@@ -477,9 +590,9 @@ impl Frontend {
                 input.consume_press(button);
                 self.notes.push(format!(
                     "the movie was skipped, firing {}",
-                    states::LANGUAGE_SELECTION
+                    states::LOGO_FMV_REDIRECT
                 ));
-                self.machine.fire(states::LANGUAGE_SELECTION);
+                self.machine.fire(states::LOGO_FMV_REDIRECT);
                 return;
             }
         }
@@ -586,7 +699,7 @@ impl Frontend {
         }
     }
 
-    /// Takes the highlighted language and leaves for `Launch Game`.
+    /// Takes the highlighted language and leaves for [`states::SHOW_LOGO`].
     fn confirm_language(&mut self) {
         let language = self.languages[self.selected].clone();
         let disc_goto = self.language_auto_redirect().map(str::to_string);
@@ -595,15 +708,47 @@ impl Frontend {
             "language {} ({}) selected, firing {}",
             language.name,
             language.native_name,
-            states::LAUNCH_GAME
+            states::SHOW_LOGO
         ));
         if let Some(goto) = disc_goto {
             self.notes.push(format!(
                 "note: the disc's own LanguageAutoRedirect goes to {goto}, not {}",
-                states::LAUNCH_GAME
+                states::SHOW_LOGO
             ));
         }
-        self.machine.fire(states::LAUNCH_GAME);
+        self.machine.fire(states::SHOW_LOGO);
+    }
+
+    /// `Show Logo`: the Pulse logo, PRESS START, and nothing that moves.
+    ///
+    /// **START and only START, and no timeout at all.** The screen's own XML is
+    /// the whole of the evidence and it is unambiguous: `Show Logo` carries
+    /// exactly two `Redirect` widgets, one `forward="start"` and one with no
+    /// `forward` attribute, both `goto="RemoveMemoryStickWarning"`. There is no
+    /// frame counter, no `delay` on either redirect and no timer anywhere on the
+    /// screen, so nothing here invents a duration. Note this is a **narrower**
+    /// button set than [`states::LOGO_FMV`]'s, which lists all five of start,
+    /// circle, square, triangle and cross - the screen that says "Press START
+    /// button" means it. Confidence **95**: read straight off
+    /// `Data\Plugins\PI001\GUI\Skin.xml` on `pulse-psp-usa.chd`, and the EU
+    /// disc's copy has the same two redirects.
+    ///
+    /// The unnamed redirect is the one thing left open. It has no button and no
+    /// name, which is the shape `Language Selection` gives to
+    /// `LanguageAutoRedirect` - a redirect the code fires rather than the pad -
+    /// so something in the original can advance this screen without a press.
+    /// **What that something is has not been found**, and a guess would be a
+    /// hidden timeout, so it is left unfired here rather than modelled.
+    fn update_show_logo(&mut self, input: &mut Input) {
+        if input.is_pressed(button::START) {
+            input.consume_press(button::START);
+            self.notes.push(format!(
+                "START pressed on {}, firing {}",
+                states::SHOW_LOGO,
+                states::LAUNCH_GAME
+            ));
+            self.machine.fire(states::LAUNCH_GAME);
+        }
     }
 
     /// Chooses `name` without showing the picker, if this source offers it.
@@ -644,6 +789,7 @@ impl Frontend {
                 out.push(Draw::Video {
                     rect: pillarbox(SCREEN, self.video_aspect),
                     frame: self.player.frame(),
+                    source: Video::Intro,
                 });
             }
             if self.overlay {
@@ -671,6 +817,37 @@ impl Frontend {
 
         if self.machine.is(states::LANGUAGE_SELECTION) {
             self.draw_language_selection(&mut out);
+            return out;
+        }
+
+        if self.machine.is(states::SHOW_LOGO) {
+            // Its widgets and nothing else, which is what `--screen "Show Logo"`
+            // has been drawing all along - so the state reaching the boot order
+            // changes when it is drawn, not what is drawn.
+            //
+            // Over the moving menu backdrop, which is the screen's parent's
+            // movie: `Show Logo` is a child of `FE Screen` and `FE Screen` is
+            // what owns `Data\Movies\Backdrop`. Inserted at index 1 - after the
+            // black fill the screen is cleared with, under the logo and the
+            // text - because the draw list is drawn in its own order and this
+            // belongs at the bottom of it.
+            //
+            // One thing the screen has that this still does not reproduce, and
+            // it is recorded rather than approximated: `BOOT_PRESS_START`
+            // carries `pulse="true"` and `delay="1"`, so on the disc it fades in
+            // a second late and throbs instead of appearing at once and standing
+            // still. See `docs/architecture/frontend-boot.md`.
+            let mut out = self.draw_screen(states::SHOW_LOGO);
+            if let Some((player, rect)) = &self.backdrop {
+                out.insert(
+                    1,
+                    Draw::Video {
+                        rect: *rect,
+                        frame: player.frame(),
+                        source: Video::Backdrop,
+                    },
+                );
+            }
             return out;
         }
 
@@ -926,6 +1103,21 @@ mod tests {
   </Screen>
   <Screen name="LogoFMV">
     <Movie><Values src="Data\Movies\Intro" autostart="true" autoredirect="true"></Values></Movie>
+    <Redirect name="AutoRedirect"><Values backward="none" forward="none"></Values><Default goto="Show Logo"></Default></Redirect>
+    <Redirect><Values backward="none" forward="start"></Values><Default goto="LogoFMVRedirectScreen"></Default></Redirect>
+  </Screen>
+  <Screen name="LogoFMVRedirectScreen">
+    <Redirect><Values backward="none" forward="none"></Values><Default goto="Show Logo"></Default></Redirect>
+  </Screen>
+  <Screen type="FEMain" name="Top FE Screen">
+    <Screen name="FE Screen">
+      <Screen name="Show Logo">
+        <Image transition="0"><Values y="72" AutoLoad="true" src="Data\FE\Images\pulse_logo.mip"></Values></Image>
+        <Text delay="1" transition="0"><Values align="right" idstring="BOOT_PRESS_START" font="Menu" pulse="true" x="460" y="220" color="0x7FFFFFFF"></Values></Text>
+        <Redirect><Values backward="none"></Values><Default goto="RemoveMemoryStickWarning"></Default></Redirect>
+        <Redirect><Values backward="none" forward="start"></Values><Default goto="RemoveMemoryStickWarning"></Default></Redirect>
+      </Screen>
+    </Screen>
   </Screen>
 </Screen>
 "#;
@@ -1035,9 +1227,25 @@ mod tests {
             let mut input = Input::new();
             input.begin_frame(1 << skip);
             frontend.update(FRAME, &mut input);
-            assert!(
-                frontend.machine().is(states::LANGUAGE_SELECTION),
-                "button {skip} must skip the movie"
+            // A skip goes through the redirect screen the XML sends it to, the
+            // way the reel leg goes through `DevPubRedirect`. The movie *ending*
+            // does not: its `AutoRedirect` is a different exit.
+            assert_eq!(
+                frontend.machine().current(),
+                Some(states::LOGO_FMV_REDIRECT),
+                "button {skip} must skip the movie through the redirect screen"
+            );
+
+            input.begin_frame(0);
+            frontend.update(FRAME, &mut input);
+            assert!(frontend.machine().is(states::LANGUAGE_SELECTION));
+            assert_eq!(
+                frontend.machine().history(),
+                [
+                    states::LOGO_FMV,
+                    states::LOGO_FMV_REDIRECT,
+                    states::LANGUAGE_SELECTION,
+                ]
             );
         }
     }
@@ -1195,24 +1403,197 @@ mod tests {
         );
     }
 
-    #[test]
-    fn picking_a_language_launches_the_game() {
-        let mut frontend = frontend(300);
-        let mut input = Input::new();
+    /// Walks from the picker to `Show Logo`, leaving the machine there.
+    fn pick_a_language(frontend: &mut Frontend, input: &mut Input) {
         input.begin_frame(1 << button::START);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, input);
         input.begin_frame(0);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, input);
 
         input.begin_frame(1 << button::DOWN);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, input);
         input.begin_frame(0);
         input.begin_frame(1 << button::CROSS);
-        let events = frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, input);
+    }
+
+    #[test]
+    fn picking_a_language_shows_the_logo_rather_than_launching() {
+        let mut frontend = frontend(300);
+        let mut input = Input::new();
+        pick_a_language(&mut frontend, &mut input);
 
         assert_eq!(frontend.chosen(), Some("German"));
+        assert!(
+            frontend.machine().is(states::SHOW_LOGO),
+            "the picker's own exit is PRESS START, not the menus"
+        );
+        assert!(
+            !frontend.is_finished(),
+            "the front end is not done until Show Logo is pressed through"
+        );
+    }
+
+    #[test]
+    fn start_on_show_logo_launches_the_game() {
+        let mut frontend = frontend(300);
+        let mut input = Input::new();
+        pick_a_language(&mut frontend, &mut input);
+
+        input.begin_frame(0);
+        input.begin_frame(1 << button::START);
+        let events = frontend.update(FRAME, &mut input);
+
         assert!(frontend.is_finished());
         assert!(events.contains(&Event::Enter(states::LAUNCH_GAME.into())));
+        assert_eq!(
+            frontend.machine().history(),
+            [
+                states::LOGO_FMV,
+                states::LOGO_FMV_REDIRECT,
+                states::LANGUAGE_SELECTION,
+                states::SHOW_LOGO,
+                states::LAUNCH_GAME,
+            ]
+        );
+    }
+
+    #[test]
+    fn show_logo_waits_and_ignores_every_button_but_start() {
+        // The screen's XML has one `forward="start"` redirect and no timer, so
+        // neither time passing nor the buttons `LogoFMV` itself accepts may move
+        // it on. Cross is the one that matters: it skips the movie, and it is
+        // also the button that was just pressed to pick a language.
+        for held in [button::CROSS, button::CIRCLE, button::DOWN] {
+            let mut frontend = frontend(300);
+            let mut input = Input::new();
+            pick_a_language(&mut frontend, &mut input);
+
+            for _ in 0..600 {
+                input.begin_frame(0);
+                frontend.update(FRAME, &mut input);
+                input.begin_frame(1 << held);
+                frontend.update(FRAME, &mut input);
+            }
+            assert!(
+                frontend.machine().is(states::SHOW_LOGO),
+                "button {held} must not leave Show Logo"
+            );
+            assert!(!frontend.is_finished());
+        }
+    }
+
+    #[test]
+    fn show_logo_draws_the_backdrop_under_its_own_widgets() {
+        let mut frontend = frontend(300);
+        // 270 frames at the PSP's own rate, which is what `Backdrop.PMF` is.
+        frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+        let mut input = Input::new();
+        pick_a_language(&mut frontend, &mut input);
+        assert!(frontend.machine().is(states::SHOW_LOGO));
+
+        let draws = frontend.draw_list();
+        // Under the widgets and over the clear, because the list is painted in
+        // its own order: black fill, backdrop, then whatever the screen has.
+        assert!(matches!(draws[0], Draw::Fill { .. }));
+        let Draw::Video { rect, source, .. } = draws[1] else {
+            panic!("Show Logo must draw the backdrop second: {draws:?}");
+        };
+        assert_eq!(
+            source,
+            Video::Backdrop,
+            "the intro is over by here; naming the wrong movie draws a picture rather than failing"
+        );
+        assert_eq!(
+            rect,
+            [0.0, 0.0, SCREEN.0, SCREEN.1],
+            "a .PMF fills the screen"
+        );
+        assert!(
+            draws[2..].iter().any(|d| matches!(d, Draw::Text { .. })),
+            "and PRESS START on top of it: {draws:?}"
+        );
+    }
+
+    #[test]
+    fn the_backdrop_is_already_running_by_the_time_show_logo_is_reached() {
+        // It is `autostart` on a screen the boot opens long before this build
+        // draws it, so it must not be sitting at frame zero when it appears.
+        let mut frontend = frontend(300);
+        frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+        let mut input = Input::new();
+
+        for _ in 0..200 {
+            input.begin_frame(0);
+            frontend.update(FRAME, &mut input);
+        }
+        let running = frontend.backdrop().expect("a backdrop was set").frame();
+        assert!(running > 0, "the playhead must advance during LogoFMV");
+
+        // And it loops rather than ending, so it is still there after its own
+        // length has gone by twice over.
+        for _ in 0..600 {
+            input.begin_frame(0);
+            frontend.update(FRAME, &mut input);
+        }
+        let player = frontend.backdrop().expect("a backdrop was set");
+        assert!(!player.is_finished(), "repeat=true has no end to run off");
+        assert!(player.frame() < 270, "and it wraps inside its own length");
+    }
+
+    #[test]
+    fn no_backdrop_leaves_show_logo_on_black() {
+        // A source without one, `--no-video`, and a backdrop whose planes are
+        // not the intro's all land here, and none of them may emit a video draw
+        // the renderer has no feed for.
+        let mut frontend = frontend(300);
+        let mut input = Input::new();
+        pick_a_language(&mut frontend, &mut input);
+
+        let draws = frontend.draw_list();
+        assert!(!draws.iter().any(|d| matches!(d, Draw::Video { .. })));
+        assert!(matches!(draws[0], Draw::Fill { .. }));
+    }
+
+    #[test]
+    fn show_logo_draws_the_pulse_logo_and_its_press_start_line() {
+        let mut frontend = frontend(300);
+        let mut input = Input::new();
+        pick_a_language(&mut frontend, &mut input);
+        assert!(frontend.machine().is(states::SHOW_LOGO));
+
+        let draws = frontend.draw_list();
+        // The `Text` widget's own coordinates, colour and alignment, from the
+        // USA disc's `Skin.xml`. `y` is 220 there and 230 on the EU disc, which
+        // drops the `BOOT_LEGAL` line above it.
+        let text = draws
+            .iter()
+            .find_map(|d| match d {
+                Draw::Text {
+                    x,
+                    y,
+                    align,
+                    color,
+                    text,
+                    ..
+                } => Some((*x, *y, *align, *color, text.clone())),
+                _ => None,
+            })
+            .expect("Show Logo draws its text widget");
+        assert_eq!(text.0, 460.0);
+        assert_eq!(text.1, 220.0);
+        assert_eq!(text.2, Align::Right);
+        assert_eq!(text.3, argb_to_rgba(0x7fff_ffff));
+        assert_eq!(
+            text.4, "BOOT_PRESS_START",
+            "with no string table loaded the id stands in for its own string"
+        );
+
+        // The logo itself needs a sprite sheet, which these tests do not build.
+        // What must hold either way is that the screen's `Image` was found and
+        // nothing else crept in: a black fill, then the text.
+        assert!(matches!(draws[0], Draw::Fill { .. }));
+        assert!(!draws.iter().any(|d| matches!(d, Draw::Video { .. })));
     }
 
     #[test]

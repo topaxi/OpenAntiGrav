@@ -331,6 +331,25 @@ the backdrop being loaded by then is not established either. Settling it means
 finding what the picker's parent draws. Until then the colour stays lifted and
 the picker stays black.
 
+**The XML's own nesting now argues the same way, and it is stronger than the
+count.** Extracting `Skin.xml` and reading the tree shows the backdrop `Movie`
+belongs to `Top FE Screen->FE Screen`, and that `Language Selection` is a
+top-level screen *outside* that subtree - a sibling of `LogoFMV`, not a
+descendant of the screen that owns the backdrop. So the picker cannot inherit it
+by nesting, which is the mechanism that would have made "it sits on a lit
+background" true for free. Confidence **90**, read off the file. What the same
+reading *does* settle is the neighbouring case: `Show Logo` **is** a child of
+`FE Screen`, so on hardware the Pulse logo and PRESS START sit on the moving
+backdrop - confirmed since by a player who has run the original - and this build
+draws it that way. [The boot page](frontend-boot.md) has the detail.
+
+**So the backdrop's feed is now borrowed by two stages, not one.** It was already
+built when the window opens rather than when the menus open, and already outlived
+the menu stage so a menu -> race -> menu round trip did not pay for a second
+decoder; the front end's `Show Logo` borrows that same feed on the way *in*.
+Nothing about the menus' own use of it changed, and the page's `Draw::Video` now
+carries `source: Backdrop` to say which of the front end's two movies it means.
+
 ## DISPLAY against GRAPHICS
 
 Two pages under OPTIONS rather than one, and the line between them is **whether

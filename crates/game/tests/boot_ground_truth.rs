@@ -18,7 +18,8 @@
 //! - the disc offers five languages, each naming itself;
 //! - `Language Selection` has a `DisplayLanguages` widget and redirects to
 //!   `LogoFMV`;
-//! - the whole sequence runs from boot to `Launch Game` with no picture at all.
+//! - the whole sequence runs from boot to `Launch Game` with no picture at all,
+//!   through `Show Logo`, which waits for START and has no timeout.
 //!
 //! It runs with `no_video`, so it never invokes `ffmpeg` and never writes a
 //! cache. What it is testing is the sequencing and the data, not the transcode.
@@ -162,6 +163,37 @@ fn the_front_end_root_names_the_intro_movie() {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
+fn the_backdrop_and_the_intro_share_one_plane_geometry() {
+    // What lets `Show Logo` sit on the moving backdrop at all. The front end is
+    // drawn by one renderer with one set of I420 planes, sized once from the
+    // intro, and `upload_frame` slices by *those* dimensions rather than by the
+    // frame's own - so `boot::load` only hands the sequence a backdrop when the
+    // two agree, and on the PSP they do. If this ever fails the guard fires and
+    // `Show Logo` quietly loses its backdrop; if the guard were removed it would
+    // draw a garbled picture rather than error, which is why it exists.
+    // (The PS2's pair agree too, at 512x512 - see the notes in `boot::load`.)
+    let Some(intro) = load() else { return };
+    let Some(backdrop) = load_leg(
+        oag_game::frontend::Leg::LogoFmv,
+        pulse::names::BACKDROP_MOVIE,
+    ) else {
+        return;
+    };
+
+    let intro = intro.movie.expect("the PSP disc has the intro");
+    let backdrop = backdrop.movie.expect("the PSP disc has the backdrop");
+
+    assert_eq!((intro.width, intro.height), (480, 272));
+    assert_eq!(
+        (backdrop.width, backdrop.height),
+        (intro.width, intro.height),
+        "both are 480x272 .PMFs, which is what makes one video pipeline enough"
+    );
+    assert_eq!(backdrop.frame_count, 270, "9 seconds of looping backdrop");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
 fn the_disc_offers_five_languages_each_naming_itself() {
     let Some(loaded) = load() else { return };
     let languages = loaded.frontend.languages();
@@ -272,8 +304,47 @@ fn the_sequence_runs_from_boot_to_launch_game() {
     input.begin_frame(1 << button::CROSS);
     frontend.update(dt, &mut input);
     assert_eq!(frontend.chosen(), Some("English"));
+
+    // The picker's exit is `Show Logo`, not the menus: the disc's own boot puts
+    // the Pulse logo and PRESS START between the front end and everything after
+    // it, and this build keeps that screen even though it skips the four Memory
+    // Stick screens the disc has on either side of it.
+    assert!(
+        frontend.machine().is(states::SHOW_LOGO),
+        "got as far as {:?}",
+        frontend.machine().current()
+    );
+    assert!(
+        !frontend.is_finished(),
+        "Show Logo waits: nothing has been pressed through it yet"
+    );
+
+    // Its own XML gives it one redirect with a button and that button is START.
+    // Ten seconds of doing nothing must not advance it, because nothing on the
+    // screen is a timer.
+    for _ in 0..600 {
+        input.begin_frame(0);
+        frontend.update(dt, &mut input);
+    }
+    assert!(
+        frontend.machine().is(states::SHOW_LOGO),
+        "and it has no timeout"
+    );
+
+    input.begin_frame(1 << button::START);
+    frontend.update(dt, &mut input);
     assert!(frontend.is_finished());
     assert!(frontend.machine().is(states::LAUNCH_GAME));
+
+    assert_eq!(
+        frontend.machine().history(),
+        [
+            states::LOGO_FMV,
+            states::LANGUAGE_SELECTION,
+            states::SHOW_LOGO,
+            states::LAUNCH_GAME,
+        ]
+    );
 }
 
 #[test]

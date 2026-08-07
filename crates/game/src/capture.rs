@@ -374,7 +374,20 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
         }
         (None, None) => {
             let list = frontend.draw_list();
-            (movie, video_format, list)
+            // **The sequence itself now has the same split.** Its last screen,
+            // `Show Logo`, sits on the looping backdrop rather than on the
+            // intro - so a capture that stops there has to read its frame from
+            // the backdrop and build its planes for the backdrop, exactly as
+            // `--menu-page` does. The draw says which movie it means, so this
+            // follows the list rather than guessing from the state.
+            match video_source(&list) {
+                Some(crate::frontend::Video::Backdrop) => {
+                    let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
+                    let format = showing.and_then(VideoFormat::of);
+                    (backdrop, format, list)
+                }
+                _ => (movie, video_format, list),
+            }
         }
     };
 
@@ -492,6 +505,14 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
 fn video_frame(list: &[Draw]) -> Option<usize> {
     list.iter().find_map(|draw| match draw {
         Draw::Video { frame, .. } => Some(*frame),
+        _ => None,
+    })
+}
+
+/// Which movie the list's video draw wants a frame of, if it has one.
+fn video_source(list: &[Draw]) -> Option<crate::frontend::Video> {
+    list.iter().find_map(|draw| match draw {
+        Draw::Video { source, .. } => Some(*source),
         _ => None,
     })
 }

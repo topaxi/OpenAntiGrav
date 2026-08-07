@@ -502,8 +502,38 @@ mod tests {
       <Values backward="none" forward="start"></Values>
       <Default goto="LogoFMVRedirectScreen"></Default>
     </Redirect>
-    <Screen name="Show Logo">
-      <Text><Values idstring="BOOT_PRESS_START" font="Menu"></Values></Text>
+  </Screen>
+  <Screen name="LogoFMVRedirectScreen">
+    <Redirect>
+      <Values backward="none" forward="none"></Values>
+      <Default goto="Show Logo"></Default>
+    </Redirect>
+  </Screen>
+  <Screen type="FEMain" name="Top FE Screen">
+    <Screen name="FE Screen">
+      <Movie transition="0" name="BackdropMovie">
+        <Values src="Data\Movies\Backdrop" sound="false" autostart="true" repeat="true"></Values>
+      </Movie>
+      <Screen name="Show Logo">
+        <Image transition="0"><Values y="72" AutoLoad="true" src="Data\FE\Images\pulse_logo.mip"></Values></Image>
+        <Text delay="1" transition="0">
+          <Values align="right" idstring="BOOT_PRESS_START" font="Menu" pulse="true" x="460" y="220" color="0x7FFFFFFF"></Values>
+        </Text>
+        <Viewport>
+          <Values x="40" y="0" height="480" width="400"></Values>
+          <Text name="USLegalText" delay="0" transition="0">
+            <Values align="left" idstring="BOOT_LEGAL" font="small" scale="0.7" x="40" y="250" widthlimited="true" color="0x7FFFFFFF"></Values>
+          </Text>
+        </Viewport>
+        <Redirect>
+          <Values backward="none"></Values>
+          <Default goto="RemoveMemoryStickWarning"></Default>
+        </Redirect>
+        <Redirect>
+          <Values backward="none" forward="start"></Values>
+          <Default goto="RemoveMemoryStickWarning"></Default>
+        </Redirect>
+      </Screen>
     </Screen>
   </Screen>
   <LoadXML><Values src="Data\Plugins\PI001\GUI\MainMenu_Definition.xml"></Values></LoadXML>
@@ -632,11 +662,72 @@ mod tests {
     #[test]
     fn nested_screens_get_a_hierarchical_path() {
         let screens = Screens::from_xml(SAMPLE);
+        // `Show Logo` is nested three deep and **not** under `LogoFMV`, which
+        // only names it as a `goto` target. Worth asserting precisely, because
+        // its parent is where the menu backdrop movie lives.
         assert_eq!(
             screens.by_name("Show Logo").unwrap().path,
-            "LogoFMV->Show Logo"
+            "Top FE Screen->FE Screen->Show Logo"
+        );
+        assert_eq!(
+            screens.by_name("FE Screen").unwrap().path,
+            "Top FE Screen->FE Screen"
         );
         assert_eq!(screens.by_name("LogoFMV").unwrap().path, "LogoFMV");
+    }
+
+    #[test]
+    fn show_logo_advances_on_start_and_nothing_else() {
+        let screens = Screens::from_xml(SAMPLE);
+        let logo = screens.by_name("Show Logo").unwrap();
+
+        let start = logo.redirect_for(button::START).unwrap();
+        assert_eq!(start.goto.as_deref(), Some("RemoveMemoryStickWarning"));
+        // `LogoFMV` takes all five; the screen that says "Press START button"
+        // takes one. Nothing else on it is a redirect with a button, and there
+        // is no timer of any kind.
+        assert!(logo.redirect_for(button::CROSS).is_none());
+        assert!(logo.redirect_for(button::CIRCLE).is_none());
+        assert_eq!(logo.redirects.len(), 2);
+    }
+
+    #[test]
+    fn a_text_inside_a_viewport_is_not_collected() {
+        // `BOOT_LEGAL` sits inside a `Viewport` and only direct children are
+        // read, so the USA disc's legal line is absent by construction rather
+        // than by accident. This is the guard on that gap: when `Viewport` is
+        // decoded, this assertion is what has to change. See
+        // `docs/architecture/frontend-boot.md`.
+        let screens = Screens::from_xml(SAMPLE);
+        let logo = screens.by_name("Show Logo").unwrap();
+        let ids: Vec<&str> = logo
+            .texts
+            .iter()
+            .filter_map(|t| t.idstring.as_deref())
+            .collect();
+        assert_eq!(ids, ["BOOT_PRESS_START"]);
+    }
+
+    #[test]
+    fn the_press_start_widget_keeps_its_own_layout() {
+        let screens = Screens::from_xml(SAMPLE);
+        let text = &screens.by_name("Show Logo").unwrap().texts[0];
+        assert_eq!(text.x, 460.0);
+        assert_eq!(text.y, 220.0, "230 on the EU disc, which has no BOOT_LEGAL");
+        assert_eq!(text.align, "right");
+        assert_eq!(text.color, 0x7fff_ffff);
+        assert_eq!(text.font, "Menu");
+    }
+
+    #[test]
+    fn the_logo_image_has_a_y_and_no_x() {
+        // Which is what makes the centring rule in `frontend.rs` load-bearing.
+        let screens = Screens::from_xml(SAMPLE);
+        let image = &screens.by_name("Show Logo").unwrap().images[0];
+        assert_eq!(image.src, r"Data\FE\Images\pulse_logo.mip");
+        assert_eq!(image.y, 72.0);
+        assert_eq!(image.x, 0.0);
+        assert!(image.auto_load);
     }
 
     #[test]

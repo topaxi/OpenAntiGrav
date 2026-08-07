@@ -1437,6 +1437,7 @@ impl Stage {
             frontend: loaded.frontend,
             feed,
             shown: false,
+            backdrop_shown: false,
             trace,
         })))
     }
@@ -1634,6 +1635,10 @@ struct FrontendStage {
     /// Whether a picture has ever reached the planes. See
     /// [`FrontendStage::sync_video`].
     shown: bool,
+    /// The same, for the backdrop `Show Logo` sits on. Kept apart from `shown`
+    /// because the two movies fill the planes at different points in the
+    /// sequence, and either can be the one that has not arrived yet.
+    backdrop_shown: bool,
     trace: bool,
 }
 
@@ -1644,9 +1649,10 @@ impl FrontendStage {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
+        backdrop: Option<&mut movie::Feed>,
     ) -> Result<()> {
         let mut list = self.frontend.draw_list();
-        self.sync_video(&gpu.queue, &mut list)?;
+        self.sync_video(&gpu.queue, &mut list, backdrop)?;
         self.renderer
             .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
         Ok(())
@@ -1679,27 +1685,47 @@ impl FrontendStage {
     /// green over the screen rather than black, zeroed I420 being green. This
     /// costs the first frame or two of a 40-second movie that fades up from black
     /// anyway.
-    fn sync_video(&mut self, queue: &wgpu::Queue, list: &mut Vec<frontend::Draw>) -> Result<()> {
-        let Some(wanted) = list.iter().find_map(|draw| match draw {
-            frontend::Draw::Video { frame, .. } => Some(*frame),
+    /// **Two movies reach this, and which one is named by the draw rather than
+    /// inferred.** `Show Logo` sits on the looping backdrop, so the sequence's
+    /// last screen asks for a different file than its first one does; taking the
+    /// frame from the intro's feed instead would draw a picture rather than fail,
+    /// which is the trap `crate::capture` already documents. The two share one
+    /// set of planes, which is safe only because `boot::load` declines to set the
+    /// backdrop at all unless its geometry matches the intro's.
+    fn sync_video(
+        &mut self,
+        queue: &wgpu::Queue,
+        list: &mut Vec<frontend::Draw>,
+        backdrop: Option<&mut movie::Feed>,
+    ) -> Result<()> {
+        let Some((wanted, source)) = list.iter().find_map(|draw| match draw {
+            frontend::Draw::Video { frame, source, .. } => Some((*frame, *source)),
             _ => None,
         }) else {
             return Ok(());
         };
-        if let Some(feed) = self.feed.as_mut() {
+        let (feed, label, shown) = match source {
+            frontend::Video::Intro => (self.feed.as_mut(), "intro movie", &mut self.shown),
+            frontend::Video::Backdrop => (backdrop, "menu backdrop", &mut self.backdrop_shown),
+        };
+        if let Some(feed) = feed {
             if let Some(reason) = feed.take_error() {
-                bail!("decoding the intro movie: {reason}");
+                bail!("decoding the {label}: {reason}");
             }
             // `saturating_sub`, so an empty cache is a movie with no picture
             // rather than a panic on `0 - 1`.
             let position = wanted.min(feed.len().saturating_sub(1)) as u64;
             if let Some(frame) = feed.take_upto(position) {
                 self.renderer.upload_frame(queue, &frame.picture)?;
-                self.shown = true;
+                *shown = true;
             }
-            if !self.shown {
+            if !*shown {
                 list.retain(|draw| !matches!(draw, frontend::Draw::Video { .. }));
             }
+        } else {
+            // No feed for the movie this draw names - a source without a
+            // backdrop, `--no-video`, no `ffmpeg`. The quad would be green.
+            list.retain(|draw| !matches!(draw, frontend::Draw::Video { .. }));
         }
         Ok(())
     }
@@ -2115,7 +2141,17 @@ impl Session {
         let target = self.framebuffer.view();
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Frontend(stage) => {
-                stage.render(&self.gpu, &mut encoder, target, inside)?;
+                // The same feed the menus will borrow, and it is alive from the
+                // session opening rather than from the menus opening - so the
+                // backdrop under `Show Logo` is the one already looping, not a
+                // second decoder.
+                stage.render(
+                    &self.gpu,
+                    &mut encoder,
+                    target,
+                    inside,
+                    self.backdrop.as_mut(),
+                )?;
                 (None, stage.video_label())
             }
             Stage::Menu(stage) => {

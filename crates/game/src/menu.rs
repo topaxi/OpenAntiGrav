@@ -1585,6 +1585,9 @@ pub fn draw_list(
         .map(|backdrop| Draw::Video {
             rect: backdrop.rect,
             frame: backdrop.frame,
+            // The same movie `Show Logo` sits on, still looping: the menus are
+            // where the disc's own `FE Screen` was going anyway.
+            source: crate::frontend::Video::Backdrop,
         })
         .into_iter()
         .collect();
@@ -3216,6 +3219,7 @@ restart_required = "RESTART THE GAME"
             Some(&Draw::Video {
                 rect: backdrop.rect,
                 frame: backdrop.frame,
+                source: crate::frontend::Video::Backdrop,
             }),
             "the backdrop has to be painted first: {with:?}"
         );

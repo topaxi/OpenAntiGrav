@@ -150,7 +150,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         ),
         |movie| movie.display_aspect,
     );
-    let frontend = Frontend::booting(
+    let mut frontend = Frontend::booting(
         options.leg,
         screens,
         strings.clone(),
@@ -162,10 +162,66 @@ pub fn load(options: &Options) -> Result<Boot> {
         movie.as_ref().is_some_and(|movie| movie.frames.is_some()),
     );
 
+    // `Show Logo` sits on the moving backdrop, because it is a child of the
+    // `FE Screen` that owns that movie. Set here rather than at either call site
+    // because this is the one place the frontend and the backdrop are both in
+    // hand, and because the window, the offscreen capture and the ground-truth
+    // tests all have to agree about it - `main.rs` takes the backdrop's frames
+    // away onto a decode thread immediately after this, so there is no second
+    // moment where both halves exist.
+    //
+    // **Only when the two movies have the same plane geometry**, which is a
+    // guard rather than a switch: the front end is drawn by one renderer with
+    // one set of I420 planes, sized once from the intro, and `upload_frame`
+    // slices a frame by *those* dimensions rather than by the frame's own - so
+    // handing it a differently-shaped picture is a garbled image rather than an
+    // error.
+    //
+    // **Both current sources pass it**, and that was worth checking rather than
+    // assuming: the PSP's `Intro.PMF` and `Backdrop.PMF` are both 480x272, and
+    // the PS2's `INTRO512.PSS` and `BG512.IPF` are both 512x512. What differs on
+    // the PS2 is the *display aspect*, not the plane size, and that is already
+    // handled per-movie by the pillarbox rect rather than here. So this branch
+    // does not currently fire on any disc anyone has - it is what stops a future
+    // source, or a `--movie` override pointing the intro at something else, from
+    // drawing garbage instead of saying so.
+    // See `docs/architecture/frontend-boot.md`.
+    if let Some(backdrop) = &backdrop {
+        let same_planes = crate::render::VideoFormat::of(backdrop)
+            .zip(movie.as_ref().and_then(crate::render::VideoFormat::of))
+            .is_some_and(|(back, intro)| {
+                (
+                    back.width,
+                    back.height,
+                    back.chroma_width,
+                    back.chroma_height,
+                ) == (
+                    intro.width,
+                    intro.height,
+                    intro.chroma_width,
+                    intro.chroma_height,
+                )
+            });
+        if same_planes {
+            frontend.set_backdrop(
+                backdrop.frame_count,
+                backdrop.frame_rate,
+                backdrop.display_aspect,
+            );
+        } else {
+            report.push(
+                "Show Logo draws on black: the backdrop's planes are not the intro's, \
+                 and the front end has one video pipeline"
+                    .to_string(),
+            );
+        }
+    }
+
     if let Some(goto) = frontend.language_auto_redirect() {
         report.push(format!(
-            "the disc's Language Selection redirects to {goto}; this build goes to Launch Game, \
-             which starts a race"
+            "the disc's Language Selection redirects to {goto}; this build goes to {}, \
+             having played it first",
+            crate::frontend::states::SHOW_LOGO
         ));
     }
 

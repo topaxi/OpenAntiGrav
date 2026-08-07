@@ -261,7 +261,8 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     let mut input = Input::new();
     let dt = 1.0 / 60.0;
 
-    // START skips the intro, and cross picks a language, which fires `Launch Game`.
+    // START skips the intro through `LogoFMVRedirectScreen`, cross picks a
+    // language, and START again presses through `Show Logo`.
     input.begin_frame(1 << button::START);
     frontend.update(dt, &mut input);
     input.begin_frame(0);
@@ -273,6 +274,13 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     );
 
     input.begin_frame(1 << button::CROSS);
+    frontend.update(dt, &mut input);
+    assert!(frontend.machine().is(states::SHOW_LOGO));
+
+    // `Show Logo` is the disc's PRESS START screen and it sits between the
+    // picker and everything after it, so the front end is not finished until
+    // START goes through it.
+    input.begin_frame(1 << button::START);
     frontend.update(dt, &mut input);
     assert!(frontend.machine().is(states::LAUNCH_GAME));
     assert!(

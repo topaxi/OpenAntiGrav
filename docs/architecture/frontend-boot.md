@@ -10,18 +10,22 @@ just play
 That reads `data/images/pulse-psp-usa.chd`, plays `Data\Movies\Intro.PMF` - the
 40-second Pulse intro, and the only movie the disc's own boot ever opens - and
 lands on a Language Selection screen built from the disc's own XML. START, or
-space, skips it. Picking a language fires `Launch Game`, and `Launch Game`
-opens [the menus](menus.md), from which START on the Race page loads
+space, skips it. Picking a language goes on to `Show Logo` - the Pulse logo and
+PRESS START - and START there fires `Launch Game`, which opens
+[the menus](menus.md), from which START on the Race page loads
 [a race](../tools/oag-game.md) into the same window.
 
 **The language is remembered.** Once the picker has been through, the choice is
 written to `settings.toml` and the next run goes straight past it: the state is
 still entered and left the same frame, so the sequence below is unchanged.
-`--pick-language` shows it anyway.
+`--pick-language` shows it anyway. A remembered language therefore lands on
+`Show Logo`, which waits - the run stops at PRESS START rather than at the
+picker, which is what the disc does too.
 
 ```sh
 # No display needed.
 just play --screenshot /tmp/menu.png --until "Language Selection" --hold start
+just play --screenshot /tmp/logo.png --until "Show Logo" --press start,cross
 just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross --ticks 60
 ```
 
@@ -30,7 +34,9 @@ just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross
 | State | What happens |
 | --- | --- |
 | `LogoFMV` | Entered at boot. `Data\Movies\Intro.PMF` plays straight through, 1200 frames of it. START or cross skips it. |
+| `LogoFMVRedirectScreen` | Only on the skip. A one-shot redirect state, entered and left the same frame; the movie *ending* does not pass through it. |
 | `Language Selection` | The disc's own picker. Up and down move, cross selects. |
+| `Show Logo` | The Pulse logo and PRESS START. **START, and only START.** No timeout. |
 | `Launch Game` | End of the front end. The composition root opens [the menus](menus.md), which are **ours** - see that page for why they are not the disc's `MainMenu_Definition.xml`. |
 
 Every one of those names is a **string literal from the original**, not one we
@@ -68,12 +74,90 @@ redirect target at startup, and
 it so [a test](../../crates/game/tests/boot_ground_truth.rs) asserts it is
 `LogoFMV`.
 
-**`LogoFMV`'s own exits differ too.** On the disc the movie finishing fires
-`AutoRedirect` to `LogoFMV->Show Logo` - the Pulse logo and PRESS START - and any
-of start, circle, square, triangle or cross fires `LogoFMVRedirectScreen`, which
-goes to the same place. Here both go to the picker, because the picker is what
-this build has next; and only start and cross are read, because those are the
-buttons the abstract layer carries.
+**`LogoFMV`'s own exits differ too, though less than they did.** On the disc the
+movie finishing fires `AutoRedirect` to `Show Logo` - the Pulse logo and PRESS
+START - and any of start, circle, square, triangle or cross fires
+`LogoFMVRedirectScreen`, which goes to the same place. Both hops are modelled
+now, and both still land on the picker rather than on `Show Logo`, because the
+picker is what this build has next; only start and cross are read, because those
+are the buttons the abstract layer carries.
+
+**`Show Logo` is not a child of `LogoFMV`.** An earlier version of this page
+wrote its path as `LogoFMV->Show Logo`, and extracting `Skin.xml` and reading the
+nesting settles that it is wrong: `LogoFMV` only names it as a `goto` target, and
+the screen itself lives at `Top FE Screen->FE Screen->Show Logo`. Confidence
+**98**, read off the file. That matters for more than pedantry, because
+**`FE Screen` is what owns `Data\Movies\Backdrop`** - so on hardware the logo and
+PRESS START sit on the moving menu backdrop, and the runtime capture below
+showing `Backdrop.PMF` opening during boot is explained by it rather than being a
+loose end. **This build draws it that way**; the `--until "Show Logo"` capture in
+the commands above lands on the backdrop under the logo, not on black.
+
+That was a documented gap for one revision and is not one now. Three things
+agree: the nesting in `Skin.xml`, the boot capture opening `Backdrop.PMF` ~15 s
+in while the state is still `LogoFMV` - i.e. **before** `Show Logo`, so the loop
+is already running rather than starting when the screen appears - and a player
+who has run the original confirming the picture. The playhead therefore runs from
+the start of the sequence rather than from the moment `Show Logo` is entered.
+
+Two implementation notes worth keeping, because both are traps:
+
+- **One feed, not two.** `Session` already builds the backdrop's decode thread
+  when the window opens, well before the menus ask for it, so the front end
+  borrows the same [`movie::Feed`](../../crates/game/src/movie.rs) the menus will
+  and no second decoder is spawned. It was already outliving the menu stage on
+  purpose; it now outlives the front end's own stage backwards as well.
+- **The draw names its movie.** `Draw::Video` carries a `source` of `Intro` or
+  `Backdrop`, because the sequence now plays two movies and reading a frame out
+  of the wrong one produces *a picture* rather than an error - the same trap
+  [`capture.rs`](../../crates/game/src/capture.rs) already warns about for
+  `--menu-page`. Nothing infers the movie from the current state.
+
+**There is a plane-geometry guard, and both discs pass it.** The front end is
+drawn by one renderer with one set of I420 planes, sized once from the intro, and
+`upload_frame` slices a frame by *those* dimensions rather than by the frame's
+own - so a differently-shaped picture is garbled output, not an error. `boot::load`
+therefore declines to set the backdrop at all unless the two movies agree, and
+says so in its report.
+
+Whether that branch ever fires was checked rather than assumed, and **it does
+not**: the PSP's `Intro.PMF` and `Backdrop.PMF` are both 480x272 (asserted on the
+real disc by `the_backdrop_and_the_intro_share_one_plane_geometry`), and the PS2's
+`INTRO512.PSS` and `BG512.IPF` are both 512x512. So **the PS2 gets the backdrop
+under `Show Logo` too**, pillarboxed - what differs there is the *display aspect*,
+not the plane size, and that is handled per-movie by the rect rather than by this
+guard. An earlier draft of this page claimed the PS2 kept a black background;
+running it disproved that. The guard stays as a guard - for a future source, or a
+`--movie` override pointing the intro somewhere else.
+
+**`Show Logo` sits one state later here than on the disc.** The disc runs picker,
+`LogoFMV`, `Show Logo`; this build runs `LogoFMV`, picker, `Show Logo`, which is
+the same swap already described above and no additional one - `Show Logo` still
+comes after both of them and still immediately precedes the menus. What the disc
+has in between is `RemoveMemoryStickWarning`, `NameSetup2FromBoot`,
+`TagSetup2FromBoot` and `CreateFromBoot`, four screens serving Memory Stick
+mechanics this build deliberately does not have. They are skipped, not
+unimplemented; see `HANDOVER.md`.
+
+**Its advance condition is read, not guessed.** `Show Logo` carries exactly two
+`Redirect` widgets, one `forward="start"` and one with no `forward` attribute at
+all, both `goto="RemoveMemoryStickWarning"`. There is no frame counter, no
+`delay` on either redirect and no timer anywhere on the screen, so this build
+waits for START and nothing else - a **narrower** set than `LogoFMV`'s five,
+which is what a screen reading "Press START button" should have. Confidence
+**95**, off the USA disc's `Skin.xml`, and the EU disc's copy has the same two
+redirects. The unnamed redirect is the open question: no button and no name is
+the shape `Language Selection` gives `LanguageAutoRedirect`, a redirect the code
+fires rather than the pad, so something can advance this screen without a press
+and **what that something is has not been found**. It is left unfired here rather
+than modelled as a timeout, because a duration would be invented.
+
+**`BOOT_PRESS_START` does not pulse.** The widget carries `pulse="true"` and
+`delay="1"`, so on hardware it fades in a second after the screen and throbs.
+This build draws it static, at its own `x="460"`, `y="220"`, `align="right"` and
+`0x7FFFFFFF`. Neither attribute is decoded; the text is what was asked for and
+the animation is the one remaining gap on this screen, recorded rather than
+approximated.
 
 **This build booted the dev/pub reel for a while, and that was wrong.** The reel
 is the one whose contents fit `IntroMovie1`'s frame counters, and pointing the
@@ -174,7 +258,10 @@ Two things this settled that were worth finding out:
   faint line across the Pulse logo from the backdrop stacked over it.
 
 `--screen "Show Logo"` renders a named screen out of the XML without running the
-sequence, which is how this is checked while the boot order is unchanged.
+sequence, which is how this was checked while the boot order did not reach it.
+`Show Logo` is now in the boot order and draws through the same code, so the two
+views agree by construction; the flag stays useful for the screens the sequence
+still does not enter.
 
 ### Image layout
 
@@ -196,10 +283,39 @@ logo's dominant teal is `(36, 147, 153)` in the texture and came out
 solid fills never showed it, because they write their colour straight through with
 no sRGB source.
 
-**`Viewport` is not implemented.** `Show Logo`'s `BOOT_LEGAL` text sits inside
-one, and [`screen.rs`](../../crates/game/src/screen.rs) only reads a screen's
-direct children, so that line is absent from the render. A `Viewport` is a
-clipping rectangle; nothing about it is decoded yet.
+**`Viewport` is still not implemented, and it is not the scissor rect that is in
+the way.** `Show Logo`'s `BOOT_LEGAL` text sits inside one, and
+[`screen.rs`](../../crates/game/src/screen.rs) only reads a screen's direct
+children, so that line is absent from the render - asserted by
+`a_text_inside_a_viewport_is_not_collected`, so the gap is a guarded fact rather
+than a silent one. Extracting the element settles what closing it would actually
+take, and it is more than clipping:
+
+```xml
+<Viewport><Values x="40" y="0" height="480" width="400"></Values>
+  <Text name="USLegalText" delay="0" transition="0">
+    <Values align="left" idstring="BOOT_LEGAL" font="small" scale="0.7"
+            x="40" y="250" widthlimited="true" color="0x7FFFFFFF"></Values>
+</Viewport>
+```
+
+- **The clip itself would do nothing here.** The rect is 400 wide and *480* tall
+  on a screen that is 480x272, so vertically it does not clip at all, and the one
+  widget inside it starts at the rect's own left edge. A scissor rect added for
+  this screen would be dead code on this screen.
+- **`widthlimited="true"` is the real requirement.** `BOOT_LEGAL` is a
+  118-character copyright line at `font="small"` and `scale="0.7"`, which is
+  comfortably wider than both the 400-pixel viewport and the 480-pixel screen, so
+  the attribute has to mean wrapping, and the wrap width has to come from the
+  enclosing `Viewport`. `Draw::Text` has no width and no wrap, so this is a text
+  *layout* feature, not a rectangle.
+
+Drawing it unwrapped would run a single line off both edges of the screen, which
+is worse than the current absence, so it stays absent. **This affects the USA
+disc only**: the EU disc drops the `Viewport` and the line with it, and moves
+`BOOT_PRESS_START` from `y="220"` to `y="230"` to fill the gap. The other two
+`Viewport`s in the file hold `Animation` and `TextInfo` widgets this build does
+not model at all, so nothing else is waiting on it either.
 
 ### What the disc actually does at boot
 
