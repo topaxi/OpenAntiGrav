@@ -228,6 +228,64 @@ cannot reach (mid-race state, a different track's start) makes it worth
 returning to. `.ppst`/`.p2s`/`.state` are now in `just audit-leakage`'s
 extension list, which did not cover them before.
 
+## The speed-pad boost visual pass (2026-08-07)
+
+The first tick-addressable capture of a real pad crossing exists
+(`psp-drive.py place` + a tuned steering script + `psp-trace.py --camera
+--shot-every 2`; regenerate under `data/traces/pad0-ref.csv` +
+`data/shots/pad0-ref/` - derived data, not durable). What it settled is on
+[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md) (2026-08-07
+history entry): the flare is a **view-space billboard** (the "post-projection,
+constant screen size" reading is dead, `HALF_SIZE_TO_WORLD` is `1.0`), the
+**original widens its fov during a boost** (~90-95 deg against the authored
+60 - `BoostFovKick` is real, its DEFAULT is far subtler than the measured
+original), and the plume's authored vertex alpha visibly reaches the
+original's picture despite the recovered fixed-factor blend (premultiplied in
+`race.rs`, mechanism open). `--pose-boost SECONDS` on `oag-game` forces the
+exhaust state for posed captures, which is what makes matched-pose boost
+comparisons possible (`--pose-from row --pose-boost age` against the shot at
+that row). Traps that cost time here: the place->capture handover free-runs
+the emulator and decays the craft's speed (chain the two commands, or accept
+a slow crossing); pad 0 sits ~8 units right of the spline so a spline
+placement misses it laterally; the standing-start pose veers right naturally
+and "right" input steers toward +z. Still open, in exhaust.md's Open list:
+what widens the fov, how the plume's alpha reaches the GE, what stretches the
+flare wide. Comparison montages from the pass: crawl-speed crossing whites
+out the frame for ~10 ticks (matched by ours after the fixes); ours still
+reads whiter/less orange than the original at mid-boost from high-rear
+angles.
+
+**The colour-space audit that pass commissioned found the pipeline
+inconsistent, and one piece is fixed.** The PSP GE blends raw framebuffer
+bytes - gamma space. Our flare and trail sample their textures raw
+(`FlareTexture::bind` uploads `Rgba8Unorm`) and so feed the additive blender
+PSP-shaped values; but every `Drawable` texture - the boost plume included -
+uploads `Rgba8UnormSrgb` (`mesh_render.rs` `make`), whose sampler linearises,
+and `One`/`One` addition on linear light crushes the halo mid-tones (PSP:
+`0.4 + 0.5 = 0.90`; linearised: `0.133 + 0.214 = 0.347 -> 0.62` encoded,
+~30% lost). `race.rs` now re-encodes the plume's texels on load (exact
+piecewise sRGB) so the decode hands the shader the disc's own bytes. **The
+larger decision is untaken**: the windowed surface is sRGB (linear dst
+blending) while the ordinary `--screenshot` target is `Rgba8Unorm` (raw), so
+no single path is PSP-consistent end to end, and the ordinary capture also
+still stores the meshes' linear light unencoded (`race.rs`'s own open
+question, same failure `mesh_render.rs:186-201` measured for the viewer).
+Whichever space is made authoritative, `exhaust.rs`'s raw upload and
+`mesh_render.rs`'s sRGB upload cannot both stay.
+
+**The Ghidra corroboration also landed** (same pass, second agent):
+`Gu_SetMatrix` index mapping pinned at command-byte level (0=projection 4x4
+`0x3e/0x3f`, 1=view `0x3c/0x3d`, 2=world `0x3a/0x3b`, 3=texgen), the scene
+projection builder located at `FUN_08901dc4` (fov degrees at `cam+0x50`,
+near hardcoded `1.2`, far `2000.0` from `g_display+0x1698`, standard RH
+perspective; installs into the display's projection stack at `+0x1190` and
+`Gu_SetMatrix(0,..)`), the display's `+0x1410` stack confirmed as the view
+stack (camera world-to-view written by `FUN_08900884`/`FUN_08900a9c` from
+`obj+0x50`), and `FUN_0891e9d0` identified as fog re-evaluation
+(`Fog_FindVolume` then GE state 7), not matrix code. None of it renamed in
+Ghidra yet - a future pass should write these onto `camera.md` and
+`names.tsv` properly.
+
 ## Open threads
 
 Each is a real, named next step. The Task numbers are the ones the agent passes
@@ -235,6 +293,7 @@ used, kept because commits and docs cite them.
 
 | Thread | What is known, and the next step |
 | --- | --- |
+| **Planned input scripts: `oag-trace plan` works in our simulation, has never been replayed into the emulator** | **2026-08-07.** New `oag-trace plan` subcommand plus `crates/trace/src/plan.rs`: a pure-pursuit controller run against our own physics through the new `replay::drive_with`, whose per-tick recording of what it pressed *is* the emitted input script. Motivating case done: from the emulator's Talon's Junction Time Trial start `(6.07, -50.07, -196.10)` it crosses speed pad 0 **0.09 units right of the pad's centre line at 110.8**, inside the pad's own trigger box from tick 159, in 221 ticks - committed as `verification/scenarios/talons-junction-pad-0.inputs`, and reproduced frame-for-frame by `oag-trace drive --start`. `scripts/psp-autopilot.py` gained `--gate/--gate-dir/--gate-after` for the same target driven *live* off emulator state. **Next step is the only thing that settles it**: `psp-trace.py --script verification/scenarios/talons-junction-pad-0.inputs --script-lead 2` and compare against `plan --trace-out`. Design, evidence and the full untested list: `docs/tools/autopilot-planning.md`. Watch the start-pose trap - `drive`'s default `Start Position` on `16_Track` is ~138 units behind the time-trial line. |
 | **M6 authored lighting: `AmbientLight`/`DirectionalLight` registered, `PointLight` genuinely isn't, and no hardware light slot is ever enabled in the mesh draw path** | **2026-08-05.** First real exercise of the target-of-record flip below, in `/psp-pulse-eu/BOOT.BIN`, cross-verified against `/psp-pulse-usa/BOOT.BIN`. Format decode is done and validated (`docs/formats/lighting.md`, `crates/formats/src/lighting.rs`). Ghidra: `AmbientLight_RegisterClass` (`0x0892d960`, 90) and `DirectionalLight_RegisterClass` (`0x08934fc8`, 90) found and cross-verified on both binaries; `PointLight 0x132` has **no** `Vex_RegisterClass` call site on either binary - all 46 sites on each read individually, a counting argument, not an inference. **The bigger finding**: following `Gu_Ambient`'s callers instead of the (unreachable - see below) per-class init functions found `Mesh_ApplyMaterialLighting` (`0x0890cea8`, 78) and `Mesh_ApplyShinemapReflection_q` (`0x0890d8d4`, 55, `_q`), the two real ambient consumers in the mesh path - both read ambient as **one flat global RGB triple**, and both **explicitly disable all four `GU_LIGHT0..3` slots** even in the branch where `GU_LIGHTING` is on. All seven sibling display-list-builder functions were read too; none enables `0xb`-`0xe` either. This refutes the premise this pass was opened to test (`13_Track`'s 8 authored lights against 4 hardware slots implies a selection function) - the evidence found says hardware per-light GU lighting isn't used in the mesh draw path at all, not that a selector is hiding. **This changes M6 Stage 3's design** (`/home/topaxi/.claude/plans/polymorphic-imagining-whistle.md`'s `GpuLight; 4]` slot array is premised on hardware slots being used somewhere) and was surfaced to the user before touching `oag_render`, per the plan's own stated policy on scope changes. Full evidence: `docs/ghidra/functions/psp-pulse-eu/lighting.md`. Also recorded there, project-wide rather than lighting-specific: every class's method-table population goes through a compiler-emitted "return &self" stub (`lui/addiu/jr ra`), confirmed on four samples across two binaries - this is *why* the per-class init/bind body can't be reached by following the stored method pointer, not a lighting quirk. | **Two unfound writers, either of which would settle whether `AmbientLight`'s decoded colour actually reaches the global**: the ambient RGB triple itself (EU `_DAT_002b90c4/c8/cc`, USA `DAT_08abf494/498/49c` - `get_xrefs_to` finds only the one read each, no writer, likely a computed-offset write Ghidra's static analysis misses) and `Mesh_ApplyMaterialLighting`'s own per-material `+0x6c` field. `DirectionalLight`'s consumer, if any, is still unfound - registered but nothing reads it via the paths this pass could reach. |
 | **Ghidra target of record flipped from psp-pulse-usa to psp-pulse-eu** | **2026-08-05.** The row directly below this one, and `docs/ghidra/functions/psp-pulse-eu/corroboration.md`'s original framing, call `/psp-pulse-usa/BOOT.BIN` the "primary target" and treat `psp-pulse-eu` as pure corroboration - four sweeps under that policy carried 268 of `psp-pulse-usa/names.tsv`'s 304 names across via fuzzy matching, all still valid and kept as history. Per explicit direction, that policy is reversed going forward: **`psp-pulse-eu` is now the preferred first target for new investigation; `psp-pulse-usa` (and `ps2-pulse-eu` where relevant) are the cross-verification sources.** Rationale: EU is the more complete release - Pulse PSP's DLC shipped on the EU disc only, the USA release never got any, and Pulse PS2 was **EU-only, no USA disc exists**, so `ps2-pulse-eu` was already this project's sole PS2 reference; this keeps PSP's primary target in the same region. `corroboration.md` carries a dated notice at its top recording the same reversal; `psp-pulse-eu/names.tsv`'s header comment is updated to say rows from this date on may be independent derivations at the normal confidence rubric, not just capped carryovers. No ADR conflict - ADR-0005 names `docs/ghidra/functions/<binary>/` generically and never hardcoded a primary target. | First real exercise of this is the M6 authored-lighting Ghidra pass (`AmbientLight`/`DirectionalLight`/`PointLight` - `Vex_RegisterClass` xrefs, payload confirmation, the 4-hardware-slot selection question): search/decompile in `/psp-pulse-eu/BOOT.BIN` first, cross-verify against `/psp-pulse-usa/BOOT.BIN` with `find_similar_functions_fuzzy`/`diff_functions` after naming, document under `docs/ghidra/functions/psp-pulse-eu/`. |
 | **EU discs acquired for Pulse and Pure (`UCES-00465`, `UCES-00001`); the Ghidra project is now folder-organised per binary, matching the region-coded docs dirs** | **2026-08-04.** Closes the inference in `pulse-psp-usa.chd`'s own record (SCEE publisher, `UCES00465` boot tree) with a real disc: `data/images/pulse-psp-eu.chd`, hashed and recorded in `source-images.md`. **Its `BOOT.BIN` is a genuinely different binary from the USA disc's** - 3,844,732 vs 3,854,564 bytes, different SHA-256 - so the "EU build" claim about the USA disc's strings does not mean byte-identical code; nothing has been diffed yet. **User's own hypothesis, unconfirmed**: the difference is mostly networking code, since Pulse's PSP multiplayer used region-specific services. Also acquired the same day, `data/images/pure-psp-eu.chd` (`UCES-00001`, a very early PSP launch serial), pairing with the existing `pure-psp-usa.chd` the same way. **Final Ghidra project layout, one folder per binary**: `/psp-pulse-usa/BOOT.BIN` (primary target, 10,703 functions, `names.tsv`-backed, moved by the user via the GUI, untouched throughout), `/ps2-pulse-eu/SCES_547.48` (also user-moved, 5,234 functions, untouched), `/psp-pulse-eu/BOOT.BIN` (Pulse EU corroboration, 10,671 functions), `/psp-pure-usa/BOOT.BIN` (6,927 functions) and `/psp-pure-eu/BOOT.BIN` (6,934 functions) - all four secondary programs rebased with `set_image_base` from `00000000` to `08804000` to match the primary target's addressing, since **Ghidra's ELF auto-loader does not always place a PSP `BOOT.BIN` at the conventional `0x08804000`** - it uses whatever the ELF's own program headers specify, and these builds' headers all say `0`. Pure's two builds landed close together (6,927 vs 6,934) unlike Pulse's EU import, which is reassuring rather than incidental - see the resolved mess below. Also acquired the same day: two Pulse beta builds (`UCET-00713`, v0.02 and v0.07, both still only in `~/Downloads`, not imported), four Pulse EU DLC packs and seven Pure EU DLC packs (`data/dlc/`). **The two titles' DLC land on opposite sides of the encryption question, checked by reading the actual bytes in both cases**: Pulse's `.edat`-named payload is not encrypted at all (parses as an ordinary `oag-wad` archive; the wrong "encrypted" assumption almost shipped in `data/README.md` uncorrected); Pure's `pi.wad` payload genuinely is (flat 8.0 bits/byte entropy, `oag-wad` refuses it, not reverse-engineered). See `data/README.md`. `just play` now defaults to the EU Pulse disc (`psp-usa`/`usa` for the primary target, `ps2` unchanged). **The Pulse EU import went through a real mess, now resolved**: five separate import/rebase attempts left four stray files across two folders (one of them stuck at only 7,932 functions for unexplained reasons, another the abandoned-but-actually-best 10,671-function analysis sitting in the wrong, pre-rename folder). The user cleaned this up directly in the Ghidra GUI - deleted the weaker duplicates, moved the genuinely-best one into `/psp-pulse-eu/`, renamed it to plain `BOOT.BIN`. **`delete_file`/`close_program` via this MCP bridge could not reliably delete or release a lock on any of the four stray files, reproduced across five attempts on four different files - a bridge limitation, not a retry-fixable issue.** When cleaning up a botched Ghidra import again, do the delete/rename in the GUI directly rather than trying the API repeatedly. | **No diffing done yet.** Run `diff_functions`/`compare_programs_documentation` between `/psp-pulse-usa/BOOT.BIN` and `/psp-pulse-eu/BOOT.BIN` to test the networking-code hypothesis - that is the actual payoff of this import, not yet cashed in. Same opportunity exists for the two Pure builds, with no hypothesis yet to test. |

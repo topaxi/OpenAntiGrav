@@ -767,15 +767,58 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 // for this model specifically - see
                 // `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`), the same
                 // `dst + src` equation `exhaust::TRAIL_BLEND` already encodes
-                // for the ribbon. That blend ignores alpha as a weight
-                // entirely, so the baked falloff has to live in the vertex
-                // RGB instead - premultiply here, mirroring
-                // `exhaust::rib_vertex`'s own comment on the same blend.
+                // for the ribbon. That blend reads no alpha, so the authored
+                // vertex-alpha falloff is premultiplied into the RGB here.
+                //
+                // The premultiply is settled **empirically, not from the static
+                // read** (2026-08-07): the fixed-factor blend plus a modulate
+                // texfunc says vertex alpha never reaches the picture, and a
+                // build that took that literally (alpha forced to 1, RGB
+                // untouched) drew the streak fins as huge hard-edged solid
+                // sheets. A matched-pose comparison against the running
+                // original - `--pose-from` a captured pad-crossing row,
+                // `--pose-boost` the same age, same recorded camera - shows the
+                // original's plume feathering away exactly where the authored
+                // vertex alpha fades, so alpha demonstrably reaches the
+                // original's fragment somewhere upstream of the blend. Where is
+                // an open question for mesh-draw.md; folding it into the RGB
+                // reproduces the observed picture under this blend either way.
                 for v in &mut model.vertices {
                     v.colour[0] *= v.colour[3];
                     v.colour[1] *= v.colour[3];
                     v.colour[2] *= v.colour[3];
                     v.colour[3] = 1.0;
+                }
+                // The GE blends raw framebuffer bytes - gamma space - and the
+                // plume's whole look rides on that: additive maths on encoded
+                // values blooms to white far faster than the same maths on
+                // linear light. `Drawable` uploads every texture as
+                // `Rgba8UnormSrgb`, whose sampler hands the shader *linearised*
+                // values, which under `TRAIL_BLEND`'s `One`/`One` crushes the
+                // halo's mid-tones by ~30% of encoded brightness (worked
+                // example in HANDOVER's 2026-08-07 entry). The flare and trail
+                // already sample raw (`FlareTexture::bind` uploads
+                // `Rgba8Unorm`); encoding the plume's texels once here makes
+                // the hardware decode hand the shader the disc's own values,
+                // so all three boost elements feed the blender in the same
+                // space the PSP does.
+                // The exact piecewise curve, not a `pow(1/2.2)` approximation,
+                // so the GPU's decode restores the disc's own bytes to within
+                // 8-bit rounding.
+                fn srgb_encode(linear: f32) -> f32 {
+                    if linear <= 0.003_130_8 {
+                        linear * 12.92
+                    } else {
+                        1.055 * linear.powf(1.0 / 2.4) - 0.055
+                    }
+                }
+                for texture in model.textures.iter_mut().flatten() {
+                    for texel in texture.rgba.chunks_exact_mut(4) {
+                        for channel in &mut texel[..3] {
+                            let value = f32::from(*channel) / 255.0;
+                            *channel = (srgb_encode(value) * 255.0).round() as u8;
+                        }
+                    }
                 }
                 Some(model)
             }
@@ -2405,6 +2448,29 @@ impl Race {
         &self.exhaust
     }
 
+    /// Drives the exhaust to the state a speed pad entry `age` seconds ago
+    /// would leave it in, at saturated intensity - `CaptureOptions::pose_boost`.
+    ///
+    /// Replays [`Exhaust::advance`] at the fixed step rather than poking
+    /// fields: six seconds of full thrust at racing speed to saturate the
+    /// intensity ramp, [`Exhaust::boost`] on the entry edge, then `age` more
+    /// seconds of the same advance, so the flare size, the plume reveal timer
+    /// and the flicker generator all sit exactly where a real crossing at
+    /// racing speed puts them.
+    pub fn force_boost_state(&mut self, age: f32) {
+        let warmup = (6.0 / self.dt).ceil() as u32;
+        for _ in 0..warmup {
+            self.exhaust
+                .advance(self.dt, 1.0, 120.0, &mut self.exhaust_rng);
+        }
+        self.exhaust.boost(exhaust::BOOST_SECONDS);
+        let aged = (age / self.dt).round() as u32;
+        for _ in 0..aged {
+            self.exhaust
+                .advance(self.dt, 1.0, 120.0, &mut self.exhaust_rng);
+        }
+    }
+
     /// The collision sparks' current particle pool.
     #[must_use]
     pub fn sparks(&self) -> &Sparks {
@@ -3719,6 +3785,15 @@ pub struct CaptureOptions {
     /// the two culling tiers are: a capture is how `[graphics] anti_aliasing`
     /// gets compared against itself off and against the running original.
     pub anti_aliasing: crate::display::AntiAliasing,
+    /// Force the exhaust into the state it holds this many seconds after a
+    /// speed pad entry, at saturated intensity, before the frame is drawn.
+    ///
+    /// `--pose-boost`. A posed capture (`--pose-from --ticks 0`) never crosses
+    /// a pad, so this is the only way a frame comparison can see the boost
+    /// visuals at a chosen age. The state is reached by replaying
+    /// [`Exhaust::advance`] rather than by poking fields, so what is captured
+    /// is the same trajectory a real crossing produces.
+    pub pose_boost: Option<f32>,
     /// Capture the frame the way a **window** presents it, rather than the
     /// scene the way it is drawn.
     ///
@@ -3791,6 +3866,9 @@ pub fn capture(loaded: Loaded, options: &CaptureOptions) -> Result<()> {
         if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
             println!("{}", describe(&race.telemetry()));
         }
+    }
+    if let Some(age) = options.pose_boost {
+        race.force_boost_state(age);
     }
     println!(
         "after {} tick(s): {}",

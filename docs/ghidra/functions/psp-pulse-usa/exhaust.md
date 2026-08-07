@@ -156,14 +156,46 @@ format, which is why the confidence is 90 rather than 75:
 The quad is rebuilt from scratch every draw. **There is no history buffer here** -
 the flare is a nozzle sprite, and the ribbon is the separate `Trail` class.
 
-**The equal `+/- half_size` extents do not mean a square on screen.** The quad
-is submitted in post-projection space, and the PSP viewport maps a unit of `x`
-onto 240 pixels against 136 for `y`, so the flare renders `480/272 = 1.76x`
-wider than tall - which is also the aspect the `128x64` flare texture is
-authored for. A reimplementation that draws the quad square compresses the
-art's horizontal lobes and reads visibly narrower than the running game
-(observed against a live capture, 2026-08-02; `oag_render::exhaust` carries
-the stretch as `FLARE_ASPECT`). All four vertices take the **single** colour
+**The quad is a view-space billboard with world-sized extents, and it shrinks
+with distance.** Settled 2026-08-07 by reading the matrix live at a breakpoint
+on this function: the display's stack top at `+0x1410` - what
+`Math_TransformVec4` transforms the nozzle by - read back as a pure
+world-to-view rigid transform (orthonormal rows, fourth column `0,0,0,1`,
+translation in row 3), `Math_TransformVec4` is a plain `vtfm4.q` with no
+perspective divide, and the two `Gu_SetMatrix` calls below set GE matrices 1
+and 2 to identity while **leaving the projection live** (only matrix 1 is
+restored afterwards). So `half_size` is in view units - world-sized under a
+rigid view - and the sprite projects like any other geometry. This supersedes
+the "post-projection units, constant on-screen size" reading an earlier
+version of this page carried, and with it the fitted `2.15` world conversion:
+`oag_render::exhaust::HALF_SIZE_TO_WORLD` is now `1.0`, confirmed by a
+matched-pose frame comparison (`--pose-from` a captured crossing row, same
+recorded camera) where `1.0` reproduces the original's flare-to-hull ratio and
+`2.15` read double.
+
+Statically corroborated the same day (confidence up from the live read alone):
+`Gu_SetMatrix` is a thunk onto `FUN_08811d64`, a `sceGuSetMatrix` clone whose
+command bytes pin index `0` = projection (`0x3e`/`0x3f`, the only 16-word
+upload), `1` = view (`0x3c`/`0x3d`), `2` = world (`0x3a`/`0x3b`) - so this
+function's two calls really are view and world, and it emits no index-0
+command at all. The scene projection it inherits is built by `FUN_08901dc4`
+(fov in degrees at `cam+0x50`, near hardcoded `1.2`, far `2000.0` from
+`g_display+0x1698`), installed into the display's parallel projection stack at
+`+0x1190`; `+0x1410` is the **view** stack, written from the camera node's
+matrix at `+0x50` by `FUN_08900884`/`FUN_08900a9c`. The `FUN_0891e9d0` called
+after `Gu_CallList` is fog re-evaluation (`Fog_FindVolume`, then GE state 7
+enable/disable), not matrix restoration. One caveat for future live reads: the
+second camera type (`FUN_088b7f24`/`FUN_088b8548`, aspect hardcoded
+`1.7647059`) installs **identity** into the view stack and carries everything
+in the projection - a read taken inside its scope shows identity.
+
+**The wide shape survives the correction, unexplained.** The visible glow on
+the original's own frames measures about 1.7:1 (stalled-craft capture,
+2026-08-07), and a square-drawn flare read visibly narrower against a live
+capture (2026-08-02) - but a view-space square through a symmetric projection
+renders square, so the old viewport-mapping explanation for the stretch is
+dead and nothing replaces it yet. `FLARE_ASPECT` carries the observation with
+its mechanism marked open. All four vertices take the **single** colour
 at `self+0xc8` - white, flickered alpha - so the flare has no per-layer
 structure at all; the three staggered ramps belong to the `Trail` below, and
 mapping them onto three concentric flare quads (an early reading this project
@@ -592,6 +624,18 @@ if that side is ever wanted.
 Per [`goals.md`](../../../overview/goals.md#scope), the PSP side is what gets
 implemented.
 
+## History
+
+- **2026-08-07** - the flare's coordinate space corrected by a live matrix
+  read at `ExhaustFlare_Draw` (view-space billboard, world-sized extents,
+  projection live; `HALF_SIZE_TO_WORLD` retired to `1.0` and the fitted
+  `2.15` superseded). First tick-addressable capture of a real pad crossing:
+  the boost fov widening measured (~90-95 degrees against the authored 60,
+  settling by age ~1.3 s), the plume's vertex alpha shown to reach the
+  original's picture despite the fixed-factor blend, and the entry white-out
+  explained by quad size at close camera distance. Three matching entries
+  added under Open. Earlier history lived in the sections above and in git.
+
 ## Applied names
 
 Per [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md): below 70
@@ -877,6 +921,39 @@ plume's own 1.5 s reveal timer (`plume_timer`/`plume_visible`,
 loads `Data\Ships\<Team>\shipboost.vex` for `Race::Scene` to draw additively
 alongside the ship, model-matrix and all, whenever `plume_visible()` is true.
 
+### Measured on a live crossing: the fov widens, and the plume needs its alpha
+
+Two findings from the first tick-addressable capture of a real pad crossing
+(2026-08-07: Talon's Junction pad 0, `psp-drive.py place` +
+`psp-trace.py --camera --shot-every 2`, then our frames re-rendered from the
+captured rows with `--pose-from`/`--pose-boost` for matched-pose comparison):
+
+- **The original widens its field of view during the boost.** Trackside
+  geometry (the B2 tower) reads ~1.4-1.5x smaller at boost age 0.3-0.7 s than
+  at 1.3 s+, from a recorded camera pose that barely moves, and an fov sweep
+  of our posed render lands the boosted frame at roughly 90-95 degrees
+  against the authored 60. The widening outlives the 0.8 s flare timer
+  slightly and settles back by about age 1.3 s. **This is a live measurement,
+  not a binary read** - no code doing it has been located - and it means
+  `oag_game`'s `BoostFovKick`, shipped as an invented effect, has a real
+  counterpart whose magnitude sits nearest the strongest offered tier.
+  Confidence **75**: one scenario, one crossing, tower-width pixel
+  measurement.
+- **The authored vertex alpha of `shipboost.vex` visibly reaches the
+  original's picture**, even though the recovered blend
+  (`GU_FIX`/`GU_FIX` additive, modulate texfunc) has no path for it: a build
+  that ignored alpha entirely drew the plume's streak fins as hard-edged
+  solid sheets, while the original's plume feathers away exactly where the
+  authored alpha fades. Where the GE applies it is **open** - candidates
+  include a texfunc or colour path not yet read for this batch type - and
+  until that is settled `race.rs` premultiplies the alpha into the vertex RGB,
+  which reproduces the observed picture under the fixed-factor blend.
+
+The capture also shows the entry flash plainly: at crawl speed the enlarged
+flare quad (half-size `~8.9` at a camera distance of a few units) covers the
+frame and the first ~10 ticks after entry read as a near-total white-out,
+tapering as `boost_timer` decays.
+
 ### The boost visual, and settling the mount question
 
 `Ship.vex` carries two `Transform` locators named `boost_flare` and
@@ -1004,3 +1081,12 @@ three *confirmed* PS2-only teams having no PSP entry to find.
   `Ship_ThrustInput_q` (`0x0883d850`, read as thrust) and `Gfx_ViewDepth_q`
   (`0x0890486c`, read as a view depth).
 - The class table's `id == -1` terminator, and therefore its extent.
+- **What widens the fov during a boost** (measured above at 75): the camera
+  code that does it has not been located. `camera.md`'s update function is the
+  place to look, breakpointing its fov write during a pad crossing.
+- **How the plume's authored vertex alpha reaches the picture** (measured
+  above): the recovered fixed-factor blend and modulate texfunc leave no path
+  for it, yet the original feathers where it fades. Re-read
+  `Mesh_SetBatchDrawState`'s additive branch for this batch type.
+- **What stretches the flare wide** now that the post-projection reading is
+  dead - see `ExhaustFlare_Draw` above.

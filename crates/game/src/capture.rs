@@ -324,6 +324,9 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
                 animated_textures: options.settings.graphics.animated_textures,
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 anti_aliasing: options.settings.graphics.anti_aliasing,
+                // The front-end capture path never poses a ship, so there is
+                // nothing for a forced boost state to be aged relative to.
+                pose_boost: None,
                 presented: options.presented.then_some(race::Presented {
                     render_scale: options.settings.graphics.render_scale,
                     presentation: crate::upscale::Presentation {

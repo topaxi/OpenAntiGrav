@@ -354,6 +354,16 @@ struct Cli {
     /// the captured shot, and the value that matches is the measurement.
     #[arg(long, requires = "pose_from")]
     camera_fov: Option<f32>,
+
+    /// With `--screenshot`: force the exhaust into the state it would hold this
+    /// many seconds after entering a speed pad, at saturated intensity.
+    ///
+    /// The frame-comparison knob for the boost visuals: a posed capture
+    /// (`--pose-from --ticks 0`) never crosses a pad, so without this the flare
+    /// renders cold and the plume not at all, and there is nothing to compare
+    /// against an emulator shot taken mid-boost. `0.0` is the entry tick.
+    #[arg(long, value_name = "SECONDS")]
+    pose_boost: Option<f32>,
 }
 
 /// Parses `--pose`: three or four comma-separated numbers, the fourth a yaw in
@@ -795,6 +805,7 @@ fn run_race(
                 animated_textures: settings.graphics.animated_textures,
                 boost_fov_kick: settings.graphics.boost_fov_kick,
                 anti_aliasing: settings.graphics.anti_aliasing,
+                pose_boost: cli.pose_boost,
                 presented: cli.presented.then_some(race::Presented {
                     render_scale: settings.graphics.render_scale,
                     presentation: oag_game::upscale::Presentation {

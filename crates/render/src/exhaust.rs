@@ -34,16 +34,18 @@
 //! recovered constants are testable on a machine with no graphics driver - the
 //! same split `track` and `collision` already use. [`Pipeline`] is the GPU side.
 //!
-//! # What is *not* the original
+//! # The flare's space, corrected
 //!
-//! The original submits its quad after projection, with the GE's matrices set to
-//! identity, so its half-size is in post-projection units and the sprite does not
-//! shrink with distance. This module builds the quad in **world space** from the
-//! camera basis instead - a deliberate choice, since that artefact is calibrated
-//! for 480x272 and this renderer must hold up at 4K and in ultrawide (see
-//! `docs/rendering/README.md`, "reproduce the output, not the pipeline"). The one
-//! constant that departs is [`HALF_SIZE_TO_WORLD`], which carries its own
-//! reasoning and its own confidence score rather than being folded in silently.
+//! An earlier version of this module recorded the original as submitting its
+//! quad after projection, in units that kept a constant on-screen size. A live
+//! read at the draw (2026-08-07, see [`HALF_SIZE_TO_WORLD`]) shows otherwise:
+//! the original transforms the nozzle into **view space** by a rigid matrix,
+//! builds the quad there with world-sized extents, and draws it through the
+//! scene's own projection - a view-space billboard that shrinks with distance.
+//! This module's world-space camera-basis quad is therefore the same
+//! construction, not a divergence, and [`HALF_SIZE_TO_WORLD`] is `1.0` rather
+//! than a fitted conversion. What still departs is [`FLARE_ASPECT`], an
+//! observed stretch whose mechanism is open - see its doc.
 //!
 //! The ribbon itself is recovered end to end (2026-08-02, static read plus a
 //! live PPSSPP capture; see exhaust.md's GE-state and vertex-bake sections):
@@ -319,38 +321,39 @@ pub const ALPHA_FLICKER: (f32, f32) = (200.0 / 255.0, 1.0);
 
 /// The flare quad's on-screen width-to-height ratio: `480 / 272`.
 ///
-/// `ExhaustFlare_Draw` writes equal extents, `x = cx +/- half_size` and
-/// `y = cy +/- half_size`, in the post-projection space it submits in, and the
-/// PSP viewport maps a unit of NDC `x` onto 240 pixels against 136 for `y`.
-/// The shipped flare is therefore drawn **1.76x wider than tall on screen**,
-/// and the `128x64` flare texture is authored for exactly that stretch.
-/// Drawing the quad square, which this module did until 2026-08-02, compressed
-/// the art's horizontal lobes and read visibly narrower than the original.
+/// Carried as an **observation whose mechanism is now open** (2026-08-07).
+/// The old justification - equal extents in post-projection space, stretched
+/// by the viewport's 240:136 pixel mapping - fell with the live matrix read
+/// that settled [`HALF_SIZE_TO_WORLD`]: the quad is a view-space square, and
+/// a view-space square through a symmetric projection renders square. Yet the
+/// original's own frames really do show a wide flare (a stalled-craft capture
+/// on Talon's Junction measures the visible glow at about 1.7:1), and drawing
+/// ours square read visibly narrower against a live capture (2026-08-02). So
+/// the stretch stays, as the measured shape with an unexplained cause -
+/// candidates being the GE projection the flare inherits or something about
+/// the art's own content - rather than as recovered geometry.
 pub const FLARE_ASPECT: f32 = 480.0 / 272.0;
 
-/// Converts the recovered half-size into world units.
+/// Converts the recovered half-size into world units: `1.0`, because the
+/// original's half-size **is already in view units**, which a rigid view
+/// transform makes the same size as world units.
 ///
-/// **This is the one number here that is not the original's.** The original's
-/// half-size is applied after projection, so it is in the GE's post-projection
-/// units and the sprite keeps a constant on-screen size at any distance. Drawing
-/// in world space instead is what makes the effect resolution-independent, and it
-/// needs the size in world units, for which no conversion factor exists anywhere
-/// in the executable to read.
-///
-/// `2.15`, **measured**, replacing the earlier sanity-check `1.0`
-/// (2026-08-02). Method: two intensity-saturated frames - a live PPSSPP race
-/// at 83 km/h and our capture at 459 km/h - both cameras at their recovered
-/// speed-independent distance, comparing the bloom's visible-core width as a
-/// fraction of the hull's on-screen width (the same `128x64` art on both
-/// sides, so core-to-hull ratios compare quad sizes directly). Original:
-/// `~0.56` hull widths; ours at `1.0`: `~0.26`; ratio `2.15`.
-///
-/// **Confidence 65.** Better than the old sanity check but still a fit: the
-/// measurement rides on the visible-core threshold and on our camera's field
-/// of view matching the original's, neither of which is pinned. It stays
-/// named and isolated rather than multiplied into [`HALF_SIZE_GAIN`], where
-/// it would silently corrupt a recovered value.
-pub const HALF_SIZE_TO_WORLD: f32 = 2.15;
+/// Settled 2026-08-07 by reading the transform live rather than fitting
+/// pixels: at a breakpoint in `ExhaustFlare_Draw` (`0x08904a30`), the matrix
+/// the nozzle is transformed by - the display's stack top at `+0x1410` - read
+/// back as a pure world-to-view rigid transform (orthonormal rows, fourth
+/// column `0,0,0,1`), and `Math_TransformVec4` applies it with no perspective
+/// divide. The GE's view and model matrices are then set to identity with the
+/// **projection left live**, so the quad is a view-space billboard whose
+/// `+/- half_size` extents are world-sized and shrink with distance like any
+/// other geometry. This retires two earlier readings in order: the
+/// "post-projection units, constant on-screen size" story this module used to
+/// carry, and the `2.15` fitted here on 2026-08-02 - a matched-pose
+/// comparison (`--pose-from` a captured crossing row, same recorded camera)
+/// shows `1.0` reproducing the original's flare-to-hull ratio where `2.15`
+/// read double. Confidence **85**: one live read, one binary, corroborated by
+/// the matched-pose frame.
+pub const HALF_SIZE_TO_WORLD: f32 = 1.0;
 
 /// Per-frame state of one ship's exhaust.
 ///

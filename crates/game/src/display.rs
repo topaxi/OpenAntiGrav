@@ -13,7 +13,8 @@
 //! - [`Scale`] is how many pixels that shape is actually rendered with.
 //! - [`Fov`] is how much of the world fits in it.
 //! - [`BoostFovKick`] is how much [`Fov`] itself moves for a moment on a
-//!   speed pad, an effect this project invented rather than recovered.
+//!   speed pad - invented here first, then measured to exist in the original
+//!   too (see its own doc for the capture that showed it).
 //! - [`Brightness`] and [`Gamma`] are what happens to the finished picture on
 //!   its way to the surface.
 //!
@@ -1047,13 +1048,21 @@ percentage!(Fov, AUTHORED, "field of view");
 /// scales in, so this composes with a player's own field-of-view choice
 /// rather than fighting it. 0 turns the effect off.
 ///
-/// **An authored effect, not a recovered one** - the same standing this
-/// project gives `oag_render::sparks`. Nothing in either binary has been read
-/// that widens the field of view on a speed pad; this exists because a boost
-/// the player cannot feel is a boost that reads as nothing happening, and the
-/// force term it rides on *is* recovered. See `crate::race::Race::projection`
-/// for where it is applied and `crate::race::BOOST_FOV_OPEN_RATE`/
-/// `BOOST_FOV_CLOSE_RATE` for how it moves.
+/// **The original has this effect, and this project found that out after
+/// inventing its own version.** This type shipped as an authored effect on the
+/// reasoning that a boost the player cannot feel reads as nothing happening.
+/// A 2026-08-07 matched-pose comparison against a captured PPSSPP pad
+/// crossing on Talon's Junction then showed the original's whole scene zoom
+/// out during the boost and settle back over roughly half a second after the
+/// force ends: trackside geometry reads ~1.4-1.5x smaller at boost age 0.3-0.7 s
+/// than at 1.3 s+, from a camera whose recorded pose barely moved, and an fov
+/// sweep of our posed render lands the boosted frame at roughly 90-95 degrees
+/// against the authored 60. Nothing in the *binary* has been read that does
+/// this - the measurement is a live capture, the mechanism and exact law are
+/// unrecovered - so the tiers here remain this project's own numbers, and the
+/// measured original sits well above [`Self::DEFAULT`], nearest the 32 tier.
+/// See `crate::race::Race::projection` for where it is applied and
+/// `crate::race::BOOST_FOV_OPEN_RATE`/`BOOST_FOV_CLOSE_RATE` for how it moves.
 ///
 /// **A number, the same idiom as [`Fov`] itself**, rather than a named tier:
 /// there is nothing to name that "twice as wide" does not already say. 8 was
