@@ -164,11 +164,18 @@ right, on the first real run.
 
 - GStreamer is now a real, if optional and Linux-only, runtime dependency:
   `pkg-config` plus `gstreamer-1.0`/`gstreamer-app-1.0`/`gstreamer-video-1.0`
-  development headers are needed to build with `--features native-video`,
-  and the target system needs GStreamer core plus `gst-plugins-base`,
-  `gst-plugins-good`/`bad` (for `h264parse`/`decodebin`), and either
-  `gst-plugin-va` or `gst-libav` installed at runtime for the pipeline to
-  produce a decoder element at all. None of this touches the default build.
+  development headers are needed to build with `--features native-video`. At
+  runtime the target system needs `gst-plugins-base` (`decodebin`,
+  `videoconvert`, `appsrc`/`appsink`), `gst-plugins-bad` (`h264parse` lives
+  there, not in `-good`), and a decoder element for `decodebin` to actually
+  select - either `gst-plugin-va` (hardware, package name varies by
+  distribution) or `gst-libav` (software, wraps `ffmpeg`'s `libavcodec` -
+  see "The software-decode question this reopens" above). Confirmed directly
+  against this machine's Arch install: `h264parse` resolves from
+  `gst-plugins-bad-libs`, `decodebin`/`videoconvert`/`appsrc`/`appsink` from
+  `gst-plugins-base-libs`, and (with no `gst-plugin-va` installed)
+  `avdec_h264` from `gst-libav` - all already present, none of this touches
+  the default build.
 - The first LGPL dependency in this workspace, discussed above under "The
   license question this adds." Acceptable because linking is dynamic and
   nothing is modified, but worth a reader's attention if this project's
