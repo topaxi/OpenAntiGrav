@@ -201,9 +201,18 @@ impl fmt::Display for Error {
             Self::TooShort { need, got } => {
                 write!(f, "need at least {need} bytes, got {got}")
             }
+            // Two files on the PS2 disc land here and are not corrupt:
+            // `PS2MUSIC.WAD` (reads as version 16) and `PRERACE.WAD` (version
+            // 32). Both are count-first PCM archives whose first word is an
+            // entry count, so the bare message sends the reader looking for a
+            // WAD variant that does not exist. Naming the alternative costs
+            // nothing and is the difference between a dead end and a pointer.
             Self::UnknownVersion { version } => write!(
                 f,
-                "unknown WAD version {version} (only {KNOWN_VERSION} is known)"
+                "unknown WAD version {version} (only {KNOWN_VERSION} is known); \
+                 if this is a PS2 `.wad`, the first word may be an entry count \
+                 rather than a version - see `crate::ps2_music` and \
+                 docs/formats/ps2-audio.md"
             ),
             Self::ImplausibleEntryCount {
                 entry_count,
