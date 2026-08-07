@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crates/assets",
+  "crates/audio",
   "crates/core",
   "crates/disc",
   "crates/formats",
@@ -25,6 +26,7 @@ rust-version = "1.88"
 
 [workspace.dependencies]
 oag-assets = { path = "crates/assets" }
+oag-audio = { path = "crates/audio" }
 oag-core = { path = "crates/core" }
 oag-disc = { path = "crates/disc" }
 oag-formats = { path = "crates/formats" }

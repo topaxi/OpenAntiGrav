@@ -245,14 +245,25 @@ impl Directory {
 
 /// Wraps raw PCM in a canonical WAV header, so a decoded track can be played.
 ///
-/// The payload is copied verbatim: it is already the sample format a WAV
-/// `data` chunk wants, which is the whole reason this is 40 lines and not a
-/// codec.
+/// This archive's own rate and channel count. Anything else - a mixer render,
+/// a decoded sound bank - wants [`wav_with`].
 #[must_use]
 pub fn wav(pcm: &[u8]) -> Vec<u8> {
+    wav_with(pcm, SAMPLE_RATE, CHANNELS)
+}
+
+/// Wraps raw 16-bit little-endian PCM in a canonical WAV header.
+///
+/// The payload is copied verbatim: it is already the sample format a WAV
+/// `data` chunk wants, which is the whole reason this is 40 lines and not a
+/// codec. It lives here, beside the archive that first needed it, so the
+/// workspace has one WAV writer rather than one per caller - `oag-audio` uses
+/// it for `--dump-audio`.
+#[must_use]
+pub fn wav_with(pcm: &[u8], sample_rate: u32, channels: u16) -> Vec<u8> {
     let data_len = pcm.len() as u32;
-    let byte_rate = SAMPLE_RATE * u32::from(CHANNELS) * 2;
-    let block_align = CHANNELS * 2;
+    let byte_rate = sample_rate * u32::from(channels) * 2;
+    let block_align = channels * 2;
 
     let mut out = Vec::with_capacity(44 + pcm.len());
     out.extend_from_slice(b"RIFF");
@@ -260,8 +271,8 @@ pub fn wav(pcm: &[u8]) -> Vec<u8> {
     out.extend_from_slice(b"WAVEfmt ");
     out.extend_from_slice(&16u32.to_le_bytes());
     out.extend_from_slice(&1u16.to_le_bytes()); // PCM
-    out.extend_from_slice(&CHANNELS.to_le_bytes());
-    out.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
+    out.extend_from_slice(&channels.to_le_bytes());
+    out.extend_from_slice(&sample_rate.to_le_bytes());
     out.extend_from_slice(&byte_rate.to_le_bytes());
     out.extend_from_slice(&block_align.to_le_bytes());
     out.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
