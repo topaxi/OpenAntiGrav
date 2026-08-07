@@ -5,6 +5,7 @@ default: check
 ppsspp_bin := env_var_or_default("PPSSPP_BIN", "PPSSPPSDL")
 pcsx2_bin := env_var_or_default("PCSX2_BIN", "pcsx2")
 rpcs3_bin := env_var_or_default("RPCS3_BIN", "rpcs3")
+mangohud_bin := env_var_or_default("MANGOHUD_BIN", "mangohud")
 
 # The PSP disc a scripted run reads its track and handling out of, and the ISO
 # PPSSPP itself wants (it will not open a CHD). Override with OAG_IMAGE / OAG_ISO.
@@ -117,7 +118,12 @@ play *ARGS:
             args=("data/images/pulse-ps2-eu.chd" "${args[@]:1}")
             ;;
     esac
-    cargo run -q --release -p oag-game {{native_video_flags}} -- "${args[@]}"
+    ${OAG_PLAY_WRAPPER:-} cargo run -q --release -p oag-game {{native_video_flags}} -- "${args[@]}"
+
+# Same as `play`, but wrapped with MangoHud for an FPS/frametime overlay. Needs
+# `mangohud` installed; override the binary with `MANGOHUD_BIN`.
+play-mangohud *ARGS:
+    OAG_PLAY_WRAPPER={{mangohud_bin}} just play {{ARGS}}
 
 # Capture the boot sequence, the menu and the race it launches, without a display
 play-screenshots out="/tmp":
