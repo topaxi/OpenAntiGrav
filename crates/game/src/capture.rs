@@ -355,6 +355,10 @@ pub fn run(loaded: Boot, video_format: Option<VideoFormat>, options: &Options) -
             let frame = showing.map(|movie| crate::menu::Backdrop {
                 rect: crate::frontend::pillarbox(crate::frontend::SCREEN, movie.display_aspect),
                 frame: 0,
+                // Position zero with the frame, there being no playhead here to
+                // have got anywhere: a capture reads the frame straight out of
+                // the `FrameStore` rather than off a `Feed`.
+                position: 0,
             });
             let format = showing.and_then(VideoFormat::of);
             let list = menu_page(

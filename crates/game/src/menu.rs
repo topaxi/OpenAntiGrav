@@ -243,6 +243,15 @@ pub struct Backdrop {
     pub rect: [f32; 4],
     /// Which frame of it to show, counting from zero.
     pub frame: usize,
+    /// How far playback has got, counting every loop.
+    ///
+    /// Carried through to the draw for the same reason the front end carries it
+    /// (see [`Draw::Video`]), even though the menus have already taken their
+    /// picture out of the feed by the time they build one. It is the *same*
+    /// playback either way: the number goes on rising across the handoff from
+    /// `Show Logo` rather than starting again at zero, and a draw list that said
+    /// otherwise would be the one place that claim is not visible.
+    pub position: u64,
 }
 
 /// One option on a `choice` row: what it stores, and what it shows.
@@ -1585,8 +1594,10 @@ pub fn draw_list(
         .map(|backdrop| Draw::Video {
             rect: backdrop.rect,
             frame: backdrop.frame,
-            // The same movie `Show Logo` sits on, still looping: the menus are
-            // where the disc's own `FE Screen` was going anyway.
+            position: backdrop.position,
+            // The same movie `Show Logo` sits on, still looping and still on the
+            // same playhead: the menus are where the disc's own `FE Screen` was
+            // going anyway.
             source: crate::frontend::Video::Backdrop,
         })
         .into_iter()
@@ -3212,6 +3223,10 @@ restart_required = "RESTART THE GAME"
         let backdrop = Backdrop {
             rect: [12.0, 34.0, 456.0, 78.0],
             frame: 91,
+            // Past the movie's own length, because the menus are a continuation
+            // of the playback `Show Logo` sat on rather than a second one - see
+            // `Backdrop::position`.
+            position: 631,
         };
         let with = draw_list(&menu, &no_bindings, Some(backdrop));
         assert_eq!(
@@ -3219,6 +3234,7 @@ restart_required = "RESTART THE GAME"
             Some(&Draw::Video {
                 rect: backdrop.rect,
                 frame: backdrop.frame,
+                position: backdrop.position,
                 source: crate::frontend::Video::Backdrop,
             }),
             "the backdrop has to be painted first: {with:?}"

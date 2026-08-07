@@ -350,6 +350,52 @@ decoder; the front end's `Show Logo` borrows that same feed on the way *in*.
 Nothing about the menus' own use of it changed, and the page's `Draw::Video` now
 carries `source: Backdrop` to say which of the front end's two movies it means.
 
+### One playback, not one per screen
+
+**`Show Logo` and the menus sit in front of the same, never-interrupted playback
+of `Backdrop.PMF`.** That follows from the nesting above - `Show Logo` is a
+*child* of the `FE Screen` that owns the movie widget, so pressing START changes
+which widgets are drawn over a loop that is already running and does not stop -
+and a player who has run the original confirms it: the picture does not jump when
+the boot sequence ends.
+
+This build got it wrong for one revision, in two separate ways, and both are
+worth recording because each hid the other:
+
+1. **Two playheads.** `Frontend` owned one `movie::Player` and `open_menus` built
+   a second one at frame zero, rewinding the shared `movie::Feed` to match. The
+   comment justifying the rewind was right about what it was solving - a second
+   menu open must not compare a fresh player's positions against a worker
+   hundreds of frames ahead - but the fix was aimed at the wrong end. There is
+   only one movie, so there should only ever be one playhead: the front end now
+   *hands its own over* (`Frontend::take_backdrop`, `menu_playhead` in
+   `main.rs`), and nothing is rewound on that path.
+2. **The feed was asked with a wrapped frame index.** `Draw::Video` carried only
+   `frame`, which wraps at 270, while a feed counts positions that never wrap. So
+   nine seconds into the boot sequence the front end started asking for positions
+   the feed was already past, took nothing ever again, and froze on its last
+   picture - which then made the menus' restart look like the only thing wrong.
+   The draw carries `position` as well now, and the feed only ever sees that.
+
+Two consequences that are easy to undo by accident:
+
+- **The front end pumps the backdrop's feed on every frame, whether or not
+  anything draws it.** The playhead runs from the start of the sequence but only
+  `Show Logo` puts the picture on screen, and a feed nobody takes from parks four
+  frames in. Without the pump, `Show Logo` would appear and then rush through
+  nine seconds of movie at decode speed catching up. `FrontendStage::sync_video`
+  therefore takes the frame at the playhead always and *uploads* it only when the
+  backdrop is the movie being drawn.
+- **Leaving a race does start the loop over**, and that is a judgement call
+  rather than a finding. Nothing advances the playhead during a race and the
+  stage that owned it is gone, so `escape` gets a fresh player and the feed is
+  restarted to match - which is at least consistent with `FE Screen` being torn
+  down for a race and rebuilt after it, with its `autostart` movie starting
+  again. Nobody has measured the original's loop phase across a race. If it turns
+  out to continue there too, the change is small: stash the playhead on `Session`
+  when a race starts and hand it back to `menu_playhead`, with no feed restart -
+  the feed parks at most four frames past where the menus stopped taking from it.
+
 ## DISPLAY against GRAPHICS
 
 Two pages under OPTIONS rather than one, and the line between them is **whether

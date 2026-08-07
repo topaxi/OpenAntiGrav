@@ -203,11 +203,18 @@ pub fn load(options: &Options) -> Result<Boot> {
                 )
             });
         if same_planes {
-            frontend.set_backdrop(
-                backdrop.frame_count,
-                backdrop.frame_rate,
-                backdrop.display_aspect,
-            );
+            // **The cache's length, not the container's frame count**, when
+            // there is a cache. The playhead set here is the one the menus go
+            // on running after the boot sequence hands it over, and it is
+            // compared against a `movie::Feed` built from these same decoded
+            // frames - so it has to wrap where the feed wraps. The two agree on
+            // every source measured so far; taking the count off the container
+            // would only be right by luck.
+            let frames = backdrop
+                .frames
+                .as_ref()
+                .map_or(backdrop.frame_count, |frames| frames.len);
+            frontend.set_backdrop(frames, backdrop.frame_rate, backdrop.display_aspect);
         } else {
             report.push(
                 "Show Logo draws on black: the backdrop's planes are not the intro's, \

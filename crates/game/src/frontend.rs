@@ -207,8 +207,22 @@ pub enum Draw {
     Video {
         /// Rectangle.
         rect: [f32; 4],
-        /// Which frame to show.
+        /// Which frame of the movie to show, counting from zero.
+        ///
+        /// Wraps on a movie that loops, so this is what a caller holding the
+        /// whole movie - a headless capture reading a
+        /// [`crate::movie::FrameStore`] - asks for.
         frame: usize,
+        /// How far playback has got, counting every loop.
+        ///
+        /// The same number [`crate::movie::Player::position`] reports, and the
+        /// **only** one a [`crate::movie::Feed`] can be asked with: a feed
+        /// decodes forward forever, so on the second time round a 270-frame
+        /// loop it holds positions 270..274 while `frame` has gone back to 0.
+        /// Asking it with `frame` takes nothing from that point on and the
+        /// picture freezes - which is exactly what the menu backdrop used to do
+        /// nine seconds into the boot sequence.
+        position: u64,
         /// Which movie the frame belongs to.
         source: Video,
     },
@@ -469,10 +483,31 @@ impl Frontend {
         ));
     }
 
-    /// The backdrop's playhead, for tests.
+    /// The backdrop's playhead, for tests and for whoever is pumping its feed.
     #[must_use]
     pub fn backdrop(&self) -> Option<&crate::movie::Player> {
         self.backdrop.as_ref().map(|(player, _)| player)
+    }
+
+    /// Hands the backdrop's playhead on, leaving the sequence without one.
+    ///
+    /// **`Data\Movies\Backdrop` is one continuous playback for as long as the
+    /// front end is up.** `Show Logo` and the menus that follow it are two
+    /// screens in front of the *same* looping movie, not two playbacks of it -
+    /// so when the boot sequence ends, the player moves rather than being
+    /// rebuilt at frame zero. Rebuilding it is what made the picture jump back
+    /// to the start of the loop the moment START was pressed, which a player
+    /// who has run the original reported as wrong.
+    ///
+    /// Whoever takes it also takes the obligation the sequence had: keep
+    /// advancing it, and keep asking the one [`crate::movie::Feed`] for frames
+    /// at its position. Nothing restarts the feed on this path - the two share
+    /// an origin already, and a restart is what would put them back at odds.
+    ///
+    /// Called once, when the menus open. The sequence draws no backdrop
+    /// afterwards, which is correct: it is over.
+    pub fn take_backdrop(&mut self) -> Option<crate::movie::Player> {
+        self.backdrop.take().map(|(player, _)| player)
     }
 
     /// The state machine, for tests and tracing.
@@ -789,6 +824,10 @@ impl Frontend {
                 out.push(Draw::Video {
                     rect: pillarbox(SCREEN, self.video_aspect),
                     frame: self.player.frame(),
+                    // The same number as `frame` here, the intro being played
+                    // once through rather than looped, and carried anyway so a
+                    // consumer never has to know which movie it is holding.
+                    position: self.player.position(),
                     source: Video::Intro,
                 });
             }
@@ -844,6 +883,7 @@ impl Frontend {
                     Draw::Video {
                         rect: *rect,
                         frame: player.frame(),
+                        position: player.position(),
                         source: Video::Backdrop,
                     },
                 );
@@ -1539,6 +1579,80 @@ mod tests {
         let player = frontend.backdrop().expect("a backdrop was set");
         assert!(!player.is_finished(), "repeat=true has no end to run off");
         assert!(player.frame() < 270, "and it wraps inside its own length");
+    }
+
+    #[test]
+    fn the_backdrops_draw_carries_a_position_that_outgrows_its_own_loop() {
+        // What a `movie::Feed` is asked with. It decodes forward forever, so on
+        // the second time round it holds positions 270..274 while `frame` has
+        // gone back to 0 - and a draw carrying only `frame` takes nothing from
+        // it from that moment on, which froze the picture nine seconds in.
+        let mut frontend = frontend(300);
+        frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+        let mut input = Input::new();
+        pick_a_language(&mut frontend, &mut input);
+        assert!(frontend.machine().is(states::SHOW_LOGO));
+
+        for _ in 0..300 {
+            input.begin_frame(0);
+            frontend.update(FRAME, &mut input);
+        }
+
+        let draws = frontend.draw_list();
+        let Draw::Video {
+            frame,
+            position,
+            source: Video::Backdrop,
+            ..
+        } = draws[1]
+        else {
+            panic!("Show Logo must draw the backdrop second: {draws:?}");
+        };
+        assert!(position >= 270, "the loop has been round once by here");
+        assert_eq!(
+            frame,
+            (position % 270) as usize,
+            "the frame is the position wrapped, and the draw carries both"
+        );
+        assert_eq!(
+            position,
+            frontend.backdrop().expect("a backdrop was set").position(),
+            "and it is the playhead's own position, not a second count of it"
+        );
+    }
+
+    #[test]
+    fn the_backdrops_playhead_is_handed_on_rather_than_left_behind() {
+        // `Show Logo` and the menus are two screens in front of one playback.
+        // Whoever opens the menus takes this player as it stands; anything that
+        // rebuilt it would put the picture back to the start of the loop.
+        let mut frontend = frontend(300);
+        frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+        let mut input = Input::new();
+        pick_a_language(&mut frontend, &mut input);
+        for _ in 0..500 {
+            input.begin_frame(0);
+            frontend.update(FRAME, &mut input);
+        }
+
+        let running = frontend.backdrop().expect("a backdrop was set").position();
+        assert!(running > 0, "the playhead must have got somewhere");
+
+        let handed = frontend.take_backdrop().expect("a backdrop was set");
+        assert_eq!(
+            handed.position(),
+            running,
+            "the menus continue the playback rather than starting one"
+        );
+        assert!(!handed.is_finished(), "and it still loops");
+        assert!(
+            frontend.backdrop().is_none(),
+            "the sequence is over; two playheads on one feed is the bug this fixes"
+        );
+        // And with it gone the sequence stops asking for a picture, rather than
+        // drawing one nobody is advancing.
+        let draws = frontend.draw_list();
+        assert!(!draws.iter().any(|d| matches!(d, Draw::Video { .. })));
     }
 
     #[test]

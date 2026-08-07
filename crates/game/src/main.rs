@@ -1522,6 +1522,10 @@ struct MenuStage {
     /// The player lives here rather than in `Session` because it is part of what
     /// is on screen: a stage that is not running should not be advancing a
     /// movie, and putting it here makes that structural instead of remembered.
+    /// **It is usually not this stage's own player**: coming out of the boot
+    /// sequence it is the one `Show Logo` was running, moved across rather than
+    /// rebuilt, so the loop never restarts on the handoff. See
+    /// [`menu_playhead`].
     backdrop: Option<Backdrop>,
 }
 
@@ -1539,6 +1543,53 @@ struct Backdrop {
     /// draw list reports, so the list names the frame on screen rather than one
     /// that may not have arrived. See [`MenuStage::render`].
     shown: Option<usize>,
+}
+
+/// The playhead the menus open on: the one already running, when there is one.
+///
+/// # Coming out of the boot sequence, there always is
+///
+/// `Show Logo` and the menus are two screens in front of **one** playback of
+/// `Data\Movies\Backdrop`, not two playbacks of it: `Show Logo` is a child of
+/// the `FE Screen` that owns the movie, so on hardware pressing START changes
+/// which widgets are drawn over a loop that never stops. Building a
+/// [`movie::Player`] here instead put the picture back at frame zero on that
+/// press, which is the jump a player who has run the original reported. So the
+/// front end hands its playhead over - see
+/// [`frontend::Frontend::take_backdrop`] - and this passes it straight through,
+/// unmodified and un-rewound. There is one [`movie::Feed`] for the whole
+/// session already, so nothing else has to move.
+///
+/// # Leaving a race is the other way in, and it does start over
+///
+/// A race replaces the menu stage, and its playhead goes with it: nothing
+/// advances the backdrop while a race is on screen, and nothing takes frames
+/// out of the feed either, so both stop where the menus left them. Rather than
+/// resume mid-loop from a stage that no longer exists, `escape` gets a fresh
+/// playhead and `Session::open_menus` restarts the feed to match - which is
+/// what the original does too, `FE Screen` being torn down for a race and
+/// rebuilt after it, with its `autostart` movie starting again. It is also the
+/// cheap end of the trade: one decoder flush against carrying a position
+/// through a stage that has no use for it.
+///
+/// **This is a judgement call and the docs do not settle it.** What is
+/// confirmed against the original is the boot handoff above; nobody has
+/// measured the loop's phase across a race. If it turns out to continue there
+/// too, the change is to stash the playhead on [`Session`] when a race starts
+/// and pass it back in here - the feed needs no restart for that, because it
+/// parks at most four frames past where the menus stopped taking from it.
+fn menu_playhead(
+    carried: Option<movie::Player>,
+    frames: usize,
+    frame_rate: (u64, u64),
+) -> movie::Player {
+    carried.unwrap_or_else(|| {
+        // `repeat`, which is the whole difference between this movie and the
+        // intro: `FE Screen` sits under it for as long as a player is in the
+        // menus, so it wraps rather than finishing on its last frame. See
+        // `movie::Player`.
+        movie::Player::new(frames, true, frame_rate)
+    })
 }
 
 impl MenuStage {
@@ -1611,6 +1662,7 @@ impl MenuStage {
                 backdrop.shown.map(|frame| menu::Backdrop {
                     rect: backdrop.rect,
                     frame,
+                    position: backdrop.player.position(),
                 })
             }
             // A backdrop whose frames could not be opened is no backdrop: the
@@ -1692,39 +1744,86 @@ impl FrontendStage {
     /// which is the trap `crate::capture` already documents. The two share one
     /// set of planes, which is safe only because `boot::load` declines to set the
     /// backdrop at all unless its geometry matches the intro's.
+    ///
+    /// # The backdrop's feed is pumped on every frame, drawn or not
+    ///
+    /// The backdrop's playhead runs from the moment the sequence starts - the
+    /// movie is `autostart` on `FE Screen`, which the boot opens long before
+    /// `Show Logo` draws it - but only `Show Logo` puts it on screen. A feed
+    /// decodes a fixed few frames ahead and then parks, so a feed nobody takes
+    /// from sits four frames from the start while the playhead is
+    /// hundreds of frames on; the moment `Show Logo` appeared it would then rush
+    /// through the whole movie at decode speed catching up.
+    ///
+    /// So the frame at the playhead is taken every frame whatever is on screen,
+    /// and only *uploaded* when the backdrop is the movie being drawn. That
+    /// keeps the one feed and the one playhead in step from boot to the menus,
+    /// which is what makes handing the playhead over at `Launch Game`
+    /// ([`frontend::Frontend::take_backdrop`]) a continuation rather than a
+    /// second playback. It costs the worker thread decoding a 480x272 movie at
+    /// 30 Hz during the intro - which is what the hardware is doing at that
+    /// moment too.
     fn sync_video(
         &mut self,
         queue: &wgpu::Queue,
         list: &mut Vec<frontend::Draw>,
         backdrop: Option<&mut movie::Feed>,
     ) -> Result<()> {
-        let Some((wanted, source)) = list.iter().find_map(|draw| match draw {
-            frontend::Draw::Video { frame, source, .. } => Some((*frame, *source)),
+        let drawn = list.iter().find_map(|draw| match draw {
+            frontend::Draw::Video {
+                position, source, ..
+            } => Some((*position, *source)),
             _ => None,
-        }) else {
-            return Ok(());
-        };
-        let (feed, label, shown) = match source {
-            frontend::Video::Intro => (self.feed.as_mut(), "intro movie", &mut self.shown),
-            frontend::Video::Backdrop => (backdrop, "menu backdrop", &mut self.backdrop_shown),
-        };
-        if let Some(feed) = feed {
+        });
+        // Copied out before the renderer is touched, both being fields of
+        // `self`, and because the pump below runs on frames whose draw list
+        // names no movie at all.
+        let playhead = self.frontend.backdrop().map(movie::Player::position);
+
+        let has_backdrop = backdrop.is_some();
+        if let (Some(feed), Some(position)) = (backdrop, playhead) {
             if let Some(reason) = feed.take_error() {
-                bail!("decoding the {label}: {reason}");
+                bail!("decoding the menu backdrop: {reason}");
+            }
+            if let Some(frame) = feed.take_upto(position) {
+                // Only when it is the movie on screen: one renderer, one set of
+                // planes, and the intro is in them until `Show Logo`.
+                if matches!(drawn, Some((_, frontend::Video::Backdrop))) {
+                    self.renderer.upload_frame(queue, &frame.picture)?;
+                    self.backdrop_shown = true;
+                }
+            }
+        }
+
+        // The intro, only on the frames that draw it. Unlike the backdrop it
+        // does not loop and nothing carries it past the sequence, so a feed left
+        // parked while another screen is up has nothing to fall behind.
+        if let Some((position, frontend::Video::Intro)) = drawn
+            && let Some(feed) = self.feed.as_mut()
+        {
+            if let Some(reason) = feed.take_error() {
+                bail!("decoding the intro movie: {reason}");
             }
             // `saturating_sub`, so an empty cache is a movie with no picture
-            // rather than a panic on `0 - 1`.
-            let position = wanted.min(feed.len().saturating_sub(1)) as u64;
+            // rather than a panic on `0 - 1`. The cache can be shorter than the
+            // sequence - `--movie-frames` - and then the last frame holds.
+            let position = position.min(feed.len().saturating_sub(1) as u64);
             if let Some(frame) = feed.take_upto(position) {
                 self.renderer.upload_frame(queue, &frame.picture)?;
-                *shown = true;
+                self.shown = true;
             }
-            if !*shown {
-                list.retain(|draw| !matches!(draw, frontend::Draw::Video { .. }));
-            }
-        } else {
-            // No feed for the movie this draw names - a source without a
-            // backdrop, `--no-video`, no `ffmpeg`. The quad would be green.
+        }
+
+        // A quad with nothing in its planes is a green rectangle, zeroed I420
+        // not being black - so a movie with no feed at all (a source without a
+        // backdrop, `--no-video`, no `ffmpeg`) and one whose first picture has
+        // not arrived yet are both dropped from the list rather than drawn.
+        let ready = match drawn {
+            Some((_, frontend::Video::Intro)) => self.feed.is_some() && self.shown,
+            Some((_, frontend::Video::Backdrop)) => has_backdrop && self.backdrop_shown,
+            None => return Ok(()),
+        };
+        if !ready {
             list.retain(|draw| !matches!(draw, frontend::Draw::Video { .. }));
         }
         Ok(())
@@ -1857,6 +1956,13 @@ struct Session {
     /// only [`movie::Feed::restart`]ed, which is one decoder flush. It also means
     /// the worker is alive while a race is on screen - parked on a full ring,
     /// costing nothing, because nothing is taking frames out of it.
+    ///
+    /// **It also outlives the boot sequence, and that is the whole reason there
+    /// is one movie here rather than two.** The front end draws out of this same
+    /// feed under `Show Logo` and hands its playhead to the menus when it ends -
+    /// see [`menu_playhead`] - so nothing is restarted on that path. The
+    /// [`movie::Feed::restart`] above is for the race path only, where there is
+    /// no playhead left to continue.
     backdrop: Option<movie::Feed>,
     /// The backdrop's frame rate and where on screen it goes, kept because the
     /// feed carries pixels and not presentation.
@@ -2335,16 +2441,15 @@ impl Session {
         // headless capture path and its movie is a different one that kept its
         // frames. See `VideoFormat::of_feed`.
         //
-        // **And the feed is put back to the start.** `Player::new` below begins at
-        // frame zero every time the menus open, so the feed has to begin at
-        // position zero with it or the second open compares this player's
-        // positions against a worker that is hundreds of frames further on, takes
-        // nothing, and freezes on the last picture of the first visit.
+        // **The playhead is carried over the front end's shoulder, not built
+        // fresh.** See `menu_playhead`: coming out of the boot sequence there is
+        // already one running, and rebuilding it at frame zero is what made the
+        // picture jump back to the start of the loop the instant START was
+        // pressed. The feed is only restarted when there is nothing to carry -
+        // the two share an origin already, and restarting one of them is exactly
+        // what would put them at odds.
         let shape = self.backdrop_shape.filter(|_| self.backdrop.is_some());
         let format = self.backdrop.as_ref().map(VideoFormat::of_feed);
-        if let Some(feed) = self.backdrop.as_mut() {
-            feed.restart();
-        }
         let frames = self.backdrop.as_ref().map_or(0, movie::Feed::len);
         let renderer = Renderer::new(
             &self.gpu.device,
@@ -2354,15 +2459,23 @@ impl Session {
             shell.font,
             &shell.sprites,
         )?;
+        // Past the last fallible step, so a renderer that could not be built
+        // leaves the front end holding its own backdrop rather than stripped of
+        // one it is still drawing.
+        let carried = match &mut self.stage {
+            Stage::Frontend(stage) => stage.frontend.take_backdrop(),
+            _ => None,
+        };
+        if carried.is_none()
+            && let Some(feed) = self.backdrop.as_mut()
+        {
+            feed.restart();
+        }
         self.stage = Stage::Menu(Box::new(MenuStage {
             renderer,
             menu: model,
             backdrop: shape.map(|shape| Backdrop {
-                // `repeat`, which is the whole difference between this movie and
-                // the intro: `FE Screen` sits under it for as long as a player
-                // is in the menus, so it wraps rather than finishing on its last
-                // frame. See `movie::Player`.
-                player: movie::Player::new(frames, true, shape.frame_rate),
+                player: menu_playhead(carried, frames, shape.frame_rate),
                 rect: shape.rect,
                 shown: None,
             }),
@@ -2792,6 +2905,55 @@ cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z
         let path = fixture_file("no-camera", FIXTURE);
         let (_, camera) = pose_from_trace(&path, 5, true, None).expect("the fixture row");
         assert!(camera.is_none());
+    }
+
+    /// One frame of the PSP's backdrop, to the nanosecond.
+    const BACKDROP_FRAME: f64 = 1001.0 / 30_000.0;
+
+    #[test]
+    fn the_menus_open_on_the_playhead_the_front_end_was_running() {
+        // The bug this is here for: the boot sequence handed over a backdrop
+        // that was 400 frames into its loop and the menus started a new one at
+        // zero, so the picture jumped back to the start of the movie the instant
+        // START was pressed.
+        let mut running = movie::Player::new(270, true, movie::FRAME_RATE);
+        for _ in 0..400 {
+            running.update(BACKDROP_FRAME);
+        }
+        assert_eq!(running.position(), 400);
+
+        let opened = menu_playhead(Some(running), 270, movie::FRAME_RATE);
+        assert_eq!(
+            opened.position(),
+            400,
+            "the menus continue the playback rather than restarting it"
+        );
+        assert_eq!(opened.frame(), 400 % 270, "and it is mid-loop, not at zero");
+        assert!(!opened.is_finished());
+    }
+
+    #[test]
+    fn a_playhead_carried_across_keeps_running_from_where_it_was() {
+        // Not just the position at the handoff: the next frame after it has to
+        // be the next frame of the same playback, wrap included.
+        let mut running = movie::Player::new(270, true, movie::FRAME_RATE);
+        for _ in 0..269 {
+            running.update(BACKDROP_FRAME);
+        }
+        let mut opened = menu_playhead(Some(running), 270, movie::FRAME_RATE);
+        opened.update(BACKDROP_FRAME);
+        assert_eq!(opened.position(), 270);
+        assert_eq!(opened.frame(), 0, "it wraps rather than ending");
+    }
+
+    #[test]
+    fn with_nothing_to_carry_the_menus_start_the_loop_themselves() {
+        // Leaving a race: the stage that owned the playhead is gone, and
+        // `open_menus` restarts the feed to match this. See `menu_playhead`.
+        let fresh = menu_playhead(None, 270, movie::FRAME_RATE);
+        assert_eq!(fresh.position(), 0);
+        assert_eq!(fresh.frames(), 270);
+        assert!(!fresh.is_finished(), "270 frames of loop are not an ending");
     }
 
     #[test]

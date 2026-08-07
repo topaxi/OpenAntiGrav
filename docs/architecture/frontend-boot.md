@@ -100,7 +100,7 @@ is already running rather than starting when the screen appears - and a player
 who has run the original confirming the picture. The playhead therefore runs from
 the start of the sequence rather than from the moment `Show Logo` is entered.
 
-Two implementation notes worth keeping, because both are traps:
+Three implementation notes worth keeping, because all three are traps:
 
 - **One feed, not two.** `Session` already builds the backdrop's decode thread
   when the window opens, well before the menus ask for it, so the front end
@@ -112,6 +112,15 @@ Two implementation notes worth keeping, because both are traps:
   of the wrong one produces *a picture* rather than an error - the same trap
   [`capture.rs`](../../crates/game/src/capture.rs) already warns about for
   `--menu-page`. Nothing infers the movie from the current state.
+- **One playhead, and it is asked for by position rather than by frame.** A
+  `movie::Player` reports both: `frame` wraps at the movie's length, `position`
+  counts every loop. A `movie::Feed` decodes forward forever, so on the second
+  time round the 270-frame backdrop it holds positions 270..274 while `frame` has
+  gone back to 0 - asking it with `frame` takes nothing from that point on and
+  the picture freezes. `Draw::Video` therefore carries both, and the feed only
+  ever sees `position`. See [menus.md](menus.md#one-playback-not-one-per-screen)
+  for the other half of this, which is that the playhead is *handed to* the menus
+  rather than replaced by one of theirs.
 
 **There is a plane-geometry guard, and both discs pass it.** The front end is
 drawn by one renderer with one set of I420 planes, sized once from the intro, and
