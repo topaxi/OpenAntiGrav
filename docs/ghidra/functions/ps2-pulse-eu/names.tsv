@@ -169,3 +169,16 @@
 0x0015e600	function	Body_ResolveContactPair	85	craft-update.md
 0x0015ce28	function	Body_QueueDeferredImpulse	82	craft-update.md
 0x0019b168	function	Movie_ResolveSourcePath	90	movie-paths.md
+0x001da0a0	function	Loading_Show	88	loading-screen.md
+0x001d9a90	function	Loading_ScreenConstruct	85	loading-screen.md
+0x001d9c20	function	Loading_ScreenDraw	85	loading-screen.md
+0x001d95a8	function	Loading_DrawWave	90	loading-screen.md
+0x001da658	function	Loading_DrawText	85	loading-screen.md
+0x001d9408	function	Loading_Ramp255	88	loading-screen.md
+0x001d9558	function	Loading_SlewToward	85	loading-screen.md
+0x001d9470	function	Loading_LerpColour	85	loading-screen.md
+0x0028285c	data	g_loading_screen_type	85	loading-screen.md
+0x00282834	data	g_loading_wave_phase	85	loading-screen.md
+0x00282838	data	g_loading_wave_rates	85	loading-screen.md
+0x002bc098	data	g_loading_wave_envelope	90	loading-screen.md
+0x002f9c88	data	g_loading_tip	82	loading-screen.md

@@ -46,6 +46,9 @@ same results.
 One entry in `Data.wad` matched `data/defaults/loading/LoadingPulseOverlay.mip`,
 already lowercase with forward slashes, while its siblings matched
 `Data\...\*.mip`. That single case confirms both normalisation rules at once.
+The blob it names is now identified too - a 32x32 cyan glow strip, the only
+texture the loading screen's procedural wave uses; see
+[loading screen](loading-screen.md).
 
 There is also an escape hatch at `0x08940d5c`-`0x08940dd8`: a name of exactly
 `#` plus 8 **uppercase** hex digits is parsed as a literal hash. No such string

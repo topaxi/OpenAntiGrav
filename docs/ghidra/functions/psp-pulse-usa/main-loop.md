@@ -52,7 +52,9 @@ is an interpretation of a function that only sets up a timer and enters the loop
 | `0x0893fb3c` | `Utility_DialogLoop` | 1 vblank plus swap | 82 |
 
 The loading screen runs on its own thread and drives its animation from
-`sceKernelGetSystemTimeLow` with a 33,333 us divisor.
+`sceKernelGetSystemTimeLow` with a 33,333 us divisor. What it draws, who
+starts it, and what `0x08abf45c` selects are on
+[loading screen](loading-screen.md).
 
 ## State machine
 
@@ -154,5 +156,7 @@ reading of the stub table; it is now a checked fact.
   delta.** The most valuable follow-up in this area; see
   [frame pacing](../../../psp/frame-pacing.md).
 - The full state list and the state registration table.
-- `0x08b31048` (game mode) and `0x08abf45c` (loading-screen type).
+- `0x08b31048` (game mode). ~~`0x08abf45c` (loading-screen type)~~ - resolved,
+  see [loading screen](loading-screen.md): `g_loading_screen_type`, six call
+  sites, four distinct values, 0 = boot logo and 4/6 = tip screen.
 - Nothing verified at runtime.

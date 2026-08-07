@@ -812,3 +812,151 @@ gap is 21 functions (`Options_LoadControlMapping`, `Loading_ThreadMain`,
 `Race_ResetCraftBoosts_q`, `Gfx_ViewDepth`, `strtod`,
 `Xml_AttributeAsFloatLibc`, `Xml_AttributeAsOwnedString`, and the 13
 collision-prone plus 1 rejected from the deep sweep) and 15 data items.
+
+## Loading-screen sweep (2026-08-07, fifth pass)
+
+Carries over the 21 rows
+[`psp-pulse-usa/loading-screen.md`](../psp-pulse-usa/loading-screen.md)
+recovered. 10 functions and 7 data items landed; 2 functions and 3 data items
+did not, and are listed with the reason rather than forced.
+
+### The established method was unavailable, and what replaced it
+
+**`bulk_fuzzy_match` could not be used for this pass.** The program at
+`/psp-eu/BOOT.BIN` in the shared Ghidra project is a raw re-import: base
+address `0x00000000`, **0 functions, 0 symbols**, 77 memory blocks. A
+`bulk_fuzzy_match` from the analysed USA program into it returns an empty
+match list because there is nothing on the target side to match against, and
+`diff_functions` needs two analysed functions by definition. Both programs
+are also literally named `BOOT.BIN`, so the bridge's `program` parameter
+cannot disambiguate them by name. This is a tooling state, not a finding: a
+future pass with a properly analysed `/psp-pulse-eu/BOOT.BIN` should redo this
+with the normal tools and should reproduce the table below.
+
+What replaced it is a **relocation-tolerant byte match run directly on the two
+ELFs**, which gives the same guarantee `diff_functions` gives and is checkable
+without Ghidra:
+
+1. Take the USA function's exact byte range from the analysed USA program.
+2. Canonicalise both binaries' `.text` by zeroing *only* the fields a rebuilt
+   binary is allowed to move: the 16-bit immediate of `lui`, `addiu`, `ori`
+   and every load/store, and the 26-bit target of `j`/`jal`.
+   **Branch displacements are left intact**, so any change in control flow
+   breaks the match - that is the same property that makes a `DATA_EXT`-only
+   `diff_functions` result trustworthy.
+3. Require a **unique, 4-byte-aligned** occurrence of the canonicalised
+   function in EU `.text`.
+
+The method self-validates on three addresses derived independently by raw
+string search in the EU ELF earlier in the same session: the
+`data/defaults/loading/LoadingPulseOverlay.mip` literal (EU `0x08a87878`), the
+`"Load screen"` thread-name literal (EU `0x08a878fc`), and the wave envelope
+table (EU `0x08a87814`). All three fall out of the aligned `lui`/`addiu` pairs
+of the matched functions at exactly the values the string search found.
+
+### Functions
+
+`words` counts whole 32-bit instruction words that are byte-identical between
+the two, out of the function's total; the remainder are relocated literal-pool
+and data operands.
+
+| USA function (confidence) | EU address | Words identical |
+| --- | --- | --- |
+| `Loading_Ramp255` (88) | `0x08909c00` | 17/17 |
+| `Loading_LerpByte` (85) | `0x08909c44` | 14/14 |
+| `Loading_LerpColour` (88) | `0x08909c7c` | 55/59 |
+| `Loading_SlewToward` (85) | `0x08909d68` | 25/25 |
+| `Loading_DrawText` (85) | `0x08909e6c` | 203/254 |
+| `Loading_DrawWave` (88) | `0x0890a264` | 197/225 |
+| `Loading_DrawBackdrop` (82) | `0x0890a7d4` | 42/51 |
+| `Loading_Show` (90) | `0x0890a8a0` | 402/405 common, see below |
+| `Texture_LoadEffectSurfaces` (78) | `0x0890c454` | 126/202 |
+| `Texture_BindCausticFrame` (85) | `0x0890d7f8` | 49/55 |
+
+Nine of the ten matched at identical length with identical control flow.
+
+### `Loading_Show`: matched, and it carries a real one-instruction divergence
+
+`Loading_Show` is the one row that did **not** match at identical length: EU is
+404 instructions to USA's 405. An alignment-tolerant diff over the
+canonicalised words gives 402 common in 3 hunks, and all three are the same
+change:
+
+```
+USA[370] 3c070001  lui   a3, 0x1        EU[370] 34060010  ori  a2, zero, 0x10
+USA[371] 24e77700  addiu a3, a3, 0x7700 EU[371] 34072ee0  ori  a3, zero, 0x2ee0
+USA[372] 34060010  ori   a2, zero, 0x10 EU[372] 34084000  ori  t0, zero, 0x4000
+USA[373] 34084000  ori   t0, zero, 0x4000
+```
+
+`a3` is `sceKernelCreateThread`'s fourth argument, the stack size. **USA asks
+for 96,000 bytes (`0x17700`, needing a `lui`/`addiu` pair); EU asks for 12,000
+(`0x2ee0`, which fits one `ori`).** That is the missing instruction, and the
+third hunk is its only other consequence: `USA[32]`'s `bne` displacement is
+`0x15f` against EU's `0x15e`, the same branch retargeted one instruction
+earlier. Nothing else in 405 instructions differs structurally, so the name is
+carried over and the stack-size difference is recorded as a genuine
+region divergence - eight times smaller on the EU disc.
+
+### Data
+
+Recorded **unbased**, per this page's "Method: data" note that EU's data and
+BSS are not rebased into the `0x088xxxxx` range the way `.text` is. Each was
+read out of the aligned `lui`+load/store pair inside an already-matched
+function, at the same instruction index on both sides.
+
+| USA data (confidence) | EU address | Read from |
+| --- | --- | --- |
+| `g_loading_wave_envelope` (90) | `0x00283814` | `Loading_DrawWave` idx 77/82 |
+| `g_loading_thread_id` (90) | `0x002b9078` | `Loading_Show` idx 376/377-379 |
+| `g_loading_finished` (80) | `0x002b9084` | `Loading_DrawWave` idx 83/130 |
+| `g_loading_screen_type` (88) | `0x002b908c` | `Loading_Show` idx 16/24 |
+| `g_loading_start_time` (85) | `0x002b9090` | `Loading_Show` idx 21/23 |
+| `g_loading_wave_phase` (85) | `0x002b90a0` | `Loading_DrawWave` idx 28/49 |
+| `g_loading_wave_rates` (85) | `0x002b90a4` | `Loading_DrawWave` idx 20/21 |
+
+Six of the seven BSS items are internally consistent at a uniform
+`0x23d0` shift from their USA counterparts, and they land in the same
+`0x002b9xxx` neighbourhood as `g_force_fixed_30` (`0x002b920c`) and its two
+siblings, which the fourth pass resolved independently. `g_loading_thread_id`
+is the one derived past `Loading_Show`'s divergence hunk, so its EU index is
+shifted by one; three separate instruction pairs in that function all give
+`0x002b9078`.
+
+### What did not match
+
+- **`Loading_ThreadMain`** (USA `0x0890b52c`). Independently landed on the same
+  EU candidate `0x0890aef0` the fourth pass reached by offset interpolation,
+  and independently rejected it: best canonical-word agreement is 105/411 at
+  that alignment, and an alignment-tolerant diff over a same-length window
+  gives 73.2 % in 24 hunks. That agrees with the fourth pass's
+  `body_added=188` finding above. **Two techniques, two rejections** - treat
+  this as settled unless a genuinely different candidate address turns up.
+- **`Loading_DrawBootLogo`** (USA `0x0890ac68`, 105 instructions). The EU slot
+  between the matched `Loading_DrawWave` and `Loading_DrawBackdrop` runs
+  `0x0890a5e8`-`0x0890a7d3`, which is **123 instructions - 18 more than USA**,
+  with 86 common in 14 hunks (69.9 %). That is a real structural difference,
+  not a relocation pattern. Not renamed. It is also unsurprising: this is the
+  boot logo and legal screen, exactly where the EU disc is already documented
+  to differ (the language picker and `PI000`-vs-`PI012` plugin layout in
+  [frontend-boot.md](../../../architecture/frontend-boot.md)).
+- **`g_loading_tip`** (USA `0x08af25c0`), **`g_loading_tip_show_help`**
+  (`0x08af2699`) and **`g_caustic_frames`** (`0x08b62d90`). None is formed by
+  a `lui`+load/store pair that this pass's tracker can follow - most likely the
+  base register is renamed through a `move` between the two halves, which the
+  tracker does not chase. Left unresolved rather than guessed; a normal
+  `decompile_function` on the EU side, once that program is analysed, reads
+  these straight out of the pseudo-C the way the fourth pass's data method did.
+
+**These names are not applied to Ghidra.** The EU program in the project has no
+functions, so `apply-ghidra-names.py` would `create_function` at each address
+in an unanalysed image rather than rename anything. The rows are recorded here
+and in `names.tsv`; apply them after the EU binary is analysed properly.
+
+**17 rows added** (10 functions, 7 data); `names.tsv` now carries 289 rows.
+
+Confined finding worth keeping: **everything the wave itself touches is
+region-invariant** - the envelope, the rates, the helpers, the draw path - and
+both rejections (`Loading_ThreadMain`, `Loading_DrawBootLogo`) plus the one
+accepted divergence (the thread stack size) sit in the *boot logo and thread
+setup*, not in the effect.

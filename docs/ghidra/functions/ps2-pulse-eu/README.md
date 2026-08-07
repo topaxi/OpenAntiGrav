@@ -24,10 +24,11 @@ form, and Ghidra's string search will return all three.
 | [Front-end globals](fe-globals.md) | The `FEGlobals->` / `FEConst->` indirection, its registry, and the flag-bit tagging that makes one a live binding |
 | [Movie source paths](movie-paths.md) | How a `Movie` widget's `src` becomes a filename, and the one global that picks the PAL cut of both the intro and the backdrop |
 | [Recovered C library](libc.md) | `strlen`, `strcmp`, `strcasecmp`, `tolower`, `_ctype_` |
+| [Loading screen](loading-screen.md) | The same procedural heartbeat wave as the PSP, and the four places the port diverges |
 
 ## Renames
 
-**Applied.** 138 symbols, collected in [names.tsv](names.tsv). There is no
+**Applied.** 151 symbols, collected in [names.tsv](names.tsv). There is no
 `just` recipe for this set yet; run the script directly against a bridge with
 `SCES_547.48` open:
 
