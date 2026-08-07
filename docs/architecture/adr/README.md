@@ -28,6 +28,8 @@ out to be wrong.
 | [0015](0015-ordered-visible-set-union.md) | Order the visible-set union, and never rejoin authored alternatives | Accepted |
 | [0016](0016-platform-native-h264-decode.md) | Platform-native H.264 decode as an accelerated path, on Linux first | Superseded by [ADR-0017](0017-gstreamer-native-video.md) |
 | [0017](0017-gstreamer-native-video.md) | GStreamer for platform-native H.264 decode, not a hand-rolled `libva` decoder | Accepted |
+| [0018](0018-audio-mixer-architecture.md) | Own the mixer, and treat cues as a per-tick output | Accepted |
+| [0019](0019-atrac3plus-out-of-process.md) | Decode ATRAC3+ out of process, into the movie cache | Accepted |
 
 ## Format
 
