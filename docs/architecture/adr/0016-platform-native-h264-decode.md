@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted. Additive: does not supersede
+Superseded by [ADR-0017](0017-gstreamer-native-video.md). Kept as the record
+of why hand-rolled `libva` was tried first and what it cost - the decision
+itself no longer holds; nothing in `crates/game` still implements it.
+
+Originally: Accepted. Additive: does not supersede
 [ADR-0004](0004-asset-pipeline.md) or [ADR-0008](0008-av1-movie-cache.md), which
 stand unchanged as the default and universal fallback.
 

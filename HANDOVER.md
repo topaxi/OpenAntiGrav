@@ -322,6 +322,7 @@ the past.
 | **Pure asset work** | Deferred behind M4's exit per [ADR-0009](docs/architecture/adr/0009-multi-game-fanout.md); the probe ran and [`pure-status.md`](docs/formats/pure-status.md) has the table. Two render blockers: the `.vex` class-ID table is renumbered wholesale (five constants, but the right shape is a per-title table keyed off the version word, which is a design call), and Pure's embedded model textures ship pre-swizzled behind a flag byte at `+0x06` that `vex::textures` never reads. |
 | **A "CPU renderer" switch** | There is nothing to switch. wgpu ships no software rasteriser (`Backend::Noop` draws nothing), so CPU rendering exists only when the *system* has a driver - Mesa lavapipe, or WARP on Windows - which wgpu then enumerates as an ordinary adapter reporting `DeviceType::Cpu`. The GRAPHICS -> RENDERER row therefore lists what the machine actually has and tags that one `(cpu)`; it is absent on a machine without lavapipe rather than present and failing. `force_fallback_adapter` was rejected for exactly that reason. See `crates/game/src/adapter.rs`. |
 | **RENDERER applies on the next launch** | The device is made once at boot and everything hangs off it. Live switching means tearing down the surface, the upscaler framebuffer, every pipeline and the current `Stage`; that is a bigger change than the row and it buys a relaunch. What *is* handled now is recovery: `Gpu::bring_up` retries on `default` when the named adapter enumerates but will not produce a device or configure the surface, because `apply_setting` saves on every keypress and a setting reachable from inside the game must not be able to lock a player out of it. Verified by forcing an impossible `required_limits` on the named adapter. |
+| **PS2 `.PSS`/`.IPF` through GStreamer** | [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md) added a GStreamer-backed decode path for the PSP's `.PMF` H.264, and the same pipeline shape could decode the PS2's MPEG-2 `.PSS` too - raised twice as an argument for GStreamer, deferred both times, still deferred. Nothing in `open_mpeg2_ps`/`open_ipuf` changed; PS2 content always goes through the AV1 cache. |
 | Everything milestone-scoped | Weapons, AI, audio, netcode, the shell: [roadmap](docs/overview/roadmap.md), not here. |
 
 ## Working rules that were learned expensively
@@ -550,6 +551,15 @@ the past.
 
 **Tools that fail silently rather than erroring:**
 
+- **A GStreamer `appsrc` set to `AppStreamType::Seekable` performs an initial
+  seek on start, and that seek can fail with no exception at the call site
+  that set the property.** `pipeline.set_state(Playing)` just returns `Err`
+  with an empty bus - `GST_DEBUG=3` is what shows `gst_app_src_do_seek: seek
+  failed` and `Failed to perform initial seek` underneath it. This decoder
+  (`crates/game/src/movie/gst.rs`, [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md))
+  pushes one whole buffer and calls `end_of_stream()`, which is exactly what
+  `AppStreamType::Stream` describes; `Seekable` is for sources that support
+  real seeking, which this one never claimed to and does not need to.
 - **`ffprobe -show_entries` does not print fields in the order requested** - it
   uses its own. Parse `key=value` pairs by name (`-of
   default=noprint_wrappers=1`, keys kept); positional parsing reads the wrong

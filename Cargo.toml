@@ -66,12 +66,6 @@ float_arithmetic = "allow"     # enabled per-module in sim crates, not globally
 suboptimal_flops = "allow"     # would suggest mul_add, which is contraction
 imprecise_flops = "allow"
 
-# `cros-libva` 0.0.13 does not build against this host's libva as published;
-# see vendor/README.md for what changed and why. Drop this patch (and
-# vendor/cros-libva-0.0.13/) once upstream ships a release with the fix.
-[patch.crates-io]
-cros-libva = { path = "vendor/cros-libva-0.0.13" }
-
 [profile.release]
 debug = 1
 

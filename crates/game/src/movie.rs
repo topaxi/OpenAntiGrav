@@ -35,7 +35,8 @@
 //!
 //! See `docs/architecture/frontend-boot.md`.
 
-mod dpb;
+#[cfg(all(target_os = "linux", feature = "native-video"))]
+mod gst;
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -814,6 +815,20 @@ fn open_psmf(
 
     let wanted = extent.limit(frame_count);
 
+    #[cfg(all(target_os = "linux", feature = "native-video"))]
+    if let Some(frames) = gst_frame_store(&demuxed.video, key, width, height, wanted) {
+        return Ok(Movie {
+            header: Some(header),
+            frame_count,
+            width,
+            height,
+            frame_rate: FRAME_RATE,
+            display_aspect: (width, height),
+            frames: Some(frames),
+            no_picture_reason: None,
+        });
+    }
+
     match transcode(&demuxed.video, key, cache_dir, width, height, wanted) {
         Ok(frames) => Ok(Movie {
             header: Some(header),
@@ -836,6 +851,55 @@ fn open_psmf(
             no_picture_reason: Some(format!("{reason:#}")),
         }),
     }
+}
+
+/// Tries the platform-native H.264 path for a demuxed `.PMF` elementary
+/// stream, on Linux with the `native-video` feature. `None` means "use the
+/// AV1 cache instead" - for any reason: no usable GStreamer H.264 decoder
+/// element, or an outright error partway through, which is printed as a
+/// warning rather than surfaced, matching how a missing `ffmpeg` is handled
+/// a few lines down. See
+/// [ADR-0017](../../../docs/architecture/adr/0017-gstreamer-native-video.md).
+#[cfg(all(target_os = "linux", feature = "native-video"))]
+fn gst_frame_store(
+    video: &[u8],
+    key: &str,
+    width: u32,
+    height: u32,
+    wanted: usize,
+) -> Option<FrameStore> {
+    let decoder = match gst::GstDecoder::open(video.to_vec(), wanted) {
+        Ok(Some(decoder)) => decoder,
+        Ok(None) => return None,
+        Err(e) => {
+            eprintln!("warning: platform-native H.264 decode unavailable for {key}: {e:#}");
+            return None;
+        }
+    };
+
+    let geometry = decoder.geometry();
+    if (geometry.width, geometry.height) != (width, height) {
+        eprintln!(
+            "warning: {key}'s GStreamer decode is {}x{}, but the movie declares {width}x{height}",
+            geometry.width, geometry.height
+        );
+        return None;
+    }
+
+    Some(FrameStore {
+        // Keeps the `{hash}-{size}` prefix the AV1 cache's own filenames use
+        // (see `transcode`), so a caller that parses `path()` for the entry
+        // key - `movie_ground_truth.rs`'s `the_cache_is_lossless` does - gets
+        // the same answer regardless of which decoder actually served the
+        // movie.
+        path: PathBuf::from(format!("{key}-gst")),
+        len: decoder.len(),
+        luma_len: geometry.luma_len(),
+        chroma_len: geometry.chroma_len(),
+        chroma_width: geometry.chroma_width,
+        chroma_height: geometry.chroma_height,
+        source: Box::new(decoder),
+    })
 }
 
 /// Makes a raw MPEG-2 program stream's frames available, transcoding if it

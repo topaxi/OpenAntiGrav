@@ -87,20 +87,51 @@ fn load() -> Option<boot::Boot> {
     Some(boot::load(&options).expect("loading the boot sequence"))
 }
 
-/// Decodes the cached elementary stream straight to raw frames, which is what
-/// the cache used to hold and is the reference the AV1 must reproduce.
-fn reference_frames(key_glob: &str, frame_len: usize) -> Vec<u8> {
+/// Like [`load`], but asks for the intro's full length (`Extent::Whole`)
+/// rather than [`FRAMES`]. Real gameplay mostly plays movies this way -
+/// `Extent::Frames` exists for the intro's own early cutoff and not much
+/// else - so a decoder that is only ever exercised against a truncated
+/// extent in tests could have a wanted-count bug nothing here would catch.
+fn load_whole() -> Option<boot::Boot> {
+    let image = image()?;
+    if !have_ffmpeg() {
+        return None;
+    }
+    let options = boot::Options {
+        language: None,
+        source: image.display().to_string(),
+        leg: oag_game::frontend::Leg::LogoFmv,
+        movie: pulse::names::INTRO_MOVIE.to_string(),
+        cache: cache_dir(),
+        extent: movie::Extent::Whole,
+        no_video: false,
+    };
+    Some(boot::load(&options).expect("loading the boot sequence"))
+}
+
+/// Demuxes the intro's `.PMF` straight off the disc image, independent of
+/// whatever the boot path under test did with it - so this reference does
+/// not depend on the AV1 cache's `transcode` step having run and left the
+/// elementary stream sitting beside it, which the `native-video` path has no
+/// reason to do (see [`GstDecoder`](../src/movie/gst.rs), which decodes the
+/// demuxed bytes in memory and never touches the cache directory at all).
+fn intro_elementary_stream(image: &Path) -> Vec<u8> {
+    let mut archives =
+        pulse::Archives::open(&image.display().to_string()).expect("opening the disc's archives");
+    let blob = archives
+        .read_name(pulse::names::INTRO_MOVIE)
+        .expect("reading the intro movie out of its archive");
+    let demuxed = oag_formats::pmf::demux(&blob).expect("demuxing the intro's program stream");
+    demuxed.video
+}
+
+/// Decodes an elementary stream straight to raw frames with `ffmpeg`, which
+/// is the reference every decoder under test must reproduce exactly.
+fn reference_frames(elementary_stream: &[u8], frame_len: usize) -> Vec<u8> {
     let dir = cache_dir();
-    let es = std::fs::read_dir(&dir)
-        .expect("the cache directory exists")
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .find(|p| {
-            p.extension().is_some_and(|e| e == "h264")
-                && p.file_name()
-                    .is_some_and(|n| n.to_string_lossy().starts_with(key_glob))
-        })
-        .expect("the demuxed elementary stream was written beside the cache");
+    std::fs::create_dir_all(&dir).expect("creating the reference scratch directory");
+    let es = dir.join("reference.h264");
+    std::fs::write(&es, elementary_stream).expect("writing the elementary stream");
 
     let out = dir.join("reference.raw");
     let status = Command::new("ffmpeg")
@@ -132,6 +163,7 @@ fn reference_frames(key_glob: &str, frame_len: usize) -> Vec<u8> {
 #[test]
 #[ignore = "needs data/images/ and ffmpeg"]
 fn the_cache_is_lossless() {
+    let Some(image) = image() else { return };
     let Some(loaded) = load() else { return };
     let mut movie = loaded.movie.expect("the PSP disc carries the reel");
     let frames = movie
@@ -142,17 +174,7 @@ fn the_cache_is_lossless() {
     assert_eq!(frames.len, FRAMES, "the cache holds the frames asked for");
 
     let frame_len = frames.luma_len + 2 * frames.chroma_len;
-    let key = frames
-        .path()
-        .file_name()
-        .expect("the cache file has a name")
-        .to_string_lossy()
-        .split('-')
-        .next()
-        .expect("the cache name starts with the entry hash")
-        .to_string();
-
-    let reference = reference_frames(&key, frame_len);
+    let reference = reference_frames(&intro_elementary_stream(&image), frame_len);
 
     let mut decoded = movie::VideoFrame::default();
     for index in 0..FRAMES {
@@ -162,6 +184,57 @@ fn the_cache_is_lossless() {
             decoded.bytes.as_slice(),
             want,
             "frame {index} differs from what ffmpeg decodes: the transcode is not lossless"
+        );
+    }
+}
+
+/// The `native-video` feature must actually be the one serving the frames it
+/// produced, not silently falling back to the AV1 cache. `the_cache_is_lossless`
+/// above is decoder-agnostic - it passes just as well whichever tier serves
+/// the movie - so on its own it cannot tell a healthy GStreamer install from
+/// a broken one that fell through to the ffmpeg cache unnoticed. This is the
+/// check that closes that gap: it fails loudly instead of quietly passing for
+/// the wrong reason. See [ADR-0017](../../../docs/architecture/adr/0017-gstreamer-native-video.md).
+#[test]
+#[cfg(all(target_os = "linux", feature = "native-video"))]
+#[ignore = "needs data/images/, ffmpeg, and a working GStreamer H.264 decode element"]
+fn native_video_decodes_through_gstreamer_not_the_cache() {
+    let Some(image) = image() else { return };
+    let Some(loaded) = load() else { return };
+    let mut movie = loaded.movie.expect("the PSP disc carries the reel");
+    let frames = movie
+        .frames
+        .as_mut()
+        .expect("the movie transcoded; is libaom-av1 missing from this ffmpeg?");
+
+    let name = frames
+        .path()
+        .file_name()
+        .expect("the cache file has a name")
+        .to_string_lossy()
+        .into_owned();
+    if !name.ends_with("-gst") {
+        println!(
+            "skipping: {name} was not served by GStreamer - no working \
+             native-video decode element on this machine, fell back to the \
+             AV1 cache instead"
+        );
+        return;
+    }
+
+    assert_eq!(frames.len, FRAMES, "the cache holds the frames asked for");
+
+    let frame_len = frames.luma_len + 2 * frames.chroma_len;
+    let reference = reference_frames(&intro_elementary_stream(&image), frame_len);
+
+    let mut decoded = movie::VideoFrame::default();
+    for index in 0..FRAMES {
+        frames.read_frame(index, &mut decoded).expect("decoding");
+        let want = &reference[index * frame_len..(index + 1) * frame_len];
+        assert_eq!(
+            decoded.bytes.as_slice(),
+            want,
+            "frame {index} differs from what ffmpeg decodes: GStreamer's decode is not correct"
         );
     }
 }
@@ -274,4 +347,43 @@ fn the_cache_geometry_matches_the_psmf_header() {
     assert_eq!(frames.chroma_width, movie.width.div_ceil(2));
     assert_eq!(frames.chroma_height, movie.height.div_ceil(2));
     assert_eq!(frames.luma_len, (movie.width * movie.height) as usize);
+}
+
+/// `native-video`'s decoder must decode the *whole* movie when asked to, not
+/// just a truncated `Extent::Frames` extent - which is all the other tests
+/// here use, since [`FRAMES`] keeps them quick. Real gameplay mostly plays
+/// movies with `Extent::Whole` (the intro's own early cutoff is the
+/// exception, not the rule), so a `wanted`-count bug that only shows up past
+/// a truncated extent needs its own check rather than riding along on tests
+/// that never ask for the full length.
+#[test]
+#[cfg(all(target_os = "linux", feature = "native-video"))]
+#[ignore = "needs data/images/, ffmpeg, and a working GStreamer H.264 decode element"]
+fn native_video_decodes_the_whole_movie_length() {
+    let Some(loaded) = load_whole() else { return };
+    let movie = loaded.movie.expect("the PSP disc carries the reel");
+    let frames = movie.frames.as_ref().expect("the movie transcoded");
+
+    let name = frames
+        .path()
+        .file_name()
+        .expect("the cache file has a name")
+        .to_string_lossy()
+        .into_owned();
+    if !name.ends_with("-gst") {
+        println!(
+            "skipping: {name} was not served by GStreamer - no working \
+             native-video decode element on this machine, fell back to the \
+             AV1 cache instead"
+        );
+        return;
+    }
+
+    assert_eq!(
+        frames.len, movie.frame_count,
+        "GStreamer decoded {} frames but the PSMF header declares {} access units - \
+         a partial decode this quiet would otherwise only show up as a movie that \
+         silently freezes or loops early",
+        frames.len, movie.frame_count
+    );
 }
