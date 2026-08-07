@@ -15,6 +15,14 @@ psp_iso := env_var_or_default("OAG_ISO", "data/cache/pulse-psp-usa.iso")
 # the recorded whole lap of Talon's Junction. See docs/tools/oag-trace.md.
 default_scenario := "verification/scenarios/talons-junction-time-trial-lap.inputs"
 
+# The `play`-family recipes' own opt-in default: exercise the accelerated
+# GStreamer decode path (ADR-0017) rather than always falling to the AV1
+# cache, on the one platform it exists for. This is a `just`-only default -
+# `oag-game`'s own Cargo feature stays off by default, so `cargo build`,
+# `cargo test` and CI never touch GStreamer. Empty (not an error) on any
+# other `os()`, since the feature does not exist there.
+native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
+
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
 check: fmt-check lint test check-docs check-deps
 
@@ -109,19 +117,19 @@ play *ARGS:
             args=("data/images/pulse-ps2-eu.chd" "${args[@]:1}")
             ;;
     esac
-    cargo run -q --release -p oag-game -- "${args[@]}"
+    cargo run -q --release -p oag-game {{native_video_flags}} -- "${args[@]}"
 
 # Capture the boot sequence, the menu and the race it launches, without a display
 play-screenshots out="/tmp":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-intro.png" --ticks 400
-    cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-language.png" \
+    cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-intro.png" --ticks 400
+    cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-language.png" \
         --until "Language Selection" --hold start
     # Launch Game hands off to a race, so this one is a ship on a track that was
     # reached through the menus. `--press` pulses cross on alternating ticks, which
     # is what picks the language and then leaves the throttle on half of them.
-    cargo run -q --release -p oag-game -- --screenshot "{{out}}/oag-launch.png" \
+    cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-launch.png" \
         --until "Launch Game" --press start,cross --ticks 60
 
 # One race frame per upscaler, plus a supersampled reference, for judging a
