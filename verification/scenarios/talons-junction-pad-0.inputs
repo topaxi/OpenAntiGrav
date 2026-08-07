@@ -1,0 +1,38 @@
+# Talon's Junction: from the emulator's Time Trial start line, over speed pad 0.
+#
+# Planned, not hand-tuned. Regenerate with:
+#
+#   cargo run -q -p oag-trace -- plan --source data/images/pulse-psp-usa.chd \
+#       --pad 0 --start 6.07,-50.07,-196.10 \
+#       --look-min 26 --look-speed 0.55 --deadband 0.045 \
+#       --out verification/scenarios/talons-junction-pad-0.inputs
+#
+# In our simulation this crosses the pad plane on tick 161 at (168.2, -48.0,
+# -179.0) - 0.09 units right of the pad's centre line, inside a half width of
+# 4.8 - doing 110.8, and is inside the pad's own trigger box from tick 159.
+# Check it with:
+#
+#   cargo run -q -p oag-trace -- drive verification/scenarios/talons-junction-pad-0.inputs \
+#       --source data/images/pulse-psp-usa.chd --start 6.07,-50.07,-196.10 --every 20
+#
+# The first two ticks are deliberately empty: `psp-trace.py --script-lead 2`
+# never sends them, so planning them as released makes the run planned here the
+# run replayed there. Replay it into the emulator with
+#
+#   uv run --with websocket-client scripts/psp-trace.py --script \
+#       verification/scenarios/talons-junction-pad-0.inputs --script-lead 2
+#
+# **Untested against the original.** See docs/tools/autopilot-planning.md.
+
+2 none
+8 cross right r
+16 cross right
+5 cross
+37 cross left
+4 cross
+30 cross right
+4 cross
+36 cross left
+5 cross
+14 cross right
+60 cross

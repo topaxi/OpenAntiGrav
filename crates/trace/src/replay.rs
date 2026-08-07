@@ -499,6 +499,57 @@ pub fn drive<R: Raycaster + ?Sized>(
     script: &[Held],
     options: &DriveOptions,
 ) -> Trace {
+    let script = script.to_vec();
+    drive_with(
+        initial,
+        handling,
+        environment,
+        raycaster,
+        options,
+        |tick, _| {
+            // A script shorter than the run holds its last state; `Script::at` argues why.
+            Some(
+                script
+                    .get(tick)
+                    .or_else(|| script.last())
+                    .copied()
+                    .unwrap_or_default(),
+            )
+        },
+    )
+    .0
+}
+
+/// Runs a *controller* through our physics, and writes down what it pressed.
+///
+/// The same loop [`drive`] is, with the script replaced by a closure that is
+/// handed the state at the start of every tick and answers with the input for
+/// that tick. `drive` itself is this with a closure that reads an array, so a
+/// planned run and a scripted run are stepped by one piece of code rather than
+/// two that have to be kept agreeing.
+///
+/// The second return value is the input the controller chose, tick by tick, in
+/// the order it chose it - which is exactly a [`crate::Script`]'s `states`, and
+/// therefore an authored artefact that can be replayed into either runtime. That
+/// is the point of the signature: a controller is a *way of finding* a script,
+/// not a thing anything downstream has to know about.
+///
+/// Returning `None` from the closure ends the run. The frame for that tick has
+/// already been recorded, so the trace's last frame is the state the controller
+/// stopped on, and the recorded input is one shorter than the trace.
+#[must_use]
+pub fn drive_with<R, F>(
+    initial: ShipState,
+    handling: &Handling,
+    environment: &Environment,
+    raycaster: &R,
+    options: &DriveOptions,
+    mut controller: F,
+) -> (Trace, Vec<Held>)
+where
+    R: Raycaster + ?Sized,
+    F: FnMut(usize, &ShipState) -> Option<Held>,
+{
     let mut world = World::new(SEED);
     world.ships[0] = Ship {
         physics: initial,
@@ -517,8 +568,9 @@ pub fn drive<R: Raycaster + ?Sized>(
     let mut out = Trace {
         frames: Vec::with_capacity(options.ticks),
     };
-    let frame_options = Options {
-        inputs: Inputs::Scripted(script.to_vec()),
+    let mut chosen = Vec::with_capacity(options.ticks);
+    let mut frame_options = Options {
+        inputs: Inputs::Held(Held::default()),
         dt: DeltaSource::Fixed(options.dt),
         basis: options.basis,
         angular: options.angular,
@@ -538,8 +590,14 @@ pub fn drive<R: Raycaster + ?Sized>(
         ));
         speed_cached = state.body.linear_velocity.dot(state.body.forward());
 
+        let Some(held) = controller(index, state) else {
+            break;
+        };
+        chosen.push(held);
+        frame_options.inputs = Inputs::Held(held);
+
         // `Frame::default()` is only ever read by `Inputs::FromTrace`, which this
-        // is not: the script is the whole of the input here.
+        // is not: the controller is the whole of the input here.
         let snapshot = snapshot_for(
             &Frame::default(),
             &mut buttons,
@@ -559,7 +617,7 @@ pub fn drive<R: Raycaster + ?Sized>(
         world.tick += 1;
     }
 
-    out
+    (out, chosen)
 }
 
 /// One tick of our state, in the recording's columns.

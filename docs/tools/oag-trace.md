@@ -13,6 +13,7 @@ oag-trace compare <recorded.csv> <simulated.csv>   diff two traces
 oag-trace script  <script.inputs> [--expand]       validate an input script
 oag-trace drive   <script.inputs> --source <image>  run a scenario, no capture
 oag-trace track   --source <image> [--track <e>]   dump a track's spline as CSV
+oag-trace plan    --source <image> --pad N          find a script that drives to a point
 ```
 
 `drive` is `run` without the recording. `run` takes a scenario's length, its
@@ -21,6 +22,14 @@ script and a disc, puts the ship on the track's own start line the way a race
 does, and prints [a run report](#the-run-report). So a scenario can be exercised
 against our side before, or without, anybody capturing it - which is most of the
 time, since a capture costs an emulator session and a script costs a text editor.
+
+`plan` is `drive` run backwards: instead of being given a script and reporting
+where the ship went, it is given a place and reports the script that goes there.
+It steers our own craft with a pure-pursuit controller and writes down what it
+pressed, so an input script can be authored without an emulator round trip per
+guess. It has its own page - [autopilot planning](autopilot-planning.md) - which
+also covers the live route through `scripts/psp-autopilot.py --gate`, and the
+start-pose trap that catches both.
 
 `track` is the odd one out: it simulates nothing and compares nothing. It reads
 the `WO Track` node out of a track's `.vex` and writes the resampled spline -

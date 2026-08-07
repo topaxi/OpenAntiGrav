@@ -30,6 +30,7 @@
 //! | [`mod@trace`] | The CSV format, exactly as the capture script writes it |
 //! | [`mod@script`] | The committed input-script format both sides are driven by |
 //! | [`mod@replay`] | Driving `oag-gameplay` and `oag-physics` over a recording's scenario |
+//! | [`mod@plan`] | Finding an input script that drives our simulation through a gate |
 //! | [`mod@compare`] | The tolerance table, the first divergence, and the trends |
 //!
 //! # Traces are not committed; scripts are
@@ -55,6 +56,7 @@
 //! shape matches the capture script's header.
 
 pub mod compare;
+pub mod plan;
 pub mod replay;
 pub mod script;
 pub mod trace;

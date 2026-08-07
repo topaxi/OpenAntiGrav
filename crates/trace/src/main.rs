@@ -33,7 +33,7 @@ use oag_race::Course;
 use oag_trace::compare::Tolerances;
 use oag_trace::replay::{Basis, DeltaSource, DriveOptions, Held, Inputs, Options};
 use oag_trace::trace::AngularReading;
-use oag_trace::{Script, Trace, compare, replay};
+use oag_trace::{Script, Trace, compare, plan, replay};
 
 /// The track a recording is assumed to have been taken on unless another is
 /// named. The same default `oag-game` races on, and the directory the reference
@@ -208,6 +208,19 @@ enum Command {
     Drive {
         /// The input script, e.g. `verification/scenarios/steer-left.inputs`.
         script: PathBuf,
+        /// Start the craft here, `x,y,z`, instead of on the track's own grid slot.
+        ///
+        /// A script planned by `oag-trace plan --start` was planned from a pose
+        /// the track's authored `Start Position` is not - the emulator's time
+        /// trial line is about 138 units past it on Talon's Junction - so
+        /// replaying it from the grid slot runs a different scenario. Pass the
+        /// same pose the plan was made from and the two runs are one run.
+        #[arg(long, value_parser = parse_vec3)]
+        start: Option<Vec3>,
+        /// Turn the craft this many degrees off the spline tangent at `--start`,
+        /// positive toward its right. Ignored without `--start`.
+        #[arg(long, default_value_t = 0.0, requires = "start")]
+        start_yaw: f32,
         /// Release the script's first N ticks, as the capture harness did.
         ///
         /// Only worth setting when the run is going to be held next to a capture
@@ -292,6 +305,21 @@ enum Command {
         #[arg(long = "before")]
         before: Vec<f32>,
     },
+    /// Find an input script that drives our simulation through a point on the track.
+    ///
+    /// The plan-then-replay half of `scripts/psp-autopilot.py`: instead of
+    /// steering the original over a websocket and recording the result, this
+    /// steers *our* craft and records the result, at no emulator cost. What comes
+    /// out is a committed-format input script, and the one thing worth doing with
+    /// it is replaying it into PPSSPP - `scripts/psp-trace.py --script <file>
+    /// --script-lead 2` - which is the only thing that shows whether the plan
+    /// transfers. See `docs/tools/autopilot-planning.md`.
+    ///
+    /// ```sh
+    /// oag-trace plan --source data/images/pulse-psp-usa.chd --pad 0 \
+    ///     --start 6.07,-50.07,-196.10 --out /tmp/pad0.inputs
+    /// ```
+    Plan(PlanArgs),
     /// Compare two traces that already exist.
     Compare {
         /// The recording, from the original.
@@ -301,6 +329,92 @@ enum Command {
         #[command(flatten)]
         tolerances: ToleranceArgs,
     },
+}
+
+/// Everything `plan` was asked for.
+#[derive(Debug, Args)]
+struct PlanArgs {
+    /// A disc image, or a directory extracted with `oag-unpack`.
+    #[arg(long)]
+    source: String,
+    /// Archive entry name of the track's `.vex`.
+    #[arg(long, default_value = DEFAULT_TRACK)]
+    track: String,
+    /// Team, which selects the handling stats.
+    #[arg(long, default_value = DEFAULT_TEAM)]
+    team: String,
+    /// Speed class to run in.
+    #[arg(long, default_value = "venom")]
+    class: String,
+    /// Aim at speed pad N, numbered as `oag-trace pads` numbers them.
+    ///
+    /// The gate's centre, direction and width all come off the pad, and the
+    /// pad's own trigger box is tested as well as the plane, so the report
+    /// says whether the craft would actually have set the pad off.
+    #[arg(long, conflicts_with = "gate")]
+    pad: Option<usize>,
+    /// Aim at an arbitrary world point instead: `x,y,z`.
+    #[arg(long, value_parser = parse_vec3)]
+    gate: Option<Vec3>,
+    /// Direction to cross `--gate` in, `x,y,z`. Defaults to the spline
+    /// tangent there, which is what a gate across the track means.
+    #[arg(long, value_parser = parse_vec3, requires = "gate")]
+    gate_dir: Option<Vec3>,
+    /// Half the gate's width, for the hit report. Defaults to the pad's own
+    /// half width, or 5 units for a `--gate`.
+    #[arg(long)]
+    gate_half_width: Option<f32>,
+    /// Start the craft here, `x,y,z`, instead of on the track's own grid slot.
+    ///
+    /// **The emulator does not start where our race does.** On Talon's
+    /// Junction the authored `Start Position` sits about 138 units behind
+    /// where a time trial actually begins, so a plan made from the grid slot
+    /// is a plan for a different run. Read the craft's position out of the
+    /// emulator - `scripts/psp-trace.py` writes it - and pass it here.
+    #[arg(long, value_parser = parse_vec3)]
+    start: Option<Vec3>,
+    /// Turn the craft this many degrees off the spline tangent at `--start`,
+    /// positive toward its right. Ignored without `--start`.
+    #[arg(long, default_value_t = 0.0)]
+    start_yaw: f32,
+    /// Give up after this many ticks without reaching the gate.
+    #[arg(long, default_value_t = 1800)]
+    max_ticks: usize,
+    /// Hold nothing for the first N ticks, because `psp-trace.py
+    /// --script-lead N` never sends them. Match the two or the run planned
+    /// here is not the run replayed there.
+    #[arg(long, default_value_t = 2)]
+    lead: usize,
+    /// Keep planning this many ticks past the crossing.
+    #[arg(long, default_value_t = 60)]
+    after: usize,
+    /// Write the script here. Without it, it goes to stdout.
+    #[arg(long)]
+    out: Option<PathBuf>,
+    /// Also write the planned run as a trace CSV, in a capture's columns.
+    #[arg(long)]
+    trace_out: Option<PathBuf>,
+    /// How often the report prints a row.
+    #[arg(long, default_value_t = 30)]
+    every: usize,
+    /// Lookahead distance at a standstill.
+    #[arg(long, default_value_t = 18.0)]
+    look_min: f32,
+    /// Extra lookahead per unit of speed.
+    #[arg(long, default_value_t = 0.55)]
+    look_speed: f32,
+    /// Lookahead ceiling.
+    #[arg(long, default_value_t = 90.0)]
+    look_max: f32,
+    /// Lateral error below which nothing is held.
+    #[arg(long, default_value_t = 0.045)]
+    deadband: f32,
+    /// Lateral error past which the inside airbrake comes on as well.
+    #[arg(long, default_value_t = 0.32)]
+    brake_at: f32,
+    /// Control scheme the emitted script is meant to be read under.
+    #[arg(long, default_value_t = ControlScheme::default())]
+    scheme: ControlScheme,
 }
 
 /// How the recorded basis maps onto the body's axes.
@@ -438,8 +552,11 @@ fn main() -> Result<()> {
             track,
             before,
         } => dump_pads(&source, &track, &before),
+        Command::Plan(args) => plan_scenario(args),
         Command::Drive {
             script,
+            start,
+            start_yaw,
             script_lead,
             source,
             track,
@@ -454,6 +571,8 @@ fn main() -> Result<()> {
             scheme,
         } => drive_scenario(DriveArgs {
             script,
+            start,
+            start_yaw,
             script_lead,
             source,
             track,
@@ -525,6 +644,8 @@ fn main() -> Result<()> {
 #[derive(Debug)]
 struct DriveArgs {
     script: PathBuf,
+    start: Option<Vec3>,
+    start_yaw: f32,
     script_lead: usize,
     source: String,
     track: String,
@@ -590,26 +711,39 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
     // The same placement `oag_game::race` makes, and for the same reason: the
     // track's own `Start Position` when it has one, at the height the hover spring
     // rests at, and the first spline sample only when it has not. A scenario run
-    // that started anywhere else would not be the scenario.
-    let pose = match &start_position {
-        Some(slot) => {
-            let origin = Vec3::from_array(slot.position) + Vec3::Y * 20.0;
-            let ground = collision
-                .raycast(Ray::new(origin, Vec3::NEG_Y, 80.0), None, false)
-                .map(|hit| hit.point.y);
+    // that started anywhere else would not be the scenario - unless the caller
+    // says otherwise, which is what `--start` is: a script planned from the
+    // emulator's own start line has to be replayed from it.
+    let pose = match (args.start, &start_position) {
+        (Some(position), _) => {
+            let near = nearest_sample(&samples, position);
             eprintln!(
-                "{}: Start Position {:?} facing {:?}, ground {ground:?}",
-                args.track, slot.position, slot.forward
+                "--start ({:.3}, {:.3}, {:.3}), attitude from spline sample {near} \
+                 yawed {:.1} degrees - not the track's own grid slot",
+                position.x, position.y, position.z, args.start_yaw,
             );
-            Pose::from_start_position(slot, ground, spawn_height(&handling))
+            Pose::from_position_on_sample(&samples[near], position, args.start_yaw.to_radians())
         }
-        None => {
-            eprintln!(
-                "{}: no Start Position node, starting on the spline",
-                args.track
-            );
-            Pose::from_sample(&start, start.racing_line, spawn_height(&handling))
-        }
+        (None, start_position) => match start_position {
+            Some(slot) => {
+                let origin = Vec3::from_array(slot.position) + Vec3::Y * 20.0;
+                let ground = collision
+                    .raycast(Ray::new(origin, Vec3::NEG_Y, 80.0), None, false)
+                    .map(|hit| hit.point.y);
+                eprintln!(
+                    "{}: Start Position {:?} facing {:?}, ground {ground:?}",
+                    args.track, slot.position, slot.forward
+                );
+                Pose::from_start_position(slot, ground, spawn_height(&handling))
+            }
+            None => {
+                eprintln!(
+                    "{}: no Start Position node, starting on the spline",
+                    args.track
+                );
+                Pose::from_sample(&start, start.racing_line, spawn_height(&handling))
+            }
+        },
     };
     let mut ship = Ship::default();
     ship.physics.body.mass = handling.physical.mass;
@@ -666,6 +800,252 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
         eprintln!("wrote {}", path.display());
     }
     Ok(())
+}
+
+/// Parses an `x,y,z` command-line vector.
+fn parse_vec3(text: &str) -> Result<Vec3, String> {
+    let parts: Vec<&str> = text.split(',').map(str::trim).collect();
+    let [x, y, z] = parts.as_slice() else {
+        return Err(format!("{text:?} is not three comma-separated numbers"));
+    };
+    let mut out = [0.0f32; 3];
+    for (slot, part) in out.iter_mut().zip([x, y, z]) {
+        *slot = part
+            .parse()
+            .map_err(|_| format!("{part:?} is not a number"))?;
+    }
+    Ok(Vec3::from_array(out))
+}
+
+/// Plans an input script that drives our craft through a gate, and writes it out.
+///
+/// The report is where the run went and where it crossed; the artefact is the
+/// script. Everything the run needs beyond the physics comes from the same disc
+/// the physics does - the pad's box, the racing line, the handling stats - so a
+/// plan is reproducible from an image and a command line, with nothing tuned by
+/// hand in between.
+fn plan_scenario(args: PlanArgs) -> Result<()> {
+    if args.every == 0 {
+        bail!("--every must be at least 1");
+    }
+    let class = SpeedClass::from_name(&args.class)
+        .with_context(|| format!("{:?} is not a speed class", args.class))?;
+    let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
+    let blob = read_track_blob(&args.source, &args.track)?;
+    let ai = ai_of(&blob, &args.track)?;
+    let samples: Vec<track::Sample> = resample(&ai, STEPS_PER_SEGMENT)
+        .into_iter()
+        .map(|(_, sample)| sample)
+        .collect();
+    if samples.is_empty() {
+        bail!("{}: the track's spline has no samples", args.track);
+    }
+
+    // The gate: a pad's own box and push axis when there is a pad, an authored
+    // point and the spline's tangent there when there is not.
+    let (gate, volume) = match (args.pad, args.gate) {
+        (Some(index), _) => {
+            let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
+            let volumes =
+                oag_formats::pads::volumes(&blob, &nodes, oag_formats::vex::CLASS_SPEEDUP_PAD);
+            let pad = volumes.get(index).copied().with_context(|| {
+                format!(
+                    "{} has {} speed pad(s), so there is no pad {index}",
+                    args.track,
+                    volumes.len()
+                )
+            })?;
+            let direction = pad
+                .direction()
+                .context("the pad's transform has a degenerate push axis")?;
+            // The box's own half extent across its push axis, which is what
+            // "did the craft go through the pad" is actually asking about.
+            let half = args
+                .gate_half_width
+                .unwrap_or((pad.max[0] - pad.min[0]) * 0.5);
+            (
+                plan::Gate::new(
+                    Vec3::from_array(pad.centre()),
+                    Vec3::from_array(direction),
+                    half,
+                ),
+                Some(pad),
+            )
+        }
+        (None, Some(centre)) => {
+            let direction = args.gate_dir.unwrap_or_else(|| {
+                let near = nearest_sample(&samples, centre);
+                Vec3::from_array(samples[near].tangent)
+            });
+            (
+                plan::Gate::new(centre, direction, args.gate_half_width.unwrap_or(5.0)),
+                None,
+            )
+        }
+        (None, None) => bail!("nothing to aim at: pass --pad N or --gate x,y,z"),
+    };
+
+    // Where the craft starts. `--start` is the one that matters for a plan meant
+    // to be replayed into the emulator, because the emulator's start line is not
+    // the track's authored grid slot - see the flag's own help.
+    let pose = match args.start {
+        Some(position) => {
+            let near = nearest_sample(&samples, position);
+            eprintln!(
+                "start: ({:.3}, {:.3}, {:.3}), attitude from spline sample {near} \
+                 yawed {:.1} degrees",
+                position.x, position.y, position.z, args.start_yaw,
+            );
+            Pose::from_position_on_sample(&samples[near], position, args.start_yaw.to_radians())
+        }
+        None => {
+            let slot = load_start_position(&args.source, &args.track)?;
+            match &slot {
+                Some(slot) => {
+                    let origin = Vec3::from_array(slot.position) + Vec3::Y * 20.0;
+                    let ground = collision
+                        .raycast(Ray::new(origin, Vec3::NEG_Y, 80.0), None, false)
+                        .map(|hit| hit.point.y);
+                    eprintln!(
+                        "start: the track's own Start Position {:?}. This is *not* where \
+                         a time trial begins - pass --start to plan for the emulator's.",
+                        slot.position,
+                    );
+                    Pose::from_start_position(slot, ground, spawn_height(&handling))
+                }
+                None => {
+                    eprintln!("start: no Start Position node, starting on the spline");
+                    Pose::from_sample(&samples[0], samples[0].racing_line, spawn_height(&handling))
+                }
+            }
+        }
+    };
+
+    let path = plan::Path::to_gate(&samples, pose.position, &gate, 60.0)
+        .context("building the line from the start to the gate")?;
+    let mut ship = Ship::default();
+    ship.physics.body.mass = handling.physical.mass;
+    ship.physics.body.inertia = box_inertia();
+    ship.place_at(pose);
+
+    let options = plan::PlanOptions {
+        drive: DriveOptions {
+            ticks: args.max_ticks,
+            dt: FIXED_DT,
+            basis: Basis::default(),
+            angular: AngularReading::default(),
+            scheme: args.scheme,
+        },
+        lead: args.lead,
+        after: args.after,
+        tuning: plan::Tuning {
+            look_min: args.look_min,
+            look_speed: args.look_speed,
+            look_max: args.look_max,
+            deadband: args.deadband,
+            brake_at: args.brake_at,
+            ..plan::Tuning::default()
+        },
+        volume,
+    };
+
+    println!(
+        "gate ({:.1}, {:.1}, {:.1}) facing ({:.3}, {:.3}, {:.3}), half width {:.1}",
+        gate.centre.x,
+        gate.centre.y,
+        gate.centre.z,
+        gate.direction.x,
+        gate.direction.y,
+        gate.direction.z,
+        gate.half_width,
+    );
+    println!(
+        "line: {} point(s), gate at {}, {} on {}, {:?} class, lead {} tick(s)",
+        path.points.len(),
+        path.gate_index,
+        args.team,
+        args.track,
+        class,
+        args.lead,
+    );
+    println!();
+
+    let planned = plan::to_gate(
+        ship.physics,
+        &handling,
+        &Environment::default(),
+        &collision,
+        &path,
+        &gate,
+        &options,
+    );
+    report(&planned.trace, &samples, args.every);
+    println!();
+
+    match planned.crossing {
+        Some(crossing) => {
+            let hit = if crossing.offset.abs() <= gate.half_width {
+                "inside"
+            } else {
+                "OUTSIDE"
+            };
+            println!(
+                "crossed the gate on tick {} at ({:.1}, {:.1}, {:.1}), {:.2} units \
+                 {} of centre - {hit} its half width - doing {:.1}",
+                crossing.tick,
+                crossing.point.x,
+                crossing.point.y,
+                crossing.point.z,
+                crossing.offset.abs(),
+                if crossing.offset >= 0.0 {
+                    "right"
+                } else {
+                    "left"
+                },
+                crossing.speed,
+            );
+        }
+        None => println!(
+            "never reached the gate in {} tick(s) - the script below is not a plan",
+            planned.trace.len()
+        ),
+    }
+    match (options.volume.is_some(), planned.inside) {
+        (true, Some(tick)) => println!("inside the pad's own trigger box from tick {tick}"),
+        (true, None) => {
+            println!("never inside the pad's own trigger box, so the pad would not fire")
+        }
+        (false, _) => {}
+    }
+    println!("{} tick(s) of input planned", planned.script.len());
+
+    let text = planned.script.to_text();
+    match &args.out {
+        Some(path) => {
+            std::fs::write(path, &text).with_context(|| format!("writing {}", path.display()))?;
+            eprintln!("wrote {}", path.display());
+        }
+        None => println!("\n{text}"),
+    }
+    if let Some(path) = &args.trace_out {
+        std::fs::write(path, planned.trace.to_csv())
+            .with_context(|| format!("writing {}", path.display()))?;
+        eprintln!("wrote {}", path.display());
+    }
+    Ok(())
+}
+
+/// Index of the spline sample whose surface point is nearest a world position.
+fn nearest_sample(samples: &[track::Sample], position: Vec3) -> usize {
+    samples
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            let da = Vec3::from_array(a.pos).distance_squared(position);
+            let db = Vec3::from_array(b.pos).distance_squared(position);
+            da.total_cmp(&db)
+        })
+        .map_or(0, |(index, _)| index)
 }
 
 /// The run report: a row every `every` ticks, then what the whole run did.

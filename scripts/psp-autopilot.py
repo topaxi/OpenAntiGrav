@@ -59,6 +59,14 @@ def sub(a, b):
     return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
 
+def add(a, b):
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def scale(a, k):
+    return (a[0] * k, a[1] * k, a[2] * k)
+
+
 def dot(a, b):
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
@@ -118,6 +126,33 @@ class Line:
                 best, best_d = index, d
         return best, best_d
 
+    def converge_to(self, start_index, gate, gate_index):
+        """Bend the ring between two indices so it ends on `gate`.
+
+        The same ramp `oag_trace::plan::Path::to_gate` builds, and for the same
+        reason: a gate that does not sit on the authored racing line has to be
+        converged onto over the whole approach rather than swerved at in the last
+        few metres. The gate's own offset from the line is faded in linearly from
+        nothing at `start_index` to all of it at `gate_index`; a gate already on
+        the line leaves the ring untouched.
+
+        The ring is mutated in place and its arc lengths recomputed, because the
+        lap counter reads them. Only the arc *between* the two indices moves, so
+        a lap that continues past the gate is back on the authored line.
+        """
+        n = len(self.points)
+        span = (gate_index - start_index) % n
+        offset = sub(gate, self.points[gate_index])
+        for step in range(span + 1):
+            at = (start_index + step) % n
+            fraction = step / span if span else 1.0
+            self.points[at] = add(self.points[at], scale(offset, fraction))
+        self.cumulative = [0.0]
+        for a, b in zip(self.points, self.points[1:]):
+            self.cumulative.append(self.cumulative[-1] + length(sub(b, a)))
+        self.closing = length(sub(self.points[0], self.points[-1]))
+        self.total = self.cumulative[-1] + self.closing
+
     def ahead(self, index, distance):
         """The point `distance` further along the ring."""
         n = len(self.points)
@@ -138,6 +173,20 @@ def read_floats(blob, table):
 
 def vec(blob, at):
     return struct.unpack_from("<3f", blob, at)
+
+
+def parse_vec(parser, flag, text):
+    """An `x,y,z` command-line vector, or None."""
+    if text is None:
+        return None
+    parts = text.split(",")
+    if len(parts) != 3:
+        parser.error("%s wants three comma-separated numbers, got %r" % (flag, text))
+    try:
+        return tuple(float(p) for p in parts)
+    except ValueError:
+        parser.error("%s: %r is not three numbers" % (flag, text))
+        return None
 
 
 def steer_for(state, line, index, args):
@@ -195,6 +244,31 @@ def main():
         "centre, or the raw surface centre",
     )
     parser.add_argument("--laps", type=float, default=1.0)
+    parser.add_argument(
+        "--gate",
+        metavar="X,Y,Z",
+        help="drive at this world point instead of round the lap: the spline is "
+        "bent to end on it - see Line.converge_to - and the run stops once the "
+        "craft has crossed the plane through it. This is the closed-loop route "
+        "to a target: the controller reads the emulator's own craft state every "
+        "tick, so it corrects for the emulator instead of hoping an open-loop "
+        "script transfers. `oag-trace plan` is the offline route to the same "
+        "place. See docs/tools/autopilot-planning.md.",
+    )
+    parser.add_argument(
+        "--gate-dir",
+        metavar="X,Y,Z",
+        help="the direction to cross --gate in. Defaults to the spline's own "
+        "heading there, which is what a gate across the track means. "
+        "`oag-trace pads` prints a speed pad's centre and push axis.",
+    )
+    parser.add_argument(
+        "--gate-after",
+        type=int,
+        default=60,
+        metavar="N",
+        help="keep driving N ticks past the gate, so a recording does not end on it",
+    )
     parser.add_argument("--max-ticks", type=int, default=30000)
     parser.add_argument("--script-out", type=Path, help="write the recorded input script here")
     parser.add_argument(
@@ -237,6 +311,11 @@ def main():
     )
     args = parser.parse_args()
 
+    gate = parse_vec(parser, "--gate", args.gate)
+    gate_dir = parse_vec(parser, "--gate-dir", args.gate_dir)
+    if gate_dir is not None and gate is None:
+        parser.error("--gate-dir needs --gate")
+
     if args.shot_dir and args.shot_window is None:
         args.shot_window = find_window()
         if args.shot_window is None:
@@ -270,6 +349,10 @@ def main():
     laps = 0.0
     best_progress = 0
     stalled_since = 0
+    gate_index = None
+    gate_normal = None
+    crossed_at = None
+    gate_distance = None
     began = time.time()
     craft = None
     body = None
@@ -304,6 +387,25 @@ def main():
                     % (index, distance),
                     file=sys.stderr,
                 )
+                if gate is not None:
+                    gate_index, gate_off = line.nearest(
+                        gate, index, back=0, ahead=len(line) - 1
+                    )
+                    gate_normal = unit(
+                        gate_dir
+                        if gate_dir is not None
+                        else sub(
+                            line.points[(gate_index + 1) % len(line)],
+                            line.points[gate_index],
+                        )
+                    )
+                    line.converge_to(index, gate, gate_index)
+                    print(
+                        "gate (%.2f, %.2f, %.2f) at spline point %d, %.2f units off "
+                        "the line, crossing (%.3f, %.3f, %.3f)"
+                        % (gate + (gate_index, gate_off) + gate_normal),
+                        file=sys.stderr,
+                    )
             previous = index
             index, off = line.nearest(state["position"], index)
             # Signed arc progress, wrapped the short way round, so a craft that
@@ -335,6 +437,20 @@ def main():
                     file=sys.stderr,
                 )
                 break
+
+            if gate_normal is not None:
+                was, gate_distance = gate_distance, dot(sub(state["position"], gate), gate_normal)
+                if crossed_at is None and was is not None and was < 0.0 <= gate_distance:
+                    crossed_at = tick
+                    print(
+                        "crossed the gate at tick %d, (%.2f, %.2f, %.2f) doing %.2f"
+                        % ((tick,) + state["position"] + (length(state["velocity"]),)),
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                if crossed_at is not None and tick - crossed_at >= args.gate_after:
+                    print("%d tick(s) past the gate - stopping" % args.gate_after, file=sys.stderr)
+                    break
 
             held, error, look = steer_for(state, line, index, args)
             script_state = input_script.parse("1 %s\n" % (" ".join(held) or "none"))[0]

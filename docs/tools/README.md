@@ -7,6 +7,7 @@
 | `oag-convert` | M1 | Convert assets to standard formats |
 | [`oag-trace`](oag-trace.md) | **working** | Compare a simulation run against a trace from the original |
 | [`oag-game`](oag-game.md) | **working** | The engine itself: the front end, and the race its `Launch Game` starts |
+| [autopilot planning](autopilot-planning.md) | **working** | Plan an input script that drives to a point on the track, offline in our simulation or live in the emulator |
 | [frame comparison](frame-compare.md) | **working** | One frame of the original and one of ours from the same captured state: teleport, capture, render, diff |
 
 [Packaging](packaging.md) covers `just appimage` and `just appimage-portable`:
