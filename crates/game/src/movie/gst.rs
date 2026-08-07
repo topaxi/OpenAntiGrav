@@ -100,6 +100,10 @@ impl GstDecoder {
 }
 
 impl VideoDecoder for GstDecoder {
+    fn label(&self) -> &'static str {
+        "gstreamer"
+    }
+
     fn geometry(&self) -> av1::Geometry {
         self.geometry
     }

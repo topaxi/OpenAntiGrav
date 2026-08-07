@@ -1652,6 +1652,13 @@ impl FrontendStage {
         Ok(())
     }
 
+    /// What is decoding the intro, for the `dev` performance overlay. `None`
+    /// on a source with no movie, under `--no-video`, or with no `ffmpeg` -
+    /// see [`FrontendStage::feed`].
+    fn video_label(&self) -> Option<&'static str> {
+        self.feed.as_ref().map(movie::Feed::decoder_label)
+    }
+
     /// Uploads the newest decoded frame at or before the one the draw list asks
     /// for.
     ///
@@ -2106,10 +2113,10 @@ impl Session {
         let size = self.framebuffer.size();
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let target = self.framebuffer.view();
-        let scene_stats = match &mut self.stage {
+        let (scene_stats, video_label) = match &mut self.stage {
             Stage::Frontend(stage) => {
                 stage.render(&self.gpu, &mut encoder, target, inside)?;
-                None
+                (None, stage.video_label())
             }
             Stage::Menu(stage) => {
                 stage.render(
@@ -2119,18 +2126,21 @@ impl Session {
                     inside,
                     self.backdrop.as_mut(),
                 )?;
-                None
+                (None, self.backdrop.as_ref().map(movie::Feed::decoder_label))
             }
-            Stage::Race(stage) => Some(stage.render(
-                &self.gpu,
-                &mut encoder,
-                target,
-                inside,
-                self.settings.graphics.fov,
-                self.settings.graphics.frustum_culling,
-                self.settings.graphics.pvs_culling,
-                self.settings.graphics.animated_textures,
-            )),
+            Stage::Race(stage) => (
+                Some(stage.render(
+                    &self.gpu,
+                    &mut encoder,
+                    target,
+                    inside,
+                    self.settings.graphics.fov,
+                    self.settings.graphics.frustum_culling,
+                    self.settings.graphics.pvs_culling,
+                    self.settings.graphics.animated_textures,
+                )),
+                None,
+            ),
         };
 
         // Over the stage and inside the offscreen target, so the overlay is
@@ -2142,6 +2152,7 @@ impl Session {
             self.settings.graphics.perf_overlay,
             self.presentation_hz(),
             scene_stats,
+            video_label,
         );
         if !list.is_empty() {
             self.overlay.overlay(

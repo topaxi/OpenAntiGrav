@@ -566,6 +566,7 @@ pub fn draw_list(
     mode: Overlay,
     target_hz: u32,
     scene: Option<crate::race::SceneStats>,
+    video: Option<&str>,
 ) -> Vec<Draw> {
     if !mode.is_on() {
         return Vec::new();
@@ -597,6 +598,16 @@ pub fn draw_list(
             "DRAWS {}/{total}  TRIS {}",
             scene.draws_submitted, scene.triangles
         ));
+    }
+    // Which decoder is actually serving the movie on screen right now - the
+    // front end and the menu backdrop are the only stages with one, and a
+    // stage with no movie playing (a menu page with the backdrop hidden, a
+    // race) passes `None` rather than a stale label. See
+    // [`crate::movie::VideoDecoder::label`].
+    if mode == Overlay::Dev
+        && let Some(video) = video
+    {
+        lines.push(format!("VIDEO {video}"));
     }
 
     let text_height = lines.len() as f32 * LINE;
@@ -679,7 +690,7 @@ mod tests {
         let meter = Meter::new();
         assert!(meter.is_empty());
         assert_eq!(meter.stats(), None);
-        assert!(draw_list(&meter, Overlay::Pacing, 60, None).is_empty());
+        assert!(draw_list(&meter, Overlay::Pacing, 60, None, None).is_empty());
     }
 
     #[test]
@@ -769,7 +780,7 @@ mod tests {
     fn off_draws_nothing_however_full_the_meter_is() {
         let mut meter = Meter::new();
         steady(&mut meter, WINDOW, 1.0 / 60.0);
-        assert!(draw_list(&meter, Overlay::Off, 60, None).is_empty());
+        assert!(draw_list(&meter, Overlay::Off, 60, None, None).is_empty());
     }
 
     /// The counter is one panel and one line; the pacing view adds a second
@@ -779,15 +790,60 @@ mod tests {
         let mut meter = Meter::new();
         steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-        let fps = draw_list(&meter, Overlay::Fps, 60, None);
+        let fps = draw_list(&meter, Overlay::Fps, 60, None, None);
         assert_eq!(fps.len(), 2);
         assert!(matches!(fps[0], Draw::Fill { .. }));
         assert!(matches!(&fps[1], Draw::Text { text, .. } if text.starts_with("60 FPS")));
 
-        let pacing = draw_list(&meter, Overlay::Pacing, 60, None);
+        let pacing = draw_list(&meter, Overlay::Pacing, 60, None, None);
         // panel + two lines + the rule + one column per frame
         assert_eq!(pacing.len(), 4 + WINDOW);
         assert!(matches!(&pacing[2], Draw::Text { text, .. } if text.starts_with("P99")));
+    }
+
+    /// `Dev` adds the scene line and the video line, and only when a caller
+    /// actually has one to give it - a stage with no scene and no movie
+    /// still gets exactly what `Pacing` would have shown it.
+    #[test]
+    fn dev_adds_a_line_for_whichever_of_scene_and_video_it_is_given() {
+        let mut meter = Meter::new();
+        steady(&mut meter, WINDOW, 1.0 / 60.0);
+
+        let bare = draw_list(&meter, Overlay::Dev, 60, None, None);
+        // Same shape as `Pacing` with nothing extra: panel + two lines + the
+        // rule + one column per frame.
+        assert_eq!(bare.len(), 4 + WINDOW);
+
+        let scene = crate::race::SceneStats {
+            draws_submitted: 12,
+            draws_culled: 3,
+            triangles: 4096,
+        };
+        let with_scene = draw_list(&meter, Overlay::Dev, 60, Some(scene), None);
+        assert!(
+            with_scene
+                .iter()
+                .any(|d| matches!(d, Draw::Text { text, .. } if text == "DRAWS 12/15  TRIS 4096"))
+        );
+
+        let with_video = draw_list(&meter, Overlay::Dev, 60, None, Some("gstreamer"));
+        assert!(
+            with_video
+                .iter()
+                .any(|d| matches!(d, Draw::Text { text, .. } if text == "VIDEO gstreamer"))
+        );
+
+        let with_both = draw_list(&meter, Overlay::Dev, 60, Some(scene), Some("av1 cache"));
+        assert!(
+            with_both
+                .iter()
+                .any(|d| matches!(d, Draw::Text { text, .. } if text == "VIDEO av1 cache"))
+        );
+        assert!(
+            with_both
+                .iter()
+                .any(|d| matches!(d, Draw::Text { text, .. } if text == "DRAWS 12/15  TRIS 4096"))
+        );
     }
 
     /// Every rectangle has to land inside the panel it is drawn under, or the
@@ -798,7 +854,7 @@ mod tests {
         for i in 0..WINDOW {
             meter.record(if i == 7 { 0.5 } else { 1.0 / 60.0 });
         }
-        let list = draw_list(&meter, Overlay::Pacing, 60, None);
+        let list = draw_list(&meter, Overlay::Pacing, 60, None, None);
         let Draw::Fill { rect: panel, .. } = list[0] else {
             panic!("the panel comes first");
         };
@@ -829,7 +885,7 @@ mod tests {
         steady(&mut meter, WINDOW, 1.0 / 240.0);
 
         let heights = |target| {
-            draw_list(&meter, Overlay::Pacing, target, None)
+            draw_list(&meter, Overlay::Pacing, target, None, None)
                 .into_iter()
                 .skip(4) // the panel, two lines of text and the rule
                 .filter_map(|draw| match draw {

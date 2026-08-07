@@ -158,6 +158,12 @@ pub struct VideoFrame {
 /// its own instead. `Send` is a supertrait because [`Feed::spawn`] moves the
 /// decoder onto a worker thread.
 pub trait VideoDecoder: std::fmt::Debug + Send {
+    /// A short, human-readable name for what is actually decoding - `"av1
+    /// cache"`, `"gstreamer"`. Exists for the `dev` performance overlay (see
+    /// [`crate::perf`]), so a player or a screenshot can tell which tier
+    /// served a given movie without reading a log.
+    fn label(&self) -> &'static str;
+
     /// The frame shape this decoder produces.
     fn geometry(&self) -> av1::Geometry;
 
@@ -194,6 +200,10 @@ pub trait VideoDecoder: std::fmt::Debug + Send {
 struct Av1CacheDecoder(av1::FrameSource);
 
 impl VideoDecoder for Av1CacheDecoder {
+    fn label(&self) -> &'static str {
+        "av1 cache"
+    }
+
     fn geometry(&self) -> av1::Geometry {
         self.0.geometry()
     }
@@ -286,6 +296,13 @@ impl FrameStore {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// What is actually decoding this movie - `"av1 cache"` or `"gstreamer"`.
+    /// See [`VideoDecoder::label`].
+    #[must_use]
+    pub fn decoder_label(&self) -> &'static str {
+        self.source.label()
     }
 }
 
@@ -462,6 +479,10 @@ pub struct Feed {
     /// it moved onto the worker, because the player needs it and the store is no
     /// longer reachable from here.
     len: usize,
+    /// The store's [`FrameStore::decoder_label`], copied out for the same
+    /// reason as `len` - the store itself is not reachable from here once
+    /// the worker owns it.
+    decoder_label: &'static str,
     /// Chroma plane width in samples, for the renderer's plane geometry.
     pub chroma_width: u32,
     /// Chroma plane height in samples, for the renderer's plane geometry.
@@ -496,6 +517,7 @@ impl Feed {
     #[must_use]
     pub fn spawn(store: FrameStore, repeat: bool, width: u32, height: u32) -> Self {
         let len = store.len;
+        let decoder_label = store.decoder_label();
         let (chroma_width, chroma_height) = (store.chroma_width, store.chroma_height);
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
@@ -526,6 +548,7 @@ impl Feed {
             shared,
             worker: Some(worker),
             len,
+            decoder_label,
             chroma_width,
             chroma_height,
             width,
@@ -537,6 +560,13 @@ impl Feed {
     #[must_use]
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    /// What is actually decoding this movie - `"av1 cache"` or `"gstreamer"`.
+    /// See [`VideoDecoder::label`].
+    #[must_use]
+    pub fn decoder_label(&self) -> &'static str {
+        self.decoder_label
     }
 
     /// Whether the cache holds no frames at all.

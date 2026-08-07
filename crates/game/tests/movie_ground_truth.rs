@@ -92,6 +92,7 @@ fn load() -> Option<boot::Boot> {
 /// `Extent::Frames` exists for the intro's own early cutoff and not much
 /// else - so a decoder that is only ever exercised against a truncated
 /// extent in tests could have a wanted-count bug nothing here would catch.
+#[cfg(all(target_os = "linux", feature = "native-video"))]
 fn load_whole() -> Option<boot::Boot> {
     let image = image()?;
     if !have_ffmpeg() {
