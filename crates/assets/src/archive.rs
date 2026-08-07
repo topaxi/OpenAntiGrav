@@ -192,13 +192,58 @@ impl Archive {
     /// Names use the game's own spelling, backslashes included, for example
     /// `Data\Movies\Intro.PMF`.
     pub fn read_name(&mut self, name: &str) -> Result<Vec<u8>> {
-        let hash = wad::hash_name(name);
-        let index = self.index_of_hash(hash).ok_or_else(|| Error::NoSuchEntry {
-            archive: self.label.clone(),
-            hash,
-            name: Some(name.to_string()),
-        })?;
+        let index = self.index_for_name(name)?;
         self.read(index)
+    }
+
+    /// Reads `len` bytes starting `offset` bytes into entry `index`.
+    ///
+    /// [`Archive::peek`] answers "what is at the start of this blob"; this
+    /// answers "what is at *this point* in it", which is what streaming a blob
+    /// too large to hold needs. The `.PMF` movies are the case in reach: `peek`
+    /// gets the 2048-byte header that says what the stream is, and this gets a
+    /// chunk from the middle of the megabytes that follow without holding the
+    /// whole movie. It works on them because every entry in every PSP archive
+    /// is stored verbatim; the PS2 archives are LZSS throughout, and are what
+    /// the compression error below exists for.
+    ///
+    /// `offset` counts from the start of the entry's own bytes, not from the
+    /// start of the archive. Following [`oag_disc::DiscImage::read_entry_range`],
+    /// which this ends up calling for a disc-backed archive, a range running
+    /// past the end of the entry is a short read rather than an error, and an
+    /// `offset` past the end returns an empty vector. Clamping happens against
+    /// the *entry*, so unlike [`Archive::peek_raw`] this never runs on into the
+    /// next blob.
+    ///
+    /// # Errors
+    ///
+    /// A compressed entry is refused outright with
+    /// [`Error::RangeIntoCompressed`], before any I/O happens: an LZSS stream
+    /// has no meaning at a byte offset, and returning the bytes stored there
+    /// would be returning noise.
+    pub fn read_range(&mut self, index: usize, offset: u64, len: u64) -> Result<Vec<u8>> {
+        let entry = *self.entry(index)?;
+        if entry.compression != Compression::None {
+            return Err(Error::RangeIntoCompressed {
+                archive: self.label.clone(),
+                index,
+                compression: entry.compression.to_string(),
+            });
+        }
+        if offset >= u64::from(entry.size) {
+            return Ok(Vec::new());
+        }
+        let len = len.min(u64::from(entry.size) - offset);
+        self.source.read(u64::from(entry.offset) + offset, len)
+    }
+
+    /// Reads `len` bytes starting `offset` bytes into the entry with this name.
+    ///
+    /// The named form of [`Archive::read_range`]; the same rules about
+    /// clamping and compression apply.
+    pub fn read_range_name(&mut self, name: &str, offset: u64, len: u64) -> Result<Vec<u8>> {
+        let index = self.index_for_name(name)?;
+        self.read_range(index, offset, len)
     }
 
     /// Reads the first `len` bytes of an entry, without decompressing.
@@ -223,6 +268,18 @@ impl Archive {
     /// Uncompressed length of an entry, from the directory.
     pub fn entry_len(&self, index: usize) -> Result<u32> {
         Ok(self.entry(index)?.size_uncompressed)
+    }
+
+    /// Resolves a name to an index, reporting the name as well as the hash it
+    /// failed to match. A directory holds no names, so the caller's spelling is
+    /// the only clue an error message can offer.
+    fn index_for_name(&self, name: &str) -> Result<usize> {
+        let hash = wad::hash_name(name);
+        self.index_of_hash(hash).ok_or_else(|| Error::NoSuchEntry {
+            archive: self.label.clone(),
+            hash,
+            name: Some(name.to_string()),
+        })
     }
 
     fn entry(&self, index: usize) -> Result<&wad::Entry> {
@@ -340,6 +397,24 @@ mod tests {
         bytes
     }
 
+    /// The same layout as [`tiny_wad`], but with the stored and uncompressed
+    /// sizes disagreeing, which is the only thing that makes `Directory::parse`
+    /// classify an entry as LZSS. The blob itself is not a real LZSS stream:
+    /// nothing that reads it should ever get as far as decoding.
+    fn tiny_lzss_wad(name_hash: u32, blob: &[u8]) -> Vec<u8> {
+        let offset = 64u32;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // version
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // entry_count
+        bytes.extend_from_slice(&name_hash.to_le_bytes());
+        bytes.extend_from_slice(&offset.to_le_bytes());
+        bytes.extend_from_slice(&(blob.len() as u32 * 2).to_le_bytes()); // size_uncompressed
+        bytes.extend_from_slice(&(blob.len() as u32).to_le_bytes()); // size
+        bytes.resize(offset as usize, 0);
+        bytes.extend_from_slice(blob);
+        bytes
+    }
+
     fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
         let path = std::env::temp_dir().join(format!("oag-assets-test-{name}"));
         std::fs::write(&path, contents).unwrap();
@@ -354,6 +429,100 @@ mod tests {
         let archive = Archive::open(path.to_str().unwrap()).unwrap();
         assert_eq!(archive.len(), bytes.len() as u64);
         assert!(!archive.is_empty());
+
+        std::fs::remove_file(path).ok();
+    }
+
+    /// Two stored entries back to back, so that a read clamped at the end of
+    /// the first has something recognisable to run into if the clamp is wrong.
+    fn tiny_wad_pair(first: &[u8], second: &[u8]) -> Vec<u8> {
+        let first_at = 64u32;
+        let second_at = first_at + first.len() as u32;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // version
+        bytes.extend_from_slice(&2u32.to_le_bytes()); // entry_count
+        for (hash, at, blob) in [(1u32, first_at, first), (2u32, second_at, second)] {
+            bytes.extend_from_slice(&hash.to_le_bytes());
+            bytes.extend_from_slice(&at.to_le_bytes());
+            bytes.extend_from_slice(&(blob.len() as u32).to_le_bytes()); // size_uncompressed
+            bytes.extend_from_slice(&(blob.len() as u32).to_le_bytes()); // size
+        }
+        bytes.resize(first_at as usize, 0);
+        bytes.extend_from_slice(first);
+        bytes.extend_from_slice(second);
+        bytes
+    }
+
+    #[test]
+    fn read_range_returns_bytes_from_the_middle_of_an_entry() {
+        let blob = b"0123456789abcdef";
+        let bytes = tiny_wad(0x1111_2222, blob);
+        let path = temp_file("range-mid.wad", &bytes);
+
+        let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
+        assert_eq!(archive.read_range(0, 4, 6).unwrap(), b"456789");
+        // The offset is into the entry, not into the archive: reading from
+        // zero has to land on the blob, not on the directory.
+        assert_eq!(archive.read_range(0, 0, 4).unwrap(), b"0123");
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn read_range_stops_at_the_end_of_the_entry() {
+        let bytes = tiny_wad_pair(b"first entry", b"SECOND ENTRY");
+        let path = temp_file("range-clamp.wad", &bytes);
+
+        // The clamp has to be against the entry, not the archive. Both blobs
+        // are in the file, so an over-long read that clamped on the file's
+        // length would quietly return the second entry's bytes as well.
+        let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
+        assert_eq!(archive.read_range(0, 6, 4096).unwrap(), b"entry");
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn read_range_past_the_end_of_an_entry_is_empty() {
+        let bytes = tiny_wad_pair(b"first entry", b"SECOND ENTRY");
+        let path = temp_file("range-past.wad", &bytes);
+
+        let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
+        assert!(archive.read_range(0, 11, 4).unwrap().is_empty());
+        assert!(archive.read_range(0, 9_000, 4).unwrap().is_empty());
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn read_range_refuses_a_compressed_entry() {
+        let bytes = tiny_lzss_wad(0x3333_4444, b"not really an lzss stream");
+        let path = temp_file("range-lzss.wad", &bytes);
+
+        // Refused rather than seeked into, and refused rather than decoded:
+        // the blob is not a valid stream, so reaching the decoder at all would
+        // surface as `BadBlob` instead.
+        let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
+        assert!(matches!(
+            archive.read_range(0, 4, 4),
+            Err(Error::RangeIntoCompressed { .. })
+        ));
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn read_range_name_resolves_the_name_and_reports_a_missing_one() {
+        let name = r"Data\Sound\gentrak.bnk";
+        let bytes = tiny_wad(wad::hash_name(name), b"0123456789abcdef");
+        let path = temp_file("range-name.wad", &bytes);
+
+        let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
+        assert_eq!(archive.read_range_name(name, 10, 3).unwrap(), b"abc");
+        assert!(matches!(
+            archive.read_range_name(r"Data\Sound\nothing.bnk", 0, 3),
+            Err(Error::NoSuchEntry { .. })
+        ));
 
         std::fs::remove_file(path).ok();
     }

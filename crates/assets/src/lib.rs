@@ -138,6 +138,31 @@ pub enum Error {
         compression: String,
     },
 
+    /// A ranged read asked for the middle of a compressed blob.
+    ///
+    /// Not the same complaint as
+    /// [`UnsupportedCompression`](Error::UnsupportedCompression): LZSS is
+    /// decodable here, it just is not *seekable*. Back-references reach into
+    /// the ring buffer the earlier bytes filled, so byte 300 MiB of an LZSS
+    /// stream cannot be produced without decoding the 300 MiB before it, and
+    /// the whole point of [`Archive::read_range`] is not doing that. Falling
+    /// back to a full read the way [`Archive::peek`] does would silently turn
+    /// a bounded read into an unbounded one, so the caller is told instead and
+    /// can reach for [`Archive::read`] knowingly. The message does not suggest
+    /// `read()` by name, because it is also raised for zlib, which `read()`
+    /// refuses too.
+    #[error(
+        "{archive} entry {index} is stored {compression}-compressed, so it cannot be read at an offset; read the whole entry instead"
+    )]
+    RangeIntoCompressed {
+        /// Which archive.
+        archive: String,
+        /// Which entry.
+        index: usize,
+        /// The compression the entry declared.
+        compression: String,
+    },
+
     /// LZSS decompression failed or produced the wrong length.
     #[error("{archive} entry {index}: {message}")]
     BadBlob {
