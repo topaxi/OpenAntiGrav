@@ -44,6 +44,17 @@ const PS2_PRERACE: &str = "54748/PRERACE.WAD";
 /// Bytes of each track to sample for the stereo statistics.
 const PROBE_BYTES: u64 = 2 << 20;
 
+/// The rate `PRERACE.WAD` turns out to be recorded at. See
+/// `docs/formats/ps2-voice.md`; the two tests below are the two legs of it.
+const VOICE_RATE: usize = 44_100;
+
+/// How much of each clip's head and tail to pull in to measure the pad. Has to
+/// exceed [`VOICE_RATE`] frames with room to see where the speech starts.
+const PAD_PROBE_FRAMES: u64 = 64 * 1024;
+
+/// The PSP archive that carries the pre-race dialogue as ATRAC3plus.
+const PSP_DATA: &str = "PSP_GAME/USRDIR/Data.wad";
+
 /// The PSP archives that hold sound banks.
 const PSP_ARCHIVES: [&str; 2] = ["PSP_GAME/USRDIR/FE.wad", "PSP_GAME/USRDIR/Data.wad"];
 
@@ -282,6 +293,261 @@ fn the_ps2_prerace_archive_chains_exactly_and_holds_dual_mono() {
         "every clip should be dual-mono; {identical} of {} were",
         dir.entries.len()
     );
+}
+
+/// Frames of digital silence at the start of a dual-mono clip.
+fn leading_silent_frames(bytes: &[u8]) -> Option<usize> {
+    bytes
+        .chunks_exact(ps2_music::FRAME_LEN)
+        .position(|f| f != [0u8; ps2_music::FRAME_LEN])
+}
+
+/// Frames of digital silence at the end of a dual-mono clip.
+fn trailing_silent_frames(bytes: &[u8]) -> Option<usize> {
+    bytes
+        .chunks_exact(ps2_music::FRAME_LEN)
+        .rev()
+        .position(|f| f != [0u8; ps2_music::FRAME_LEN])
+}
+
+/// The sample rate, from the PS2 side alone.
+///
+/// Nothing in the container declares a rate, and durations cannot settle it:
+/// the 32 clips span about six seconds, so nearest-neighbour matching against
+/// the PSP durations is noise - it agrees with the pairing the correlation
+/// actually establishes on 9 of 32. What does settle it is that the authoring
+/// tool padded every clip with **exactly one second** of digital silence at
+/// each end. The shortest run at either end, over all 32 clips, is 44,100
+/// frames to the frame, and no clip exceeds it by more than 80. At 48,000 Hz
+/// that pad would be 0.919 s, which is not a number anyone chooses.
+///
+/// The other leg - that these are the same recordings the PSP disc carries -
+/// cannot be tested here, because re-running the cross-correlation needs an
+/// ATRAC3plus decoder this workspace does not have. See
+/// `docs/formats/ps2-voice.md` for the correlation figures and how to
+/// reproduce them.
+#[test]
+#[ignore = "needs a PS2 disc image under data/images"]
+fn the_prerace_clips_are_padded_to_one_second_at_44100() {
+    let Some(path) = image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == PS2_PRERACE)
+        .expect("PRERACE.WAD present")
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, ps2_music::HEADER_LEN as u64)
+        .expect("header");
+    let count = ps2_music::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, ps2_music::directory_len(count))
+        .expect("directory");
+    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    let probe_bytes = PAD_PROBE_FRAMES * ps2_music::FRAME_LEN as u64;
+    let mut leads = Vec::with_capacity(dir.entries.len());
+    let mut tails = Vec::with_capacity(dir.entries.len());
+
+    for (index, entry) in dir.entries.iter().enumerate() {
+        let head = disc
+            .read_entry_range(&archive, u64::from(entry.offset), probe_bytes)
+            .expect("clip head");
+        let tail_at = u64::from(entry.offset) + u64::from(entry.size) - probe_bytes;
+        let tail = disc
+            .read_entry_range(&archive, tail_at, probe_bytes)
+            .expect("clip tail");
+
+        let lead = leading_silent_frames(&head)
+            .unwrap_or_else(|| panic!("clip {index} is silent for the whole probe"));
+        let trail = trailing_silent_frames(&tail)
+            .unwrap_or_else(|| panic!("clip {index} is silent for the whole probe"));
+
+        println!("  {index:2} lead {lead:6} frames  tail {trail:6} frames");
+        leads.push(lead);
+        tails.push(trail);
+    }
+
+    // Bounds first, so a single odd clip names itself rather than being hidden
+    // in the minimum below. The slack is the speech starting or ending on a
+    // zero crossing: 11 frames at the head and 80 at the tail, measured.
+    for (index, &lead) in leads.iter().enumerate() {
+        assert!(
+            (VOICE_RATE..VOICE_RATE + 256).contains(&lead),
+            "clip {index}: leading silence is {lead} frames, not a one-second pad"
+        );
+    }
+    for (index, &trail) in tails.iter().enumerate() {
+        assert!(
+            (VOICE_RATE..VOICE_RATE + 512).contains(&trail),
+            "clip {index}: trailing silence is {trail} frames, not a one-second pad"
+        );
+    }
+
+    // The exact part. A pad that merely *covers* one second would leave the
+    // minimum above 44,100; landing on it to the frame at both ends is what
+    // says the tool was asked for one second at 44,100 Hz.
+    assert_eq!(
+        leads.iter().copied().min(),
+        Some(VOICE_RATE),
+        "the shortest leading pad should be exactly one second at {VOICE_RATE} Hz"
+    );
+    assert_eq!(
+        tails.iter().copied().min(),
+        Some(VOICE_RATE),
+        "the shortest trailing pad should be exactly one second at {VOICE_RATE} Hz"
+    );
+}
+
+/// What a RIFF header declares, for the ATRAC3plus census below.
+struct RiffFormat {
+    tag: u16,
+    channels: u16,
+    rate: u32,
+    bytes_per_second: u32,
+    block_align: u16,
+}
+
+/// Reads `fmt ` out of a RIFF/WAVE header.
+///
+/// Hand-rolled rather than pulled from a crate because this is the only place
+/// in `oag-formats` that needs it, and the check has to run against bytes taken
+/// straight off the disc.
+fn riff_format(blob: &[u8]) -> Option<RiffFormat> {
+    fn word(blob: &[u8], at: usize) -> u32 {
+        u32::from_le_bytes([blob[at], blob[at + 1], blob[at + 2], blob[at + 3]])
+    }
+    fn half(blob: &[u8], at: usize) -> u16 {
+        u16::from_le_bytes([blob[at], blob[at + 1]])
+    }
+
+    if blob.len() < 20 || &blob[..4] != b"RIFF" || &blob[8..12] != b"WAVE" {
+        return None;
+    }
+
+    let mut pos = 12;
+    while pos + 8 <= blob.len() {
+        let len = usize::try_from(word(blob, pos + 4)).ok()?;
+        let body = pos + 8;
+        if &blob[pos..pos + 4] == b"fmt " && len >= 16 && body + 16 <= blob.len() {
+            return Some(RiffFormat {
+                tag: half(blob, body),
+                channels: half(blob, body + 2),
+                rate: word(blob, body + 4),
+                bytes_per_second: word(blob, body + 8),
+                block_align: half(blob, body + 12),
+            });
+        }
+        pos = body.checked_add(len)?.checked_add(len & 1)?;
+    }
+    None
+}
+
+/// The PSP half of the pre-race set: 32 mono 44,100 Hz ATRAC3plus streams.
+///
+/// This is the other endpoint of the cross-correlation in
+/// `docs/formats/ps2-voice.md`. It matters because the "32 against 32" count
+/// is only evidence if the PSP population really is 32 - and nothing but the
+/// RIFF headers says where it starts and stops. `Data.wad` also holds a
+/// *second* ATRAC3plus population at half the bitrate, and a naive size filter
+/// would have merged the two or clipped this one.
+/// Surveys one PSP disc's `Data.wad` and returns the pre-race run's name hashes.
+fn psp_prerace_hashes(image_name: &str, expected_first: usize) -> Option<Vec<u32>> {
+    let path = image(image_name)?;
+    let mut disc = DiscImage::open(&path).expect("open");
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == PSP_DATA)
+        .expect("Data.wad present")
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = wad::Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, wad::Directory::directory_len(count))
+        .expect("directory");
+    let dir = wad::Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    // Every stream in the archive declares `WAVE_FORMAT_EXTENSIBLE` with the
+    // ATRAC3plus subformat GUID and 44,100 Hz. Three populations sit behind
+    // that, and it takes both the channel count *and* the bitrate to separate
+    // them - bitrate alone pulls in 28 stereo streams scattered through the
+    // archive.
+    let mut voice = Vec::new();
+    let mut half_rate = 0usize;
+    let mut stereo = 0usize;
+    for (index, entry) in dir.entries.iter().enumerate() {
+        let head = disc
+            .read_entry_range(&archive, u64::from(entry.offset), 128)
+            .expect("blob head");
+        let Some(fmt) = riff_format(&head) else {
+            continue;
+        };
+        assert_eq!(fmt.tag, 0xfffe, "entry {index}: not WAVE_FORMAT_EXTENSIBLE");
+        assert_eq!(
+            usize::try_from(fmt.rate).expect("rate fits"),
+            VOICE_RATE,
+            "entry {index}: unexpected rate"
+        );
+        match (fmt.channels, fmt.bytes_per_second, fmt.block_align) {
+            (1, 12_058, 560) => voice.push((index, entry.name_hash)),
+            (1, 6_029, 280) => half_rate += 1,
+            (2, _, _) => stereo += 1,
+            other => panic!("entry {index}: unclassified stream {other:?}"),
+        }
+    }
+
+    println!("{image_name}: entries {}", dir.entries.len());
+    println!("  mono, 12058 B/s  {}", voice.len());
+    println!("  mono, 6029 B/s   {half_rate}");
+    println!("  stereo           {stereo}");
+    println!("  first / last     {:?}", (voice.first(), voice.last()));
+
+    assert_eq!(
+        voice.len(),
+        32,
+        "{image_name}: the pre-race set should be exactly 32 streams, matching PRERACE.WAD"
+    );
+
+    // Contiguous, so the count is a population and not a scatter that happens
+    // to total 32.
+    let first = voice[0].0;
+    assert!(
+        voice.iter().enumerate().all(|(n, &(i, _))| i == first + n),
+        "{image_name}: the 32 pre-race streams are not a contiguous run of entries"
+    );
+    assert_eq!(
+        first, expected_first,
+        "{image_name}: the run starts at the wrong entry"
+    );
+
+    Some(voice.into_iter().map(|(_, hash)| hash).collect())
+}
+
+#[test]
+#[ignore = "needs a PSP disc image under data/images"]
+fn the_psp_prerace_streams_are_32_mono_atrac3plus_at_44100() {
+    // The EU and USA builds hold different numbers of entries, so the run sits
+    // one index apart; the *hashes* do not move, which is what says the two
+    // builds ship the same 32 lines rather than 32 lines each.
+    let eu = psp_prerace_hashes("pulse-psp-eu.chd", 867);
+    let usa = psp_prerace_hashes("pulse-psp-usa.chd", 868);
+
+    if let (Some(eu), Some(usa)) = (eu, usa) {
+        assert_eq!(
+            eu, usa,
+            "the two PSP builds should key the pre-race clips identically"
+        );
+    }
 }
 
 #[derive(Default)]
