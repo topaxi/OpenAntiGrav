@@ -37,6 +37,10 @@ use oag_formats::wad;
 /// The PS2 music archive, relative to the disc root.
 const PS2_MUSIC: &str = "54748/PS2MUSIC.WAD";
 
+/// The pre-race voice-over archive. Same count-first container as
+/// [`PS2_MUSIC`], different payload: dual-mono rather than true stereo.
+const PS2_PRERACE: &str = "54748/PRERACE.WAD";
+
 /// Bytes of each track to sample for the stereo statistics.
 const PROBE_BYTES: u64 = 2 << 20;
 
@@ -204,6 +208,80 @@ fn the_ps2_music_archive_chains_exactly_and_holds_interleaved_stereo() {
             "track {index}: channel correlation {correlation:.3} is too low for a stereo mix"
         );
     }
+}
+
+#[test]
+#[ignore = "needs a PS2 disc image under data/images"]
+fn the_ps2_prerace_archive_chains_exactly_and_holds_dual_mono() {
+    let Some(path) = image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == PS2_PRERACE)
+        .expect("PRERACE.WAD present")
+        .clone();
+
+    // The point of the test: the *music* reader parses this file unchanged.
+    // `oag-wad` rejects it as "unknown WAD version 32" because the first word
+    // is an entry count, not a version - the same false negative it gives
+    // PS2MUSIC.WAD.
+    let header = disc
+        .read_entry_range(&archive, 0, ps2_music::HEADER_LEN as u64)
+        .expect("header");
+    let count = ps2_music::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, ps2_music::directory_len(count))
+        .expect("directory");
+    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    println!("archive      {} bytes", archive.size);
+    println!("clips        {}", dir.entries.len());
+
+    assert!(
+        dir.chains_exactly(archive.size),
+        "the entry chain does not close on the archive length"
+    );
+    assert!(
+        dir.entries.iter().all(|e| e.size % 4 == 0),
+        "an entry size is not a whole number of frames"
+    );
+
+    // What separates this archive from the music one. Both are 16-bit stereo
+    // frames, but here the two channels carry identical bytes - a mono
+    // recording written into a stereo stream. Asserting it keeps the two
+    // archives from being conflated, and it is why the music test's
+    // `correlation > 0.3` would be a meaningless check here: it is 1.0 by
+    // construction.
+    let mut identical = 0usize;
+    for (index, entry) in dir.entries.iter().enumerate() {
+        let probe = u64::from(entry.offset) + (u64::from(entry.size) / 3 / 4) * 4;
+        let len = PROBE_BYTES.min(u64::from(entry.size) / 3);
+        let raw = disc
+            .read_entry_range(&archive, probe, len)
+            .expect("clip bytes");
+        let samples: Vec<i16> = raw
+            .chunks_exact(2)
+            .map(|c| i16::from_le_bytes([c[0], c[1]]))
+            .collect();
+
+        let pairs = samples.chunks_exact(2);
+        let total = pairs.len();
+        let same = samples.chunks_exact(2).filter(|p| p[0] == p[1]).count();
+        let ratio = same as f64 / total as f64;
+        println!("  {index:2} {:9} bytes  L==R {ratio:.4}", entry.size);
+        identical += usize::from(ratio > 0.99);
+    }
+
+    assert_eq!(
+        identical,
+        dir.entries.len(),
+        "every clip should be dual-mono; {identical} of {} were",
+        dir.entries.len()
+    );
 }
 
 #[derive(Default)]
