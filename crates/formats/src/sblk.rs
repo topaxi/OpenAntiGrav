@@ -53,14 +53,20 @@
 //! by the flag byte, which has to be one of eight values and is on 99.96% of the
 //! disc's 530,916 blocks.
 //!
+//! # Splitting a bank into its sounds
+//!
+//! [`Bank::sounds`] walks the command table and resolves every command that
+//! binds a waveform to the 24-byte descriptor holding its offset and length;
+//! [`Bank::sound_names`] walks the name table for the `{name, cue}` pairs. Both
+//! rules come out of the PSP executable - see
+//! `docs/ghidra/functions/psp-pulse-usa/sound.md` - and both are checked
+//! against all 39 banks on the disc, where the spans tile every waveform
+//! section exactly.
+//!
 //! # What is not decoded
 //!
-//! Where each individual waveform starts. The three tables here address each
-//! other rather than the waveform data, and only the simplest banks have an
-//! obvious offset/length pair. [`Bank::name`] is recovered, and
-//! [`decode_adpcm`] will decode any span the caller can identify, but this
-//! module does not split a bank into its component sounds. See the page's open
-//! questions.
+//! 43 of the 45 command opcodes, the sample rate each waveform plays at, and
+//! the header's `+0x24`. See the format page's open questions.
 
 /// Bytes before the section table.
 pub const HEADER_LEN: usize = 8;
@@ -91,6 +97,29 @@ pub const COMMAND_LEN: usize = 8;
 
 /// Bytes per voice-state entry.
 pub const VOICE_LEN: usize = 16;
+
+/// Bytes per waveform descriptor in the parameter block.
+pub const DESCRIPTOR_LEN: usize = 24;
+
+/// Bytes per name-table entry: a 16-byte name and a `u16` cue index.
+pub const NAME_ENTRY_LEN: usize = 0x14;
+
+/// Bytes of name block before the hash buckets.
+pub const NAME_BUCKETS_AT: usize = 0x18;
+
+/// The bit of the header word at `+0x08` that says a name table is present.
+///
+/// `Scream_FindSoundInBank` refuses a bank with it clear before it reads
+/// anything, so it is a capability flag rather than part of a size. Both values
+/// the disc uses - 772 and 260 - have it set.
+pub const HAS_NAME_TABLE: u32 = 0x100;
+
+/// The two opcodes that bind a waveform to a voice.
+///
+/// Of `g_scream_opcode_table`'s 45 entries, exactly these two point at
+/// `Scream_OpKeyOn`. Whether they differ from each other is not known: they
+/// share a handler, so any difference has to come out of the command word.
+pub const KEY_ON_OPCODES: [u8; 2] = [0x01, 0x09];
 
 /// Something wrong with a sound bank.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,10 +212,21 @@ pub struct Bank<'a> {
     pub command_count: u16,
     /// Waveforms the bank holds.
     pub waveform_count: u16,
+    /// The header word at `+0x08`, a capability mask. See [`HAS_NAME_TABLE`].
+    pub flags: u32,
+    /// The whole `SBlk` descriptor section.
+    ///
+    /// Every offset the header states is an index into this, not into the file:
+    /// the cue table's offset is always 64, which is where the header stops.
+    pub block: &'a [u8],
     /// The 12-byte cue table.
     pub cues: &'a [u8],
     /// The 8-byte command table.
     pub commands: &'a [u8],
+    /// Offset of the parameter block within [`Bank::block`], header `+0x34`.
+    pub parameter_offset: u32,
+    /// Offset of the name block within [`Bank::block`], header `+0x38`.
+    pub name_offset: u32,
     /// PS-ADPCM waveform data, a whole number of 16-byte blocks.
     pub waveforms: &'a [u8],
 }
@@ -269,11 +309,13 @@ impl<'a> Bank<'a> {
             });
         }
 
+        let flags = word(block, 0x08);
         let cue_count = half(block, 0x16);
         let command_count = half(block, 0x18);
         let waveform_count = half(block, 0x1a);
         let cue_offset = word(block, 0x1c);
         let command_offset = word(block, 0x20);
+        let parameter_offset = word(block, 0x34);
         let name_offset = word(block, 0x38);
 
         let slice = |offset: u32, len: usize, name: &'static str| -> Result<&'a [u8]> {
@@ -303,8 +345,12 @@ impl<'a> Bank<'a> {
             cue_count,
             command_count,
             waveform_count,
+            flags,
+            block,
             cues,
             commands,
+            parameter_offset,
+            name_offset,
             waveforms,
         })
     }
@@ -314,6 +360,137 @@ impl<'a> Bank<'a> {
     pub fn adpcm_blocks(&self) -> usize {
         self.waveforms.len() / ADPCM_BLOCK_LEN
     }
+
+    /// Every waveform the command table binds, in command order.
+    ///
+    /// `Scream_OpKeyOn` computes `parameter_block + (command_word & 0xffffff)`
+    /// and hands the last two words of the 24-byte record it lands on to
+    /// `sceSasSetVoice` as an address and a size, so walking the command table
+    /// for the two opcodes that reach that handler yields the bank's waveform
+    /// spans without a runtime.
+    ///
+    /// A command whose descriptor does not fit the descriptor section is
+    /// skipped rather than reported: the caller's own count of key-on commands
+    /// against this length is the misfit measure, and a silent `None` would
+    /// hide it.
+    #[must_use]
+    pub fn sounds(&self) -> Vec<Sound> {
+        let mut out = Vec::new();
+        for (index, command) in self.commands.chunks_exact(COMMAND_LEN).enumerate() {
+            let first = word(command, 0);
+            // The opcode is the high byte of the first word, which is byte 3 in
+            // memory: `Scream_StepCommandList` reads `*(u8 *)(cmd + 3)`.
+            let opcode = (first >> 24) as u8;
+            if !KEY_ON_OPCODES.contains(&opcode) {
+                continue;
+            }
+            let Some(at) = self.parameter_offset.checked_add(first & 0x00ff_ffff) else {
+                continue;
+            };
+            let Some(record) = self
+                .block
+                .get(at as usize..)
+                .and_then(|tail| tail.get(..DESCRIPTOR_LEN))
+            else {
+                continue;
+            };
+            out.push(Sound {
+                command: index,
+                opcode,
+                descriptor: at,
+                mode: half(record, 0x0e),
+                offset: word(record, 0x10),
+                length: word(record, 0x14),
+            });
+        }
+        out
+    }
+
+    /// Every `{name, cue}` pair in the bank's name table.
+    ///
+    /// Empty when [`HAS_NAME_TABLE`] is clear in [`Bank::flags`], which is the
+    /// gate `Scream_FindSoundInBank` applies before it reads anything.
+    ///
+    /// The runtime jumps into the entry array at a hash bucket and walks
+    /// forward to a NUL-named terminator. Reproducing the lookup would need the
+    /// hash; enumerating the table does not, because every bucket's chain is a
+    /// run of the same array. This walks all of the buckets' chains, so it
+    /// returns exactly the set a lookup could find.
+    #[must_use]
+    pub fn sound_names(&self) -> Vec<SoundName> {
+        if self.flags & HAS_NAME_TABLE == 0 {
+            return Vec::new();
+        }
+        let names = self.name_offset as usize;
+        let Some(block) = self.block.get(names..) else {
+            return Vec::new();
+        };
+        if block.len() < NAME_BUCKETS_AT {
+            return Vec::new();
+        }
+        // Relative to the name block, not to the section: the word reads 0x98
+        // on all 39 banks even though their name blocks sit at wildly different
+        // offsets. The runtime fixes it up to a pointer before using it.
+        let entries = word(block, 0x08) as usize;
+        // The buckets fill the gap between the name block's fixed head and the
+        // entry array, so their count follows from the two offsets rather than
+        // from the hash's range, which is not known.
+        let Some(bucket_bytes) = entries.checked_sub(NAME_BUCKETS_AT) else {
+            return Vec::new();
+        };
+
+        let mut out = Vec::new();
+        let mut seen = Vec::new();
+        for bucket in 0..bucket_bytes / 2 {
+            let head = usize::from(half(block, NAME_BUCKETS_AT + bucket * 2));
+            let mut at = entries + head * NAME_ENTRY_LEN;
+            while let Some(entry) = block.get(at..).and_then(|tail| tail.get(..NAME_ENTRY_LEN)) {
+                if entry[0] == 0 {
+                    break;
+                }
+                if !seen.contains(&at) {
+                    seen.push(at);
+                    let end = entry[..16].iter().position(|&b| b == 0).unwrap_or(16);
+                    out.push(SoundName {
+                        name: String::from_utf8_lossy(&entry[..end]).into_owned(),
+                        cue: half(entry, 0x10),
+                    });
+                }
+                at += NAME_ENTRY_LEN;
+            }
+        }
+        out
+    }
+}
+
+/// A waveform bound by one command in the bank's command table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sound {
+    /// Index of the binding command in the command table.
+    pub command: usize,
+    /// The opcode that bound it, one of [`KEY_ON_OPCODES`].
+    pub opcode: u8,
+    /// Offset of the 24-byte descriptor within the descriptor section.
+    pub descriptor: u32,
+    /// The descriptor's `+0x0e` flags word.
+    ///
+    /// `Scream_KeyOnVoice` passes `0x40` to `sceSasSetVoice` as its loop mode
+    /// and treats `0x80` as an assertion that the data is ADPCM. The rest is
+    /// unread, so this is exposed as the raw word rather than as booleans.
+    pub mode: u16,
+    /// Byte offset of the waveform within [`Bank::waveforms`].
+    pub offset: u32,
+    /// Length of the waveform in bytes.
+    pub length: u32,
+}
+
+/// One entry of a bank's name table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoundName {
+    /// The sound's name, up to 16 characters.
+    pub name: String,
+    /// The cue this name resolves to, an index into the 12-byte cue table.
+    pub cue: u16,
 }
 
 /// The four PS-ADPCM predictor filters, as `(previous, previous but one)`.
@@ -428,6 +605,77 @@ mod tests {
         out
     }
 
+    /// Builds a bank carrying a command table, a parameter block and a name
+    /// table. Hand-assembled, like [`bank`]: no game data in any test.
+    ///
+    /// `sounds` is `(opcode, waveform offset, waveform length)` per command,
+    /// laid out contiguously in the parameter block; `names` is the name table.
+    /// The first two hash buckets are both aimed at entry 0 so that walking
+    /// them yields each name once rather than twice.
+    fn scored_bank(sounds: &[(u8, u32, u32)], names: &[(&str, u16)]) -> Vec<u8> {
+        let cues = u16::try_from(names.len()).expect("few names");
+        let cue_bytes = usize::from(cues) * CUE_LEN;
+        let command_offset = SBLK_HEADER_LEN + cue_bytes;
+        let parameter_offset = command_offset + sounds.len() * COMMAND_LEN;
+        let name_offset = parameter_offset + sounds.len() * DESCRIPTOR_LEN;
+        let entries_at = name_offset + 0x98;
+        let block_len = entries_at + (names.len() + 1) * NAME_ENTRY_LEN;
+        let waveform_len = sounds
+            .iter()
+            .map(|&(_, offset, length)| offset + length)
+            .max()
+            .unwrap_or(0) as usize;
+
+        let mut block = vec![0u8; block_len];
+        block[..4].copy_from_slice(MAGIC);
+        block[4..8].copy_from_slice(&VERSION.to_le_bytes());
+        block[0x08..0x0c].copy_from_slice(&HAS_NAME_TABLE.to_le_bytes());
+        block[0x16..0x18].copy_from_slice(&cues.to_le_bytes());
+        let commands = u16::try_from(sounds.len()).expect("few commands");
+        block[0x18..0x1a].copy_from_slice(&commands.to_le_bytes());
+        block[0x1a..0x1c].copy_from_slice(&commands.to_le_bytes());
+        block[0x1c..0x20].copy_from_slice(&(SBLK_HEADER_LEN as u32).to_le_bytes());
+        block[0x20..0x24].copy_from_slice(&(command_offset as u32).to_le_bytes());
+        block[0x28..0x2c].copy_from_slice(&(waveform_len as u32).to_le_bytes());
+        block[0x2c..0x30].copy_from_slice(&(waveform_len as u32).to_le_bytes());
+        block[0x34..0x38].copy_from_slice(&(parameter_offset as u32).to_le_bytes());
+        block[0x38..0x3c].copy_from_slice(&(name_offset as u32).to_le_bytes());
+
+        for (index, &(opcode, offset, length)) in sounds.iter().enumerate() {
+            let operand = u32::try_from(index * DESCRIPTOR_LEN).expect("small bank");
+            let at = command_offset + index * COMMAND_LEN;
+            block[at..at + 4].copy_from_slice(&(u32::from(opcode) << 24 | operand).to_le_bytes());
+            let record = parameter_offset + index * DESCRIPTOR_LEN;
+            block[record + 0x10..record + 0x14].copy_from_slice(&offset.to_le_bytes());
+            block[record + 0x14..record + 0x18].copy_from_slice(&length.to_le_bytes());
+        }
+
+        block[name_offset + 8..name_offset + 12].copy_from_slice(&0x98u32.to_le_bytes());
+        for bucket in 0..64usize {
+            // Every bucket but the first two lands on the terminator, which is
+            // what an empty bucket looks like on disc.
+            let head = u16::try_from(if bucket < 2 { 0 } else { names.len() }).expect("few names");
+            let at = name_offset + NAME_BUCKETS_AT + bucket * 2;
+            block[at..at + 2].copy_from_slice(&head.to_le_bytes());
+        }
+        for (index, &(name, cue)) in names.iter().enumerate() {
+            let at = entries_at + index * NAME_ENTRY_LEN;
+            block[at..at + name.len()].copy_from_slice(name.as_bytes());
+            block[at + 0x10..at + 0x12].copy_from_slice(&cue.to_le_bytes());
+        }
+
+        let mut out = VERSION.to_le_bytes().to_vec();
+        out.extend_from_slice(&2u32.to_le_bytes());
+        let first = (HEADER_LEN + 2 * SECTION_LEN) as u32;
+        out.extend_from_slice(&first.to_le_bytes());
+        out.extend_from_slice(&(block_len as u32).to_le_bytes());
+        out.extend_from_slice(&(first + block_len as u32).to_le_bytes());
+        out.extend_from_slice(&(waveform_len as u32).to_le_bytes());
+        out.extend_from_slice(&block);
+        out.resize(out.len() + waveform_len, 0);
+        out
+    }
+
     #[test]
     fn a_bank_parses_and_its_sections_close() {
         let data = bank(6, 10, 7, 4, "FRNTEND");
@@ -495,6 +743,75 @@ mod tests {
         let pcm = decode_adpcm(&stream);
         assert_eq!(pcm.len(), 2 * ADPCM_BLOCK_SAMPLES);
         assert_ne!(pcm[ADPCM_BLOCK_SAMPLES], 0, "history did not carry");
+    }
+
+    #[test]
+    fn the_key_on_commands_resolve_to_their_waveform_spans() {
+        let data = scored_bank(
+            &[(0x01, 0, 272), (0x09, 272, 912), (0x01, 1184, 848)],
+            &[("HORN", 0)],
+        );
+        let bank = Bank::parse(&data).expect("parse");
+        let sounds = bank.sounds();
+        assert_eq!(sounds.len(), 3);
+        assert_eq!(sounds[0].opcode, 0x01);
+        assert_eq!(sounds[1].opcode, 0x09, "0x09 binds a waveform too");
+        assert_eq!(
+            sounds
+                .iter()
+                .map(|s| (s.offset, s.length))
+                .collect::<Vec<_>>(),
+            [(0, 272), (272, 912), (1184, 848)]
+        );
+        // The command index, so a caller can tell which two commands shared a
+        // waveform when a bank reuses one.
+        assert_eq!(sounds[2].command, 2);
+    }
+
+    #[test]
+    fn a_command_that_is_not_a_key_on_binds_nothing() {
+        // 0x05 and 0x16 are both opcodes the shipped banks use, and neither
+        // reaches the handler that resolves a descriptor.
+        let data = scored_bank(&[(0x05, 0, 16), (0x01, 16, 32), (0x16, 48, 16)], &[]);
+        let sounds = Bank::parse(&data).expect("parse").sounds();
+        assert_eq!(sounds.len(), 1);
+        assert_eq!((sounds[0].offset, sounds[0].length), (16, 32));
+    }
+
+    #[test]
+    fn a_descriptor_outside_the_block_is_skipped_rather_than_panicking() {
+        let mut data = scored_bank(&[(0x01, 0, 16)], &[]);
+        // Point the one command's operand past the end of the section.
+        let block_at = HEADER_LEN + 2 * SECTION_LEN;
+        let at = block_at + SBLK_HEADER_LEN;
+        data[at..at + 4].copy_from_slice(&(0x0100_0000u32 | 0x00ff_ffff).to_le_bytes());
+        assert!(Bank::parse(&data).expect("parse").sounds().is_empty());
+    }
+
+    #[test]
+    fn the_name_table_walks_to_every_entry_once() {
+        let data = scored_bank(
+            &[(0x01, 0, 16)],
+            &[("SPEEDUPPAD", 3), ("~ENGINE", 0), ("MESSAGE", 7)],
+        );
+        let bank = Bank::parse(&data).expect("parse");
+        let names = bank.sound_names();
+        // Two buckets aim at entry 0, so a walk that did not deduplicate would
+        // return six.
+        assert_eq!(names.len(), 3);
+        assert_eq!(names[0].name, "SPEEDUPPAD");
+        assert_eq!(names[0].cue, 3);
+        assert_eq!(names[2].cue, 7);
+    }
+
+    #[test]
+    fn a_bank_without_the_name_table_bit_reports_no_names() {
+        let mut data = scored_bank(&[(0x01, 0, 16)], &[("HORN", 0)]);
+        let at = HEADER_LEN + 2 * SECTION_LEN + 0x08;
+        data[at..at + 4].copy_from_slice(&0u32.to_le_bytes());
+        let bank = Bank::parse(&data).expect("parse");
+        assert_eq!(bank.flags & HAS_NAME_TABLE, 0);
+        assert!(bank.sound_names().is_empty());
     }
 
     #[test]

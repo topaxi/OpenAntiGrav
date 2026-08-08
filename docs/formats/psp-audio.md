@@ -1,12 +1,12 @@
 # PSP sound bank
 
-**Status: partial.** The container, the `SBlk` descriptor header and the audio
-codec are decoded, implemented in
+**Status: understood.** The container, the `SBlk` descriptor header, the audio
+codec, **where each individual sound starts** and **what each sound is called**
+are all decoded, implemented in
 [`oag-formats::sblk`](../../crates/formats/src/sblk.rs) and validated across all
-39 banks on the PSP disc. **Where each individual sound starts is now solved
-too** - see "Not determined" below for the rule - but it is read out of the
-executable rather than implemented here, so the status stays `partial` until
-`sblk` splits a bank into its sounds and that is validated against all 39.
+39 banks on the PSP disc. What remains open is about *playing* a bank rather
+than reading one: 43 of the 45 command opcodes, and the sample rate each
+waveform runs at.
 
 These are the `03000000` blobs from the [WAD](wad.md) census - 3 in `FE.wad`,
 36 in `Data.wad`. The known name `Data\Sound\frontend.bnk` is one of them.
@@ -162,6 +162,156 @@ circuit banks are addressed some other way. The lead worth following is the
 into context by `crates/game/src/catalogue.rs` with its meaning unrecorded -
 name mining from the self-name field is now known to be a dead end for them.
 
+## Where each sound starts
+
+`Scream_OpKeyOn` is the opcode handler that hands a waveform to the hardware
+synth, and its arithmetic is computable from the file alone. Walk the command
+table; for every command whose opcode is `0x01` or `0x09`:
+
+```text
+descriptor      = parameter_block_offset + (first_word & 0x00ffffff)
+waveform offset = *(u32 *)(descriptor + 0x10)
+waveform length = *(u32 *)(descriptor + 0x14)
+```
+
+The opcode is the **high byte of the first word**; the low 24 bits are a byte
+offset from the parameter block (header `+0x34`) to a 24-byte descriptor. Both
+offsets in the header are indices into the **descriptor section**, and the
+waveform offset is an index into the **waveform section**, biased by nothing.
+That was determined empirically rather than assumed: the smallest offset in
+every one of the 39 banks is 0, and the largest offset plus its length is the
+section length exactly.
+
+Implemented as [`Bank::sounds`](../../crates/formats/src/sblk.rs). The
+descriptor's other fields, from the runtime: `+0x01` a note, `+0x04` an angle in
+degrees, `+0x0e` a flags word whose `0x40` selects loop mode and `0x80` asserts
+ADPCM. Those are exposed as raw values, not interpreted.
+
+### What the ground-truth test proves
+
+The rule is checked against every bank on the disc. The figures are exact, not
+approximate:
+
+| Check | Result |
+| --- | --- |
+| Banks | 39 |
+| Commands with a key-on opcode | 916 |
+| Descriptors that resolved | **916 of 916** |
+| Distinct `(offset, length)` spans | 595 |
+| Spans landing inside the waveform section | **595 of 595** |
+| Spans a whole number of PS-ADPCM blocks at both ends | **595 of 595** |
+| Distinct spans equal to the header's `waveform_count` | **39 of 39 banks** |
+| Banks whose spans tile the waveform section with no gap | **39 of 39** |
+| Partially overlapping or nested spans | **0** |
+
+916 commands against 595 spans is the reuse the rule allows: a bank may bind one
+waveform from several commands, and **33 of the 39** do.
+
+Three of those are strong on their own and none of them is what the rule reads.
+**`waveform_count` is a header field the arithmetic never touches**, and the
+number of distinct spans matches it in all 39 banks. **Block alignment** is the
+check that separates a wrong base from a bank with holes in it: a base off by
+anything but a multiple of 16 breaks it everywhere, and it breaks nowhere.
+**Exact tiling** is the sharpest: 595 spans partitioning 39 sections totalling
+about 8.4 MB with no gap and no overlap is not something a wrong reading
+produces.
+
+### The codec's own terminator agrees
+
+The check that settles it is one the command table knows nothing about.
+PS-ADPCM carries a terminator in each block's flag byte - 1 end, 3 loop end, 5
+start and end, 7 end and mute - so if these spans are where the encoder stopped,
+every span carries one at its tail and none in its body.
+
+**595 of 595 spans have their terminator on the last block or the one before
+it. None has one earlier, and none is missing one.** The penultimate position is
+the common case: the encoder flags the last block it wrote and appends a block
+of run-out.
+
+A terminator is one flag value in eight. A span boundary off by a single block
+would drop a terminator into the middle of its neighbour, and none of the
+595 does. That is the codec and the command table, two things with no knowledge
+of each other, agreeing on the same 595 boundaries.
+
+### The audio survives extraction
+
+Each span is decoded on its own and measured with the same mean-step-over-RMS
+metric the whole-section decode uses. **Mean 0.321 over 593 spans**, against
+about 1.41 for white noise. That is higher than the whole-section figure of
+0.220, and it should be: a section's measurement averages its quiet content in
+with its loud content, while a span's does not.
+
+35 spans - **10 distinct waveforms**, replicated across the circuit banks that
+share an ambience library - measure at or above 1.0, topping out at 1.418.
+Tracing them through the name table below names them: `~AMB`, `~FLYBY_DIST`,
+`~HAWK`, `~MONORAIL`, `CANNONEXPLWALL`, and `outpost`'s wind. **Those are the
+sounds that are supposed to be flat.** Wind and an explosion against a wall are
+noise by design, and this metric cannot tell "correctly decoded noise" from
+"incorrectly decoded anything" - which is why it is reported per span and
+asserted on the mean rather than the worst.
+
+## Every sound has a name
+
+The name block (header `+0x38`) is a 64-bucket hash table:
+
+```text
+names + 0x00   char[8]    the bank's own name
+names + 0x08   u32        offset of the entry array, relative to the name block
+names + 0x18   u16[64]    hash buckets, indexed by hash(name)
+entry + 0x00   char[16]   the sound's name
+entry + 0x10   u16        the cue it resolves to
+```
+
+Two things are settled by the data. The entry-array offset is **relative to the
+name block, not to the section**: it reads `0x98` in all 39 banks even though
+their name blocks sit at wildly different offsets, and `0x18 + 64 * 2` is
+exactly `0x98`. And the bucket count follows from the two offsets rather than
+from the hash's range, which is still unread.
+
+**The hash is not needed.** A bucket's chain is a run of the array terminated by
+a NUL-named entry, so walking every bucket's chain enumerates the whole table -
+which is exactly the set a lookup could find. Implemented as
+[`Bank::sound_names`](../../crates/formats/src/sblk.rs). The table only exists
+when bit `0x100` of the header word at `+0x08` is set; every bank on the disc
+has it.
+
+| Check | Result |
+| --- | --- |
+| Banks with the name-table bit clear | **0 of 39** |
+| Names recovered | 607 |
+| Banks where the name count equals `cue_count` | **39 of 39** |
+| Banks whose names index every cue exactly once | **39 of 39** |
+| Names pointing at a cue that does not exist | **0** |
+| Names carrying a byte outside printable ASCII | **0** |
+
+The second row is the one that matters, and it is stronger than the first:
+equal counts with every index in range would still allow two names on one cue
+and another cue unnamed. Sorted, each bank's recovered indices are exactly
+`0..cue_count`, so **every cue is named exactly once**. The corroboration is
+better still: **the strings the executable passes to `Sound_Play` turn up in these
+tables verbatim.** `"SPEEDUPPAD"`, recovered while reading
+[speed pads](../ghidra/functions/psp-pulse-usa/pads.md), resolves in `hud.bnk`.
+`"~ENGINE"`, from [exhaust](../ghidra/functions/psp-pulse-usa/exhaust.md),
+resolves in both `ship.bnk` and `ship_zone.bnk`. `"ABSORB"`, from
+[contact response](../ghidra/functions/psp-pulse-usa/contact-response.md),
+resolves in `weapons.bnk`. None of the three was known from the bank side, and a
+wrong stride or a wrong base cannot manufacture a string the disassembler found
+on its own.
+
+`contact-response.md`'s `"COLLISIONS"` is in `ship.bnk` as **`".COLLISIONS"`**,
+with a leading dot. SCREAM's error strings distinguish a sound from a *child*
+sound, so the prefix is probably that distinction; it is not investigated, which
+is why the ground-truth test checks the three that match exactly rather than
+four with a rule for the fourth.
+
+The tables read as Wipeout Pulse content throughout: `weapons.bnk` names 42 cues
+including `QUAKELAUNCH`, `SHURIKENEXPL` and `~REPULSORTRAVEL`, and the circuit
+banks name their ambience - `~AMB_SIREN`, `~TUN_ELEC_LIGHT`, `~startlineneon`.
+
+Confidence **94** for both rules, the rubric's cap for a reading that makes an
+arithmetic invariant come out exactly across many real files. Nothing here has
+been run under an emulator.
+
 ## The waveforms are PS-ADPCM
 
 Sony's 16-byte block: one predictor/shift byte, one flag byte, then 14 bytes
@@ -210,8 +360,14 @@ Every structural claim above holds on 39 of 39 banks:
   against its own declared count.
 - `+0x1c` always 64, `+0x24` always 20544, `+0x14` and `+0x30` always zero.
 - Waveform data a whole number of 16-byte blocks.
+- 595 waveform spans tiling 39 waveform sections exactly, numbering each bank's
+  declared `waveform_count`, every one block-aligned, every one carrying a
+  PS-ADPCM terminator in its final two blocks and nowhere earlier.
+- 607 sound names indexing every cue of every bank exactly once, every name
+  printable, and three of them strings the disassembler found independently.
 
-Confidence: **94** for the container and the `SBlk` header. **92** for
+Confidence: **94** for the container and the `SBlk` header, and **94** for the
+per-sound boundaries and the name table. **92** for
 PS-ADPCM: the flag and predictor census is corpus-wide and overwhelming, and the
 roughness measurement rules out a wrong-but-well-framed decode, but neither is
 an exact identity and nothing has been run under an emulator. Per the
@@ -248,31 +404,44 @@ name matches   4 of 4 short enough to check
 roughness      mean 0.220, worst 0.408 (white noise is ~1.41)
 ```
 
+The per-sound rule has its own test in the same file,
+`every_psp_sound_bank_splits_into_waveforms_that_tile_it`, which reports:
+
+```text
+banks             39
+key-on commands   916
+sounds resolved   916
+distinct spans    595
+banks reusing one 33 of 39
+spans == wf count 39 of 39
+tiles exactly     39 of 39
+outside section   0
+misaligned        0
+overlaps          0 partial, 0 nested
+no name table     0
+names             607
+names == cues     39 of 39
+names index 0..n  39 of 39
+bad cue / unprintable  0 / 0
+cue strings found ["SPEEDUPPAD", "~ENGINE", "ABSORB"]
+adpcm terminator  595 in the last two blocks, 0 earlier, 0 absent
+span roughness    mean 0.321, worst 1.418 over 593 spans (white noise is ~1.41)
+as rough as noise 35 spans, 10 distinct waveforms
+```
+
 ## Not determined
 
-- ~~**Where each sound starts.**~~ **Solved, from the executable.** A cue's
-  command list is walked, and every command whose opcode is `0x01` or `0x09`
-  binds a waveform:
+- ~~**Where each sound starts.**~~ **Solved and validated** - see [above](#where-each-sound-starts).
+  The rule came out of the executable; running it across all 39 banks is what
+  made it a finding rather than a hypothesis. Worth recording is what the
+  earlier search got wrong: `frontend.bnk`'s operands are 0, 24, 48 ... 216
+  because that bank's descriptors happen to be laid out contiguously, and a
+  tiling search over contiguous 24-byte records therefore found it and failed on
+  the race banks. **The rule does not require contiguity.** The conclusion that
+  "the same reading does not generalise" was right about the search and wrong
+  about the structure.
 
-  ```text
-  descriptor = parameter_block_offset + (command_word & 0xffffff)
-  waveform offset = descriptor + 0x10
-  waveform length = descriptor + 0x14
-  ```
-
-  The operand is a byte offset from the **parameter block** (header `+0x34`) to
-  a 24-byte descriptor whose last two words are the offset and length. This
-  page's own `frontend.bnk` observation is the confirmation: ten opcode-`0x01`
-  commands with operands 0, 24, 48 ... 216 landing on ten 24-byte records whose
-  last two words tile the waveform section exactly. Those operands are multiples
-  of 24 because that bank's descriptors happen to be contiguous, which is what
-  let a tiling search find them; **the rule does not require contiguity, which is
-  why the same search failed on the race banks.** The conclusion that "the same
-  reading does not generalise" was right about the search and wrong about the
-  structure. Confidence 90. **Not yet implemented in
-  [`sblk`](../../crates/formats/src/sblk.rs) or run across all 39 banks** - that
-  is what would turn a documented rule into a validated one. See
-  [the sound engine](../ghidra/functions/psp-pulse-usa/sound.md#solved-where-each-sound-starts).
+- ~~**Per-sound names.**~~ **Solved and validated** - see [above](#every-sound-has-a-name).
 
 - **The command opcodes.** Nine distinct values seen in the data; the engine
   defines **45**, dispatched through a jump table at `0x08ac326c`. Two are now
@@ -281,6 +450,15 @@ roughness      mean 0.220, worst 0.408 (white noise is ~1.41)
   are unread.
 - **`+0x24` = 20544.** Still not determined; the shape of it suggests an
   audio-RAM base address.
+- **Which cue owns which commands.** A name resolves to a cue, and a cue's
+  `+0x08` is its command list, so the last link between a name and a waveform is
+  the cue record. Probed by hand while validating the above: reading `+0x08` as
+  a byte offset into the descriptor section and converting it to a command index
+  with `(cue[0x08] - command_table_offset) / 8`, with `+0x04` as the count,
+  attributes the noisy spans to plausible cues - `~FLYBY_DIST`, `~HAWK`,
+  `~MONORAIL` - but it does not resolve on every bank, and it is not
+  implemented. Worth an hour, and it would make `sblk` able to report a sound by
+  name rather than by span.
 - ~~**`+0x08` = 772/260.**~~ **Partly settled.** The runtime gates its
   name lookup on `bank[2] & 0x100`, and 772 is `0x304` while 260 is `0x104`, so
   **bit `0x100` means "this bank carries a name table"** - a capability flag

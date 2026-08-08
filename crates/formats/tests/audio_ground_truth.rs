@@ -722,3 +722,505 @@ fn every_psp_sound_bank_frames_exactly_and_holds_ps_adpcm() {
         "a bank name did not hash back to its own entry"
     );
 }
+
+/// `Data\Sound\frontend.bnk`'s WAD name hash, in both `FE.wad` and `Data.wad`.
+const FRONTEND_HASH: u32 = 0x75a9_1641;
+
+/// The seven waveform spans `frontend.bnk`'s ten key-on commands resolve to.
+///
+/// This bank is the one the format page found from the data side, by searching
+/// for a set of `(offset, length)` pairs that tile the waveform section. It is
+/// asserted literally here because it is the case the rule was checked against
+/// before the rule was known, so it is the one place a regression in the
+/// arithmetic would be caught by a number rather than by a property.
+const FRONTEND_SPANS: [(u32, u32); 7] = [
+    (0, 272),
+    (272, 912),
+    (1184, 848),
+    (2032, 2096),
+    (4128, 1920),
+    (6048, 8112),
+    (14160, 8864),
+];
+
+/// Cue names that appear verbatim as `Sound_Play` arguments in the executable.
+///
+/// `"SPEEDUPPAD"` is from `docs/ghidra/functions/psp-pulse-usa/pads.md`,
+/// `"~ENGINE"` from `exhaust.md` and `"ABSORB"` from `contact-response.md`.
+/// None was known from the bank side, so finding each one in a decoded name
+/// table is an independent confirmation that the table is being read correctly.
+/// A wrong stride or a wrong base cannot produce a string the disassembler
+/// found on its own.
+const CUE_STRINGS: [&str; 3] = ["SPEEDUPPAD", "~ENGINE", "ABSORB"];
+
+#[derive(Default)]
+struct SoundSurvey {
+    banks: usize,
+    /// Commands with a key-on opcode, counted straight off the command table.
+    key_on_commands: usize,
+    /// Sounds [`Bank::sounds`] resolved. Below `key_on_commands` means a
+    /// descriptor fell outside the descriptor section.
+    sounds: usize,
+    /// Distinct `(offset, length)` pairs, summed over banks.
+    spans: usize,
+    /// Banks that bind one waveform from more than one command.
+    reuses: usize,
+    /// Banks whose distinct span count equals the header's `waveform_count`.
+    span_count_agrees: usize,
+    /// Banks whose spans cover the waveform section with no gap.
+    tiles_exactly: usize,
+    /// Spans that run past the end of the waveform section, or are empty.
+    outside: usize,
+    /// Spans not a whole number of PS-ADPCM blocks at both ends.
+    misaligned: usize,
+    /// Pairs of distinct spans that overlap without one containing the other.
+    partial_overlaps: usize,
+    /// Pairs of distinct spans where one contains the other.
+    nested: usize,
+    /// Banks with [`sblk::HAS_NAME_TABLE`] clear.
+    no_name_table: usize,
+    /// Names recovered, summed over banks.
+    names: usize,
+    /// Banks whose name count equals `cue_count`.
+    name_count_agrees: usize,
+    /// Banks whose names index every cue exactly once.
+    names_index_every_cue: usize,
+    /// Names whose cue index is not a valid cue.
+    bad_cue: usize,
+    /// Names carrying a byte outside printable ASCII.
+    unprintable: usize,
+    /// Executable cue strings found in some bank's name table.
+    cue_strings_found: Vec<&'static str>,
+    /// Spans whose PS-ADPCM terminator sits on their last block or the one
+    /// before it.
+    terminated: usize,
+    /// Spans carrying a terminator earlier than that, which is what a boundary
+    /// in the wrong place produces.
+    terminated_early: usize,
+    /// Spans with no terminator at all.
+    unterminated: usize,
+    /// Mean sample step over RMS, per extracted span long enough to measure.
+    roughness: Vec<f64>,
+    /// Spans that measure as rough as white noise, named so they can be
+    /// looked at rather than averaged away.
+    noisy: Vec<String>,
+    /// Whether `frontend.bnk` was seen and matched [`FRONTEND_SPANS`].
+    frontend_matches: usize,
+}
+
+/// Walks a bank's sounds and names and folds the result into `into`.
+fn survey_bank_sounds(bank: &Bank<'_>, name_hash: u32, into: &mut SoundSurvey) {
+    into.banks += 1;
+
+    let key_on = bank
+        .commands
+        .chunks_exact(sblk::COMMAND_LEN)
+        .filter(|command| sblk::KEY_ON_OPCODES.contains(&command[3]))
+        .count();
+    into.key_on_commands += key_on;
+
+    let sounds = bank.sounds();
+    into.sounds += sounds.len();
+
+    let section = bank.waveforms.len() as u64;
+    for sound in &sounds {
+        let end = u64::from(sound.offset) + u64::from(sound.length);
+        if sound.length == 0 || end > section {
+            into.outside += 1;
+        }
+        // A wrong base breaks this; a bank with holes in it does not. So it is
+        // the check that separates "the rule is wrong" from "this bank is
+        // simply not covered end to end".
+        if !sound.offset.is_multiple_of(sblk::ADPCM_BLOCK_LEN as u32)
+            || !sound.length.is_multiple_of(sblk::ADPCM_BLOCK_LEN as u32)
+        {
+            into.misaligned += 1;
+        }
+    }
+
+    // Deduplicated, because a bank reusing one waveform under two commands is
+    // expected - `frontend.bnk` does it three times - and identical spans are
+    // not an overlap.
+    let mut spans: Vec<(u32, u32)> = sounds.iter().map(|s| (s.offset, s.length)).collect();
+    spans.sort_unstable();
+    spans.dedup();
+    into.spans += spans.len();
+    if sounds.len() > spans.len() {
+        into.reuses += 1;
+    }
+    if spans.len() == usize::from(bank.waveform_count) {
+        into.span_count_agrees += 1;
+    }
+
+    let mut covered = 0u64;
+    let mut reach = 0u64;
+    for &(offset, length) in &spans {
+        let (start, end) = (u64::from(offset), u64::from(offset) + u64::from(length));
+        if start >= reach {
+            covered += end - start;
+        } else if end <= reach {
+            into.nested += 1;
+        } else {
+            into.partial_overlaps += 1;
+            covered += end - reach;
+        }
+        reach = reach.max(end);
+    }
+    if covered == section && section > 0 {
+        into.tiles_exactly += 1;
+    }
+
+    if bank.flags & sblk::HAS_NAME_TABLE == 0 {
+        into.no_name_table += 1;
+    }
+    let names = bank.sound_names();
+    into.names += names.len();
+    if names.len() == usize::from(bank.cue_count) {
+        into.name_count_agrees += 1;
+    }
+    // Stronger than the count: the names have to index every cue exactly once.
+    // Equal counts with every index in range would still allow two names on one
+    // cue and another cue unnamed.
+    let mut indices: Vec<u16> = names.iter().map(|entry| entry.cue).collect();
+    indices.sort_unstable();
+    if indices == (0..bank.cue_count).collect::<Vec<u16>>() {
+        into.names_index_every_cue += 1;
+    }
+    for entry in &names {
+        if entry.cue >= bank.cue_count {
+            into.bad_cue += 1;
+        }
+        if !entry.name.bytes().all(|b| b.is_ascii_graphic()) {
+            into.unprintable += 1;
+        }
+        if let Some(&found) = CUE_STRINGS.iter().find(|&&want| want == entry.name)
+            && !into.cue_strings_found.contains(&found)
+        {
+            into.cue_strings_found.push(found);
+        }
+    }
+
+    if name_hash == FRONTEND_HASH {
+        println!("  frontend spans {spans:?}");
+        assert_eq!(spans, FRONTEND_SPANS, "frontend.bnk's spans moved");
+        assert_eq!(
+            spans
+                .iter()
+                .map(|&(_, length)| u64::from(length))
+                .sum::<u64>(),
+            section,
+            "frontend.bnk's spans do not sum to its waveform section"
+        );
+        assert_eq!(sounds.len(), 10, "frontend.bnk should bind ten waveforms");
+        into.frontend_matches += 1;
+    }
+
+    // The sharpest check available, and one the command table knows nothing
+    // about. PS-ADPCM carries its own terminator in each block's flag byte -
+    // 1 end, 3 loop end, 5 start and end, 7 end and mute - so if these spans
+    // are really where the encoder stopped, every span has one at its tail and
+    // none in its body. A span boundary off by a single block would put a
+    // terminator in the middle of its neighbour.
+    for &(offset, length) in &spans {
+        // Indexed through `get` because the span bounds are what is under test:
+        // an out-of-range one is already counted above, and a panic here would
+        // replace that count with an index message.
+        let Some(span) = bank
+            .waveforms
+            .get(offset as usize..)
+            .and_then(|tail| tail.get(..length as usize))
+        else {
+            continue;
+        };
+        let blocks = span.len() / sblk::ADPCM_BLOCK_LEN;
+        let last = span
+            .chunks_exact(sblk::ADPCM_BLOCK_LEN)
+            .enumerate()
+            .filter(|(_, block)| matches!(block[1], 1 | 3 | 5 | 7))
+            .map(|(index, _)| blocks - 1 - index)
+            .max();
+        match last {
+            // The terminator sits on the final block or the one before it. The
+            // penultimate case is the common one: the encoder flags the last
+            // block it wrote and appends a block of run-out after it.
+            Some(0 | 1) => into.terminated += 1,
+            Some(_) => into.terminated_early += 1,
+            None => into.unterminated += 1,
+        }
+    }
+
+    // The point of extracting a span is that it decodes on its own. Each one
+    // gets the roughness check the whole-section decode already gets: a span
+    // taken at a wrong offset is out of phase with the block grid and decodes
+    // to noise.
+    for &(offset, length) in &spans {
+        let Some(span) = bank
+            .waveforms
+            .get(offset as usize..)
+            .and_then(|tail| tail.get(..length as usize))
+        else {
+            continue;
+        };
+        let pcm = sblk::decode_adpcm(span);
+        assert_eq!(
+            pcm.len(),
+            span.len() / sblk::ADPCM_BLOCK_LEN * sblk::ADPCM_BLOCK_SAMPLES,
+            "a span decoded to the wrong sample count"
+        );
+        if pcm.len() <= 1024 {
+            continue;
+        }
+        let steps: f64 = pcm
+            .windows(2)
+            .map(|w| f64::from(i32::from(w[0]).abs_diff(i32::from(w[1]))))
+            .sum();
+        let energy: f64 = pcm.iter().map(|&s| f64::from(s) * f64::from(s)).sum();
+        #[expect(clippy::cast_precision_loss, reason = "sample counts are small")]
+        let n = pcm.len() as f64;
+        let rms = (energy / n).sqrt();
+        let roughness = steps / (n - 1.0) / rms.max(1.0);
+        if roughness >= 1.0 {
+            into.noisy.push(format!(
+                "{}:{offset}+{length} {roughness:.3}",
+                if bank.name.is_empty() {
+                    "?"
+                } else {
+                    &bank.name
+                }
+            ));
+        }
+        into.roughness.push(roughness);
+    }
+
+    println!(
+        "  {:8} hash {name_hash:#010x} cues {:3} cmds {:4} wf {:3} | key-on {key_on:3} spans {:3} \
+         covered {covered:7}/{section:7} | names {:3}",
+        bank.name,
+        bank.cue_count,
+        bank.command_count,
+        bank.waveform_count,
+        spans.len(),
+        names.len(),
+    );
+}
+
+/// Reads every bank in one archive and folds it into `into`.
+fn survey_sounds_in(disc: &mut DiscImage, archive_path: &str, into: &mut SoundSurvey) {
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == archive_path)
+        .unwrap_or_else(|| panic!("{archive_path} present"))
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = wad::Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, wad::Directory::directory_len(count))
+        .expect("directory");
+    let dir = wad::Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    println!("{archive_path}");
+    for (index, entry) in dir.entries.iter().enumerate() {
+        if entry.size == 0 {
+            continue;
+        }
+        let raw = disc
+            .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
+            .expect("blob");
+        let blob = match entry.compression {
+            wad::Compression::None => raw,
+            wad::Compression::Lzss => {
+                oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize).expect("lzss")
+            }
+            wad::Compression::Zlib => panic!("{archive_path} entry {index}: unexpected zlib entry"),
+        };
+        if !sblk::looks_like_bank(&blob) {
+            continue;
+        }
+        let bank =
+            Bank::parse(&blob).unwrap_or_else(|e| panic!("{archive_path} entry {index}: {e}"));
+        survey_bank_sounds(&bank, entry.name_hash, into);
+    }
+}
+
+/// The per-sound rule, run against every bank on the disc.
+///
+/// `Scream_OpKeyOn` resolves `parameter_block + (command_word & 0xffffff)` to a
+/// 24-byte descriptor and reads a waveform offset and length out of its last
+/// two words. That is a claim about the data, so it can be checked without a
+/// runtime, and the checks that discriminate are the ones a wrong base cannot
+/// pass by luck:
+///
+/// - every span is a whole number of PS-ADPCM blocks at both ends;
+/// - the distinct spans number exactly the header's `waveform_count`, a figure
+///   the rule never reads;
+/// - they tile the waveform section with no gap and no partial overlap.
+///
+/// The name table gets the same treatment: its entry count has to equal
+/// `cue_count`, every recovered index has to be a valid cue, and the strings
+/// the executable passes to `Sound_Play` at named call sites have to turn up in
+/// it.
+#[test]
+#[ignore = "needs a PSP disc image under data/images"]
+fn every_psp_sound_bank_splits_into_waveforms_that_tile_it() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+
+    let mut survey = SoundSurvey::default();
+    for archive in PSP_ARCHIVES {
+        survey_sounds_in(&mut disc, archive, &mut survey);
+    }
+
+    let worst = survey.roughness.iter().copied().fold(0.0f64, f64::max);
+    #[expect(clippy::cast_precision_loss, reason = "a few hundred spans")]
+    let mean = survey.roughness.iter().sum::<f64>() / survey.roughness.len() as f64;
+    println!("banks             {}", survey.banks);
+    println!("key-on commands   {}", survey.key_on_commands);
+    println!("sounds resolved   {}", survey.sounds);
+    println!("distinct spans    {}", survey.spans);
+    println!("banks reusing one {} of {}", survey.reuses, survey.banks);
+    println!(
+        "spans == wf count {} of {}",
+        survey.span_count_agrees, survey.banks
+    );
+    println!(
+        "tiles exactly     {} of {}",
+        survey.tiles_exactly, survey.banks
+    );
+    println!("outside section   {}", survey.outside);
+    println!("misaligned        {}", survey.misaligned);
+    println!(
+        "overlaps          {} partial, {} nested",
+        survey.partial_overlaps, survey.nested
+    );
+    println!("no name table     {}", survey.no_name_table);
+    println!("names             {}", survey.names);
+    println!(
+        "names == cues     {} of {}",
+        survey.name_count_agrees, survey.banks
+    );
+    println!(
+        "names index 0..n  {} of {}",
+        survey.names_index_every_cue, survey.banks
+    );
+    println!(
+        "bad cue / unprintable  {} / {}",
+        survey.bad_cue, survey.unprintable
+    );
+    println!("cue strings found {:?}", survey.cue_strings_found);
+    println!(
+        "adpcm terminator  {} in the last two blocks, {} earlier, {} absent",
+        survey.terminated, survey.terminated_early, survey.unterminated
+    );
+    println!(
+        "span roughness    mean {mean:.3}, worst {worst:.3} over {} spans (white noise is ~1.41)",
+        survey.roughness.len()
+    );
+    // Deduplicated on the length, because the track banks share an ambience
+    // library: the same handful of source waveforms turn up in four circuits
+    // apiece, so the raw count overstates how many distinct sounds are rough.
+    let mut noisy_lengths: Vec<&str> = survey
+        .noisy
+        .iter()
+        .map(|entry| entry.split('+').nth(1).unwrap_or(entry))
+        .collect();
+    noisy_lengths.sort_unstable();
+    noisy_lengths.dedup();
+    println!(
+        "as rough as noise {} spans, {} distinct waveforms: {:?}",
+        survey.noisy.len(),
+        noisy_lengths.len(),
+        survey.noisy
+    );
+
+    assert!(
+        survey.banks >= MIN_BANKS,
+        "only {} banks found, expected at least {MIN_BANKS}",
+        survey.banks
+    );
+    assert_eq!(
+        survey.sounds, survey.key_on_commands,
+        "a key-on command's descriptor fell outside the descriptor section"
+    );
+    assert_eq!(
+        survey.outside, 0,
+        "a span is empty or runs past the section"
+    );
+    assert_eq!(
+        survey.misaligned, 0,
+        "a span is not a whole number of PS-ADPCM blocks, which is what a wrong base looks like"
+    );
+    assert_eq!(
+        survey.partial_overlaps, 0,
+        "two distinct spans overlap without one containing the other"
+    );
+    assert_eq!(survey.nested, 0, "one span contains another");
+    assert_eq!(
+        survey.span_count_agrees, survey.banks,
+        "a bank's distinct spans do not number its declared waveform_count"
+    );
+    assert_eq!(
+        survey.tiles_exactly, survey.banks,
+        "a bank's spans leave part of its waveform section uncovered"
+    );
+
+    // `frontend.bnk` ships in both archives, so it should be checked twice.
+    assert_eq!(
+        survey.frontend_matches, 2,
+        "frontend.bnk should have been seen in both FE.wad and Data.wad"
+    );
+
+    assert_eq!(
+        survey.name_count_agrees, survey.banks,
+        "a bank's name table does not hold one entry per cue"
+    );
+    assert_eq!(
+        survey.bad_cue, 0,
+        "a name points at a cue that does not exist"
+    );
+    assert_eq!(
+        survey.names_index_every_cue, survey.banks,
+        "a bank's names do not index every one of its cues exactly once"
+    );
+    assert_eq!(
+        survey.unprintable, 0,
+        "a recovered name is not printable ASCII"
+    );
+    assert_eq!(
+        survey.cue_strings_found.len(),
+        CUE_STRINGS.len(),
+        "the executable's own cue strings should all resolve: found {:?}",
+        survey.cue_strings_found
+    );
+
+    // The codec's own framing agrees with the command table's arithmetic. This
+    // is the check that cannot be passed by a rule that merely partitions the
+    // section plausibly: a terminator is one flag byte in eight, so putting one
+    // in the tail of every span by luck is not something an off-by-a-block
+    // reading does.
+    assert_eq!(
+        survey.terminated_early, 0,
+        "a span carries a PS-ADPCM terminator in its body, so its end is in the wrong place"
+    );
+    assert_eq!(
+        survey.unterminated, 0,
+        "a span has no PS-ADPCM terminator, so it does not end where the encoder stopped"
+    );
+
+    // Every span decodes to audio on its own, not just the section as a whole.
+    // The bound is on the mean rather than the worst: a handful of spans are
+    // genuinely as flat as noise, because that is what they are - wind,
+    // ambience, and explosions, identified by the name table above them. The
+    // whole-section test's 0.408 worst is those spans averaged with the rest of
+    // their bank, so per-span figures are expected to be higher, not lower.
+    assert!(
+        mean < 0.5,
+        "the mean span decoded with a mean step of {mean:.3} times its RMS, which is noise"
+    );
+}

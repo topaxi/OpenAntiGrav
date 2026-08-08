@@ -434,9 +434,13 @@ already had.
   ones worth reading, and eight of the 45 share one handler.
 - **Whether `0x01` and `0x09` differ.** They share a handler, so any difference
   must come from the command word rather than the dispatch.
-- **The extraction itself.** The rule above is not implemented in
-  `oag-formats::sblk` and has not been run against all 39 banks; doing so is
-  what would take it from a documented rule to a validated one.
+- ~~**The extraction itself.**~~ **Done.** Both rules are implemented in
+  `oag-formats::sblk` and validated against all 39 banks: 595 waveform spans
+  tile every waveform section exactly and number each bank's declared
+  `waveform_count`, and 607 names resolve one per cue. See
+  [psp-audio.md](../../../formats/psp-audio.md#where-each-sound-starts). That
+  takes the key-on arithmetic from 90 to **94**, the rubric's cap for a reading
+  that makes an arithmetic invariant come out exactly across many real files.
 - **What the cue record's `+0x08` points at after fixup.** Its `+0x04` is read
   as the handler's `+0x12`, a `s16` the play loop tests against zero.
 - **The name hash**, `FUN_089924ec`. Not needed to extract names - the entry
@@ -445,8 +449,14 @@ already had.
   onto a per-owner list (head `owner+0x58`, count `owner+0x54`); the consumer
   that turns a queued cue string into `Scream_PlaySoundByName` has not been
   found.
-- **The name table has not been run against a real bank.** Doing so is what
-  takes the layout above from 85 to 90, and it is a `just test-data` sized job.
+- ~~**The name table has not been run against a real bank.**~~ **Run against
+  all 39.** One `{name, cue}` pair per cue in every bank, no invalid index, no
+  unprintable byte, and the `Sound_Play` strings this page's neighbours
+  recovered - `"SPEEDUPPAD"`, `"~ENGINE"`, `"ABSORB"` - all resolve in the bank
+  that should hold them. That takes the layout from 85 to **94**. One
+  correction: the entry-array offset at `names + 0x08` is relative to **the name
+  block**, not to the section - it reads `0x98` in all 39 banks, which is
+  exactly `0x18 + 64 * 2`, so the hash has **64 buckets**.
 - **The other four dirty bits**, and the two output paths the `0x80` bit picks
   between.
 - **EU cross-verification.** Nothing on this page has been checked against
