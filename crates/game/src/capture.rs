@@ -439,34 +439,8 @@ pub fn run(
         renderer.upload_frame(&queue, &picture)?;
     }
 
-    let target = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("capture"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[],
-    });
+    let target = offscreen(&device, format, width, height);
     let view = target.create_view(&wgpu::TextureViewDescriptor::default());
-
-    // Copies out of a texture must have rows aligned to 256 bytes, so the
-    // readback buffer is usually wider than the image and needs unpadding.
-    let unpadded = width as usize * 4;
-    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
-    let padded = unpadded.div_ceil(align) * align;
-
-    let readback = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("readback"),
-        size: (padded * height as usize) as u64,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("capture"),
@@ -483,6 +457,60 @@ pub fn run(
         &list,
         crate::display::viewport((width, height), options.settings.display.aspect),
     );
+    let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
+    write_png(&options.path, width, height, &pixels)
+}
+
+/// The texture a headless capture draws into.
+///
+/// `Rgba8Unorm` at both call sites rather than the surface's sRGB format: the
+/// readback is written straight into a PNG, so a second gamma encode would
+/// double-correct.
+fn offscreen(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("capture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    })
+}
+
+/// Submits `encoder`, then copies the drawn texture back as tightly packed RGBA.
+///
+/// Copies out of a texture must have rows aligned to 256 bytes, so the readback
+/// buffer is usually wider than the image and needs unpadding.
+fn read_back(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    mut encoder: wgpu::CommandEncoder,
+    target: &wgpu::Texture,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>> {
+    let unpadded = width as usize * 4;
+    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+    let padded = unpadded.div_ceil(align) * align;
+
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback"),
+        size: (padded * height as usize) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
@@ -516,12 +544,158 @@ pub fn run(
     }
     drop(mapped);
     readback.unmap();
+    Ok(pixels)
+}
 
-    let png = oag_formats::png::encode_rgba(width, height, &pixels);
-    std::fs::write(&options.path, png)
-        .with_context(|| format!("writing {}", options.path.display()))?;
-    println!("wrote {} ({width}x{height})", options.path.display());
+fn write_png(path: &std::path::Path, width: u32, height: u32, pixels: &[u8]) -> Result<()> {
+    let png = oag_formats::png::encode_rgba(width, height, pixels);
+    std::fs::write(path, png).with_context(|| format!("writing {}", path.display()))?;
+    println!("wrote {} ({width}x{height})", path.display());
     Ok(())
+}
+
+/// What `--loading-screen` draws.
+#[derive(Debug, Clone)]
+pub struct LoadingOptions {
+    /// Where to write the PNG.
+    pub path: std::path::PathBuf,
+    /// Image size.
+    pub size: (u32, u32),
+    /// How many frames the screen has been up.
+    ///
+    /// Both the wave's phase and the tip on show are functions of this, so it
+    /// is how a capture reaches a particular beat of the heartbeat: the
+    /// envelope peaks at 5 and 11 of its 24 frames, and phase 0 idles at the
+    /// amplitude floor.
+    pub ticks: u32,
+    /// The conversion state to draw.
+    ///
+    /// **Stated rather than observed, and that is the flag's whole reason for
+    /// existing.** A warm cache reaches a real mid-conversion state for a
+    /// fraction of a second and a cold one takes ten minutes to leave it, so
+    /// neither is a way to look at the screen. What is drawn from here is the
+    /// window's own [`crate::loading::Screen::draw_list`] with a known input,
+    /// not a second layout.
+    pub progress: crate::prefetch::Progress,
+    /// Which adapter to draw with, from `[graphics] renderer`.
+    pub renderer: crate::display::Renderer,
+    /// The shape the game is drawn in, from `[display] aspect`.
+    pub aspect: crate::display::Aspect,
+}
+
+/// Draws the loading screen once and writes it, without a window or a worker.
+///
+/// The same two passes the window makes, in the same order: the UI list clears
+/// the frame and draws the text, and the wave goes over it additively with no
+/// depth attachment. A capture that composited them differently would prove
+/// nothing about what a player sees, which is the rule the rest of this module
+/// follows.
+///
+/// # Errors
+///
+/// Propagates the adapter, the device and the file. Also fails when the wave
+/// produced no geometry: [`oag_render::loading::Pipeline::draw`] draws nothing
+/// at all when nothing was uploaded, which would otherwise write a
+/// perfectly plausible text-on-black PNG with no error anywhere.
+pub fn loading(
+    assets: &crate::loading::Assets,
+    font: crate::font::Atlas,
+    sprites: &crate::sprite::Sheet,
+    options: &LoadingOptions,
+) -> Result<()> {
+    let mut screen = crate::loading::Screen::new(assets.tips.clone());
+    // Stepped rather than jumped to: the tip rotation counts frames, and the
+    // wave draws from its own `Rng` on every one of them, so frame `n` is only
+    // reachable by having drawn the `n - 1` before it.
+    let mut quads = screen.quads();
+    for _ in 0..options.ticks {
+        screen.advance(options.progress.finished);
+        quads = screen.quads();
+    }
+    let vertices = oag_render::loading::vertices(&quads);
+    anyhow::ensure!(
+        !vertices.is_empty(),
+        "the wave produced no geometry, so there would be nothing to draw"
+    );
+
+    let (width, height) = options.size;
+    let instance = crate::adapter::instance();
+    let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("oag-game loading screen"),
+        ..Default::default()
+    }))
+    .context("requesting the device")?;
+
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    // Kept before the renderer takes it: the layout measures its own wrapping
+    // and eliding through the atlas that will draw it, and `Renderer` owns
+    // rather than borrows one.
+    let atlas = font.clone();
+    let mut renderer = Renderer::new(&device, &queue, format, None, font, sprites)?;
+    // Sample count 1, matching `upscale::Framebuffer`'s own target and this
+    // capture's texture. The wave's pipeline bakes it in, so a mismatch here is
+    // a validation error rather than a soft failure.
+    let mut wave = oag_render::loading::Pipeline::new(&device, &queue, format, &assets.strip, 1);
+    wave.upload(&queue, [1.0, 1.0, 1.0, screen.opacity()], &vertices);
+
+    let target = offscreen(&device, format, width, height);
+    let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+    let viewport = crate::display::viewport((width, height), options.aspect);
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("loading screen"),
+    });
+    renderer.render(
+        &device,
+        &queue,
+        &mut encoder,
+        &view,
+        &screen.draw_list(&options.progress, &atlas),
+        viewport,
+    );
+    draw_wave(&mut encoder, &view, &wave, viewport);
+
+    let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
+    write_png(&options.path, width, height, &pixels)
+}
+
+/// Adds the wave's pass to `encoder`, over whatever is already in `view`.
+///
+/// One place rather than two so the window and the capture cannot drift apart,
+/// and three things it has to get right:
+///
+/// - **Load, not clear**: the wave sits over the text the UI pass drew.
+/// - **No depth attachment.** `oag_render::loading::Pipeline` is built with
+///   `depth_stencil: None` and a pass that attached one would not match it.
+/// - **The same viewport the UI pass used.** The wave's vertices are normalised
+///   `0..1` with no idea where the game's rectangle is, so without this it
+///   spans the whole surface while the text sits letterboxed inside it. Invisible
+///   at the PSP's own aspect, where the two rectangles are the same.
+pub fn draw_wave(
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    wave: &oag_render::loading::Pipeline,
+    viewport: (f32, f32, f32, f32),
+) {
+    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("loading wave"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
+    wave.draw(&mut pass);
 }
 
 fn video_frame(list: &[Draw]) -> Option<usize> {

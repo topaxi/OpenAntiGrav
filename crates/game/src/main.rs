@@ -39,8 +39,8 @@ use oag_game::input;
 use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{
-    adapter, audio, boot, capture, catalogue, display, menu, movie, perf, prefetch, race, report,
-    settings, source, upscale,
+    adapter, audio, boot, capture, catalogue, display, loading, menu, movie, perf, prefetch, race,
+    report, settings, source, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -125,6 +125,20 @@ struct Cli {
     /// Render one frame to a PNG and exit, without opening a window.
     #[arg(long)]
     screenshot: Option<std::path::PathBuf>,
+
+    /// With `--screenshot`, draw the loading screen at a stated conversion
+    /// state instead of the sequence: `DONE/TOTAL`, e.g. `37/115`.
+    ///
+    /// The same kind of debugging view `--screen` and `--menu-page` are, and it
+    /// exists for the same reason plus one of its own: a warm cache passes
+    /// through a real mid-conversion state in a fraction of a second and a cold
+    /// one takes ten minutes to leave it, so neither is a way to look at this
+    /// screen. What is drawn is the window's own layout with a stated input.
+    ///
+    /// `--ticks` chooses the frame, which is what picks the wave's beat and the
+    /// tip on show: the heartbeat peaks at 5 and 11 of its 24 frames.
+    #[arg(long, value_name = "DONE/TOTAL")]
+    loading_screen: Option<String>,
 
     /// Write everything the mixer produced to a WAV instead of to a device.
     ///
@@ -532,6 +546,14 @@ fn main() -> Result<()> {
         "--dump-audio needs --screenshot: the dump is as long as the run, and only \
          a capture has an end. Add --screenshot FILE --ticks N."
     );
+    // Refused for the same reason `--screen` and `--menu-page` are capture-only:
+    // there is no window route that draws a *stated* conversion state, and
+    // silently ignoring the flag would look like a screen that does not work.
+    ensure!(
+        cli.loading_screen.is_none() || cli.screenshot.is_some(),
+        "--loading-screen needs --screenshot: it draws one frame of the loading \
+         screen at a stated state. A window shows the real one under --prefetch."
+    );
 
     // Resolved once, before anything opens it: both ways in need a source, and
     // "no disc image found" is a message about the command line, not something to
@@ -591,6 +613,12 @@ fn main() -> Result<()> {
                 "--prefetch has no effect with --race: it converts the front end's movies and \
                  sounds, which a race never opens. Run it without --race once."
             );
+        }
+        // Same reasoning one screen along: the loading screen is what a player
+        // waits on while that conversion runs, so on a route that does not run
+        // it there is nothing for the screen to be about.
+        if cli.loading_screen.is_some() {
+            println!("--loading-screen has no effect with --race; run it without --race.");
         }
         return run_race(&cli, race_options, &settings, anisotropy, audio);
     }
@@ -670,6 +698,34 @@ fn main() -> Result<()> {
     // format either, and the front end draws without one.
     let video_format = loaded.movie.as_ref().and_then(VideoFormat::of);
 
+    // Before the sequence's own capture, because it is a different picture
+    // rather than a variation on that one: it runs no state machine, opens no
+    // movie and reaches the GPU through `capture::loading`.
+    if let (Some(path), Some(spec)) = (&cli.screenshot, &cli.loading_screen) {
+        let progress = parse_progress(spec)?;
+        let assets = loading::Assets::load(&source, &loaded.strings);
+        for note in &assets.notes {
+            println!("{note}");
+        }
+        capture::loading(
+            &assets,
+            loaded.font.clone(),
+            &loaded.sprites,
+            &capture::LoadingOptions {
+                path: path.clone(),
+                size: parse_size(&cli.size)?,
+                ticks: cli.ticks,
+                progress,
+                renderer: settings.graphics.renderer.clone(),
+                aspect: settings.display.aspect,
+            },
+        )?;
+        if let Some(prefetch) = &mut prefetch {
+            prefetch.join();
+        }
+        return Ok(());
+    }
+
     if let Some(path) = cli.screenshot {
         capture::run(
             loaded,
@@ -747,6 +803,18 @@ fn main() -> Result<()> {
 
     println!("\n{MENU_KEYS}");
 
+    // Only when there is a conversion to wait on. Two extra archive reads, and
+    // they buy nothing on a boot that goes straight to the front end - which is
+    // every boot without `--prefetch`, and which is why this is not in
+    // `boot::load`.
+    let loading_assets = prefetch.is_some().then(|| {
+        let assets = loading::Assets::load(&source, &loaded.strings);
+        for note in &assets.notes {
+            println!("{note}");
+        }
+        assets
+    });
+
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the intro is animated whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
@@ -763,23 +831,13 @@ fn main() -> Result<()> {
         settings,
         shell: Some(shell),
         audio: Some(audio),
+        prefetch: prefetch.take(),
+        loading_assets,
         state: None,
     };
     event_loop.run_app(&mut app)?;
     app.finish_audio()?;
-    // The window is gone by now, so a conversion still running has nothing to
-    // stay responsive for - but it does have work worth not throwing away, and
-    // it prints as it goes.
-    if let Some(prefetch) = &mut prefetch {
-        let outstanding = prefetch.progress();
-        if !outstanding.finished {
-            println!(
-                "waiting for --prefetch: {} of {} converted",
-                outstanding.done, outstanding.total
-            );
-        }
-        prefetch.join();
-    }
+    app.finish_prefetch();
     Ok(())
 }
 
@@ -812,6 +870,39 @@ fn button_mask(names: Option<&str>) -> u32 {
         list.split(',')
             .filter_map(|name| input::button_from_name(name.trim()))
             .fold(0u32, |mask, index| mask | (1u32 << index))
+    })
+}
+
+/// Parses `--loading-screen`'s `DONE/TOTAL`.
+///
+/// Only the two figures the bar is drawn from, because everything else on the
+/// screen follows from them: `planning` is over by definition once there is a
+/// total, and `finished` is `done == total`, which is also the state the fade
+/// runs in. `cached` and `failed` are left at zero rather than invented - they
+/// are counts of things that really happened, and a flag that made them up
+/// would be drawing a run nobody had.
+fn parse_progress(spec: &str) -> Result<prefetch::Progress> {
+    let bad = || {
+        anyhow::anyhow!("{spec:?} is not a conversion state; write it as DONE/TOTAL, e.g. 37/115")
+    };
+    let (done, total) = spec.split_once('/').ok_or_else(bad)?;
+    let done: usize = done.trim().parse().map_err(|_| bad())?;
+    let total: usize = total.trim().parse().map_err(|_| bad())?;
+    ensure!(
+        done <= total,
+        "{done} converted of {total} is more than all of them"
+    );
+    Ok(prefetch::Progress {
+        planning: false,
+        total,
+        done,
+        cached: 0,
+        failed: 0,
+        // A real label, built the way `prefetch` builds one, so the line reads
+        // as the thing it will read as in a window rather than as filler.
+        current: (done < total)
+            .then(|| format!("Data.wad {}", oag_assets::pulse::names::INTRO_MOVIE)),
+        finished: done == total,
     })
 }
 
@@ -952,6 +1043,11 @@ fn run_race(
         // is what makes escape quit on this route rather than back out.
         shell: None,
         audio: Some(audio),
+        // `--race` says up front that it ignores `--prefetch` - that converts
+        // the front end's movies and sounds, which a race never opens - so
+        // there is nothing to wait on here and no loading screen to wait with.
+        prefetch: None,
+        loading_assets: None,
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -983,6 +1079,13 @@ struct App {
     /// `Option`: there is one of these per run, not one per window, and winit
     /// may resume more than once.
     audio: Option<audio::Audio>,
+    /// The conversion `--prefetch` started, and the only reason there is a
+    /// loading screen at all. `None` on every ordinary boot.
+    prefetch: Option<prefetch::Prefetch>,
+    /// The wave's glow strip and the disc's tips, read only when there is a
+    /// loading screen to draw them on. `None` without `--prefetch`, which is
+    /// what keeps an ordinary boot's two extra archive reads at zero.
+    loading_assets: Option<loading::Assets>,
     state: Option<Session>,
 }
 
@@ -1053,7 +1156,15 @@ impl App {
                 self.scheme,
             )?
         } else if let Some(loaded) = self.boot.take() {
-            Stage::frontend(&gpu, loaded, self.video_format, self.trace)?
+            // The loading screen only exists while there is something to wait
+            // for. Without `--prefetch` there is nothing, and the front end
+            // takes the window straight away exactly as it always has.
+            match (&self.prefetch, &self.loading_assets) {
+                (Some(_), Some(assets)) => {
+                    Stage::loading(&gpu, loaded, assets, self.video_format, self.trace)?
+                }
+                _ => Stage::frontend(&gpu, loaded, self.video_format, self.trace)?,
+            }
         } else {
             return Ok(None);
         };
@@ -1107,7 +1218,34 @@ impl App {
             quit: false,
             backdrop,
             backdrop_shape,
+            // Moved rather than borrowed, for the same reason the mixer is:
+            // there is one worker per run, and the session is what polls it.
+            prefetch: self.prefetch.take(),
         }))
+    }
+
+    /// Waits for a conversion the window has outlived.
+    ///
+    /// Here rather than in `main` because the handle moved onto the [`Session`]
+    /// at the first resume - see [`Session::prefetch`]. The window is gone by
+    /// now, so a conversion still running has nothing to stay responsive for,
+    /// but it does have work worth not throwing away, and it prints as it goes.
+    fn finish_prefetch(&mut self) {
+        let Some(prefetch) = self
+            .state
+            .as_mut()
+            .and_then(|session| session.prefetch.as_mut())
+        else {
+            return;
+        };
+        let outstanding = prefetch.progress();
+        if !outstanding.finished {
+            println!(
+                "waiting for --prefetch: {} of {} converted",
+                outstanding.done, outstanding.total
+            );
+        }
+        prefetch.join();
     }
 
     /// Writes the `--dump-audio` WAV once the event loop has returned.
@@ -1560,6 +1698,8 @@ impl Gpu {
 /// Both variants are boxed: a race carries the whole `World`, eight ship slots
 /// wide, and an enum is as large as its largest variant wherever it is stored.
 enum Stage {
+    /// The wave and the counts, while `--prefetch` converts the disc.
+    Loading(Box<LoadingStage>),
     /// The boot sequence: the intro reel, then the language picker.
     Frontend(Box<FrontendStage>),
     /// Our own menus, between the boot sequence and a race.
@@ -1569,6 +1709,53 @@ enum Stage {
 }
 
 impl Stage {
+    /// The loading screen, holding the front end it will hand the window to.
+    ///
+    /// **The boot sequence is carried as data rather than built and paused.**
+    /// [`Stage::frontend`] spawns the intro's decode thread, and starting that
+    /// ten minutes before anything reads a frame would leave a worker filling a
+    /// ring nobody drains. So the front end is built at the hand-off, in
+    /// [`Session::finish_loading`], and until then this owns the `Boot`.
+    fn loading(
+        gpu: &Gpu,
+        loaded: boot::Boot,
+        assets: &loading::Assets,
+        video_format: Option<VideoFormat>,
+        trace: bool,
+    ) -> Result<Self> {
+        // The **disc's** font, not the built-in 5x7 set: the tips are the
+        // disc's own prose in the player's own language, and `push_text` skips
+        // a glyph the atlas has no cell for - so accented text would silently
+        // lose characters rather than fail. No video pipeline, this screen
+        // having no movie; there is no loading movie in either build.
+        let renderer = Renderer::new(
+            &gpu.device,
+            &gpu.queue,
+            gpu.config.format,
+            None,
+            loaded.font.clone(),
+            &loaded.sprites,
+        )?;
+        // Sample count 1, matching `upscale::Framebuffer`'s target, which is
+        // what this draws into.
+        let wave = oag_render::loading::Pipeline::new(
+            &gpu.device,
+            &gpu.queue,
+            gpu.config.format,
+            &assets.strip,
+            1,
+        );
+        Ok(Self::Loading(Box::new(LoadingStage {
+            atlas: loaded.font.clone(),
+            renderer,
+            wave,
+            screen: loading::Screen::new(assets.tips.clone()),
+            boot: Some(loaded),
+            video_format,
+            trace,
+        })))
+    }
+
     fn frontend(
         gpu: &Gpu,
         loaded: boot::Boot,
@@ -1835,6 +2022,58 @@ impl MenuStage {
         self.renderer
             .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
         Ok(())
+    }
+}
+
+/// The loading screen: two passes, and the front end waiting behind it.
+///
+/// It holds no [`prefetch::Prefetch`], deliberately. The worker handle lives on
+/// [`Session`], because this stage is *replaced* when the wait is over and a
+/// handle stored here would be dropped by that replacement - which sets the
+/// stop flag and silently abandons whatever conversion was still to do. What
+/// arrives here instead is a [`prefetch::Progress`] snapshot, per frame, which
+/// also leaves `loading::Screen` drivable from a test with no worker at all.
+struct LoadingStage {
+    renderer: Renderer,
+    /// The wave's own pipeline: additive, screen-space, no depth.
+    wave: oag_render::loading::Pipeline,
+    screen: loading::Screen,
+    /// The atlas the layout measures its wrapping and eliding with. [`Renderer`]
+    /// owns a copy and does not lend it out.
+    atlas: oag_game::font::Atlas,
+    /// Handed to [`Stage::frontend`] when the fade runs out. `None` once taken,
+    /// which is also what stops the hand-off happening twice.
+    boot: Option<boot::Boot>,
+    video_format: Option<VideoFormat>,
+    trace: bool,
+}
+
+impl LoadingStage {
+    /// Draws the text, then the wave over it.
+    ///
+    /// In that order and in two passes because they are two different blends:
+    /// the UI list is alpha-over and clears the frame, the wave is additive over
+    /// what is already there. See [`capture::draw_wave`], which is the same
+    /// second pass and is shared so the window and a capture cannot drift.
+    fn render(
+        &mut self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        progress: &prefetch::Progress,
+    ) {
+        let quads = self.screen.quads();
+        let vertices = oag_render::loading::vertices(&quads);
+        self.wave.upload(
+            &gpu.queue,
+            [1.0, 1.0, 1.0, self.screen.opacity()],
+            &vertices,
+        );
+        let list = self.screen.draw_list(progress, &self.atlas);
+        self.renderer
+            .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
+        capture::draw_wave(encoder, view, &self.wave, viewport);
     }
 }
 
@@ -2135,6 +2374,15 @@ struct Session {
     /// The backdrop's frame rate and where on screen it goes, kept because the
     /// feed carries pixels and not presentation.
     backdrop_shape: Option<BackdropShape>,
+    /// The `--prefetch` worker, when this run started one.
+    ///
+    /// **On the session and not on the loading stage.** The stage is replaced
+    /// the moment the wait is over, and a handle owned by it would be dropped by
+    /// that replacement - `Prefetch`'s `Drop` sets the stop flag, so a run whose
+    /// loading screen finished planning first would silently abandon everything
+    /// still to convert. Here it outlives every stage and is joined once, at the
+    /// exit, by [`App::finish_prefetch`].
+    prefetch: Option<prefetch::Prefetch>,
 }
 
 /// What the menus need to know about the backdrop besides its pixels.
@@ -2271,7 +2519,53 @@ impl Session {
         }
     }
 
+    /// How far the conversion has got, right now.
+    ///
+    /// A run with no worker reads as finished rather than as
+    /// [`prefetch::Progress::default`], which would be "nothing done of
+    /// nothing" - true, but it is `finished: false`, and a loading screen shown
+    /// that would never freeze or hand the window on.
+    fn prefetch_progress(&self) -> prefetch::Progress {
+        self.prefetch.as_ref().map_or(
+            prefetch::Progress {
+                finished: true,
+                ..prefetch::Progress::default()
+            },
+            prefetch::Prefetch::progress,
+        )
+    }
+
+    /// Hands the window to the front end once the loading screen's fade is out.
+    ///
+    /// Taking the `Boot` is what makes this idempotent: a second call finds
+    /// `None` and does nothing, so a failed `Stage::frontend` cannot be retried
+    /// once a frame for the rest of the run.
+    fn finish_loading(&mut self) -> Result<()> {
+        let (loaded, video_format, trace) = match &mut self.stage {
+            Stage::Loading(stage) if stage.screen.is_done() => {
+                let Some(loaded) = stage.boot.take() else {
+                    return Ok(());
+                };
+                (loaded, stage.video_format, stage.trace)
+            }
+            _ => return Ok(()),
+        };
+        // Building the front end spawns the intro's decode thread and uploads a
+        // sprite sheet; that is a load, and a load is not a frame time.
+        self.stalled = true;
+        self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace)?;
+        Ok(())
+    }
+
     fn frame(&mut self) -> Result<()> {
+        // Before this frame's ticks, so the front end's own first frame is drawn
+        // on the frame after the fade ended rather than a frame later still.
+        if let Err(e) = self.finish_loading() {
+            eprintln!("cannot open the front end: {e:#}");
+            self.quit = true;
+            return Ok(());
+        }
+
         // Checked before this frame's ticks rather than after them, so the frame
         // that entered `Launch Game` is drawn once before the load stalls the
         // window.
@@ -2332,6 +2626,11 @@ impl Session {
         let steps = self.clock.advance(nanos);
         let dt = f64::from(self.clock.rate().dt());
 
+        // One snapshot for the whole frame, taken outside the tick loop: it is a
+        // lock and a clone, and the ticks in one frame cannot have seen the
+        // worker at different points anyway.
+        let progress = self.prefetch_progress();
+
         for _ in 0..steps {
             // Ends the devices' tick for both stages. A race reads the snapshot's
             // axes; the front end reads the button edges the same call computed,
@@ -2348,6 +2647,13 @@ impl Session {
             // dump below is the only reader.
             self.audio.tick();
             match &mut self.stage {
+                // Stepped in the tick loop with everything else, so the wave's
+                // heartbeat runs at the simulation's fixed 60 Hz rather than at
+                // whatever the window is managing. The original's own loading
+                // thread ran it at 30; ours is one beat per 24 ticks either way,
+                // and a frame-rate-dependent heartbeat is exactly the thing
+                // ADR-0007 fixed the timestep to avoid.
+                Stage::Loading(stage) => stage.screen.advance(progress.finished),
                 Stage::Frontend(stage) => {
                     let events = stage.frontend.update(dt, self.controls.buttons_mut());
                     report(&events, stage.trace);
@@ -2423,6 +2729,10 @@ impl Session {
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let target = self.framebuffer.view();
         let (scene_stats, video_label) = match &mut self.stage {
+            Stage::Loading(stage) => {
+                stage.render(&self.gpu, &mut encoder, target, inside, &progress);
+                (None, None)
+            }
             Stage::Frontend(stage) => {
                 // The same feed the menus will borrow, and it is alive from the
                 // session opening rather than from the menus opening - so the
@@ -3145,6 +3455,33 @@ cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z
         assert_eq!(fresh.position(), 0);
         assert_eq!(fresh.frames(), 270);
         assert!(!fresh.is_finished(), "270 frames of loop are not an ending");
+    }
+
+    /// The two figures, and the three fields that follow from them.
+    #[test]
+    fn a_stated_conversion_state_is_read_as_the_worker_would_report_it() {
+        let midway = parse_progress("37/115").expect("37 of 115");
+        assert!(!midway.planning, "a stated total means planning is over");
+        assert!(!midway.finished);
+        assert_eq!((midway.done, midway.total), (37, 115));
+        assert!(midway.current.is_some(), "something is converting");
+
+        let done = parse_progress("115/115").expect("all of them");
+        assert!(done.finished);
+        assert_eq!(done.fraction(), 1.0);
+        assert_eq!(done.current, None, "nothing is converting any more");
+    }
+
+    /// Every rejection names what to write instead, because the flag is typed
+    /// by hand and the shape is not guessable.
+    #[test]
+    fn a_state_that_is_not_two_numbers_is_refused() {
+        for spec in ["37", "37/", "a/b", "37 115", ""] {
+            let error = parse_progress(spec).expect_err("{spec} is not a state");
+            assert!(error.to_string().contains("DONE/TOTAL"), "{spec}: {error}");
+        }
+        let error = parse_progress("200/115").expect_err("more than all of them");
+        assert!(error.to_string().contains("more than all"), "{error}");
     }
 
     #[test]

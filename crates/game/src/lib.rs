@@ -44,6 +44,7 @@ pub use oag_gameplay::input;
 /// its owner.
 pub use oag_input::keys;
 pub mod language;
+pub mod loading;
 pub mod menu;
 pub mod movie;
 pub mod perf;
