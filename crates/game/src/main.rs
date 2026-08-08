@@ -39,8 +39,8 @@ use oag_game::input;
 use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{
-    adapter, audio, boot, capture, catalogue, display, menu, movie, perf, race, report, settings,
-    source, upscale,
+    adapter, audio, boot, capture, catalogue, display, menu, movie, perf, prefetch, race, report,
+    settings, source, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -105,6 +105,22 @@ struct Cli {
     /// Where converted frames are cached.
     #[arg(long)]
     cache: Option<std::path::PathBuf>,
+
+    /// Convert every movie and every sound on the disc up front, on a
+    /// background thread, instead of one at a time on first use.
+    ///
+    /// **Off by default and deliberately so.** Converting lazily is what makes
+    /// a cold boot half a second rather than ten minutes; this is the opposite
+    /// trade, taken once, so that nothing afterwards ever waits. Measured on
+    /// this workspace: 5.5 s for all 93 ATRAC3+ streams and about ten minutes
+    /// for the ~13,000 movie frames, of which `Data\Movies\Intro.PMF` alone is
+    /// 57 s.
+    ///
+    /// The game boots and runs normally while it happens, and progress goes to
+    /// stdout. Interrupting is safe: both caches are keyed by content, so the
+    /// next run picks up whatever finished. See `oag_game::prefetch`.
+    #[arg(long)]
+    prefetch: bool,
 
     /// Render one frame to a PNG and exit, without opening a window.
     #[arg(long)]
@@ -566,6 +582,16 @@ fn main() -> Result<()> {
     // XML, every language plugin and a string table, and may shell out to `ffmpeg`
     // to transcode the intro. Going straight to a race needs none of it.
     if cli.race {
+        // `--prefetch` is a front-end thing, and saying so is better than
+        // quietly doing nothing. `--race` exists to skip the boot sequence, and
+        // hanging its exit on ten minutes of `ffmpeg` would invert the one
+        // thing it is for.
+        if cli.prefetch {
+            println!(
+                "--prefetch has no effect with --race: it converts the front end's movies and \
+                 sounds, which a race never opens. Run it without --race once."
+            );
+        }
         return run_race(&cli, race_options, &settings, anisotropy, audio);
     }
 
@@ -623,6 +649,20 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // **After `boot::load`, and that is the whole of why it is here.** The boot
+    // sequence transcodes the intro and the backdrop itself, lazily, and the
+    // prefetch worker would convert those same two movies - two `ffmpeg`
+    // processes writing one cache file, which is a corrupt file rather than a
+    // race that resolves. Started once boot has finished, they are already
+    // cached and the worker's planning pass skips them by name.
+    let mut prefetch = cli.prefetch.then(|| {
+        prefetch::Prefetch::spawn(prefetch::Options {
+            source: source.clone(),
+            movies: options.cache.clone(),
+            audio: boot::default_audio_cache_dir(),
+        })
+    });
+
     let scheme = resolve_scheme(&cli, &settings);
 
     // A source with no intro reel at all - which is every PS2 source, whose
@@ -656,7 +696,15 @@ fn main() -> Result<()> {
         // After both legs, and only here: the capture above may have handed off
         // to a race that went on filling the same buffer, so writing inside
         // either one would truncate the WAV to whichever leg wrote it.
-        return audio.finish();
+        audio.finish()?;
+        // A capture is over in seconds and the conversion is not, so this is
+        // where `--prefetch` actually waits. Joined rather than dropped,
+        // because a headless run is how the whole cache gets filled in the
+        // first place.
+        if let Some(prefetch) = &mut prefetch {
+            prefetch.join();
+        }
+        return Ok(());
     }
 
     // Parsed here rather than when the menus open, so a broken definition is a
@@ -718,7 +766,21 @@ fn main() -> Result<()> {
         state: None,
     };
     event_loop.run_app(&mut app)?;
-    app.finish_audio()
+    app.finish_audio()?;
+    // The window is gone by now, so a conversion still running has nothing to
+    // stay responsive for - but it does have work worth not throwing away, and
+    // it prints as it goes.
+    if let Some(prefetch) = &mut prefetch {
+        let outstanding = prefetch.progress();
+        if !outstanding.finished {
+            println!(
+                "waiting for --prefetch: {} of {} converted",
+                outstanding.done, outstanding.total
+            );
+        }
+        prefetch.join();
+    }
+    Ok(())
 }
 
 /// Turns a comma-separated list of abstract button names into a mask.

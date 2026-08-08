@@ -71,6 +71,24 @@ pub const PIXEL_FORMAT: &str = "yuv420p";
 /// before the flags were right must never be mistaken for a good one.
 const CACHE_CODEC: &str = "av1ll";
 
+/// The name a converted movie takes under the cache directory.
+///
+/// One function rather than a `format!` at each of the three transcode paths,
+/// because [`crate::prefetch`] has to be able to ask "is this one already
+/// done?" without transcoding it, and a fourth copy of the pattern would be a
+/// fourth chance to disagree with the three that write it.
+///
+/// `frames` is how many pictures the file holds; `None` is the whole input,
+/// which only [`transcode_mpeg2_ps`] ever writes - the other two resolve
+/// [`Extent::Whole`] against a frame count they already know.
+#[must_use]
+pub fn cache_name(key: &str, width: u32, height: u32, frames: Option<usize>) -> String {
+    format!(
+        "{key}-{width}x{height}-{CACHE_CODEC}-{}.ivf",
+        frames.map_or_else(|| "all".to_string(), |n| n.to_string())
+    )
+}
+
 /// A movie that has been demuxed, and possibly transcoded.
 #[derive(Debug)]
 pub struct Movie {
@@ -738,13 +756,6 @@ pub enum Extent {
 }
 
 impl Extent {
-    fn key(self) -> String {
-        match self {
-            Self::Whole => "all".to_string(),
-            Self::Frames(n) => n.to_string(),
-        }
-    }
-
     fn limit(self, available: usize) -> usize {
         match self {
             Self::Whole => available,
@@ -1123,11 +1134,7 @@ fn transcode_ipu(
     height: u32,
     frames: usize,
 ) -> Result<FrameStore> {
-    let name = format!(
-        "{key}-{width}x{height}-{CACHE_CODEC}-{}.ivf",
-        Extent::Frames(frames).key()
-    );
-    let out = cache_dir.join(&name);
+    let out = cache_dir.join(cache_name(key, width, height, Some(frames)));
 
     let ready = FrameStore::open(out.clone(), width, height)
         .ok()
@@ -1165,11 +1172,7 @@ fn transcode(
     height: u32,
     frames: usize,
 ) -> Result<FrameStore> {
-    let name = format!(
-        "{key}-{width}x{height}-{CACHE_CODEC}-{}.ivf",
-        Extent::Frames(frames).key()
-    );
-    let out = cache_dir.join(&name);
+    let out = cache_dir.join(cache_name(key, width, height, Some(frames)));
 
     // A previous run's file is reused only if it opens *and* holds the frames
     // asked for. Unlike the raw cache this cannot be checked by file length, so
@@ -1215,11 +1218,7 @@ fn transcode_mpeg2_ps(
     height: u32,
     frames: Option<usize>,
 ) -> Result<FrameStore> {
-    let name = format!(
-        "{key}-{width}x{height}-{CACHE_CODEC}-{}.ivf",
-        frames.map_or_else(|| "all".to_string(), |n| n.to_string())
-    );
-    let out = cache_dir.join(&name);
+    let out = cache_dir.join(cache_name(key, width, height, frames));
 
     let ready = FrameStore::open(out.clone(), width, height)
         .ok()

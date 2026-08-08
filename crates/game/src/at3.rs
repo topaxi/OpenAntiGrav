@@ -34,7 +34,7 @@
 //! also means changing [`riff`] invalidates every wrapped entry by itself,
 //! since the wrapper is part of what is hashed.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use oag_core::hash::StateHasher;
@@ -117,6 +117,58 @@ const HEADER_LEN: usize = 12 + 8 + FMT_LEN as usize + 8;
 pub fn decode(at3: &[u8], cache_dir: &Path) -> Result<Pcm> {
     let format = read_format(at3)?;
     decode_riff(at3, format, cache_dir)
+}
+
+/// Fills the cache for a RIFF-wrapped ATRAC3+ file without reading it back.
+///
+/// [`decode`] minus the samples, and the difference is the whole reason it
+/// exists: [`crate::prefetch`] converts all 93 of the disc's streams and wants
+/// none of them, and reading each one back would be 0.70 GB of PCM through
+/// memory to be dropped a line later. Returns the cache file's path.
+///
+/// The already-cached test is the same rule [`from_s16le`] applies - not empty,
+/// a whole number of frames - taken off the file's metadata rather than its
+/// contents, so a resumed run costs one `stat` per stream instead of one read.
+///
+/// # Errors
+///
+/// As [`decode`]: a blob that is not a readable RIFF/WAVE, an `ffmpeg` that is
+/// absent or fails, or a cache file that will not write.
+pub fn ensure_cached(at3: &[u8], cache_dir: &Path) -> Result<PathBuf> {
+    let format = read_format(at3)?;
+    let out = cache_path(at3, format, cache_dir);
+    if !is_usable(&out, format) {
+        transcode(at3, &out, format)?;
+    }
+    Ok(out)
+}
+
+/// Whether this stream's samples are already in the cache.
+///
+/// The question [`crate::prefetch`] asks while planning, so that the total it
+/// reports is what is left to do rather than what exists. `false` for a blob
+/// that is not a readable RIFF at all: it has no cache file by construction,
+/// and [`ensure_cached`] is the one that reports why.
+#[must_use]
+pub fn is_cached(at3: &[u8], cache_dir: &Path) -> bool {
+    read_format(at3).is_ok_and(|format| is_usable(&cache_path(at3, format, cache_dir), format))
+}
+
+/// The same shape rule [`from_s16le`] applies - not empty, a whole number of
+/// frames - read off the file's metadata rather than its contents.
+///
+/// Metadata rather than a read because the answer is wanted for all 93 streams
+/// at once and the contents come to 0.70 GB. It catches the case that actually
+/// happens for the same reason [`read_cached`] does: an `ffmpeg` killed partway
+/// through leaves a truncated file behind.
+fn is_usable(path: &Path, format: Format) -> bool {
+    let per_frame = u64::from(format.channels) * 2;
+    std::fs::metadata(path)
+        .ok()
+        .filter(|meta| meta.is_file())
+        .is_some_and(|meta| {
+            per_frame != 0 && meta.len() != 0 && meta.len().is_multiple_of(per_frame)
+        })
 }
 
 /// Decodes bare ATRAC3+ frames, wrapping them first.
@@ -238,33 +290,49 @@ fn read_format(blob: &[u8]) -> Result<Format> {
 
 /// Decodes a complete RIFF file, reading the cache when it is already there.
 fn decode_riff(riff: &[u8], format: Format, cache_dir: &Path) -> Result<Pcm> {
-    let key = content_key(riff);
-    // Geometry is in the **name**, so a cache file is self-describing and
-    // reading one back needs no sidecar and no header parse - the same reason
-    // `crate::movie` puts its codec in the filename rather than trusting the
-    // contents.
-    let out = cache_dir.join(format!(
-        "{key}-{}ch-{}hz.s16le",
-        format.channels, format.sample_rate
-    ));
+    let out = cache_path(riff, format, cache_dir);
 
     if let Some(pcm) = read_cached(&out, format) {
         return Ok(pcm);
     }
 
+    transcode(riff, &out, format)?;
+
+    read_cached(&out, format)
+        .with_context(|| format!("{} decoded to nothing usable", out.display()))
+}
+
+/// Where a stream's decoded samples land.
+///
+/// Geometry is in the **name**, so a cache file is self-describing and reading
+/// one back needs no sidecar and no header parse - the same reason
+/// [`crate::movie`] puts its codec in the filename rather than trusting the
+/// contents.
+fn cache_path(riff: &[u8], format: Format, cache_dir: &Path) -> PathBuf {
+    cache_dir.join(format!(
+        "{}-{}ch-{}hz.s16le",
+        content_key(riff),
+        format.channels,
+        format.sample_rate
+    ))
+}
+
+/// Runs the decode unconditionally, writing `out` and the input beside it.
+///
+/// Split from [`decode_riff`] so that [`ensure_cached`] can reach the same
+/// conversion without the read-back, rather than growing a second copy of it.
+fn transcode(riff: &[u8], out: &Path, format: Format) -> Result<()> {
+    let cache_dir = out.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
 
     // Written beside the cache because it is the exact input ffmpeg saw, so a
     // decode that comes out wrong can be reproduced by hand against the same
     // bytes. Same reasoning as `crate::movie::transcode`'s `.h264` file.
-    let source = cache_dir.join(format!("{key}.at3"));
+    let source = cache_dir.join(format!("{}.at3", content_key(riff)));
     std::fs::write(&source, riff).with_context(|| format!("writing {}", source.display()))?;
 
-    run_ffmpeg(&source, &out, format)?;
-
-    read_cached(&out, format)
-        .with_context(|| format!("{} decoded to nothing usable", source.display()))
+    run_ffmpeg(&source, out, format)
 }
 
 /// Reads a cache file back, or `None` if it is missing or the wrong shape.

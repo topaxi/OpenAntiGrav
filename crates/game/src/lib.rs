@@ -47,6 +47,7 @@ pub mod language;
 pub mod menu;
 pub mod movie;
 pub mod perf;
+pub mod prefetch;
 pub mod race;
 pub mod render;
 pub mod screen;
