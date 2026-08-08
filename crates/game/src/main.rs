@@ -561,11 +561,11 @@ fn main() -> Result<()> {
     let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
 
     // Opened before either way in, because both want sound and neither owns the
-    // other. The music is loaded here too rather than inside `boot::load`: a
-    // `--race` run never boots the front end and would otherwise be silent.
-    // `--dry-run` is the one case that skips it - reading 35 MiB, or shelling
-    // out to `ffmpeg`, to then print a report and exit is the opposite of what
-    // that flag is for.
+    // other. **Only the device, not the music itself** - `start_music` is
+    // deferred to whichever tick loop is actually about to run, windowed or
+    // headless, so that a player never hears the front end before the window
+    // that shows it exists. See the two call sites below and
+    // `App::open`.
     let mut audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
     // Surveyed once, here, because it is what decides whether the AUDIO page
     // offers MUSIC SOURCE at all - and answering it means opening every disc
@@ -578,13 +578,6 @@ fn main() -> Result<()> {
         println!("audio: music discs, {}", discs.describe());
         discs
     };
-    if !cli.dry_run {
-        audio.start_music(
-            &music_discs,
-            settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
-        );
-    }
 
     let (pose, camera) = match &cli.pose_from {
         Some(path) => {
@@ -750,6 +743,15 @@ fn main() -> Result<()> {
     }
 
     if let Some(path) = cli.screenshot {
+        // Started here rather than in `main`'s setup, and only on this branch:
+        // a capture has no window to lag behind, but it does have a tick loop,
+        // and the music has to be running before that loop's first tick or the
+        // dump would open on silence. See the comment above `Audio::open`.
+        audio.start_music(
+            &music_discs,
+            settings.audio.music_source,
+            &boot::default_audio_cache_dir(),
+        );
         capture::run(
             loaded,
             video_format,
@@ -1012,6 +1014,14 @@ fn run_race(
     let scheme = resolve_scheme(cli, settings);
 
     if let Some(path) = cli.screenshot.clone() {
+        // Same reasoning as the front end's own capture branch: no window to
+        // stay in step with, but the music has to be running before
+        // `race::capture`'s first tick.
+        audio.start_music(
+            &music_discs,
+            settings.audio.music_source,
+            &boot::default_audio_cache_dir(),
+        );
         race::capture(
             loaded,
             &race::CaptureOptions {
@@ -1187,6 +1197,18 @@ impl App {
         let Some(mut audio) = self.audio.take() else {
             return Ok(None);
         };
+        // Started here, with the window already open above, rather than back
+        // in `main` before the front end's own load - which used to run
+        // seconds of `Data.wad` parsing and `ffmpeg` transcoding with the
+        // music already looping and no window yet on screen to account for
+        // it. This is the earliest point a player has something to look at,
+        // so it is also the latest point sound may start without noticeably
+        // leading the picture.
+        audio.start_music(
+            &self.music_discs,
+            self.settings.audio.music_source,
+            &boot::default_audio_cache_dir(),
+        );
 
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
