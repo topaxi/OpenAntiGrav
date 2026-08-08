@@ -78,6 +78,7 @@ use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_race::{Course, Mode, RaceState};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
+use oag_render::camera::internal::InternalParams;
 use oag_render::collision as render_collision;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
 use oag_render::mesh::{DrawCall, Model};
@@ -360,6 +361,11 @@ pub struct Setup {
     pub class_gravity_scale: f32,
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
+    /// The same seven from `<ExternalCameraClose>`: the nearer of the two
+    /// external views [`crate::display::CameraView`] cycles.
+    pub chase_close: ChaseParams,
+    /// The cockpit view's five values, from `<InternalCamera>`.
+    pub internal: InternalParams,
     /// The `engine_flare` locator, in the ship model's own space.
     ///
     /// `None` means the model carries no `Engine Flare` node, and the exhaust is
@@ -710,14 +716,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
         None
     };
     let far = stats.external_camera_far;
-    let chase = ChaseParams {
-        fov: far.fov,
-        lookat_height: far.lookat_height,
-        lookat_length: far.lookat_length,
-        pos_height: far.pos_height,
-        pos_length: chase_pos_length(far.pos_length),
-        spring_horiz: far.spring_horiz,
-        spring_vert: far.spring_vert,
+    let chase = chase_params(far);
+    // The other two views the player can cycle to, read from the same document
+    // and through the same conversion - so the sign convention is reconciled in
+    // exactly one place for both external blocks, which is what
+    // `chase_pos_length` exists for.
+    let chase_close = chase_params(stats.external_camera_close);
+    let internal = InternalParams {
+        fov: stats.internal_camera.fov,
+        headtilt: stats.internal_camera.headtilt,
+        height: stats.internal_camera.height,
+        length: stats.internal_camera.length,
+        pitch: stats.internal_camera.pitch,
     };
     report.push(format!(
         "{stats_name}: team {:?}, {:?} class, mass {}, ride_height {}",
@@ -727,6 +737,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
         "<ExternalCameraFar>: fov {} read as degrees (the unit is unrecovered), \
          pos_length {} on disc -> eye {} up and {} back",
         chase.fov, far.pos_length, chase.pos_height, chase.pos_length
+    ));
+    report.push(format!(
+        "<ExternalCameraClose>: fov {}, eye {} up and {} back; \
+         <InternalCamera>: fov {}, eye {} up and {} forward, pitch {} over {} units",
+        chase_close.fov,
+        chase_close.pos_height,
+        chase_close.pos_length,
+        internal.fov,
+        internal.height,
+        internal.length,
+        internal.pitch,
+        oag_render::camera::internal::AIM_DISTANCE,
     ));
 
     let ship_name = ship_entry_name(&options.team, options.mode);
@@ -1145,6 +1167,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             handling,
             airbrake_graphics,
             chase,
+            chase_close,
+            internal,
             nozzle,
             collision_fx,
             speedup_pads,
@@ -1460,6 +1484,61 @@ fn chase_pos_length(from_disc: f32) -> f32 {
     -from_disc
 }
 
+/// One `<ExternalCamera*>` block as the renderer's [`ChaseParams`].
+///
+/// Both external views go through this, so [`chase_pos_length`] is applied to
+/// exactly one of them never and to both of them always: a second transcription
+/// of the seven fields is how the close view would end up with the far view's
+/// sign convention.
+///
+/// # All four offsets carry the craft's global `0.75` scale
+///
+/// `oag_physics::hover::TARGET_GLOBAL_SCALE` is a **world scale on craft-space
+/// geometry**, not a suspension tuning knob, and the external camera rigs are one
+/// of the places the original applies it. A camera reading a scale out of the
+/// physics crate looks odd, which is why it is spelled out here:
+///
+/// - It is one global, `DAT_08ab0e1c`, set to a literal `0.75` in the craft
+///   constructor (`FUN_08840c74`, the store at `0x08841000`). The **same** global
+///   is read by `Ship_HoverFourCorner`'s four probe corners, by the `<Misc>` hull
+///   dimensions on their way into the collider, by the initial body position, and
+///   by both camera rigs in `Ship_UpdateCameraRigs` - which end with
+///   `eye = shipPos + (eye - shipPos) * 0.75` and the same line for the look-at
+///   point. Confidence **85**.
+/// - Scaling the whole eye-and-look-at pair about the ship is the same thing as
+///   scaling all four offsets, which is why **four** fields are multiplied here
+///   and not two. Scaling only `pos_*` would pull the eye in and leave the aim
+///   point where it was, tilting the framing rather than closing the distance.
+/// - `fov` and the two springs are **not** scaled: they are not lengths.
+///
+/// Three independent numbers agree that this belongs here. The authored close
+/// block times `0.75` is `11.643` units from the craft; a static probe of the
+/// original in that view measured `11.643`; and a 150-tick capture of the
+/// original measured a near-constant `11.6` across 94-153 units/s. The far block
+/// lands on `14.562` against a measured `14.562`. Before this scale existed here
+/// the eye sat `15.5` and `19.4` units out, which is the framing difference
+/// `docs/ghidra/functions/psp-pulse-usa/camera.md` recorded as an unexplained
+/// factor of three quarters and this closes.
+///
+/// **`<InternalCamera>` is deliberately *not* scaled** - see
+/// `oag_render::camera::internal`. The original's internal rig reads this global
+/// nowhere, and the cockpit eye was measured at `+3.000` against an authored
+/// `length` of `3`. Counterintuitive next to the two external blocks, and
+/// measured twice, so it stays.
+#[must_use]
+fn chase_params(block: handling::ExternalCamera) -> ChaseParams {
+    let scale = oag_physics::hover::TARGET_GLOBAL_SCALE;
+    ChaseParams {
+        fov: block.fov,
+        lookat_height: block.lookat_height * scale,
+        lookat_length: block.lookat_length * scale,
+        pos_height: block.pos_height * scale,
+        pos_length: chase_pos_length(block.pos_length) * scale,
+        spring_horiz: block.spring_horiz,
+        spring_vert: block.spring_vert,
+    }
+}
+
 /// Placing a ship on a track lives in [`oag_gameplay::spawn`], which is where a
 /// harness that is not the composition root can reach it: `oag-trace drive` puts
 /// a ship on a start line exactly the way a race does and may not depend on this
@@ -1668,7 +1747,26 @@ pub struct Race {
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on
     /// a source whose `handlingstats.xml` carries no `<Global><Zone/>`.
     zone: Option<oag_formats::handling::Zone>,
+    /// The external block the chase camera is currently flying, which is
+    /// whichever of [`Self::chase_far`] / [`Self::chase_close`]
+    /// [`Self::camera_view`] names. Kept as its own field rather than looked up
+    /// per use, so every consumer reads one thing and cannot pick the wrong
+    /// block.
     chase_params: ChaseParams,
+    /// `<ExternalCameraFar>`, kept so a view change can swap it back in.
+    chase_far: ChaseParams,
+    /// `<ExternalCameraClose>`.
+    chase_close: ChaseParams,
+    /// `<InternalCamera>`: the cockpit view, which has no spring and so no state
+    /// of its own beside these five numbers.
+    internal_params: InternalParams,
+    /// Which of the three perspectives is live. **Render-only state**, on `Race`
+    /// rather than in `World` for the same reason [`Self::exhaust`] is - and here
+    /// it is load-bearing rather than tidy: cycling the view mid-race must not
+    /// move a determinism hash or a replay by a single bit. See
+    /// [`crate::display::CameraView`] and
+    /// `tests::cycling_the_camera_changes_no_simulation_state`.
+    view: crate::display::CameraView,
     camera: Chase,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     camera_override: Option<CameraOverride>,
@@ -1846,6 +1944,8 @@ impl Race {
             collision,
             handling,
             chase,
+            chase_close,
+            internal,
             nozzle,
             collision_fx,
             speedup_pads,
@@ -1887,6 +1987,14 @@ impl Race {
             // engine keeps its ordinary throttle path.
             zone: zone.filter(|_| mode == Mode::Zone),
             chase_params: chase,
+            chase_far: chase,
+            chase_close,
+            internal_params: internal,
+            // The default rather than the settings file's value, for the reason
+            // `set_boost_fov_kick` gives: `Setup` is what a *headless* race
+            // needs and a display preference must not be in front of a caller
+            // with no screen. `set_camera_view` is what applies the player's.
+            view: crate::display::CameraView::default(),
             camera,
             camera_override,
             // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
@@ -1973,6 +2081,63 @@ impl Race {
     #[must_use]
     pub fn boost_fov_kick(&self) -> crate::display::BoostFovKick {
         self.boost_fov_kick
+    }
+
+    /// Chooses which of the three perspectives to render from. `[graphics]
+    /// camera_view`.
+    ///
+    /// A setter for the same reason `set_boost_fov_kick` is one - and unlike that
+    /// one this is called **during** a race as well as before it, because the
+    /// original binds the choice to a button. Everything it touches is
+    /// render-only, so calling it mid-race cannot change what the simulation does
+    /// next; that is the property
+    /// `tests::cycling_the_camera_changes_no_simulation_state` pins.
+    ///
+    /// **The chase eye is snapped on a change between the two external views**,
+    /// not sprung across. They share one eye and their anchors are metres apart,
+    /// so springing would sweep the camera through the world for a second - the
+    /// same reason [`Chase::snapped`] exists for a race start and a respawn.
+    /// Whether the original springs or snaps between them is **not recovered**:
+    /// it keeps a separate previous-eye per rig, so it does neither, and
+    /// reproducing that needs a second [`Chase`] rather than a decision here.
+    pub fn set_camera_view(&mut self, view: crate::display::CameraView) {
+        if view == self.view {
+            return;
+        }
+        self.view = view;
+        self.chase_params = match view {
+            crate::display::CameraView::Close => self.chase_close,
+            // The cockpit view does not use these, but leaving the *far* block
+            // installed means a cycle back out of the cockpit lands on the block
+            // the next external view will want anyway.
+            crate::display::CameraView::Internal | crate::display::CameraView::Far => {
+                self.chase_far
+            }
+        };
+        self.camera = Chase::snapped(target_of(self.ship()), &self.chase_params);
+    }
+
+    /// Which perspective this race is rendering from.
+    #[must_use]
+    pub fn camera_view(&self) -> crate::display::CameraView {
+        self.view
+    }
+
+    /// Whether the player's own hull should be drawn this frame.
+    ///
+    /// False in the cockpit view alone. Read by [`Scene::render`], which skips
+    /// the draw call rather than moving the model: see
+    /// [`crate::display::CameraView::draws_own_ship`] for the evidence and its
+    /// confidence.
+    ///
+    /// **The exhaust plume, the boost plume and the collision sparks are still
+    /// drawn.** The recovered flag covers the hull and nothing else, so the
+    /// alternative would be inventing three more consequences for it; and from a
+    /// cockpit at the nose the nozzle is behind the eye, so the plume is normally
+    /// off screen anyway rather than visibly wrong.
+    #[must_use]
+    pub fn draws_own_ship(&self) -> bool {
+        self.view.draws_own_ship()
     }
 
     /// How many times a `Reset` contact has respawned the ship this race.
@@ -2570,7 +2735,13 @@ impl Race {
             // A view matrix is the inverse of the camera's world transform.
             return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
         }
-        self.camera.view(target_of(self.ship()), &self.chase_params)
+        let target = target_of(self.ship());
+        if self.view == crate::display::CameraView::Internal {
+            // Rigid, so there is no per-tick state to advance and nothing to
+            // snap: the cockpit is bolted to the hull.
+            return oag_render::camera::internal::view(target, &self.internal_params);
+        }
+        self.camera.view(target, &self.chase_params)
     }
 
     /// The camera's own world position, from the view matrix it produces.
@@ -2684,11 +2855,20 @@ impl Race {
         // through the player's setting, whose default is identity; it exists to
         // calibrate the authored value's unrecovered unit against a captured
         // frame, so it must sit at exactly the same point in the chain.
+        // Each view authors its own fov, in the same unit at the same aspect, so
+        // the live one is whichever perspective is being rendered - a cockpit
+        // framed with the chase view's field would be the wrong picture with the
+        // right camera.
+        let view_fov = if self.view == crate::display::CameraView::Internal {
+            self.internal_params.fov
+        } else {
+            self.chase_params.fov
+        };
         let authored_fov = self
             .camera_override
             .as_ref()
             .and_then(|over| over.fov_deg)
-            .unwrap_or(self.chase_params.fov);
+            .unwrap_or(view_fov);
         let authored = setting.apply(authored_fov.to_radians());
         // Composed *after* the setting, so a player who has widened the field
         // gets the same proportional kick rather than a fixed number of degrees.
@@ -3703,7 +3883,13 @@ impl Scene {
         if let Some(pads) = &self.pads {
             stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
         }
-        stats.add(self.ship.draw(&mut pass, None, None, None));
+        // Skipped outright in the cockpit view rather than moved or scaled away:
+        // the original sets one flag on the craft and draws no hull, and a draw
+        // call not issued is the only version of that with no chance of a stray
+        // polygon across the middle of the screen. See `Race::draws_own_ship`.
+        if race.draws_own_ship() {
+            stats.add(self.ship.draw(&mut pass, None, None, None));
+        }
         // After the ship, so the hull's depth is already in the buffer: the
         // plume's own blend pipeline writes no depth, the same reasoning as
         // the flare below.
@@ -3849,6 +4035,12 @@ pub struct CaptureOptions {
     /// [`crate::display::BoostFovKick::OFF`], and that comparison is the only
     /// way anyone will find out whether the original has something like it.
     pub boost_fov_kick: crate::display::BoostFovKick,
+    /// Which of the three perspectives to render from.
+    ///
+    /// Honoured because a headless capture is the **only** way to get a frame of
+    /// the cockpit view without a window, and therefore the only way anyone
+    /// checks it: `--camera-view internal --screenshot`. `[graphics] camera_view`.
+    pub camera_view: crate::display::CameraView,
     /// Which anti-aliasing the scene draws with. Honoured for the same reason
     /// the two culling tiers are: a capture is how `[graphics] anti_aliasing`
     /// gets compared against itself off and against the running original.
@@ -3935,6 +4127,7 @@ pub fn capture(
     } = loaded;
     let mut race = Race::start(setup);
     race.set_boost_fov_kick(options.boost_fov_kick);
+    race.set_camera_view(options.camera_view);
     race.set_control_scheme(options.scheme);
 
     let mut held = HeldButtons::new(options.held);
@@ -4440,6 +4633,30 @@ mod tests {
                 spring_horiz: 4.0,
                 spring_vert: 2.0,
             },
+            // The nearer external view, deliberately a *different* set of round
+            // numbers from `chase`: a test that cycles to it and back has to be
+            // able to tell the two apart. Note these go into `Setup` already
+            // converted, so unlike a real load no `chase_params` scale or sign
+            // flip is applied to them.
+            chase_close: ChaseParams {
+                fov: 50.0,
+                lookat_height: 1.0,
+                lookat_length: 10.0,
+                pos_height: 1.0,
+                pos_length: 4.0,
+                spring_horiz: 4.0,
+                spring_vert: 2.0,
+            },
+            // The cockpit view. `length` positive puts the eye ahead of the
+            // craft's origin, which is the sign the original's own measured
+            // sample pins - see `oag_render::camera::internal`.
+            internal: InternalParams {
+                fov: 65.0,
+                headtilt: 3.0,
+                height: 1.0,
+                length: 5.0,
+                pitch: 0.0,
+            },
             // A synthetic setup has no ship model, so no locators either. The
             // exhaust still ticks; it just has nowhere to be drawn, which is the
             // same path a model with no `Engine Flare` node takes. Sparks
@@ -4768,6 +4985,176 @@ mod tests {
             scales.windows(2).all(|pair| pair[0] > pair[1]),
             "the tiers must widen monotonically: {scales:?}"
         );
+    }
+
+    /// **The load-bearing test of this whole feature.** Cycling the camera is
+    /// presentation, and the determinism rules say presentation may not reach the
+    /// simulation - so the proof has to be a hash, not a reading of the code.
+    ///
+    /// Two races from one seed, driven with identical input for identical tick
+    /// counts. One of them walks the full camera cycle in the middle, twice
+    /// round, including in and out of the cockpit view. The exhaustive state hash
+    /// (`oag_physics::probe::hash_state`, which destructures `ShipState` field by
+    /// field on purpose) has to come out bit-identical at every tick, and so does
+    /// the seeded generator.
+    #[test]
+    fn cycling_the_camera_changes_no_simulation_state() {
+        use oag_core::hash::StateHasher;
+        use oag_physics::probe::hash_state;
+
+        fn hash(race: &Race) -> u64 {
+            let mut hasher = StateHasher::new();
+            hash_state(&mut hasher, &race.ship().physics);
+            hasher.write_u64(race.world.tick);
+            hasher.finish()
+        }
+
+        // Thrust held, so the craft is moving rather than parked: a stationary
+        // ship would hash the same however badly the camera behaved.
+        let held = 1u32 << oag_gameplay::input::button::CROSS;
+
+        let mut control = Race::start(setup(Handling::default()));
+        let mut cycled = Race::start(setup(Handling::default()));
+
+        let mut control_input = HeldButtons::new(held);
+        let mut cycled_input = HeldButtons::new(held);
+
+        for tick in 0..240u32 {
+            control.tick(&control_input.snapshot());
+            cycled.tick(&cycled_input.snapshot());
+            // Eleven changes over the run, so every view is entered and left
+            // several times while the craft flies - and eleven is deliberately
+            // not a multiple of three, so the run does not end back on the view
+            // it started from and the assertions below have something to see.
+            if tick > 0 && tick % 20 == 0 {
+                cycled.set_camera_view(cycled.camera_view().next());
+            }
+            assert_eq!(hash(&control), hash(&cycled), "diverged at tick {tick}");
+            // The seeded generator too, by value: a camera that drew a random
+            // number from the *simulation's* generator - rather than from the
+            // separate ones `Race` keeps for the exhaust and the sparks - would
+            // desynchronise every later tick, and this catches it on the first.
+            assert_eq!(
+                control.world.rng, cycled.world.rng,
+                "the simulation's generator moved at tick {tick}"
+            );
+        }
+
+        // The cycle really did move: otherwise this test passes by doing nothing,
+        // which is the failure mode a test of this shape is prone to.
+        assert_eq!(control.camera_view(), crate::display::CameraView::default());
+        assert_ne!(cycled.camera_view(), control.camera_view());
+        // And the two cameras really are looking at different things, so the
+        // hashes above are equal despite a genuinely different picture.
+        assert_ne!(control.view(), cycled.view());
+    }
+
+    /// The three views have to be three *different* cameras. A dispatch that fell
+    /// through to the far block for all of them would satisfy every other test
+    /// here.
+    #[test]
+    fn each_view_frames_the_craft_from_its_own_block() {
+        use crate::display::{CameraView, Fov};
+
+        let mut race = Race::start(setup(Handling::default()));
+        let mut eyes = Vec::new();
+        let mut fovs = Vec::new();
+        for view in CameraView::ALL {
+            race.set_camera_view(view);
+            eyes.push((view, race.camera_position()));
+            fovs.push((
+                view,
+                race.projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED),
+            ));
+        }
+
+        for (index, (view, eye)) in eyes.iter().enumerate() {
+            for (other, other_eye) in &eyes[index + 1..] {
+                assert!(
+                    (*eye - *other_eye).length() > 1e-3,
+                    "{view} and {other} share an eye at {eye}"
+                );
+            }
+        }
+        // Each block authors its own fov in the fixture, so the projections have
+        // to differ too - which is what catches a `view()` that dispatches beside
+        // a `projection()` that does not.
+        for (index, (view, projection)) in fovs.iter().enumerate() {
+            for (other, other_projection) in &fovs[index + 1..] {
+                assert_ne!(projection, other_projection, "{view} and {other}");
+            }
+        }
+
+        // The geometry, not just the difference: the cockpit eye is *ahead* of the
+        // craft and both chase eyes are behind it. A sign error here is the single
+        // most likely mistake in the whole feature.
+        let craft = race.ship().physics.body.position;
+        let forward = race.ship().physics.body.forward();
+        race.set_camera_view(CameraView::Internal);
+        assert!((race.camera_position() - craft).dot(forward) > 0.0);
+        for view in [CameraView::Close, CameraView::Far] {
+            race.set_camera_view(view);
+            assert!(
+                (race.camera_position() - craft).dot(forward) < 0.0,
+                "{view} is in front of the craft"
+            );
+        }
+        // And close is closer than far, which is what the two names mean.
+        race.set_camera_view(CameraView::Close);
+        let close = (race.camera_position() - craft).length();
+        race.set_camera_view(CameraView::Far);
+        assert!(close < (race.camera_position() - craft).length());
+
+        // The hull is drawn in both external views and in neither of the other
+        // states, which is the one thing `Scene::render` branches on.
+        for view in [CameraView::Close, CameraView::Far] {
+            race.set_camera_view(view);
+            assert!(race.draws_own_ship(), "{view}");
+        }
+        race.set_camera_view(CameraView::Internal);
+        assert!(!race.draws_own_ship());
+    }
+
+    /// The craft's global `0.75` scale reaches all four external offsets and none
+    /// of the internal ones. Both halves are measurements off the original - see
+    /// [`chase_params`] and `oag_render::camera::internal` - and both are cheap to
+    /// undo by accident.
+    #[test]
+    fn the_external_blocks_carry_the_crafts_global_scale() {
+        let scale = oag_physics::hover::TARGET_GLOBAL_SCALE;
+        let block = handling::ExternalCamera {
+            fov: 60.0,
+            lookat_height: 4.0,
+            lookat_length: 8.0,
+            pos_height: 4.0,
+            pos_length: -16.0,
+            spring_horiz: 3.0,
+            spring_vert: 5.0,
+        };
+        let params = chase_params(block);
+
+        assert_eq!(params.lookat_height, 4.0 * scale);
+        assert_eq!(params.lookat_length, 8.0 * scale);
+        assert_eq!(params.pos_height, 4.0 * scale);
+        // Negated *and* scaled: the sign flip is [`chase_pos_length`]'s and the
+        // scale is [`chase_params`]', and both apply.
+        assert_eq!(params.pos_length, 16.0 * scale);
+        // Not lengths, so not scaled.
+        assert_eq!(params.fov, 60.0);
+        assert_eq!(params.spring_horiz, 3.0);
+        assert_eq!(params.spring_vert, 5.0);
+
+        // The number three independent measurements of the original agree on: an
+        // authored `(-15, +4)` close block puts the eye 11.64 units from the
+        // craft. See [`chase_params`] for all three.
+        let close = chase_params(handling::ExternalCamera {
+            pos_height: 4.0,
+            pos_length: -15.0,
+            ..block
+        });
+        let distance =
+            (close.pos_height * close.pos_height + close.pos_length * close.pos_length).sqrt();
+        assert!((distance - 11.643).abs() < 0.01, "{distance}");
     }
 
     /// A camera override must move every reader of the camera at once: the

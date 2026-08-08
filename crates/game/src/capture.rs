@@ -375,6 +375,7 @@ pub fn run(
                 pvs_culling: options.settings.graphics.pvs_culling,
                 animated_textures: options.settings.graphics.animated_textures,
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
+                camera_view: options.settings.graphics.camera_view,
                 anti_aliasing: options.settings.graphics.anti_aliasing,
                 // The front-end capture path never poses a ship, so there is
                 // nothing for a forced boost state to be aged relative to.

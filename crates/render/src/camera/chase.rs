@@ -43,6 +43,38 @@
 //!   treated as a rate per second. If the original's are per-frame at its own
 //!   variable timestep, the numbers will need a factor, and the shape here does
 //!   not change.
+//!
+//! # Scored against the original, 2026-08-08
+//!
+//! `Ship_UpdateCameraRigs` (`0x08845ed0`) was read at instruction level, which
+//! turns four of the readings above into measurements. Recorded here rather than
+//! only in the docs tree, because the next person to change this file will read
+//! this comment and not `camera.md`:
+//!
+//! - **Confirmed: the two springs split along and across the ship's own up.** The
+//!   original closes the up component at `spring_vert` and *both* remaining
+//!   components - side and forward - at `spring_horiz`, in the craft's frame, not
+//!   the world's. That is exactly [`Chase::advance`].
+//! - **Confirmed: the integrator is `error * rate * dt`**, a plain first-order
+//!   lag with no transcendental, which is what this module chose without
+//!   evidence. The original does **not** clamp the factor; [`lag`] does, and that
+//!   is this module's own guard rather than a reproduction.
+//! - **Confirmed: only the eye is sprung** and the look-at point is rigid.
+//! - **Not reproduced: the eye's distance from the look-at point is rigid.** The
+//!   original springs the eye and then rewrites it as
+//!   `look_at + normalize(eye - look_at) * |anchor - look_at|`, so the spring
+//!   moves the eye only *around* the look-at point and never nearer or further
+//!   from it. [`Chase`] springs the position freely. That is a real behavioural
+//!   difference, it is not fixed here, and it is the highest-value follow-up on
+//!   this camera - see `docs/ghidra/functions/psp-pulse-usa/camera.md`.
+//! - **Not reproduced: `pos_height` is applied after the spring** in the
+//!   original, so the vertical offset is rigid and the spring acts on a
+//!   forward-only offset point. [`anchor`] folds both offsets in before the
+//!   spring sees them.
+//!
+//! Both unreproduced items are deliberate for now: changing them moves every
+//! frame this project has ever captured, and it is a separate change from the one
+//! that added the view cycle.
 
 use oag_core::math::{Mat4, Vec3, camera};
 

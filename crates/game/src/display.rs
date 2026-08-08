@@ -16,6 +16,10 @@
 //!   speed pad - **this project's own effect, not a reimplementation of the
 //!   original's** (see its own doc, which records what the original does
 //!   instead and why the two are not being reconciled).
+//! - [`CameraView`] is *which* camera the field of view belongs to: the cockpit
+//!   or one of the two chase distances. Unlike everything else here it is also
+//!   cycled from a button during a race, so the settings file is where the
+//!   choice persists rather than the only place it is set.
 //! - [`Brightness`] and [`Gamma`] are what happens to the finished picture on
 //!   its way to the surface.
 //!
@@ -1124,6 +1128,111 @@ impl BoostFovKick {
 
 percentage!(BoostFovKick, DEFAULT, "boost field-of-view kick");
 
+/// Which of the original's three in-race camera perspectives is live.
+///
+/// **Recovered, including the cycle order.** `Camera_UpdatePlayerView`
+/// (`0x0883c0cc`) tests SELECT, consumes the press and rotates one profile
+/// setting through exactly three values, selecting a differently named camera rig
+/// for each; the order wraps and there is no fourth entry. Confidence **88** for
+/// the set and the order - see
+/// `docs/ghidra/functions/psp-pulse-usa/camera.md`. [`Self::next`] is that
+/// rotation and [`Self::ALL`] is in that order, so the button and the menu row
+/// cannot disagree about it.
+///
+/// # What is not recovered
+///
+/// - **Which one a fresh profile starts on.** The original stores the choice as a
+///   string and nothing read what an empty profile holds, so [`Self::default`] is
+///   **this project's choice**: [`Self::ExternalFar`], because it is what every
+///   frame captured under `data/traces/` was taken with and what the game
+///   rendered before this type existed. Marked here rather than dressed up as a
+///   reading, the way [`BoostFovKick`] marks its own invention.
+/// - **The spelling.** The original persists `OPT_INT`, `OPT_CLOSE` and
+///   `OPT_FAR`; [`Self::name`] uses this project's own settings-file vocabulary.
+///   Anything that ever reads a real profile save has to know the disc's own
+///   three spellings, and `camera.md` records them.
+///
+/// # It is presentation, never simulation
+///
+/// This does not enter `oag_gameplay::World` and nothing hashed reads it, so
+/// cycling the view cannot move a determinism hash or a replay. That is asserted
+/// rather than argued: see
+/// `crate::race::tests::cycling_the_camera_changes_no_simulation_state`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CameraView {
+    /// The cockpit view, `<InternalCamera>`. The only one that hides the
+    /// player's own ship.
+    Internal,
+    /// The nearer chase view, `<ExternalCameraClose>`.
+    Close,
+    /// The further chase view, `<ExternalCameraFar>`. The default; see the type's
+    /// documentation for why that is a choice and not a reading.
+    #[default]
+    Far,
+}
+
+impl CameraView {
+    /// All three, in the order SELECT cycles them.
+    ///
+    /// `internal -> close -> far`, wrapping, which is the original's own order
+    /// and not alphabetical or nearest-first by accident.
+    pub const ALL: [Self; 3] = [Self::Internal, Self::Close, Self::Far];
+
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Internal => "internal",
+            Self::Close => "close",
+            Self::Far => "far",
+        }
+    }
+
+    /// The next view SELECT would move to, wrapping.
+    ///
+    /// The whole cycle in one place, so the button, the menu row and any test
+    /// share it.
+    #[must_use]
+    pub fn next(self) -> Self {
+        match self {
+            Self::Internal => Self::Close,
+            Self::Close => Self::Far,
+            Self::Far => Self::Internal,
+        }
+    }
+
+    /// Whether the player's own hull is drawn.
+    ///
+    /// False for the cockpit view alone. The original sets one byte
+    /// (`craft+0x6d`) to 1 for `OPT_INT` and 0 for both external views and
+    /// mirrors it to the byte beside it; that it means "hide the own ship" is
+    /// inference from the correlation rather than from a consumer, at confidence
+    /// **70** - but it is the one thing that distinguishes a cockpit view, and
+    /// the alternative reading would leave a hull filling the frame.
+    #[must_use]
+    pub fn draws_own_ship(self) -> bool {
+        self != Self::Internal
+    }
+}
+
+impl std::str::FromStr for CameraView {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|view| view.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| format!("{text:?} is not a camera view; try internal, close or far"))
+    }
+}
+
+impl std::fmt::Display for CameraView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// Where a window of `size` goes to sit centred on a monitor whose own
 /// rectangle starts at `origin` and is `area` across, all in physical pixels.
 ///
@@ -1377,6 +1486,87 @@ mod tests {
         for value in BoostFovKick::OFFERED {
             assert_eq!(value.to_string().parse::<BoostFovKick>(), Ok(value));
         }
+    }
+
+    /// The recovered order, stated as a test because it is the one fact about
+    /// this type that came out of the binary and the one a refactor could
+    /// silently reorder.
+    #[test]
+    fn the_camera_view_cycle_is_the_originals_order_and_wraps() {
+        assert_eq!(CameraView::Internal.next(), CameraView::Close);
+        assert_eq!(CameraView::Close.next(), CameraView::Far);
+        assert_eq!(CameraView::Far.next(), CameraView::Internal);
+
+        // Three presses from anywhere is back where it started, and every view
+        // is reachable - so the cycle is a rotation of the whole set rather
+        // than a rotation of a subset with an orphan.
+        for start in CameraView::ALL {
+            let mut seen = vec![start];
+            let mut view = start;
+            for _ in 0..3 {
+                view = view.next();
+                if view != start {
+                    seen.push(view);
+                }
+            }
+            assert_eq!(view, start, "from {start}");
+            seen.sort_unstable_by_key(|v| v.name());
+            let mut all: Vec<CameraView> = CameraView::ALL.to_vec();
+            all.sort_unstable_by_key(|v| v.name());
+            assert_eq!(seen, all, "from {start}");
+        }
+
+        // `ALL` is the cycle, in order, so a menu row built from it and the
+        // button move through the same sequence.
+        for pair in CameraView::ALL.windows(2) {
+            assert_eq!(pair[0].next(), pair[1]);
+        }
+    }
+
+    #[test]
+    fn camera_views_round_trip_and_refuse_nonsense() {
+        for view in CameraView::ALL {
+            assert_eq!(view.to_string().parse::<CameraView>(), Ok(view));
+        }
+        assert_eq!("FAR".parse::<CameraView>(), Ok(CameraView::Far));
+        for bad in ["", "cockpit", "opt_int", "external"] {
+            assert!(bad.parse::<CameraView>().is_err(), "{bad}");
+        }
+    }
+
+    /// The default is a *choice* - see the type's docs - and it is the one that
+    /// leaves every existing capture alone, so it is worth pinning.
+    #[test]
+    fn the_default_camera_view_is_the_far_chase() {
+        assert_eq!(CameraView::default(), CameraView::Far);
+    }
+
+    /// The cockpit view is the only one that hides the hull. Getting this
+    /// backwards fills the frame with the inside of a ship in the two views
+    /// where a player expects to see it from behind.
+    #[test]
+    fn only_the_internal_view_hides_the_players_own_ship() {
+        assert!(!CameraView::Internal.draws_own_ship());
+        assert!(CameraView::Close.draws_own_ship());
+        assert!(CameraView::Far.draws_own_ship());
+    }
+
+    /// The settings file round-trips through serde, not through `FromStr`, so
+    /// the two spellings have to agree or a saved view comes back as the
+    /// default.
+    #[test]
+    fn camera_views_survive_a_settings_file() {
+        for view in CameraView::ALL {
+            let toml = toml::to_string(&Wrapper { view }).expect("serialises");
+            assert!(toml.contains(view.name()), "{toml}");
+            let back: Wrapper = toml::from_str(&toml).expect("deserialises");
+            assert_eq!(back.view, view);
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct Wrapper {
+        view: CameraView,
     }
 
     /// The point of turning the toggle into a magnitude: each tier has to be

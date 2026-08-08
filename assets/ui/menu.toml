@@ -395,6 +395,23 @@ label = "ANISOTROPIC FILTERING"
 setting = "graphics.anisotropy"
 values = ["off", "2x", "4x", "8x", "16x"]
 
+# Which of the original's three in-race perspectives to fly with. The set and the
+# order are **recovered** (confidence 88): `Camera_UpdatePlayerView` rotates one
+# profile setting through exactly these three, in this order, wrapping - see
+# `docs/ghidra/functions/psp-pulse-usa/camera.md`. Which one a fresh install
+# starts on is *not* recovered; `far` is this project's choice, being what the
+# game rendered before the other two existed.
+#
+# The values are listed in the cycle's own order rather than nearest-first, so
+# moving the row and pressing the in-race cycle button (SELECT, or TAB on a
+# keyboard) walk the same sequence. No `restart_required`: this one applies to a
+# race already running, which is the whole point of there being a button for it.
+[[page.entry]]
+kind = "choice"
+label = "CAMERA VIEW"
+setting = "graphics.camera_view"
+values = ["internal", "close", "far"]
+
 # A **percentage of the field of view the disc's own data authored**, not an
 # angle. `<ExternalCameraFar fov>` comes off the disc and its unit is
 # unrecovered, so a row that let a player type `90` would be quietly asserting a

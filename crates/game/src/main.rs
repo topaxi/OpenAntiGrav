@@ -43,6 +43,7 @@ use oag_game::{
     report, settings, source, upscale,
 };
 use oag_gameplay::ControlScheme;
+use oag_gameplay::input::button;
 use oag_input::Controls;
 use oag_physics::SpeedClass;
 use oag_render::mesh_render::Anisotropy;
@@ -412,6 +413,22 @@ struct Cli {
     /// against an emulator shot taken mid-boost. `0.0` is the entry tick.
     #[arg(long, value_name = "SECONDS")]
     pose_boost: Option<f32>,
+
+    /// Which of the three in-race camera perspectives to fly with, overriding
+    /// `[graphics] camera_view` for this run: `internal`, `close` or `far`.
+    ///
+    /// In-game the choice is cycled with SELECT (TAB on a keyboard) and persisted,
+    /// so this flag exists for the case a keypress cannot reach: a **headless
+    /// `--screenshot`**, which is the only way to get a frame of the cockpit view
+    /// on a machine that never opens a window. Unlike the settings row, it does not
+    /// persist.
+    ///
+    /// Gated on `--screenshot` the way `--camera-fov` is gated on `--pose-from`,
+    /// and for the same reason: a windowed run reads the view from the settings
+    /// file and cycles it from the button, so a flag accepted there would be
+    /// silently dropped. Refusing it says so instead.
+    #[arg(long, value_name = "VIEW", requires = "screenshot")]
+    camera_view: Option<display::CameraView>,
 }
 
 /// Parses `--pose`: three or four comma-separated numbers, the fourth a yaw in
@@ -769,7 +786,19 @@ fn main() -> Result<()> {
                 screen: cli.screen.clone(),
                 menu_page: cli.menu_page.clone(),
                 presented: cli.presented,
-                settings: settings.clone(),
+                // The clone is overridden rather than `settings` itself, so
+                // `--camera-view` reaches the race this capture may hand over to
+                // (`capture::run` builds its `CaptureOptions` from this block)
+                // without ever being written back to the settings file. The same
+                // one flag then covers both screenshot paths - this one and
+                // `--race --screenshot` - and neither persists it.
+                settings: settings::Settings {
+                    graphics: settings::Graphics {
+                        camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
+                        ..settings.graphics.clone()
+                    },
+                    ..settings.clone()
+                },
                 music_discs: music_discs.clone(),
                 anisotropy,
             },
@@ -1040,6 +1069,7 @@ fn run_race(
                 pvs_culling: settings.graphics.pvs_culling,
                 animated_textures: settings.graphics.animated_textures,
                 boost_fov_kick: settings.graphics.boost_fov_kick,
+                camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
                 anti_aliasing: settings.graphics.anti_aliasing,
                 pose_boost: cli.pose_boost,
                 presented: cli.presented.then_some(race::Presented {
@@ -1217,8 +1247,7 @@ impl App {
                 loaded,
                 framebuffer.size(),
                 self.anisotropy,
-                self.settings.graphics.anti_aliasing,
-                self.settings.graphics.boost_fov_kick,
+                &self.settings,
                 self.scheme,
             )?
         } else if let Some(loaded) = self.boot.take() {
@@ -1880,8 +1909,13 @@ impl Stage {
         loaded: race::Loaded,
         size: (u32, u32),
         anisotropy: Anisotropy,
-        anti_aliasing: display::AntiAliasing,
-        boost_fov_kick: display::BoostFovKick,
+        // The whole settings block rather than the three values a race reads out
+        // of it. Three separate parameters is what this used to be, and each new
+        // display preference added a fourth: the values travel together, they all
+        // come from one place, and none of them is ever overridden per race. The
+        // exception is `anisotropy`, which stays its own parameter precisely
+        // because `--anisotropy` *can* override it.
+        settings: &settings::Settings,
         scheme: ControlScheme,
     ) -> Result<Self> {
         let race::Loaded {
@@ -1914,7 +1948,7 @@ impl Stage {
             size,
             anisotropy,
             visibility,
-            anti_aliasing,
+            settings.graphics.anti_aliasing,
             fog_volumes,
         )?;
         // Against the **surface** format, like every other renderer here, because
@@ -1922,7 +1956,11 @@ impl Stage {
         let overlay = oag_game::hud::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
             .context("building the HUD overlay")?;
         let mut race = race::Race::start(setup);
-        race.set_boost_fov_kick(boost_fov_kick);
+        race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
+        // Applied before the first tick, but unlike the kick this one is also
+        // set again whenever the cycle button or the menu row moves it - see
+        // `Session::cycle_camera_view`.
+        race.set_camera_view(settings.graphics.camera_view);
         race.set_control_scheme(scheme);
         Ok(Self::Race(Box::new(RaceStage {
             scene,
@@ -2794,6 +2832,25 @@ impl Session {
             // `movie::Player::follow`.
             let movie_playhead = self.audio.movie_playhead();
             self.audio.tick();
+            // The in-race camera cycle, read off the shared `Input` and consumed,
+            // exactly as the front end and the menus consume their own presses -
+            // a press seen on two devices is one press and there is one place to
+            // clear it.
+            //
+            // Deliberately here and **not** inside `Race::tick`. The tick takes an
+            // `InputSnapshot` by value and the selected view is not part of one, so
+            // keeping the cycle outside is what makes "cycling the camera cannot
+            // move a simulation bit" true by construction rather than by argument.
+            // It also puts the settings file - which `Race` cannot see - in reach,
+            // which is what persists the choice across a restart. Before the tick
+            // rather than after, so the frame this tick produces is already drawn
+            // from the new view.
+            if matches!(self.stage, Stage::Race(_))
+                && self.controls.buttons().is_pressed(button::SELECT)
+            {
+                self.controls.buttons_mut().consume_press(button::SELECT);
+                self.cycle_camera_view();
+            }
             match &mut self.stage {
                 // Stepped in the tick loop with everything else, so the wave's
                 // heartbeat runs at the simulation's fixed 60 Hz rather than at
@@ -3527,6 +3584,23 @@ impl Session {
                     return;
                 }
             },
+            // Applied to the race already running, unlike the two rows above:
+            // the original binds this to a button precisely so it can be changed
+            // while flying, and a row that deferred it to the next race would be
+            // the odd one out rather than the careful one. Nothing it touches is
+            // simulation state - see `race::Race::set_camera_view`.
+            "graphics.camera_view" => match text.parse::<display::CameraView>() {
+                Ok(view) => {
+                    self.settings.graphics.camera_view = view;
+                    if let Stage::Race(stage) = &mut self.stage {
+                        stage.race.set_camera_view(view);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // The scheme the *next* race starts with. Not applied to a race
             // already running: `Race::set_control_scheme` is called once before
             // the first tick, and swapping mid-race would leave a half-finished
@@ -3556,6 +3630,36 @@ impl Session {
         }
     }
 
+    /// Moves the in-race camera on one perspective and persists the choice.
+    ///
+    /// **This is the original's SELECT.** `Camera_UpdatePlayerView`
+    /// (`0x0883c0cc`) tests abstract button index `0xf`, consumes the press,
+    /// rotates its profile setting through three values and sets the profile's
+    /// dirty byte - so the write back to the settings file here is a reproduction
+    /// and not a convenience. Confidence **88** for the cycle and its order; see
+    /// `docs/ghidra/functions/psp-pulse-usa/camera.md`.
+    ///
+    /// The order lives on [`display::CameraView::next`], so this function decides
+    /// nothing about it: the button, the `CAMERA VIEW` menu row and the type's own
+    /// test all walk one sequence.
+    ///
+    /// Saving on every press is deliberate. The alternative - saving on exit -
+    /// loses the choice to a crash or a `kill`, and the file is a few hundred
+    /// bytes written at most once per press of one button.
+    fn cycle_camera_view(&mut self) {
+        let next = self.settings.graphics.camera_view.next();
+        self.settings.graphics.camera_view = next;
+        if let Stage::Race(stage) = &mut self.stage {
+            stage.race.set_camera_view(next);
+        }
+        // Nothing re-seeds the menu here: `settings::menu_seeds` reads
+        // `self.settings` when the page opens, so the `CAMERA VIEW` row already
+        // opens on whatever the player last flew with.
+        if let Err(e) = settings::save(&self.settings) {
+            eprintln!("could not save settings: {e:#}");
+        }
+    }
+
     /// Replaces whatever is on screen with the race the menus ask for.
     ///
     /// The window, the device and the surface are the ones already open, so the
@@ -3571,8 +3675,7 @@ impl Session {
             loaded,
             self.framebuffer.size(),
             self.anisotropy,
-            self.settings.graphics.anti_aliasing,
-            self.settings.graphics.boost_fov_kick,
+            &self.settings,
             self.scheme,
         )?;
         self.gpu.window.set_title(RACE_TITLE);
