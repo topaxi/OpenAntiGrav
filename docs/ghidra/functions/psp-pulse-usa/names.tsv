@@ -358,3 +358,7 @@
 0x08a2aebc	function	Sas_SetVoice	95	sound.md
 0x08995224	function	SoundVoice_Unlink	65	sound.md
 0x08b893d0	data	g_sas_voices	85	sound.md
+0x0898bf4c	function	Sas_QueueSetVoice	92	sound.md
+0x08992304	function	Scream_FindSoundInBank	85	sound.md
+0x08991b20	function	Scream_PlaySoundByName	85	sound.md
+0x08992264	function	Scream_FindBankByName	80	sound.md

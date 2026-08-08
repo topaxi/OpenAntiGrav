@@ -6,8 +6,13 @@
 that matters, because it is what stands between here and extracting individual
 sounds"*. Everything about race audio is blocked behind it.
 
-This page attacks it from the code side rather than the data side, and gets far
-enough to name the field the answer has to land in. It does not close the gap.
+This page attacks it from the code side rather than the data side, and gets most
+of the way. It **confirms the engine is Sony's SCREAM** from the binary's own
+copyright string rather than by inference, **decodes the bank's name table** so
+that per-sound names are extractable, and **names the two fields** a sound's
+offset and length are finally written to. What it does not do is join those two
+ends: how a sound's index becomes a byte offset is still open, but it is now one
+named function away rather than an open-ended search.
 
 **Target note.** `psp-pulse-eu` is this project's preferred first target for new
 investigation, and this page is `psp-pulse-usa`. That is deliberate: the cue
@@ -102,24 +107,139 @@ the 32 records double as the allocator's free list. It also zeroes `+0x08` and
 which is the same array at a `u32` stride). Five callers, all in the
 `0x08994xxx` voice-manager cluster. Confidence **65**, so the name carries `_q`.
 
+## This is Sony's SCREAM, and that is now a finding
+
+`docs/formats/psp-audio.md` recorded *"whether this is Sony's SCREAM engine"* as
+**a strong inference rather than a finding**, because `SBlk` is SCREAM's bank
+magic and the PS2 disc ships `IOP/SCREAM.IRX` but the PSP build has no
+equivalent file to point at.
+
+The binary says so itself. Nineteen `SCREAM` strings, including a copyright
+line:
+
+```
+0x08aa4238   " SCREAM PSP    (c)2006 Sony Computer Entertainment America\n"
+0x08aa3d90   "SCREAM: ERROR! You must call snd_RegisterMainMemAllocator ..."
+0x08aa3e00   "SCREAM: Couldn't find named bank -> %s\n"
+0x08aa3e28   "SCREAM: Didn't find sound named -> %s\n"
+0x08aa3ca8   "SCREAM: Didn't find child sound named -> %s\n"
+0x08aa3a30   "SCREAM ERROR: THIS SYSTEM ONLY SUPPORTS ADPCM VOICE DATA!\n"
+```
+
+Confidence **99**. A verbatim vendor copyright string is as direct as this kind
+of evidence gets, and `snd_RegisterMainMemAllocator` is a published SCREAM API
+name. The practical consequence is larger than the label: SCREAM is a documented
+middleware, so its structure names are worth looking up rather than deriving.
+
+The ADPCM line is also a small independent confirmation of
+[psp-audio.md](../../../formats/psp-audio.md)'s codec finding - this build
+refuses anything that is not ADPCM.
+
+## The name table, decoded
+
+`Scream_FindSoundInBank` (`0x08992304`) is the lookup those two error strings
+guard, and it reads the structure `psp-audio.md` describes but could not
+interpret. Signature: `(bank, name, out_bank) -> sound_index`, `-1` on miss.
+
+Two gates first:
+
+```c
+if (*bank != 0x6b6c4253 || (bank[2] & 0x100) == 0) return -1;
+```
+
+`0x6b6c4253` is `"SBlk"` little-endian. `bank[2]` is the word at **`+0x08`**,
+which `psp-audio.md` records as *"772/260, not determined"* - and 772 is `0x304`
+while 260 is `0x104`, so **both have bit `0x100` set**. That bit means *this bank
+carries a name table*; it is a capability flag, not a size.
+
+Then, with `names = bank[0xe]`, the **`+0x38` name-block offset** already
+documented:
+
+```c
+entries = *(u32 *)(names + 0x08);                  /* the entry array */
+bucket  = *(u16 *)(names + 0x18 + hash(name) * 2); /* head index */
+for (e = entries + bucket * 0x14; *e != 0; e += 0x14)
+    if (memcmp(e, name, 0x10) == 0) return *(i16 *)(e + 0x10);
+```
+
+So the name block is:
+
+```text
+names + 0x00   char[8]   the bank's own name, already documented
+names + 0x08   u32       offset of the entry array
+names + 0x18   u16[]     hash buckets, indexed by hash(name)
+```
+
+and each entry is **0x14 bytes**:
+
+```text
+entry + 0x00   char[16]  the sound's name, compared with a 16-byte memcmp
+entry + 0x10   u16       the sound's index within the bank
+```
+
+Confidence **85**. Every stride and offset is a literal in the decompilation and
+the two gates are unambiguous; it has not been run against a real bank yet,
+which is the one step between this and 90.
+
+**The practical consequence is that per-sound names are extractable now.** The
+hash in `FUN_089924ec` is only needed to *jump* to a bucket - walking the entry
+array linearly to its terminator yields every `{name, index}` pair without
+reverse-engineering the hash at all. That turns `psp-audio.md`'s *"where each
+sound starts"* from one problem into two smaller ones: the names are readable,
+and what remains is the index-to-waveform-offset step.
+
+`Scream_PlaySoundByName` (`0x08991b20`) is the caller and shows the whole shape:
+resolve the bank by name if one was not passed (`Scream_FindBankByName`,
+`0x08992264`), resolve the
+sound to an index here, then hand `(bank, index, ...)` to `FUN_08991c70`. **That
+last call is where an index becomes a waveform offset**, and it is the function
+to read next.
+
+The `param_1 == NULL` branch walks a bank list by `+0x30`, recursing, so a cue
+name with no bank named resolves against every loaded bank in turn.
+
 ## Where this stops
 
-**The writer of `+0x54` was not found.** The obvious searches do not reach it:
-the record base lives in a register at the write site, so `sw ... 0x54(reg)`
-returns 135,729 instructions' worth of stack-frame noise across the binary, and
-the five `0x08994xxx` functions that call the unlink helper contain no store to
-`+0x54` at all. The write is somewhere between the cue-request list and this
-table, and finding it is the next step rather than a dead end.
+**The writer of `+0x54` is `Sas_QueueSetVoice` (`0x0898bf4c`)**, found by
+searching for the instruction that sets the dirty bit rather than the one that
+stores the address - only two `ori ..., 0x20` sites exist in the whole sound
+module:
+
+```c
+undefined4 Sas_QueueSetVoice(voice, addr, size, loop, only_adpcm) {
+  if (only_adpcm != 0) printf("SCREAM ERROR: THIS SYSTEM ONLY SUPPORTS ADPCM VOICE DATA!\n");
+  voices[voice].addr  = addr;   /* +0x54 */
+  voices[voice].size  = size;   /* +0x58 */
+  voices[voice].loop  = loop;   /* +0x5c */
+  voices[voice].dirty |= 0x20;  /* +0x3c */
+  return 1;
+}
+```
+
+The decompiler writes the four stores as `(&DAT_08b89424)[voice * 0x1b]` and
+friends; `0x08b89424 - 0x08b893d0` is `0x54`, and `0x1b` words is `0x6c` bytes,
+so these are the same table and the same fields as the commit loop reads.
+Confidence **92** - it is a direct store to the exact offsets, and its argument
+order matches `sceSasSetVoice`'s.
+
+**What is still open is one hop further back**: nothing yet connects a bank's
+sound index to the `addr`/`size` pair passed in here. `FUN_08991c70` is the
+named function that receives `(bank, index, ...)` and is the next thing to read.
 
 ## Not determined
 
-- **Who writes `voice + 0x54`.** The single most valuable next question, because
-  it is the join between a `.bnk` and a sounding voice. Suggested attack: set a
-  write watchpoint on `0x08b893d0 + 0x54` in PPSSPP and play one known cue -
-  a runtime capture answers in one step what static search has not.
+- **How a sound index becomes a waveform offset.** The one hop left in the
+  chain, and now a bounded question rather than an open one: read
+  `FUN_08991c70`, which receives `(bank, index, ...)` from
+  `Scream_PlaySoundByName` and must eventually reach `Sas_QueueSetVoice`.
+- **The name hash**, `FUN_089924ec`. Not needed to extract names - the entry
+  array walks linearly - but needed to reproduce a lookup faithfully.
 - **What consumes the cue-request list.** `Sound_Play` pushes 0x30-byte nodes
   onto a per-owner list (head `owner+0x58`, count `owner+0x54`); the consumer
-  that turns a queued cue string into a voice has not been found.
+  that turns a queued cue string into `Scream_PlaySoundByName` has not been
+  found.
+- **The name table has not been run against a real bank.** Doing so is what
+  takes the layout above from 85 to 90, and it is a `just test-data` sized job.
 - **The other four dirty bits**, and the two output paths the `0x80` bit picks
   between.
 - **EU cross-verification.** Nothing on this page has been checked against
