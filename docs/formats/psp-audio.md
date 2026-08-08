@@ -3,9 +3,10 @@
 **Status: partial.** The container, the `SBlk` descriptor header and the audio
 codec are decoded, implemented in
 [`oag-formats::sblk`](../../crates/formats/src/sblk.rs) and validated across all
-39 banks on the PSP disc. What is **not** decoded is where each individual sound
-starts inside a bank: the descriptor block's three tables address each other,
-and only the simplest banks expose an obvious offset and length.
+39 banks on the PSP disc. **Where each individual sound starts is now solved
+too** - see "Not determined" below for the rule - but it is read out of the
+executable rather than implemented here, so the status stays `partial` until
+`sblk` splits a bank into its sounds and that is validated against all 39.
 
 These are the `03000000` blobs from the [WAD](wad.md) census - 3 in `FE.wad`,
 36 in `Data.wad`. The known name `Data\Sound\frontend.bnk` is one of them.
@@ -249,40 +250,35 @@ roughness      mean 0.220, worst 0.408 (white noise is ~1.41)
 
 ## Not determined
 
-- **Where each sound starts.** This is the gap that matters, because it is what
-  stands between here and extracting individual sounds. The command table is not
-  an offset table: its entries are `{ u8 opcode, u24 operand, u32 argument }`
-  and the opcodes vary (`0x05`, `0x06`, `0x15`, `0x16`, `0x1e`, `0x22`-`0x24`,
-  `0x29` in one race bank), which reads as a small sound script rather than a
-  directory. In the *simplest* banks it degenerates usefully: `frontend.bnk`'s
-  ten commands are all opcode `0x01` with operands 0, 24, 48 ... 216, pointing
-  at ten 24-byte parameter records whose last two words are an offset and a
-  length that **tile the waveform section exactly** - 0+272, 272+912,
-  1184+848, 2032+2096, 4128+1920, 6048+8112, 14160+8864 = 23,024 bytes, with
-  exactly `waveform_count` = 7 distinct spans. The race banks do not have a
-  record array of that shape at that offset, so the same reading does not
-  generalise and is not implemented.
-  One encoding has been **ruled out** rather than merely not found: every bank's
-  waveform section is under 340 KB, so a block index fits a `u16`, and a `u16`
-  table was the obvious thing the byte-offset searches would structurally miss.
-  Searching `frontend.bnk` - the one bank whose answer is known - for its seven
-  boundaries as `u16` block indices (0, 17, 74, 127, 258, 378, 885) finds two of
-  seven, which is chance; as `u32` block indices, one of seven. They appear only
-  as `u32` **byte** offsets, and only inside those 24-byte parameter records. So
-  the general table, if there is one, is not a block-index array.
-  **The runtime side has since been read**, and it narrows this considerably.
-  A cue index reaches `bank + 0x1c + i * 12` - this page's own cue region,
-  confirmed from the opposite direction - and the cue's `+0x08` is dereferenced
-  as a pointer into the command table. The step that turns that command list
-  into a waveform offset happens in one unread function, `FUN_0898efd8`, which
-  the play path drives in a loop. That is where the nine opcodes below are
-  interpreted, and it is now the single thing between here and per-sound
-  extraction. **Separately, per-sound *names* are already extractable**: the
-  name block's entry array is `{char[16] name, u16 cue_index}` at a 20-byte
-  stride and walks linearly, so the hash never has to be reproduced. See
-  [the sound engine](../ghidra/functions/psp-pulse-usa/sound.md).
-- **The command opcodes.** Nine distinct values seen. Nothing has been traced to
-  them.
+- ~~**Where each sound starts.**~~ **Solved, from the executable.** A cue's
+  command list is walked, and every command whose opcode is `0x01` or `0x09`
+  binds a waveform:
+
+  ```text
+  descriptor = parameter_block_offset + (command_word & 0xffffff)
+  waveform offset = descriptor + 0x10
+  waveform length = descriptor + 0x14
+  ```
+
+  The operand is a byte offset from the **parameter block** (header `+0x34`) to
+  a 24-byte descriptor whose last two words are the offset and length. This
+  page's own `frontend.bnk` observation is the confirmation: ten opcode-`0x01`
+  commands with operands 0, 24, 48 ... 216 landing on ten 24-byte records whose
+  last two words tile the waveform section exactly. Those operands are multiples
+  of 24 because that bank's descriptors happen to be contiguous, which is what
+  let a tiling search find them; **the rule does not require contiguity, which is
+  why the same search failed on the race banks.** The conclusion that "the same
+  reading does not generalise" was right about the search and wrong about the
+  structure. Confidence 90. **Not yet implemented in
+  [`sblk`](../../crates/formats/src/sblk.rs) or run across all 39 banks** - that
+  is what would turn a documented rule into a validated one. See
+  [the sound engine](../ghidra/functions/psp-pulse-usa/sound.md#solved-where-each-sound-starts).
+
+- **The command opcodes.** Nine distinct values seen in the data; the engine
+  defines **45**, dispatched through a jump table at `0x08ac326c`. Two are now
+  traced - `0x01` and `0x09` both bind a waveform, above - and eight more share
+  a single handler, which is the shape of a family taking an index. The other 35
+  are unread.
 - **`+0x24` = 20544.** Still not determined; the shape of it suggests an
   audio-RAM base address.
 - ~~**`+0x08` = 772/260.**~~ **Partly settled.** The runtime gates its

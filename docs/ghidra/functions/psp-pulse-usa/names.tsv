@@ -366,3 +366,4 @@
 0x0899456c	function	Scream_KeyOnVoice	85	sound.md
 0x0898efd8	function	Scream_StepCommandList	88	sound.md
 0x08ac326c	data	g_scream_opcode_table	85	sound.md
+0x0898fc78	function	Scream_OpKeyOn	90	sound.md

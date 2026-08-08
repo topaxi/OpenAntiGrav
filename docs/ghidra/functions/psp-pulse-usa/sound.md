@@ -305,6 +305,64 @@ section is a search over 39 banks with a very sharp test - the offsets and
 lengths must partition the section exactly, which is what made `frontend.bnk`
 findable in the first place.
 
+## Solved: where each sound starts
+
+`Scream_OpKeyOn` (`0x0898fc78`) is the opcode handler that binds a waveform to a
+voice, and its first two lines are the answer:
+
+```c
+descriptor = *(u32 *)(bank + 0x34) + (command_word & 0xffffff);
+...
+g_sas_voices[v].waveform = descriptor;      /* +0x14 */
+```
+
+`bank + 0x34` is the **parameter block offset**, straight out of the header
+[psp-audio.md](../../../formats/psp-audio.md) already documents. The `& 0xffffff`
+is the command's **u24 operand**. So:
+
+```text
+waveform_descriptor = parameter_block + operand
+waveform offset     = descriptor + 0x10
+waveform length     = descriptor + 0x14
+```
+
+**That is the whole of "where each sound starts", and it is computable from the
+data alone.** No runtime, no emulator: walk the command table, take every
+command whose opcode binds a waveform, add its operand to the parameter block
+offset, and read the last two words of the 24-byte record it lands on.
+
+### Which opcodes, and the confirmation
+
+Reading `g_scream_opcode_table`'s 45 entries, **exactly two point at this
+handler: `0x01` and `0x09`.**
+
+`psp-audio.md` records, independently and from the data side, that
+`frontend.bnk`'s *"ten commands are all opcode `0x01` with operands 0, 24,
+48 ... 216, pointing at ten 24-byte parameter records whose last two words are
+an offset and a length that **tile the waveform section exactly**"*.
+
+Operands 0, 24, 48 ... 216 are multiples of 24 **because that bank's ten
+descriptors happen to be laid out contiguously**, which is what let a tiling
+search find them without knowing the rule. The rule is the addition above, and
+it does not require contiguity - which is exactly why the same search failed on
+the race banks. The page's conclusion that *"the same reading does not
+generalise"* was right about the search and wrong about the structure.
+
+Confidence **90**. The arithmetic is a direct read; the opcode identification is
+a table lookup; and an independently derived observation about a real bank
+matches it in both the record size and the two field positions.
+
+### The rest of the table
+
+Eight consecutive opcodes, `0x0c` through `0x13`, share a single handler
+(`0x0898efa8`), which is the shape of a family taking an index rather than eight
+distinct instructions. The other 35 are one handler each and none is read.
+
+The descriptor's remaining fields, from this function and
+[the key-on](#the-waveform-descriptor-and-why-the-format-page-already-had-it):
+`+0x01` is a note, and `+0x04` is reduced modulo `0x168` (360) both here and in
+the voice record, so it is an **angle in degrees** - a pan position.
+
 ## The command list is a 45-entry jump table
 
 `Scream_StepCommandList` (`0x0898efd8`) is the interpreter `Scream_StartSound`
@@ -363,19 +421,22 @@ so these are the same table and the same fields as the commit loop reads.
 Confidence **92** - it is a direct store to the exact offsets, and its argument
 order matches `sceSasSetVoice`'s.
 
-**The chain is now complete end to end**, with one link read only in outline:
-which of the 45 opcode handlers writes `g_sas_voices[v] + 0x14`. Everything
-either side of that is read.
+**The chain is complete end to end.** Every link from a cue string to
+`sceSasSetVoice` is read, and the one that mattered - how a sound's index
+becomes a byte offset - turns out to be plain arithmetic on data the format page
+already had.
 
 ## Not determined
 
-- **The 45 opcode handlers** in `g_scream_opcode_table` (`0x08ac326c`). None is
-  read. One of them writes
-  `g_sas_voices[v] + 0x14`, and that one names the waveform-descriptor array's
-  location in the bank; the format page's nine observed opcodes (`0x05`, `0x06`,
-  `0x15`, `0x16`, `0x1e`, `0x22`-`0x24`, `0x29`) are where to start.
-- **Where the waveform-descriptor array lives in a bank.** Now a data search
-  with a sharp test rather than an open question - see above.
+- **43 of the 45 opcode handlers.** `0x01` and `0x09` are read; the rest are
+  not. The format page's other observed opcodes (`0x05`, `0x06`, `0x15`, `0x16`,
+  `0x1e`, `0x22`-`0x24`, `0x29`) are what a bank actually uses, so they are the
+  ones worth reading, and eight of the 45 share one handler.
+- **Whether `0x01` and `0x09` differ.** They share a handler, so any difference
+  must come from the command word rather than the dispatch.
+- **The extraction itself.** The rule above is not implemented in
+  `oag-formats::sblk` and has not been run against all 39 banks; doing so is
+  what would take it from a documented rule to a validated one.
 - **What the cue record's `+0x08` points at after fixup.** Its `+0x04` is read
   as the handler's `+0x12`, a `s16` the play loop tests against zero.
 - **The name hash**, `FUN_089924ec`. Not needed to extract names - the entry
