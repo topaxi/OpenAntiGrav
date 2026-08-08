@@ -479,8 +479,12 @@ seen from the authoring side.
       `Ship_UpdateCraft` in `oag_physics::engine::speedup_pad`, reading
       `<GlobalClass><SpeedupPads amount time/>` off the player's own disc. Zone
       pays +100 per new pad, and `Exhaust::boost` is armed on the same edge.
-      **Two branches of the original are deliberately absent**, both gated on
-      unidentified bits: the `speedpad_jump` tilt and the `craft+0x2cc` fade-in.
+      **One branch of the original is deliberately absent**, gated on an
+      unidentified bit: the `craft+0x2cc` fade-in. The `speedpad_jump` tilt that
+      used to sit beside it is **applied** - `craft+0x160` is the hull up axis
+      and `controls->0x24 & 1` is d-pad Up, both read live, and the magnitude
+      comes off the disc as `<Global><Special speedpad_jump>`. It is a
+      5.71-degree tilt and 0.5 % more force, not a jump.
       The field-of-view kick is an **authored** effect, not a recovered one -
       `[graphics] boost_fov_kick` is a magnitude (0, 8, 16, 32), 0 turning it
       off, with a `BOOST FOV KICK` row on the graphics menu page.

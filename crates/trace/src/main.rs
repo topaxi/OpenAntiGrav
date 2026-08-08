@@ -1561,20 +1561,25 @@ fn load(
     // out of a second file. A capture that crosses a pad is compared against a
     // force law that has them; without this the replay would be missing step 15
     // entirely and the difference would be read as a fit error somewhere else.
-    let pad_tunables = archives
+    let global = archives
         .read_name(handling::GLOBAL_ENTRY)
         .ok()
         .and_then(|blob| handling::global_from_blob(&blob).ok())
-        .flatten()
+        .flatten();
+    if global.is_none() {
+        eprintln!(
+            "{}: unreadable, so this replay applies no speed-pad boost",
+            handling::GLOBAL_ENTRY
+        );
+    }
+    let pad_tunables = global
         .map(|global| global.speedup_pads(oag_gameplay::to_format_class(class)))
-        .unwrap_or_else(|| {
-            eprintln!(
-                "{}: unreadable, so this replay applies no speed-pad boost",
-                handling::GLOBAL_ENTRY
-            );
-            handling::SpeedupPads::default()
-        });
-    let handling = handling_for(&stats, class, pad_tunables);
+        .unwrap_or_default();
+    // `<Special speedpad_jump>` rides along: a capture taken with the pitch axis
+    // held over a pad tilts, and a replay that dropped the field would read that
+    // as a force-law error.
+    let special = global.map(|global| global.special).unwrap_or_default();
+    let handling = handling_for(&stats, class, pad_tunables, special);
     eprintln!(
         "{stats_name}: team {:?}, {class:?} class, mass {}, ride_height {}",
         stats.team, handling.physical.mass, handling.antigrav.ride_height

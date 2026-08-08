@@ -511,14 +511,15 @@ Three consequences, and the first is the interesting one:
 - **The four-corner hover variant and its auto-speed law.** The selector is now *known* -
   `DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, confidence 84 - and the same condition gates
   the brakes off, but what the mode *is* sits at confidence 50.
-- **Two branches of the speed-pad boost** (`Ship_ApplySpeedupPad`, `0x08848f9c`). The term
-  itself is implemented - see the entry in the implemented list - but two of its arms are
-  not, and both for the same reason as the entries above: they are gated on bits nothing
-  has identified. `if (controls->0x24 & 1) dir += craft+0x160 * speedpad_jump` tilts the
-  push upward while some input is held; `if (craft+0x2cc < 1.0) f *= craft+0x2cc` fades
-  the boost in over a second after flag `0x200` clears. **`craft+0x2cc` is not the contact
-  ratio**, which an earlier plan assumed: `Ship_UpdateEngine`'s prologue accumulates `dt`
-  into it, so it is unbounded and cannot be a `0..1` groundedness.
+- **One branch of the speed-pad boost** (`Ship_ApplySpeedupPad`, `0x08848f9c`), down from
+  two. `if (craft+0x2cc < 1.0) f *= craft+0x2cc` fades the boost in over a second after
+  flag `0x200` clears, and `0x200` is one of the eleven undecoded bits of `craft+0x1c0`,
+  so it is left out for the same reason as the entries above. **`craft+0x2cc` is not the
+  contact ratio**, which an earlier plan assumed: `Ship_UpdateEngine`'s prologue
+  accumulates `dt` into it, so it is unbounded and cannot be a `0..1` groundedness.
+  The other arm, `if (controls->0x24 & 1) dir += craft+0x160 * speedpad_jump`, **is now
+  implemented**: both of its unknowns were closed live - `craft+0x160` is the hull up axis
+  and the gate is d-pad Up - so it is no longer a guess.
 - **The per-team in-air pitch bias** at `stats_base + 0x90`, which is outside every class
   block and whose XML element is unknown, so there is no field to read it from.
 - **The gate on pitch input** (`FUN_088492bc`), not decoded, so pitch applies

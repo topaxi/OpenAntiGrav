@@ -562,6 +562,20 @@ pub const PAD_RAMP_FLOOR: f32 = 0.1;
 /// moment of the last contact to `amount` at [`PAD_RAMP_FLOOR`] and then holds.
 pub const PAD_RAMP_RATE: f32 = 10.0;
 
+/// How far the pitch axis must be deflected before the speed-pad tilt counts as
+/// held.
+///
+/// **This project's own number, and the single judgement call in
+/// [`speedup_pad`].** The original tests a bit; there is no bit here, because
+/// [`ShipControls`] is normalised by contract. Half deflection is the obvious
+/// place to put the line: a D-pad or a keyboard produces exactly `-1.0` and is
+/// never ambiguous, and an analog stick has to be pushed decisively rather than
+/// brushed. It is **not** a recovered value and must not be quoted as one.
+///
+/// Compared at `<=` against a **negative** `steer_y`: see [`speedup_pad`]'s docs
+/// for why up is negative on that axis.
+pub const SPEEDPAD_JUMP_THRESHOLD: f32 = 0.5;
+
 /// The speed-pad boost, into the **world** force accumulator.
 ///
 /// `Ship_ApplySpeedupPad` (`0x08848f9c`), step 15 of `Ship_UpdateCraft` and the
@@ -584,31 +598,60 @@ pub const PAD_RAMP_RATE: f32 = 10.0;
 /// ramp, about 6 % at 60 Hz, and `docs/physics/cornering-ground-truth.md` measured
 /// five pad crossings on one lap closely enough to prefer it.
 ///
-/// # Two branches of the original are deliberately not here
+/// # `<Special speedpad_jump>`, and the one judgement call in it
 ///
-/// Both are gated on bits this project has not identified, and
-/// `crate::controls`' module docs give the standing reason: a guessed binding is
-/// worse than a missing feature, because it produces behaviour that looks
-/// deliberate.
+/// `if (controls->0x24 & 1) dir += craft+0x160 * g_speedpad_jump` is now here,
+/// and neither half of it is a guess any more:
 ///
-/// - **The jump term.** `if (controls->0x24 & 1) dir += craft+0x160 * 0.1`, the
-///   `0.1` being `<Special speedpad_jump>`. Bit 0 of the control word at
-///   `entity+0x78 + 0x24` is unidentified, and `craft+0x160` is a hull axis this
-///   crate does not otherwise read. Its effect is to tilt the boost upward while
-///   some input is held.
-/// - **The `craft+0x2cc` scale.** `if (craft+0x2cc < 1.0) f *= craft+0x2cc`, a
-///   one-second fade-in. `craft+0x2cc` is written in exactly one place -
-///   `Ship_UpdateEngine`'s prologue, as `flags & 0x200 ? 0.0 : craft+0x2cc + dt` -
-///   so it is **seconds since flag `0x200` was last set**, and bit `0x200` is one
-///   of the eleven undecoded bits of `craft+0x1c0`. It is emphatically *not* the
-///   contact ratio, which an earlier reading of this function assumed: an
-///   unbounded accumulator cannot be a `0..1` groundedness. Leaving it out means
-///   the boost is at full strength from its first tick, which is what the trace
-///   measures anyway - `0x200` is evidently not set during ordinary racing, or the
-///   captured peaks would have been scaled down.
+/// - **`craft+0x160` is the hull's up axis.** Live in PPSSPP its dot product
+///   against the body's own up row (`body+0x010`) reads `+1.000000`, and
+///   `0.000000` against both of the others; it is unit length. So the term tilts
+///   the boost toward the sky in the *craft's* frame, which is what `up` is here.
+/// - **`controls->0x24 & 1` is D-pad Up.** From a one-hot sweep of all twelve
+///   buttons against `*(craft+0x78)+0x24`: only Up sets bit 0.
+/// - **The magnitude is `<Special speedpad_jump>`**, read live at `0x08b36bec`
+///   and `0.1` on both shipped discs, and it comes off the player's own disc
+///   through [`Handling::speedpad_jump`] rather than being written down here.
+///
+/// **It is not a jump, and the name is misleading.** The sum is *not*
+/// renormalised, so at `0.1` against a unit direction the boost tilts by
+/// `atan(0.1)` - **5.71 degrees** - and gains `sqrt(1.01)`, **0.5 %** more force,
+/// for at most the class's `time` (`0.24`-`0.27 s`, also read live). A hover
+/// spring that holds the craft on a cushion absorbs most of a 5.7-degree tilt,
+/// which is why nothing visibly leaps in the original either.
+///
+/// ## The judgement call: a normalised axis standing in for a digital button
+///
+/// The original gates on a **bit**. [`ShipControls`] is normalised by contract -
+/// `oag-gameplay` owns that type and the simulation may not reach past it to the
+/// input system - so there is no bit to test, and inventing a second control
+/// input for one branch would be worse than the threshold.
+///
+/// [`SPEEDPAD_JUMP_THRESHOLD`] is that threshold, and **the sign is the
+/// surprising half**: `oag_gameplay::ship_controls` maps D-pad Up to
+/// `steer_y = -1`, because up on the stick pitches the nose *down* in this game
+/// and the inversion lives at the input boundary. So the gate is
+/// `steer_y <= -threshold`, not `>=`. Getting that backwards would tilt the boost
+/// upward whenever the player pitches down - behaviour that looks deliberate,
+/// which is the exact failure `crate::controls`' module docs warn about.
+///
+/// # One branch of the original is still deliberately not here
+///
+/// **The `craft+0x2cc` scale.** `if (craft+0x2cc < 1.0) f *= craft+0x2cc`, a
+/// one-second fade-in. `craft+0x2cc` is written in exactly one place -
+/// `Ship_UpdateEngine`'s prologue, as `flags & 0x200 ? 0.0 : craft+0x2cc + dt` -
+/// so it is **seconds since flag `0x200` was last set**, and bit `0x200` is one
+/// of the eleven undecoded bits of `craft+0x1c0`. It is emphatically *not* the
+/// contact ratio, which an earlier reading of this function assumed: an unbounded
+/// accumulator cannot be a `0..1` groundedness. Leaving it out means the boost is
+/// at full strength from its first tick, which is what the trace measures anyway:
+/// `0x200` is evidently not set during ordinary racing, or the captured peaks
+/// would have been scaled down.
 pub fn speedup_pad(
     state: &mut ShipState,
+    controls: &ShipControls,
     handling: &Handling,
+    up: Vec3,
     pad_hit: Option<Vec3>,
     dt: f32,
 ) -> Vec3 {
@@ -635,7 +678,18 @@ pub fn speedup_pad(
         amount
     };
 
-    state.pad_direction * force
+    // Read fresh every tick from *this* tick's input and *this* tick's hull, and
+    // deliberately not baked into `pad_direction` when the pad arms it: the
+    // original recomputes `dir` inside the `timer > 0` block, so a boost that
+    // outlives the pad still tilts the moment the player pitches up, and stops
+    // tilting the moment they let go.
+    let direction = if controls.steer_y <= -SPEEDPAD_JUMP_THRESHOLD {
+        state.pad_direction + up * handling.speedpad_jump
+    } else {
+        state.pad_direction
+    };
+
+    direction * force
 }
 
 #[cfg(test)]
@@ -1077,10 +1131,26 @@ mod auto_speed_tests {
 
 #[cfg(test)]
 mod speedup_pad_tests {
-    use super::{PAD_RAMP_FLOOR, PAD_RAMP_RATE, speedup_pad};
+    use super::{PAD_RAMP_FLOOR, PAD_RAMP_RATE, SPEEDPAD_JUMP_THRESHOLD, speedup_pad};
     use crate::params::{Handling, SpeedupPads};
-    use crate::ship::ShipState;
+    use crate::ship::{ShipControls, ShipState};
     use oag_core::math::Vec3;
+
+    /// Upright, with the pitch axis centred: the tilt branch not taken.
+    const UP: Vec3 = Vec3::Y;
+
+    fn centred() -> ShipControls {
+        ShipControls::default()
+    }
+
+    /// The pitch axis held the way the input layer reports d-pad Up, which is
+    /// **negative**. See `speedup_pad`'s own documentation for why.
+    fn pitched_up() -> ShipControls {
+        ShipControls {
+            steer_y: -1.0,
+            ..ShipControls::default()
+        }
+    }
 
     /// Round invented numbers. `time` is deliberately well above
     /// [`PAD_RAMP_FLOOR`] so both branches of the law are reachable.
@@ -1100,7 +1170,7 @@ mod speedup_pad_tests {
     fn a_ship_that_has_touched_no_pad_gets_no_boost() {
         let mut state = ShipState::default();
         assert_eq!(
-            speedup_pad(&mut state, &padded_handling(), None, DT),
+            speedup_pad(&mut state, &centred(), &padded_handling(), UP, None, DT),
             Vec3::ZERO
         );
         assert_eq!(state.pad_timer, 0.0);
@@ -1115,7 +1185,7 @@ mod speedup_pad_tests {
         let handling = padded_handling();
         let mut state = ShipState::default();
 
-        let first = speedup_pad(&mut state, &handling, Some(Vec3::NEG_Z), DT);
+        let first = speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::NEG_Z), DT);
         let peak = handling.speedup_pads.amount * PAD_RAMP_RATE * (handling.speedup_pads.time - DT);
         assert!((first.length() - peak).abs() < 1e-3, "{first} vs {peak}");
         assert!(
@@ -1127,18 +1197,18 @@ mod speedup_pad_tests {
         // Falls monotonically while the ramp branch is live.
         let mut previous = first.length();
         while state.pad_timer > PAD_RAMP_FLOOR {
-            let now = speedup_pad(&mut state, &handling, None, DT).length();
+            let now = speedup_pad(&mut state, &centred(), &handling, UP, None, DT).length();
             assert!(now < previous, "{now} is not below {previous}");
             previous = now;
         }
 
         // And then holds flat at `amount` until the timer runs out.
         while state.pad_timer > 0.0 {
-            let now = speedup_pad(&mut state, &handling, None, DT).length();
+            let now = speedup_pad(&mut state, &centred(), &handling, UP, None, DT).length();
             assert!((now - handling.speedup_pads.amount).abs() < 1e-6, "{now}");
         }
         assert_eq!(
-            speedup_pad(&mut state, &handling, None, DT),
+            speedup_pad(&mut state, &centred(), &handling, UP, None, DT),
             Vec3::ZERO,
             "an expired boost applies nothing"
         );
@@ -1161,9 +1231,11 @@ mod speedup_pad_tests {
         let handling = padded_handling();
         let mut state = ShipState::default();
 
-        let first = speedup_pad(&mut state, &handling, Some(Vec3::NEG_Z), DT).length();
+        let first =
+            speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::NEG_Z), DT).length();
         for _ in 0..120 {
-            let now = speedup_pad(&mut state, &handling, Some(Vec3::NEG_Z), DT).length();
+            let now =
+                speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::NEG_Z), DT).length();
             assert!((now - first).abs() < 1e-6, "{now} drifted from {first}");
         }
     }
@@ -1176,9 +1248,125 @@ mod speedup_pad_tests {
         let handling = padded_handling();
         let mut state = ShipState::default();
 
-        speedup_pad(&mut state, &handling, Some(Vec3::X), DT);
-        let later = speedup_pad(&mut state, &handling, None, DT);
+        speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::X), DT);
+        let later = speedup_pad(&mut state, &centred(), &handling, UP, None, DT);
         assert_eq!(later.normalize(), Vec3::X);
         assert_eq!(state.pad_direction, Vec3::X);
+    }
+
+    /// `<Special speedpad_jump>`: the numbers, not just the shape. At the live
+    /// `0.1` against a unit pad direction the boost tilts by `atan(0.1)` and
+    /// gains `sqrt(1.01)`, which is the arithmetic that makes this "not a jump".
+    #[test]
+    fn the_tilt_is_a_small_angle_and_a_smaller_force_increase() {
+        let handling = Handling {
+            speedpad_jump: 0.1,
+            ..padded_handling()
+        };
+        let mut plain = ShipState::default();
+        let mut tilted = ShipState::default();
+
+        let without = speedup_pad(&mut plain, &centred(), &handling, UP, Some(Vec3::X), DT);
+        let with = speedup_pad(&mut tilted, &pitched_up(), &handling, UP, Some(Vec3::X), DT);
+
+        let angle = without
+            .normalize()
+            .dot(with.normalize())
+            .clamp(-1.0, 1.0)
+            .acos()
+            .to_degrees();
+        assert!((angle - 5.71).abs() < 0.01, "{angle} degrees");
+
+        let gain = with.length() / without.length();
+        assert!((gain - 1.01f32.sqrt()).abs() < 1e-5, "{gain}");
+        // Toward the hull's up, not away from it and not sideways.
+        assert!(with.dot(UP) > 0.0 && without.dot(UP) == 0.0, "{with}");
+    }
+
+    /// The gate is on the **negative** side of the pitch axis, because that is
+    /// where `oag_gameplay::ship_controls` puts d-pad Up. A reimplementation that
+    /// took the positive side would tilt on nose-down, which is the failure this
+    /// pins.
+    #[test]
+    fn only_a_pitch_up_input_tilts_the_boost() {
+        let handling = Handling {
+            speedpad_jump: 0.5,
+            ..padded_handling()
+        };
+        let plain = {
+            let mut state = ShipState::default();
+            speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::X), DT)
+        };
+
+        for (name, steer_y, tilts) in [
+            ("centred", 0.0, false),
+            ("nose down, full", 1.0, false),
+            (
+                "nose down, past the threshold",
+                SPEEDPAD_JUMP_THRESHOLD,
+                false,
+            ),
+            ("nose up, just under the threshold", -0.49, false),
+            ("nose up, on the threshold", -SPEEDPAD_JUMP_THRESHOLD, true),
+            ("nose up, full", -1.0, true),
+        ] {
+            let controls = ShipControls {
+                steer_y,
+                ..ShipControls::default()
+            };
+            let mut state = ShipState::default();
+            let force = speedup_pad(&mut state, &controls, &handling, UP, Some(Vec3::X), DT);
+            assert_eq!(force.dot(UP) > 0.0, tilts, "{name}: {force}");
+            if !tilts {
+                assert_eq!(force, plain, "{name} moved the boost");
+            }
+        }
+    }
+
+    /// The tilt is read from *this* tick's input, not baked into
+    /// `pad_direction` when the pad armed the boost. So it can start and stop
+    /// while the boost runs on behind the pad, which is what the original's
+    /// recomputation of `dir` inside the timer block does.
+    #[test]
+    fn the_tilt_follows_the_input_rather_than_the_pad() {
+        let handling = Handling {
+            speedpad_jump: 0.5,
+            ..padded_handling()
+        };
+        let mut state = ShipState::default();
+
+        // Crossed with the axis centred, so nothing is stored tilted.
+        speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::X), DT);
+        assert_eq!(state.pad_direction, Vec3::X, "the stored axis is the pad's");
+
+        // Pitch up after the pad: the remaining boost tilts anyway.
+        let after = speedup_pad(&mut state, &pitched_up(), &handling, UP, None, DT);
+        assert!(after.dot(UP) > 0.0, "{after}");
+        assert_eq!(state.pad_direction, Vec3::X, "and the state stays clean");
+
+        // Let go: it stops tilting on the very next tick.
+        let released = speedup_pad(&mut state, &centred(), &handling, UP, None, DT);
+        assert_eq!(released.dot(UP), 0.0, "{released}");
+    }
+
+    /// A disc whose `<Special speedpad_jump>` is zero, or a load that could not
+    /// read the file, boosts exactly as it did before this branch existed.
+    #[test]
+    fn a_zero_jump_changes_nothing() {
+        let handling = padded_handling();
+        assert_eq!(handling.speedpad_jump, 0.0, "the fixture's default");
+        let mut plain = ShipState::default();
+        let mut pitched = ShipState::default();
+        assert_eq!(
+            speedup_pad(&mut plain, &centred(), &handling, UP, Some(Vec3::X), DT),
+            speedup_pad(
+                &mut pitched,
+                &pitched_up(),
+                &handling,
+                UP,
+                Some(Vec3::X),
+                DT
+            )
+        );
     }
 }

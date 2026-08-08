@@ -33,6 +33,7 @@ values it cycles and the observed period all agree with it.
 | Where the 3/4 factor on the external offsets comes from | answered 2026-08-08: `g_craft_scale`, a code literal |
 | How the internal rig applies `pitch` and `headtilt` | answered 2026-08-08: `pitch` is a rise over a run of 10; `headtilt` rolls the up vector by an unidentified per-craft term |
 | How many camera rigs a craft has | answered 2026-08-08: **four**, internal / backward / external close / external far |
+| Whether the external rig is reproduced | answered 2026-08-08, third pass: yes, to `0.008` RMS over a 150-tick capture of the original |
 
 ## There are three player-selectable views, and SELECT cycles them
 
@@ -645,9 +646,23 @@ eye  = shipPos + (eye  - shipPos) * g_craft_scale;
 look = shipPos + (look - shipPos) * g_craft_scale;
 ```
 
-which is the same thing as scaling all **four** offsets - `pos_height`,
+which is *nearly* the same thing as scaling all **four** offsets - `pos_height`,
 `pos_length`, `lookat_height`, `lookat_length`. `fov` and the two spring constants
 are not touched, being not lengths.
+
+> **Correction, 2026-08-08, third pass: "the same thing as scaling all four
+> offsets" holds for the look-at point and fails for the eye.** The scale runs
+> *after* `prevEye = eye`, so the state the spring carries between frames is
+> **unscaled**. A rig that pre-multiplies its offsets instead carries a *scaled*
+> state - and the craft those two are measured from has moved in between, so they
+> are different states rather than the same one in different units. The
+> difference only exists while the spring is working, which is exactly what the
+> static probes in this page cannot see. Measured over the 150 ticks of
+> `data/traces/pad0-boost.csv`: pre-multiplied offsets miss the original's own
+> recorded eye by `0.121` RMS, applying the scale after the spring by `0.008`.
+> `oag_render::camera::chase::ChaseParams::craft_scale` is the field that exists
+> because of this; `crates/game/tests/chase_camera_ground_truth.rs` is the
+> measurement.
 
 Confidence **85**: the value and the write site are read directly and the store is
 a single immediate; the reading of it as a general craft-space scale rather than as
@@ -761,22 +776,56 @@ choices:
 4. **The eye's distance from the look-at point is rigid.** The spring result is
    re-projected onto the sphere of radius `|anchorPos - anchorLook|` centred on the
    look-at point, so the spring rotates the eye *about* the aim point and never
-   moves it nearer or further. `chase.rs` springs the position freely, and that is
-   a real behavioural difference which is **not** fixed by this change.
+   moves it nearer or further.
 5. **`pos_height` is applied after the spring**, so the vertical offset is rigid
-   and the spring acts on a forward-only offset point. `chase.rs` folds both
-   offsets in before the spring sees them.
-
-Items 4 and 5 are the outstanding work on this camera, and item 4 is
-**independently corroborated by measurement**: the 150-tick capture holds the
-eye-to-craft distance at 11.6 while the along-forward component moves 10.9 -> 9.5,
-so the perpendicular component grew from about 4 to about 6.6 *at constant radius*.
-A freely sprung eye cannot produce that signature; a rotation about a fixed aim
-point is the only thing that can. Fixing it rewrites `Chase::advance` and several
-of its tests, which is why it was left out of the change that added the view cycle.
+   and the spring acts on a forward-only offset point.
 
 Confidence **85** for the algorithm: read as instructions at one site that runs
-twice, with the constant-radius half measured independently.
+twice.
+
+**Items 4 and 5 were the outstanding work on this camera and are now applied**,
+together with the ordering correction to `g_craft_scale` above - see the section
+below, which raises all three from a reading to a measurement.
+
+### Applied, and the whole rig measured against the original's own camera
+
+`data/traces/pad0-boost.csv` is the only capture carrying the original's craft
+pose **and** its camera pose on the same tick, 150 consecutive ticks of a
+speed-pad crossing at 40-154 units/s. Driving `oag_render::camera::chase` with
+that capture's pose and its own `dt`, seeded from its tick 0, and comparing
+against the recorded `cam_pos_*`:
+
+| Model | RMS, world units | Max |
+| --- | ---: | ---: |
+| free spring, `pos_height` before the spring | 4.938 | 6.824 |
+| `pos_height` after the spring only | 4.954 | 6.831 |
+| rigid radius only | 0.415 | 0.556 |
+| both, `g_craft_scale` pre-multiplied into the offsets | 0.121 | 0.332 |
+| **both, `g_craft_scale` applied about the craft after the spring** | **0.008** | **0.060** |
+
+Three things follow that the instruction reading alone did not give:
+
+- **Items 4 and 5 are only worth having together.** Either alone is worse than
+  useless: `pos_height` after the spring without the rigid radius is *slightly
+  worse* than the old model.
+- **The scale's placement matters and the earlier reading of it was wrong** - the
+  correction above.
+- **The 11.6-unit constant camera-to-craft distance is confirmed and its range
+  widened**: `11.571`-`11.674` across 40-154 units/s, against an authored
+  `0.75 * hypot(15, 4) = 11.643`. A `0.10`-unit spread over a 3.9x speed range
+  retires "speed-dependent chase distance" for a third time.
+
+Recorded because it is easy to get wrong on re-reading: the along-forward
+component of that offset is **not** the `10.9 -> 9.5` an earlier note quoted; it
+is flat at `-11.25` across the whole capture, and the sideways component stays
+under `0.4`. The rig is close to rigid in the *craft's* frame too, which the
+rigid-radius model reproduces without being told to - the constraint it actually
+enforces is about the look-at point 25 units ahead.
+
+Confidence **90** for the rig as a whole, up from 85: an instruction-level read
+plus a 150-tick numerical agreement to three decimal places, on a capture that
+was not used to fit anything. `crates/game/tests/chase_camera_ground_truth.rs` is
+the comparison, `#[ignore]`d because it needs both a disc image and the capture.
 
 **One thing was not confirmed and should not be transcribed.** The far block's
 `pos_height` term decompiles as `up * up.y * (pos_height + 2 * stats[0x74])`, with

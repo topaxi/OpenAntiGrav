@@ -675,9 +675,23 @@ pub fn load(options: &Options) -> Result<Loaded> {
             handling::SpeedupPads::default()
         }
     };
+    // `<Special speedpad_jump>`, out of the same file and with the same fallback
+    // reasoning: a zero means the boost simply does not tilt, which is a missing
+    // feature rather than a broken race.
+    let special = global.map(|global| global.special).unwrap_or_default();
+    // Reported for the same reason the pad tunables are: a tilt that silently
+    // reads zero is indistinguishable from a tilt that is not implemented, and
+    // this is the only place the number's journey off the disc is observable.
+    report.push(format!(
+        "<Special speedpad_jump>: {} - the boost tilts {:.2} degrees toward the \
+         hull's up while the pitch axis is held up",
+        special.speedpad_jump,
+        special.speedpad_jump.atan().to_degrees()
+    ));
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once
-    // and this is not the place it happens, and `<SpeedupPads>` is not one of them.
-    let handling = handling_for(&stats, options.class, pad_tunables);
+    // and this is not the place it happens, and neither `<SpeedupPads>` nor
+    // `<Special>` is one of them.
+    let handling = handling_for(&stats, options.class, pad_tunables, special);
     // `<AirbrakeGraphics>` is the fifth pre-scaled field and it *is* converted
     // here, by its own function: it is per team rather than per class, and it
     // is graphics, so it deliberately never enters `Handling`.
@@ -1473,7 +1487,7 @@ fn chase_pos_length(from_disc: f32) -> f32 {
 /// of the seven fields is how the close view would end up with the far view's
 /// sign convention.
 ///
-/// # All four offsets carry the craft's global `0.75` scale
+/// # The rig carries the craft's global `0.75` scale, and does not pre-multiply it
 ///
 /// `oag_physics::hover::TARGET_GLOBAL_SCALE` is a **world scale on craft-space
 /// geometry**, not a suspension tuning knob, and the external camera rigs are one
@@ -1487,18 +1501,24 @@ fn chase_pos_length(from_disc: f32) -> f32 {
 ///   by both camera rigs in `Ship_UpdateCameraRigs` - which end with
 ///   `eye = shipPos + (eye - shipPos) * 0.75` and the same line for the look-at
 ///   point. Confidence **85**.
-/// - Scaling the whole eye-and-look-at pair about the ship is the same thing as
-///   scaling all four offsets, which is why **four** fields are multiplied here
-///   and not two. Scaling only `pos_*` would pull the eye in and leave the aim
-///   point where it was, tilting the framing rather than closing the distance.
 /// - `fov` and the two springs are **not** scaled: they are not lengths.
 ///
-/// Three independent numbers agree that this belongs here. The authored close
-/// block times `0.75` is `11.643` units from the craft; a static probe of the
-/// original in that view measured `11.643`; and a 150-tick capture of the
-/// original measured a near-constant `11.6` across 94-153 units/s. The far block
-/// lands on `14.562` against a measured `14.562`. Before this scale existed here
-/// the eye sat `15.5` and `19.4` units out, which is the framing difference
+/// **It goes in [`ChaseParams::craft_scale`] rather than into the four offsets,
+/// and that is a correction, not a preference.** Scaling the eye-and-look-at pair
+/// about the ship and scaling the four offsets are the same thing for the aim
+/// point, which is rigid, and are **not** the same thing for the eye, which is
+/// sprung: the original scales *after* writing its spring state back, so the
+/// state it keeps is unscaled, while a pre-multiplied offset set keeps a scaled
+/// one - and the ship those two are measured from has moved in between. Over the
+/// 150 ticks of `data/traces/pad0-boost.csv` that is `0.121` RMS against `0.008`.
+/// See `crates/game/tests/chase_camera_ground_truth.rs`.
+///
+/// Three independent numbers agree that the scale belongs here at all. The
+/// authored close block times `0.75` is `11.643` units from the craft; a static
+/// probe of the original in that view measured `11.643`; and a 150-tick capture
+/// of the original measured `11.571`-`11.674` across 40-154 units/s. The far
+/// block lands on `14.562` against a measured `14.562`. Before this scale existed
+/// here the eye sat `15.5` and `19.4` units out, which is the framing difference
 /// `docs/ghidra/functions/psp-pulse-usa/camera.md` recorded as an unexplained
 /// factor of three quarters and this closes.
 ///
@@ -1507,17 +1527,22 @@ fn chase_pos_length(from_disc: f32) -> f32 {
 /// nowhere, and the cockpit eye was measured at `+3.000` against an authored
 /// `length` of `3`. Counterintuitive next to the two external blocks, and
 /// measured twice, so it stays.
+///
+/// `pub` so that `crates/game/tests/chase_camera_ground_truth.rs` compares the
+/// **shipped** conversion against the original's own camera rather than a second
+/// transcription of it - which would pass while the game rendered something
+/// else.
 #[must_use]
-fn chase_params(block: handling::ExternalCamera) -> ChaseParams {
-    let scale = oag_physics::hover::TARGET_GLOBAL_SCALE;
+pub fn chase_params(block: handling::ExternalCamera) -> ChaseParams {
     ChaseParams {
         fov: block.fov,
-        lookat_height: block.lookat_height * scale,
-        lookat_length: block.lookat_length * scale,
-        pos_height: block.pos_height * scale,
-        pos_length: chase_pos_length(block.pos_length) * scale,
+        lookat_height: block.lookat_height,
+        lookat_length: block.lookat_length,
+        pos_height: block.pos_height,
+        pos_length: chase_pos_length(block.pos_length),
         spring_horiz: block.spring_horiz,
         spring_vert: block.spring_vert,
+        craft_scale: oag_physics::hover::TARGET_GLOBAL_SCALE,
     }
 }
 
@@ -4762,6 +4787,10 @@ mod tests {
                 pos_length: 8.0,
                 spring_horiz: 4.0,
                 spring_vert: 2.0,
+                // `1.0` rather than the craft's `0.75`, so the round numbers
+                // above stay the numbers a reader can check the geometry
+                // against. A real load passes the scale through.
+                craft_scale: 1.0,
             },
             // The nearer external view, deliberately a *different* set of round
             // numbers from `chase`: a test that cycles to it and back has to be
@@ -4776,6 +4805,7 @@ mod tests {
                 pos_length: 4.0,
                 spring_horiz: 4.0,
                 spring_vert: 2.0,
+                craft_scale: 1.0,
             },
             // The cockpit view. `length` positive puts the eye ahead of the
             // craft's origin, which is the sign the original's own measured
@@ -5245,10 +5275,16 @@ mod tests {
         assert!(!race.draws_own_ship());
     }
 
-    /// The craft's global `0.75` scale reaches all four external offsets and none
-    /// of the internal ones. Both halves are measurements off the original - see
+    /// The craft's global `0.75` scale reaches the external rig and none of the
+    /// internal one. Both halves are measurements off the original - see
     /// [`chase_params`] and `oag_render::camera::internal` - and both are cheap to
     /// undo by accident.
+    ///
+    /// It reaches the rig as [`ChaseParams::craft_scale`] and **not** as four
+    /// pre-multiplied offsets, which is the correction this test pins: the two
+    /// differ once the spring has state, by `0.121` RMS against `0.008` over the
+    /// capture. Asserting the four offsets come through *unscaled* is what stops
+    /// somebody folding the scale back in and double-applying it.
     #[test]
     fn the_external_blocks_carry_the_crafts_global_scale() {
         let scale = oag_physics::hover::TARGET_GLOBAL_SCALE;
@@ -5263,27 +5299,36 @@ mod tests {
         };
         let params = chase_params(block);
 
-        assert_eq!(params.lookat_height, 4.0 * scale);
-        assert_eq!(params.lookat_length, 8.0 * scale);
-        assert_eq!(params.pos_height, 4.0 * scale);
-        // Negated *and* scaled: the sign flip is [`chase_pos_length`]'s and the
-        // scale is [`chase_params`]', and both apply.
-        assert_eq!(params.pos_length, 16.0 * scale);
-        // Not lengths, so not scaled.
+        assert_eq!(params.craft_scale, scale);
+        // Authored, unscaled: the rig applies `craft_scale` itself, at the end,
+        // about the craft, which is where the original applies it.
+        assert_eq!(params.lookat_height, 4.0);
+        assert_eq!(params.lookat_length, 8.0);
+        assert_eq!(params.pos_height, 4.0);
+        // Negated but not scaled: the sign flip is [`chase_pos_length`]'s.
+        assert_eq!(params.pos_length, 16.0);
+        // Not lengths, so never scaled wherever the scale is applied.
         assert_eq!(params.fov, 60.0);
         assert_eq!(params.spring_horiz, 3.0);
         assert_eq!(params.spring_vert, 5.0);
 
         // The number three independent measurements of the original agree on: an
         // authored `(-15, +4)` close block puts the eye 11.64 units from the
-        // craft. See [`chase_params`] for all three.
+        // craft. See [`chase_params`] for all three. Measured off the settled
+        // camera the rig actually produces, so it covers the scale wherever the
+        // scale now lives.
         let close = chase_params(handling::ExternalCamera {
             pos_height: 4.0,
             pos_length: -15.0,
             ..block
         });
+        let target = oag_render::camera::chase::Target {
+            position: Vec3::ZERO,
+            forward: Vec3::X,
+            up: Vec3::Y,
+        };
         let distance =
-            (close.pos_height * close.pos_height + close.pos_length * close.pos_length).sqrt();
+            (oag_render::camera::chase::anchor(target, &close) - target.position).length();
         assert!((distance - 11.643).abs() < 0.01, "{distance}");
     }
 

@@ -268,6 +268,18 @@ pub struct Handling {
     pub dimensions: Dimensions,
     /// `<GlobalClass><SpeedupPads/>`, which is shared by all eight teams.
     pub speedup_pads: SpeedupPads,
+    /// `<Global><Special speedpad_jump>`, which is shared by all eight teams
+    /// **and** by all four classes.
+    ///
+    /// How far the speed-pad boost tilts toward the hull's up axis while the
+    /// pitch-up input is held. Not per class, unlike [`Self::speedup_pads`]:
+    /// `g_speedpad_jump` (`0x08b36bec`) is a single float rather than a
+    /// four-entry table, and it sits here beside the boost it modifies rather
+    /// than in a second parameter block of one field.
+    ///
+    /// Unscaled, like both `<SpeedupPads>` fields. See
+    /// `crate::engine::speedup_pad`.
+    pub speedpad_jump: f32,
 }
 
 impl Handling {
@@ -336,6 +348,7 @@ impl Handling {
             amount: 0.0,
             time: 0.0,
         },
+        speedpad_jump: 0.0,
     };
 }
 

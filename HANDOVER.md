@@ -400,17 +400,110 @@ second site was searched for and **not found**. See
   mechanism for the plume's falloff, deliberately unported: it would change
   every transparent batch on every track and ship, the same blast radius
   `mesh-draw.md` already refused for `TRANSPARENT_BLEND`.
-- **`<Special speedpad_jump>` is recovered and still unimplemented, and it is
-  not a jump.** `craft+0x160` is the **hull up axis** (live dot `+1.000000`
-  against `body+0x010`, `0.000000` against the other two) and the gating
+- **`<Special speedpad_jump>`.** Recovered here, **applied 2026-08-08** - see the
+  section below. Left in place because the measurements are the evidence:
+  `craft+0x160` is the **hull up axis** (live dot `+1.000000` against
+  `body+0x010`, `0.000000` against the other two) and the gating
   `controls->0x24 & 1` is **D-pad Up**, from a one-hot sweep of all twelve
   buttons against `*(craft+0x78)+0x24`. At the live `0.1` that is a **5.71
   degree** tilt of the boost direction and **0.5 %** more force, for at most the
   class `time` - `0.27/0.27/0.27/0.24 s`, also read live, which independently
   confirms the flare's `0.8 s` outliving every one of them. A hover spring
-  absorbs most of it, which is why no jump is visible in the original. Both
-  "unidentified bit" entries can come off the docs; the effect itself is
-  arguably not worth the determinism-reference churn.
+  absorbs most of it, which is why no jump is visible in the original.
+
+## Two recovered behaviours ported, and one correction found by porting them (2026-08-08, third pass)
+
+Both were things the project had **read at instruction level and knowingly not
+implemented**. Neither is new recovery. What is new is a measurement that only
+existed once they were both in.
+
+### The chase camera: rigid radius, `pos_height` after the spring - and where the craft scale goes
+
+`crates/render/src/camera/chase.rs` now reproduces `Ship_UpdateCameraRigs`
+(`0x08845ed0`) whole. The instrument is `data/traces/pad0-boost.csv`, the only
+capture carrying the original's **craft pose and camera pose on the same tick**,
+150 of them at 40-154 units/s. Driving our camera with that pose and its own
+`dt`, seeded from its tick 0, against the recorded `cam_pos_*`:
+
+| Model | RMS, world units | Max |
+| --- | ---: | ---: |
+| free spring, `pos_height` before the spring (what shipped) | 4.938 | 6.824 |
+| `pos_height` after the spring only | 4.954 | 6.831 |
+| rigid radius only | 0.415 | 0.556 |
+| both, craft scale pre-multiplied into the four offsets | 0.121 | 0.332 |
+| **both, craft scale applied about the craft after the spring** | **0.008** | **0.060** |
+
+Three things worth carrying forward:
+
+- **Neither half is worth landing alone.** `pos_height` after the spring, on its
+  own, is *worse* than what it replaces. That is the shape of a change that would
+  have been reverted by anyone who tried half of it and looked at a screenshot.
+- **The fourth row is a correction to a doc claim, and it was not expected.**
+  `camera.md` recorded `eye = shipPos + (eye - shipPos) * g_craft_scale` as "the
+  same thing as scaling all four offsets". True of the rigid look-at point, false
+  of the sprung eye: the original scales *after* writing its spring state back, so
+  its state is unscaled, while pre-multiplied offsets keep a scaled state - and
+  the craft those are measured from moved in between.
+  `ChaseParams::craft_scale` exists because of this. Both `camera.md` and
+  `race::chase_params` carry the correction.
+- **A settled camera cannot see any of it.** All the models agree exactly at
+  rest, which is why every static probe and every `--pose-from --ticks 0`
+  screenshot this project has ever taken was blind to a 4.9-unit error. **A
+  camera can only be judged while it is lagging.**
+
+`crates/game/tests/chase_camera_ground_truth.rs` is the comparison, `#[ignore]`d
+(it needs a disc image *and* the capture). It also pins, as a by-product, the
+`pos_length`/`lookat_length` signs, the first-order lag, and the craft-frame
+spring split - break any of those and it moves by tenths or units rather than
+thousandths.
+
+### `<Special speedpad_jump>`, and one judgement call
+
+Implemented as described in the entry above. Three things a reader should not
+have to rediscover:
+
+- **The value comes off the disc**, not from a constant here:
+  `oag_formats::handling::Special` decodes `<Global><Special speedpad_jump>` and
+  it threads through `handling_for` beside `<SpeedupPads>`.
+- **The gate is on the *negative* side of the pitch axis.**
+  `oag_gameplay::ship_controls` maps d-pad Up to `steer_y = -1`, because up on the
+  stick pitches the nose down in this game and the inversion lives at the input
+  boundary. `SPEEDPAD_JUMP_THRESHOLD` (`0.5`) is **this project's own number** -
+  the original tests a bit and `ShipControls` is normalised by contract - and it
+  is the one judgement call in the change.
+- **`dir` is recomputed every tick inside the timer block**, so the tilt tracks
+  the button and can start or stop while a boost runs on behind the pad.
+
+### The determinism reference moved, and the check that says why
+
+`crates/physics/tests/determinism.rs`, two of its three rows. **This is
+legitimate and it is not the tilt on its own**: until this pass no probe script
+ever set `pad_hit`, so step 15 of 15 was the one force term the gate did not
+cover at all - and a new branch inside an uncovered term lands with the hashes
+*not* moving, which is the worst outcome available. `probe::environment` is new
+and the scenario now crosses a pad twice, once on each side of the tilt's
+threshold.
+
+Two checks, both run rather than argued:
+
+- **The 600-tick row does not move.** No `ShipState` field was added, so the hash
+  stream is the same length; the first crossing is at tick 1600. A hash-input
+  change moves every row, a behaviour change moves only the rows that reach it.
+- **With `environment` returning `Environment::default()` and nothing else
+  touched, all three rows reproduce the old constants bit for bit.** The two
+  crossings are deliberately placed inside stretches of `probe::controls` that
+  already hold the pitch axis on either side of the threshold, so **no input in
+  the script changed** and there is exactly one cause to attribute the movement
+  to.
+
+### What was deliberately not done
+
+- **`Race::ship_model_matrix` and the craft model scale** - out of scope for this
+  pass by instruction, and being worked on separately at the same time. Note the
+  two changes **partially cancel in apparent craft size**, so a screenshot taken
+  now contains both.
+- **The boost field-of-view kick, bloom, and environment-mapped UV generation**,
+  each for the reason its own page already gives.
 
 ## The three boost-visual opens, worked through (2026-08-08)
 

@@ -192,12 +192,56 @@ pub fn handling() -> Handling {
             easyshield: 120.0,
             weight_distribution: 0.5,
         },
-        // Non-zero on purpose, even though no probe script crosses a pad: if a
-        // future script does, it must boost rather than silently do nothing.
+        // Both scripts cross a pad twice - see [`environment`] - so these are
+        // live rather than aspirational. `time` of `0.5` is 30 ticks of boost
+        // off a 6-tick crossing, which is long enough that the ramp-down and the
+        // flat tail are both exercised.
         speedup_pads: SpeedupPads {
             amount: 50.0,
             time: 0.5,
         },
+        // `<Special speedpad_jump>`, the tilt toward the hull's up axis. A round
+        // number, **not** the disc's - see the module docs.
+        speedpad_jump: 0.2,
+    }
+}
+
+/// The first tick of each of the two speed-pad crossings.
+///
+/// Two crossings and not one, because the branch that needed covering is
+/// **gated**: [`PAD_PLAIN`] is crossed with the pitch axis on the wrong side of
+/// [`crate::engine::SPEEDPAD_JUMP_THRESHOLD`] and [`PAD_TILTED`] with it on the
+/// right side, so a reference hash sees the tilt both applied and not.
+///
+/// **Both are placed inside stretches where [`controls`] already holds the axis
+/// the way each needs, so this change adds no input to the script at all.**
+/// `1500..1800` holds `steer_y = +0.8` and `1800..2100` holds `-0.8`, and the
+/// gate wants negative - d-pad Up reaches the simulation as a *negative*
+/// `steer_y`, see `crate::engine::speedup_pad`. Placing them anywhere else would
+/// have meant editing the control script too, and then the reference would have
+/// moved for two reasons at once with no way to tell them apart.
+///
+/// The tilted window also runs on for 200 ticks after the crossing, far longer
+/// than the boost's 30, which is what exercises the tilt outliving the pad.
+pub const PAD_PLAIN: u32 = 1600;
+/// The tilted crossing. See [`PAD_PLAIN`].
+pub const PAD_TILTED: u32 = 1900;
+/// How many ticks each crossing lasts. A real crossing at racing speed is a
+/// handful of ticks; the boost outlives it by design.
+pub const PAD_TICKS: u32 = 6;
+
+/// The world around the ship at a given tick: a speed pad, twice, and nothing
+/// else.
+///
+/// [`Environment`] is otherwise all defaults, which is what it was before this
+/// existed. The pad's push direction is the corridor's own axis, unit length the
+/// way a pad's matrix row is.
+#[must_use]
+pub fn environment(tick: u32) -> Environment {
+    let inside = |first: u32| (first..first + PAD_TICKS).contains(&tick);
+    Environment {
+        pad_hit: (inside(PAD_PLAIN) || inside(PAD_TILTED)).then_some(Vec3::NEG_Z),
+        ..Environment::default()
     }
 }
 
@@ -237,7 +281,11 @@ pub fn controls(script: Script, tick: u32) -> ShipControls {
         // One tick of sideshift, then its decay.
         1200 => controls.sideshift = Sideshift::Left,
         1201..1500 => {}
-        // Pitch up hard enough to leave the floor, then land again.
+        // Pitch up hard enough to leave the floor, then land again. These two
+        // stretches are also where [`environment`] puts the two speed-pad
+        // crossings, because they already hold the pitch axis on either side of
+        // `crate::engine::SPEEDPAD_JUMP_THRESHOLD` - the tilt branch is gated on
+        // the **negative** side, which is where the input layer puts d-pad Up.
         1500..1800 => controls.steer_y = 0.8,
         1800..2100 => {
             controls.thrust = 0.0;
@@ -386,7 +434,6 @@ pub fn start(handling: &Handling) -> ShipState {
 pub fn run(script: Script, ticks: u32) -> RunResult {
     let handling = handling();
     let world = corridor();
-    let environment = Environment::default();
     let mut state = start(&handling);
 
     let mut trajectory = StateHasher::new();
@@ -395,7 +442,7 @@ pub fn run(script: Script, ticks: u32) -> RunResult {
             &mut state,
             &controls(script, tick),
             &handling,
-            &environment,
+            &environment(tick),
             &world,
             TICK,
         );

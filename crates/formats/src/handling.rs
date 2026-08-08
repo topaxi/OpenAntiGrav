@@ -545,24 +545,57 @@ impl GravityMul {
     }
 }
 
+/// The one attribute of `<Special>` this project reads.
+///
+/// The element carries five - `roll_cost roll_speed roll_turbotime speedpad_jump
+/// turbo_jump` - and the other four are left alone until something needs them,
+/// the way the rest of `<Global>` is. Only `speedpad_jump` has a consumer.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Special {
+    /// How far the speed-pad boost tilts toward the hull's up axis while the
+    /// pitch-up input is held. `0.1` on both shipped discs, read live.
+    ///
+    /// `Xml_ReadGlobalSettings` (`0x0883a970`) puts it in `g_speedpad_jump`
+    /// (`0x08b36bec`), and `Ship_ApplySpeedupPad` (`0x08848f9c`) adds
+    /// `craft+0x160 * g_speedpad_jump` to the pad's own push direction on the
+    /// gated branch. It is **not** a jump: the direction is not renormalised, so
+    /// `0.1` is a 5.71-degree tilt and 0.5 % more force, and the hover spring
+    /// absorbs most of that. See `oag_physics::engine::speedup_pad`.
+    ///
+    /// Stored **unscaled**, like `<SpeedupPads>` and unlike
+    /// `oag_gameplay::handling::SCALED_FIELDS`: the parse writes
+    /// `Xml_AttributeAsFloat`'s return straight into the global.
+    pub speedpad_jump: f32,
+}
+
+impl Special {
+    const ELEMENT: &'static str = "Special";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        Ok(Self {
+            speedpad_jump: number(node, Self::ELEMENT, "speedpad_jump")?,
+        })
+    }
+}
+
 /// The engine-wide `<Global>` block, out of [`GLOBAL_ENTRY`].
 ///
-/// Only the parts this project has a consumer for are decoded. `<Special>`,
-/// `<WeaponPad>`, `<GravityMul>`, the three camera pitch modifiers,
-/// `<CameraSideOffset>` and `<StartBoost>` are all read by the original's
-/// `Xml_ReadGlobalSettings` and are deliberately left alone here; they are named
-/// in `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be added when something
-/// needs them. Two are worth knowing about because they touch code that exists:
+/// Only the parts this project has a consumer for are decoded. `<WeaponPad>`, the
+/// three camera pitch modifiers, `<CameraSideOffset>` and `<StartBoost>` are all
+/// read by the original's `Xml_ReadGlobalSettings` and are deliberately left
+/// alone here; they are named in
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be added when
+/// something needs them. `<WeaponPad>` fills two more per-class tables and has no
+/// consumer, because nothing hands out a weapon yet.
 ///
-/// - `<Special speedpad_jump>` fills `0x08b36bec`, the constant on the one branch
-///   of the boost this project deliberately does not implement - see the
-///   speed-pad term in `oag_physics::forces`.
-/// - `<WeaponPad>` fills two more per-class tables and has no consumer here,
-///   because nothing hands out a weapon yet.
+/// Of `<Special>`'s five attributes only `speedpad_jump` is read - see
+/// [`Special`].
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Global {
     /// `<Zone/>`.
     pub zone: Zone,
+    /// `<Special/>`, of which one attribute is decoded.
+    pub special: Special,
     /// `<GlobalClass><SpeedupPads/></GlobalClass>`, indexed by [`SpeedClass`].
     pub speedup_pads: [SpeedupPads; 4],
     /// `<GlobalClass><GravityMul/></GlobalClass>`, indexed by [`SpeedClass`].
@@ -972,6 +1005,7 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
     let (speedup_pads, gravity_mul) = global_classes(global)?;
     Ok(Some(Global {
         zone: Zone::from_node(child(global, Zone::ELEMENT)?)?,
+        special: Special::from_node(child(global, Special::ELEMENT)?)?,
         speedup_pads,
         gravity_mul,
     }))
@@ -1483,9 +1517,14 @@ mod tests {
             })
             .collect();
         format!(
-            r#"<Handling><Global><Zone start="1" increment="2" recharge="3"/>{blocks}</Global></Handling>"#
+            r#"<Handling><Global><Zone start="1" increment="2" recharge="3"/>{SPECIAL}{blocks}</Global></Handling>"#
         )
     }
+
+    /// `<Special>` as [`global_document`] authors it. All five attributes, so
+    /// the fixture is the shape the disc's own file is rather than only the one
+    /// attribute [`Special`] reads; only `speedpad_jump` is asserted on.
+    const SPECIAL: &str = r#"<Special roll_cost="4" roll_speed="5" roll_turbotime="6" speedpad_jump="7" turbo_jump="8"/>"#;
 
     const FOUR: [&str; 4] = ["VENOM", "FLASH", "RAPIER", "PHANTOM"];
 
@@ -1500,6 +1539,9 @@ mod tests {
             .expect("parses")
             .expect("has a <Global>");
         assert_eq!(global.zone.start, 1.0);
+        // The one `<Special>` attribute with a consumer, read off the same
+        // `<Global>` as the rest and distinct from every other number here.
+        assert_eq!(global.special.speedpad_jump, 7.0);
         for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
             let n = (index + 1) as f32;
             assert_eq!(
@@ -1572,6 +1614,12 @@ mod tests {
         assert_eq!(
             parse_global(&no_zone),
             Err(Error::MissingElement { element: "Zone" })
+        );
+
+        let no_special = global_document(&FOUR).replace(SPECIAL, "");
+        assert_eq!(
+            parse_global(&no_special),
+            Err(Error::MissingElement { element: "Special" })
         );
 
         let no_pads = global_document(&FOUR).replace(r#"<SpeedupPads amount="1" time="10"/>"#, "");

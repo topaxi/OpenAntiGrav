@@ -146,20 +146,25 @@ pub fn airbrake_graphics_for(stats: &fmt::Stats) -> AirbrakeGraphics {
 /// enclosing [`fmt::Stats`] while everything else comes from the class block.
 /// That asymmetry is the format's, not ours.
 ///
-/// `speedup_pads` is an argument rather than a lookup for a sharper version of
-/// the same reason: it is authored in a **different file**,
+/// `speedup_pads` and `special` are arguments rather than lookups for a sharper
+/// version of the same reason: both are authored in a **different file**,
 /// `Data\XML\HandlingStats.xml`, which [`fmt::Stats`] does not describe. Passing
-/// it in makes the caller decide what a ship gets when that file is unreadable,
+/// them in makes the caller decide what a ship gets when that file is unreadable,
 /// which is a decision worth being explicit about - a defaulted zero here would
 /// be a game whose speed pads silently do nothing.
 ///
+/// `special` carries one field, `speedpad_jump`, and unlike `speedup_pads` it is
+/// **not per speed class**: `g_speedpad_jump` (`0x08b36bec`) is a single float,
+/// not a four-entry table.
+///
 /// The four pre-scaled fields are converted here; every other field is moved
-/// unchanged, `speedup_pads` included. See the module docs.
+/// unchanged, both of these included. See the module docs.
 #[must_use]
 pub fn handling_for(
     stats: &fmt::Stats,
     class: SpeedClass,
     speedup_pads: fmt::SpeedupPads,
+    special: fmt::Special,
 ) -> Handling {
     let block = stats.class(to_format_class(class));
     Handling {
@@ -167,6 +172,7 @@ pub fn handling_for(
             amount: speedup_pads.amount,
             time: speedup_pads.time,
         },
+        speedpad_jump: special.speedpad_jump,
         engine: Engine {
             accelcap: block.engine.accelcap,
             amount: block.engine.amount * ENGINE_AMOUNT_SCALE,
@@ -267,6 +273,14 @@ mod tests {
         fmt::SpeedupPads {
             amount: 1000.0,
             time: 2000.0,
+        }
+    }
+
+    /// A third, from the same out-of-range block as [`pads`] and for the same
+    /// reason.
+    fn special() -> fmt::Special {
+        fmt::Special {
+            speedpad_jump: 3000.0,
         }
     }
 
@@ -393,7 +407,7 @@ mod tests {
         let stats = stats();
         for class in SpeedClass::ALL {
             let block = stats.class(to_format_class(class));
-            let mapped = handling_for(&stats, class, pads());
+            let mapped = handling_for(&stats, class, pads(), special());
 
             assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
             assert_eq!(
@@ -467,9 +481,12 @@ mod tests {
     #[test]
     fn the_hull_is_shared_by_every_speed_class() {
         let stats = stats();
-        let venom = handling_for(&stats, SpeedClass::Venom, pads()).dimensions;
+        let venom = handling_for(&stats, SpeedClass::Venom, pads(), special()).dimensions;
         for class in SpeedClass::ALL {
-            assert_eq!(handling_for(&stats, class, pads()).dimensions, venom);
+            assert_eq!(
+                handling_for(&stats, class, pads(), special()).dimensions,
+                venom
+            );
         }
         assert_eq!(venom.height, stats.misc.height);
         assert_eq!(venom.length, stats.misc.length);
@@ -483,7 +500,7 @@ mod tests {
         let stats = stats();
         let mapped: Vec<_> = SpeedClass::ALL
             .into_iter()
-            .map(|class| handling_for(&stats, class, pads()))
+            .map(|class| handling_for(&stats, class, pads(), special()))
             .collect();
         for (i, a) in mapped.iter().enumerate() {
             for b in &mapped[i + 1..] {
@@ -505,7 +522,7 @@ mod tests {
             "the fixture's XML value is positive, or this test proves nothing"
         );
         assert!(
-            handling_for(&stats, SpeedClass::Venom, pads())
+            handling_for(&stats, SpeedClass::Venom, pads(), special())
                 .brakes
                 .amount
                 < 0.0
@@ -573,7 +590,7 @@ mod tests {
     fn the_siblings_of_the_scaled_fields_are_untouched() {
         let stats = stats();
         let block = stats.class(FmtClass::Venom);
-        let mapped = handling_for(&stats, SpeedClass::Venom, pads());
+        let mapped = handling_for(&stats, SpeedClass::Venom, pads(), special());
         assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
         assert_eq!(mapped.engine.turbo, block.engine.turbo);
         assert_eq!(mapped.airbrake.drag, block.airbrake.drag);
@@ -590,7 +607,7 @@ mod tests {
     fn the_speed_pad_tunables_arrive_from_the_argument_unscaled() {
         let stats = stats();
         for class in SpeedClass::ALL {
-            let mapped = handling_for(&stats, class, pads());
+            let mapped = handling_for(&stats, class, pads(), special());
             assert_eq!(mapped.speedup_pads.amount, pads().amount);
             assert_eq!(mapped.speedup_pads.time, pads().time);
         }

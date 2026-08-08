@@ -1014,10 +1014,45 @@ flag `0x200` was last set*, and `0x200` is one of the eleven undecoded bits of
 fade-in after some unidentified state ends**, not a contact scale.
 
 `crates/physics/src/engine.rs`'s `speedup_pad` therefore leaves it out rather than
-guessing, on the same standing as the `controls->0x24 & 1` jump branch beside it.
-That is also what the measurement wants: `docs/physics/cornering-ground-truth.md`
-records five pad crossings at full magnitude, so `0x200` is evidently not set
-during ordinary racing and the gate would be inert anyway.
+guessing. **It is now the only branch of that function left out** - the
+`controls->0x24 & 1` one beside it is implemented, see below. That is also what
+the measurement wants: `docs/physics/cornering-ground-truth.md` records five pad
+crossings at full magnitude, so `0x200` is evidently not set during ordinary
+racing and the gate would be inert anyway.
+
+##### `<Special speedpad_jump>` is recovered, applied, and is not a jump
+
+Both unknowns in `if (controls->0x24 & 1) dir += craft+0x160 * g_speedpad_jump`
+were closed live in PPSSPP, and the branch is implemented.
+
+| Piece | What it is | How | Conf |
+| --- | --- | --- | ---: |
+| `craft+0x160` | the **hull up axis** | live dot `+1.000000` against `body+0x010`, `0.000000` against the right and forward rows, unit length | 90 |
+| `controls->0x24 & 1` | **d-pad Up** | one-hot sweep of all twelve buttons against `*(craft+0x78)+0x24`; only Up sets bit 0 | 88 |
+| `g_speedpad_jump` | `<Global><Special speedpad_jump>` | read live at `0x08b36bec`, `0.1` on both shipped discs, written by `Xml_ReadGlobalSettings` | 88 |
+
+**The sum is not renormalised**, and that is what makes the name misleading. At
+`0.1` against a unit pad direction the boost tilts by `atan(0.1)` = **5.71
+degrees** and gains `sqrt(1.01)` = **0.5 %** of force, for at most the class's
+`time` - `0.27/0.27/0.27/0.24 s`, also read live, which incidentally confirms the
+engine flare's `0.8 s` outliving every one of them. A hover spring holding the
+craft on its cushion absorbs most of a 5.7-degree tilt, which is why nothing
+visibly leaps in the original.
+
+Note also that `dir` is a **local recomputed inside the `timer > 0` block**, not
+the stored `craft+0x1b0`. So the tilt tracks the button every tick and can start
+or stop while a boost runs on behind the pad; baking it into the stored direction
+when the pad arms the boost would be a different behaviour.
+
+**Applied 2026-08-08** as `oag_physics::engine::speedup_pad`, with the value read
+off the player's own disc through `oag_formats::handling::Special`. One judgement
+call, and it is documented at the constant rather than buried: the original tests
+a **bit**, and `oag_physics::ShipControls` is normalised by contract, so
+`SPEEDPAD_JUMP_THRESHOLD` (`0.5`, this project's own number) stands in.
+`oag_gameplay::ship_controls` maps d-pad Up to `steer_y = -1` - up on the stick
+pitches the nose down in this game, and the inversion lives at the input boundary
+- so the gate is on the **negative** side of that axis. The determinism reference
+moved for this, deliberately; see `crates/physics/tests/determinism.rs`.
 
 ##### The two tables are filled unscaled, and the timer is re-armed every tick
 

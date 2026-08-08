@@ -107,6 +107,34 @@ use oag_physics::{Environment, ShipState, step};
 ///   bypasses `shift_lockout`. The 600-tick `Corridor` row does not even reach
 ///   that tick, so on that row all four new fields hold their defaults for the
 ///   whole run - and it moved anyway, which is the tell.
+/// - **Regenerated 2026-08-08, and this time behaviour *did* change - on
+///   purpose.** Two things landed together and both are deliberate:
+///
+///   1. `crate::engine::speedup_pad` implements `<Special speedpad_jump>`, the
+///      original's `if (controls->0x24 & 1) dir += craft+0x160 * jump` - a
+///      5.71-degree tilt of the boost toward the hull's up axis while d-pad Up is
+///      held. See that function's docs and
+///      `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+///   2. **`probe::environment` is new and the scenario now crosses a speed pad,
+///      twice.** Until now no script ever set `pad_hit`, so step 15 of 15 was
+///      the one force term this gate did not cover at all - and a new branch
+///      inside an uncovered term would have landed with the hashes not moving,
+///      which is the worst possible outcome for a gate.
+///
+///   **No `ShipState` field was added**, so unlike the four entries above this is
+///   not a longer hash stream: the movement is trajectory, not bookkeeping. Two
+///   things say so, and both were checked rather than argued:
+///
+///   - **The 600-tick `Corridor` row does not move.** The first crossing is at
+///     tick 1600. A change to what is *hashed* reaches every row equally; a
+///     change to *behaviour* reaches only the rows that reach it.
+///   - **With `environment` returning `Environment::default()` and nothing else
+///     touched, all three rows reproduce the 2026-08-04 constants bit for bit.**
+///     That is the check the entry above asks for, and it isolates the cause to
+///     the two crossings alone - the two crossings are deliberately placed inside
+///     stretches of `probe::controls` that already hold the pitch axis on either
+///     side of the tilt's threshold, so **not one byte of the input script
+///     changed** and there is no second cause to disentangle.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
@@ -117,14 +145,14 @@ const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         3_600,
         Script::Corridor,
-        0xe58a_696d_c7ac_6e1c,
-        0x6399_e183_3107_c05b,
+        0x9e0c_b6e6_2a45_2e46,
+        0x8bfb_3a95_b9c7_06cd,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x0e9c_8963_d181_9c96,
-        0x7edd_5a23_56e3_966b,
+        0x5ffa_e615_646e_7b6b,
+        0xa366_ca15_e12b_d283,
     ),
 ];
 

@@ -651,7 +651,12 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     // 15. The speed-pad boost, the last of the fifteen. Its own timer, so it runs
     //     on long after the tick that armed it.
-    let speedup_pad = engine::speedup_pad(state, handling, env.pad_hit, dt);
+    //
+    //     `up` is the body's own up row, bound at the top of this function and
+    //     shared with the vertical damping term. It is `craft+0x160`, the hull up
+    //     axis the original's `<Special speedpad_jump>` branch tilts toward - dot
+    //     `+1.000000` against `body+0x010` on a live capture.
+    let speedup_pad = engine::speedup_pad(state, input, handling, up, env.pad_hit, dt);
     acc.world_force += speedup_pad;
 
     drain(state, &acc);

@@ -136,7 +136,12 @@ fn load() -> (Handling, oag_physics::CollisionWorld, Trace) {
     let stats = handling::from_blob(&stats_blob).expect("parsing the handling stats");
     // Zero for the reason `yaw_authority_ground_truth.rs` gives: this capture
     // crosses no pad, so step 15 must contribute nothing here.
-    let handling = handling_for(&stats, CLASS, handling::SpeedupPads::default());
+    let handling = handling_for(
+        &stats,
+        CLASS,
+        handling::SpeedupPads::default(),
+        handling::Special::default(),
+    );
 
     let text = std::fs::read_to_string(workspace(CAPTURE)).expect("reading the capture");
     let trace = Trace::parse(&text).expect("parsing the capture");

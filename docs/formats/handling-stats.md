@@ -392,9 +392,15 @@ Two consequences worth having in one place:
   is `oag_physics::forces::Environment::class_gravity_scale`. Decoded, and the
   table's confidence goes from 78 to **90**: it now has a read writer and two read
   readers. See the subsection below, because the attribute's name is misleading.
-- **`<Special speedpad_jump>` fills `0x08b36bec`**, the constant on the one branch
-  of the boost this project does not implement. See
-  `oag_physics::engine::speedup_pad`.
+- **`<Special speedpad_jump>` fills `0x08b36bec`**, and is decoded, as
+  [`Special`](../../crates/formats/src/handling.rs). It is the magnitude of the
+  speed-pad boost's tilt toward the hull's up axis while d-pad Up is held - a
+  5.71-degree tilt and 0.5 % more force at the shipped `0.1`, **not** a jump. Read
+  the same way `<SpeedupPads>` is, verbatim with no load-time scale. See
+  `oag_physics::engine::speedup_pad` and
+  [engine.md](../ghidra/functions/psp-pulse-usa/engine.md). The other four
+  `<Special>` attributes - `roll_cost`, `roll_speed`, `roll_turbotime`,
+  `turbo_jump` - still have no consumer and are still not decoded.
 
 ### `<GravityMul airborne>` scales the *grounded* gravity term
 

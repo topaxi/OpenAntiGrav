@@ -113,7 +113,12 @@ fn shipped_handling() -> Handling {
 
     // Zero: neither of these scenarios crosses a speed pad, so the boost must
     // contribute nothing and a non-zero magnitude could only mask that.
-    handling_for(&stats, CLASS, handling::SpeedupPads::default())
+    handling_for(
+        &stats,
+        CLASS,
+        handling::SpeedupPads::default(),
+        handling::Special::default(),
+    )
 }
 
 /// The yaw rate the recording actually shows, differentiated out of the captured

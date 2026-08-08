@@ -118,6 +118,8 @@ fn fixture() -> Handling {
         // non-zero magnitude here could only mask a boost that fired when it
         // should not have.
         speedup_pads: SpeedupPads::default(),
+        // No test in this file crosses a pad, so the tilt has nothing to modify.
+        speedpad_jump: 0.0,
     }
 }
 
