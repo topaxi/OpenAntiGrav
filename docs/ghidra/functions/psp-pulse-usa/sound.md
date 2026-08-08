@@ -213,11 +213,12 @@ cue = *(u32 *)(bank + 0x1c) + index * 0xc;
 
 **That is exactly the cue region [psp-audio.md](../../../formats/psp-audio.md)
 already measured** - offset field at `+0x1c`, stride 12, one per playable sound -
-reached here from the opposite direction. The two readings were derived
-independently, one from strides across all 39 banks and one from the runtime's
-own bounds check, and they agree. It also identifies the count: **`+0x16` is
-`cue_count` as a `u16`**, which is the field the format page infers but does not
-locate.
+reached here from the opposite direction, and it bounds the index against
+`+0x16`, which that page already documents as `cue_count`. The two readings were
+derived independently - one from strides across all 39 banks, one from the
+runtime's own bounds check - and they agree on every figure. Corroboration
+rather than new ground, which is worth having on a page whose central claim is
+still open.
 
 So **the name table's "sound index" is a cue index**, and the chain from a cue
 string to a playing sound is now unbroken:
@@ -247,9 +248,9 @@ command table; the runtime dereferences it (`*(u32 *)(cue + 8) + 4`), so SCREAM
 fixes it up from an index to a pointer at load time. Both readings are right
 about different moments.
 
-Confidence **85** for the cue-record fields, from direct reads in one function;
-**90** for `+0x16` and the `+0x1c` stride, which two independent derivations
-agree on.
+Confidence **85** for the cue-record fields, from direct reads in one function.
+`+0x16` and the `+0x1c` stride were already at 94 from the data side; the
+runtime agreeing does not raise a number, it removes a way of being wrong.
 
 ## Where this stops
 

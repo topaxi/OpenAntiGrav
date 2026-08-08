@@ -270,17 +270,34 @@ roughness      mean 0.220, worst 0.408 (white noise is ~1.41)
   seven, which is chance; as `u32` block indices, one of seven. They appear only
   as `u32` **byte** offsets, and only inside those 24-byte parameter records. So
   the general table, if there is one, is not a block-index array.
+  **The runtime side has since been read**, and it narrows this considerably.
+  A cue index reaches `bank + 0x1c + i * 12` - this page's own cue region,
+  confirmed from the opposite direction - and the cue's `+0x08` is dereferenced
+  as a pointer into the command table. The step that turns that command list
+  into a waveform offset happens in one unread function, `FUN_0898efd8`, which
+  the play path drives in a loop. That is where the nine opcodes below are
+  interpreted, and it is now the single thing between here and per-sound
+  extraction. **Separately, per-sound *names* are already extractable**: the
+  name block's entry array is `{char[16] name, u16 cue_index}` at a 20-byte
+  stride and walks linearly, so the hash never has to be reproduced. See
+  [the sound engine](../ghidra/functions/psp-pulse-usa/sound.md).
 - **The command opcodes.** Nine distinct values seen. Nothing has been traced to
   them.
-- **`+0x24` = 20544 and `+0x08` = 772/260.** The second correlates exactly with
-  whether the voice-state block is present, so it is likely a size or a flag
-  word for the runtime allocation.
+- **`+0x24` = 20544.** Still not determined; the shape of it suggests an
+  audio-RAM base address.
+- ~~**`+0x08` = 772/260.**~~ **Partly settled.** The runtime gates its
+  name lookup on `bank[2] & 0x100`, and 772 is `0x304` while 260 is `0x104`, so
+  **bit `0x100` means "this bank carries a name table"** - a capability flag
+  rather than a size. The other bits are still unread. See
+  [the sound engine](../ghidra/functions/psp-pulse-usa/sound.md#the-name-table-decoded).
 - **The sample rate of each waveform.** Not in the header. PS-ADPCM carries no
   rate, so it comes from a per-sound pitch value, and the 24-byte parameter
   records' first word is the obvious candidate - `0x42aa7f00`, `0x42a15000`,
   `0x42a76400` in `frontend.bnk`, which vary per sound and cluster tightly.
-- **Whether this is Sony's SCREAM engine.** The PS2 disc ships `IOP/SCREAM.IRX`,
-  Sony's audio module, and `SBlk` is its bank magic. The PSP build has no
-  equivalent file to point at, so this is a strong inference rather than a
-  finding, and it is worth confirming against the executable when someone is in
-  there - the opcode table would come with it.
+- ~~**Whether this is Sony's SCREAM engine.**~~ **Settled: it is.** The PSP
+  executable carries nineteen `SCREAM` strings including the verbatim copyright
+  line `" SCREAM PSP    (c)2006 Sony Computer Entertainment America"` and a
+  reference to `snd_RegisterMainMemAllocator`, a published SCREAM API name.
+  Confidence 99. One of those strings, `"THIS SYSTEM ONLY SUPPORTS ADPCM VOICE
+  DATA"`, independently corroborates the codec above. See
+  [the sound engine](../ghidra/functions/psp-pulse-usa/sound.md).
