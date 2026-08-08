@@ -279,7 +279,7 @@ mod blink_texture_tests {
 }
 
 /// A texture decoded from the model.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModelTexture {
     pub label: String,
     pub width: u32,
@@ -507,13 +507,20 @@ pub fn build_with_textures(
 /// a different mesh.
 ///
 /// The sky's textures are the track file's own, indexed by the same ordinals, so
-/// this must be built from the same `data` the track model was.
+/// this must be built from the same `data` the track model was, and - on PS2,
+/// where the file embeds no texture block at all - from the same `external`
+/// set the caller resolved for the track model too. Passing `None` uses
+/// whatever the file embeds, which is what every PSP model wants.
 ///
 /// Returns a model with no meshes when the file authors no sky. That is not an
 /// error: 4 of the 40 PSP track files have no `fogCube` and a `.vex` that is not
 /// a track has neither.
-pub fn build_sky(label: &str, data: &[u8]) -> Result<Model> {
-    build_class(label, data, None, Lod::Both, vex::CLASS_SKYCUBE)
+pub fn build_sky(
+    label: &str,
+    data: &[u8],
+    external: Option<Vec<Option<ModelTexture>>>,
+) -> Result<Model> {
+    build_class(label, data, external, Lod::Both, vex::CLASS_SKYCUBE)
 }
 
 /// The track's speedup pads, as a model in their own right.
@@ -531,12 +538,17 @@ pub fn build_sky(label: &str, data: &[u8]) -> Result<Model> {
 /// put geometry into that mapping that the mapping cannot describe.
 ///
 /// The textures are the track file's own, indexed by the same ordinals, so this
-/// must be built from the same `data` the track model was.
+/// must be built from the same `data` the track model was, and from the same
+/// `external` set on PS2 - see [`build_sky`].
 ///
 /// Returns a model with no meshes when the file authors no pads, which is
 /// ordinary: every Pure track and every `.vex` that is not a track.
-pub fn build_pads(label: &str, data: &[u8]) -> Result<Model> {
-    build_class(label, data, None, Lod::Both, vex::CLASS_SPEEDUP_PAD)
+pub fn build_pads(
+    label: &str,
+    data: &[u8],
+    external: Option<Vec<Option<ModelTexture>>>,
+) -> Result<Model> {
+    build_class(label, data, external, Lod::Both, vex::CLASS_SPEEDUP_PAD)
 }
 
 /// Flattens every node of one class into one buffer pair.

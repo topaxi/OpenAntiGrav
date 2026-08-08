@@ -262,9 +262,23 @@ smoother     {"linear": 185, "psmt8": 4856}
 88 - see below).** A model's texture set is never looked up by name or hash
 at all - it is the archive entry **directly before** the model's own entry
 in the WAD directory. `oag_assets::pulse::Archives::read_preceding`
-implements this, and `oag_game::race::load` uses it for both a ship and the
-track model: when a model's embedded texture slots are all empty (the PS2
+implements this, and `oag_game::race::load` uses it for a ship and for the
+track file: when a model's embedded texture slots are all empty (the PS2
 signature), it reads the preceding entry and tries it as a texture set.
+
+**The track file's set is not just the track model's.** A `Skycube` and a
+`Speedup Pad` node's materials name a texture by its ordinal among *all* of
+the file's `Texture` nodes, the same shared ordinal space the track's own art
+meshes use (see [`build_class`'s embedded-texture handling](vex.md#embedded-textures)) -
+they are not separate per-class texture sets. So `oag_game::race::load`
+resolves the set once, against the track model, and passes that same
+resolved `Vec<Option<ModelTexture>>` into `mesh::build_sky` and
+`mesh::build_pads` too, rather than each doing its own `read_preceding`.
+Missing this was a real bug until 2026-08-07: both builders hardcoded
+`external: None`, so on PS2 the sky and the pads always fell back to the
+(empty) embedded texture block and drew untextured - white, in the sky's
+case, since it has no lighting to hide it. See
+[`skycube.md`](skycube.md#open) for the before/after.
 
 This was checked independently against **every** team on the roster, not
 inferred from one example: `AG_Systems`, `Assegai`, `Auricom`, `EGX`,

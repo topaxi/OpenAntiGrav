@@ -838,6 +838,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
+    // Shared with the sky and the pads below: all three are node classes inside
+    // the same track file, and a material in any of them names a texture by its
+    // ordinal among *all* of the file's `Texture` nodes, not a per-class one -
+    // see `mesh::build_sky`'s doc comment. Resolved once here, against the track
+    // model's own embedded textures, and reused rather than re-read from the
+    // archive and re-decoded per model.
+    let mut ps2_track_textures: Option<Vec<Option<mesh::ModelTexture>>> = None;
     let track_model = if options.ribbon {
         track_render::build_model(&label, &ai)
     } else {
@@ -854,6 +861,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             && track_model.textures.iter().all(Option::is_none)
             && let Some(external) = ps2_texture_set(&mut archives, &options.track)
         {
+            ps2_track_textures = Some(external.clone());
             track_model = mesh::build_with_textures(
                 &options.track,
                 &track_blob,
@@ -890,7 +898,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let sky_model = if options.ribbon {
         None
     } else {
-        let sky = mesh::build_sky(&options.track, &track_blob)?;
+        let sky = mesh::build_sky(&options.track, &track_blob, ps2_track_textures.clone())?;
         if sky.indices.is_empty() {
             report.push("the track authors no Skycube; the sky stays black".to_string());
             None
@@ -909,7 +917,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pad_model = if options.ribbon {
         None
     } else {
-        let pads = mesh::build_pads(&options.track, &track_blob)?;
+        let pads = mesh::build_pads(&options.track, &track_blob, ps2_track_textures.clone())?;
         if pads.indices.is_empty() {
             report.push("the track authors no Speedup Pad geometry".to_string());
             None
@@ -933,7 +941,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
         track_model.radius
     ));
 
-    for model in [&ship_model, &track_model] {
+    for model in [
+        Some(&ship_model),
+        Some(&track_model),
+        sky_model.as_ref(),
+        pad_model.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
         if let Some(line) = untextured_note(model) {
             report.push(line);
         }
@@ -1359,8 +1375,9 @@ fn untextured_note(model: &Model) -> Option<String> {
     }
     Some(format!(
         "{}: {decoded} of {slots} texture slot(s) decoded, drawing the rest \
-         untextured. PS2 models keep their textures in separate archive entries \
-         and the model-to-texture-set lookup is not recovered; see \
+         untextured. PS2 models keep their textures in separate archive entries, \
+         found by directory position; a handful of circuits' texture sets are \
+         short 1-2 slots on disc rather than unresolved by this lookup - see \
          docs/formats/ps2-texture.md",
         model.label
     ))

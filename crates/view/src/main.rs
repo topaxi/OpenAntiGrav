@@ -108,13 +108,16 @@ struct Cli {
     #[arg(long)]
     pads: Option<String>,
 
-    /// Skin a `--mesh` from an external texture set, by entry index or
-    /// `0x`-prefixed name hash.
+    /// Skin a `--mesh`, `--sky` or `--pads` from an external texture set, by
+    /// entry index or `0x`-prefixed name hash.
     ///
     /// PS2 models carry no textures of their own: their texture set is a
     /// separate archive entry, a nested WAD of Graphics Synthesizer upload
-    /// packets. Which entry belongs to which model is not resolved yet, so it
-    /// is named here rather than found.
+    /// packets. A track's art mesh, its `Skycube` and its `Speedup Pad`
+    /// geometry all live in the same `.vex` and share one ordinal space, so
+    /// the same set skins all three - see `mesh::build_sky`'s doc comment. In
+    /// `oag-game`, which entry belongs to which model is found by directory
+    /// position (`docs/formats/ps2-texture.md`); here it is named by hand.
     #[arg(long)]
     textures: Option<String>,
 
@@ -535,8 +538,20 @@ fn main() -> Result<()> {
     }
 
     if let Some(name) = &cli.sky {
+        let external = cli
+            .textures
+            .as_deref()
+            .map(|entry| load_texture_set(&cli.archive, entry))
+            .transpose()?;
+        if let Some(set) = &external {
+            println!(
+                "texture set: {} of {} entries decoded",
+                set.iter().filter(|slot| slot.is_some()).count(),
+                set.len()
+            );
+        }
         let data = mesh::read_blob(&cli.archive, name)?;
-        let model = mesh::build_sky(name, &data)?;
+        let model = mesh::build_sky(name, &data, external)?;
         println!(
             "{}: {} sky node(s), {} vertices, {} triangles, radius {:.2}",
             model.label,
@@ -565,8 +580,20 @@ fn main() -> Result<()> {
     }
 
     if let Some(name) = &cli.pads {
+        let external = cli
+            .textures
+            .as_deref()
+            .map(|entry| load_texture_set(&cli.archive, entry))
+            .transpose()?;
+        if let Some(set) = &external {
+            println!(
+                "texture set: {} of {} entries decoded",
+                set.iter().filter(|slot| slot.is_some()).count(),
+                set.len()
+            );
+        }
         let data = mesh::read_blob(&cli.archive, name)?;
-        let model = mesh::build_pads(name, &data)?;
+        let model = mesh::build_pads(name, &data, external)?;
         println!(
             "{}: {} Speedup Pad node(s), {} vertices, {} triangles, radius {:.2}",
             model.label,
