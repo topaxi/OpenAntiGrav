@@ -559,6 +559,18 @@ kind = "binding"
 label = "AIRBRAKE RIGHT"
 button = "r"
 
+# Not one of the original's eight driving bindings, and listed here anyway: the
+# in-race camera cycle is the one control a player has no other way to discover.
+# It is bound (SELECT on a pad, TAB on a keyboard, through
+# `oag_input::keys::map_key`) and it works, but until this row existed the only
+# record of it was a source comment - so the feature was effectively invisible.
+# `bound_keys` fills the right-hand column from the input layer, so this row says
+# whatever is actually bound rather than a hardcoded key name.
+[[page.entry]]
+kind = "binding"
+label = "CAMERA VIEW"
+button = "select"
+
 # The one row on this page that is not read-only, and the reason it sits below
 # the bindings rather than above them: it does not rebind anything. It chooses
 # which *gesture* a sideshift takes, which is the original's own `Control_Type`
