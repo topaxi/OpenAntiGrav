@@ -28,7 +28,8 @@
 //!   reading of the original's (undecoded) particle asset - see that
 //!   module's doc comment.
 //! - [`loading`] is the loading screen's procedural heartbeat wave, recovered
-//!   rather than authored: there is no loading movie in either build.
+//!   rather than authored: there is no loading movie in either build. It is the
+//!   crate's one 2D overlay pipeline - no camera, no depth.
 
 pub mod camera;
 pub mod collision;

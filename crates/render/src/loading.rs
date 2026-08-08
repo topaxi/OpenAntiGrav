@@ -38,7 +38,15 @@
 //! walk's step count, so it is part of the waveform's identity: adding columns
 //! on a wider screen makes the walk finer and visibly changes the wave's
 //! character. The quad *width* scales; the count does not.
+//!
+//! # The simulation half and the drawing half
+//!
+//! [`Wave`] and [`Wave::quads`] are the recovered algorithm and need no GPU;
+//! [`Pipeline`] draws what they produce. The split is the one
+//! [`crate::sparks`] uses, for the same reason: the motion is testable, and
+//! is tested, without an adapter.
 
+use anyhow::{Context, Result};
 use oag_core::rng::Rng;
 
 /// Reference display width, in the pixels every constant here is written in.
@@ -310,6 +318,437 @@ impl Wave {
     }
 }
 
+/// One vertex of the overlay.
+///
+/// Two floats of position rather than three, and no normal, colour or `lit`
+/// flag: this is a screen-space overlay, so there is nothing for a light rig or
+/// a camera to do. That is why it does not reuse
+/// [`crate::mesh::GpuVertex`] the way [`crate::exhaust`] and [`crate::sparks`]
+/// do - they draw in the world and this does not.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuVertex {
+    /// Normalised screen space, origin top left, `0..1` on both axes.
+    pub position: [f32; 2],
+    /// Into the 32x32 glow strip.
+    pub texcoord: [f32; 2],
+    /// The across-screen ramp, `0..1`.
+    pub alpha: f32,
+}
+
+/// Six vertices - two triangles - for one [`Quad`].
+///
+/// `v` runs 0 at the quad's top edge to 1 at its bottom, because
+/// [`oag_formats::texture::Texture::to_rgba`] is row-major from the top left
+/// and the strip is uploaded in that order. Wound as an explicit triangle list
+/// rather than a strip, matching the rest of the crate.
+fn quad_vertices(quad: &Quad) -> [GpuVertex; 6] {
+    let corner = |x: f32, y: f32, u: f32, v: f32| GpuVertex {
+        position: [x, y],
+        texcoord: [u, v],
+        alpha: quad.alpha,
+    };
+    let tl = corner(quad.x, quad.y, quad.u0, 0.0);
+    let tr = corner(quad.x + quad.w, quad.y, quad.u1, 0.0);
+    let bl = corner(quad.x, quad.y + quad.h, quad.u0, 1.0);
+    let br = corner(quad.x + quad.w, quad.y + quad.h, quad.u1, 1.0);
+    [tl, bl, tr, bl, br, tr]
+}
+
+/// Expands [`Wave::quads`] into the vertex buffer [`Pipeline`] draws.
+///
+/// Kept separate from `quads` so the geometry stays testable without any of
+/// this module's GPU half existing.
+#[must_use]
+pub fn vertices(quads: &[Quad]) -> Vec<GpuVertex> {
+    let mut out = Vec::with_capacity(quads.len() * 6);
+    for quad in quads {
+        out.extend_from_slice(&quad_vertices(quad));
+    }
+    out
+}
+
+/// Most vertices [`Pipeline`]'s buffer holds: one quad per band per column.
+pub const MAX_VERTICES: usize = COLUMNS * BANDS * 6;
+
+/// The overlay's blend: `dst + src.rgb * src.a`, the same shape
+/// [`crate::exhaust::BLEND`] and [`crate::sparks::BLEND`] use.
+///
+/// Additive rather than alpha-over for two reasons, and the second is the one
+/// that decides it:
+///
+/// 1. It is a glow on black. Three bands overlap in every column and overlap
+///    should read as *brighter*, not as one band occluding another.
+/// 2. **The original's across-screen ramp is a colour tint, not an alpha.**
+///    `Loading_DrawWave` ramps the vertex colour from `0xff000000` to
+///    `0xff808080` - full alpha throughout, rgb rising. Under this blend the
+///    two are the same operation, since `src.rgb * src.a` is exactly
+///    "scale the texel's brightness by the ramp". Under alpha-over they are
+///    not, and [`Quad::alpha`] would then mean something the original never
+///    computed.
+pub const BLEND: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
+/// The 32x32 glow strip, as RGBA8.
+///
+/// Normally `data/defaults/loading/LoadingPulseOverlay.mip` - `Data.wad` entry
+/// 68, name hash `d857f34b`, 2,064 bytes. Unlike
+/// [`crate::exhaust::FlareTexture`], which takes pixels the caller decoded, this
+/// carries its own [`GlowStrip::decode`]: `oag-render` already depends on
+/// `oag-formats`, there is exactly one blob this pipeline ever wants, and
+/// pushing the parse onto the caller only spreads that one fact around. The
+/// caller still owns the archive - this takes bytes, never a path or a disc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlowStrip {
+    /// Width in texels.
+    pub width: u32,
+    /// Height in texels.
+    pub height: u32,
+    /// `width * height * 4` bytes, RGBA8.
+    pub rgba: Vec<u8>,
+}
+
+impl GlowStrip {
+    /// Decodes a `.mip` blob.
+    ///
+    /// # Errors
+    ///
+    /// Propagates whatever [`oag_formats::texture::Texture::parse`] rejects.
+    /// The size arithmetic there is exact, so a failure means the blob is not a
+    /// texture rather than that it is a damaged one.
+    pub fn decode(blob: &[u8]) -> Result<Self> {
+        let texture = oag_formats::texture::Texture::parse(blob)
+            .map_err(|e| anyhow::anyhow!("{e}"))
+            .with_context(|| format!("decoding the glow strip, {} bytes", blob.len()))?;
+        Ok(Self {
+            width: u32::from(texture.width),
+            height: u32::from(texture.height),
+            rgba: texture.to_rgba(),
+        })
+    }
+
+    /// An authored stand-in, for when the disc's own strip is unavailable.
+    ///
+    /// Used by the tests below, which must run without a disc image. **Not** a
+    /// silent substitute in the game: a caller that cannot read entry 68 should
+    /// say so, for the reason [`crate::exhaust::FlareTexture::placeholder`]
+    /// gives - a plausible-looking stand-in is how a decode failure survives
+    /// review.
+    ///
+    /// Authored to the *character* the RE page describes rather than copied
+    /// from the asset: dark at the top and bottom rows, brighter towards the
+    /// middle, cut by a few bright scanlines, on a black-to-cyan ramp ending at
+    /// the documented `(222, 255, 255)`. Nothing here is measured off the
+    /// original's pixels, which would be reproducing game content.
+    #[must_use]
+    pub fn placeholder(size: u32) -> Self {
+        let size = size.max(2);
+        let mut rgba = Vec::with_capacity((size * size * 4) as usize);
+        for y in 0..size {
+            // Exactly -1 and +1 on the outermost rows, so the strip fades to
+            // black at both edges instead of clipping.
+            let t = (y as f32 / (size - 1) as f32) * 2.0 - 1.0;
+            let bell = 1.0 - t * t;
+            let scanline = if y % 5 == 1 { 1.0 } else { 0.45 };
+            let level = bell * scanline;
+            for _ in 0..size {
+                let channel = |peak: f32| (peak * level) as u8;
+                rgba.extend_from_slice(&[
+                    channel(222.0),
+                    channel(255.0),
+                    channel(255.0),
+                    // Constant, matching the real palette: every one of its 256
+                    // entries is opaque, so the alpha channel carries no shape.
+                    255,
+                ]);
+            }
+        }
+        Self {
+            width: size,
+            height: size,
+            rgba,
+        }
+    }
+
+    fn bind(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::BindGroup {
+        let size = wgpu::Extent3d {
+            width: self.width.max(1),
+            height: self.height.max(1),
+            depth_or_array_layers: 1,
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("loading glow strip"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            // Raw, not sRGB, exactly as `FlareTexture::bind` uploads: the
+            // texels feed an additive blend, so an encode on the sample would
+            // change the arithmetic the blend is doing.
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &self.rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(self.width.max(1) * 4),
+                rows_per_image: Some(self.height.max(1)),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        // Clamped on both axes. A column samples one texel of `u` and the full
+        // height of `v`, so neither coordinate ever leaves `[0, 1]` - and
+        // clamping means a `u` at the very edge cannot wrap round and pull in
+        // the opposite side of the strip under bilinear filtering.
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("loading glow strip"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("loading glow strip"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        })
+    }
+}
+
+/// Size of the tint uniform block.
+const TINT_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
+
+/// The wave's draw pipeline.
+///
+/// Modelled on [`crate::sparks::Pipeline`] - `new`/`upload`/`draw`, every entry
+/// point taking the device and queue the caller already has - with two
+/// differences, both because this is a 2D overlay:
+///
+/// - **No depth.** `depth_stencil` is `None` here, where the world-space
+///   effects share [`crate::mesh_render::DEPTH_FORMAT`]. The overlay is drawn
+///   over a finished frame and there is nothing for it to be occluded by. A
+///   pass drawing it must therefore not attach a depth target either.
+/// - **No view-projection.** The vertices arrive in normalised screen space, so
+///   the uniform block holds a tint rather than a camera.
+#[derive(Debug)]
+pub struct Pipeline {
+    pipeline: wgpu::RenderPipeline,
+    uniforms: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+    texture: wgpu::BindGroup,
+    vertices: wgpu::Buffer,
+    /// Vertices actually uploaded by the last [`Pipeline::upload`].
+    count: u32,
+}
+
+impl Pipeline {
+    /// Builds the pipeline and uploads the glow strip.
+    ///
+    /// `format` must be the target the caller's render pass writes, and
+    /// `sample_count` must match its multisample state - see
+    /// `mesh_render::build`.
+    #[must_use]
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: wgpu::TextureFormat,
+        strip: &GlowStrip,
+        sample_count: u32,
+    ) -> Self {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("loading wave"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("loading.wgsl").into()),
+        });
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("loading wave tint"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let texture_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("loading glow strip"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("loading wave"),
+            bind_group_layouts: &[Some(&layout), Some(&texture_layout)],
+            immediate_size: 0,
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("loading wave"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![
+                        0 => Float32x2, 1 => Float32x2, 2 => Float32
+                    ],
+                })],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(BLEND),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                // Screen-space quads are emitted in one winding and never seen
+                // from behind, but culling them buys nothing and a flipped
+                // winding would then show as nothing drawing at all.
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                ..Default::default()
+            },
+            multiview_mask: None,
+            cache: None,
+        });
+
+        let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("loading wave tint"),
+            size: TINT_SIZE,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("loading wave tint"),
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniforms.as_entire_binding(),
+            }],
+        });
+
+        let vertices = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("loading wave vertices"),
+            size: (MAX_VERTICES * std::mem::size_of::<GpuVertex>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let texture = strip.bind(device, queue, &texture_layout);
+
+        Self {
+            pipeline,
+            uniforms,
+            bind_group,
+            texture,
+            vertices,
+            count: 0,
+        }
+    }
+
+    /// Uploads this frame's tint and geometry, as [`vertices`] returns them.
+    ///
+    /// `tint` is rgb and a fade in `a`, and `[1.0; 4]` is the neutral value.
+    /// **Neither is a recovered term**: the only fade the RE page attributes to
+    /// this screen (`Loading_Ramp255(30, 60, t)`) tints the full-screen backdrop
+    /// blit, not the wave. It is here because a caller fading the loading screen
+    /// out needs the overlay to go with it, and doing that by rebuilding every
+    /// quad's alpha would corrupt the across-screen ramp that *is* recovered.
+    ///
+    /// Takes `&mut self` only for the vertex count; both writes go through
+    /// `queue`, the same split [`crate::sparks::Pipeline::upload`] uses.
+    pub fn upload(&mut self, queue: &wgpu::Queue, tint: [f32; 4], vertices: &[GpuVertex]) {
+        queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&tint));
+        let n = vertices.len().min(MAX_VERTICES);
+        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices[..n]));
+        self.count = n as u32;
+    }
+
+    /// Draws into a pass the caller already opened.
+    ///
+    /// An overlay, so it belongs last in the frame - after the scene and after
+    /// any post-processing, since it is UI and must not be blurred or sharpened
+    /// by an upscaler.
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
+        // `Buffer::slice` on a zero-length range is the crash `mesh_render`'s
+        // empty-model test guards; nothing to draw has to mean no commands.
+        if self.count == 0 {
+            return;
+        }
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.set_bind_group(1, &self.texture, &[]);
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        pass.draw(0..self.count, 0..1);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,5 +925,480 @@ mod tests {
         // Column 0 is pinned flat, so its band is exactly on the baseline.
         let expected = BASELINE_Y / REF_HEIGHT - (STRIP_SIZE / REF_HEIGHT) * 0.5;
         assert!((quads[0].y - expected).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_quad_becomes_two_triangles_with_the_strip_the_right_way_up() {
+        let quad = Quad {
+            x: 0.25,
+            y: 0.5,
+            w: 0.1,
+            h: 0.2,
+            u0: 0.0,
+            u1: 1.0 / STRIP_SIZE,
+            alpha: 0.75,
+        };
+        let v = quad_vertices(&quad);
+        assert_eq!(v.len(), 6);
+        // The capture below cannot catch a flipped `v`: the strip's own
+        // intensity is very nearly symmetric about its middle row, so
+        // mirroring it moves the drawn band by far less than the tolerance
+        // there. Pinned exactly here instead.
+        assert_eq!(v[0].position, [quad.x, quad.y], "vertex 0 is the top left");
+        assert_eq!(v[0].texcoord, [quad.u0, 0.0], "the top edge samples v = 0");
+        assert_eq!(
+            v[5].texcoord[1], 0.0,
+            "the second triangle's top vertex too"
+        );
+        assert!(
+            v.iter().all(|vertex| vertex.alpha == quad.alpha),
+            "the ramp is per column, so every vertex of a quad carries it"
+        );
+        let bottom = v
+            .iter()
+            .filter(|vertex| vertex.texcoord[1] == 1.0)
+            .collect::<Vec<_>>();
+        assert_eq!(bottom.len(), 3, "three of the six are on the bottom edge");
+        assert!(
+            bottom
+                .iter()
+                .all(|vertex| vertex.position[1] == quad.y + quad.h),
+            "v = 1 must be the lower edge on screen, not the upper one"
+        );
+    }
+
+    /// `GlowStrip::decode` on a blob shaped like the real one.
+    ///
+    /// Synthetic bytes, not the disc's: a 32x32 8bpp texture is a 16-byte
+    /// header, a 256-entry palette and one index per pixel, which is 2,064
+    /// bytes - the size `LoadingPulseOverlay.mip` is documented at. Building it
+    /// here rather than reading entry 68 keeps the test runnable without a disc
+    /// image and keeps no game content anywhere near the repository.
+    #[test]
+    fn the_glow_strip_decodes_from_a_mip_blob() {
+        let size = STRIP_SIZE as usize;
+        let mut blob = vec![0u8; 16];
+        blob[0..2].copy_from_slice(&(size as u16).to_le_bytes());
+        blob[2..4].copy_from_slice(&(size as u16).to_le_bytes());
+        blob[4] = 8;
+        blob[6] = 1;
+        // A palette ramping black to the documented `(222, 255, 255)`, opaque
+        // throughout, which is what the real one does.
+        for i in 0..256u32 {
+            let level = |peak: u32| (peak * i / 255) as u8;
+            blob.extend_from_slice(&[level(222), level(255), level(255), 255]);
+        }
+        blob.extend((0..size * size).map(|i| (i % 256) as u8));
+        assert_eq!(blob.len(), 2064, "the documented size of entry 68");
+
+        let strip = GlowStrip::decode(&blob).expect("a well-formed blob must decode");
+        assert_eq!((strip.width, strip.height), (32, 32));
+        assert_eq!(strip.rgba.len(), 32 * 32 * 4);
+        assert_eq!(
+            &strip.rgba[..4],
+            &[0, 0, 0, 255],
+            "index 0 is the black end"
+        );
+
+        assert!(
+            GlowStrip::decode(&blob[..blob.len() - 1]).is_err(),
+            "the size arithmetic is exact, so a truncated blob is not a texture"
+        );
+    }
+
+    /// Renders the overlay offscreen and hands the frame back as RGBA8.
+    ///
+    /// `Rgba8Unorm`, not sRGB: this is checking what the additive blend put on
+    /// screen against a known input, and an encode would put a transfer
+    /// function between the two. Sample count 1 and **no depth attachment** -
+    /// [`Pipeline`] declares `depth_stencil: None`, so attaching one is a
+    /// validation error rather than a harmless extra.
+    fn capture(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        strip: &GlowStrip,
+        vertices: &[GpuVertex],
+        width: u32,
+        height: u32,
+    ) -> Vec<u8> {
+        let format = wgpu::TextureFormat::Rgba8Unorm;
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let target = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("loading capture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut pipeline = Pipeline::new(device, queue, format, strip, 1);
+        pipeline.upload(queue, [1.0; 4], vertices);
+
+        let unpadded = width as usize * 4;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+        let padded = unpadded.div_ceil(align) * align;
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("readback"),
+            size: (padded * height as usize) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = device.create_command_encoder(&Default::default());
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("loading wave"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        // Black, which is what the wave is drawn over: the
+                        // backdrop is either cleared or a tip image, and an
+                        // additive blend over black is the strip itself.
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pipeline.draw(&mut pass);
+        }
+        encoder.copy_texture_to_buffer(
+            target.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded as u32),
+                    rows_per_image: Some(height),
+                },
+            },
+            size,
+        );
+        queue.submit(Some(encoder.finish()));
+        readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("draining the queue");
+        let mapped = readback.slice(..).get_mapped_range().expect("mapping");
+        let mut pixels = Vec::with_capacity(unpadded * height as usize);
+        for row in mapped.chunks(padded).take(height as usize) {
+            pixels.extend_from_slice(&row[..unpadded]);
+        }
+        drop(mapped);
+        readback.unmap();
+        pixels
+    }
+
+    /// Per-row brightness: the sum of every rgb channel on that row.
+    fn row_profile(pixels: &[u8], width: u32, height: u32) -> Vec<u64> {
+        (0..height as usize)
+            .map(|y| {
+                pixels[y * width as usize * 4..(y + 1) * width as usize * 4]
+                    .chunks_exact(4)
+                    .map(|p| u64::from(p[0]) + u64::from(p[1]) + u64::from(p[2]))
+                    .sum()
+            })
+            .collect()
+    }
+
+    /// Per-column brightness, the same sum down the other axis.
+    fn column_profile(pixels: &[u8], width: u32, height: u32) -> Vec<u64> {
+        let mut out = vec![0u64; width as usize];
+        for row in pixels
+            .chunks_exact(width as usize * 4)
+            .take(height as usize)
+        {
+            for (x, pixel) in row.chunks_exact(4).enumerate() {
+                out[x] += u64::from(pixel[0]) + u64::from(pixel[1]) + u64::from(pixel[2]);
+            }
+        }
+        out
+    }
+
+    /// The band's intensity-weighted centre, as a fraction of the height.
+    fn band_centre(profile: &[u64]) -> f64 {
+        let total: u64 = profile.iter().sum();
+        assert!(total > 0, "nothing was drawn at all");
+        let weighted: f64 = profile
+            .iter()
+            .enumerate()
+            .map(|(y, v)| (y as f64 + 0.5) * *v as f64)
+            .sum();
+        weighted / total as f64 / profile.len() as f64
+    }
+
+    /// Draws the wave offscreen at two very different sizes and asserts on the
+    /// pixels.
+    ///
+    /// **Skips when there is no adapter**, so a green CI run is not evidence
+    /// that it ran - the same caveat `post::fxaa`'s device tests carry.
+    ///
+    /// Both captures are fed the *same* quads, built once from one seeded
+    /// [`Rng`]. Resolution independence is then exact rather than statistical:
+    /// the band's centre must land at the same fraction of the height on a
+    /// 480x272 frame and a 1920x1080 one, and any difference is rasterisation
+    /// quantisation rather than a difference in the geometry.
+    ///
+    /// What it measured when written, on this machine:
+    ///
+    /// | Size | Lit rows | As a fraction | Weighted centre |
+    /// | --- | --- | --- | ---: |
+    /// | 480x272 | 202..=238 | 0.743..0.879 | 0.8117 |
+    /// | 1920x1080 | 804..=949 | 0.744..0.880 | 0.8117 |
+    ///
+    /// The centre sits 0.003 below `BASELINE_Y / REF_HEIGHT` (0.8088) because
+    /// the wave is not flat even on the envelope's silent frame - the floor
+    /// keeps a tenth of the amplitude alive - and the drawn spread is wider
+    /// than one 32-pixel strip for the same reason.
+    #[test]
+    fn the_band_draws_where_the_original_puts_it_at_any_resolution() {
+        let instance = wgpu::Instance::default();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                .expect("requesting the device");
+
+        let wave = Wave::new();
+        let columns = wave.columns(&mut rng());
+        let quads = wave.quads(&columns);
+        let vertices = vertices(&quads);
+        assert_eq!(vertices.len(), MAX_VERTICES);
+
+        let strip = GlowStrip::placeholder(STRIP_SIZE as u32);
+        let mut centres = Vec::new();
+        for (width, height) in [(REF_WIDTH as u32, REF_HEIGHT as u32), (1920, 1080)] {
+            let pixels = capture(&device, &queue, &strip, &vertices, width, height);
+            let profile = row_profile(&pixels, width, height);
+            let lit: Vec<usize> = profile
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| **v > 0)
+                .map(|(y, _)| y)
+                .collect();
+            let first = *lit.first().expect("some row must be lit");
+            let last = *lit.last().expect("some row must be lit");
+            let centre = band_centre(&profile);
+            eprintln!(
+                "{width}x{height}: lit rows {first}..={last} ({:.4}..{:.4}), centre {centre:.4}",
+                first as f64 / height as f64,
+                (last + 1) as f64 / height as f64
+            );
+
+            // Well above and well below the band is untouched black. The band
+            // is 32 reference pixels tall around y=220 of 272, so 0.70 and 0.92
+            // are both clear of it even before the wave's own offsets - which
+            // are small at phase 0, the envelope's silent frame.
+            let above = (height as f64 * 0.70) as usize;
+            let below = (height as f64 * 0.92) as usize;
+            assert!(
+                profile[..above].iter().all(|v| *v == 0),
+                "the top 70% must be black, first lit row is {first}"
+            );
+            assert!(
+                profile[below..].iter().all(|v| *v == 0),
+                "the bottom 8% must be black, last lit row is {last}"
+            );
+            assert!(
+                profile[first..=last].iter().any(|v| *v > 0),
+                "the band itself must be lit"
+            );
+
+            // The across-screen ramp is a real thing to check: `ramp255(10,
+            // 350, x)` is zero until x=10 of 480, so the far left is dark and
+            // brightness rises to the right.
+            let row = &pixels[centre_row_range(centre, width, height)];
+            let brightness = |slice: &[u8]| -> u64 {
+                slice
+                    .chunks_exact(4)
+                    .map(|p| u64::from(p[0]) + u64::from(p[1]) + u64::from(p[2]))
+                    .sum()
+            };
+            let third = row.len() / 3 / 4 * 4;
+            let left = brightness(&row[..third]);
+            let right = brightness(&row[row.len() - third..]);
+            assert!(
+                right > left,
+                "the alpha ramp must brighten to the right: left {left}, right {right}"
+            );
+
+            // The band reaches the right edge of the framebuffer, whatever the
+            // framebuffer is - the PS2 port's bug, checked in pixels this time
+            // rather than in the quads' arithmetic. And the far left is
+            // genuinely black rather than dim: `ramp255(10, 350, 0)` clamps to
+            // zero, so the first columns draw nothing at all. That is the dark
+            // left edge in a capture of this, and it is correct.
+            let columns = column_profile(&pixels, width, height);
+            assert_eq!(
+                columns[0], 0,
+                "the alpha ramp starts at x=10 of 480, so column 0 draws nothing"
+            );
+            assert!(
+                columns[width as usize - 1] > 0,
+                "the band must reach the right edge of a {width}-wide frame"
+            );
+
+            centres.push(centre);
+        }
+
+        // y = 220 on a 272-line display, the figure `BASELINE_Y` carries.
+        let expected = f64::from(BASELINE_Y) / f64::from(REF_HEIGHT);
+        for centre in &centres {
+            assert!(
+                (centre - expected).abs() < 0.01,
+                "the band's centre is {centre:.4}, expected {expected:.4}"
+            );
+        }
+        assert!(
+            (centres[0] - centres[1]).abs() < 0.005,
+            "the same quads must land at the same fraction of the height: {:.4} against {:.4}",
+            centres[0],
+            centres[1]
+        );
+    }
+
+    /// The byte range of the row nearest `centre`.
+    fn centre_row_range(centre: f64, width: u32, height: u32) -> std::ops::Range<usize> {
+        let y = ((centre * f64::from(height)) as usize).min(height as usize - 1);
+        let stride = width as usize * 4;
+        y * stride..(y + 1) * stride
+    }
+
+    /// Writes one frame to `data/cache/loading-wave.png`, for eyeballing.
+    ///
+    /// `#[ignore]`d because it exists to produce a picture rather than to check
+    /// anything, the same split `tests/collision_capture.rs` uses - the test
+    /// above is the one that guards the behaviour. Run it with
+    /// `cargo nextest run -p oag-render --run-ignored all a_capture_for_eyeballing`.
+    /// `data/` is gitignored, which is where a derived picture belongs.
+    #[test]
+    #[ignore = "writes a picture rather than asserting anything"]
+    fn a_capture_for_eyeballing() {
+        let instance = wgpu::Instance::default();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                .expect("requesting the device");
+
+        // Phase 5 is the envelope's first 99, so the band is at full amplitude
+        // rather than idling at the floor.
+        let mut wave = Wave::new();
+        for _ in 0..5 {
+            wave.advance();
+        }
+        let columns = wave.columns(&mut rng());
+        let vertices = vertices(&wave.quads(&columns));
+        let strip = GlowStrip::placeholder(STRIP_SIZE as u32);
+        let (width, height) = (REF_WIDTH as u32, REF_HEIGHT as u32);
+        let pixels = capture(&device, &queue, &strip, &vertices, width, height);
+
+        // Relative to the workspace root, not the crate: a test's working
+        // directory is its own crate.
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/cache");
+        std::fs::create_dir_all(&dir).expect("creating data/cache");
+        let path = dir.join("loading-wave.png");
+        std::fs::write(&path, oag_formats::png::encode_rgba(width, height, &pixels))
+            .expect("writing the capture");
+        eprintln!("wrote {}", path.display());
+    }
+
+    /// Renders the wave with the **real** `LoadingPulseOverlay.mip`, not the
+    /// placeholder.
+    ///
+    /// Everything else here is checked against a synthetic strip, which proves
+    /// the pipeline but not that the game's own texture survives
+    /// [`GlowStrip::decode`] and reaches the shader. `Data.wad` entry 68 is
+    /// swizzled and its palette is fully opaque, so a linear read or an
+    /// alpha-respecting shader both give a plausible-but-wrong band - exactly
+    /// the failure a synthetic strip cannot reproduce.
+    #[test]
+    #[ignore = "needs a PSP disc image under data/images"]
+    fn the_games_own_glow_strip_reaches_the_shader() {
+        let image = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data/images/pulse-psp-eu.chd");
+        if !image.exists() {
+            eprintln!("skipping: {} not present", image.display());
+            return;
+        }
+        let spec = format!("{}:PSP_GAME/USRDIR/Data.wad", image.display());
+        let mut archive = oag_assets::Archive::open(&spec).expect("opening Data.wad");
+        let blob = archive.read(68).expect("reading entry 68");
+
+        let strip = GlowStrip::decode(&blob).expect("decoding the glow strip");
+        assert_eq!(
+            (strip.width, strip.height),
+            (STRIP_SIZE as u32, STRIP_SIZE as u32),
+            "the recovered strip is 32x32"
+        );
+
+        // The documented palette ends at Pulse's cyan, so the brightest texel
+        // has to be blue-dominant. A swizzle or palette mistake shows up here
+        // as grey or as a colour cast rather than as a crash.
+        let brightest = strip
+            .rgba
+            .chunks_exact(4)
+            .max_by_key(|p| u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]))
+            .expect("a texel");
+        assert!(
+            brightest[2] >= brightest[0] && brightest[1] >= brightest[0],
+            "brightest texel {brightest:?} is not on the black-to-cyan ramp"
+        );
+        assert!(
+            strip.rgba.chunks_exact(4).all(|p| p[3] == 255),
+            "every palette entry is opaque, which is why the shader ignores texel alpha"
+        );
+
+        let instance = wgpu::Instance::default();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+            eprintln!("no GPU adapter: skipping the draw");
+            return;
+        };
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                .expect("requesting the device");
+
+        let mut wave = Wave::new();
+        for _ in 0..5 {
+            wave.advance();
+        }
+        let columns = wave.columns(&mut rng());
+        let vertices = vertices(&wave.quads(&columns));
+        let (width, height) = (REF_WIDTH as u32, REF_HEIGHT as u32);
+        let pixels = capture(&device, &queue, &strip, &vertices, width, height);
+
+        let lit = pixels
+            .chunks_exact(4)
+            .filter(|p| u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]) > 0)
+            .count();
+        assert!(
+            lit > 0,
+            "the real strip drew nothing, so it never reached the shader"
+        );
+        eprintln!("{lit} lit pixels of {}", width * height);
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/cache");
+        std::fs::create_dir_all(&dir).expect("creating data/cache");
+        let out = dir.join("loading-wave-real.png");
+        std::fs::write(&out, oag_formats::png::encode_rgba(width, height, &pixels))
+            .expect("writing the capture");
+        eprintln!("wrote {}", out.display());
     }
 }

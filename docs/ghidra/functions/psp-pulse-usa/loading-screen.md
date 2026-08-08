@@ -102,6 +102,17 @@ and a pixel grid of dark noise cut by a few bright horizontal scanlines. It is
 a glow strip, not an image of anything. Confidence **95**: the header
 arithmetic is exact and the decode was rendered.
 
+Two further facts about the blob, measured while writing the renderer half
+(`oag_render::loading::Pipeline`) and worth not re-deriving. **Every one of the
+256 palette entries carries alpha 255.** The strip's shape therefore lives
+entirely in the black-to-cyan colour ramp and its alpha channel carries
+nothing, which is why the reimplementation samples the texel's rgb and takes
+its alpha from the across-screen ramp instead. And **bit 0 of `+0x07` is set**,
+so the pixels are stored in the GE's swizzled layout - the
+[PSP texture](../../../formats/psp-texture.md) reader unswizzles them, and
+reading the blob linearly gives a plausible-looking but wrong strip.
+Confidence **95**, both being direct reads of the decoded bytes.
+
 ### The geometry
 
 The draw loop walks screen X in steps of 2, from 0 to 480, and emits three
