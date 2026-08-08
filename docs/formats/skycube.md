@@ -203,3 +203,20 @@ that would be needed to fix it; recorded rather than silently accepted.
   `weatherPos` runs 1 to 21 per track with a zero-length payload - and undecoded.
 - **PS2 parity.** Not checked. Pulse's class IDs do not carry to Pure, and the
   PS2 build's numbering is unconfirmed.
+
+**PS2 rendering was broken until 2026-08-07: `build_sky` never received the
+external texture set, so every PS2 sky drew white.** A PS2 `.vex` embeds no
+texture block at all (see [`ps2-texture.md`](ps2-texture.md)), and
+`oag_render::mesh::build_sky` hardcoded `external: None`, unlike
+[`build_with_textures`] which the track model already resolved an external set
+for. The `Skycube`'s materials name a texture by its ordinal among *all* of the
+file's `Texture` nodes, the same ordinal space the track mesh and the speedup
+pads use - see `ps2-texture.md`'s "How a model finds its texture set" - so the
+fix is passing the *same* resolved set into `build_sky` (and `build_pads`,
+which had the identical bug) rather than resolving a second one. Confirmed on
+`03_Track` (Moa Therma, the reported case): white sky before, textured sky
+after, `just view --sky` gives the identical result standalone. Also confirmed
+on the two circuits with a texture set short by 1-2 slots
+(`02_Track`, `12_Track`) - the missing ordinals are not among the sky's own, so
+both skies draw fully textured despite the track's own art meshes reporting a
+couple of undecoded slots.
