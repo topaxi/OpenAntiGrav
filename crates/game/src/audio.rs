@@ -29,7 +29,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use oag_audio::{Bus, Output, Play, Sound, VoiceId};
-use oag_disc::DiscImage;
+use oag_disc::{DiscImage, Platform};
 use oag_formats::ps2_music;
 use serde::{Deserialize, Serialize};
 
@@ -88,13 +88,276 @@ pub const DUMP_SAMPLE_RATE: u32 = ps2_music::SAMPLE_RATE;
 /// `docs/ps2/pulse-disc-layout.md`.
 const PS2_MUSIC_PATH: &str = "54748/PS2MUSIC.WAD";
 
-/// Which track is played, by index into the archive's directory.
+/// Which track is played, by index into the booted release's own soundtrack.
 ///
 /// The first, because nothing yet maps a circuit or a menu to a track: the
-/// entries are addressed by name hash and no name for any of them has been
-/// recovered. Playing a fixed one proves the path end to end without claiming
-/// a mapping that has not been established.
+/// entries are addressed by name hash on both discs and no name for any of them
+/// has been recovered. Playing a fixed one proves the path end to end without
+/// claiming a mapping that has not been established.
 const MUSIC_TRACK: usize = 0;
+
+/// Which release's encode of the soundtrack is played.
+///
+/// **Music, not audio.** Only the sixteen soundtrack tracks have a counterpart
+/// on the other disc - a 16-for-16 bijection with a mean duration gap of 11 ms,
+/// established in `docs/formats/ps2-audio.md`. Voice and every sound bank stay
+/// on whatever disc the game booted from, because nothing pairs them.
+///
+/// # This does not govern the front end's own music
+///
+/// **And a reader who expects it to should stop here rather than file a bug.**
+/// The PSP release has music written for its menus,
+/// `Data\Music\FEMusic\frontend1.at3`, a 28-second loop that is *not* one of
+/// the sixteen: no PS2 entry has ever been matched to it, and `PS2MUSIC.WAD`
+/// holds sixteen entries of which all sixteen are three-minute soundtrack
+/// tracks. With no counterpart there is nothing for this to choose between, so
+/// a PSP boot plays its front-end music at every value of this setting.
+///
+/// Offering it anyway would be worse than useless: the row promises that its
+/// three values are **one recording encoded twice**, which is what licenses
+/// [`Audio::set_music_source`] to seek rather than restart. Pointing it at two
+/// unrelated pieces of music would break that promise and land the playhead 20
+/// seconds into something else.
+///
+/// The PS2 release has no front-end music of its own that has been found, and
+/// what it plays under its menus **is** soundtrack track 0 - one of the
+/// sixteen. So the row is effective on a PS2 boot and inert on a PSP one, and
+/// that asymmetry is the discs', not this module's. Nothing here adds music to
+/// a screen that had none.
+///
+/// The rule is enforced in exactly one place, by
+/// [`Audio::music_from`] being `None` for anything that was not loaded as one
+/// of the sixteen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MusicSource {
+    /// The disc the game booted from.
+    ///
+    /// **The default, and deliberately not "whichever is better".** Running the
+    /// PSP release should sound like the PSP release; ATRAC3+ at 96 kbit/s is
+    /// part of what that sounded like, and swapping it out by default would be
+    /// this project deciding a player's copy of the game was wrong.
+    #[default]
+    Auto,
+    /// The PSP release's ATRAC3+ encode, 44,100 Hz and lossy.
+    Psp,
+    /// The PS2 release's uncompressed PCM, 48,000 Hz.
+    Ps2,
+}
+
+impl MusicSource {
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Psp => "psp",
+            Self::Ps2 => "ps2",
+        }
+    }
+
+    /// Every value, for the menus and for error messages.
+    pub const ALL: [Self; 3] = [Self::Auto, Self::Psp, Self::Ps2];
+
+    /// The release this names outright, or `None` for [`Self::Auto`], which
+    /// names whichever disc booted.
+    #[must_use]
+    pub fn platform(self) -> Option<Platform> {
+        match self {
+            Self::Auto => None,
+            Self::Psp => Some(Platform::Psp),
+            Self::Ps2 => Some(Platform::Ps2),
+        }
+    }
+}
+
+impl std::str::FromStr for MusicSource {
+    type Err = String;
+
+    fn from_str(text: &str) -> std::result::Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|source| source.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| format!("{text:?} is not a music source; try auto, psp or ps2"))
+    }
+}
+
+impl std::fmt::Display for MusicSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Which Pulse releases this machine has, and which one the game booted from.
+///
+/// Surveyed once, at boot: the answer decides whether the MUSIC SOURCE row is
+/// offered at all, and re-deriving it on a keypress would mean opening every
+/// disc image on the search path while a menu is on screen.
+///
+/// # The counterpart is confirmed by its soundtrack, not by its serial
+///
+/// **Neither a file name nor a disc serial is enough here, and both were tried
+/// first.** `crate::source::IMAGE_NAMES` does not cover every regional
+/// pressing - `pulse-psp-eu.chd` is not on it - and a file somebody renamed is
+/// still a valid source. `oag_assets::pulse::Layout::resolve` looked like the
+/// answer, but its deny-list is deliberately *positive-only*: it rules out the
+/// one Pure serial this project has verified (`UCUS-98612`) and gives an
+/// unlisted serial no verdict, because allow-listing would hard-reject a
+/// player's own legitimate pressing. Measured, a `data/images/` holding
+/// `pure-psp-eu.chd` (`UCES-00001`, not on that list) reported it as the PSP
+/// counterpart.
+///
+/// That polarity is right for the disc a player *named* and wrong for one
+/// nobody did: here a false positive is silent and plays another game's music,
+/// while a false negative only means the row is not offered. So a candidate has
+/// to **pair**, through [`Soundtrack::pairs_with`] - sixteen tracks against
+/// sixteen, each within [`PAIR_TOLERANCE`] of a distinct partner. That is the
+/// measurement `docs/formats/ps2-audio.md` records, run against the disc in
+/// hand rather than trusted from a table, and it is a far stronger test than
+/// any serial: a disc that passes it demonstrably carries this soundtrack.
+#[derive(Debug, Clone, Default)]
+pub struct MusicDiscs {
+    /// A Pulse PSP source, if one was found.
+    psp: Option<String>,
+    /// A Pulse PS2 source, if one was found.
+    ps2: Option<String>,
+    /// Which release the game booted from, when it is one of the two.
+    booted: Option<Platform>,
+}
+
+impl MusicDiscs {
+    /// Works out which releases are reachable, given the one that booted.
+    ///
+    /// The booted source is taken at its word - the game is already running off
+    /// it - and only the *other* release is looked for, on
+    /// [`crate::source::search_path`]. That halves the work and it also stops
+    /// the survey from opening a second copy of the disc already open.
+    ///
+    /// Never fails: every reason a counterpart is not found - no such directory,
+    /// an image that will not open, a Pure UMD sitting beside a Pulse one -
+    /// collapses into "there is no counterpart", which is the same answer a
+    /// machine with one disc gives.
+    #[must_use]
+    pub fn survey(booted: &str) -> Self {
+        let mut discs = Self::default();
+        let Ok(layout) = oag_assets::pulse::Layout::resolve(booted) else {
+            return discs;
+        };
+        discs.booted = Some(layout.platform);
+        match layout.platform {
+            Platform::Psp => discs.psp = Some(booted.to_string()),
+            Platform::Ps2 => discs.ps2 = Some(booted.to_string()),
+            Platform::Unknown => return discs,
+        }
+
+        // The booted disc's own soundtrack is what a candidate has to match,
+        // so it is read first. A source that has none - a partial extract -
+        // leaves nothing to confirm a counterpart against, and the row is not
+        // offered rather than offered on trust.
+        let Ok(Some(mine)) = Soundtrack::read(booted, layout.platform) else {
+            return discs;
+        };
+
+        let wanted = match layout.platform {
+            Platform::Psp => Platform::Ps2,
+            _ => Platform::Psp,
+        };
+        let Some(found) = find_release(booted, wanted, &mine) else {
+            return discs;
+        };
+        match wanted {
+            Platform::Ps2 => discs.ps2 = Some(found),
+            _ => discs.psp = Some(found),
+        }
+        discs
+    }
+
+    /// Whether both releases are reachable, which is when the row is offered.
+    #[must_use]
+    pub fn both(&self) -> bool {
+        self.psp.is_some() && self.ps2.is_some()
+    }
+
+    /// The release the game booted from, when it is one this knows.
+    #[must_use]
+    pub fn booted(&self) -> Option<Platform> {
+        self.booted
+    }
+
+    /// One line for a load report: what was found, and where.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        match (&self.psp, &self.ps2) {
+            (Some(psp), Some(ps2)) => format!("PSP {psp} and PS2 {ps2}"),
+            (Some(psp), None) => format!("PSP {psp} only"),
+            (None, Some(ps2)) => format!("PS2 {ps2} only"),
+            (None, None) => "neither release".to_string(),
+        }
+    }
+
+    /// Which source `choice` resolves to, and which release it is.
+    ///
+    /// **Falls back to the booted disc** rather than to silence when the chosen
+    /// release is not reachable: a settings file that says `ps2` carried onto a
+    /// machine with only the PSP disc should still have music, and the row is
+    /// not offered there to say otherwise.
+    fn pick(&self, choice: MusicSource) -> Option<(&str, Platform)> {
+        let chosen = choice.platform().and_then(|platform| match platform {
+            Platform::Psp => self.psp.as_deref().map(|at| (at, platform)),
+            _ => self.ps2.as_deref().map(|at| (at, platform)),
+        });
+        chosen.or_else(|| match self.booted? {
+            Platform::Psp => self.psp.as_deref().map(|at| (at, Platform::Psp)),
+            Platform::Ps2 => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
+            Platform::Unknown => None,
+        })
+    }
+}
+
+/// The first source on the search path carrying `wanted`'s encode of `mine`.
+///
+/// Every container in every directory [`crate::source::search_path`] lists is
+/// tried, in that order. `Layout::resolve` is only the **prefilter** - it says
+/// what platform a disc is and skips one that carries no archives at all - and
+/// [`Soundtrack::pairs_with`] is the test that decides, for the reason
+/// [`MusicDiscs`] records at length: a serial cannot rule a disc *in*, and a
+/// counterpart nobody named has to be ruled in rather than merely not ruled
+/// out.
+fn find_release(booted: &str, wanted: Platform, mine: &Soundtrack) -> Option<String> {
+    for directory in crate::source::search_path() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            continue;
+        };
+        let mut candidates: Vec<PathBuf> = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file() && crate::source::is_container(path))
+            .collect();
+        // Alphabetical, so two runs of the same directory pick the same image -
+        // the same reason `crate::source::first_image` sorts.
+        candidates.sort();
+
+        for path in candidates {
+            let source = path.to_string_lossy().into_owned();
+            if source == booted {
+                continue;
+            }
+            if !oag_assets::pulse::Layout::resolve(&source)
+                .is_ok_and(|layout| layout.platform == wanted)
+            {
+                continue;
+            }
+            if Soundtrack::read(&source, wanted)
+                .ok()
+                .flatten()
+                .is_some_and(|theirs| theirs.pairs_with(mine))
+            {
+                return Some(source);
+            }
+        }
+    }
+    None
+}
 
 /// The PSP front end's music, in `Data.wad`.
 ///
@@ -102,7 +365,9 @@ const MUSIC_TRACK: usize = 0;
 /// template at `0x08a88e94`, `Data\Music\FEMusic\frontend%d.at3` - see
 /// `docs/formats/vex.md` - and hashing the expansion finds an entry for every
 /// `%d` from 1 to 8 and none for 0, so the numbering starts at one. All eight
-/// are stereo ATRAC3+ at 44,100 Hz and about 28 seconds long.
+/// are stereo ATRAC3+ at 44,100 Hz; the first declares 1,302,720 samples in its
+/// `fact` chunk and decodes to **29.5 seconds**, which is what a `--dump-audio`
+/// capture of a PSP boot reports.
 ///
 /// Which of the eight belongs to which menu is **not** established, so the
 /// first is played, for the same reason [`MUSIC_TRACK`] is zero: it proves the
@@ -124,6 +389,35 @@ pub struct Audio {
     /// The looping music voice, so a later volume change or stop can address
     /// it. `None` when this source carries no decodable music.
     music: Option<VoiceId>,
+    /// Which release the playing music came off, **when what is playing is one
+    /// of the sixteen soundtrack tracks**.
+    ///
+    /// `None` means either nothing is playing or what is playing has no
+    /// counterpart on the other disc - the PSP front end's own music is that
+    /// case - and [`Audio::set_music_source`] declines to touch it. This one
+    /// field is the whole of the row's scope; see [`MusicSource`].
+    music_from: Option<Platform>,
+    /// The soundtrack track each release has already been read for, kept so
+    /// that moving the row back is instant. Only ever holds one of the sixteen:
+    /// the front end's own music never enters here, because nothing would ever
+    /// ask for it a second time.
+    ///
+    /// **This is what the setting costs**, and it is memory rather than a
+    /// second live disc handle: track 0 is 33 MiB of PCM as the PSP stores it
+    /// and 36 MiB as the PS2 does, so holding both is about 69 MiB. Nothing
+    /// here keeps a [`DiscImage`] open - each release is read once, whole, and
+    /// the handle dropped.
+    ///
+    /// The alternative is re-reading on every nudge of the row, and that is
+    /// measured rather than assumed: on this machine the first move onto the
+    /// PS2 release costs **2.0 seconds** and the first onto the PSP release
+    /// about **0.4 seconds** with the `ffmpeg` cache already filled. Neither
+    /// figure is only the payload read - a cross-disc selection also
+    /// enumerates both soundtracks to pair them, and opens the chosen image
+    /// twice, once in [`Audio::locate`] and once in [`load_track`]. A row a
+    /// player cycles through three values would otherwise stall every time
+    /// round.
+    held: Vec<(Platform, Arc<Sound>)>,
     /// The movie's own sound, while a movie is playing one.
     ///
     /// Separate from [`Self::music`] although both are on [`Bus::Music`],
@@ -131,6 +425,35 @@ pub struct Audio {
     /// the music runs for the whole session and this lasts one movie. See
     /// [`Audio::start_movie`].
     movie: Option<VoiceId>,
+}
+
+/// A music track that has been read and decoded, before a voice is started on
+/// it.
+///
+/// [`Loaded::from`] is the field that matters and the reason this is a struct
+/// rather than a tuple: it carries whether what was loaded is one of the
+/// sixteen soundtrack tracks, which is what decides whether MUSIC SOURCE may
+/// ever move it. See [`MusicSource`].
+struct Loaded {
+    /// Which release it came off, or `None` for music with no counterpart -
+    /// the PSP front end's own. Becomes [`Audio::music_from`].
+    from: Option<Platform>,
+    /// The decoded samples.
+    sound: Arc<Sound>,
+    /// One line naming it, for the load report on stdout.
+    what: String,
+}
+
+// Written out rather than derived for the reason [`Dump`]'s is: a `{:?}` of one
+// of these should say how long the track is, not print three minutes of it.
+impl std::fmt::Debug for Loaded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Loaded")
+            .field("from", &self.from)
+            .field("seconds", &self.sound.seconds())
+            .field("what", &self.what)
+            .finish()
+    }
 }
 
 /// The offline capture: a path and the samples destined for it.
@@ -156,6 +479,8 @@ impl std::fmt::Debug for Audio {
             .field("output", &self.output)
             .field("dump", &self.dump)
             .field("music", &self.music)
+            .field("music_from", &self.music_from)
+            .field("held", &self.held.len())
             .field("movie", &self.movie)
             .finish()
     }
@@ -187,6 +512,8 @@ impl Audio {
                 samples: Vec::new(),
             }),
             music: None,
+            music_from: None,
+            held: Vec::new(),
             movie: None,
         };
         audio.apply(settings);
@@ -214,52 +541,212 @@ impl Audio {
         &self.output
     }
 
-    /// Loads one music track off `source` and starts it looping.
+    /// Starts the music this source plays under the front end, looping.
     ///
-    /// The two releases keep their music in unrelated places and unrelated
-    /// formats, so both are tried in turn: the PS2's `PS2MUSIC.WAD` first,
-    /// because it is loose on the disc and needs nothing but a ranged read, and
-    /// then the PSP's `Data.wad`, whose ATRAC3+ has to go out to `ffmpeg` and
-    /// through the cache in [`crate::at3`]. A source answers exactly one of
-    /// them, so the order is only about doing the cheap check first.
+    /// **The two releases play different things here, and that is the disc's
+    /// doing rather than a choice made in this module.** The PSP has front-end
+    /// music of its own - [`PSP_MUSIC_NAME`], a 28-second loop - and that is
+    /// what it plays. The PS2 release has no such entry anywhere that has been
+    /// found, and what it plays is [`PS2_MUSIC_PATH`] track [`MUSIC_TRACK`],
+    /// one of the sixteen soundtrack tracks, at three minutes. Neither is
+    /// touched by [`MusicSource`]: see that type for why the row cannot reach
+    /// the PSP's, and [`Self::set_music_source`] for the one line that enforces
+    /// it.
     ///
     /// `cache_dir` is where a decoded PSP track lands - see
     /// [`crate::boot::default_audio_cache_dir`]. It is unused by the PS2 path,
-    /// which needs no decoder.
+    /// which stores its music as PCM and needs no decoder.
     ///
     /// **Never fatal.** A source with no decodable music says so on stdout and
     /// plays nothing, which is the same degradation the video path takes when
     /// `ffmpeg` is missing: name what is absent and carry on. A machine with no
     /// `ffmpeg` on `PATH` is that case for a PSP disc, and the message names
     /// the tool.
-    pub fn start_music(&mut self, source: &str, cache_dir: &Path) {
+    pub fn start_music(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
         if self.music.is_some() {
             return;
         }
-        let loaded = load_ps2_track(source, MUSIC_TRACK)
-            .map(|found| {
-                found.map(|sound| (sound, format!("{PS2_MUSIC_PATH} track {MUSIC_TRACK}")))
-            })
-            .and_then(|found| match found {
-                Some(found) => Ok(Some(found)),
-                None => load_psp_track(source, cache_dir)
-                    .map(|found| found.map(|sound| (sound, PSP_MUSIC_NAME.to_string()))),
-            });
+        // The PS2's front-end music **is** a soundtrack track, so it goes
+        // through `fetch` and comes back stamped with the release it came off -
+        // which is what makes the row able to move it. The PSP's is not one,
+        // so it is loaded directly and left unstamped; `music_from` staying
+        // `None` is the whole of the scoping rule.
+        let loaded = match discs.booted() {
+            Some(Platform::Ps2) => self.fetch(discs, choice, cache_dir),
+            _ => front_end_music(discs, cache_dir),
+        };
 
         match loaded {
-            Ok(Some((sound, what))) => {
-                let seconds = sound.seconds();
+            Ok(Some(loaded)) => {
+                let seconds = loaded.sound.seconds();
                 self.music = self
                     .output
-                    .with_mixer(|mixer| mixer.play(Play::looping(Arc::new(sound), Bus::Music)));
-                println!("audio: music {what}, {seconds:.1} s, looping");
+                    .with_mixer(|mixer| mixer.play(Play::looping(loaded.sound, Bus::Music)));
+                self.music_from = self.music.and(loaded.from);
+                println!("audio: music {}, {seconds:.1} s, looping", loaded.what);
             }
-            Ok(None) => println!(
-                "audio: this source carries neither {PS2_MUSIC_PATH} nor {PSP_MUSIC_NAME}, so no \
-                 music"
-            ),
+            Ok(None) => println!("audio: this source carries no music this can play"),
             Err(error) => println!("audio: no music ({error:#})"),
         }
+    }
+
+    /// Moves the playing **soundtrack track** onto the release `choice` names,
+    /// without restarting it.
+    ///
+    /// The playhead is carried across in seconds, which is the unit
+    /// [`oag_audio::Mixer::position`] and [`oag_audio::Mixer::seek`] both speak
+    /// and the only one that survives the change of rate: 48,000 frames into
+    /// the PS2's track is one second and into the PSP's is 1.088. That the two
+    /// land in the same bar is not an assumption either - the sixteen pairs
+    /// agree in length to 11 milliseconds, which is a third of a video frame.
+    ///
+    /// # What it deliberately does not touch
+    ///
+    /// **Anything that is not one of the sixteen.** A voice with no
+    /// [`Self::music_from`] was not loaded as a soundtrack track - the PSP
+    /// front end's own music is the case that exists - and this returns without
+    /// doing anything at all. That single condition is what scopes the row, and
+    /// it is here rather than at the call site so no second caller can forget
+    /// it. See [`MusicSource`].
+    ///
+    /// Also does nothing when the music is already on that release, so nudging
+    /// the row back and forth past a value costs nothing.
+    ///
+    /// **Never fatal**, for the same reason [`Self::start_music`] is not: a
+    /// release that will not load leaves the music where it was and says so.
+    pub fn set_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
+        let Some((_, wanted)) = discs.pick(choice) else {
+            return;
+        };
+        let (Some(playing), Some(from)) = (self.music, self.music_from) else {
+            // Either nothing is playing, or what is playing is not one of the
+            // sixteen. Neither is this row's business - see above.
+            return;
+        };
+        if from == wanted {
+            return;
+        }
+
+        let at = self.playhead().unwrap_or(0.0);
+        match self.fetch(discs, choice, cache_dir) {
+            Ok(Some(loaded)) => {
+                self.output.with_mixer(|mixer| {
+                    mixer.stop(playing);
+                    let started = mixer.play(Play::looping(loaded.sound, Bus::Music));
+                    if let Some(id) = started {
+                        mixer.seek(id, at);
+                    }
+                    self.music = started;
+                });
+                self.music_from = self.music.and(loaded.from);
+                println!("audio: music {}, from {at:.1} s", loaded.what);
+            }
+            Ok(None) => {
+                println!("audio: no soundtrack on the {wanted} release, so nothing changed")
+            }
+            Err(error) => println!("audio: the music stays where it is ({error:#})"),
+        }
+    }
+
+    /// How far into the soundtrack track the music has got, in seconds.
+    ///
+    /// The **source's** own seconds, which is the unit a swap carries across -
+    /// see [`Self::set_music_source`]. Unlike [`Self::movie_playhead`] this
+    /// needs no "is the mixer actually moving" test, because nothing paces a
+    /// picture against it: a music voice at zero on a mixer nobody pulls from
+    /// is a track that has not started, which is the truth.
+    #[must_use]
+    pub fn playhead(&self) -> Option<f64> {
+        self.output.with_mixer(|mixer| mixer.position(self.music?))
+    }
+
+    /// The soundtrack track `choice` names, from the cache or from a disc.
+    ///
+    /// Returns the release it came off, the sound, and a line naming it.
+    /// `Ok(None)` when the release carries no soundtrack at all.
+    ///
+    /// # How a track on the *other* disc is found
+    ///
+    /// The booted release's own order decides which track [`MUSIC_TRACK`] is;
+    /// the other release is then reached by **length**, through
+    /// [`Soundtrack::nearest`]. That is one rule rather than two, and it is the
+    /// only one available: neither archive stores names, and the two orders
+    /// differ.
+    fn fetch(
+        &mut self,
+        discs: &MusicDiscs,
+        choice: MusicSource,
+        cache_dir: &Path,
+    ) -> Result<Option<Loaded>> {
+        let Some((source, platform)) = discs.pick(choice) else {
+            return Ok(None);
+        };
+        if let Some((_, sound)) = self.held.iter().find(|(held, _)| *held == platform) {
+            return Ok(Some(Loaded {
+                from: Some(platform),
+                sound: Arc::clone(sound),
+                what: format!("{platform} soundtrack track {MUSIC_TRACK}, already read"),
+            }));
+        }
+
+        // No fallback to the front end's own music when a release turns out to
+        // carry no pairable soundtrack. It would be a *different recording*,
+        // and the row's whole claim is that its three values are one recording
+        // encoded twice - see [`MusicSource`]. The caller reports the absence.
+        let Some(track) = self.locate(discs, platform, source)? else {
+            return Ok(None);
+        };
+
+        let sound = Arc::new(load_track(source, platform, track, cache_dir)?);
+        self.held.push((platform, Arc::clone(&sound)));
+        Ok(Some(Loaded {
+            from: Some(platform),
+            sound,
+            what: format!(
+                "{platform} soundtrack track {MUSIC_TRACK}, {:.1} s as its own disc lists it",
+                track.seconds
+            ),
+        }))
+    }
+
+    /// Which track of `platform`'s soundtrack [`MUSIC_TRACK`] means.
+    ///
+    /// On the booted release that is simply its own entry [`MUSIC_TRACK`]. On
+    /// the other one it is whichever track is the same length, which is what
+    /// makes the two selections the same recording rather than two unrelated
+    /// pieces of music.
+    ///
+    /// **The index is not stable across boots**, and it is worth being plain
+    /// about that: [`MUSIC_TRACK`] means "entry 0 of whichever disc booted",
+    /// and the two archives are not in the same order. Entry 0 happens to name
+    /// the same recording on both - the PS2's first track is also the first of
+    /// the PSP's sixteen in `Data.wad` order - but that is coincidence, and at
+    /// index 1 the two boots would start on different music. Nothing depends on
+    /// it today because the index is a constant; a future circuit-to-track map
+    /// has to be built on one disc's order, not on "index N".
+    fn locate(
+        &self,
+        discs: &MusicDiscs,
+        platform: Platform,
+        source: &str,
+    ) -> Result<Option<Track>> {
+        let Some(soundtrack) = Soundtrack::read(source, platform)? else {
+            return Ok(None);
+        };
+        if discs.booted() == Some(platform) {
+            return Ok(soundtrack.tracks.get(MUSIC_TRACK).copied());
+        }
+
+        let Some((booted_source, booted_platform)) = discs.pick(MusicSource::Auto) else {
+            return Ok(soundtrack.tracks.get(MUSIC_TRACK).copied());
+        };
+        let Some(booted) = Soundtrack::read(booted_source, booted_platform)? else {
+            return Ok(soundtrack.tracks.get(MUSIC_TRACK).copied());
+        };
+        let Some(wanted) = booted.tracks.get(MUSIC_TRACK) else {
+            return Ok(None);
+        };
+        Ok(soundtrack.nearest(wanted.seconds))
     }
 
     /// Starts the boot sequence's movie sound, reporting what happened.
@@ -419,13 +906,7 @@ fn load_ps2_track(source: &str, index: usize) -> Result<Option<Sound>> {
         return Ok(None);
     };
 
-    let header = archive.read(0, ps2_music::HEADER_LEN as u64)?;
-    let count = ps2_music::peek_entry_count(&header)
-        .map_err(|e| anyhow::anyhow!("{PS2_MUSIC_PATH} is not a music archive: {e}"))?;
-    let table = archive.read(0, ps2_music::directory_len(count))?;
-    let directory = ps2_music::Directory::parse(&table, Some(archive.len()))
-        .map_err(|e| anyhow::anyhow!("reading the {PS2_MUSIC_PATH} directory: {e}"))?;
-
+    let directory = ps2_directory(&mut archive)?;
     let entry = directory.entries.get(index).with_context(|| {
         format!(
             "{PS2_MUSIC_PATH} has {} track(s), so there is no track {index}",
@@ -447,7 +928,302 @@ fn load_ps2_track(source: &str, index: usize) -> Result<Option<Sound>> {
     Ok(Some(sound))
 }
 
+/// Reads the archive's directory, and only its directory.
+///
+/// Four bytes to learn the entry count, then exactly the table those four bytes
+/// size. The payload behind it is 559 MiB and nothing here wants any of it.
+fn ps2_directory(archive: &mut MusicArchive) -> Result<ps2_music::Directory> {
+    let header = archive.read(0, ps2_music::HEADER_LEN as u64)?;
+    let count = ps2_music::peek_entry_count(&header)
+        .map_err(|e| anyhow::anyhow!("{PS2_MUSIC_PATH} is not a music archive: {e}"))?;
+    let table = archive.read(0, ps2_music::directory_len(count))?;
+    ps2_music::Directory::parse(&table, Some(archive.len()))
+        .map_err(|e| anyhow::anyhow!("reading the {PS2_MUSIC_PATH} directory: {e}"))
+}
+
+/// One release's soundtrack, as that release lists it.
+///
+/// The two discs share nothing that could address a track: the PS2 keys its
+/// archive by position and the PSP keys `Data.wad` by name hash, no name for
+/// any of the sixteen has been recovered on either side, and the two orders are
+/// **not** the same - PS2 track 12 is the second of the PSP's sixteen in
+/// `Data.wad` order. What they do share is length, to within 11 milliseconds
+/// over all sixteen, which is what `docs/formats/ps2-audio.md` establishes and
+/// what [`Self::nearest`] pairs on.
+#[derive(Debug, Clone)]
+struct Soundtrack {
+    /// The tracks, in the disc's own order. [`Track::at`] is addressed the way
+    /// the release they came off addresses one.
+    tracks: Vec<Track>,
+}
+
+/// One soundtrack track, addressed the way its own disc addresses it.
+#[derive(Debug, Clone, Copy)]
+struct Track {
+    /// A `PS2MUSIC.WAD` directory index, or a `Data.wad` name hash.
+    at: u32,
+    /// How long it is. The only thing the two releases have in common.
+    seconds: f64,
+}
+
+/// How far apart two tracks' lengths may be and still be the same recording.
+///
+/// The measured gap is **11.4 milliseconds, the same to a tenth of a
+/// millisecond on all sixteen pairs** - the ATRAC3+ encoder's trailing padding,
+/// which is a constant. A second of tolerance is therefore enormously more than
+/// the match needs and still far less than the gap to the nearest wrong answer:
+/// the sixteen tracks are 177 to 205 seconds long and the closest two of them
+/// are 0.13 seconds apart, so a mispairing would have to be off by a hundred
+/// times the observed error before this let it through.
+///
+/// It is not enormous compared to *another game*, and that is worth being
+/// plain about: Wipeout Pure's shortest soundtrack track is 205.2 s and
+/// Pulse's longest is 204.3 s, 0.87 s apart and so inside this. One track
+/// matching by luck is exactly why [`Soundtrack::pairs_with`] demands a
+/// complete one-for-one assignment rather than a match, and why it checks the
+/// count first - Pure has nineteen tracks, Pulse sixteen.
+const PAIR_TOLERANCE: f64 = 1.0;
+
+/// The smallest a `Data.wad` entry can be and still hold a soundtrack track.
+///
+/// **Arithmetic, not a round number picked by eye.** The shortest of the
+/// sixteen PS2 tracks is 177.2 seconds; at 44,100 Hz and ATRAC3+'s 560 bytes
+/// per 2,048 samples that is `177.2 * 44100 / 2048 * 560` = 2,137,000 bytes of
+/// stored stream, so nothing shorter than about 2 MiB can be one of them. It is
+/// a prefilter and not the test - [`psp_soundtrack`] still checks the codec,
+/// the channel count and the rate - and it exists because applying those checks
+/// to all 1,142 entries would mean 1,142 reads off a disc image where 61 will
+/// do.
+const MIN_SOUNDTRACK_BYTES: u32 = 2_000_000;
+
+/// Bytes of each candidate entry read to find its `fmt ` and `fact` chunks.
+///
+/// Both sit in front of `data` on every entry the disc carries, within the
+/// first 100 bytes; a kibibyte is slack for an entry that orders its chunks
+/// differently, and it is what stops this reading 2 MiB per candidate.
+const RIFF_HEADER_PEEK: u64 = 1024;
+
+impl Soundtrack {
+    /// Reads the soundtrack `source` carries, for the release it is.
+    ///
+    /// `Ok(None)` when the source has none - a partially extracted directory,
+    /// or a disc of the other release - which is an ordinary outcome rather
+    /// than an error.
+    ///
+    /// # Errors
+    ///
+    /// An archive that opens and then will not parse.
+    fn read(source: &str, platform: Platform) -> Result<Option<Self>> {
+        let tracks = match platform {
+            Platform::Ps2 => ps2_soundtrack(source)?,
+            Platform::Psp => psp_soundtrack(source)?,
+            Platform::Unknown => None,
+        };
+        Ok(tracks.map(|tracks| Self { tracks }))
+    }
+
+    /// Whether this is the same soundtrack as `other`, one track for one
+    /// track.
+    ///
+    /// Sixteen against sixteen, every track within [`PAIR_TOLERANCE`] of a
+    /// **distinct** partner. The distinctness is the half that does the work:
+    /// a listing of sixteen roughly-three-minute tracks from a *different*
+    /// game has tracks near some of these by luck, but a complete one-for-one
+    /// assignment across all sixteen is not something two unrelated albums do.
+    /// Measured on the real pair, every partner is within 11.4 ms and the
+    /// closest wrong answer is 130 ms away.
+    ///
+    /// This is what stops another Studio Liverpool UMD being taken for the
+    /// counterpart - see [`MusicDiscs`], where the case is not hypothetical.
+    fn pairs_with(&self, other: &Self) -> bool {
+        if self.tracks.len() != other.tracks.len() || self.tracks.is_empty() {
+            return false;
+        }
+        let mut taken = vec![false; self.tracks.len()];
+        for track in &other.tracks {
+            let found = self
+                .tracks
+                .iter()
+                .enumerate()
+                .filter(|(index, mine)| {
+                    !taken[*index] && (mine.seconds - track.seconds).abs() <= PAIR_TOLERANCE
+                })
+                .min_by(|(_, a), (_, b)| {
+                    (a.seconds - track.seconds)
+                        .abs()
+                        .total_cmp(&(b.seconds - track.seconds).abs())
+                })
+                .map(|(index, _)| index);
+            match found {
+                Some(index) => taken[index] = true,
+                None => return false,
+            }
+        }
+        true
+    }
+
+    /// The track nearest `seconds` long, if one is close enough to be it.
+    ///
+    /// `None` rather than the least-bad answer when nothing is within
+    /// [`PAIR_TOLERANCE`]: a source whose soundtrack does not pair is one this
+    /// has misidentified, and playing the wrong three minutes of music is a
+    /// worse outcome than playing none.
+    fn nearest(&self, seconds: f64) -> Option<Track> {
+        self.tracks
+            .iter()
+            .copied()
+            .filter(|track| (track.seconds - seconds).abs() <= PAIR_TOLERANCE)
+            .min_by(|a, b| {
+                (a.seconds - seconds)
+                    .abs()
+                    .total_cmp(&(b.seconds - seconds).abs())
+            })
+    }
+}
+
+/// The `PS2MUSIC.WAD` directory as a soundtrack listing.
+///
+/// Each entry's length comes from its stored size, because the payload is
+/// uncompressed PCM of a known geometry - `size / (4 * 48000)` seconds. See
+/// `docs/formats/ps2-audio.md` for how the frame size and the rate were
+/// established.
+fn ps2_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
+    let Some(mut archive) = MusicArchive::open(source)? else {
+        return Ok(None);
+    };
+    let directory = ps2_directory(&mut archive)?;
+    Ok(Some(
+        directory
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| Track {
+                at: index as u32,
+                seconds: f64::from(entry.seconds()),
+            })
+            .collect(),
+    ))
+}
+
+/// The soundtrack entries of a PSP `Data.wad`, by name hash.
+///
+/// The population is picked out by what the entries *are* rather than by where
+/// they sit: stereo ATRAC3+ at 44,100 Hz, over [`MIN_SOUNDTRACK_BYTES`]. On
+/// both PSP pressings that is exactly sixteen entries, matching the PS2
+/// archive's sixteen - the channel count is what carries it, because the disc
+/// also holds 32 *mono* ATRAC3+ streams at the same bitrate and a dozen shorter
+/// stereo ones. This is the same population argument `docs/formats/ps2-voice.md`
+/// makes for the pre-race clips, and for the same reason: a size filter alone
+/// gets it wrong in both directions.
+///
+/// The length comes from the `fact` chunk, never from the stored size: ATRAC3+
+/// pads its last block, so block count times samples per block overstates a
+/// track by a few hundred samples and the pairing tolerance would be spent on
+/// an avoidable error.
+fn psp_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
+    // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
+    // path, so a directory somebody extracted with `oag-unpack` answers the
+    // same as a disc image does.
+    let Ok(mut archives) = oag_assets::pulse::Archives::open(source) else {
+        return Ok(None);
+    };
+    if archives.layout.platform != Platform::Psp {
+        return Ok(None);
+    }
+
+    let candidates: Vec<(usize, u32)> = archives
+        .data
+        .directory()
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| entry.size >= MIN_SOUNDTRACK_BYTES)
+        .map(|(index, entry)| (index, entry.name_hash))
+        .collect();
+
+    let mut tracks = Vec::new();
+    for (index, name_hash) in candidates {
+        let Ok(header) = archives.data.peek(index, RIFF_HEADER_PEEK) else {
+            continue;
+        };
+        let Ok(stream) = crate::at3::describe(&header) else {
+            continue;
+        };
+        let Some(seconds) = stream.seconds() else {
+            continue;
+        };
+        if stream.format.channels != 2 || stream.format.sample_rate != 44_100 {
+            continue;
+        }
+        tracks.push(Track {
+            at: name_hash,
+            seconds,
+        });
+    }
+    Ok(Some(tracks))
+}
+
+/// Reads one soundtrack track off `source` and turns it into a sound.
+///
+/// # Errors
+///
+/// An archive that will not open or read, and on the PSP a decode that failed -
+/// including `ffmpeg` being absent, which the caller reports rather than
+/// treating as fatal.
+fn load_track(source: &str, platform: Platform, track: Track, cache_dir: &Path) -> Result<Sound> {
+    match platform {
+        Platform::Ps2 => load_ps2_track(source, track.at as usize)?
+            .with_context(|| format!("{source} carries no {PS2_MUSIC_PATH}")),
+        _ => load_psp_entry(source, track.at, cache_dir),
+    }
+}
+
+/// Reads one ATRAC3+ soundtrack entry out of `Data.wad` by name hash and
+/// decodes it.
+///
+/// The whole entry is read rather than ranged, unlike the PS2 path: 2.2 MiB of
+/// ATRAC3+ is a moment's work and the whole thing has to go to `ffmpeg` anyway.
+/// It is the *decoded* form that is large - 33 MiB of PCM for three minutes -
+/// and that is what the cache in [`crate::at3`] exists to avoid paying twice.
+fn load_psp_entry(source: &str, name_hash: u32, cache_dir: &Path) -> Result<Sound> {
+    let mut archives =
+        oag_assets::pulse::Archives::open(source).with_context(|| format!("opening {source}"))?;
+    let at3 = archives
+        .data
+        .read_hash(name_hash)
+        .with_context(|| format!("reading Data.wad entry {name_hash:08x}"))?;
+    let pcm = crate::at3::decode(&at3, cache_dir)
+        .with_context(|| format!("decoding Data.wad entry {name_hash:08x}"))?;
+    Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
+        .with_context(|| format!("Data.wad entry {name_hash:08x}"))
+}
+
+/// The music the front end plays, for a source that has its own.
+///
+/// The PSP's front-end music and nothing else, which is what
+/// [`Audio::start_music`] wants for every source that is not the PS2 release.
+/// It is deliberately **not** routed through [`Audio::fetch`]: what comes back
+/// is not one of the sixteen, it has no counterpart on the other disc, and the
+/// caller records that by leaving [`Audio::music_from`] unset.
+fn front_end_music(discs: &MusicDiscs, cache_dir: &Path) -> Result<Option<Loaded>> {
+    let Some((source, _)) = discs.pick(MusicSource::Auto) else {
+        return Ok(None);
+    };
+    Ok(load_psp_track(source, cache_dir)?.map(|sound| Loaded {
+        // **Unstamped, and that is the whole of the row's scope.** This track
+        // has no counterpart on the other disc, so nothing may swap it.
+        from: None,
+        sound: Arc::new(sound),
+        what: PSP_MUSIC_NAME.to_string(),
+    }))
+}
+
 /// Reads the PSP front end's music out of `Data.wad` and decodes it.
+///
+/// **Not one of the sixteen soundtrack tracks, and that is the point.** It is a
+/// *named* entry where the sixteen are not - the executable builds this path at
+/// run time - and no PS2 entry has ever been matched to it, which is why
+/// [`MusicSource`] cannot reach it.
 ///
 /// `Ok(None)` when the source holds no such entry, which is every PS2 source
 /// and any partially extracted directory - an ordinary outcome, not an error,
@@ -611,6 +1387,369 @@ mod tests {
         assert_eq!(Volume(0).gain(), 0.0);
     }
 
+    #[test]
+    fn a_music_source_round_trips_through_its_own_text() {
+        for value in MusicSource::ALL {
+            assert_eq!(value.to_string().parse::<MusicSource>(), Ok(value));
+        }
+        assert_eq!("PS2".parse::<MusicSource>(), Ok(MusicSource::Ps2));
+        assert!("umd".parse::<MusicSource>().is_err());
+        assert_eq!(MusicSource::default(), MusicSource::Auto);
+        assert_eq!(MusicSource::Auto.platform(), None, "auto names no release");
+    }
+
+    /// The row is offered only when both discs are reachable, and `pick` is
+    /// what a value the machine cannot honour falls through: a settings file
+    /// saying `ps2`, carried onto a machine that has only the PSP disc, has to
+    /// play the PSP's music rather than nothing.
+    #[test]
+    fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
+        let psp_only = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: None,
+            booted: Some(Platform::Psp),
+        };
+        assert!(!psp_only.both(), "one disc is not a choice");
+        for choice in MusicSource::ALL {
+            assert_eq!(
+                psp_only.pick(choice),
+                Some(("psp.chd", Platform::Psp)),
+                "{choice} on a machine with only the PSP disc"
+            );
+        }
+
+        let both = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Psp),
+        };
+        assert!(both.both());
+        assert_eq!(
+            both.pick(MusicSource::Auto),
+            Some(("psp.chd", Platform::Psp)),
+            "auto is the booted disc, not the better one"
+        );
+        assert_eq!(
+            both.pick(MusicSource::Ps2),
+            Some(("ps2.chd", Platform::Ps2))
+        );
+        assert_eq!(
+            both.pick(MusicSource::Psp),
+            Some(("psp.chd", Platform::Psp))
+        );
+
+        // A source that is neither release - an extracted directory of
+        // something else - has nothing to fall back to and says so.
+        assert_eq!(MusicDiscs::default().pick(MusicSource::Auto), None);
+    }
+
+    /// Track lengths as a listing, addressed by position - a test fixture, not
+    /// how a disc addresses one.
+    fn lengths(seconds: &[f64]) -> Vec<Track> {
+        seconds
+            .iter()
+            .enumerate()
+            .map(|(index, seconds)| Track {
+                at: index as u32,
+                seconds: *seconds,
+            })
+            .collect()
+    }
+
+    /// The pairing rule, on the real numbers. These sixteen lengths are the
+    /// EU PS2 archive's, in its own order, and the PSP lengths are its sixteen
+    /// large stereo `Data.wad` entries in *theirs* - which is a different order,
+    /// and the whole reason a length is what pairs them.
+    #[test]
+    fn the_two_discs_soundtracks_pair_one_for_one_by_length() {
+        let ps2 = [
+            187.592, 195.789, 188.739, 193.550, 189.731, 187.814, 182.009, 177.226, 183.913,
+            202.632, 200.624, 204.347, 194.013, 183.440, 182.143, 197.474,
+        ];
+        let psp = [
+            187.581, 194.001, 188.728, 195.778, 193.538, 189.719, 187.803, 181.998, 177.215,
+            183.902, 202.620, 200.612, 204.336, 183.429, 182.132, 197.462,
+        ];
+        let listing = Soundtrack {
+            tracks: psp
+                .iter()
+                .enumerate()
+                .map(|(index, seconds)| Track {
+                    at: index as u32,
+                    seconds: *seconds,
+                })
+                .collect(),
+        };
+
+        let mut matched: Vec<u32> = ps2
+            .iter()
+            .map(|seconds| {
+                listing
+                    .nearest(*seconds)
+                    .unwrap_or_else(|| panic!("{seconds} s has no partner"))
+                    .at
+            })
+            .collect();
+        matched.sort_unstable();
+        assert_eq!(
+            matched,
+            (0..16).collect::<Vec<u32>>(),
+            "every PSP track must be claimed exactly once"
+        );
+
+        // And the pairing is not the identity, which is the thing that would
+        // make indexing one archive by the other's order silently wrong: PS2
+        // track 1 is the PSP's fourth in `Data.wad` order.
+        assert_eq!(listing.nearest(ps2[1]).expect("a partner").at, 3);
+        assert_eq!(listing.nearest(ps2[12]).expect("a partner").at, 1);
+    }
+
+    /// A *different game's* soundtrack must not be taken for the counterpart,
+    /// and this is the case that made the check necessary rather than
+    /// hypothetical: `pure-psp-eu.chd` carries the serial `UCES-00001`, which
+    /// `oag_assets::pulse::Layout::resolve` gives no verdict on by design, and
+    /// was reported as the PSP counterpart until a soundtrack had to pair.
+    ///
+    /// Both listings are read values - Pulse's sixteen from the USA UMD, Pure's
+    /// nineteen from `pure-psp-eu.chd`, each the `fact` count over 44,100. Note
+    /// how close the two populations come: Pure's shortest is 205.2 s and
+    /// Pulse's longest 204.3 s, which is *inside* [`PAIR_TOLERANCE`]. One track
+    /// matching is not the test; sixteen distinct partners is.
+    #[test]
+    fn another_games_soundtrack_does_not_pair() {
+        let pulse = Soundtrack {
+            tracks: lengths(&[
+                187.581, 194.001, 188.728, 195.778, 193.538, 189.719, 187.803, 181.998, 177.215,
+                183.902, 202.620, 200.612, 204.336, 183.429, 182.132, 197.462,
+            ]),
+        };
+        let pure = Soundtrack {
+            tracks: lengths(&[
+                217.896, 213.693, 210.884, 205.217, 224.955, 220.667, 208.237, 219.103, 219.011,
+                228.984, 209.816, 214.047, 213.862, 215.612, 227.857, 326.078, 213.240, 217.780,
+                216.526,
+            ]),
+        };
+        assert!(!pure.pairs_with(&pulse), "nineteen tracks is not sixteen");
+        assert!(!pulse.pairs_with(&pure));
+
+        // The near miss the count check catches first, isolated: Pure's
+        // shortest against Pulse's longest, 0.87 s apart.
+        assert!(
+            (205.217f64 - 204.336).abs() < PAIR_TOLERANCE,
+            "the two populations really do overlap within the tolerance"
+        );
+
+        // The PS2 side of the real pair, which does have to pass. Same
+        // recordings, so every partner is within 11.4 ms.
+        let ps2 = Soundtrack {
+            tracks: lengths(&[
+                187.592, 195.789, 188.739, 193.550, 189.731, 187.814, 182.009, 177.226, 183.913,
+                202.632, 200.624, 204.347, 194.013, 183.440, 182.143, 197.474,
+            ]),
+        };
+        assert!(ps2.pairs_with(&pulse), "the two Pulse discs must pair");
+        assert!(
+            pulse.pairs_with(&ps2),
+            "and it must not depend on the order"
+        );
+
+        // Sixteen tracks that are each within a second of a Pulse track but
+        // all of the *same* one: a listing that would pass a per-track match
+        // and must fail a bijection.
+        let all_alike = Soundtrack {
+            tracks: lengths(&[187.6; 16]),
+        };
+        assert!(!all_alike.pairs_with(&pulse), "distinctness is the test");
+
+        assert!(
+            !Soundtrack { tracks: Vec::new() }.pairs_with(&Soundtrack { tracks: Vec::new() }),
+            "two empty listings pair with nothing, not with each other"
+        );
+    }
+
+    /// Nothing within a second is no answer at all, rather than the least bad
+    /// one. Playing the wrong three minutes of music is worse than playing
+    /// none, and it is what a misidentified population would produce.
+    #[test]
+    fn a_length_nothing_matches_pairs_with_nothing() {
+        let listing = Soundtrack {
+            tracks: vec![
+                Track {
+                    at: 0,
+                    seconds: 187.5,
+                },
+                Track {
+                    at: 1,
+                    seconds: 204.3,
+                },
+            ],
+        };
+        assert!(listing.nearest(28.0).is_none(), "the front end's own music");
+        assert_eq!(listing.nearest(187.511).expect("within tolerance").at, 0);
+        assert!(
+            listing.nearest(186.4).is_none(),
+            "1.1 s out is a hundred times the observed error"
+        );
+    }
+
+    /// **Seek, do not restart** - the row's headline constraint, measured
+    /// rather than asserted, and through the real pieces: a real mixer, a real
+    /// pair of [`Sound`]s at the two releases' actual rates, pulled by
+    /// [`Audio::tick`] at the fixed 60 Hz, swapped by the same
+    /// [`Audio::set_music_source`] a keypress calls.
+    ///
+    /// The two rates are the point. 48,000 frames into the PS2's track is one
+    /// second and into the PSP's is 1.088, so a swap that carried *frames*
+    /// across would land 8.8% out - two seconds adrift three minutes in, which
+    /// is most of a bar. Carrying seconds lands where it started.
+    ///
+    /// No disc is read: both sounds are put straight into [`Audio::held`],
+    /// which is exactly what a second visit to a release finds there.
+    #[test]
+    fn changing_the_music_source_seeks_rather_than_restarting() {
+        // Booted from the PS2 release, because that is the one whose front-end
+        // music is a soundtrack track and so the one the row can move. See
+        // `MusicSource`, and the test below for the PSP boot.
+        let discs = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Ps2),
+        };
+        // Three minutes of silence at each release's own rate. What is measured
+        // is where the playhead is, and the mixer advances it whatever the
+        // samples are.
+        let psp = Arc::new(Sound::new(vec![0i16; 180 * 44_100 * 2], 2, 44_100).expect("a sound"));
+        let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
+
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: Some(Dump {
+                path: PathBuf::from("unused"),
+                samples: Vec::new(),
+            }),
+            music: None,
+            music_from: None,
+            held: vec![
+                (Platform::Psp, Arc::clone(&psp)),
+                (Platform::Ps2, Arc::clone(&ps2)),
+            ],
+            movie: None,
+        };
+        audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
+        assert_eq!(
+            audio.music_from,
+            Some(Platform::Ps2),
+            "auto is the booted release"
+        );
+
+        // Twenty seconds in, so a restart is unmistakable against a seek.
+        for _ in 0..(60 * 20) {
+            audio.tick();
+        }
+        let before = audio.playhead().expect("music is playing");
+        assert!(
+            (before - 20.0).abs() < 0.01,
+            "expected 20 s of the PS2 track, got {before}"
+        );
+
+        audio.set_music_source(&discs, MusicSource::Psp, Path::new("unused"));
+        assert_eq!(audio.music_from, Some(Platform::Psp), "it moved");
+        let after = audio.playhead().expect("music is still playing");
+        assert!(
+            (after - before).abs() < 1.0 / 60.0,
+            "the playhead moved from {before} s to {after} s; a swap must seek, not restart"
+        );
+
+        // And back, from wherever it has got to by then - the return trip is
+        // the one that would expose a frame count carried across, because the
+        // rate ratio inverts.
+        for _ in 0..(60 * 5) {
+            audio.tick();
+        }
+        let before = audio.playhead().expect("music is playing");
+        audio.set_music_source(&discs, MusicSource::Ps2, Path::new("unused"));
+        let after = audio.playhead().expect("music is still playing");
+        assert!(
+            (after - before).abs() < 1.0 / 60.0,
+            "coming back: {before} s became {after} s"
+        );
+
+        // Choosing what is already playing does nothing at all, so nudging the
+        // row past a value it is already on cannot restart the track.
+        let before = audio.playhead().expect("music is playing");
+        let voice = audio.music;
+        audio.set_music_source(&discs, MusicSource::Auto, Path::new("unused"));
+        assert_eq!(audio.music, voice, "the same voice, untouched");
+        assert_eq!(audio.playhead(), Some(before));
+    }
+
+    /// **The scope of the row, and the reason it has one.** The PSP front
+    /// end's own music is not one of the sixteen and has no counterpart on the
+    /// PS2 disc, so no value of MUSIC SOURCE may touch it - not even to the
+    /// release it already is. Left ungoverned it would be swapped for an
+    /// unrelated three-minute soundtrack track *and seeked into*, landing
+    /// twenty seconds inside a different piece of music.
+    ///
+    /// A voice with no [`Audio::music_from`] is exactly that case, and the
+    /// assertion here is that all three values leave it alone: the same voice,
+    /// at the same playhead, on the same 28-second loop.
+    #[test]
+    fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
+        let discs = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Psp),
+        };
+        // The PSP front end's own music: 28 seconds, not three minutes, and
+        // never stamped with a release.
+        let front_end =
+            Arc::new(Sound::new(vec![0i16; 28 * 44_100 * 2], 2, 44_100).expect("a sound"));
+        let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
+
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: Some(Dump {
+                path: PathBuf::from("unused"),
+                samples: Vec::new(),
+            }),
+            music: None,
+            music_from: None,
+            // The PS2 track is *there to be chosen* and still must not be, so
+            // this cannot pass by the swap merely failing to find anything.
+            held: vec![(Platform::Ps2, Arc::clone(&ps2))],
+            movie: None,
+        };
+        audio.music = audio
+            .output
+            .with_mixer(|mixer| mixer.play(Play::looping(Arc::clone(&front_end), Bus::Music)));
+        assert!(audio.music.is_some(), "a free voice");
+        assert_eq!(audio.music_from, None, "not one of the sixteen");
+
+        for _ in 0..(60 * 5) {
+            audio.tick();
+        }
+        let voice = audio.music;
+        let before = audio.playhead().expect("music is playing");
+
+        for choice in MusicSource::ALL {
+            audio.set_music_source(&discs, choice, Path::new("unused"));
+            assert_eq!(
+                audio.music, voice,
+                "{choice} restarted the front end's music"
+            );
+            assert_eq!(
+                audio.playhead(),
+                Some(before),
+                "{choice} moved the playhead"
+            );
+            assert_eq!(
+                audio.music_from, None,
+                "{choice} claimed it as a soundtrack"
+            );
+        }
+    }
+
     /// The dump's length has to be a function of the tick count and nothing
     /// else, because that is the whole claim `--dump-audio` makes: the same
     /// control sequence renders the same file. A wall clock anywhere in the
@@ -624,6 +1763,8 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            music_from: None,
+            held: Vec::new(),
             movie: None,
         };
         for _ in 0..120 {
@@ -664,6 +1805,8 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            music_from: None,
+            held: Vec::new(),
             movie: None,
         };
         assert!(audio.start_movie(sound), "a free voice");
@@ -703,6 +1846,8 @@ mod tests {
             output: Output::null(DUMP_SAMPLE_RATE),
             dump: None,
             music: None,
+            music_from: None,
+            held: Vec::new(),
             movie: None,
         };
         let sound = Sound::new(vec![0i16; 44_100 * 2], 2, 44_100).expect("a sound");
@@ -726,6 +1871,8 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            music_from: None,
+            held: Vec::new(),
             movie: None,
         };
         assert_eq!(audio.movie_playhead(), None, "nothing started");
@@ -746,6 +1893,8 @@ mod tests {
             output: Output::null(DUMP_SAMPLE_RATE),
             dump: None,
             music: None,
+            music_from: None,
+            held: Vec::new(),
             movie: None,
         };
         for _ in 0..120 {

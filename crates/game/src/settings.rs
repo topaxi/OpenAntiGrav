@@ -210,6 +210,22 @@ pub struct Audio {
     /// its own audio approximate. See [`crate::audio::DUMP_SAMPLE_RATE`].
     #[serde(default)]
     pub music_volume: crate::audio::Volume,
+    /// Which release's encode of the soundtrack plays: `auto`, `psp` or `ps2`.
+    ///
+    /// **`auto`, the booted disc, by default.** Only the sixteen soundtrack
+    /// tracks have a proven counterpart on the other release - see
+    /// `docs/formats/ps2-audio.md` - so this moves those and nothing else.
+    /// Voice, every sound bank, and **the PSP front end's own music** stay
+    /// where the game booted from; that last one has no PS2 counterpart at all,
+    /// so a PSP boot sounds the same at every value of this key. See
+    /// [`crate::audio::MusicSource`], which spells out why.
+    ///
+    /// The menu row is offered only on a machine that has both discs, but the
+    /// key is always in this file, because a settings file is carried between
+    /// machines and a value it cannot honour falls back to the booted disc
+    /// rather than to silence.
+    #[serde(default)]
+    pub music_source: crate::audio::MusicSource,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -710,6 +726,10 @@ pub fn menu_seeds(
         (
             "audio.music_volume",
             text(&settings.audio.music_volume.to_string()),
+        ),
+        (
+            "audio.music_source",
+            text(&settings.audio.music_source.to_string()),
         ),
         ("race.mode", text(&settings.race.mode)),
         ("race.class", text(&settings.race.class)),

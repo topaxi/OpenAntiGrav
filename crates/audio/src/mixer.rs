@@ -363,6 +363,45 @@ impl Mixer {
         Some(voice.position / f64::from(sound.sample_rate()))
     }
 
+    /// Moves a live voice's playhead to `seconds` into its own source.
+    ///
+    /// **The source's clock, not the device's**, exactly as [`Self::position`]
+    /// reports it - the two are each other's inverse, and that is the whole
+    /// reason this takes seconds rather than frames. Handing one voice's frame
+    /// count to another voice at a different rate is the mistake it exists to
+    /// make impossible: 48,000 frames into a 48 kHz track is one second, and
+    /// into a 44,100 Hz one it is 1.088.
+    ///
+    /// Past the end of a looping sound this wraps rather than ending the voice,
+    /// which is the same rule [`Self::render`] applies when the playhead runs
+    /// off the end of one. On a one-shot it lands past the end and the voice
+    /// finishes on the next render. A negative or non-finite `seconds` is
+    /// clamped to the start rather than refused: there is nothing a caller
+    /// could usefully do with a failure here, and a voice at a NaN position
+    /// would silently render nothing for ever.
+    ///
+    /// Returns whether the handle still addressed a sounding voice.
+    pub fn seek(&mut self, id: VoiceId, seconds: f64) -> bool {
+        let Some(voice) = self.voice_mut(id) else {
+            return false;
+        };
+        let Some(sound) = voice.sound.as_ref() else {
+            return false;
+        };
+        let frames = sound.frames() as f64;
+        let rate = f64::from(sound.sample_rate());
+        let mut position = if seconds.is_finite() {
+            (seconds * rate).max(0.0)
+        } else {
+            0.0
+        };
+        if voice.looping && frames > 0.0 {
+            position %= frames;
+        }
+        voice.position = position;
+        true
+    }
+
     fn voice(&self, id: VoiceId) -> Option<&Voice> {
         self.voices
             .get(usize::from(id.slot))
@@ -516,6 +555,65 @@ mod tests {
             (seconds - 0.1).abs() < 1e-9,
             "expected a tenth of a second, got {seconds}"
         );
+    }
+
+    /// [`Mixer::seek`] and [`Mixer::position`] are each other's inverse, and the
+    /// unit they agree in is the **source's** seconds. Two sounds at different
+    /// rates, because that is the case the whole signature exists for: carrying
+    /// a playhead from a 48 kHz track to a 44.1 kHz one has to land at the same
+    /// moment of the music, not at the same frame number.
+    #[test]
+    fn a_seek_lands_where_the_playhead_then_reports() {
+        for rate in [22_050, 44_100, 48_000] {
+            let mut mixer = Mixer::new(44_100);
+            let id = mixer
+                .play(Play::looping(tone(rate as usize * 4, 2, rate), Bus::Music))
+                .expect("a free slot");
+
+            assert!(mixer.seek(id, 2.5), "the voice is sounding");
+            let seconds = mixer.position(id).expect("still sounding");
+            assert!(
+                (seconds - 2.5).abs() < 1e-9,
+                "at {rate} Hz: expected 2.5 s, got {seconds}"
+            );
+        }
+    }
+
+    /// Past the end of a **looping** sound the seek wraps, the same rule
+    /// `render` applies when the playhead runs off one. Landing at four times
+    /// the length of a one-second bed has to be the start of it, not silence
+    /// for ever.
+    #[test]
+    fn a_seek_past_the_end_of_a_loop_wraps_into_it() {
+        let mut mixer = Mixer::new(44_100);
+        let id = mixer
+            .play(Play::looping(tone(44_100, 2, 44_100), Bus::Music))
+            .expect("a free slot");
+
+        assert!(mixer.seek(id, 4.25));
+        let seconds = mixer.position(id).expect("still sounding");
+        assert!(
+            (seconds - 0.25).abs() < 1e-9,
+            "expected 0.25 s, got {seconds}"
+        );
+
+        // A negative or non-finite request is the start rather than a refusal:
+        // a voice parked at a NaN position renders nothing and says nothing.
+        assert!(mixer.seek(id, -3.0));
+        assert_eq!(mixer.position(id), Some(0.0));
+        assert!(mixer.seek(id, f64::NAN));
+        assert_eq!(mixer.position(id), Some(0.0));
+    }
+
+    #[test]
+    fn seeking_a_stale_handle_does_nothing() {
+        let mut mixer = Mixer::new(44_100);
+        let id = mixer
+            .play(Play::once(tone(4, 2, 44_100), Bus::Sfx))
+            .expect("a free slot");
+        let mut out = vec![0.0f32; 64 * CHANNELS];
+        mixer.render(&mut out);
+        assert!(!mixer.seek(id, 1.0), "the voice has already finished");
     }
 
     #[test]

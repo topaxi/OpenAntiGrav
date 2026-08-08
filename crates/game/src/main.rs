@@ -567,8 +567,23 @@ fn main() -> Result<()> {
     // out to `ffmpeg`, to then print a report and exit is the opposite of what
     // that flag is for.
     let mut audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
+    // Surveyed once, here, because it is what decides whether the AUDIO page
+    // offers MUSIC SOURCE at all - and answering it means opening every disc
+    // image on the search path, which is not something to do while a menu is on
+    // screen. Skipped under `--dry-run` for the same reason the music is.
+    let music_discs = if cli.dry_run {
+        audio::MusicDiscs::default()
+    } else {
+        let discs = audio::MusicDiscs::survey(&source);
+        println!("audio: music discs, {}", discs.describe());
+        discs
+    };
     if !cli.dry_run {
-        audio.start_music(&source, &boot::default_audio_cache_dir());
+        audio.start_music(
+            &music_discs,
+            settings.audio.music_source,
+            &boot::default_audio_cache_dir(),
+        );
     }
 
     let (pose, camera) = match &cli.pose_from {
@@ -620,7 +635,14 @@ fn main() -> Result<()> {
         if cli.loading_screen.is_some() {
             println!("--loading-screen has no effect with --race; run it without --race.");
         }
-        return run_race(&cli, race_options, &settings, anisotropy, audio);
+        return run_race(
+            &cli,
+            race_options,
+            &settings,
+            anisotropy,
+            audio,
+            music_discs,
+        );
     }
 
     let leg = if cli.reel {
@@ -746,6 +768,7 @@ fn main() -> Result<()> {
                 menu_page: cli.menu_page.clone(),
                 presented: cli.presented,
                 settings: settings.clone(),
+                music_discs: music_discs.clone(),
                 anisotropy,
             },
             &mut audio,
@@ -832,6 +855,7 @@ fn main() -> Result<()> {
         settings,
         shell: Some(shell),
         audio: Some(audio),
+        music_discs,
         prefetch: prefetch.take(),
         loading_assets,
         state: None,
@@ -974,6 +998,7 @@ fn run_race(
     settings: &settings::Settings,
     anisotropy: Anisotropy,
     mut audio: audio::Audio,
+    music_discs: audio::MusicDiscs,
 ) -> Result<()> {
     let loaded = race::load(&options)?;
     for line in &loaded.report {
@@ -1044,6 +1069,7 @@ fn run_race(
         // is what makes escape quit on this route rather than back out.
         shell: None,
         audio: Some(audio),
+        music_discs,
         // `--race` says up front that it ignores `--prefetch` - that converts
         // the front end's movies and sounds, which a race never opens - so
         // there is nothing to wait on here and no loading screen to wait with.
@@ -1080,6 +1106,13 @@ struct App {
     /// `Option`: there is one of these per run, not one per window, and winit
     /// may resume more than once.
     audio: Option<audio::Audio>,
+    /// Which Pulse releases this machine has, surveyed once before the window
+    /// opened.
+    ///
+    /// Beside `audio` because it is the same kind of thing - a property of the
+    /// run rather than of what is on screen - and it is here rather than in
+    /// `Shell` because `--race` has no shell and still has music.
+    music_discs: audio::MusicDiscs,
     /// The conversion `--prefetch` started, and the only reason there is a
     /// loading screen at all. `None` on every ordinary boot.
     prefetch: Option<prefetch::Prefetch>,
@@ -1206,6 +1239,7 @@ impl App {
             stage,
             controls,
             audio,
+            music_discs: self.music_discs.clone(),
             clock: TickClock::new(TickRate::DEFAULT),
             last: std::time::Instant::now(),
             meter: perf::Meter::new(),
@@ -2312,6 +2346,8 @@ struct Session {
     /// starting does not restart the music. Stepped from inside the fixed
     /// timestep and never from the frame - see [`audio::Audio::tick`].
     audio: audio::Audio,
+    /// Which Pulse releases this machine has. See [`App::music_discs`].
+    music_discs: audio::MusicDiscs,
     clock: TickClock,
     last: std::time::Instant,
     /// Recent frame times, for the performance overlay.
@@ -2892,6 +2928,20 @@ impl Session {
             .map(menu::Choice::plain)
             .collect();
         model.supply(menu::ValueSource::Renderers, &renderers);
+        // Empty unless this machine has both Pulse discs, which draws the row
+        // unusable rather than offering a swap that cannot happen. Kept from
+        // the boot survey rather than re-derived here: answering it means
+        // opening every image on the search path, and a menu opening is not
+        // the moment for that. See `audio::MusicDiscs`.
+        let music_sources: Vec<menu::Choice> = if self.music_discs.both() {
+            audio::MusicSource::ALL
+                .iter()
+                .map(|source| menu::Choice::plain(source.name()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        model.supply(menu::ValueSource::MusicSources, &music_sources);
         self.seed_menu(&mut model);
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
@@ -3223,6 +3273,27 @@ impl Session {
                 Ok(volume) => {
                     self.settings.audio.music_volume = volume;
                     self.audio.apply(&self.settings.audio);
+                }
+                Err(e) => {
+                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Applied on the spot, and **seeked rather than restarted**: the
+            // two releases' encodes of a track agree in length to 11 ms, so
+            // carrying the playhead across lands in the same bar. The first
+            // move onto a release reads it off its disc - measured at 2.0 s
+            // for the PS2's 36 MiB of PCM and 0.4 s for the PSP's cached
+            // decode - and every move after that is instant, because the sound
+            // is held. See `audio::Audio::set_music_source`.
+            "audio.music_source" => match text.parse::<audio::MusicSource>() {
+                Ok(source) => {
+                    self.settings.audio.music_source = source;
+                    self.audio.set_music_source(
+                        &self.music_discs,
+                        source,
+                        &oag_game::boot::default_audio_cache_dir(),
+                    );
                 }
                 Err(e) => {
                     eprintln!("ignoring {setting} = {text:?}: {e}");

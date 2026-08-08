@@ -77,6 +77,10 @@ pub struct Options {
     /// The persisted settings, so `--menu-page` draws the rows a player would
     /// see rather than each list's first entry.
     pub settings: crate::settings::Settings,
+    /// Which Pulse releases this machine has, so the MUSIC SOURCE row draws
+    /// the same way it would in a live menu: with three values on a machine
+    /// that has both discs, and empty on one that does not.
+    pub music_discs: crate::audio::MusicDiscs,
 }
 
 /// How many ticks the runner will take before giving up on `until`.
@@ -103,6 +107,7 @@ fn menu_page(
     tracks: &[crate::catalogue::Track],
     languages: &[crate::language::Language],
     strings: &crate::language::StringTable,
+    music_discs: &crate::audio::MusicDiscs,
     backdrop: Option<crate::menu::Backdrop>,
 ) -> Result<Vec<crate::frontend::Draw>> {
     let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN)
@@ -176,6 +181,22 @@ fn menu_page(
         .into_iter()
         .map(crate::menu::Choice::plain)
         .collect::<Vec<_>>(),
+    );
+    // Straight off the boot survey, not off the settings file, and that is
+    // the difference from the two rows above: what a player may choose here
+    // depends on which discs they own rather than on what they last picked, so
+    // a still drawn from the file alone would show a row that is always
+    // usable. Empty draws it unusable, which is what most machines would see.
+    model.supply(
+        crate::menu::ValueSource::MusicSources,
+        &if music_discs.both() {
+            crate::audio::MusicSource::ALL
+                .iter()
+                .map(|source| crate::menu::Choice::plain(source.name()))
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        },
     );
     // Seeded after supplying, and from the same list the live menus use, so
     // what the flag draws is what a player would see rather than whatever each
@@ -403,6 +424,7 @@ pub fn run(
                 &tracks,
                 &languages,
                 &strings,
+                &options.music_discs,
                 frame,
             )?;
             (backdrop, format, list)

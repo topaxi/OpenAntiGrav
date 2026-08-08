@@ -165,6 +165,17 @@ pub enum ValueSource {
     /// is installed at all - see [`crate::adapter`]. `default` is always first,
     /// so there is a way back from an adapter that has since been uninstalled.
     Renderers,
+    /// Which release's soundtrack can be played, which is a property of what
+    /// discs the *player owns* rather than of the one that booted.
+    ///
+    /// The first source whose answer is routinely **nothing**: choosing between
+    /// two encodes needs both discs, and most people have one. Supplied empty
+    /// there, which draws the row unusable rather than offering a swap that
+    /// cannot happen - see [`Menu::supply`]. Hiding it instead would leave the
+    /// AUDIO page with no way to say that the setting exists and this machine
+    /// cannot reach it, which is the same argument [`Menu::is_disabled`] makes
+    /// for greying a row rather than removing it.
+    MusicSources,
 }
 
 impl ValueSource {
@@ -177,6 +188,7 @@ impl ValueSource {
             Self::Monitors => "monitors",
             Self::Renderers => "renderers",
             Self::RaceModes => "race_modes",
+            Self::MusicSources => "music_sources",
         }
     }
 
@@ -189,6 +201,7 @@ impl ValueSource {
             "monitors" => Some(Self::Monitors),
             "renderers" => Some(Self::Renderers),
             "race_modes" => Some(Self::RaceModes),
+            "music_sources" => Some(Self::MusicSources),
             _ => None,
         }
     }
@@ -2377,6 +2390,76 @@ mod tests {
             menu.page().entries[row].chosen(),
             Some(Value::Text("60".to_string()))
         );
+    }
+
+    /// **The first source whose answer is routinely nothing.** Monitors and
+    /// renderers always hold `default`; languages, circuits and race modes are
+    /// never empty on a real disc. `music_sources` is empty on every machine
+    /// with one Pulse disc, which is most of them, so the empty case is the
+    /// *common* one here rather than a corner - and it has to draw, be walked
+    /// past, and refuse to move, without panicking on a `rem_euclid(0)` or an
+    /// index into an empty list.
+    #[test]
+    fn a_row_whose_source_has_nothing_is_inert_rather_than_a_panic() {
+        let mut menu = Menu::new(built_in());
+        assert_eq!(
+            menu.supply(ValueSource::MusicSources, &[]),
+            1,
+            "the AUDIO page has exactly one such row"
+        );
+        assert!(menu.open("audio"));
+        let row = menu
+            .page()
+            .entries
+            .iter()
+            .position(|entry| entry.setting() == Some("audio.music_source"))
+            .expect("the music source is on the audio page");
+        for _ in 0..row {
+            press(&mut menu, &[button::DOWN]);
+        }
+
+        let entry = &menu.page().entries[row];
+        assert_eq!(entry.value(), None, "an empty row shows no value");
+        assert_eq!(entry.chosen(), None);
+
+        for buttons in [&[button::LEFT], &[button::RIGHT], &[button::CROSS]] {
+            assert!(
+                press(&mut menu, buttons).is_empty(),
+                "an empty row must report no change"
+            );
+        }
+        // And it still draws, label and all, rather than vanishing.
+        let drawn = draw_list(&menu, &|_| vec!["X"], None);
+        assert!(
+            drawn.iter().any(|draw| matches!(
+                draw,
+                Draw::Text { text, .. } if text == "MUSIC SOURCE"
+            )),
+            "the row is drawn"
+        );
+    }
+
+    /// A machine that has both discs gets the three values, and the row keeps
+    /// whatever the settings file seeded it with - which is what stops the
+    /// first nudge of the row persisting `auto` over a player's `ps2`.
+    #[test]
+    fn a_supplied_music_source_row_keeps_the_value_it_was_seeded_with() {
+        let mut menu = Menu::new(built_in());
+        let offered: Vec<Choice> = crate::audio::MusicSource::ALL
+            .iter()
+            .map(|source| Choice::plain(source.name()))
+            .collect();
+        assert_eq!(menu.supply(ValueSource::MusicSources, &offered), 1);
+        menu.seed("audio.music_source", &Value::Text("ps2".to_string()));
+
+        assert!(menu.open("audio"));
+        let entry = menu
+            .page()
+            .entries
+            .iter()
+            .find(|entry| entry.setting() == Some("audio.music_source"))
+            .expect("the row");
+        assert_eq!(entry.chosen(), Some(Value::Text("ps2".to_string())));
     }
 
     /// The visible half: a disabled row draws dim, so "this does nothing" is

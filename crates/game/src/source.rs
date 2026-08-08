@@ -167,7 +167,12 @@ fn first_image(directory: &Path) -> Option<PathBuf> {
 }
 
 /// Whether a path looks like a disc image this engine can open.
-fn is_container(path: &Path) -> bool {
+///
+/// Public because [`crate::audio::MusicDiscs`] walks the same directories
+/// looking for the *other* release rather than the first one, and a second
+/// spelling of "what counts as an image" is a second thing to keep in step.
+#[must_use]
+pub fn is_container(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {

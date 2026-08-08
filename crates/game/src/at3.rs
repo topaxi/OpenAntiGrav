@@ -285,24 +285,69 @@ pub fn riff(frames: &[u8], format: Format) -> Vec<u8> {
     out
 }
 
-/// Reads `channels`, `sample_rate` and `block_align` out of a RIFF `fmt `
-/// chunk.
+/// What a RIFF-wrapped stream declares about itself, before anything decodes
+/// it.
+///
+/// Enough to decide whether a `Data.wad` entry is a soundtrack track without
+/// handing 2 MiB of ATRAC3+ to `ffmpeg` to find out - see
+/// [`crate::audio::MusicSource`], which pairs the two discs' soundtracks by
+/// length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stream {
+    /// The `fmt ` chunk's geometry.
+    pub format: Format,
+    /// The `fact` chunk's sample count: decoded samples **per channel**.
+    ///
+    /// `None` for a stream that carries no `fact` chunk, which is every one
+    /// [`riff`] writes and none of the disc's own. It is not the same number as
+    /// the block count times [`SAMPLES_PER_BLOCK`] - the encoder pads the last
+    /// block, and on the disc's soundtrack entries the difference is a few
+    /// hundred samples. That is why a duration comes from here rather than from
+    /// the stored size.
+    pub samples: Option<u32>,
+}
+
+impl Stream {
+    /// How long the stream is, in seconds, when it says.
+    #[must_use]
+    pub fn seconds(&self) -> Option<f64> {
+        let samples = self.samples?;
+        (self.format.sample_rate > 0)
+            .then(|| f64::from(samples) / f64::from(self.format.sample_rate))
+    }
+}
+
+/// Reads what the `fmt ` and `fact` chunks declare.
 ///
 /// Chunk-walked rather than read at a fixed offset: `Data.wad`'s entries carry
-/// `fact` and `smpl` chunks as well, in an order nothing guarantees.
+/// `fact` and `smpl` chunks as well, in an order nothing guarantees. The walk
+/// stops at `data`, whose body is the whole stream and holds no chunks -
+/// nothing on the disc puts anything after it.
 ///
-/// Parsed here rather than in `oag-formats` because these three fields are all
-/// the transcoder needs and RIFF is not one of the disc's own formats - it is
+/// Parsed here rather than in `oag-formats` because these fields are all the
+/// transcoder needs and RIFF is not one of the disc's own formats - it is
 /// Microsoft's, and the only reason it appears is that Sony's encoder wrote it.
-fn read_format(blob: &[u8]) -> Result<Format> {
+///
+/// # Errors
+///
+/// A blob that is not a RIFF/WAVE, or one with no readable `fmt ` chunk.
+pub fn describe(blob: &[u8]) -> Result<Stream> {
     if blob.len() < 12 || !blob.starts_with(b"RIFF") || &blob[8..12] != b"WAVE" {
         bail!("not a RIFF/WAVE file");
     }
 
     let mut at = 12usize;
+    let mut format = None;
+    let mut samples = None;
     while at + 8 <= blob.len() {
         let id = &blob[at..at + 4];
         let len = u32::from_le_bytes(blob[at + 4..at + 8].try_into().expect("four bytes")) as usize;
+        // A `data` body is the entire stream, so a caller that peeked only the
+        // header has it truncated. That is not a malformed file, and the walk
+        // is over either way.
+        if id == b"data" {
+            break;
+        }
         let body = blob
             .get(at + 8..at + 8 + len)
             .context("a RIFF chunk runs past the end of the file")?;
@@ -312,18 +357,30 @@ fn read_format(blob: &[u8]) -> Result<Format> {
             if body.len() < 16 {
                 bail!("the fmt chunk is {} bytes, too short to read", body.len());
             }
-            return Ok(Format {
+            format = Some(Format {
                 channels: u16::from_le_bytes(body[2..4].try_into().expect("two bytes")),
                 sample_rate: u32::from_le_bytes(body[4..8].try_into().expect("four bytes")),
                 block_align: u16::from_le_bytes(body[12..14].try_into().expect("two bytes")),
             });
+        } else if id == b"fact" && body.len() >= 4 {
+            samples = Some(u32::from_le_bytes(
+                body[..4].try_into().expect("four bytes"),
+            ));
         }
 
         // RIFF pads every odd-length chunk to an even boundary, and the pad
         // byte is not counted in the length.
         at += 8 + len + (len & 1);
     }
-    bail!("no fmt chunk");
+
+    let format = format.context("no fmt chunk")?;
+    Ok(Stream { format, samples })
+}
+
+/// Reads `channels`, `sample_rate` and `block_align` out of a RIFF `fmt `
+/// chunk.
+fn read_format(blob: &[u8]) -> Result<Format> {
+    Ok(describe(blob)?.format)
 }
 
 /// Decodes a complete RIFF file, reading the cache when it is already there.
@@ -642,6 +699,56 @@ mod tests {
         shuffled.extend_from_slice(&wrapped[12..]);
 
         assert_eq!(read_format(&shuffled).unwrap(), format);
+    }
+
+    /// A soundtrack track is picked out by its declared length, which comes
+    /// from `fact` and never from the stored size - so `describe` has to find
+    /// the chunk, and has to find it with only the header in hand. That last
+    /// part is the case that actually happens: `psp_soundtrack` peeks a
+    /// kibibyte of a 2 MiB entry, which cuts the `data` chunk short.
+    #[test]
+    fn a_peeked_header_still_yields_the_length_the_fact_chunk_declares() {
+        let format = Format {
+            channels: 2,
+            sample_rate: 44_100,
+            block_align: 560,
+        };
+        let mut blob = riff(&[0; 5600], format);
+        // The disc writes `fact` between `fmt ` and `data`; put it there.
+        let data_at = HEADER_LEN - 8;
+        let mut fact = Vec::from(*b"fact");
+        fact.extend_from_slice(&4u32.to_le_bytes());
+        fact.extend_from_slice(&8_272_316u32.to_le_bytes());
+        blob.splice(data_at..data_at, fact);
+
+        let whole = describe(&blob).expect("a readable stream");
+        assert_eq!(whole.format, format);
+        assert_eq!(whole.samples, Some(8_272_316));
+        let seconds = whole.seconds().expect("a length");
+        assert!((seconds - 187.581).abs() < 1e-3, "{seconds} s");
+
+        // Truncated to the header, which is what a peek hands over. The `data`
+        // chunk's declared length now runs past the end of the blob, and that
+        // must not be read as a malformed file.
+        let peeked = describe(&blob[..HEADER_LEN + 8]).expect("a peeked header");
+        assert_eq!(peeked, whole);
+    }
+
+    /// Every stream [`riff`] writes has no `fact` chunk, and that is a length
+    /// this cannot state rather than a length of zero.
+    #[test]
+    fn a_stream_with_no_fact_chunk_states_no_length() {
+        let stream = describe(&riff(
+            &[0; 560],
+            Format {
+                channels: 1,
+                sample_rate: 44_100,
+                block_align: 280,
+            },
+        ))
+        .expect("a readable stream");
+        assert_eq!(stream.samples, None);
+        assert_eq!(stream.seconds(), None);
     }
 
     #[test]

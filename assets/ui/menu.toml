@@ -446,9 +446,9 @@ label = "BACK"
 id = "audio"
 title = "AUDIO"
 
-# One row, because there is one bus with anything on it: the PS2 release's music
-# archive decodes and plays, and nothing else does yet. The effects bus gets a
-# row when it gets a sound.
+# One volume row, because there is one bus with anything on it: the soundtrack
+# decodes and plays and nothing else does yet. The effects bus gets a row when
+# it gets a sound.
 #
 # Applied on the next tick - the change goes straight onto `Bus::Music`'s gain,
 # so it is audible on the row the player is standing on rather than after a
@@ -459,6 +459,35 @@ kind = "choice"
 label = "MUSIC VOLUME"
 setting = "audio.music_volume"
 values = ["0", "25", "50", "75", "90", "100"]
+
+# Which release's encode of the **soundtrack** plays. Only the sixteen
+# soundtrack tracks have a proven counterpart on the other disc - a 16-for-16
+# bijection, mean duration gap 11 ms, side-signal correlation +0.98, see
+# `docs/formats/ps2-audio.md`. Voice and every `.bnk` stay on the disc the game
+# booted from, because nothing pairs them.
+#
+# **It does not govern the front end's own music, and that is not a bug.** The
+# PSP release has menu music written for it, a 28-second loop that is not one of
+# the sixteen and has no PS2 counterpart at all, so there is nothing for this
+# row to choose between and a PSP boot sounds the same at every value. The PS2
+# release has no menu music of its own that has been found and plays soundtrack
+# track 0 under its menus, so the row does move that. The asymmetry is the
+# discs'; nothing here adds music to a screen that had none.
+#
+# The values are supplied at runtime rather than listed here, because what is on
+# offer depends on which discs the player owns: `auto`, `psp` and `ps2` on a
+# machine that has both, and nothing at all on one that has one, where the row
+# draws unusable. `auto` is the booted disc - the PSP release is meant to sound
+# like the PSP release, compression included.
+#
+# Changing it **seeks rather than restarts**: the playhead is carried across in
+# seconds, and the two encodes of a track agree in length to 11 ms, so the same
+# offset lands in the same bar. See `crates/game/src/audio.rs`.
+[[page.entry]]
+kind = "choice"
+label = "MUSIC SOURCE"
+setting = "audio.music_source"
+values_from = "music_sources"
 
 [[page.entry]]
 kind = "back"
