@@ -124,6 +124,13 @@ pub struct Audio {
     /// The looping music voice, so a later volume change or stop can address
     /// it. `None` when this source carries no decodable music.
     music: Option<VoiceId>,
+    /// The movie's own sound, while a movie is playing one.
+    ///
+    /// Separate from [`Self::music`] although both are on [`Bus::Music`],
+    /// because they are stopped at different moments and by different things:
+    /// the music runs for the whole session and this lasts one movie. See
+    /// [`Audio::start_movie`].
+    movie: Option<VoiceId>,
 }
 
 /// The offline capture: a path and the samples destined for it.
@@ -149,6 +156,7 @@ impl std::fmt::Debug for Audio {
             .field("output", &self.output)
             .field("dump", &self.dump)
             .field("music", &self.music)
+            .field("movie", &self.movie)
             .finish()
     }
 }
@@ -179,6 +187,7 @@ impl Audio {
                 samples: Vec::new(),
             }),
             music: None,
+            movie: None,
         };
         audio.apply(settings);
         audio
@@ -251,6 +260,100 @@ impl Audio {
             ),
             Err(error) => println!("audio: no music ({error:#})"),
         }
+    }
+
+    /// Starts the boot sequence's movie sound, reporting what happened.
+    ///
+    /// The seam both tick loops go through - the window's and the headless
+    /// capture's - so that the line on stdout, and the decision itself, cannot
+    /// come out differently on one of them. `None` is the ordinary silent case
+    /// and says so once; see [`crate::boot::Boot::movie_sound`] for the reasons
+    /// it is `None`.
+    pub fn start_boot_movie(&mut self, sound: Option<crate::at3::Pcm>) {
+        let Some(pcm) = sound else {
+            println!("audio: the intro movie plays silently");
+            return;
+        };
+        let seconds = pcm.samples.len() as f64
+            / f64::from(pcm.channels.max(1))
+            / f64::from(pcm.sample_rate.max(1));
+        match Sound::new(pcm.samples, pcm.channels, pcm.sample_rate) {
+            Ok(sound) => {
+                if self.start_movie(sound) {
+                    println!(
+                        "audio: the intro movie's own track, {seconds:.2} s, clocking the picture"
+                    );
+                } else {
+                    // A mixer with every slot busy, which cannot happen today -
+                    // the music is the only other voice - but is reported rather
+                    // than leaving a movie silent for no stated reason.
+                    println!("audio: no free voice for the intro movie, so it plays silently");
+                }
+            }
+            Err(error) => println!("audio: the intro movie plays silently ({error:#})"),
+        }
+    }
+
+    /// Starts a movie's own sound, replacing whatever was playing before.
+    ///
+    /// One shot rather than looping: a movie ends. It goes on [`Bus::Music`] so
+    /// that a player who has turned the music down has turned this down too -
+    /// there is no separate movie bus on the original either, and a movie's
+    /// track *is* its music.
+    ///
+    /// Returns whether a voice was actually started, which is what
+    /// [`Self::movie_playhead`] then paces the picture against. `false` means
+    /// every voice slot was busy, and a movie that plays silently is a better
+    /// outcome than one that will not play.
+    pub fn start_movie(&mut self, sound: Sound) -> bool {
+        self.stop_movie();
+        self.movie = self
+            .output
+            .with_mixer(|mixer| mixer.play(Play::once(Arc::new(sound), Bus::Music)));
+        self.movie.is_some()
+    }
+
+    /// Stops the movie's sound, if any is playing.
+    ///
+    /// Called when the movie ends **or is skipped**, and the skip is the reason
+    /// it is a separate call rather than something the voice's own end handles:
+    /// the intro can be cut short by START at any point, and 30 seconds of
+    /// leftover intro playing under the menus would be the most obvious
+    /// possible bug.
+    pub fn stop_movie(&mut self) {
+        if let Some(id) = self.movie.take() {
+            self.output.with_mixer(|mixer| mixer.stop(id));
+        }
+    }
+
+    /// How far into its own sound the playing movie has got, in seconds.
+    ///
+    /// **This is the whole of ADR-0019's clock rule**, in one place so that no
+    /// two callers can answer it differently: `Some` means pace the picture
+    /// against this, `None` means pace it against the tick. Every reason a
+    /// movie has no playhead collapses into `None` here - no audio stream, a
+    /// widget that says `sound="false"`, no `ffmpeg` to decode with, a voice
+    /// that has ended, and the case below.
+    ///
+    /// # Why "is a voice playing" is not enough on its own
+    ///
+    /// [`Self::tick`] only pulls samples when there is a dump to write, because
+    /// with a device attached `cpal`'s callback is already draining the mixer
+    /// and pulling here would take samples out of its mouth. So a run with
+    /// **neither** a device nor a dump - a null output, which is what a headless
+    /// run without `--dump-audio` gets, and what CI has - advances the mixer
+    /// never. A voice on it sits at zero for ever.
+    ///
+    /// Pacing a movie against that clock would stop the picture on frame one
+    /// and the intro would never reach its end, so `--until` would run to its
+    /// tick ceiling and fail. The mixer has to be **moving** as well as
+    /// sounding, and only this module knows whether it is.
+    #[must_use]
+    pub fn movie_playhead(&self) -> Option<f64> {
+        if !(self.dump.is_some() || self.output.is_streaming()) {
+            return None;
+        }
+        self.output.with_mixer(|mixer| mixer.position(self.movie?))
     }
 
     /// Advances the mixer by one simulation tick.
@@ -521,6 +624,7 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            movie: None,
         };
         for _ in 0..120 {
             audio.tick();
@@ -528,6 +632,110 @@ mod tests {
         let dump = audio.dump.as_ref().expect("the dump is set");
         let frames = dump.samples.len() / 2;
         assert_eq!(frames, 120 * (DUMP_SAMPLE_RATE as usize / 60));
+    }
+
+    /// **The A/V sync measurement**, and the only one that can be made without
+    /// something to listen with: over a full 40-second reel, does the frame the
+    /// picture is on stay within one frame of where the sound has got to?
+    ///
+    /// Run through the real pieces rather than a model of them - a real
+    /// [`Sound`] in a real mixer, pulled by [`Audio::tick`] at the fixed 60 Hz,
+    /// with the playhead read exactly where both tick loops read it and handed
+    /// to [`crate::movie::Player::follow`]. Drift is what audio clocking exists
+    /// to prevent and it is cumulative, so measuring it over one tick would
+    /// measure nothing; 2,402 ticks is the whole intro.
+    ///
+    /// The bound is **one frame**, which is 33 ms of picture against 44,100
+    /// samples a second of sound. The error is a floor, so the frame is at
+    /// worst the one before the sound's own, never the one after.
+    #[test]
+    fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
+        let seconds = 40.17;
+        let rate = 44_100;
+        let frames = (seconds * f64::from(rate)) as usize;
+        // Silence is fine: what is measured is where the playhead is, and the
+        // mixer advances it whatever the samples are.
+        let sound = Sound::new(vec![0i16; frames * 2], 2, rate).expect("a sound");
+
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: Some(Dump {
+                path: PathBuf::from("unused"),
+                samples: Vec::new(),
+            }),
+            music: None,
+            movie: None,
+        };
+        assert!(audio.start_movie(sound), "a free voice");
+
+        let (num, den) = crate::movie::FRAME_RATE;
+        let mut player = crate::movie::Player::new(1200, false, crate::movie::FRAME_RATE);
+        let mut worst = 0.0f64;
+
+        for tick in 0..(60 * 41) {
+            let playhead = audio.movie_playhead().expect("a sounding voice");
+            player.follow(playhead);
+            audio.tick();
+
+            if player.is_finished() {
+                break;
+            }
+            // Where the sound says the picture should be, unrounded.
+            let wanted = playhead * num as f64 / den as f64;
+            let error = wanted - player.frame() as f64;
+            assert!(
+                (0.0..1.0).contains(&error),
+                "tick {tick}: the picture is {error} frames from the sound"
+            );
+            worst = worst.max(error);
+        }
+
+        assert!(worst > 0.0, "the reel should actually have played");
+    }
+
+    /// The clock rule's own failure mode, and the reason the predicate is not
+    /// just "is a voice playing": a run with **neither** a device nor a dump
+    /// never advances the mixer, so a movie paced against it would stop on
+    /// frame one and the boot sequence would never reach its end.
+    #[test]
+    fn a_mixer_that_is_never_advanced_offers_no_clock() {
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: None,
+            music: None,
+            movie: None,
+        };
+        let sound = Sound::new(vec![0i16; 44_100 * 2], 2, 44_100).expect("a sound");
+        assert!(audio.start_movie(sound), "a free voice");
+
+        assert_eq!(
+            audio.movie_playhead(),
+            None,
+            "a voice on a mixer nothing pulls from is not a clock"
+        );
+    }
+
+    /// A movie with no sound is tick-clocked, which is `Backdrop.PMF` - the
+    /// movie that plays most, and the one this must not get wrong.
+    #[test]
+    fn a_movie_with_no_voice_has_no_playhead() {
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: Some(Dump {
+                path: PathBuf::from("unused"),
+                samples: Vec::new(),
+            }),
+            music: None,
+            movie: None,
+        };
+        assert_eq!(audio.movie_playhead(), None, "nothing started");
+
+        let sound = Sound::new(vec![0i16; 4], 2, 44_100).expect("a sound");
+        assert!(audio.start_movie(sound));
+        assert_eq!(audio.movie_playhead(), Some(0.0));
+
+        audio.stop_movie();
+        assert_eq!(audio.movie_playhead(), None, "and none once it is stopped");
     }
 
     /// With no dump asked for, nothing is accumulated at all - a windowed run
@@ -538,6 +746,7 @@ mod tests {
             output: Output::null(DUMP_SAMPLE_RATE),
             dump: None,
             music: None,
+            movie: None,
         };
         for _ in 0..120 {
             audio.tick();

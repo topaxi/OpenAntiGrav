@@ -344,6 +344,25 @@ impl Mixer {
         self.voice(id).is_some()
     }
 
+    /// How far into its own source a voice has played, in seconds.
+    ///
+    /// The source's clock, not the device's: [`Voice::position`] counts source
+    /// frames, so a 48 kHz track on a 44.1 kHz device reports the second of
+    /// itself that is sounding rather than the second of output that carried
+    /// it. That is what a caller pacing something else against this wants -
+    /// `crate::mixer` is the only place that knows the resampling step, and a
+    /// playhead in output seconds would make every consumer undo it.
+    ///
+    /// `None` for a handle that no longer addresses a sounding voice, which is
+    /// the same answer [`Self::is_playing`] gives and for the same reason: a
+    /// finished voice's slot may already belong to somebody else.
+    #[must_use]
+    pub fn position(&self, id: VoiceId) -> Option<f64> {
+        let voice = self.voice(id)?;
+        let sound = voice.sound.as_ref()?;
+        Some(voice.position / f64::from(sound.sample_rate()))
+    }
+
     fn voice(&self, id: VoiceId) -> Option<&Voice> {
         self.voices
             .get(usize::from(id.slot))
@@ -473,6 +492,30 @@ mod tests {
 
         assert_eq!(mixer.active_voices(), 0, "the voice should have finished");
         assert!(!mixer.is_playing(id), "the handle should be stale");
+        assert_eq!(mixer.position(id), None, "and report no playhead");
+    }
+
+    /// The playhead is in the **source's** seconds, so a caller pacing a movie
+    /// against it does not have to know the device's rate. Rendered at 44.1 kHz
+    /// against a 22.05 kHz source, so the two would disagree by a factor of two
+    /// if the resampling step were left in.
+    #[test]
+    fn a_playhead_is_measured_in_the_sources_own_seconds() {
+        let mut mixer = Mixer::new(44_100);
+        let id = mixer
+            .play(Play::looping(tone(22_050, 1, 22_050), Bus::Music))
+            .expect("a free slot");
+        assert_eq!(mixer.position(id), Some(0.0), "nothing rendered yet");
+
+        // 4,410 output frames is a tenth of a second at 44.1 kHz, and a tenth
+        // of a second of a 22.05 kHz source is 2,205 of its frames.
+        let mut out = vec![0.0f32; 4_410 * CHANNELS];
+        mixer.render(&mut out);
+        let seconds = mixer.position(id).expect("still sounding");
+        assert!(
+            (seconds - 0.1).abs() < 1e-9,
+            "expected a tenth of a second, got {seconds}"
+        );
     }
 
     #[test]

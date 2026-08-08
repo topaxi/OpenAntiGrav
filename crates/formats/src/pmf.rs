@@ -272,7 +272,16 @@ impl Header {
 pub struct Demuxed {
     /// H.264 video in Annex B form, start codes included.
     pub video: Vec<u8>,
-    /// One ATRAC3+ frame per PES packet, in presentation order.
+    /// One `private_stream_1` PES payload per packet, in presentation order.
+    ///
+    /// **Not one ATRAC3+ frame each**, which this said until the frames were
+    /// actually decoded. Two layers of framing are still on them, and both are
+    /// the container's rather than the codec's: four bytes of sub-header on each
+    /// payload, whose third and fourth are a big-endian offset to the first
+    /// frame that *starts* in it, and then eight bytes on each frame - the sync
+    /// word `0f d0`, a codec config word, and four zero bytes. Frames straddle
+    /// packet boundaries, so a payload is a slice of a byte stream and not a
+    /// unit. `oag_game::movie` unwraps both; see its `movie_audio`.
     pub audio: Vec<Vec<u8>>,
     /// Pack headers seen. Every pack is 2048 bytes in shipped files.
     pub packs: usize,

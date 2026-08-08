@@ -643,6 +643,7 @@ fn main() -> Result<()> {
             .to_string()
         }),
         cache: cli.cache.clone().unwrap_or_else(boot::default_cache_dir),
+        audio_cache: boot::default_audio_cache_dir(),
         // Every frame by default: the movie the disc plays is 1200 frames long
         // and its last one is the Wipeout Pulse logo, so a cap would stop the
         // sequence before the thing it exists to show.
@@ -1144,6 +1145,16 @@ impl App {
                 }
                 None => (None, None),
             };
+
+        // Taken before the stage rather than after it, because building the
+        // front end is what starts the intro's sound and that needs the mixer
+        // in hand. Moved rather than cloned: there is one mixer per run, and a
+        // second one would either fight the first for the device or split a
+        // `--dump-audio` capture across two buffers.
+        let Some(mut audio) = self.audio.take() else {
+            return Ok(None);
+        };
+
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
             Stage::race(
@@ -1163,7 +1174,7 @@ impl App {
                 (Some(_), Some(assets)) => {
                     Stage::loading(&gpu, loaded, assets, self.video_format, self.trace)?
                 }
-                _ => Stage::frontend(&gpu, loaded, self.video_format, self.trace)?,
+                _ => Stage::frontend(&gpu, loaded, self.video_format, self.trace, &mut audio)?,
             }
         } else {
             return Ok(None);
@@ -1188,13 +1199,6 @@ impl App {
             &oag_game::sprite::Sheet::default(),
         )
         .context("building the performance overlay")?;
-
-        // Moved rather than cloned: there is one mixer per run, and a second
-        // one would either fight the first for the device or split a
-        // `--dump-audio` capture across two buffers.
-        let Some(audio) = self.audio.take() else {
-            return Ok(None);
-        };
 
         Ok(Some(Session {
             gpu,
@@ -1756,12 +1760,24 @@ impl Stage {
         })))
     }
 
+    /// `audio` is taken because this is the moment the intro's sound starts,
+    /// and there are two ways here - straight off the boot, or out of the
+    /// loading screen when its fade runs out. Passing the mixer in makes
+    /// starting it part of *becoming* the front end rather than something each
+    /// of those two has to remember, which is the difference between a missed
+    /// call being a compile error and being a silent movie on one path only.
     fn frontend(
         gpu: &Gpu,
-        loaded: boot::Boot,
+        mut loaded: boot::Boot,
         video_format: Option<VideoFormat>,
         trace: bool,
+        audio: &mut audio::Audio,
     ) -> Result<Self> {
+        // Before the renderer is built rather than after, so the sound and the
+        // first frame of picture start on the same tick: `Session::frame` draws
+        // before it ticks, and a movie whose voice started a frame late would
+        // be a frame late for the whole reel.
+        audio.start_boot_movie(loaded.movie_sound.take());
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
@@ -2553,7 +2569,7 @@ impl Session {
         // Building the front end spawns the intro's decode thread and uploads a
         // sprite sheet; that is a load, and a load is not a frame time.
         self.stalled = true;
-        self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace)?;
+        self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace, &mut self.audio)?;
         Ok(())
     }
 
@@ -2645,6 +2661,14 @@ impl Session {
             // per-frame counterpart: with a device attached `cpal` drains the
             // mixer from its own callback thread, and with none the offline
             // dump below is the only reader.
+            //
+            // The movie's playhead is read **before** that call, so that this
+            // loop and `capture::run` pace the picture against the same
+            // measurement - where the sound had got to at the end of the
+            // previous tick - rather than differing by one tick depending on
+            // which side of `tick` each happened to sit. See
+            // `movie::Player::follow`.
+            let movie_playhead = self.audio.movie_playhead();
             self.audio.tick();
             match &mut self.stage {
                 // Stepped in the tick loop with everything else, so the wave's
@@ -2655,10 +2679,19 @@ impl Session {
                 // ADR-0007 fixed the timestep to avoid.
                 Stage::Loading(stage) => stage.screen.advance(progress.finished),
                 Stage::Frontend(stage) => {
-                    let events = stage.frontend.update(dt, self.controls.buttons_mut());
+                    let events =
+                        stage
+                            .frontend
+                            .update(dt, self.controls.buttons_mut(), movie_playhead);
                     report(&events, stage.trace);
                     for note in stage.frontend.take_notes() {
                         println!("{note}");
+                    }
+                    // The movie's sound outlives neither leg, and a skip leaves
+                    // the state without finishing the player - see
+                    // `Frontend::is_playing_movie`.
+                    if !stage.frontend.is_playing_movie() {
+                        self.audio.stop_movie();
                     }
                 }
                 Stage::Menu(stage) => {

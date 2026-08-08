@@ -54,6 +54,14 @@ pub struct Boot {
     pub strings: StringTable,
     /// Every circuit this source offers to race on. See [`crate::catalogue`].
     pub tracks: Vec<crate::catalogue::Track>,
+    /// The intro movie's own sound, decoded and ready to play.
+    ///
+    /// `None` whenever the movie should be silent, and every reason funnels
+    /// into that one word rather than being re-decided downstream: a movie with
+    /// no audio stream, a `Movie` widget carrying `sound="false"`, an
+    /// `ffmpeg` that is missing or failed, or `--no-video`, which never reads
+    /// the movie at all. See [`load_movie_sound`].
+    pub movie_sound: Option<crate::at3::Pcm>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
@@ -88,6 +96,12 @@ pub struct Options {
     pub movie: String,
     /// Where converted frames are cached.
     pub cache: std::path::PathBuf,
+    /// Where decoded PCM is cached - see [`default_audio_cache_dir`].
+    ///
+    /// A second directory rather than the one above, and deliberately: the two
+    /// hold different things with different lifetimes, and a player clearing
+    /// one should not lose the other.
+    pub audio_cache: std::path::PathBuf,
     /// How much of the movie to convert.
     pub extent: Extent,
     /// Skip conversion entirely.
@@ -125,6 +139,10 @@ pub fn load(options: &Options) -> Result<Boot> {
     );
     let tracks = load_tracks(&mut archives, &mut report);
     let movie = load_movie(&mut archives, options, &mut report)?;
+    // Straight after the movie, so its report lines stay together, and while
+    // `screens` is still in hand: the widget that decides whether this movie is
+    // heard at all is in that XML.
+    let movie_sound = load_movie_sound(movie.as_ref(), &screens, options, &mut report);
     let backdrop = load_backdrop(&mut archives, options, &mut report);
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
@@ -239,10 +257,98 @@ pub fn load(options: &Options) -> Result<Boot> {
         font,
         frontend,
         movie,
+        movie_sound,
         backdrop,
         sprites,
         report,
     })
+}
+
+/// Decodes the intro movie's ATRAC3+ track, if it should be heard at all.
+///
+/// # The widget decides, not the container
+///
+/// A `.PMF` having an audio stream is not the same question as whether the
+/// front end plays it. `Data\Movies\Backdrop` is `sound="false"` **and** has no
+/// track, so it is silent twice over; a movie that had a track and a widget
+/// saying `sound="false"` would still have to be silent, and this is what makes
+/// that true rather than the container's own contents. `Data\Movies\Intro` is
+/// `sound="true"`.
+///
+/// A movie no widget names - `--movie` pointing at an entry by hash, which is
+/// how the three unnamed reels are addressed - is played **with** its sound.
+/// The widget is the authority when there is one, and its absence is an absence
+/// of instruction rather than an instruction to be silent.
+///
+/// # Never fatal
+///
+/// A decode that fails names the reason on the report and leaves the movie
+/// silent, exactly as a missing `ffmpeg` leaves it with a black picture. This
+/// is the degradation ADR-0019 asks for, and it is the only one available:
+/// there is no second decoder to fall back to.
+fn load_movie_sound(
+    movie: Option<&Movie>,
+    screens: &Screens,
+    options: &Options,
+    report: &mut Vec<String>,
+) -> Option<crate::at3::Pcm> {
+    let movie = movie?;
+    if options.no_video {
+        // Said here rather than left to the branch below, which would report a
+        // track that could not be unwrapped: `--no-video` never reads the movie
+        // at all, so there was nothing to unwrap. Worth stating, because the
+        // flag names only the picture and takes the sound with it.
+        report.push(
+            "  audio: --no-video skips reading the movie, so it has no sound either".to_string(),
+        );
+        return None;
+    }
+    let Some(audio) = movie.audio.as_ref() else {
+        // A header that declares a track and a demux that could not recover one
+        // has already said why on stderr; this is the line that says the movie
+        // is silent as a result, so the two are not read as unrelated.
+        if movie
+            .header
+            .as_ref()
+            .is_some_and(|header| header.audio.is_some())
+        {
+            report.push("  audio: declared but not recovered, so it stays silent".to_string());
+        }
+        return None;
+    };
+
+    let silent = screens
+        .with_movies()
+        .filter_map(|screen| screen.movie.as_ref())
+        .any(|widget| widget.entry_name().eq_ignore_ascii_case(&options.movie) && !widget.sound);
+    if silent {
+        report.push(format!(
+            "  audio: {} channel(s) at {} Hz, muted - the widget playing it is sound=\"false\"",
+            audio.format.channels, audio.format.sample_rate
+        ));
+        return None;
+    }
+
+    match audio.decode(&options.audio_cache) {
+        Ok(pcm) => {
+            report.push(format!(
+                "  audio: {} channel(s) at {} Hz, {} ATRAC3+ block(s) of {} bytes, decoded to \
+                 {:.2}s",
+                pcm.channels,
+                pcm.sample_rate,
+                audio.block_count(),
+                audio.format.block_align,
+                pcm.samples.len() as f64
+                    / f64::from(pcm.channels.max(1))
+                    / f64::from(pcm.sample_rate.max(1))
+            ));
+            Some(pcm)
+        }
+        Err(error) => {
+            report.push(format!("  audio: not decoded ({error:#})"));
+            None
+        }
+    }
 }
 
 /// Loads the looping backdrop the disc plays behind its menus.
@@ -717,6 +823,12 @@ fn load_movie(
             header: Some(header),
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
+            // `--no-video` costs the movie its sound as well, because this path
+            // never reads the movie at all - it peeks the header and stops, and
+            // the ATRAC3+ frames are in the program stream behind it. Worth
+            // knowing when reaching for the flag to isolate the audio: it
+            // removes both.
+            audio: None,
         }));
     }
 
@@ -736,16 +848,9 @@ fn load_movie(
             movie.frame_count,
             String::from_utf8_lossy(&header.version)
         ));
-        if let Some(audio) = header.audio {
-            report.push(format!(
-                "  audio: {} channel(s) at {}, ATRAC3+, not decoded",
-                audio.channels,
-                audio.frequency_hz().map_or_else(
-                    || format!("code {}", audio.frequency_code),
-                    |hz| format!("{hz} Hz")
-                )
-            ));
-        }
+        // What the audio stream *is* gets reported by [`load_movie_sound`],
+        // which says what became of it as well. This used to say "ATRAC3+, not
+        // decoded" here, and that was true right up until ADR-0019 landed.
     }
     match (&movie.frames, &movie.no_picture_reason) {
         (Some(frames), _) => report.push(format!(

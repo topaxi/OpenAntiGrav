@@ -74,7 +74,7 @@ pub struct Format {
 ///
 /// Not a bit depth despite the field name: read off `SND0.AT3`, which stores
 /// 2048 there beside a `wBitsPerSample` of zero.
-const SAMPLES_PER_BLOCK: u16 = 2048;
+pub const SAMPLES_PER_BLOCK: u16 = 2048;
 
 /// The `WAVE_FORMAT_EXTENSIBLE` subformat GUID that means ATRAC3+.
 ///
@@ -85,12 +85,47 @@ const ATRAC3PLUS_GUID: [u8; 16] = [
     0xbf, 0xaa, 0x23, 0xe9, 0x58, 0xcb, 0x71, 0x44, 0xa1, 0x19, 0xff, 0xfa, 0x01, 0xe4, 0xce, 0x62,
 ];
 
-/// The 12 bytes of codec extra data that follow the GUID.
+/// The first two bytes of the codec extra data, before the config word.
 ///
-/// Copied verbatim from `SND0.AT3`, and the same on every `Data.wad` entry
-/// checked. What the four non-zero bytes mean is not established; `ffmpeg`'s
-/// decoder reads them, so they are reproduced rather than guessed at.
-const CODEC_EXTRA: [u8; 12] = [0x01, 0x00, 0x28, 0x45, 0, 0, 0, 0, 0, 0, 0, 0];
+/// `01 00` on every RIFF-wrapped stream on the disc, at all three block sizes
+/// and both channel counts, so it is a constant rather than something derived.
+const CODEC_EXTRA_PREFIX: [u8; 2] = [0x01, 0x00];
+
+/// The codec config word the extra data carries, as [`Format`] states it.
+///
+/// **Derived rather than copied, and the disc is what settled it.** The four
+/// non-zero bytes used to be reproduced verbatim off `SND0.AT3` - `01 00 28
+/// 45` - with what they meant left open. Reading the `fmt ` chunk of every
+/// RIFF-wrapped ATRAC3+ entry in `Data.wad` gives three combinations, and one
+/// formula accounts for all of them:
+///
+/// | `block_align` | channels | entries | config word |
+/// | --- | --- | --- | --- |
+/// | 280 | 1 | 32 | `0x2422` |
+/// | 560 | 1 | 32 | `0x2445` |
+/// | 560 | 2 | 28 | `0x2845` |
+///
+/// The low 10 bits are `block_align / 8 - 1` (34, 69, 69) and the top 6 are
+/// `8 + channels` (9, 9, 10). A fourth combination confirms it from a
+/// completely separate direction: the **8-byte header on every ATRAC3+ frame
+/// inside a `.PMF`** carries this same word in its third and fourth bytes -
+/// `28 45` on the disc's 560-byte movie tracks, and `28 5c` on `Intro.PMF`,
+/// whose blocks are 744 bytes. `(8 + 2) << 10 | (744 / 8 - 1)` is `0x285c`.
+/// See [`crate::movie`] for that header.
+///
+/// This matters because the constant it replaces was a **stereo 560** word.
+/// Writing it into `Intro.PMF`'s stereo 744 stream, or into any of the mono
+/// clips, states a geometry the `fmt ` chunk beside it contradicts. `ffmpeg`
+/// happens not to read it - it decodes `Intro.PMF` correctly either way,
+/// which is exactly why this would never have been noticed by listening.
+fn codec_config(format: Format) -> u16 {
+    // Saturating rather than wrapping: a caller cannot produce a block size
+    // this cannot describe, and a silent wrap would write a plausible word for
+    // the wrong geometry - the failure this whole function exists to remove.
+    let blocks = (format.block_align / 8).saturating_sub(1) & 0x3ff;
+    let channels = (8u16.saturating_add(format.channels)) & 0x3f;
+    (channels << 10) | blocks
+}
 
 /// Bytes in the `fmt ` chunk body this wrapper writes.
 ///
@@ -177,9 +212,9 @@ fn is_usable(path: &Path, format: Format) -> bool {
 /// PSMF header states the channel count and a frequency code, and the block
 /// size comes from the audio stream descriptor rather than from the frames.
 ///
-/// Nothing calls this yet - movie sound and A/V sync are their own piece of
-/// work - but it is the half of ADR-0019 that the cache exists to serve, and
-/// the wrapper it depends on is pinned by a test below.
+/// [`crate::movie::MovieAudio::decode`] is the caller, and the only one: it
+/// unwraps a `.PMF`'s own two layers of framing first, which is where the
+/// `block_align` this cannot infer comes from.
 ///
 /// # Errors
 ///
@@ -208,7 +243,7 @@ pub fn decode_frames(frames: &[u8], format: Format, cache_dir: &Path) -> Result<
 /// +0x26  u16     wValidBitsPerSample 2048 (samples per block, not a depth)
 /// +0x28  u32     dwChannelMask       3
 /// +0x2c  u8[16]  SubFormat GUID
-/// +0x3c  u8[12]  codec extra data
+/// +0x3c  u8[12]  codec extra data - see `codec_config`
 /// +0x48  "data"  u32 length
 /// ```
 ///
@@ -239,7 +274,10 @@ pub fn riff(frames: &[u8], format: Format) -> Vec<u8> {
     out.extend_from_slice(&SAMPLES_PER_BLOCK.to_le_bytes());
     out.extend_from_slice(&3u32.to_le_bytes());
     out.extend_from_slice(&ATRAC3PLUS_GUID);
-    out.extend_from_slice(&CODEC_EXTRA);
+    out.extend_from_slice(&CODEC_EXTRA_PREFIX);
+    out.extend_from_slice(&codec_config(format).to_be_bytes());
+    // The remaining eight bytes are zero on every entry on the disc.
+    out.extend_from_slice(&[0u8; 8]);
 
     out.extend_from_slice(b"data");
     out.extend_from_slice(&(frames.len() as u32).to_le_bytes());
@@ -494,7 +532,11 @@ mod tests {
         );
         assert_eq!(u32::from_le_bytes(wrapped[40..44].try_into().unwrap()), 3);
         assert_eq!(&wrapped[44..60], &ATRAC3PLUS_GUID);
-        assert_eq!(&wrapped[60..72], &CODEC_EXTRA);
+        assert_eq!(
+            &wrapped[60..72],
+            &[0x01, 0x00, 0x28, 0x45, 0, 0, 0, 0, 0, 0, 0, 0],
+            "the twelve bytes SND0.AT3 itself stores"
+        );
         assert_eq!(&wrapped[72..76], b"data");
         assert_eq!(
             u32::from_le_bytes(wrapped[76..80].try_into().unwrap()),
@@ -523,6 +565,39 @@ mod tests {
             u32::from_le_bytes(wrapped[28..32].try_into().unwrap()),
             6_029
         );
+        assert_eq!(
+            &wrapped[60..72],
+            &[0x01, 0x00, 0x24, 0x22, 0, 0, 0, 0, 0, 0, 0, 0],
+            "the config word the disc's own 280-byte mono clips carry"
+        );
+    }
+
+    /// Every `(block_align, channels)` combination the disc actually stores,
+    /// against the word its own `fmt ` chunk carries. These are read values,
+    /// not derived ones: the formula in [`codec_config`] was fitted to them and
+    /// this is what stops it being refactored into something that merely
+    /// reproduces the stereo 560 case it was originally copied from.
+    #[test]
+    fn the_config_word_is_what_the_discs_own_entries_carry() {
+        for (block_align, channels, expected) in [
+            (280u16, 1u16, 0x2422u16),
+            (560, 1, 0x2445),
+            (560, 2, 0x2845),
+            // Not a `Data.wad` entry but `Intro.PMF`'s frame header, which
+            // carries this same word - see `crate::movie`.
+            (744, 2, 0x285c),
+        ] {
+            let format = Format {
+                channels,
+                sample_rate: 44_100,
+                block_align,
+            };
+            assert_eq!(
+                codec_config(format),
+                expected,
+                "block_align {block_align}, {channels} channel(s)"
+            );
+        }
     }
 
     /// What [`riff`] writes is what [`read_format`] reads. The two are each

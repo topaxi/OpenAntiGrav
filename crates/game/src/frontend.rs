@@ -570,24 +570,60 @@ impl Frontend {
         &self.player
     }
 
+    /// Whether the sequence is on one of its two movie screens.
+    ///
+    /// What a caller holding the movie's sound asks to know when to stop it,
+    /// and the reason it lives here is that it has to be true of **both** legs
+    /// and of every way out of them. The movie ends on its own on one path and
+    /// is cut short by START on four others - all five leave the state, and
+    /// none of them finishes the player - so "is the player finished" is the
+    /// wrong question and would leave the intro's sound playing under the
+    /// language picker.
+    #[must_use]
+    pub fn is_playing_movie(&self) -> bool {
+        self.machine.is(states::LOGO_FMV) || self.machine.is(states::INTRO_MOVIE)
+    }
+
     /// Steps the sequence by `dt` seconds.
+    ///
+    /// `movie_playhead` is how far the movie's **own sound** has got, in
+    /// seconds, and `None` - the ordinary case - means it has none to pace
+    /// against. See [`Self::advance_movie`] for what it does with it, and
+    /// [`crate::audio::Audio::movie_playhead`] for every reason it is `None`.
+    /// It is a parameter rather than something set beforehand because there are
+    /// two tick loops - the window's and the headless capture's - and an
+    /// argument makes forgetting one a compile error instead of a movie that
+    /// silently reverts to the wrong clock on one path.
     ///
     /// Returns the transitions that happened, in order, so a caller can log them
     /// or a test can assert on them.
-    pub fn update(&mut self, dt: f64, input: &mut Input) -> Vec<Event> {
+    pub fn update(
+        &mut self,
+        dt: f64,
+        input: &mut Input,
+        movie_playhead: Option<f64>,
+    ) -> Vec<Event> {
         // Advanced whatever state the sequence is in, and deliberately: the
         // widget is `autostart` on a screen whose movie the boot opens well
         // before this build draws it, so by the time `Show Logo` is reached the
         // loop is already somewhere in the middle of itself rather than at frame
         // zero. It repeats, so there is no end to run off.
+        //
+        // **Always the tick clock, never `movie_playhead`.** `Backdrop.PMF` has
+        // no audio stream and its widget is `sound="false"`, so there is no
+        // playhead that belongs to it - and the one being passed in belongs to
+        // a different movie entirely, the intro, which is playing over the top
+        // of this loop for the whole boot sequence. Pacing the backdrop against
+        // the intro's sound would tie the menus' loop to a movie that has
+        // ended. See ADR-0019.
         if let Some((player, _)) = &mut self.backdrop {
             player.update(dt);
         }
 
         if self.machine.is(states::LOGO_FMV) {
-            self.update_logo_fmv(dt, input);
+            self.update_logo_fmv(dt, input, movie_playhead);
         } else if self.machine.is(states::INTRO_MOVIE) {
-            self.update_intro(dt, input);
+            self.update_intro(dt, input, movie_playhead);
         } else if self.machine.is(states::DEV_PUB_REDIRECT)
             || self.machine.is(states::LOGO_FMV_REDIRECT)
         {
@@ -619,7 +655,7 @@ impl Frontend {
     /// skip redirects - start, circle, square, triangle, cross - all go to
     /// `LogoFMVRedirectScreen`. Only the buttons the abstract layer carries are
     /// read here, which is start and cross.
-    fn update_logo_fmv(&mut self, dt: f64, input: &mut Input) {
+    fn update_logo_fmv(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
         for button in [button::START, button::CROSS] {
             if input.is_pressed(button) {
                 input.consume_press(button);
@@ -632,7 +668,7 @@ impl Frontend {
             }
         }
 
-        self.player.update(dt);
+        self.advance_movie(dt, playhead);
         if self.player.is_finished() {
             // The disc's `AutoRedirect` goes to `LogoFMV->Show Logo` here. This
             // build has the picker next instead; see the module docs.
@@ -644,7 +680,21 @@ impl Frontend {
         }
     }
 
-    fn update_intro(&mut self, dt: f64, input: &mut Input) {
+    /// Advances the movie's playhead on whichever clock ADR-0019 says is its.
+    ///
+    /// The **only** place the intro's picture is advanced, so the choice is
+    /// made once: audio when the movie has sound that is actually sounding,
+    /// the fixed timestep otherwise. Two callers reach it, which is exactly why
+    /// it is a method rather than the same three lines in each of them - the
+    /// two movie legs must not end up on different clocks.
+    fn advance_movie(&mut self, dt: f64, playhead: Option<f64>) {
+        match playhead {
+            Some(seconds) => self.player.follow(seconds),
+            None => self.player.update(dt),
+        }
+    }
+
+    fn update_intro(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
         // The skip. The player never reads the pad; the state does, and it fires
         // the cached redirect rather than stopping playback.
         if input.is_pressed(button::START)
@@ -656,6 +706,17 @@ impl Frontend {
             input.consume_press(button::START);
             return;
         }
+
+        // **Before the hold, not after it, and that is what keeps this leg's
+        // sound in step with its picture.** This leg holds the picture for two
+        // seconds at frames 144, 231 and 260, and a sound card cannot be asked
+        // to hold with it - so the player has to be told the hold is happening
+        // while it happens, or those two seconds of audio would be skipped over
+        // in one step the moment it resumed. It is paused throughout, so on the
+        // tick clock this call does nothing at all and the leg's timing is
+        // unchanged; on the audio clock it is what lets `Player::follow`
+        // discount the hold. See `movie::Player::follow`.
+        self.advance_movie(dt, playhead);
 
         if let Hold::Held { finish } = self.hold {
             self.held_for += dt;
@@ -671,7 +732,6 @@ impl Frontend {
             return;
         }
 
-        self.player.update(dt);
         let produced = self.player.frames_produced();
 
         if produced >= FINISH_FRAME && !self.acted.contains(&FINISH_FRAME) {
@@ -1217,7 +1277,7 @@ mod tests {
                 return true;
             }
             input.begin_frame(0);
-            frontend.update(FRAME, input);
+            frontend.update(FRAME, input, None);
         }
         predicate(frontend)
     }
@@ -1241,7 +1301,7 @@ mod tests {
         // counters belong to the other leg.
         for _ in 0..250 {
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
         }
         assert!(!frontend.player().is_paused(), "LogoFMV has no frame holds");
         assert_eq!(frontend.player().frames_produced(), 251);
@@ -1266,7 +1326,7 @@ mod tests {
             let mut frontend = frontend(300);
             let mut input = Input::new();
             input.begin_frame(1 << skip);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
             // A skip goes through the redirect screen the XML sends it to, the
             // way the reel leg goes through `DevPubRedirect`. The movie *ending*
             // does not: its `AutoRedirect` is a different exit.
@@ -1277,7 +1337,7 @@ mod tests {
             );
 
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
             assert!(frontend.machine().is(states::LANGUAGE_SELECTION));
             assert_eq!(
                 frontend.machine().history(),
@@ -1298,7 +1358,7 @@ mod tests {
         // Frame 144 is reached after 143 steps from frame 1.
         for _ in 0..143 {
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
         }
         assert_eq!(frontend.player().frames_produced(), 144);
         assert!(frontend.player().is_paused(), "must pause at 144");
@@ -1306,7 +1366,7 @@ mod tests {
         // Two seconds is 59.94 frames, so 59 is not yet up and 61 is.
         for _ in 0..59 {
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
         }
         assert!(frontend.player().is_paused(), "two seconds is not up yet");
         assert_eq!(
@@ -1316,7 +1376,7 @@ mod tests {
         );
         for _ in 0..2 {
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
         }
         assert!(!frontend.player().is_paused(), "the hold must release");
 
@@ -1346,7 +1406,7 @@ mod tests {
         let mut input = Input::new();
 
         input.begin_frame(1 << button::START);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert_eq!(
             frontend.machine().current(),
             Some(states::DEV_PUB_REDIRECT),
@@ -1356,7 +1416,7 @@ mod tests {
         assert!(!frontend.player().is_finished());
 
         input.begin_frame(0);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert!(frontend.machine().is(states::LANGUAGE_SELECTION));
     }
 
@@ -1366,7 +1426,7 @@ mod tests {
         let mut input = Input::new();
 
         input.begin_frame(1 << button::START);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert!(
             run_until(&mut frontend, &mut input, 2000, |f| f
                 .machine()
@@ -1418,24 +1478,24 @@ mod tests {
         let mut frontend = frontend(300);
         let mut input = Input::new();
         input.begin_frame(1 << button::START);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         input.begin_frame(0);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert!(frontend.machine().is(states::LANGUAGE_SELECTION));
 
         assert_eq!(frontend.selected(), 0);
         input.begin_frame(1 << button::DOWN);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert_eq!(frontend.selected(), 1);
 
         input.begin_frame(0);
         input.begin_frame(1 << button::UP);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert_eq!(frontend.selected(), 0);
 
         input.begin_frame(0);
         input.begin_frame(1 << button::UP);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert_eq!(
             frontend.selected(),
             2,
@@ -1446,15 +1506,15 @@ mod tests {
     /// Walks from the picker to `Show Logo`, leaving the machine there.
     fn pick_a_language(frontend: &mut Frontend, input: &mut Input) {
         input.begin_frame(1 << button::START);
-        frontend.update(FRAME, input);
+        frontend.update(FRAME, input, None);
         input.begin_frame(0);
-        frontend.update(FRAME, input);
+        frontend.update(FRAME, input, None);
 
         input.begin_frame(1 << button::DOWN);
-        frontend.update(FRAME, input);
+        frontend.update(FRAME, input, None);
         input.begin_frame(0);
         input.begin_frame(1 << button::CROSS);
-        frontend.update(FRAME, input);
+        frontend.update(FRAME, input, None);
     }
 
     #[test]
@@ -1482,7 +1542,7 @@ mod tests {
 
         input.begin_frame(0);
         input.begin_frame(1 << button::START);
-        let events = frontend.update(FRAME, &mut input);
+        let events = frontend.update(FRAME, &mut input, None);
 
         assert!(frontend.is_finished());
         assert!(events.contains(&Event::Enter(states::LAUNCH_GAME.into())));
@@ -1511,9 +1571,9 @@ mod tests {
 
             for _ in 0..600 {
                 input.begin_frame(0);
-                frontend.update(FRAME, &mut input);
+                frontend.update(FRAME, &mut input, None);
                 input.begin_frame(1 << held);
-                frontend.update(FRAME, &mut input);
+                frontend.update(FRAME, &mut input, None);
             }
             assert!(
                 frontend.machine().is(states::SHOW_LOGO),
@@ -1565,7 +1625,7 @@ mod tests {
 
         for _ in 0..200 {
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
         }
         let running = frontend.backdrop().expect("a backdrop was set").frame();
         assert!(running > 0, "the playhead must advance during LogoFMV");
@@ -1574,11 +1634,87 @@ mod tests {
         // length has gone by twice over.
         for _ in 0..600 {
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
         }
         let player = frontend.backdrop().expect("a backdrop was set");
         assert!(!player.is_finished(), "repeat=true has no end to run off");
         assert!(player.frame() < 270, "and it wraps inside its own length");
+    }
+
+    /// **The backdrop is tick-clocked, whatever the intro's sound is doing.**
+    ///
+    /// ADR-0019's rule is per movie, and the two movies here are not the same
+    /// movie: the intro has a track and `Backdrop.PMF` has none - it is
+    /// video-only *and* its `FE Screen` widget is `sound="false"`. The playhead
+    /// passed into `update` belongs to the intro, which plays over the top of
+    /// this loop for the whole boot sequence, so a backdrop that read it would
+    /// be paced by a movie that ends - and would stop dead when it did.
+    ///
+    /// Asserted as an equality against the same run with no playhead at all,
+    /// rather than as a range, because the property is that the value is
+    /// *ignored* rather than that its effect is small. An absurd playhead is
+    /// used for the same reason: 600 seconds is 65 times round this loop, so a
+    /// backdrop that read it could not accidentally agree.
+    /// **The intro is on the audio clock, and this is the only test that can
+    /// tell.** In every headless run the mixer is advanced exactly
+    /// `sample_rate / 60` frames a tick, so the audio playhead and the tick
+    /// clock are numerically identical and every capture measurement agrees
+    /// with both. Drop the playhead from `update_logo_fmv` and nothing else in
+    /// the suite notices.
+    ///
+    /// So the clocks are made to disagree: `dt` is zero and the sound is five
+    /// seconds in. A tick-clocked player has not moved; an audio-clocked one is
+    /// on frame 149.
+    #[test]
+    fn the_movie_is_paced_by_its_sound_rather_than_by_the_tick() {
+        // Both legs, because they are two different methods reaching the same
+        // `advance_movie` and either could be the one that loses the argument.
+        for (state, mut frontend) in [
+            (states::LOGO_FMV, frontend(1200)),
+            (states::INTRO_MOVIE, reel(1200)),
+        ] {
+            assert!(frontend.machine().is(state), "the leg under test");
+
+            let mut input = Input::new();
+            input.begin_frame(0);
+            frontend.update(0.0, &mut input, None);
+            assert_eq!(
+                frontend.player().frame(),
+                0,
+                "{state}: no time and no sound is no movement"
+            );
+
+            input.begin_frame(0);
+            frontend.update(0.0, &mut input, Some(5.0));
+            assert_eq!(
+                frontend.player().frame(),
+                (5.0 * 30_000.0 / 1001.0) as usize,
+                "{state}: the sound is what moved the picture, not the tick"
+            );
+        }
+    }
+
+    #[test]
+    fn the_backdrop_ignores_the_movies_audio_clock() {
+        let run = |playhead: Option<f64>| {
+            let mut frontend = frontend(300);
+            frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+            let mut input = Input::new();
+            for tick in 0..400 {
+                input.begin_frame(0);
+                // Growing, the way a real playhead does, rather than one value
+                // repeated - a backdrop reading a constant would look stuck
+                // rather than wrong.
+                frontend.update(FRAME, &mut input, playhead.map(|s| s * f64::from(tick)));
+            }
+            let player = frontend.backdrop().expect("a backdrop was set");
+            (player.position(), player.frame())
+        };
+
+        let ticked = run(None);
+        assert_eq!(ticked.0, 400, "the tick clock is the one it is on");
+        assert_eq!(run(Some(1.5)), ticked, "an audio clock must change nothing");
+        assert_eq!(run(Some(0.0)), ticked, "and neither must a stalled one");
     }
 
     #[test]
@@ -1595,7 +1731,7 @@ mod tests {
 
         for _ in 0..300 {
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
         }
 
         let draws = frontend.draw_list();
@@ -1632,7 +1768,7 @@ mod tests {
         pick_a_language(&mut frontend, &mut input);
         for _ in 0..500 {
             input.begin_frame(0);
-            frontend.update(FRAME, &mut input);
+            frontend.update(FRAME, &mut input, None);
         }
 
         let running = frontend.backdrop().expect("a backdrop was set").position();
@@ -1715,12 +1851,12 @@ mod tests {
         let mut frontend = frontend(300);
         let mut input = Input::new();
         input.begin_frame(1 << button::START);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         input.begin_frame(0);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
 
         input.begin_frame(1 << button::CIRCLE);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert_eq!(
             frontend.chosen(),
             None,
@@ -1739,9 +1875,9 @@ mod tests {
         let mut frontend = frontend(300);
         let mut input = Input::new();
         input.begin_frame(1 << button::START);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         input.begin_frame(0);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
 
         let draws = frontend.draw_list();
         let rows: Vec<&String> = draws
@@ -1795,11 +1931,11 @@ mod tests {
         );
         let mut input = Input::new();
         input.begin_frame(1 << button::START);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         input.begin_frame(0);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         input.begin_frame(1 << button::CROSS);
-        frontend.update(FRAME, &mut input);
+        frontend.update(FRAME, &mut input, None);
         assert_eq!(frontend.chosen(), None);
         let _ = frontend.draw_list();
     }

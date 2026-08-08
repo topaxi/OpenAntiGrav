@@ -45,6 +45,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use anyhow::{Context, Result, anyhow, bail};
 use oag_formats::{av1, ipf, pmf};
 
+use crate::at3;
+
 /// The rate the PSP presents `.PMF` frames at, as a rational.
 ///
 /// PS2 movies are not this rate: a raw MPEG-2 program stream carries its own,
@@ -89,6 +91,197 @@ pub fn cache_name(key: &str, width: u32, height: u32, frames: Option<usize>) -> 
     )
 }
 
+/// Bytes of sub-header on every audio PES payload in a `.PMF`.
+///
+/// `pmf::demux` strips the PES header itself and hands over what follows, and
+/// what follows is **not** an ATRAC3+ frame: it is four bytes and then a slice
+/// of the frame stream. The first two are zero on every packet of every movie
+/// on the disc; the third and fourth are a big-endian offset from the end of
+/// this header to the first frame that *starts* inside the packet, the bytes
+/// before it being the tail of the frame the previous packet began.
+///
+/// **Measured, on all 323 packets of `Intro.PMF` and every other movie with a
+/// track.** Reading that offset lands on the ATRAC3+ sync word 323 times out of
+/// 323, and it is what confirms the field is a pointer rather than a counter:
+/// packet 0 carries two whole 752-byte frames and 509 bytes of a third, and
+/// packet 1's offset is the 243 bytes that complete it.
+///
+/// Nothing here needs the pointer to *reassemble* the stream - concatenating
+/// every packet's payload in order gives the frames back contiguously - but the
+/// first packet's is used, because a movie whose first frame does not begin at
+/// offset zero would otherwise be decoded half a frame out.
+const AUDIO_PES_HEADER_LEN: usize = 4;
+
+/// The sync word every ATRAC3+ frame inside a `.PMF` begins with.
+///
+/// **A RIFF-wrapped `.at3` has no such word**: `PSP_GAME/SND0.AT3`'s data chunk
+/// starts straight in on the codec payload, and a scan of all 25,760 bytes of
+/// it finds `0f d0` nowhere. So this is the `.PMF`'s framing rather than the
+/// codec's, and it has to come off before `ffmpeg` will read a block.
+const ATRAC3PLUS_SYNC: [u8; 2] = [0x0f, 0xd0];
+
+/// Bytes of header on every ATRAC3+ frame inside a `.PMF`, sync word included.
+///
+/// `0f d0` then the codec config word - see `at3::codec_config`, which the
+/// disc's own `.at3` entries carry in the same shape - then four zero bytes.
+/// Constant across all 865 frames of `Intro.PMF` and every frame of every other
+/// movie with a track.
+///
+/// The evidence that it is exactly eight is that stripping eight leaves a block
+/// that decodes: `Intro.PMF`'s frames are 752 bytes apart, 752 - 8 is 744, and
+/// 744-byte blocks decode to 865 whole blocks of 2,048 samples with no
+/// remainder. It also lines the payload up with what a `.at3` stores - both
+/// begin `3a` - where stripping only the two-byte sync word does not, and
+/// `ffmpeg` rejects that with "frame data doesn't match channel configuration"
+/// rather than decoding noise.
+const ATRAC3PLUS_FRAME_HEADER_LEN: usize = 8;
+
+/// A movie's ATRAC3+ track, unwrapped from the container but not yet decoded.
+///
+/// Held rather than decoded on the spot because decoding shells out to `ffmpeg`
+/// and lands in a **different** cache from the one the pictures use - see
+/// [`crate::boot::default_audio_cache_dir`] - and [`open`] is given only the
+/// movie cache. Keeping the two apart is also what lets `--prefetch` and the
+/// viewer open a movie without ever paying for its sound.
+pub struct MovieAudio {
+    /// Every ATRAC3+ block, headers off, back to back. Exactly what
+    /// [`crate::at3::riff`] wants for its `data` chunk.
+    blocks: Vec<u8>,
+    /// What those blocks are, for the RIFF wrapper.
+    pub format: crate::at3::Format,
+}
+
+// Written out rather than derived for the reason `crate::audio::Dump` gives:
+// this is most of a megabyte of codec payload, and a `{:?}` of a `Movie` should
+// say how much there is rather than print it.
+impl std::fmt::Debug for MovieAudio {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MovieAudio")
+            .field("blocks", &self.blocks.len())
+            .field("format", &self.format)
+            .finish()
+    }
+}
+
+impl MovieAudio {
+    /// How many whole ATRAC3+ blocks the track holds.
+    #[must_use]
+    pub fn block_count(&self) -> usize {
+        self.blocks.len() / usize::from(self.format.block_align).max(1)
+    }
+
+    /// How long the track is, in seconds, at block granularity.
+    ///
+    /// **This is not the movie's own duration and should not be expected to
+    /// match it.** A block is 2,048 samples whatever the encoder had left to
+    /// put in it, so a track always runs to the end of a whole number of them:
+    /// `Intro.PMF` declares 40.04 s and its 865 blocks are 40.17 s. The
+    /// difference is padding, not a demux that ran long.
+    #[must_use]
+    pub fn seconds(&self) -> f64 {
+        let samples = self.block_count() as f64 * f64::from(at3::SAMPLES_PER_BLOCK);
+        samples / f64::from(self.format.sample_rate.max(1))
+    }
+
+    /// Decodes the track through `ffmpeg` and the cache.
+    ///
+    /// # Errors
+    ///
+    /// As [`crate::at3::decode_frames`]: an `ffmpeg` that is absent or fails,
+    /// or a cache file that will not write or read back.
+    pub fn decode(&self, cache_dir: &Path) -> Result<at3::Pcm> {
+        at3::decode_frames(&self.blocks, self.format, cache_dir)
+    }
+}
+
+/// Unwraps a demuxed `.PMF`'s audio packets into ATRAC3+ blocks.
+///
+/// Two layers come off, and both are the container's rather than the codec's:
+/// [`AUDIO_PES_HEADER_LEN`] bytes on each packet, then
+/// [`ATRAC3PLUS_FRAME_HEADER_LEN`] on each frame.
+///
+/// `block_align` is **measured rather than assumed**, because the disc uses two
+/// values: the two 40-second reels are 744 bytes a block and the other seven
+/// tracks are 560. It is the distance between the first two sync words, which
+/// is then checked against every remaining frame - a stream whose sync words are
+/// not evenly spaced is one this has read wrong, and saying so is better than
+/// handing `ffmpeg` a block size that decodes into noise.
+///
+/// `None` means there is no track to play: a header that declares audio but a
+/// demux that found no packets, a sample-rate code this build does not know, or
+/// a stream whose framing does not check out. Never an error, because none of
+/// those should cost a movie its picture.
+fn movie_audio(demuxed: &pmf::Demuxed, stream: pmf::AudioStream, key: &str) -> Option<MovieAudio> {
+    let first = demuxed.audio.first()?;
+    let Some(sample_rate) = stream.frequency_hz() else {
+        eprintln!(
+            "warning: {key}'s audio is sample-rate code {}, which this build does not know, so \
+             it stays silent",
+            stream.frequency_code
+        );
+        return None;
+    };
+
+    // Where the first whole frame starts, past whatever tail of a previous one
+    // the packet opens with. Zero on every movie on the disc, and read anyway
+    // rather than assumed: it is the one field that tells us.
+    //
+    // Read through `get`, because `pmf::demux` hands over whatever followed the
+    // PES header and that can be fewer than four bytes on a truncated stream -
+    // and a movie that loses its sound must not also lose its picture to a
+    // panic.
+    let pointer: [u8; 2] = first.get(2..4).and_then(|b| b.try_into().ok())?;
+    let start = usize::from(u16::from_be_bytes(pointer));
+
+    let mut stream_bytes = Vec::new();
+    for packet in &demuxed.audio {
+        stream_bytes.extend_from_slice(&packet[AUDIO_PES_HEADER_LEN.min(packet.len())..]);
+    }
+    let body = stream_bytes.get(start..).unwrap_or_default();
+
+    if !body.starts_with(&ATRAC3PLUS_SYNC) {
+        eprintln!("warning: {key}'s first audio frame carries no sync word, so it stays silent");
+        return None;
+    }
+
+    // Stepped by eight because a frame is always a whole number of eight-byte
+    // groups - `block_align / 8 - 1` is what the config word stores - which
+    // keeps a `0f d0` that happens to fall inside codec payload from being
+    // mistaken for the next frame.
+    let stride = (ATRAC3PLUS_FRAME_HEADER_LEN..body.len().saturating_sub(1))
+        .step_by(8)
+        .find(|&at| body[at..at + 2] == ATRAC3PLUS_SYNC)?;
+    let Ok(block_align) = u16::try_from(stride - ATRAC3PLUS_FRAME_HEADER_LEN) else {
+        return None;
+    };
+
+    // A trailing partial frame is dropped rather than padded: the movie's own
+    // duration is carried by its PTS range, so a fragment of a block would add
+    // noise at the end and nothing else.
+    let frames = body.len() / stride;
+    let mut blocks = Vec::with_capacity(frames * usize::from(block_align));
+    for index in 0..frames {
+        let at = index * stride;
+        if body[at..at + 2] != ATRAC3PLUS_SYNC {
+            eprintln!(
+                "warning: {key}'s audio loses framing at frame {index} of {frames}, so it stays \
+                 silent"
+            );
+            return None;
+        }
+        blocks.extend_from_slice(&body[at + ATRAC3PLUS_FRAME_HEADER_LEN..at + stride]);
+    }
+
+    Some(MovieAudio {
+        blocks,
+        format: crate::at3::Format {
+            channels: u16::from(stream.channels),
+            sample_rate,
+            block_align,
+        },
+    })
+}
+
 /// A movie that has been demuxed, and possibly transcoded.
 #[derive(Debug)]
 pub struct Movie {
@@ -119,6 +312,13 @@ pub struct Movie {
     pub frames: Option<FrameStore>,
     /// Why there is no picture, when there is none.
     pub no_picture_reason: Option<String>,
+    /// The movie's own ATRAC3+ track, undecoded.
+    ///
+    /// `None` on a movie with no audio stream - which `Backdrop.PMF` is, and it
+    /// is the movie that plays most - and on the PS2's two containers, neither
+    /// of which carries one. Decoding it is [`MovieAudio::decode`]'s job and
+    /// deliberately not this module's: see [`MovieAudio`].
+    pub audio: Option<MovieAudio>,
 }
 
 /// Pixel format a decoded [`VideoFrame`]'s planes are laid out in.
@@ -484,10 +684,21 @@ struct State {
 /// the GPU**: a [`Player`] hands it a position and it hands back pixels. Nothing
 /// it produces is ever read back into sequencing - the intro's state machine
 /// compares [`Player::frames_produced`] against its own 144, 231 and 260, and
-/// that number comes from the player's fixed-timestep `update` whether a picture
-/// ever arrives or not. So no simulation state, and no state the simulation
-/// reads, can depend on when a decode finished. See
+/// that number comes from the player whether a picture ever arrives or not. So
+/// no simulation state, and no state the simulation reads, can depend on when a
+/// decode finished. See
 /// [ADR-0010](../../../docs/architecture/adr/0010-movie-decode-thread.md).
+///
+/// **What ADR-0019 changed, and what it did not.** That number no longer always
+/// comes from a *fixed-timestep* `update`: a movie with a sounding track is
+/// paced by [`Player::follow`] instead, so the sequencing of that movie now
+/// depends on the audio device's clock. ADR-0010's argument survives unchanged,
+/// because it is about the **decode** thread and this is not it - the feed still
+/// cannot influence the player, and a decode that ran long still cannot move a
+/// state transition. What is new is a second clock, not a second writer, and it
+/// is not the renderer's. Headless runs are unaffected either way: with no
+/// device the mixer is advanced by [`crate::audio::Audio::tick`] at exactly the
+/// tick rate, so the two clocks are the same number.
 #[derive(Debug)]
 pub struct Feed {
     shared: Arc<Shared>,
@@ -841,6 +1052,14 @@ fn open_psmf(
     let width = u32::from(video.width);
     let height = u32::from(video.height);
 
+    // Unwrapped here rather than where it is played, because this is the only
+    // place the demuxed packets exist: `pmf::demux` has been handing them over
+    // to nothing since it was written, which is what ADR-0019 exists to end.
+    // Undecoded, though - see `MovieAudio`.
+    let audio = header
+        .audio
+        .and_then(|stream| movie_audio(&demuxed, stream, key));
+
     if no_video {
         return Ok(Movie {
             header: Some(header),
@@ -851,6 +1070,7 @@ fn open_psmf(
             display_aspect: (width, height),
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
+            audio,
         });
     }
 
@@ -867,6 +1087,7 @@ fn open_psmf(
             display_aspect: (width, height),
             frames: Some(frames),
             no_picture_reason: None,
+            audio,
         });
     }
 
@@ -880,6 +1101,7 @@ fn open_psmf(
             display_aspect: (width, height),
             frames: Some(frames),
             no_picture_reason: None,
+            audio,
         }),
         Err(reason) => Ok(Movie {
             header: Some(header),
@@ -890,6 +1112,7 @@ fn open_psmf(
             display_aspect: (width, height),
             frames: None,
             no_picture_reason: Some(format!("{reason:#}")),
+            audio,
         }),
     }
 }
@@ -971,6 +1194,7 @@ fn open_mpeg2_ps(
             display_aspect: probed.display_aspect,
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
+            audio: None,
         });
     }
 
@@ -989,6 +1213,7 @@ fn open_mpeg2_ps(
             display_aspect: probed.display_aspect,
             frames: Some(frames),
             no_picture_reason: None,
+            audio: None,
         }),
         Err(reason) => Ok(Movie {
             header: None,
@@ -999,6 +1224,7 @@ fn open_mpeg2_ps(
             display_aspect: probed.display_aspect,
             frames: None,
             no_picture_reason: Some(format!("{reason:#}")),
+            audio: None,
         }),
     }
 }
@@ -1069,6 +1295,7 @@ fn open_ipuf(
             display_aspect: BACKDROP_DISPLAY_ASPECT,
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
+            audio: None,
         });
     }
 
@@ -1084,6 +1311,7 @@ fn open_ipuf(
             display_aspect: BACKDROP_DISPLAY_ASPECT,
             frames: Some(frames),
             no_picture_reason: None,
+            audio: None,
         }),
         Err(reason) => Ok(Movie {
             header: None,
@@ -1094,6 +1322,7 @@ fn open_ipuf(
             display_aspect: BACKDROP_DISPLAY_ASPECT,
             frames: None,
             no_picture_reason: Some(format!("{reason:#}")),
+            audio: None,
         }),
     }
 }
@@ -1437,6 +1666,17 @@ pub struct Player {
     paused: bool,
     finished: bool,
     repeat: bool,
+    /// Seconds of sound that went by while the picture was held, which the
+    /// audio clock has to be read net of.
+    ///
+    /// Only the `--reel` leg ever holds a movie - see
+    /// [`crate::frontend::PAUSE_FRAMES`] - and it holds for two seconds at a
+    /// time. A sound card cannot be held with it, so without this the picture
+    /// would jump sixty frames the moment it resumed. Zero on the disc's own
+    /// leg, which never pauses.
+    held_seconds: f64,
+    /// Where the audio clock was when the current hold started, if one is on.
+    held_from: Option<f64>,
 }
 
 impl Player {
@@ -1452,6 +1692,8 @@ impl Player {
             paused: false,
             finished: frames == 0,
             repeat,
+            held_seconds: 0.0,
+            held_from: None,
         }
     }
 
@@ -1482,6 +1724,75 @@ impl Player {
                     return;
                 }
             }
+        }
+    }
+
+    /// Advances to wherever the movie's own audio has got to, in seconds.
+    ///
+    /// **This is the audio clock ADR-0019 requires**, and the alternative to
+    /// [`Player::update`] rather than an addition to it: a movie with a track
+    /// is paced by one or the other on any given tick, never both, because two
+    /// clocks on one playhead is the two-playhead bug this file has already
+    /// had once.
+    ///
+    /// # Why audio leads and video follows
+    ///
+    /// A sound card consumes samples at its own rate and cannot be asked to
+    /// wait. Stretching the picture to fit is invisible - a frame held or
+    /// dropped at 30 Hz is 33 ms - where stretching the sound is a click. So
+    /// the playhead is read off the mixer and the frame number is derived from
+    /// it, which makes drift structurally impossible rather than merely small:
+    /// there is no second accumulator to disagree with.
+    ///
+    /// # It only ever goes forwards
+    ///
+    /// Clamped against the position already reached, because a [`Feed`] hands
+    /// each frame over exactly once and compares positions to do it - see
+    /// [`Ring::take_upto`]. A playhead that went backwards would ask for a
+    /// frame the ring had already dropped and get nothing, freezing the
+    /// picture. Nothing should make it go backwards; the clamp is what stops a
+    /// resampler's rounding from mattering if it did.
+    /// # A held picture is discounted rather than skipped over
+    ///
+    /// The `--reel` leg holds the picture for two seconds at three points and
+    /// the sound runs on underneath, so the seconds spent held are subtracted
+    /// rather than treated as playback. This only works because the caller
+    /// keeps calling while the hold is on - see
+    /// [`crate::frontend::Frontend::update_intro`] - which is what lets the
+    /// hold's start and end both be observed.
+    pub fn follow(&mut self, seconds: f64) {
+        if self.paused {
+            // Where the sound was when the hold began, so its length can be
+            // measured when it ends. `get_or_insert` because every tick of the
+            // hold arrives here and only the first one is the start of it.
+            self.held_from.get_or_insert(seconds);
+            return;
+        }
+        if let Some(from) = self.held_from.take() {
+            self.held_seconds += (seconds - from).max(0.0);
+        }
+        if self.finished || self.frames == 0 {
+            return;
+        }
+
+        let (num, den) = self.frame_rate;
+        // The movie's own rate, not the audio's: a frame index is what the feed
+        // is addressed by, and `seconds` is only how far along we are.
+        let elapsed = ((seconds - self.held_seconds).max(0.0) * num as f64 / den as f64) as u64;
+        let position = elapsed.max(self.position);
+
+        if self.repeat {
+            self.position = position;
+            // `frames` came from a `usize`, so the remainder fits one.
+            self.frame = (position % self.frames as u64) as usize;
+        } else if position >= self.frames as u64 {
+            // Clamped with the frame it clamps to, exactly as `update` does.
+            self.frame = self.frames - 1;
+            self.position = self.frame as u64;
+            self.finished = true;
+        } else {
+            self.position = position;
+            self.frame = position as usize;
         }
     }
 
@@ -1615,6 +1926,265 @@ mod tests {
         }
         assert_eq!(player.frame(), 259);
         assert_eq!(player.frames_produced(), 260);
+    }
+
+    /// The audio clock names the frame the picture should be on, which is the
+    /// whole of what [`Player::follow`] promises.
+    #[test]
+    fn following_the_audio_names_the_frame_that_second_belongs_to() {
+        let mut player = Player::new(1200, false, FRAME_RATE);
+        player.follow(0.0);
+        assert_eq!(player.frame(), 0);
+        // One second of sound is 29.97 frames of picture, so frame 29.
+        player.follow(1.0);
+        assert_eq!(player.frame(), 29);
+        player.follow(10.0);
+        assert_eq!(player.frame(), 299);
+    }
+
+    /// A slow tick moves the playhead several frames at once and the picture
+    /// has to jump rather than crawl - the opposite of an accumulator, and the
+    /// reason audio clocking cannot drift.
+    #[test]
+    fn a_jump_in_the_audio_takes_the_picture_with_it() {
+        let mut player = Player::new(1200, false, FRAME_RATE);
+        player.follow(0.5);
+        player.follow(20.0);
+        assert_eq!(player.frame(), 599);
+        assert_eq!(player.position(), 599);
+    }
+
+    /// A [`Feed`] hands each position over once, so a playhead that went
+    /// backwards would ask for a frame the ring had already dropped and freeze
+    /// the picture.
+    #[test]
+    fn the_audio_clock_never_runs_the_picture_backwards() {
+        let mut player = Player::new(1200, false, FRAME_RATE);
+        player.follow(5.0);
+        let position = player.position();
+        player.follow(4.0);
+        assert_eq!(player.position(), position, "a rewind is ignored");
+        assert_eq!(player.frame(), position as usize);
+    }
+
+    /// A movie that does not repeat ends on the audio clock too, and clamps to
+    /// its last frame exactly as `update` does - the intro's `AutoRedirect`
+    /// depends on `is_finished` becoming true whichever clock got it there.
+    #[test]
+    fn following_past_the_end_finishes_and_clamps() {
+        let mut player = Player::new(5, false, FRAME_RATE);
+        player.follow(100.0);
+        assert!(player.is_finished());
+        assert_eq!(player.frame(), 4);
+        assert_eq!(player.position(), 4);
+    }
+
+    /// The invariant a [`Feed`] shares with the player, on the other clock:
+    /// `position % frames == frame`, however the position was arrived at.
+    #[test]
+    fn following_wraps_a_repeating_movie_where_the_feed_wraps() {
+        let mut player = Player::new(30, true, FRAME_RATE);
+        for seconds in [0.0, 0.5, 1.0, 2.0, 3.5] {
+            player.follow(seconds);
+            assert_eq!(
+                frame_at(player.position(), 30, true),
+                Some(player.frame()),
+                "the feed and the player disagree at {seconds}s"
+            );
+        }
+        assert!(!player.is_finished());
+    }
+
+    /// The `--reel` leg holds the picture for two seconds at a time and the
+    /// sound cannot be held with it, so those seconds are discounted. Without
+    /// this the picture jumps sixty frames the instant the hold ends - which is
+    /// the whole of what audio clocking is supposed to prevent, arriving by a
+    /// different door.
+    #[test]
+    fn seconds_spent_holding_the_picture_are_discounted_from_the_audio_clock() {
+        let mut player = Player::new(1200, false, FRAME_RATE);
+        player.follow(1.0);
+        assert_eq!(player.frame(), 29);
+
+        // The hold: the caller keeps calling while the sound runs on.
+        player.pause();
+        for tick in 0..120 {
+            player.follow(1.0 + f64::from(tick) / 60.0);
+        }
+        assert_eq!(player.frame(), 29, "the picture is held");
+
+        player.resume();
+        // Two seconds of sound went by, so the next frame is the next frame -
+        // not the one sixty frames further on.
+        player.follow(3.0 + 1.0 / 60.0);
+        assert_eq!(
+            player.frame(),
+            29,
+            "the hold is discounted rather than played through"
+        );
+        player.follow(4.0);
+        assert_eq!(player.frame(), 59, "and a second on from there is a second");
+    }
+
+    #[test]
+    fn a_paused_player_ignores_the_audio_clock_too() {
+        let mut player = Player::new(1200, false, FRAME_RATE);
+        player.follow(1.0);
+        player.pause();
+        player.follow(20.0);
+        assert_eq!(player.frame(), 29, "paused is paused on either clock");
+        player.resume();
+        player.follow(20.0);
+        assert_eq!(player.frame(), 599);
+    }
+
+    /// One audio packet, built the way a `.PMF` builds them: a four-byte
+    /// sub-header, then frames that are an eight-byte header and a block.
+    fn audio_packet(pointer: u16, frames: &[Vec<u8>]) -> Vec<u8> {
+        let mut out = vec![0, 0];
+        out.extend_from_slice(&pointer.to_be_bytes());
+        for frame in frames {
+            out.extend_from_slice(frame);
+        }
+        out
+    }
+
+    fn atrac_frame(block_align: usize, fill: u8) -> Vec<u8> {
+        let mut out = Vec::from(ATRAC3PLUS_SYNC);
+        out.extend_from_slice(&[0x28, 0x5c, 0, 0, 0, 0]);
+        out.extend_from_slice(&vec![fill; block_align]);
+        out
+    }
+
+    fn stereo_44k() -> pmf::AudioStream {
+        pmf::AudioStream {
+            channels: 2,
+            frequency_code: 2,
+        }
+    }
+
+    /// Both layers of framing come off and the block size is measured rather
+    /// than assumed - the disc uses 744 and 560, so a constant would decode one
+    /// of them into noise.
+    #[test]
+    fn the_audio_framing_comes_off_and_the_block_size_is_measured() {
+        let demuxed = pmf::Demuxed {
+            audio: vec![audio_packet(
+                0,
+                &[atrac_frame(744, 0xab), atrac_frame(744, 0xcd)],
+            )],
+            ..pmf::Demuxed::default()
+        };
+        let audio = movie_audio(&demuxed, stereo_44k(), "test").expect("a track");
+
+        assert_eq!(audio.format.block_align, 744, "measured, not assumed");
+        assert_eq!(audio.format.channels, 2);
+        assert_eq!(audio.format.sample_rate, 44_100);
+        assert_eq!(audio.block_count(), 2);
+        assert_eq!(audio.blocks.len(), 744 * 2);
+        assert!(
+            audio.blocks[..744].iter().all(|&b| b == 0xab),
+            "the sync word and its header should be gone"
+        );
+        assert!(audio.blocks[744..].iter().all(|&b| b == 0xcd));
+    }
+
+    /// A frame straddles the packet boundary in a real `.PMF` - `Intro.PMF`'s
+    /// first packet ends 243 bytes into its third frame - so reassembly has to
+    /// be a concatenation rather than a frame per packet.
+    #[test]
+    fn a_frame_split_across_two_packets_is_put_back_together() {
+        let whole = atrac_frame(560, 0x11);
+        let (head, tail) = whole.split_at(200);
+        let demuxed = pmf::Demuxed {
+            audio: vec![
+                audio_packet(0, &[atrac_frame(560, 0x22), head.to_vec()]),
+                // 368 bytes of the previous frame before the next one starts.
+                audio_packet(368, &[tail.to_vec(), atrac_frame(560, 0x33)]),
+            ],
+            ..pmf::Demuxed::default()
+        };
+        let audio = movie_audio(&demuxed, stereo_44k(), "test").expect("a track");
+        assert_eq!(audio.format.block_align, 560);
+        assert_eq!(audio.block_count(), 3);
+        assert!(audio.blocks[560..1120].iter().all(|&b| b == 0x11));
+    }
+
+    /// A movie whose first packet opens partway into a frame skips to the
+    /// frame boundary rather than handing `ffmpeg` a fragment. No movie on the
+    /// disc does this, and a decode half a block out is silent noise rather
+    /// than an error, so it is pinned rather than left to chance.
+    #[test]
+    fn a_first_packet_that_opens_mid_frame_is_skipped_to_the_boundary() {
+        let mut packet = audio_packet(16, &[]);
+        packet.extend_from_slice(&[0xff; 16]);
+        packet.extend_from_slice(&atrac_frame(560, 0x44));
+        packet.extend_from_slice(&atrac_frame(560, 0x44));
+        let demuxed = pmf::Demuxed {
+            audio: vec![packet],
+            ..pmf::Demuxed::default()
+        };
+        let audio = movie_audio(&demuxed, stereo_44k(), "test").expect("a track");
+        assert_eq!(audio.block_count(), 2);
+        assert!(audio.blocks.iter().all(|&b| b == 0x44));
+    }
+
+    /// Every way a track can be unreadable is silence rather than a failure,
+    /// because none of them should cost the movie its picture.
+    #[test]
+    fn an_unreadable_track_is_silence_rather_than_an_error() {
+        let good = audio_packet(0, &[atrac_frame(560, 0x55), atrac_frame(560, 0x66)]);
+
+        // A header that declares audio and a demux that found none.
+        assert!(movie_audio(&pmf::Demuxed::default(), stereo_44k(), "test").is_none());
+
+        // A sample-rate code this build does not know.
+        let unknown = pmf::AudioStream {
+            channels: 2,
+            frequency_code: 7,
+        };
+        let demuxed = pmf::Demuxed {
+            audio: vec![good.clone()],
+            ..pmf::Demuxed::default()
+        };
+        assert!(movie_audio(&demuxed, unknown, "test").is_none());
+
+        // A first frame with no sync word at all.
+        let mut wrong = good.clone();
+        wrong[4] = 0x00;
+        let demuxed = pmf::Demuxed {
+            audio: vec![wrong],
+            ..pmf::Demuxed::default()
+        };
+        assert!(movie_audio(&demuxed, stereo_44k(), "test").is_none());
+
+        // One sync word and never a second, so no stride can be measured.
+        let demuxed = pmf::Demuxed {
+            audio: vec![audio_packet(0, &[atrac_frame(560, 0x77)])],
+            ..pmf::Demuxed::default()
+        };
+        assert!(movie_audio(&demuxed, stereo_44k(), "test").is_none());
+    }
+
+    /// Block granularity, stated as such: a track is always a whole number of
+    /// 2,048-sample blocks and so runs slightly past the movie's own duration.
+    #[test]
+    fn a_tracks_length_is_a_whole_number_of_blocks() {
+        let demuxed = pmf::Demuxed {
+            audio: vec![audio_packet(
+                0,
+                &[
+                    atrac_frame(744, 0),
+                    atrac_frame(744, 0),
+                    atrac_frame(744, 0),
+                ],
+            )],
+            ..pmf::Demuxed::default()
+        };
+        let audio = movie_audio(&demuxed, stereo_44k(), "test").expect("a track");
+        assert_eq!(audio.block_count(), 3);
+        let expected = 3.0 * 2048.0 / 44_100.0;
+        assert!((audio.seconds() - expected).abs() < 1e-9);
     }
 
     #[test]

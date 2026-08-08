@@ -406,6 +406,7 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: oag_game::boot::DEFAULT_BOOT_MOVIE.to_string(),
         cache: oag_game::boot::default_cache_dir(),
+        audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         // No transcode: this is about what is found, not about ffmpeg.
         no_video: true,

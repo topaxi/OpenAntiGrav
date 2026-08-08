@@ -217,6 +217,7 @@ pub fn run(
         tracks,
         mut frontend,
         movie,
+        movie_sound,
         backdrop,
         font,
         sprites,
@@ -249,6 +250,12 @@ pub fn run(
     let dt = 1.0 / 60.0;
     let mut input = Input::new();
     let mut ticks = 0u32;
+
+    // Started before the first tick, because the movie is `autostart` on the
+    // screen the sequence opens on: the first tick's playhead has to be a real
+    // zero rather than the absence of a voice, or that tick would be paced by
+    // the wrong clock.
+    audio.start_boot_movie(movie_sound);
 
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
@@ -287,10 +294,20 @@ pub fn run(
             0
         };
         input.begin_frame(options.held | pulse);
-        let events = frontend.update(dt, &mut input);
+        // The playhead is read **before** the mixer is advanced, so it is where
+        // the sound had got to at the end of the previous tick - the last
+        // moment it is a measurement rather than a prediction. See
+        // `movie::Player::follow`.
+        let events = frontend.update(dt, &mut input, audio.movie_playhead());
         // In the tick loop, next to the state machine it belongs to. See
         // [`crate::audio`] for why nothing here is per frame.
         audio.tick();
+        // The movie's sound outlives neither leg: see
+        // `Frontend::is_playing_movie` for why the state is what is asked
+        // rather than the player.
+        if !frontend.is_playing_movie() {
+            audio.stop_movie();
+        }
         crate::report(&events, options.trace);
         for note in frontend.take_notes() {
             println!("{note}");

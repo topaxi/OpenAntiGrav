@@ -81,6 +81,7 @@ fn load() -> Option<boot::Boot> {
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: pulse::names::INTRO_MOVIE.to_string(),
         cache: cache_dir(),
+        audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Frames(FRAMES),
         no_video: false,
     };
@@ -104,6 +105,7 @@ fn load_whole() -> Option<boot::Boot> {
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: pulse::names::INTRO_MOVIE.to_string(),
         cache: cache_dir(),
+        audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Whole,
         no_video: false,
     };

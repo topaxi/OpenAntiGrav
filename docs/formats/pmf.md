@@ -54,7 +54,7 @@ Standard MPEG-1/2 program stream, in 2048-byte packs.
 | `00 00 01 BF` | `private_stream_2` | length-prefixed, skipped |
 | `00 00 01 BE` | padding | length-prefixed, skipped |
 | `00 00 01 E0` | video PES | payload appended to the video elementary stream |
-| `00 00 01 BD` | `private_stream_1` | one ATRAC3+ frame per packet |
+| `00 00 01 BD` | `private_stream_1` | a slice of the ATRAC3+ frame stream, behind two more layers of framing - see [audio framing](#audio-framing) |
 
 A PES packet's payload starts after two flag bytes and a length byte, plus that
 many bytes of optional fields.
@@ -63,6 +63,72 @@ Video comes out as **H.264 in Annex B form**, Main profile: the intro's first
 NAL units are an access unit delimiter then an SPS with `profile_idc` 77 and
 `level_idc` 21. Audio is ATRAC3+, which `sceMpegAtracDecode` handles on hardware;
 see [frontend video](../ghidra/functions/psp-pulse-usa/frontend-video.md).
+
+## Audio framing
+
+**Confidence 92.** An arithmetic invariant comes out exactly on every movie with
+a track, and a second, independent reading of the same field agrees with the
+disc's own `.at3` files. Short of 95 because nothing has been checked against a
+runtime trace or a second binary.
+
+A `private_stream_1` payload is **not** an ATRAC3+ frame. Two layers sit on top,
+and both are the container's rather than the codec's.
+
+**Four bytes per PES payload.** The first two are zero on every packet of every
+movie; the third and fourth are a big-endian offset, counted from the end of
+these four, to the first frame that *starts* inside the packet. The bytes before
+it are the tail of the frame the previous packet began, so a payload is a slice
+of a byte stream and frames straddle packets freely.
+
+**Eight bytes per frame.**
+
+```text
++0x00  u8[2]  0f d0            sync word
++0x02  u16be  config word      see below
++0x04  u8[4]  00 00 00 00
++0x08         the ATRAC3+ block, `block_align` bytes
+```
+
+The config word is `((8 + channels) << 10) | (block_align / 8 - 1)`: the low ten
+bits are the block size in eight-byte groups less one, and the top six are a
+channel code, 9 for mono and 10 for stereo. **The disc's RIFF-wrapped `.at3`
+files carry this same word** in the third and fourth bytes of their `fmt `
+chunk's codec extra data, which is what turns a fitted formula into a
+corroborated one. That is also what the wrapper written for `ffmpeg` fills the
+field with, rather than the one constant it used to copy off `SND0.AT3` - see
+[ADR-0019](../architecture/adr/0019-atrac3plus-out-of-process.md).
+
+| `block_align` | channels | Where | Config word |
+| --- | --- | --- | --- |
+| 280 | 1 | 32 `Data.wad` entries | `0x2422` |
+| 560 | 1 | 32 `Data.wad` entries | `0x2445` |
+| 560 | 2 | 28 `Data.wad` entries, and 7 movies | `0x2845` |
+| 744 | 2 | `Intro.PMF` and `Tutorial.PMF` | `0x285c` |
+
+### What pins it down
+
+- **`Intro.PMF`'s 323 payload pointers all land on a sync word**, 323 out of
+  323. They are pointers rather than counters: packet 0 holds two whole 752-byte
+  frames and 509 bytes of a third, and packet 1's pointer is exactly the 243
+  that complete it.
+- **Stripping both layers leaves a whole number of blocks with nothing over.**
+  `Intro.PMF`'s stream is 650,480 bytes, its frames are 752 apart, and
+  `650,480 / 752` is 865 exactly. The same holds for all nine movies with a
+  track, at both block sizes.
+- **`ffmpeg` decodes the result and rejects the alternatives.** 865 blocks of
+  744 bytes decode to 1,771,520 samples - 865 x 2048, again exact - at
+  40.17 s against the header's declared 40.04 s, the difference being the
+  padding of a whole final block. Leaving the eight-byte header on and calling
+  the block 752 fails with "frame data doesn't match channel configuration" on
+  every frame rather than decoding noise, and stripping only the two-byte sync
+  word fails the same way.
+- **The payload lines up with a `.at3`'s.** `PSP_GAME/SND0.AT3`'s data chunk
+  begins `3a 63 8f 80` and contains no `0f d0` anywhere in its 25,760 bytes;
+  every movie frame's byte at `+0x08` is likewise `3a`. So the sync word is the
+  `.PMF`'s framing and a RIFF `.at3` has none.
+
+Reproduce with `just play <image> --screenshot out.png --dump-audio out.wav`,
+which reports the block count and size it measured.
 
 ## What pins the layout down
 
@@ -147,5 +213,8 @@ at all - the state whose counters they fit is never entered during boot. See
 - The fields at `+0x50`, `+0x60` to `+0x7c`. Reading `+0x50` as a total size does
   not work: it is 78 for the intro.
 - Whether the EP map is needed for seeking. Playback here is sequential.
-- The audio's exact ATRAC3+ parameters. Frames are 1103, 1410, 2017 or 2020
-  bytes; the demuxer hands them over whole and nothing decodes them.
+- What the four zero bytes at `+0x04` of a frame header are for. They are zero on
+  every frame of every movie, so nothing distinguishes a reserved field from one
+  this disc never uses.
+- Whether a frequency code other than 2 (44,100 Hz) exists. Only code 2 appears,
+  and anything else is reported as unknown rather than guessed at.

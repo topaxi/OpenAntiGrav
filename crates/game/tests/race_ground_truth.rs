@@ -252,6 +252,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: boot::DEFAULT_BOOT_MOVIE.to_string(),
         cache: std::env::temp_dir().join("oag-race-handoff"),
+        audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
     })
@@ -264,9 +265,9 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     // START skips the intro through `LogoFMVRedirectScreen`, cross picks a
     // language, and START again presses through `Show Logo`.
     input.begin_frame(1 << button::START);
-    frontend.update(dt, &mut input);
+    frontend.update(dt, &mut input, None);
     input.begin_frame(0);
-    frontend.update(dt, &mut input);
+    frontend.update(dt, &mut input, None);
     assert!(
         frontend.machine().is(states::LANGUAGE_SELECTION),
         "got as far as {:?}",
@@ -274,14 +275,14 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     );
 
     input.begin_frame(1 << button::CROSS);
-    frontend.update(dt, &mut input);
+    frontend.update(dt, &mut input, None);
     assert!(frontend.machine().is(states::SHOW_LOGO));
 
     // `Show Logo` is the disc's PRESS START screen and it sits between the
     // picker and everything after it, so the front end is not finished until
     // START goes through it.
     input.begin_frame(1 << button::START);
-    frontend.update(dt, &mut input);
+    frontend.update(dt, &mut input, None);
     assert!(frontend.machine().is(states::LAUNCH_GAME));
     assert!(
         frontend.is_finished(),

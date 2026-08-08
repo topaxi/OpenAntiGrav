@@ -62,6 +62,7 @@ fn load_leg(leg: oag_game::frontend::Leg, movie: &str) -> Option<boot::Boot> {
         movie: movie.to_string(),
         // Nothing is written and ffmpeg is never run.
         cache: std::env::temp_dir().join("oag-boot-ground-truth"),
+        audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
     };
@@ -115,7 +116,7 @@ fn the_reel_leg_still_runs_its_frame_holds() {
             break;
         }
         input.begin_frame(0);
-        frontend.update(dt, &mut input);
+        frontend.update(dt, &mut input, None);
         if frontend.player().is_paused() {
             let frame = frontend.player().frames_produced();
             if !held_at.contains(&frame) {
@@ -277,7 +278,7 @@ fn the_sequence_runs_from_boot_to_launch_game() {
             break;
         }
         input.begin_frame(0);
-        frontend.update(dt, &mut input);
+        frontend.update(dt, &mut input, None);
     }
     assert!(
         frontend.machine().is(states::LANGUAGE_SELECTION),
@@ -295,14 +296,14 @@ fn the_sequence_runs_from_boot_to_launch_game() {
     // Move to English, the last of the five, and pick it.
     for _ in 0..4 {
         input.begin_frame(1 << button::DOWN);
-        frontend.update(dt, &mut input);
+        frontend.update(dt, &mut input, None);
         input.begin_frame(0);
-        frontend.update(dt, &mut input);
+        frontend.update(dt, &mut input, None);
     }
     assert_eq!(frontend.selected(), 4);
 
     input.begin_frame(1 << button::CROSS);
-    frontend.update(dt, &mut input);
+    frontend.update(dt, &mut input, None);
     assert_eq!(frontend.chosen(), Some("English"));
 
     // The picker's exit is `Show Logo`, not the menus: the disc's own boot puts
@@ -324,7 +325,7 @@ fn the_sequence_runs_from_boot_to_launch_game() {
     // screen is a timer.
     for _ in 0..600 {
         input.begin_frame(0);
-        frontend.update(dt, &mut input);
+        frontend.update(dt, &mut input, None);
     }
     assert!(
         frontend.machine().is(states::SHOW_LOGO),
@@ -332,7 +333,7 @@ fn the_sequence_runs_from_boot_to_launch_game() {
     );
 
     input.begin_frame(1 << button::START);
-    frontend.update(dt, &mut input);
+    frontend.update(dt, &mut input, None);
     assert!(frontend.is_finished());
     assert!(frontend.machine().is(states::LAUNCH_GAME));
 
@@ -358,9 +359,9 @@ fn the_picker_draws_every_language_in_its_own_name() {
 
     // START skips straight there.
     input.begin_frame(1 << button::START);
-    frontend.update(1.0 / 60.0, &mut input);
+    frontend.update(1.0 / 60.0, &mut input, None);
     input.begin_frame(0);
-    frontend.update(1.0 / 60.0, &mut input);
+    frontend.update(1.0 / 60.0, &mut input, None);
     assert!(frontend.machine().is(states::LANGUAGE_SELECTION));
 
     let drawn: Vec<String> = frontend
