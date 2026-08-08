@@ -494,6 +494,21 @@ pub struct Graphics {
     /// collision burst.
     #[serde(default = "default_boost_fov_kick")]
     pub boost_fov_kick: crate::display::BoostFovKick,
+
+    /// Which of the original's three in-race camera perspectives to fly with.
+    ///
+    /// **The one setting on this page a race also writes.** SELECT cycles the
+    /// view mid-race exactly as the original's does, and the handler saves the
+    /// new value straight back here, so a player who found their preferred view
+    /// with the button keeps it next launch without ever opening a menu. That is
+    /// the original's own behaviour: it sets its profile's dirty flag on every
+    /// cycle - see `docs/ghidra/functions/psp-pulse-usa/camera.md`.
+    ///
+    /// The order the button cycles is recovered at confidence 88; **which view a
+    /// fresh install starts on is not**, and
+    /// [`crate::display::CameraView::default`] documents that choice.
+    #[serde(default = "default_camera_view")]
+    pub camera_view: crate::display::CameraView,
 }
 
 /// See [`Graphics::animated_textures`]: **off**, because a debugger read of the
@@ -503,6 +518,14 @@ pub struct Graphics {
 /// original, which does not have *this* effect.
 fn default_boost_fov_kick() -> crate::display::BoostFovKick {
     crate::display::BoostFovKick::DEFAULT
+}
+
+/// See [`Graphics::camera_view`]: the further of the two chase views, which is
+/// what the game rendered before the other two existed and what every capture
+/// under `data/traces/` was taken with. A choice, not a reading - see
+/// [`crate::display::CameraView`].
+fn default_camera_view() -> crate::display::CameraView {
+    crate::display::CameraView::default()
 }
 
 fn default_animated_textures() -> bool {
@@ -525,6 +548,7 @@ impl Default for Graphics {
             lod: Lod::default(),
             animated_textures: default_animated_textures(),
             boost_fov_kick: default_boost_fov_kick(),
+            camera_view: default_camera_view(),
         }
     }
 }
@@ -729,6 +753,10 @@ pub fn menu_seeds(
         (
             "graphics.boost_fov_kick",
             text(&settings.graphics.boost_fov_kick.to_string()),
+        ),
+        (
+            "graphics.camera_view",
+            text(&settings.graphics.camera_view.to_string()),
         ),
         (
             "audio.music_volume",

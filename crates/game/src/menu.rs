@@ -1981,7 +1981,9 @@ mod tests {
     /// does nothing".
     #[test]
     fn the_two_settings_pages_offer_only_values_that_parse() {
-        use crate::display::{Aspect, BoostFovKick, Brightness, Fov, Gamma, Size, WindowMode};
+        use crate::display::{
+            Aspect, BoostFovKick, Brightness, CameraView, Fov, Gamma, Size, WindowMode,
+        };
         let definition = built_in();
         let values = |setting: &str| -> Vec<String> {
             definition
@@ -2142,6 +2144,21 @@ mod tests {
             boost_fov_kick,
             BoostFovKick::OFFERED,
             "the boost-fov-kick rows and `BoostFovKick::OFFERED` must be one list"
+        );
+
+        // And this one is stronger than the others in the list: `CameraView::ALL`
+        // is the *recovered cycle order*, so a row list that merely held the same
+        // three values in a different order would put the menu and the in-race
+        // cycle button out of step. Equality of the sequences is what rules that
+        // out.
+        let camera_view: Vec<CameraView> = values("graphics.camera_view")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+        assert_eq!(
+            camera_view,
+            CameraView::ALL,
+            "the camera-view rows and `CameraView::ALL` must be one list, in the cycle's order"
         );
     }
 

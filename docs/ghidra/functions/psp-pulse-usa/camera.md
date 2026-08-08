@@ -30,6 +30,9 @@ values it cycles and the observed period all agree with it.
 | Sign of `ChaseParams::pos_length` | answered, below: the disc value is a signed offset and is used as-is |
 | A third parameter block for an internal view | answered: there are **five** blocks |
 | Whether the view is persisted to the profile save | answered: yes, as a string setting |
+| Where the 3/4 factor on the external offsets comes from | answered 2026-08-08: `g_craft_scale`, a code literal |
+| How the internal rig applies `pitch` and `headtilt` | answered 2026-08-08: `pitch` is a rise over a run of 10; `headtilt` rolls the up vector by an unidentified per-craft term |
+| How many camera rigs a craft has | answered 2026-08-08: **four**, internal / backward / external close / external far |
 
 ## There are three player-selectable views, and SELECT cycles them
 
@@ -335,6 +338,12 @@ is a constant 0.75 independent of speed and position, from seven samples spannin
 It is worth someone's time: a chase camera 25 % closer than its data says is a
 visible difference, and the tidy 3/4 suggests a knob rather than an accident.
 
+**Superseded 2026-08-08.** It was worth someone's time, and it was found: see
+[the 3/4 factor is `g_craft_scale`](#the-34-factor-is-g_craft_scale-a-code-literal-and-it-is-the-scale-this-project-already-knew)
+below. It is a code literal in the craft constructor, it is the same global scale
+this project had already recovered twice from the physics and the exhaust, and it
+is now applied. The confidence **0** on its origin above no longer stands.
+
 ## Applied renames
 
 | Address | Name | Conf |
@@ -443,8 +452,11 @@ as evidence of a difference.
   should go.
 - Nothing in the camera block is pre-scaled at load, unlike four of the handling
   parameters - but the two external offsets do reach the eye at exactly **3/4**
-  of their authored value at runtime, from a source that was not found. Do not
-  hardcode that; do not ignore it either.
+  of their authored value at runtime, ~~from a source that was not found. Do not
+  hardcode that; do not ignore it either.~~ from `g_craft_scale`
+  (`0x08ab0e1c`), a code literal that is the **same** global scale
+  `oag_physics::hover::TARGET_GLOBAL_SCALE` already is. Apply it to all four
+  external offsets and to none of the internal ones. See the section below.
 - `<BonnetCamera>`, `<BackwardCamera>` and `<InternalCamera headtilt>` exist and
   are parsed; the SELECT cycle never reaches the first two, and
   `<BackwardCamera headtilt>` is not even stored.
@@ -597,3 +609,277 @@ projection genuinely does depend on, and that were inferred before and are
 measured now: the fov field is **vertical degrees**, and the aspect is a
 hardcoded **480.0/272.0**. Both are literals in `Camera_PublishTripod`, and
 both are already what `Race::projection` assumes.
+
+## The 3/4 factor is `g_craft_scale`, a code literal, and it is the scale this project already knew
+
+Recovered 2026-08-08, and it **closes the confidence-0 open question above**: the
+factor's origin was "not found" and the page told the next reader not to hardcode
+it until it was. It is found.
+
+`g_craft_scale` (`0x08ab0e1c`) is written **once**, by the craft constructor
+`Craft_Construct_q` (`0x08840c74`), as a literal `0.75` at `0x08841000`. The
+reciprocal `1.3333334` is written into `0x08ab0e20` on the very next instruction.
+Neither comes from the XML: the store is an immediate.
+
+It is **not a camera factor.** The same global is read by
+
+| Consumer | What it scales |
+| --- | --- |
+| `Ship_UpdateCameraRigs` (4 reads) | the eye *and* the look-at point of both external rigs |
+| `Ship_HoverFourCorner` (4 reads) | the four hover-probe corner offsets, `(+/-2.5, ?, +/-5.0)` |
+| `Craft_Construct_q` itself | the three `<Misc>` hull dimensions on their way into the collider, and the initial `Body_SetPosition` height (`0.75 * 150.0`) |
+| `Ship_InitCraft`, `Ship_UpdateCraft`, `FUN_088418e0`, `FUN_08837e64` | not read here |
+
+so it is a **global scale on craft-space geometry**. That is the same `0.75` this
+project had already recovered twice by other routes and named
+`oag_physics::hover::TARGET_GLOBAL_SCALE` and
+`oag_render::exhaust::CRAFT_ROW_SCALE` - the first found empirically (it was the
+missing suspension headroom), the second read off the craft's world matrix row.
+This pass gives all three an address, a single write site and a value that is an
+immediate rather than a measurement.
+
+The exact form in the rigs is, for each external view,
+
+```c
+eye  = shipPos + (eye  - shipPos) * g_craft_scale;
+look = shipPos + (look - shipPos) * g_craft_scale;
+```
+
+which is the same thing as scaling all **four** offsets - `pos_height`,
+`pos_length`, `lookat_height`, `lookat_length`. `fov` and the two spring constants
+are not touched, being not lengths.
+
+Confidence **85**: the value and the write site are read directly and the store is
+a single immediate; the reading of it as a general craft-space scale rather than as
+five coincidences rests on the five consumers above all scaling craft-space
+lengths.
+
+**Applied 2026-08-08.** `crates/game/src/race.rs::chase_params` multiplies all four
+offsets by `oag_physics::hover::TARGET_GLOBAL_SCALE`, for both external blocks.
+Three independent numbers agree that this is right:
+
+| Source | Close view | Far view |
+| --- | ---: | ---: |
+| authored block x 0.75 | 11.643 | 14.562 |
+| this page's static probe (above) | 11.643 | 14.562 |
+| a 150-tick capture of the original, 94-153 units/s | ~11.6 | not captured |
+
+The per-tick capture is the new one and it is the strongest: the eye-to-craft
+distance is flat at 11.6 across the whole speed range, which also retires
+"speed-dependent chase distance" for a second time.
+
+**`<InternalCamera>` is not scaled, and that is deliberate rather than an
+oversight.** The internal rig reads `g_craft_scale` nowhere, and this page's own
+probe measured `OPT_INT` at `+3.000` against an authored `length` of 3. Two
+independent confirmations of an asymmetry that looks like a bug, so it stays.
+
+**Consequence worth stating for whoever reads a screenshot next.** Applying this
+moved the *default* far view's eye from 19.4 units out to 14.56, which is a visible
+change to what this project renders. It lands at the same time as
+`Race::ship_model_matrix` starting to apply the same `0.75` to the drawn model, and
+the two **partially cancel in apparent craft size**: model 1.0 with the eye at 19.4
+and model 0.75 with the eye at 14.56 look similar, while either change alone does
+not match the original. Neither should be reverted on the strength of a screenshot
+of the other.
+
+## There are four tripods per craft, not two
+
+`Craft_Construct_q` (`0x08840c74`) builds and registers all four by name, from
+`"%s "`-prefixed templates, where `%s` is `player`, `player <n>` or an AI name:
+
+| Rig | Craft offset | Name template | XML block |
+| --- | --- | --- | --- |
+| internal | `craft+0x0a0` | `"%s internal tripod"` (`0x08a7b9b4`) | `<InternalCamera>` |
+| backward | `craft+0x150` | `"%s backward tripod"` (`0x08a7b9c8`) | `<BackwardCamera>` |
+| external close | `craft+0x200` | `"%s external close tripod"` (`0x08a7b9dc`) | `<ExternalCameraClose>` |
+| external far | `craft+0x2b0` | `"%s external far tripod"` (`0x08a7b9f8`) | `<ExternalCameraFar>` |
+
+Each is `0xb0` bytes: `+0x00..0x3f` a 4x4 pose, `+0x50` the fov
+`Camera_PublishTripod` reads, `+0x94` whatever it hands to `FUN_08878644`. The
+literals `Camera_UpdatePlayerView` looks up by name (`player internal tripod` and
+friends, `0x08a7b5dc` onward) are these four with `player` substituted, which is
+what joins the SELECT cycle to the rigs.
+
+**So `<BackwardCamera>` does get a rig**, which the earlier finding that the SELECT
+cycle "never reaches" it left open. What binds it is still not determined; that it
+exists as a live tripod rather than as parsed-and-discarded data is new. No fifth
+rig is built, so `<BonnetCamera>` genuinely has none.
+
+Also read at construction, and useful: `craft+0x6d` (the hide-own-ship flag) is
+initialised to `0` and mirrored to `craft+0x6f` immediately, which is weak
+corroboration that the un-set state is an external view; and `craft+0x868`, the fov
+override's target, is initialised to `60.0`.
+
+Confidence **88**: four registrations read directly, each with its own literal and
+its own craft offset, and the offsets match the two `Ship_UpdateCameraRigs` writes
+this page already recorded (`craft+0x200` and `craft+0x2b0`).
+
+## `FUN_08885e84` selects a rig and does nothing geometric
+
+Left unread above ("selects a rig by name; what it does with it is not read"), and
+now read. It is three lines: hash the name, look the tripod up in the registry at
+`0x08b317b8`, increment its refcount at `+0xa0`, store the pointer into
+`controller+0x3c`. That is the whole function, and `Camera_PublishTripod` then
+reads `controller+0x3c` on the next frame. **Still not renamed**: what
+`controller+0x3c` belongs to is not established, so a `Camera_`-prefixed name would
+be a claim about the wrong subsystem. Confidence 55 on the reading, which is above
+the do-not-rename floor but not above the bar for a name that would be misleading
+if the object turns out not to be the camera controller.
+
+## The two external rigs, at instruction level
+
+`Ship_UpdateCameraRigs` (`0x08845ed0`) runs the identical algorithm twice, once per
+external block. With `params = *(*(craft+0x94)+0x6c)`, `fwd = *(craft+0x374)`,
+`up = *(craft+0x378)`, `side = *(craft+0x37c)` and `dt = param_1`:
+
+```c
+anchorLook = shipPos + fwd * lookat_length + up * lookat_height;
+anchorPos  = shipPos + fwd * pos_length;              /* no up term here */
+d          = anchorPos - prevEye;
+eye        = prevEye + up   * dot(d, up)   * spring_vert  * dt
+                     + side * dot(d, side) * spring_horiz * dt
+                     + fwd  * dot(d, fwd)  * spring_horiz * dt;
+eye        = anchorLook + normalize(eye - anchorLook) * length(anchorPos - anchorLook);
+prevEye    = eye;                       /* close: craft+0x7e0, far: craft+0x7f0 */
+eye       += up * pos_height;
+eye        = shipPos + (eye  - shipPos) * g_craft_scale;
+look       = shipPos + (anchorLook - shipPos) * g_craft_scale;
+Tripod_LookAt_q(tripod, &eye, &look, up);
+tripod[0x50] = craft[0x850] /* close */ or craft[0x84c] /* far */;
+```
+
+Four things fall out, and they score `oag_render::camera::chase`'s four undeclared
+choices:
+
+1. **The two springs split along and across the craft's own up axis** - `up` at
+   `spring_vert`, both of `side` and `fwd` at `spring_horiz`, in the craft frame
+   and not the world's. That is exactly what `chase.rs` chose without evidence.
+2. **The integrator is `error * rate * dt`**, a plain first-order lag with no
+   transcendental. Also exactly what `chase.rs` chose. The original does **not**
+   clamp the factor; `chase.rs` does, as its own guard.
+3. **Only the eye is sprung** and the look-at point is rigid. Confirmed.
+4. **The eye's distance from the look-at point is rigid.** The spring result is
+   re-projected onto the sphere of radius `|anchorPos - anchorLook|` centred on the
+   look-at point, so the spring rotates the eye *about* the aim point and never
+   moves it nearer or further. `chase.rs` springs the position freely, and that is
+   a real behavioural difference which is **not** fixed by this change.
+5. **`pos_height` is applied after the spring**, so the vertical offset is rigid
+   and the spring acts on a forward-only offset point. `chase.rs` folds both
+   offsets in before the spring sees them.
+
+Items 4 and 5 are the outstanding work on this camera, and item 4 is
+**independently corroborated by measurement**: the 150-tick capture holds the
+eye-to-craft distance at 11.6 while the along-forward component moves 10.9 -> 9.5,
+so the perpendicular component grew from about 4 to about 6.6 *at constant radius*.
+A freely sprung eye cannot produce that signature; a rotation about a fixed aim
+point is the only thing that can. Fixing it rewrites `Chase::advance` and several
+of its tests, which is why it was left out of the change that added the view cycle.
+
+Confidence **85** for the algorithm: read as instructions at one site that runs
+twice, with the constant-radius half measured independently.
+
+**One thing was not confirmed and should not be transcribed.** The far block's
+`pos_height` term decompiles as `up * up.y * (pos_height + 2 * stats[0x74])`, with
+an extra `up.y` factor and a doubled `stats+0x74` that the close block does not
+have. It was not checked at assembly level. The measured vertical offset sat at
+2.91-3.01 - `0.75 * 4.0` - through a run in which the craft pitched and rolled, so
+any extra `up.y` factor is either absent or stayed at about 1 throughout, and a
+plain scale matches every measurement. Treated as a decompiler artefact.
+`stats+0x74` is unidentified and reads `0` on the evidence available, so nothing
+here depends on it.
+
+## The internal rig, at instruction level: `pitch` is a rise over a run of 10
+
+`FUN_088455ec` is the internal rig's update - the only caller of
+`Tripod_LookAt_q` that passes `craft+0xa0`. With `row1 = *(shipNode+0x10)`, the
+ship node's up row:
+
+```c
+eye  = shipPos + fwd  * params[0x08 /* length */];
+eye += row1 * (params[0x04 /* height */] + craft[0x870]);   /* -> craft+0x7b0 */
+tgt  = eye + fwd * 10.0;                                    /* literal 0x41200000 */
+tgt += row1 * params[0x0c /* pitch */];
+tgt += craft[0x810];                    /* a look-around offset this fn integrates */
+u    = row1 - side * (craft[0x844] * params[0x10 /* headtilt */]);
+up   = normalize(cross(eye - tgt, cross(u, eye - tgt)));
+up   = Rot(craft[0x880] * 6.28) * up;                       /* a roll about the view axis */
+Tripod_LookAt_q(craft + 0xa0, &eye, &tgt, &up);
+craft[0xf0] = craft[0x840];             /* = tripod+0x50, the fov */
+```
+
+So:
+
+- **`<InternalCamera pitch>` is a vertical offset of the aim point over a fixed
+  forward run of `10.0` world units, not an angle.** A `pitch` of 1 tilts the view
+  up by `atan(1/10)`, about 5.7 degrees; reading the attribute as degrees or
+  radians would be wrong by whatever the ship happens to author. The `10.0` is a
+  code literal at the site. Confidence **85**: one site, read as instructions, with
+  the literal visible.
+- **`<InternalCamera headtilt>` rolls the view's up vector**, by
+  `side * craft[0x844] * headtilt`, so the horizon leans by an amount proportional
+  to the attribute times an unidentified per-craft quantity. The *shape* is
+  confidence 80; `craft+0x844` was **not** identified, so the magnitude and the
+  sign of the roll are unknown.
+- **No `g_craft_scale`** anywhere in this rig, per the section above.
+- Two further dynamic terms exist and are named here so their absence from a
+  reimplementation is not read as an oversight: `craft+0x810`, a per-frame smoothed
+  look-around offset added to the aim point, and `craft+0x880`, a roll about the
+  view axis. Neither moves where the cockpit is.
+
+**Applied 2026-08-08** as `oag_render::camera::internal`, with `pitch` implemented
+as the rise it is and `headtilt` **parsed, carried and deliberately not applied** -
+a lean applied with the wrong sign leans the horizon the wrong way through every
+corner, which is worse than a horizon that does not lean. The original already
+discards `<BackwardCamera headtilt>` outright, so an unapplied headtilt is at least
+a thing this format does elsewhere.
+
+## Correction: `craft+0x790` has a second write site, and it is speed-proportional
+
+The fov-chain section above records `ship+0x790` as "written **only** at
+`0x0881c2b4`, inside `Hud_Update`", on the strength of a write breakpoint that
+reported one pc on every hit. **There is a second store**, at the top of
+`FUN_088455ec`:
+
+```c
+craft[0x790] = dot(fwd, *(shipNode + 0x140)) * 0.075 + craft[0x7c];
+```
+
+with `0.075` a constant at `0x08a7b6a0` and `shipNode+0x140` a velocity-shaped
+vector. So the additive fov term has a **speed-proportional** component, not only
+the HUD's oscillating shake - and `0.075 * 130 = 9.75` degrees against the `+9.4`
+that section measured at 130 units/s is close enough to say this is most of what
+that measurement was seeing.
+
+**Why the write breakpoint missed it**: that measurement was taken in an *external*
+view, and this store lives in the internal rig's update. Whether that update runs
+while an external view is selected was not established, and it is the obvious next
+check - if it does not, the two write sites are simply never live at the same time,
+which is also why one pc was reported on every hit.
+
+`craft+0x7c` is unidentified. It has to carry most of the *non*-linear part of that
+section's measured series (`+6` at 120 and `+3` at 100 do not fit a line through
+`+9.4` at 130), so the decomposition of that series into these two terms is **not**
+settled and no number here should be used to tune anything. Confidence **80** for
+the store and its constant, read directly; **0** for the decomposition.
+
+## Applied renames, 2026-08-08 (second pass)
+
+| Address | Name | Conf |
+| --- | --- | ---: |
+| `0x08840c74` | `Craft_Construct_q` | 65 |
+| `0x08885a1c` | `Tripod_LookAt_q` | 65 |
+| `0x08ab0e1c` | `g_craft_scale` | 85 |
+
+`Craft_Construct_q` and `Tripod_LookAt_q` both take the `_q` suffix the rubric
+requires below 70. `Craft_Construct_q` is unmistakably *a* constructor - it zeroes
+several hundred bytes of one object, builds four tripods, loads the handling stats
+and the model, and creates the rigid body - but it also takes four arguments whose
+meaning was not read, and whether "craft" or "racer" is the right noun for the
+object is not established. `Tripod_LookAt_q` is named from its three call sites all
+passing `(tripod, &eye, &look, up)` and never from its body, which was not opened;
+that it *is* a look-at matrix build is inference from the arguments.
+
+Deliberately **not** renamed: `FUN_088455ec` (the internal rig's update - it also
+writes the fov shake term, a smoothed look-around offset and a view roll, so
+"update the internal camera rig" describes less than half of it, and the rest was
+not read), and `FUN_08885e84` for the reason its own section gives.

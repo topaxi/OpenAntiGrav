@@ -1,12 +1,18 @@
 //! Cameras.
 //!
-//! Three of them, all pure maths over plain vectors so they can be tested
+//! Four of them, all pure maths over plain vectors so they can be tested
 //! without a window or a GPU:
 //!
 //! - [`orbit`], which an asset viewer wants: yaw, pitch and zoom around a point.
 //! - [`free`], which a debug fly-through wants.
 //! - [`chase`], the external view the game flies behind a ship, whose parameters
 //!   come from the ship's own `handlingstats.xml`.
+//! - [`internal`], the cockpit view, whose parameters come from the same file.
+//!
+//! The last two are the ones a player cycles between with a button, and both take
+//! the same [`chase::Target`] so the caller describes the ship once. Which of them
+//! is live is `crate::display::CameraView` in `oag-game`, not a decision made
+//! here: this crate offers cameras and picks none.
 //!
 //! Every view and projection matrix here comes from [`oag_core::math::camera`],
 //! which is right-handed with a 0..1 depth range. That is what wgpu, Metal and
@@ -20,6 +26,7 @@
 
 pub mod chase;
 pub mod free;
+pub mod internal;
 pub mod orbit;
 
 use oag_core::math::{Mat4, camera};

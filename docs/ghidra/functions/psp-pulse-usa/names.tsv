@@ -393,3 +393,6 @@
 0x0887a4f0	function	SceneLight_BuildLightingList	68	mesh-draw.md
 0x08912358	function	Vex_UpdateLightLists	65	mesh-draw.md
 0x0887a018	function	SceneLight_InitLists	65	mesh-draw.md
+0x08840c74	function	Craft_Construct	65	camera.md
+0x08885a1c	function	Tripod_LookAt	65	camera.md
+0x08ab0e1c	data	g_craft_scale	85	camera.md
