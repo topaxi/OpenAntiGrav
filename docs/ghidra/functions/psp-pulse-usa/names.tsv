@@ -353,3 +353,8 @@
 0x08af25c0	data	g_loading_tip	85	loading-screen.md
 0x08af2699	data	g_loading_tip_show_help	85	loading-screen.md
 0x08b62d90	data	g_caustic_frames	85	loading-screen.md
+0x089392b0	function	Sound_Play	80	sound.md
+0x0898c7e8	function	Sas_CommitVoices	85	sound.md
+0x08a2aebc	function	Sas_SetVoice	95	sound.md
+0x08995224	function	SoundVoice_Unlink	65	sound.md
+0x08b893d0	data	g_sas_voices	85	sound.md

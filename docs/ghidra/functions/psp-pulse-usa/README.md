@@ -23,6 +23,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [XML reader](xml-reader.md) | The one parser behind the front end, handling stats and camera blocks, and its exponent-blind float accessor |
 | [Texture animation](texture-animation.md) | The GU texture offset/scale primitives, their callers, and what is still unknown about the global scroll clock |
 | [Loading screen](loading-screen.md) | The screen type field, the `loading` plugin's tip table, and the procedural heartbeat wave that is not a movie |
+| [Sound engine](sound.md) | Cue dispatch by name, and the 32-entry SAS voice table the waveform address and length are committed from |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
 
 ## Renames
