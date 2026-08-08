@@ -252,6 +252,93 @@ Confidence **85** for the cue-record fields, from direct reads in one function.
 `+0x16` and the `+0x1c` stride were already at 94 from the data side; the
 runtime agreeing does not raise a number, it removes a way of being wrong.
 
+## The waveform descriptor, and why the format page already had it
+
+`Scream_KeyOnVoice` (`0x0899456c`) is the last link. It reads a pointer from
+`g_sas_voices[v] + 0x14`, and every argument it hands to `Sas_QueueSetVoice`
+comes out of what that pointer addresses:
+
+```c
+wf = *(u32 *)(&g_sas_voices[v] + 0x14);
+Sas_QueueSetVoice(v, *(u32 *)(wf + 0x10),      /* address */
+                     *(u32 *)(wf + 0x14),      /* size    */
+                     (*(u16 *)(wf + 0x0e) & 0x40) != 0,
+                     (*(u16 *)(wf + 0x0e) & 0x80) != 0);
+```
+
+So a **waveform descriptor** carries, at least:
+
+```text
+wf + 0x02   s8    a note or pitch base
+wf + 0x03   s8    a second one
+wf + 0x0a   u16   paired with +0x0c into an envelope call
+wf + 0x0c   u16
+wf + 0x0e   u16   flags; 0x40 selects loop mode, 0x80 the ADPCM assertion
+wf + 0x10   u32   the waveform's offset
+wf + 0x14   u32   the waveform's length
+```
+
+**This is the record [psp-audio.md](../../../formats/psp-audio.md) already
+found and could not generalise.** That page reports, of `frontend.bnk`, *"ten
+24-byte parameter records whose last two words are an offset and a length that
+tile the waveform section exactly"* - and 24 bytes is `0x18`, whose last two
+words sit at exactly `+0x10` and `+0x14`. The two readings were derived with no
+knowledge of each other, one by tiling byte ranges across a bank and one out of
+the runtime's argument list, and they land on the same two fields of the same
+sized record.
+
+The page's conclusion from the data side was that *"the race banks do not have a
+record array of that shape at that offset, so the same reading does not
+generalise"*. The runtime says the **shape** does generalise - it is the only
+shape `Sas_QueueSetVoice` can be fed - so what differs between banks is where
+the array lives, not what it is. The header already carries `waveform_count` at
+`+0x1a`, which is the count that array must have.
+
+Confidence **85**: the field offsets are direct reads, and the corroboration
+with an independently derived 24-byte record is strong, but the stride itself is
+the format page's measurement rather than this function's, and no bank has been
+parsed this way yet.
+
+**What this leaves is a data question rather than a code one.** Locating a
+24-byte, `waveform_count`-long array whose last two words tile the waveform
+section is a search over 39 banks with a very sharp test - the offsets and
+lengths must partition the section exactly, which is what made `frontend.bnk`
+findable in the first place.
+
+## The command list is a 45-entry jump table
+
+`Scream_StepCommandList` (`0x0898efd8`) is the interpreter `Scream_StartSound`
+drives, and it is a straightforward dispatch:
+
+```c
+cmd    = *(u32 *)(cue + 8) + pc * 8;              /* 8-byte commands */
+opcode = *(u8 *)(cmd + 3);
+if (opcode > 0x2c) { error(); return 1; }
+r = (*(code **)0x08ac326c)[opcode](handler, cue);
+```
+
+Three things follow. The command stride is **8 bytes**, matching the format
+page. The opcode is the **high byte of the first word**, which is consistent
+with that page's `{ u8 opcode, u24 operand }` reading of a little-endian word
+rather than in conflict with it. And **the engine defines 45 opcodes**
+(`0x00`-`0x2c`) through a jump table, `g_scream_opcode_table` at
+**`0x08ac326c`**, where the format page
+observed only nine distinct values in the shipped data - so the banks use a
+fifth of the instruction set.
+
+`handler + 0x4a` is the program counter, and a cue ends when it passes
+`*(i8 *)(cue + 4) - 1`. **That refines the note above**: `cue + 0x04` is the
+cue's command count, so "must be non-zero to play" and "is the command count"
+are the same fact seen twice.
+
+`handler + 0x50`/`+0x52`/`+0x54` are a repeat mechanism - a flag, a countdown,
+and a signed jump added to the program counter when it reaches zero - so the
+command list has loops. `handler + 0x48` accumulates the command's second word,
+which is therefore a duration.
+
+Reading the 45 handlers is the obvious next job, and one of them is what writes
+`g_sas_voices[v] + 0x14`.
+
 ## Where this stops
 
 **The writer of `+0x54` is `Sas_QueueSetVoice` (`0x0898bf4c`)**, found by
@@ -276,19 +363,19 @@ so these are the same table and the same fields as the commit loop reads.
 Confidence **92** - it is a direct store to the exact offsets, and its argument
 order matches `sceSasSetVoice`'s.
 
-**What is still open is the middle**: a cue record is reached and a voice is
-written, but the step that turns the cue's command list into a waveform offset
-and length is not read. `FUN_0898efd8` is where it happens - `Scream_StartSound`
-loops on it until the handler's `+0x4a` goes to `-1`, which is the shape of a
-script interpreter, and the format page's nine unexplained opcodes are what it
-would be interpreting.
+**The chain is now complete end to end**, with one link read only in outline:
+which of the 45 opcode handlers writes `g_sas_voices[v] + 0x14`. Everything
+either side of that is read.
 
 ## Not determined
 
-- **The command-list interpreter, `FUN_0898efd8`.** The last unread step, and
-  the one that turns a cue into a waveform offset. `Scream_StartSound` drives it
-  in a loop, and the format page's nine opcodes (`0x05`, `0x06`, `0x15`, `0x16`,
-  `0x1e`, `0x22`-`0x24`, `0x29`) are almost certainly its instruction set.
+- **The 45 opcode handlers** in `g_scream_opcode_table` (`0x08ac326c`). None is
+  read. One of them writes
+  `g_sas_voices[v] + 0x14`, and that one names the waveform-descriptor array's
+  location in the bank; the format page's nine observed opcodes (`0x05`, `0x06`,
+  `0x15`, `0x16`, `0x1e`, `0x22`-`0x24`, `0x29`) are where to start.
+- **Where the waveform-descriptor array lives in a bank.** Now a data search
+  with a sharp test rather than an open question - see above.
 - **What the cue record's `+0x08` points at after fixup.** Its `+0x04` is read
   as the handler's `+0x12`, a `s16` the play loop tests against zero.
 - **The name hash**, `FUN_089924ec`. Not needed to extract names - the entry

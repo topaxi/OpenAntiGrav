@@ -363,3 +363,6 @@
 0x08991b20	function	Scream_PlaySoundByName	85	sound.md
 0x08992264	function	Scream_FindBankByName	80	sound.md
 0x0898f864	function	Scream_StartSound	85	sound.md
+0x0899456c	function	Scream_KeyOnVoice	85	sound.md
+0x0898efd8	function	Scream_StepCommandList	88	sound.md
+0x08ac326c	data	g_scream_opcode_table	85	sound.md
