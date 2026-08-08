@@ -412,6 +412,37 @@ struct Cli {
     /// against an emulator shot taken mid-boost. `0.0` is the entry tick.
     #[arg(long, value_name = "SECONDS")]
     pose_boost: Option<f32>,
+
+    /// With `--pose-boost`: the intensity the exhaust had when the pad was
+    /// entered, instead of saturating it.
+    ///
+    /// **Saturated is the wrong default for a comparison against a teleported
+    /// capture, and this is what fixes it.** `Exhaust_Update`'s intensity ramp
+    /// climbs at only `0.25`/s, so it needs four seconds of thrust to reach
+    /// `1.0`; a craft put on a pad's approach by `psp-drive.py place` has had
+    /// far less than that, and the first real pad capture measured `0.1334` at
+    /// the entry tick. Intensity is not cosmetic there - it sets the flare's
+    /// resting half-size through `(i * 0.6 + 0.4) * 2.5` (`1.2` at `0.13`
+    /// against `2.5` saturated) and all three of the ribbon's staggered layer
+    /// alphas - so comparing a saturated render against an unsaturated capture
+    /// measures the difference in *state*, not in rendering.
+    ///
+    /// Take the value from a `psp-trace.py --flare` capture's `intensity`
+    /// column at the entry tick. The ramp then keeps climbing through the
+    /// posed age at the same rate the original's does, so one number matches
+    /// the whole curve rather than just its start.
+    #[arg(long, value_name = "0..1", requires = "pose_boost")]
+    pose_intensity: Option<f32>,
+
+    /// With `--pose-boost`: the speed in units/s to advance the exhaust at,
+    /// instead of the default racing `120`.
+    ///
+    /// Only reaches the picture through `Exhaust_Update`'s speed ramp, which
+    /// floors the boost accumulator at `clamp((kmh - 100) / 500) * 0.6` - so it
+    /// matters when a capture's speed is far from `120`. Take it from the
+    /// capture's `speed` column.
+    #[arg(long, value_name = "UNITS_PER_S", requires = "pose_boost")]
+    pose_speed: Option<f32>,
 }
 
 /// Parses `--pose`: three or four comma-separated numbers, the fourth a yaw in
@@ -1042,6 +1073,8 @@ fn run_race(
                 boost_fov_kick: settings.graphics.boost_fov_kick,
                 anti_aliasing: settings.graphics.anti_aliasing,
                 pose_boost: cli.pose_boost,
+                pose_intensity: cli.pose_intensity,
+                pose_speed: cli.pose_speed,
                 presented: cli.presented.then_some(race::Presented {
                     render_scale: settings.graphics.render_scale,
                     presentation: oag_game::upscale::Presentation {

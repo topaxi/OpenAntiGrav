@@ -361,6 +361,57 @@ GE state we have not recovered. `oag-view` treats vertex colour as prelit and
 skips its own light rig for those batches, which is the viewer's choice and not a
 claim about the game.
 
+### The vertex type is not misdeclared, and `u8` texcoords really are one byte each
+
+**Confidence: 95.** Checked by
+[`crates/formats/tests/vex_batch_layout_ground_truth.rs`](../../crates/formats/tests/vex_batch_layout_ground_truth.rs).
+
+`shipboost.vex` raised the question. Its two short batches decode to a *single*
+texture coordinate - all 9 (or 10) of their vertices carry `u` `0.0078`, `v`
+`0.0312` - which reads exactly like the stride misread that
+["Texture rows are padded to 16 bytes"](#texture-rows-are-padded-to-16-bytes)
+caught one section down. The competing reading is that bytes 0-3 of a `0x13d`
+vertex are two `u16` texcoords rather than a `u8` pair plus two bytes of nothing,
+which would put a real `u` sweep where the table above sees a constant. Four
+measurements over the whole PSP disc close it, and they are worth recording
+because the same question will come up again for any batch whose UVs look degenerate.
+
+- **The stride closes on every batch.** A batch declares its vertex count at
+  `+0x04` and its vertex-data size at `+0x0c`. Taking the stride from the vertex
+  type alone, `count * stride` rounded up to 16 reproduces the declared size on
+  **65,279 of 65,279 batches** across 307 models, with no exceptions and at
+  eleven different strides. Both candidate readings happen to give stride 20 for
+  `0x13d`, so this does not by itself pick between them - but it does rule out
+  "our stride is wrong" as the explanation for anything here.
+- **No batch anywhere declares 16-bit texcoords.** Bits 0-1 of the vertex type
+  are the GU texcoord format, and across those 65,279 batches the value is only
+  ever `0` (none), `1` (`u8`) or `3` (`f32`). `2` (`GU_TEXTURE_16BIT`) does not
+  occur, which is why `VertexLayout::from_vertex_type` can refuse it outright.
+  The competing reading needs a format the exporter never emits.
+- **The spare bytes are the exporter's fill.** In a `0x13d` vertex, bytes `+2`
+  and `+3` carry the *same value* as the padding at `+11` (after the three
+  normal bytes) and `+18`/`+19` (after the three position `s16`), in **744,686
+  of 744,686** such vertices on the disc, and that value is only ever `0x00` or
+  `0xff`. No reading of the format puts a field at `+11`. Two bytes that track
+  the padding byte for byte across three quarters of a million vertices are
+  padding - and a `v` coordinate that is binary on every ship hull and every
+  circuit is not a texture coordinate.
+- **The `u` byte is not systematically pinned.** Read the way the table above
+  says, byte 0 takes all **256** values across the disc, and **25,735 of 25,900**
+  `u8`-texcoord batches contain a vertex with `u` past texel 2. A decode that
+  clamped `u` to nothing would show up here as a disc-wide flat distribution. It
+  does not.
+
+The `TEXCOORD_U16_GAIN` question in
+[`oag-render::exhaust`](../../crates/render/src/exhaust.rs) does **not** transfer
+to baked `.vex` data. That constant is about `Trail_DrawRibbon`, geometry the
+original generates at runtime and where the game's own code writes 16-bit
+texcoords for the GE to divide by 32768. Nothing on the disc is stored that way.
+
+**A single-point UV is ordinary authoring here, not an anomaly.** 1,463 of the
+25,900 `u8`-texcoord batches on the disc - 5.6% - carry exactly one distinct
+texture coordinate across every vertex, at every vertex count from 3 upward.
+
 ### PS2: the vertex type still names the attributes, but the data is a VIF packet
 
 **Status: decoded.** Implemented in

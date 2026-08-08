@@ -121,15 +121,32 @@ demonstrably restructures some fields between disc and runtime. Nothing here
 rules out the loader poking batch-header `+3` in place; no write to that
 offset has been searched for.
 
-**The material's own display list cannot override any of this, and that is
-now read rather than assumed** (2026-08-08). In `FUN_089307b4`'s `& 2` group
-the per-material list is replayed as `Gu_CallList(material + 0xc0)` when the
-material *changes*, and `Mesh_SetBatchDrawState` is called **after** it, once
-per batch. So whatever blend function a material list programs is overwritten
-before the draw, and the two fixed-factor equations above are the only ones a
-transparent batch can be drawn with. Worth stating because a material list is
-the obvious place to look for a missing alpha path, and it is ruled out - see
+**The list replayed before the draw cannot override any of this, and that is
+now read rather than assumed** (2026-08-08). In `FUN_089307b4`'s `& 2` group a
+`+0xc0` display list is replayed when the material *changes*, and
+`Mesh_SetBatchDrawState` is called **after** it, once per batch.
+
+**That list belongs to the `Texture`, not to the material** - corrected
+2026-08-08. `FUN_0890db54` reaches it as `texture_array[material.tex_index] +
+0xc0` and `FUN_089307b4` hands the same pointer to `Gfx_BindTexture` in its
+other branch; it is built by `Texture_BuildBindList` (`0x08928d4c`) and its
+complete contents are texture state only - `TEXLEVEL`, `TEXTUREMAPENABLE`,
+`TEXMODE`, `TEXFORMAT`, the per-mip `TEXADDR`/`TEXBUFWIDTH`/`TEXSIZE`, the CLUT
+registers and `TEXFLUSH`. **No colour state at all, and no `0xc9` texture
+function.** The conclusion the old wording supported still holds - nothing
+replayed there can override the blend - but the attribution was wrong, and
+anyone looking for a *material* list will not find one at this offset.
+
+Either way the two fixed-factor equations above are the only ones a transparent
+batch can be drawn with, which is what matters: a replayed list was the obvious
+place to look for a missing alpha path, and it is ruled out - see
 [exhaust.md](exhaust.md)'s section on the boost plume's vertex alpha.
+
+**`mesh+0x70` is a pointer to the per-*model* object, not a per-mesh block** -
+also corrected 2026-08-08. It is `Vex_LoadModel`'s own object (`model+0x1a4` is
+the texture-pointer array, dereferenced as `*(int *)(mesh + 0x70) + 0x1a4` in
+`FUN_0890cf84`), so sibling meshes in one file share it. Both of
+`shipboost.vex`'s meshes therefore replay the *same* two lists.
 
 `FUN_089307b4` is the mesh draw path's pass-group dispatcher: it walks up to
 four separately-gated batch groups (`param_3 & 1/2/4/8`), and
@@ -168,9 +185,22 @@ the replace branch" and "the `0x10` bit does not mean what this page claims,
 or gets rewritten before the draw path reads it." The stride-arithmetic
 match above (not this histogram) is what supports byte identity; this
 histogram only supports "every sampled batch's `0x10` bit reads clear," which
-is the fact the ground-truth test actually pins and the fact
-`race::Scene`'s `exhaust::TRAIL_BLEND` choice for the boost plume actually
-needs.
+is the fact the ground-truth test actually pins and the fact `race::Scene`'s
+additive-blend choice for the boost plume actually needs.
+
+**`race::Scene` draws the boost plume with `exhaust::BLEND`, not
+`exhaust::TRAIL_BLEND`, and that is a deliberate departure from this page.**
+Both are additive; they differ only in the source factor, `SrcAlpha` against
+`One`. The plume is the one model whose authored vertex alpha is not constant -
+bimodal, `0` on the orange rim and `255` in the white core - and a matched-pose
+capture of a real pad crossing shows the original's fins feathering exactly
+where that alpha falls, at a hue our `One`-factor build could not produce. The
+recovered call here really is `GU_FIX` white on both sides, so **the GE path
+that performs that per-fragment weight is not recovered**; the renderer
+reproduces the measured observable and the mechanism stays open. The numbers,
+and why the previous per-vertex premultiply was a bug rather than a
+compensation, are in
+[exhaust.md](exhaust.md#the-plumes-vertex-alpha-the-question-was-wrong-and-the-bug-was-ours).
 
 Taken together, this resolves the open question for the boost plume
 specifically at **confidence 75** (not this page's headline 85: the byte
@@ -217,20 +247,201 @@ Recorded here so the blend question is neither credited with it nor reopened
 for it: the two `Gu_CallList` lists below are still unread, and still the way
 to settle blend-enable.
 
+## The GE state a transparent batch is actually drawn under
+
+2026-08-08, static read of `BOOT.BIN` throughout - **no live verification**, so
+every figure here is a decompile and the confidences say so. This is what
+finally answered [exhaust.md](exhaust.md)'s three-pass-old question about the
+boost plume's vertex alpha, and the answer is that no alpha path exists.
+
+### The two `Gu_CallList` lists are light directions, and that guess was wrong
+
+Both are 9 words, capacity `0x28`, terminated `0x0b000000` (GE `RET`, which is
+what `Gu_CallList`'s `CALL` needs). Written as raw GE words by `Vex_LoadModel`
+(`0x08912b80`, at `0x08913258`-`0x089135b8`) and by `Vex_UpdateLightLists_q`
+(`0x08912358`):
+
+```text
+list A (model+0x48)            list B (model+0x70)
+0x63 LX0 = dir0.x              0x63 LX0 = dir0.x
+0x64 LY0 = dir0.y              0x64 LY0 = dir0.y
+0x65 LZ0 = dir0.z              0x65 LZ0 = dir0.z
+0x5f LIGHTTYPE0 = 0            0x5f LIGHTTYPE0 = 1
+0x66 LX1 = dir1.x              0x66 LX1 = dir1.x
+0x67 LY1 = dir1.y              0x67 LY1 = dir1.y
+0x68 LZ1 = dir1.z              0x68 LZ1 = dir1.z
+0x60 LIGHTTYPE1 = 0            0x60 LIGHTTYPE1 = 1
+0x0b RET                       0x0b RET
+```
+
+So **`*batch & 0x8000` selects only the light computation field** (`0` =
+diffuse-only, `1` = diffuse+specular). No blend, no alpha test, no texture
+function, no ambient, no material, no lighting-enable in either list.
+Confidence **92**.
+
+That closes this page's own first open question, and it is worth recording that
+the *prediction* was wrong: these lists were named here as "the most likely
+place blend-enable actually lives", and they are nothing of the kind.
+
+### Where the state really is: `Mesh_BeginTransparentPass` (`0x0890d904`)
+
+Called by `FUN_0890d508` and by `FUN_089307b4`'s `& 2` group immediately before
+the batch loop:
+
+```text
+Gu_Disable(10)               GU_LIGHTING off
+Gu_SpecularCoef(...)         0x5b MATERIALSPECULARCOEF = DAT_08abf490
+Gu_TexMapMode(2, 0, 1)       0xc0 TEXMAPMODE uvgen = 2, 0xc1 TEXSHADELS LS0=0 LS1=1
+Gu_Enable(4)                 GU_BLEND ON
+Gu_CallList(model+0xb0+0xd0) material ambient / alpha / diffuse / specular
+Gu_AlphaFunc(1, 0, 0xff)     0xdb  func ALWAYS, ref 0, mask 0xff
+Gu_Disable(0)                GU_ALPHA_TEST OFF
+Gu_Disable(0x11)             GU_COLOR_TEST off
+```
+
+- **`GU_BLEND` is enabled.** Confidence 90. The additive branch is a true
+  `dst + src` glow.
+- **`GU_ALPHA_TEST` is disabled**, and the func programmed is `ALWAYS` / ref `0`
+  / mask `0xff`. Confidence 90. Any "the rim is alpha-clipped" reading is dead.
+- **Lighting is disabled for transparent batches** - twice, since
+  `FUN_089307b4`'s own first statement is also `Gu_Disable(10)`. So the `Trail`
+  ribbon's lit-colour path (lighting on with all four lights off) does **not**
+  apply to mesh batches, and the two lists above are inert as lighting.
+  Confidence 85.
+
+**This rests on the full `sceGuEnable` index table, read as a literal switch out
+of `Gu_SetState` (`0x08811b58`) rather than recalled from the SDK** - confidence
+95: `0`→ALPHATEST, `1`→ZTEST, `2`→scissor, `3`→STENCILTEST, `4`→ALPHABLEND,
+`5`→CULLFACE, `6`→DITHER, `7`→FOG, `8`→DEPTHCLAMP, `9`→TEXTUREMAP,
+`10`→LIGHTING, `11`-`14`→LIGHT0..3, `15`→AA, `16`→PATCHCULL, `17`→COLORTEST,
+`18`→LOGICOP, `19`→REVERSENORMAL, `20`→PATCHFACING, `21`→TEXFUNC with the
+colour-double bit. That retro-confirms this page's `GU_CULL_FACE = 5` and
+`exhaust.md`'s `Trail` decode. **Note `GU_ALPHA_TEST` is index `0`, not `3`;
+index `3` is `GU_STENCIL_TEST`.**
+
+### The texture function is never set in this path
+
+`Texture_BuildBindList` (`0x08928d4c`) emits no `0xc9`, and **the entire binary
+contains only two `0xc9` emitters** - `Gu_TexFunc` (`0x0881141c`, the one
+`Gfx_Init` calls once) and `Gu_SetState`'s case `0x15` (the `GU_FRAGMENT_2X`
+path) - searched as `lui *, 0xc900`, two hits, both accounted for. So the mesh
+path inherits `Gfx_Init`'s `GU_TFX_MODULATE` / `GU_TCC_RGBA` with colour-double
+off. Confidence 90, and it closes `exhaust.md`'s ribbon texfunc question a
+second, independent way (that one was closed by a live command-stream scan).
+
+### A trap: `model+0xb0` holds two lists and the obvious one is the wrong one
+
+- `model+0xb0 + 0x00`, capacity `0x94`, built by
+  `SceneLight_BuildLightingList_q` (`0x0887a4f0`): `0x17000001`
+  **LIGHTINGENABLE = 1**, ambient colour/alpha, light enables, light positions,
+  per-light colours.
+- `model+0xb0 + 0xd0`, capacity `0x20`, built by `SceneLight_Rebuild`
+  (`0x08879b14`): `MATERIALAMBIENT`, `MATERIALALPHA`, `MATERIALDIFFUSE`,
+  `MATERIALSPECULAR`, all four from one colour.
+
+Two sibling replay functions, and **they split exactly along
+opaque/transparent**: `SceneLight_CallLightingList` (`0x0887a230`) replays
+`+0x00` and its only caller is `FUN_0890d3ac`, the opaque/alpha-tested state
+function; `SceneLight_CallMaterialList` (`0x0887a268`) replays `+0xd0` and its
+only caller is `Mesh_BeginTransparentPass`. So opaque batches are lit,
+transparent batches are not, and nothing in the transparent path ever emits
+`0x17`. **Anyone who greps `0x0887a4f0`, finds `0x17000001` and concludes
+transparent batches are lit has it backwards.**
+
+### Nothing else scales fragment RGB
+
+Full ordered state for a transparent batch, every item read from the binary:
+`FUN_089307b4` entry disables lighting, enables `TEXTURE_2D` and sets all four
+material registers white via `Gu_Color(0xffffffff)`; the `& 2` prologue above
+runs; then per batch the texture bind list (texture state only), the mesh's
+world matrix, `Mesh_SetBatchDrawState`, and the draw. The epilogue
+`Mesh_EndTransparentPass` (`0x0890dc20`) restores uvgen `0`.
+
+**The only multipliers are vertex colour x texture (`MODULATE`) x the blend
+equation.** No fog, no colour test, no texenv colour, no colour-double, no
+emissive (`MATERIALEMISSIVE` `0x54` still has no emitter anywhere), no logic op.
+Confidence **85**. That is a hard negative for `exhaust.md`'s long-running
+"something scales the plume's rim down without discarding its hue" - it is not
+GE state.
+
+### The transparent pass generates its texture coordinates
+
+`Mesh_BeginTransparentPass` sets `TEXMAPMODE` uvgen **2 - environment (shade)
+mapping** - from the vertex normal and lights `0`/`1`, and **nothing inside the
+batch loop re-emits `0xc0` to undo it**: the whole binary has only two `0xc0`
+emitters, `Gu_TexMapMode` (`0x08811508`) and `Gu_TexProjMapMode`
+(`0x08811558`), and `Gu_TexMapMode`'s thirteen call sites are all pass
+prologues and epilogues. So **authored UVs are not read for a transparent
+batch.** Confidence **82** - the uvgen enum values come from pspgu/PPSSPP
+rather than from `BOOT.BIN`, which is what holds it below 90.
+
+What makes the choice deliberate rather than incidental: `FUN_0890dc64`, the
+`& 8` pass prologue, sets uvgen **1** with `TEXSHADELS (0,0)`, while this one
+sets uvgen **2** with `TEXSHADELS (0,1)`. `TEXSHADELS` only means anything under
+shade mapping, and only the mode-2 pass sets it non-trivially. **And this is
+what the two light-direction lists are for** - they program the exact registers
+env-map UV generation reads, replayed per batch inside the pass that turned it
+on.
+
+The plume's degenerate authored UVs are explained by this rather than fixed by
+it, and the reimplementation does **not** implement env-mapped UV generation:
+it would change every transparent batch on every track and ship, which is the
+same blast radius this page already refused for `TRANSPARENT_BLEND`. See
+[exhaust.md](exhaust.md).
+
+## Applied names
+
+Per [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md): below 70
+gains a `_q` suffix, below 50 is not renamed at all. Mirrored in
+[`names.tsv`](names.tsv). All of these were read from the GE command byte in the
+callee's own body, not inferred from call sites - the distinction that a
+previous pass on this subsystem got wrong.
+
+| Address | Kind | Name | Conf |
+| --- | --- | --- | --- |
+| `0x08811b58` | function | `Gu_SetState` | 92 |
+| `0x08811814` | function | `Gu_AlphaFunc` | 92 |
+| `0x088126ac` | function | `Gu_Material` | 90 |
+| `0x088112c8` | function | `Gu_Color` | 88 |
+| `0x08811508` | function | `Gu_TexMapMode` | 88 |
+| `0x08811898` | function | `Gu_PixelMask` | 88 |
+| `0x08811558` | function | `Gu_TexProjMapMode` | 85 |
+| `0x08810a88` | function | `Gu_SpecularCoef` | 82 |
+| `0x08928d4c` | function | `Texture_BuildBindList` | 85 |
+| `0x0890d904` | function | `Mesh_BeginTransparentPass` | 85 |
+| `0x0890dc20` | function | `Mesh_EndTransparentPass` | 82 |
+| `0x0887a268` | function | `SceneLight_CallMaterialList` | 78 |
+| `0x0887a230` | function | `SceneLight_CallLightingList` | 78 |
+| `0x08879b14` | function | `SceneLight_Rebuild` | 75 |
+| `0x0887a4f0` | function | `SceneLight_BuildLightingList_q` | 68 |
+| `0x08912358` | function | `Vex_UpdateLightLists_q` | 65 |
+| `0x0887a018` | function | `SceneLight_InitLists_q` | 65 |
+
+`Gu_SetState` carries 92 because its body *is* the `sceGuEnable` index table - a
+literal switch from state index to GE enable command - which makes every other
+`Gu_Enable`/`Gu_Disable` reading on this page and on
+[exhaust.md](exhaust.md) a read rather than an SDK recollection.
+
+The three `_q` names are the three whose *bodies* are decoded but whose role is
+partly inferred: `SceneLight_BuildLightingList_q`'s list contents are fully read
+while its return value's meaning (an accumulated light colour) is not,
+`Vex_UpdateLightLists_q` writes both light lists correctly but its trigger was
+never read, and `SceneLight_InitLists_q` only writes bare `RET`s and a flag.
+
+**Deliberately not named:** `FUN_0881129c` (a two-argument colour setter used by
+`FUN_0890d3ac`, body unread), `FUN_08927550`, `FUN_08928174`, `FUN_08944544`,
+and `FUN_08a6bfc0`/`FUN_08a6bd6c` - the last two return their own address and are
+RTTI type tokens rather than real functions.
+
 ## What is still not recovered
 
-- **Whether `GU_BLEND` is enabled when the additive branch runs.**
-  `Mesh_SetBatchDrawState` never calls `Gu_Enable`/`Gu_Disable(4)`
-  (`GU_BLEND`'s state index). The two `Gu_CallList` replays it does make,
-  selected by `*batch & 0x8000` against `mesh+0x70`'s `+0x48`/`+0x70` prebuilt
-  lists, are the most likely place blend-enable actually lives - not read this
-  pass. For the additive branch this matters (enabled means true `dst + src`
-  glow, disabled means the same overwrite as the replace branch); for the
-  replace branch it does not, since a zero destination factor and a disabled
-  stage look identical either way. The convergent match with `Trail`'s own
-  already-live-confirmed-enabled blend state is treated here as strong
-  circumstantial support (confidence 75, not higher) rather than a
-  substitute for reading the two lists.
+- ~~**Whether `GU_BLEND` is enabled when the additive branch runs.**~~ -
+  **closed 2026-08-08 at confidence 90: it is enabled.** The guess about where
+  to look was wrong in an instructive way, so both halves are recorded in the
+  new section below. `Mesh_SetBatchDrawState`'s two `Gu_CallList` replays are
+  **not** the home of blend state - they hold light directions - and the enable
+  lives in the transparent pass's own prologue, `Mesh_BeginTransparentPass`
+  (`0x0890d904`). The additive branch really composites `dst + src`.
 - **Whether the loader rewrites batch-header `+3` between disc and the draw
   path.** Not searched for. The stride-arithmetic match earlier on this page
   supports the *offsets* being read as-authored; it does not by itself rule
@@ -240,6 +451,26 @@ to settle blend-enable.
   `Batch::header_flags` is populated identically for PS2 batches (the header
   layout is shared - see that field's own doc comment) but no PS2 function has
   been read to confirm the same bit means the same thing there.
+- **Whether `shipboost.vex`'s model has `model+0x1a8` set.** It gates which
+  builder writes the `+0x48`/`+0x70` lists, and whether `SceneLight_Rebuild`
+  writes an accumulated light colour or a hard `0xffffffff` into the `+0xd0`
+  material list. `model+0x1a8` means "this model owns a component of the RTTI
+  token class at `FUN_08a6bfc0`", not traced to a `.vex` class name.
+- **The `Vex_LoadModel` list-B divergence.** *Fact, instruction level* at
+  `0x089134cc`-`0x08913538`: the second triple is emitted as `0x63`/`0x64`/`0x65`
+  + `0x5f000001` - light **0** again - rather than `0x66`/`0x67`/`0x68` +
+  `0x60000001`, with registers `a2`/`a3`/`t0` reused from the first triple.
+  `Vex_UpdateLightLists_q`'s twin emits the correct light-1 commands.
+  *Interpretation*: a copy-paste/register-reuse bug, so on that path light 1 is
+  never set and light 0 ends up holding `dir1`. **Confidence 95 on the emitted
+  words, 70 on "bug" as the reading** - do not collapse those two numbers.
+- **Whether `*batch & 0x8000` has any visible effect.** With lighting off the
+  A/B difference is only the `LIGHTTYPE` computation field, which PPSSPP's model
+  does not feed into env-map UV generation. Real-hardware behaviour unknown.
+  **This is a gap, not a no-op** - do not write it up as one.
+- **None of the 2026-08-08 GE read was verified live.** It is all static
+  decompilation. The one half that *was* measured against real data is the
+  vertex-type read, and that is a disc read rather than an emulator one.
 - **Whether `mesh_render::TRANSPARENT_BLEND` should change project-wide.**
   Already self-documented as unconfirmed in
   `crates/render/src/mesh_render.rs`; this page's measurement is evidence

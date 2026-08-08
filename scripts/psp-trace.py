@@ -46,6 +46,10 @@ from psp_trace_fields import (
     CAMERA_NODE_OFFSET,
     CAMERA_UPDATE_BREAK,
     CRAFT_FIELDS,
+    FLARE_FIELDS,
+    FLARE_OWNER,
+    FLARE_POINTER,
+    RACER_POINTER,
     SHIP_UPDATE_CRAFT,
 )
 
@@ -181,6 +185,20 @@ def main():
         "position like pos_*. See docs/ghidra/functions/psp-pulse-usa/camera.md.",
     )
     parser.add_argument(
+        "--flare",
+        action="store_true",
+        help="also record the craft's Engine Flare node per tick, as the "
+        "boost_timer / plume_timer / intensity / half_size columns. This is "
+        "what makes a boost comparison quantitative rather than eyeballed: "
+        "boost_timer pins the entry tick exactly (it steps to the 0.8 literal "
+        "ExhaustFlare_OnSpeedupPad stores) so a frame of ours can be posed at "
+        "the same boost age with --pose-boost, instead of the age being "
+        "inferred from where the craft looks like it crossed. The node is "
+        "reached by two pointer hops off the traced craft and the walk is "
+        "checked against the flare's own owner field; see "
+        "scripts/psp_trace_fields.py.",
+    )
+    parser.add_argument(
         "--shot-every",
         type=int,
         metavar="N",
@@ -297,7 +315,15 @@ def main():
         names = [name for name, _ in CRAFT_FIELDS] + [name for name, _ in BODY_FIELDS]
         if args.camera:
             names += [name for name, _ in CAMERA_FIELDS]
+        if args.flare:
+            names += [name for name, _ in FLARE_FIELDS]
         print("tick," + ",".join(names), file=out)
+
+        # Resolved once, on the first recorded tick, and reused: both hops are
+        # allocated with the craft and do not move for the life of a race, so
+        # re-walking them every tick would cost two extra reads a tick for a
+        # constant. `None` until then.
+        flare_node = None
 
         # A race updates every craft from the same function, so the breakpoint
         # fires once per ship per tick and only one of those hits is the ship
@@ -375,6 +401,36 @@ def main():
                     if name.startswith("cam_pos_")
                     else struct.unpack("<f", blob[at : at + 4])[0]
                     for name, at in CAMERA_FIELDS
+                ]
+            if args.flare:
+                if flare_node is None:
+                    racer = struct.unpack(
+                        "<I", craft_blob[RACER_POINTER : RACER_POINTER + 4]
+                    )[0]
+                    flare_node = dbg.read_u32(racer + FLARE_POINTER)
+                    owner = dbg.read_u32(flare_node + FLARE_OWNER)
+                    # The identity that makes the walk evidence rather than an
+                    # offset guess. Refusing here rather than recording a column
+                    # of garbage: a wrong pointer would still read as plausible
+                    # floats, and a boost comparison built on it would be worse
+                    # than no comparison at all.
+                    if owner != racer:
+                        print(
+                            "flare 0x%08x claims owner 0x%08x, not the 0x%08x "
+                            "craft+0x1c4 reached - the chain in "
+                            "psp_trace_fields.py no longer holds"
+                            % (flare_node, owner, racer),
+                            file=sys.stderr,
+                        )
+                        return 2
+                    print(
+                        "flare 0x%08x (craft 0x%08x -> 0x%08x -> +0x78)"
+                        % (flare_node, craft, racer),
+                        file=sys.stderr,
+                    )
+                blob = dbg.read(flare_node, 0x100)
+                values += [
+                    struct.unpack("<f", blob[at : at + 4])[0] for _, at in FLARE_FIELDS
                 ]
             print("%d,%s" % (tick, ",".join("%.7g" % v for v in values)), file=out)
 

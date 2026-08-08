@@ -115,3 +115,46 @@ CAMERA_FIELDS = [
     ("cam_fwd_x", 0x020), ("cam_fwd_y", 0x024), ("cam_fwd_z", 0x028),
     ("cam_pos_x", 0x030), ("cam_pos_y", 0x034), ("cam_pos_z", 0x038),
 ]
+
+# The craft's `Engine Flare` node, captured only under `psp-trace.py --flare`.
+# Two hops, both from docs/ghidra/functions/psp-pulse-usa/pads.md: the object
+# `Ship_ApplySpeedupPad` reaches through `craft+0x1c4` holds the flare at
+# `+0x78`, and `ExhaustFlare_OnSpeedupPad` (0x08904f10) stores its `0.8`
+# literal into `flare+0xb8`. The field offsets are exhaust.md's, off
+# `Exhaust_Update` (0x089058b0).
+#
+# **The two hops are verified by a pointer identity, not assumed**: the flare's
+# own owner field, `flare+0xc0`, reads back as exactly the pointer
+# `craft+0x1c4` held, so the walk lands on the object the flare itself claims
+# as its owner. Measured live 2026-08-08 on Talon's Junction, craft
+# `0x09a04170` -> `0x09a031b0` -> flare `0x09a2af50`, `flare+0xc0` =
+# `0x09a031b0`. Worth one note for a future reader: pads.md calls that middle
+# object the **racer** and exhaust.md calls it the **craft**, and this identity
+# says they are the same pointer under two names - it is *not* the craft that
+# `Ship_UpdateCraft` takes in `a0`, which is what `SHIP_UPDATE_CRAFT` above
+# breaks on and what `CRAFT_FIELDS` is indexed off.
+#
+# Corroboration that the offsets are right, from the same live read at rest:
+# `colour` came back `0xd7ffffff` - white with alpha `0xd7` = 215, inside
+# `Exhaust_Update`'s recovered `rand_int(200, 255)` - and `half_size` `1.0586`,
+# inside `(0 * 0.6 + 0.4) * 2.5 = 1.0` times its recovered `rand(0.75, 1.25)`
+# flicker. Two independently-derived formulas landing on two live values is
+# what makes this an address book rather than a guess.
+RACER_POINTER = 0x1C4
+FLARE_POINTER = 0x78
+FLARE_OWNER = 0xC0
+
+# `colour` is deliberately absent: it is a packed ABGR8888 word, not a float,
+# and the alpha is re-randomised every frame anyway, so a column of it would
+# record the flicker and nothing else. `half_size` already carries the other
+# half of the same randomisation.
+FLARE_FIELDS = [
+    ("boost_timer", 0x0B8),
+    ("plume_timer", 0x088),
+    ("intensity", 0x0BC),
+    ("half_size", 0x0C4),
+    ("engine_on", 0x094),
+    ("flare_speed_kmh", 0x08C),
+    ("speed_ramp", 0x090),
+    ("boost_accum", 0x060),
+]

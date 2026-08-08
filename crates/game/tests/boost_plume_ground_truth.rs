@@ -274,3 +274,124 @@ fn every_psp_teams_boost_plume_batches_are_additive_blend() {
         assert!(checked > 0, "{name}: decoded zero batches to check");
     }
 }
+
+/// Pins the plume's texture coordinates as **authored**, not as an artefact of
+/// how `vex::mesh_batches` reads them.
+///
+/// Each team's plume is four batches: two of 51 vertices and two of 9 or 10.
+/// The short pair decodes to a *single* texture coordinate - `u` `0.0078`, `v`
+/// `0.0312` on every one of their vertices - which reads exactly like a stride
+/// or vertex-format misread. It is not one. The texcoord field of all 9 (or 10)
+/// vertices is byte-identical in the file, the literal pair `01 04`, so no
+/// stride, scale or format change can turn it into a sweep; the layout it is
+/// read at is corroborated disc-wide by
+/// `crates/formats/tests/vex_batch_layout_ground_truth.rs`.
+///
+/// The part worth pinning is what that means on the actual texture, because it
+/// is **not** confined to the short batches. `pulse_boost2_ADD` is 64x16 and
+/// ramps left to right, white to black. Every batch of the plume, long pair
+/// included, carries `u <= 1/128` - texel column 0 - and column 0 is one flat
+/// colour down all sixteen rows, so the long batches' `v` sweep
+/// (`{4, 5, 114, 122} / 128`) lands on that same texel four times over. So the
+/// short batches are not the only ones the baked coordinates give no texture
+/// detail to; a stripe texture substituted for this one *does* band on the long
+/// pair, but only because a stripe varies along `v` where this one does not,
+/// which is what made the short batches look like the odd ones out.
+///
+/// **What this does not establish** is what the plume finally samples on
+/// screen. These are the *baked* coordinates; the GE applies `sceGuTexScale` and
+/// `sceGuTexOffset` after them, and the original demonstrably drives both for
+/// the runtime exhaust ribbon (`oag_render::exhaust`'s `LAYER_TEX_SCALE_U` and
+/// `LAYER_SCROLL_U`). Whether `shipboost.vex`'s own draw takes identity scale
+/// and zero offset - which would make the 64-wide ramp a no-op here - or slides
+/// the baked `u` along it, has not been read out of the PSP draw path. See
+/// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
+///
+/// If a future change to the decoder ever makes these coordinates sweep, this
+/// test fails and the finding above needs re-deriving rather than the constants
+/// here being widened.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_psp_teams_boost_plume_samples_one_texture_column() {
+    /// Largest `u` any plume vertex carries, as the raw `u8` the file stores.
+    /// `1 / 128` lands mid-texel in column 0 of a 64-wide texture.
+    const MAX_U: f32 = 1.0 / 128.0;
+
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives =
+        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+
+    for team in TEAMS {
+        let name = format!(r"Data\Ships\{team}\shipboost.vex");
+        let blob = archives
+            .read_name(&name)
+            .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+        let nodes = vex::nodes(&blob).expect("nodes");
+
+        let texture = vex::textures(&blob)
+            .expect("textures")
+            .into_iter()
+            .flatten()
+            .next()
+            .unwrap_or_else(|| panic!("{name}: no embedded texture"));
+        let width = usize::from(texture.width);
+        let rgba = texture.to_rgba();
+        let column: Vec<_> = (0..usize::from(texture.height))
+            .map(|y| &rgba[y * width * 4..y * width * 4 + 4])
+            .collect();
+        assert!(
+            column.iter().all(|c| *c == column[0]),
+            "{name}: texel column 0 of the {}x{} texture is not one flat colour \
+             ({:?}), so the plume's v sweep does reach texture content and this \
+             test's premise is wrong",
+            texture.width,
+            texture.height,
+            column,
+        );
+
+        let mut short_batches = 0usize;
+        let mut batches = 0usize;
+        for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+            let payload = &blob[node.payload()];
+            for list in 0..2u8 {
+                for batch in vex::mesh_batches(payload, list).expect("batches") {
+                    batches += 1;
+                    let uvs: Vec<[f32; 2]> =
+                        batch.vertices.iter().filter_map(|v| v.texcoord).collect();
+                    assert_eq!(
+                        uvs.len(),
+                        batch.vertices.len(),
+                        "{name}: a batch decodes without texture coordinates"
+                    );
+                    let worst = uvs.iter().map(|t| t[0]).fold(0.0f32, f32::max);
+                    assert!(
+                        worst <= MAX_U,
+                        "{name}: a batch reaches u {worst}, past column 0 of the \
+                         texture - the plume now samples texture content and the \
+                         finding this test pins has changed"
+                    );
+                    if batch.vertices.len() < 20 {
+                        short_batches += 1;
+                        assert!(
+                            uvs.iter().all(|t| *t == uvs[0]),
+                            "{name}: a {}-vertex batch carries more than one \
+                             texture coordinate ({uvs:?}); the single authored \
+                             point this test pins is gone",
+                            batch.vertices.len()
+                        );
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            batches, 4,
+            "{name}: {batches} batch(es), not the plume's four"
+        );
+        assert_eq!(
+            short_batches, 2,
+            "{name}: {short_batches} short batch(es), not the plume's two"
+        );
+    }
+}

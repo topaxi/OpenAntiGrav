@@ -379,6 +379,8 @@ pub fn run(
                 // The front-end capture path never poses a ship, so there is
                 // nothing for a forced boost state to be aged relative to.
                 pose_boost: None,
+                pose_intensity: None,
+                pose_speed: None,
                 presented: options.presented.then_some(race::Presented {
                     render_scale: options.settings.graphics.render_scale,
                     presentation: crate::upscale::Presentation {

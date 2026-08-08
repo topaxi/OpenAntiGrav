@@ -1166,6 +1166,296 @@ decoding with exactly two meshes, a resolved texture and all four batches
 landing in the transparent-draw list `exhaust::BLEND` needs to reach, and the
 three *confirmed* PS2-only teams having no PSP entry to find.
 
+## The boost, measured against a real crossing end to end
+
+2026-08-08. The first pad capture that carries the flare's **own state per
+tick** rather than an inferred boost age, taken on Talon's Junction pad 0 with
+`psp-drive.py place` onto the pad's own axis and
+`psp-trace.py --camera --flare --shot-every 2`, 150 ticks across the approach,
+the boost and the plume's whole life. `--flare` is new and walks
+`craft+0x1c4 -> +0x78`, checked against the flare's own `+0xc0` owner field
+(see `scripts/psp_trace_fields.py`).
+
+**Four recovered values are now confirmed on live data, not just read:**
+
+| Claim | Recovered | Measured |
+| --- | --- | --- |
+| the flare timer is a `0.8` code literal | `0.8` | max `boost_timer` `0.783316` = `0.8 - dt` exactly |
+| it decays by `dt` per tick in `Exhaust_UpdateEngineSound` | `-dt` | `0.7666 -> 0.7166` over 3 ticks = `3 x 0.016667` |
+| the plume runs a separate 1.5 s timer, zeroed at the reveal | `1.5`, zeroed | `0.017` on the reveal tick, hidden once past `1.502` |
+| `half_size = (i * 0.6 + 0.4) * 2.5 + boost_timer * 8.0` | - | `7.351` against `7.333` x flicker at `i = 0.1334`, `boost_timer = 0.7666` |
+
+The flare's colour word read `0xd7ffffff` at rest - white, alpha `0xd7` = 215,
+inside the recovered `rand_int(200, 255)`. **The trail's non-reaction is
+confirmed too**: nothing in the ribbon moves on the entry tick.
+
+One thing a teleported capture gets wrong if it is not watched: **the intensity
+ramp is nowhere near saturated.** It climbs at `0.25`/s from wherever the
+craft's idle time left it, and this capture entered the pad at `0.1292`, not
+`1.0`. That is not cosmetic - intensity sets the flare's resting half-size
+(`1.2` here against a saturated `2.5`) and all three ribbon layer alphas - so
+`oag-game` grew `--pose-intensity` and `--pose-speed` to pose a frame at a
+captured row's *measured* exhaust state rather than a saturated one.
+
+### The craft is measurably too big, and the `0.75` is deliberately NOT applied
+
+**This is a large part of why the boost reads weak, and it is not an exhaust bug
+at all.** [`CRAFT_ROW_SCALE`](../../../../crates/render/src/exhaust.rs) has
+recorded since the trail-direction read that the original's craft world matrix
+carries a global `0.75` (`200000.0` times row 2, live `150,080`). The rigid
+body's own rows are orthonormal - the capture harness measures them unit-length
+over 200 ticks - so the scale belongs to the **render** matrix, and
+`oag_game::race::Race::ship_model_matrix` builds rotation and translation only.
+
+**It was applied on 2026-08-08 and then deliberately reverted**; the reasoning
+is on that function's own doc comment and is summarised below. Treat the
+discrepancy as measured and open, not as fixed.
+
+Caught by putting a real emulator frame beside ours from the original's own
+recorded camera, 11.6 units back: the wingtip lamps span **172 px** in the
+original against **268 px** in ours while the track and the buildings behind
+them aligned. A field of view cannot do that - it scales the background too.
+
+**The residual is 19 %, not 9 %, and it is not explained.** A lamp *span* is
+glow-sensitive, so it was re-measured on the two lamps' **centroids**, which
+bloom far less: separation `108.8 px` in the original against `189.3 px` in ours
+at scale `1.0` (ratio `1.740`) and `129.6 px` at `0.75` (ratio `1.191`). So the
+`0.75` is a large, correctly-signed improvement and demonstrably not the whole
+story - a pure `0.75` would land the ratio near `1.00`, and the factor the
+centroid measurement actually wants is nearer `0.575`, which is not a constant
+this project has recovered anywhere. **Not applied**, and the reason sharpened on the same day: **this metric cannot
+tell one candidate factor from another.** Measured lamp-centroid ratios at three
+scales - `1.0` -> `1.740`, `0.75` -> `1.191`, `0.5625` -> `1.067` - are **not
+linear in the scale they are measuring**. A linear metric would put `0.75` at
+`1.740 * 0.75 = 1.305` and `0.5625` at `0.979`; it reads `1.191` and `1.067`
+instead. So a glowing lamp's centroid moves with its own brightness and with
+which pixels clear the detection threshold, and the number it produces is good
+enough to establish **"our craft is too big"** and nothing finer. Any factor
+picked to make it read `1.000` would be fitted to an instrument, which is the
+kind of constant this project retires rather than adds (see
+`HALF_SIZE_TO_WORLD` and the deleted `FLARE_ASPECT`).
+
+**A second `0.75` is the live hypothesis, and it is arithmetic rather than a
+reading.** `1 / 0.75^2 = 1.7778` sits 2.2 % from the measured `1.740`, and
+`g_craft_scale` (`0x08ab0e1c`, a code literal `0.75` written once in
+`Craft_Construct_q`) is confirmed read by the hover probe corners, the `<Misc>`
+hull dimensions into the collider, the initial body height and both camera rigs
+- see [camera.md](camera.md). If the original also scales the drawn mesh by it,
+the craft is scaled twice where this project scales it never. **The second site
+was searched for and not found**; `Ship_LoadModel` and `FUN_0884dab4` are the
+two unopened calls in `Craft_Construct_q` that could set a node scale. Until one
+of them is read, or a non-emissive silhouette measurement replaces the lamp
+centroids, the factor is not established. More practically: the chase camera is separately known
+not to frame the craft the way the original's does and is being worked on, and a
+half-correct ship scale sitting in the tree while that happens is how a camera
+distance gets fitted to cancel a model error. One wrong constant is easier to
+find than two that cancel.
+What the remaining 19 % is stays open: candidates not separated here are a
+second scale on the render node, a camera the recorded pose does not fully
+describe, and this measurement's own perspective sensitivity (the two frames put
+the craft at slightly different distances).
+
+**Two consequences to be aware of whenever this is picked up again.** First, the
+scale would reach **every frame of every race**, not just a boost -
+`ship_model_matrix` also composes the `engine_flare` locator through
+`Race::nozzle`, so the flare's centre and the trail's origin move with the hull.
+Second, and this is the trap: the flare's *position* would scale while its *size*
+must not. That is not an
+oversight to tidy up - `half_size` is in view units under a rigid
+world-to-view matrix with GE matrices 1 and 2 set to identity
+(`HALF_SIZE_TO_WORLD` is `1.0`, from the live read at `ExhaustFlare_Draw`), so
+the craft's model scale has no path to it. A future reader who "fixes" that
+asymmetry will reintroduce a fitted constant.
+
+Applying it would make the craft 25 % smaller in ordinary play, and whether that
+reads *better* depends on the chase camera. Measured, from the same capture, as
+the figure that camera work should be checked against:
+the original's eye sits a near-constant **11.6 units** from the craft (11.65,
+11.64, 11.64, 11.60 at ticks 34/54/78/120, over speeds from 94 to 153 units/s),
+with 9.5-10.9 of that along its own forward axis.
+
+The consequence for this page: the flare and the plume are sized in world units
+and were right, but the hull they sit behind was `1.33x` too big, so the
+flare-to-hull ratio came out a quarter small and from that camera the craft's
+tail and most of its exhaust fell off the bottom of the frame. **The fit behind
+`HALF_SIZE_TO_WORLD` was contaminated by this** - it was settled on
+"reproduces the original's flare-to-hull ratio" while the hull was oversized.
+The constant itself does not move, because it is recovered rather than fitted
+(`1.0`, from the live matrix read at `ExhaustFlare_Draw` above); but that
+particular corroboration for it must not be cited again.
+
+### The plume's vertex alpha: the question was wrong, and the bug was ours
+
+The three-pass-old question was "how does the authored vertex alpha reach the
+picture, given a blend that cannot read it". **The premise held and the
+arithmetic on our side was simply wrong.**
+
+`race.rs` premultiplied the authored alpha into the vertex RGB **at the
+vertices**, then let the rasteriser interpolate. That is not the same operation
+as interpolating and then multiplying, and for this model the difference is the
+entire visual: the rim is `(255, 98, 5)` at alpha `0`, so premultiplying maps it
+to `(0, 0, 0)` and what crosses each fin is **black to white**. The authored
+orange exists nowhere on it. Weighted per *fragment* instead, colour
+interpolates orange-to-white while alpha interpolates `0`-to-`1` and the two
+meet at the fragment, which leaves a dimmed orange fringe fading out - the
+original's own feathered edge.
+
+Measured on the capture above at boost age `0.367` s, matched camera and matched
+entry intensity, over the magenta signature `r > 110, b > 110, r - g > 25,
+b - g > 20` in one crop around the craft:
+
+**The whole lower half of the frame**, which is the figure that describes what
+actually ships, because it depends on no crop chosen per build:
+
+| build | pixels | mean colour | `b - r` |
+| --- | ---: | --- | ---: |
+| **the original** | **9,217** | **`(223, 164, 224)`** | **+1** |
+| premultiplied per vertex, `TRAIL_BLEND` (the old arithmetic) | 493 | `(180, 141, 228)` | +48 |
+| raw alpha, `BLEND` (shipped) | **1,993** | **`(159, 118, 175)`** | **+16** |
+
+Extent **4x** better and the red/blue balance three times closer to neutral -
+the original's magenta has `r` and `b` within one unit of each other, ours went
+from 48 apart to 16. Still only 22 % of the original's extent, and dimmer
+overall; the section below on what does not match says why.
+
+A second set of numbers, from a crop centred on the craft **and with the
+craft-scale experiment applied**, is worth keeping only because it isolates the
+arithmetic from everything else:
+
+| build (cropped, craft scale `0.75`) | pixels | mean colour |
+| --- | ---: | --- |
+| the original | 55,731 | `(224, 166, 227)` |
+| premultiplied per vertex, `TRAIL_BLEND` | 2,034 | `(151, 93, 212)` |
+| raw alpha, `TRAIL_BLEND` | 7,582 | `(222, 168, 230)` |
+| raw alpha, `BLEND` | 39,549 | `(203, 162, 219)` |
+
+With the hull at the right size and the crop on the plume, raw-plus-`BLEND`
+reaches 71 % of the original's extent at a hue within a few units. **That is
+not the shipped configuration** - the craft scale was reverted, see below - so
+it measures the blend change with the scale confound removed rather than what a
+player sees. Both tables agree on the ordering, which is the point: the
+premultiplied build is blue-dominant and far short on extent, raw alpha alone
+recovers the hue but draws hard-edged solid wedges (the 2026-08-07 and
+2026-08-08 results reproduced exactly), and the per-fragment weight is what
+supplies the falloff those wedges were missing.
+
+**But per-fragment alpha weighting is almost certainly not what the hardware
+does, and the real mechanism was found the same day - by reading the GE state,
+not the blend.** See [mesh-draw.md](mesh-draw.md) for the full decode; the three
+results that bear on this page:
+
+- **`GU_ALPHA_TEST` is disabled** for the transparent mesh pass, with
+  `sceGuAlphaFunc` programmed `ALWAYS` / ref `0` / mask `0xff`
+  (`Mesh_BeginTransparentPass`, `0x0890d904`). The inherited-alpha-test
+  hypothesis for the rim is dead. Confidence 90.
+- **`GU_BLEND` *is* enabled** for that pass, which closes `mesh-draw.md`'s own
+  standing open question: the additive branch really composites `dst + src`.
+  Confidence 90.
+- **Nothing in the pass scales fragment RGB** except vertex colour x texture
+  (`MODULATE`, colour-double off) x the blend. No fog, no colour test, no
+  texenv colour, no emissive; lighting is *disabled* for transparent batches,
+  so the ribbon's lit-colour path does not apply here. Confidence 85. That is a
+  hard negative for "something scales the rim down without discarding its hue"
+  being GE state at all.
+
+**What supplies the falloff instead is the texture, reached through generated
+coordinates.** The transparent pass sets `TEXMAPMODE` uvgen `2` -
+**environment (shade) mapping** from the vertex normal and lights 0/1 - and
+nothing inside the batch loop re-emits `0xc0` to undo it (the whole binary has
+only two `0xc0` emitters, neither reachable there). So a transparent batch's
+texture coordinates are *generated*, and `pulse_boost2_ADD`'s own
+bright-to-dark streak gradient is what varies across the fin. Confidence 82;
+the uvgen enum values come from pspgu/PPSSPP rather than from `BOOT.BIN`, which
+is what holds it below 90.
+
+**This also retires two of this page's own refutations, and explains the
+authored data.** The plume's degenerate `u` is real and it is *unused*: the
+batches declare 8-bit texcoords, which the GE decodes as `value / 128`, and the
+authored bytes are `u = 1`, `v = 4` - exactly the `0.008` and `0.031` that were
+recorded here as a suspected decode bug. **The decode was correct all along.**
+And the two experiments this page cited as refutations - `u` scaled by 128, and
+`u`/`v` swapped, both "changing the picture not at all" - were manipulating
+coordinates the original never reads, so their conclusion stands but their
+reasoning does not.
+
+The decisive check: every one of the **32** `shipboost.vex` batches across all
+eight PSP teams reads `vtype = 0x013d` - `tex=u8, col=8888, nrm=s8, pos=s16,
+through=0`. Normals are present on every batch and none is in through mode, so
+environment mapping has real normals to vary with.
+
+`batch+0x0a` is the GE vertex-type word at confidence 88, from two independent
+uses in the binary: `FUN_0892e8f0` emits it as GE command `0x12` and
+`FUN_0890d3ac` tests its `& 0x60` (normal format) and `& 0x1c` (colour format).
+**And the reading is now pinned disc-wide rather than on this one model**, by
+`crates/formats/tests/vex_batch_layout_ground_truth.rs`: every batch's declared
+payload size is reproduced by `count * stride` with the stride derived from the
+vertex type alone, across eleven different strides, and `GU_TEXTURE_16BIT` never
+appears anywhere on the disc - which is what rules out the competing reading of
+a `0x013d` vertex as carrying two `u16` texcoords instead of one `u8` pair. Run
+it with
+
+```sh
+OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
+    -E 'binary(vex_batch_layout_ground_truth)'
+```
+
+That is also what settles the `u8` decode behind the `0.008`/`0.031` above:
+`u = 1` and `v = 4` over the GE's `/ 128`.
+
+**So what ships is an empirical approximation, labelled as one.** `SrcAlpha`
+reproduces a measured observable with arithmetic that is at least correct for
+*some* per-fragment weighting, where the per-vertex premultiply was correct for
+none. Environment-mapped UV generation is **not** implemented, deliberately: it
+would change every transparent batch on every track and ship, and this repo
+already carries a rejected project-wide blend flip
+([mesh-draw.md](mesh-draw.md)) as the precedent for not doing that off one
+pass's finding. It is the highest-value next step for this subsystem.
+
+### What still does not match
+
+Recorded rather than fixed, so the next pass starts from the measurement:
+
+- **The plume is 71 % of the original's extent, not 100 %**, and its two fins
+  stay closer to the wing roots where the original's reach further back and
+  further outboard.
+- **Ours blows out whiter in the core.** Near-white pixel counts are already
+  comparable at 96,152 (theirs) against 102,829 (ours, premultiplied build) in
+  the same crop, so ours is not short of brightness - it is short of *shape*.
+
+  **And the shape it is short of is a bloom, measured.** Mean luminance in
+  20-pixel annuli around each frame's own brightest exhaust pixel, same
+  matched-pose frame:
+
+  | radius (px) | 0-19 | 20-39 | 40-59 | 60-79 | 80-99 | 100-119 | 120-139 | 140-159 |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | the original | 158 | 144 | 154 | 156 | 151 | 130 | 118 | 118 |
+  | ours | **201** | 165 | 153 | 148 | 143 | 130 | 109 | **92** |
+
+  The original holds a **flat shoulder near 150 out to about 100 px** and only
+  then falls away; ours is sharply peaked - 28 % brighter at the core and 28 %
+  darker at the outer edge - and falls monotonically. That is the bright-pass
+  signature: the same energy spread wide against the same energy concentrated.
+  It is [`roadmap.md`](../../../overview/roadmap.md)'s unchecked M6 item "bloom
+  and the bright-pass on the exhaust and lights", and this is the first
+  measurement that shows it is load-bearing for the boost specifically rather
+  than for scene brightness in general. Part of the original's shoulder is the
+  pad's own blown-out track surface, so treat the numbers as the shape of the
+  difference rather than as a bloom radius to fit. Note the PSP has **no
+  programmable shaders at all** - whatever the original does here is
+  fixed-function GE work or a framebuffer pass, so "find the shader" is the
+  wrong search; the roadmap's sibling item, motion blur / speed streaking, is
+  visible in these same frames and is the other half of the look.
+- **The original's field of view is wider during a boost**, reproduced
+  independently here. Per the Open list below this is **not** a porting
+  target and no constant in `display.rs` moves for it.
+- **A 19 % ship-scale residual survives the `0.75`**, measured above, and until
+  it is explained every absolute size on this page is a comparison of ratios
+  rather than of pixels.
+- **The original offers several cycleable race perspectives and this project has
+  one.** Worth having in its own right, but note it does **not** explain the size
+  gap above - that was the model scale, and a camera preset would have moved the
+  background with the craft, which it did not.
+
 ## Open
 
 - **`engine_fire` (`0x3e5`) and `exitglow` (`0x3e4`) have no registration call
@@ -1226,10 +1516,22 @@ three *confirmed* PS2-only teams having no PSP entry to find.
   writeup is worth having - it settles the fov *unit* and the hardcoded
   `480.0/272.0` aspect at instruction level, which the projection does depend
   on - but nothing downstream of it is owed a port.
-- **How the plume's authored vertex alpha reaches the picture.** Sharpened
-  2026-08-08 and still open; see the new section below. The blend really is
-  `Gu_BlendFunc(0, 10, 10, 0xffffff, 0xffffff)` and it is programmed *after*
-  the material's own display list, so no GE path recovered so far can weight
-  by alpha - and the authored alpha turns out to be two values, not a fade.
+- ~~**How the plume's authored vertex alpha reaches the picture.**~~ -
+  **closed 2026-08-08, and the answer is that it does not.** `GU_ALPHA_TEST` is
+  disabled, `GU_BLEND` is enabled with `GU_FIX` white on both sides, and nothing
+  in the transparent pass scales fragment RGB but vertex colour x texture x the
+  blend. The falloff comes from the *texture*, sampled through
+  environment-generated coordinates. See the section above and
+  [mesh-draw.md](mesh-draw.md). What replaces it as the open item is narrower and
+  is a **rendering** gap rather than an RE one: **environment-mapped UV
+  generation for the transparent pass is not implemented**, and until it is, the
+  plume's `SrcAlpha` blend is an approximation standing in for it.
+- **Superseded phrasing kept for one revision**, because two passes cited it:
+  the old question assumed some GE path weighted a mesh batch by source alpha. None does. And the two prebuilt
+  lists at `mesh+0x70` `+0x48`/`+0x70` are now read: they hold **light 0 and
+  light 1 directions plus `LIGHTTYPE`**, nine words each, and `*batch & 0x8000`
+  selects only the light computation field. They were the last candidate for a
+  hidden alpha path and they are not one - they are what environment-mapped UV
+  generation reads.
 - ~~What stretches the flare wide~~ - **closed 2026-08-08: nothing does.**
   See `ExhaustFlare_Draw` above.

@@ -288,6 +288,130 @@ question, same failure `mesh_render.rs:186-201` measured for the viewer).
 Whichever space is made authoritative, `exhaust.rs`'s raw upload and
 `mesh_render.rs`'s sRGB upload cannot both stay.
 
+## The boost, compared against a real capture (2026-08-08, second pass)
+
+The first pass that had **an emulator frame of a real pad crossing beside one of
+ours at the same pose**. Two renderer bugs fixed, the plume's alpha question
+closed after four passes, and two "decode bugs" shown not to be bugs. Full
+evidence on [`exhaust.md`](docs/ghidra/functions/psp-pulse-usa/exhaust.md) and
+[`mesh-draw.md`](docs/ghidra/functions/psp-pulse-usa/mesh-draw.md); what belongs
+here is the method and the traps.
+
+**The capture recipe that works, and why the old reference was useless.**
+`data/shots/boost-visuals/original-boost-0.5.png` is 1280x720 and measures
+`mean = 0, max = 0` - a solid black frame, the off-canvas Xvfb trap this file
+already documents, and it had been sitting there as the only original-side
+reference. **Never cite a screenshot without measuring it first**
+(`magick f.png -format "%[fx:mean*255]" info:` costs nothing). What removes the
+trap structurally rather than working around it:
+
+```sh
+Xvfb :97 -screen 0 960x544x24 &                 # exactly 2x PSP, aspect-exact
+DISPLAY=:97 SDL_VIDEODRIVER=x11 setsid PPSSPPSDL --appendconfig=/tmp/debugger.ini \
+    --fullscreen --xres 960 --yres 544 data/cache/pulse-psp-usa.iso &
+export OAG_SHOT_DISPLAY=:97                     # REQUIRED, see below
+```
+
+Fullscreen on a canvas the game's own aspect means `import -window root` *is*
+the game window - no positioning, no cropping, and `frame-compare`'s `480x272!`
+resize stays aspect-exact. **`OAG_SHOT_DISPLAY` is not optional**: without it
+`niri_shot.find_window()` looks for a niri window, does not find PPSSPP on
+`:97`, returns `None`, and `psp-trace.py` `parser.error`s out before capturing
+anything.
+
+**Placing a craft on a pad: two failure modes, both silent.** `just pads`'
+`--before N` approach points are on the **course ring**, and a pad can sit ~8
+units to the side of it (pad 0 on Talon's Junction does), so an on-ring approach
+drives *past* the pad. Walk back along the **pad's own push axis** instead
+(`centre - dir * N`, height from the ring point) and the crossing is head-on.
+Separately, `--settle 8` is not enough: the hover shoves a freshly-placed craft
+several units up and it flies over the plate with `grounded = 0` for the whole
+run. `--settle 30` at 110 units/s settles it. **Check `grounded` and
+`boost_timer` in the capture before believing it** - the first two attempts
+produced 140 clean-looking rows with `max boost_timer = 0.0`.
+
+**`psp-trace.py --flare` is new** and records the craft's `Engine Flare` per
+tick - `boost_timer`, `plume_timer`, `intensity`, `half_size`. It walks
+`craft+0x1c4 -> +0x78` and **refuses to record unless the flare's own `+0xc0`
+owner field reads back as the pointer it walked through**, because a wrong
+pointer still yields plausible floats. That column set is what makes a boost
+comparison quantitative: it confirmed `BOOST_SECONDS` (`max = 0.783316` =
+`0.8 - dt`), the `dt` decay, the plume's 1.5 s timer zeroed at the reveal, and
+the half-size law to four digits.
+
+**`--pose-intensity` and `--pose-speed` are new, and a posed frame was lying
+before them.** `force_boost_state` saturated the intensity ramp; a teleported
+capture enters a pad at `0.1292`, because the ramp climbs at only `0.25`/s.
+Intensity sets the flare's resting half-size and all three ribbon layer alphas,
+so a saturated render against an unsaturated capture differs in **state** before
+it differs in anything a renderer does. Posed frames also had **no trail at
+all** - the ring needs ten pushed samples and `--ticks 0` pushes none - so the
+element carrying most of the exhaust's colour was simply absent from every
+comparison taken before this pass.
+
+**The two fixes.** The plume's authored alpha was premultiplied into the vertex
+RGB *at the vertices*; premultiplying then interpolating is not interpolating
+then multiplying, and since the rim is `(255, 98, 5)` at alpha `0`, it mapped to
+black and the authored orange existed nowhere on the fin. Weighting per fragment
+(`exhaust::BLEND`, `SrcAlpha`) fixes it: magenta extent 4x, red/blue balance from
+48 apart to 16 against the original's 1.
+
+**Two "decode bugs" that were not bugs.** The plume's single-texel UVs are
+authored and *unused* - the transparent pass generates coordinates by
+environment mapping - and `u8` texcoords over the GE's `/128` give exactly the
+`0.008`/`0.031` that read like a stride error.
+`crates/formats/tests/vex_batch_layout_ground_truth.rs` now pins the layout
+disc-wide.
+
+### The craft is drawn too big, and the factor is not established
+
+**Do not reapply `CRAFT_ROW_SCALE` to `ship_model_matrix` on the strength of the
+measurement alone** - it was tried this pass and reverted deliberately; that
+function's doc comment says so at length.
+
+What is solid: from the original's own recorded camera, with the track and
+buildings behind aligning, the wingtip lamp centroids sit `108.8 px` apart in the
+original and `189.3 px` in ours. Our craft is too big.
+
+What is **not** solid is the factor, and the reason is worth keeping because it
+is a lesson about the instrument rather than about the game. Measured ratios at
+three scales - `1.0` -> `1.740`, `0.75` -> `1.191`, `0.5625` -> `1.067` - are
+**not linear in the scale being measured** (linear would give `1.305` and
+`0.979`). A glowing lamp's centroid moves with its own brightness and with which
+pixels clear the threshold. **The metric establishes "too big" and nothing
+finer**; any factor chosen to make it read `1.000` is fitted to the instrument.
+A non-emissive silhouette measurement is what would replace it.
+
+`1 / 0.75^2 = 1.7778` sits 2.2 % from `1.740` and `g_craft_scale`
+(`0x08ab0e1c`) is confirmed read by four other consumers, so "the original
+scales the mesh twice and we scale it never" is the live hypothesis - but the
+second site was searched for and **not found**. See
+[`camera.md`](docs/ghidra/functions/psp-pulse-usa/camera.md).
+
+### Still not matched, each with its measurement
+
+- **Bloom.** Mean luminance in rings out from the exhaust core: the original
+  holds a flat shoulder near `150` out to ~100 px and then falls; ours peaks at
+  `201` and falls monotonically to `92`. Same energy, spread against
+  concentrated - the bright-pass signature, and `roadmap.md`'s unchecked M6
+  item. **The PSP has no programmable shaders at all**, so "find the shader" is
+  the wrong search.
+- **Environment-mapped UV generation** for the transparent pass. The recovered
+  mechanism for the plume's falloff, deliberately unported: it would change
+  every transparent batch on every track and ship, the same blast radius
+  `mesh-draw.md` already refused for `TRANSPARENT_BLEND`.
+- **`<Special speedpad_jump>` is recovered and still unimplemented, and it is
+  not a jump.** `craft+0x160` is the **hull up axis** (live dot `+1.000000`
+  against `body+0x010`, `0.000000` against the other two) and the gating
+  `controls->0x24 & 1` is **D-pad Up**, from a one-hot sweep of all twelve
+  buttons against `*(craft+0x78)+0x24`. At the live `0.1` that is a **5.71
+  degree** tilt of the boost direction and **0.5 %** more force, for at most the
+  class `time` - `0.27/0.27/0.27/0.24 s`, also read live, which independently
+  confirms the flare's `0.8 s` outliving every one of them. A hover spring
+  absorbs most of it, which is why no jump is visible in the original. Both
+  "unidentified bit" entries can come off the docs; the effect itself is
+  arguably not worth the determinism-reference churn.
+
 ## The three boost-visual opens, worked through (2026-08-08)
 
 **One is closed, one is recovered, one is sharpened.** Target of record for

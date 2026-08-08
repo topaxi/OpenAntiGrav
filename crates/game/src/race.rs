@@ -762,76 +762,58 @@ pub fn load(options: &Options) -> Result<Loaded> {
                     "{boost_name}: {} triangle(s) - drawn additively while the plume is up",
                     model.indices.len() / 3
                 ));
-                // The plume's own batches take `Mesh_SetBatchDrawState`'s
-                // pure-additive branch (`is_additive_blend()`, confidence 75
-                // for this model specifically - see
-                // `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`), the same
-                // `dst + src` equation `exhaust::TRAIL_BLEND` already encodes
-                // for the ribbon. That blend reads no alpha, and **there is no
-                // other path for alpha either**: the literal call is
-                // `Gu_BlendFunc(0, 10, 10, 0xffffff, 0xffffff)` and it runs
-                // *after* the material's own display list, so nothing can
-                // override it.
+                // **The authored vertex alpha is left alone here, and the
+                // blend at the draw site weights by it per fragment.** This
+                // used to premultiply alpha into the RGB, and that was a real
+                // bug rather than a compensation: premultiplying at a vertex
+                // and then letting the rasteriser interpolate is not the same
+                // arithmetic as interpolating and then multiplying, and for
+                // this model the difference is the whole visual.
                 //
-                // So the premultiply below is a **compensation with no
-                // recovered mechanism**, kept because removing it was tried
-                // twice and looks worse both times. What the authored data
-                // actually holds, measured 2026-08-08 on every batch of every
-                // PSP team's `shipboost.vex`, sharpens the open question a
-                // long way past "the alpha fades":
+                // What the authored data holds, measured on every batch of
+                // every PSP team's `shipboost.vex` and pinned by
+                // `boost_plume_ground_truth.rs`, is why:
                 //
                 // - the vertex colours are exactly **two** values,
                 //   `(255, 98, 5, 0)` on the rim and `(255, 255, 255, 255)` in
                 //   the core, 29 and 22 of a 51-vertex batch, nothing between;
                 // - `pulse_boost2_ADD` is 64x16 with a **constant alpha of
-                //   238**, so the texture supplies no alpha gradient either.
+                //   238**, so the texture supplies no gradient either.
                 //
-                // Both failure modes are therefore explained by that one
-                // split. Premultiplied, the orange rim maps to black and the
-                // plume reads white and un-orange, which is the reported
-                // symptom. Raw (rebuilt and screenshotted 2026-08-08,
-                // `data/shots/boost-visuals/after-boost-0.5.png`), the rim
-                // draws at full orange and the fins are hard-edged solid
-                // orange wedges - reproducing the 2026-08-07 result exactly.
-                // The truth sits between the two, so something scales the rim
-                // down without discarding its hue, and the fixed-factor blend
-                // is not it.
+                // Premultiplied per vertex, the rim becomes `(0, 0, 0)` and
+                // what crosses the fin is black-to-white: **the authored
+                // orange exists nowhere on it**, which is exactly the
+                // "reads white and un-orange" symptom. Weighted per fragment,
+                // colour interpolates orange-to-white while alpha
+                // interpolates `0`-to-`1` and the two meet at the fragment,
+                // leaving a dimmed orange fringe that fades out - the
+                // original's own feathered edge.
                 //
-                // One suspect was raised and then **refuted** on 2026-08-08,
-                // recorded so nobody spends the same afternoon: the plume's
-                // authored `u` never leaves the first texel (measured
-                // `[0.000, 0.008]` against a `v` of `[0.031, 0.953]`, i.e. one
-                // step of an 8-bit texcoord on a 64x16 texture), so it samples
-                // one column of `pulse_boost2_ADD` and never sees the streak
-                // gradient at all. That looked like the missing modulation,
-                // and `Mesh_SetBatchDrawState`'s caller does apply a
-                // per-material `Gu_TexScale`/`Gu_TexOffset` for exactly this
-                // material's flags (`0x212 & 0x10`, through `FUN_089271cc`).
-                // But rendering the plume with `u` scaled by 128 and again
-                // with `u`/`v` swapped changes the picture **not at all** -
-                // the fins stay solid orange wedges either way. So where the
-                // plume samples its texture is not what is wrong, and the
-                // per-material texture transform is a real unported feature
-                // rather than this bug's cause.
+                // Measured against the first matched-pose pad capture, over
+                // the magenta signature in a crop around the craft: the
+                // original reads `(224, 166, 227)`, the premultiplied build
+                // `(151, 93, 212)` - blue-dominant, hue lost - and the raw
+                // build `(222, 168, 230)`, within three units per channel on
+                // all three. See the draw site in `Scene::new` for the full
+                // table and for what remains unrecovered: the GE's own route
+                // for this alpha, since `Mesh_SetBatchDrawState` programs
+                // `GU_FIX` white on both sides *after* the material's own
+                // display list.
                 //
-                // Nor is the texture dropped or mis-bound, which was the next
-                // guess: replacing it with hard horizontal stripes puts
-                // **visible bands on the two trailing streaks** and leaves
-                // the wedges flat, so the sampler, the bind and the draw's
-                // texture index are all correct for at least half the model.
-                // What that test did expose is the wedges' own UVs: the two
-                // short batches (9 and 10 vertices) decode to a **single
-                // point** - `u [0.008, 0.008]`, `v [0.031, 0.031]` - so those
-                // draws sample one texel by construction and no texture
-                // content can reach them. Whether that is our decode or the
-                // authored data is open; the 51-vertex batches carry a real
-                // `v` sweep and do band.
-                for v in &mut model.vertices {
-                    v.colour[0] *= v.colour[3];
-                    v.colour[1] *= v.colour[3];
-                    v.colour[2] *= v.colour[3];
-                    v.colour[3] = 1.0;
-                }
+                // Two suspects were raised and **refuted** earlier, recorded
+                // so nobody spends the same afternoon on them. The plume's
+                // authored `u` never leaves the first texel (`[0.000, 0.008]`
+                // against a `v` of `[0.031, 0.953]`), so it samples one column
+                // of `pulse_boost2_ADD`; rendering with `u` scaled by 128, and
+                // again with `u`/`v` swapped, changed the picture not at all.
+                // And the texture is neither dropped nor mis-bound: replacing
+                // it with hard horizontal stripes banded the two trailing
+                // streaks while leaving the wedges flat. What that second test
+                // did expose is still open - the two short batches (9 and 10
+                // vertices) decode to a **single** UV point, `u [0.008,
+                // 0.008]`, `v [0.031, 0.031]`, so no texture content can reach
+                // them whatever the scale, while the 51-vertex batches carry a
+                // real `v` sweep and do band.
                 // The GE blends raw framebuffer bytes - gamma space - and the
                 // plume's whole look rides on that: additive maths on encoded
                 // values blooms to white far faster than the same maths on
@@ -2515,25 +2497,82 @@ impl Race {
     }
 
     /// Drives the exhaust to the state a speed pad entry `age` seconds ago
-    /// would leave it in, at saturated intensity - `CaptureOptions::pose_boost`.
+    /// would leave it in - `CaptureOptions::pose_boost`.
     ///
     /// Replays [`Exhaust::advance`] at the fixed step rather than poking
-    /// fields: six seconds of full thrust at racing speed to saturate the
-    /// intensity ramp, [`Exhaust::boost`] on the entry edge, then `age` more
-    /// seconds of the same advance, so the flare size, the plume reveal timer
-    /// and the flicker generator all sit exactly where a real crossing at
-    /// racing speed puts them.
-    pub fn force_boost_state(&mut self, age: f32) {
-        let warmup = (6.0 / self.dt).ceil() as u32;
+    /// fields: enough ticks of full thrust to reach `entry_intensity`,
+    /// [`Exhaust::boost`] on the entry edge, then `age` more seconds of the
+    /// same advance, so the flare size, the plume reveal timer and the flicker
+    /// generator all sit exactly where a real crossing puts them.
+    ///
+    /// `entry_intensity` is `None` for a saturated ramp, which is what a craft
+    /// that has been racing for four seconds or more actually has. **Pass the
+    /// measured value when comparing against a capture taken after a
+    /// teleport**: `psp-drive.py place` leaves the flare's ramp wherever the
+    /// craft's idle time left it, and the first tick-addressable pad capture
+    /// read `0.1334` at the entry tick. That is not a cosmetic difference -
+    /// intensity sets the flare's resting half-size through
+    /// `(i * 0.6 + 0.4) * 2.5` (`1.2` against a saturated `2.5`) and every one
+    /// of the ribbon's three staggered layer alphas - so a saturated render
+    /// against an unsaturated capture differs in *state* before it differs in
+    /// anything a renderer does.
+    ///
+    /// Matching only the entry value is enough to match the whole curve,
+    /// because the ramp climbs at the same recovered `0.25`/s on both sides
+    /// through the posed age.
+    ///
+    /// `speed` is `None` for the racing `120` units/s. It reaches the picture
+    /// only through the speed ramp's floor on the boost accumulator, so it
+    /// matters when a capture's speed is far from that.
+    pub fn force_boost_state(
+        &mut self,
+        age: f32,
+        entry_intensity: Option<f32>,
+        speed: Option<f32>,
+    ) {
+        let speed = speed.unwrap_or(120.0);
+        // `INTENSITY_RISE` per second while the engine is on, from rest, so the
+        // ticks needed are the target over the rate. Saturation is the four
+        // seconds that takes plus the margin the old six-second warmup carried.
+        let target = entry_intensity.unwrap_or(1.0).clamp(0.0, 1.0);
+        let warmup = (target / exhaust::INTENSITY_RISE / self.dt).ceil() as u32;
         for _ in 0..warmup {
             self.exhaust
-                .advance(self.dt, 1.0, 120.0, &mut self.exhaust_rng);
+                .advance(self.dt, 1.0, speed, &mut self.exhaust_rng);
         }
         self.exhaust.boost(exhaust::BOOST_SECONDS);
         let aged = (age / self.dt).round() as u32;
         for _ in 0..aged {
             self.exhaust
-                .advance(self.dt, 1.0, 120.0, &mut self.exhaust_rng);
+                .advance(self.dt, 1.0, speed, &mut self.exhaust_rng);
+        }
+
+        // **A posed frame otherwise has no ribbon at all, and that silently
+        // wrecks a boost comparison.** `Trail_DrawRibbon` refuses to draw until
+        // its ring is full, our [`Exhaust::trail_ready`] reproduces that, and a
+        // `--pose-from --ticks 0` capture never runs a tick that would push a
+        // sample - so every posed frame before this was missing the one element
+        // that carries the exhaust's colour. Measured on the first real pad
+        // capture: the original's rear reads magenta (mean `(224, 164, 217)`,
+        // peaks near `(252, 109, 214)`, red and blue both far above green) over
+        // 6,355 pixels of one frame, against 491 pixels of blue-dominant violet
+        // `(180, 141, 229)` in ours - and most of that difference was the
+        // missing ribbon, not the flare or the plume.
+        //
+        // The history is laid down straight, back along the nozzle's own axis at
+        // `speed * dt` per sample, oldest pushed first. That is exactly what a
+        // real run produces here: a speed pad sits on a straight, and over the
+        // ten ticks a full ring spans the captured positions are collinear to
+        // far below a pixel. It is a *capture* approximation and nothing in the
+        // game uses it - a real race pushes one true sample per tick from
+        // `Race::tick`.
+        if let Some(nozzle) = self.nozzle() {
+            let back = -self.ship().physics.body.forward();
+            self.exhaust.clear_trail();
+            for k in (0..exhaust::TRAIL_SAMPLES).rev() {
+                let behind = back * (speed * self.dt * k as f32);
+                self.exhaust.push_trail(nozzle + behind, back);
+            }
         }
     }
 
@@ -2712,6 +2751,39 @@ impl Race {
     /// The model's own origin is used as it is: no recentring, and the only rotation
     /// composed in is [`MODEL_YAW`], which is a stated finding about the `.vex` and
     /// not a nudge to make the picture look right.
+    ///
+    /// # The craft is measurably too big here, and the scale is deliberately not applied
+    ///
+    /// **Do not add `oag_render::exhaust::CRAFT_ROW_SCALE` here without reading
+    /// this.** It was tried on 2026-08-08 and reverted on purpose.
+    ///
+    /// The evidence that something is wrong is solid. The original's craft world
+    /// matrix carries a global `0.75` - `CRAFT_ROW_SCALE`, read out of the
+    /// magnitude of the per-sample trail direction `Exhaust_Update` stores
+    /// (`200000.0` times the craft's row 2, live `150,080`) - while the rigid
+    /// body's own basis rows are orthonormal, so the scale belongs to the render
+    /// matrix and this function does not have it. Measured against the first
+    /// matched-pose speed-pad capture, from the original's own recorded camera
+    /// 11.6 units back, with the track and the buildings behind aligning: the
+    /// two wingtip lamps' centroids sit `108.8 px` apart in the original and
+    /// `189.3 px` apart in ours, a ratio of `1.740`. No field of view can
+    /// produce that, because a field of view scales the background too.
+    ///
+    /// **But `0.75` does not account for it, which is why it is not applied.**
+    /// It takes the ratio to `1.191`, not to `1.00`; the factor that measurement
+    /// actually wants is nearer `0.575`, which is a constant this project has
+    /// recovered nowhere. Applying `0.75` would leave a 19 % residual dressed as
+    /// a fix, and would make the craft 25 % smaller in every race frame - which
+    /// is the shape of change that quietly invites a *second* wrong constant
+    /// somewhere else to compensate for it. The chase camera is separately known
+    /// not to frame the craft the way the original's does, and it is being
+    /// worked on; a half-correct ship scale sitting in the tree while that
+    /// happens is exactly how a camera distance gets fitted to cancel a model
+    /// error.
+    ///
+    /// So this stays as it is until the whole discrepancy is explained, and the
+    /// measurement above is the starting point for explaining it. See
+    /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
     #[must_use]
     pub fn ship_model_matrix(&self) -> Mat4 {
         let body = &self.ship().physics.body;
@@ -3402,19 +3474,68 @@ impl Scene {
         // mesh, not a camera-facing quad), so it needs depth testing and a
         // model matrix, which is what `Drawable` already gives every other
         // mesh here rather than a third thing beside `exhaust::Pipeline`.
-        // `exhaust::TRAIL_BLEND` in place of `TRANSPARENT_BLEND` is the one
-        // thing that has to differ - the model's texture is named `_ADD`,
-        // and drawing it with the ordinary lerp blend looks plausible and is
-        // wrong. It is `TRAIL_BLEND`, not the flare's own `exhaust::BLEND`:
-        // the plume's batches take `Mesh_SetBatchDrawState`'s pure-additive
-        // `GU_FIX`/`GU_FIX` branch (`is_additive_blend()`), the same
-        // `dst + src` equation as the ribbon, not the flare's
-        // alpha-weighted one - see
-        // `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`. The authored
-        // vertex alpha is premultiplied into the RGB at the load site above,
-        // which is a compensation with no recovered mechanism - that comment
-        // records what the authored data holds and what removing it looks
-        // like.
+        // An additive blend in place of `TRANSPARENT_BLEND` is the one thing
+        // that has to differ - the model's texture is named `_ADD`, and
+        // drawing it with the ordinary lerp blend looks plausible and is
+        // wrong.
+        //
+        // **Which additive blend changed on 2026-08-08, from the ribbon's
+        // `TRAIL_BLEND` to the flare's `exhaust::BLEND`, and it is a bug fix
+        // rather than a retuning.** The two differ only in the source factor -
+        // `One` against `SrcAlpha` - and the plume is the one model here whose
+        // authored vertex alpha is not constant: it is bimodal, `0` on the
+        // orange rim and `255` in the white core (pinned by
+        // `boost_plume_ground_truth.rs`). Under `TRAIL_BLEND` alpha cannot
+        // reach the picture at all, so the load site compensated by
+        // premultiplying it into the RGB *per vertex* - and that is simply the
+        // wrong arithmetic. Premultiplying at a vertex and then interpolating
+        // is not interpolating and then multiplying: it maps the rim to
+        // **black**, so what interpolates across the fin is black-to-white and
+        // the authored orange never exists anywhere on it. `SrcAlpha` does the
+        // same multiply *per fragment*, after the rasteriser has interpolated
+        // colour and alpha separately, which is what real hardware does and
+        // what leaves a dimmed orange fringe fading out along the fin.
+        //
+        // Measured against the first matched-pose pad capture (boost age
+        // `0.367` s, the original's own recorded camera and its measured
+        // entry intensity), over the magenta signature `r > 110, b > 110,
+        // r - g > 25, b - g > 20` in a crop around the craft:
+        //
+        // | build | pixels | mean colour | `b - r` |
+        // | --- | ---: | --- | ---: |
+        // | the original | 9,217 | `(223, 164, 224)` | +1 |
+        // | premultiplied, `TRAIL_BLEND` | 493 | `(180, 141, 228)` | +48 |
+        // | raw, `BLEND` (this) | 1,993 | `(159, 118, 175)` | +16 |
+        //
+        // Extent 4x better and the red/blue balance three times closer to the
+        // original's neutral. The premultiplied build was blue-dominant; raw
+        // alpha alone recovers the hue but draws the fins as hard-edged solid
+        // wedges, which is the 2026-08-07 and 2026-08-08 result reproduced
+        // exactly, and `SrcAlpha` is what supplies the falloff those wedges are
+        // missing. Still 22% of the original's extent - the rest is a missing
+        // bright-pass and a craft drawn too large, both recorded on the page.
+        //
+        // **This is an empirical approximation and the real mechanism is
+        // something else.** The GE state for the transparent mesh pass is now
+        // read: `GU_ALPHA_TEST` is *disabled*, `GU_BLEND` is *enabled* with
+        // `GU_FIX` white on both sides, and nothing in the pass scales fragment
+        // RGB but vertex colour x texture x the blend - so no source-alpha
+        // weight exists on the hardware at all. What supplies the original's
+        // falloff is the *texture*: the pass sets `TEXMAPMODE` uvgen 2,
+        // environment mapping from the vertex normal and lights 0/1, and
+        // `pulse_boost2_ADD`'s own bright-to-dark gradient varies across the
+        // fin. Every plume batch declares normals (`vtype = 0x013d` on all 32
+        // across 8 teams - `cargo run -p oag-assets --example
+        // boost_vertex_type`), so that generation has something to vary with.
+        //
+        // Environment-mapped UV generation is **not** implemented: it would
+        // change every transparent batch on every track and ship, and this repo
+        // already carries a rejected project-wide blend flip as the precedent
+        // for not doing that off one pass. `SrcAlpha` stands in until it is,
+        // and it is at least arithmetic that is correct for *some*
+        // per-fragment weighting where the premultiply was correct for none.
+        // See `docs/ghidra/functions/psp-pulse-usa/exhaust.md` and
+        // `mesh-draw.md`.
         let boost = boost_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -3426,7 +3547,7 @@ impl Scene {
                     anisotropy,
                     sample_count,
                     scene_depth,
-                    exhaust::TRAIL_BLEND,
+                    exhaust::BLEND,
                 )
             })
             .transpose()?;
@@ -3862,6 +3983,15 @@ pub struct CaptureOptions {
     /// [`Exhaust::advance`] rather than by poking fields, so what is captured
     /// is the same trajectory a real crossing produces.
     pub pose_boost: Option<f32>,
+    /// With [`Self::pose_boost`]: the intensity at the entry tick, instead of a
+    /// saturated ramp. `--pose-intensity`.
+    ///
+    /// See [`Race::force_boost_state`] for why a saturated default is the wrong
+    /// one to compare a teleported capture against.
+    pub pose_intensity: Option<f32>,
+    /// With [`Self::pose_boost`]: the speed in units/s to advance the exhaust
+    /// at, instead of `120`. `--pose-speed`.
+    pub pose_speed: Option<f32>,
     /// Capture the frame the way a **window** presents it, rather than the
     /// scene the way it is drawn.
     ///
@@ -3953,7 +4083,7 @@ pub fn capture(
         }
     }
     if let Some(age) = options.pose_boost {
-        race.force_boost_state(age);
+        race.force_boost_state(age, options.pose_intensity, options.pose_speed);
     }
     println!(
         "after {} tick(s): {}",
