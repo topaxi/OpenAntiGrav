@@ -10,9 +10,11 @@ This page attacks it from the code side rather than the data side, and gets most
 of the way. It **confirms the engine is Sony's SCREAM** from the binary's own
 copyright string rather than by inference, **decodes the bank's name table** so
 that per-sound names are extractable, and **names the two fields** a sound's
-offset and length are finally written to. What it does not do is join those two
-ends: how a sound's index becomes a byte offset is still open, but it is now one
-named function away rather than an open-ended search.
+offset and length are finally written to. It also reaches the cue record from
+the runtime side and finds it agrees, field for field, with what the format page
+measured from the data side. What remains is the middle - the command-list
+interpreter that turns a cue into a waveform offset - and that is one named
+function away rather than an open-ended search.
 
 **Target note.** `psp-pulse-eu` is this project's preferred first target for new
 investigation, and this page is `psp-pulse-usa`. That is deliberate: the cue
@@ -31,8 +33,9 @@ takes a cue string and queues a request; the sites are in
 [exhaust](exhaust.md#exhaust_updateenginesound) (`"~ENGINE"`).
 
 **The far end** is `sceSasSetVoice`, where a waveform's address and length are
-handed to the PSP's hardware synth. This page walks the far end back three hops
-and finds where those two numbers live in memory.
+handed to the PSP's hardware synth. This page walks the far end back to where
+those two numbers live in memory, and walks the near end forward to the cue
+record. They stop one function apart.
 
 ## The far end, walked back
 
@@ -198,6 +201,56 @@ to read next.
 The `param_1 == NULL` branch walks a bank list by `+0x30`, recursing, so a cue
 name with no bank named resolves against every loaded bank in turn.
 
+## A cue is a sound, and the runtime agrees with the format page
+
+`Scream_StartSound` (`0x0898f864`) is what the index finally reaches, through
+two thin dispatchers. Its first three lines settle what a "cue" is:
+
+```c
+if (index < 0 || index >= *(i16 *)(bank + 0x16)) return 0;
+cue = *(u32 *)(bank + 0x1c) + index * 0xc;
+```
+
+**That is exactly the cue region [psp-audio.md](../../../formats/psp-audio.md)
+already measured** - offset field at `+0x1c`, stride 12, one per playable sound -
+reached here from the opposite direction. The two readings were derived
+independently, one from strides across all 39 banks and one from the runtime's
+own bounds check, and they agree. It also identifies the count: **`+0x16` is
+`cue_count` as a `u16`**, which is the field the format page infers but does not
+locate.
+
+So **the name table's "sound index" is a cue index**, and the chain from a cue
+string to a playing sound is now unbroken:
+
+```text
+"SPEEDUPPAD"  ->  Scream_FindSoundInBank   name table       -> cue index
+              ->  Scream_StartSound        bank+0x1c + i*12 -> cue record
+              ->  ...                                       -> waveform offset
+              ->  Sas_QueueSetVoice        voices[v].addr/size
+              ->  Sas_CommitVoices         sceSasSetVoice
+```
+
+The cue record's other fields, which the format page lists only as "the third
+word indexes the command table":
+
+| Offset | Read as | Use |
+| --- | --- | --- |
+| `+0x00` | `s8` | default for the caller's first `-1` argument |
+| `+0x01` | `s8` | copied into the handler at `+0x17` |
+| `+0x02` | `s16` | default for the caller's second `-1` argument |
+| `+0x04` | `u8` | **must be non-zero or the cue does not play at all** |
+| `+0x06` | `u16` | flags: `0x4000` is set on every play, `0x2` triggers a preload |
+| `+0x08` | `u32` | the command-table index, dereferenced **as a pointer** at runtime |
+
+`+0x08` is the interesting one. The format page reads it as an index into the
+command table; the runtime dereferences it (`*(u32 *)(cue + 8) + 4`), so SCREAM
+fixes it up from an index to a pointer at load time. Both readings are right
+about different moments.
+
+Confidence **85** for the cue-record fields, from direct reads in one function;
+**90** for `+0x16` and the `+0x1c` stride, which two independent derivations
+agree on.
+
 ## Where this stops
 
 **The writer of `+0x54` is `Sas_QueueSetVoice` (`0x0898bf4c`)**, found by
@@ -222,16 +275,21 @@ so these are the same table and the same fields as the commit loop reads.
 Confidence **92** - it is a direct store to the exact offsets, and its argument
 order matches `sceSasSetVoice`'s.
 
-**What is still open is one hop further back**: nothing yet connects a bank's
-sound index to the `addr`/`size` pair passed in here. `FUN_08991c70` is the
-named function that receives `(bank, index, ...)` and is the next thing to read.
+**What is still open is the middle**: a cue record is reached and a voice is
+written, but the step that turns the cue's command list into a waveform offset
+and length is not read. `FUN_0898efd8` is where it happens - `Scream_StartSound`
+loops on it until the handler's `+0x4a` goes to `-1`, which is the shape of a
+script interpreter, and the format page's nine unexplained opcodes are what it
+would be interpreting.
 
 ## Not determined
 
-- **How a sound index becomes a waveform offset.** The one hop left in the
-  chain, and now a bounded question rather than an open one: read
-  `FUN_08991c70`, which receives `(bank, index, ...)` from
-  `Scream_PlaySoundByName` and must eventually reach `Sas_QueueSetVoice`.
+- **The command-list interpreter, `FUN_0898efd8`.** The last unread step, and
+  the one that turns a cue into a waveform offset. `Scream_StartSound` drives it
+  in a loop, and the format page's nine opcodes (`0x05`, `0x06`, `0x15`, `0x16`,
+  `0x1e`, `0x22`-`0x24`, `0x29`) are almost certainly its instruction set.
+- **What the cue record's `+0x08` points at after fixup.** Its `+0x04` is read
+  as the handler's `+0x12`, a `s16` the play loop tests against zero.
 - **The name hash**, `FUN_089924ec`. Not needed to extract names - the entry
   array walks linearly - but needed to reproduce a lookup faithfully.
 - **What consumes the cue-request list.** `Sound_Play` pushes 0x30-byte nodes
