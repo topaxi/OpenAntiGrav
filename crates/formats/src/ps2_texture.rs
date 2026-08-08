@@ -56,7 +56,8 @@
 //!   bytes are already in raster order. The game uses this whenever the width is
 //!   8 or less, where the halving above cannot produce a valid rectangle.
 //! - `(width/2, height/4)` at 4 bytes each: the same trick for 4-bit texels
-//!   (`PSMT4`). Five blobs on the disc; the permutation is not implemented.
+//!   (`PSMT4`). Five blobs on the disc, and they are the five PS2 font atlases:
+//!   see [`psmt4_offset`] and [`crate::fnt`].
 //!
 //! # Alpha is 0-128, not 0-255
 //!
@@ -194,7 +195,8 @@ pub enum Layout {
     Linear,
     /// `PSMT8` swizzle, uploaded as a `PSMCT32` blit of half the dimensions.
     Psmt8,
-    /// `PSMT4` swizzle, uploaded as a `PSMCT32` blit. Not decoded.
+    /// `PSMT4` swizzle, uploaded as a `PSMCT32` blit of half the width and a
+    /// quarter of the height.
     Psmt4,
 }
 
@@ -368,11 +370,17 @@ pub fn looks_like_ps2_texture(data: &[u8]) -> bool {
 ///
 /// # Errors
 ///
-/// Returns [`Error::UnsupportedLayout`] for the five `PSMT4` blobs on the disc,
-/// whose swizzle is not implemented.
+/// Every way [`header`] can fail, plus [`Error::UnsupportedLayout`] for a
+/// [`Layout::Psmt4`] blob smaller than one 128x128 GS page - a shape nothing on
+/// either disc has. See [`psmt4_offset`].
 pub fn parse(data: &[u8]) -> Result<Ps2Texture> {
     let head = header(data)?;
-    if head.layout == Layout::Psmt4 {
+    // A PSMT4 page is 128x128 texels and [`psmt4_offset`]'s transposition
+    // works inside one, so a texture narrower or shorter than a page would
+    // address source pixels that are not there. Nothing on the disc is: the
+    // five are 256x128, 512x256 and 512x512. Refusing beats indexing past the
+    // end of the blob.
+    if head.layout == Layout::Psmt4 && (head.width < 128 || head.height < 128) {
         return Err(Error::UnsupportedLayout(head.layout));
     }
 
@@ -394,7 +402,16 @@ pub fn parse(data: &[u8]) -> Result<Ps2Texture> {
             }
             out
         }
-        Layout::Psmt4 => unreachable!("refused above"),
+        Layout::Psmt4 => {
+            let mut out = vec![0u8; width * height];
+            for y in 0..height {
+                for x in 0..width {
+                    let (at, nibble) = psmt4_offset(x, y, width);
+                    out[y * width + x] = (texels[at] >> (nibble * 4)) & 0x0f;
+                }
+            }
+            out
+        }
     };
 
     let palette = unswizzle_clut(stored_palette, head.bits_per_pixel);
@@ -425,6 +442,62 @@ pub fn psmt8_offset(x: usize, y: usize, width: usize) -> usize {
     let column = ((x + swap) & 0x7) * 4;
     let byte_select = ((y >> 1) & 1) + ((x >> 2) & 2);
     block + row + column + byte_select
+}
+
+/// Byte offset and nibble of texel `(x, y)` inside a `PSMT4`-swizzled blob.
+///
+/// The nibble is 0 for the low half of the byte and 1 for the high half, the
+/// same order [`crate::texture`] and [`crate::fnt`] use.
+///
+/// # Derived from [`psmt8_offset`], not from a table
+///
+/// Both offsets answer the same question - where in a **linear `PSMCT32`
+/// source image** does one indexed texel live - because the blob is the source
+/// of a blit rather than a copy of GS memory. That makes the two formulas the
+/// same shape with three differences, each of which follows from the geometry:
+///
+/// | | `PSMT8` | `PSMT4` |
+/// | --- | --- | --- |
+/// | source rectangle | `(width/2, height/2)` | `(width/2, height/4)` |
+/// | page | 128x64 texels | 128x128 texels |
+/// | block | 16x16 texels | 32x16 texels |
+///
+/// A `PSMCT32` page is 64x32 and its block is 8x8, so `PSMT8`'s page and block
+/// are both exactly twice the source's in both axes. Its blocks therefore land
+/// in the source in plain raster order and no block table is needed - which is
+/// why [`psmt8_offset`] has no page term at all. `PSMT4`'s page is 2x wider and
+/// 4x taller than the source's while its block is 4x wider and 2x taller, so
+/// the two disagree: within a page, the block at block-column `bx`, block-row
+/// `by` sits at source block-column `by`, source block-row `bx`. That
+/// transposition is the whole of `blockTable4` being the transpose of
+/// `blockTable32`, and it is the only new fact here.
+///
+/// Inside a block the split of the coordinates follows from the counts: a
+/// 32x16 `PSMT4` block is 512 nibbles over an 8x8 patch of 32-bit source
+/// pixels, so `x`'s low three bits pick the source column, `x`'s next two bits
+/// pick the byte within that word, `y`'s bit 1 picks the nibble, and `y`'s
+/// remaining bits pick the source row through the same two-of-four row swap
+/// [`psmt8_offset`] uses.
+///
+/// # Evidence
+///
+/// A permutation of `0..width * height` at every shape on the disc, which the
+/// tests assert. The non-transposed reading is **not** a permutation and dies
+/// on that test alone. Decoded, the five `PSMT4` blobs are the five PS2 font
+/// atlases, and every lit texel of `pulse_text` lands inside a glyph box its
+/// own `.fnt` declares. See `docs/formats/ps2-texture.md`.
+#[must_use]
+pub fn psmt4_offset(x: usize, y: usize, width: usize) -> (usize, usize) {
+    // Pages tile the source in raster order, and a PSMT4 page covers a whole
+    // 64x32 source page, so this term needs no transposing.
+    let page = (x / 128) * 64 + (y / 128) * 32 * (width / 2);
+    // Within the page, block columns become source block rows and back.
+    let block = ((y % 128) / 16) * 8 + ((x % 128) / 32) * 8 * (width / 2);
+    let swap = (((y + 2) >> 2) & 1) * 4;
+    let column = (x + swap) & 0x7;
+    let row = (((y & !3) >> 1) + (y & 1)) & 0x7;
+    let word = page + block + row * (width / 2) + column;
+    (word * 4 + ((x >> 3) & 3), (y >> 1) & 1)
 }
 
 /// Reorders a 256-entry palette out of the GS's `CSM1` layout.
@@ -623,11 +696,55 @@ mod tests {
     }
 
     #[test]
-    fn a_four_bit_blob_is_recognised_but_refused() {
+    fn a_four_bit_blob_decodes() {
         let data = blob(256, 512, 4, 128, 128);
         let head = header(&data).expect("header");
         assert_eq!(head.layout, Layout::Psmt4);
+        let texture = parse(&data).expect("parse");
+        assert_eq!(texture.indices.len(), 256 * 512);
+        // 4bpp, so every index is a nibble.
+        assert!(texture.indices.iter().all(|&i| i < 16));
+    }
+
+    #[test]
+    fn a_four_bit_blob_smaller_than_a_page_is_refused() {
+        let data = blob(64, 128, 4, 32, 32);
+        assert_eq!(
+            header(&data).expect("header").layout,
+            Layout::Psmt4,
+            "the shape is recognised"
+        );
         assert_eq!(parse(&data), Err(Error::UnsupportedLayout(Layout::Psmt4)));
+    }
+
+    /// The test that kills a wrong `PSMT4` model before any pixel is looked at:
+    /// the reading without the block transposition is not even a bijection.
+    #[test]
+    fn psmt4_offsets_are_a_permutation_for_every_shipped_shape() {
+        // The five font atlases are 256x128, 512x256 and 512x512; the rest is
+        // headroom. A PSMT4 page is 128x128 and `parse` refuses anything
+        // smaller, which `a_four_bit_blob_smaller_than_a_page_is_refused`
+        // covers.
+        for width in [128usize, 256, 512] {
+            for height in [128usize, 256, 512] {
+                let mut seen = vec![false; width * height];
+                for y in 0..height {
+                    for x in 0..width {
+                        let (at, nibble) = psmt4_offset(x, y, width);
+                        assert!(nibble < 2, "{width}x{height}: nibble {nibble}");
+                        let slot = at * 2 + nibble;
+                        assert!(
+                            slot < width * height,
+                            "{width}x{height}: {slot} out of range"
+                        );
+                        assert!(
+                            !std::mem::replace(&mut seen[slot], true),
+                            "{width}x{height}: {slot} twice"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]

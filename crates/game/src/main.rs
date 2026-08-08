@@ -1842,6 +1842,12 @@ impl Stage {
             loaded.font.clone(),
             &loaded.sprites,
         )?;
+        // The sequence's rects are in its source's grid, and the renderer maps
+        // rects onto the viewport - so it has to be told which grid, or a PS2
+        // screen's widgets are drawn a third again too big. See
+        // `frontend::Space`.
+        let mut renderer = renderer;
+        renderer.set_space(loaded.frontend.space());
         // The store moves onto its own thread and the `Movie` around it is done
         // with: everything else it carried - the frame count, the rate, the
         // aspect - was read into the sequence and the renderer before this.
@@ -1858,6 +1864,8 @@ impl Stage {
             feed,
             shown: false,
             backdrop_shown: false,
+            held_backdrop: None,
+            backdrop_in_planes: false,
             trace,
         })))
     }
@@ -1956,12 +1964,21 @@ struct Backdrop {
     /// Which frame is **actually in the renderer's planes**, or `None` while none
     /// is.
     ///
-    /// Not "which frame we would like": the decode happens on another thread now,
-    /// so for the first frame or two after the menus open there is genuinely no
-    /// picture, and `None` is what stops the video quad being drawn over zeroed
-    /// planes - which is a green rectangle, not a black one. It is also what the
-    /// draw list reports, so the list names the frame on screen rather than one
-    /// that may not have arrived. See [`MenuStage::render`].
+    /// Not "which frame we would like": the decode happens on another thread, so
+    /// there can genuinely be no picture yet, and `None` is what stops the video
+    /// quad being drawn over zeroed planes - which is a green rectangle, not a
+    /// black one. It is also what the draw list reports, so the list names the
+    /// frame on screen rather than one that may not have arrived. See
+    /// [`MenuStage::render`].
+    ///
+    /// **Coming out of the boot sequence this starts `Some`**, seeded by
+    /// `Session::open_menus` from the picture the front end had on screen. It
+    /// used to start `None` on every path, and the one to three frames of
+    /// menu-on-black that produced were the flicker on the START press. It still
+    /// starts `None` on the `escape` -> menus path, which carries no playhead and
+    /// no picture and so shows black until the restarted feed produces frame 0 -
+    /// see [`menu_playhead`], which is where that whole path's judgement call is
+    /// argued.
     shown: Option<usize>,
 }
 
@@ -2163,7 +2180,37 @@ struct FrontendStage {
     /// because the two movies fill the planes at different points in the
     /// sequence, and either can be the one that has not arrived yet.
     backdrop_shown: bool,
+    /// The newest backdrop picture taken from the feed, **kept after it has
+    /// been used** rather than dropped.
+    ///
+    /// [`movie::Feed::take_upto`] pops: a frame handed over is gone from the
+    /// ring, and asking again for the same position returns `None`. The pump
+    /// below runs on every frame whether or not the backdrop is on screen (see
+    /// [`FrontendStage::sync_video`]), so without this the frame it popped on a
+    /// frame that drew the intro was thrown away, and the first frame that
+    /// wanted to *draw* the backdrop found the ring already past it - one to
+    /// three frames of `Show Logo` over black before the playhead reached the
+    /// next decoded frame. Holding it costs one 480x272 picture and makes the
+    /// handoff seamless, both into `Show Logo` and on into the menus, which take
+    /// it through [`FrontendStage::held_backdrop`].
+    held_backdrop: Option<HeldFrame>,
+    /// Whether [`FrontendStage::held_backdrop`] is what the planes hold now.
+    ///
+    /// One set of planes serves both movies, so an intro upload displaces the
+    /// backdrop and the next backdrop draw has to put it back even though no
+    /// new frame arrived. Without this the flag would say "uploaded" about a
+    /// picture the intro had since overwritten.
+    backdrop_in_planes: bool,
     trace: bool,
+}
+
+/// A decoded backdrop picture kept past the moment it was taken from the feed.
+///
+/// The index rather than the position, because that is what a draw list reports
+/// and what [`Backdrop::shown`] holds.
+struct HeldFrame {
+    index: usize,
+    picture: movie::VideoFrame,
 }
 
 impl FrontendStage {
@@ -2257,13 +2304,29 @@ impl FrontendStage {
             if let Some(reason) = feed.take_error() {
                 bail!("decoding the menu backdrop: {reason}");
             }
+            // Kept rather than used-or-dropped: the take is a pop, and the
+            // frame popped on a frame that draws the intro is the one
+            // `Show Logo` asks for a moment later. See
+            // [`FrontendStage::held_backdrop`].
             if let Some(frame) = feed.take_upto(position) {
-                // Only when it is the movie on screen: one renderer, one set of
-                // planes, and the intro is in them until `Show Logo`.
-                if matches!(drawn, Some((_, frontend::Video::Backdrop))) {
-                    self.renderer.upload_frame(queue, &frame.picture)?;
-                    self.backdrop_shown = true;
-                }
+                self.held_backdrop = Some(HeldFrame {
+                    index: frame.index,
+                    picture: frame.picture,
+                });
+                self.backdrop_in_planes = false;
+            }
+            // Uploaded only when the backdrop is the movie on screen - one
+            // renderer, one set of planes, and the intro is in them until
+            // `Show Logo` - and only when the planes do not already hold it, so
+            // the steady state is the same one upload per decoded frame it
+            // always was.
+            if matches!(drawn, Some((_, frontend::Video::Backdrop)))
+                && !self.backdrop_in_planes
+                && let Some(held) = &self.held_backdrop
+            {
+                self.renderer.upload_frame(queue, &held.picture)?;
+                self.backdrop_in_planes = true;
+                self.backdrop_shown = true;
             }
         }
 
@@ -2283,6 +2346,9 @@ impl FrontendStage {
             if let Some(frame) = feed.take_upto(position) {
                 self.renderer.upload_frame(queue, &frame.picture)?;
                 self.shown = true;
+                // The intro has displaced whatever backdrop picture was in the
+                // planes, so the next backdrop draw has to upload again.
+                self.backdrop_in_planes = false;
             }
         }
 
@@ -3051,6 +3117,30 @@ impl Session {
             shell.font,
             &shell.sprites,
         )?;
+        // **The picture moves across as well as the playhead**, and it has to,
+        // because the renderer does not. A fresh `Renderer` is fresh planes:
+        // zeroed, which is green rather than black, so the first menu frame
+        // would draw its rows on the black fill instead and the picture would
+        // only appear once the playhead reached the next decoded frame. That is
+        // one to three frames of menu-on-black on every boot - the flicker on
+        // the START press. Seeding the planes here closes it, and `shown` is
+        // seeded to match so the draw list names the frame that is really in
+        // them. `escape` -> menus carries nothing, as it carries no playhead:
+        // that path restarts the loop deliberately, see `menu_playhead`.
+        let seed = match &self.stage {
+            Stage::Frontend(stage) => stage
+                .held_backdrop
+                .as_ref()
+                .map(|held| (held.index, held.picture.clone())),
+            _ => None,
+        };
+        let seeded = match &seed {
+            Some((index, picture)) => {
+                renderer.upload_frame(&self.gpu.queue, picture)?;
+                Some(*index)
+            }
+            None => None,
+        };
         // Past the last fallible step, so a renderer that could not be built
         // leaves the front end holding its own backdrop rather than stripped of
         // one it is still drawing.
@@ -3069,7 +3159,7 @@ impl Session {
             backdrop: shape.map(|shape| Backdrop {
                 player: menu_playhead(carried, frames, shape.frame_rate),
                 rect: shape.rect,
-                shown: None,
+                shown: seeded,
             }),
         }));
         self.gpu.window.set_title(SHELL_TITLE);

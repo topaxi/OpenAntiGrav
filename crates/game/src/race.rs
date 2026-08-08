@@ -767,22 +767,65 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 // for this model specifically - see
                 // `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`), the same
                 // `dst + src` equation `exhaust::TRAIL_BLEND` already encodes
-                // for the ribbon. That blend reads no alpha, so the authored
-                // vertex-alpha falloff is premultiplied into the RGB here.
+                // for the ribbon. That blend reads no alpha, and **there is no
+                // other path for alpha either**: the literal call is
+                // `Gu_BlendFunc(0, 10, 10, 0xffffff, 0xffffff)` and it runs
+                // *after* the material's own display list, so nothing can
+                // override it.
                 //
-                // The premultiply is settled **empirically, not from the static
-                // read** (2026-08-07): the fixed-factor blend plus a modulate
-                // texfunc says vertex alpha never reaches the picture, and a
-                // build that took that literally (alpha forced to 1, RGB
-                // untouched) drew the streak fins as huge hard-edged solid
-                // sheets. A matched-pose comparison against the running
-                // original - `--pose-from` a captured pad-crossing row,
-                // `--pose-boost` the same age, same recorded camera - shows the
-                // original's plume feathering away exactly where the authored
-                // vertex alpha fades, so alpha demonstrably reaches the
-                // original's fragment somewhere upstream of the blend. Where is
-                // an open question for mesh-draw.md; folding it into the RGB
-                // reproduces the observed picture under this blend either way.
+                // So the premultiply below is a **compensation with no
+                // recovered mechanism**, kept because removing it was tried
+                // twice and looks worse both times. What the authored data
+                // actually holds, measured 2026-08-08 on every batch of every
+                // PSP team's `shipboost.vex`, sharpens the open question a
+                // long way past "the alpha fades":
+                //
+                // - the vertex colours are exactly **two** values,
+                //   `(255, 98, 5, 0)` on the rim and `(255, 255, 255, 255)` in
+                //   the core, 29 and 22 of a 51-vertex batch, nothing between;
+                // - `pulse_boost2_ADD` is 64x16 with a **constant alpha of
+                //   238**, so the texture supplies no alpha gradient either.
+                //
+                // Both failure modes are therefore explained by that one
+                // split. Premultiplied, the orange rim maps to black and the
+                // plume reads white and un-orange, which is the reported
+                // symptom. Raw (rebuilt and screenshotted 2026-08-08,
+                // `data/shots/boost-visuals/after-boost-0.5.png`), the rim
+                // draws at full orange and the fins are hard-edged solid
+                // orange wedges - reproducing the 2026-08-07 result exactly.
+                // The truth sits between the two, so something scales the rim
+                // down without discarding its hue, and the fixed-factor blend
+                // is not it.
+                //
+                // One suspect was raised and then **refuted** on 2026-08-08,
+                // recorded so nobody spends the same afternoon: the plume's
+                // authored `u` never leaves the first texel (measured
+                // `[0.000, 0.008]` against a `v` of `[0.031, 0.953]`, i.e. one
+                // step of an 8-bit texcoord on a 64x16 texture), so it samples
+                // one column of `pulse_boost2_ADD` and never sees the streak
+                // gradient at all. That looked like the missing modulation,
+                // and `Mesh_SetBatchDrawState`'s caller does apply a
+                // per-material `Gu_TexScale`/`Gu_TexOffset` for exactly this
+                // material's flags (`0x212 & 0x10`, through `FUN_089271cc`).
+                // But rendering the plume with `u` scaled by 128 and again
+                // with `u`/`v` swapped changes the picture **not at all** -
+                // the fins stay solid orange wedges either way. So where the
+                // plume samples its texture is not what is wrong, and the
+                // per-material texture transform is a real unported feature
+                // rather than this bug's cause.
+                //
+                // Nor is the texture dropped or mis-bound, which was the next
+                // guess: replacing it with hard horizontal stripes puts
+                // **visible bands on the two trailing streaks** and leaves
+                // the wedges flat, so the sampler, the bind and the draw's
+                // texture index are all correct for at least half the model.
+                // What that test did expose is the wedges' own UVs: the two
+                // short batches (9 and 10 vertices) decode to a **single
+                // point** - `u [0.008, 0.008]`, `v [0.031, 0.031]` - so those
+                // draws sample one texel by construction and no texture
+                // content can reach them. Whether that is our decode or the
+                // authored data is open; the 51-vertex batches carry a real
+                // `v` sweep and do band.
                 for v in &mut model.vertices {
                     v.colour[0] *= v.colour[3];
                     v.colour[1] *= v.colour[3];
@@ -1155,7 +1198,10 @@ fn load_hud(
     let layout = match archives
         .read_name(entry)
         .map_err(|e| e.to_string())
-        .and_then(|blob| oag_formats::fexml::expand(&blob).map_err(|e| e.to_string()))
+        // `text`, not `expand`: the PS2 ships these five layouts as plain
+        // `<?xml` where the PSP shortens them, and reaching for `expand`
+        // refused the PS2's outright and took the whole HUD with it.
+        .and_then(|blob| oag_formats::fexml::text(&blob).map_err(|e| e.to_string()))
     {
         Ok(xml) => {
             let layout = crate::hud::Layout::from_xml(&xml);
@@ -1181,7 +1227,9 @@ fn load_hud(
     // through the sheet rather than binding the atlas directly means the HUD
     // shares the renderer every other screen uses, `Draw::Sprite` and all.
     let mut sheet = crate::sprite::Sheet::default();
-    match archives.read_name(crate::hud::ATLAS) {
+    // `read_image`, not `read_name`: the PS2 keeps this atlas under an entry
+    // its own XML's name does not hash to. See `pulse::PS2_IMAGES`.
+    match archives.read_image(crate::hud::ATLAS) {
         Ok(blob) => {
             let mut notes = Vec::new();
             let built =
@@ -1228,19 +1276,20 @@ fn load_hud(
 /// Reads one `.fnt`, falling back to the built-in glyphs and saying so.
 ///
 /// The same shape as `crate::boot::load_font`, which reads the front end's
-/// `Default` font. Not shared with it because that one reaches through
-/// `read_front_end_first` for a front-end archive order this path does not have,
-/// and threading a strategy through would be more code than the six lines it saves.
+/// `Default` font, and now the same read: both go through
+/// [`pulse::Archives::read_font`], so a PS2 source finds the glyph atlas the
+/// disc keeps in the entry after the `.fnt` rather than falling back to 5x7.
+/// Kept separate only so the report line says which font is being talked about.
+///
+/// Both HUD fonts are pre-outlined on both discs - six distinct greys, alpha
+/// covering glyph *plus* border - so `Atlas::from_font`'s body/outline split
+/// applies unchanged here; see `docs/formats/fnt.md`.
 fn hud_font(
     archives: &mut pulse::Archives,
     name: &str,
     report: &mut Vec<String>,
 ) -> crate::font::Atlas {
-    match archives
-        .read_name(name)
-        .map_err(|e| e.to_string())
-        .and_then(|blob| oag_formats::fnt::Font::parse(&blob).map_err(|e| e.to_string()))
-    {
+    match archives.read_font(name).map_err(|e| e.to_string()) {
         Ok(font) => {
             report.push(format!(
                 "HUD font {name}: {}x{} atlas, {} glyph(s), line height {}",
@@ -3361,9 +3410,11 @@ impl Scene {
         // `GU_FIX`/`GU_FIX` branch (`is_additive_blend()`), the same
         // `dst + src` equation as the ribbon, not the flare's
         // alpha-weighted one - see
-        // `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`. The baked alpha
-        // falloff is premultiplied into the vertex RGB above, since this
-        // blend ignores alpha as a weight entirely.
+        // `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`. The authored
+        // vertex alpha is premultiplied into the RGB at the load site above,
+        // which is a compensation with no recovered mechanism - that comment
+        // records what the authored data holds and what removing it looks
+        // like.
         let boost = boost_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {

@@ -216,14 +216,31 @@ pub fn looks_like_font(data: &[u8]) -> bool {
     data.len() >= 4 && data[0] == VERSION && &data[1..4] == MAGIC
 }
 
-impl Font {
-    /// Parses a font.
+/// The metrics half of a `.fnt`: everything but the pixels.
+///
+/// Split out because the PS2 build ships exactly this and keeps its atlas
+/// somewhere else - see [`Font::with_atlas`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Metrics {
+    /// Distance between baselines, in pixels.
+    pub line_height: u32,
+    /// The word at `+0x14`, 0 or 4. Not decoded.
+    pub unknown: u32,
+    /// Where the atlas block begins. Equal to the file's own length when there
+    /// is no atlas in the file, which is how the PS2 build stores it.
+    pub atlas_at: usize,
+    /// Glyphs, in codepoint order.
+    pub glyphs: Vec<Glyph>,
+}
+
+impl Metrics {
+    /// Parses the header, the codepoint table and the glyph records, and stops
+    /// before the atlas.
     ///
     /// # Errors
     ///
-    /// Fails when the magic is wrong, a declared offset runs past the end, the
-    /// atlas is not 4bpp, or the atlas block is not exactly
-    /// `64 + clut_size + width * height / 2` bytes.
+    /// Fails when the magic is wrong, a declared table runs past the end, or a
+    /// glyph record's box disagrees with its declared size.
     pub fn parse(data: &[u8]) -> Result<Self> {
         if data.len() < HEADER_LEN {
             return Err(Error::TooShort { got: data.len() });
@@ -277,6 +294,41 @@ impl Font {
             }
             glyphs.push(glyph);
         }
+
+        Ok(Self {
+            line_height,
+            unknown,
+            atlas_at,
+            glyphs,
+        })
+    }
+
+    /// Whether the file carries its own atlas.
+    ///
+    /// False on every PS2 `.fnt`, where `atlas_at` is the file's own length.
+    #[must_use]
+    pub fn has_embedded_atlas(&self, data: &[u8]) -> bool {
+        self.atlas_at + ATLAS_HEADER_LEN <= data.len()
+    }
+}
+
+impl Font {
+    /// Parses a font whose atlas is inside the file, as the PSP build stores it.
+    ///
+    /// # Errors
+    ///
+    /// Every way [`Metrics::parse`] can fail, plus a missing or malformed
+    /// atlas: not 4bpp, or a block that is not exactly
+    /// `64 + clut_size + width * height / 2` bytes. A PS2 `.fnt` fails here
+    /// with [`Error::TooShort`] and needs [`Font::with_atlas`] instead.
+    pub fn parse(data: &[u8]) -> Result<Self> {
+        let metrics = Metrics::parse(data)?;
+        let Metrics {
+            line_height,
+            unknown,
+            atlas_at,
+            glyphs,
+        } = metrics;
 
         let atlas = data.get(atlas_at..).ok_or(Error::OutOfRange {
             what: "atlas",
@@ -342,6 +394,52 @@ impl Font {
             palette,
             indices,
             glyphs,
+        })
+    }
+
+    /// Builds a font from metrics that carry no pixels and an atlas read from
+    /// somewhere else.
+    ///
+    /// This is the PS2 build: its `.fnt` ends where the atlas would start and
+    /// the glyph sheet is its own archive entry, a
+    /// [`PSMT4`](crate::ps2_texture::Layout::Psmt4) texture. `indices` is one
+    /// palette index per pixel in raster order and `palette` is RGBA8888.
+    ///
+    /// # Alpha is the caller's to normalise
+    ///
+    /// A [`crate::ps2_texture`] palette keeps the GS's 0-128 alpha, and
+    /// [`Self::alpha_at`] is read as coverage on the usual 0-255 scale, so a
+    /// caller handing over a PS2 palette has to double it first -
+    /// [`crate::ps2_texture::Ps2Texture::to_rgba`] is where that rule is
+    /// written down. Doing it here would be wrong for a palette that was
+    /// already full range.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::AtlasSizeMismatch`] when `indices` is not `width * height`
+    /// long.
+    pub fn with_atlas(
+        metrics: Metrics,
+        width: u16,
+        height: u16,
+        palette: Vec<[u8; 4]>,
+        indices: Vec<u8>,
+    ) -> Result<Self> {
+        let pixels = usize::from(width) * usize::from(height);
+        if indices.len() != pixels {
+            return Err(Error::AtlasSizeMismatch {
+                expected: pixels,
+                got: indices.len(),
+            });
+        }
+        Ok(Self {
+            line_height: metrics.line_height,
+            unknown: metrics.unknown,
+            width,
+            height,
+            palette,
+            indices,
+            glyphs: metrics.glyphs,
         })
     }
 

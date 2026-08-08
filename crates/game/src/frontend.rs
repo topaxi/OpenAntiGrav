@@ -263,7 +263,84 @@ pub enum Draw {
 }
 
 /// The PSP's screen, which the XML's coordinates are in.
+///
+/// Still a constant, and still the PSP's: it is what our own layouts
+/// (`crate::loading`), the HUD's bounds checks and `oag_race`'s authored aspect
+/// are written against, and every front-end test embeds PSP XML. A source that
+/// authors somewhere else says so through [`Space`] instead of redefining this.
 pub const SCREEN: (f32, f32) = (480.0, 272.0);
+
+/// The coordinate space a source's front-end XML places widgets in, and what
+/// that space is displayed as.
+///
+/// # Why these are two numbers and not one
+///
+/// On the PSP they are the same ratio and nothing notices. On the PS2 they are
+/// not, because its pixels are not square: `Skin.xml` places widgets in a
+/// **640x448** grid, and a PAL 640x448 frame is shown as **4:3**. Deriving the
+/// display aspect from the grid would stretch the whole front end 7% wide
+/// (640/448 = 1.429 against 4:3 = 1.333), and using the display aspect as the
+/// grid would put every widget in the wrong place. Three sites need one or the
+/// other and picking the wrong one is silent on the PSP:
+///
+/// - the renderer's `screen` uniform, which maps a draw's rect onto the
+///   viewport, wants the **grid**;
+/// - `crate::render::letterbox`, which fits that grid into a window without
+///   distorting it, wants the **display aspect**;
+/// - [`pillarbox`] wants **both** - it returns a rect in grid coordinates, but
+///   the decision of whether a picture is wider or narrower than the screen is
+///   a question about display aspects. This is the one that stays wrong after
+///   the other two are fixed, and it is what `INTRO512.PSS` runs into.
+///
+/// # Evidence for the PS2 grid
+///
+/// The PS2 `Skin.xml`'s layout is the PSP's, scaled by exactly the resolution
+/// ratio. `BOOT_PRESS_START` sits at `x=613 y=362` against the PSP's `460`/`230`
+/// on the same disc region, the `Show Logo` logo at `y=119` against `72`, and
+/// the extremes over the whole file are `x=613 y=415` against `x=460 y=252`.
+/// Every one of those matches 640/480 and 448/272 to better than a tenth of a
+/// percent: 613/460 = 1.3326 against 1.3333, and 415/252 = 1.6468 against
+/// 1.6471. Confidence **95** - the arithmetic is unambiguous and 640x448 is
+/// PAL's own frame; what is not independently confirmed is the *display*
+/// aspect, which is taken from `crate::display::Aspect::Ps2`'s existing 4:3
+/// rather than measured here.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Space {
+    /// The grid widget coordinates are in.
+    pub size: (f32, f32),
+    /// What that grid is shown as. **Not** `size.0 / size.1`.
+    pub display_aspect: f32,
+}
+
+impl Space {
+    /// 480x272 square pixels, shown as itself.
+    pub const PSP: Self = Self {
+        size: SCREEN,
+        display_aspect: SCREEN.0 / SCREEN.1,
+    };
+    /// PAL's 640x448, shown as 4:3.
+    pub const PS2: Self = Self {
+        size: (640.0, 448.0),
+        display_aspect: 4.0 / 3.0,
+    };
+
+    /// The space a source authors in, from what its archives say it is.
+    #[must_use]
+    pub fn of(platform: oag_disc::Platform) -> Self {
+        match platform {
+            oag_disc::Platform::Ps2 => Self::PS2,
+            // A source we could not identify is read as a PSP one, which is
+            // what every other unidentified-source path here already does.
+            _ => Self::PSP,
+        }
+    }
+}
+
+impl Default for Space {
+    fn default() -> Self {
+        Self::PSP
+    }
+}
 
 /// Fits `aspect` inside `screen` without distorting it, centred on whichever
 /// axis is left over.
@@ -275,15 +352,38 @@ pub const SCREEN: (f32, f32) = (480.0, 272.0);
 /// than `SCREEN`'s ~16:9, so this pillarboxes it rather than stretching it
 /// wide. See `crate::movie::Movie::display_aspect`.
 pub fn pillarbox(screen: (f32, f32), aspect: (u32, u32)) -> [f32; 4] {
-    let (screen_w, screen_h) = screen;
-    let content = aspect.0 as f32 / aspect.1 as f32;
-    let frame = screen_w / screen_h;
+    pillarbox_in(
+        Space {
+            size: screen,
+            display_aspect: screen.0 / screen.1,
+        },
+        aspect,
+    )
+}
 
+/// [`pillarbox`], told what the grid is *shown* as rather than assuming square
+/// pixels.
+///
+/// The returned rect is in `space.size`'s coordinates, but which way a picture
+/// has to be boxed is decided against `space.display_aspect`. The two agree on
+/// the PSP and disagree on the PS2 by 7%, which is a `.PSS` pillarboxed inside
+/// a screen that was already its own shape. See [`Space`].
+#[must_use]
+pub fn pillarbox_in(space: Space, aspect: (u32, u32)) -> [f32; 4] {
+    let (screen_w, screen_h) = space.size;
+    let content = aspect.0 as f32 / aspect.1 as f32;
+    let frame = space.display_aspect;
+
+    // A `w` by `h` slice of a grid that shows as `frame` is displayed at
+    // `frame * (w / screen_w) / (h / screen_h)`. Setting that equal to
+    // `content` and solving for the axis being given up is what these two are;
+    // both reduce to the old `screen_w / content` and `screen_h * content` when
+    // the pixels are square, which is why the PSP never noticed.
     if content >= frame {
-        let height = screen_w / content;
+        let height = frame * screen_h / content;
         [0.0, (screen_h - height) / 2.0, screen_w, height]
     } else {
-        let width = screen_h * content;
+        let width = content * screen_w / frame;
         [(screen_w - width) / 2.0, 0.0, width, screen_h]
     }
 }
@@ -330,6 +430,13 @@ pub struct Frontend {
     /// what keeps its picture from being stretched into the wrong aspect. See
     /// `crate::movie::Movie::display_aspect`.
     video_aspect: (u32, u32),
+    /// The grid this source's XML places widgets in, and what it is shown as.
+    ///
+    /// [`Space::PSP`] unless a caller says otherwise, because every screen this
+    /// file's own tests parse is PSP XML. `boot::load` sets it from the
+    /// archives' platform - see [`Space`] for why the PS2 needs it and what
+    /// goes wrong silently without it.
+    space: Space,
     /// Whether a picture is available at all.
     has_picture: bool,
     /// The looping backdrop `FE Screen` plays under `Show Logo`, and where it
@@ -427,6 +534,7 @@ impl Frontend {
             chosen: None,
             auto_confirm: false,
             placements,
+            space: Space::PSP,
             player: crate::movie::Player::new(frames, false, movie_frame_rate),
             video_aspect,
             has_picture,
@@ -450,6 +558,25 @@ impl Frontend {
     /// Draws or hides the intro's frame counter.
     pub fn set_overlay(&mut self, on: bool) {
         self.overlay = on;
+    }
+
+    /// Tells the sequence which grid its XML places widgets in.
+    ///
+    /// **Call this before [`Self::set_backdrop`].** The backdrop's rect is
+    /// computed once, from the space in force at the time, so setting the space
+    /// afterwards leaves a PSP-shaped rect on a PS2 screen.
+    pub fn set_space(&mut self, space: Space) {
+        self.space = space;
+    }
+
+    /// The grid this sequence's draw rects are in.
+    ///
+    /// Whatever draws them has to be told: the renderer maps a rect onto the
+    /// viewport through it, and a renderer still assuming 480x272 would put a
+    /// PS2 screen's widgets at a third again their proper size. See [`Space`].
+    #[must_use]
+    pub fn space(&self) -> Space {
+        self.space
     }
 
     /// Gives the sequence the looping backdrop `Show Logo` sits on.
@@ -479,7 +606,7 @@ impl Frontend {
         }
         self.backdrop = Some((
             crate::movie::Player::new(frames, true, frame_rate),
-            pillarbox(SCREEN, aspect),
+            pillarbox_in(self.space, aspect),
         ));
     }
 
@@ -873,7 +1000,7 @@ impl Frontend {
     /// What to draw this frame.
     #[must_use]
     pub fn draw_list(&self) -> Vec<Draw> {
-        let (width, height) = SCREEN;
+        let (width, height) = self.space.size;
         let mut out = vec![Draw::Fill {
             rect: [0.0, 0.0, width, height],
             color: [0.0, 0.0, 0.0, 1.0],
@@ -882,7 +1009,7 @@ impl Frontend {
         if self.machine.is_in(states::INTRO) || self.machine.is(states::LOGO_FMV) {
             if self.has_picture {
                 out.push(Draw::Video {
-                    rect: pillarbox(SCREEN, self.video_aspect),
+                    rect: pillarbox_in(self.space, self.video_aspect),
                     frame: self.player.frame(),
                     // The same number as `frame` here, the intro being played
                     // once through rather than looped, and carried anyway so a
@@ -915,6 +1042,7 @@ impl Frontend {
         }
 
         if self.machine.is(states::LANGUAGE_SELECTION) {
+            self.insert_backdrop(&mut out);
             self.draw_language_selection(&mut out);
             return out;
         }
@@ -937,21 +1065,20 @@ impl Frontend {
             // a second late and throbs instead of appearing at once and standing
             // still. See `docs/architecture/frontend-boot.md`.
             let mut out = self.draw_screen(states::SHOW_LOGO);
-            if let Some((player, rect)) = &self.backdrop {
-                out.insert(
-                    1,
-                    Draw::Video {
-                        rect: *rect,
-                        frame: player.frame(),
-                        position: player.position(),
-                        source: Video::Backdrop,
-                    },
-                );
-            }
+            self.insert_backdrop(&mut out);
             return out;
         }
 
         if self.machine.is(states::LAUNCH_GAME) {
+            // The same loop, for the same reason, and this one is the frame a
+            // player actually stares at: the composition root draws
+            // `Launch Game` **once and then stalls** building the menus (see
+            // `Session::frame`), so this is on screen for the whole of that
+            // load rather than for a frame. Without the backdrop under it the
+            // START press read as `Show Logo` -> a few hundred milliseconds of
+            // black -> the menus, which is most of the flicker the transition
+            // was reported for.
+            self.insert_backdrop(&mut out);
             out.push(Draw::Text {
                 x: width / 2.0,
                 y: height / 2.0 - 4.0,
@@ -965,6 +1092,37 @@ impl Frontend {
         out
     }
 
+    /// Puts the `FE Screen` backdrop at the bottom of a screen's draw list.
+    ///
+    /// At index 1, after the black fill a screen is cleared with and under
+    /// everything else, because the list is drawn in its own order.
+    ///
+    /// **Every screen between the intro and the menus gets it, not only
+    /// `Show Logo`.** The movie belongs to `FE Screen`, is `autostart` and
+    /// `repeat`, and the boot opens it long before any of these screens draw;
+    /// on the disc its children are drawn over a loop that never stops. Leaving
+    /// it off a screen therefore does not mean "the loop is not running there",
+    /// it means one screen punches a black hole in a continuous picture - which
+    /// is what both reported transition defects turned out to be made of.
+    /// `Language Selection` is this build's own screen rather than one of the
+    /// disc's, so putting it on the same backdrop is a consistency judgement;
+    /// `Launch Game` is a continuity requirement. See
+    /// [menus.md](../../../docs/architecture/menus.md).
+    fn insert_backdrop(&self, out: &mut Vec<Draw>) {
+        let Some((player, rect)) = &self.backdrop else {
+            return;
+        };
+        out.insert(
+            1,
+            Draw::Video {
+                rect: *rect,
+                frame: player.frame(),
+                position: player.position(),
+                source: Video::Backdrop,
+            },
+        );
+    }
+
     /// A named screen's own widgets, drawn from the XML alone.
     ///
     /// This is what the disc's data describes and nothing else: no state, no
@@ -972,7 +1130,7 @@ impl Frontend {
     /// image path is checked without moving any screen into the boot order.
     #[must_use]
     pub fn draw_screen(&self, name: &str) -> Vec<Draw> {
-        let (width, height) = SCREEN;
+        let (width, height) = self.space.size;
         let mut out = vec![Draw::Fill {
             rect: [0.0, 0.0, width, height],
             color: [0.0, 0.0, 0.0, 1.0],
@@ -1009,7 +1167,7 @@ impl Frontend {
     fn draw_backdrops(&self, screen: &Screen, out: &mut Vec<Draw>) {
         for &fill in &screen.fills {
             out.push(Draw::Fill {
-                rect: [0.0, 0.0, SCREEN.0, SCREEN.1],
+                rect: [0.0, 0.0, self.space.size.0, self.space.size.1],
                 color: argb_to_rgba(fill),
             });
         }
@@ -1037,7 +1195,7 @@ impl Frontend {
             let w = image.width.unwrap_or(placed.width as f32);
             let h = image.height.unwrap_or(placed.height as f32);
             let x = if image.x == 0.0 {
-                (SCREEN.0 - w) / 2.0
+                (self.space.size.0 - w) / 2.0
             } else {
                 image.x
             };
@@ -1189,6 +1347,85 @@ mod tests {
     use super::*;
 
     const FRAME: f64 = 1001.0 / 30_000.0;
+
+    /// The PS2 grid is the PSP's, scaled by the resolution ratio.
+    ///
+    /// Not a round-number check: `Skin.xml`'s own extremes are `x=613 y=415` on
+    /// the PS2 against `x=460 y=252` on the PSP, and both ratios have to land on
+    /// 640/480 and 448/272 for 640x448 to be the grid it authors in. They do, to
+    /// under a tenth of a percent. See [`Space`].
+    #[test]
+    fn the_ps2_grid_is_the_psp_layout_scaled_by_the_resolution() {
+        let psp = Space::PSP.size;
+        let ps2 = Space::PS2.size;
+        assert!((613.0 / 460.0 - ps2.0 / psp.0).abs() < 0.002, "x extreme");
+        assert!((415.0 / 252.0 - ps2.1 / psp.1).abs() < 0.002, "y extreme");
+        // **220, the USA PSP's value, not the EU's 230.** The EU PSP disc moved
+        // this widget down 10px on its own; the PS2 EU disc did not follow it,
+        // and 362/220 lands on the resolution ratio while 362/230 misses it by
+        // 4%. So the PS2 layout was scaled from the USA-era artwork rather than
+        // from the EU PSP release - a small dating fact this test happens to
+        // pin, and the reason a naive EU-to-EU comparison looks wrong.
+        assert!(
+            (362.0 / 220.0 - ps2.1 / psp.1).abs() < 0.005,
+            "PRESS START y"
+        );
+        assert!((119.0 / 72.0 - ps2.1 / psp.1).abs() < 0.01, "the logo's y");
+    }
+
+    /// The grid and the display aspect are two numbers, and on the PS2 they
+    /// disagree.
+    #[test]
+    fn a_ps2_grid_is_not_its_own_display_aspect() {
+        assert!((Space::PSP.display_aspect - Space::PSP.size.0 / Space::PSP.size.1).abs() < 1e-6);
+        let as_grid = Space::PS2.size.0 / Space::PS2.size.1;
+        assert!(
+            (as_grid - Space::PS2.display_aspect).abs() > 0.09,
+            "640/448 is {as_grid}, and taking it for the display aspect is the 7% stretch"
+        );
+    }
+
+    /// A picture already the screen's shape fills it, on either disc.
+    ///
+    /// The PS2 half is the case that was wrong and stayed wrong after the
+    /// renderer was fixed: `INTRO512.PSS` declares 4:3, the PS2 screen *is* 4:3,
+    /// and the old square-pixel comparison boxed it inside itself anyway.
+    #[test]
+    fn a_picture_of_the_screens_own_shape_is_not_boxed() {
+        assert_eq!(
+            pillarbox_in(Space::PSP, (480, 272)),
+            [0.0, 0.0, 480.0, 272.0]
+        );
+        let ps2 = pillarbox_in(Space::PS2, (4, 3));
+        assert!(
+            (ps2[2] - 640.0).abs() < 0.01 && (ps2[3] - 448.0).abs() < 0.01,
+            "a 4:3 cut fills a 4:3 screen: {ps2:?}"
+        );
+        assert!(ps2[0].abs() < 0.01 && ps2[1].abs() < 0.01, "{ps2:?}");
+    }
+
+    /// A wider picture is letterboxed, and the bars are in grid units.
+    #[test]
+    fn a_wider_picture_is_letterboxed_within_the_grid() {
+        let ps2 = pillarbox_in(Space::PS2, (16, 9));
+        assert!((ps2[2] - 640.0).abs() < 0.01, "full width: {ps2:?}");
+        // 4:3 shown, 16:9 wanted, so the height gives up 3/4 of itself.
+        let wanted = (4.0 / 3.0) * 448.0 / (16.0 / 9.0);
+        assert!((ps2[3] - wanted).abs() < 0.01, "{ps2:?} against {wanted}");
+        assert!((ps2[1] - (448.0 - wanted) / 2.0).abs() < 0.01, "centred");
+    }
+
+    /// The old two-argument form is the square-pixel case and is unchanged.
+    #[test]
+    fn the_square_pixel_form_still_agrees_with_itself() {
+        for aspect in [(4, 3), (16, 9), (512, 512), (480, 272)] {
+            assert_eq!(
+                pillarbox(SCREEN, aspect),
+                pillarbox_in(Space::PSP, aspect),
+                "{aspect:?}"
+            );
+        }
+    }
 
     const XML: &str = r#"
 <Screen>
@@ -1755,6 +1992,65 @@ mod tests {
             frontend.backdrop().expect("a backdrop was set").position(),
             "and it is the playhead's own position, not a second count of it"
         );
+    }
+
+    /// Every screen between the intro and the menus draws the one loop.
+    ///
+    /// `Launch Game` is the one that matters: the composition root draws it
+    /// **once and then stalls** building the menus, so it is on screen for the
+    /// whole of that load. Without the backdrop it was a few hundred
+    /// milliseconds of black between `Show Logo` and the menus - the flicker on
+    /// the START press, and the half of it no amount of feed bookkeeping could
+    /// have fixed, because a screen that emits no video draw has nothing to
+    /// take a frame for.
+    #[test]
+    fn the_screens_after_the_intro_all_sit_on_the_backdrop() {
+        for state in [
+            states::LANGUAGE_SELECTION,
+            states::SHOW_LOGO,
+            states::LAUNCH_GAME,
+        ] {
+            let mut frontend = frontend(300);
+            frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+            let mut input = Input::new();
+            if state == states::LANGUAGE_SELECTION {
+                // START skips the movie, and the redirect that follows it
+                // spends one update on its way to the picker.
+                input.begin_frame(1 << button::START);
+                frontend.update(FRAME, &mut input, None);
+                input.begin_frame(0);
+                frontend.update(FRAME, &mut input, None);
+            } else {
+                pick_a_language(&mut frontend, &mut input);
+                if state == states::LAUNCH_GAME {
+                    // `Show Logo` leaves on START and on nothing else.
+                    input.begin_frame(0);
+                    input.begin_frame(1 << button::START);
+                    frontend.update(FRAME, &mut input, None);
+                }
+            }
+            assert!(
+                frontend.machine().is(state),
+                "meant to be on {state}, got {:?}",
+                frontend.machine().current()
+            );
+
+            let draws = frontend.draw_list();
+            assert!(
+                matches!(draws[0], Draw::Fill { .. }),
+                "{state} still clears to black first: {draws:?}"
+            );
+            assert!(
+                matches!(
+                    draws[1],
+                    Draw::Video {
+                        source: Video::Backdrop,
+                        ..
+                    }
+                ),
+                "{state} must draw the backdrop under its own widgets: {draws:?}"
+            );
+        }
     }
 
     #[test]

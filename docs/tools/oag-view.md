@@ -90,6 +90,45 @@ recorded in [vex.md](../formats/vex.md) was measured **by hand, once**. There is
 no standing assertion, so a regression in the scale factor would not be caught
 today.
 
+### `--draws` and `--only`: attributing a wrong pixel to a draw call
+
+```sh
+oag-view <image>:<archive> --mesh 'Data\Environments\16_Track\track.vex' --draws
+oag-view <image>:<archive> --mesh 'Data\Environments\16_Track\track.vex' \
+    --only node:74 --screenshot /tmp/one-node.png
+```
+
+`--draws` prints one line per draw call - which of the three lists it is in
+(and therefore which pipeline draws it), the scene-tree node it came from, its
+triangle count, the texture it binds and that texture's size, how many whole
+tiles of it the vertices span, the mean vertex colour, and the world centre -
+followed by the material side of the same chain per batch (material index,
+material flags, `pass_mask`, header byte 3, and whether the texture ordinal the
+material names is in range and decoded), and a texture table.
+
+Run it `--release` on a track. A circuit is ~2,000 draw calls over ~180,000
+vertices and the debug build takes minutes to walk them; the release build
+takes seconds.
+
+The line to look for first is a draw binding **`none -> white 1x1`**: that is
+the fallback `mesh_render::build` binds for an unresolved texture, and such a
+draw paints white whatever its material meant to paint. A `uv` span well over
+1.00 means the texture repeats, under 1.00 that one copy is stretched - which
+is the difference between a small texture used as intended and one that is
+being magnified because something upstream is wrong.
+
+`--only <text>` then draws **only** the parts whose node name or texture label
+contains that text, reframing the camera on what is left; `--only node:N`
+selects one scene-tree node by index, which is the only handle a track's
+geometry has, since every `Mesh` node in a track `.vex` carries an empty name.
+
+The two together are what turns a guess into an attribution. Working out that
+`16_Track`'s blown-out white board over the start line was `billboard8.tga` and
+not the `col_banners2_ADD.tga` sign beside it took exactly this: the name said
+one thing, `--draws` said the banner resolved its texture and sat in the blend
+list, and hiding it left the white block untouched. See
+[vex.md](../formats/vex.md#texture-rows-are-padded-to-16-bytes).
+
 ## Tracks
 
 ```sh

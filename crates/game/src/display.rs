@@ -13,8 +13,9 @@
 //! - [`Scale`] is how many pixels that shape is actually rendered with.
 //! - [`Fov`] is how much of the world fits in it.
 //! - [`BoostFovKick`] is how much [`Fov`] itself moves for a moment on a
-//!   speed pad - invented here first, then measured to exist in the original
-//!   too (see its own doc for the capture that showed it).
+//!   speed pad - **this project's own effect, not a reimplementation of the
+//!   original's** (see its own doc, which records what the original does
+//!   instead and why the two are not being reconciled).
 //! - [`Brightness`] and [`Gamma`] are what happens to the finished picture on
 //!   its way to the surface.
 //!
@@ -1055,19 +1056,30 @@ percentage!(Fov, AUTHORED, "field of view");
 /// scales in, so this composes with a player's own field-of-view choice
 /// rather than fighting it. 0 turns the effect off.
 ///
-/// **The original has this effect, and this project found that out after
-/// inventing its own version.** This type shipped as an authored effect on the
-/// reasoning that a boost the player cannot feel reads as nothing happening.
-/// A 2026-08-07 matched-pose comparison against a captured PPSSPP pad
-/// crossing on Talon's Junction then showed the original's whole scene zoom
-/// out during the boost and settle back over roughly half a second after the
-/// force ends: trackside geometry reads ~1.4-1.5x smaller at boost age 0.3-0.7 s
-/// than at 1.3 s+, from a camera whose recorded pose barely moved, and an fov
-/// sweep of our posed render lands the boosted frame at roughly 90-95 degrees
-/// against the authored 60. Nothing in the *binary* has been read that does
-/// this - the measurement is a live capture, the mechanism and exact law are
-/// unrecovered - so the tiers here remain this project's own numbers, and the
-/// measured original sits well above [`Self::DEFAULT`], nearest the 32 tier.
+/// **This effect is ours by choice, and it is not being fitted to the
+/// original.** It shipped as an authored effect on the reasoning that a boost
+/// the player cannot feel reads as nothing happening, and that reasoning is
+/// still the whole justification. Every number here is this project's own.
+///
+/// Two later findings about the original are recorded because they are
+/// interesting, and **neither is a specification for this type**:
+///
+/// - a 2026-08-07 matched-pose comparison against a captured PPSSPP pad
+///   crossing on Talon's Junction shows the original's whole scene zoom out
+///   during a boost and settle back over roughly half a second - trackside
+///   geometry ~1.4-1.5x smaller at boost age 0.3-0.7 s than at 1.3 s+, with an
+///   fov sweep of our posed render landing the boosted frame near 90-95
+///   degrees against the authored 60;
+/// - the original's fov chain was then recovered on 2026-08-08
+///   (`docs/ghidra/functions/psp-pulse-usa/camera.md`): its fov is
+///   `authored + ship->0x790`, an additive **degrees** term on a `+/-30`
+///   clamp, which is a different shape from this type's tangent multiplier.
+///
+/// **Do not retune the tiers below against either.** They differ from the
+/// original by design, not by defect; an earlier version of this doc read as
+/// a calibration instruction ("the measured original sits nearest the 32
+/// tier") and that reading is withdrawn.
+///
 /// See `crate::race::Race::projection` for where it is applied and
 /// `crate::race::BOOST_FOV_OPEN_RATE`/`BOOST_FOV_CLOSE_RATE` for how it moves.
 ///

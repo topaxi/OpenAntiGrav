@@ -1171,19 +1171,31 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
 
         // Only the base level; mips follow it and are not needed for viewing.
         let pixels = usize::from(width) * usize::from(height);
-        let base_bytes = pixels * usize::from(bits_per_pixel) / 8;
         let texels = &data[at + clut_size..end];
+        let row = texture_row_bytes(width, bits_per_pixel);
+        let stride = texture_row_stride(width, bits_per_pixel);
 
-        let indices = if bits_per_pixel == 8 {
-            texels.get(..base_bytes).unwrap_or(texels).to_vec()
-        } else {
-            let mut v = Vec::with_capacity(pixels);
-            for &b in texels.get(..base_bytes).unwrap_or(texels) {
-                v.push(b & 0x0f);
-                v.push(b >> 4);
+        let mut indices = Vec::with_capacity(pixels);
+        for y in 0..usize::from(height) {
+            let Some(line) = texels.get(y * stride..y * stride + row) else {
+                break;
+            };
+            if bits_per_pixel == 8 {
+                indices.extend_from_slice(line);
+            } else {
+                for &b in line {
+                    indices.push(b & 0x0f);
+                    indices.push(b >> 4);
+                }
             }
-            v
-        };
+        }
+        // `to_rgba` promises exactly `width * height` texels and its consumers
+        // index against those dimensions, so a block too short to hold every
+        // row (which no Pulse PSP texture is - see the closure argument in
+        // `texture_row_stride` - but a file sized by some other rule could be)
+        // is padded out rather than handed on short. The same call caps a
+        // 4-bit odd width, where the last byte carries a pixel past the end.
+        indices.resize(pixels, 0);
 
         out.push(Some(EmbeddedTexture {
             name: node.name,
@@ -1199,6 +1211,39 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     }
 
     Ok(out)
+}
+
+/// How many bytes of one texture row hold actual picture, before padding.
+#[must_use]
+pub fn texture_row_bytes(width: u16, bits_per_pixel: u8) -> usize {
+    (usize::from(width) * usize::from(bits_per_pixel)).div_ceil(8)
+}
+
+/// The stride between texture rows: [`texture_row_bytes`] rounded up to 16.
+///
+/// **The GE's texture buffer width is in units of 16 bytes**, so a row narrower
+/// than that is padded out and the next row starts on the next 16-byte
+/// boundary, not immediately after the picture. A decoder that reads rows back
+/// to back is right only where the picture already fills the stride - which is
+/// every 4-bit texture 32 pixels or wider and every 8-bit one 16 or wider, i.e.
+/// nearly all of them, which is exactly why this went unnoticed.
+///
+/// **Confidence 90.** Measured rather than assumed: every `Texture` node
+/// declares its own total texel-block size at payload `+0x0c`, and summing this
+/// stride over each texture's declared mip levels reproduces that number for
+/// **135 of 135** textures on `16_Track`. The unpadded formula reproduces
+/// **22** of them - it agrees only where the padding is a no-op. See
+/// `crates/formats/tests/texture_stride_ground_truth.rs`, which re-measures it
+/// across circuits and ships, and `docs/formats/vex.md`.
+///
+/// What this is *not*: swizzling. A swizzled PSP texture is reordered into
+/// 16-byte by 8-row blocks, and reading it row-wise would corrupt every texture
+/// wider than the block rather than only the narrow ones. Every 64-pixel-wide
+/// 4-bit texture on the disc decodes correctly read row-wise, so this data is
+/// linear with padded rows.
+#[must_use]
+pub fn texture_row_stride(width: u16, bits_per_pixel: u8) -> usize {
+    texture_row_bytes(width, bits_per_pixel).next_multiple_of(16)
 }
 
 /// One material of a mesh, from the stride-`0x14` array at `+0x30`.

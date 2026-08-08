@@ -396,6 +396,71 @@ Two consequences that are easy to undo by accident:
   when a race starts and hand it back to `menu_playhead`, with no feed restart -
   the feed parks at most four frames past where the menus stopped taking from it.
 
+### A continuous playhead is not a continuous picture
+
+Fixing the two playheads above made the *loop* continuous and left the *picture*
+flashing black, so the user's report came back: the intro-to-`Show Logo` handoff
+was still not as smooth as the original, and the START press into the menus still
+flickered. Neither was a playhead bug. Three mechanisms, all measured on a real
+windowed run of the EU PSP disc under Xvfb, with a temporary probe printing the
+draw list's named movie, the position it asked for, what the feed handed back and
+whether the video draw survived:
+
+1. **`Feed::take_upto` pops, and the pump threw the frame away.** The pump above
+   is required, but it took the frame and dropped it on every frame that was not
+   drawing the backdrop. A ring has no memory of what it handed over, so the
+   first frame that actually wanted to *draw* the backdrop asked for a position
+   the ring was already past and got `None`. Caught in the act: at window frame
+   480 the front end was in `Language Selection`, drew no video, and took
+   position 119; at frame 482 `Show Logo` asked for position 119 and got
+   nothing, so its video draw was trimmed and the logo drew on black for two
+   frames. Timing-dependent - it reproduced on roughly one boot in three -
+   which is exactly the shape of an intermittent "sometimes it is not smooth".
+2. **The menus get a fresh `Renderer`, and a fresh renderer is empty planes.**
+   `open_menus` builds one so the menus can also be opened from somewhere that is
+   not the front end. Its video planes start zeroed, and zeroed I420 is green
+   rather than black, so `MenuStage` refuses to draw the quad until a frame has
+   arrived. With the pump having just discarded the frame at the playhead, that
+   took **three window frames every single boot** - deterministic, unlike (1).
+   Frame 1803 was `Launch Game`, drew no video and took position 450; frames
+   1804-1806 were the menus asking for position 450 and getting nothing, drawing
+   their rows on black.
+3. **Two screens on the boot path emitted no video draw at all**, so no amount of
+   feed bookkeeping could have covered them. `Launch Game` is the one that
+   matters: `Session::frame` draws it **once and then stalls** building the
+   menus, so it is on screen for the whole of that load - a few hundred
+   milliseconds of black with `LAUNCH GAME` written across it, which is most of
+   what the START press looked like.
+
+The fixes mirror the causes. `FrontendStage` keeps the newest backdrop picture it
+took (`held_backdrop`) instead of dropping it, uploads it on the first frame the
+backdrop becomes the drawn movie, and tracks whether the planes still hold it
+(`backdrop_in_planes`) because one set of planes serves both movies and an intro
+upload displaces it. `open_menus` clones that picture into the new renderer's
+planes before the first menu frame and seeds `Backdrop::shown` to match. And
+every screen between the intro and the menus now inserts the backdrop draw, not
+only `Show Logo` - `Frontend::insert_backdrop`.
+
+**Do not "fix" the pop.** Popping is what frees a ring slot for the worker to
+decode into; stop *discarding*, not popping. `movie.rs`'s
+`a_frame_taken_is_a_frame_gone_even_at_the_same_position` pins the invariant, and
+`frontend.rs`'s `the_screens_after_the_intro_all_sit_on_the_backdrop` pins the
+draws.
+
+After the change, a full boot reports **zero** frames anywhere between the intro
+and the menus that draw without the backdrop, across four runs including the
+timings that used to reproduce (1).
+
+**That covers the boot path only, and `escape` -> menus is a fourth instance of
+the same thing.** The seeding above reads the front-end stage, so leaving a race
+still opens the menus with no picture and shows black until the restarted feed
+produces frame 0 - one to three frames, by mechanism (2). That the loop
+*restarts* there is the deliberate judgement call already argued above; that it
+shows black first is not, and the original would show frame 0 whichever way the
+loop-phase question goes. Nobody has reported it, so it is recorded rather than
+fixed - see HANDOVER's task #8 row for the fix shape, which is the same one that
+closed the boot path: stash a picture beside the playhead when a race starts.
+
 ## DISPLAY against GRAPHICS
 
 Two pages under OPTIONS rather than one, and the line between them is **whether

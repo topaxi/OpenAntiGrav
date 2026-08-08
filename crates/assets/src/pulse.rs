@@ -152,6 +152,96 @@ pub mod hashes {
     /// The American cut, which the disc's `UCUS-98712` serial argues for and
     /// nothing else does. See [`DEVPUB_REEL_SCEE`].
     pub const DEVPUB_REEL_SCEA: u32 = 0x3d2c_85f8;
+
+    /// The PS2 `WADS2.WAD` entry holding the in-race HUD atlas, the one the
+    /// five layouts call `Data\HUD\Textures\PulseHUD.mip`.
+    ///
+    /// **That name hashes to nothing on the PS2 disc**, and neither does any
+    /// spelling of it: 60 path, case and extension variants were tried against
+    /// all 7,393 hashes in both archives and none hit. The entry was found by
+    /// its picture instead - see [`super::PS2_IMAGES`] for the method and the
+    /// evidence.
+    pub const PS2_HUD_ATLAS: u32 = 0xbeaf_613c;
+    /// A second, byte-identical copy of [`PS2_HUD_ATLAS`], at entry 3583 where
+    /// the first is at 3518.
+    ///
+    /// Not an ambiguity to resolve: the PSP ships this atlas twice too, in
+    /// `FE.wad` and `Data.wad`, byte-identical at 66,576 bytes. Both PS2 copies
+    /// are 13,446 stored / 66,829 unpacked and both score 0.9999 against the
+    /// PSP silhouette. Recorded so a reader who finds the second one knows it
+    /// is the same picture.
+    pub const PS2_HUD_ATLAS_DUPLICATE: u32 = 0xf012_b5af;
+    /// The PS2 entry holding `Data\FE\Images\pulse_logo.mip`, entry 3421.
+    ///
+    /// This is the missing half of the `Show Logo` screen recorded in
+    /// `HANDOVER.md`.
+    pub const PS2_PULSE_LOGO: u32 = 0x1e6c_873e;
+    /// The PS2 entry holding `Data\FE\Images\pulse_assets.mip`, entry 3420 -
+    /// immediately before [`PS2_PULSE_LOGO`].
+    pub const PS2_PULSE_ASSETS: u32 = 0x0d31_af1b;
+}
+
+/// What a PS2 archive calls the front-end and HUD images the XML asks for by
+/// their PSP `.mip` names.
+///
+/// # Why a table and not a rule
+///
+/// The PS2 release keeps its raster images as ordinary [PS2
+/// textures](oag_formats::ps2_texture) in `WADS2.WAD`, but **not under the
+/// names its own XML uses**. `Data\HUD\Textures\PulseHUD.mip` hashes to
+/// `57d37d8c`, which is in neither archive, and no variation on the spelling
+/// helps: 60 candidates across path shape, case and extension were hashed
+/// against all 7,393 entry hashes on the disc and every one missed. The
+/// directory-position rules that solve the PS2's models and fonts do not apply
+/// either - the five `*_HUD.xml` entries sit in a run of XML with no texture
+/// anywhere near them. **How the game itself performs this lookup is not
+/// known**; a repeated 3,656-byte blob next to the HUD assets looked like a
+/// name table and was checked and ruled out (none of its 914 words is an entry
+/// hash).
+///
+/// # How the entries were found, and how sure it is
+///
+/// By the picture. Each PSP `.mip` was decoded, reduced to a silhouette - one
+/// bit per pixel, "is this texel's palette entry transparent" - and compared
+/// against every same-shaped PS2 texture on the disc. The measure is
+/// independent of palette order, which differs between the two builds.
+///
+/// | PSP name | PS2 entry | Silhouette agreement |
+/// | --- | ---: | ---: |
+/// | `Data\HUD\Textures\PulseHUD.mip` | 3518, 3583 | 0.9999, over 614 same-shape candidates |
+/// | `Data\FE\Images\pulse_logo.mip` | 3421 | 0.9946 |
+/// | `Data\FE\Images\pulse_assets.mip` | 3420 | 0.9999 |
+///
+/// Each is separated from the runner-up by a wide margin (0.71, 0.51, 0.51),
+/// and all three were then decoded and looked at: 3518 is the speed and shield
+/// bars with the weapon icons, 3421 is the Wipeout Pulse wordmark. For the HUD
+/// atlas there is a fourth, independent agreement: the `U`/`V`/`TxtrWidth`/
+/// `TxtrHeight` boxes in the PS2 layouts are **identical** to the PSP's, so the
+/// two discs index the same 256x256 arrangement.
+///
+/// # One image really is absent
+///
+/// `Data\FE\Images\gameshare_backdrop.mip` is **not on the PS2 disc**, which is
+/// a finding rather than a gap - Game Sharing is a PSP ad-hoc feature. Note the
+/// silhouette test cannot say so: that image is 93.75 % opaque, so every
+/// candidate scores 0.9375 trivially. Correlating the picture instead settles
+/// it, at 0.02 across all 28 same-shaped candidates. Do not re-run the weaker
+/// test on it.
+pub const PS2_IMAGES: &[(&str, u32)] = &[
+    (r"Data\HUD\Textures\PulseHUD.mip", hashes::PS2_HUD_ATLAS),
+    (r"Data\FE\Images\pulse_logo.mip", hashes::PS2_PULSE_LOGO),
+    (r"Data\FE\Images\pulse_assets.mip", hashes::PS2_PULSE_ASSETS),
+];
+
+/// The PS2 entry hash for an image the XML names the PSP way, if there is one.
+///
+/// See [`PS2_IMAGES`] for how the mapping was established.
+#[must_use]
+pub fn ps2_image_hash(name: &str) -> Option<u32> {
+    PS2_IMAGES
+        .iter()
+        .find(|(psp, _)| psp.eq_ignore_ascii_case(name))
+        .map(|(_, hash)| *hash)
 }
 
 /// The plugins that carry a language, in the order the disc lists them.
@@ -349,6 +439,104 @@ impl Archives {
         self.data.read_name(name)
     }
 
+    /// Reads a front-end or HUD image the XML named, from wherever this source
+    /// keeps it.
+    ///
+    /// The declared name is tried first, so the PSP path is exactly
+    /// [`Self::read_name`] and needs no platform test. Only when that misses
+    /// does the PS2 substitution in [`PS2_IMAGES`] get a look, and an image
+    /// that is in neither still fails with the original name in the message -
+    /// `Data\FE\Images\gameshare_backdrop.mip` really is absent from the PS2
+    /// disc and should keep saying so.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoSuchEntry`] naming the entry the caller asked for.
+    pub fn read_image(&mut self, name: &str) -> Result<Vec<u8>> {
+        match self.read_name(name) {
+            Ok(blob) => Ok(blob),
+            Err(original) => {
+                let Some(hash) = ps2_image_hash(name) else {
+                    return Err(original);
+                };
+                self.read_hash(hash).map_err(|_| original)
+            }
+        }
+    }
+
+    /// Reads the entry with this name hash out of whichever archive holds it.
+    ///
+    /// The hash-addressed counterpart of [`Self::read_name`], for the entries
+    /// whose names are not recovered - see [`hashes`].
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoSuchEntry`] against the bulk archive when neither has it.
+    pub fn read_hash(&mut self, hash: u32) -> Result<Vec<u8>> {
+        if let Some(fe) = self.fe.as_mut()
+            && self.data.index_of_hash(hash).is_none()
+            && fe.index_of_hash(hash).is_some()
+        {
+            return fe.read_hash(hash);
+        }
+        self.data.read_hash(hash)
+    }
+
+    /// Reads a `.fnt` and returns it with its glyph atlas attached, wherever
+    /// that atlas lives on this source.
+    ///
+    /// The two builds differ and the file itself says which is which: a PSP
+    /// `.fnt` carries its atlas inside it, a PS2 `.fnt` stops where the atlas
+    /// would begin and keeps the glyph sheet in the **next archive entry**, as
+    /// a [`PSMT4`](oag_formats::ps2_texture::Layout::Psmt4) texture. So the
+    /// embedded atlas is tried first and the following entry is only read when
+    /// there is none, which means a PSP source never touches the fallback and
+    /// this needs no platform test.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoSuchEntry`] when `name` is not on this source, and
+    /// [`Error::Font`] when the metrics, or the atlas the following entry is
+    /// supposed to hold, do not decode.
+    pub fn read_font(&mut self, name: &str) -> Result<oag_formats::fnt::Font> {
+        use oag_formats::{fnt, ps2_texture};
+
+        let blob = self.read_name(name)?;
+        let metrics = fnt::Metrics::parse(&blob).map_err(|source| Error::Font {
+            name: name.to_string(),
+            source,
+        })?;
+        if metrics.has_embedded_atlas(&blob) {
+            return fnt::Font::parse(&blob).map_err(|source| Error::Font {
+                name: name.to_string(),
+                source,
+            });
+        }
+
+        let atlas = self.read_following(name)?;
+        let texture = ps2_texture::parse(&atlas).map_err(|source| Error::FontAtlas {
+            name: name.to_string(),
+            source,
+        })?;
+        // The GS calls 128 fully opaque; `alpha_at` is read as 0-255 coverage.
+        let palette = texture
+            .palette
+            .iter()
+            .map(|&[r, g, b, a]| [r, g, b, a.saturating_mul(2)])
+            .collect();
+        fnt::Font::with_atlas(
+            metrics,
+            texture.width,
+            texture.height,
+            palette,
+            texture.indices,
+        )
+        .map_err(|source| Error::Font {
+            name: name.to_string(),
+            source,
+        })
+    }
+
     /// Reads the entry immediately before `name`'s own entry, in whichever
     /// archive holds `name`.
     ///
@@ -364,6 +552,27 @@ impl Archives {
     /// [`Error::NoSuchEntry`] when `name` itself is not found, or its entry is
     /// first in the directory and nothing precedes it.
     pub fn read_preceding(&mut self, name: &str) -> Result<Vec<u8>> {
+        self.read_neighbour(name, Neighbour::Before)
+    }
+
+    /// Reads the entry immediately after `name`'s own entry, in whichever
+    /// archive holds `name`.
+    ///
+    /// The other half of the PS2's directory-position addressing: a model's
+    /// texture set sits *before* it ([`Self::read_preceding`]), and a font's
+    /// glyph atlas sits *after* it. All five `.fnt` entries in `WADS2.WAD` are
+    /// followed by a `PSMT4` texture whose dimensions cover that font's own
+    /// glyph boxes; see `docs/formats/fnt.md`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoSuchEntry`] when `name` itself is not found, or its entry is
+    /// last in the directory and nothing follows it.
+    pub fn read_following(&mut self, name: &str) -> Result<Vec<u8>> {
+        self.read_neighbour(name, Neighbour::After)
+    }
+
+    fn read_neighbour(&mut self, name: &str, which: Neighbour) -> Result<Vec<u8>> {
         let hash = oag_formats::wad::hash_name(name);
         let in_fe = self.data.index_of_hash(hash).is_none()
             && self
@@ -383,13 +592,27 @@ impl Archives {
                 hash,
                 name: Some(name.to_string()),
             })?;
-        let preceding = index.checked_sub(1).ok_or_else(|| Error::NoSuchEntry {
+        let (neighbour, edge) = match which {
+            Neighbour::Before => (index.checked_sub(1), "first"),
+            Neighbour::After => (
+                Some(index + 1).filter(|&next| next < archive.directory().entries.len()),
+                "last",
+            ),
+        };
+        let neighbour = neighbour.ok_or_else(|| Error::NoSuchEntry {
             archive: archive.label().to_string(),
             hash,
-            name: Some(format!("{name} (first in its directory)")),
+            name: Some(format!("{name} ({edge} in its directory)")),
         })?;
-        archive.read(preceding)
+        archive.read(neighbour)
     }
+}
+
+/// Which side of an entry [`Archives::read_neighbour`] wants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Neighbour {
+    Before,
+    After,
 }
 
 /// Reads a file that sits loose on `source`'s own filesystem - not inside any

@@ -60,6 +60,69 @@ and the code is real and evidenced. What is **not** established is what triggers
 it: the disc's own boot never enters it, so it is behind a flag rather than in
 the boot order. See [what the disc actually does](#what-the-disc-actually-does-at-boot).
 
+### The PS2 places its widgets in a different grid
+
+**`Skin.xml` on the PS2 disc authors in 640x448, not the PSP's 480x272, and that
+grid is shown as 4:3 rather than as itself. Confidence 95.**
+
+The PS2 layout is the PSP's, scaled by exactly the resolution ratio - which is
+what makes it an arithmetic identification rather than a guess:
+
+| Widget | PSP | PS2 | ratio | expected |
+| --- | --- | --- | --- | --- |
+| `BOOT_PRESS_START` `x` | 460 | 613 | 1.3326 | 640/480 = 1.3333 |
+| `BOOT_PRESS_START` `y` | 220 | 362 | 1.6455 | 448/272 = 1.6471 |
+| `Show Logo` logo `y` | 72 | 119 | 1.6528 | 1.6471 |
+| extreme `x` over the file | 460 | 613 | 1.3326 | 1.3333 |
+| extreme `y` over the file | 252 | 415 | 1.6468 | 1.6471 |
+
+Every one lands within a tenth of a percent, and 640x448 is PAL's own frame.
+Pinned by `the_ps2_grid_is_the_psp_layout_scaled_by_the_resolution`.
+
+**The `y=220` in that table is the USA PSP disc's, not the EU one's.** The EU PSP
+release moved `BOOT_PRESS_START` down to `y=230` on its own (see below); the PS2
+EU disc did not follow it, and `362/230` misses the ratio by 4% while `362/220`
+hits it. So the PS2 layout was scaled from the USA-era artwork. A small thing,
+but it is why an EU-to-EU comparison of that one widget looks wrong.
+
+**The grid and the display aspect are two numbers, and conflating them is a
+silent 7% error.** 640/448 is 1.429; a PAL frame is shown as 4:3 = 1.333,
+because its pixels are not square. Three places need one or the other, and on the
+PSP they are the same number so a wrong choice shows nothing:
+
+- the renderer's `screen` uniform, which maps a draw rect onto the viewport,
+  wants the **grid**;
+- `render::letterbox_in`, which fits that grid into a window, wants the
+  **display aspect** - feeding it 640/448 leaves the front end 7% short of the
+  window it should fill exactly;
+- `frontend::pillarbox_in` wants **both**: it returns a rect in grid
+  coordinates, but whether a picture is wider or narrower than the screen is a
+  question about display aspects. This is the one that stays wrong after the
+  other two are fixed, and `INTRO512.PSS` is what runs into it - it declares
+  4:3, the PS2 screen *is* 4:3, and a square-pixel comparison boxed it inside
+  itself anyway.
+
+`frontend::Space` carries the pair, `boot::load` sets it from the archives' own
+platform, and `SCREEN` stays the PSP constant it always was - our own layouts
+(the loading screen, the menus), the HUD's bounds checks and `oag_race`'s
+authored aspect are all written against it, and a source that authors elsewhere
+opts in rather than redefining it.
+
+**What this fixed.** Before it, every PS2 widget landed off the bottom-right of a
+screen a third too small and the PS2's `Show Logo` drew nothing whatever. It now
+draws the Pulse logo, `START-Taste drücken` where the XML puts it, and the
+`.ipf` backdrop filling the 4:3 frame.
+
+The logo needed a second, independent thing that landed the same day: the sheet
+could not decode a PS2 texture at all, so `pulse_logo.mip` was reported missing
+when it was merely unreadable - `sprite.rs` now falls back to `ps2_texture::parse`
+and it decodes as 512x128, 8bpp. Worth knowing which half was which, because the
+older note that it "is not found in its WADs" reads like an archive problem and
+is not one: `read_front_end_first` searches the companion archive *and* the bulk
+one, and reports only the bulk one's complaint because it is the last tried.
+`gameshare_backdrop.mip` genuinely is absent from that disc, and is on no screen
+this build draws.
+
 ### Where we knowingly differ
 
 **The original runs the picker first and `LogoFMV` second.** The front-end XML's
@@ -584,6 +647,62 @@ The font itself is no longer on this list: the `.fnt` atlas decodes for real
 now (see [fnt.md](../formats/fnt.md)), so `Français` draws with its own ç and
 `FE_CONFIRM_BUTTON` draws the game's own cross-button glyph. The 5x7 built-in
 font survives only as a fallback for a font that fails to decode.
+
+## What the original's handoff looks like, and what ours still does not
+
+A user report that both handoffs - the intro into `Show Logo`, and START into
+what follows - are "not as smooth as the original" turned out to be three
+separate black-frame mechanisms in our code plus one unimplemented widget
+attribute. The three are fixed and written up in
+[menus.md](menus.md#a-continuous-playhead-is-not-a-continuous-picture); this is
+what the disc itself says about the transition, and what we still do not
+reproduce.
+
+**The picture is one uninterrupted playback, and every screen in the sequence
+sits on it. Confidence 85.** `Show Logo` is a *child* of the `FE Screen` that
+owns the `Movie` widget naming `Data\Movies\Backdrop`, and that widget is
+`autostart` and `repeat="true"`. So on hardware there is no handoff to smooth:
+pressing START changes which widgets are drawn over a loop nobody stopped. The
+evidence is the XML's own nesting and widget attributes, plus a player who has
+run the original confirming the picture does not jump; that is a strong reading
+of a structural fact rather than a measurement of the running game, which is
+why it is 85 and not higher. The consequence for us is that **any screen between
+the intro and the menus that draws no backdrop is wrong**, which is what
+`Launch Game` was.
+
+**`PRESS START` fades in a second late and throbs. Confidence 90, and we do not
+do it.** `BOOT_PRESS_START` carries `pulse="true"` and `delay="1"`. Ours appears
+at once, at full opacity, and stands still. This is independent of the black
+frames and is **the named residual on the intro-to-`Show Logo` transition**:
+closing the flash does not close the report, because a static text pop is itself
+a discontinuity where the disc has a fade. Implementing it needs the pulse's
+period and depth, which no document here states and no capture has measured.
+
+**What is deliberately not claimed.** Nobody has captured the original's boot
+frame by frame, so there is no evidence here about whether the intro's last frame
+holds, crossfades, or cuts to `Show Logo`; the "no jump" claim above is about the
+*backdrop's phase*, not about a transition effect. A capture was attempted and
+abandoned rather than faked, and the reason is worth recording because it will
+bite the next attempt too: **on this machine's DRI-less `Xvfb` an accelerated
+window's contents never reach the root framebuffer**, so `ffmpeg -f x11grab` of
+our own window returned 2,400 uniformly black frames while the game was
+demonstrably drawing - which is what forced the in-process framebuffer readback
+that produced our own evidence. The PPSSPP leg is weaker and is *not* offered as
+proof of the same: `import -window root` also came back black there, and
+`[Recording] DumpFrames` produced no file in one attempt, but that run shared a
+display with another session's emulator and so is confounded. Treat the emulator
+capture as **untried**, not as failed. A maintainer with a real display can
+settle it directly:
+
+```sh
+just launch-pulse-psp data/images/pulse-psp-eu.chd
+# then capture the boot with any screen recorder and step the frames around
+# the intro's end and the START press.
+```
+
+Until that is run, the three claims above rest on the front-end XML, which is the
+disc's own authored data and is the stronger source for *structure*; only the
+question of a transition *effect* needs pixels.
 
 ### The EU disc (`pulse-psp-eu.chd`)
 

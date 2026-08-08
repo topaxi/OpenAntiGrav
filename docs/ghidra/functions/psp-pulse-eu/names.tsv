@@ -350,3 +350,5 @@
 0x08934cb0	function	DirectionalLight_Init	85	lighting.md
 0x0892d7ec	function	AmbientLight_Construct	88	lighting.md
 0x0892d708	function	AmbientLight_Init	85	lighting.md
+0x088786d0	function	Camera_SubmitScene	90	camera.md
+0x08885bd4	function	Camera_PublishTripod	90	camera.md

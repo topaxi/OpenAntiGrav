@@ -405,7 +405,13 @@ pub fn run(
     //
     // Frame zero and not a moving one: a capture is one picture, and there is
     // nothing here for a playhead to be advanced by.
-    let (mut movie, video_format, list) = match (&options.menu_page, &options.screen) {
+    // The grid the chosen list's rects are in. `--menu-page` draws this
+    // project's own menu layout, which is authored at 480x272 whatever the disc
+    // is; the other two draw a source's XML and so take the source's grid. A
+    // capture that got this wrong would disagree with the window, which is the
+    // divergence this module exists to prevent.
+    let space = crate::frontend::Space::PSP;
+    let (mut movie, video_format, list, space) = match (&options.menu_page, &options.screen) {
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
             let frame = showing.map(|movie| crate::menu::Backdrop {
@@ -427,11 +433,11 @@ pub fn run(
                 &options.music_discs,
                 frame,
             )?;
-            (backdrop, format, list)
+            (backdrop, format, list, space)
         }
         (None, Some(name)) => {
             let list = frontend.draw_screen(name);
-            (movie, video_format, list)
+            (movie, video_format, list, frontend.space())
         }
         (None, None) => {
             let list = frontend.draw_list();
@@ -445,9 +451,9 @@ pub fn run(
                 Some(crate::frontend::Video::Backdrop) => {
                     let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
                     let format = showing.and_then(VideoFormat::of);
-                    (backdrop, format, list)
+                    (backdrop, format, list, frontend.space())
                 }
-                _ => (movie, video_format, list),
+                _ => (movie, video_format, list, frontend.space()),
             }
         }
     };
@@ -468,6 +474,7 @@ pub fn run(
     // straight into a PNG, so a second gamma encode would double-correct.
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let mut renderer = Renderer::new(&device, &queue, format, video_format, font, &sprites)?;
+    renderer.set_space(space);
 
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),

@@ -21,10 +21,16 @@
 //! information the vertex colour does not already supply". **That was measured and
 //! it is wrong for the two HUD fonts.** Distinct palette RGB values, per font:
 //!
-//! | Font | Distinct RGB | Digit ink at alpha > 128 |
+//! | Font (PSP) | Distinct RGB | Digit ink at alpha > 128 |
 //! | --- | ---: | ---: |
 //! | `pulse_text.fnt`, `Pulse_20.fnt` (menus) | **1** - pure white | 25 % |
 //! | `PulseHud.fnt`, `small.fnt` (HUD) | **6** - 0, 1, 5, 77, 209, 255 | 64 % |
+//!
+//! **That table is the PSP's and does not carry over.** On the PS2 four of the
+//! five bake an outline in, not two: `Pulse_14` has 10 distinct greys and
+//! `Pulse_20` has 9, where their PSP counterparts have one white each. Only
+//! `pulse_text` is a single pure white on both discs, and it is the one the
+//! menus draw with. See `docs/formats/fnt.md`.
 //!
 //! The HUD fonts are **pre-outlined**: alpha is the silhouette of glyph *plus*
 //! outline, and the grey level says which part is which - white body, black

@@ -189,13 +189,34 @@ second camera type (`FUN_088b7f24`/`FUN_088b8548`, aspect hardcoded
 `1.7647059`) installs **identity** into the view stack and carries everything
 in the projection - a read taken inside its scope shows identity.
 
-**The wide shape survives the correction, unexplained.** The visible glow on
-the original's own frames measures about 1.7:1 (stalled-craft capture,
-2026-08-07), and a square-drawn flare read visibly narrower against a live
-capture (2026-08-02) - but a view-space square through a symmetric projection
-renders square, so the old viewport-mapping explanation for the stretch is
-dead and nothing replaces it yet. `FLARE_ASPECT` carries the observation with
-its mechanism marked open. All four vertices take the **single** colour
+**The quad is square, and nothing stretches it. Settled 2026-08-08**, closing
+the open item this paragraph used to carry. Three independent readings agree:
+
+- the geometry, at instruction level. `0x08904b58`..`0x08904ba4` loads
+  `half_size` into `f13` once and writes `cx +/- f13` into the four vertices'
+  `x` and `cy +/- f13` into their `y`. **One register, both axes.**
+- the art, measured in the space the quad samples. `ExhaustFlare_Init` writes
+  the four UVs as `(0,1) (0,0) (1,1) (1,0)` - the whole texture - and
+  `grabbedEngineFlare128x64x8.mip`'s glow has intensity-weighted
+  `sigma_u / sigma_v = 1.007` **in UV space**, centred at `(0.495, 0.498)`.
+  The artists authored it round *for a square quad*; it is 2:1 in pixels only
+  because the image is 128x64.
+- the projection, read live off the running game at a breakpoint on this
+  function: `m00 = 0.955628`, `m11 = 1.686403`, `m11 / m00 = 1.764706`
+  exactly - aspect-correct for 480x272, so a view-space square projects
+  square. (The vertical fov that comes out, `60.04` degrees, is the authored
+  `<ExternalCameraFar fov>`; see [camera.md](camera.md).)
+
+The "visible glow measures about 1.7:1" observation from the 2026-08-07
+stalled-craft capture is contradicted by all three and is not reproduced. Its
+companion, "a square-drawn flare read visibly narrower against a live capture"
+(2026-08-02), was taken while `HALF_SIZE_TO_WORLD` was still the fitted
+`2.15`, so what it compared was *size*, not aspect - which is why it did not
+survive the correction that retired `2.15` either. `oag_render::exhaust`'s
+`FLARE_ASPECT` is gone; `Exhaust::vertices` carries the three readings above
+so nobody reinstates it from a screenshot measurement.
+
+All four vertices take the **single** colour
 at `self+0xc8` - white, flickered alpha - so the flare has no per-layer
 structure at all; the three staggered ramps belong to the `Trail` below, and
 mapping them onto three concentric flare quads (an early reading this project
@@ -626,6 +647,15 @@ implemented.
 
 ## History
 
+- **2026-08-08** - the three opens from 2026-08-07 worked through. **The
+  flare stretch is closed: there isn't one** (square quad at instruction
+  level, round glow in UV space, aspect-exact projection read live);
+  `FLARE_ASPECT` retired from `oag_render::exhaust`. **The fov chain is
+  recovered end to end** and written up on [camera.md](camera.md) - five
+  links, each pinned by a PPSSPP memory write breakpoint - leaving only which
+  of its two paths a pad uses. **The plume's alpha question is sharpened
+  rather than closed**: the authored alpha is a two-value rim/core split, the
+  texture's alpha is constant, and the blend is confirmed unoverridable.
 - **2026-08-07** - the flare's coordinate space corrected by a live matrix
   read at `ExhaustFlare_Draw` (view-space billboard, world-sized extents,
   projection live; `HALF_SIZE_TO_WORLD` retired to `1.0` and the fitted
@@ -939,6 +969,15 @@ captured rows with `--pose-from`/`--pose-boost` for matched-pose comparison):
   counterpart whose magnitude sits nearest the strongest offered tier.
   Confidence **75**: one scenario, one crossing, tower-width pixel
   measurement.
+
+  **The last sentence of that bullet is withdrawn, 2026-08-08.**
+  `BoostFovKick` is a deliberate invention of this project and is not being
+  fitted to the original; "has a real counterpart whose magnitude sits nearest
+  the strongest offered tier" read as a calibration instruction and was never
+  meant to be one. The measurement itself stands as an observation about the
+  original, and [camera.md](camera.md) now records what actually moves the
+  original's fov - but the two are not being reconciled, and the `90-95`
+  figure must not be used to retune ours. See the [Open](#open) list.
 - **The authored vertex alpha of `shipboost.vex` visibly reaches the
   original's picture**, even though the recovered blend
   (`GU_FIX`/`GU_FIX` additive, modulate texfunc) has no path for it: a build
@@ -953,6 +992,95 @@ The capture also shows the entry flash plainly: at crawl speed the enlarged
 flare quad (half-size `~8.9` at a camera distance of a few units) covers the
 frame and the first ~10 ticks after entry read as a near-total white-out,
 tapering as `boost_timer` decays.
+
+### The plume's alpha: what the authored data actually holds
+
+2026-08-08. The question "how does the authored vertex alpha reach the GE" was
+asked of the code and answered by the data instead, and the answer changes the
+question.
+
+**There is no alpha in the blend, and nothing downstream can add one.** The
+literal call in `Mesh_SetBatchDrawState` is
+`Gu_BlendFunc(0, 10, 10, 0xffffff, 0xffffff)` - `GU_ADD`, `GU_FIX` white on
+both sides - and reading its caller `FUN_089307b4` settles the ordering that
+was the last hope for an override: in the transparent (`& 2`) group the
+material's own display list (`Gu_CallList(material + 0xc0)`) is replayed
+**before** `Mesh_SetBatchDrawState`, so the blend function it programs is the
+one that stands. The one remaining candidate on this page,
+`FUN_0891e988`'s fourth argument, is not an alpha reference either: its whole
+body is `sceGuDepthRange(ref * 6 + lo, ref * 6 + hi)`, a per-batch depth bias.
+[mesh-draw.md](mesh-draw.md) is corrected.
+
+**The authored alpha is not a fade.** Read out of `shipboost.vex` through
+`oag_formats::vex::mesh_batches`, on every batch of all eight PSP teams, the
+vertex colours take exactly **two** values:
+
+| Colour | Alpha | Count in a 51-vertex batch |
+| --- | ---: | ---: |
+| `(255, 98, 5)` orange | `0` | 29 |
+| `(255, 255, 255)` white | `255` | 22 |
+
+Nothing in between, on any batch. So the thing an earlier pass described as
+"the authored alpha fading" is a **rim/core colour split**: the fin's outer
+vertices are orange with alpha 0 and its inner ones white with alpha 255, and
+the gradient across the fin is the interpolation between them. The texture
+does not supply a fade either - `pulse_boost2_ADD` is 64x16 with a **constant
+alpha of 238** across every texel, so the whole "maybe the texture's alpha
+feathers it" branch is dead without a further experiment. Its RGB *is* a
+bright-to-dark streak gradient, mean 108, which is the only falloff in the
+material.
+
+That one split explains both of the failures this project has seen:
+
+- premultiplying alpha into the RGB, which `race.rs` does today, maps the
+  orange rim to **black** - so the plume reads white and un-orange, which is
+  exactly the reported symptom that opened this task;
+- leaving the RGB alone draws the rim at **full orange**, and the fins come
+  out as hard-edged solid orange wedges. Rebuilt and screenshotted 2026-08-08
+  (`data/shots/boost-visuals/`, `--pose-boost 0.5`), which reproduces the
+  2026-08-07 result exactly rather than contradicting it.
+
+The original sits between the two, so something scales the rim's contribution
+down without discarding its hue, and it is not the blend. The premultiply
+stays, labelled in `race.rs` as a compensation with no recovered mechanism.
+
+**One suspect was raised and refuted the same day, and the refutation is the
+more useful half.** The plume's authored `u` never leaves the first texel -
+`[0.000, 0.008]` against a `v` of `[0.031, 0.953]`, one step of an 8-bit
+texcoord on a 64x16 texture - so every fragment samples a single column of
+`pulse_boost2_ADD` and the streak gradient never reaches the picture. There is
+even a mechanism that would fix that in the original:
+`Mesh_SetBatchDrawState`'s caller applies a per-material
+`Gu_TexScale`/`Gu_TexOffset` pair through `FUN_089271cc` when the runtime
+material's `& 0x10` bit is set, and the plume's material flags are `0x212`,
+which has it. But rendering our plume with `u` scaled by 128, and again with
+`u`/`v` swapped, changes the picture **not at all** - the fins stay solid
+orange wedges. So where the plume samples its texture is not what is wrong
+here, and the search has to look elsewhere.
+
+**Nor is the texture dropped or mis-bound**, which was the next guess and is
+now excluded by a direct test: replacing `pulse_boost2_ADD` with hard
+horizontal stripes puts **visible bands on the plume's two trailing streaks**
+while leaving the wedges flat. The sampler, the bind and the draw's texture
+index are therefore all correct for at least half the model. What that test
+did expose is the wedges' own UVs - the two short batches (9 and 10 vertices,
+the all-white-alpha ones) decode to a **single point**, `u [0.008, 0.008]`
+and `v [0.031, 0.031]`, so those draws sample one texel by construction and no
+texture content can reach them whatever the scale. Whether that is our decode
+or the authored data is open; the 51-vertex batches carry a real `v` sweep and
+do band. A first stripe test striped `u` instead of `v` and showed nothing,
+which is a false negative worth naming: **stripe the axis the geometry
+actually varies in**, or the test proves only that the constant axis is
+constant.
+
+**That does upgrade `FUN_089271cc` on its own account**, independently of the
+plume: [texture-animation.md](texture-animation.md) carries it at confidence
+45 as "a two-line helper ... the most likely home of a general per-material
+texture transform". It is that, and the gate is now read - the runtime
+material's `& 0x10` bit, tested in `FUN_089307b4` at three separate call
+sites. The on-disc material's `+0x0c..0x14` is zero on the plume as it is on
+every track surface, so where the runtime block's scale and offset come from
+is still unread, and no rename is proposed here.
 
 ### The boost visual, and settling the mount question
 
@@ -1081,12 +1209,27 @@ three *confirmed* PS2-only teams having no PSP entry to find.
   `Ship_ThrustInput_q` (`0x0883d850`, read as thrust) and `Gfx_ViewDepth_q`
   (`0x0890486c`, read as a view depth).
 - The class table's `id == -1` terminator, and therefore its extent.
-- **What widens the fov during a boost** (measured above at 75): the camera
-  code that does it has not been located. `camera.md`'s update function is the
-  place to look, breakpointing its fov write during a pad crossing.
-- **How the plume's authored vertex alpha reaches the picture** (measured
-  above): the recovered fixed-factor blend and modulate texfunc leave no path
-  for it, yet the original feathers where it fades. Re-read
-  `Mesh_SetBatchDrawState`'s additive branch for this batch type.
-- **What stretches the flare wide** now that the post-projection reading is
-  dead - see `ExhaustFlare_Draw` above.
+- ~~What widens the fov during a boost~~ - **not an open question, and never
+  was an RE one. Withdrawn 2026-08-08.** `crates/game/src/display.rs`'s
+  `BoostFovKick` is a **deliberate invention of this project**, added because
+  a boost reads better with it, and the 2026-08-07 entry that listed it here
+  as unrecovered original behaviour mis-stated its status. It is ours by
+  choice; it is not being fitted to the original and its `DEFAULT` is not a
+  measurement of anything. **Do not re-open this as a porting target.**
+
+  What the original's own fov does is now documented anyway, on
+  [camera.md](camera.md), as evidence rather than as a specification: the
+  projection's fov is `authored + ship->0x790`, `ship->0x790` being a 4 Hz
+  decaying cosine shake clamped to +/-30 degrees written only by `Hud_Update`,
+  with a second path through `Ship_UpdateCameraRigs`' `ship->0x860 & 4`
+  override. Which of the two a speed pad uses was not established. That
+  writeup is worth having - it settles the fov *unit* and the hardcoded
+  `480.0/272.0` aspect at instruction level, which the projection does depend
+  on - but nothing downstream of it is owed a port.
+- **How the plume's authored vertex alpha reaches the picture.** Sharpened
+  2026-08-08 and still open; see the new section below. The blend really is
+  `Gu_BlendFunc(0, 10, 10, 0xffffff, 0xffffff)` and it is programmed *after*
+  the material's own display list, so no GE path recovered so far can weight
+  by alpha - and the authored alpha turns out to be two values, not a fade.
+- ~~What stretches the flare wide~~ - **closed 2026-08-08: nothing does.**
+  See `ExhaustFlare_Draw` above.

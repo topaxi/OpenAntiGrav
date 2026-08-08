@@ -6,6 +6,10 @@ validated across all five fonts: 863 glyphs, and every atlas renders as a
 recognisable character set - digits, upper and lower case, the accented Latin-1
 capitals the five shipped languages need, and the PSP button glyphs.
 
+**The PS2 build is decoded too**, and it is a different arrangement of the same
+format: metrics-only `.fnt`, glyph atlas in the following archive entry as a
+`PSMT4` [PS2 texture](ps2-texture.md). See [below](#the-ps2-keeps-the-same-five-fonts-and-moves-the-pixels-out).
+
 **Validated against two discs**: `pulse-psp-usa` and `pure-psp-usa`. Pure ships
 six fonts under the same header - version `1` plus `"FNT"`, codepoint table at
 `0x30`, offset table at `0x30 + 2 * count` - and the atlas arithmetic
@@ -29,6 +33,64 @@ language plugins' `<Font Src="...">` attributes:
 | `Data\FE\Fonts\Pulse_20.fnt` | 22 | 256x256 | 205 | `Menu` |
 | `Data\FE\Fonts\PulseHud.fnt` | 25 | 512x256 | 128 | `HUD` |
 | `Data\FE\Fonts\small.fnt` | 10 | 256x128 | 128 | `HUDSmall` |
+
+### The PS2 keeps the same five fonts and moves the pixels out
+
+Same five names, hashing to the same five entries, in `WADS2.WAD`. The header,
+the codepoint table, the offset table and the 18-byte glyph records are
+unchanged and parse without a special case. **The atlas is not in the file.**
+
+`+0x18` still points at where the atlas would begin, and on a PS2 `.fnt` that
+value is the file's own length: `pulse_text.fnt` is 3,936 bytes and its
+`atlas_at` is 3,936. The glyph sheet is the **next entry in the archive
+directory**, as a [PS2 texture](ps2-texture.md) using the `PSMT4` transfer:
+
+| Entry | `.fnt` index | Bytes | Atlas index | Atlas | Line height | Glyphs |
+| --- | ---: | ---: | ---: | --- | ---: | ---: |
+| `Data\FE\Fonts\PulseHud.fnt` | 3389 | 3,200 | 3390 | 512x256 | 25 | 131 |
+| `Data\FE\Fonts\Pulse_14.fnt` | 3391 | 4,992 | 3392 | 512x256 | 21 | 206 |
+| `Data\FE\Fonts\Pulse_20.fnt` | 3393 | 4,992 | 3394 | 512x512 | 24 | 206 |
+| `Data\FE\Fonts\pulse_text.fnt` | 3395 | 3,936 | 3396 | 256x128 | 14 | 162 |
+| `Data\FE\Fonts\small.fnt` | 3397 | 3,200 | 3398 | 256x128 | 10 | 131 |
+
+This is the same directory-position addressing a PS2 model uses to find its
+texture set, in the other direction: a model's set **precedes** it, a font's
+atlas **follows** it. See [ps2-texture.md](ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name).
+
+The metrics are not the PSP's, retargeted rather than reused: bigger glyphs,
+different line heights, a different atlas packing and a different codepoint set
+(162 against the PSP's 197 for `pulse_text`). So the two builds' fonts cannot be
+cross-checked against each other pixel for pixel, and were not.
+
+Two things differ from the PSP beyond the location:
+
+- **Alpha is on the GS's 0-128 scale**, like every other PS2 palette, so a
+  caller has to double it before treating it as coverage. Four of the five peak
+  at exactly 128 and `small.fnt` at 115. Skipping this draws every menu string
+  at half opacity - which looks like a colour bug, not a loading one.
+- **Four of the five bake an outline in**, where the PSP bakes one into only
+  two. `pulse_text` is a single pure white with a 16-level alpha ramp on both
+  discs, but `Pulse_14` carries 10 distinct greys on the PS2 and `Pulse_20`
+  carries 9, where their PSP counterparts carry one white each (`PulseHud` and
+  `small` carry 6, as on the PSP). Anything that wires those two
+  up has to use the `luma_at` body/outline split described
+  [below](#the-rgb-is-a-second-channel-not-a-constant); only `pulse_text` is
+  wired today.
+
+`Pulse_14`, `Pulse_20` and `PulseHud` also carry button and prompt glyphs -
+`START`, `SELECT`, `L1`/`R1`, the four face-button shapes - packed into the
+atlas below the text rows, and those are **not** in the codepoint table.
+
+**Confidence 90** for "a PS2 `.fnt` is metrics-only and its atlas is the
+following entry". All five agree, `atlas_at == file length` exactly on all five,
+and every glyph box each font declares fits inside the atlas the rule hands it.
+The corpus makes the pairing sharper than "the nearest texture": of the 5,348
+PS2 textures across both archives, **exactly 5 are 4bpp, and all five are the
+entry after a `.fnt`** - there is no sixth candidate anywhere on the disc to
+have picked instead. Pinned by
+`crates/assets/tests/ps2_font_ground_truth.rs`. Not 94, because the rule is
+positional rather than declared: nothing in the file *says* "my atlas is next",
+and no code path in the executable has been read to confirm it.
 
 ## Layout
 
@@ -262,6 +324,23 @@ The five `.fnt` entries are `00000`-`00004`. The test reports:
   entry  3 512x256 lh=25 glyphs=128 checked=123 edge-ink=1.000
   entry  4 256x128 lh=10 glyphs=128 checked=118 edge-ink=1.000
 alpha levels {16: 5}
+```
+
+The PS2 half is `crates/assets/tests/ps2_font_ground_truth.rs`, run by the same
+`just test-data`, and reports:
+
+```text
+Data\FE\Fonts\pulse_text.fnt       256x128 lh=14 glyphs=162 greys=1  peak-alpha=255
+Data\FE\Fonts\Pulse_14.fnt         512x256 lh=21 glyphs=206 greys=10 peak-alpha=255
+Data\FE\Fonts\Pulse_20.fnt         512x512 lh=24 glyphs=206 greys=9  peak-alpha=255
+Data\FE\Fonts\PulseHud.fnt         512x256 lh=25 glyphs=131 greys=6  peak-alpha=255
+Data\FE\Fonts\small.fnt            256x128 lh=10 glyphs=131 greys=6  peak-alpha=230
+```
+
+To look at one atlas rather than trust the numbers:
+
+```sh
+just play ps2 --screenshot data/cache/ps2-main.png --menu-page main
 ```
 
 ## Not determined

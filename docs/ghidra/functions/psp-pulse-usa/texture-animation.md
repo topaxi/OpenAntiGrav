@@ -53,7 +53,7 @@ identified.
 | Caller | Status |
 | --- | --- |
 | `Trail_DrawRibbon` `0x0892acc8` | Identified. The exhaust ribbon, documented in [`exhaust.md`](exhaust.md). |
-| `FUN_089271cc` | A two-line helper: applies scale from `+0x18`/`+0x1c` and offset from `+0x20`/`+0x24` of a struct. Called only from `FUN_089307b4`. |
+| `FUN_089271cc` | A two-line helper: applies scale from `+0x18`/`+0x1c` and offset from `+0x20`/`+0x24` of a struct. Called only from `FUN_089307b4`. **Its gate is now read - see below.** |
 | `FUN_089307b4` | Large; also calls both primitives directly. Reached from `FUN_0892f35c` (4 sites) and `FUN_0893021c`. |
 | 9 others | Not examined. |
 
@@ -67,6 +67,42 @@ surface's UV offset would be written.
 struct, and no name is proposed for either function - **confidence 45**, below
 the [rubric](../../../reverse-engineering/confidence-rubric.md)'s rename
 threshold. Written down instead, per that rubric's rule.
+
+### The gate is a per-material bit, read 2026-08-08
+
+The "most likely home" reading above is right about the shape and can be
+tightened: `FUN_089307b4` calls the pair at three sites, each guarded by the
+same test on the **runtime material** (`*(mesh+0x5c) + material_index * 0x14`,
+the stride-`0x14` repacked array), and the branch picks between the immediate
+form and a prebuilt list:
+
+```c
+if ((*(u16 *)(*(int *)(mesh + 0x5c) + material_index * 0x14) & 0x10) != 0) {
+    if (mode == 1) Gu_CallList(*(int *)(mesh + 0x64) + material_index * 0x18);
+    else if (mode == 0) FUN_089271cc(*(int *)(mesh + 0x60) + material_index * 0x40);
+}
+```
+
+So `& 0x10` on the material's first `u16` is **the per-material "this surface
+has a texture transform" bit**, and `mesh+0x60 + index * 0x40` is the block
+whose `+0x18`/`+0x1c` and `+0x20`/`+0x24` `FUN_089271cc` submits.
+Corroborated from the data side: `Data\Ships\<Team>\shipboost.vex`'s single
+material carries flags `0x212`, which has the bit, and that model's authored
+`u` spans only `[0.000, 0.008]` - one step of an 8-bit texcoord on its 64x16
+texture - which is geometry that *needs* a scale to make sense of. Confidence
+**75** for the gate (the test is read at instruction level at three sites and
+the one model checked agrees); still **0** for where the block's values come
+from, since the on-disc material's `+0x0c..0x14` is zero on that ship exactly
+as it is on every track.
+
+This does **not** contradict the live negative below. That measured
+`Gu_TexOffset`, and found only the ribbon submitting a non-zero one;
+`Gu_TexScale` was never sampled, and a scale with a zero offset would have
+looked identical to it.
+
+Still no rename: the gate is read but the data path into the block is not, and
+`FUN_089307b4` is a large function whose name would have to cover much more
+than this.
 
 ## Measured in a live race: only the trail scrolls
 

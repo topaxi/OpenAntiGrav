@@ -115,6 +115,28 @@ pub enum Error {
         index: usize,
     },
 
+    /// A `.fnt` did not decode.
+    #[error("{name}: {source}")]
+    Font {
+        /// The entry name asked for.
+        name: String,
+        /// What the font parser said.
+        source: oag_formats::fnt::Error,
+    },
+
+    /// A PS2 `.fnt`'s glyph atlas - the entry following it - did not decode.
+    ///
+    /// Separate from [`Font`](Error::Font) because the two say different
+    /// things about what went wrong: this one means the directory-position
+    /// rule found something that is not a texture.
+    #[error("{name}: the entry after it is not a glyph atlas ({source})")]
+    FontAtlas {
+        /// The entry name asked for.
+        name: String,
+        /// What the texture parser said.
+        source: oag_formats::ps2_texture::Error,
+    },
+
     /// The archive's own directory did not parse.
     #[error("{archive}: {source}")]
     BadDirectory {

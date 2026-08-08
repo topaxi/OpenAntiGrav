@@ -39,6 +39,43 @@ read. The cheap check that would have caught it - grep the archive listing for
 | `HUDSmall` font | `Data\FE\Fonts\small.fnt` | 10 px line height |
 | `Default` font | `Data\FE\Fonts\pulse_text.fnt` | 13 px; used only by the eight opponent name tags |
 
+### The PS2 ships the same HUD and hides both halves of it
+
+Same five layouts under the same names, the same widget counts, and - the part
+that settles it - the **same `U`/`V`/`TxtrWidth`/`TxtrHeight` boxes**, so both
+discs index the identical 256x256 atlas arrangement. Only the on-screen
+geometry differs, and it differs by exactly one ratio: `SpeedBarBg` is
+`x=8 y=16 w=224 h=43` where the PSP has `x=6 y=10 w=168 h=26`, which is
+640/480 horizontally and 448/272 vertically. That is the front-end coordinate
+space, not a HUD question - see the `SCREEN` thread in
+[`HANDOVER.md`](../../HANDOVER.md).
+
+Two things kept it off the screen entirely, and each hid the other:
+
+| | PSP | PS2 |
+| --- | --- | --- |
+| Layout XML | shortened, `<code>` dictionary | **plain `<?xml`** |
+| Atlas entry | `Data\HUD\Textures\PulseHUD.mip` | hashes to nothing; entry **3518** holds it |
+
+**Shortening is per file, not per platform.** The PS2's own `Skin.xml` *is*
+shortened while its `Data\XML\*_HUD.xml` are not, so a reader that calls
+`fexml::expand` unconditionally rejects a perfectly good layout with "no
+`<code>` dictionary element" and the whole HUD goes with it.
+[`fexml::text`](../../crates/formats/src/fexml.rs) decides from the blob's own
+first bytes instead.
+
+The atlas is an ordinary [PS2 texture](../formats/ps2-texture.md) that the
+archive does not file under the name the layout asks for. **How the game
+performs that lookup is unknown** - 60 spellings of the name miss all 7,393
+hashes on the disc, the directory-position rules that solve models and fonts do
+not apply, and a repeated 3,656-byte blob beside the HUD assets that looked
+like a name table was checked and ruled out. The entry was found by its picture
+and is recorded as a hash in
+[`oag_assets::pulse::PS2_IMAGES`](../../crates/assets/src/pulse.rs), which is
+what that module exists for. See its documentation for the evidence and
+`crates/assets/tests/ps2_image_ground_truth.rs` for the check that re-derives
+it rather than asserting the constant against itself. **Confidence 90.**
+
 The atlas's flag byte at `+0x07` is `2`, so `FLAG_SWIZZLED` is **clear** and it
 takes the linear path in [`texture.rs`](../../crates/formats/src/texture.rs) - it
 is one of the 7 of 13 `FE.wad` textures that are *not* pre-swizzled, unlike the

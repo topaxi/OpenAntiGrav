@@ -367,3 +367,12 @@
 0x0898efd8	function	Scream_StepCommandList	88	sound.md
 0x08ac326c	data	g_scream_opcode_table	85	sound.md
 0x0898fc78	function	Scream_OpKeyOn	90	sound.md
+0x08878874	function	Camera_SubmitScene	80	camera.md
+0x08885d78	function	Camera_PublishTripod	88	camera.md
+0x08845ed0	function	Ship_UpdateCameraRigs	82	camera.md
+0x0881bf50	function	Hud_Update	80	camera.md
+0x08901dc4	function	VexCamera_BuildProjection	85	camera.md
+0x089021c8	function	VexCamera_EvaluateFovCurve	85	camera.md
+0x08b34310	data	g_camera_fov_degrees	90	camera.md
+0x08b34314	data	g_camera_tan_half_fov_horizontal	85	camera.md
+0x08b34318	data	g_camera_tan_half_fov	85	camera.md

@@ -180,6 +180,19 @@ pub fn load(options: &Options) -> Result<Boot> {
         movie.as_ref().is_some_and(|movie| movie.frames.is_some()),
     );
 
+    // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's
+    // `Skin.xml` places widgets in a 640x448 grid rather than the PSP's
+    // 480x272, so every widget on that disc landed off the bottom-right of a
+    // screen a third too small - which is why its `Show Logo` drew nothing at
+    // all. Set from the archives' own platform rather than sniffed: the layout
+    // resolved one to open them. See `crate::frontend::Space`.
+    let space = crate::frontend::Space::of(archives.layout.platform);
+    frontend.set_space(space);
+    report.push(format!(
+        "front-end grid {}x{}, shown as {:.3}",
+        space.size.0, space.size.1, space.display_aspect
+    ));
+
     // `Show Logo` sits on the moving backdrop, because it is a child of the
     // `FE Screen` that owns that movie. Set here rather than at either call site
     // because this is the one place the frontend and the backdrop are both in
@@ -457,6 +470,11 @@ fn load_sprites(
 /// The mirror image of [`oag_assets::pulse::Archives::read_name`]'s order, for the
 /// callers that want a front-end asset specifically. See [`load_sprites`] for the
 /// two entries that decide it.
+///
+/// A name neither archive has falls through to
+/// [`oag_assets::pulse::Archives::read_image`], which knows the handful of
+/// images the PS2 keeps under an entry its own XML's name does not hash to -
+/// `pulse_logo.mip` among them.
 fn read_front_end_first(
     archives: &mut oag_assets::pulse::Archives,
     name: &str,
@@ -466,7 +484,7 @@ fn read_front_end_first(
     {
         return Ok(blob);
     }
-    archives.data.read_name(name)
+    archives.read_image(name)
 }
 
 /// Reads the front end's own font, falling back to the built-in glyphs.
@@ -474,16 +492,21 @@ fn read_front_end_first(
 /// A missing or undecodable font is not fatal: the menu still draws, in the 5x7
 /// approximation, and the report says which one is on screen. That matters more
 /// than it sounds - the two look very different, and a silent fallback would
-/// make a rendering bug indistinguishable from a loading one.
+/// make a rendering bug indistinguishable from a loading one. The PS2 spent a
+/// while in exactly that state: its `.fnt` decodes as far as the metrics and
+/// then stops, because the glyph sheet is a separate archive entry.
+///
+/// Which is why this goes through [`oag_assets::pulse::Archives::read_font`]
+/// rather than [`read_front_end_first`] plus a parse: locating the atlas is the
+/// archive's problem, not the front end's. The two archives hold byte-identical
+/// copies of all five fonts on the PSP, checked, so reading the bulk one costs
+/// nothing there.
 fn load_font(
     archives: &mut oag_assets::pulse::Archives,
     report: &mut Vec<String>,
 ) -> crate::font::Atlas {
     let name = oag_assets::pulse::names::DEFAULT_FONT;
-    match read_front_end_first(archives, name)
-        .map_err(|e| e.to_string())
-        .and_then(|blob| oag_formats::fnt::Font::parse(&blob).map_err(|e| e.to_string()))
-    {
+    match archives.read_font(name).map_err(|e| e.to_string()) {
         Ok(font) => {
             let atlas = crate::font::Atlas::from_font(&font);
             report.push(format!(

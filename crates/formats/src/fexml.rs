@@ -87,12 +87,41 @@ pub fn dictionary(xml: &str) -> Result<HashMap<String, String>> {
     Ok(map)
 }
 
+/// A blob's XML text, expanded when it is shortened and decoded when it is not.
+///
+/// **Shortening is per file, not per platform**, and the PS2 uses it much less:
+/// its `Skin.xml` is shortened, its five `Data\XML\*_HUD.xml` layouts are plain
+/// `<?xml`. A caller that reaches straight for [`expand`] therefore fails on a
+/// perfectly good file with "no `<code>` dictionary element", which is what the
+/// PS2 in-race HUD did - the layout never loaded and the whole HUD went with
+/// it. Deciding from the blob rather than from the source is what stops that:
+/// [`is_fexml`] is a two-way test on the first bytes, so neither form can be
+/// mistaken for the other.
+///
+/// # Errors
+///
+/// [`Error::NotText`] when the blob is not UTF-8, and everything [`expand`] can
+/// raise when it *is* shortened. A plain file with no dictionary is not an
+/// error here, which is the whole difference from [`expand`].
+pub fn text(data: &[u8]) -> Result<String> {
+    if is_fexml(data) {
+        expand(data)
+    } else {
+        std::str::from_utf8(data)
+            .map(str::to_owned)
+            .map_err(|_| Error::NotText)
+    }
+}
+
 /// Expands a blob's short names using its own dictionary.
 ///
 /// The `<code>` element itself is dropped: it is metadata, not content.
 ///
 /// Names absent from the dictionary are left as they are, so a partially
 /// shortened file still round-trips rather than losing data.
+///
+/// Refuses a blob that carries no dictionary. Callers reading a file that may
+/// be either form want [`text`] instead.
 pub fn expand(data: &[u8]) -> Result<String> {
     let xml = std::str::from_utf8(data).map_err(|_| Error::NotText)?;
     let map = dictionary(xml)?;
@@ -529,6 +558,30 @@ mod tests {
     #[test]
     fn rejects_a_blob_with_no_dictionary() {
         assert_eq!(expand(b"<Screen/>"), Err(Error::NoDictionary));
+    }
+
+    /// The PS2's `Data\XML\*_HUD.xml` shape: plain `<?xml`, no dictionary, and
+    /// nothing to expand. `expand` refuses it and `text` must not.
+    #[test]
+    fn plain_xml_passes_through_text_untouched() {
+        let plain = b"<?xml version=\"1.0\" ?>\n<Screen name=\"HUD\"></Screen>";
+        assert_eq!(expand(plain), Err(Error::NoDictionary));
+        assert_eq!(
+            text(plain).as_deref(),
+            Ok("<?xml version=\"1.0\" ?>\n<Screen name=\"HUD\"></Screen>")
+        );
+    }
+
+    #[test]
+    fn text_still_expands_a_shortened_blob() {
+        let short = br#"<code as="Values" bs="Screen"></code><b><a d="1"></a></b>"#;
+        assert_eq!(text(short), expand(short));
+        assert!(text(short).expect("expands").contains("<Screen>"));
+    }
+
+    #[test]
+    fn text_refuses_bytes_that_are_not_utf8() {
+        assert_eq!(text(&[0xff, 0xfe, 0x00]), Err(Error::NotText));
     }
 
     #[test]

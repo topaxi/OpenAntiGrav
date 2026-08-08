@@ -30,12 +30,12 @@ void Mesh_SetBatchDrawState(int mesh, ushort *batch)
 
     if ((batch[flags_byte] & 0x10) == 0) {
         // depth state branches on *batch & 2, both sides read the same
-        // depth-range pair from mesh+0xcc/+0xd0 and an alpha-ref byte at
+        // depth-range pair from mesh+0xcc/+0xd0 and a depth-bias byte at
         // batch+0x29, fed to FUN_0891e988
     } else {
         Gu_DepthMask(0); Gu_DepthFunc(6);
     }
-    FUN_0891e988(g_display, depth_range_lo, depth_range_hi, alpha_ref);
+    FUN_0891e988(g_display, depth_range_lo, depth_range_hi, depth_bias);
 
     if ((*batch & 0x20) == 0) Gu_Enable(5); else Gu_Disable(5);   // GU_CULL_FACE
 
@@ -48,6 +48,15 @@ void Mesh_SetBatchDrawState(int mesh, ushort *batch)
     else                        FUN_08811898(0);
 }
 ```
+
+**`batch+0x29` is a depth bias, not an alpha reference** - corrected
+2026-08-08, after an earlier version of this page named it `alpha_ref` from its
+position in the call rather than from the callee. `FUN_0891e988`'s whole body
+is `FUN_088111cc(ref * 6 + lo, ref * 6 + hi)`, i.e. it shifts both ends of the
+`sceGuDepthRange` pair by the same `ref * 6`, which is a per-batch depth offset
+and cannot be an alpha test of any kind. Nothing on this page depended on the
+old reading, but a search for where the plume's alpha reaches the GE did, which
+is how it was caught (see [exhaust.md](exhaust.md)).
 
 (Renamed from the literal decompile for readability; `batch[flags_byte]` is
 `*(byte *)((int)batch + 3)`, `GU_CULL_FACE` = state index `5` per the PSP SDK's
@@ -111,6 +120,16 @@ versus the packed on-disk layout `oag_formats::vex` parses), so the loader
 demonstrably restructures some fields between disc and runtime. Nothing here
 rules out the loader poking batch-header `+3` in place; no write to that
 offset has been searched for.
+
+**The material's own display list cannot override any of this, and that is
+now read rather than assumed** (2026-08-08). In `FUN_089307b4`'s `& 2` group
+the per-material list is replayed as `Gu_CallList(material + 0xc0)` when the
+material *changes*, and `Mesh_SetBatchDrawState` is called **after** it, once
+per batch. So whatever blend function a material list programs is overwritten
+before the draw, and the two fixed-factor equations above are the only ones a
+transparent batch can be drawn with. Worth stating because a material list is
+the obvious place to look for a missing alpha path, and it is ruled out - see
+[exhaust.md](exhaust.md)'s section on the boost plume's vertex alpha.
 
 `FUN_089307b4` is the mesh draw path's pass-group dispatcher: it walks up to
 four separately-gated batch groups (`param_3 & 1/2/4/8`), and
@@ -184,6 +203,19 @@ example, at confidence 60 as a data point rather than a finding - but a real
 regression on real content, and reason enough on its own not to flip the
 constant without first reading the two `Gu_CallList` lists this page already
 names as the cheapest way to settle blend-enable.
+
+**One thing that was blamed on this page's open question and turned out not to
+be about blending at all.** `16_Track`'s start-line gantry carried a blown-out
+white board, and because a `col_banners2_ADD.tga` sign sits beside it the fault
+was recorded as a candidate symptom of the blend question above. It was not.
+The white board is `billboard8.tga`, an 8x8 4-bit texture, drawn by an
+**opaque** batch - no blending involved on either side - and it was white
+because `oag_formats::vex::textures` read its rows back to back where the
+format pads each row to 16 bytes. Fixed there; see
+[`vex.md`](../../../formats/vex.md#texture-rows-are-padded-to-16-bytes).
+Recorded here so the blend question is neither credited with it nor reopened
+for it: the two `Gu_CallList` lists below are still unread, and still the way
+to settle blend-enable.
 
 ## What is still not recovered
 

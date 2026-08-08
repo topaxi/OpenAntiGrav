@@ -727,6 +727,70 @@ bytes against a declared 47,296.
 
 Only the base level is needed for display; the mips follow it.
 
+### Texture rows are padded to 16 bytes
+
+**Confidence: 90.** A texture's rows are **not** stored back to back. Each row
+occupies `align_up(width * bits_per_pixel / 8, 16)` bytes, of which the leading
+`width * bits_per_pixel / 8` are picture and the rest is padding - the GE's
+texture buffer width is in units of 16 bytes, so a narrower row is padded out
+and the next row starts on the next boundary.
+
+This is a no-op for most of the disc, which is why it went unnoticed for so
+long: a 4-bit texture is 32 pixels wide or more, and an 8-bit one 16 or more,
+and the picture already fills the stride. It bites exactly the narrow ones.
+
+The evidence is arithmetic, over a field nothing else reads. Every `Texture`
+node declares its own total texel-block size at `+0x0c`; summing the padded
+stride over the node's declared mip levels reproduces that number for **5,017 of
+5,017 textures** on the PSP disc, while the unpadded sum reproduces **775** -
+the ones where the padding happens to be a no-op. **509 of the 5,017 have a
+padded base level**, i.e. are textures a back-to-back reader builds out of the
+wrong bytes. Measured by
+`crates/formats/tests/texture_stride_ground_truth.rs`.
+
+Confirmed directly as padding rather than as some other packing: dumping
+`col_arrows1_GLOW_ADD.tga` (16x64, 4-bit, so 8 picture bytes in a 16-byte row)
+shows every row as eight content bytes followed by eight zeroes.
+
+It is also **not swizzling**. A swizzled PSP texture is reordered into 16-byte
+by 8-row blocks, and reading one row-wise corrupts every texture wider than a
+block rather than only the narrow ones; every 64-pixel-wide 4-bit texture on the
+disc decodes correctly read row-wise. (The standalone [`.mip`
+container](psp-texture.md) *does* carry a swizzle flag and is a separate case.)
+
+**Corroborated from the runtime, 2026-08-08, which raises this from a data
+measurement to a mechanism.** The PSP texture-upload path counts every mip
+level in **16-byte units and cannot express anything else**:
+`FUN_08928704(texture, level)`, the per-level size used to lay levels out in
+VRAM, is a one-line `return *(u16 *)(texture + 0x5c + level * 2) << 4` - a
+u16 block count shifted up by four. Its caller `FUN_089287c0` stores each
+level's address the same way (`>> 4` into `texture+0x84`) and traps when the
+value it is handed has any of its low four bits set. Both are reached from
+`Gfx_BindTexture` (`0x08928460`) through `FUN_08928550`, the VRAM upload. So a
+level whose rows were packed to an unpadded stride would have a size the
+runtime has no way to represent, which is the same conclusion the 5,017-of-5,017
+closure reaches from the file side and independent of it. Neither function is
+renamed here: the upload path is otherwise unread and a name would claim more
+than one line each.
+
+**What the old reading looked like on screen.** With the rows read back to back,
+a 16-pixel-wide 4-bit texture came out as its own top half stretched over the
+whole quad with every other row blank, and an 8x8 one as its first two buffer
+rows repeated. On `16_Track` the visible casualty was the start-line gantry's
+advertising board: node 74's opaque batch paints
+`GenericTrackTextures\billboard8.tga`, an 8x8 4-bit icon spanning exactly one
+tile of UV, and the wrong bytes made it a blown-out white block hanging over the
+track. This was for a while attributed to the `col_banners2_ADD.tga` sign beside
+it, from the texture name; hiding every `col_banners2` draw left the white block
+exactly where it was, and hiding the opaque list removed it. Both checks are
+`oag-view --draws` / `--only` (see [`oag-view`](../tools/oag-view.md)).
+
+The full affected set on `16_Track` is `billboard1/2/6/7/8.tga`,
+`grey_swatch.tga`, `whitenonalpha.tga`, `hologram_effect_ADD.tga`,
+`strut__light_rp_GLOW.tga`, `lightglow_anim_ADD.tga` and
+`col_arrows1_GLOW_ADD.tga`; disc-wide it also covers every ship's
+`Glass_ADD.tga` (16x16) and most of `Data\Weapons\Textures`.
+
 This also answers an open question from the
 [standalone `.mip` layout](psp-texture.md): the byte after `bits_per_pixel` is a
 **mip count**, so the `.mip` size arithmetic holds only when it is 1, which is

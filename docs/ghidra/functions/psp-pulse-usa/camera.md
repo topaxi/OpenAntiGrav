@@ -346,6 +346,37 @@ visible difference, and the tidy 3/4 suggests a knob rather than an accident.
 | `0x08838bc8` | `HandlingXml_ParseExternalCameraFar` | 92 |
 | `0x08838d8c` | `HandlingXml_ParseExternalCameraClose` | 92 |
 | `0x08880724` | `Camera_SetMode` | 82 |
+| `0x08878874` | `Camera_SubmitScene` | 80 |
+| `0x08885d78` | `Camera_PublishTripod` | 88 |
+| `0x08845ed0` | `Ship_UpdateCameraRigs` | 82 |
+| `0x0881bf50` | `Hud_Update` | 80 |
+| `0x08901dc4` | `VexCamera_BuildProjection` | 85 |
+| `0x089021c8` | `VexCamera_EvaluateFovCurve` | 85 |
+| `0x08b34310` | `g_camera_fov_degrees` | 90 |
+| `0x08b34314` | `g_camera_tan_half_fov_horizontal` | 85 |
+| `0x08b34318` | `g_camera_tan_half_fov` | 85 |
+
+The six new names are from the 2026-08-08 pass above. `Camera_SubmitScene` is
+the race camera node's submit: it installs the view matrix into the display's
+view stack, builds and installs the projection, fills a frustum-plane set into
+the camera object and ends at `Gfx_Enqueue` - the projection half is read at
+instruction level and confirmed by a write breakpoint on the stack slot, the
+plane block is read as shape, hence 80 rather than 90. `Hud_Update` is named
+for its body (it reads the `Dynamic_HUD` and `Multiplayer_Tags` settings by
+name and dispatches about fifteen HUD element updates off a bit mask), and the
+fov shake is one block inside it.
+
+`VexCamera_BuildProjection` and `VexCamera_EvaluateFovCurve` are the *other*
+projection path, the one authored `.vex` camera nodes use: the fov lives on a
+u16 key/value curve at `cam+0x54` (`+0x00` key count, `+0x02` a flag byte whose
+bit 0 selects the orthographic branch, `+0x04` key times, `+0x08` values,
+`+0x1c` the frustum aspect), evaluated piecewise-linearly and scaled
+`* 180.0 / 65535.0` for a perspective camera or `* 500.0 / 65535.0` for an
+orthographic one, with **65.0 degrees** as the value when the curve is empty.
+Two such cameras are live during a race on Talon's Junction, at aspects `2.0`
+and `4.0` - neither is the player's, which is why an earlier attempt to read
+the player fov by breakpointing `VexCamera_BuildProjection` found nothing that
+matched the picture.
 
 Deliberately **not** renamed: `FUN_0883198c` (the trace the pull-in hypothesis
 rests on, confidence 40), `FUN_08885e84` (selects a rig by name; what it does
@@ -385,6 +416,18 @@ half-step low-pass, and a vertical lift below 7.5 - and no multiply by three
 quarters appears anywhere in it. So whatever produces the PSP's constant 0.75 is
 not a constant both builds share, and the PS2 path should be treated as a
 different algorithm rather than as a second copy to read the answer off.
+
+**Correction, 2026-08-08:** the paragraph above presents that inline chase
+distance as the PS2's distinguishing algorithm, and it is not distinguishing.
+The **PSP** `Camera_UpdatePlayerView` contains the same three pieces - the
+`min(|delta| - 1, 3)` clamp, the `FUN_0883198c` geometry probe, the
+`d = prev + (d - prev) * 0.5` low-pass and the `y += (7.5 - d) * 0.5` lift
+below 7.5 - read straight out of its own decompilation. What is genuinely
+absent from the PS2 side is only the 0.75, so the sentence that stands is
+"no multiply by three quarters appears in the PS2 function"; the rest was a
+false contrast. Noticed in passing while chasing the fov chain and recorded
+rather than left, because the next reader would otherwise use the shared code
+as evidence of a difference.
 
 ## For reimplementation
 
@@ -468,3 +511,89 @@ direct pixel comparison against the original's own output, and a wrong unit
 **3/4 factor above does not enter the projection**: it scales the eye offset,
 which a recorded eye already contains, and this measurement says it does not
 also scale the fov. See `docs/tools/frame-compare.md` for the workflow.
+
+**Confirmed at instruction level 2026-08-08, and the unit is no longer
+inferred**: see the next section. `Camera_SubmitScene` builds the projection as
+`m11 = 1/tan(g_camera_fov_degrees * pi/180 * 0.5)` and `m00 = m11 / 1.7647059`,
+and `Camera_PublishTripod` computes `tan(fov/2)` from the same value and
+multiplies it by a literal `480.0 / 272.0`. So the field really is a vertical
+fov in degrees at a hardcoded 480x272 aspect, and the projection read live off
+the running game reads `m11 / m00 = 1.764706` exactly with a vertical fov of
+**60.04 degrees** at rest, against the authored 60. Confidence for the unit
+rises to **95**.
+
+## The field of view is dynamic, and this is the whole chain
+
+Recovered 2026-08-08, prompted by [exhaust.md](exhaust.md)'s open item on what
+widens the fov during a speed-pad boost. The store-offset sweep that earlier
+passes used bottomed out (87 `swc1 ..., 0x50(reg)` sites, none of them the
+camera), so each link below was pinned instead with a **PPSSPP memory write
+breakpoint**: arm a write watch on the address, resume, and read back the pc
+that trips it. Every one of them reported a single pc on every sample, which
+is what makes "written only by" a measurement rather than an absence of
+evidence from a search.
+
+| Link | Address | What it does |
+| --- | --- | --- |
+| the projection | `Camera_SubmitScene` `0x08878874` | `m11 = 1/tan(fov * pi/180 * 0.5)`, `m00 = m11 / 1.7647059`, near `= cam+0x80 + 0.5 * (65.0/fov - 1.0)`, far from `g_display+0x1698`; installs it at `display+0x1190` and calls `Gu_SetMatrix(0, ..)` |
+| the live fov | `g_camera_fov_degrees` `0x08b34310` | written **only** at `0x08885df8`, inside `Camera_PublishTripod` `0x08885d78`, as `*(tripod + 0x50)`; the same function publishes `g_camera_tan_half_fov` `0x08b34318` = `tan(fov/2)` and `g_camera_tan_half_fov_horizontal` `0x08b34314` = that times a literal `480.0 / 272.0` |
+| the tripod's fov | `tripod + 0x50` | written **only** at `0x0884642c`, inside `Ship_UpdateCameraRigs` `0x08845ed0`, as `ship->0x850`; the far tripod's `+0x50` (at `ship+0x300`) takes `ship->0x84c` the same way |
+| where those come from | `Ship_UpdateCameraRigs`' tail | with `ship->0x860 & 4` set, `lerp(authored, ship->0x868, ship->0x86c)` saturating at `1`; otherwise the authored `<ExternalCameraClose fov>` (`params+0x60`) and `<ExternalCameraFar fov>` (`params+0x44`) unchanged - **and then both get `+ ship->0x790` added, every frame** |
+| the additive term | `ship + 0x790` | written **only** at `0x0881c2b4`, inside `Hud_Update` `0x0881bf50` |
+
+`Hud_Update`'s term is a **shake in the field of view**, not a zoom:
+
+```c
+if (amp != 0 || phase > 0)  phase += dt * 2*pi * 4.0;
+if (amp != 0)               clamped = clamp(amp, -30.0, +30.0);   /* degrees */
+if (phase > 2*pi)           phase = 0;
+a      = clamped * (1.0 + 2.0 * (rand01 - 0.5));   /* re-jittered every frame */
+offset = cosf(phase) * a - a;                      /* 0 at both ends of a cycle */
+```
+
+with `amp` read from `ship+0x80` and a sibling term (`sinf(phase) * -|a|`)
+stored beside it at `+0x40`. `ship` here is the **scene-side** craft - the same
+pointer `flare+0xc0` holds - and not `Ship_UpdateCraft`'s `a0`; the two are
+different objects (`0x09a029c0` and `0x09a03980` in one live session) and
+reading the wrong one gives zeros for every field in this section.
+
+Measured live (Talon's Junction, Assegai, external view, craft placed at
+130 units/s and free-running): the two tripod fovs read `60.00 + offset` on
+**every** tick, with `offset` a decaying oscillation - about `+9.4` degrees at
+130 units/s, `+6` at 120, `+3` at 100 and `+0.5` at 75. `ship+0x80` reads `0`
+on most ticks with transient spikes (`32.9`, `121.3`, `-30.7` seen, the last
+two outside the clamp, which is what the clamp is for), so it is a request
+that is consumed rather than a level.
+
+Confidence **85** for the chain: five links, each pinned by a write breakpoint
+that reported one pc on every hit, with the arithmetic read at instruction
+level and the result cross-checked against the live projection matrix. The
+`ship+0x860 & 4` override branch is read from the decompiler only - it never
+armed in any capture here - so it carries **70** on its own.
+
+**What this does not settle is whether a speed pad uses either path.** Every
+`ship+0x790` burst captured coincided with a *speed drop*, i.e. an impact, and
+the one clean run through pad 0's line never armed the flare's boost timer.
+The override branch - a target fov with a blend factor - is the shape a boost
+kick would take and is the first place to look; the shake is the shape an
+impact kick would take. Both are now named, which is the useful half of the
+answer: **nothing else in the binary can move the projection's fov.**
+
+**None of this is owed a port, and the reason is worth stating so the next
+pass does not treat it as one.**
+[`crates/game/src/display.rs`](../../../../crates/game/src/display.rs)'s
+`BoostFovKick` is a **deliberate invention of this project** - a boost reads
+better with a fov kick, and that is the whole justification. It is not a
+reimplementation of anything above, it is not being fitted to the original,
+and its `DEFAULT` is a taste decision rather than a measurement. So the two
+shapes differing (`BoostFovKick` widens a *tangent* by a multiplier; the
+original's `ship+0x790` is additive degrees on a `+/-30` clamp) is not a
+defect, and the "90-95 degrees" figure
+[exhaust.md](exhaust.md) recorded from a 2026-08-07 tower-width measurement
+must **not** be used to retune it.
+
+What this section is for instead is the two facts underneath it that the
+projection genuinely does depend on, and that were inferred before and are
+measured now: the fov field is **vertical degrees**, and the aspect is a
+hardcoded **480.0/272.0**. Both are literals in `Camera_PublishTripod`, and
+both are already what `Race::projection` assumes.

@@ -44,8 +44,9 @@
 //! scene's own projection - a view-space billboard that shrinks with distance.
 //! This module's world-space camera-basis quad is therefore the same
 //! construction, not a divergence, and [`HALF_SIZE_TO_WORLD`] is `1.0` rather
-//! than a fitted conversion. What still departs is [`FLARE_ASPECT`], an
-//! observed stretch whose mechanism is open - see its doc.
+//! than a fitted conversion. The `480 / 272` stretch that used to ride on top
+//! of it went with the same correction, on 2026-08-08 - see
+//! [`Exhaust::vertices`].
 //!
 //! The ribbon itself is recovered end to end (2026-08-02, static read plus a
 //! live PPSSPP capture; see exhaust.md's GE-state and vertex-bake sections):
@@ -318,21 +319,6 @@ pub const FLICKER: (f32, f32) = (0.75, 1.25);
 /// Bounds of the per-frame alpha flicker, from `Rng_RangeI(200, 255)`, as
 /// fractions of full opacity.
 pub const ALPHA_FLICKER: (f32, f32) = (200.0 / 255.0, 1.0);
-
-/// The flare quad's on-screen width-to-height ratio: `480 / 272`.
-///
-/// Carried as an **observation whose mechanism is now open** (2026-08-07).
-/// The old justification - equal extents in post-projection space, stretched
-/// by the viewport's 240:136 pixel mapping - fell with the live matrix read
-/// that settled [`HALF_SIZE_TO_WORLD`]: the quad is a view-space square, and
-/// a view-space square through a symmetric projection renders square. Yet the
-/// original's own frames really do show a wide flare (a stalled-craft capture
-/// on Talon's Junction measures the visible glow at about 1.7:1), and drawing
-/// ours square read visibly narrower against a live capture (2026-08-02). So
-/// the stretch stays, as the measured shape with an unexplained cause -
-/// candidates being the GE projection the flare inherits or something about
-/// the art's own content - rather than as recovered geometry.
-pub const FLARE_ASPECT: f32 = 480.0 / 272.0;
 
 /// Converts the recovered half-size into world units: `1.0`, because the
 /// original's half-size **is already in view units**, which a rigid view
@@ -709,10 +695,29 @@ impl Exhaust {
     /// The flare's vertices: **one** quad, as `ExhaustFlare_Draw` draws it.
     ///
     /// `nozzle` is the `engine_flare` locator in world space; `right` and `up`
-    /// come from the camera, which is what makes the quad face the viewer. The
-    /// `right` extent is stretched by [`FLARE_ASPECT`], reproducing the
-    /// original's post-projection square rendering 1.76x wider than tall
-    /// through the PSP viewport.
+    /// come from the camera, which is what makes the quad face the viewer.
+    /// Both extents are the same `half_size`: **the quad is square**, and the
+    /// `480 / 272` stretch this module applied until 2026-08-08 was an
+    /// artefact. Three independent readings close it:
+    ///
+    /// - `ExhaustFlare_Draw` writes `cx +/- half` into x and `cy +/- half`
+    ///   into y from the **same** register (`f13`,
+    ///   `0x08904b58`..`0x08904ba4`), so the original's quad is an exact
+    ///   view-space square.
+    /// - the four UVs `ExhaustFlare_Init` writes span the whole `[0, 1]^2` of
+    ///   `grabbedEngineFlare128x64x8.mip`, and that texture's glow measures
+    ///   `sigma_u / sigma_v = 1.007` **in UV space** - authored round for a
+    ///   square quad, and 2:1 in pixels only because the image is 2:1.
+    /// - the projection read live at the flare draw is
+    ///   `m11 / m00 = 1.764706` exactly, i.e. aspect-correct for 480x272, so
+    ///   a view-space square projects square.
+    ///
+    /// The "visible glow measures about 1.7:1" observation on one of the
+    /// original's own frames is contradicted by all three; the companion "a
+    /// square flare read visibly narrower" comparison (2026-08-02) was taken
+    /// while [`HALF_SIZE_TO_WORLD`] was still the fitted `2.15`, so it
+    /// measured size rather than aspect. Read this before reinstating a
+    /// stretch from a screenshot measurement.
     ///
     /// The colour is white with the flickered alpha and nothing else - all four
     /// of the original's vertices take the single colour at `flare+0xc8`. The
@@ -725,7 +730,7 @@ impl Exhaust {
     #[must_use]
     pub fn vertices(&self, nozzle: Vec3, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
         let half = self.half_size;
-        quad(nozzle, right * (half * FLARE_ASPECT), up * half, self.alpha).to_vec()
+        quad(nozzle, right * half, up * half, self.alpha).to_vec()
     }
 }
 
@@ -1507,14 +1512,14 @@ mod tests {
         assert_eq!(e.vertices(Vec3::ZERO, Vec3::X, Vec3::Y).len(), cold);
     }
 
-    /// The flare renders wider than tall by the PSP viewport's 480:272.
+    /// The flare quad is square, because the original's is.
     ///
-    /// Equal post-projection extents through a 480x272 viewport is the
-    /// original's own stretch; a square flare - which this module drew at
-    /// first - compresses the wide-authored `128x64` art and reads visibly
-    /// narrower than the running game.
+    /// `ExhaustFlare_Draw` takes both extents from one register and the live
+    /// projection is aspect-correct, so a stretch here would be an invention -
+    /// see [`Exhaust::vertices`] for the three readings that retired the
+    /// `480 / 272` factor this test used to assert.
     #[test]
-    fn the_flare_is_wider_than_tall_by_the_viewport_aspect() {
+    fn the_flare_quad_is_square() {
         let mut e = Exhaust::new();
         let mut r = rng();
         for _ in 0..600 {
@@ -1526,8 +1531,8 @@ mod tests {
         let height = v.iter().map(|v| v.position[1]).fold(f32::MIN, f32::max)
             - v.iter().map(|v| v.position[1]).fold(f32::MAX, f32::min);
         assert!(
-            (width / height - FLARE_ASPECT).abs() < 1e-5,
-            "aspect {} vs {FLARE_ASPECT}",
+            (width / height - 1.0).abs() < 1e-5,
+            "aspect {} is not square",
             width / height
         );
     }

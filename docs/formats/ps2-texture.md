@@ -1,7 +1,7 @@
 # PS2 texture
 
-**Status: understood, including the ship and track lookup.** Located,
-decoded, implemented in
+**Status: understood, including the ship and track lookup and all three
+transfer shapes.** Located, decoded, implemented in
 [`oag-formats::ps2_texture`](../../crates/formats/src/ps2_texture.rs); every
 ship on the roster now draws in its own livery in `just play pulse-ps2`
 itself, not only through `oag-view --mesh ... --textures ...` naming an entry
@@ -132,6 +132,62 @@ other one (32x128, 64x128, 512x512) are not explained - but they are not
 mislabelled: all 185 testable linear textures decode smoother linearly than
 swizzled, see [the permutation evidence](#the-permutation-separately).
 
+### `PSMT4`, and why it is the same formula with one new fact
+
+The five 4-bit blobs are the **five PS2 font atlases** - see
+[`.fnt`](fnt.md#the-ps2-keeps-the-same-five-fonts-and-moves-the-pixels-out) -
+which is why there are so few and why nothing needed them until the PS2 menus
+were asked to draw text.
+
+`psmt8_offset` above answers "where in the **linear `PSMCT32` source image**
+does this indexed texel live", not "where is it in GS memory". That is the
+whole reason it needs no block table: the blob is the *source of a blit*, and
+the GS scatters it into pages and blocks on the way in. So the `PSMT4` version
+is the same question with different geometry:
+
+| | `PSMT8` | `PSMT4` | `PSMCT32` (the source) |
+| --- | --- | --- | --- |
+| source rectangle | `(width/2, height/2)` | `(width/2, height/4)` | - |
+| page | 128x64 | 128x128 | 64x32 |
+| block | 16x16 | 32x16 | 8x8 |
+
+`PSMT8`'s page and block are both exactly 2x the source's in both axes, so its
+blocks land in the source in plain raster order and the block table cancels out.
+`PSMT4`'s page is 2x wider and 4x taller while its block is 4x wider and 2x
+taller - they disagree, and the disagreement is exactly one transposition:
+within a page, the block at block-column `bx`, block-row `by` sits at source
+block-column `by`, source block-row `bx`. That is `blockTable4` being the
+transpose of `blockTable32`, and it is the only fact here that is not already
+carried by the `PSMT8` formula.
+
+Inside a block the split follows from the counts. A 32x16 `PSMT4` block is 512
+nibbles over an 8x8 patch of 32-bit source pixels, so `x`'s low three bits pick
+the source column, `x`'s next two bits pick the byte inside that word, `y`'s
+bit 1 picks the nibble, and `y`'s remaining bits pick the source row through the
+same two-of-four row swap:
+
+```rust
+fn psmt4_offset(x, y, width) -> (usize, usize) {
+    let page = (x / 128) * 64 + (y / 128) * 32 * (width / 2);
+    let block = ((y % 128) / 16) * 8 + ((x % 128) / 32) * 8 * (width / 2);
+    let swap = (((y + 2) >> 2) & 1) * 4;
+    let column = (x + swap) & 0x7;
+    let row = (((y & !3) >> 1) + (y & 1)) & 0x7;
+    let word = page + block + row * (width / 2) + column;
+    (word * 4 + ((x >> 3) & 3), (y >> 1) & 1)
+}
+```
+
+**The transposition is not a choice between two plausible readings.** Without
+it the mapping is not even a bijection: source words collide and others are
+never read, which the unit test catches before a single pixel is looked at.
+With it, it is a permutation of `0..width * height` at every shape on the disc.
+
+The page term only works from 128x128 up, because a page is 128x128 texels and
+a smaller texture would address source pixels that are not there. Everything on
+the disc is 256x128 or larger, and `parse` refuses anything smaller rather than
+indexing off the end.
+
 ## The palette is in `CSM1` order
 
 A 256-entry CLUT is uploaded as a 16x16 `PSMCT32` rectangle, which is `CSM1`
@@ -193,6 +249,7 @@ Over the whole disc:
 | --- | ---: | ---: |
 | `PSMT8` | 4,956 | **4,856** (98.0%) |
 | linear | 185 | **185** (100%) |
+| `PSMT4` | 5 | **5** (100%) |
 
 The hundred `PSMT8` exceptions are flat or noise-like blobs with almost no
 variation in either reading. The linear column is the one that matters most,
@@ -221,6 +278,17 @@ dimensions and the alpha scale - every declared size closes against every other
 one across 5,348 real files, and the framing is what those closures actually
 evidence.
 
+Confidence **93** for the `PSMT4` permutation, which is the best-evidenced of
+the three despite having only five files behind it: it is a *derivation* from
+the already-verified `PSMT8` formula rather than an independent guess, the
+non-transposed alternative fails the bijection test outright, all five decode
+smoother than the unswizzled reading, all five come out as legible character
+sets, and on `pulse_text` **every single lit texel of 9,816 falls inside a glyph
+box that font's own metrics declare** - an exact agreement between two
+independent parts of the data, which is what the rubric wants. One point under
+94 because the block transposition is asserted from GS geometry and the
+bijection test rather than read out of the executable.
+
 Confidence **92** for the `PSMT8` permutation, the linear/swizzled split and the
 `CSM1` palette order. The evidence is different in kind: a corpus-wide
 smoothness comparison against the opposite reading rather than an exact
@@ -228,7 +296,7 @@ arithmetic identity, plus the ship render, where texture coordinates decoded by 
 completely separate path land on the right panels of the right artwork. Strong,
 and not exact.
 
-Per the [rubric](../reverse-engineering/confidence-rubric.md) both are data
+Per the [rubric](../reverse-engineering/confidence-rubric.md) all three are data
 agreement rather than a runtime trace, which caps at 94 regardless.
 
 ## Reproducing
@@ -324,9 +392,53 @@ figure says this rule will not fit - that piece is still open and is a
 separate, smaller RE task from "does a circuit's own `track.vex` get its
 textures back," which this section now answers.
 
+## The front-end and HUD images are not under the names their XML uses
+
+A third lookup, and unlike the two above it is **not** a rule. The PS2's own
+screens ask for `Data\HUD\Textures\PulseHUD.mip` and
+`Data\FE\Images\pulse_logo.mip`, and neither hashes to an entry on the disc.
+Nor does any variation: 60 candidates across path shape, case and extension
+were hashed against all 7,393 entry hashes in `WADS2.WAD` and `WADSP.WAD` and
+every one missed. Directory position does not help either - the five
+`Data\XML\*_HUD.xml` entries sit in a run of XML with no texture near them.
+
+The entries were found **by their pictures**: decode the PSP `.mip`, reduce it
+to a silhouette (one bit per pixel, "is this texel's palette entry
+transparent"), and compare against every same-shaped PS2 texture on the disc.
+The measure ignores palette order, which the two builds do differently.
+
+| PSP name | PS2 entry | Hash | Silhouette | Best runner-up |
+| --- | ---: | --- | ---: | ---: |
+| `Data\HUD\Textures\PulseHUD.mip` | 3518, 3583 | `beaf613c`, `f012b5af` | 0.9999 | 0.7085 |
+| `Data\FE\Images\pulse_logo.mip` | 3421 | `1e6c873e` | 0.9946 | 0.5149 |
+| `Data\FE\Images\pulse_assets.mip` | 3420 | `0d31af1b` | 0.9999 | 0.5147 |
+
+All three were then decoded and looked at: 3518 is the speed and shield bars
+with the weapon icons, 3421 is the Wipeout Pulse wordmark. The two `PulseHUD`
+entries are a genuine duplicate, not an ambiguity - the PSP ships that atlas
+twice as well, and both PS2 copies are 13,446 stored / 66,829 unpacked. For the
+HUD atlas there is a fourth, independent agreement: the UV boxes in the PS2
+layouts are identical to the PSP's, so both index the same arrangement.
+
+`Data\FE\Images\gameshare_backdrop.mip` is **confirmed absent**, which fits -
+Game Sharing is a PSP ad-hoc feature. Note the silhouette test cannot say so:
+that image is 93.75 % opaque, so every candidate scores 0.9375 for free.
+Correlating the picture settles it at 0.02 across all 28 same-shaped
+candidates. Do not re-run the weaker test on it.
+
+**How the game itself resolves these names is not known.** A repeated
+3,656-byte blob sitting beside the HUD assets looked like a name table and was
+ruled out: none of its 914 words is an entry hash in either archive.
+
+**Confidence 90** for the three mappings - exact shape agreement, 0.99+
+silhouette against a runner-up field below 0.71, visual confirmation, and for
+the atlas the independent UV agreement. Short of 94 because the mapping is
+recovered rather than declared and no executable path has been read. Recorded
+in [`oag_assets::pulse::PS2_IMAGES`](../../crates/assets/src/pulse.rs) and
+pinned by `crates/assets/tests/ps2_image_ground_truth.rs`, which re-derives the
+match instead of asserting the constants against themselves.
+
 ## Not determined
-- **The `PSMT4` swizzle**, so five 4-bit textures do not decode. `parse` refuses
-  them by name rather than guessing.
 - **`flags` at `+0x02`.** 0x2000 on 3,925 textures and 0x2040 on 1,423. Nothing
   correlates it with dimensions or depth.
 - **`+0x08` and `+0x0c`.** They move together — `0x00400000` with 68,

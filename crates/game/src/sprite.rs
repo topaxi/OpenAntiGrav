@@ -11,7 +11,55 @@
 //! three images. When a screen needs enough of them for the waste to show, the
 //! lookup below is already in pixels, so only this file has to change.
 
+use oag_formats::ps2_texture;
 use oag_formats::texture::Texture;
+
+/// One decoded image, from either disc's texture format.
+///
+/// The two are different formats, not two versions of one - a PSP `.mip` is a
+/// header, a palette and pixels, a PS2 texture is the GS upload packet that
+/// would put one in video memory - but a sheet only needs a size and RGBA, so
+/// the difference stops here. See `docs/formats/psp-texture.md` and
+/// `docs/formats/ps2-texture.md`.
+struct Image {
+    width: u16,
+    height: u16,
+    bits_per_pixel: u8,
+    rgba: Vec<u8>,
+}
+
+impl Image {
+    /// Decodes whichever of the two formats this blob is.
+    ///
+    /// The PSP is tried first and its error is the one reported, because a
+    /// `.mip` that will not parse is the far commoner failure and naming the
+    /// PS2 parser's complaint about it would send a reader the wrong way.
+    fn decode(blob: &[u8]) -> Result<Self, String> {
+        match Texture::parse(blob) {
+            Ok(t) => Ok(Self {
+                width: t.width,
+                height: t.height,
+                bits_per_pixel: t.bits_per_pixel,
+                rgba: t.to_rgba(),
+            }),
+            Err(psp) => match ps2_texture::parse(blob) {
+                Ok(t) => Ok(Self {
+                    width: t.width,
+                    height: t.height,
+                    bits_per_pixel: t.bits_per_pixel,
+                    rgba: t.to_rgba(),
+                }),
+                Err(_) => Err(psp.to_string()),
+            },
+        }
+    }
+
+    /// The decoded pixels, consuming the image: the sheet copies them out and
+    /// nothing wants them twice.
+    fn into_rgba(self) -> Vec<u8> {
+        self.rgba
+    }
+}
 
 /// Transparent rows left between stacked images.
 ///
@@ -80,11 +128,11 @@ impl Sheet {
     /// than one archive.
     #[must_use]
     pub fn build(blobs: &[(String, Vec<u8>)], report: &mut Vec<String>) -> Self {
-        let mut decoded: Vec<(String, Texture)> = Vec::new();
+        let mut decoded: Vec<(String, Image)> = Vec::new();
 
         for (src, blob) in blobs {
-            match Texture::parse(blob) {
-                Ok(texture) => decoded.push((src.clone(), texture)),
+            match Image::decode(blob) {
+                Ok(image) => decoded.push((src.clone(), image)),
                 Err(e) => report.push(format!("image {src}: {e}")),
             }
         }
@@ -109,7 +157,8 @@ impl Sheet {
 
         for (src, texture) in decoded {
             let (w, h) = (u32::from(texture.width), u32::from(texture.height));
-            let pixels = texture.to_rgba();
+            let bits_per_pixel = texture.bits_per_pixel;
+            let pixels = texture.into_rgba();
 
             // Copied row by row because the sheet is wider than the image
             // whenever another image is wider than this one.
@@ -120,10 +169,7 @@ impl Sheet {
                     .copy_from_slice(&pixels[from..from + (w * 4) as usize]);
             }
 
-            report.push(format!(
-                "image {src}: {w}x{h}, {}bpp",
-                texture.bits_per_pixel
-            ));
+            report.push(format!("image {src}: {w}x{h}, {bits_per_pixel}bpp"));
             placed.push((
                 src,
                 Placed {

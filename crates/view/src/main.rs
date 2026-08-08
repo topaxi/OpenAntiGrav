@@ -14,6 +14,7 @@
 //! GPU. If it draws the right picture, every layer beneath it is right.
 
 mod assets;
+mod draws;
 mod offscreen;
 mod orbit;
 
@@ -211,6 +212,26 @@ struct Cli {
     /// Stop each `--payload` dump after this many bytes. 0 dumps all of it.
     #[arg(long, default_value_t = 256)]
     payload_bytes: usize,
+
+    /// Print every draw call of a `--mesh`, `--sky` or `--pads` model - list,
+    /// node, material, texture ordinal, decoded texture, vertex colour - and
+    /// the material chain behind it.
+    ///
+    /// A screenshot says a surface looks wrong; this says which draw made it.
+    /// The line that usually matters is a draw that resolves no texture: those
+    /// bind `mesh_render::build`'s white 1x1 and paint white whatever their
+    /// material meant to paint.
+    #[arg(long)]
+    draws: bool,
+
+    /// Draw only the parts of a `--mesh`, `--sky` or `--pads` model whose node
+    /// name or texture label contains this text, case-insensitively.
+    ///
+    /// Node-level isolation: hide everything else and the remaining pixels can
+    /// only have come from what is left, which is what turns `--draws`'
+    /// attribution into a confirmation. The camera reframes onto what survives.
+    #[arg(long)]
+    only: Option<String>,
 }
 
 /// Hex-dumps one node payload, 16 bytes to a line with an ASCII gutter.
@@ -371,6 +392,28 @@ fn report_collision(nodes: &[oag_formats::collision::CollisionNode]) {
             );
         }
     }
+}
+
+/// Applies `--draws` and `--only` to a freshly built model.
+///
+/// Both act on the same three draw lists and both want the file the model came
+/// from (for node names), so they are one step rather than two scattered
+/// through each `--mesh`/`--sky`/`--pads` branch.
+fn inspect(model: mesh::Model, data: &[u8], cli: &Cli) -> mesh::Model {
+    if cli.draws {
+        draws::report(&model, data);
+    }
+    let Some(needle) = &cli.only else {
+        return model;
+    };
+    let model = draws::isolate(model, data, needle);
+    println!(
+        "  --only {needle:?}: {} opaque, {} cutout, {} blend draw(s) kept",
+        model.draws.len(),
+        model.alpha_tested_draws.len(),
+        model.transparent_draws.len()
+    );
+    model
 }
 
 /// Reads and decodes an external texture set out of the same archive.
@@ -551,7 +594,7 @@ fn main() -> Result<()> {
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
-        let model = mesh::build_sky(name, &data, external)?;
+        let model = inspect(mesh::build_sky(name, &data, external)?, &data, &cli);
         println!(
             "{}: {} sky node(s), {} vertices, {} triangles, radius {:.2}",
             model.label,
@@ -593,7 +636,7 @@ fn main() -> Result<()> {
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
-        let model = mesh::build_pads(name, &data, external)?;
+        let model = inspect(mesh::build_pads(name, &data, external)?, &data, &cli);
         println!(
             "{}: {} Speedup Pad node(s), {} vertices, {} triangles, radius {:.2}",
             model.label,
@@ -637,7 +680,11 @@ fn main() -> Result<()> {
         // Both tiers by default: an asset inspector's job is to show what is on
         // the disc, not to apply a performance divergence from it. `--lod
         // single` is how you see what the duplication is costing.
-        let model = mesh::build_with_textures(name, &data, external, cli.lod)?;
+        let model = inspect(
+            mesh::build_with_textures(name, &data, external, cli.lod)?,
+            &data,
+            &cli,
+        );
         println!(
             "{}: {} meshes, {} vertices, {} triangles, radius {:.2}",
             model.label,

@@ -186,7 +186,7 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
         // bijections. Scoring the same texels under the *opposite* reading is
         // what discriminates: any wrong permutation scatters pixels that belong
         // together and raises local discontinuity.
-        if texture.width >= 32 && texture.height >= 16 && head.layout != Layout::Psmt4 {
+        if texture.width >= 32 && texture.height >= 16 {
             let name = layout_name(head.layout);
             let (w, h) = (usize::from(texture.width), usize::from(texture.height));
             *into.testable.entry(name).or_default() += 1;
@@ -198,7 +198,11 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
                 Layout::Linear => (0..w * h)
                     .map(|i| texels[ps2_texture::psmt8_offset(i % w, i / w, w)])
                     .collect(),
-                Layout::Psmt4 => unreachable!("filtered above"),
+                // The nibbles read straight off the blob, which is what a
+                // reader that missed the swizzle entirely would draw.
+                Layout::Psmt4 => (0..w * h)
+                    .map(|i| (texels[i / 2] >> ((i & 1) * 4)) & 0x0f)
+                    .collect(),
             };
             if texture.roughness() < ps2_texture::roughness_of(&control, w, h) {
                 *into.smoother.entry(name).or_default() += 1;
@@ -252,18 +256,27 @@ fn every_ps2_texture_blob_decodes_and_its_declared_sizes_close() {
         survey.textures,
         "every recognised blob must either decode or be explicitly refused"
     );
-    // Both transfer shapes are in use; if one vanished the classifier would be
-    // silently collapsing them.
+    assert_eq!(
+        survey.refused, 0,
+        "nothing on this disc is refused any more: the five PSMT4 blobs are the \
+         font atlases and they decode"
+    );
+    // All three transfer shapes are in use; if one vanished the classifier
+    // would be silently collapsing them.
     assert!(survey.layouts.contains_key("psmt8"));
     assert!(survey.layouts.contains_key("linear"));
+    assert!(survey.layouts.contains_key("psmt4"));
     // The permutation check. Reading the texels the other way round has to be
     // measurably rougher, on essentially every texture, or the layout
     // classifier and the unswizzle are not earning their place.
-    for layout in ["psmt8", "linear"] {
+    for layout in ["psmt8", "linear", "psmt4"] {
         let testable = survey.testable.get(layout).copied().unwrap_or(0);
         let smoother = survey.smoother.get(layout).copied().unwrap_or(0);
+        // There are only five PSMT4 blobs on the disc, so that one gets its own
+        // floor rather than being excused.
+        let floor = if layout == "psmt4" { 5 } else { 100 };
         assert!(
-            testable > 100,
+            testable >= floor,
             "{layout}: only {testable} testable textures"
         );
         assert!(

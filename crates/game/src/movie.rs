@@ -2297,6 +2297,31 @@ mod tests {
         assert!(ring.take_upto(2).is_none(), "and only once each");
     }
 
+    /// Taking is a **pop**, and this is the invariant both front-end transition
+    /// defects rested on.
+    ///
+    /// A consumer that asks for a position, uses the frame or throws it away,
+    /// and then asks for the same position again gets nothing the second time:
+    /// the ring has no memory of what it handed over. That is correct here -
+    /// popping is what frees a slot for the worker to decode into - so the
+    /// caller is the one that has to keep the picture. `FrontendStage` does,
+    /// in `held_backdrop`; before it did, the frame popped on a frame that drew
+    /// the intro was gone by the time `Show Logo` wanted to draw it.
+    #[test]
+    fn a_frame_taken_is_a_frame_gone_even_at_the_same_position() {
+        let mut ring = ring(0..3);
+        assert_eq!(ring.take_upto(1).map(|f| f.position), Some(1));
+        assert!(
+            ring.take_upto(1).is_none(),
+            "the same position asked twice hands nothing over the second time"
+        );
+        assert_eq!(
+            ring.take_upto(2).map(|f| f.position),
+            Some(2),
+            "and the ring has moved on rather than been emptied"
+        );
+    }
+
     /// The playhead being ahead of the decoder is the ordinary underrun, and the
     /// answer is *nothing* rather than a stale frame or a wrong one: the caller
     /// keeps the picture it has.

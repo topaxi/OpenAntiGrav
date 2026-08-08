@@ -2,9 +2,11 @@
 //!
 //! Two pipelines and nothing else: one for colour-modulated quads, which covers
 //! text, solid fills and the front end's own images, and one for a movie frame
-//! out of three 8-bit planes. Everything is positioned in the PSP's
-//! 480x272 screen space and letterboxed into whatever the window is, so the XML's
-//! own coordinates can be used untouched.
+//! out of three 8-bit planes. Everything is positioned in the grid its source's
+//! XML places widgets in - the PSP's 480x272, the PS2's 640x448 - and
+//! letterboxed into whatever the window is, so those coordinates can be used
+//! untouched. See [`Space`], and note that a grid and the aspect it is *shown*
+//! as are two different numbers on the PS2.
 //!
 //! The same code path serves the window and the headless screenshot. That is
 //! deliberate: a screenshot that went through a different pipeline would not
@@ -13,7 +15,7 @@
 use anyhow::{Context, Result};
 
 use crate::font::{self, Atlas};
-use crate::frontend::{Align, Draw, SCREEN};
+use crate::frontend::{Align, Draw, SCREEN, Space};
 
 /// Shared with both shaders.
 #[repr(C)]
@@ -134,6 +136,11 @@ pub struct Renderer {
     sprites: (u32, u32),
     video: Option<Video>,
     quads: Vec<Quad>,
+    /// The grid the draw lists it is given are in, and what that grid is shown
+    /// as. [`Space::PSP`] until someone says otherwise, which is what every
+    /// caller that draws our own layouts - the loading screen, the menus, the
+    /// HUD - wants. See `crate::frontend::Space`.
+    space: Space,
 }
 
 impl std::fmt::Debug for Renderer {
@@ -153,6 +160,15 @@ struct Video {
 }
 
 impl Renderer {
+    /// Tells the renderer which grid the draw lists it is given are in.
+    ///
+    /// Set from the front end's own [`Space`] whenever a stage draws a source's
+    /// XML rather than one of our layouts. Nothing calls this for the loading
+    /// screen or the menus, whose rects this project authors at 480x272.
+    pub fn set_space(&mut self, space: Space) {
+        self.space = space;
+    }
+
     /// Builds the pipelines for a target of `format`.
     pub fn new(
         device: &wgpu::Device,
@@ -343,6 +359,7 @@ impl Renderer {
             sprites: (sprites.width, sprites.height),
             video,
             quads: Vec::new(),
+            space: Space::PSP,
         })
     }
 
@@ -485,7 +502,7 @@ impl Renderer {
         // PS2 `.PSS`'s own display aspect pillarboxes inside [`SCREEN`] rather
         // than filling it the way a `.PMF` always has. See
         // `crate::frontend::pillarbox`.
-        let mut video_rect = [0.0, 0.0, SCREEN.0, SCREEN.1];
+        let mut video_rect = [0.0, 0.0, self.space.size.0, self.space.size.1];
         for draw in list {
             match draw {
                 Draw::Fill { rect, color } => self.push_solid(*rect, *color),
@@ -550,8 +567,15 @@ impl Renderer {
                 // window and are not otherwise, and feeding the surface here
                 // would letterbox the widgets a second time inside the bars
                 // `set_viewport` already left.
-                viewport: letterbox((viewport.2 as u32, viewport.3 as u32)),
-                screen: [SCREEN.0, SCREEN.1],
+                viewport: letterbox_in(
+                    (viewport.2 as u32, viewport.3 as u32),
+                    self.space.display_aspect,
+                ),
+                // The **grid**, not the display aspect: this maps a draw's rect
+                // onto the viewport, and the rects are in grid coordinates.
+                // `letterbox_in` above is the one that wants the other number.
+                // See `crate::frontend::Space`.
+                screen: [self.space.size.0, self.space.size.1],
                 atlas: [self.atlas.width as f32, self.atlas.height as f32],
                 sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
                 video_rect,
@@ -957,9 +981,18 @@ fn upload_rg8(
 /// Scale that fits 480x272 inside `target` without distorting it.
 #[must_use]
 pub fn letterbox(target: (u32, u32)) -> [f32; 2] {
+    letterbox_in(target, SCREEN.0 / SCREEN.1)
+}
+
+/// [`letterbox`], for a screen that is not the PSP's shape.
+///
+/// `screen_aspect` is a **display** aspect, not a grid one - the PS2's 640x448
+/// grid is shown as 4:3, and fitting 640/448 into the window instead would
+/// stretch the whole front end 7% wide. See `crate::frontend::Space`.
+#[must_use]
+pub fn letterbox_in(target: (u32, u32), screen_aspect: f32) -> [f32; 2] {
     let (width, height) = (target.0.max(1) as f32, target.1.max(1) as f32);
     let target_aspect = width / height;
-    let screen_aspect = SCREEN.0 / SCREEN.1;
     if target_aspect > screen_aspect {
         [screen_aspect / target_aspect, 1.0]
     } else {
@@ -970,6 +1003,28 @@ pub fn letterbox(target: (u32, u32)) -> [f32; 2] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A PS2 front end is fitted as 4:3, not as its own 640x448.
+    ///
+    /// The difference is 7%, it is a horizontal stretch of the entire front end,
+    /// and it is invisible on the PSP because there the two numbers agree. See
+    /// `crate::frontend::Space`.
+    #[test]
+    fn a_ps2_screen_is_letterboxed_by_what_it_is_shown_as() {
+        // A 4:3 window: the PS2 front end fills it exactly.
+        let fitted = letterbox_in((640, 480), Space::PS2.display_aspect);
+        assert!((fitted[0] - 1.0).abs() < 1e-6, "{fitted:?}");
+        assert!((fitted[1] - 1.0).abs() < 1e-6, "{fitted:?}");
+        // Fitting it by the grid instead would leave it 7% too wide to fit.
+        // 640/448 is *wider* than the 4:3 window, so fitting by the grid gives
+        // the height away instead of filling: a front end 7% short of the
+        // window it should have filled exactly.
+        let by_grid = letterbox_in((640, 480), Space::PS2.size.0 / Space::PS2.size.1);
+        assert!(
+            by_grid[1] < 0.94,
+            "the bug this exists to stop: {by_grid:?}"
+        );
+    }
 
     #[test]
     fn a_matching_aspect_ratio_needs_no_letterboxing() {

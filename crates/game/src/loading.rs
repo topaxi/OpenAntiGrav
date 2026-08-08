@@ -111,7 +111,9 @@ impl Assets {
                 match archives
                     .read_name(TIPS_ENTRY)
                     .map_err(|e| e.to_string())
-                    .and_then(|blob| fexml::expand(&blob).map_err(|e| e.to_string()))
+                    // `text` rather than `expand`: shortening is per file, and
+                    // the PS2 leaves several of these plain.
+                    .and_then(|blob| fexml::text(&blob).map_err(|e| e.to_string()))
                 {
                     Ok(xml) => tips = self::tips(&xml, strings),
                     Err(e) => notes.push(format!("{TIPS_ENTRY}: {e}")),

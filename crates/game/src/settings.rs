@@ -477,12 +477,19 @@ pub struct Graphics {
     /// How much crossing a speed pad widens the field of view for a moment.
     ///
     /// **[`crate::display::BoostFovKick::DEFAULT`] by default, and an authored
-    /// effect rather than a recovered one.** Nothing read out of either binary
-    /// widens the view on a boost; the force it rides on *is* recovered, and
-    /// this exists so the player can feel it. It is a magnitude rather than a
-    /// constant precisely because it is invented - somebody comparing against
-    /// a capture of the original wants [`crate::display::BoostFovKick::OFF`],
-    /// and somebody who finds the default too subtle wants a stronger tier.
+    /// effect rather than a recovered one.** The force it rides on *is*
+    /// recovered; this exists so the player can feel it, and it is not being
+    /// fitted to the original. It is a magnitude rather than a constant
+    /// precisely because it is invented - somebody comparing against a capture
+    /// of the original wants [`crate::display::BoostFovKick::OFF`], and
+    /// somebody who finds the default too subtle wants a stronger tier.
+    ///
+    /// The original's own field of view is *not* static, and a 2026-08-08 pass
+    /// recovered what moves it (`authored + ship->0x790`, an additive-degrees
+    /// shake - see `docs/ghidra/functions/psp-pulse-usa/camera.md`), but that
+    /// is a different mechanism from this one and no attempt is being made to
+    /// match it. [`crate::display::BoostFovKick::OFF`] is still the setting for
+    /// a comparison, because it takes *our* effect out of the picture.
     /// See `oag_render::sparks` for the same standing applied to the
     /// collision burst.
     #[serde(default = "default_boost_fov_kick")]
@@ -493,7 +500,7 @@ pub struct Graphics {
 /// original found no texture-coordinate offset submitted for any track surface.
 /// See [`Graphics::boost_fov_kick`]: **[`crate::display::BoostFovKick::DEFAULT`]**,
 /// so the boost is felt. Off is for comparing against a capture of the
-/// original, which has no such effect.
+/// original, which does not have *this* effect.
 fn default_boost_fov_kick() -> crate::display::BoostFovKick {
     crate::display::BoostFovKick::DEFAULT
 }
