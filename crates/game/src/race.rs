@@ -2698,34 +2698,6 @@ impl Race {
         &self.exhaust
     }
 
-    /// Drives the exhaust to the state a speed pad entry `age` seconds ago
-    /// would leave it in - `CaptureOptions::pose_boost`.
-    ///
-    /// Replays [`Exhaust::advance`] at the fixed step rather than poking
-    /// fields: enough ticks of full thrust to reach `entry_intensity`,
-    /// [`Exhaust::boost`] on the entry edge, then `age` more seconds of the
-    /// same advance, so the flare size, the plume reveal timer and the flicker
-    /// generator all sit exactly where a real crossing puts them.
-    ///
-    /// `entry_intensity` is `None` for a saturated ramp, which is what a craft
-    /// that has been racing for four seconds or more actually has. **Pass the
-    /// measured value when comparing against a capture taken after a
-    /// teleport**: `psp-drive.py place` leaves the flare's ramp wherever the
-    /// craft's idle time left it, and the first tick-addressable pad capture
-    /// read `0.1334` at the entry tick. That is not a cosmetic difference -
-    /// intensity sets the flare's resting half-size through
-    /// `(i * 0.6 + 0.4) * 2.5` (`1.2` against a saturated `2.5`) and every one
-    /// of the ribbon's three staggered layer alphas - so a saturated render
-    /// against an unsaturated capture differs in *state* before it differs in
-    /// anything a renderer does.
-    ///
-    /// Matching only the entry value is enough to match the whole curve,
-    /// because the ramp climbs at the same recovered `0.25`/s on both sides
-    /// through the posed age.
-    ///
-    /// `speed` is `None` for the racing `120` units/s. It reaches the picture
-    /// only through the speed ramp's floor on the boost accumulator, so it
-    /// matters when a capture's speed is far from that.
     /// Held throttle on the original's `0..=100` scale, for
     /// [`Race::force_boost_state`]'s synthetic warmup.
     ///
@@ -2747,6 +2719,47 @@ impl Race {
     /// `ShipControls::thrust` on the *input* side is `0.0..=1.0`.
     const FULL_THRUST: f32 = 100.0;
 
+    /// Drives the exhaust to the state a speed pad entry `age` seconds ago
+    /// would leave it in - `CaptureOptions::pose_boost`.
+    ///
+    /// Replays [`Exhaust::advance`] at the fixed step rather than poking
+    /// fields: enough ticks of full thrust to reach `entry_intensity`,
+    /// [`Exhaust::boost`] on the entry edge, then `age` more seconds of the
+    /// same advance, so the flare size, the plume reveal timer and the flicker
+    /// generator all sit exactly where a real crossing puts them.
+    ///
+    /// `entry_intensity` is `None` for a saturated ramp, which is what a craft
+    /// that has been racing for four seconds or more actually has. **Pass the
+    /// measured value when comparing against a capture taken after a
+    /// teleport**: `psp-drive.py place` leaves the flare's ramp wherever the
+    /// craft's idle time left it. That is not a cosmetic difference -
+    /// intensity sets the flare's resting half-size through
+    /// `(i * 0.6 + 0.4) * 2.5` (`1.2` against a saturated `2.5`) and every one
+    /// of the ribbon's three staggered layer alphas - so a saturated render
+    /// against an unsaturated capture differs in *state* before it differs in
+    /// anything a renderer does.
+    ///
+    /// Matching only the entry value is enough to match the whole curve,
+    /// because the ramp climbs at the same recovered `0.25`/s on both sides
+    /// through the posed age. **That rate is now confirmed numerically**: the
+    /// capture's own per-tick rise reads `0.0041708`, and `0.25 / 59.94` is
+    /// `0.0041708`.
+    ///
+    /// **Pass the intensity of the tick *before* the pad fires, not the entry
+    /// tick's.** [`Exhaust::boost`] arms the timer and the *next* `advance`
+    /// is the entry tick - it both decays `boost_timer` by one step and raises
+    /// intensity by one step, which is exactly what the capture's entry row
+    /// already shows (`boost_timer` reads `0.783316`, i.e. `0.8 - dt`, not
+    /// `0.8`). So passing the entry row's own intensity counts that tick twice.
+    /// Measured on `pad0-boost.csv` tick 62: the entry row's `0.1292277` lands
+    /// `+0.0080` high, the row before it (`0.1250567`) lands `+0.0003` - and
+    /// that remainder is the fixed-60 Hz against variable-59.94 Hz difference
+    /// [ADR-0007](../../../docs/architecture/adr/0007-fixed-timestep-vs-original.md)
+    /// accepts, not a model error.
+    ///
+    /// `speed` is `None` for the racing `120` units/s. It reaches the picture
+    /// only through the speed ramp's floor on the boost accumulator, so it
+    /// matters when a capture's speed is far from that.
     pub fn force_boost_state(
         &mut self,
         age: f32,
@@ -2754,14 +2767,25 @@ impl Race {
         speed: Option<f32>,
     ) {
         let speed = speed.unwrap_or(120.0);
-        // `INTENSITY_RISE` per second while the engine is on, from rest, so the
-        // ticks needed are the target over the rate. Saturation is the four
-        // seconds that takes plus the margin the old six-second warmup carried.
+        // Whole ticks, then a **short final tick** for the remainder, so the
+        // ramp lands exactly on `target` instead of up to one tick past it.
+        //
+        // This used to be `ceil`, and the overshoot was real: the first numeric
+        // comparison against a capture measured `intensity` `+0.0041` high, one
+        // whole tick of `INTENSITY_RISE * dt`, purely from rounding the warmup
+        // up. Still a replay of `advance` rather than a poked field - the
+        // principle this function is built on - because a shortened step is
+        // something the original's own variable timestep does anyway.
         let target = entry_intensity.unwrap_or(1.0).clamp(0.0, 1.0);
-        let warmup = (target / exhaust::INTENSITY_RISE / self.dt).ceil() as u32;
-        for _ in 0..warmup {
+        let ticks = target / exhaust::INTENSITY_RISE / self.dt;
+        for _ in 0..(ticks.floor() as u32) {
             self.exhaust
                 .advance(self.dt, Self::FULL_THRUST, speed, &mut self.exhaust_rng);
+        }
+        let remainder = (ticks - ticks.floor()) * self.dt;
+        if remainder > 0.0 {
+            self.exhaust
+                .advance(remainder, Self::FULL_THRUST, speed, &mut self.exhaust_rng);
         }
         self.exhaust.boost(exhaust::BOOST_SECONDS);
         let aged = (age / self.dt).round() as u32;
