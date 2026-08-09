@@ -55,6 +55,8 @@
 
 use std::fmt;
 
+use crate::vex;
+
 /// Bytes of `WO Track` header.
 pub const HEADER_LEN: usize = 0x20;
 
@@ -437,6 +439,25 @@ fn normalize(v: [f32; 3]) -> Option<[f32; 3]> {
     } else {
         None
     }
+}
+
+/// The `WO Track` node in an already-walked scene tree, found by the class id
+/// the file's own version word implies.
+///
+/// Eleven call sites used to spell `n.class_id == vex::CLASS_WO_TRACK` by hand,
+/// which is the version-6 id and finds nothing in a version-4 file. The payload
+/// parser here has never needed that fix - [`MIN_VERSION`] is `0x100`, so
+/// Pure's `0x103` payloads were always inside what it accepts. Only *finding*
+/// the node was version-locked.
+///
+/// `None` for a file whose version has no class table, or whose table has no
+/// `WO Track` id recovered, as well as for a `.vex` that simply authors none.
+/// Those are not distinguishable here, and a caller that needs to tell them
+/// apart should ask [`vex::classes_of`] itself.
+#[must_use]
+pub fn find_node<'a>(file: &[u8], nodes: &'a [vex::Node]) -> Option<&'a vex::Node> {
+    let wo_track = vex::classes_of(file).ok()?.wo_track?;
+    nodes.iter().find(|node| node.class_id == wo_track)
 }
 
 /// Bytes of reserved block for a given version.

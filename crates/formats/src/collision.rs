@@ -394,31 +394,36 @@ impl SurfaceKind {
     /// The kind a `.vex` class ID selects, or `None` if it is not a collision
     /// class.
     ///
-    /// The IDs are **Pulse's**. Pure PSP's `Data.wad` holds 171 `.vex` files with
-    /// 23,677 nodes and not one of these IDs: its whole class-ID space is
-    /// different (`0x6d` and `0x11e` dominate where Pulse has `0x6e` and
-    /// `0x125`). Where Pure keeps collision geometry is an open question.
+    /// The IDs come from `classes`, which a caller reads off the file with
+    /// [`vex::classes_of`].
+    ///
+    /// **Only version 6's are recovered.** Pure PSP's `Data.wad` holds 171
+    /// `.vex` files with 23,677 nodes and not one of Pulse's five IDs: its whole
+    /// class-ID space is different (`0x6d` and `0x11e` dominate where Pulse has
+    /// `0x6e` and `0x125`). Where Pure keeps collision geometry is an open
+    /// question, so a version-4 table returns `None` for every kind and this
+    /// finds nothing - which is the honest answer rather than a decode failure.
     #[must_use]
-    pub fn from_class_id(class_id: u32) -> Option<Self> {
-        match class_id {
-            vex::CLASS_FLOOR_COLLISION => Some(Self::Floor),
-            vex::CLASS_WALL_COLLISION => Some(Self::Wall),
-            vex::CLASS_RESET_COLLISION => Some(Self::Reset),
-            vex::CLASS_MAG_FLOOR_COLLISION => Some(Self::MagFloor),
-            vex::CLASS_CAGE_COLLISION => Some(Self::Cage),
-            _ => None,
-        }
+    pub fn from_class_id(class_id: u32, classes: vex::classes::Classes) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|kind| kind.class_id(classes) == Some(class_id))
     }
 
-    /// The `.vex` class ID of this kind.
+    /// The `.vex` class ID of this kind under `classes`, or `None` where that
+    /// version's ID has not been recovered.
+    ///
+    /// `None` is not "this version has no such surface": it is "nobody has found
+    /// its ID yet". The two are indistinguishable from here, and saying the
+    /// weaker thing is the honest one.
     #[must_use]
-    pub fn class_id(self) -> u32 {
+    pub fn class_id(self, classes: vex::classes::Classes) -> Option<u32> {
         match self {
-            Self::Wall => vex::CLASS_WALL_COLLISION,
-            Self::Floor => vex::CLASS_FLOOR_COLLISION,
-            Self::Reset => vex::CLASS_RESET_COLLISION,
-            Self::MagFloor => vex::CLASS_MAG_FLOOR_COLLISION,
-            Self::Cage => vex::CLASS_CAGE_COLLISION,
+            Self::Wall => classes.wall_collision,
+            Self::Floor => classes.floor_collision,
+            Self::Reset => classes.reset_collision,
+            Self::MagFloor => classes.mag_floor_collision,
+            Self::Cage => classes.cage_collision,
         }
     }
 
@@ -845,9 +850,19 @@ pub struct CollisionNode {
 /// ([`Error::PayloadNotAccountedFor`]), and anything [`parse_chunks`] refuses.
 pub fn from_vex(file: &[u8]) -> Result<Vec<CollisionNode>> {
     let mut out = Vec::new();
+    // The table comes from the file's own version word, so a generation whose
+    // collision IDs are unrecovered yields no nodes rather than matching
+    // version 6's IDs against a numbering that does not contain them.
+    //
+    // Propagated, not swallowed: a file too short to hold a header, or a version
+    // with no table at all, is a decode failure and reads differently from a
+    // file that simply authors no collision. Returning an empty vector for both
+    // is what `a_vex_walk_failure_is_propagated_rather_than_swallowed` exists to
+    // stop.
+    let classes = vex::classes_of(file)?;
 
     for (node_index, node) in vex::nodes(file)?.into_iter().enumerate() {
-        let Some(kind) = SurfaceKind::from_class_id(node.class_id) else {
+        let Some(kind) = SurfaceKind::from_class_id(node.class_id, classes) else {
             continue;
         };
         let range = node.payload();
@@ -915,6 +930,7 @@ fn f32_at(data: &[u8], at: usize) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vex::classes::V6;
 
     /// Encodes one chunk: `{u32 kind, u16 stride, u16 count, body}`.
     fn chunk_with_stride(kind: u32, stride: u16, count: usize, body: &[u8]) -> Vec<u8> {
@@ -1310,10 +1326,11 @@ mod tests {
     #[test]
     fn every_surface_kind_round_trips_through_its_class_id() {
         for kind in SurfaceKind::ALL {
-            assert_eq!(SurfaceKind::from_class_id(kind.class_id()), Some(kind));
+            let id = kind.class_id(V6).expect("version 6 has every collision id");
+            assert_eq!(SurfaceKind::from_class_id(id, V6), Some(kind));
         }
-        assert_eq!(SurfaceKind::from_class_id(vex::CLASS_MESH), None);
-        assert_eq!(SurfaceKind::from_class_id(0), None);
+        assert_eq!(SurfaceKind::from_class_id(vex::CLASS_MESH, V6), None);
+        assert_eq!(SurfaceKind::from_class_id(0, V6), None);
 
         // The surface-type enum the loader stores, from the class table.
         assert_eq!(SurfaceKind::Wall.surface_type(), Some(0));

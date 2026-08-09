@@ -46,10 +46,8 @@ pub fn load(spec: &str, name: &str) -> Result<(AiTrack, String)> {
     }
 
     let nodes = vex::nodes(&data).context("walking the node tree")?;
-    let node = nodes
-        .iter()
-        .find(|n| n.class_id == vex::CLASS_WO_TRACK)
-        .with_context(|| format!("{name} has no WO Track node"))?;
+    let node =
+        track::find_node(&data, &nodes).with_context(|| format!("{name} has no WO Track node"))?;
 
     let payload = data
         .get(node.payload())

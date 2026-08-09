@@ -519,6 +519,18 @@ pub fn visible(
 
 #[cfg(test)]
 mod tests {
+    /// A minimal but honest `.vex` file header.
+    ///
+    /// `TrackPvs::from_nodes` reads its class table out of the version word, so
+    /// a fixture's `data` has to be a file rather than a bare run of payloads -
+    /// which is what that parameter has always been documented as.
+    fn vex_header() -> Vec<u8> {
+        let mut header = vec![0u8; oag_formats::vex::FILE_HEADER_LEN];
+        header[0..4].copy_from_slice(&6u32.to_le_bytes());
+        header[0x0c..0x10].copy_from_slice(oag_formats::vex::MAGIC);
+        header
+    }
+
     use super::*;
     use crate::mesh::Bounds;
 
@@ -535,7 +547,7 @@ mod tests {
 
     /// Sections with boxes, built the way a `.vex` would hold them.
     fn pvs(boxes: &[(u8, [f32; 3], [f32; 3])]) -> TrackPvs {
-        let mut data = Vec::new();
+        let mut data = vex_header();
         let mut nodes = Vec::new();
         for &(index, min, max) in boxes {
             nodes.push(oag_formats::vex::Node {
@@ -819,7 +831,7 @@ mod tests {
 
     /// Sections without boxes but with authored visibility masks.
     fn pvs_with_masks(sections: &[(u8, u64)]) -> TrackPvs {
-        let mut data = Vec::new();
+        let mut data = vex_header();
         let mut nodes = Vec::new();
         for &(index, mask) in sections {
             nodes.push(oag_formats::vex::Node {

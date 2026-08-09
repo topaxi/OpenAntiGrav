@@ -105,6 +105,17 @@ pub mod classes {
         pub texture: Option<u32>,
         pub transform: Option<u32>,
         pub wo_track: Option<u32>,
+        pub section: Option<u32>,
+        pub skycube: Option<u32>,
+        pub fogcube: Option<u32>,
+        pub speedup_pad: Option<u32>,
+        pub weapon_pad: Option<u32>,
+        pub start_position: Option<u32>,
+        pub floor_collision: Option<u32>,
+        pub wall_collision: Option<u32>,
+        pub reset_collision: Option<u32>,
+        pub mag_floor_collision: Option<u32>,
+        pub cage_collision: Option<u32>,
     }
 
     /// The table used by every file Pulse ships except one.
@@ -117,6 +128,17 @@ pub mod classes {
         texture: Some(super::CLASS_TEXTURE),
         transform: Some(super::CLASS_TRANSFORM),
         wo_track: Some(super::CLASS_WO_TRACK),
+        section: Some(super::CLASS_SECTION),
+        skycube: Some(super::CLASS_SKYCUBE),
+        fogcube: Some(super::CLASS_FOGCUBE),
+        speedup_pad: Some(super::CLASS_SPEEDUP_PAD),
+        weapon_pad: Some(super::CLASS_WEAPON_PAD),
+        start_position: Some(super::CLASS_START_POSITION),
+        floor_collision: Some(super::CLASS_FLOOR_COLLISION),
+        wall_collision: Some(super::CLASS_WALL_COLLISION),
+        reset_collision: Some(super::CLASS_RESET_COLLISION),
+        mag_floor_collision: Some(super::CLASS_MAG_FLOOR_COLLISION),
+        cage_collision: Some(super::CLASS_CAGE_COLLISION),
     };
 
     /// The table Pure's 156 version-4 files use, and Pulse's one legacy
@@ -136,6 +158,17 @@ pub mod classes {
         texture: Some(0x373),
         transform: Some(0x6d),
         wo_track: Some(0x36d),
+        section: None,
+        skycube: None,
+        fogcube: None,
+        speedup_pad: None,
+        weapon_pad: None,
+        start_position: None,
+        floor_collision: None,
+        wall_collision: None,
+        reset_collision: None,
+        mag_floor_collision: None,
+        cage_collision: None,
     };
 
     /// The table Pure's 15 version-3 files use.
@@ -150,6 +183,17 @@ pub mod classes {
         texture: None,
         transform: None,
         wo_track: None,
+        section: None,
+        skycube: None,
+        fogcube: None,
+        speedup_pad: None,
+        weapon_pad: None,
+        start_position: None,
+        floor_collision: None,
+        wall_collision: None,
+        reset_collision: None,
+        mag_floor_collision: None,
+        cage_collision: None,
     };
 
     /// The class table for a file's version word, or `None` for a version this
@@ -486,6 +530,15 @@ pub enum Error {
         /// Bytes supplied.
         got: usize,
     },
+    /// A format version this project has no class table for.
+    ///
+    /// Deliberately an error rather than a fall back to version 6: the
+    /// numberings share no id, so reading an unknown generation with the wrong
+    /// table finds nothing and looks exactly like an empty file.
+    UnknownVersion {
+        /// The version word the file declares.
+        version: u32,
+    },
     /// A structure points outside the file.
     OutOfBounds {
         /// What was being read.
@@ -531,6 +584,11 @@ impl fmt::Display for Error {
             Self::TooShort { got } => {
                 write!(f, "need at least {FILE_HEADER_LEN} bytes, got {got}")
             }
+            Self::UnknownVersion { version } => write!(
+                f,
+                "no class table for .vex version {version}; \
+                 known versions are 6 (Pulse), 4 and 3"
+            ),
             Self::OutOfBounds { what, end, len } => {
                 write!(f, "{what} ends at {end} but the file is {len} bytes")
             }
@@ -999,6 +1057,22 @@ pub fn version(data: &[u8]) -> Result<u32> {
         return Err(Error::TooShort { got: data.len() });
     }
     Ok(u32_at(data, 0))
+}
+
+/// The class table for a file, read from its own version word.
+///
+/// This is what a decoder should call. Asking [`classes::for_version`] with a
+/// version obtained some other way reintroduces the one mistake the table
+/// exists to prevent: pairing a table with a file it does not describe.
+///
+/// # Errors
+///
+/// [`Error::TooShort`] for a file with no header, and
+/// [`Error::UnknownVersion`] for a format generation this project has never
+/// seen - which is deliberately not silently read as version 6.
+pub fn classes_of(data: &[u8]) -> Result<classes::Classes> {
+    let version = version(data)?;
+    classes::for_version(version).ok_or(Error::UnknownVersion { version })
 }
 
 /// Whether the file carries the `VEXX` magic.

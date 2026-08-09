@@ -168,9 +168,20 @@ impl FogVolume {
 ///
 /// A track has one or none - `06_Track` authors none, so an empty result is
 /// ordinary and not a decode failure.
+///
+/// The class id comes from the file's own version word, so this reads a
+/// version-6 track and returns nothing for a generation whose `fogCube` id has
+/// not been recovered - which is the honest answer, and the same answer it gave
+/// before, only now declared rather than accidental.
 #[must_use]
 pub fn volumes(data: &[u8], nodes: &[Node]) -> Vec<FogVolume> {
-    vex::nodes_by_class(nodes, vex::CLASS_FOGCUBE)
+    let Ok(classes) = vex::classes_of(data) else {
+        return Vec::new();
+    };
+    let Some(fogcube) = classes.fogcube else {
+        return Vec::new();
+    };
+    vex::nodes_by_class(nodes, fogcube)
         .filter_map(|node| FogVolume::parse(data.get(node.payload())?))
         .collect()
 }

@@ -18,10 +18,20 @@ av1 = ["dep:re_rav1d"]
 # faster than playback. `bitdepth_8` is all the 8-bit I420 path needs.
 re_rav1d = { workspace = true, optional = true }
 
-# Ground-truth tests read real tracks out of a disc image. This is a
-# dev-dependency only: the library itself knows nothing about discs.
+# Ground-truth tests read real tracks out of a disc image. These are
+# dev-dependencies only: the library itself knows nothing about discs.
+#
+# `oag-assets` and `oag-pulse` both depend back on this crate, so these two
+# lines close a cycle. Cargo permits it - a dev-dependency edge is not part of
+# the normal dependency graph, so the library still builds on its own - and
+# `scripts/check-dependency-rules.py` walks only normal edges, so the boundary
+# gate is unaffected. What they buy is that a sweep does not have to hard-code
+# where a release keeps its archives: `oag_pulse::open` finds them on a PSP or
+# a PS2 pressing alike, which is exactly what a corpus-wide measurement needs.
 [dev-dependencies]
+oag-assets.workspace = true
 oag-disc.workspace = true
+oag-pulse.workspace = true
 
 [lints]
 workspace = true

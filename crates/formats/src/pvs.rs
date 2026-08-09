@@ -235,8 +235,9 @@ impl TrackPvs {
     /// [`vex::nodes`].
     pub fn from_nodes(data: &[u8], nodes: &[Node]) -> Result<Self> {
         let mut pvs = Self::empty();
+        let section_class = vex::classes_of(data).ok().and_then(|c| c.section);
         for (at, node) in nodes.iter().enumerate() {
-            if node.class_id != vex::CLASS_SECTION {
+            if Some(node.class_id) != section_class {
                 continue;
             }
             let section = parse_section(data, node, at)?;
@@ -388,8 +389,9 @@ impl TrackPvs {
 pub fn governing_sections(data: &[u8], nodes: &[Node]) -> Result<Vec<Option<u8>>> {
     // parent node index -> the id of its section child.
     let mut section_of_parent: Vec<Option<u8>> = vec![None; nodes.len()];
+    let section_class = vex::classes_of(data).ok().and_then(|c| c.section);
     for (at, node) in nodes.iter().enumerate() {
-        if node.class_id != vex::CLASS_SECTION {
+        if Some(node.class_id) != section_class {
             continue;
         }
         let section = parse_section(data, node, at)?;
@@ -648,8 +650,22 @@ mod tests {
         }
     }
 
+    /// A minimal but honest `.vex` file header, so a fixture's `data` really is
+    /// a file.
+    ///
+    /// [`TrackPvs::from_nodes`] reads the class table out of the version word,
+    /// which means a bare payload no longer stands in for a file. It never
+    /// should have: the parameter has always been documented as the whole file,
+    /// and the fixtures were relying on nothing looking.
+    fn vex_header() -> Vec<u8> {
+        let mut header = vec![0u8; vex::FILE_HEADER_LEN];
+        header[0..4].copy_from_slice(&6u32.to_le_bytes());
+        header[0x0c..0x10].copy_from_slice(vex::MAGIC);
+        header
+    }
+
     fn pvs_from(payloads: &[Vec<u8>]) -> Result<TrackPvs> {
-        let mut data = Vec::new();
+        let mut data = vex_header();
         let mut nodes = Vec::new();
         for p in payloads {
             nodes.push(node(data.len(), p.len()));
@@ -677,7 +693,8 @@ mod tests {
     #[test]
     fn a_section_governs_its_parents_subtree() {
         let section = payload(7, 0, 0, None);
-        let data = section.clone();
+        let mut data = vex_header();
+        data.extend_from_slice(&section);
         // 0 root
         // +-- 1 group transform
         // |   +-- 2 section id 7
@@ -688,7 +705,12 @@ mod tests {
         let nodes = vec![
             tree_node(0x6e, 0, 0, None),
             tree_node(0x6e, 0, 0, Some(0)),
-            tree_node(vex::CLASS_SECTION, 0, section.len(), Some(1)),
+            tree_node(
+                vex::CLASS_SECTION,
+                vex::FILE_HEADER_LEN,
+                section.len(),
+                Some(1),
+            ),
             tree_node(vex::CLASS_MESH, 0, 0, Some(1)),
             tree_node(0x6e, 0, 0, Some(1)),
             tree_node(vex::CLASS_MESH, 0, 0, Some(4)),

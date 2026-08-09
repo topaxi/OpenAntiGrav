@@ -36,6 +36,7 @@ use std::path::{Path, PathBuf};
 use oag_disc::DiscImage;
 use oag_formats::collision::{self, CollisionNode, PAYLOAD_ALIGN, SurfaceKind};
 use oag_formats::vex;
+use oag_formats::vex::classes::V6;
 use oag_formats::wad::{self, Compression, Directory};
 
 /// Collision nodes in the PSP disc's `Data.wad`: 40 floor, 40 wall, 26 reset,
@@ -183,7 +184,7 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
         // specific to these five IDs, which matters because that specificity is
         // how the same format was located in Pure.
         for node in &tree {
-            if SurfaceKind::from_class_id(node.class_id).is_some() {
+            if SurfaceKind::from_class_id(node.class_id, V6).is_some() {
                 continue;
             }
             let range = node.payload();
@@ -362,7 +363,7 @@ fn check_common(label: &str, s: &Survey, expected_nodes: usize) {
          would mean collision geometry is not stored as .vex nodes under class \
          IDs {:#x?} at all.",
         s.nodes,
-        SurfaceKind::ALL.map(SurfaceKind::class_id),
+        SurfaceKind::ALL.map(|kind| kind.class_id(V6)),
     );
 
     // The four surfaces the engine instantiates are all present in both builds.
@@ -376,7 +377,7 @@ fn check_common(label: &str, s: &Survey, expected_nodes: usize) {
             s.per_kind.contains_key(kind.node_name()),
             "{label}: no {} node, though the class table lists {:#x}",
             kind.node_name(),
-            kind.class_id(),
+            kind.class_id(V6).expect("version 6 has every collision id"),
         );
     }
 
@@ -571,9 +572,9 @@ fn the_same_collision_format_appears_in_wipeout_pure() {
 
     for kind in SurfaceKind::ALL {
         assert!(
-            !census.contains_key(&kind.class_id()),
+            !census.contains_key(&kind.class_id(V6).expect("version 6 has every collision id")),
             "Pure uses Pulse's {:#x} ({}), so the class table is shared after all",
-            kind.class_id(),
+            kind.class_id(V6).expect("version 6 has every collision id"),
             kind.node_name(),
         );
     }
