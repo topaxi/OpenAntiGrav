@@ -1177,10 +1177,25 @@ and `+0xb0` after `Texture_BindCausticFrame`, falling back to a live
     needs. Mode `0` instead calls `FUN_0891fd98(entry+0x98)`, enables
     `GU_STENCIL_TEST` with `entry+0x94` as the reference, and disables fog.
   - Neither `FUN_0891fd98`/`FUN_0891fdf0` (paired, push/pop shaped) nor the
-    `DAT_08b323c0` table's producer was read, and no `.vex` material carrying a
-    non-zero `(material+3) & 0xfc` has been located on disc to confirm the
-    feature is used by shipped content at all. **That last check is the cheapest
-    next step and it decides whether any of this matters.**
+    `DAT_08b323c0` table's producer was read.
+  - **The feature is used by shipped content - measured, so this is not a dead
+    branch.** Every `Mesh` node of two circuits scanned off
+    `pulse-psp-usa.chd`, `(material+3) & 0xfc` tabulated `>> 2`:
+
+    | Circuit | meshes | materials | non-zero | indices seen |
+    | --- | ---: | ---: | ---: | --- |
+    | `01_Track` | 594 | 1,364 | **15** | 1, 5, 6, 8 |
+    | `16_Track` | 602 | 1,717 | **8** | 1, 2, 6, 7, 8 |
+
+    Rare but real, and spread over six of the eight available slots between the
+    two tracks - consistent with a handful of authored reflective or
+    render-to-texture surfaces per circuit rather than with stray bits. The
+    flagged materials also all carry `(material+3) & 0x03 == 1`, a separate flag
+    in the same byte that was not decoded.
+  - **What to do next**, in order: locate one flagged mesh's node name and
+    texture to see what kind of surface it is; then read `FUN_0891fd98` and the
+    `DAT_08b323c0` producer. This project draws none of it today, and a track
+    surface that should mirror is currently drawn as an ordinary textured one.
 
 ## The plume's real per-batch GE state, and why five multiplier candidates all read negative
 
