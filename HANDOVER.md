@@ -989,10 +989,12 @@ which is the opposite of what a missing bloom would do - bloom spreads dim light
 outward and would inflate the low thresholds while leaving the core alone. So
 "it is the unimplemented bright-pass" does not fit this measurement.
 
-**The most likely explanation is the instrument.** Our craft renders **1.43x**
-too large at the original's own recorded camera pose - wingtip-lamp span
-`133.1 px` against `92.9 px`, measured with one detector over both frames - and
-sits ~35 px lower in the frame. Normalising by craft span assumes the scene
+**The most likely explanation is the instrument.** Our craft renders too large
+at the original's own recorded camera pose. **The `1.43x` this paragraph
+originally reported is withdrawn** - it came from the *inner* wing-marker pair
+rather than the wingtips; the sound figure is **1.30x**, and the whole
+measurement is in "The craft render scale, measured soundly at last" below.
+Normalising by craft span assumes the scene
 scales uniformly, and it does not for geometry extending *toward* the camera,
 which is exactly what an exhaust ribbon is. **Every matched-pose pixel
 comparison in this project inherits that error**, including the four-row blend
@@ -1088,6 +1090,72 @@ which is the signature of a too-small bright source rather than a missing halo.
 That is the next thing to measure, and the trace harness makes it cheap: the
 capture records `half_size` per tick, so a matched-pose render can be compared
 against a frame whose flare size is *known* rather than inferred.
+
+## The craft render scale, measured soundly at last: 1.30x, and it is `0.75` twice (2026-08-09)
+
+**The original scales the craft mesh by `0.75` twice and we scale it once.** The
+`1/0.75^2` lead in the Open threads table is confirmed to within 2.6 %, and this
+is the first measurement of this quantity that survives its own soundness
+checks.
+
+| quantity | value |
+| --- | ---: |
+| ours, by exact vertex projection | 195.0 px |
+| the original, measured | 150.1 px |
+| on-screen ratio | **1.2991** |
+| we apply (`ship_model_matrix`) | 0.75 |
+| so the original's effective scale | **0.5773** |
+| `0.75^2` | 0.5625 (**+2.6 %**) |
+| `0.75` once | 0.75 (-23.0 %) |
+
+**Why this one is trustworthy where four attempts were not.** Both sides are now
+threshold-free or threshold-stable, and each was validated before any number was
+read off it:
+
+- **Our side has no threshold at all.** `Ship.vex`'s `glowingShape` node has an
+  exactly symmetric outermost vertex pair at `x = +/-2.7425, y = -1.0334,
+  z = -2.1890` (model space, after the node's transform chain), which projects
+  through the camera pose recorded in `pad0-boost.csv`. Two known vertices, no
+  centroid, no brightness dependence. **Cross-checked by a second, independent
+  route**: differencing our render against a ship-free render of the same pose
+  gives the exact silhouette with no hue or threshold involved, and it measures
+  **196 px** against the projection's **195.0** - agreement to 0.5 %. The
+  wingtips are the widest points of both `glowingShape` and `shipShape` (both
+  span `x = +/-2.742`), so the two should coincide, and they do.
+- **The original's side is threshold-stable.** Its outermost red wingtip points
+  measure `403.5` and `553.6` px, separation **150.1 px**, and sweeping the
+  red-dominance threshold from 40 to 90 moves it by **0.3 px**. That is the
+  property the centroid metric fails.
+
+**Two traps that produced the earlier wrong numbers, both worth knowing.**
+
+- **There are two red feature pairs on the hull, not one**, and they are 60 px
+  apart in separation. The *inner* pair - rectangular markers on the upper
+  wings - reads ~93 px; the *outer* pair, the actual wingtips, reads ~150 px. A
+  "largest red cluster" detector locks onto the inner pair and a "extreme
+  clusters" detector onto the outer, which is exactly why two passes over the
+  same frame reported 92.9 and 151. **Take the extreme clusters, and look at
+  the frame once to confirm which pair you have.** The `1.43x` recorded earlier
+  in this file came from the inner pair and is withdrawn.
+- **The camera node stores its rotation transposed**, which this file already
+  warned about, and a projection that uses the trace's `cam_*` rows directly
+  lands on empty track. The check that catches it costs nothing and should be
+  standard: sample our own render at the predicted pixels against a ship-free
+  render of the same pose, and if neither pixel differs, the projection is
+  wrong. A first attempt reported `159.90 px` from the untransposed basis and
+  is withdrawn.
+
+**What is still not recovered is the mechanism.** `g_craft_scale`
+(`0x08ab0e1c`) is confirmed read by `Craft_Construct_q` for the collider and the
+initial body height, and the craft world matrix's rows were live-confirmed
+carrying `0.75` - but the *second* application site was searched for and not
+found. So squaring the constant in `ship_model_matrix` would be applying a
+**measured** factor, not a recovered one, and the code should say so if it is
+done. `ship_model_matrix`'s doc comment currently records the opposite decision -
+"the confirmed constant, applied once, with the unexplained remainder left
+visible rather than cancelled" - which was the right call on the evidence
+available then, because that evidence was a metric that "establishes 'too big'
+and nothing finer". It no longer is.
 
 ## Open threads
 
