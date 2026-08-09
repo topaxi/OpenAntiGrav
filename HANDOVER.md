@@ -291,8 +291,18 @@ frames gives `fov = 60.181 + 0.07685 * dot(fwd, vel)`, with the recovered
 `0.075` and the authored `60` both inside the fit's 95 % intervals. It is
 **unimplemented** in `Race::projection`, which is the one live consequence.
 
-**A pixel fit briefly appeared to reject the driver; it was a confound, and the
-resolution is the useful part.** Nesting both candidate drivers rejected a
+**Settled on the running game, and the law is exact.** `g_camera_fov_degrees`
+(`0x08b34310`) read live against the body's own `fwd` and `vel` gives
+`fov(N) = 60 + 0.075 * dot(fwd, vel)(N-1)` with a **worst residual of 0.0007
+degrees over 19 samples** - float32 precision, not a fit. `craft+0x7c` is
+exactly zero, the one-frame offset is publish order (`Camera_PublishTripod` runs
+after `Ship_UpdateCraft`), and the driver is settled by a sample at *negative*
+forward velocity that drove the fov to **54.26**, below the authored 60, which
+no speed-magnitude driver can do. Confidence **94**. The pixel measurement was
+right to 0.6 %. **Only the port decision is left.**
+
+**The pixel fit that briefly appeared to reject the driver was a confound, and
+the resolution is still worth reading.** Nesting both candidate drivers rejected a
 *pure* forward-velocity driver at about 95 % - but only on 3 of 16 ticks, and
 those three are the hardest-yawing ticks in the capture, where a registration
 metric that fits **no rotation term** degrades. `|residual|` correlates with yaw

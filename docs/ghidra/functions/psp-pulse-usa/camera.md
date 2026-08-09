@@ -905,6 +905,36 @@ while an external view is selected was not established, and it is the obvious ne
 check - if it does not, the two write sites are simply never live at the same time,
 which is also why one pc was reported on every hit.
 
+### Settled on the running game, 2026-08-09: the law is exact, confidence 94
+
+`g_camera_fov_degrees` (`0x08b34310`) read live at a `Ship_UpdateCraft`
+breakpoint, alongside the body's own `fwd` (`+0x20`) and `vel` (`+0x140`):
+
+```
+fov_degrees(frame N) = 60 + 0.075 * dot(fwd, vel) at frame N-1
+worst residual over 19 consecutive samples: 0.0007 degrees
+```
+
+Float32 precision, over a sweep from 122 to 146 units/s. **`craft+0x7c` is
+exactly `0`** and the intercept is the authored `60` at every sample. The
+one-frame offset is publish order - `Camera_PublishTripod` runs later in the
+frame than `Ship_UpdateCraft` - and not a lag in the law; anything sampling the
+fov and the body together must account for it.
+
+**The driver is settled by a case no pixel method could reach.** One sample
+during a placement transient had forward velocity `-76.5` while `|vel|` was
+`69.4`, and the fov read **54.26** - *below* the authored 60. A speed-magnitude
+driver cannot go below the authored value at any speed; the dot product predicts
+exactly that. So `+0x140` is the body velocity, the projection is onto forward,
+and the earlier off-axis objection is closed by construction.
+
+Also settled: **this store runs while an external view is selected** (the
+capture is the external chase view), which this page previously left open.
+
+Confidence **94** - a runtime trace of the exact quantity, the rubric's ceiling
+until a second binary agrees. Everything below this heading is the reasoning
+that got here and is superseded by it wherever they differ.
+
 ### Confirmed against the original's own pixels, 2026-08-09, and the decomposition with it
 
 **Both constants of this store are now independently recovered from 16 frames of

@@ -346,7 +346,61 @@ intercept indistinguishable from the authored fov. So:
 | `craft+0x7c` is ~0 during a clean run | 75 | One capture, one circuit, one ship. The residual is 0.41 deg rms against a term that would have to be several degrees to matter |
 | `1 / 0.75^2` scales the drawn mesh | **refuted** | Far scenery, which no mesh scale can touch, carries the same ratio as the craft in all 16 frames |
 
-## Two things in this repository still contradict it, and one read settles both
+## Settled on the running game: the law is exact
+
+**2026-08-09, and it ends the thread.** `g_camera_fov_degrees` (`0x08b34310`) is
+the live projection's own fov with a single writer, so reading it is the
+quantity in dispute with no pixels and no instrument in between. Breaking at
+`Ship_UpdateCraft` and reading the global alongside the body's own `fwd` and
+`vel` at `+0x20` and `+0x140`:
+
+```
+fov_degrees(frame N) = 60 + 0.075 * dot(fwd, vel) evaluated at frame N-1
+worst residual over 19 consecutive samples: 0.0007 degrees
+```
+
+That is float32 precision. Not a fit - the **law reproduces exactly**, over a
+sweep from 122 to 146 units/s taken while the craft accelerated and then
+settled. Three things follow immediately:
+
+- **`craft+0x7c` is exactly `0`**, not merely small. The intercept is the
+  authored `60` to three decimals at every sample.
+- **The one-frame offset is a publish order, not a lag in the law.**
+  `Camera_PublishTripod` runs later in the frame than `Ship_UpdateCraft`, so the
+  global read at that breakpoint is the previous frame's. Anything sampling the
+  fov and the body together must account for it.
+- **The driver is `dot(fwd, vel)` and nothing else, settled by a case the pixels
+  could never reach.** During a placement transient one sample had forward
+  velocity of **-76.5** units/s while `|vel|` was 69.4, and the fov read
+  **54.26** - *below* the authored 60. A speed-magnitude driver cannot produce a
+  fov below the authored value at any speed; a dot product can, and predicts
+  exactly that number. The off-axis question is closed by construction.
+
+**The pixel measurement was right to 0.6 %.** At tick 0 registration said the
+fov that zeroes the background is `65.75`; the executable says
+`60 + 0.075 * 71.52 = 65.364`. That is the whole method validated end to end
+against the machine it was inferring about.
+
+**Confidence 94** for the law, its coefficient and its driver - a runtime trace
+of the exact quantity, which the [rubric](../reverse-engineering/confidence-rubric.md)
+caps at 94 until a second binary agrees. The confidence table below is superseded
+by this section wherever they differ.
+
+### What this retires
+
+- **The `craft+0x7c` decomposition question**: answered, it is zero on a clean
+  run.
+- **`FUN_088455ec` runs in an external view**: no longer an inference. The
+  capture above is the external chase view and the term is plainly live in it.
+- **The off-axis / speed-magnitude objection**: moot. Kept below because the
+  *reason* it was wrong is worth more than the result.
+- **`exhaust.md`'s 136-edge world fit**: definitively the broken instrument, not
+  merely the less-validated one.
+- **The B2 tower's "90-95 degrees"**: refuted. The fov's actual ceiling on this
+  circuit is ~71 degrees at 146 units/s, and it is reached by speed rather than
+  by a boost.
+
+## Two things in this repository still contradicted it, and the live read settled both
 
 Recorded rather than resolved, because a page that only lists its supporting
 evidence is the failure this whole thread was about.
