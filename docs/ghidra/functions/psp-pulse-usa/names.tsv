@@ -397,3 +397,6 @@
 0x08885a1c	function	Tripod_LookAt	65	camera.md
 0x08ab0e1c	data	g_craft_scale	85	camera.md
 0x08b36bec	data	g_speedpad_jump	88	engine.md
+0x08abf500	data	g_envmap_light_basis_angle_x	90	mesh-draw.md
+0x08abf504	data	g_envmap_light_basis_angle_y	90	mesh-draw.md
+0x08abf510	data	g_envmap_light_basis	88	mesh-draw.md

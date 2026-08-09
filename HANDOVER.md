@@ -648,6 +648,166 @@ stack (camera world-to-view written by `FUN_08900884`/`FUN_08900a9c` from
 Ghidra yet - a future pass should write these onto `camera.md` and
 `names.tsv` properly.
 
+## The boost plume was sampling one white pixel (2026-08-09)
+
+Reported as "a yellowish solid mesh, instead of particles flying from the wings
+backwards joining the exhaust trail". Both halves of that report are now
+answered, and the second half is the more useful one.
+
+**There are no boost particles in the original.** None of the 35 authored
+`.pob` effects is a boost or speed-pad effect
+([pob.md](docs/formats/pob.md) carries the full name list), and that page
+separately records that the exhaust flare and trail are a hand-authored code
+path with no `.pob` at all. What reads as particles is a texture. **Do not go
+looking for an emitter to port.**
+
+**The cause, and it is a single sentence.** `Data\Ships\<Team>\shipboost.vex`'s
+authored texture coordinates pin `u` to texel **column 0**, and column 0 of
+`Data\Tex\pulse_boost2_ADD.tga` is a uniform `(250, 248, 250)` down all sixteen
+rows. So the texture multiplied every fin by a constant white, the plume drew
+as flat vertex colour, and it read as two hard-edged orange wedges. The
+original never reads those coordinates: `Mesh_BeginTransparentPass` sets
+`TEXMAPMODE` uvgen 2 and nothing in the batch loop undoes it, so the GE
+generates them per vertex from the normal and lights 0/1.
+
+**What the rest of that 64x16 texture holds** - measured, and worth having
+because it is what the effect actually *is*:
+
+| axis | content |
+| --- | --- |
+| `u` | brightness ramp: `(250, 248, 250)` at column 0, violet `(143, 72, 218)` mid, `(10, 4, 18)` at the far end |
+| `v` | at any column but 0, the rows alternate **hard** between a bright magenta `(241, 110, 253)` and a dark navy `(20, 5, 122)`, irregularly |
+
+The `v` axis is the streak pattern - it is what breaks a continuous fin into
+discrete bright bands. Column 0 is the one column where that alternation
+vanishes, which is exactly the column the authored coordinates sample. That
+also settles a colour gap this project had measured and could not explain: the
+original's boost region reads magenta `(223, 164, 224)` against ours at
+`(159, 118, 175)`, because with column 0 as the only sample **there was no
+magenta anywhere in our pipeline** for the additive blend to reach.
+
+**The two light vectors are recovered, not fitted**, and the space they are in
+is the part a reader is most likely to get wrong.
+[mesh-draw.md](docs/ghidra/functions/psp-pulse-usa/mesh-draw.md) has the full
+account; the short form is that `Vex_LoadModel` and `Vex_UpdateLightLists_q`
+both write the `+0x48`/`+0x70` lists and `model+0x1a8` decides which. The
+**runtime** branch reads rows 0 and 1 of the live view matrix and genuinely is
+a matcap. The plume does **not** take it: `ExhaustFlare_Init` (`0x08905444`)
+sets the boost model's parent link to the craft-class ancestor immediately
+before loading it, so the ancestor walk matches on its first step, `model+0x1a8
+= 1`, and the model takes the **load-time fixed-basis** path -
+`Rx(-1.0) * Ry(0.3)` from two read-only literals, columns 0 and 1:
+
+```text
+dir0 = ( 0.9553365, -0.2486722, -0.1596704 )   -> u
+dir1 = ( 0.0,        0.5403023, -0.8414710 )   -> v
+```
+
+So the UVs move when the **ship** rotates and stay put when the **camera**
+moves. A plume that shimmers as the camera orbits a stationary ship has it
+wrong. Confidence **85** on the numeric vectors (the `vmmul` operand order is
+derived from PPSSPP's matrix-register semantics, not measured) and **95** on
+the two angle constants; if the plume ever reads mirrored against a capture,
+the transposed reading is the first thing to try and the two are
+distinguishable by eye - this one has `dir1.x == 0` exactly, the alternative
+has `dir0.y == 0` exactly.
+
+**Implemented in `oag_render::texgen`, for the boost plume alone.** On the CPU,
+per vertex, because uvgen is a transform-stage operation on real hardware and
+the plume is 121 vertices. The general transparent pass is deliberately
+untouched - switching every transparent batch on every track and ship is the
+blast radius `mesh-draw.md` has twice refused off one pass, and the reported
+symptom does not need it.
+
+**Measured against the original at its own pose**, `data/traces/pad0-boost.csv`
+tick 62 (boost age `0.5` s, entry intensity `0.1292`) against
+`data/shots/pad0-boost/tick00062.png`, over that capture's own plume mask
+(`min(r, b) - g > 25`, `luma > 60`):
+
+| build | plume px | mean | `b - r` | orange px |
+| --- | ---: | --- | ---: | ---: |
+| the original | 9,435 | `(220, 165, 237)` | +17.6 | 230 |
+| ours, authored UVs (what shipped before) | 4,467 | `(183, 142, 205)` | +22.0 | 2,394 |
+| **ours, texgen (this)** | **6,076** | `(197, 150, 212)` | **+15.0** | **1,767** |
+| ours, texgen + the recovered `One`/`One` blend | 2,017 | `(240, 177, 225)` | -14.4 | 6,750 |
+
+**The last row is the one worth carrying forward, because it is a negative
+result about something this project believes it has recovered.** `SrcAlpha`
+(`exhaust::BLEND`) was introduced only as a stand-in for the missing texture
+falloff, so once the falloff existed the obvious next move was to put the plume
+back on the recovered `GU_FIX`/`GU_FIX` blend. It was tried and it is far
+worse: `One`/`One` restores the authored `(255, 98, 5)` rim at full strength,
+giving **29x the original's orange pixel count**, red-dominant where the
+original is blue-dominant, at 21 % of its extent. The capture's own
+connected-component pass agrees independently - the original's plume and its
+trail ribbon are one violet family and neither is anywhere near that orange.
+**So a term in the recovered blend chain is still missing.** The GE state was
+read carefully and does not reproduce the picture; an unrecovered source-alpha
+weight does. `SrcAlpha` is kept because it measures better, not because it is
+understood, and **do not "fix" it back to the recovered blend without
+re-running this table.**
+
+Three things that would have been easy to miss:
+
+- **Check for strobing before believing a still frame.** A texture whose `v`
+  axis alternates hard between two colours is a high-frequency response to
+  small normal changes, and the UVs are regenerated every frame from a pose
+  that jitters under the hover spring. Measured: consecutive-tick RMSE in the
+  plume region is within **0.003** of the pre-fix build on every pair, so the
+  generated coordinates add essentially nothing to the frame-to-frame
+  difference. A strobing plume would have been worse than a solid wedge and no
+  screenshot would have shown it.
+- **A two-heading A/B is not a heading A/B unless the poses match.** The first
+  attempt here compared frames at 440 and 85 km/h, so the hover spring had the
+  craft at different pitch and roll and the comparison measured pose as much as
+  heading.
+- **The camera-independence check passes, and it is worth re-running after any
+  change here.** A normal-driven texgen that accidentally picks up the view
+  matrix becomes a matcap, and the difference is invisible on a single frame.
+  Two cameras at the *same* ship pose (`--pose-tick 62` with and without
+  `--no-camera`) give plume means `(197.2, 149.7, 212.2)` and
+  `(198.1, 149.1, 209.6)` - within three counts per channel, against pixel
+  counts that differ by 40 % because the projection does. Structurally it
+  cannot drift either: `texgen::environment_map` takes no view matrix.
+- `*batch & 0x0020` is **set** on every plume batch, so `Batch::is_culled()` is
+  true for all 32 across the 8 teams - and **our renderer sets `cull_mode:
+  None` everywhere**, deliberately (`mesh_render.rs`: strip winding is
+  reconstructed rather than read, so culling would turn a winding mistake into
+  missing geometry). So we draw back faces the original discards, and under a
+  normal-driven texgen those shade differently rather than merely overdrawing.
+  **Not acted on**, for two reasons: the no-cull decision is renderer-wide with
+  its own stated rationale, and we are already *under* the original's extent
+  (6,076 against 9,435), so removing geometry moves the wrong way. Recorded
+  because it is now a live term in the plume's appearance where before it was
+  only overdraw.
+
+**The original-side reference this was checked against is
+`data/shots/pad0-boost/measurements.md`** - 648 lines, regenerable with the
+`measure.py` beside it, derived data rather than durable. It is the first
+capture in this project that answers "particles or geometry?" with pixels, and
+its verdict is **a continuous surface carrying discrete lengthwise streaks**:
+
+- the emission mask is dominated by exactly **two** connected components, one
+  per side, carrying 60-99 % of all emission pixels, every other component 1-3
+  px;
+- the two are mirror images about the craft centreline to **0-6 px** over a
+  130-row span, which a stochastic emitter cannot be;
+- a least-squares line through the outer boundary has an RMS residual of
+  **3.5-5.3 px** over 111 rows - a polygon silhouette, not a spray;
+- but at 1 px resolution one lobe carries **2-4 local maxima** with troughs
+  8-65 % below their flanking peaks - banding **across** the fin, on a surface
+  continuous **along** it.
+
+It also corrects the obvious reading of the user's report: the lobes and the
+trail ribbon are **not** one connected component. The ribbon sits on the
+centreline, both lobes sit ~70 px outboard of it; they converge on the exhaust
+and overlap near the nozzle, which is what makes them read as "joining the
+exhaust trail", but they are two adjacent elements drawn in the same violet.
+
+Still not matched, and unchanged by this: the bloom / bright-pass shoulder, and
+the craft's residual render scale. Both are recorded on
+[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md).
+
 ## Open threads
 
 Each is a real, named next step. The Task numbers are the ones the agent passes
@@ -657,7 +817,7 @@ used, kept because commits and docs cite them.
 | --- | --- |
 | **Selectable camera perspectives landed, and they closed the 3/4 mystery - but two recovered chase behaviours are still unported** | **2026-08-08.** The three views the original cycles with SELECT are implemented, cycled with the same button, and persisted to `[graphics] camera_view`; see [camera.md](docs/ghidra/functions/psp-pulse-usa/camera.md)'s second 2026-08-08 pass for the evidence. **The one thing to carry forward is what was recovered and deliberately *not* implemented**, because both are visible differences and both are cheap to lose track of. (1) **The chase eye's distance from the look-at point is rigid in the original** - `Ship_UpdateCameraRigs` springs the eye and then re-projects it onto the sphere of radius `|anchorPos - anchorLook|` about the aim point, so the spring *rotates* the eye and never moves it nearer or further. Read at instruction level **and** independently measured: the 150-tick capture holds the eye at 11.6 units while the along-forward component moves 10.9 -> 9.5, which a freely sprung eye cannot produce. `oag_render::camera::chase::Chase::advance` springs the position freely. (2) **`pos_height` is applied *after* the spring**, so the vertical offset is rigid; `chase::anchor` folds it in before. Fixing either rewrites `Chase::advance` and several of its tests, which is why they were left out of a change about a button. Both are recorded in `chase.rs`'s own module doc as well, so the next person to touch that file reads them without opening the docs tree. **Also carried forward, unresolved**: `<InternalCamera headtilt>` is parsed and **not applied** - the original rolls the view's up vector by `side * craft[0x844] * headtilt` and `craft+0x844` was not identified, so the sign and scale of the lean are unknown; identifying that one field is the whole remaining work. And `craft+0x790`'s **second** write site (in the internal rig's update, `dot(forward, velocity) * 0.075 + craft[0x7c]`) means the fov-shake section's "written only at `0x0881c2b4`" is wrong; the obvious next check is whether the internal rig's update runs at all while an external view is selected, which would explain why a write breakpoint reported one pc every time. |
 | **Lead for the craft-model-too-large question: the ratio is close to `0.75` squared** | **2026-08-08, arithmetic on someone else's measurement rather than a reading - treat it as a lead, not a finding.** The reported wingtip-lamp separation is 189.3 px ours against 108.8 px the original's, from the original's own recorded camera pose, ratio **1.740**. `1 / 0.75**2 = 1.7778`, which is 2.2 % away - within the pixel-centroid noise of a 108.8 px measurement. One `0.75` is accounted for: `g_craft_scale` (`0x08ab0e1c`) is read by `Craft_Construct_q` on the three `<Misc>` hull dimensions on their way into the collider and on the initial body height, and [exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md) separately live-confirmed the craft world matrix's rows carrying `0.75`. **If both are real and independent, the drawn mesh is scaled twice in the original and once nowhere in ours**, which is exactly a factor of `1/0.5625`. What was *not* done: finding the second site. `Ship_LoadModel` and `FUN_0884dab4` are the two calls in `Craft_Construct_q` that could set a node scale and neither was opened, and the reciprocal `0x08ab0e20` (`1.3333334`) is read only by the two hover springs, so it is not the second factor. Checked and **not** the answer: nothing in the `<ExternalCamera*>` blocks or the camera path carries any scale beyond `g_craft_scale` itself. |
-| **The boost plume's two wedge batches decode to a single-point UV - our decode, or the authored data?** | **2026-08-08, and this is what the "how does the plume's alpha reach the GE" question turned into.** Everything that could have supplied the plume's missing feather is now excluded: the blend is `Gu_BlendFunc(0, 10, 10, 0xffffff, 0xffffff)` and `FUN_089307b4` programs it *after* the material's own display list, so nothing can override it; `pulse_boost2_ADD`'s alpha is a **constant 238**; the authored vertex alpha is not a fade but a two-value split (`(255, 98, 5, 0)` rim, `(255, 255, 255, 255)` core, 29 and 22 of a 51-vertex batch, every batch of every PSP team); mipmaps make no difference (plume forced to mip 0 = RMSE 0.007 against the shipped build, the whole-scene noise floor); and the texture is neither dropped nor mis-bound. **What is left**: of the plume's four transparent draws, the two short ones (9 and 10 vertices, the all-white-alpha batches) decode through `oag_formats::vex::mesh_batches` to a UV of `u [0.008, 0.008]`, `v [0.031, 0.031]` - **a single point** - so those draws sample one texel by construction and no texture content can reach them at any scale. The 51-vertex batches carry a real `v` sweep and behave. Next step: dump those two batches' raw texcoord bytes and check the 8-bit texcoord decode (divisor, signedness, component order, and the alternate `& 0x40` header block) against them, then decide whether the single point is ours or authored. Related and separate: the per-material `Gu_TexScale`/`Gu_TexOffset` transform below, which this model's material flags (`0x212`) do request. **Method trap, cost one round**: the first stripe test striped `u` - the axis the geometry does *not* vary in - and showed nothing, a false negative. **Stripe the axis the geometry actually varies in**, or the test only proves the constant axis is constant. Evidence on [exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md); the premultiply in `race.rs` stays until this resolves, labelled there as a compensation with no recovered mechanism. |
+| ~~**The boost plume's two wedge batches decode to a single-point UV - our decode, or the authored data?**~~ | **Closed 2026-08-09: the authored data, and it does not matter, because the original never reads it.** A transparent batch's texture coordinates are *generated* - `Mesh_BeginTransparentPass` sets `TEXMAPMODE` uvgen 2 and nothing in the batch loop undoes it - so the single point was a real authored value that the GE discards. What made it look like a decode bug is that it was, by coincidence, the one degenerate sample: `u` at texel column 0, the only column of `pulse_boost2_ADD` that is flat down every row. See the 2026-08-09 section above. |
 | **The per-material `Gu_TexScale`/`Gu_TexOffset` transform is real and unported** | **2026-08-08**, found while chasing the plume and worth its own line because it is a general renderer feature, not a plume bug. [`texture-animation.md`](docs/ghidra/functions/psp-pulse-usa/texture-animation.md) carried `FUN_089271cc` at confidence 45 as "the most likely home of a general per-material texture transform"; **its gate is now read at instruction level at three call sites in `FUN_089307b4`** and the page is at 75: `if ((*(u16 *)(*(int *)(mesh + 0x5c) + material_index * 0x14) & 0x10) != 0)`, choosing between `Gu_CallList(*(int *)(mesh + 0x64) + index * 0x18)` and `FUN_089271cc(*(int *)(mesh + 0x60) + index * 0x40)`, the latter submitting scale from `+0x18`/`+0x1c` and offset from `+0x20`/`+0x24`. So `& 0x10` on a material's first `u16` is the "this surface has a texture transform" bit, and `Data\Ships\<Team>\shipboost.vex`'s material carries `0x212`, which has it. **Still unread: where the block's values come from.** The on-disc material's `+0x0c..0x14` is zero on that ship exactly as it is on every track surface, so the loader gets them from somewhere else. Note this does *not* contradict the live negative on the same page - that measured `Gu_TexOffset` only, and a scale with a zero offset would look identical to it. Nothing renamed: the gate is read but the data path is not. |
 | **Reference frames from the original are unobtainable on this setup, and one route is untried** | **2026-08-08.** A matched-pose comparison against the original needs a frame out of PPSSPP, and three routes failed here. (1) `import -window root` on Xvfb `:97` returns a blank image - PPSSPP's GL window never composites into the root X sees, confirmed independently. (2) `psp-trace.py --shot-every` routes through that same `import` when `OAG_SHOT_DISPLAY` is set, so it inherits (1); it is only the proven path on a **real compositor**, through the niri clipboard, which this machine does not have. (3) The debugger's own `gpu.buffer.screenshot` **exists**, takes `type: "base64"` (not `"screenshot"`, which errors), and needs the CPU stepping - which a breakpoint gives - but then answers `Could not download output` on the GL backend. **The untried route is `PPSSPPHeadless --graphics=software`**, whose framebuffer lives in RAM and should therefore answer `gpu.buffer.screenshot`, at the cost of a fresh boot and menu walk under software rendering. Everything except the grab is already built: `data/scratch/boost-visuals/refcapture.py` places the craft, arms the boost by writing `flare+0xb8` (the field `--pose-boost` models on our side), writes a `--pose-from` CSV from the same stopped frame, and calls the grab. Two operational notes for whoever retries: run every script as `uv run --with websocket-client scripts/...` (plain `python3` dies on the missing `websocket` module), and if the emulator is stuck in **`Race End Photo`**, neither `psp-drive.py restart` nor `menu` can leave it - press `cross`/`start`/`circle` in a loop for about five rounds to walk out through `EndRace Results`/`Rewards`/`Menu` to `Main Menu`. |
 | **Task #7: PRESS START does not fade in or throb, and the numbers to make it are unmeasured** | **2026-08-08, the named residual of the intro -> `Show Logo` transition, and the reason that defect is only *partly* closed.** The black-frame half is fixed (see the backdrop-continuity row below); this is the other half, and it is why a user may still report the handoff as not matching the original. `BOOT_PRESS_START` carries **`pulse="true"`** and **`delay="1"`** in `Skin.xml` on both PSP discs and on the PS2, so on hardware the line fades in about a second after the screen appears and then throbs. Ours pops on at once, at full opacity, and stands still - `frontend.rs`'s `Show Logo` arm has carried a comment saying so for some time. Confidence **90** that the attributes mean fade-in-delay and pulse; what is missing is **the pulse's period and depth**, which no document here states and no capture has measured, and inventing them would be inventing presentation. **Measurement recipe.** This needs the emulator, and it needs a real display - the reason it is parked rather than done: on this machine's DRI-less Xvfb an accelerated window's contents never reach the root framebuffer, so `ffmpeg -f x11grab` and `import -window root` both return uniformly black for PPSSPP *and* for our own window (see the capture-traps rows). Do **not** start a second emulator while another pass owns one; PPSSPP's debugger port is single-occupancy and a second instance silently becomes "secondary instance" with no debugger. On a real display: `just launch-pulse-psp data/images/pulse-psp-eu.chd`, let it reach PRESS START, record the screen, then step frames and read the text's alpha over ~4 seconds. Two numbers come out - the period between peaks and the min/max alpha - and both go straight into the `Draw::Text` colour for that widget. The `delay="1"` second is separately checkable as the gap between the logo appearing and the text first showing. **Do not measure it off our own build**: ours is static, so a capture of it would confirm nothing. |

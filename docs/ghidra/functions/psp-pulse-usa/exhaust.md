@@ -1571,16 +1571,67 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   in the transparent pass scales fragment RGB but vertex colour x texture x the
   blend. The falloff comes from the *texture*, sampled through
   environment-generated coordinates. See the section above and
-  [mesh-draw.md](mesh-draw.md). What replaces it as the open item is narrower and
-  is a **rendering** gap rather than an RE one: **environment-mapped UV
-  generation for the transparent pass is not implemented**, and until it is, the
-  plume's `SrcAlpha` blend is an approximation standing in for it.
+  [mesh-draw.md](mesh-draw.md). What replaced it as the open item was narrower
+  and was a **rendering** gap rather than an RE one - environment-mapped UV
+  generation was not implemented - and **that is closed too, 2026-08-09, on
+  both halves**. [mesh-draw.md](mesh-draw.md) carries the uvgen-2 equation, the
+  space each term is in, and the plume's two recovered light vectors
+  `(0.9553365, -0.2486722, -0.1596704)` and `(0.0, 0.5403023, -0.8414710)` -
+  fixed, world-space, ship-locked rather than camera-locked;
+  `oag_render::texgen` generates the coordinates per vertex from them, for the
+  boost plume alone.
+
+  **What this fixed is bigger than the falloff the question was asked about.**
+  The authored coordinates pin `u` to texel column 0, and column 0 of
+  `pulse_boost2_ADD` is a uniform `(250, 248, 250)` down all sixteen rows - so
+  the texture contributed a constant white, the plume drew as flat vertex
+  colour, and it read as two hard-edged solid orange wedges. The rest of that
+  64x16 texture is a **streak lookup**: `u` ramps white through violet
+  (`(143, 72, 218)`) to `(10, 4, 18)`, and at any column but 0 the rows
+  alternate hard between a bright magenta `(241, 110, 253)` and a dark navy
+  `(20, 5, 122)`. The `v` axis is what breaks a fin into discrete bright
+  bands, and it is where the original's streaked look comes from. That also
+  accounts for this page's own unexplained colour gap - the original's boost
+  region reads magenta `(223, 164, 224)` against ours at `(159, 118, 175)` -
+  because with column 0 as the only sample there was no magenta anywhere in
+  the reimplementation's pipeline for the additive blend to reach.
+  `boost_plume_ground_truth.rs` pins both halves across all eight PSP teams.
+
+  **The `SrcAlpha` blend was re-tested against the recovered one and kept, on
+  the measurement rather than on inertia.** `SrcAlpha` was introduced only as a
+  substitute for this missing falloff, so implementing the falloff is a real
+  argument for returning the plume to the recovered `GU_FIX`/`GU_FIX`
+  (`One`/`One`) blend. Measured at the original's own pose
+  (`data/traces/pad0-boost.csv` tick 62, age `0.5` s) against its own frame,
+  over the capture's plume mask (`min(r, b) - g > 25`, `luma > 60`):
+
+  | build | plume px | mean | `b - r` | orange px |
+  | --- | ---: | --- | ---: | ---: |
+  | the original | 9,435 | `(220, 165, 237)` | +17.6 | 230 |
+  | ours, authored UVs | 4,467 | `(183, 142, 205)` | +22.0 | 2,394 |
+  | **ours, texgen + `SrcAlpha`** | **6,076** | `(197, 150, 212)` | **+15.0** | **1,767** |
+  | ours, texgen + `One`/`One` | 2,017 | `(240, 177, 225)` | -14.4 | 6,750 |
+
+  `One`/`One` restores the authored `(255, 98, 5)` rim at full strength: **29x
+  the original's orange pixel count**, red-dominant where the original is
+  blue-dominant, at 21 % of its extent. The capture's own connected-component
+  pass says the same independently - the original's plume and ribbon are one
+  violet family and neither is near that orange. **So a term in the recovered
+  blend chain is still missing**: the GE state was read carefully and does not
+  reproduce the picture, while an unrecovered source-alpha weight does. Kept
+  because it measures better, not because it is understood - and that is the
+  live open item this replaces the old one with.
 - **Superseded phrasing kept for one revision**, because two passes cited it:
   the old question assumed some GE path weighted a mesh batch by source alpha. None does. And the two prebuilt
   lists at `mesh+0x70` `+0x48`/`+0x70` are now read: they hold **light 0 and
   light 1 directions plus `LIGHTTYPE`**, nine words each, and `*batch & 0x8000`
   selects only the light computation field. They were the last candidate for a
   hidden alpha path and they are not one - they are what environment-mapped UV
-  generation reads.
+  generation reads. **Followed through 2026-08-09**: both writers of those lists
+  are now read to the instruction, the plume's are written once at load from a
+  fixed `Rx(-1.0) * Ry(0.3)` basis rather than per frame from the view matrix,
+  and all 32 of the eight teams' plume batches measure `pass_mask = 0x1232`, so
+  `& 0x8000` is clear on every one and they all replay list A. See
+  [mesh-draw.md](mesh-draw.md).
 - ~~What stretches the flare wide~~ - **closed 2026-08-08: nothing does.**
   See `ExhaustFlare_Draw` above.

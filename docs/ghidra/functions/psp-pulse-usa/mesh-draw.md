@@ -384,10 +384,222 @@ env-map UV generation reads, replayed per batch inside the pass that turned it
 on.
 
 The plume's degenerate authored UVs are explained by this rather than fixed by
-it, and the reimplementation does **not** implement env-mapped UV generation:
-it would change every transparent batch on every track and ship, which is the
-same blast radius this page already refused for `TRANSPARENT_BLEND`. See
-[exhaust.md](exhaust.md).
+it. See [exhaust.md](exhaust.md).
+
+**Measured 2026-08-09 from the art, and it is what makes this pass matter
+visually rather than academically:** `Data\Tex\pulse_boost2_ADD.tga` is 64x16
+and is a *streak lookup*, not a surface texture - `u` is a brightness ramp from
+a uniform white `(250, 248, 250)` at column 0 through violet `(143, 72, 218)`
+to `(10, 4, 18)`, and `v` alternates hard row by row between a bright magenta
+`(241, 110, 253)` and a dark navy `(20, 5, 122)`, which is the axis that breaks
+a fin into discrete bands. `Data\Ships\Assegai\shipboost.vex`'s 121 authored
+texcoords span `u` in `[0, 0.0078125]` - `1/128`, i.e. **column 0** - and that
+is precisely the one column where the `v` alternation vanishes. So sampling the
+authored UVs returns a constant white and the plume collapses to flat vertex
+colour; every bit of the plume's structure comes from uvgen 2 replacing those
+coordinates. Pinned across all eight PSP teams by
+`crates/game/tests/boost_plume_ground_truth.rs`.
+
+### The uvgen-2 equation, and which space each term is in
+
+2026-08-09. The GE's own behaviour is not in `BOOT.BIN` - it is in the
+hardware - so this half is emulator/SDK sourced and says so. **Two independent
+PPSSPP backends were read and they agree**, which is what lifts it above a
+single recollection:
+
+- software rasteriser - `GPU/Software/Lighting.cpp`, `GenerateLightST` and its
+  helper `GenerateLightCoord`:
+  `s = (Dot(GetLightVec(gstate.lpos, getUVLS0()).NormalizedOr001(), worldnormal) + 1) / 2`,
+  and the same with `getUVLS1()` for `t`.
+- hardware transform - `GPU/Common/VertexShaderGenerator.cpp`, the
+  `GE_TEXMAP_ENVIRONMENT_MAP` case:
+  `v_texcoord = vec2(1.0 + dot(normalize(u_lightpos[ls0]), worldnormal), 1.0 + dot(normalize(u_lightpos[ls1]), worldnormal)) * 0.5`,
+  with a `length(u_lightpos) == 0.0 ? worldnormal.z` fallback that is the same
+  degenerate case `NormalizedOr001` encodes on the software side.
+
+So the equation the task set out to confirm is **confirmed, with three
+qualifications that the one-line form hides**:
+
+1. **The light is used as a raw direction, normalised, and `LIGHTTYPE` is not
+   consulted.** `GenerateLightCoord` reads `gstate.lpos` and normalises it; there
+   is no `position - vertex` term and no directional/positional branch. So the
+   `0x5f`/`0x60` `LIGHTTYPE` words the two lists differ in are **inert for uvgen
+   2 in PPSSPP's model** - which is why `*batch & 0x8000` stays a gap here (see
+   "What is still not recovered"), not a closed question.
+2. **The normal is the *world* normal and it is normalised.**
+   `TransformUnit::ModelToWorldNormal` is `Norm3ByMatrix43(coords,
+   gstate.worldMatrix)` - the **world matrix only**, not the view matrix -
+   followed by an unconditional `worldnormal.NormalizeOr001()`; the hardware
+   path writes `normalizeOr001(mul(vec4(normal, 0.0), u_world).xyz)`. Both
+   normalise, so a non-unit authored normal or a scaled world matrix does *not*
+   move the UVs.
+3. **The light vectors are in the same world space**, i.e. the space `u_world`
+   maps into, with no view transform applied to either side.
+
+Point 2 only means "world space" if this engine actually keeps a separate view
+matrix, and it does: `FUN_08900884`/`FUN_08900a9c` write the camera node's 4x4
+at `cam+0x50` into the display's view stack at `g_display + 0x1410 +
+*(g_display + 0x1694) * 0x40` and then call `Gu_SetMatrix(1, ..)` - GE matrix
+**1**, the view matrix (`0x3c`/`0x3d`, pinned in [exhaust.md](exhaust.md)). The
+mesh path sets GE matrix **2** per batch. So GE world really is model-to-world
+and no model-view folding happens for meshes. **This is the fork that decides
+whether the effect is a matcap, and it lands on "not a matcap".** Confidence
+**88** on the equation and on both spaces; the uvgen enum value `2` itself keeps
+its **82** because it still comes from `pspgu.h`
+(`GU_ENVIRONMENT_MAP = 2`, `sceGuTexMapMode(mode, lu, lv)`) rather than from
+`BOOT.BIN`.
+
+### The two light vectors are a fixed world-space pair, built once at load
+
+Both writers of the `+0x48`/`+0x70` lists were read to the instruction. **They
+do not read the same source, and which one runs is decided by `model+0x1a8`:**
+
+| `model+0x1a8` | writer | `dir0`/`dir1` source |
+| --- | --- | --- |
+| `!= 0` | `Vex_LoadModel` (`0x08913258`-`0x089135b8`), once, at load | columns 0 and 1 of a fixed 4x4 global at `g_envmap_light_basis` (`0x08abf510`) |
+| `== 0` | `Vex_UpdateLightLists_q` (`0x08912358`) | **rows** 0 and 1 of the live view matrix at `g_display + 0x1410 + *(g_display + 0x1694) * 0x40` |
+
+**The two rows of that table say "columns" and "rows" because the two writers
+use different address strides over matrices that are stored the same way.** Both
+are PSP 4x4 column-major - four consecutive floats are one column, translation
+lands at `+0x30`, which is what [exhaust.md](exhaust.md)'s live read of the view
+stack saw as "translation in row 3". `Vex_LoadModel` reads `+0x00`/`+0x04`/`+0x08`
+- **consecutive**, so one whole column. `Vex_UpdateLightLists_q` reads
+`+0x1410`/`+0x1420`/`+0x1430` and `+0x1414`/`+0x1424`/`+0x1434` - **stride
+`0x10`**, so one element out of each of the first three columns, which is a
+matrix row. Do not read the two offset patterns as a transcription
+inconsistency; the stride is the whole difference.
+
+For a world-to-view rigid transform, rows 0 and 1 are the camera's right and up
+axes in world space, and `dot(right, N_world)` is `N_view.x`. **So the runtime
+branch is a matcap**: `uv = 0.5 * (normalize(N_view).xy + 1)`. Worth writing
+down even though the plume does not take it, because it is what a reader
+expecting PPSSPP's formula will assume the plume does.
+
+**The boost plume does not take that branch.** `ExhaustFlare_Init`
+(`0x08905444`) walks the ancestor chain for the `FUN_08a6bfc0` class token,
+stores the hit at `flare+0xc0`, and then - for the model it builds from
+`"%s\%sboost.vex"` with that ancestor's team name at `+0x370`→`+0x94` - writes
+`*(int *)(model + 8) = flare->0xc0` **before** calling `Vex_LoadModel`.
+`model+0x8` is the parent link (`node+0x4` is the type token, `node+0x8` the
+next link up - the same three-field walk `SceneLight`'s `model+0xac` lookup
+uses). So `Vex_LoadModel`'s own walk at `0x08913048` matches on its **first**
+step and sets `model+0x1a8 = 1`. The plume therefore takes the **load-time,
+fixed-basis** path, and `Vex_UpdateLightLists_q`'s block never runs for it.
+Confidence **88**; the store and the walk are both instruction level, the
+identification of the token class as the craft is inferred from the team-name
+field it is immediately read for.
+
+`g_envmap_light_basis` is built in `Vex_LoadModel` at
+`0x08913078`-`0x08913248`, and its only two references in the whole binary are
+that write and the read at `0x08913258` - it exists for nothing else. The build
+is, at instruction level:
+
+- `g_envmap_light_basis_angle_x` (`0x08abf500`) `= -1.0`, and
+  `g_envmap_light_basis_angle_y` (`0x08abf504`) `= 0.3`, both read-only
+  (`0x08abf500` has exactly one xref, the read at `0x0891307c`) - so they are
+  constants, not tunables. `vcst.s S002, 2/PI` then `vmul.s` before `vcos.s` /
+  `vsin.s` converts radians into the VFPU's half-cycle units, so **the units are
+  radians**.
+- the `vpfxs` shuffles build a plain `Rx(-1.0)` (columns `(1,0,0)`,
+  `(0,cA,sA)`, `(0,-sA,cA)`) and a plain `Ry(0.3)` (columns `(cB,0,-sB)`,
+  `(0,1,0)`, `(sB,0,cB)`), column-major.
+- `vmmul.q E000,E100,E200` at `0x089131d0` combines them. **`vmmul`'s operand
+  order is the trap here** - it transposes, and the two candidate readings give
+  different vectors, so it was decoded rather than recalled. The printed
+  register names resolve through the Allegrex module's attach tables
+  (`data/tools/ghidra-allegrex/data/languages/allegrexVfpuBase.sinc`, where
+  `vs` uses the inverted `vs_e` table and `vt`/`vd` the `vt_m`/`vd_m` one) to
+  raw fields `vs = 4`, `vt = 40`, `vd = 32`. Those decode as matrix `1`, `2`, `0`
+  respectively - which matches the printed `E100`/`E200`/`E000` and so confirms
+  the table indexing - with transpose bits `0`, `1`, `1`. Pushing them through
+  PPSSPP's `ReadMatrix`/`WriteMatrix` (`Core/MIPS/MIPSVFPUUtils.cpp`) and
+  `Int_Vmmul` (`Core/MIPS/MIPSIntVFPU.cpp`, `d[a*4+b] = dot(&s[b*4], &t[a*4])`)
+  gives `d[a*4+b] = (S2 · S1)(a, b)` and a transposed store that leaves the
+  global equal to **`S2 · S1` = `Rx(-1.0) · Ry(0.3)`**. Matrix 2 was loaded from
+  the `Rx` scratch (`sp+0x3030`) and matrix 1 from the `Ry` scratch
+  (`sp+0x3070`).
+
+`dir0` is that product's column 0 and `dir1` its column 1:
+
+```text
+dir0 = ( cos B, sin A * sin B, -cos A * sin B ) = ( 0.9553365, -0.2486722, -0.1596704 )
+dir1 = ( 0,     cos A,          sin A         ) = ( 0.0,        0.5403023, -0.8414710 )
+      A = -1.0 rad, B = 0.3 rad
+```
+
+They are orthonormal to within `f32` (`|dir0| = |dir1| = 1.000`,
+`dir0 · dir1 = -2.5e-5`), which is the check that the composition order came out
+right rather than transposed into something skewed. Confidence **95** on the two
+angle constants and on the two `Rx`/`Ry` builds; **85** on the numeric vectors -
+the `vmmul` operand order is derived from PPSSPP's matrix-register semantics
+rather than measured, though the derivation was run twice by different routes
+and reproduced. A transposed reading would instead give
+`dir0 = (cos B, 0, -sin B)`, `dir1 = (sin B sin A, cos A, cos B sin A)`, so
+**the two are distinguishable by eye at runtime: the recovered `dir1` has
+`x == 0` exactly, the alternative has `dir0.y == 0` exactly.**
+
+### Consequences for the plume: ship-locked, not camera-locked
+
+- **Per model, never per batch.** The lists live on the model object
+  (`mesh+0x70`), and both of `shipboost.vex`'s meshes share it - already
+  established above. The only per-batch difference is `*batch & 0x8000`
+  selecting list A or B, and the two differ **only** in `LIGHTTYPE`, which uvgen
+  2 does not read.
+- **Both vectors are constants for the whole run** on this path - written once
+  in `Vex_LoadModel` from a global that is itself built from two literals.
+- **They do not rotate with the ship.** The model matrix rotates the *normal*;
+  `lpos` is world-space and untouched. So the UVs move when the **ship**
+  rotates and stay put when the **camera** moves. A reimplementation that makes
+  the plume shimmer as the camera orbits a stationary ship has it wrong.
+
+### A shader-ready form
+
+With `N` the model-space authored normal and `M` the ship's model-to-world
+rotation:
+
+```wgsl
+let n = normalize((model_rot * vec4<f32>(normal, 0.0)).xyz);
+let L0 = vec3<f32>( 0.9553365, -0.2486722, -0.1596704);
+let L1 = vec3<f32>( 0.0,        0.5403023, -0.8414710);
+uv = vec2<f32>(1.0 + dot(L0, n), 1.0 + dot(L1, n)) * 0.5;
+```
+
+`L0` drives `u` and `L1` drives `v` because `Mesh_BeginTransparentPass` emits
+`TEXSHADELS` `LS0 = 0`, `LS1 = 1` and list A puts `dir0` in light 0 (`0x63`-`0x65`)
+and `dir1` in light 1 (`0x66`-`0x68`). `L0`/`L1` are already unit, so the
+`normalize` PPSSPP applies to them is a no-op here.
+
+**Unverified, and cheap to get wrong: the `v` axis orientation.** Nothing here
+pins whether the GE's `t` runs the same way as this project's texture upload,
+and the equation is symmetric enough that a flipped `v` looks plausible rather
+than broken. Treat `v = 1.0 - v` as the first thing to try if the plume reads
+mirrored against a captured reference.
+
+### The load-time list-B bug is real but cannot fire on the plume
+
+This page already records, at confidence 95 on the words, that
+`Vex_LoadModel`'s list B emits `0x63`/`0x64`/`0x65` + `0x5f000001` twice - light
+**0** written with `dir0` and then overwritten with `dir1`, light 1 never
+touched - where `Vex_UpdateLightLists_q`'s twin correctly emits
+`0x66`/`0x67`/`0x68` + `0x60000001`. Under uvgen 2 that would make `u` and `v`
+resolve toward the same vector and sample the texture along its diagonal.
+
+**Measured 2026-08-09, and it does not happen here:** every batch of every one
+of the eight PSP teams' `Data\Ships\<Team>\shipboost.vex` (2 meshes x 2 batches
+x 8 teams = 32 batches) carries `pass_mask = 0x1232` - identical across all
+eight teams - so `& 0x8000` is **clear** on all of them and every plume batch
+replays **list A**, which is correct on both paths. `0x1232` is **not** a fully
+decoded value: `& 0x0200` is what classifies these transparent, `& 0x0020` is
+set so `Batch::is_culled` is true for every plume batch (relevant to anyone
+implementing this, since a culled plume and a two-sided one shade differently
+under a normal-driven texgen), and `& 0x1000` is undecoded here. Read off
+`data/images/pulse-psp-usa.chd` through `oag_formats::vex::mesh_batches`. The
+same dump shows the authored normals are already unit to within the 8-bit
+quantisation (`|n|` in `[0.9923, 1.0000]` across all 32 batches), so the
+`normalize` in the equation above is close to a no-op on real plume data - it
+is kept because the world matrix, not the authored normal, is what would break
+it.
 
 ## Applied names
 
@@ -416,6 +628,9 @@ previous pass on this subsystem got wrong.
 | `0x0887a4f0` | function | `SceneLight_BuildLightingList_q` | 68 |
 | `0x08912358` | function | `Vex_UpdateLightLists_q` | 65 |
 | `0x0887a018` | function | `SceneLight_InitLists_q` | 65 |
+| `0x08abf500` | data | `g_envmap_light_basis_angle_x` | 90 |
+| `0x08abf504` | data | `g_envmap_light_basis_angle_y` | 90 |
+| `0x08abf510` | data | `g_envmap_light_basis` | 88 |
 
 `Gu_SetState` carries 92 because its body *is* the `sceGuEnable` index table - a
 literal switch from state index to GE enable command - which makes every other
@@ -451,11 +666,17 @@ RTTI type tokens rather than real functions.
   `Batch::header_flags` is populated identically for PS2 batches (the header
   layout is shared - see that field's own doc comment) but no PS2 function has
   been read to confirm the same bit means the same thing there.
-- **Whether `shipboost.vex`'s model has `model+0x1a8` set.** It gates which
-  builder writes the `+0x48`/`+0x70` lists, and whether `SceneLight_Rebuild`
-  writes an accumulated light colour or a hard `0xffffffff` into the `+0xd0`
-  material list. `model+0x1a8` means "this model owns a component of the RTTI
-  token class at `FUN_08a6bfc0`", not traced to a `.vex` class name.
+- ~~**Whether `shipboost.vex`'s model has `model+0x1a8` set.**~~ - **closed
+  2026-08-09 at confidence 88: it is set**, so the plume's light lists come from
+  `Vex_LoadModel`'s fixed basis and not from the view matrix. `ExhaustFlare_Init`
+  writes the boost model's `+0x8` parent link to the `FUN_08a6bfc0`-class
+  ancestor it just found, immediately before calling `Vex_LoadModel`, so the
+  ancestor walk matches on its first step. Evidence in the env-map section
+  above. **The other half of this item stays open**: whether
+  `SceneLight_Rebuild` writes an accumulated light colour or a hard
+  `0xffffffff` into the `+0xd0` material list was not revisited, and
+  `FUN_08a6bfc0`'s class is still identified only by the team-name field
+  `ExhaustFlare_Init` reads off it, not by a `.vex` class name.
 - **The `Vex_LoadModel` list-B divergence.** *Fact, instruction level* at
   `0x089134cc`-`0x08913538`: the second triple is emitted as `0x63`/`0x64`/`0x65`
   + `0x5f000001` - light **0** again - rather than `0x66`/`0x67`/`0x68` +
@@ -464,6 +685,9 @@ RTTI type tokens rather than real functions.
   *Interpretation*: a copy-paste/register-reuse bug, so on that path light 1 is
   never set and light 0 ends up holding `dir1`. **Confidence 95 on the emitted
   words, 70 on "bug" as the reading** - do not collapse those two numbers.
+  Still open **for other models**; ruled out for the plume, whose 32 batches all
+  measure `pass_mask = 0x1232` and so all replay list A - see the env-map
+  section above.
 - **Whether `*batch & 0x8000` has any visible effect.** With lighting off the
   A/B difference is only the `LIGHTTYPE` computation field, which PPSSPP's model
   does not feed into env-map UV generation. Real-hardware behaviour unknown.

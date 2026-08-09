@@ -3376,6 +3376,39 @@ impl Drawable {
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
 
+    /// Regenerates this model's texture coordinates the way the PSP GE's
+    /// transparent pass does, and uploads them.
+    ///
+    /// `Mesh_BeginTransparentPass` sets `TEXMAPMODE` uvgen 2 - environment
+    /// (shade) mapping from the vertex normal and lights 0/1 - and nothing in
+    /// the batch loop undoes it, so a transparent batch's **authored** texture
+    /// coordinates are never read on the original. See
+    /// [`oag_render::texgen`], which carries the formula and the measurement
+    /// of what feeding the authored ones instead did to the boost plume.
+    ///
+    /// Called only for the plume, and only on the frames it is visible. The
+    /// general transparent pass is deliberately left alone: switching every
+    /// transparent batch on every track and ship to generated coordinates is
+    /// the blast radius `mesh-draw.md` has twice refused to take off one
+    /// pass, and it is not what the reported symptom needs.
+    ///
+    /// Per frame rather than once at load, because the dot product is between
+    /// a world-space light direction and a world-space normal: the
+    /// coordinates move as the **ship** turns. From `self.model.vertices`
+    /// every time rather than from the last frame's buffer, for the same
+    /// reason [`Self::deflect_airbrakes`] does.
+    fn generate_env_uvs(&self, queue: &wgpu::Queue, model: Mat4) {
+        let mut generated = Vec::new();
+        oag_render::texgen::environment_map(
+            &self.model.vertices,
+            &mut generated,
+            model,
+            oag_render::texgen::PLUME_LIGHT_0,
+            oag_render::texgen::PLUME_LIGHT_1,
+        );
+        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&generated));
+    }
+
     /// Swings this model's airbrake flaps to `left` and `right` radians.
     ///
     /// Rewrites the two flaps' own vertices in place rather than giving them a
@@ -3765,12 +3798,45 @@ impl Scene {
         // across 8 teams - `cargo run -p oag-assets --example
         // boost_vertex_type`), so that generation has something to vary with.
         //
-        // Environment-mapped UV generation is **not** implemented: it would
-        // change every transparent batch on every track and ship, and this repo
-        // already carries a rejected project-wide blend flip as the precedent
-        // for not doing that off one pass. `SrcAlpha` stands in until it is,
-        // and it is at least arithmetic that is correct for *some*
-        // per-fragment weighting where the premultiply was correct for none.
+        // **Environment-mapped UV generation is now implemented**, 2026-08-09,
+        // for this model alone - `oag_render::texgen`, called from
+        // `Drawable::generate_env_uvs`. Every transparent batch on every track
+        // and ship is still left on authored coordinates, which is the blast
+        // radius this comment used to give as the reason for not doing it at
+        // all; scoping it to the plume gets the recovered mechanism without
+        // taking that risk.
+        //
+        // **`SrcAlpha` stays, and it is no longer a stand-in - it is a
+        // measured choice that beat the recovered alternative.** The argument
+        // for going back to `TRAIL_BLEND` was strong on paper: the recovered
+        // GE state really is `GU_FIX` white on both sides, `SrcAlpha` was only
+        // ever introduced as a substitute for the missing texture falloff, and
+        // that falloff now exists. So it was tried, at the original's own pose
+        // (`data/traces/pad0-boost.csv` tick 62, boost age `0.5` s, entry
+        // intensity `0.1292`), against the original's own frame
+        // (`data/shots/pad0-boost/tick00062.png`), over the capture's own
+        // plume mask (`min(r, b) - g > 25` and `luma > 60`):
+        //
+        // | build | plume px | mean | `b - r` | orange px |
+        // | --- | ---: | --- | ---: | ---: |
+        // | the original | 9,435 | `(220, 165, 237)` | +17.6 | 230 |
+        // | ours, authored UVs (what shipped before) | 4,467 | `(183, 142, 205)` | +22.0 | 2,394 |
+        // | **ours, texgen + `SrcAlpha` (this)** | **6,076** | `(197, 150, 212)` | **+15.0** | **1,767** |
+        // | ours, texgen + `TRAIL_BLEND` (the recovered blend) | 2,017 | `(240, 177, 225)` | -14.4 | 6,750 |
+        //
+        // `One`/`One` restores the authored `(255, 98, 5)` rim at full
+        // strength and the result is **29x the original's orange pixel count**
+        // and red-dominant where the original is blue-dominant, at 21 % of its
+        // extent. The capture's own section 9 says the same thing
+        // independently: the original's plume and its trail ribbon are one
+        // violet family and "neither is anywhere near the `(255, 98, 5)`
+        // orange rim recorded for the plume mesh".
+        //
+        // **So something in the recovered blend chain is still incomplete**,
+        // and that is worth stating rather than papering over: the GE state
+        // was read carefully and it does not reproduce the picture, while an
+        // unrecovered source-alpha weight does. `SrcAlpha` is kept because it
+        // measures better, not because it is understood.
         // See `docs/ghidra/functions/psp-pulse-usa/exhaust.md` and
         // `mesh-draw.md`.
         let boost = boost_model
@@ -3948,7 +4014,9 @@ impl Scene {
         if let Some(boost) = &self.boost
             && race.exhaust().plume_visible()
         {
-            boost.write(queue, view_projection, race.ship_model_matrix(), 0.0);
+            let model = race.ship_model_matrix();
+            boost.write(queue, view_projection, model, 0.0);
+            boost.generate_env_uvs(queue, model);
         }
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);

@@ -298,14 +298,24 @@ fn every_psp_teams_boost_plume_batches_are_additive_blend() {
 /// pair, but only because a stripe varies along `v` where this one does not,
 /// which is what made the short batches look like the odd ones out.
 ///
-/// **What this does not establish** is what the plume finally samples on
-/// screen. These are the *baked* coordinates; the GE applies `sceGuTexScale` and
-/// `sceGuTexOffset` after them, and the original demonstrably drives both for
-/// the runtime exhaust ribbon (`oag_render::exhaust`'s `LAYER_TEX_SCALE_U` and
-/// `LAYER_SCROLL_U`). Whether `shipboost.vex`'s own draw takes identity scale
-/// and zero offset - which would make the 64-wide ramp a no-op here - or slides
-/// the baked `u` along it, has not been read out of the PSP draw path. See
-/// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
+/// **What the original samples on screen is not this, and that is now
+/// settled.** These are the *baked* coordinates, and a transparent batch never
+/// reads them: `Mesh_BeginTransparentPass` sets `TEXMAPMODE` uvgen 2 -
+/// environment (shade) mapping from the vertex normal and lights 0/1 - and
+/// nothing in the batch loop re-emits `0xc0` to undo it. So the ramp is not a
+/// no-op on the original; the GE walks it with coordinates it generates per
+/// vertex. This test therefore pins the *file*, not the picture, and the
+/// reimplementation generates its own through
+/// [`oag_render::texgen`](../../render/src/texgen.rs) - which is what turned
+/// the plume from two flat orange wedges into streaks. See
+/// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
+///
+/// The `v` sweep landing on one texel is worth keeping for a second reason
+/// this page did not have when it was written: at any column *other* than 0
+/// the rows alternate hard between a bright magenta `(241, 110, 253)` and a
+/// dark navy `(20, 5, 122)`, so `v` is the texture's streak pattern rather
+/// than a second ramp, and column 0 is the one column where that alternation
+/// vanishes.
 ///
 /// If a future change to the decoder ever makes these coordinates sweep, this
 /// test fails and the finding above needs re-deriving rather than the constants
@@ -349,6 +359,24 @@ fn every_psp_teams_boost_plume_samples_one_texture_column() {
             texture.width,
             texture.height,
             column,
+        );
+
+        // And the other columns are not flat, which is the whole point: `v` is
+        // a streak pattern everywhere except at `u = 0`. Measured on Assegai at
+        // column 20 - alternating `(241, 110, 253)` and `(20, 5, 122)` - and
+        // asserted here as "more than one distinct row", which is the claim
+        // `oag_render::texgen` rests on without pinning any team's exact art.
+        let mid = width / 2;
+        let mid_column: Vec<_> = (0..usize::from(texture.height))
+            .map(|y| &rgba[(y * width + mid) * 4..(y * width + mid) * 4 + 4])
+            .collect();
+        assert!(
+            mid_column.iter().any(|c| *c != mid_column[0]),
+            "{name}: column {mid} of the {}x{} texture is flat down every row, so the \
+             generated v coordinate has no streak pattern to land in and \
+             oag_render::texgen's premise is wrong",
+            texture.width,
+            texture.height,
         );
 
         let mut short_batches = 0usize;
