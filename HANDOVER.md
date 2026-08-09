@@ -291,6 +291,20 @@ frames gives `fov = 60.181 + 0.07685 * dot(fwd, vel)`, with the recovered
 `0.075` and the authored `60` both inside the fit's 95 % intervals. It is
 **unimplemented** in `Race::projection`, which is the one live consequence.
 
+**The two halves of that do not carry the same weight, and the difference is
+load-bearing.** The **magnitude** is solid at confidence **88**; the **driver**
+is not, at **70**. Nesting both candidate drivers in one fit rejects a *pure*
+forward-velocity driver at about 95 % - but on 3 of 16 ticks, against a store
+that unambiguously reads a dot product, so it is **deliberately unresolved**
+rather than decided either way. `shipNode+0x140` being a **smoothed** velocity
+is the reconciliation worth testing, because it would put the true quantity
+between the two candidates exactly where the divergence lives. Both confidences
+and the fit are on
+[camera.md](docs/ghidra/functions/psp-pulse-usa/camera.md) and
+[projection-vs-the-original.md](docs/rendering/projection-vs-the-original.md).
+**Do not quote the driver from this file** - point at those, which is what this
+file is for.
+
 **Matched-pose pixel comparisons are still invalid**, for this reason rather
 than the craft's size, and with a fix: re-take with `--camera-fov` computed from
 the capture's own forward velocity, or at a low-speed tick. The three readings
