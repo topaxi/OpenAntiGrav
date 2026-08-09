@@ -1764,6 +1764,69 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   | ours, authored UVs | 2,854 | 5,887 | `(133, 104, 172)` | +39.1 | 2,860 |
   | **ours, texgen + `SrcAlpha`** | **3,573** | **6,593** | `(143, 110, 178)` | **+35.7** | **2,599** |
   | ours, texgen + `One`/`One` | 1,254 | 3,614 | `(121, 87, 158)` | +37.2 | 4,392 |
+  | **ours, shipped, at the corrected fov 71.1663** | **3,942** | **6,095** | `(171, 133, 194)` | **+22.8** | **1,714** |
+
+  > **Fifth measurement, 2026-08-09 - and the first where the two frames are
+  > actually the same projection.** Every row above the last was taken against a
+  > reference misregistered by **1.2521x**, because the original widens its fov
+  > with speed and we did not. The corrected row renders at `--camera-fov
+  > 71.1663`, the tick's own `60 + 0.075 * dot(fwd, vel)`, which puts far
+  > scenery at 1.0093 with two sweep steps agreeing to 0.07 %. Tick 62's yaw is
+  > 0.037 rad/s, well inside where that registration is reliable.
+  >
+  > **The instrument is committed now**, as
+  > [`scripts/plume-mask.py`](../../../../scripts/plume-mask.py), and it
+  > reproduces all five columns of the original's row and of the shipped row to
+  > the digit. This table has been derived five times in three places with three
+  > sets of numbers; there is now one home for the arithmetic. **One definition
+  > on this page is ambiguous enough to have been re-derived wrong**: `orange` is
+  > **not** a subset of the plume mask. Scoring it inside the mask gives `197`
+  > where the recorded figure is `425`; scoring it over the gated region gives
+  > `425`, `2,599` and `1,714` exactly. The two populations are largely disjoint,
+  > which is what makes the orange a *rim*.
+  >
+  > **What changes, and one of them is load-bearing:**
+  >
+  > - **`b - r`: the conclusion is at risk.** The correction moves it by
+  >   **-12.9**, from `+35.7` to `+22.8`, and the sign of the error flips - we
+  >   were 10.9 *above* the original's `+24.8` and are now 2.0 *below* it. The
+  >   entire spread between the three builds is **3.4**, so the correction is
+  >   four times the inter-build spread and **"`One`/`One` is worst on every
+  >   column" cannot be carried on this leg**. The other two builds are
+  >   unmeasured at the corrected fov and the ranking could invert.
+  > - **The decision to keep `exhaust::BLEND` still stands**, which is the
+  >   reassuring half. It rests on extent (6,593 against `One`/`One`'s 3,614)
+  >   and orange (2,599 against 4,392), both *ours-versus-ours* ratios at one
+  >   pose, so the shared zoom cancels exactly and no re-take can move them.
+  >   Only the `b - r`-distance leg is exposed, and it is not what the decision
+  >   turns on.
+  > - **"About 26 % dimmer" becomes 11 %.** Mean luma 127.7 -> 151.1 against the
+  >   original's 169.0. **This is mechanism, not a better measurement**: widening
+  >   the fov compresses the plume's overlapping quads into fewer pixels, and
+  >   under an additive blend more fragments stack per pixel - this page's own
+  >   "additive stacking, not amplitude". The corrected frame is a *different and
+  >   correct* picture, not the same one measured again.
+  > - **The `old-mask px` column is retired rather than re-taken.** On the same
+  >   pair of images it moved **up** 10 % while the normalised mask moved **down**
+  >   8 %, because the corrected frame is brighter and more pixels clear its
+  >   absolute `luma > 60` gate even as the plume covers less area. It was kept
+  >   "for one revision so the two are comparable"; it has now demonstrated in
+  >   one row that it measures brightness and calls it extent.
+  > - **Extent is digits only**: 0.533 -> 0.492 of the original, and no
+  >   conclusion turned on it. All three masks reach the frame's bottom row, so
+  >   every extent figure here is a lower bound - equally in all three, so the
+  >   ratios survive.
+  >
+  > **By-catch: the plume-width claim flips sign and is quantified for the first
+  > time.** Mask bounding boxes give the original 215 px wide, ours uncorrected
+  > **224** (4 % *wider*) and ours corrected **196** (**9 % narrower**). So the
+  > "fins stay closer to the wing roots where the original's reach further back
+  > and further outboard" claim below is **right**, and the uncorrected frame was
+  > hiding it behind a zoom that made us look wider than the original. Threshold
+  > dependent, so ~9 % rather than three digits. Independent corroboration that
+  > the correction landed: the mask's top edge sits at y=**318** in both the
+  > corrected render and the original, against 329 uncorrected - a different
+  > quantity from the registration metric entirely.
 
   **Fourth measurement of this table, and the first with an instrument that
   does not break under it.** The first used the wrong pose age and a boost
