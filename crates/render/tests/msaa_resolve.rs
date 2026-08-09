@@ -62,6 +62,7 @@ fn triangle_model() -> Model {
         label: "msaa_resolve test triangle".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
+            blend: None,
             range: 0..3,
             texture: None,
             bounds: Bounds {

@@ -9,6 +9,7 @@ use oag_core::math::{Mat4, Vec3, camera};
 use std::path::Path;
 
 use crate::mesh::{GpuVertex, Model};
+use oag_formats::vex;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -232,6 +233,8 @@ pub fn capture_from(
         pipeline,
         alpha_test_pipeline,
         blend_pipeline,
+        additive_pipeline,
+        unblended_pipeline,
         bind_group,
         vertex_buffer,
         index_buffer,
@@ -357,12 +360,26 @@ pub fn capture_from(
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
             }
 
-            // Third pipeline, same pass: `Model::transparent_draws` is meant to be
-            // blended rather than replace, and drawn last so opaque and cutout
+            // Third pipeline group, same pass: `Model::transparent_draws`,
+            // blended rather than replaced and drawn last so opaque and cutout
             // depth is already resolved. See `crate::exhaust::Pipeline` for the
             // precedent of pairing an opaque and a blended pipeline this way.
-            pass.set_pipeline(&blend_pipeline);
+            //
+            // **One `set_pipeline` per draw call, because the batch's own
+            // `pass_mask` picks its blend equation** - the `0x0700` class
+            // splits three ways and a single model mixes them. Grouping the
+            // draws by class first would reorder them, and transparent draws
+            // are order-dependent by definition.
+            let mut current: Option<Option<vex::BlendClass>> = None;
             for draw in &model.transparent_draws {
+                if current != Some(draw.blend) {
+                    pass.set_pipeline(match draw.blend {
+                        Some(vex::BlendClass::Additive) => &additive_pipeline,
+                        Some(vex::BlendClass::None) => &unblended_pipeline,
+                        Some(vex::BlendClass::AlphaOver) | None => &blend_pipeline,
+                    });
+                    current = Some(draw.blend);
+                }
                 let slot = draw.texture.map_or(0, |t| t + 1);
                 pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
@@ -492,17 +509,20 @@ fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
     levels
 }
 
-/// The blend this crate uses for a model's `transparent_draws` (list B).
+/// The blend for a transparent batch of class
+/// [`vex::BlendClass::AlphaOver`] - `pass_mask & 0x100`.
 ///
-/// **Not recovered from the game.** Unlike [`crate::exhaust::BLEND`], no GE
-/// blend-function state has been read out of a decompile for these batches;
-/// this is a plausible reading (source-over, the ordinary "glass" lerp), not
-/// a confirmed one - an unscored placeholder in the same sense
-/// `crates/game/src/race.rs`'s `GLOW_SCROLL_PERIOD_TICKS` documents its own
-/// invented constants. `Batch::is_transparent`/`is_alpha_tested` in
-/// `oag_formats::vex` are what is actually confirmed: that these batches are
-/// meant to be blended rather than replaced, and are not alpha-tested
-/// cutouts. Revise this the moment the real state is recovered.
+/// **Recovered.** `Gfx_BuildBatchStateList`'s `0x100` branch programs
+/// `Gu_Enable(GU_BLEND)` with `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA,
+/// GU_ONE_MINUS_SRC_ALPHA, 0, 0)` and disables the colour test. The colour
+/// factors here are that call. This constant's doc used to say the opposite -
+/// "not recovered ... a plausible reading" - and it happened to be right; what
+/// was wrong was applying it to **every** transparent batch. See
+/// [`ADDITIVE_BLEND`] and [`vex::BlendClass`].
+///
+/// **The alpha factors are still ours**, and deliberately unchanged: PSP
+/// blending is RGB-only, so the original's call says nothing about the alpha
+/// channel and there is nothing to copy.
 pub const TRANSPARENT_BLEND: wgpu::BlendState = wgpu::BlendState {
     color: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::SrcAlpha,
@@ -512,6 +532,34 @@ pub const TRANSPARENT_BLEND: wgpu::BlendState = wgpu::BlendState {
     alpha: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::One,
         dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
+/// The blend for a transparent batch of class [`vex::BlendClass::Additive`] -
+/// `pass_mask & 0x200`.
+///
+/// **Recovered, and identical to [`crate::exhaust::BLEND`].**
+/// `Gfx_BuildBatchStateList`'s `0x200` branch programs
+/// `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0x000000, 0xffffff)` - a fixed
+/// destination factor of white, i.e. `src * srcAlpha + dst`. That is the same
+/// equation `ExhaustFlare_BuildDisplayList` programs for the engine flare, so
+/// **the flare, the boost plume and every other `0x200` batch in the game
+/// share one blend**, which was not known until the `0x0700` class was split.
+///
+/// Alpha matches the colour factors here rather than following
+/// [`TRANSPARENT_BLEND`]'s split, for the same reason `exhaust::BLEND` does:
+/// a target later read as premultiplied should not disagree with its own
+/// colour channels.
+pub const ADDITIVE_BLEND: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::One,
         operation: wgpu::BlendOperation::Add,
     },
 };
@@ -534,6 +582,17 @@ pub struct Built {
     /// same render pass - see [`crate::exhaust::Pipeline`] for the precedent
     /// of pairing an opaque and a blended pipeline this way.
     pub blend_pipeline: wgpu::RenderPipeline,
+    /// Blended pass for [`vex::BlendClass::Additive`] batches
+    /// (`pass_mask & 0x200`): [`ADDITIVE_BLEND`], depth write off.
+    ///
+    /// A second blended pipeline rather than a second pass: the three classes
+    /// interleave freely within one model's `transparent_draws`, so they are
+    /// selected per draw call by [`Model`]'s own `DrawCall::blend`.
+    pub additive_pipeline: wgpu::RenderPipeline,
+    /// Blended pass for [`vex::BlendClass::None`] batches
+    /// (`pass_mask & 0x400`): sorted with the transparent list, drawn with
+    /// blending **off**, depth write still off.
+    pub unblended_pipeline: wgpu::RenderPipeline,
     pub bind_group: wgpu::BindGroup,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -784,50 +843,61 @@ pub fn build(
     // which established this opaque/blended pairing first. `blend` is almost
     // always `TRANSPARENT_BLEND`; see this function's own doc comment for the
     // one caller that passes something else.
-    let blend_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("mesh blend"),
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs_main"),
-            buffers: &[Some(wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &wgpu::vertex_attr_array![
-                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Float32
-                ],
-            })],
-            compilation_options: Default::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_main_blend"),
-            targets: &[Some(wgpu::ColorTargetState {
-                format,
-                blend: Some(blend),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-            compilation_options: Default::default(),
-        }),
-        primitive: wgpu::PrimitiveState {
-            cull_mode: None,
-            ..Default::default()
-        },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: Some(false),
-            depth_compare: Some(depth_compare),
-            stencil: Default::default(),
-            bias: Default::default(),
-        }),
-        multisample: wgpu::MultisampleState {
-            count: sample_count,
-            ..Default::default()
-        },
-        multiview_mask: None,
-        cache: None,
-    });
+    // **One pipeline per recovered blend class.** The `0x0700` transparent
+    // class splits three ways and a single mesh mixes them, so the choice is
+    // per draw call rather than per model - see `vex::Batch::blend_class` and
+    // `Model`'s `DrawCall::blend`. `blend_pipeline` keeps the caller's own
+    // `blend` argument so an override still works; the other two are the
+    // recovered equations and take no argument.
+    let make_blend_pipeline = |label: &str, blend: Option<wgpu::BlendState>| {
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![
+                        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                        4 => Float32, 5 => Float32
+                    ],
+                })],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main_blend"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(depth_compare),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                ..Default::default()
+            },
+            multiview_mask: None,
+            cache: None,
+        })
+    };
+    let blend_pipeline = make_blend_pipeline("mesh blend (alpha over)", Some(blend));
+    let additive_pipeline = make_blend_pipeline("mesh blend (additive)", Some(ADDITIVE_BLEND));
+    let unblended_pipeline = make_blend_pipeline("mesh blend (none)", None);
 
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertices"),
@@ -957,6 +1027,8 @@ pub fn build(
         pipeline,
         alpha_test_pipeline,
         blend_pipeline,
+        additive_pipeline,
+        unblended_pipeline,
         bind_group,
         vertex_buffer,
         index_buffer,

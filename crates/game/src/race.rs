@@ -3330,6 +3330,11 @@ struct Drawable {
     pipeline: wgpu::RenderPipeline,
     alpha_test_pipeline: wgpu::RenderPipeline,
     blend_pipeline: wgpu::RenderPipeline,
+    /// The other two recovered transparent blend classes. Selected per draw
+    /// call, because a single model mixes them - see
+    /// `oag_formats::vex::Batch::blend_class`.
+    additive_pipeline: wgpu::RenderPipeline,
+    unblended_pipeline: wgpu::RenderPipeline,
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,
@@ -3368,6 +3373,8 @@ impl Drawable {
             pipeline,
             alpha_test_pipeline,
             blend_pipeline,
+            additive_pipeline,
+            unblended_pipeline,
             bind_group: _placeholder,
             vertex_buffer: vertices,
             index_buffer: indices,
@@ -3405,6 +3412,8 @@ impl Drawable {
             pipeline,
             alpha_test_pipeline,
             blend_pipeline,
+            additive_pipeline,
+            unblended_pipeline,
             vertices,
             indices,
             uniforms,
@@ -3570,13 +3579,32 @@ impl Drawable {
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
 
-        // Third pipeline, same pass: transparent batches, blended. See
-        // `mesh_render::Built::blend_pipeline`.
-        pass.set_pipeline(&self.blend_pipeline);
+        // Third pipeline group, same pass: transparent batches, blended.
+        //
+        // **The blend equation is the batch's own, not the model's.**
+        // `Gfx_BuildBatchStateList` splits `is_transparent()`'s `0x0700` three
+        // ways - `0x100` alpha-over, `0x200` additive, `0x400` unblended - and
+        // a single model mixes them, so the pipeline is chosen per draw call.
+        // This crate drew every one of them alpha-over until that was
+        // recovered. See `oag_formats::vex::Batch::blend_class` and
+        // `mesh_render::ADDITIVE_BLEND`.
+        //
+        // Switched only when the class changes rather than grouped by class
+        // first: transparent draws are order-dependent by definition, and
+        // sorting them to save `set_pipeline` calls would reorder the picture.
+        let mut current: Option<Option<oag_formats::vex::BlendClass>> = None;
         for (index, draw) in self.model.transparent_draws.iter().enumerate() {
             if !visible(draw, DrawSections::at(transparent, index), set, frustum) {
                 stats.draws_culled += 1;
                 continue;
+            }
+            if current != Some(draw.blend) {
+                pass.set_pipeline(match draw.blend {
+                    Some(oag_formats::vex::BlendClass::Additive) => &self.additive_pipeline,
+                    Some(oag_formats::vex::BlendClass::None) => &self.unblended_pipeline,
+                    Some(oag_formats::vex::BlendClass::AlphaOver) | None => &self.blend_pipeline,
+                });
+                current = Some(draw.blend);
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;

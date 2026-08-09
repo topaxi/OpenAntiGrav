@@ -236,6 +236,8 @@ pub fn build_model(
         .fold(0.0f32, f32::max)
         .sqrt();
     let draws = vec![DrawCall {
+        // Synthetic: no batch, so no recovered blend class.
+        blend: None,
         range: 0..indices_len(&indices),
         texture: None,
         bounds: Bounds {

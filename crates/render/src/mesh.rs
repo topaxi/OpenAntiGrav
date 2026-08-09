@@ -59,6 +59,16 @@ pub struct DrawCall {
     /// culling - not the whole model's, which would defeat the point on a
     /// track where one `Model` is the entire circuit.
     pub bounds: Bounds,
+    /// Which blend equation this batch asked for, or `None` when it is not a
+    /// transparent batch at all.
+    ///
+    /// **The three bits inside `is_transparent()`'s `0x0700` are not
+    /// interchangeable, and this crate drew all of them with one equation
+    /// until it was recovered.** `0x100` is an ordinary alpha blend, `0x200`
+    /// is additive and source-alpha weighted, `0x400` is unblended. Carried
+    /// per draw call rather than per model because a single mesh mixes them.
+    /// See [`oag_formats::vex::Batch::blend_class`].
+    pub blend: Option<vex::BlendClass>,
     /// Index of the scene-tree node this draw call came from, into the
     /// `vex::nodes` of the file the model was built from, or `None` for
     /// synthetic geometry (ribbons, collision overlays, fixtures).
@@ -764,6 +774,7 @@ fn build_class(
                         range: first_index..last_index,
                         texture,
                         bounds: Bounds { centre, radius },
+                        blend: batch.blend_class(),
                         node: Some(index as u32),
                     });
                 }
@@ -948,6 +959,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             texture: d.texture.map(|t| t + texture_base),
             bounds: d.bounds,
             node: d.node,
+            blend: d.blend,
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
         out.alpha_tested_draws
@@ -1086,6 +1098,7 @@ mod merge_tests {
                 .collect(),
             indices: (0..vertices as u32).collect(),
             draws: vec![DrawCall {
+                blend: None,
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),
                 bounds: Bounds {

@@ -628,6 +628,24 @@ pub struct Vertex {
     pub colour: Option<[u8; 4]>,
 }
 
+/// Which blend equation a transparent batch asks for.
+///
+/// Recovered from `Gfx_BuildBatchStateList`; see [`Batch::blend_class`] for the
+/// bits and the branch order. Not a quality setting and not a choice - the
+/// batch's own `pass_mask` picks one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlendClass {
+    /// `pass_mask & 0x100`: ordinary alpha blend, `SrcAlpha` over
+    /// `OneMinusSrcAlpha`.
+    AlphaOver,
+    /// `pass_mask & 0x200`: additive and source-alpha weighted, `SrcAlpha`
+    /// plus `One`. The boost plume's, and the engine flare's.
+    Additive,
+    /// `pass_mask & 0x400`: sorted with the transparent batches but drawn
+    /// unblended.
+    None,
+}
+
 /// One batch of draw calls.
 #[derive(Debug, Clone)]
 pub struct Batch {
@@ -718,9 +736,47 @@ impl Batch {
     }
 
     /// Whether this batch is transparent and must be drawn after opaque ones.
+    ///
+    /// The `0x0700` mask is confirmed operationally: it is the exact test
+    /// `Gfx_BuildBatchStateList` branches on. Which of the three bits is set
+    /// decides *how* it blends - see [`Batch::blend_class`].
     #[must_use]
     pub fn is_transparent(&self) -> bool {
         self.pass_mask & 0x0700 != 0
+    }
+
+    /// Which blend equation a transparent batch asks for, or `None` when it is
+    /// not transparent at all.
+    ///
+    /// The three bits inside `is_transparent`'s `0x0700` are not
+    /// interchangeable, and the reimplementation drew all of them with one
+    /// equation until this was recovered. From `Gfx_BuildBatchStateList`, whose
+    /// branch order this method reproduces - `0x100` wins over `0x200`, which
+    /// wins over `0x400`:
+    ///
+    /// | Bit | The original programs |
+    /// | --- | --- |
+    /// | `0x100` | `GU_ADD`, `GU_SRC_ALPHA` / `GU_ONE_MINUS_SRC_ALPHA`, colour test off |
+    /// | `0x200` | `GU_ADD`, `GU_SRC_ALPHA` / `GU_FIX 0xffffff`, colour test on |
+    /// | `0x400` | `Gu_Disable(GU_BLEND)` - in the transparent class, not blended |
+    ///
+    /// Only the blend equation and the colour test differ between them; the
+    /// depth-write disable, the alpha test and the stencil setup are emitted
+    /// outside the nest and are common to all three.
+    ///
+    /// See `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "Three
+    /// `pass_mask` bits decoded, inside the `0x0700` transparent class".
+    #[must_use]
+    pub fn blend_class(&self) -> Option<BlendClass> {
+        if self.pass_mask & 0x0100 != 0 {
+            Some(BlendClass::AlphaOver)
+        } else if self.pass_mask & 0x0200 != 0 {
+            Some(BlendClass::Additive)
+        } else if self.pass_mask & 0x0400 != 0 {
+            Some(BlendClass::None)
+        } else {
+            None
+        }
     }
 
     /// Whether this batch is alpha-tested rather than blended.
@@ -2589,6 +2645,18 @@ mod tests {
         // the batch that carries the bit is the one that is *not* culled.
         assert!(!batch(0x0021).is_culled());
         assert!(batch(0x0001).is_culled());
+
+        // The three bits inside `0x0700`, and the branch order that separates
+        // them: `Gfx_BuildBatchStateList` tests `0x100` first, then `0x200`,
+        // then `0x400`, so a batch carrying more than one takes the earliest.
+        assert_eq!(batch(0x0100).blend_class(), Some(BlendClass::AlphaOver));
+        assert_eq!(batch(0x0200).blend_class(), Some(BlendClass::Additive));
+        assert_eq!(batch(0x0400).blend_class(), Some(BlendClass::None));
+        assert_eq!(batch(0x0300).blend_class(), Some(BlendClass::AlphaOver));
+        assert_eq!(batch(0x0600).blend_class(), Some(BlendClass::Additive));
+        assert_eq!(batch(0x0021).blend_class(), None);
+        // The boost plume's own measured mask, all 32 batches across 8 teams.
+        assert_eq!(batch(0x1232).blend_class(), Some(BlendClass::Additive));
     }
 
     #[test]

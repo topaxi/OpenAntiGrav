@@ -123,6 +123,8 @@ struct Session {
     pipeline: wgpu::RenderPipeline,
     alpha_test_pipeline: wgpu::RenderPipeline,
     blend_pipeline: wgpu::RenderPipeline,
+    additive_pipeline: wgpu::RenderPipeline,
+    unblended_pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
@@ -189,6 +191,8 @@ impl Session {
             pipeline,
             alpha_test_pipeline,
             blend_pipeline,
+            additive_pipeline,
+            unblended_pipeline,
             bind_group: placeholder_bind_group,
             vertex_buffer,
             index_buffer,
@@ -235,6 +239,8 @@ impl Session {
             pipeline,
             alpha_test_pipeline,
             blend_pipeline,
+            additive_pipeline,
+            unblended_pipeline,
             uniform_buffer,
             bind_group,
             vertex_buffer,
@@ -380,10 +386,23 @@ impl Session {
                     pass.draw_indexed(draw.range.clone(), 0, 0..1);
                 }
 
-                // Third pipeline, same pass: transparent batches, blended. See
-                // `mesh_render::Built::blend_pipeline`.
-                pass.set_pipeline(&self.blend_pipeline);
+                // Third pipeline group, same pass: transparent batches,
+                // blended, with the equation the batch's own `pass_mask` asks
+                // for - see `oag_formats::vex::Batch::blend_class`. The viewer
+                // selects per draw call exactly as the game does, because it
+                // is only useful as a reference if it renders the same way.
+                let mut current: Option<Option<oag_formats::vex::BlendClass>> = None;
                 for draw in &self.model.transparent_draws {
+                    if current != Some(draw.blend) {
+                        pass.set_pipeline(match draw.blend {
+                            Some(oag_formats::vex::BlendClass::Additive) => &self.additive_pipeline,
+                            Some(oag_formats::vex::BlendClass::None) => &self.unblended_pipeline,
+                            Some(oag_formats::vex::BlendClass::AlphaOver) | None => {
+                                &self.blend_pipeline
+                            }
+                        });
+                        current = Some(draw.blend);
+                    }
                     let slot = draw.texture.map_or(0, |t| t + 1);
                     pass.set_bind_group(
                         1,

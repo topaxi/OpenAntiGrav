@@ -524,6 +524,7 @@ mod tests {
 
     fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
         DrawCall {
+            blend: None,
             range: 0..3,
             texture: None,
             bounds: Bounds { centre, radius },
@@ -564,6 +565,7 @@ mod tests {
 
     fn draw_of_node(node: Option<u32>) -> DrawCall {
         DrawCall {
+            blend: None,
             range: 0..3,
             texture: None,
             bounds: Bounds {
