@@ -104,6 +104,24 @@ Still no rename: the gate is read but the data path into the block is not, and
 `FUN_089307b4` is a large function whose name would have to cover much more
 than this.
 
+**The writer chain is now read too (2026-08-09), and it does not close the
+values gap.** `FUN_0890e160(mesh)` fires when `mesh+0x40` (a time) differs from
+`mesh+0x18c`, walks the materials, and for each one carrying `& 0x10` calls
+`FUN_08927204(time, block)` then `FUN_08927358(slot, block)`. `FUN_08927358`
+builds the five-word list - `0x48` `TEXSCALEU`, `0x49` `TEXSCALEV`, `0x4a`
+`TEXOFFSETU`, `0x4b` `TEXOFFSETV`, `RET` - from block `+0x18`/`+0x1c`/`+0x20`/
+`+0x24`, the same fields `FUN_089271cc` submits immediately. `FUN_08927204` is a
+curve evaluator, and **its failure path is the useful part: no scale track
+writes `1.0`/`1.0`, no offset track writes `0`/`0`.** So the transform defaults
+to identity, which means the live negative below - only the ribbon scrolls - is
+consistent with every track material simply having no track data, rather than
+with the mechanism being absent. Confidence **85** on the chain and the
+defaults; **still 0** on where any non-identity values would come from, exactly
+where this page already stood. See
+[mesh-draw.md](mesh-draw.md) for why this mattered: it was the leading candidate
+for the boost plume's missing rim multiplier, and defaulting to identity is what
+argues against it.
+
 ## Measured in a live race: only the trail scrolls
 
 **Confidence 88, and it is a negative.** A breakpoint on `Gu_TexOffset` through

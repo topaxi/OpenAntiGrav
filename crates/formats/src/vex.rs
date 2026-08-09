@@ -729,10 +729,27 @@ impl Batch {
         self.pass_mask & 0x0800 != 0
     }
 
-    /// Whether back-face culling is enabled. Clear means two-sided.
+    /// Whether back-face culling is enabled. Set means two-sided.
+    ///
+    /// **The sense of the bit is the opposite of what it looks like, and this
+    /// method used to have it backwards.** `Mesh_SetBatchDrawState` reads
+    /// `if ((pass_mask & 0x20) == 0) { Gu_Enable(5) } else { Gu_Disable(5) }`,
+    /// state index `5` being `GU_CULL_FACE` - so the bit **set** *disables*
+    /// culling. Read at instruction level, confidence 90; see
+    /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The plume is
+    /// two-sided".
+    ///
+    /// Nothing in this workspace consumes this yet - every `mesh_render`
+    /// pipeline sets `cull_mode: None` deliberately, because strip winding is
+    /// reconstructed rather than read from the file and culling would turn a
+    /// winding mistake into missing geometry. So the inversion never reached a
+    /// picture. It is corrected here because the first consumer would have
+    /// culled exactly the surfaces the original draws two-sided, and on the
+    /// boost plume - all 32 of whose batches carry the bit - that means every
+    /// batch.
     #[must_use]
     pub fn is_culled(&self) -> bool {
-        self.pass_mask & 0x0020 != 0
+        self.pass_mask & 0x0020 == 0
     }
 
     /// Whether the PSP draw path's shared per-batch state setup
@@ -2568,8 +2585,10 @@ mod tests {
         assert!(batch(0x0101).is_transparent());
         assert!(!batch(0x0021).is_transparent());
         assert!(batch(0x0801).is_alpha_tested());
-        assert!(batch(0x0021).is_culled());
-        assert!(!batch(0x0001).is_culled());
+        // `0x20` set is the `Gu_Disable(GU_CULL_FACE)` branch - two-sided - so
+        // the batch that carries the bit is the one that is *not* culled.
+        assert!(!batch(0x0021).is_culled());
+        assert!(batch(0x0001).is_culled());
     }
 
     #[test]

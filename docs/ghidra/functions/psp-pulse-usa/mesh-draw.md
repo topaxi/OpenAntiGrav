@@ -61,8 +61,9 @@ is how it was caught (see [exhaust.md](exhaust.md)).
 (Renamed from the literal decompile for readability; `batch[flags_byte]` is
 `*(byte *)((int)batch + 3)`, `GU_CULL_FACE` = state index `5` per the PSP SDK's
 standard `sceGuEnable` constants, already load-bearing for
-[`Batch::is_culled`](../../../../crates/formats/src/vex.rs) matching `*batch &
-0x20` exactly.)
+[`Batch::is_culled`](../../../../crates/formats/src/vex.rs) reading `*batch &
+0x20` - though **not** matching it: the bit set takes the `Gu_Disable` branch,
+so the predicate is its negation. See "The plume is two-sided" below.)
 
 Two `Gu_BlendFunc` calls happen on *every* invocation, not a blend-enable
 toggle - the only variable is which of two fixed-factor equations it
@@ -329,6 +330,18 @@ path inherits `Gfx_Init`'s `GU_TFX_MODULATE` / `GU_TCC_RGBA` with colour-double
 off. Confidence 90, and it closes `exhaust.md`'s ribbon texfunc question a
 second, independent way (that one was closed by a live command-stream scan).
 
+**The two arguments are now read rather than assumed** (2026-08-09). The single
+call site is `0x0891f62c`, and the two instructions around it set `a0 = 0`
+(`move a0, zero` at `0x0891f628`) and `a1 = 1` (the delay slot). `Gu_TexFunc`'s
+body packs them as `(colour_double << 16) | (tcc << 8) | tfx | 0xc9000000`, so
+that is `tfx = 0` = **`GU_TFX_MODULATE`** and `tcc = 1` = **`GU_TCC_RGBA`**,
+exactly as the paragraph above states. Confidence **92**. This matters beyond
+bookkeeping: `MODULATE` is what makes `fragment.rgb = vertex.rgb * texel.rgb`
+an identity the rim argument above depends on, and had it been `GU_TFX_REPLACE`
+the authored vertex colour would have been discarded entirely and the plume's
+orange rim would never reach the framebuffer - which would have been the whole
+answer to [exhaust.md](exhaust.md)'s missing-multiplier question. It is not.
+
 ### A trap: `model+0xb0` holds two lists and the obvious one is the wrong one
 
 - `model+0xb0 + 0x00`, capacity `0x94`, built by
@@ -591,15 +604,144 @@ x 8 teams = 32 batches) carries `pass_mask = 0x1232` - identical across all
 eight teams - so `& 0x8000` is **clear** on all of them and every plume batch
 replays **list A**, which is correct on both paths. `0x1232` is **not** a fully
 decoded value: `& 0x0200` is what classifies these transparent, `& 0x0020` is
-set so `Batch::is_culled` is true for every plume batch (relevant to anyone
-implementing this, since a culled plume and a two-sided one shade differently
-under a normal-driven texgen), and `& 0x1000` is undecoded here. Read off
+set - which by this page's own `if ((*batch & 0x20) == 0) Gu_Enable(5); else
+Gu_Disable(5)` means **`GU_CULL_FACE` is disabled and the plume is drawn
+two-sided** - and `& 0x1000` is undecoded here. Read off
 `data/images/pulse-psp-usa.chd` through `oag_formats::vex::mesh_batches`. The
 same dump shows the authored normals are already unit to within the 8-bit
 quantisation (`|n|` in `[0.9923, 1.0000]` across all 32 batches), so the
 `normalize` in the equation above is close to a no-op on real plume data - it
 is kept because the world matrix, not the authored normal, is what would break
 it.
+
+## Every per-batch state setter, read to its command byte
+
+2026-08-09, after `exhaust.md` re-opened "something scales the plume's rim down
+and it is not the blend". `Mesh_SetBatchDrawState`'s five state calls were each
+followed into the callee and identified by the GE command byte the callee
+writes, rather than by name or by position. **This is a negative result and it
+is the point of the section**: there is no source-alpha term anywhere in the
+chain.
+
+| Call, for the plume's batches | Address | Emits | Meaning |
+| --- | --- | --- | --- |
+| `Gu_CallList(model+0x70 + 0x48)` | - | replay | light list A (`& 0x8000` clear) |
+| `Gu_DepthMask(1)` | `0x08811874` | `0xe7` | `ZWRITEDISABLE` - depth **writes off** |
+| `Gu_DepthFunc(6)` | `0x08811850` | `0xde` | `ZTEST` function |
+| `FUN_0891e988(..)` | - | `sceGuDepthRange` | per-batch depth bias, already read |
+| `Gu_Disable(5)` | `0x08810db8` | enable table | `GU_CULL_FACE` **off** |
+| `Gu_BlendFunc(0,10,10,0xffffff,0xffffff)` | `0x0881197c` | `0xdf`,`0xe0`,`0xe1` | `BLENDMODE` `(op<<8)|(dst<<4)|src`, `BLENDFIXEDA`, `BLENDFIXEDB` |
+| `Gu_PixelMask(0xff000000)` | `0x08811898` | write mask | alpha channel not written, RGB written |
+
+The `0xdd` anchor is what fixes the rest of that range: `Gu_StencilOp`
+(`0x08811948`) writes `0xdd` with three packed fields, which pins `0xdd` =
+`STENCILOP` and therefore `0xde` = `ZTEST` and `0xe7` = `ZWRITEDISABLE`.
+`Gu_BlendFunc`'s body independently confirms it is `sceGuBlendFunc`: the
+`(op << 8) | (dst << 4) | src` packing plus two 24-bit fix colours is that
+function's exact encoding, which raises this page's `dst + src` reading from a
+call-site argument match to a callee-body read. **Confidence 92.**
+
+**Trap, and it is the reason this section exists.** In the live Ghidra database
+`0x08811874` and `0x08811850` currently carry the stale names
+**`Gu_BlendFunc_q`** and **`Gu_StencilOp_q`**, while
+[`names.tsv`](names.tsv) and [exhaust.md](exhaust.md) correctly call them
+`Gu_DepthMask` and `Gu_DepthFunc`. Anyone reading the decompiler rather than the
+docs sees `Gu_BlendFunc_q(1)` sitting in `Mesh_SetBatchDrawState` ahead of the
+real `Gu_BlendFunc` and concludes there is a second, earlier blend path to
+investigate. **There is not** - `0xe7` is the depth-write mask. Per
+[ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md) the docs are
+authoritative; the reading here was arrived at from the command bytes and
+happens to confirm the documented names, which is why their confidence goes
+`85` -> `90`.
+
+### The plume is two-sided, and `Batch::is_culled` reads backwards
+
+`pass_mask & 0x20` **set** takes the `Gu_Disable(5)` branch, and state index `5`
+is `GU_CULL_FACE` from `Gu_SetState`'s literal table (confidence 95, above). So
+a batch with the bit set is drawn with **culling off - two-sided**. Every one of
+the plume's 32 batches has it set.
+
+`oag_formats::vex::Batch::is_culled` **was** `pass_mask & 0x0020 != 0`, with a
+doc comment reading "whether back-face culling is enabled; clear means
+two-sided". That is inverted against the GE call: the bit set means culling
+*disabled*. Confidence **90**; the branch is read at instruction level and the
+state-index table it depends on is the same one this page already scores 95.
+
+**Corrected in the same change, 2026-08-09** - the predicate is now
+`pass_mask & 0x0020 == 0` and its tests are flipped.
+
+**It had no effect on any picture, and the reason is worth recording** so the
+next reader does not go looking for one: **nothing in the workspace consumes
+that predicate**, and every `mesh_render` pipeline sets `cull_mode: None`
+deliberately (strip winding is reconstructed rather than read from the file, so
+culling would turn a winding mistake into missing geometry). The
+reimplementation therefore already draws the plume two-sided, matching the
+original by accident rather than by reading this bit. The first consumer would
+have culled exactly the surfaces the original draws two-sided - on the boost
+plume, all 32 of its batches - which is why it is fixed now rather than left as
+a comment.
+
+### Environment-generated UVs do not suppress the orange rim
+
+Measured 2026-08-09 over `Data\Ships\Assegai\shipboost.vex`'s 121 vertices,
+using the light vectors recovered above:
+
+| Authored colour | Alpha | Count | Generated `u` range | Mean `u` |
+| --- | ---: | ---: | --- | ---: |
+| `(255, 255, 255)` white | `255` | 63 | `[0.074, 0.750]` | 0.505 |
+| `(255, 98, 5)` orange | `0` | 58 | `[0.074, 0.750]` | 0.437 |
+
+Whole-model generated ranges are `u` in `[0.074, 0.750]`, `v` in
+`[0.691, 0.985]`. **The two colour classes are not separated** - the orange
+vertices span the same range as the white ones and sit slightly *brighter* on
+the ramp, so switching from the authored UVs to generated ones cannot be what
+darkens the rim. It moves the whole model off the texture's white column, which
+is a large and correct change, but it is orthogonal to the rim.
+
+This closes off one branch cleanly. `pulse_boost2_ADD` under `MODULATE` cannot
+recolour an orange vertex either: with an authored blue of `5/255`, `blue_out =
+0.02 * texel_blue` for any texel, so no sampled coordinate makes an
+orange-vertex fragment blue-dominant. **The rim can only ever be darkened, never
+turned violet** - which means whatever the missing term is, it is a multiplier
+on the rim's contribution and not a coordinate change. Confidence **90** on the
+measurement, which is arithmetic over decoded data.
+
+The vertex-colour split itself is **not new here** - `exhaust.md` measured the
+two-value rim/core split and the constant texture alpha of 238 on 2026-08-08.
+What is new is that the recovered texgen does not act on it.
+
+### The per-material texture transform: mechanism found, values not
+
+[texture-animation.md](texture-animation.md) established the `& 0x10` gate on
+2026-08-08 and left "where the block's values come from" at confidence **0**.
+The writer chain is now read, and it does not close that gap:
+
+`FUN_0890e160(mesh)` runs when `mesh+0x40` (a time) differs from `mesh+0x18c`,
+walks every material, and for each one whose flags carry `& 0x10` calls
+`FUN_08927204(time, material_block)` then `FUN_08927358(list_slot,
+material_block)`. `FUN_08927358` is a five-word list builder - `0x48`
+`TEXSCALEU`, `0x49` `TEXSCALEV`, `0x4a` `TEXOFFSETU`, `0x4b` `TEXOFFSETV`, `RET`
+- reading floats at block `+0x18`/`+0x1c`/`+0x20`/`+0x24`, which is the same
+block layout `FUN_089271cc` submits immediately. `FUN_08927204` is a curve
+evaluator over a normalised time, and **its failure path is the important
+part**: when the scale track evaluates to nothing it writes `1.0`/`1.0`, and
+when the offset track does it writes `0`/`0`.
+
+So the per-material texture transform **defaults to identity**. It is a live
+mechanism for the plume - its material's `0x212` carries the bit, confirmed
+again here on both meshes - whose actual values are still unknown, and absent
+animation data it is a no-op. Treating it as the missing multiplier is not
+supported by anything read so far. Confidence **85** on the chain and the
+defaults, still **0** on the values.
+
+**And PPSSPP cannot arbitrate whether it would even reach generated
+coordinates.** The two backends disagree: `GPU/Software/TransformUnit.cpp`
+applies neither scale nor offset in the `GE_TEXMAP_ENVIRONMENT_MAP` case, while
+`GPU/Common/VertexShaderGenerator.cpp` multiplies the generated pair by
+`u_uvscaleoffset.xy` - scale but not offset. The cross-backend agreement that
+lifted the uvgen-2 equation's confidence above is **not available here**, so no
+confidence is claimed either way. Deciding it needs hardware or a targeted
+experiment, not more source reading.
 
 ## Applied names
 
@@ -631,6 +773,8 @@ previous pass on this subsystem got wrong.
 | `0x08abf500` | data | `g_envmap_light_basis_angle_x` | 90 |
 | `0x08abf504` | data | `g_envmap_light_basis_angle_y` | 90 |
 | `0x08abf510` | data | `g_envmap_light_basis` | 88 |
+| `0x08811874` | function | `Gu_DepthMask` | 90 |
+| `0x08811850` | function | `Gu_DepthFunc` | 90 |
 
 `Gu_SetState` carries 92 because its body *is* the `sceGuEnable` index table - a
 literal switch from state index to GE enable command - which makes every other

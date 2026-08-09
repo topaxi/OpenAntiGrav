@@ -265,8 +265,8 @@
 0x08811948	function	Gu_StencilOp	88	exhaust.md
 0x0881197c	function	Gu_BlendFunc	90	exhaust.md
 0x08811484	function	Gu_TexWrap	88	exhaust.md
-0x08811874	function	Gu_DepthMask	85	exhaust.md
-0x08811850	function	Gu_DepthFunc	85	exhaust.md
+0x08811874	function	Gu_DepthMask	90	mesh-draw.md
+0x08811850	function	Gu_DepthFunc	90	mesh-draw.md
 0x08810db8	function	Gu_Enable	90	exhaust.md
 0x08810e10	function	Gu_Disable	90	exhaust.md
 0x08810a60	function	Gu_ColorMaterial	85	exhaust.md
