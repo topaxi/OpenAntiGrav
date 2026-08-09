@@ -323,8 +323,9 @@ port.
 Both were dispatched with known arguments but never opened. Both decompile
 cleanly and completely. **Confidence 88** on the geometry each builds - the
 vertex arithmetic is a direct read and the vertex *format* is confirmed
-independently, see below - and **65** on which of the two trig helpers is sine
-and which cosine, which is why neither is renamed.
+independently, see below. The one subsidiary question this section opened, which
+of the two trig helpers is sine and which cosine, was **closed the same day at
+90** and is written up under the mode-3 sprite.
 
 ### The vertex format both use, and why it corroborates the rest
 
@@ -427,14 +428,27 @@ half-height `half_height` and half-width `aspect * half_height`. `axis_u` and
 `axis_v` are perpendicular for any `c, s` on the unit circle, so the quad is a
 true rectangle.
 
-**Not renamed, and this is why**: the two axes are a rotation only if
-`FUN_0897e030` is cosine and `FUN_0897e300` sine. That assignment makes
-`roll = 0` give an axis-aligned quad, which is the natural authoring intent and
-is almost certainly right - but "almost certainly right" is a 65, and neither
-helper was opened. **Reading those two functions is a five-minute job that would
-lift this whole section to 90**; until then, treat the pairing as a hypothesis.
-Nothing else on this page depends on it: the quad is a rotated rectangle either
-way, only the sign convention of `roll` is at stake.
+**The trig pairing is settled - it was a five-minute check and it came back the
+natural way.** `FUN_0897e030` is **`cosf`** and `FUN_0897e300` is **`sinf`**,
+confidence **90**, so `roll = 0` gives an axis-aligned quad and `axis_u`/`axis_v`
+really are a rotation by `roll`.
+
+The evidence is fdlibm's own structure rather than a guess. Both functions have
+**byte-identical** prologues - mask the sign bit, compare `|x|` against
+`0x3f490fd8` (`pi/4`), then against `0x7f800000` (infinity), then call the shared
+argument reducer at `0x08984760` (`__rem_pio2f`). They diverge only on the
+small-`|x|` path, and that is where fdlibm's two kernels differ in **arity**:
+
+| Function | small-`|x|` call | arguments passed |
+| --- | --- | --- |
+| `0x0897e030` | `0x08984d14` | `(x, y=0)` - two |
+| `0x0897e300` | `0x08985680` | `(x, y=0, iy=0)` - three, the third an **integer** |
+
+`__kernel_cosf(x, y)` takes two arguments; `__kernel_sinf(x, y, iy)` takes three,
+the last an int selecting whether `y` is used. The extra `li a0, 0` at
+`0x0897e394` is that third argument and it is the discriminator. Library
+functions keep their library names here, following `powf` (`0x08985e30`) already
+on this page.
 
 ### The stretch factor: traced to `particle+0x64`, and it is one field feeding three modes
 
@@ -510,13 +524,19 @@ ratio.
 | `0x08916d00` | `ParticleSystem_DrawCappedStreak` | 88 |
 | `0x08916610` | `ParticleSystem_DrawRotatedSprite` | 88 |
 | `0x0891eaec` | `Gfx_AllocDrawScratch` | 82 |
+| `0x0897e030` | `cosf` | 90 |
+| `0x0897e300` | `sinf` | 90 |
+| `0x08984d14` | `__kernel_cosf` | 88 |
+| `0x08985680` | `__kernel_sinf` | 88 |
+| `0x08984760` | `__rem_pio2f` | 82 |
 
 `Gfx_AllocDrawScratch` (`0x0891eaec`) is named from its use rather than its
 body - it is called with a byte count, returns a pointer or zero, and both
 callers immediately write vertices into it - so 82 rather than 88. The two draw
-functions keep no `_q` suffix because the geometry they build is a direct read;
-the 65-confidence item is only the sine/cosine pairing, which is called out
-above and does not affect either name.
+functions keep no `_q` suffix because the geometry they build is a direct read.
+`__rem_pio2f` (`0x08984760`) is 82 rather than 88 because it is identified by
+position in the call structure - the shared reducer both kernels' callers branch
+to for `|x| > pi/4` - rather than by reading its body.
 
 ### Two smaller facts from the same read
 
