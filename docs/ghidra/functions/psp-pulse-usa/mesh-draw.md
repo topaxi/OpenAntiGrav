@@ -845,3 +845,308 @@ RTTI type tokens rather than real functions.
   against its `SrcAlpha`/`OneMinusSrcAlpha` lerp, in favour of the `GU_FIX`
   additive equation, but changing it touches every transparent batch on every
   track and ship and needs its own verification pass.
+
+## The plume is not drawn by `FUN_089307b4` at all, and the batch-set path is list-A-only
+
+**2026-08-09, confidence 90 on the mechanism, 92 on the two measurements.**
+Opened to settle a narrow question - *which group mask (`param_3 & 1/2/4/8`)
+does the boost plume's draw item carry, and does every plume batch reach the
+GE?* - and it turned out the question was aimed at the wrong function. The
+answer to the question as asked is that **the plume has no draw item in that
+structure at all**, and the answer to what the question was really after is
+that **all four plume batches are drawn and none is dropped**.
+
+Everything below is static decompilation of `psp-pulse-usa/BOOT.BIN` plus one
+disc measurement; nothing was verified live.
+
+### The two independent draw paths
+
+`Vex_LoadModel` (`0x08912b80`) ends by calling `Mesh_BuildModelDrawData`
+(`0x08912018`) when its flag argument has neither `& 1` nor `& 4`. That
+function starts **both** paths for every model:
+
+1. `Mesh_BuildLayerBatchSets` (`0x0892eda4`), given `model+0x98` - the layer key
+   `Vex_LoadModel` was called with. This is the **batch-set** path, whose
+   dispatcher is `FUN_089307b4`.
+2. `Mesh_CompileDisplayLists` (`0x0890fad8`) **twice per mesh**, once with
+   `list = 0` and once with `list = 1`. This is the **per-mesh compiled-list**
+   path.
+
+The two are not alternatives and not a fallback pair; both run.
+
+### The batch-set path counts only list A, so it cannot see the plume
+
+`Mesh_CountBatchesPerList` (`0x0890e7a8`), called from `Mesh_InitFromPayload`
+(`0x0890e998`) at load, writes two separate counts onto the mesh object:
+
+- `mesh+0x68` - batches reachable from the **list-A** head (`mesh_header+0x04`,
+  relocated), counted while `pass_mask & 1`.
+- `mesh+0x6a` - batches reachable from the **list-B** head (`mesh_header+0x08`),
+  counted while `pass_mask & 2`.
+
+`Mesh_CompileBatchSet` (`0x0892f35c`), which fills the four arrays
+`FUN_089307b4` walks, reads **`mesh+0x68` only** - both in its sizing pre-pass
+and as the bound of its classification loop, which starts at the list-A head
+and strides by `payload_size + header_size` with no terminator test. `mesh+0x6a`
+is referenced once, and only to decide whether to call `FUN_08944e50`.
+
+**A mesh with zero list-A batches therefore contributes zero draw items to
+every batch set, whatever its layer key.** Measured off
+`data/images/pulse-psp-usa.chd` (`oag-wad cat` on
+`Data\Ships\Assegai\shipboost.vex`, parsed against the header layout in
+[`../../../formats/vex.md`](../../../formats/vex.md)): both plume meshes,
+`bflare1Shape` and `bflare2Shape`, have `listA_off = 0x0` and
+`listB_off = 0xb0`. Relocation makes the list-A head point at the **mesh header
+itself**, whose first `u16` is `mesh_flags = 0x1232` - `& 1` clear - so the
+list-A walk terminates before its first iteration and `mesh+0x68 = 0`. Both
+meshes carry two list-B batches each, all four `pass_mask = 0x1232`.
+
+So the boost plume never enters `FUN_089307b4`. Neither does any other
+list-B-only geometry, which is a large share of a track (see
+[`../../../formats/vex.md`](../../../formats/vex.md)'s "List B is real, distinct
+geometry" section).
+
+### What actually draws the plume
+
+`Mesh_CompileDisplayLists` (`0x0890fad8`) selects the list from its second
+argument - `list = 1` takes `mesh_header+0x08` with terminator `2`, `list = 0`
+takes `mesh_header+0x04` with terminator `1` - and then compiles up to five
+display lists, each behind its own gate on the **mesh's** flag word:
+
+| Cached at | Built by | Gate |
+| --- | --- | --- |
+| `mesh + list*4 + 0x144` | `FUN_0890cf84` | `mesh_flags & 0x800` |
+| `mesh + list*4 + 0x14c` | `FUN_0890d508` (which calls `FUN_0890db54`) | `mesh_flags & 0x2000` |
+| `mesh + 0x154` | `Mesh_SetBatchLighting` (`0x0890d3ac`), with `-1` | always |
+| `mesh + list*4 + 0x158` | `Mesh_CompileGeometryPass` (`0x0890d0cc`) | `mesh+0x7a == 0` or `list == 1` |
+| `mesh + list*4 + 0x160` | `FUN_0890d678` | `mesh_header+0x0c & 4`, or the reflection global |
+
+The plume's `mesh_flags = 0x1232` has `& 0x800` and `& 0x2000` both **clear**,
+so only the `+0x154` and `+0x158` lists are ever built for it.
+
+`Mesh_CompileGeometryPass` (`0x0890d0cc`) is the one that emits its geometry:
+
+```c
+while (*batch & terminator) {
+    if ((*batch & 0x800) == 0) {
+        Gu_CallList(*(int *)(batch + 0x2c) + 0x10);   // per-batch GE state
+        // stencil when *batch & 0xc0; FUN_0892733c when the material has 0x10
+        Gu_CallList(texture + 0xc0);                  // or a reflection target
+        Mesh_EmitDrawArray(batch);
+    }
+    batch += ((batch[3] & 0x40) ? 0x80 : 0x40) + payload_size;
+}
+```
+
+It walks the **whole** list and skips only batches with `pass_mask & 0x800`
+set. All four plume batches have it clear. **Every plume batch is submitted;
+nothing is dropped.** That closes the last of the six candidate multipliers
+listed on [`exhaust.md`](exhaust.md) as negative.
+
+### The correction this forces: `Mesh_SetBatchDrawState` is not on the plume's path
+
+`Mesh_SetBatchDrawState` (`0x0890d994`) has exactly two callers, and **both are
+gated on the `0x2000` bit** - `FUN_0890db54` is reached only through
+`FUN_0890d508`, which `Mesh_CompileDisplayLists` gates on `mesh_flags & 0x2000`,
+and `FUN_089307b4`'s `& 2` group is the array `Mesh_CompileBatchSet` fills from
+`pass_mask & 0x2000`. The plume has `0x2000` clear on both the mesh word and
+all four batch words.
+
+**So the "Every per-batch state setter, read to its command byte" table earlier
+on this page is describing a function the plume never reaches.** The blend,
+depth-mask, cull and pixel-mask values in it are correctly decoded and remain
+correct *for `0x2000` batches*; they are not evidence about the boost plume.
+The header note that "where this page and other pages give a number next to a
+specific claim, that number governs" now has to be read the other way round for
+that table: its claim scope is narrower than it says.
+
+Where the plume's per-batch GE state really comes from is
+`Gfx_AcquireBatchStateList` (`0x0891df48`), called once per batch at load from
+`Mesh_InitBatch` (`0x0890e8b4`) as
+
+```c
+batch->0x2c = Gfx_AcquireBatchStateList(g_display, pass_mask, header_byte3,
+                                        mesh->0xcc, mesh->0xd0, batch->0x29);
+```
+
+which is an **interned, refcounted cache** of at most `0x96` entries at stride
+`0x1c`, keyed on exactly that tuple, with the compiled list at `entry+0x10` and
+a dirty flag at `entry+0x18`. `Mesh_CompileGeometryPass` replays `entry+0x10`.
+The function that fills `entry+0x10` was not identified in this pass; the
+candidates are `FUN_0891ee98`, `FUN_0891f320` and `FUN_0891f890`, all in the
+same module, and **`FUN_0891f320` is almost certainly it** - the texfunc read
+already recorded on [`exhaust.md`](exhaust.md) at confidence 92 comes from
+`0x0891f62c`, which lies inside it. That reading is therefore on the plume's
+real path and stands. **This is the single highest-value unread function left
+in the mesh path**: it is where a per-fragment weight on a `0x1232` batch would
+have to live, and it has never been decompiled.
+
+### `Mesh_SetBatchLighting` (`0x0890d3ac`) is a lighting setter, not a second blend path
+
+It carried a duplicate `Mesh_SetBatchDrawState` name in the live Ghidra
+database, which is what made `FUN_089307b4`'s four groups look like they shared
+one state setter. Its body sets no blend state at all:
+
+```c
+if ((batch->vertex_type & 0x60) == 0 || (batch->vertex_type & 0x1c) != 0) {
+    if (ambient == -1) Gu_Disable(10);              // GU_LIGHTING off
+    else { Gu_Enable(10); Gu_Disable(0xb..0xe);     // all four light slots off
+           Gu_Ambient(ambient);
+           FUN_0881129c(1, 0xffffffff); FUN_0881129c(2, 0xffffffff); }
+} else {
+    SceneLight_CallLightingList(mesh->0x70 + 0xb0);
+    FUN_0881129c(1, mesh->0x6c | 0xff000000);
+    FUN_0881129c(2, mesh->0x6c | 0xff000000);
+    FUN_0881129c(4, 0);
+}
+Gu_Color(0xffffffff);
+```
+
+`batch+0x0a` is the GU vertex type, so `& 0x60` is its normal field and `& 0x1c`
+its colour field: **a batch with no normals, or with vertex colours, takes the
+first branch.** The plume has both normals and `GU_COLOR_8888` (`0x1c` set), so
+it takes the first branch, and `Mesh_CompileDisplayLists` compiles the
+`mesh+0x154` list with `ambient = -1` - **`Gu_Disable(10)`, lighting off,
+`Gu_Color(0xffffffff)`**. That is a *sixth* negative: no ambient term weights
+the plume's fragments either. Confidence 85; the `& 0x60`/`& 0x1c` reading as
+`GU_NORMAL`/`GU_COLOR` is from the standard PSP `sceGuDrawArray` vertex-type
+packing, not from a decompiled decoder.
+
+`mesh+0x6c` reaching `Gu_Ambient` on the *other* branch is a real per-mesh
+colour and is not read here; it cannot touch the plume, which never takes that
+branch.
+
+### `Mesh_RegisterBatches` (`0x0890c84c`) is the only walker that visits both lists
+
+Worth recording because it is the clearest statement in the binary of what list
+A and list B mean, and because it is where `mesh+0x4c` picks up its low bits:
+
+```c
+void Mesh_RegisterBatches(int mesh) {
+    header = mesh->0x58;
+    for (b = *(header + 4); b && (*b & 1); b = next(b)) Mesh_InitBatch(mesh, b);
+    for (b = *(header + 8); b && (*b & 2); b = next(b)) Mesh_InitBatch(mesh, b);
+    mesh->0x4c |= *(u16 *)(texture_of(last_material) + 0xb4);
+}
+```
+
+The two terminators are `pass_mask & 1` for the head at `mesh_header+0x04` and
+`pass_mask & 2` for the head at `mesh_header+0x08`, which is exactly the rule
+[`../../../formats/vex.md`](../../../formats/vex.md) states and
+`oag_formats::vex::mesh_batches` implements. The `|=` only touches the low 16
+bits, so it cannot disturb the layer byte the classification tests read out of
+the top 12. Confidence 80 - the body is a direct read, the texture field at
+`+0xb4` is not.
+
+### `Mesh_BuildBatchDrawCommands` (`0x0892e8f0`) confirms three parser rules
+
+The 0x28-byte draw items `Mesh_CompileBatchSet` builds are turned into GE
+commands by `Mesh_BuildBatchDrawCommands`, which writes a five-word list into
+`item+0x14`:
+
+| Word | Value | GE command |
+| --- | --- | --- |
+| `item+0x14` | `batch->0x0a \| 0x12000000` | `0x12` `VTYPE` |
+| `item+0x18` | `(vaddr & 0xf000000) >> 8 \| 0x10000000` | `0x10` `BASE` |
+| `item+0x1c` | `(vaddr & 0xffffff) \| 0x01000000` | `0x01` `VADDR` |
+| `item+0x20` | `prim << 16 \| count \| 0x04000000` | `0x04` `PRIM` |
+| `item+0x24` | `0x0b000000` | `0x0b` `RET` |
+
+and selects between the batch's two vertex blocks as
+
+```c
+batch->0x28 = (batch->0x06 != 0);
+count = batch->0x28 ? batch->0x06 : batch->0x04;
+prim  = batch->0x28 ? batch->0x09 : batch->0x08;
+vaddr = batch + header_size + (batch->0x28 ? batch->0x0e : 0);
+```
+
+Three things this pins, at confidence 88, that
+[`../../../formats/vex.md`](../../../formats/vex.md) and
+`crates/formats/src/vex.rs` had inferred rather than read:
+
+- **`use_alternate = u16_at(payload, at + 6) != 0`** in `vex.rs` is bit-for-bit
+  the original's rule. It was a hypothesis; it is now a read.
+- **`+0x0e` is the alternate block's byte offset from the primary**, ending the
+  `unk_0x0e` doc comment's "meaning is not established".
+- **`+0x28` is that selector cached as a `bool`, rewritten on every draw**, not
+  "written at load" as `vex.md` currently says. Worth correcting there.
+
+It also writes `item+0x10` = `FLT_MAX` when there is no alternate block and
+`-1.0` when there is - a sort key consumed by `Mesh_CompileBatchSet`'s four
+comparator sorts.
+
+### The layer key at `mesh+0x4c`, and how a mesh can leave its model's layer
+
+`Mesh_InitFromPayload` (`0x0890e998`) settles it, at confidence 85:
+
+1. It starts as the model's own key - `Vex_LoadModel`'s third argument, which is
+   `0x4d000000` for `<Team>boost.vex` ([`exhaust.md`](exhaust.md)).
+2. If it is `0x45000000` (the ordinary scene layer) it is re-derived from the
+   first batch's `pass_mask` into `0x45000000`, `0x4a000000` or `0x31000000`.
+   `Mesh_BuildLayerBatchSets` builds exactly those three extra sets, plus
+   `0x40000000`, only when its own argument is `0x45000000`.
+3. **If any material in either list has `(material+3) & 0xfc` non-zero**, the key
+   is overwritten with `0x01500000 + (idx-1) * 0x1000000`, `idx` being that
+   field `>> 2`, and cached at `mesh+0x7a`. The same index selects an entry in
+   the `DAT_08b323c0` table that `Mesh_CompileGeometryPass` and `FUN_089307b4`
+   both use to bind a render-target texture with `Gu_TexScale(1.0, -1.0)` - a
+   flipped `v`, i.e. **planar reflection surfaces**. Not pursued further here.
+
+Measured: both plume meshes have a single material whose `+0x03` is `0x00`, so
+neither is diverted, and `mesh+0x4c` stays `0x4d000000`.
+
+`mesh+0xc8` gets a second, derived key through a small fixed mapping
+(`< 0x30000000` adds `0x100000`; `0x66`->`0x68`, `0x53`->`0x55`, `0x61`->`0x63`,
+`0x58`->`0x5a`, `0x6b`->`0x6c`, `0x4b`->`0x4d`, otherwise `0x4c000000`). Its
+consumer was not traced.
+
+### Live-database name drift found on the way, beyond the three already known
+
+The docs win per [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md).
+`names.tsv` was checked and is clean of all of these - the drift is in the
+Ghidra database only, and a fresh import replayed from `names.tsv` will not
+reproduce it.
+
+| Address | Name in the live DB | What it is |
+| --- | --- | --- |
+| `0x0890d3ac` | `Mesh_SetBatchDrawState` (duplicate of `0x0890d994`) | `Mesh_SetBatchLighting`, above |
+| `0x0892e8f0` | `Ship_UpdateEngine_q` | `Mesh_BuildBatchDrawCommands`, above |
+| `0x0892eda4` | `Ship_UpdateEngine_q` (same name, second function) | `Mesh_BuildLayerBatchSets`, above |
+
+`Ship_UpdateEngine` proper is `0x0884c5c8` (`engine.md`), and is unrelated to
+both. The duplicate names are why `get_function_callers` by name returns
+contradictory answers in this region; query by address here.
+
+### Correction to this page's own earlier description of `FUN_089307b4`
+
+The paragraph above beginning "`FUN_089307b4` is the mesh draw path's pass-group
+dispatcher" is right that `Mesh_SetBatchDrawState` (`0x0890d994`) appears only
+in the `& 2` group, and right that `& 1` uses `FUN_0890d3ac`. It is wrong that
+`& 4` "sets depth directly off `*batch & 2` without a blend call": the `& 4`
+group calls `FUN_0890d3ac` too, with the same four arguments the `& 1` group
+uses. The four groups map to `Mesh_CompileBatchSet`'s four arrays as
+
+| `param_3` bit | array / count | membership test |
+| --- | --- | --- |
+| `1` | `+0x68` / `+0x64` | `pass_mask & 0x800` set |
+| `2` | `+0x70` / `+0x6c` | `pass_mask & 0x2000` set |
+| `4` | `+0x78` / `+0x74` | `pass_mask & 0x800` clear |
+| `8` | `+0x80` / `+0x7c` | `(batch+3) & 4` set - the caustic pass |
+
+`Mesh_CompileBatchSet` bakes groups `1|2|4` into `set+0xac` and group `8` into
+`set+0xb0`; `Mesh_DrawBatchSet` (`0x0893021c`) replays `+0xac` unconditionally
+and `+0xb0` after `Texture_BindCausticFrame`, falling back to a live
+`FUN_089307b4(set, 0, 0xf)` when nothing was baked.
+
+### Open, and named so it is not re-derived
+
+- **`FUN_0891f320`** - the per-batch state-list compiler, above. The one to read
+  next.
+- **Who replays the `mesh+0x158` list per frame.** `Mesh_CompileGeometryPass`
+  builds it; the deferred draw callback that issues it, downstream of
+  `Gfx_FlushRenderManager`'s sort, was not followed.
+- **`FUN_0890d678`** and **`FUN_0890cf84`**'s and **`FUN_0890d508`**'s full
+  bodies, and the `DAT_08b323c0` reflection-target table.
+- **`mesh+0x6c`**, the per-mesh ambient colour on `Mesh_SetBatchLighting`'s
+  second branch. Never written to by anything read here.

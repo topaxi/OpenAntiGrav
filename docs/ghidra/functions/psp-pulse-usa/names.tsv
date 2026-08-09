@@ -400,3 +400,15 @@
 0x08abf500	data	g_envmap_light_basis_angle_x	90	mesh-draw.md
 0x08abf504	data	g_envmap_light_basis_angle_y	90	mesh-draw.md
 0x08abf510	data	g_envmap_light_basis	88	mesh-draw.md
+0x0890c84c	function	Mesh_RegisterBatches	80	mesh-draw.md
+0x0890d0cc	function	Mesh_CompileGeometryPass	85	mesh-draw.md
+0x0890d3ac	function	Mesh_SetBatchLighting	82	mesh-draw.md
+0x0890e7a8	function	Mesh_CountBatchesPerList	88	mesh-draw.md
+0x0890e8b4	function	Mesh_InitBatch	82	mesh-draw.md
+0x0890e998	function	Mesh_InitFromPayload	85	mesh-draw.md
+0x0891df48	function	Gfx_AcquireBatchStateList	85	mesh-draw.md
+0x0892e8f0	function	Mesh_BuildBatchDrawCommands	88	mesh-draw.md
+0x0892eda4	function	Mesh_BuildLayerBatchSets	78	mesh-draw.md
+0x0892f35c	function	Mesh_CompileBatchSet	80	mesh-draw.md
+0x0893021c	function	Mesh_DrawBatchSet	78	mesh-draw.md
+0x08912018	function	Mesh_BuildModelDrawData	82	mesh-draw.md
