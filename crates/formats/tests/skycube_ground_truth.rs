@@ -602,6 +602,29 @@ fn the_defaults_skycube_is_a_legacy_version_four_asset() {
         !tree.iter().any(|n| n.class_id == CLASS_SKYCUBE),
         "a version-4 file cannot hold a version-6 class id"
     );
+
+    // The claim `vex::classes` rests on, checked against a file on the *Pulse*
+    // disc rather than against Pure: a version-4 file uses version-4 numbering
+    // whichever release shipped it. `0x373` here is the same `Texture` id
+    // `docs/formats/pure-status.md` measured across 156 Pure files, so the two
+    // corpora corroborate each other and neither is the only witness.
+    let table = vex::classes::for_version(4).expect("version 4 is a known table");
+    assert_eq!(table, vex::classes::V4);
+    let textures = tree
+        .iter()
+        .filter(|n| Some(n.class_id) == table.texture)
+        .count();
+    assert_eq!(
+        textures, 6,
+        "the version-4 table's Texture id does not find the six skybox faces"
+    );
+    for node in &tree {
+        assert_ne!(
+            Some(node.class_id),
+            vex::classes::V6.texture,
+            "a version-6 Texture id turned up in a version-4 file"
+        );
+    }
     // Six faces, named for what they are. This is the corroboration that the
     // class name means a literal cube rather than being a Maya-export artefact.
     let faces = tree

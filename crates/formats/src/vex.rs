@@ -60,10 +60,123 @@ pub const FILE_HEADER_LEN: usize = 16;
 /// File magic, at `+0x0c` of the header.
 pub const MAGIC: &[u8; 4] = b"VEXX";
 
+pub mod classes {
+    //! Class IDs, keyed by the file's own version word.
+    //!
+    //! # Why the version and not the title
+    //!
+    //! A class ID is a **table index, not a stable enum**: the numbering shifted
+    //! wholesale between format versions, so `0x125` means `Mesh` in a version-6
+    //! file and something else entirely in a version-4 one. Keying on which disc
+    //! a file came off would be both wrong and unnecessary, and
+    //! [ADR-0021](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md)
+    //! says why: the decoder reads the artifact and picks a table.
+    //!
+    //! **This is not a guess dressed up as a design.** The Pulse PSP disc ships
+    //! its own version-4 file - `Data\Defaults\Skycube.vex`, in an otherwise
+    //! version-6 archive - and its class IDs are the *older* numbering, not
+    //! Pulse's: `0x0ee` world, `0x373` texture, `0x378` shape, measured in
+    //! `crates/formats/tests/skycube_ground_truth.rs`. Its `0x373` is exactly
+    //! the `Texture` ID `docs/formats/pure-status.md` measured across 156 Pure
+    //! files. So a version-4 file uses version-4 numbering whichever disc it
+    //! came from, which is the whole claim this module rests on, and it was
+    //! testable before any Pure work started.
+    //!
+    //! # The older tables are deliberately incomplete
+    //!
+    //! [`V6`] is fully recovered. [`V4`] carries only what has been measured,
+    //! and [`V3`] almost nothing - a `None` here means "not recovered", never
+    //! "absent from the format", and per `CLAUDE.md`'s naming rules an
+    //! unrecovered ID gets no entry rather than a plausible one. `docs/formats/pure-status.md`
+    //! costs out what filling them in would take.
+
+    /// One format version's class-ID assignments.
+    ///
+    /// `None` means the ID has not been recovered for that version. A decoder
+    /// that needs one and finds `None` should report that it cannot read the
+    /// file, not fall back to another version's numbering: the two tables share
+    /// no values, so a fallback would silently match nothing or, worse, match
+    /// the wrong node type.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Classes {
+        /// The format version this table belongs to.
+        pub version: u32,
+        pub mesh: Option<u32>,
+        pub texture: Option<u32>,
+        pub transform: Option<u32>,
+        pub wo_track: Option<u32>,
+    }
+
+    /// The table used by every file Pulse ships except one.
+    ///
+    /// Recovered in full; see each `CLASS_*` constant's own doc comment for the
+    /// evidence behind it.
+    pub const V6: Classes = Classes {
+        version: 6,
+        mesh: Some(super::CLASS_MESH),
+        texture: Some(super::CLASS_TEXTURE),
+        transform: Some(super::CLASS_TRANSFORM),
+        wo_track: Some(super::CLASS_WO_TRACK),
+    };
+
+    /// The table Pure's 156 version-4 files use, and Pulse's one legacy
+    /// `Skycube.vex`.
+    ///
+    /// `texture` is corroborated twice and independently: `docs/formats/pure-status.md`
+    /// measured `0x373` across 156 Pure files by closing
+    /// `sum(clut_size + texel_size)` against each file's declared texture-block
+    /// length, and `skycube_ground_truth.rs` reads the same `0x373` out of a
+    /// file on the *Pulse* disc.
+    ///
+    /// `mesh`, `transform` and `wo_track` come from `pure-status.md` alone, at
+    /// confidences 92, 90 and 94.
+    pub const V4: Classes = Classes {
+        version: 4,
+        mesh: Some(0x11e),
+        texture: Some(0x373),
+        transform: Some(0x6d),
+        wo_track: Some(0x36d),
+    };
+
+    /// The table Pure's 15 version-3 files use.
+    ///
+    /// Nothing is recovered. Version 3 also **shortens the batch header** - it
+    /// carries no `alternate` pair - so a v3 file needs more than a class table
+    /// before it decodes; `docs/formats/pure-status.md` records that walk at
+    /// confidence 65.
+    pub const V3: Classes = Classes {
+        version: 3,
+        mesh: None,
+        texture: None,
+        transform: None,
+        wo_track: None,
+    };
+
+    /// The class table for a file's version word, or `None` for a version this
+    /// project has never seen.
+    ///
+    /// `None` is not a decode failure to swallow: it means the file is a format
+    /// generation nobody has looked at, and saying so is more useful than
+    /// guessing at [`V6`].
+    #[must_use]
+    pub fn for_version(version: u32) -> Option<Classes> {
+        match version {
+            6 => Some(V6),
+            4 => Some(V4),
+            3 => Some(V3),
+            _ => None,
+        }
+    }
+}
+
 /// Class ID of a `Mesh` node.
+///
+/// Version 6 only; [`classes::for_version`] is what a decoder should ask.
 pub const CLASS_MESH: u32 = 0x125;
 
 /// Class ID of a `Texture` node.
+///
+/// Version 6 only; [`classes::for_version`] is what a decoder should ask.
 pub const CLASS_TEXTURE: u32 = 0x3c1;
 
 /// Class ID of a `Floor Collision` node.
@@ -1828,6 +1941,51 @@ fn emit_vif_chunk(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_version_word_selects_a_table_and_an_unknown_one_selects_none() {
+        assert_eq!(classes::for_version(6), Some(classes::V6));
+        assert_eq!(classes::for_version(4), Some(classes::V4));
+        assert_eq!(classes::for_version(3), Some(classes::V3));
+        // Not a decode failure to swallow: a version nobody has looked at
+        // should say so rather than be read as version 6.
+        assert_eq!(classes::for_version(5), None);
+        assert_eq!(classes::for_version(7), None);
+    }
+
+    /// The two numberings share no value, which is why falling back from one to
+    /// the other would match nothing rather than mismatch loudly.
+    #[test]
+    fn the_two_recovered_tables_have_no_id_in_common() {
+        let v6 = [
+            classes::V6.mesh,
+            classes::V6.texture,
+            classes::V6.transform,
+            classes::V6.wo_track,
+        ];
+        let v4 = [
+            classes::V4.mesh,
+            classes::V4.texture,
+            classes::V4.transform,
+            classes::V4.wo_track,
+        ];
+        for id in v6.into_iter().flatten() {
+            assert!(
+                !v4.contains(&Some(id)),
+                "{id:#x} appears in both numberings"
+            );
+        }
+    }
+
+    /// The version-6 table is the `CLASS_*` constants, not a second copy of
+    /// them that can drift.
+    #[test]
+    fn the_version_6_table_is_the_documented_constants() {
+        assert_eq!(classes::V6.mesh, Some(CLASS_MESH));
+        assert_eq!(classes::V6.texture, Some(CLASS_TEXTURE));
+        assert_eq!(classes::V6.transform, Some(CLASS_TRANSFORM));
+        assert_eq!(classes::V6.wo_track, Some(CLASS_WO_TRACK));
+    }
     use super::*;
 
     /// Builds a `.vex` file from `(class_id, child_count, payload_len)` nodes,
