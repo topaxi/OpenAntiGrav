@@ -474,15 +474,61 @@ read both ways - as a multiple of the half-width for the caps, and as a
 width/height ratio for the sprite. That is a useful constraint on the search and
 it was not available before.
 
-**Still open, and now narrow**: which resource field initialises
-`particle+0x64`. It is **not** written by `ParticleSystem_InitParticle` or
-`ParticleSystem_UpdateParticles` - neither contains any store to `+0x64`
-(searched by instruction, both functions, all store forms). So it arrives either
-in a block copy at spawn or from a per-emitter cache. **The next step is to find
-the block copy in `ParticleSystem_InitParticle` and read its source offset**,
-not to keep grepping for a scalar store. A whole-program sweep for float stores
-to `+0x64` was run and every hit in the particle module belongs to a different
-struct, so the brute-force route is already exhausted - do not repeat it.
+**Closed the same day: `particle+0x64` is a hard-coded `1.0f`, not a resource
+field at all.** Confidence **88**.
+
+`ParticleSystem_InitParticleFields` (`0x088f79b4`) - the per-particle field
+initialiser, sitting immediately after `ParticleSystem_InitParticle` in the
+binary - writes it directly:
+
+```c
+particle[0x19] = 0x3f800000;      // +0x64 = 1.0f
+```
+
+It is one constant in a block of neighbours that **independently confirms the
+offset map read off the draw side**, which is what lifts this to 88 rather than
+leaving it a lone store:
+
+| Write | Offset | Meaning |
+| --- | --- | --- |
+| `particle[0x11] = resource` | `+0x44` | the resource pointer the draw path reads |
+| `particle[0x17] = RandFloatRange(0, 2*pi)` when `res+0x884 & 0x10`, else `0` | `+0x5c` | **roll** - exactly the field mode 3 takes |
+| `particle[0x18]` | `+0x60` | roll *rate*, from the `res+0x394` channel, negated on alternate particles |
+| **`particle[0x19] = 1.0f`** | **`+0x64`** | **the stretch / cap ratio / aspect** |
+| `particle[0x1a] = 1.0 / u16 at +0x70` | `+0x68` | `Gu_TexScale` u |
+| `particle[0x1b] = 1.0 / u16 at +0x72` | `+0x6c` | `Gu_TexScale` v |
+| `*(u16 *)(particle+0x70) = res+0x880 >> 16`, `+0x72 = res+0x880 & 0xffff` | | atlas columns, rows |
+
+Every one lands where the draw-side read predicted, including the
+reciprocal-of-atlas-count shape of the `Gu_TexScale` pair. The two readings were
+derived independently, from opposite ends.
+
+**So all three modes get `1.0`:** mode 7's caps extend exactly one half-width past
+each endpoint, mode 6's stretch is `1.0`, and the mode-3 sprite is **square**.
+Nothing authored feeds it - which is why the "one field, three modes" constraint
+resolved so cleanly. It is not modified later either:
+`ParticleSystem_UpdateParticles` (`0x088f635c`) contains no store to `+0x64` in
+any form.
+
+**And that means `oag_render::sparks` is already exactly right.** Its cap is
+`1.0 * half`, and its doc comment calls that a substitution for an unknown
+per-system factor. It is not a substitution - it is the recovered value. **The
+comment should be corrected; the code should not change.** That is the second
+time in this sweep that a recovered mechanism turned out to be already
+reproduced.
+
+**A trap this cost time on, recorded so it does not cost it again.** The first
+attempt concluded `+0x64` was written by neither `InitParticle` nor
+`UpdateParticles`, from an instruction search scoped by *function name*. The live
+Ghidra database has **two functions both named `ParticleSystem_InitParticle`** -
+`0x088f635c` (which the docs call `ParticleSystem_UpdateParticles`) and
+`0x088f6e6c` (the real one) - so the name resolved to the wrong body and the
+"searched both functions" claim was false. Re-run **by address** the negative does
+hold for both real bodies, and the answer was one function further on. This is
+the same duplicate-name hazard [mesh-draw.md](mesh-draw.md) records for the mesh
+module: **in these two modules, scope instruction searches by address, never by
+name.** The whole-program float-store sweep was also run; every particle-module
+hit belongs to a different struct, so that route is genuinely exhausted.
 
 ### Checked against the consumer: none of this is a code change today
 
@@ -491,11 +537,10 @@ implemented yet. `oag_render::sparks` builds **one** four-corner quad per streak
 `centre ± dir*(length/2 + half) ± perp*half`, with `u`,`v` spanning `0..1` across
 the whole thing. Against the original's eight vertices that is two differences:
 
-1. **Cap length.** Ours is `1.0 * half`; the original's is `particle+0x64 * half`.
-   The module's own doc comment already says it substitutes the size itself. But
-   **`+0x64`'s authored value is still unknown**, and `1.0` may be exactly right -
-   so there is nothing to change until the field is traced. The difference is now
-   *bounded and named* rather than vague, which is the useful part.
+1. **Cap length - resolved, and ours is correct.** `particle+0x64` is `1.0f`
+   (above), so the original's cap is `1.0 * half` and so is ours. Not a
+   substitution and not an approximation: the same value. Only the module's
+   comment needs correcting.
 2. **Where the falloff sits.** The original confines it to two fixed-size caps
    and stretches a single texture row over the body; ours spreads it over the
    entire streak. That would be a real visual difference **if we were sampling
@@ -524,6 +569,7 @@ ratio.
 | `0x08916d00` | `ParticleSystem_DrawCappedStreak` | 88 |
 | `0x08916610` | `ParticleSystem_DrawRotatedSprite` | 88 |
 | `0x0891eaec` | `Gfx_AllocDrawScratch` | 82 |
+| `0x088f79b4` | `ParticleSystem_InitParticleFields` | 88 |
 | `0x0897e030` | `cosf` | 90 |
 | `0x0897e300` | `sinf` | 90 |
 | `0x08984d14` | `__kernel_cosf` | 88 |

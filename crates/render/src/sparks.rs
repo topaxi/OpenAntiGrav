@@ -48,19 +48,18 @@
 //!   not model; both cones aim along the contact normal instead. The two
 //!   sphere emitters have no aim at all, so they are exact.
 //! - **Streak end caps**: `ParticleSystem_DrawStreak` (`0x08916820`)
-//!   extends the quad past both points by a stretch factor times the size.
-//!   **That factor is `particle+0x64`, and it is one field feeding three
-//!   draw modes** - the cap ratio in mode 7, this stretch in mode 6, and the
-//!   width/height aspect in mode 3 - so whatever authored value initialises
-//!   it has to read sensibly as both a multiple of half-width and a ratio.
-//!   Its *writer* is still untraced: it is not stored by
-//!   `ParticleSystem_InitParticle` or `ParticleSystem_UpdateParticles` (all
-//!   store forms searched in both), so it arrives by a block copy at spawn
-//!   or a per-emitter cache. A whole-program float-store sweep is already
-//!   exhausted - see `particle-system.md` before repeating one. So this
-//!   module uses the size itself, which may well be exactly right, and
-//!   which also keeps a zero-length streak drawing a size-sized glow, the
-//!   same degenerate case the original handles.
+//!   extends the quad past both points by a stretch factor times the size,
+//!   and **that factor is a hard-coded `1.0`, so this module's cap is not an
+//!   approximation - it is the recovered value.**
+//!
+//!   The factor is `particle+0x64`, written as a literal `1.0f` by
+//!   `ParticleSystem_InitParticleFields` (`0x088f79b4`) and never modified
+//!   afterwards; confidence 88. There is no resource field behind it. It is
+//!   also **one field feeding three draw modes** - the cap ratio in mode 7,
+//!   this stretch in mode 6, and the width/height aspect in mode 3 - which
+//!   is why mode 3's sprite is square. `1.0 * half` here matches the
+//!   original exactly, and it also keeps a zero-length streak drawing a
+//!   size-sized glow, the same degenerate case the original handles.
 //!
 //!   **The other half of the streak's shape is deliberately not adopted
 //!   yet.** The original's body samples a *single* texture row stretched
