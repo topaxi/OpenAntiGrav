@@ -1084,14 +1084,29 @@ impl Overlay {
 /// outside is a parser bug, and the parser is the thing under test.
 ///
 /// **PSP only, and measurably so.** The PS2 release authors the same layouts in
-/// its own 640x448 grid - `Data\XML\Arcade_HUD.xml` on `pulse-ps2-eu.chd` is
-/// the PSP file's coordinates scaled by 640/480 and 448/272 to four digits
-/// (`x` reaches 321 against 241, `y` 435 against 264, ratios 1.3320 and 1.6477),
-/// the same scaling `crate::frontend::Space`'s PS2 evidence records for
-/// `Skin.xml`. So a PS2 layout checked against [`SCREEN`] fails on nearly every
-/// widget, which would say nothing about the parser. A PS2 sweep wants
-/// `Space::PS2.size` here and has not been done; the runtime draw path is
-/// unaffected, since it takes its `screen` uniform from the source's own space.
+/// its own 640x448 grid. Checked coordinate by coordinate rather than by the
+/// extremes: `Data\XML\Arcade_HUD.xml` carries 141 coordinate values (69 `x`,
+/// 72 `y`) on both discs in the same order, and **121 of the 141 are the PSP's
+/// own value scaled by 640/480 or 448/272 and rounded to an integer**, the same
+/// scaling `crate::frontend::Space`'s PS2 evidence records for `Skin.xml`.
+///
+/// The 20 that are not divide cleanly, and neither is a counter-example:
+///
+/// - **18 are the nine `<Mode3D><Model>` placements**, every one of them at the
+///   PSP's own `x="-240" y="136"` unchanged. Those sit in an `orthographic` 3D
+///   mode rather than in the widget grid, and nothing here places them.
+/// - **2 are `TimeDiffIcon`'s** `x` (-35 against a predicted -47) and `y` (-4
+///   against -7), small negatives inside an `<Item>` - a nudge from an anchor
+///   rather than a screen position, which is the same distinction
+///   [`RUNTIME_ANCHORED`] exists for.
+///
+/// So a PS2 layout checked against [`SCREEN`] fails on nearly every widget -
+/// `y` reaches 435 - which would say nothing about the parser. **A PS2 sweep
+/// needs more than swapping in `Space::PS2.size` here**: the unscaled offsets
+/// above mean it also has to agree with the [`RUNTIME_ANCHORED`] skip about
+/// which coordinates are positions at all. Not done. The runtime draw path is
+/// unaffected either way, since it takes its `screen` uniform from the source's
+/// own space.
 #[must_use]
 pub fn inside_screen(rect: [f32; 4]) -> bool {
     rect[0] >= 0.0
