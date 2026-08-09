@@ -532,6 +532,21 @@ writers in it at the same time:
 - **A doc two parties are editing wants committing promptly**, not left dirty:
   concurrent uncommitted edits are indistinguishable from data loss to whoever
   looks second.
+- **If two sessions do run at once, the value is in their *disagreement*, not
+  their throughput - and one thing destroys it.** On 2026-08-09 two sessions
+  worked this tree simultaneously; every number in that day's four commits was
+  reproduced by whoever did **not** produce it, and each caught refuted
+  citations the other's sweep had missed, in both directions. What made that
+  work is that neither could see the other's intermediate state, so **a wrong
+  premise had to survive contact with someone who had not formed it** - which
+  is precisely what six days of single-session work could not provide. Two
+  sessions that agree on method up front and split strictly by file reproduce
+  each other's blind spots at twice the cost. So: split by *claim* and re-derive
+  each other's numbers, do not split by directory and trust the reports. And
+  note the same day's counter-example - a spawned subagent went idle four times
+  without ever producing a report, and its one decisive check had to be run by
+  hand. **Parallelism bought nothing that day; independent re-derivation bought
+  everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
 
