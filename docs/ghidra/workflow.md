@@ -155,18 +155,72 @@ in-database rename otherwise propagates into every binary corroborated from it.
   time, worked every time; only the script's tight sequential loop showed this.
   **Verify with `get_function_by_address` afterwards - do not trust the script's
   own applied/skipped/failed count.**
-- **Two live drift instances, both still unresolved.** `0x0884de5c` is
-  live-named `Body_Integrate` where `psp-pulse-usa/names.tsv` documents
-  `Body_Init` (`rigid-body.md`, confidence 85) and puts `Body_Integrate` at
-  `0x0884e230`; and `0x08811630` is live-named `Gu_Fog_q` where the same file
-  documents `Gu_TexOffset` (`texture-animation.md`, confidence 88), `Gu_Fog`
-  itself being at `0x08811748`. `bulk_fuzzy_match` surfaces the live name as its
-  source, not the documented one, which is how both were found while
-  cross-binary sweeping. Whichever address is wrong needs a project rename to
-  match its page, or a doc correction if the live name turns out right.
+- **Those "two live drift instances" were 527 of them, and the count is the
+  finding.** This bullet used to name `0x0884de5c` (`Body_Integrate` where the
+  docs say `Body_Init`) and `0x08811630` (`Gu_Fog_q` where the docs say
+  `Gu_TexOffset`) as two isolated, unresolved cases found incidentally while
+  cross-binary sweeping. Auditing the whole program on 2026-08-09 - see the
+  section below - found **527 of `psp-pulse-usa`'s 753 live names disagreeing
+  with `names.tsv`**, including `Gu_Fog` (95), `Xml_AttributeAsFloat` (95),
+  `Wad_BuildCrcTable` (95) and `Ship_UpdateCameraRigs` (82), the spine of
+  `camera.md`'s field-of-view chain, which read `Ship_UpdateSideshiftInput_q`.
+  Whole families were **permuted**: the four `HandlingXml_Parse*Camera` parsers
+  each carried a sibling's name, two slots along.
+
+  **Two isolated defects and a systematic one need different responses**, which
+  is why the count mattered more than either instance. Both named addresses are
+  now repaired, along with the other 525, by re-running `just apply-names`;
+  `names.tsv` was right throughout and needed no correction.
 - **`apply-ghidra-names.py`'s default run once silently skipped four of five
   binaries' `names.tsv`.** Fixed 2026-08-05; dry-run verified against all five
   post-fix. Explicit positional args plus `--program` still work as before.
+
+### Auditing the database against `names.tsv`: `just audit-names`
+
+**`apply-ghidra-names.py` is additive and cannot clean up after anything.** It
+writes the names the documentation has evidence for and never removes one, so a
+database accumulates names from sources that left no record - a fuzzy
+cross-application sweep, a rename made during an investigation, an experiment
+nobody undid - and those outlive the session that made them. `just apply-names`
+does not know they are there.
+
+[`scripts/audit-ghidra-names.py`](../../scripts/audit-ghidra-names.py) reads
+every named function out of a program and diffs it against that binary's
+sanctioned set (`names.tsv`, plus `data/ghidra/psp-imports.tsv` for
+`psp-pulse-usa`), reporting two kinds of disagreement:
+
+| verdict | meaning | what to do |
+| --- | --- | --- |
+| **MISMATCHED** | `names.tsv` documents that address as something else | `just apply-names` - the table is right, the database drifted |
+| **UNSANCTIONED** | no row for that address at all | judgement, see below |
+
+`psp-pulse-usa` on 2026-08-09, before and after a repair run:
+
+| | before | after |
+| --- | ---: | ---: |
+| mismatched | **527** | **0** |
+| unsanctioned | 116 | 116 |
+
+The 116 split cleanly, and the split is what makes them actionable:
+
+- **110 are duplicates** - a documented name sitting at a *second*, undocumented
+  address, so the function has both its correct name and a stale twin. Every one
+  is a live trap of the kind that cost a reading this same day, when a decompile
+  of "`Ship_UpdateStartBoost`" turned out to be a steering filter because the
+  real one is 0x338 further on.
+- **6 are undocumented recoveries**: `AmbientLight_Init`,
+  `AmbientLight_Construct`, `AmbientLight_RegisterClass`,
+  `DirectionalLight_RegisterClass`, `Mesh_ApplyMaterialLighting`, and
+  `Mesh_ApplyShinemapReflection_q_q`. The first five are the M6 authored-lighting
+  work; **they are a straight breach of the rule that a recovered name goes into
+  `names.tsv` in the same change that recovers it**, and they will vanish on the
+  next fresh import. The sixth is a `psp-pulse-eu` row (confidence 55) applied to
+  the USA program, doubly suffixed because `Row.symbol` derives the `_q` from the
+  confidence column and that row bakes one into the name as well.
+
+**Run the audit after any sweep**, and especially after anything that renames
+off fuzzy matches. The check is cheap and the alternative is discovering a
+permuted family by decompiling one of them.
 
 ### `psp-pulse-eu`'s data addresses do not share USA's base
 

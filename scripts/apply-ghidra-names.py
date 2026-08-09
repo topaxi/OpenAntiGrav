@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -203,7 +204,19 @@ def check_evidence(rows: list[Row]) -> list[str]:
             continue
         if row.address not in text:
             complaints.append(f"{row.source}: {row.address} does not appear in {row.evidence}")
-        if row.name not in text:
+        # Word-boundary rather than substring, and either spelling counts.
+        #
+        # `names.tsv` stores the **bare** name; `Row.symbol` derives the `_q`
+        # from the confidence column, so a page documenting a sub-70 name writes
+        # `Craft_Construct_q` while its row says `Craft_Construct`. Both have to
+        # satisfy this check, which is why the accepted set is `name|name_q`.
+        #
+        # The bare `in` test this replaces was too lenient in the other
+        # direction: `Sap_Insert` is satisfied by a page that only mentions
+        # `Sap_InsertPair`, so a row could keep pointing at evidence for a
+        # neighbouring function after a rename. The boundaries close that
+        # without breaking the suffix.
+        if not re.search(rf"\b{re.escape(row.name)}(_q)?\b", text):
             complaints.append(f"{row.source}: name `{row.name}` does not appear in {row.evidence}")
     return complaints
 

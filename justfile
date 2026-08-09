@@ -335,6 +335,10 @@ resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
 apply-names *ARGS: resolve-imports
     python3 scripts/apply-ghidra-names.py {{ARGS}}
 
+# Report names in the open Ghidra program that names.tsv does not sanction
+audit-names *ARGS:
+    python3 scripts/audit-ghidra-names.py {{ARGS}}
+
 # Assert no game content (or a reproduction this project itself writes) is tracked
 audit-leakage:
     python3 scripts/check-leakage.py
