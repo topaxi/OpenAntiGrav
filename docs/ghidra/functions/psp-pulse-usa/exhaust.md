@@ -1589,6 +1589,43 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   | the original | 158 | 144 | 154 | 156 | 151 | 130 | 118 | 118 |
   | ours | **201** | 165 | 153 | 148 | 143 | 130 | 109 | **92** |
 
+  > **Re-taken 2026-08-09 with the projection corrected, and the table does not
+  > survive. It is not evidence about the exhaust.** Two separate problems, and
+  > the second is fatal to the metric rather than to the numbers.
+  >
+  > **The registration was wrong and is now fixable.** At tick 62 the two frames
+  > differ by a **1.2521x** whole-frame zoom, because the original widens its
+  > fov with speed. Re-rendering with `--camera-fov 71.1663` - computed from the
+  > tick's own `0.075 * dot(fwd, vel)` - brings far scenery to **1.0093**, and
+  > two sweep steps agree to 0.07 %, so the corrected frame is soundly matched.
+  > Tick 62's yaw rate is 0.037 rad/s, well inside where this metric is
+  > reliable.
+  >
+  > **But the centre is undefined in the original's frame, and that is fatal.**
+  > The core is saturated in both frames, so "the brightest pixel" is arbitrary
+  > among ties; using the centroid of the saturated region instead exposes the
+  > real problem. Widening the analysis box walks the original's centre from
+  > `(469, 422)` to `(602, 452)` and its saturated-pixel count from 4,254 to
+  > 11,445, because **the box keeps picking up the pad's own blown-out track
+  > surface** - which this section's own closing caveat already suspected. Ours
+  > has a compact core; the original's is a large saturated field. The
+  > consequence is that the headline number's **sign flips with the box**:
+  > against the corrected render the core annulus reads **-16 %**, **+21 %** and
+  > **+9 %** for three reasonable boxes. A statistic whose sign is a free
+  > parameter is not a measurement.
+  >
+  > **So the bright-pass claim below is withdrawn as *this* table's conclusion**,
+  > and the M6 item loses this as its supporting measurement. That is not the
+  > same as the bright-pass being wrong: the original's bloom is directly
+  > visible elsewhere - crop the two frames anywhere the track is lit and the
+  > original's road surface is blown to white where ours is not. What is gone is
+  > the claim that this table measures it *on the exhaust specifically*.
+  >
+  > What would replace it: a centre that is not a brightness feature at all -
+  > the projected nozzle vertex, which both renderers agree on - and a mask that
+  > excludes the pad surface. See
+  > [projection-vs-the-original.md](../../../rendering/projection-vs-the-original.md).
+
   The original holds a **flat shoulder near 150 out to about 100 px** and only
   then falls away; ours is sharply peaked - 28 % brighter at the core and 28 %
   darker at the outer edge - and falls monotonically. That is the bright-pass
