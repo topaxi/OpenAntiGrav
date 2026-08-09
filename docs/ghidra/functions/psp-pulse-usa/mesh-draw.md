@@ -1150,3 +1150,244 @@ and `+0xb0` after `Texture_BindCausticFrame`, falling back to a live
   bodies, and the `DAT_08b323c0` reflection-target table.
 - **`mesh+0x6c`**, the per-mesh ambient colour on `Mesh_SetBatchLighting`'s
   second branch. Never written to by anything read here.
+
+## The plume's real per-batch GE state, and why five multiplier candidates all read negative
+
+**2026-08-09, confidence 90.** Found by following the previous section's open
+item. The chain from a `.vex` batch to the GE words it replays is now closed at
+instruction level with no inference left in it:
+
+```
+Mesh_InitBatch (0x0890e8b4)                 at load, once per batch
+  batch->0x2c = Gfx_AcquireBatchStateList(g_display, pass_mask, header_byte3,
+                                          mesh->0xcc, mesh->0xd0, batch->0x29)
+
+Gfx_CompileDirtyBatchStateLists (0x0891e054) per frame, over all 0x96 entries
+  if (entry->refcount && entry->dirty) {
+      Gu_Start(1, entry->0x10, 0xc0);       the 192-byte EDRAM slot Gfx_Init gave it
+      Gfx_BuildBatchStateList(g_display, entry->pass_mask, entry->header_byte3,
+                              entry->depth_lo, entry->depth_hi, entry->bias);
+      ...
+      entry->dirty = 0;
+  }
+
+Mesh_CompileGeometryPass (0x0890d0cc)        per batch, per draw
+  Gu_CallList(*(int *)(batch + 0x2c) + 0x10)
+```
+
+`Gfx_BuildBatchStateList` (`0x0891f890`) takes **exactly** the six-tuple
+`Gfx_AcquireBatchStateList` interns on, and `Gfx_CompileDirtyBatchStateLists`
+records it straight into the slot the draw path replays. It is *the* per-batch
+state setter for every batch the engine draws through
+`Mesh_CompileGeometryPass` - which, per the previous section, is every list-B
+batch including all four of the boost plume's.
+
+### Four `_q` names in this path are wrong, and three of them mattered
+
+Resolved by reading each callee to its GE command byte, the way the
+`Mesh_SetBatchDrawState` table earlier on this page was. The `0xdd` =
+`STENCILOP` anchor that table established is what fixes the neighbours.
+
+| Address | Live-DB name | Emits | Actually |
+| --- | --- | --- | --- |
+| `0x08811814` | `Gu_StencilFunc_q` | `0xdb`, `(mask<<16)\|(ref<<8)\|func` | `ATST` - **`Gu_AlphaFunc`** |
+| `0x08811850` | `Gu_StencilOp_q` | `0xde` | `ZTEST` - `Gu_DepthFunc` (already known) |
+| `0x08811874` | `Gu_BlendFunc_q` | `0xe7` | `ZWRITEDISABLE` - `Gu_DepthMask` (already known) |
+| `0x088117cc` | *unnamed* | `0xd8`, `0xd9`, `0xda` | `CTEST`/`CREF`/`CMSK` - **`Gu_ColorFunc`** |
+
+`0x08811814` is the new one and it is the load-bearing one. The GE test-function
+enum (`0` never, `1` always, `2` equal, `3` notequal, `4` less, `5` lequal,
+`6` greater, `7` gequal) and the `sceGuEnable` state enum (`0` `GU_ALPHA_TEST`,
+`3` `GU_STENCIL_TEST`, `4` `GU_BLEND`, `5` `GU_CULL_FACE`, `10` `GU_LIGHTING`,
+`11`-`14` the four lights, `0x11` `GU_COLOR_TEST`) are the standard PSP SDK
+ones; they are corroborated four times over inside these functions by
+co-occurrence - `Gu_Enable(3)` next to `Gu_StencilFunc`/`Gu_StencilOp`,
+`Gu_Enable(4)` next to `Gu_BlendFunc`, `Gu_Enable(10)` next to `Gu_Ambient` and
+`Gu_Disable(0xb..0xe)`, `Gu_Enable(0x11)` next to `Gu_ColorFunc`.
+
+### What the plume's batches actually program
+
+Evaluated for the measured `pass_mask = 0x1232`, `header_byte3 = 0x01` (both
+read off `pulse-psp-usa.chd`, all four batches, previous section):
+
+```c
+Gu_PixelMask(0);                              // every channel written
+Gu_TexWrap(0, 0);                             // pass_mask & 4, & 8 both clear: repeat/repeat
+Gu_Disable(GU_CULL_FACE);                     // pass_mask & 0x20 set: two-sided
+                                              // header_byte3 & 0x10 clear -> not the additive branch
+                                              // pass_mask & 0x700 == 0x200 -> the transparent branch
+Gu_DepthFunc(6);
+Gu_DepthMask(1);                              // depth writes off
+Gu_Enable(GU_BLEND);
+Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0x000000, 0xffffff);
+Gu_ColorFunc(GU_NOTEQUAL, 0x000000, 0xffffff);
+Gu_Enable(GU_COLOR_TEST);                     // discard fragments whose RGB is pure black
+                                              // -- the two below are OUTSIDE the 0x100/0x200/0x400
+                                              //    nest: every transparent batch gets them --
+Gu_Enable(GU_ALPHA_TEST);
+Gu_AlphaFunc(GU_GREATER, 0, 0xff);            // discard fragments whose alpha is 0
+sceGuDepthRange(mesh->0xcc + bias*6, mesh->0xd0 + bias*6);
+Fog_Disable();                                // header_byte3 & 1 set, & 8 clear
+Gu_StencilOp(0, 0, 0); Gu_Disable(GU_STENCIL_TEST);   // pass_mask & 0xc0 clear, & 0x700 set
+```
+
+### The alpha and colour tests are fill-rate optimisations, not the orange-rim mechanism
+
+**This section replaces an over-claim made earlier the same day and retracted
+within the hour.** The first version of it read the alpha test as *the* answer
+to why the plume's authored orange rim does not appear. That was wrong, and the
+measurement that kills it is below. Recorded rather than deleted because the
+wrong reading is an easy one to make again.
+
+**Scope first, because the first version got this wrong too.** `Gu_Enable(
+GU_ALPHA_TEST)` and `Gu_AlphaFunc(GU_GREATER, 0, 0xff)` sit at the end of
+`Gfx_BuildBatchStateList`'s `pass_mask & 0x700` branch, **outside** the
+`0x100`/`0x200`/`0x400` nest. They therefore apply to **every transparent batch
+in the game** - every track, every ship - not to the plume or to `0x200`
+specifically.
+
+**Why `0xdb` is `ATST`, from structure rather than from enum recall.** This is
+better evidence than the command-byte ordering and it is inside the same
+function. The opaque branch (`pass_mask & 0x700 == 0`) calls the same setter two
+ways: with `(1, 0, 0xff)` - function `1`, *always*, i.e. no test - on batches
+with `pass_mask & 0x800` **clear**, and with `(6, 0x7f, 0xff)`, `(6, 0, 0xff)`
+or `(6, 0x10, 0xff)` - function `6`, *greater*, with a per-batch reference of
+half, zero and `0x10` - on batches with `0x800` **set**. `0x800` is
+`is_alpha_tested()`'s own bit. A setter that programs an alpha *reference* on
+exactly the alpha-tested batches and *always* everywhere else is `ATST` and
+nothing else. **That also independently confirms `is_alpha_tested()`'s bit**,
+which had no operational evidence before.
+
+**And now the measurement that makes both tests visually inert here.** Dumped
+from `/tmp/shipboost.vex` (`oag-wad cat`), all four batches, vertex type
+`0x013d` = `GU_TEXTURE_8BIT | GU_COLOR_8888 | GU_NORMAL_8BIT | GU_VERTEX_16BIT`,
+stride 20, colour at `+4`:
+
+| RGBA | vertices |
+| --- | ---: |
+| `(255, 255, 255, 255)` | 63 |
+| `(255, 98, 5, 0)` | 58 |
+
+121 vertices, **exactly two colours, alpha strictly `{0, 255}`**. Under the
+recovered `GU_SRC_ALPHA` / `GU_FIX 0xffffff` blend a fragment contributes
+`src * srcAlpha`, so an alpha-zero fragment contributes **exactly zero** with or
+without the alpha test. `GU_GREATER, 0` discards precisely the fragments that
+were already contributing nothing. The colour test is inert for the same
+reason: a black fragment adds zero under an additive blend whatever its alpha.
+
+**So both tests are fill-rate optimisations - they stop the GE writing pixels
+that would not have changed the framebuffer - and neither changes the
+picture.** Implementing them would be a no-op on this content.
+
+**What actually suppresses the orange rim, then**, is the thing the project
+already does: the orange vertices are authored at **alpha 0**, and the blend is
+weighted by source alpha. The rim contributes nothing at its vertices and only
+its interpolated interior contributes at all. That mechanism was already
+correct in `oag_render::exhaust::BLEND` before this pass started. The five
+candidate multipliers on [`exhaust.md`](exhaust.md) read negative because
+**there is no multiplier and there never was** - the suppression is the authored
+alpha meeting a source-alpha blend, and it is already implemented.
+
+Any residual orange difference against a capture therefore has a **different**
+cause, and the most likely candidate is that the comparison predates the uvgen-2
+fix, which changed the plume's sampled texel from a constant white column to the
+real streak lookup. Re-measure before opening a new thread on it.
+
+### `oag_render::exhaust::BLEND` is exactly right, and is no longer a departure
+
+The recovered call is `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0x000000,
+0xffffff)` - source weighted by source alpha, destination weighted by fixed
+white, i.e. **`SrcAlpha` / `One`**. That is bit-for-bit what
+`oag_render::exhaust::BLEND` already uses.
+
+This page currently describes that choice as "a deliberate departure from this
+page ... the GE path that performs that per-fragment weight is not recovered".
+**Both halves of that sentence are now wrong in the project's favour**: the
+per-fragment weight is recovered, it is `GU_SRC_ALPHA`, and the renderer's
+existing constant matches the original rather than departing from it. The
+`GU_FIX`/`GU_FIX` reading it was compared against belongs to the `0x2000`
+batches, not to the plume.
+
+It is also identical to `ExhaustFlare_BuildDisplayList`'s own
+`Gu_BlendFunc(0,2,10,0,0xffffff)`, already decoded on
+[`exhaust.md`](exhaust.md) - so the flare and the plume share one blend
+equation, which they were never known to.
+
+### Three `pass_mask` bits decoded, inside the `0x0700` transparent class
+
+`is_transparent()`'s `0x0700` mask is confirmed operationally - it is the exact
+test `Gfx_BuildBatchStateList` branches on - and the three bits inside it are
+now separated:
+
+| Bit | Programs |
+| --- | --- |
+| `0x100` | `Gu_Enable(GU_BLEND)`, `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0)`, `Gu_Disable(GU_COLOR_TEST)` - ordinary alpha blend |
+| `0x200` | `Gu_Enable(GU_BLEND)`, `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX 0xffffff)`, `Gu_ColorFunc(GU_NOTEQUAL, 0, 0xffffff)`, `Gu_Enable(GU_COLOR_TEST)` - **additive, source-alpha weighted**; the plume's |
+| `0x400` | `Gu_Disable(GU_BLEND)` - in the transparent class but not blended |
+
+Only the blend equation and the colour test differ between the three. The
+depth-write disable, the alpha test and the stencil setup are **common to all
+of them**, emitted outside the nest.
+
+Checked in that order: `0x100` wins over `0x200`, which wins over `0x400`.
+`mesh_render::TRANSPARENT_BLEND`'s `SrcAlpha`/`OneMinusSrcAlpha` is therefore
+**correct for `0x100` batches and wrong for `0x200` ones**, which is a sharper
+statement than this page's earlier "evidence against it, in favour of the
+`GU_FIX` additive equation" - both equations are real, and the batch's own bit
+picks between them. That resolves the "whether `TRANSPARENT_BLEND` should
+change project-wide" open item into a concrete rule rather than a project-wide
+flip.
+
+`header_byte3 & 0x10` selects a separate branch entirely -
+`Gu_BlendFunc(GU_ADD, GU_FIX 0xffffff, GU_FIX 0xffffff)` when
+`header_byte3 & 2` is clear and `(GU_ADD, GU_FIX, GU_SRC_ALPHA)` when set, with
+`Gu_Disable(GU_ALPHA_TEST)`. That is the pure-additive pair the
+`Mesh_SetBatchDrawState` table describes, reached here through a different
+gate; no plume batch takes it (`header_byte3 = 0x01`).
+
+### Recommended code changes, for the agent that owns `crates/render`
+
+Described rather than made, per this pass's scope. None of this is verified
+against a live capture.
+
+1. **Make `mesh_render::TRANSPARENT_BLEND` per-batch**, keyed on
+   `pass_mask & 0x0700`: `0x100` -> `SrcAlpha`/`OneMinusSrcAlpha`, `0x200` ->
+   `SrcAlpha`/`One`, `0x400` -> no blend. This is the one with real visual
+   consequences, and it affects every track and ship, not the plume.
+2. **Keep `exhaust::BLEND` exactly as it is.** Remove the comment calling it a
+   departure; it matches the original exactly.
+3. **Disable fog on batches with `header_byte3 & 1`.**
+4. **Do not implement the alpha or colour tests** for their visual effect - the
+   section above measures them inert on this content. They are worth adding only
+   if the renderer ever wants the original's fill-rate behaviour, which it does
+   not.
+5. `is_alpha_tested()`'s `0x800` bit now has operational evidence and a
+   per-batch alpha reference behind it (`0x7f`, `0`, `0x10`); if the renderer
+   ever implements alpha-tested batches, that reference is where it comes
+   from.
+
+### Still open here
+
+- ~~**`FUN_0891e8c8`**, the last unread step in this chain.~~ - **closed
+  2026-08-09 at confidence 88, and it changes nothing.** `Gfx_ResetTexScaleAndFog`
+  (`0x0891e8c8`) is two calls in full:
+
+  ```c
+  Gu_TexScale(1.0f, 1.0f);
+  Gu_Fog_q(0, 0);
+  ```
+
+  No blend equation, no enable/disable, no test, nothing that touches fragment
+  colour or alpha. **The alpha-test result above is not overridden by it.** The
+  one thing worth flagging is that its `Gu_Fog_q(0, 0)` is recorded *after*
+  `Gfx_BuildBatchStateList`'s own `Fog_Apply`/`Fog_Disable`/`FUN_0891e9d0`
+  branch, so it is the last fog word in the list; whether that neutralises
+  `Fog_Apply` depends on whether `Gu_Fog_q` carries the enable or only the
+  range, which was not read.
+- **`FUN_0891e9d0`**, the third fog branch (`header_byte3 & 8` clear and `& 1`
+  clear).
+- Whether `entry->0x14`, set to `Gu_Finish() + 4`, is a length used anywhere
+  other than bookkeeping.
+- None of this was verified live; it is all static decompilation, though the
+  `pass_mask` and `header_byte3` values it is evaluated at are disc
+  measurements.

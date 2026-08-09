@@ -412,3 +412,7 @@
 0x0892f35c	function	Mesh_CompileBatchSet	80	mesh-draw.md
 0x0893021c	function	Mesh_DrawBatchSet	78	mesh-draw.md
 0x08912018	function	Mesh_BuildModelDrawData	82	mesh-draw.md
+0x088117cc	function	Gu_ColorFunc	92	mesh-draw.md
+0x0891e054	function	Gfx_CompileDirtyBatchStateLists	90	mesh-draw.md
+0x0891f890	function	Gfx_BuildBatchStateList	90	mesh-draw.md
+0x0891e8c8	function	Gfx_ResetTexScaleAndFog	88	mesh-draw.md
