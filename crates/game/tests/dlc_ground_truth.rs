@@ -92,10 +92,20 @@ fn cache() -> PathBuf {
 }
 
 /// Every pack under `data/dlc`, unzipped into the cache if it is still a zip.
+///
+/// **Problems are printed, not asserted on.** That directory also holds seven
+/// Wipeout Pure packs, whose payload is encrypted and is nobody's pack here,
+/// plus whatever else a maintainer has downloaded. Failing a Pulse test because
+/// an unrelated zip would not open would send someone chasing a Pulse
+/// regression that does not exist - and the production path treats exactly the
+/// same condition as skip-and-report. What these tests assert is that the four
+/// Pulse packs are found, which is a statement about what *is* there.
 fn packs() -> Option<Vec<oag_assets::dlc::Pack>> {
     let root = dlc_root()?;
     let (packs, problems) = dlc::packs(&[root], &cache());
-    assert!(problems.is_empty(), "unpacking: {problems:?}");
+    for problem in &problems {
+        println!("skipped: {problem}");
+    }
     Some(packs)
 }
 

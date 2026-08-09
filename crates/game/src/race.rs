@@ -639,7 +639,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     for pack in &archives.packs {
         report.push(format!("dlc: {}", pack.label()));
     }
-    report.extend(problems.into_iter().map(|p| format!("dlc: skipped {p}")));
+    report.extend(problems.into_iter().map(|p| format!("dlc: {p}")));
 
     let spec = archives
         .locate(&options.track)

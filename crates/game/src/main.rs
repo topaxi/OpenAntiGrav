@@ -2834,6 +2834,18 @@ impl Shell {
             .map(|(track, _)| track)
             .find(|track| track.id == id)
     }
+
+    /// Whether a stored `race.team` is one this source offers, and its id.
+    ///
+    /// The teams are already `menu::Choice`s here rather than
+    /// `catalogue::Team`s, and the value side of a choice *is* the id - see
+    /// where the shell is built.
+    fn team(&self, id: &str) -> Option<&str> {
+        self.teams
+            .iter()
+            .find(|choice| choice.value == id)
+            .map(|choice| choice.value.as_str())
+    }
 }
 
 impl Session {
@@ -3483,7 +3495,25 @@ impl Session {
                         self.settings.race.track, self.race_options.track
                     ),
                 }
-                self.race_options.team = self.settings.race.team.clone();
+                // The same shape as the circuit above, and needed for the same
+                // reason now that the roster is what this source offers rather
+                // than a fixed list: a stored team can be one only a
+                // downloadable pack carries, and a boot that did not find the
+                // pack drops it. `Menu::supply` resets the row silently when
+                // that happens, so without this check the menu would show one
+                // team and the race would attempt another - failing at the
+                // archive with a message naming a team that is not on screen.
+                match self
+                    .shell
+                    .as_ref()
+                    .and_then(|shell| shell.team(&self.settings.race.team))
+                {
+                    Some(team) => self.race_options.team = team.to_string(),
+                    None => eprintln!(
+                        "this source does not offer team {:?}, racing as {} instead",
+                        self.settings.race.team, self.race_options.team
+                    ),
+                }
                 if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {
                     self.race_options.class = class;
                 }

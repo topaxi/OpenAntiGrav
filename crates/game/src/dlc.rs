@@ -30,14 +30,11 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-
-/// The extension the packs use. Not a WAD, not a zip - see the module docs.
-const PACK_EXTENSION: &str = "edat";
-
-/// How deep [`packs`] looks for a zip below a root, matching
-/// [`oag_assets::dlc`]'s own depth so a zip and an unpacked folder are found in
-/// the same places.
-const MAX_DEPTH: usize = 2;
+// How deep to look for a zip below a root. Shared with the walker that finds
+// the unpacked result rather than spelled again here: a zip found deeper than
+// that walker reaches would be extracted and then never discovered, and the
+// player would see their pack quietly not load.
+use oag_assets::dlc::MAX_DEPTH;
 
 /// Every pack under `roots`, unpacking any zip it finds into `cache_dir` first.
 ///
@@ -49,9 +46,18 @@ const MAX_DEPTH: usize = 2;
 pub fn packs(roots: &[PathBuf], cache_dir: &Path) -> (Vec<oag_assets::dlc::Pack>, Vec<String>) {
     let mut roots = roots.to_vec();
     let mut problems = Vec::new();
+    let mut empty = Vec::new();
 
     for zip in zips(&roots) {
         match ensure_extracted(&zip, cache_dir) {
+            // A zip holding no archive is not a failure - a player's DLC folder
+            // legitimately holds zips that are nothing to do with this game,
+            // Wipeout Pure's own packs among them. Still worth saying, because
+            // "my pack did not load" and "my pack is not a pack" look identical
+            // from the menus otherwise. Gathered into one line rather than one
+            // each: seven Pure packs would otherwise print seven lines on every
+            // boot, forever, about a thing that is working correctly.
+            Ok(unpacked) if !unpacked.is_dir() => empty.push(name_of(&zip)),
             Ok(unpacked) => {
                 if !roots.contains(&unpacked) {
                     roots.push(unpacked);
@@ -61,7 +67,22 @@ pub fn packs(roots: &[PathBuf], cache_dir: &Path) -> (Vec<oag_assets::dlc::Pack>
         }
     }
 
+    if !empty.is_empty() {
+        problems.push(format!(
+            "{} zip(s) hold no WAD archive and were skipped: {}",
+            empty.len(),
+            empty.join(", ")
+        ));
+    }
+
     (oag_assets::dlc::discover(&roots), problems)
+}
+
+fn name_of(path: &Path) -> String {
+    path.file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Every zip under `roots`, sorted, so a run does not depend on `read_dir`
@@ -116,18 +137,22 @@ pub fn is_zip(path: &Path) -> bool {
     file.read_exact(&mut magic).is_ok() && magic == ZIP_MAGIC
 }
 
-/// Extract every `.edat` member of `zip` into `<cache_dir>/<zip stem>/`,
-/// returning that directory.
+/// Extract every archive member of `zip` into `<cache_dir>/<zip stem>/`,
+/// returning that directory - which does **not** exist if the zip held none.
+///
+/// A member is an archive if its first bytes read as a WAD header, exactly the
+/// test [`oag_assets::dlc`] applies on disk. Not the `.edat` extension: this
+/// project's whole DLC path promises that a renamed or repacked download still
+/// works, and gating here on a spelling would quietly break that promise one
+/// step before the code that keeps it. `PARAM.pbp` and anything else a repacker
+/// added fail the header test and are skipped rather than refused - a pack with
+/// an unexpected extra file is still a usable pack.
 ///
 /// Idempotent: a member already present at its recorded size is left alone, so
 /// the second call does no work and no writes. Size rather than a hash because
 /// the failure this actually guards against is a run interrupted partway
 /// through a write, which truncates; a member that is the right length is one
 /// the previous run finished.
-///
-/// Members that are not `.edat` - `PARAM.pbp`, and anything a repacker added -
-/// are skipped rather than refused. A pack with an unexpected extra file is
-/// still a usable pack.
 pub fn ensure_extracted(zip: &Path, cache_dir: &Path) -> Result<PathBuf> {
     let out = cache_dir.join(
         zip.file_stem()
@@ -156,15 +181,20 @@ pub fn ensure_extracted(zip: &Path, cache_dir: &Path) -> Result<PathBuf> {
         let Some(base) = name.file_name().map(std::ffi::OsString::from) else {
             continue;
         };
-        if Path::new(&base)
-            .extension()
-            .is_none_or(|e| !e.eq_ignore_ascii_case(PACK_EXTENSION))
-        {
-            continue;
-        }
 
         let target = out.join(&base);
         if std::fs::metadata(&target).is_ok_and(|m| m.len() == member.size()) {
+            written = true;
+            continue;
+        }
+
+        // The header decides, not the name. Read before creating anything, so
+        // a zip of holiday photos leaves no empty directory behind.
+        let mut header = [0u8; oag_formats::wad::HEADER_LEN];
+        use std::io::Read as _;
+        if member.read_exact(&mut header).is_err()
+            || oag_formats::wad::Directory::peek_entry_count(&header).is_err()
+        {
             continue;
         }
 
@@ -175,7 +205,14 @@ pub fn ensure_extracted(zip: &Path, cache_dir: &Path) -> Result<PathBuf> {
 
         let mut sink = std::fs::File::create(&target)
             .with_context(|| format!("creating {}", target.display()))?;
-        std::io::copy(&mut member, &mut sink).with_context(|| {
+        let mut write = || -> std::io::Result<()> {
+            use std::io::Write as _;
+            // The header was consumed by the sniff above and has to go back.
+            sink.write_all(&header)?;
+            std::io::copy(&mut member, &mut sink)?;
+            Ok(())
+        };
+        write().with_context(|| {
             format!(
                 "extracting {} from {}",
                 base.to_string_lossy(),
@@ -191,28 +228,49 @@ pub fn ensure_extracted(zip: &Path, cache_dir: &Path) -> Result<PathBuf> {
 mod tests {
     use super::{ensure_extracted, is_zip};
 
-    /// A zip holding one `.edat`, one `.pbp` and one member nested in a
-    /// title-id folder, built in memory. Nothing here is game content: the
-    /// payloads are counted bytes.
-    fn sample_zip(edat: &[u8]) -> Vec<u8> {
+    /// A one-entry WAD holding `text`, hand-authored to the layout in
+    /// `docs/formats/wad.md`. No shipped bytes appear in this repository; see
+    /// [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md).
+    fn tiny_wad(text: &[u8]) -> Vec<u8> {
+        let offset: u32 = 64;
+        let len = u32::try_from(text.len()).unwrap();
+        let mut out = Vec::new();
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&oag_formats::wad::hash_name("only").to_le_bytes());
+        out.extend_from_slice(&offset.to_le_bytes());
+        out.extend_from_slice(&len.to_le_bytes());
+        out.extend_from_slice(&len.to_le_bytes());
+        out.resize(offset as usize, 0);
+        out.extend_from_slice(text);
+        out
+    }
+
+    /// A zip shaped like a download: an archive and a `PARAM.pbp`, both under a
+    /// title-id folder, plus `members` spelled however the caller wants.
+    fn zip_of(members: &[(&str, Vec<u8>)]) -> Vec<u8> {
         use std::io::Write as _;
         let mut buffer = std::io::Cursor::new(Vec::new());
         {
             let mut writer = zip::ZipWriter::new(&mut buffer);
             let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated);
-            writer.start_file("UCES00465/PACK9.edat", options).unwrap();
-            writer.write_all(edat).unwrap();
-            writer.start_file("UCES00465/PARAM.pbp", options).unwrap();
-            writer.write_all(b"not a pack").unwrap();
+            for (name, bytes) in members {
+                writer.start_file(*name, options).unwrap();
+                writer.write_all(bytes).unwrap();
+            }
             writer.finish().unwrap();
         }
         buffer.into_inner()
     }
 
-    fn write_sample(dir: &std::path::Path, edat: &[u8]) -> std::path::PathBuf {
+    fn write_sample(dir: &std::path::Path, payload: &[u8]) -> std::path::PathBuf {
         let path = dir.join("Some Pack (Europe) (DLC).zip");
-        std::fs::write(&path, sample_zip(edat)).unwrap();
+        let bytes = zip_of(&[
+            ("UCES00465/PACK9.edat", tiny_wad(payload)),
+            ("UCES00465/PARAM.pbp", b"\0PBP not a pack".to_vec()),
+        ]);
+        std::fs::write(&path, bytes).unwrap();
         path
     }
 
@@ -238,10 +296,14 @@ mod tests {
             cache.join("Some Pack (Europe) (DLC)"),
             "the output directory is named for the zip, not for the title id inside it"
         );
-        assert_eq!(std::fs::read(out.join("PACK9.edat")).unwrap(), [1, 2, 3, 4]);
+        assert_eq!(
+            std::fs::read(out.join("PACK9.edat")).unwrap(),
+            tiny_wad(&[1, 2, 3, 4]),
+            "the member arrives whole, header included"
+        );
         assert!(
             !out.join("PARAM.pbp").exists(),
-            "PARAM.pbp is PSN packaging and nothing reads it"
+            "PARAM.pbp is PSN packaging, fails the header test, and nothing reads it"
         );
         assert!(
             !out.join("UCES00465").exists(),
@@ -291,10 +353,50 @@ mod tests {
         ensure_extracted(&zip, &cache).unwrap();
 
         assert_eq!(
-            std::fs::read(out.join("PACK9.edat")).unwrap().len(),
-            32,
+            std::fs::read(out.join("PACK9.edat")).unwrap(),
+            tiny_wad(&[9; 32]),
             "a short file is a half-written one, and must be replaced"
         );
+    }
+
+    /// The promise `oag_assets::dlc` and ADR-0021 both make, kept on this side
+    /// of the boundary too: a repacked download whose members carry another
+    /// name, or no extension at all, still unpacks.
+    #[test]
+    fn a_member_is_extracted_on_its_header_rather_than_its_name() {
+        let dir = temp_dir("renamed-member");
+        let path = dir.join("Repacked.zip");
+        std::fs::write(
+            &path,
+            zip_of(&[
+                ("PACK9.wad", tiny_wad(b"renamed")),
+                ("PACK9_UI1", tiny_wad(b"extensionless")),
+                ("readme.txt", b"not an archive".to_vec()),
+            ]),
+        )
+        .unwrap();
+
+        let out = ensure_extracted(&path, &dir.join("cache")).unwrap();
+
+        assert!(out.join("PACK9.wad").is_file());
+        assert!(out.join("PACK9_UI1").is_file());
+        assert!(
+            !out.join("readme.txt").exists(),
+            "the header is the test, and this has none"
+        );
+    }
+
+    /// A zip with nothing to mount leaves no directory behind, which is how
+    /// [`super::packs`] tells "not a pack" from "a pack that failed".
+    #[test]
+    fn a_zip_holding_no_archive_creates_nothing() {
+        let dir = temp_dir("no-archive");
+        let path = dir.join("Holiday Photos.zip");
+        std::fs::write(&path, zip_of(&[("beach.jpg", b"not an archive".to_vec())])).unwrap();
+
+        let out = ensure_extracted(&path, &dir.join("cache")).unwrap();
+
+        assert!(!out.exists(), "no members, so no directory");
     }
 
     #[test]

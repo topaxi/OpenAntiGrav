@@ -128,7 +128,7 @@ pub fn load(options: &Options) -> Result<Boot> {
             archives.packs.len()
         ));
     }
-    report.extend(problems.into_iter().map(|p| format!("dlc: skipped {p}")));
+    report.extend(problems.into_iter().map(|p| format!("dlc: {p}")));
     report.push(format!(
         "{}: {} entries",
         archives.data.label(),
@@ -687,8 +687,18 @@ fn load_tracks(
 /// Reads the roster out of [`definitions`], the same way [`load_tracks`] reads
 /// the circuits.
 ///
-/// Filtered the same way too, and for the same reason: a team whose `Ship.vex`
-/// is in no mounted archive is a row that would fail at load.
+/// Filtered the same way too, and for the same reason - but against **both**
+/// files a race needs, not just the model.
+///
+/// A pack splits the two across archives: the ship is in `PACKn.edat` and the
+/// handling stats are in `PACKn_UI1.edat`. A hand-copied or repacked pack
+/// holding only the first would pass a model-only filter, appear in the menu,
+/// and then fail at the stats read the moment it was picked. Checking both is
+/// what keeps "offered" and "raceable" the same set - the job the deleted
+/// menu.rs assertion used to do when the roster was a fixed list.
+///
+/// Both names are composed by the same functions `race::load` will call, so the
+/// filter cannot disagree with the loader about how a path is spelled.
 fn load_teams(
     archives: &mut pulse::Archives,
     documents: &[String],
@@ -696,21 +706,44 @@ fn load_teams(
 ) -> Vec<crate::catalogue::Team> {
     let declared = crate::catalogue::all_teams(documents);
     let declared_count = declared.len();
-    let teams: Vec<_> = declared
+    let mut teams: Vec<_> = declared
         .into_iter()
-        .filter(|team| {
-            archives
-                .locate(&format!(r"{}\Ship.vex", team.location))
-                .is_some()
-        })
+        .filter(|team| raceable(archives, &team.id))
         .collect();
 
     if teams.len() != declared_count {
         report.push(format!(
-            "dlc: {} declared team(s) have no ship on this source",
+            "{} declared team(s) have no ship or no handling stats on this \
+             source; a pack they belong to may be only half mounted",
             declared_count - teams.len()
         ));
     }
+
+    // A source whose plugin definition will not read is reported and not fatal
+    // - see `definitions` - but a TEAM row with nothing in it would leave the
+    // player unable to start a race at all, where the circuits row still has a
+    // default to fall back on. So the eight teams the PSP disc always ships
+    // stand in, still filtered against what is really there. This is the list
+    // the menu definition itself carried before the roster became data.
+    if teams.is_empty() {
+        teams = oag_formats::handling::TEAMS
+            .iter()
+            .filter(|id| raceable(archives, id))
+            .map(|id| crate::catalogue::Team {
+                id: (*id).to_string(),
+                location: format!(r"Data\Ships\{id}"),
+                help_text: None,
+            })
+            .collect();
+        if !teams.is_empty() {
+            report.push(format!(
+                "no team was declared; falling back to the {} shipped team(s) \
+                 this source actually carries",
+                teams.len()
+            ));
+        }
+    }
+
     report.push(format!(
         "{}: {} team(s) over {} definition(s)",
         pulse::names::GAME_PLUGIN_DEFINITION,
@@ -718,6 +751,16 @@ fn load_teams(
         documents.len()
     ));
     teams
+}
+
+/// Whether both files a race reads for a team are on this source.
+fn raceable(archives: &pulse::Archives, id: &str) -> bool {
+    archives
+        .locate(&crate::race::ship_entry_name(id, oag_race::Mode::default()))
+        .is_some()
+        && archives
+            .locate(&oag_formats::handling::entry_name(id))
+            .is_some()
 }
 
 /// The chosen language's string table.

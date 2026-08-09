@@ -45,7 +45,12 @@ use crate::Archive;
 /// Two, so that a directory holding a download's own `UCES00465/PACK3.edat`
 /// works without the player flattening it first, while a root pointed at a home
 /// directory by accident does not turn into a filesystem walk.
-const MAX_DEPTH: usize = 2;
+///
+/// **Public because it has to agree with whoever unpacks the zips.** A zip
+/// found deeper than this walker reaches would be extracted and then never
+/// discovered, and the player would see their pack quietly not load; sharing
+/// the constant is what stops the two halves drifting. `oag_game::dlc` uses it.
+pub const MAX_DEPTH: usize = 2;
 
 /// One directory's worth of downloadable content.
 #[derive(Debug)]
@@ -66,16 +71,31 @@ pub struct Pack {
 /// directory holding nothing usable are all simply "no pack here" - a player
 /// with no DLC is the common case, not an error, and a `PARAM.pbp` sitting
 /// beside the packs is not a problem to report.
+///
+/// A directory reached twice - a root that is also inside another root, or a
+/// hand-unpacked copy of a zip that is also in the cache - yields one pack, not
+/// two. Mounting the same archives twice would double the boot report's count,
+/// hold two copies of every directory for the session, and make every lookup
+/// miss scan the duplicates.
 #[must_use]
 pub fn discover(roots: &[PathBuf]) -> Vec<Pack> {
     let mut out = Vec::new();
+    let mut seen = Vec::new();
     for root in roots {
-        walk(root, 0, &mut out);
+        walk(root, 0, &mut out, &mut seen);
     }
     out
 }
 
-fn walk(dir: &Path, depth: usize, out: &mut Vec<Pack>) {
+fn walk(dir: &Path, depth: usize, out: &mut Vec<Pack>, seen: &mut Vec<PathBuf>) {
+    // Canonical, so `data/dlc` and `./data/dlc/../dlc` are one directory, and
+    // so a symlinked pack folder is not mounted beside its target.
+    let identity = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    if seen.contains(&identity) {
+        return;
+    }
+    seen.push(identity);
+
     if let Some(pack) = open_dir(dir) {
         out.push(pack);
     }
@@ -92,7 +112,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<Pack>) {
         .collect();
     children.sort();
     for child in children {
-        walk(&child, depth + 1, out);
+        walk(&child, depth + 1, out, seen);
     }
 }
 
@@ -116,16 +136,14 @@ pub fn open_dir(dir: &Path) -> Option<Pack> {
     let mut archives = Vec::new();
     let mut manifests = Vec::new();
     for file in files {
-        // `Archive::open` takes a spec string, so a path that is not UTF-8
-        // cannot be addressed. Skipped rather than lossily converted: a lossy
-        // name would open the wrong file or none, and neither is better than
-        // saying nothing.
-        let Some(spec) = file.to_str() else {
-            continue;
-        };
-        // Anything that is not a WAD is not a pack archive. This is the whole
-        // shape test - a rejected `PARAM.pbp` costs one failed header read.
-        let Ok(mut archive) = Archive::open(spec) else {
+        // `open_file` rather than `Archive::open`: a spec string would read a
+        // colon in the directory name as a disc image and refuse an
+        // extensionless file unopened, and neither has anything to do with
+        // whether this is an archive. The header is the only test.
+        //
+        // Anything that is not a WAD is not a pack archive - a rejected
+        // `PARAM.pbp` costs one failed header read.
+        let Ok(mut archive) = Archive::open_file(&file) else {
             continue;
         };
         if let Some(manifest) = read_manifest(&mut archive) {
@@ -192,6 +210,12 @@ mod tests {
 
     /// The rule that makes a renamed or repacked download work: nothing keys
     /// off the `PACK*.edat` spelling.
+    ///
+    /// **Including the two spellings a spec string cannot express.** A file
+    /// with no extension at all reads as a mistyped disc spec, and a directory
+    /// holding a colon reads as an image name - both are ordinary things to
+    /// find on a player's disk, and neither says anything about whether the
+    /// file is an archive. See [`Archive::open_file`].
     #[test]
     fn an_archive_is_recognised_whatever_it_is_called() {
         let dir = temp_dir("renamed");
@@ -200,9 +224,45 @@ mod tests {
             one_entry_wad("manifest", MANIFEST),
         )
         .unwrap();
+        std::fs::write(dir.join("PACK9"), one_entry_wad("manifest", MANIFEST)).unwrap();
 
         let pack = open_dir(&dir).expect("a pack");
-        assert_eq!(pack.manifests, vec![MANIFEST.to_string()]);
+        assert_eq!(
+            pack.archives.len(),
+            2,
+            "an extensionless archive counts too"
+        );
+    }
+
+    #[test]
+    fn a_directory_whose_name_holds_a_colon_is_not_read_as_a_disc_image() {
+        let root = temp_dir("colon");
+        let dir = root.join("Pulse: Mirage Pack");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("PACK9.edat"), one_entry_wad("manifest", MANIFEST)).unwrap();
+
+        let packs = discover(&[root]);
+        assert_eq!(packs.len(), 1, "{packs:?}");
+        assert_eq!(packs[0].manifests, vec![MANIFEST.to_string()]);
+    }
+
+    /// One directory, one pack, however many ways the walk reaches it.
+    /// Mounting the same archives twice costs memory for the session and makes
+    /// every lookup miss scan the duplicates.
+    #[test]
+    fn a_directory_reachable_from_two_roots_is_mounted_once() {
+        let root = temp_dir("duplicate");
+        let inner = root.join("Harimau");
+        std::fs::create_dir_all(&inner).unwrap();
+        std::fs::write(
+            inner.join("PACK9.edat"),
+            one_entry_wad("manifest", MANIFEST),
+        )
+        .unwrap();
+
+        let packs = discover(&[root, inner]);
+
+        assert_eq!(packs.len(), 1, "{packs:?}");
     }
 
     /// The European downloads unpack into a title-id folder. Finding them there
