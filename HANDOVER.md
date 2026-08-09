@@ -1335,6 +1335,35 @@ the past.
 
 ## Working rules that were learned expensively
 
+- **Decode, then ask "can this change a pixel?", then report - not the other way
+  round.** Three times in one session a recovered GE mechanism was reported as a
+  finding and turned out to be **inert**: the plume's alpha test
+  (`GU_GREATER, 0` discards exactly the fragments a `SrcAlpha` blend already
+  weights to zero), its colour test (an RGB-zero fragment adds nothing under an
+  additive blend - redundant *algebraically*, for any content), and the streak
+  `v` layout (a real difference, but `oag_render::sparks` binds no texture at
+  all, so adopting it would fit an approximation to the coordinate convention of
+  a sprite we never sample). **Each check was cheap** - a vertex-alpha
+  histogram, one line of algebra, a grep for a texture bind - and each would
+  have taken minutes *before* the finding was written up rather than after.
+  The general form: **recovering a GE call is not by itself an argument for
+  implementing it.** A fixed-function console programs per-fragment tests to
+  avoid paying for writes the blend would have made invisible; fill rate is the
+  scarcest resource on the part. On a reimplementation with a different fill
+  budget those are recovered-but-inert state - correct to document, wrong to
+  port, and actively harmful to port as a "fix". The failure mode is reporting
+  at the moment a mechanism *decodes* rather than at the moment it is shown to
+  *matter*.
+- **Stability against a threshold is not stability across frames, and only the
+  second one usually matters.** A craft-scale measurement was published as
+  "measured soundly at last" on the strength of a 0.3 px spread across a 2.25x
+  threshold sweep - and withdrawn when the same measurement across four ticks
+  showed a **10.4 %** spread on a quantity that must be constant. The detector
+  was locking onto a different feature set as the lighting changed. Sweep the
+  *frame*, not just the parameter, and prefer a control that could refute the
+  claim: the measurements that survived this session all had one (an exposure
+  scale on an unchanged frame, a ship-free render, a vertex dump).
+
 - **You cannot measure the original's exhaust by thresholding a screenshot, and the
   exhaust has *two* independent inputs that both have to be matched.** Two traps, one
   pass, both cost a wrong conclusion.
