@@ -439,7 +439,12 @@ pixel argument about the exhaust.
   no-cull decision is renderer-wide, and we are already *under* the original's
   extent, so removing geometry moves the wrong way.
 
-## The engine/title split (2026-08-09, stages 1-2 of 7 landed)
+## The engine/title split (2026-08-09, stages 1, 2, 3 and 5 landed)
+
+**Working handover for the unfinished stages:
+[`HANDOVER-title-split.md`](HANDOVER-title-split.md)** - the next actions, the
+traps, and the decisions not to reverse. Delete it when stages 4, 6 and 7 land;
+what follows here is the part that outlives the effort.
 
 Work in flight, on a user directive to make Pure workable in parallel with
 Pulse. Governed by [ADR-0021](docs/architecture/adr/0021-title-packages.md),
