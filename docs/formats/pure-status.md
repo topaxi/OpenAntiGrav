@@ -158,6 +158,26 @@ it covers 0.2 % of Pure's geometry, so nothing depends on it.
 
 ### Pure's model textures ship pre-swizzled
 
+> **Corrected 2026-08-09: the sentence about Pulse below is wrong.** A
+> corpus-wide sweep found bit 0 set on **88 of 5,375** `Texture` nodes on the
+> Pulse PSP pressing and **120 of 8,972** on the PS2 one, and the nodes carrying
+> it are *not* font atlases - they are ship liveries, glass, engine and
+> environment maps across EGX, Feisar, Goteki, Piranha, Triakis and Zone, plus
+> the mine, bomb and shuriken effects. See
+> `crates/formats/tests/texture_swizzle_flag_ground_truth.rs`, which measures
+> and pins the distribution.
+>
+> The consequence is the part that matters: **making `vex::textures` read
+> `+0x06` is not free for Pulse.** It changes what 88 PSP nodes decode to, and a
+> ground-truth screenshot of a circuit need not cover the one model that
+> changed, so `just test-data` would stay green over the regression. Either read
+> it gated on version word <= 4, or settle what bit 0 means first.
+>
+> What the sweep cannot say is *which* of the two claims below breaks. A
+> histogram distinguishes "the Pulse claim is wrong" from "bit 0 is not the bit
+> this claim means" not at all. Decoding one flagged Pulse texture both ways and
+> looking at the result would. That is unstarted.
+
 The `Texture` node payload has a flags byte at `+0x06` whose bit 0 means *the
 texels are already in the GE's 16-byte by 8-row block order*. On Pulse this bit
 is set only on [font atlases](fnt.md#the-texels-are-stored-already-swizzled).
@@ -167,11 +187,13 @@ textures read flags `0x61`, where Pulse's eight read `0xe4`.
 
 [`vex::textures`](../../crates/formats/src/vex.rs) reads width, height,
 `bits_per_pixel`, `mip_count`, `clut_size` and `texel_size`, and **never looks
-at `+0x06`**. On Pulse that is harmless. On Pure it would return scrambled
+at `+0x06`**. On Pulse that was thought harmless, and the correction above is
+that it is not: On Pure it would return scrambled
 texels for every model. Unswizzling by the block rule the font path already
 implements turns the ship's environment map back into a clean radial highlight,
 which is what confirms both the flag's meaning and that nothing else is wrong
-with the block. Confidence **88**.
+with the block. Confidence **88** as written; the Pulse half of it is now
+contradicted by measurement and should be read as **open**, not as 88.
 
 ## Name recovery transfers intact
 

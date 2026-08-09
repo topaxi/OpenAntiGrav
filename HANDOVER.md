@@ -481,20 +481,34 @@ Two behaviours changed, both deliberate:
   exists. It is now `Title::foreign_serials`: each title names the *others* it
   rules out. The one-directional policy is unchanged - it rules out, never in.
 
-Remaining, in order: **(3)** version-keyed class tables in `oag-formats`
-(`vex::classes::{V6, V4, V3}` and the same for `collision`/`track`/`handling`) -
-the load-bearing stage, and the one where Pure's files start decoding;
+Stage **(3)** is substantially done: `vex::classes` keys class ids on the file's
+own version word, `fog`/`pvs`/`collision`/`track` read their ids off the file,
+and `handling.rs` no longer refuses a five-rung ladder or the three attributes
+Pulse added. What is left of it: ten test call sites still spelling
+`CLASS_WO_TRACK` by hand (`track::find_node` exists for them), and the
+pre-swizzle read, which is blocked on the finding above rather than on effort.
+
+Remaining after that, in order:
 **(4)** presentation tables to `oag-pulse`, folding in `frontend::SCREEN`
 per-source; **(5)** an `oag-pure` skeleton whose acceptance test is `just view`
 drawing a Pure ship; **(6)** the physics seam **without** relocating constants;
 **(7)** docs and hygiene. The full plan, with per-stage oracles, is in the
 session plan file referenced by the commit that lands stage 3.
 
-**Stage 3 has one precondition that is easy to miss.** Pure ships model textures
-pre-swizzled, flagged at `Texture` payload `+0x06`, and `vex::textures` never
-reads that byte today. Starting to read it is a *Pulse* change if any Pulse
-texture sets the bit - verify it is zero across Pulse's corpus first, or gate
-the read on version word <= 4.
+**Stage 3's pre-swizzle precondition was checked, and it failed.** The claim was
+that `Texture` payload `+0x06` bit 0 is set only on font atlases in Pulse, so
+`vex::textures` could start reading it for free. It is set on **88 of 5,375**
+`Texture` nodes on the Pulse PSP pressing and **120 of 8,972** on the PS2 one,
+and they are ship liveries, glass, engine and environment maps, not font
+atlases. `crates/formats/tests/texture_swizzle_flag_ground_truth.rs` measures
+and pins it; [`pure-status.md`](docs/formats/pure-status.md) carries the
+correction.
+
+So **do not make `vex::textures` read `+0x06` unconditionally.** Gate it on
+version word <= 4, or settle what bit 0 means first. The open question the
+histogram cannot answer: whether the Pulse claim is wrong, or whether bit 0 is
+not the bit that claim means. Decoding one flagged Pulse texture both ways and
+looking at it would separate them; that is unstarted.
 
 **Stage 6 is deliberately half-done and must stay that way until M4 closes.**
 The physics, Zone and `START_LINE_OFFSET` constants get a seam but do not move.
