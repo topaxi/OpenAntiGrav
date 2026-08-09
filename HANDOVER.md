@@ -1009,9 +1009,34 @@ Two consequences, and they are the actionable part:
   but the capture path. **An ordinary `--screenshot` currently stores the scene
   as unencoded linear light while some elements are written in gamma**, so any
   threshold over absolute brightness is measuring two colour spaces at once.
-  ADR-0020 makes gamma authoritative and removes that; **re-run the silhouette
-  measurement after it lands, not before**, and prefer a hue- or
-  geometry-based silhouette over a luminance one even then.
+  ADR-0020 makes gamma authoritative and removes that. **It landed, the
+  silhouette measurement was retried, and it failed again for a second and
+  independent reason - so do not simply try harder at it.**
+
+  The retry used a hue silhouette with no brightness threshold at all:
+  blue-dominance normalised by the pixel's own luminance,
+  `(b - g) / luma > k` and `(b - r) / luma > k`. **The craft's blue hull is not
+  separable from the background by hue in these frames**, because the tunnel
+  and trackside geometry are blue-tinted too. The mask runs to the crop edge at
+  every `k` from `0.06` to `0.20`, and a connected-component pass seeded at the
+  craft's centre does not help: the hull is *touching* the blue background, so
+  the flood fill merges them and returns 80,000+ px with a 620 px width for a
+  craft whose lamps are 93 px apart. Both frames behave the same way, so it is
+  not a rendering difference - it is the scene.
+
+  **The method that should work next converts this from measuring two images to
+  measuring one.** We know the recorded camera pose (`pad0-boost.csv` carries
+  it per tick), our own projection, and the craft model's vertex positions. So
+  **project our wingtip-lamp vertices through the recorded camera analytically
+  and compare where they land against where the original's lamps actually
+  are.** Our side then has no threshold in it at all, and the original's side
+  is a *position* measurement on a small bright blob rather than an *extent*
+  measurement on a silhouette - far less sensitive to which pixels clear a
+  threshold, which is the exact failure mode HANDOVER already records for the
+  centroid metric. What is needed first is the lamp vertices' model-space
+  positions, findable in `Ship.vex` from their saturated-red vertex colour or
+  from a named mesh.
+
   See the `1/0.75^2` lead in the Open threads table.
   Note this 1.43 does not agree with the 1.191 that table records after the
   `0.75` landed; HANDOVER already warns the lamp-centroid metric "establishes
