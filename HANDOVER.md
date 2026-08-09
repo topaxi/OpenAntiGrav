@@ -993,7 +993,18 @@ table in the section above.
 Two consequences, and they are the actionable part:
 
 - **The craft scale stops being a cosmetic open item and becomes a blocker for
-  the comparison method.** See the `1/0.75^2` lead in the Open threads table.
+  the comparison method** - and an attempt to replace the metric on
+  2026-08-09 **did not produce one**, which is worth knowing before anyone
+  spends the afternoon again. The task was to build a non-emissive silhouette
+  measurement that is stable across brightness thresholds and linear in the
+  model scale; it did not settle, and the likeliest reason is not the metric
+  but the capture path. **An ordinary `--screenshot` currently stores the scene
+  as unencoded linear light while some elements are written in gamma**, so any
+  threshold over absolute brightness is measuring two colour spaces at once.
+  ADR-0020 makes gamma authoritative and removes that; **re-run the silhouette
+  measurement after it lands, not before**, and prefer a hue- or
+  geometry-based silhouette over a luminance one even then.
+  See the `1/0.75^2` lead in the Open threads table.
   Note this 1.43 does not agree with the 1.191 that table records after the
   `0.75` landed; HANDOVER already warns the lamp-centroid metric "establishes
   'too big' and nothing finer", and two different detectors disagreeing by that
