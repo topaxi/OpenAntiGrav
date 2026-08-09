@@ -196,10 +196,15 @@ sanctioned set (`names.tsv`, plus `data/ghidra/psp-imports.tsv` for
 
 `psp-pulse-usa` on 2026-08-09, before and after a repair run:
 
-| | before | after |
-| --- | ---: | ---: |
-| mismatched | **527** | **0** |
-| unsanctioned | 116 | 116 |
+| | before | after `just apply-names` | after `--prune` |
+| --- | ---: | ---: | ---: |
+| mismatched | **527** | **0** | 0 |
+| unsanctioned | 116 | 116 | **0** |
+
+`psp-pulse-usa` is clean as of 2026-08-09: 659 named functions, every one of them
+sanctioned. `--prune` reverts unsanctioned names to `FUN_<addr>` and deliberately
+leaves mismatched ones alone, since those have a documented name and
+`just apply-names` restores it.
 
 The 116 split cleanly, and the split is what makes them actionable:
 
@@ -208,15 +213,31 @@ The 116 split cleanly, and the split is what makes them actionable:
   is a live trap of the kind that cost a reading this same day, when a decompile
   of "`Ship_UpdateStartBoost`" turned out to be a steering filter because the
   real one is 0x338 further on.
-- **6 are undocumented recoveries**: `AmbientLight_Init`,
-  `AmbientLight_Construct`, `AmbientLight_RegisterClass`,
-  `DirectionalLight_RegisterClass`, `Mesh_ApplyMaterialLighting`, and
-  `Mesh_ApplyShinemapReflection_q_q`. The first five are the M6 authored-lighting
-  work; **they are a straight breach of the rule that a recovered name goes into
-  `names.tsv` in the same change that recovers it**, and they will vanish on the
-  next fresh import. The sixth is a `psp-pulse-eu` row (confidence 55) applied to
-  the USA program, doubly suffixed because `Row.symbol` derives the `_q` from the
-  confidence column and that row bakes one into the name as well.
+- **6 looked like undocumented recoveries and are not.** All six are
+  **`psp-pulse-eu` names sitting on `psp-pulse-usa` addresses** - the five M6
+  authored-lighting functions plus `Mesh_ApplyShinemapReflection`, every one of
+  them documented in `psp-pulse-eu/names.tsv` against
+  [lighting.md](functions/psp-pulse-eu/lighting.md), and none of them documented
+  for this binary. (The sixth also arrives doubly suffixed, because
+  `Row.symbol` derives the `_q` from the confidence column and that row bakes
+  one into the name as well.)
+
+  **The addresses are worth keeping even though the names went**, because they
+  are a free lead: each is a plausible USA counterpart of a function already
+  read on the EU binary, and `diff_functions` would settle each one cheaply.
+
+  | EU (documented) | USA address the sweep chose | confidence on EU |
+  | --- | --- | ---: |
+  | `AmbientLight_Init` `0x0892d708` | `0x0892d6f0` | 85 |
+  | `AmbientLight_Construct` `0x0892d7ec` | `0x0892d7c4` | 88 |
+  | `AmbientLight_RegisterClass` `0x0892d960` | `0x0892d944` | 90 |
+  | `DirectionalLight_RegisterClass` `0x08934fc8` | `0x08934ea0` | 90 |
+  | `Mesh_ApplyMaterialLighting` `0x0890cea8` | `0x0890cc80` | 78 |
+  | `Mesh_ApplyShinemapReflection` `0x0890d8d4` | `0x0890d828` | 55 |
+
+  A verified pair earns a `psp-pulse-usa/names.tsv` row and a USA evidence page;
+  until then the addresses are candidates, not names, which is why the database
+  no longer asserts them.
 
 **Run the audit after any sweep**, and especially after anything that renames
 off fuzzy matches. The check is cheap and the alternative is discovering a

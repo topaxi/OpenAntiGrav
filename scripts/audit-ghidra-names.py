@@ -18,13 +18,16 @@ as `Gu_DepthMask_q`. The GE state-cache wrappers are 9-22 instructions and
 structurally identical, which is exactly the shape a fuzzy matcher permutes.
 
 **The docs win.** A disagreement is a defect in the database, never in
-`names.tsv` - see `docs/ghidra/workflow.md`. This script only reports; repairing
-is `just apply-names` for the addresses that *are* documented, and a manual
-revert to `FUN_<addr>` for the rest.
+`names.tsv` - see `docs/ghidra/workflow.md`. Repair a MISMATCHED name with
+`just apply-names`, which has a documented name to restore; an UNSANCTIONED one
+has no correct name to apply, so `--prune` reverts it to `FUN_<addr>`. That is
+the honest state: it says "nobody has identified this", which is true, where a
+stale name says something false.
 
 Usage:
     scripts/audit-ghidra-names.py                     # every binary with a names.tsv
     scripts/audit-ghidra-names.py --binary psp-pulse-usa
+    scripts/audit-ghidra-names.py --binary psp-pulse-usa --prune
 """
 
 from __future__ import annotations
@@ -128,7 +131,30 @@ def named_functions(url: str, program: str) -> list[tuple[str, str]]:
     return found
 
 
-def audit(url: str, binary: str) -> int:
+def revert(url: str, program: str, addr: str) -> bool:
+    """Rename a function back to Ghidra's own `FUN_<addr>`.
+
+    Removing a name is the only repair for an unsanctioned one: `names.tsv` has
+    nothing to say about that address, so there is no correct name to apply.
+    Ghidra's generated form is the honest state - it says "nobody has
+    identified this", which is true, where the stale name says something false.
+    """
+    body = json.dumps(
+        {"program": program, "function_address": f"0x{addr}", "new_name": f"FUN_{addr}"}
+    ).encode()
+    req = urllib.request.Request(
+        f"{url}/rename_function_by_address",
+        data=body,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return "success" in r.read().decode("utf-8", "replace").lower()
+    except OSError:
+        return False
+
+
+def audit(url: str, binary: str, prune: bool = False) -> int:
     program = BINARY_PROGRAMS[binary]
     table = sanctioned(binary)
     if not table:
@@ -160,6 +186,23 @@ def audit(url: str, binary: str) -> int:
             print(f"     {addr}  `{name}`")
     if not mismatched and not unsanctioned:
         print("   clean: every live name is sanctioned by names.tsv")
+
+    if prune and unsanctioned:
+        print(f"\n   reverting {len(unsanctioned)} unsanctioned name(s) to FUN_<addr>")
+        done = sum(revert(url, program, addr) for _name, addr in unsanctioned)
+        print(f"   reverted {done}, failed {len(unsanctioned) - done}")
+        if done:
+            urllib.request.urlopen(
+                urllib.request.Request(
+                    f"{url}/save_program",
+                    data=json.dumps({"program": program}).encode(),
+                    headers={"Content-Type": "application/json"},
+                ),
+                timeout=120,
+            ).read()
+            print("   saved")
+        return 0 if done == len(unsanctioned) else 1
+
     return 1 if (mismatched or unsanctioned) else 0
 
 
@@ -167,12 +210,19 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--url", default="http://127.0.0.1:8089", help="GhidraMCP bridge URL")
     ap.add_argument("--binary", choices=sorted(BINARY_PROGRAMS), help="just this one")
+    ap.add_argument(
+        "--prune",
+        action="store_true",
+        help="revert UNSANCTIONED names to FUN_<addr>. Does not touch MISMATCHED "
+        "ones - those have a documented name and `just apply-names` restores it. "
+        "Run the plain audit first and read what it lists.",
+    )
     args = ap.parse_args()
 
     binaries = [args.binary] if args.binary else sorted(BINARY_PROGRAMS)
     worst = 0
     for binary in binaries:
-        worst = max(worst, audit(args.url, binary))
+        worst = max(worst, audit(args.url, binary, prune=args.prune))
     if worst:
         print(
             "\nThe docs win: a disagreement is a defect in the database, not in "
