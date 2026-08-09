@@ -77,6 +77,21 @@ Counts below are over all three archives, 1,229 entries, unless stated.
 | `WO Track` payload | reads | 16 nodes carry the magic; version `0x103` against Pulse's `0x105`; `encoded_len == payload length` exact on **16/16** under the documented layout, reserved block included. Reported separately, see [below](#reported-elsewhere) | 94 |
 | [Collision geometry](collision.md#the-same-format-is-in-wipeout-pure) | **breaks** | Already recorded: none of the five Pulse collision class IDs appears; three candidates decode exactly but which is which is undetermined | 90 / 45 |
 | [Front-end XML](fexml.md) | reads | 291 XML entries across the three archives. **Zero** begin `<code`, so the name shortening is a Pulse-era addition and `--expand` is correctly a no-op on Pure | 94 |
+> **Extended 2026-08-09.** Pointing the parser at Pure's real
+> `Data\Ships\Feisar\handlingstats.xml` found **two more differences than this
+> page records**, each visible only once the one before it was handled: Pure has
+> **no `<FE>` element** and **no `<pitch>` element**. Neither is listed anywhere
+> below. `<FE>` is presentation and is now optional; `<pitch>` feeds
+> `oag_physics::Pitch`, so it is left as the parser's next blocker rather than
+> made optional under ADR-0009 item 2.
+>
+> The lesson is about method, not about Pure: this page's per-layer confidences
+> were assigned from *surveys* - counting nodes, closing sizes - and a survey
+> cannot see an element that is simply not there. `crates/pure/tests/seam_ground_truth.rs`
+> pins the current blocker so it fails when someone clears it. **Enumerate
+> Pure's element set in one diff against Pulse's rather than discovering them
+> one panic at a time.**
+
 | [Handling stats](handling-stats.md) | **breaks** | Addressing and schema hold; the parser rejects the file on three counts. See [below](#handling-stats-the-schema-holds-the-parser-does-not) | 92 |
 | [Bitmap font](fnt.md) | reads | 6 fonts. Version `1` + `"FNT"`, codepoint table at `0x30`, offset table at `0x30 + 2*count`, and `atlas + 0x40 + clut_size + texel_size == file length` exact on **6/6**, with `texel_size == width * height / 2`. The atlas flag bit is set on 6/6, same as Pulse | 94 |
 | [PSP movie](pmf.md) | reads | 14 movies. `stream_offset == 0x800` and `stream_offset + stream_size == file length` exact on **14/14**; two streams each, ids `0xe0` and `0xbd`. Version string `"0012"` only, where Pulse ships both `"0012"` and `"0014"` | 94 |

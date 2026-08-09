@@ -942,8 +942,15 @@ pub struct Stats {
     pub airbrake_graphics: AirbrakeGraphics,
     /// `<Misc/>`, shared by all four classes.
     pub misc: Misc,
-    /// `<FE/>`: the ship-select bars. Presentation only.
-    pub fe: Fe,
+    /// `<FE/>`: the ship-select bars, when the file has them.
+    ///
+    /// `None` on Pure, which omits the element entirely. A fourth schema
+    /// difference, and one nothing predicted - `pure-status.md` lists the team
+    /// count, the class count and three absent attributes, but not this. It was
+    /// found by pointing the parser at a real Pure file, which is the argument
+    /// for `oag-pure` existing at all. Presentation only, so nothing in the
+    /// simulation notices its absence.
+    pub fe: Option<Fe>,
     /// The `<Class>` blocks, in ladder order, slowest first.
     ///
     /// Look one up with [`Self::class`], which matches on the rung's own name;
@@ -1017,7 +1024,10 @@ pub fn parse(expanded: &str) -> Result<Stats> {
         )?,
         airbrake_graphics: AirbrakeGraphics::from_node(child(stats, AirbrakeGraphics::ELEMENT)?)?,
         misc: Misc::from_node(child(stats, Misc::ELEMENT)?)?,
-        fe: Fe::from_node(child(stats, Fe::ELEMENT)?)?,
+        fe: match stats.children_named(Fe::ELEMENT).next() {
+            Some(node) => Some(Fe::from_node(node)?),
+            None => None,
+        },
         classes: classes(stats)?,
     })
 }
@@ -1347,7 +1357,7 @@ mod tests {
         assert_eq!(stats.external_camera_close.lookat_height, 23.0);
         assert_eq!(stats.airbrake_graphics.up_speed, 31.0);
         assert_eq!(stats.misc.weight_distribution, Some(37.0));
-        assert_eq!(stats.fe.shield, 41.0);
+        assert_eq!(stats.fe.expect("the fixture carries <FE>").shield, 41.0);
     }
 
     #[test]
@@ -1415,7 +1425,11 @@ mod tests {
             "ExternalCameraClose",
             "AirbrakeGraphics",
             "Misc",
-            "FE",
+            // `FE` is deliberately absent from this list: Pure omits the
+            // element entirely, so its absence is a schema difference rather
+            // than a defect, and `Stats::fe` is an `Option`. Every other element
+            // here is still required, which is what keeps this test meaningful
+            // rather than a formality.
             "Engine",
             "Brakes",
             "Turning",

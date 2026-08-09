@@ -37,6 +37,7 @@ GAMEPLAY_CRATES = {
     "oag-gameplay",
     "oag-physics",
     "oag-pulse",
+    "oag-pure",
     "oag-race",
     "oag-title",
 }

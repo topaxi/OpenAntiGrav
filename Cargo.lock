@@ -1733,6 +1733,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-pure"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-formats",
+ "oag-pulse",
+ "oag-title",
+]
+
+[[package]]
 name = "oag-race"
 version = "0.1.0"
 dependencies = [

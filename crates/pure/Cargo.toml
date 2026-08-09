@@ -1,0 +1,23 @@
+[package]
+name = "oag-pure"
+description = "What Wipeout Pure ships: archive names and the serials that are not it"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# A title package is tables. Deliberately thinner than `oag-pulse`: this holds
+# what `docs/formats/pure-status.md` actually measured and nothing more, and it
+# does not restate the `.vex` class sets - those are keyed by the file's own
+# version word inside `oag-formats`, per ADR-0021.
+[dependencies]
+oag-assets.workspace = true
+oag-title.workspace = true
+
+[dev-dependencies]
+oag-formats.workspace = true
+oag-pulse.workspace = true
+
+[lints]
+workspace = true

@@ -11,6 +11,7 @@ members = [
   "crates/input",
   "crates/physics",
   "crates/pulse",
+  "crates/pure",
   "crates/race",
   "crates/render",
   "crates/title",
@@ -36,6 +37,7 @@ oag-gameplay = { path = "crates/gameplay" }
 oag-input = { path = "crates/input" }
 oag-physics = { path = "crates/physics" }
 oag-pulse = { path = "crates/pulse" }
+oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }
 oag-render = { path = "crates/render" }
 oag-title = { path = "crates/title" }
