@@ -28,7 +28,7 @@ payloads themselves - is what stops `oag-view` drawing a Pure ship today.
 | `.vex` file header, node tree, mesh batches, texture block | Reads unchanged; **found by different class IDs** |
 | `WO Track` payload | Reads unchanged; **found by a different class ID** |
 | Front-end XML | Reads; the name-shortening optimisation **does not exist yet** |
-| Handling stats | Same schema and addressing; **the parser refuses the file** |
+| Handling stats | Same addressing, schema enumerated in full; **one absent element still refuses the file** |
 | Collision classes | Not located - see [collision](collision.md#the-same-format-is-in-wipeout-pure) |
 | `SBlk` sound bank | **Not present on Pure at all** |
 
@@ -77,22 +77,7 @@ Counts below are over all three archives, 1,229 entries, unless stated.
 | `WO Track` payload | reads | 16 nodes carry the magic; version `0x103` against Pulse's `0x105`; `encoded_len == payload length` exact on **16/16** under the documented layout, reserved block included. Reported separately, see [below](#reported-elsewhere) | 94 |
 | [Collision geometry](collision.md#the-same-format-is-in-wipeout-pure) | **breaks** | Already recorded: none of the five Pulse collision class IDs appears; three candidates decode exactly but which is which is undetermined | 90 / 45 |
 | [Front-end XML](fexml.md) | reads | 291 XML entries across the three archives. **Zero** begin `<code`, so the name shortening is a Pulse-era addition and `--expand` is correctly a no-op on Pure | 94 |
-> **Extended 2026-08-09.** Pointing the parser at Pure's real
-> `Data\Ships\Feisar\handlingstats.xml` found **two more differences than this
-> page records**, each visible only once the one before it was handled: Pure has
-> **no `<FE>` element** and **no `<pitch>` element**. Neither is listed anywhere
-> below. `<FE>` is presentation and is now optional; `<pitch>` feeds
-> `oag_physics::Pitch`, so it is left as the parser's next blocker rather than
-> made optional under ADR-0009 item 2.
->
-> The lesson is about method, not about Pure: this page's per-layer confidences
-> were assigned from *surveys* - counting nodes, closing sizes - and a survey
-> cannot see an element that is simply not there. `crates/pure/tests/seam_ground_truth.rs`
-> pins the current blocker so it fails when someone clears it. **Enumerate
-> Pure's element set in one diff against Pulse's rather than discovering them
-> one panic at a time.**
-
-| [Handling stats](handling-stats.md) | **breaks** | Addressing and schema hold; the parser rejects the file on three counts. See [below](#handling-stats-the-schema-holds-the-parser-does-not) | 92 |
+| [Handling stats](handling-stats.md) | **breaks** | Addressing holds and the schema is enumerated in full; one element, `<pitch>`, still stops the parser. See [below](#handling-stats-the-schema-holds-the-parser-does-not) | 94 |
 | [Bitmap font](fnt.md) | reads | 6 fonts. Version `1` + `"FNT"`, codepoint table at `0x30`, offset table at `0x30 + 2*count`, and `atlas + 0x40 + clut_size + texel_size == file length` exact on **6/6**, with `texel_size == width * height / 2`. The atlas flag bit is set on 6/6, same as Pulse | 94 |
 | [PSP movie](pmf.md) | reads | 14 movies. `stream_offset == 0x800` and `stream_offset + stream_size == file length` exact on **14/14**; two streams each, ids `0xe0` and `0xbd`. Version string `"0012"` only, where Pulse ships both `"0012"` and `"0014"` | 94 |
 | [PSP sound bank](psp-audio.md) | **absent** | No entry in any Pure archive begins `SBlk`, though the executable names `Data\Sound\*.bnk` paths. Pure's 25 RIFF entries are `WAVE_FORMAT_EXTENSIBLE`, 2 channels, 44.1 kHz | 85 |
@@ -244,24 +229,102 @@ and output path, and forking it is work for a real Pure effort, not for a probe.
 ## Handling stats: the schema holds, the parser does not
 
 `Data\Ships\<Team>\handlingstats.xml` exists on Pure at the same addresses, in
-plain (unshortened) XML, with the **same element names, the same attribute
-names and the same `<Stats team>` / `<Class name>` nesting**. Nine teams carry
-one, against Pulse's eight.
+plain (unshortened) XML, with the same element names, the same attribute names
+and the same `<Stats team>` / `<Class name>` nesting.
 
-[`oag_formats::handling::parse`](../../crates/formats/src/handling.rs) still
-refuses every one of them, on three counts:
+**Eleven ship directories carry one, against Pulse's eight** - not nine, which
+is what this section said until the roster was read off the disc rather than
+recalled. Pure's own `Data\Plugins\PI001\Definition.xml` declares eleven
+`<PI_Team>` entries and all eleven files resolve out of `Data.wad`; `FE.wad` and
+`FEData.wad` carry none of them. Eight are the racing teams, and the other three
+are `Zone`, `Medievil` and `Zone_01`, the last of which is not a team at all -
+see [below](#one-pure-file-has-no-class-blocks-at-all).
 
-| What | Why it fails |
-| --- | --- |
-| Pure has a **fifth speed class** below the four Pulse ships | `SpeedClass` is a four-variant enum over a fixed-length array, so the extra `<Class>` block raises `UnknownClass` |
-| `<Airbrake sideshift>` | Required by the parser, absent from Pure |
-| `<Misc easyshield>`, `<Misc weight_distribution>` | Required by the parser, absent from Pure |
+### The whole element diff, in one pass
 
-All three are Pulse-era **additions**, which is the useful direction: the
-handling model grew between titles rather than changing shape. Every attribute
-being required is a deliberate choice on that page - values are never defaulted
-- so this is the parser working as designed on a file it was not designed for,
-not a bug. Confidence **92**, from a direct schema diff of the two files.
+Recorded from
+[`crates/pure/tests/handling_schema_ground_truth.rs`](../../crates/pure/tests/handling_schema_ground_truth.rs),
+which walks every shipped file on both discs, folds the element and attribute
+*names* into two sets and asserts the entire symmetric difference at once. Names
+only: values stay on the player's disc, per
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md).
+
+What Pulse authors and Pure does not - **this list is complete**:
+
+| Element | Absent from Pure | Consequence |
+| --- | --- | --- |
+| `<Stats><FE speed thrust handling shield/>` | the whole element | Presentation, the ship-select bars. `Stats::fe` is an `Option` |
+| `<Class><pitch pitch_air pitch_ground pitch_damping antigrav_height_adjust/>` | the whole element | Feeds `oag_physics::Pitch`. **The live blocker** |
+| `<Class><Airbrake sideshift>` | one attribute | Optional; `oag_physics::Airbrake` already defaults it to `0.0` |
+| `<Misc easyshield>`, `<Misc weight_distribution>` | two attributes | Optional, same defaulting argument |
+
+Everything else matches exactly: the five camera elements, `<AirbrakeGraphics>`,
+and the `<Engine>`, `<Brakes>`, `<Turning>`, `<Antigrav>` and `<Physical>` blocks
+inside a `<Class>` are attribute-for-attribute identical. Pure's ladder is five
+rungs - `VECTOR` below Pulse's four - on all ten files that have a ladder at all.
+
+Every difference is a Pulse-era **addition**, which is the useful direction: the
+handling model grew between the titles rather than changing shape. Confidence
+**94**: an exact set comparison over 19 shipped files on two discs, run by a
+test rather than read by eye.
+
+### One Pure file has no `<Class>` blocks at all
+
+`Data\Ships\Zone_01\handlingstats.xml` - `<Stats team="ZoneMode">` - authors
+`<Engine>`, `<Brakes>`, `<Turning>`, `<Airbrake>`, `<Antigrav>` and `<Physical>`
+**directly on `<Stats>`**, with no speed-class ladder over them. Its `<Airbrake>`
+has no `slidegrip` and its `<Antigrav>` no `landing_rebound` or
+`rebound_jump_time`, which are exactly the attributes a per-class block carries
+and a per-team one does not.
+
+This is a difference in *shape*, and it is the one no survey of Pulse could have
+produced: there is nothing on Pulse's side to notice missing.
+
+**The decoder accepts this file and silently drops all six blocks.**
+`handling::parse` iterates `<Class>` children, finds none, and returns
+`Ok(Stats { classes: [] })` - a document with a whole parameter set in it reads
+as a document with none. That is the same shape that bit
+`collision::from_vex`, where "nothing matched" and "I could not read the file"
+became the same empty result. Nothing has yet decided
+what a classless ladder *means*, so nothing is changed here; the behaviour is
+pinned by `pures_zone_mode_file_authors_its_blocks_outside_any_class` so the
+decision has to be recorded when someone makes it. Confidence **94** on the
+observation, none offered on the interpretation.
+
+### The second file needed no work at all
+
+`Data\XML\HandlingStats.xml` - the engine-wide `<Global>` block, a different
+caller and a different file that shares the same parser - **is on Pure and
+parses today, unchanged.** Nothing predicted that either; it was simply never
+opened.
+
+Two differences, neither of which the decoder reads:
+
+| Element | Pulse | Pure |
+| --- | --- | --- |
+| `<Global><StartBoost/>` | present, 7 attributes | absent |
+| `<GlobalClass><WeaponPad>` | `refresh_time`, `elimination_refresh_time` | `refresh_time` only |
+
+Pure has no elimination mode, so both are the same Pulse-era addition as every
+difference above. Both discs author five `<GlobalClass>` blocks with `VECTOR`
+first, which is the ordering property
+[`handling::global_classes`'s skip depends on](handling-stats.md#there-are-five-globalclass-blocks-and-only-four-speed-classes).
+Confidence **94**.
+
+### Why this page could not have predicted any of it
+
+The method lesson is about surveys, not about Pure. Every per-layer confidence
+on this page came from **counting** - nodes walked, sizes closed, files
+identified - and **a count cannot see an element that is simply not there.** The
+88s and 92s were never wrong about what they measured; they could not measure
+absence.
+
+Absence needs a **comparison**, and the first four differences were found one at
+a time by a parser panicking, each visible only once the one before it had been
+handled. The set diff above is the form of the question that can answer "Pulse
+has one of these and Pure does not" in a single pass, and it turned up two more
+findings - the classless file and the global file - that no amount of pointing
+the parser at Feisar would have reached.
 
 ## Tooling defects this probe surfaced
 
@@ -310,9 +373,11 @@ Ordered by cost, from the measurements above:
 3. **Collision: unknown, and the first real research.** Three candidate classes
    decode; deciding which is floor, wall and reset needs the loader read out of
    Pure's own executable. Days, not hours.
-4. **Handling: a schema-version split.** A fifth speed class means the
-   fixed-length array is the wrong shape for a two-title parser, and three
-   attributes need to become title-conditional rather than defaulted.
+4. **Handling: hours, and the cheapest item here.** The fifth speed class and
+   the four absent attributes are already handled; `<pitch>` is one optional
+   field behind ADR-0009 item 2's gate. What is *not* costed is deciding what a
+   `<Stats>` with no `<Class>` ladder means, which is a design question rather
+   than a parser one.
 5. **Audio: a new format.** `SBlk` does not exist on Pure; whatever indexes its
    RIFF streams has not been looked at.
 

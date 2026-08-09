@@ -59,10 +59,15 @@ pub mod names {
 
     /// One team's `handlingstats.xml`.
     ///
-    /// Pure has **nine** teams to Pulse's eight, and each file carries **five**
-    /// speed classes to Pulse's four. Which nine is not recorded here: the team
-    /// list has not been read off the disc, and inventing one would be worse
-    /// than the caller passing a name it got from somewhere real.
+    /// **Eleven** ship directories carry one to Pulse's eight, and ten of the
+    /// eleven author **five** speed classes to Pulse's four. The eleventh,
+    /// `Zone_01`, authors no `<Class>` block at all.
+    ///
+    /// The roster is still not a constant here, deliberately: it is declared by
+    /// `Data\Plugins\PI001\Definition.xml` on the disc itself, so a caller that
+    /// reads it gets the list the player's own pressing ships rather than one
+    /// this crate remembered. `crates/pure/tests/handling_schema_ground_truth.rs`
+    /// does exactly that.
     #[must_use]
     pub fn handling_stats(team: &str) -> String {
         format!(r"Data\Ships\{team}\handlingstats.xml")

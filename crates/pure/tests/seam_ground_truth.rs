@@ -104,11 +104,13 @@ fn pulse_refuses_pures_disc_by_serial() {
 /// momentum of a chain of small fixes is exactly how a physics regression gets
 /// in unnoticed.
 ///
-/// There are probably more elements behind `<pitch>`. The next person should
-/// enumerate Pure's element set in one pass - diff its `<Class>` children
-/// against Pulse's - rather than discovering them one panic at a time, and
-/// write the result into `pure-status.md`, which is currently incomplete on
-/// this point in a way its confidence scores do not admit.
+/// **There are no more elements behind `<pitch>`**, and that is now a
+/// measurement rather than a hope: `handling_schema_ground_truth` walks every
+/// shipped file on both discs and asserts the entire element and attribute
+/// difference in one comparison. `<pitch>` is the last of it. The same pass
+/// found two things this one-file probe could not - a Pure file with no
+/// `<Class>` blocks at all, and the engine-wide `Data\XML\HandlingStats.xml`,
+/// which parses unchanged - both recorded in `pure-status.md`.
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd"]
 fn pures_handlingstats_is_read_up_to_its_next_schema_difference() {

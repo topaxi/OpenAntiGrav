@@ -281,17 +281,22 @@ agreeing on the name `headtilt` says nothing about what `headtilt` does.
 as a third corpus and is **deliberately not counted**: it carries
 `Data\Ships\<Team>\handlingstats.xml` at the same addresses, in plain
 (unshortened) XML, with the same element names, attribute names and
-`<Stats team>` / `<Class name>` nesting - nine teams rather than eight - but
-`oag_formats::handling::parse` refuses every one of them. Pure has a **fifth
-speed class** below the four Pulse ships, which the fixed-length array indexed
-by `SpeedClass` cannot hold, and it lacks three attributes this parser requires:
-`<Airbrake sideshift>`, `<Misc easyshield>` and `<Misc weight_distribution>`.
+`<Stats team>` / `<Class name>` nesting - **eleven** ship directories rather than
+eight - but `oag_formats::handling::parse` still refuses ten of them. Pure's
+whole element diff has since been enumerated in one pass, and every difference
+runs the same way: Pure has a **fifth speed class** below the four Pulse ships,
+and it lacks `<Class><pitch>`, `<Stats><FE>`, `<Airbrake sideshift>`,
+`<Misc easyshield>` and `<Misc weight_distribution>`. Nothing else differs.
 
-All three are Pulse-era *additions*, so the handling model grew between titles
+Every one is a Pulse-era *addition*, so the handling model grew between titles
 rather than changing shape - and the parser refusing them is the "nothing
 defaults" rule above working as designed on a file it was not designed for, not
-a bug. Confidence **92**, from a direct schema diff. Details and what a
-two-title parser would cost are in the [Pure probe](pure-status.md#handling-stats-the-schema-holds-the-parser-does-not).
+a bug. `<pitch>` is the one still outstanding, because it feeds
+`oag_physics::Pitch` and ADR-0009 item 2 gates second-title simulation work.
+Confidence **94**, from an exact set comparison over 19 shipped files run by
+`crates/pure/tests/handling_schema_ground_truth.rs`. Details, the eleventh file
+that carries no `<Class>` at all, and what a two-title parser would cost are in
+the [Pure probe](pure-status.md#handling-stats-the-schema-holds-the-parser-does-not).
 
 The tests are `#[ignore]`d and never run in CI, because they need game content.
 Run them with `just test-data`, and with `OAG_REQUIRE_GAME_DATA=1` so an absent

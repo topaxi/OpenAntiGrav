@@ -6,7 +6,7 @@ durable record is [ADR-0021](docs/architecture/adr/0021-title-packages.md),
 "engine/title split" section of [HANDOVER.md](HANDOVER.md). This file is the
 part that only matters until stages 4, 6 and 7 land.
 
-Branch: `split/title-packages`, six commits, `just` green at each.
+Branch: `split/title-packages`, seven commits, `just` green at each.
 
 ## The one rule that decides every question this raises
 
@@ -36,27 +36,38 @@ wrong on a file Pulse itself ships.
 | 2 | `oag-title`, `oag-pulse`, `oag-assets::source` taking a `&Title`; 34 call sites; two byproduct defect fixes |
 | 3 | `vex::classes` + `classes_of`; `fog`/`pvs`/`collision`/`track` read ids off the file; `handling.rs` accepts a five-rung ladder and four optional fields |
 | 5 | `oag-pure`, and three ground-truth tests proving Pure's disc opens through the same mechanism |
+| 0 | The handling element diff, enumerated in one pass against both discs |
 
 Stage 5 was taken before 4 on purpose: it unblocked the real-file evidence the
 handling change was missing.
 
+### What item 0 found, since it changes what is left
+
+`crates/pure/tests/handling_schema_ground_truth.rs` walks every shipped
+`handlingstats.xml` on both discs, folds element and attribute *names* into two
+sets and asserts the whole symmetric difference at once. Written up in
+[`pure-status.md`](docs/formats/pure-status.md#handling-stats-the-schema-holds-the-parser-does-not).
+
+- **`<pitch>` is the last one.** Nothing else is absent from Pure. The chain of
+  one-at-a-time discoveries is closed.
+- **Eleven ship directories, not nine.** Read off Pure's own `Definition.xml`
+  rather than recalled; `FE.wad` and `FEData.wad` carry none of them.
+- **`Data\Ships\Zone_01\handlingstats.xml` has no `<Class>` blocks at all** -
+  six parameter blocks sit directly on `<Stats team="ZoneMode">`. **The decoder
+  accepts it and silently drops all six**, the same collapse-two-failures shape
+  as `collision::from_vex`. Deliberately unchanged: what a classless ladder
+  means is a design question, and the behaviour is pinned by a test so whoever
+  decides has to say so.
+- **`Data\XML\HandlingStats.xml` is on Pure and parses unchanged.** Nobody had
+  opened it. Pulse-only: `<StartBoost>` and `WeaponPad elimination_refresh_time`,
+  neither of which the decoder reads.
+
+One thing item 0 noticed and did not act on: `oag_formats::handling::TEAMS` and
+`entry_name` are **Pulse's roster living in the format crate**, which the rule
+table above puts in a title package. Not moved, because `handling_ground_truth`
+and the miner both consume it and that is stage-4-shaped work, not survey work.
+
 ## Left to do
-
-### 0. Enumerate Pure's `handlingstats.xml` element set — do this first
-
-**Cheapest task here and it prevents the most waste.** Pointing the parser at
-Pure's real file found schema differences *one at a time*, each visible only
-after the previous was fixed: five rungs, three absent attributes, no `<FE>`,
-no `<pitch>`. There are probably more behind `<pitch>`.
-
-Diff Pure's `<Stats>` and `<Class>` children against Pulse's in one pass and
-write the result into [`pure-status.md`](docs/formats/pure-status.md). Do not
-discover them one panic at a time.
-
-The method lesson, already recorded on that page: its per-layer confidences came
-from **surveys** - counting nodes, closing sizes - and **a survey cannot see an
-element that is simply not there.** The 88s and 92s were never wrong about what
-they measured; they could not measure absence.
 
 ### 1. Stage 4 - presentation tables to `oag-pulse`
 

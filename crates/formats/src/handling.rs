@@ -838,9 +838,10 @@ impl Physical {
 
 /// Pitch response. `<pitch pitch_air pitch_ground pitch_damping antigrav_height_adjust/>`.
 ///
-/// The element name is lower case in the document where every sibling is
-/// capitalised. Element lookup is case-insensitive, so that costs nothing, but it
-/// is worth knowing before searching an expanded file for `<Pitch`.
+/// The element name is lower case on PSP, where every sibling is capitalised -
+/// and capitalised on PS2, which is the only element the two releases spell
+/// differently. Element lookup is case-insensitive, so that costs nothing, but it
+/// is worth knowing before searching an expanded file for one spelling.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Pitch {
     /// Pitch authority while airborne.
