@@ -992,8 +992,9 @@ outward and would inflate the low thresholds while leaving the core alone. So
 **The most likely explanation is the instrument.** Our craft renders too large
 at the original's own recorded camera pose. **The `1.43x` this paragraph
 originally reported is withdrawn** - it came from the *inner* wing-marker pair
-rather than the wingtips; the sound figure is **1.30x**, and the whole
-measurement is in "The craft render scale, measured soundly at last" below.
+rather than the wingtips. **No sound figure exists yet** - see "The craft render
+scale: our side is settled, the original's is not" below, where a `1.30x`
+replacement was also withdrawn after a cross-tick check. The range is `1.18`-`1.30`.
 Normalising by craft span assumes the scene
 scales uniformly, and it does not for geometry extending *toward* the camera,
 which is exactly what an exhaust ribbon is. **Every matched-pose pixel
@@ -1091,26 +1092,87 @@ That is the next thing to measure, and the trace harness makes it cheap: the
 capture records `half_size` per tick, so a matched-pose render can be compared
 against a frame whose flare size is *known* rather than inferred.
 
-## The craft render scale, measured soundly at last: 1.30x, and it is `0.75` twice (2026-08-09)
+## The craft render scale: our side is settled, the original's is not (2026-08-09)
 
-**The original scales the craft mesh by `0.75` twice and we scale it once.** The
-`1/0.75^2` lead in the Open threads table is confirmed to within 2.6 %, and this
-is the first measurement of this quantity that survives its own soundness
-checks.
+**A previous revision of this section claimed `1.30x`, "measured soundly at
+last", and confirmed `0.75^2` to 2.6 %. That claim is withdrawn.** It rested on
+one tick. Repeating the same measurement across ticks - the cross-tick soundness
+check that should have come first - gives:
 
-| quantity | value |
-| --- | ---: |
-| ours, by exact vertex projection | 195.0 px |
-| the original, measured | 150.1 px |
-| on-screen ratio | **1.2991** |
-| we apply (`ship_model_matrix`) | 0.75 |
-| so the original's effective scale | **0.5773** |
-| `0.75^2` | 0.5625 (**+2.6 %**) |
-| `0.75` once | 0.75 (-23.0 %) |
+| tick | ours (projected) | the original | ratio |
+| ---: | ---: | ---: | ---: |
+| 12 | 195.4 | 166.2 | 1.176 |
+| 20 | 194.9 | 164.7 | 1.183 |
+| 28 | 194.7 | 160.8 | 1.211 |
+| 62 | 195.0 | 150.2 | **1.298** |
 
-**Why this one is trustworthy where four attempts were not.** Both sides are now
-threshold-free or threshold-stable, and each was validated before any number was
-read off it:
+**10.4 % spread across ticks**, on a quantity that must be constant: ours is
+constant to 0.4 % over the same ticks, and the craft is rigid. The `1.30` was
+the outlier and it was the tick I happened to measure. **`0.75^2` is neither
+confirmed nor refuted** - `1/0.75` is `1.333` and the range is `1.18`-`1.30`,
+which excludes nothing useful.
+
+The failure is on the original's side and it is the fifth distinct one in this
+thread: a red-dominance detector finds a different feature set as the frame's
+lighting changes (group counts run 5, 5, 6, 7 across those ticks; three other
+ticks return no usable pair at all), so the *pair* it locks onto is not the same
+pair each time. Threshold-stability was verified and held at 0.3 px - but
+stability against **threshold** is not stability across **frames**, and only the
+second one matters here.
+
+### What is settled, and it is half the problem
+
+**Our side is proven three ways and is not in doubt: 195 px at 960x544.**
+
+| tick | projected wingtip separation | exact silhouette width | agreement |
+| ---: | ---: | ---: | ---: |
+| 12 | 195.4 | 195 | 100.2 % |
+| 20 | 194.9 | 195 | 99.9 % |
+| 24 | 194.7 | 195 | 99.9 % |
+| 28 | 194.7 | 194 | 100.4 % |
+
+An analytic vertex projection and a **threshold-free** pixel difference against
+a ship-free render of the same pose, agreeing to 0.1-0.4 % across four ticks.
+Neither involves a brightness threshold or a hue rule.
+
+**And one control did pass, which is worth keeping**: the red pair's *midpoint*
+sits at `478.5`-`479.9` at every tick that yields one, against a projected craft
+centre of `478.7`. So those features are borne by the craft and not trackside
+lighting - the separation is unreliable, the centring is not.
+
+### The five failures, and the one route left
+
+Every attempt has died on the **original's** side, each for a different reason,
+and naming them is the useful part:
+
+1. **Lamp centroids** - brightness-sensitive, and non-linear in the very
+   quantity being measured (`1.740`/`1.191`/`1.067` at model scales
+   `1.0`/`0.75`/`0.5625`).
+2. **Hue silhouette** - the craft's blue hull is not separable from
+   blue-tinted tunnel geometry; every threshold runs to the crop edge and a
+   connected-component pass merges hull with background.
+3. **Saturation** - at boost ticks the wingtip region is clipped to white in
+   both frames.
+4. **Photometric indistinctness** - at pre-boost ticks the wingtips are
+   geometry rather than lamps, so a luma profile finds trackside lighting
+   instead. Caught by a control: the same outer runs appear in *our* frame with
+   the ship removed entirely.
+5. **Frame-to-frame feature drift** - the red-dominance detector above.
+
+**The one route not yet tried is a red-hulled team**, and it now has a clear
+rationale rather than being a guess. Our side needs no hue rule at all - the
+ship-free difference gives an exact silhouette on any hull colour. **Only the
+original's side needs the craft separable from the track**, and that is exactly
+what an `AG_Systems` or `Piranha` hull on a blue-tinted circuit buys. The
+earlier caution that a red hull would swallow the red lamps does not bite,
+because the measurement is no longer lamps - it is silhouette width.
+
+**That needs a new emulator capture**: the same pad approach on a red-hulled
+team, `psp-trace.py --camera`, screenshots every two ticks, at a **pre-boost**
+tick. Verify from a render that the team really is red-hulled before spending
+the emulator time.
+
+**Why this one is trustworthy on our side, where four attempts were not:**
 
 - **Our side has no threshold at all.** `Ship.vex`'s `glowingShape` node has an
   exactly symmetric outermost vertex pair at `x = +/-2.7425, y = -1.0334,
