@@ -3914,12 +3914,7 @@ impl Scene {
                     anisotropy,
                     sample_count,
                     scene_depth,
-                    // TEMPORARY measurement gate - remove before committing.
-                    if std::env::var_os("OAG_ONE_ONE").is_some() {
-                        exhaust::TRAIL_BLEND
-                    } else {
-                        exhaust::BLEND
-                    },
+                    exhaust::BLEND,
                 )
             })
             .transpose()?;
@@ -4082,14 +4077,10 @@ impl Scene {
         // for the stale buffer contents to affect either way.
         if let Some(boost) = &self.boost
             && race.exhaust().plume_visible()
-            && std::env::var_os("OAG_NO_PLUME").is_none()
         {
             let model = race.ship_model_matrix();
             boost.write(queue, view_projection, model, 0.0);
-            // TEMPORARY measurement gate - remove before committing.
-            if std::env::var_os("OAG_NO_TEXGEN").is_none() {
-                boost.generate_env_uvs(queue, model);
-            }
+            boost.generate_env_uvs(queue, model);
         }
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
@@ -4214,7 +4205,6 @@ impl Scene {
         // the flare below.
         if let Some(boost) = &self.boost
             && race.exhaust().plume_visible()
-            && std::env::var_os("OAG_NO_PLUME").is_none()
         {
             stats.add(boost.draw(&mut pass, None, None, None));
         }
