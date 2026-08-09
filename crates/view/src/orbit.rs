@@ -122,9 +122,9 @@ struct Session {
     depth_view: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
     alpha_test_pipeline: wgpu::RenderPipeline,
-    blend_pipeline: wgpu::RenderPipeline,
-    additive_pipeline: wgpu::RenderPipeline,
-    unblended_pipeline: wgpu::RenderPipeline,
+    blend_pipeline: [wgpu::RenderPipeline; 2],
+    additive_pipeline: [wgpu::RenderPipeline; 2],
+    unblended_pipeline: [wgpu::RenderPipeline; 2],
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
@@ -391,17 +391,19 @@ impl Session {
                 // for - see `oag_formats::vex::Batch::blend_class`. The viewer
                 // selects per draw call exactly as the game does, because it
                 // is only useful as a reference if it renders the same way.
-                let mut current: Option<Option<oag_formats::vex::BlendClass>> = None;
+                let mut current: Option<(Option<oag_formats::vex::BlendClass>, bool)> = None;
                 for draw in &self.model.transparent_draws {
-                    if current != Some(draw.blend) {
-                        pass.set_pipeline(match draw.blend {
+                    let key = (draw.blend, draw.culled);
+                    if current != Some(key) {
+                        let set = match draw.blend {
                             Some(oag_formats::vex::BlendClass::Additive) => &self.additive_pipeline,
                             Some(oag_formats::vex::BlendClass::None) => &self.unblended_pipeline,
                             Some(oag_formats::vex::BlendClass::AlphaOver) | None => {
                                 &self.blend_pipeline
                             }
-                        });
-                        current = Some(draw.blend);
+                        };
+                        pass.set_pipeline(&set[usize::from(draw.culled)]);
+                        current = Some(key);
                     }
                     let slot = draw.texture.map_or(0, |t| t + 1);
                     pass.set_bind_group(

@@ -132,6 +132,53 @@ fn shipped_content_mixes_the_transparent_blend_classes() {
     }
 }
 
+/// The original culls most of its geometry, and this crate culled none of it
+/// until the blend classes were split. Pinned here because the *transparent*
+/// numbers are the ones that carry a visual difference: a culled transparent
+/// batch drawn two-sided is blended twice, and on `01_Track` that is 119 of
+/// its 142 transparent batches.
+///
+/// Opaque culling is deliberately **not** applied - the depth test already
+/// hides those back faces, and culling the opaque pipeline at four camera
+/// poses moved 19 to 129 pixels of a 522,240-pixel frame. It is a fill-rate
+/// win with no measured visual effect, and this project has no fill-rate
+/// problem.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn most_batches_are_culled_but_not_all_of_them() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives =
+        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+
+    for name in [
+        r"Data\Environments\01_Track\track.vex",
+        r"Data\Environments\16_Track\track.vex",
+    ] {
+        let blob = archives.read_name(name).expect("reading");
+        let model = mesh::build_with_textures(name, &blob, None, mesh::Lod::Both).expect("decode");
+        let culled = model.transparent_draws.iter().filter(|d| d.culled).count();
+        let two_sided = model.transparent_draws.len() - culled;
+        println!("{name}: {culled} culled / {two_sided} two-sided transparent draw(s)");
+        assert!(
+            culled > 0 && two_sided > 0,
+            "{name}: {culled} culled and {two_sided} two-sided - a circuit that does not mix \
+             them means the per-batch cull selection is doing nothing here"
+        );
+    }
+
+    // The plume is the counterexample that makes this per-batch rather than a
+    // global setting: every one of its batches is two-sided.
+    let name = r"Data\Ships\Assegai\shipboost.vex";
+    let blob = archives.read_name(name).expect("reading");
+    let model = mesh::build_with_textures(name, &blob, None, mesh::Lod::Both).expect("decode");
+    assert!(
+        model.transparent_draws.iter().all(|d| !d.culled),
+        "{name}: the boost plume is two-sided in the original; culling it would halve it"
+    );
+}
+
 /// `BlendClass::None` (`pass_mask & 0x400`) is implemented from the decode and
 /// no shipped model checked here uses it. Asserted rather than assumed so that
 /// the day one appears, this fails and someone looks at it instead of trusting

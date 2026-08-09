@@ -370,15 +370,17 @@ pub fn capture_from(
             // splits three ways and a single model mixes them. Grouping the
             // draws by class first would reorder them, and transparent draws
             // are order-dependent by definition.
-            let mut current: Option<Option<vex::BlendClass>> = None;
+            let mut current: Option<(Option<vex::BlendClass>, bool)> = None;
             for draw in &model.transparent_draws {
-                if current != Some(draw.blend) {
-                    pass.set_pipeline(match draw.blend {
+                let key = (draw.blend, draw.culled);
+                if current != Some(key) {
+                    let set = match draw.blend {
                         Some(vex::BlendClass::Additive) => &additive_pipeline,
                         Some(vex::BlendClass::None) => &unblended_pipeline,
                         Some(vex::BlendClass::AlphaOver) | None => &blend_pipeline,
-                    });
-                    current = Some(draw.blend);
+                    };
+                    pass.set_pipeline(&set[usize::from(draw.culled)]);
+                    current = Some(key);
                 }
                 let slot = draw.texture.map_or(0, |t| t + 1);
                 pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
@@ -581,18 +583,20 @@ pub struct Built {
     /// [`Model::transparent_draws`] last, as a third `set_pipeline` in the
     /// same render pass - see [`crate::exhaust::Pipeline`] for the precedent
     /// of pairing an opaque and a blended pipeline this way.
-    pub blend_pipeline: wgpu::RenderPipeline,
+    ///
+    /// Indexed by `culled as usize`: `[0]` two-sided, `[1]` back-face culled.
+    pub blend_pipeline: [wgpu::RenderPipeline; 2],
     /// Blended pass for [`vex::BlendClass::Additive`] batches
     /// (`pass_mask & 0x200`): [`ADDITIVE_BLEND`], depth write off.
     ///
     /// A second blended pipeline rather than a second pass: the three classes
     /// interleave freely within one model's `transparent_draws`, so they are
     /// selected per draw call by [`Model`]'s own `DrawCall::blend`.
-    pub additive_pipeline: wgpu::RenderPipeline,
+    pub additive_pipeline: [wgpu::RenderPipeline; 2],
     /// Blended pass for [`vex::BlendClass::None`] batches
     /// (`pass_mask & 0x400`): sorted with the transparent list, drawn with
     /// blending **off**, depth write still off.
-    pub unblended_pipeline: wgpu::RenderPipeline,
+    pub unblended_pipeline: [wgpu::RenderPipeline; 2],
     pub bind_group: wgpu::BindGroup,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -849,7 +853,20 @@ pub fn build(
     // `Model`'s `DrawCall::blend`. `blend_pipeline` keeps the caller's own
     // `blend` argument so an override still works; the other two are the
     // recovered equations and take no argument.
-    let make_blend_pipeline = |label: &str, blend: Option<wgpu::BlendState>| {
+    // **Cull mode is a per-batch property, so every pipeline exists twice.**
+    // The original culls most of its geometry - measured 1,632 of 1,734
+    // batches on `01_Track` - but not all of it, and `shipboost.vex` culls
+    // none of its four. It matters most on transparent batches, where a back
+    // face is not hidden by the depth test but blended a second time. See
+    // `mesh::DrawCall::culled`.
+    //
+    // Front faces are counter-clockwise, which is wgpu's default and is
+    // **measured rather than assumed**: culling back faces at four camera
+    // poses changes 19 to 129 pixels of a 522,240-pixel frame against not
+    // culling, while culling front faces changes 2,666 - and the pixels that
+    // do change are back-facing slivers that were wrongly visible. That is
+    // the check the old blanket `cull_mode: None` asked for and never got.
+    let make_pipeline = |label: &str, blend: Option<wgpu::BlendState>, cull: bool| {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(label),
             layout: Some(&pipeline_layout),
@@ -877,7 +894,7 @@ pub fn build(
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
-                cull_mode: None,
+                cull_mode: cull.then_some(wgpu::Face::Back),
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -895,9 +912,22 @@ pub fn build(
             cache: None,
         })
     };
-    let blend_pipeline = make_blend_pipeline("mesh blend (alpha over)", Some(blend));
-    let additive_pipeline = make_blend_pipeline("mesh blend (additive)", Some(ADDITIVE_BLEND));
-    let unblended_pipeline = make_blend_pipeline("mesh blend (none)", None);
+    let blend_pipeline = [
+        make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false),
+        make_pipeline("mesh blend (alpha over, culled)", Some(blend), true),
+    ];
+    let additive_pipeline = [
+        make_pipeline(
+            "mesh blend (additive, two-sided)",
+            Some(ADDITIVE_BLEND),
+            false,
+        ),
+        make_pipeline("mesh blend (additive, culled)", Some(ADDITIVE_BLEND), true),
+    ];
+    let unblended_pipeline = [
+        make_pipeline("mesh blend (none, two-sided)", None, false),
+        make_pipeline("mesh blend (none, culled)", None, true),
+    ];
 
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertices"),

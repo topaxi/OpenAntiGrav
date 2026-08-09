@@ -3329,12 +3329,12 @@ struct Drawable {
     model: Model,
     pipeline: wgpu::RenderPipeline,
     alpha_test_pipeline: wgpu::RenderPipeline,
-    blend_pipeline: wgpu::RenderPipeline,
+    blend_pipeline: [wgpu::RenderPipeline; 2],
     /// The other two recovered transparent blend classes. Selected per draw
     /// call, because a single model mixes them - see
     /// `oag_formats::vex::Batch::blend_class`.
-    additive_pipeline: wgpu::RenderPipeline,
-    unblended_pipeline: wgpu::RenderPipeline,
+    additive_pipeline: [wgpu::RenderPipeline; 2],
+    unblended_pipeline: [wgpu::RenderPipeline; 2],
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,
@@ -3592,19 +3592,21 @@ impl Drawable {
         // Switched only when the class changes rather than grouped by class
         // first: transparent draws are order-dependent by definition, and
         // sorting them to save `set_pipeline` calls would reorder the picture.
-        let mut current: Option<Option<oag_formats::vex::BlendClass>> = None;
+        let mut current: Option<(Option<oag_formats::vex::BlendClass>, bool)> = None;
         for (index, draw) in self.model.transparent_draws.iter().enumerate() {
             if !visible(draw, DrawSections::at(transparent, index), set, frustum) {
                 stats.draws_culled += 1;
                 continue;
             }
-            if current != Some(draw.blend) {
-                pass.set_pipeline(match draw.blend {
+            let key = (draw.blend, draw.culled);
+            if current != Some(key) {
+                let set = match draw.blend {
                     Some(oag_formats::vex::BlendClass::Additive) => &self.additive_pipeline,
                     Some(oag_formats::vex::BlendClass::None) => &self.unblended_pipeline,
                     Some(oag_formats::vex::BlendClass::AlphaOver) | None => &self.blend_pipeline,
-                });
-                current = Some(draw.blend);
+                };
+                pass.set_pipeline(&set[usize::from(draw.culled)]);
+                current = Some(key);
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;

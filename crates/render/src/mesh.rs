@@ -59,6 +59,18 @@ pub struct DrawCall {
     /// culling - not the whole model's, which would defeat the point on a
     /// track where one `Model` is the entire circuit.
     pub bounds: Bounds,
+    /// Whether this batch is drawn single-sided, from its own `pass_mask`.
+    ///
+    /// **The original culls most of its geometry and this crate culled none of
+    /// it.** Measured on the PSP disc: `01_Track` has 1,632 of 1,734 batches
+    /// culled, `16_Track` 1,613 of 2,079, and `Assegai\Ship.vex` 12 of 14 -
+    /// but `shipboost.vex` culls none of its four, so it is genuinely per
+    /// batch and not a global setting. It matters most on **transparent**
+    /// batches, where a back face is not hidden by the depth test but blended
+    /// a second time: 119 of `01_Track`'s 142 transparent batches are
+    /// single-sided in the original, so drawing them two-sided doubles their
+    /// contribution. See [`oag_formats::vex::Batch::is_culled`].
+    pub culled: bool,
     /// Which blend equation this batch asked for, or `None` when it is not a
     /// transparent batch at all.
     ///
@@ -774,6 +786,7 @@ fn build_class(
                         range: first_index..last_index,
                         texture,
                         bounds: Bounds { centre, radius },
+                        culled: batch.is_culled(),
                         blend: batch.blend_class(),
                         node: Some(index as u32),
                     });
@@ -960,6 +973,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             bounds: d.bounds,
             node: d.node,
             blend: d.blend,
+            culled: d.culled,
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
         out.alpha_tested_draws
@@ -1099,6 +1113,7 @@ mod merge_tests {
             indices: (0..vertices as u32).collect(),
             draws: vec![DrawCall {
                 blend: None,
+                culled: false,
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),
                 bounds: Bounds {
