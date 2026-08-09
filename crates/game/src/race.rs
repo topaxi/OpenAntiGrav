@@ -159,6 +159,44 @@ pub const MODEL_YAW: f32 = std::f32::consts::PI;
 /// framed for it.
 pub const AUTHORED_ASPECT: f32 = crate::frontend::SCREEN.0 / crate::frontend::SCREEN.1;
 
+/// Degrees of extra field of view per unit/s of **forward** speed.
+///
+/// A recovered constant, not a taste decision, and it is the whole of a
+/// behaviour this project was missing until 2026-08-09: the original's field
+/// widens as the craft goes faster. It is a code literal at `0x08a7b6a0`, read
+/// at the top of `FUN_088455ec` as
+/// `craft[0x790] = dot(fwd, vel) * 0.075 + craft[0x7c]`, and `craft+0x790` is
+/// added to **both** tripod fovs every frame in `Ship_UpdateCameraRigs`' tail.
+///
+/// Verified on the running game rather than only read: against
+/// `g_camera_fov_degrees` (`0x08b34310`), `fov = 60 + 0.075 * dot(fwd, vel)`
+/// reproduces to a worst residual of **0.0007 degrees over 19 consecutive
+/// samples** spanning 122-146 units/s - float32 precision. `craft+0x7c` is
+/// exactly zero on a clean run. Confidence 94; see
+/// `docs/rendering/projection-vs-the-original.md`.
+///
+/// Three things about the shape of it, each of which was a wrong guess first:
+///
+/// - **Additive degrees, not a tangent multiplier.** It does not compose the way
+///   [`display::BoostFovKick`](crate::display::BoostFovKick) does.
+/// - **Driven by `dot(fwd, vel)`, not by speed.** The two are the same number
+///   whenever the craft goes where it points, and a live sample at *negative*
+///   forward velocity drove the fov to `54.26` - **below** the authored 60,
+///   which no speed magnitude can do. That is what settles it.
+/// - **Nothing to do with boosting.** It is present with no pad involved;
+///   `BoostFovKick` remains this project's own invention and is composed
+///   separately.
+const SPEED_FOV_GAIN_DEG: f32 = 0.075;
+
+/// Guard rails on the composed field of view, in degrees.
+///
+/// **Not recovered - the original clamps nothing here**, and at any speed the
+/// game can actually reach the term lands far inside these. They exist because
+/// a fov at or past `0` or `180` degrees makes `tan(fov/2)` degenerate and the
+/// projection matrix `NaN`, and a renderer should not produce a broken frame
+/// for a craft that has been teleported or handed an absurd velocity by a test.
+const FOV_GUARD_DEG: (f32, f32) = (1.0, 179.0);
+
 /// The world's generator seed.
 ///
 /// Fixed and arbitrary: nothing in the recovered force law draws from the
@@ -2977,22 +3015,27 @@ impl Race {
     /// units, so a near plane at 0.01 spends the depth range on nothing and
     /// z-fights in the distance.
     ///
-    /// # Known gap: the original's field widens with speed and this one does not
+    /// # The field widens with speed, and that is the original's own behaviour
     ///
     /// `Ship_UpdateCameraRigs` adds `craft+0x790` to both tripod fovs every
     /// frame, and that term is `0.075 * dot(forward, velocity)` **additive
-    /// degrees** - recovered at instruction level and confirmed against 16
-    /// frames of the original, which put the coefficient at `0.07685` with
-    /// `0.075` inside its 95 % interval and the intercept on the authored `60`.
-    /// See `docs/rendering/projection-vs-the-original.md`.
+    /// degrees**. Implemented here as [`SPEED_FOV_GAIN_DEG`], which carries the
+    /// evidence: verified live against `g_camera_fov_degrees` to a worst
+    /// residual of 0.0007 degrees over 19 samples. See
+    /// `docs/rendering/projection-vs-the-original.md`.
     ///
-    /// Nothing here implements it. [`Self::boost_kick`] is not it and is not a
-    /// port of it: the original's term is present with no boost at all, is
-    /// driven by speed rather than by a pad, and adds degrees where
-    /// `BoostFovKick` multiplies a tangent. **Until it lands, every matched-pose
-    /// pixel comparison against the original is misregistered by 1.12-1.26x
-    /// depending on the tick's speed** - pass `--camera-fov` computed from the
-    /// capture's own forward velocity when taking one.
+    /// [`Self::boost_kick`] is a different thing and is **not** a port of it:
+    /// the original's term is present with no boost at all, is driven by speed
+    /// rather than by a pad, and adds degrees where `BoostFovKick` multiplies a
+    /// tangent. The two compose, in that order.
+    ///
+    /// **A matched-pose comparison still needs `--camera-fov`.**
+    /// [`oag_gameplay::spawn::Ship::place_at`] resets the body, so a posed craft
+    /// has zero velocity and this term contributes exactly `0` - the posed frame
+    /// renders at the authored field whatever the captured tick's speed was.
+    /// Pass the fov computed from that tick's own forward velocity. Any
+    /// comparison taken before 2026-08-09 is misregistered by 1.12-1.26x
+    /// depending on the tick's speed and has to be re-taken.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: crate::display::Fov) -> Mat4 {
         // An overridden fov stands in for the authored one and still passes
@@ -3013,7 +3056,24 @@ impl Race {
             .as_ref()
             .and_then(|over| over.fov_deg)
             .unwrap_or(view_fov);
-        let authored = setting.apply(authored_fov.to_radians());
+        // The original's speed widen, added to the authored degrees before
+        // anything else - which is where `Ship_UpdateCameraRigs` adds it, and it
+        // is additive degrees rather than a tangent multiplier. Composed
+        // *before* the player's setting so a widened field scales the whole
+        // thing proportionally, the same order the boost kick argues for below.
+        //
+        // It is deliberately not skipped for a `camera_override`: the override
+        // stands in for the authored value and this is a separate physical
+        // effect. It costs nothing in the calibration path either, because
+        // `Ship::place_at` resets the body, so a posed craft has zero velocity
+        // and the term is exactly `0` - which is why matching a captured frame
+        // still means passing `--camera-fov` computed from that frame's own
+        // forward velocity.
+        let body = &self.ship().physics.body;
+        let forward_speed = body.forward().dot(body.linear_velocity);
+        let widened_deg = (authored_fov + SPEED_FOV_GAIN_DEG * forward_speed)
+            .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
+        let authored = setting.apply(widened_deg.to_radians());
         // Composed *after* the setting, so a player who has widened the field
         // gets the same proportional kick rather than a fixed number of degrees.
         // The zero case returns the input untouched rather than through
@@ -5331,36 +5391,114 @@ mod tests {
         let mut off = race_with_pads(Mode::TimeTrial, enveloping_pad());
         off.set_boost_fov_kick(BoostFovKick::OFF);
 
-        let resting = kicked.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
+        // **Compared at the same tick, not against tick 0.** The original's own
+        // speed widen (`SPEED_FOV_GAIN_DEG`) also opens the field as the craft
+        // accelerates down the pad, so a tick-0 reference would credit the kick
+        // with a widening it did not do - and would make the bit-identical leg
+        // below fail for a reason that has nothing to do with the kick. Both
+        // races take identical input and the kick feeds nothing back into the
+        // simulation, so at any tick they are in the same physical state and the
+        // only difference between these two matrices is the kick itself.
         for _ in 0..30 {
             kicked.tick(&InputSnapshot::default());
             off.tick(&InputSnapshot::default());
         }
 
         let open = kicked.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
+        let plain = off.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
         assert!(
-            x_scale(open) < x_scale(resting),
+            x_scale(open) < x_scale(plain),
             "a wider field means a smaller x scale, and this one did not move"
         );
+
+        // The other half, and the one that matters: with the kick off the
+        // projection is *exactly* the chain that would exist if the effect had
+        // never been written - authored fov plus the recovered speed term,
+        // fitted to the window, and nothing else. Built here rather than
+        // captured, so the assertion cannot be satisfied by both sides drifting
+        // together.
+        let body = &off.ship().physics.body;
+        let expected_deg =
+            off.chase_params.fov + SPEED_FOV_GAIN_DEG * body.forward().dot(body.linear_velocity);
+        let expected = oag_render::camera::projection(
+            oag_render::camera::fit_vertical_fov(
+                expected_deg.to_radians(),
+                AUTHORED_ASPECT,
+                16.0 / 9.0,
+            ),
+            16.0 / 9.0,
+            1.0,
+            1000.0,
+        );
         assert_eq!(
-            off.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED)
-                .to_cols_array(),
-            resting.to_cols_array(),
+            plain.to_cols_array(),
+            expected.to_cols_array(),
             "with the kick off the matrix must be exactly the pre-effect one"
         );
 
         // Take the pad away and let the boost expire; the kick must return to
-        // *exactly* the resting matrix rather than to something near it.
+        // *exactly* the un-kicked matrix rather than to something near it. Both
+        // races are still in lockstep, so `off` is the right reference at
+        // whatever speed they have both decayed to.
         kicked.speedup_pads.clear();
+        off.speedup_pads.clear();
         for _ in 0..600 {
             kicked.tick(&InputSnapshot::default());
+            off.tick(&InputSnapshot::default());
         }
         assert_eq!(
             kicked
                 .projection(16.0 / 9.0, 1000.0, Fov::AUTHORED)
                 .to_cols_array(),
-            resting.to_cols_array(),
+            off.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED)
+                .to_cols_array(),
             "the kick never fully closed"
+        );
+    }
+
+    /// The recovered speed widen is live, additive in degrees, and driven by
+    /// **forward** velocity rather than speed - which is what a craft moving
+    /// backwards proves, because no speed magnitude can narrow the field below
+    /// the authored value and the original demonstrably does.
+    #[test]
+    fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
+        use crate::display::Fov;
+
+        fn vertical_fov_deg(race: &Race) -> f32 {
+            // m11 = 1 / tan(fov/2) at the authored aspect, which this window is.
+            let m11 = race
+                .projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED)
+                .to_cols_array()[5];
+            2.0 * (1.0 / m11).atan().to_degrees()
+        }
+
+        let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
+        let authored = race.chase_params.fov;
+        assert!(
+            (vertical_fov_deg(&race) - authored).abs() < 1.0e-3,
+            "at rest the field must be the authored one, got {}",
+            vertical_fov_deg(&race)
+        );
+
+        for speed in [40.0_f32, 100.0, 150.0] {
+            let body = &mut race.world.ships[0].physics.body;
+            body.linear_velocity = body.forward() * speed;
+            let expected = authored + SPEED_FOV_GAIN_DEG * speed;
+            assert!(
+                (vertical_fov_deg(&race) - expected).abs() < 1.0e-2,
+                "at {speed} units/s the field must be {expected}, got {}",
+                vertical_fov_deg(&race)
+            );
+        }
+
+        // The discriminating case, measured on the running original: a sample at
+        // negative forward velocity read 54.26 degrees against an authored 60.
+        let body = &mut race.world.ships[0].physics.body;
+        body.linear_velocity = body.forward() * -76.5;
+        assert!(
+            vertical_fov_deg(&race) < authored - 5.0,
+            "moving backwards must *narrow* the field, got {}",
+            vertical_fov_deg(&race)
         );
     }
 

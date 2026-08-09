@@ -471,12 +471,23 @@ effort on either contradiction above.
 
 **1. Do not apply any further factor to `ship_model_matrix`.** The mesh is right.
 
-**2. `Race::projection` is missing the term.** Our `widen` is driven by
-`boost_kick` only - which `camera.md` is explicit is *a deliberate invention of
-this project*, not a port - while the original's is driven by forward speed and
-is present with no boost at all. The recovered shape is additive degrees:
-`fov = authored + 0.075 * dot(fwd, vel)`, in the trace's own units/s. Note this
-composes differently from `BoostFovKick`, which multiplies a tangent.
+**2. `Race::projection` implements the term, as of 2026-08-09.**
+`SPEED_FOV_GAIN_DEG` in `crates/game/src/race.rs`, added to the authored degrees
+before the player's fov setting, which is where `Ship_UpdateCameraRigs` adds it.
+It composes with `BoostFovKick` - still this project's own invention - and does
+not replace it: this one adds degrees, that one multiplies a tangent.
+
+Two tests pin it. One asserts the field widens with forward speed at 40, 100 and
+150 units/s and **narrows below the authored value when the craft moves
+backwards**, which is the case that distinguishes the driver from speed
+magnitude. The other was rewritten: it used to compare the boost kick against a
+tick-0 reference, which this term breaks for a reason unrelated to the kick, and
+now compares two races at the same tick so the kick is isolated from the speed
+widen.
+
+**A matched-pose comparison still needs `--camera-fov`**, because `place_at`
+resets the body and a posed craft therefore has zero velocity - the term
+contributes exactly `0` in that path, by construction.
 
 **3. Every matched-pose pixel comparison taken before this is suspect**, and the
 reason is worse than a constant offset: the frames were misregistered by
