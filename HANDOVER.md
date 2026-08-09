@@ -822,32 +822,32 @@ intensity from the entry tick instead of the one before it, and ran while
 `force_boost_state` charged the boost accumulator 100x too slowly. Every number
 moved 2-15 %.
 
-| build | plume px | mean | `b - r` | orange px |
-| --- | ---: | --- | ---: | ---: |
-| the original | 9,435 | `(220, 165, 237)` | +17.6 | 230 |
-| ours, authored UVs (what shipped before) | 4,480 | `(184, 143, 203)` | +19.0 | 2,679 |
-| **ours, texgen (this)** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
-| ours, texgen + the recovered `One`/`One` blend | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
+**The table itself now lives in one place** -
+[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md), "The `SrcAlpha`
+blend was re-tested" - because it was duplicated across three files and drifted
+every time it was re-measured, which was four times. What belongs here is the
+method and the traps, not the numbers.
 
-> **These counts are superseded by ADR-0020 and must be re-baselined before
-> anything is concluded from them.** Both masks carry a `luma > 60` term and the
-> gamma migration raised background luminance by 54 % (72.9 -> 112.5), so pixels
-> flipped in and out of every row for reasons that have nothing to do with the
-> plume - the `orange px` column in particular rose on background track pixels
-> newly clearing the luma gate. Re-measure ours *and* re-derive the original's
-> row under the new pipeline, together, before comparing.
+**It has been re-measured four times and each retraction had a different
+cause**, which is the part worth carrying: (1) the wrong pose age and a boost
+accumulator charging 100x too slowly, both found by the trace harness; (2) those
+fixed; (3) invalidated by ADR-0020 moving background luminance 54 %; (4) the
+mask replaced. **The common thread was the instrument, not the renderer.** A
+`luma > 60` gate makes every row hostage to a global brightness change; the
+replacement normalises chroma by the pixel's own luminance and is immune to one
+by construction.
 
-**One conclusion reversed on re-measurement**, and it is here rather than
-buried: on `b - r` alone the authored-UV build is now *closer* to the original
-(+19.0 against +17.6) than the generated-UV one (+13.3), where the first table
-read +22.0 against +15.0 and pointed the other way. Not acted on, because
-`b - r` is a mean over a mask of a different size in every row - not a
-like-for-like colour comparison - and that mask contains a saturated white core
-that pulls every build toward neutral. The extent and orange columns, which do
-compare the same quantity across rows, still favour generated coordinates by
-+34 % and -24 %, as does the streak structure the change was made for. **But
-this is what a metric looks like when it is about to stop being trustworthy**,
-and the extent column has its own problem: see the craft-scale section below.
+Two results survive all four: generated coordinates beat authored ones on every
+column, and the recovered `One`/`One` blend is far worse than `SrcAlpha` on
+every column. One did not - a `b - r` reversal recorded in the third revision
+was a mask artefact and is withdrawn.
+
+**And the fourth measurement opened a gap the old pipeline was hiding**: over
+the same mask ours reads `(143, 110, 178)` against the original's
+`(193, 147, 218)`, about 26 % dimmer. Before ADR-0020 our capture stored the
+plume in gamma and the background in linear, which flattered the plume's
+prominence. Same direction as the luminance profile down the exhaust axis, and
+it points at the flare and the missing bright-pass rather than at the plume.
 
 **The last row is the one worth carrying forward, because it is a negative
 result about something this project believes it has recovered.** `SrcAlpha`

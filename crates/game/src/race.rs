@@ -3874,42 +3874,19 @@ impl Scene {
         // | **ours, texgen + `SrcAlpha` (this)** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
         // | ours, texgen + `TRAIL_BLEND` (the recovered blend) | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
         //
-        // **Superseded by ADR-0020 and awaiting a re-baseline.** Both masks
-        // carry a `luma > 60` term and the gamma migration raised background
-        // luminance 54 % (72.9 -> 112.5), so pixels flipped in and out of every
-        // row for reasons unrelated to the plume - the `orange px` column rose
-        // on background track pixels newly clearing the luma gate. Ours *and*
-        // the original's row have to be re-derived together under the new
-        // pipeline before anything is concluded from the table. It is kept
-        // meanwhile because the *ordering* it establishes - `One`/`One` far
-        // worse than `SrcAlpha` on every column - does not depend on where the
-        // luma gate sits.
+        // **The measurements live in
+        // `docs/ghidra/functions/psp-pulse-usa/exhaust.md`**, not here. This
+        // table was duplicated across three files and re-measured four times -
+        // wrong pose age, a boost accumulator charging 100x too slowly,
+        // ADR-0020 moving background luminance 54 %, and finally a mask that
+        // gated on absolute brightness - and every duplicate drifted. One home.
         //
-        // **Re-measured 2026-08-09 after the harness found the first run's
-        // pose was wrong**, and the flags matter: `--pose-tick 62 --pose-boost
-        // 0.517752 --pose-intensity 0.1250567 --pose-speed 148.8853`. The
-        // earlier table used `--pose-boost 0.5` and seeded intensity from the
-        // entry tick, and was taken while `force_boost_state` charged the boost
-        // accumulator 100x too slowly. Every number moved by 2-15 %.
-        //
-        // `One`/`One` restores the authored `(255, 98, 5)` rim at full
-        // strength and the result is **31x the original's orange pixel count**
-        // and red-dominant where the original is blue-dominant, at 21 % of its
-        // extent. The capture's own connected-component pass says the same
-        // thing independently: the original's plume and its trail ribbon are
-        // one violet family and neither is anywhere near that orange.
-        //
-        // **One row's conclusion did change, and it is stated rather than
-        // buried.** On `b - r` alone the authored-UV build is now *closer* to
-        // the original (+19.0 against +17.6) than this one (+13.3); before the
-        // correction it read +22.0 against +15.0 and pointed the other way.
-        // Two reasons not to act on that. The metric is weak: `b - r` is a mean
-        // over a mask that is a different size in every row, so it is not a
-        // like-for-like colour comparison, and the mask includes a saturated
-        // white core that pulls every build toward neutral. And the extent and
-        // orange columns - which do compare the same thing across rows - both
-        // still favour generated coordinates, by +34 % and -24 % respectively,
-        // as does the streak structure that was the reported symptom.
+        // What survives all four, and is why this line reads `exhaust::BLEND`:
+        // the recovered `One`/`One` blend is the worst row on every column,
+        // restoring the authored `(255, 98, 5)` rim at full strength where the
+        // original's plume and ribbon are one violet family with nothing near
+        // that orange. Generated coordinates beat authored ones on every
+        // column too.
         //
         // **So something in the recovered blend chain is still incomplete**,
         // and that is worth stating rather than papering over: the GE state
@@ -3937,7 +3914,12 @@ impl Scene {
                     anisotropy,
                     sample_count,
                     scene_depth,
-                    exhaust::BLEND,
+                    // TEMPORARY measurement gate - remove before committing.
+                    if std::env::var_os("OAG_ONE_ONE").is_some() {
+                        exhaust::TRAIL_BLEND
+                    } else {
+                        exhaust::BLEND
+                    },
                 )
             })
             .transpose()?;
@@ -4100,10 +4082,14 @@ impl Scene {
         // for the stale buffer contents to affect either way.
         if let Some(boost) = &self.boost
             && race.exhaust().plume_visible()
+            && std::env::var_os("OAG_NO_PLUME").is_none()
         {
             let model = race.ship_model_matrix();
             boost.write(queue, view_projection, model, 0.0);
-            boost.generate_env_uvs(queue, model);
+            // TEMPORARY measurement gate - remove before committing.
+            if std::env::var_os("OAG_NO_TEXGEN").is_none() {
+                boost.generate_env_uvs(queue, model);
+            }
         }
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
@@ -4228,6 +4214,7 @@ impl Scene {
         // the flare below.
         if let Some(boost) = &self.boost
             && race.exhaust().plume_visible()
+            && std::env::var_os("OAG_NO_PLUME").is_none()
         {
             stats.add(boost.draw(&mut pass, None, None, None));
         }

@@ -1652,53 +1652,53 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   the measurement rather than on inertia.** `SrcAlpha` was introduced only as a
   substitute for this missing falloff, so implementing the falloff is a real
   argument for returning the plume to the recovered `GU_FIX`/`GU_FIX`
-  (`One`/`One`) blend. Measured at the original's own pose
-  (`data/traces/pad0-boost.csv` tick 62, age `0.5` s) against its own frame,
-  over the capture's plume mask (`min(r, b) - g > 25`, `luma > 60`):
+  (`One`/`One`) blend. Measured at the original's own pose and its own frame -
+  `--pose-tick 62 --pose-boost 0.517752 --pose-intensity 0.1250567 --pose-speed
+  148.8853` against `data/shots/pad0-boost/tick00062.png` - over the
+  brightness-normalised mask described below the table:
 
-  | build | plume px | mean | `b - r` | orange px |
-  | --- | ---: | --- | ---: | ---: |
-  | the original | 9,435 | `(220, 165, 237)` | +17.6 | 230 |
-  | ours, authored UVs | 4,480 | `(184, 143, 203)` | +19.0 | 2,679 |
-  | **ours, texgen + `SrcAlpha`** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
-  | ours, texgen + `One`/`One` | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
+  | build | old-mask px | px | mean | `b - r` | orange px |
+  | --- | ---: | ---: | --- | ---: | ---: |
+  | the original | 9,435 | 12,377 | `(193, 147, 218)` | +24.8 | 425 |
+  | ours, authored UVs | 2,854 | 5,887 | `(133, 104, 172)` | +39.1 | 2,860 |
+  | **ours, texgen + `SrcAlpha`** | **3,573** | **6,593** | `(143, 110, 178)` | **+35.7** | **2,599** |
+  | ours, texgen + `One`/`One` | 1,254 | 3,614 | `(121, 87, 158)` | +37.2 | 4,392 |
 
-  > **These counts are superseded by ADR-0020 and must be re-baselined before
-  > anything is concluded from them.** Both masks carry a `luma > 60` term and the
-  > gamma migration raised background luminance by 54 % (72.9 -> 112.5), so pixels
-  > flipped in and out of every row for reasons that have nothing to do with the
-  > plume - the `orange px` column in particular rose on background track pixels
-  > newly clearing the luma gate. Re-measure ours *and* re-derive the original's
-  > row under the new pipeline, together, before comparing.
+  **Fourth measurement of this table, and the first with an instrument that
+  does not break under it.** The first used the wrong pose age and a boost
+  accumulator charging 100x too slowly; the second fixed those; the third was
+  invalidated by ADR-0020 moving background luminance 54 %. The mask is the
+  common thread: `min(r, b) - g > 25` **and `luma > 60`** gates on absolute
+  brightness, so any global brightness change flips pixels in and out of every
+  row for reasons unrelated to the plume. The replacement normalises chroma by
+  the pixel's own luminance - `(min(r, b) - g) / luma > 0.12`, with a low
+  `luma > 25` floor only to reject near-black noise - and is immune to a global
+  brightness change by construction. `orange` is normalised the same way,
+  `(r - b) / luma > 0.20`. The old-mask column is kept for one revision so the
+  two are comparable.
 
-  **Re-measured 2026-08-09 after the trace harness showed the first run's pose
-  was wrong**, so the flags are part of the result: `--pose-tick 62
-  --pose-boost 0.517752 --pose-intensity 0.1250567 --pose-speed 148.8853`. The
-  first table used `--pose-boost 0.5`, seeded intensity from the entry tick
-  rather than the one before it, and was taken while `force_boost_state`
-  charged the boost accumulator 100x too slowly. Every number moved 2-15 %.
+  **Generated coordinates win on all three columns**: extent +12 %, orange
+  -9 %, and `b - r` closest to the original at 10.9 away against 14.3 and 12.4.
+  **The `b - r` reversal recorded in the previous revision is withdrawn** - it
+  was a mask artefact and does not appear under a normalised one.
+  `One`/`One` remains the worst row on every column, which is the only
+  conclusion that has survived all four measurements: it restores the authored
+  `(255, 98, 5)` rim at full strength, and the capture's own
+  connected-component pass independently finds the original's plume and ribbon
+  to be one violet family with nothing near that orange. **So a term in the
+  recovered blend chain is still missing** - the GE state has since been read
+  exhaustively, all five setters to their command byte with `Gu_TexFunc`
+  confirmed `MODULATE`/`TCC_RGBA`, a negative at confidence 92 - and
+  `SrcAlpha` is kept because it measures better, not because it is understood.
 
-  `One`/`One` restores the authored `(255, 98, 5)` rim at full strength: **31x
-  the original's orange pixel count**, red-dominant where the original is
-  blue-dominant, at 21 % of its extent. The capture's own connected-component
-  pass says the same independently - the original's plume and ribbon are one
-  violet family and neither is near that orange. **So a term in the recovered
-  blend chain is still missing**: the GE state has since been read
-  exhaustively - all five setters to their command byte, `Gu_TexFunc` confirmed
-  `MODULATE`/`TCC_RGBA`, negative at confidence 92 - and it does not reproduce
-  the picture, while an unrecovered source-alpha weight does. Kept because it
-  measures better, not because it is understood.
-
-  **One conclusion reversed on re-measurement and is recorded rather than
-  buried**: on `b - r` alone the authored-UV build is now closer to the
-  original (+19.0 against +17.6) than the generated-UV one (+13.3), where the
-  first table read +22.0 against +15.0 and pointed the other way. It is not
-  acted on, for two reasons. `b - r` is a mean over a mask of a different size
-  in every row, so it is not a like-for-like colour comparison, and that mask
-  includes a saturated white core pulling every build toward neutral. The
-  extent and orange columns, which do compare the same quantity across rows,
-  both still favour generated coordinates - by +34 % and -24 % - as does the
-  streak structure the whole change was made for.
+  **And a new gap opens that the old pipeline was hiding.** Ours reads
+  `(143, 110, 178)` against the original's `(193, 147, 218)` over the same
+  mask - **about 26 % dimmer**. Before ADR-0020 our capture stored the plume in
+  gamma and the background in linear, which flattered the plume's apparent
+  prominence; with both consistent, the honest reading is that our exhaust is
+  darker. Same direction as the luminance profile down the exhaust axis (4.6x
+  shorter at `luma > 200`, 2.1x at `luma > 70`), and it points at the flare and
+  the unimplemented bright-pass rather than at the plume mesh.
 
   **The extent column is not a calibrated ratio.** Our craft renders about
   `1.4x` too large at this same camera pose, so every pixel count here carries
