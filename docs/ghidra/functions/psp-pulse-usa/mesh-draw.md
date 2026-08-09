@@ -1113,6 +1113,7 @@ reproduce it.
 | `0x0890d3ac` | `Mesh_SetBatchDrawState` (duplicate of `0x0890d994`) | `Mesh_SetBatchLighting`, above |
 | `0x0892e8f0` | `Ship_UpdateEngine_q` | `Mesh_BuildBatchDrawCommands`, above |
 | `0x0892eda4` | `Ship_UpdateEngine_q` (same name, second function) | `Mesh_BuildLayerBatchSets`, above |
+| `0x08811630` | `Gu_Fog_q` | `Gu_TexOffset` - emits `0x4a`/`0x4b`, `TEXOFFSETU`/`TEXOFFSETV`. Already correct in `names.tsv`; **DB-only drift, and it caught this page out once** |
 
 `Ship_UpdateEngine` proper is `0x0884c5c8` (`engine.md`), and is unrelated to
 both. The duplicate names are why `get_function_callers` by name returns
@@ -1455,21 +1456,28 @@ against a live capture.
 ### Still open here
 
 - ~~**`FUN_0891e8c8`**, the last unread step in this chain.~~ - **closed
-  2026-08-09 at confidence 88, and it changes nothing.** `Gfx_ResetTexScaleAndFog`
+  2026-08-09 at confidence 88, and it changes nothing.** `Gfx_ResetTexTransform`
   (`0x0891e8c8`) is two calls in full:
 
   ```c
   Gu_TexScale(1.0f, 1.0f);
-  Gu_Fog_q(0, 0);
+  Gu_TexOffset(0.0f, 0.0f);
   ```
 
-  No blend equation, no enable/disable, no test, nothing that touches fragment
-  colour or alpha. **The alpha-test result above is not overridden by it.** The
-  one thing worth flagging is that its `Gu_Fog_q(0, 0)` is recorded *after*
-  `Gfx_BuildBatchStateList`'s own `Fog_Apply`/`Fog_Disable`/`FUN_0891e9d0`
-  branch, so it is the last fog word in the list; whether that neutralises
-  `Fog_Apply` depends on whether `Gu_Fog_q` carries the enable or only the
-  range, which was not read.
+  A **texture-transform reset**, and the two calls are a coherent pair. No blend
+  equation, no enable/disable, no test, nothing that touches fragment colour or
+  alpha. **The alpha-test result above is not overridden by it.**
+
+  **Corrected the same day.** The first version of this entry read the second
+  call as `Gu_Fog_q` - the live Ghidra database's name for `0x08811630` - and
+  spent a paragraph speculating about whether it neutralised
+  `Gfx_BuildBatchStateList`'s `Fog_Apply` branch. It does not, because it is not
+  a fog call: `0x08811630` emits GE commands **`0x4a`/`0x4b`**, `TEXOFFSETU` and
+  `TEXOFFSETV`, i.e. `sceGuTexOffset`. `names.tsv` has carried the correct name
+  at confidence 88, cited to [texture-animation.md](texture-animation.md), the
+  whole time; **this page trusted the database over the docs, which is exactly
+  what ADR-0005 forbids and exactly what the stale-name table below warns
+  about.** The speculation it produced was wholly spurious.
 - **`FUN_0891e9d0`**, the third fog branch (`header_byte3 & 8` clear and `& 1`
   clear).
 - Whether `entry->0x14`, set to `Gu_Finish() + 4`, is a length used anywhere

@@ -415,7 +415,7 @@
 0x088117cc	function	Gu_ColorFunc	92	mesh-draw.md
 0x0891e054	function	Gfx_CompileDirtyBatchStateLists	90	mesh-draw.md
 0x0891f890	function	Gfx_BuildBatchStateList	90	mesh-draw.md
-0x0891e8c8	function	Gfx_ResetTexScaleAndFog	88	mesh-draw.md
+0x0891e8c8	function	Gfx_ResetTexTransform	88	mesh-draw.md
 0x0891f320	function	Gfx_Init	85	mesh-draw.md
 0x08916d00	function	ParticleSystem_DrawCappedStreak	88	particle-system.md
 0x08916610	function	ParticleSystem_DrawRotatedSprite	88	particle-system.md
@@ -425,3 +425,4 @@
 0x08984d14	function	__kernel_cosf	88	particle-system.md
 0x08985680	function	__kernel_sinf	88	particle-system.md
 0x08984760	function	__rem_pio2f	82	particle-system.md
+0x088f79b4	function	ParticleSystem_InitParticleFields	88	particle-system.md
