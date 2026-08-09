@@ -66,10 +66,7 @@ fn load() -> Option<(Course, Trace)> {
     let blob = archives.read_name(TRACK).expect("the track");
 
     let nodes = vex::nodes(&blob).expect("the .vex decodes");
-    let ai_node = nodes
-        .iter()
-        .find(|node| node.class_id == vex::CLASS_WO_TRACK)
-        .expect("a WO Track node");
+    let ai_node = track::find_node(&blob, &nodes).expect("a WO Track node");
     let ai = track::parse(blob.get(ai_node.payload()).expect("the payload")).expect("the spline");
 
     let slot = nodes

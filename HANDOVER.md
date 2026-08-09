@@ -70,7 +70,8 @@ appending a dated pass to it.
 
 ## Where the project stands
 
-M4, with an engine/title split in flight alongside it (see the next section).
+M4. The engine/title split that ran alongside it is finished (see the next
+section).
 
 The force law, the angular-momentum model, the contact response and the
 mag-lock attitude hold are all recovered at instruction level and implemented,
@@ -439,15 +440,15 @@ pixel argument about the exhaust.
   no-cull decision is renderer-wide, and we are already *under* the original's
   extent, so removing geometry moves the wrong way.
 
-## The engine/title split (2026-08-09, stages 1, 2, 3 and 5 landed)
+## The engine/title split (2026-08-09, all seven stages landed)
 
-**Working handover for the unfinished stages:
-[`HANDOVER-title-split.md`](HANDOVER-title-split.md)** - the next actions, the
-traps, and the decisions not to reverse. Delete it when stages 4, 6 and 7 land;
-what follows here is the part that outlives the effort.
+**Finished.** The per-stage working handover has been deleted, as it said it
+should be; what follows is the part that outlives the effort. The durable record
+is [ADR-0021](docs/architecture/adr/0021-title-packages.md),
+[workspace-layout](docs/architecture/workspace-layout.md), the module docs named
+below and this section.
 
-Work in flight, on a user directive to make Pure workable in parallel with
-Pulse. Governed by [ADR-0021](docs/architecture/adr/0021-title-packages.md),
+Done on a user directive to make Pure workable in parallel with Pulse. Governed by [ADR-0021](docs/architecture/adr/0021-title-packages.md),
 which supersedes **ADR-0009 item 3 only** - items 1, 2 and 4 stand, and item 2
 in particular still gates second-title *simulation* work behind M4's exit.
 
@@ -493,12 +494,38 @@ Pulse added. What is left of it: ten test call sites still spelling
 `CLASS_WO_TRACK` by hand (`track::find_node` exists for them), and the
 pre-swizzle read, which is blocked on the finding above rather than on effort.
 
-Remaining after that, in order:
-**(4)** presentation tables to `oag-pulse`, folding in `frontend::SCREEN`
-per-source; **(5)** an `oag-pure` skeleton whose acceptance test is `just view`
-drawing a Pure ship; **(6)** the physics seam **without** relocating constants;
-**(7)** docs and hygiene. The full plan, with per-stage oracles, is in the
-session plan file referenced by the commit that lands stage 3.
+Stages **(4)**, **(5)**, **(6)** and **(7)** are done, plus an unplanned item
+**(0)** that turned out to matter more than any of them:
+
+- **(0) The handling schema, enumerated in one pass.** Four differences between
+  Pure's `handlingstats.xml` and Pulse's had been found *one at a time*, each
+  visible only once the one before it was handled, because a **survey cannot see
+  an element that is not there** - absence needs a comparison.
+  `crates/pure/tests/handling_schema_ground_truth.rs` walks every shipped file on
+  both discs and asserts the whole symmetric difference at once. `<pitch>` is the
+  last of it. It also found two things poking one file never would: a Pure file
+  with **no `<Class>` blocks at all** whose six parameter blocks the decoder
+  silently drops, and `Data\XML\HandlingStats.xml`, which is on Pure and parses
+  unchanged. Both on [`pure-status.md`](docs/formats/pure-status.md).
+- **(4) Presentation tables.** Six modules in `oag-pulse`: `textures`, `loading`,
+  `hud`, `frontend`, `movies`, `race`. `oag-render` gains `oag-pulse` as a normal
+  dependency, which `check-dependency-rules.py` already anticipated - rule 1
+  forbids gameplay -> render, and the reverse edge is how a title package is read.
+  **`SCREEN` did not become per-source and the plan was wrong to ask**: `Space`
+  already carries a grid *and* the aspect it is shown as, two numbers that
+  disagree by 7% on the PS2 and that one `(f32, f32)` cannot hold.
+- **(6) The physics seam, stated, with nothing moved.** Four module docs -
+  `oag_physics::params`, `oag_gameplay::handling`, `oag_race::zone`,
+  `Course::START_LINE_OFFSET`. Every simulation number now falls in a named
+  place: off the disc per team and class, off the disc engine-wide, or out of
+  Pulse's compiled code, and only the third moves when ADR-0009 item 2's gate
+  opens. `START_LINE_OFFSET` **could not be filed**, which is the finding: at
+  confidence 65 it stands in for a computation nobody has read.
+- **(7)** A `Titles` column on both tables in
+  [`docs/formats/README.md`](docs/formats/README.md), and the last version-locked
+  `CLASS_WO_TRACK` lookups routed through `track::find_node`. One of those was in
+  `oag-trace`'s own `ai_of`, not a test: it would have found no spline in a Pure
+  track.
 
 **Stage 3's pre-swizzle precondition was checked, and it failed.** The claim was
 that `Texture` payload `+0x06` bit 0 is set only on font atlases in Pulse, so
@@ -516,9 +543,28 @@ not the bit that claim means. Decoding one flagged Pulse texture both ways and
 looking at it would separate them; that is unstarted.
 
 **Stage 6 is deliberately half-done and must stay that way until M4 closes.**
-The physics, Zone and `START_LINE_OFFSET` constants get a seam but do not move.
+The physics, Zone and `START_LINE_OFFSET` constants got a seam and did not move.
 The force law is M4's live blocker and relocating its constants mid-investigation
-is the one part of this refactor with real downside.
+is the one part of this refactor with real downside. `oag_race::zone`'s four
+numbers are the ones to move first when it does: they are Pulse literals, and
+Pure ships zone mode too.
+
+**Decisions not to silently reverse.** No `trait Game`, no `enum Title`
+dispatch, no plugin registry - ADR-0021 answers the n=1 objection for the
+*format layer only*. No `oag-psp`/`oag-ps2` crates; ADR-0004 stands, and turning
+the console axis into a code axis forfeits the property that made the PS2 fan-out
+cost days. `classes_of` errors on an unknown version rather than defaulting to
+V6, because the numberings share no id and a fallback looks exactly like an empty
+file. The foreign-serial lists rule a source *out*, never in, or a real player's
+own legitimate pressing gets hard-rejected. A `None` in a class table means "not
+recovered", never "absent from the format".
+
+**Two traps this refactor paid for.** A table read from data collapses "nothing
+matched" and "I could not read the file" into one empty result unless you are
+deliberate - it bit `collision::from_vex`, the `pvs` fixtures and `Stats::class`,
+and it is live again in the decoder's handling of Pure's classless zone file. And
+**do not `git add -A` while another session shares the worktree**: a file written
+concurrently landed in two commits unreviewed; `2628a80` is the correction.
 
 ## Open threads
 

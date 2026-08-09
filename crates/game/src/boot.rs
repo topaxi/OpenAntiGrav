@@ -1003,7 +1003,24 @@ fn cache_dir_named(what: &str) -> std::path::PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{EntryRef, pulse};
+    use super::{DEVPUB_REEL, EntryRef, pulse};
+
+    /// The CLI default spells the reel's hash as text, and the title package
+    /// holds it as a number. Two spellings of one fact can drift silently -
+    /// nothing would fail, `--reel` would simply address an entry that is not
+    /// there - so the text form is checked against the number rather than
+    /// trusted to stay in step.
+    #[test]
+    fn the_reel_default_spells_the_hash_the_title_package_holds() {
+        assert_eq!(
+            DEVPUB_REEL,
+            format!("hash:{:08x}", pulse::hashes::DEVPUB_REEL_SCEE)
+        );
+        assert_eq!(
+            EntryRef::parse(DEVPUB_REEL).hash(),
+            pulse::hashes::DEVPUB_REEL_SCEE
+        );
+    }
 
     #[test]
     fn a_name_resolves_through_the_wad_hash() {

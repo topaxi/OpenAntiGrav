@@ -1165,10 +1165,11 @@ fn read_track_blob(source: &str, name: &str) -> Result<Vec<u8>> {
 
 fn ai_of(blob: &[u8], name: &str) -> Result<track::AiTrack> {
     let nodes = oag_formats::vex::nodes(blob).context("walking the node tree")?;
-    let node = nodes
-        .iter()
-        .find(|n| n.class_id == oag_formats::vex::CLASS_WO_TRACK)
-        .with_context(|| format!("{name} has no WO Track node"))?;
+    // By the class id this file's own version word implies, not by the version-6
+    // constant: `CLASS_WO_TRACK` finds nothing in a version-4 `.vex`, which is
+    // every track on Pure's disc.
+    let node =
+        track::find_node(blob, &nodes).with_context(|| format!("{name} has no WO Track node"))?;
     let payload = blob
         .get(node.payload())
         .context("the WO Track payload runs past the end of the file")?;

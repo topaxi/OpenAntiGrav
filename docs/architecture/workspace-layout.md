@@ -80,16 +80,26 @@ for the axes where two corpora have actually been measured - archive candidates,
 entry names, handling schema version. Presentation vocabulary stays as plain
 constants inside `oag-pulse` until Pure forces its shape.
 
-Title crates are tables, so they depend on `oag-core` and `oag-formats` and
+Title crates are tables, so they depend on `oag-title` and `oag-assets` and
 nothing else. That keeps them readable from both sides of the simulation
 boundary, and it is why they are listed among the gameplay crates in
 `scripts/check-dependency-rules.py` - rule 1 applies to them unchanged.
 
+**Being readable from both sides means the renderer reads them too.**
+`oag-render` depends on `oag-pulse` for the tables that say which of Pulse's
+textures animate and what the loading wave's numbers are. That is not a breach:
+rule 1 forbids gameplay -> render, and this is the reverse edge, which is the
+direction a table is meant to be read in.
+
 The simulation's own Pulse constants - the physics literals, the Zone scoring,
-`START_LINE_OFFSET`, the handling scale factors - have their seam defined but
-have **not** moved into `oag-pulse`. [ADR-0009](adr/0009-multi-game-fanout.md)
-item 2 gates second-title simulation work on M4's exit criterion, and the force
-law is that milestone's live blocker. The move is mechanical once it clears.
+the handling scale factors - have their seam defined but have **not** moved into
+`oag-pulse`. [ADR-0009](adr/0009-multi-game-fanout.md) item 2 gates second-title
+simulation work on M4's exit criterion, and the force law is that milestone's
+live blocker. The move is mechanical once it clears, and
+`oag_race::zone`'s four numbers are the ones to move first: Pure ships zone mode
+too. `Course::START_LINE_OFFSET` is the one exception and could **not** be
+filed - at confidence 65 it stands in for a computation nobody has read, so
+calling it title-specific would assert one of the two answers still open.
 
 ## Dependency rules
 
@@ -110,6 +120,10 @@ law is that milestone's live blocker. The move is mechanical once it clears.
                             |
                         oag-game
 ```
+
+One edge the sketch leaves out, because drawing it would cross half the tree:
+`oag-render` also depends on `oag-pulse`, for the tables described above. It runs
+against the arrows, which is the direction a table is read in.
 
 Two rules, both enforceable:
 

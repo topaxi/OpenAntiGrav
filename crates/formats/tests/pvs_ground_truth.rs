@@ -423,11 +423,16 @@ fn survey(files: &[VexFile], label: &str) -> Survey {
 
         // The spline and the section nodes share one id namespace, and the
         // adjacency the renderer pads with stays inside it.
-        for node in file
-            .tree
-            .iter()
-            .filter(|n| n.class_id == vex::CLASS_WO_TRACK)
-        {
+        //
+        // By the id this file's own version word implies rather than the
+        // version-6 constant, which is what `track::find_node` does for the
+        // single-node case; this walk wants every one of them, so it asks for
+        // the id itself.
+        let wo_track = vex::classes_of(bytes)
+            .expect("a version with a class table")
+            .wo_track
+            .expect("a version whose WO Track id is recovered");
+        for node in file.tree.iter().filter(|n| n.class_id == wo_track) {
             let payload = node.payload();
             let Ok(ai) = track::parse(&bytes[payload]) else {
                 continue;

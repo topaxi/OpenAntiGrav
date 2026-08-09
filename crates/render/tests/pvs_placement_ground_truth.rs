@@ -127,10 +127,7 @@ fn sweep(image: &Path, minimum: usize) {
             let pvs = TrackPvs::parse(&blob).expect("parsing sections");
 
             let nodes = vex::nodes(&blob).expect("walking the tree");
-            let ai_node = nodes
-                .iter()
-                .find(|n| n.class_id == vex::CLASS_WO_TRACK)
-                .expect("a WO Track node");
+            let ai_node = track::find_node(&blob, &nodes).expect("a WO Track node");
             let ai = track::parse(&blob[ai_node.payload()]).expect("parsing the spline");
             let padding = SectionPadding::from_track(&ai);
 

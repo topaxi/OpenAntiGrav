@@ -304,7 +304,7 @@ fn every_pad_sits_on_the_driveable_surface() {
 
         // The track's own spline, as independent evidence of where the surface
         // is. A file with no `WO Track` node has nothing to check against.
-        let Some(node) = vex::nodes_by_class(&nodes, vex::CLASS_WO_TRACK).next() else {
+        let Some(node) = track::find_node(model, &nodes) else {
             continue;
         };
         let ai = track::parse(&model[node.payload()]).expect("parse WO Track");
