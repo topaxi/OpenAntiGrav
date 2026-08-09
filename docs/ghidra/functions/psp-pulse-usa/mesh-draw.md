@@ -1141,8 +1141,15 @@ and `+0xb0` after `Texture_BindCausticFrame`, falling back to a live
 
 ### Open, and named so it is not re-derived
 
-- **`FUN_0891f320`** - the per-batch state-list compiler, above. The one to read
-  next.
+- ~~**`FUN_0891f320`** - the per-batch state-list compiler.~~ - **resolved in
+  the next section, and the guess was wrong.** `0x0891f320` is `Gfx_Init`, the
+  display-subsystem constructor; the texfunc read at `0x0891f62c` cited on
+  [exhaust.md](exhaust.md) therefore comes from the **global GE default**, not
+  from a per-batch list. That default is still what a `0x1232` batch inherits,
+  since `Gfx_BuildBatchStateList` never touches texfunc - but it is weaker
+  evidence than "read at the plume's own call site", and the confidence-92
+  figure on that line should be read as covering the global default only. The
+  real per-batch compiler is `Gfx_BuildBatchStateList` (`0x0891f890`).
 - **Who replays the `mesh+0x158` list per frame.** `Mesh_CompileGeometryPass`
   builds it; the deferred draw callback that issues it, downstream of
   `Gfx_FlushRenderManager`'s sort, was not followed.
@@ -1150,6 +1157,30 @@ and `+0xb0` after `Texture_BindCausticFrame`, falling back to a live
   bodies, and the `DAT_08b323c0` reflection-target table.
 - **`mesh+0x6c`**, the per-mesh ambient colour on `Mesh_SetBatchLighting`'s
   second branch. Never written to by anything read here.
+- **The planar-reflection subsystem - an unmapped subsystem, not just an unread
+  function.** Recorded here so it is findable rather than re-derived. What was
+  seen, all of it in this pass and none of it followed up:
+  - `Mesh_InitFromPayload` (`0x0890e998`) reads `(material + 3) & 0xfc` across
+    both batch lists. When any material has it non-zero, the value `>> 2` is
+    cached at `mesh+0x7a` (range 1..8) and the mesh's layer key at `mesh+0x4c`
+    is **overwritten** with `0x01500000 + (idx - 1) * 0x1000000`, moving the
+    mesh out of its model's own layer.
+  - `Mesh_BuildLayerBatchSets` (`0x0892eda4`) builds one batch set per such
+    index, `1..8`, but **only when its own layer argument is `0x45000000`** -
+    i.e. only for ordinary scene geometry.
+  - Both `Mesh_CompileGeometryPass` (`0x0890d0cc`) and `FUN_089307b4`'s `& 4`
+    group use the same `>> 2` index into a table at **`DAT_08b323c0`**, whose
+    entries carry a mode at `+0xa8`, a matrix or plane at `+0x98`, a stencil
+    reference at `+0x94` and a texture at `+0xac`. Mode `>= 1` binds
+    `entry+0xac` as a texture with **`Gu_TexScale(1.0, -1.0)`** - a flipped `v`,
+    which is what reading back a render target rendered from a mirrored camera
+    needs. Mode `0` instead calls `FUN_0891fd98(entry+0x98)`, enables
+    `GU_STENCIL_TEST` with `entry+0x94` as the reference, and disables fog.
+  - Neither `FUN_0891fd98`/`FUN_0891fdf0` (paired, push/pop shaped) nor the
+    `DAT_08b323c0` table's producer was read, and no `.vex` material carrying a
+    non-zero `(material+3) & 0xfc` has been located on disc to confirm the
+    feature is used by shipped content at all. **That last check is the cheapest
+    next step and it decides whether any of this matters.**
 
 ## The plume's real per-batch GE state, and why five multiplier candidates all read negative
 
@@ -1278,6 +1309,46 @@ reason: a black fragment adds zero under an additive blend whatever its alpha.
 **So both tests are fill-rate optimisations - they stop the GE writing pixels
 that would not have changed the framebuffer - and neither changes the
 picture.** Implementing them would be a no-op on this content.
+
+**The colour test is redundant for a stronger reason than the alpha test, and
+the argument does not depend on the authored content at all.** The blend is
+`out = src*srcA + dst*1`. A fragment whose RGB is exactly zero contributes
+`0*srcA + dst = dst` - the destination, unchanged - which is bit-identical to
+discarding it, **for any alpha and any authored colour**. The alpha test's
+redundancy is content-dependent (it needs `srcA == 0` on the killed fragments,
+which the strictly bimodal authored alpha supplies); the colour test's is
+algebraic. Both are inert here.
+
+**Naming the pattern, because it recurs and it is a trap.** A fixed-function
+console renderer programs per-fragment *tests* to avoid paying for writes that
+an additive blend would have made invisible anyway. On the PSP that is a real
+saving - it is fill rate, the scarcest resource on the part. On a reimplementation
+with a wholly different fill budget those same tests are recovered-but-inert
+state: correct to *document*, wrong to *port*, and actively harmful to port as a
+"fix" because they cost a fragment branch and change nothing. **Recovering a GE
+call is not by itself an argument for implementing it.** The question to ask of
+each recovered state is whether it can change a pixel given the blend that batch
+also programs.
+
+**What the `0x200` block reduces to for a reimplementation**, once both tests
+drop out: an additive `SrcAlpha`/`One` blend, depth-tested with depth writes
+off, two-sided, fog off, repeat wrap on both axes. That is all of it. Everything
+else `Gfx_BuildBatchStateList` emits for a `0x1232` batch is either inert or
+already implied by those five.
+
+**One caveat, honestly unresolved.** The two arguments above are about the
+**colour** channels. A discarded fragment writes nothing at all, whereas a
+blended one still writes the *alpha* channel (PSP blending applies to RGB;
+`Gu_PixelMask(0)` leaves every channel writable). In a `GU_PSM_5551` target the
+single alpha bit **is** the stencil buffer, so "writes alpha" and "writes
+stencil" are the same statement, and these batches do run with
+`Gu_StencilOp(0, 0, 0)` and `Gu_Disable(GU_STENCIL_TEST)`. Whether the tests
+therefore differ in the framebuffer's alpha/stencil bit was **not established**
+- it needs the framebuffer pixel format and the GE's alpha-write rule under a
+disabled stencil test, neither of which was read. It cannot matter to this
+project, whose render target is a separate RGBA8 colour buffer with its own
+depth/stencil attachment, but it is the reason the redundancy claim is scoped to
+"the picture" rather than to "the framebuffer".
 
 **What actually suppresses the orange rim, then**, is the thing the project
 already does: the orange vertices are authored at **alpha 0**, and the blend is

@@ -622,6 +622,22 @@ next batch  = batch + header_size + payload_size
 earlier note describing `+0x2c` as a pre-compiled display list was describing a
 runtime allocation.
 
+**Two of those three are pinned more precisely as of 2026-08-09**, from
+`psp-pulse-usa/BOOT.BIN` - see
+[mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md):
+
+- **`+0x28` is not written at load. It is rewritten on every draw**, by
+  `Mesh_BuildBatchDrawCommands` (`0x0892e8f0`), as
+  `batch->0x28 = (batch->0x06 != 0)` - i.e. it caches "this batch uses its
+  alternate vertex block", the same predicate `mesh_batches` computes as
+  `use_alternate`. Reading it as load-time state is safe for a file parser but
+  wrong for anyone modelling the runtime.
+- **`+0x2c` is a pointer to an interned GE state-list cache entry**, not to a
+  display list itself. `Mesh_InitBatch` (`0x0890e8b4`) sets it from
+  `Gfx_AcquireBatchStateList` (`0x0891df48`), which interns on
+  `(pass_mask, header_byte3, depth_lo, depth_hi, depth_bias)`; the display list
+  is one further dereference away, at `entry+0x10`.
+
 Mesh header:
 
 ```text

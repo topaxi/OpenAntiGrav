@@ -1448,6 +1448,20 @@ results that bear on this page:
   `sceGuAlphaFunc` programmed `ALWAYS` / ref `0` / mask `0xff`
   (`Mesh_BeginTransparentPass`, `0x0890d904`). The inherited-alpha-test
   hypothesis for the rim is dead. Confidence 90.
+
+  **Scope corrected 2026-08-09: that pass is not the plume's.**
+  `Mesh_BeginTransparentPass` is the prologue of `FUN_089307b4`'s `& 2` group,
+  which the boost plume never enters - see [mesh-draw.md](mesh-draw.md), "The
+  plume is not drawn by `FUN_089307b4` at all". On the plume's real path
+  (`Mesh_CompileGeometryPass`, `0x0890d0cc`) the state comes from
+  `Gfx_BuildBatchStateList` (`0x0891f890`), which **enables** `GU_ALPHA_TEST`
+  with `GREATER` / ref `0` / mask `0xff` on every transparent batch. The
+  conclusion nevertheless still holds, for a different and stronger reason: the
+  plume's authored alpha is strictly `{0, 255}` (measured, 121 vertices, two
+  RGBA values), and under the source-alpha blend that path really programs, a
+  discard at `alpha == 0` removes only fragments already contributing zero. The
+  test is a fill-rate optimisation and changes no pixel. **The rim hypothesis
+  stays dead; the reason on this line was wrong.**
 - **`GU_BLEND` *is* enabled** for that pass, which closes `mesh-draw.md`'s own
   standing open question: the additive branch really composites `dst + src`.
   Confidence 90.
@@ -1620,7 +1634,13 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   **closed 2026-08-08, and the answer is that it does not.** `GU_ALPHA_TEST` is
   disabled, `GU_BLEND` is enabled with `GU_FIX` white on both sides, and nothing
   in the transparent pass scales fragment RGB but vertex colour x texture x the
-  blend. The falloff comes from the *texture*, sampled through
+  blend. (**Both GE readings in that sentence are from a pass the plume does not
+  take - corrected 2026-08-09, see the scope note above and
+  [mesh-draw.md](mesh-draw.md). The plume's own path enables `GU_ALPHA_TEST` and
+  blends `GU_SRC_ALPHA` / `GU_FIX` white. The heading's answer is unchanged and
+  is in fact sharper: the authored alpha reaches the picture as a *weight* on
+  the additive blend, which is exactly what `oag_render::exhaust::BLEND` already
+  does.**) The falloff comes from the *texture*, sampled through
   environment-generated coordinates. See the section above and
   [mesh-draw.md](mesh-draw.md). What replaced it as the open item was narrower
   and was a **rendering** gap rather than an RE one - environment-mapped UV

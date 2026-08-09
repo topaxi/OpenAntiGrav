@@ -416,3 +416,4 @@
 0x0891e054	function	Gfx_CompileDirtyBatchStateLists	90	mesh-draw.md
 0x0891f890	function	Gfx_BuildBatchStateList	90	mesh-draw.md
 0x0891e8c8	function	Gfx_ResetTexScaleAndFog	88	mesh-draw.md
+0x0891f320	function	Gfx_Init	85	mesh-draw.md
