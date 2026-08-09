@@ -317,3 +317,216 @@ port.
   field.
 - Modifier types other than 3, the `+0x9c8`/`+0x9cc` slot targets, and the
   emitter-local frame of the aimed cones.
+
+## The two unread draw modes, read (2026-08-09)
+
+Both were dispatched with known arguments but never opened. Both decompile
+cleanly and completely. **Confidence 88** on the geometry each builds - the
+vertex arithmetic is a direct read and the vertex *format* is confirmed
+independently, see below - and **65** on which of the two trig helpers is sine
+and which cosine, which is why neither is renamed.
+
+### The vertex format both use, and why it corroborates the rest
+
+Both end in `Gu_DrawArray(4, 0x19f, n, 0, scratch + 0x18)`. Decoding `0x19f`
+against the standard PSP vertex-type packing:
+
+| Field | Bits | Value |
+| --- | --- | --- |
+| texture | 0-1 | `3` = `GU_TEXTURE_32BITF`, 2 floats, 8 bytes |
+| colour | 2-4 | `7` = `GU_COLOR_8888`, 4 bytes |
+| normal | 5-6 | `0` = none |
+| position | 7-8 | `3` = `GU_VERTEX_32BITF`, 3 floats, 12 bytes |
+
+Total **24 bytes**, and both functions write their vertices at exactly `0x18`
+spacing. The stride the decode predicts and the stride the code uses agree
+without being fitted to each other, which is what makes `0x19f` safe to rely on
+elsewhere. `4` is `GU_TRIANGLE_STRIP`.
+
+Both begin with `iVar = Gfx_AllocDrawScratch(g_display, n)` and **return
+silently when it yields zero** - `0xf0` (240 bytes) for the eight-vertex streak,
+`0x90` (144) for the four-vertex sprite. Particle draws are therefore **dropped
+without trace when the per-frame scratch arena is exhausted**, which is worth
+knowing before attributing a missing effect to the simulation.
+
+### `FUN_08916d00` - the mode-7 draw is a *capped* streak, not a plain quad
+
+Its real signature, from the body rather than from the call site:
+
+```c
+FUN_08916d00(float half_width, float cap_ratio,
+             vec4 *b, vec4 *a, u32 colour)
+```
+
+The page's earlier description of the arguments as `(size, colour, &second_point,
+&position, ...)` mis-ordered them: **`param_5` is the colour**, and `param_2` is
+a float that only ever multiplies `param_1`.
+
+1. **Both endpoints are pushed to a common depth**, the mean of the two:
+   `z = (a.z + b.z) * 0.5`, then `a *= z/a.z` and `b *= z/b.z`. Because a
+   perspective projection divides by `z`, scaling all three components by the
+   same factor **leaves the screen position exactly unchanged** while making the
+   pair co-planar in view space. It is a deliberate trick, not a simplification:
+   it lets a screen-space-thick streak rasterise without perspective skew along
+   its length. (This page already described the mode-6 streak as scaling "onto
+   the nearer of the two depths"; mode 7 uses the **mean**, so if that reading
+   of mode 6 came from the same shape of code it is worth re-checking.)
+2. `dir = normalize(b - a)`, falling back to `(0, 1, 0)` for a zero-length
+   streak - so a degenerate streak still draws, as a blob at the sprite's own
+   size.
+3. `perp = (dir.y, -dir.x, 0) * half_width` and `cap = dir * (cap_ratio * half_width)`.
+4. Eight vertices, one triangle strip:
+
+   | # | position | `u` | `v` |
+   | --- | --- | --- | --- |
+   | 0 | `a - cap - perp` | 1 | 0 |
+   | 1 | `a - cap + perp` | 0 | 0 |
+   | 2 | `a - perp` | 1 | 0.5 |
+   | 3 | `a + perp` | 0 | 0.5 |
+   | 4 | `b - perp` | 1 | 0.5 |
+   | 5 | `b + perp` | 0 | 0.5 |
+   | 6 | `b + cap - perp` | 1 | 1 |
+   | 7 | `b + cap + perp` | 0 | 1 |
+
+   All eight take the same flat colour.
+
+**The `v` layout is the finding.** Vertices 2-5 all sit at `v = 0.5`, so the
+streak's *body* - the whole span from `a` to `b`, however long - samples a
+**single texture row**, stretched. Only the two caps, which extend
+`cap_ratio * half_width` beyond each endpoint, carry any `v` variation, running
+`0 -> 0.5` and `0.5 -> 1`. So the sprite's top and bottom edges become the
+**fade at each end of the streak** and its middle row becomes the body's
+constant colour. A reimplementation that maps `v` linearly `0 -> 1` along the
+whole streak will get a visibly different result: the falloff will smear over
+the entire length instead of staying in two fixed-size caps.
+
+### `FUN_08916610` - the mode-3 sprite is a rolled quad with an aspect ratio
+
+```c
+FUN_08916610(angle roll, float half_height, float aspect,
+             float *position, u32 colour)
+```
+
+Again `param_5` is the colour. Writing `c` and `s` for the two trig helpers'
+results (`FUN_0897e030` and `FUN_0897e300`), `h = half_height` and
+`w = aspect * half_height`, the four corners are exactly
+
+```
+axis_u = w * ( c, -s)
+axis_v = h * ( s,  c)
+
+v0 = p - axis_u - axis_v   uv (0, 1)
+v1 = p - axis_u + axis_v   uv (0, 0)
+v2 = p + axis_u - axis_v   uv (1, 1)
+v3 = p + axis_u + axis_v   uv (1, 0)
+```
+
+`z` is the particle's own view depth on all four - no depth equalisation is
+needed for a single point. So it is a **screen-aligned quad rotated by `roll`**,
+half-height `half_height` and half-width `aspect * half_height`. `axis_u` and
+`axis_v` are perpendicular for any `c, s` on the unit circle, so the quad is a
+true rectangle.
+
+**Not renamed, and this is why**: the two axes are a rotation only if
+`FUN_0897e030` is cosine and `FUN_0897e300` sine. That assignment makes
+`roll = 0` give an axis-aligned quad, which is the natural authoring intent and
+is almost certainly right - but "almost certainly right" is a 65, and neither
+helper was opened. **Reading those two functions is a five-minute job that would
+lift this whole section to 90**; until then, treat the pairing as a hypothesis.
+Nothing else on this page depends on it: the quad is a rotated rectangle either
+way, only the sign convention of `roll` is at stake.
+
+### The stretch factor: traced to `particle+0x64`, and it is one field feeding three modes
+
+The open item asked where `ParticleSystem_DrawStreak`'s stretch comes from.
+`ParticleSystem_DrawParticle` takes the **particle** struct itself (its caller
+`FUN_089177e4` walks the live list by `particle+0x78`), so its `param_1[n]`
+offsets are particle offsets. Read off the dispatch:
+
+| Particle field | Passed as |
+| --- | --- |
+| `+0x30` | `half_width` / `size` to modes 6, 7; `half_height` to mode 3; the half-extent of the inline mode-1/2 quad |
+| `+0x34` | the packed colour, to every mode |
+| `+0x38` | sprite-atlas frame index |
+| `+0x5c` | `roll`, mode 3 only |
+| **`+0x64`** | **`cap_ratio` to mode 7, the stretch to mode 6, and `aspect` to mode 3** |
+| `+0x68`, `+0x6c` | `Gu_TexScale` pair |
+| `+0x70` | atlas columns, `u16` |
+
+**One field drives all three.** This page previously treated the mode-6/7
+"stretch" and the mode-3 "aspect" as separate quantities; they are the same
+`particle+0x64`, which means whatever authored value feeds it has to make sense
+read both ways - as a multiple of the half-width for the caps, and as a
+width/height ratio for the sprite. That is a useful constraint on the search and
+it was not available before.
+
+**Still open, and now narrow**: which resource field initialises
+`particle+0x64`. It is **not** written by `ParticleSystem_InitParticle` or
+`ParticleSystem_UpdateParticles` - neither contains any store to `+0x64`
+(searched by instruction, both functions, all store forms). So it arrives either
+in a block copy at spawn or from a per-emitter cache. **The next step is to find
+the block copy in `ParticleSystem_InitParticle` and read its source offset**,
+not to keep grepping for a scalar store. A whole-program sweep for float stores
+to `+0x64` was run and every hit in the particle module belongs to a different
+struct, so the brute-force route is already exhausted - do not repeat it.
+
+### Checked against the consumer: none of this is a code change today
+
+Done before recommending anything, and the answer is that it should **not** be
+implemented yet. `oag_render::sparks` builds **one** four-corner quad per streak,
+`centre ± dir*(length/2 + half) ± perp*half`, with `u`,`v` spanning `0..1` across
+the whole thing. Against the original's eight vertices that is two differences:
+
+1. **Cap length.** Ours is `1.0 * half`; the original's is `particle+0x64 * half`.
+   The module's own doc comment already says it substitutes the size itself. But
+   **`+0x64`'s authored value is still unknown**, and `1.0` may be exactly right -
+   so there is nothing to change until the field is traced. The difference is now
+   *bounded and named* rather than vague, which is the useful part.
+2. **Where the falloff sits.** The original confines it to two fixed-size caps
+   and stretches a single texture row over the body; ours spreads it over the
+   entire streak. That would be a real visual difference **if we were sampling
+   the authored sprite** - and we are not. `sparks.rs` binds no texture at all
+   and computes a **procedural radial falloff from the UV** as a stand-in,
+   because the authored sprite has not been decoded. Re-mapping our `v` to the
+   original's `0 / 0.5 / 0.5 / 1` layout would therefore fit one approximation
+   to the *coordinate convention* of a texture we do not sample - which buys
+   nothing and would look arbitrary to the next reader.
+
+**So the correct order is: decode the sprite texture first, then adopt the `v`
+layout and the cap ratio together.** Adopting the `v` layout alone is not a
+partial fix, it is a change with no defined meaning. Recorded here so the
+sequencing survives.
+
+The one thing that *is* worth carrying into the code now is a comment
+correction: `sparks.rs`'s note that the original "extends the quad past both
+points by a per-system stretch factor" is right, and can now name the field
+(`particle+0x64`) and say that the same field is the mode-3 sprite's aspect
+ratio.
+
+### Applied names
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x08916d00` | `ParticleSystem_DrawCappedStreak` | 88 |
+| `0x08916610` | `ParticleSystem_DrawRotatedSprite` | 88 |
+| `0x0891eaec` | `Gfx_AllocDrawScratch` | 82 |
+
+`Gfx_AllocDrawScratch` (`0x0891eaec`) is named from its use rather than its
+body - it is called with a byte count, returns a pointer or zero, and both
+callers immediately write vertices into it - so 82 rather than 88. The two draw
+functions keep no `_q` suffix because the geometry they build is a direct read;
+the 65-confidence item is only the sine/cosine pairing, which is called out
+above and does not affect either name.
+
+### Two smaller facts from the same read
+
+- **The near-plane cull is `-1.0`.** `DAT_08a88500` is `0xbf800000`. Modes 6 and
+  7 test **both** endpoints and skip the particle if either has
+  `view_z > -1.0`; modes 1, 2 and 3 test the single position. So a particle
+  within one unit of the camera is dropped entirely rather than clipped, and a
+  two-point streak is dropped if *either* end is too near - it never draws
+  partially.
+- **The mode-1/2 inline quad ignores `+0x64`.** It is built at
+  `position.xy ± particle+0x30` with no aspect term, confirming this page's
+  reading that the size channel is a view-space half-extent, and confirming that
+  those two modes are square by construction.

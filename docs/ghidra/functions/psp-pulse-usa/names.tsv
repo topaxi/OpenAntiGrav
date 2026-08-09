@@ -417,3 +417,6 @@
 0x0891f890	function	Gfx_BuildBatchStateList	90	mesh-draw.md
 0x0891e8c8	function	Gfx_ResetTexScaleAndFog	88	mesh-draw.md
 0x0891f320	function	Gfx_Init	85	mesh-draw.md
+0x08916d00	function	ParticleSystem_DrawCappedStreak	88	particle-system.md
+0x08916610	function	ParticleSystem_DrawRotatedSprite	88	particle-system.md
+0x0891eaec	function	Gfx_AllocDrawScratch	82	particle-system.md
