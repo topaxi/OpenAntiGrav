@@ -186,20 +186,21 @@ pub fn capture_from(
     }))
     .context("requesting the device")?;
 
-    // **sRGB, so the hardware encodes on write exactly as the window's surface
-    // does**, and the bytes copied out are already the ones a PNG wants.
+    // **Raw, because the shader now writes gamma-space values and nothing may
+    // encode them a second time.** See
+    // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
     //
-    // The tempting alternative - a plain `Rgba8Unorm` target, on the grounds
-    // that a readback going straight into a PNG must not be gamma-encoded twice
-    // - is what this was, and it was wrong here. It is right only where the
-    // shader writes a value that is already sRGB, which is true of the front
-    // end's text and sprites and false of anything lit: `mesh.wgsl` multiplies
-    // a *linear* texel by the light rig, so an unencoded write stores linear
-    // light, and the capture comes out darker than the window it is supposed to
-    // match. Measured on the Feisar livery against the same view rendered both
-    // ways: the two disagree by a mean of ~2.4/255 and up to 57/255, the error
-    // being largest exactly where the rig is furthest from 1.0.
-    let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+    // This was `Rgba8UnormSrgb`, and the reasoning that put it there is
+    // superseded rather than wrong: given a texture upload that *linearised*,
+    // `mesh.wgsl` multiplied linear light by the light rig and only an
+    // encode-on-write target matched the window. That premise is gone - the
+    // upload below is raw now - so the multiply happens in gamma space, the
+    // window no longer encodes either, and an encoding target here would be the
+    // double-encode. The old measurement (mean ~2.4/255, up to 57/255 against
+    // the window) is exactly the error a *partial* migration reintroduces,
+    // which is why the format here and the format of `make`'s upload move
+    // together or not at all.
+    let format = wgpu::TextureFormat::Rgba8Unorm;
     let size = wgpu::Extent3d {
         width,
         height,
@@ -868,7 +869,20 @@ pub fn build(
             mip_level_count: mips.len() as u32,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            // **Raw, so the sampler hands the shader the disc's own bytes.**
+            // The GE blends stored bytes, so every stage of this pipeline works
+            // in gamma space and nothing linearises - see
+            // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
+            //
+            // This was `Rgba8UnormSrgb`. Vertex colour was never sRGB-decoded
+            // (`mesh.rs` builds it as `byte / 255.0`), so under that format the
+            // shader multiplied a *linear* texel by a *gamma* vertex colour -
+            // two spaces in one expression - and `race.rs` carried a load-time
+            // re-encode of the boost plume's texels purely to cancel it. That
+            // re-encode is gone with this; putting the sRGB format back without
+            // restoring it would darken the plume by the same ~30% the
+            // re-encode was compensating for.
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });

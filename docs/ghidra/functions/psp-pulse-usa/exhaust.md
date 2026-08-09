@@ -1044,6 +1044,57 @@ The original sits between the two, so something scales the rim's contribution
 down without discarding its hue, and it is not the blend. The premultiply
 stays, labelled in `race.rs` as a compensation with no recovered mechanism.
 
+### Colour space is not the missing multiplier either, and this one is a proof
+
+2026-08-09, after the GE state chain came back a hard negative (see
+[mesh-draw.md](mesh-draw.md)) and the search moved to the data. The remaining
+candidate on record was our own pipeline's linear-versus-gamma inconsistency
+(`HANDOVER.md`'s 2026-08-07 audit). **It cannot be the answer, and no experiment
+is needed to say so.**
+
+`srgb_encode` and `srgb_decode` are applied **per channel** and are **strictly
+increasing**. So they preserve channel ordering: if `r > b` in one space then
+`r > b` in the other, for every pixel, in either direction. The original's plume
+measures blue-dominant (`b - r = +17.6`) and an orange-rim fragment is
+red-dominant by construction - the authored vertex colour is `(255, 98, 5)` and
+`MODULATE` gives `blue_out = (5/255) * texel_blue` for any texel whatsoever.
+**No per-channel transform can carry a red-dominant fragment across to
+blue-dominant.** Confidence **95**; it is arithmetic, and the 5 is for the
+possibility that some stage is not per-channel.
+
+Confirmed numerically over the texture's own measured texels, fragment after
+`MODULATE` and an additive `One`/`One` over a dark background, PSP gamma-space
+arithmetic against fully linear-light arithmetic:
+
+| Vertex | Texel | PSP (gamma) | Linear light |
+| --- | --- | --- | --- |
+| white core | white `u=0` | `(255, 255, 255)` | `(251, 249, 252)` |
+| white core | violet mid | `(173, 98, 255)` | `(146, 77, 221)` |
+| **orange rim** | white `u=0` | `(255, 121, 45)` | `(251, 164, 56)` |
+| **orange rim** | violet mid | `(173, 54, 44)` | `(146, 53, 52)` |
+| **orange rim** | dark `u=1` | `(40, 28, 40)` | `(34, 27, 40)` |
+
+The choice of space moves values by up to 43/255 - it is a real defect and worth
+fixing on its own account - but **every orange row stays red-dominant in both
+columns**, and the linear column is if anything *more* orange in green. So the
+pipeline's colour-space bug is real, is being recommended for a fix
+(`HANDOVER.md`'s 2026-08-09 section takes the decision and the arithmetic), and
+**is not this.**
+
+### What is left, bounded
+
+Five candidate multipliers have now been read and each came back negative: GE
+blend state, the texture function (`GU_TFX_MODULATE` read from the call site's
+registers), the vertex colour format, the generated texture coordinates, and
+colour space. **The one path never read is whether every plume batch is
+submitted at all.** `FUN_089307b4` walks four separately-gated batch groups
+(`param_3 & 1/2/4/8`) and the plume's batches live in **list B** (`pass_mask &
+2`, measured: all 32 carry `0x1232`); which group mask the plume's own draw item
+carries has not been checked, so it is not established that all four batches
+reach the GE. That is decidable statically and it is the only remaining way the
+orange could be absent without any multiplier existing. Recorded as the next
+thread rather than left as an open-ended "something scales it".
+
 **One suspect was raised and refuted the same day, and the refutation is the
 more useful half.** The plume's authored `u` never leaves the first texel -
 `[0.000, 0.008]` against a `v` of `[0.031, 0.953]`, one step of an 8-bit
@@ -1611,6 +1662,14 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   | ours, authored UVs | 4,480 | `(184, 143, 203)` | +19.0 | 2,679 |
   | **ours, texgen + `SrcAlpha`** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
   | ours, texgen + `One`/`One` | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
+
+  > **These counts are superseded by ADR-0020 and must be re-baselined before
+  > anything is concluded from them.** Both masks carry a `luma > 60` term and the
+  > gamma migration raised background luminance by 54 % (72.9 -> 112.5), so pixels
+  > flipped in and out of every row for reasons that have nothing to do with the
+  > plume - the `orange px` column in particular rose on background track pixels
+  > newly clearing the luma gate. Re-measure ours *and* re-derive the original's
+  > row under the new pipeline, together, before comparing.
 
   **Re-measured 2026-08-09 after the trace harness showed the first run's pose
   was wrong**, so the flags are part of the result: `--pose-tick 62

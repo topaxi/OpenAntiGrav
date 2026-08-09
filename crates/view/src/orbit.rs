@@ -172,9 +172,17 @@ impl Session {
         .context("requesting the device")?;
 
         let size = window.inner_size();
-        let config = surface
+        // The viewer draws through the same pipeline the game does, so it
+        // works in the same space: gamma, with nothing encoding on write. See
+        // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
+        // A viewer left on an sRGB surface would show every mesh differently
+        // from the game and stop being usable as a reference, which is the
+        // whole point of it.
+        let mut config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .context("surface is not supported by this adapter")?;
+        config.format = config.format.remove_srgb_suffix();
+        config.view_formats = vec![config.format];
         surface.configure(&device, &config);
 
         let mesh_render::Built {

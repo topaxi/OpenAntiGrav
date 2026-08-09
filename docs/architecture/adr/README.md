@@ -30,6 +30,7 @@ out to be wrong.
 | [0017](0017-gstreamer-native-video.md) | GStreamer for platform-native H.264 decode, not a hand-rolled `libva` decoder | Accepted |
 | [0018](0018-audio-mixer-architecture.md) | Own the mixer, and treat cues as a per-tick output | Accepted |
 | [0019](0019-atrac3plus-out-of-process.md) | Decode ATRAC3+ out of process, into the movie cache | Accepted |
+| [0020](0020-gamma-authoritative-colour-space.md) | Gamma is the authoritative colour space; nothing linearises | Accepted |
 
 ## Format
 

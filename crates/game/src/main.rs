@@ -1795,9 +1795,24 @@ impl Gpu {
                 ..Default::default()
             }))
             .context("requesting the device")?;
-        let config = surface
+        let mut config = surface
             .get_default_config(&chosen.adapter, size.width.max(1), size.height.max(1))
             .context("surface is not supported by this adapter")?;
+        // **The window does not encode.** Every shader in this pipeline writes
+        // gamma-space values - the GE blends stored bytes, so that is the space
+        // the whole thing works in - and an sRGB surface would encode them a
+        // second time. See
+        // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
+        //
+        // Forced rather than accepted: `get_default_config` returns whichever
+        // format the adapter lists first, which is the sRGB variant on some
+        // backends and not on others, so leaving it alone would make the
+        // pipeline's colour space a property of the driver. `Renderer::new`
+        // forks the sprite sheet's texture format on `format.is_srgb()` and now
+        // always takes the raw side, which is what keeps authored sprite and
+        // text colours reaching the screen as authored on every path.
+        config.format = config.format.remove_srgb_suffix();
+        config.view_formats = vec![config.format];
         // Kept because the adapter is not: every later change of the vsync row
         // has to be checked against this same list, and re-requesting an
         // adapter to ask would be a second answer to the same question.

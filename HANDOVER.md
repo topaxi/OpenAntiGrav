@@ -829,6 +829,14 @@ moved 2-15 %.
 | **ours, texgen (this)** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
 | ours, texgen + the recovered `One`/`One` blend | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
 
+> **These counts are superseded by ADR-0020 and must be re-baselined before
+> anything is concluded from them.** Both masks carry a `luma > 60` term and the
+> gamma migration raised background luminance by 54 % (72.9 -> 112.5), so pixels
+> flipped in and out of every row for reasons that have nothing to do with the
+> plume - the `orange px` column in particular rose on background track pixels
+> newly clearing the luma gate. Re-measure ours *and* re-derive the original's
+> row under the new pipeline, together, before comparing.
+
 **One conclusion reversed on re-measurement**, and it is here rather than
 buried: on `b - r` alone the authored-UV build is now *closer* to the original
 (+19.0 against +17.6) than the generated-UV one (+13.3), where the first table

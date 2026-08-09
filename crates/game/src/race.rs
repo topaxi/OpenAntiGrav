@@ -830,7 +830,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let boost_name = boost_entry_name(&options.team, options.mode);
     let boost_model = match archives.read_name(&boost_name) {
         Ok(blob) => match mesh::build_with_textures(&boost_name, &blob, None, options.lod) {
-            Ok(mut model) => {
+            Ok(model) => {
                 report.push(format!(
                     "{boost_name}: {} triangle(s) - drawn additively while the plume is up",
                     model.indices.len() / 3
@@ -887,37 +887,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 // 0.008]`, `v [0.031, 0.031]`, so no texture content can reach
                 // them whatever the scale, while the 51-vertex batches carry a
                 // real `v` sweep and do band.
-                // The GE blends raw framebuffer bytes - gamma space - and the
-                // plume's whole look rides on that: additive maths on encoded
-                // values blooms to white far faster than the same maths on
-                // linear light. `Drawable` uploads every texture as
-                // `Rgba8UnormSrgb`, whose sampler hands the shader *linearised*
-                // values, which under `TRAIL_BLEND`'s `One`/`One` crushes the
-                // halo's mid-tones by ~30% of encoded brightness (worked
-                // example in HANDOVER's 2026-08-07 entry). The flare and trail
-                // already sample raw (`FlareTexture::bind` uploads
-                // `Rgba8Unorm`); encoding the plume's texels once here makes
-                // the hardware decode hand the shader the disc's own values,
-                // so all three boost elements feed the blender in the same
-                // space the PSP does.
-                // The exact piecewise curve, not a `pow(1/2.2)` approximation,
-                // so the GPU's decode restores the disc's own bytes to within
-                // 8-bit rounding.
-                fn srgb_encode(linear: f32) -> f32 {
-                    if linear <= 0.003_130_8 {
-                        linear * 12.92
-                    } else {
-                        1.055 * linear.powf(1.0 / 2.4) - 0.055
-                    }
-                }
-                for texture in model.textures.iter_mut().flatten() {
-                    for texel in texture.rgba.chunks_exact_mut(4) {
-                        for channel in &mut texel[..3] {
-                            let value = f32::from(*channel) / 255.0;
-                            *channel = (srgb_encode(value) * 255.0).round() as u8;
-                        }
-                    }
-                }
+                // **The load-time texel re-encode that used to sit here is
+                // gone, and putting it back would be a double-encode.** It
+                // existed only to cancel `Drawable`'s `Rgba8UnormSrgb` upload,
+                // whose sampler linearised the disc's bytes before the shader
+                // saw them. That upload is raw now
+                // ([ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)),
+                // so the sampler already hands the shader the disc's own
+                // values and there is nothing left to compensate for. The
+                // effect it was compensating for is real - `One`/`One` on
+                // linearised texels crushes the halo's mid-tones by ~30% of
+                // encoded brightness - which is why the fix moved to the
+                // upload rather than being dropped.
                 Some(model)
             }
             Err(e) => {
@@ -3893,6 +3874,17 @@ impl Scene {
         // | **ours, texgen + `SrcAlpha` (this)** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
         // | ours, texgen + `TRAIL_BLEND` (the recovered blend) | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
         //
+        // **Superseded by ADR-0020 and awaiting a re-baseline.** Both masks
+        // carry a `luma > 60` term and the gamma migration raised background
+        // luminance 54 % (72.9 -> 112.5), so pixels flipped in and out of every
+        // row for reasons unrelated to the plume - the `orange px` column rose
+        // on background track pixels newly clearing the luma gate. Ours *and*
+        // the original's row have to be re-derived together under the new
+        // pipeline before anything is concluded from the table. It is kept
+        // meanwhile because the *ordering* it establishes - `One`/`One` far
+        // worse than `SrcAlpha` on every column - does not depend on where the
+        // luma gate sits.
+        //
         // **Re-measured 2026-08-09 after the harness found the first run's
         // pose was wrong**, and the flags matter: `--pose-tick 62 --pose-boost
         // 0.517752 --pose-intensity 0.1250567 --pose-speed 148.8853`. The
@@ -4512,20 +4504,21 @@ pub fn capture(
     }))
     .context("requesting the device")?;
 
-    // `Rgba8Unorm` for an ordinary capture: the readback goes straight into a
-    // PNG and the front end's own draws already write sRGB values, so a second
-    // gamma encode would double-correct. A `--presented` capture is a picture
-    // of a *window*, so it takes the window's format and lets the hardware
-    // encode on write - which is also what makes the offscreen target's
-    // non-sRGB twin, and therefore FSR 1, work at all. See `crate::upscale`.
+    // **`Rgba8Unorm` on both paths now**, because every shader in this pipeline
+    // writes gamma-space values and nothing may encode them again - see
+    // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
     //
-    // (Whether the *ordinary* path should follow suit is an open question, and
-    // it is open because it would also encode authored HUD text colours. See
-    // HANDOVER.)
-    let format = match options.presented {
-        Some(_) => wgpu::TextureFormat::Rgba8UnormSrgb,
-        None => wgpu::TextureFormat::Rgba8Unorm,
-    };
+    // `--presented` used to be `Rgba8UnormSrgb` on the grounds that it is a
+    // picture of a *window* and should take the window's format. It still is,
+    // and it still does: the window stopped encoding in the same change. That
+    // the two agreed on the label and not on the value is what made a
+    // `--screenshot` and a `--presented` capture of the same frame disagree
+    // about the boost plume by up to 73/255, the plume being the one surface
+    // whose texels were already re-encoded to compensate for the old upload.
+    // The offscreen target's non-sRGB twin, and therefore FSR 1, still work -
+    // `remove_srgb_suffix` on a format that has no suffix is the identity. See
+    // `crate::upscale`.
+    let format = wgpu::TextureFormat::Rgba8Unorm;
     // The scene's own size, which presented is the aspect rectangle scaled and
     // otherwise is the whole capture.
     let presented = options.presented.map(|state| PresentedState {
@@ -4639,11 +4632,14 @@ pub fn capture(
     // path has no `Framebuffer` and so no overlay pass of its own - which would
     // make `--screenshot` useless for the one thing it is most wanted for.
     //
-    // Note an ordinary capture's target is `Rgba8Unorm` while a window's is
-    // sRGB, and `Renderer::new` forks the sprite sheet's texture format on
-    // `format.is_srgb()`. Text and fills go through the R8 coverage atlas and are
-    // unaffected; the HUD's art is not. See `docs/ui/hud.md`. A `--presented`
-    // capture is sRGB throughout and so takes the window's side of that fork.
+    // **Every path is `Rgba8Unorm` since ADR-0020** - this capture, a
+    // `--presented` capture and the window alike - so `Renderer::new`'s fork of
+    // the sprite sheet's texture format on `format.is_srgb()` now always takes
+    // the raw side, and the HUD's art reaches all three the same way. It used
+    // to differ: an ordinary capture was raw while the window and `--presented`
+    // were sRGB, which is exactly the disagreement the ADR removed (measured at
+    // up to `73/255` on the plume). Text and fills go through the R8 coverage
+    // atlas and were unaffected either way. See `docs/ui/hud.md`.
     match crate::hud::Overlay::new(&device, &queue, format, &hud) {
         Ok(Some(mut overlay)) => overlay.draw(
             &device,

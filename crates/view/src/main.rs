@@ -857,9 +857,17 @@ impl Renderer {
         .context("requesting the device")?;
 
         let size = window.inner_size();
-        let config = surface
+        // The viewer draws through the same pipeline the game does, so it
+        // works in the same space: gamma, with nothing encoding on write. See
+        // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
+        // A viewer left on an sRGB surface would show every mesh differently
+        // from the game and stop being usable as a reference, which is the
+        // whole point of it.
+        let mut config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .context("surface is not supported by this adapter")?;
+        config.format = config.format.remove_srgb_suffix();
+        config.view_formats = vec![config.format];
         surface.configure(&device, &config);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -972,9 +980,14 @@ impl Renderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            // Srgb: the palettes hold non-linear colour, so a linear format
-            // would render everything washed out.
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            // Raw, and for the same reason as before by a shorter route: the
+            // palettes hold non-linear colour, and the surface no longer
+            // encodes ([ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)),
+            // so handing the sampler's output straight to the screen shows the
+            // palette's own bytes. Declaring it sRGB here would linearise on
+            // read with nothing to encode on write, which is the washed-out
+            // case that comment used to be about.
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
