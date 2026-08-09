@@ -808,6 +808,79 @@ Still not matched, and unchanged by this: the bloom / bright-pass shoulder, and
 the craft's residual render scale. Both are recorded on
 [exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md).
 
+## The craft render scale invalidates matched-pose pixel comparison (2026-08-09)
+
+**Read this before trusting any matched-pose exhaust measurement, including the
+ones in the section above.**
+
+Chasing "our boost still looks nowhere near the original", three sweeps were run
+and all three came back saying the reimplementation is *right*:
+
+- **`engine_fire` (`0x3e5`) is authored on zero of the 340 VEXX files on the PSP
+  disc**, and `exitglow` (`0x3e4`) on 25, all track geometry, none ship-side.
+  That closes exhaust.md's open item about the two unregistered classes from the
+  data side: unregistered *and* uninstanced. `crates/assets/examples/class-sweep.rs`
+  was written for this and then deleted; it walks every WAD entry by index and
+  reports nodes of a given class with their parents, and is worth rewriting if
+  the question recurs.
+- **`Trail` (`0x3c8`) appears on exactly three files disc-wide**, which closes
+  exhaust.md's "whether `Trail` appears outside `shipwreck.vex`, four files
+  checked": `Assegai\shipwreck.vex` (`trail_con_left_wing` /
+  `trail_con_right_wing`), `Triakis\shipwreck.vex`, and one unidentified entry
+  (index 809, hash `0xb980d0b7`, 73 nodes, 96,224 bytes) that hashes to no
+  `Ship`/`shipwreck`/`shipboost` of any of the eight PSP teams, nor to
+  Mirage/Van_Uber/Auricom/Harimau/Icaras. **Every instance is a left/right
+  pair**, which looked like the answer - two wing-mounted ribbons where we run
+  one - but no racing `Ship.vex` authors one at all, and the racing trail is
+  code-created from preset 2, so the pairs are a wreck thing and this is not
+  evidence about the racing craft.
+- **Every recovered ribbon constant matches**: ring capacity `10`, taper rate
+  `-4.5`, head taper `1.0`, layer count `3`, per-layer half-widths
+  `[1.0, 0.7, 0.5]`, the `intensity * 0.35 + 0.2` width scale, the four-fin
+  cross, and the `~3.5`-unit direction stretch. And the **state** matches too:
+  a `--pose-intensity 0.1292277 --pose-boost 0.5` render reaches `0.2542`
+  against the capture's recorded `0.2544947`.
+
+**And yet the picture does not.** Luminance down the exhaust axis at matched
+pose and matched intensity, plume expired so only the ribbon draws, each
+normalised by its own frame's wingtip-lamp span:
+
+| threshold | the original | ours |
+| --- | --- | --- |
+| luma > 200 | 0.93 spans | 0.20 |
+| luma > 150 | 1.59 | 0.26 |
+| luma > 100 | 2.01 | 0.50 |
+| luma > 70 | 2.42 | 1.14 |
+
+Note the gap is **worst at the bright core and narrows as the threshold drops**,
+which is the opposite of what a missing bloom would do - bloom spreads dim light
+outward and would inflate the low thresholds while leaving the core alone. So
+"it is the unimplemented bright-pass" does not fit this measurement.
+
+**The most likely explanation is the instrument.** Our craft renders **1.43x**
+too large at the original's own recorded camera pose - wingtip-lamp span
+`133.1 px` against `92.9 px`, measured with one detector over both frames - and
+sits ~35 px lower in the frame. Normalising by craft span assumes the scene
+scales uniformly, and it does not for geometry extending *toward* the camera,
+which is exactly what an exhaust ribbon is. **Every matched-pose pixel
+comparison in this project inherits that error**, including the four-row blend
+table in the section above.
+
+Two consequences, and they are the actionable part:
+
+- **The craft scale stops being a cosmetic open item and becomes a blocker for
+  the comparison method.** See the `1/0.75^2` lead in the Open threads table.
+  Note this 1.43 does not agree with the 1.191 that table records after the
+  `0.75` landed; HANDOVER already warns the lamp-centroid metric "establishes
+  'too big' and nothing finer", and two different detectors disagreeing by that
+  much is the warning being earned. A non-emissive silhouette measurement is
+  what would replace it.
+- **State comparison does not inherit the error, and that is why the trace
+  harness is worth more than another screenshot.** `boost_timer`, `plume_timer`,
+  `intensity` and `half_size` are numbers on both sides and care nothing about
+  render scale. The flare column group and `oag-game --trace-out` exist for
+  exactly this; prefer them over any pixel argument about the exhaust.
+
 ## Open threads
 
 Each is a real, named next step. The Task numbers are the ones the agent passes
