@@ -42,6 +42,35 @@
 //! `oag_formats::handling`'s**, which deliberately returns the document's raw
 //! values. Applying them twice is the most likely integration bug in this area,
 //! and it would be silent: the ship would simply be sluggish.
+//!
+//! # Where the simulation's numbers come from: the seam, stated
+//!
+//! Stage 6 of the engine/title split ([ADR-0021]) is this paragraph and the ones
+//! like it, and it deliberately **moves nothing**. Naming the boundary is the
+//! work; relocating constants across it is not, because
+//! [ADR-0009](../../../docs/architecture/adr/0009-multi-game-fanout.md) item 2
+//! gates second-title *simulation* work behind M4's exit and the force law is
+//! that milestone's live subject. A constant moved mid-investigation is a
+//! constant nobody can find in the diff they are bisecting.
+//!
+//! Every number the simulation reads falls in exactly one of three places:
+//!
+//! | Where it comes from | Lives in | Example |
+//! | --- | --- | --- |
+//! | The player's disc, per team and speed class | this file's types, filled at load | every field here |
+//! | The player's disc, engine-wide | `oag_formats::handling::Global` | `<SpeedupPads>`, `<GravityMul>` |
+//! | The original's **code**, recovered by reading it | a `pub const` beside the law that uses it | `crate::passive::DRAG_GROUND` |
+//!
+//! The third row is the one the split has to be careful about. Those constants
+//! are `oag-physics`'s today and would become **a title package's** the day a
+//! second title's force law is opened - they are literals out of *Pulse's*
+//! executable, so a title that compiled a different number is a different table,
+//! not a different engine. Nothing acts on that yet, on purpose: which of them
+//! generalise is unmeasured, and `docs/formats/pure-status.md` measured none of
+//! Pure's simulation. Recording which side of the line each is on is what makes
+//! the move mechanical when M4 closes, and what stops it being guessed at now.
+//!
+//! [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
 
 /// Engine response. `<Engine accelcap amount falloff gain turbo/>`.
 ///

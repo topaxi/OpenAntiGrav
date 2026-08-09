@@ -15,6 +15,32 @@
 //! [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md)
 //! there would be no writing it down even if there were. They arrive as
 //! arguments to [`thrust`].
+//!
+//! # Which side of the engine/title seam these are on
+//!
+//! **A title package's, and this is not hypothetical.** Everything in this file
+//! is a literal out of *Pulse's* executable, and Pure ships zone mode too: its
+//! `Data\Ships\Zone_01\handlingstats.xml` is a real file, with `team="ZoneMode"`
+//! and - uniquely on either disc - no `<Class>` ladder at all
+//! (`docs/formats/pure-status.md`). So "ten seconds a zone, 500 for a clean one,
+//! 100 for a new pad" is a claim about what Pulse scores, not about what a zone
+//! *is*, and nothing here has been checked against Pure's executable.
+//!
+//! Stage 6 of the engine/title split ([ADR-0021]) names that and **moves
+//! nothing**. Relocating these into `oag-pulse` today would put four numbers in
+//! a title package with no second corpus to check them against, which is the n=1
+//! design [ADR-0009](../../../docs/architecture/adr/0009-multi-game-fanout.md)
+//! item 3 warned about and ADR-0021 does not license outside the format layer.
+//! Item 2 of the same ADR gates second-title simulation work behind M4's exit
+//! anyway. What this paragraph is for is that when that gate opens, the question
+//! "is this Pulse's or is it the engine's?" is already answered for this file
+//! rather than re-derived from the Ghidra pages.
+//!
+//! The mechanism around them - accumulating the delta, stepping the zone,
+//! assigning into the craft, `thrust`'s shape - is the engine's and stays, the
+//! same split `oag_physics::params` draws for the force law.
+//!
+//! [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
 
 /// Seconds of accumulated frame time between zone steps.
 ///

@@ -136,6 +136,24 @@ impl Course {
     /// [`Self::path_boundaries`] turning out to land on the line across circuits -
     /// which would make the start line authored data at confidence 88 rather than
     /// a constant at 65.
+    ///
+    /// # Which side of the engine/title seam this is on
+    ///
+    /// **Neither, yet, and that is the finding rather than an omission.** The
+    /// three constants stage 6 of the engine/title split
+    /// ([ADR-0021](../../../docs/architecture/adr/0021-title-packages.md)) looked
+    /// at each land somewhere definite - the per-team parameters on the disc, the
+    /// force-law literals in Pulse's code, Zone's scoring in Pulse's code - and
+    /// this one lands nowhere, because **it stands in for a computation nobody
+    /// has read**. If the grid layout turns out to be authored, this is disc data
+    /// and belongs to no crate at all; if it is code, it is Pulse's and belongs
+    /// beside the other recovered literals. Confidence 65 is exactly the reason
+    /// it cannot be filed: a number at 65 placed in a title package would be
+    /// asserting it is title-specific, which is one of the two answers still open.
+    ///
+    /// So it stays here, and the seam paragraph in `oag_physics::params` does not
+    /// claim it. A constant whose provenance is unknown is worth less filed
+    /// wrongly than left where the note explaining it is.
     pub const START_LINE_OFFSET: f32 = 137.9;
 
     /// Walks a decoded spline graph into a closed ring.

@@ -46,6 +46,25 @@
 //!
 //! Nothing else is scaled, converted or defaulted. Units of the remaining
 //! fields are the game's own; see `docs/formats/handling-stats.md`.
+//!
+//! # This file *is* the seam
+//!
+//! Stage 6 of the engine/title split ([ADR-0021]) asked where the boundary
+//! between "a number off the player's disc" and "a number out of the original's
+//! code" runs. For the per-team parameters the answer is here and needed no
+//! change: [`handling_for`] is the only place a document value becomes a
+//! simulation value, [`SCALED_FIELDS`] is the exhaustive list of the ones that
+//! are transformed on the way, and a test asserts that list has not grown.
+//!
+//! What that buys when a second title arrives: its `handlingstats.xml` reaches
+//! the force law through this one function, so a schema that authors a field
+//! differently is a change to one mapping rather than a hunt through
+//! `oag-physics`. What it does **not** buy is the constants the original
+//! compiled in - those sit beside the laws that read them in `oag-physics`, and
+//! `oag_physics::params`' module docs say which side of the line they are on and
+//! why none of them moved.
+//!
+//! [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
 
 use oag_formats::handling::{self as fmt, SpeedClass as FmtClass};
 use oag_physics::params::{

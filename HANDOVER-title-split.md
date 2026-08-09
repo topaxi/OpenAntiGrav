@@ -4,9 +4,9 @@ Scoped to one effort, and meant to be **deleted when it is finished**. The
 durable record is [ADR-0021](docs/architecture/adr/0021-title-packages.md),
 [workspace-layout](docs/architecture/workspace-layout.md) and the
 "engine/title split" section of [HANDOVER.md](HANDOVER.md). This file is the
-part that only matters until stages 6 and 7 land.
+part that only matters until stage 7 lands.
 
-Branch: `split/title-packages`, eight commits, `just` green at each.
+Branch: `split/title-packages`, nine commits, `just` green at each.
 
 ## The one rule that decides every question this raises
 
@@ -38,6 +38,7 @@ wrong on a file Pulse itself ships.
 | 5 | `oag-pure`, and three ground-truth tests proving Pure's disc opens through the same mechanism |
 | 0 | The handling element diff, enumerated in one pass against both discs |
 | 4 | Presentation tables to `oag-pulse`; `SCREEN` settled rather than made per-source |
+| 6 | The physics seam, stated in four module docs; **no constant moved** |
 
 Stage 5 was taken before 4 on purpose: it unblocked the real-file evidence the
 handling change was missing.
@@ -111,6 +112,37 @@ construction*, which means no PS2 HUD layout has ever been checked for the
 dropped-`<Item>`-offset defect that test exists to catch. Now a row in
 `HANDOVER.md`. Measure before promoting a comment to a decision.
 
+### What stage 6 settled
+
+Four module docs, no code. Every simulation number now falls in a named place:
+
+| Where it comes from | Lives in | Moves when M4 closes? |
+| --- | --- | --- |
+| The disc, per team and speed class | `oag_physics::params`' types, filled at load | no - already title-blind |
+| The disc, engine-wide | `oag_formats::handling::Global` | no |
+| Pulse's **compiled code** | a `pub const` beside the law that reads it | **yes, to a title package** |
+
+`gameplay/src/handling.rs` needed nothing: it already *is* the seam, and
+`SCALED_FIELDS` plus its test is the idiom the other three were written to
+match.
+
+`race/src/zone.rs` is the one worth knowing about. Its four numbers are Pulse
+literals and **Pure ships zone mode too** - `Data\Ships\Zone_01\handlingstats.xml`
+is the classless file item 0 found - so "ten seconds a zone, 500 for a clean
+one" is a claim about what Pulse scores, not about what a zone is. Filed as
+title-sourced, moved nowhere: four numbers in a title package with no second
+corpus is the n=1 design ADR-0009 item 3 warned about.
+
+`course.rs`'s `START_LINE_OFFSET` **could not be filed at all**, and that is the
+finding rather than an omission: at confidence 65 it stands in for a computation
+nobody has read, so putting it in a title package would assert it is
+title-specific, which is one of the two answers still open.
+
+**Oracle, run:** determinism reference hashes unchanged, and the trace-compare
+against `talons-junction-time-trial-lap.inputs` diverges at the same tick 0 on
+`angular_velocity` with the simulated trace **byte-identical** to the one taken
+before the change.
+
 One thing item 0 noticed and did not act on: `oag_formats::handling::TEAMS` and
 `entry_name` are **Pulse's roster living in the format crate**, which the rule
 table above puts in a title package. Not moved, because `handling_ground_truth`
@@ -118,22 +150,7 @@ and the miner both consume it and that is stage-4-shaped work, not survey work.
 
 ## Left to do
 
-### 2. Stage 6 - the physics seam, and *not* the relocation
-
-Define the params boundary; **leave every constant where it is.**
-`crates/physics/src/params.rs:31-49` is most of the way there. Same for
-`gameplay/src/handling.rs:59-101`, `race/src/zone.rs`, and
-`race/src/course.rs:139` `START_LINE_OFFSET`.
-
-ADR-0009 item 2 gates second-title simulation work behind M4's exit, and the
-force law is that milestone's live blocker. `<pitch>` is queued behind this too.
-
-**Oracle:** determinism hashes unchanged **and** `just trace-compare` against
-`verification/scenarios/talons-junction-time-trial-lap.inputs` diverging at the
-same tick. A shifted divergence point means the seam changed a value it was
-meant to pass through.
-
-### 3. Stage 7 - docs and tidy
+### Stage 7 - docs and tidy
 
 - A **title** column in both status tables in `docs/formats/README.md`. They
   have a `Platforms` column and no title column, so every row is implicitly
