@@ -249,6 +249,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         // No saved language: these boot a fresh install every time.
         language: None,
         source: image.display().to_string(),
+        dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: boot::DEFAULT_BOOT_MOVIE.to_string(),
         cache: std::env::temp_dir().join("oag-race-handoff"),

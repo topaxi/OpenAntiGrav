@@ -278,7 +278,13 @@ fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
     // The full roster, not just `race::DEFAULT_TEAM` - the point of this test
     // is that the rule holds for each team independently, not for one team by
     // coincidence.
-    const TEAMS: [&str; 11] = [
+    //
+    // **Twelve, not eleven.** The PS2 release bundles what the PSP sold as
+    // four downloadable packs, and the twelfth was missed here for as long as
+    // its id was unknown: the pack the packaging calls Mirage ships its ship
+    // under `Data\Ships\Mantis`, so no spelling of `Mirage` ever resolved. See
+    // `docs/formats/dlc-pack.md`.
+    const TEAMS: [&str; 12] = [
         "AG_Systems",
         "Assegai",
         "Auricom",
@@ -287,6 +293,7 @@ fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
         "Goteki",
         "Harimau",
         "Icaras",
+        "Mantis",
         "Piranha",
         "Qirex",
         "Triakis",
@@ -403,6 +410,9 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
         // No saved language: these boot a fresh install every time.
         language: None,
         source: image.display().to_string(),
+        // The PS2 disc bundles what the PSP sold as downloadable content, so
+        // this one has a roster of twelve with nothing mounted.
+        dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: oag_game::boot::DEFAULT_BOOT_MOVIE.to_string(),
         cache: oag_game::boot::default_cache_dir(),

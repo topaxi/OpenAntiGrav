@@ -1,0 +1,251 @@
+# Downloadable content packs
+
+**Status: understood.** Read by
+[`oag-assets::dlc`](../../crates/assets/src/dlc.rs), unpacked by
+[`oag-game::dlc`](../../crates/game/src/dlc.rs), mounted by
+[`oag-assets::pulse::Archives`](../../crates/assets/src/pulse.rs).
+
+Wipeout Pulse sold four downloadable packs for the PSP. Each adds one team and
+two circuits. **There is no new container here**: the payload files are
+[WAD archives](wad.md) under a misleading extension, so nothing in this page
+required a new parser.
+
+This page also settles a question the repository had open in four places - which
+platform ships `Auricom`, `Harimau`, `Icaras` and `Mirage`. See
+[the roster](#the-roster-and-the-name-that-hid-it).
+
+## Layout
+
+A download is a `.zip` holding one folder named for the title id, and five
+files:
+
+```
+UCES00465/
+  PACKn.edat        the team's ship, and the two circuits' geometry
+  PACKn_UI1.edat    the team's handlingstats.xml, and front-end art
+  PACKn_UI2.edat
+  PACKn_UI3.edat
+  PARAM.pbp         PSN packaging metadata; nothing in the engine reads it
+```
+
+Every `.edat` is a [WAD](wad.md), version 1, entries stored or LZSS-compressed,
+with the offset chain closing exactly as the disc's own archives do.
+
+### Entry 0 is a manifest
+
+The first entry of each archive is XML shaped like a fragment of the disc's own
+`Data\Plugins\PI001\Definition.xml` - the same `PI_Team` and `PI_Track` schema,
+under the same `<Screen name="Top">` root:
+
+```xml
+<Screen name="Top">
+  <PI_Team name="...">
+    <Values type="Race" soundregister="..." multiplayer="true"
+            location="Data\Ships\..." helpText="MSC_TEAMDES_..."/>
+    <FE speed="" thrust="" handling="" shield=""/>
+    <PI_TeamModel name="Normal">
+      <Values location="ship"/>
+      <PI_ModelSkin name="Alternative">
+        <Values location="Data\Ships\...\ship_alt.dat"/>
+        <Unlock Team="..." loyalty="" Exclusive="true"/>
+      </PI_ModelSkin>
+    </PI_TeamModel>
+  </PI_Team>
+  <PI_Track name="..."><Values type="Race" location="Data\Environments\..."/></PI_Track>
+  <LoadXML><Values Src="downloadNN.xml"/></LoadXML>
+</Screen>
+```
+
+The main archive's manifest is populated and plain (`<?xml`, unshortened); the
+three UI archives carry an empty `<Screen name="Top">` stub as
+[shortened XML](fexml.md). Entry 1 of the main archive is the `downloadNN.xml`
+the `LoadXML` names: a `PI_Grid` championship ladder, which this engine does not
+read yet.
+
+Because the schema is the disc's,
+[`oag_game::catalogue`](../../crates/game/src/catalogue.rs) reads a pack with
+the very functions that read the disc, and a mounted pack's teams and circuits
+are indistinguishable downstream from the source's own.
+
+## `PACKn.edat` is not encrypted
+
+**Confidence: 94.** The extension says EDAT, which on the PSP normally means
+PGD-encrypted content needing a key. These are not:
+
+- All four packs parse as WAD v1 with an unmodified `oag-formats::wad`: 32-33
+  entries each, LZSS where the flags say LZSS, and `entry[i+1].offset ==
+  align64(entry[i].offset + entry[i].size)` holding across every entry. An
+  encrypted file does not accidentally satisfy an arithmetic invariant over its
+  whole directory.
+- Every blob decompresses to its declared uncompressed size, and the results are
+  `.vex` scenes and XML that the existing decoders read.
+- The executable's only NpDrm import, `sceNpDrmEdataSetupKey`, is called with no
+  key argument, and `sceNpDrmSetLicenseeKey` - which would supply one - is never
+  imported. See `data/README.md`.
+
+**Capped at 94, and the cap is the rubric's rather than a hedge.** Nothing here
+watched the original mount a pack, so the
+[rubric](../reverse-engineering/confidence-rubric.md)'s 95-100 band - a runtime
+trace *and* a second binary - is out of reach on its first leg. What this does
+have is the top of the 85-94 band twice over: an exact arithmetic invariant
+across every entry of four real files, and the same reading holding in a second
+binary's archives. [`wad.md`](wad.md#evidence) caps the container itself at 94
+for exactly this reason, and a page about that container's contents cannot score
+higher than the container.
+
+Two consequences worth stating plainly, because both cost time otherwise:
+
+1. **There is no decryption step to write.** A contributor who sees `.edat` will
+   look for one.
+2. `Wad_ApplyStreamCrypt` (`0x089508e8`), the WAD subsystem's dead cipher hook,
+   is *not* what protects these. It is NULL at every retail mount and these
+   files are plaintext, so the two facts agree rather than one explaining the
+   other. See [the WAD subsystem](../ghidra/functions/psp-pulse-usa/wad-subsystem.md).
+
+## The ships are fully simulatable
+
+**Confidence: 90.** A pack carries `Data\Ships\<Team>\handlingstats.xml` - in
+`PACKn_UI1.edat`, not in the main archive - as shortened XML in the documented
+[handling-stats](handling-stats.md) schema, with all four speed classes and
+every attribute the parser requires - which is a real constraint rather than a
+lenient read, because `oag_formats::handling` has no defaults and rejects a file
+missing any of them. `crates/game/tests/dlc_ground_truth.rs` loads all four
+teams in all four speed classes.
+
+Below the container's own 94 rather than level with it: this is four files
+parsing against a schema, not an arithmetic invariant closing over their bytes,
+and it inherits [handling-stats](handling-stats.md)' own open question about
+which PSP function writes the tail of the struct.
+
+This is the difference between loading a DLC ship and *racing* one, and the
+split across archives is the trap: mount only `PACKn.edat` and the model appears
+while the stats do not.
+
+## The roster, and the name that hid it
+
+**Confidence: 94.** The four packs add these teams, by **id** - the folder under
+`Data\Ships\`:
+
+| Pack, as sold | Archive | Team id | Circuits it carries |
+| --- | --- | --- | --- |
+| Mirage | `PACK1` | **`Mantis`** | `11_Track`, `08_Track`, forward |
+| Icaras | `PACK2` | `Icaras` | `11_Track`, `12_Track`, reversed |
+| Harimau | `PACK3` | `Harimau` | `12_Track`, `15_Track`, forward |
+| Auricom | `PACK4` | `Auricom` | `15_Track`, `08_Track`, reversed |
+
+**The Mirage pack's team is `Mantis` everywhere in the data.** Three independent
+sources agree, which is what puts this at the top of its band - and it stays
+inside that band, not above it, because none of the three is a runtime
+observation:
+
+1. `PACK1.edat`'s manifest declares `<PI_Team name="Mantis">` with
+   `location="Data\Ships\Mantis"` and `helpText="MSC_TEAMDES_MIR"` - the id and
+   the Mirage string key in one element.
+2. On the PS2 disc, `Data\Ships\Mantis\Ship.vex` reads out of `WADS2.WAD` and
+   `Data\Ships\Mirage\Ship.vex` does not exist.
+3. **The American PSP disc's own string table** maps the id `Mantis` to a
+   different display name, in `Data\Plugins\PI008\entries.xml` and its four
+   siblings. The name is shipped text and is not reproduced here; that it
+   differs from the id is asserted by `dlc_ground_truth.rs`.
+
+So `Mirage` is a display name and was never a folder. That single fact retires a
+gap the repository recorded in four places - `HANDOVER.md`, the
+[roadmap](../overview/roadmap.md), `exhaust.md`, and
+`boost_plume_ground_truth.rs` - all of which said five teams' `Ship.vex` "does
+not resolve by name", and three of which concluded `Auricom`/`Harimau`/`Icaras`
+were **PS2-only**. They are not: they are PSP downloadable content, and the PS2
+release simply bundles what the PSP sold separately. Of the original five,
+`Van_Uber` alone is still unaccounted for, and it is a *Pure* team.
+
+The ids are also the leaf of each `location`, for every team on both discs and
+in every pack - which is why `race::ship_entry_name` can go on composing a path
+out of a team id alone.
+
+## The circuits are new, and the four packs interlock
+
+**Confidence: 94.** Each pack ships its own
+`Data\Environments\NN_Track\{track[_reversed].vex, zone_track[_reversed].vex,
+start_grid.vex, stats[_reversed].xml, TrackStartup.xml}`. None of
+`08/11/12/15_Track` is on the base disc under any spelling.
+
+Four circuits, each in two directions, is the eight `PI_Track` entries the four
+manifests declare between them - and those eight track numbers are **precisely
+the eight missing** from the base definition's own numbering, which runs to 32
+and ships 24. The numbering was reserved for them.
+
+The packs split each circuit by direction rather than by circuit: `PACK1` has
+`11_Track` forward and `PACK2` has it reversed. A player who owns one pack
+therefore holds a `PI_Track` declaration whose geometry is in a pack they do not
+have, which is why `oag_game::boot` drops a declared circuit whose `location`
+resolves to nothing mounted rather than offering it and failing at the archive.
+
+## Overlapping entries are byte-identical
+
+**Confidence: 92.** Two packs carrying the same environment share exactly two
+entries - `start_grid.vex` and `TrackStartup.xml`, which do not vary by
+direction - and both are byte-identical between the packs, same stored size and
+same SHA-256. Everything else differs by construction, being the forward or the
+reversed file.
+
+That is what makes **first mounted wins** a safe rule rather than a silent
+choice: within the shipped set it can never pick between two different things,
+because there are none to pick between.
+
+## Mounting
+
+`Archives` searches `data`, then `fe`, then each mounted pack in order, so **the
+disc always wins**. No shipped pack collides with a disc entry - a pack's whole
+content is absent from the base archives, which is what makes it downloadable -
+so the order is not load-bearing for real content. It is chosen for content that
+is not real: a modified pack that shadowed a disc entry would change the base
+game silently.
+
+### Region independence is deliberate
+
+In the original a pack was locked to its own territory's disc. This engine does
+not reproduce that, and the rules that keep it that way are:
+
+- Discovery matches on **file shape** - anything that parses as a WAD - never on
+  the `PACK*.edat` naming, never on the `UCES00465` folder, and never on the
+  booted image's serial.
+- The title-id folder is dropped when a zip is unpacked, so nothing downstream
+  can come to depend on it.
+- `Layout`'s other-title deny-list is not applied to packs. It exists to stop a
+  *different game's disc* being opened as Pulse; a pack is not a disc.
+- A pack is keyed by the team its manifest declares, never by its pack number.
+
+The evidence that this costs nothing: the American disc already carries string
+table entries for all four pack teams, in all five shipped languages. Whatever
+the region lock was for, it was not that the other region's build could not name
+the content.
+
+See [ADR-0021](../architecture/adr/0021-region-independent-dlc.md).
+
+## Not read yet
+
+- **`downloadNN.xml`**, entry 1 of each main archive: the pack's `PI_Grid`
+  championship ladder. Parsed by nothing; progression is a later milestone.
+- **`PI_TeamModel` / `PI_ModelSkin`**, the concept, zone and unlockable
+  liveries, with their `loyalty` unlock thresholds. Declared in the manifest and
+  deliberately not collected into `catalogue::Team` while nothing draws a second
+  hull.
+- **`PARAM.pbp`**, and the `.edat` files' relationship to the PSN download that
+  produced them.
+- **Wipeout Pure's packs**, which are a different problem: their payload
+  measures 8.0000 bits/byte and `oag-wad` rejects it outright. See
+  `data/README.md` and [Pure status](pure-status.md).
+
+## Reading one
+
+```sh
+# Unpack once (the game does this itself into data/cache/dlc).
+unzip -j "data/dlc/WipEout Pulse - Harimau Pack (Europe) (DLC).zip" -d /tmp/pack
+
+just wad list /tmp/pack/PACK3.edat
+just wad cat  /tmp/pack/PACK3.edat 0                       # the manifest
+just wad cat  /tmp/pack/PACK3_UI1.edat 'Data\Ships\Harimau\handlingstats.xml' --expand
+
+# Or straight into the viewer and the game, which need no unpacking:
+just view /tmp/pack/PACK3.edat --mesh 'Data\Ships\Harimau\Ship.vex' --screenshot out.png
+just play --race --team Harimau --screenshot out.png
+```

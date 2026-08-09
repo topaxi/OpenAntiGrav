@@ -78,6 +78,8 @@ fn load() -> Option<boot::Boot> {
         // No saved language: these boot a fresh install every time.
         language: None,
         source: image.display().to_string(),
+        // No downloadable content either: a pack carries no movies.
+        dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: pulse::names::INTRO_MOVIE.to_string(),
         cache: cache_dir(),
@@ -102,6 +104,7 @@ fn load_whole() -> Option<boot::Boot> {
     let options = boot::Options {
         language: None,
         source: image.display().to_string(),
+        dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: pulse::names::INTRO_MOVIE.to_string(),
         cache: cache_dir(),

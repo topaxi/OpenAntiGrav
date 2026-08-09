@@ -286,8 +286,24 @@ struct Cli {
     track: String,
 
     /// The team, which selects both the handling stats and the model.
+    ///
+    /// A team **id**, which is the folder under `Data\Ships\` and not always
+    /// the name on screen - the Mirage pack's team is `Mantis`. Teams a mounted
+    /// pack adds are accepted here like any other; see `--dlc`.
     #[arg(long, default_value = race::DEFAULT_TEAM)]
     team: String,
+
+    /// A directory holding downloadable content: a pack's `.edat` files, or the
+    /// `.zip` they were downloaded as. Repeatable.
+    ///
+    /// Left out, it is searched for: `data/dlc/` in the current directory, then
+    /// beside the AppImage, then `<data dir>/oag/dlc`. `$OAG_DLC` short-circuits
+    /// that, and `oag_game::source::resolve_dlc` documents the order.
+    ///
+    /// **Any pack works against any release.** The original locked a pack to
+    /// its own territory's disc; this does not. See `docs/formats/dlc-pack.md`.
+    #[arg(long)]
+    dlc: Vec<String>,
 
     /// The speed class: venom, flash, rapier or phantom.
     #[arg(long, default_value = "venom")]
@@ -628,6 +644,9 @@ fn main() -> Result<()> {
     // "no disc image found" is a message about the command line, not something to
     // discover eight seconds of intro later.
     let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+    // Resolved beside it, but it cannot fail: no DLC is the ordinary state of a
+    // copy of the game.
+    let dlc = source::resolve_dlc(&cli.dlc, &settings.source.dlc);
 
     // Opened before either way in, because both want sound and neither owns the
     // other. **Only the device, not the music itself** - `start_music` is
@@ -666,6 +685,7 @@ fn main() -> Result<()> {
 
     let race_options = race::Options {
         source: source.clone(),
+        dlc: dlc.clone(),
         track: cli.track.clone(),
         team: cli.team.clone(),
         class,
@@ -714,6 +734,7 @@ fn main() -> Result<()> {
     };
     let options = boot::Options {
         source: source.clone(),
+        dlc: dlc.clone(),
         // The string table follows the saved language, so a player who picked
         // French once reads French from the next boot rather than only having
         // the picker skipped.
@@ -881,14 +902,20 @@ fn main() -> Result<()> {
         None => menu::Definition::parse(menu::BUILT_IN)
             .context("parsing the built-in menu definition")?,
     };
-    // The two lists that come off the disc rather than out of the definition:
-    // what is raceable, and what languages exist. Both carry a label the player
-    // reads and a value the settings file stores, and on a circuit those are
-    // different strings - `16_Track` against its localised name, which is
-    // shipped content and only ever lives in memory.
+    // The three lists that come off the disc rather than out of the definition:
+    // what is raceable, who can be raced for, and what languages exist. All
+    // carry a label the player reads and a value the settings file stores, and
+    // on a circuit or a team those are different strings - `16_Track` and
+    // `Mantis` against their localised names, which are shipped content and
+    // only ever live in memory.
     let shell = Shell {
         definition,
         modes: menu::mode_choices(&loaded.strings),
+        teams: loaded
+            .teams
+            .iter()
+            .map(|team| menu::Choice::labelled(&team.id, loaded.strings.get_or_id(&team.id)))
+            .collect(),
         tracks: loaded
             .tracks
             .iter()
@@ -2780,6 +2807,12 @@ struct Shell {
     definition: menu::Definition,
     /// Every raceable circuit and the name to show for it.
     tracks: Vec<(catalogue::Track, String)>,
+    /// Every team, valued by its id and labelled off the disc's string table.
+    ///
+    /// A pack's teams are in here too, and indistinguishable from the disc's -
+    /// which is the point: the front end has no concept of downloadable
+    /// content, only of what this source offers.
+    teams: Vec<menu::Choice>,
     /// Every language this source offers, valued by its English name and
     /// labelled in itself.
     languages: Vec<menu::Choice>,
@@ -3243,6 +3276,7 @@ impl Session {
             .map(|(track, name)| menu::Choice::labelled(&track.id, name))
             .collect();
         model.supply(menu::ValueSource::Tracks, &tracks);
+        model.supply(menu::ValueSource::Teams, &shell.teams);
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         // Enumerated every time the menus open rather than kept from startup,

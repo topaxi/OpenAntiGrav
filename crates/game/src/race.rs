@@ -62,6 +62,8 @@
 //! along `+Z` while the simulation's forward is `-Z`. Each is one expression with
 //! its evidence written next to it.
 
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use oag_assets::pulse;
 use oag_core::math::frustum::Frustum;
@@ -284,6 +286,13 @@ fn ps2_texture_set(
 pub struct Options {
     /// A disc image, or a directory extracted with `oag-unpack`.
     pub source: String,
+    /// Directories to look in for [downloadable content](crate::dlc), mounted
+    /// behind `source`'s own archives.
+    ///
+    /// Independent of which release `source` is, on purpose: the original tied
+    /// a pack to its own territory's disc and this does not. See
+    /// `docs/formats/dlc-pack.md`.
+    pub dlc: Vec<PathBuf>,
     /// Archive entry name of the track's `.vex`.
     pub track: String,
     /// Team name, which selects both the handling stats and the model.
@@ -371,6 +380,11 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             source: crate::source::DEFAULT_IMAGE.to_string(),
+            // Empty rather than the search path: a default that read the
+            // filesystem would make two runs of the same test differ by what
+            // the developer happens to have downloaded. The composition root
+            // fills this in from `source::resolve_dlc`.
+            dlc: Vec::new(),
             track: DEFAULT_TRACK.to_string(),
             team: DEFAULT_TEAM.to_string(),
             class: SpeedClass::Venom,
@@ -615,8 +629,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `Data\Ships\<Team>\handlingstats.xml` and `Data\Environments\<n>_Track\...`
     // under the names the PSP uses - so the layout is the whole of the
     // difference. See `docs/formats/handling-stats.md`.
-    let mut archives = pulse::Archives::open(&options.source)?;
+    //
+    // Downloadable content is mounted behind them. A pack is not tied to the
+    // release it was sold for here, so this is the same call whichever image
+    // `source` names - see `docs/formats/dlc-pack.md`.
+    let (packs, problems) = crate::dlc::packs(&options.dlc, &crate::boot::default_dlc_cache_dir());
+    let mut archives = pulse::Archives::open_with_packs(&options.source, packs)?;
     report.push(archives.layout.describe());
+    for pack in &archives.packs {
+        report.push(format!("dlc: {}", pack.label()));
+    }
+    report.extend(problems.into_iter().map(|p| format!("dlc: skipped {p}")));
 
     let spec = archives
         .locate(&options.track)

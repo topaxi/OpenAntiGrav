@@ -35,10 +35,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Teams whose directories exist under Data\Ships. Taken from the string table
-# at 0x08a78200 in the PSP executable.
+# at 0x08a78200 in the PSP executable, plus `Harimau` and `Mantis`.
+#
+# `Mantis` is the folder behind the team the packaging calls Mirage; `Mirage`
+# is a display name and is not a directory on either disc, so it is kept here
+# only because hashing a name that misses costs nothing and removing it would
+# invite someone to add it back. Four of these teams are downloadable content
+# and their files are in a pack rather than in `Data.wad` - see
+# docs/formats/dlc-pack.md.
 TEAMS = [
     "AG_Systems", "Assegai", "Auricom", "EGX", "Feisar",
-    "Goteki", "Mirage", "Piranha", "Qirex", "Triakis",
+    "Goteki", "Harimau", "Icaras", "Mantis", "Mirage",
+    "Piranha", "Qirex", "Triakis",
 ]
 
 # Per-ship files, from the path templates recovered from the binary.
@@ -136,6 +144,12 @@ def from_track_plugin(image: str) -> set[str]:
 
     out = set()
     locations = set(re.findall(r'location="([^"]+)"', text))
+    # The disc lists 24 races over 12 environments, and the numbering runs to
+    # 32 with eight gaps. Those eight are the downloadable circuits, whose
+    # geometry is in a pack rather than in `Data.wad` - so the whole range is
+    # generated here rather than only what this file lists. A candidate that
+    # hashes to nothing costs one lookup. See docs/formats/dlc-pack.md.
+    locations |= {f"Data\\Environments\\{n:02}_Track" for n in range(1, 33)}
     for location in locations:
         out.update(f"{location}\\{name}" for name in TRACK_FILES)
     out |= paths_in(text)

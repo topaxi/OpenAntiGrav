@@ -31,6 +31,7 @@ pub mod boot;
 pub mod capture;
 pub mod catalogue;
 pub mod display;
+pub mod dlc;
 pub mod font;
 pub mod frontend;
 pub mod hud;

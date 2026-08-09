@@ -105,6 +105,7 @@ fn menu_page(
     anisotropy: Anisotropy,
     page: &str,
     tracks: &[crate::catalogue::Track],
+    teams: &[crate::catalogue::Team],
     languages: &[crate::language::Language],
     strings: &crate::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
@@ -130,6 +131,13 @@ fn menu_page(
         &tracks
             .iter()
             .map(|track| crate::menu::Choice::labelled(&track.id, strings.get_or_id(&track.id)))
+            .collect::<Vec<_>>(),
+    );
+    model.supply(
+        crate::menu::ValueSource::Teams,
+        &teams
+            .iter()
+            .map(|team| crate::menu::Choice::labelled(&team.id, strings.get_or_id(&team.id)))
             .collect::<Vec<_>>(),
     );
     model.supply(
@@ -236,6 +244,7 @@ pub fn run(
         languages,
         strings,
         tracks,
+        teams,
         mut frontend,
         movie,
         movie_sound,
@@ -431,6 +440,7 @@ pub fn run(
                 options.anisotropy,
                 page,
                 &tracks,
+                &teams,
                 &languages,
                 &strings,
                 &options.music_discs,

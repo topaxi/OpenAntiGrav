@@ -28,7 +28,10 @@
 //! the caller's problem, which is what keeps this testable without a GPU.
 
 pub mod archive;
+pub mod dlc;
 pub mod pulse;
+#[cfg(test)]
+mod testing;
 
 pub use archive::Archive;
 

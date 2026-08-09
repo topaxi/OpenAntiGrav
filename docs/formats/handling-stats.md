@@ -18,9 +18,15 @@ oag-wad cat data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
 
 Stored as [shortened XML](fexml.md), so `--expand` is needed.
 
-Eight files were located by hashing candidate names, one per playable team:
-`AG_Systems`, `Assegai`, `EGX`, `Feisar`, `Goteki`, `Piranha`, `Qirex`,
+Eight files were located by hashing candidate names, one per team **the disc
+ships**: `AG_Systems`, `Assegai`, `EGX`, `Feisar`, `Goteki`, `Piranha`, `Qirex`,
 `Triakis`. Each is about 2.7 KiB.
+
+Four more exist, one per [downloadable pack](dlc-pack.md) - `Auricom`,
+`Harimau`, `Icaras` and `Mantis`. They are in the same schema and parse with the
+same reader, and they live in `PACKn_UI1.edat` rather than in the pack's main
+archive, which is a trap worth knowing: mount only `PACKn.edat` and the ship
+loads with no stats to race it under.
 
 ## No values are reproduced here
 
