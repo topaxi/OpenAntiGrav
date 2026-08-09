@@ -418,7 +418,7 @@ pub fn run(
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
             let frame = showing.map(|movie| crate::menu::Backdrop {
-                rect: crate::frontend::pillarbox(crate::frontend::SCREEN, movie.display_aspect),
+                rect: crate::frontend::pillarbox_in(space, movie.display_aspect),
                 frame: 0,
                 // Position zero with the frame, there being no playhead here to
                 // have got anywhere: a capture reads the frame straight out of

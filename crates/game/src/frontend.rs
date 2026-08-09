@@ -75,54 +75,15 @@ use crate::language::{Language, StringTable};
 use crate::screen::{Screen, Screens, argb_to_rgba};
 use crate::state_machine::{Event, StateMachine};
 
-/// Frame counts at which the dev/pub reel state acts, from `0x088d7e1c`.
-pub const PAUSE_FRAMES: [usize; 2] = [144, 231];
-/// The frame at which the dev/pub reel state sets its finish flag.
-pub const FINISH_FRAME: usize = 260;
-/// How long a pause is held, in seconds.
-pub const HOLD_SECONDS: f64 = 2.0;
-
-/// State names this build drives. Every one is a literal from the original -
-/// from its executable, or from the front-end XML on the disc.
-pub mod states {
-    /// The screen that plays `Data\Movies\Intro.PMF`, named by the front-end
-    /// XML. This is the leg the disc's own boot runs.
-    pub const LOGO_FMV: &str = "LogoFMV";
-    /// The dev/pub reel's parent state.
-    pub const INTRO: &str = "Intro Screen";
-    /// The dev/pub reel state, spelled the way the original's own string
-    /// literal is. Not on the disc's boot path; see the module docs.
-    pub const INTRO_MOVIE: &str = "Intro Screen->IntroMovie1";
-    /// The one-shot redirect the reel state fires when it finishes or is
-    /// skipped.
-    pub const DEV_PUB_REDIRECT: &str = "DevPubRedirect";
-    /// The one-shot redirect `LogoFMV`'s five skip buttons fire.
-    ///
-    /// A real screen in the front-end XML, and it holds nothing but a single
-    /// `Redirect` with `forward="none"` - so its whole job is to leave, the
-    /// same shape as [`DEV_PUB_REDIRECT`]. On the disc it goes to
-    /// [`SHOW_LOGO`], which is where `LogoFMV`'s own `AutoRedirect` goes too;
-    /// here it goes to [`LANGUAGE_SELECTION`], because the picker is what this
-    /// build has next. See the module docs.
-    pub const LOGO_FMV_REDIRECT: &str = "LogoFMVRedirectScreen";
-    /// The Pulse logo and PRESS START.
-    ///
-    /// **Spelled bare rather than as a path, and that is evidence rather than
-    /// convenience.** In the XML this screen is nested three deep, at
-    /// `Top FE Screen->FE Screen->Show Logo`, but the running machine's own
-    /// current-state buffer reads `"Show Logo"`: at `0x08d0a820+0x18c` it was
-    /// caught holding `"Show Logo\0election\0"`, the shorter name overwriting
-    /// `"Language Selection"` in place. Every `goto` that reaches it spells it
-    /// bare as well. Confidence **95**, runtime-observed - see
-    /// `docs/ghidra/functions/psp-pulse-usa/main-loop.md`. What the buffer does
-    /// with a name that genuinely needs its parents is not established, so
-    /// nothing here concludes that the original's states are flat.
-    pub const SHOW_LOGO: &str = "Show Logo";
-    /// The language picker.
-    pub const LANGUAGE_SELECTION: &str = "Language Selection";
-    /// Where picking a language goes, and where a race starts.
-    pub const LAUNCH_GAME: &str = "Launch Game";
-}
+/// The reel's frame counts and every state name: `oag_pulse::frontend`.
+///
+/// Both are literals off Pulse's executable and its front-end XML, so they moved
+/// to the title package under [ADR-0021]. The state machine that drives them, and
+/// every divergence this build makes from the disc's own sequence, stay here - see
+/// the module docs.
+///
+/// [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 
 /// Which movie leg the sequence boots into.
 ///
@@ -262,12 +223,30 @@ pub enum Draw {
     },
 }
 
-/// The PSP's screen, which the XML's coordinates are in.
+/// The PSP's screen, in the pixels our own layouts are written in.
 ///
-/// Still a constant, and still the PSP's: it is what our own layouts
-/// (`crate::loading`), the HUD's bounds checks and `oag_race`'s authored aspect
-/// are written against, and every front-end test embeds PSP XML. A source that
-/// authors somewhere else says so through [`Space`] instead of redefining this.
+/// **Still a constant, and deliberately.** ADR-0021's stage 4 asked whether this
+/// should become per-source, and the answer that came out of doing it is no: a
+/// source that authors somewhere else says so through [`Space`], which already
+/// carries a grid *and* the display aspect that grid is shown as - two numbers
+/// that disagree by 7% on the PS2 and that one `(f32, f32)` cannot hold. Making
+/// this per-source would have produced a second, weaker `Space`.
+///
+/// What was per-source and hardcoded here got routed through [`Space`] instead:
+/// the menu backdrop's rect in `crate::main` and `crate::capture`, and the
+/// no-movie aspect fallback in `crate::boot`. See [`pillarbox_in`].
+///
+/// The remaining readers are console facts under
+/// [ADR-0004](../../../docs/architecture/adr/0004-asset-pipeline.md) rather than
+/// title ones, which is why none of them moved to a title package either:
+///
+/// - `crate::loading`, whose layout this project authored, in these pixels;
+/// - `oag_race::AUTHORED_ASPECT`, where the original's authored field of view is
+///   only defined at the PSP's aspect;
+/// - [`crate::hud::inside_screen`], which is a **PSP-only** test helper and says
+///   so - the PS2's `Arcade_HUD.xml` is the PSP's layout scaled by exactly
+///   640/480 and 448/272, reaching `y=435`, so checking it against these numbers
+///   would fail on every widget rather than on a parser bug.
 pub const SCREEN: (f32, f32) = (480.0, 272.0);
 
 /// The coordinate space a source's front-end XML places widgets in, and what

@@ -76,6 +76,7 @@ use oag_gameplay::{
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_pulse as pulse;
+use oag_pulse::race::ships;
 use oag_race::{Course, Mode, RaceState};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::camera::internal::InternalParams;
@@ -115,17 +116,11 @@ use oag_render::{mesh, mesh_render, track as track_render};
 /// Note the reciprocal fact recorded with it: the same 200 positions sit a fairly
 /// constant **~21 units** from `16_Track`'s AI racing line, so `spline_distance` and
 /// "on the driveable surface" are not the same measurement for this recording.
-pub const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
+pub use oag_pulse::race::DEFAULT_TRACK;
 
-/// The team whose `handlingstats.xml` and model a race uses by default.
-///
-/// **Assegai, not Feisar** - chosen to match the reference scenario used for
-/// every PPSSPP capture this project has taken (Time Trial, Venom, Talon's
-/// Junction White, Assegai; see
-/// `docs/reverse-engineering/ppsspp-debugger.md`'s "reference scenario"
-/// section), so `just play --race`'s defaults and a captured trace are
-/// directly comparable without passing `--team`/`--class` every time.
-pub const DEFAULT_TEAM: &str = "Assegai";
+/// The default team: [`oag_pulse::race::DEFAULT_TEAM`], and the reason it is
+/// Assegai rather than Feisar is on the constant itself.
+pub use oag_pulse::race::DEFAULT_TEAM;
 
 /// Turns the ship model's own facing into the body's.
 ///
@@ -230,8 +225,12 @@ pub const SPARKS_SEED: u64 = 0x5_9a_2b_00;
 /// itself is shared - only the livery painted on it still varies by team.
 #[must_use]
 pub fn ship_entry_name(team: &str, mode: Mode) -> String {
-    let model = if mode == Mode::Zone { "Zone" } else { "Ship" };
-    format!(r"Data\Ships\{team}\{model}.vex")
+    let model = if mode == Mode::Zone {
+        ships::ZONE_HULL
+    } else {
+        ships::HULL
+    };
+    ships::entry_name(team, model)
 }
 
 /// The boost plume that goes with [`ship_entry_name`]'s hull.
@@ -251,11 +250,11 @@ pub fn ship_entry_name(team: &str, mode: Mode) -> String {
 #[must_use]
 pub fn boost_entry_name(team: &str, mode: Mode) -> String {
     let model = if mode == Mode::Zone {
-        "Zoneboost"
+        ships::ZONE_BOOST
     } else {
-        "shipboost"
+        ships::BOOST
     };
-    format!(r"Data\Ships\{team}\{model}.vex")
+    ships::entry_name(team, model)
 }
 
 /// Reads and decodes a model's external PS2 texture set, from the archive

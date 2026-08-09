@@ -1370,6 +1370,15 @@ impl App {
         // rate, the rectangle - stays behind, because a `Feed` deals in pixels
         // and knows nothing about where they go. `repeat: true`, which is the
         // whole difference between this movie and the intro.
+        // The grid the backdrop's rect has to be in: the *source's*, not the
+        // PSP's. A PS2 disc authors at 640x448 shown as 4:3, so boxing its
+        // backdrop into a hardcoded 480x272 puts the rect in one grid while the
+        // renderer's `screen` uniform is in another - and it is silent on the
+        // PSP, where the two are the same numbers.
+        let space = self
+            .boot
+            .as_ref()
+            .map_or(frontend::Space::PSP, |loaded| loaded.frontend.space());
         let (backdrop, backdrop_shape) =
             match self.boot.as_mut().and_then(|loaded| loaded.backdrop.take()) {
                 Some(movie) => {
@@ -1379,7 +1388,7 @@ impl App {
                         // not the PSP's shape: an `.IPF` declares its own display
                         // aspect. The PSP's `.PMF` is already 480x272, so this is the
                         // full screen there and changes nothing.
-                        rect: frontend::pillarbox(frontend::SCREEN, movie.display_aspect),
+                        rect: frontend::pillarbox_in(space, movie.display_aspect),
                     };
                     let (width, height) = (movie.width, movie.height);
                     // No frames is no backdrop, and then there is no shape to keep

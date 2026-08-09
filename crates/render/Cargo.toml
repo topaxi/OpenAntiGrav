@@ -11,6 +11,7 @@ rust-version.workspace = true
 oag-assets.workspace = true
 oag-core.workspace = true
 oag-formats.workspace = true
+oag-pulse.workspace = true
 anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu = "30"
@@ -19,5 +20,3 @@ pollster = "0.4"
 [lints]
 workspace = true
 
-[dev-dependencies]
-oag-pulse.workspace = true

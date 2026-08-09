@@ -4,9 +4,9 @@ Scoped to one effort, and meant to be **deleted when it is finished**. The
 durable record is [ADR-0021](docs/architecture/adr/0021-title-packages.md),
 [workspace-layout](docs/architecture/workspace-layout.md) and the
 "engine/title split" section of [HANDOVER.md](HANDOVER.md). This file is the
-part that only matters until stages 4, 6 and 7 land.
+part that only matters until stages 6 and 7 land.
 
-Branch: `split/title-packages`, seven commits, `just` green at each.
+Branch: `split/title-packages`, eight commits, `just` green at each.
 
 ## The one rule that decides every question this raises
 
@@ -37,6 +37,7 @@ wrong on a file Pulse itself ships.
 | 3 | `vex::classes` + `classes_of`; `fog`/`pvs`/`collision`/`track` read ids off the file; `handling.rs` accepts a five-rung ladder and four optional fields |
 | 5 | `oag-pure`, and three ground-truth tests proving Pure's disc opens through the same mechanism |
 | 0 | The handling element diff, enumerated in one pass against both discs |
+| 4 | Presentation tables to `oag-pulse`; `SCREEN` settled rather than made per-source |
 
 Stage 5 was taken before 4 on purpose: it unblocked the real-file evidence the
 handling change was missing.
@@ -62,31 +63,60 @@ sets and asserts the whole symmetric difference at once. Written up in
   opened it. Pulse-only: `<StartBoost>` and `WeaponPad elimination_refresh_time`,
   neither of which the decoder reads.
 
+### What stage 4 decided about `SCREEN`, since the plan said the wrong thing
+
+The plan and `HANDOVER.md`'s own known-issue row both said to make
+`oag_game::frontend::SCREEN` per-source. **Doing it showed that is the wrong
+shape.** `frontend::Space` already carries a grid *and* the display aspect that
+grid is shown as - 640x448 shown as 4:3 on the PS2, two numbers that disagree by
+7% - and a per-source `(f32, f32)` cannot hold both, so it would have been a
+second, weaker `Space`.
+
+What was actually leaking was three call sites that had not been routed through
+`Space` yet: the menu backdrop's rect in `main.rs` and `capture.rs`, and the
+no-movie aspect fallback in `boot.rs`. All three now take the source's own
+space. `SCREEN` stays a constant, and its remaining readers are the ones for
+which 480x272 is right whatever disc is mounted - our own loading screen, the
+HUD bounds check, and `race::AUTHORED_ASPECT`, where the original's authored
+field of view is only defined at the PSP's aspect. Those are console facts under
+ADR-0004, which is also why none of them moved to a title package.
+
+**One of the three is not screenshot-verified and cannot be.** `main.rs`'s
+backdrop rect only draws on the menu that follows boot, and no headless capture
+path reaches it: `--menu-page` draws our own layout in PSP space, and every
+`--until` state that shows a backdrop takes the boot sequence's own
+`pillarbox_in`, which was already per-source. The fix is correct by construction
+- it hands `pillarbox_in` the space the renderer's `screen` uniform is in - and
+the arithmetic differs (a 512x512 PS2 backdrop lands `[104, 0, 272, 272]` in the
+old grid against `[80, 0, 480, 448]` in the right one), but nothing observed it.
+
+### What stage 4 left where it was
+
+- **`game/src/loading.rs`'s colours, positions and frame counts.** Ours, not
+  Pulse's - that screen is this project's, and its own docs say so. Only the two
+  disc entry names moved.
+- **`language.rs`.** Nothing to move: it hard-codes no language list at all, and
+  `LANGUAGE_PLUGINS` landed in `oag-pulse` back at stage 2.
+- **`render::loading::REF_WIDTH`/`REF_HEIGHT`.** The wave's reference space, and
+  the same 480x272 as `SCREEN`. Copying it into a title package would have
+  planted a second copy of the leak this stage was closing.
+
+**One claim this stage nearly promoted without measuring it.** The first draft of
+`SCREEN`'s new doc listed the HUD bounds check among the readers for which
+480x272 is right whatever disc is mounted, on the strength of `hud.rs`'s own
+descriptive comment. It is not: the PS2 release authors the same layouts at
+**640x448**, and `Data\XML\Arcade_HUD.xml` there is the PSP file scaled by
+640/480 and 448/272 to four digits. `hud::inside_screen` is PSP-only *by
+construction*, which means no PS2 HUD layout has ever been checked for the
+dropped-`<Item>`-offset defect that test exists to catch. Now a row in
+`HANDOVER.md`. Measure before promoting a comment to a decision.
+
 One thing item 0 noticed and did not act on: `oag_formats::handling::TEAMS` and
 `entry_name` are **Pulse's roster living in the format crate**, which the rule
 table above puts in a title package. Not moved, because `handling_ground_truth`
 and the miner both consume it and that is stage-4-shaped work, not survey work.
 
 ## Left to do
-
-### 1. Stage 4 - presentation tables to `oag-pulse`
-
-Move as plain `pub const`s, with **no engine-side type in `oag-title`**:
-`render::mesh::ANIMATED_TEXTURES` (`mesh.rs:171-190`), `render::loading`'s wave
-model, `game/src/hud.rs` atlas + layouts, `frontend.rs:88-124` screen names and
-`:79-83` reel frames, `loading.rs`, `language.rs`, `boot.rs` movie names,
-`race.rs`'s `DEFAULT_TRACK`/`DEFAULT_TEAM`/ship-model templates.
-
-`oag-title` stays scoped to the three axes with two measured corpora. Adding a
-`HudAtlas` or `ScreenNames` type would be designing from one example -
-`pure-status.md` measured none of Pure's presentation - which is exactly what
-ADR-0009 item 3 named and ADR-0021 does not license.
-
-Fold in the one named console leak: make `oag_game::frontend::SCREEN`
-per-source rather than a hardcoded 480x272 (HANDOVER.md:452).
-
-**Oracle:** determinism reference hashes in `crates/core/tests/determinism.rs`
-must not change, plus `just play --screenshot` on a PSP and a PS2 source.
 
 ### 2. Stage 6 - the physics seam, and *not* the relocation
 

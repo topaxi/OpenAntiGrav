@@ -18,6 +18,13 @@
 //!
 //! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
 
+pub mod frontend;
+pub mod hud;
+pub mod loading;
+pub mod movies;
+pub mod race;
+pub mod textures;
+
 use oag_assets::{Archives, Result};
 use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 

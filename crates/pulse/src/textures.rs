@@ -1,0 +1,109 @@
+//! Which of Pulse's textures animate, and how fast.
+//!
+//! A table, in the sense of [ADR-0021]: it names shipped assets and the rate
+//! each one scrolls at. The mechanism that consumes it - the per-vertex
+//! `v_cycles` attribute and the V offset in `mesh.wgsl` - is the renderer's and
+//! stays there. Which surfaces move is this title's business, because the names
+//! are `Data\Tex\` entries off Pulse's own disc and no other title ships them.
+//!
+//! The evidence for every entry was measured by
+//! `crates/render/tests/animated_uv_ground_truth.rs`, which still owns the
+//! measurement; this file owns the conclusion.
+//!
+//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+
+/// How many whole V sweeps of the blink-light palette pass per
+/// `oag_game::race`'s `ANIM_PERIOD_TICKS`.
+///
+/// Two, because the measured single-cycle period is ~30 ticks and the texture
+/// repeats its 8-frame curve twice down its 16 rows, so a full sweep is ~60
+/// ticks. Every other entry in [`ANIMATED_TEXTURES`] reuses this rather than
+/// inventing its own: it is the one rate with a measurement behind it, and a
+/// shared wrong rate is easier to correct than seven separate guesses.
+pub const BLINK_V_CYCLES: f32 = 2.0;
+
+/// Textures whose surfaces animate by scrolling their V (row) coordinate, and
+/// how fast, in whole sweeps per `oag_game::race`'s `ANIM_PERIOD_TICKS`.
+///
+/// Matched case-insensitively against the filename of the texture's **runtime
+/// asset path** (`Texture` node payload `+0x38`) - the only name a track
+/// texture has, since its node header carries none.
+///
+/// # Why a list and not a name rule
+///
+/// `_GLOW` and `_ADD` are the artists' blend-mode notes, not animation markers:
+/// `_ADD` is known to mean additive compositing, and the suffix sits on
+/// `hub_banner_GLOW.tga`, `col_banners2_ADD.tga` and `FEISAR3_GLOW.tga`, which
+/// are plainly static sponsor art. A suffix rule would make a whole circuit
+/// flicker. The material `flags` word at `+0x00` is no better: the static
+/// `hub_banner_GLOW` and the banded `flicker1nonalpha_GLOW` both carry `0x91`.
+/// And the file itself holds no rate - material `+0x0c..0x14` is zero on every
+/// material of every circuit. So the only honest key is an enumerated list, and
+/// each entry has to earn its place.
+///
+/// # What earned a place
+///
+/// Every entry has at least one draw call whose vertices sit in a **narrow V
+/// band** - the authored signature of a quad that picks a phase by V and lets
+/// the global scroll step it through the texture's rows. Measured per draw call
+/// (not aggregated: separate quads sit at different V deliberately, and merging
+/// them destroys the signal) by
+/// `crates/render/tests/animated_uv_ground_truth.rs`.
+///
+/// The band is evidence for *which* textures, not a runtime rule. The engine
+/// scrolls a shared texture globally and any geometry sampling it inherits the
+/// animation, wide V span included - Assegai's and Piranha's blink quads span
+/// 8.1 and 9.6 of 16 rows and still animate. Gating at runtime on a narrow band
+/// would switch those two ships off.
+///
+/// **Confidence 85 for `colours_flashing_GLOW.tga`** (surveyed across all eight
+/// ships and confirmed against a frame-accurate capture); **65 for every track
+/// entry** - the narrow-band geometry and the banded texture content are real
+/// measurements, but no capture of the original has confirmed that these
+/// particular surfaces move, and the rates are chosen rather than recovered.
+/// Below 70 deliberately: see `docs/reverse-engineering/confidence-rubric.md`.
+///
+/// # Deliberately excluded
+///
+/// - `tunnelanim_sb.tga`, despite the name: all 14 of its draws span its full
+///   32 rows, so a V scroll would slide the artwork rather than cycle it.
+/// - `flicker1/2nonalpha_GLOW.tga`: banded like the blink palette, but its
+///   draws tile ~4x vertically, and the pad geometry that mainly uses it is not
+///   loaded at all - every circuit embeds the texture while referencing it from
+///   zero materials.
+/// - `Plasma_scroll_ADD_GLOW.tga`: exactly one tile in both axes (63.75 of 64
+///   columns, 64.00 of 64 rows), with all rows distinct and flat luminance. That
+///   is a continuous scroll, a different mechanism, and no rate for it has been
+///   recovered.
+/// - Every `billboard*`, `banner*`, `WES_*_BANNER*` and `*_shinemap`: full-tile
+///   or environment-mapped on every draw.
+/// - `FEISAR2anim.tga`, which is the one asset that looks like a *horizontal*
+///   filmstrip - 256x32 in 8 distinct 32x32 blocks, on sponsor art, with `anim`
+///   in the artists' name. It is referenced by **zero materials** on all four
+///   circuits that embed it, so it is not drawn at all.
+///
+/// The U axis was measured too, not assumed: every hoarding and banner spans
+/// essentially its full width (`piranha_banner_ADD_GLOW` 254.00 of 256,
+/// `hub_banner_GLOW` 128.00 of 128, `WES_FEISAR_BANNER_A` 63.50 of 64), so
+/// trackside advertising is static on **both** axes. That is also why this is a
+/// scalar V rate rather than a `[f32; 2]`.
+pub const ANIMATED_TEXTURES: &[(&str, f32)] = &[
+    // Ships. Every one of the 8 playable teams carries a mesh whose material
+    // resolves to this one shared texture.
+    ("colours_flashing_glow", BLINK_V_CYCLES),
+    // On all 12 circuits, and the cleanest signature on the disc: its draws sit
+    // at a single exact V line (span 0.00 of 8 rows on 01, 07, 10, 13 and 16).
+    ("col_display7_glow", BLINK_V_CYCLES),
+    // Same family, 16_Track, narrowest draw 0.19 of 8 rows.
+    ("col_display7_blend_glow", BLINK_V_CYCLES),
+    // 07_Track, narrowest of 21 draws 0.00 of 32 rows.
+    ("07_pulse_light_blend_glow", BLINK_V_CYCLES),
+    // 13_Track. "cycle gradient" in the artists' own words, and the row means
+    // form a clean symmetric hump. Narrowest draws 0.25, 1.50 and 0.50 rows.
+    ("rf_cyclegrad_glow", BLINK_V_CYCLES),
+    ("rf_cyclegrad2_glow", BLINK_V_CYCLES),
+    ("rf_cyclegrad3_glow", BLINK_V_CYCLES),
+    // 10_Track, narrowest draws 0.45 of 4 rows and 0.00 of 64.
+    ("sl_bluestrip_glow", BLINK_V_CYCLES),
+    ("sl_purplestrip_glow", BLINK_V_CYCLES),
+];

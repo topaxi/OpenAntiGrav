@@ -55,65 +55,24 @@ pub const REF_WIDTH: f32 = 480.0;
 /// Reference display height.
 pub const REF_HEIGHT: f32 = 272.0;
 
-/// Columns across the strip.
+/// The wave's own numbers, all of them Pulse's: `oag_pulse::loading`.
 ///
-/// The original steps screen X by 2 from 0 to 480. This is the random walk's
-/// step count as much as it is a geometry figure - see the module doc comment
-/// on why it does not scale with resolution.
-pub const COLUMNS: usize = 240;
-
-/// Bands drawn per column: the two oscillator layers, and the slew-limited
-/// blend of them.
-pub const BANDS: usize = 3;
-
-/// Where the strip sits, in reference pixels from the top.
-pub const BASELINE_Y: f32 = 220.0;
-
-/// Quad height, and the glow strip's own size.
-pub const STRIP_SIZE: f32 = 32.0;
-
-/// The heartbeat.
+/// [`COLUMNS`], [`BANDS`], [`BASELINE_Y`], [`STRIP_SIZE`], [`ENVELOPE`] and the
+/// rest moved to the title package under [ADR-0021]. They came out of
+/// `Loading_DrawWave` and the `.rodata` beside it, so they are facts about what
+/// this release ships; the algorithm below is the mechanism and stays here.
 ///
-/// 24 floats straight out of `.rodata` at `0x08a88034`, byte-identical in the
-/// EU and PS2 builds. Two peaks of 99 with a shallow trough between them, a
-/// decay tail, then six frames of silence. At the loading thread's 30 Hz that
-/// is one beat every 0.8 s, and it is why the game is called Pulse.
-pub const ENVELOPE: [f32; 24] = [
-    0.0, 0.0, 10.0, 40.0, 70.0, 99.0, 70.0, 40.0, 10.0, 40.0, 70.0, 99.0, 70.0, 40.0, 30.0, 20.0,
-    10.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-];
-
-/// The envelope's own maximum, which is what it is divided by.
-pub const ENVELOPE_PEAK: f32 = 99.0;
-
-/// Amplitude floor. The wave idles at a tenth rather than going fully flat.
-pub const ENVELOPE_FLOOR: f32 = 0.1;
-
-/// Tracking rates for the two oscillator layers, from `g_loading_wave_rates`.
-pub const LAYER_RATES: [f32; 2] = [0.1, 0.05];
-
-/// Per-column damping applied to each layer's energy.
-pub const ENERGY_DAMPING: f32 = 0.985;
-
-/// Full width of the per-column random impulse: uniform in `+/-7.5`.
-pub const ENERGY_IMPULSE: f32 = 15.0;
-
-/// Most the slew-limited band moves in one column.
-pub const SLEW_STEP: f32 = 0.5;
-
-/// How far the slew-limited band must lag before it moves at all.
-pub const SLEW_DEADBAND: f32 = 4.0;
-
-/// Weights blending the two layers into the third band.
-pub const BLEND_WEIGHTS: [f32; 2] = [0.7, 0.3];
-
-/// Low bound of the amplitude ramp across X, in reference pixels.
-pub const AMPLITUDE_RAMP: (i32, i32) = (30, 286);
-
-/// Low and high bounds of the alpha ramp across X, in reference pixels.
+/// [`REF_WIDTH`] and [`REF_HEIGHT`] deliberately did **not** move: 480x272 is the
+/// PSP's screen, a console fact under [ADR-0004], and this module's own reference
+/// space rather than anything a second title would restate.
 ///
-/// Tints `0xff000000` to `0xff808080` in the original.
-pub const ALPHA_RAMP: (i32, i32) = (10, 350);
+/// [ADR-0004]: ../../../docs/architecture/adr/0004-asset-pipeline.md
+/// [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+pub use oag_pulse::loading::{
+    ALPHA_RAMP, AMPLITUDE_RAMP, BANDS, BASELINE_Y, BLEND_WEIGHTS, COLUMNS, ENERGY_DAMPING,
+    ENERGY_IMPULSE, ENVELOPE, ENVELOPE_FLOOR, ENVELOPE_PEAK, LAYER_RATES, SLEW_DEADBAND, SLEW_STEP,
+    STRIP_SIZE,
+};
 
 /// A clamped integer ramp, `((t - lo) * 255) / (hi - lo)`.
 ///

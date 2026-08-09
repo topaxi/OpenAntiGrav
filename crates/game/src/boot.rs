@@ -161,13 +161,15 @@ pub fn load(options: &Options) -> Result<Boot> {
     let frame_rate = movie
         .as_ref()
         .map_or(movie::FRAME_RATE, |movie| movie.frame_rate);
-    let video_aspect = movie.as_ref().map_or(
-        (
-            crate::frontend::SCREEN.0 as u32,
-            crate::frontend::SCREEN.1 as u32,
-        ),
-        |movie| movie.display_aspect,
-    );
+    // The grid this source authors in, needed before the front end is built so
+    // that a boot with no movie falls back to the *source's* shape rather than
+    // to the PSP's. `frontend.set_space` below takes the same value.
+    let space = crate::frontend::Space::of(archives.layout.platform);
+    let video_aspect = movie
+        .as_ref()
+        .map_or((space.size.0 as u32, space.size.1 as u32), |movie| {
+            movie.display_aspect
+        });
     let mut frontend = Frontend::booting(
         options.leg,
         screens,
@@ -186,7 +188,6 @@ pub fn load(options: &Options) -> Result<Boot> {
     // screen a third too small - which is why its `Show Logo` drew nothing at
     // all. Set from the archives' own platform rather than sniffed: the layout
     // resolved one to open them. See `crate::frontend::Space`.
-    let space = crate::frontend::Space::of(archives.layout.platform);
     frontend.set_space(space);
     report.push(format!(
         "front-end grid {}x{}, shown as {:.3}",
@@ -881,44 +882,10 @@ fn load_movie(
     Ok(Some(movie))
 }
 
-/// The PS2's movies, which are loose on the disc's own filesystem rather than
-/// in any WAD, keyed by the name that asks for them.
-///
-/// **The two-cut split and this table are the original's, read out of
-/// `SCES_547.48`.** `FUN_0019b168` tests the `Movie` widget's `src` for
-/// `\Intro.pss` or `\Backdrop.ipf` and rewrites it to
-/// `Data\Movies\Intro512.pss` / `Intro640.pss` or `Data\Movies\bg512.ipf` /
-/// `bg640.ipf`, choosing on one global (`0x0027a85c`) whose sole writer sets
-/// PAL pixel-aspect constants for the `512` value and NTSC ones for `640`. So
-/// the rewrite, the pairing and the region split are all the disc's, and the
-/// XML's names are never filenames on PS2.
-///
-/// `Data\Movies\Intro.PMF` is here because it is [`DEFAULT_BOOT_MOVIE`]: the
-/// PSP's name for the same reel, which a PS2 source answers with its own cut.
-/// `Data\Movies\Backdrop.PMF` is here for exactly the same reason, and so that
-/// [`load_backdrop`] can ask for one name on both platforms.
-///
-/// 512 is listed first because this disc is EU/PAL; the ultimate trigger that
-/// decides which value `0x0027a85c` takes is not traced. See
-/// `docs/ps2/pulse-disc-layout.md` and `docs/formats/ipf.md`.
-const LOOSE_MOVIES: [(&str, [&str; 2]); 4] = [
-    (
-        DEFAULT_BOOT_MOVIE,
-        ["DATA/MOVIES/INTRO512.PSS", "DATA/MOVIES/INTRO640.PSS"],
-    ),
-    (
-        r"Data\Movies\Intro.pss",
-        ["DATA/MOVIES/INTRO512.PSS", "DATA/MOVIES/INTRO640.PSS"],
-    ),
-    (
-        r"Data\Movies\Backdrop.ipf",
-        ["DATA/MOVIES/BG512.IPF", "DATA/MOVIES/BG640.IPF"],
-    ),
-    (
-        pulse::names::BACKDROP_MOVIE,
-        ["DATA/MOVIES/BG512.IPF", "DATA/MOVIES/BG640.IPF"],
-    ),
-];
+// The loose-file table `loose_candidates` searches. Which movie a name resolves
+// to on which pressing is a fact about what Pulse shipped, so it lives in the
+// title package under ADR-0021 rather than here.
+use oag_pulse::movies::LOOSE_MOVIES;
 
 /// The loose files a movie name may be answered by, if any.
 ///

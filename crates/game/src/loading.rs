@@ -35,18 +35,14 @@ use crate::frontend::{Align, Draw, SCREEN};
 use crate::language::StringTable;
 use crate::prefetch::Progress;
 
-/// The disc entry holding the 30 `<PI_LoadingScreen>` tips.
+/// The two entries this screen reads: `oag_pulse::loading`.
 ///
-/// `Data.wad` entry 1126 on the PSP pressings, reached by name rather than by
-/// index so a source whose directory is ordered differently still finds it.
-pub const TIPS_ENTRY: &str = r"Data\Plugins\loading\Definition.xml";
-
-/// The 32x32 cyan strip every column of the wave samples.
+/// Both are `Data.wad` names off Pulse's disc, so they moved to the title package
+/// under [ADR-0021]. The frame counts below did not: they are this build's own
+/// pacing choices, not the original's.
 ///
-/// `Data.wad` entry 68, name hash `d857f34b`. The only asset the original's
-/// loading screen touches, which is what makes the screen drawable while the
-/// thing being loaded does not exist yet.
-pub const GLOW_STRIP_ENTRY: &str = r"Data\Defaults\Loading\LoadingPulseOverlay.mip";
+/// [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+pub use oag_pulse::loading::{GLOW_STRIP_ENTRY, TIPS_ENTRY};
 
 /// Frames one tip stays up, at the 60 Hz the window steps at.
 ///
