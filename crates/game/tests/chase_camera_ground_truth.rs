@@ -114,8 +114,8 @@ fn close_params() -> Option<oag_render::camera::chase::ChaseParams> {
         println!("skipping: {} not present", image.display());
         return None;
     }
-    let mut archives = oag_assets::pulse::Archives::open(&image.display().to_string())
-        .expect("opening the PSP archives");
+    let mut archives =
+        oag_pulse::open(&image.display().to_string()).expect("opening the PSP archives");
     let name = oag_formats::handling::entry_name(TEAM);
     let blob = archives
         .read_name(&name)

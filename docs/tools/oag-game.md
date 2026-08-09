@@ -116,7 +116,7 @@ mean the same thing on either source, and no flag selects a platform.
 
 What the game used to do instead was spell the PSP's layout out:
 `PSP_GAME/USRDIR/Data.wad`, hardcoded, so the PS2 disc failed at the first read.
-`oag_assets::pulse::Layout` replaced that. It looks at the source's own file list
+`oag_assets::Layout` replaced that. It looks at the source's own file list
 and takes the first archive it recognises, `Data.wad` or `WADS2.WAD`, plus the
 companion beside it, `FE.wad` or `WADSP.WAD`. **Found by name, not derived from
 the platform**, which matters because the PS2 archives sit in a directory named
@@ -159,7 +159,7 @@ header. `just play data/images/pulse-ps2-eu.chd --movie 'Data\Movies\Backdrop.ip
 plays it. Nothing in the boot sequence reaches `FE Screen` yet, so it is not
 *looped as the menu backdrop* - that is front-end work, not format work.
 
-[`oag_assets::pulse::read_loose_file`](../../crates/assets/src/pulse.rs) finds
+[`oag_assets::read_loose_file`](../../crates/pulse/src/lib.rs) finds
 any of the four on the disc's own filesystem the same way an archive is found by
 name - trailing path components, case-insensitively - rather than by hash, and
 [`movie::open`](../../crates/game/src/movie.rs) dispatches on the blob's own

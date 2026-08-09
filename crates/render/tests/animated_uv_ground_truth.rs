@@ -116,7 +116,7 @@ fn narrowest_span(model: &Model, label: &str, axis: usize) -> Option<f32> {
     best
 }
 
-fn track(archives: &mut oag_assets::pulse::Archives, circuit: &str) -> Model {
+fn track(archives: &mut oag_assets::Archives, circuit: &str) -> Model {
     let name = format!(r"Data\Environments\{circuit}_Track\track.vex");
     let blob = archives.read_name(&name).expect("reading track.vex");
     mesh::build(&name, &blob).expect("decoding track.vex")
@@ -134,8 +134,7 @@ const NARROW_ROWS: f32 = 2.0;
 #[ignore = "needs a disc image in data/images/"]
 fn every_animated_track_texture_has_a_narrow_band_draw() {
     let Some(image) = image() else { return };
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
     // The circuit each table entry was measured on. `col_display7_GLOW` is on
     // all twelve; the rest are per-track art.
@@ -185,8 +184,7 @@ fn every_animated_track_texture_has_a_narrow_band_draw() {
 #[ignore = "needs a disc image in data/images/"]
 fn excluded_static_art_spans_its_whole_texture() {
     let Some(image) = image() else { return };
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
     let cases: &[(&str, &str)] = &[
         ("16", "hub_banner_GLOW.tga"),
@@ -245,8 +243,7 @@ fn excluded_static_art_spans_its_whole_texture() {
 #[ignore = "needs a disc image in data/images/"]
 fn no_advertising_surface_is_a_horizontal_filmstrip() {
     let Some(image) = image() else { return };
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
     // Painted, and spanning the full width: a static hoarding.
     let painted: &[(&str, &str)] = &[

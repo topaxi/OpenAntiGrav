@@ -14,7 +14,7 @@
 //! `oag-game` used to spell the PSP's archive layout out, `PSP_GAME/USRDIR/Data.wad`,
 //! and so refused the PS2 disc outright, even though every decoder underneath it
 //! already handled both. What replaced that is
-//! [`oag_assets::pulse::Layout`], which finds a source's bulk archive by name rather
+//! [`oag_assets::Layout`], which finds a source's bulk archive by name rather
 //! than by platform, and the claim this file exists to check is a narrow one:
 //!
 //! **The archive layout was the whole of the difference.** Not the entry names, not
@@ -43,9 +43,9 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::pulse;
 use oag_gameplay::input::button;
 use oag_physics::SpeedClass;
+use oag_pulse as pulse;
 
 use oag_game::race;
 
@@ -98,9 +98,10 @@ fn load(name: &str) -> Option<race::Loaded> {
 #[ignore = "needs a disc image in data/images/"]
 fn both_sources_resolve_to_their_own_archives() {
     if let Some(image) = image(PSP_IMAGE) {
-        let layout = pulse::Layout::resolve(&image.display().to_string()).expect("a PSP layout");
+        let layout = oag_assets::Layout::resolve(&image.display().to_string(), oag_pulse::TITLE)
+            .expect("a PSP layout");
         println!("{}", layout.describe());
-        assert_eq!(layout.platform, pulse::Platform::Psp);
+        assert_eq!(layout.platform, oag_assets::Platform::Psp);
         assert!(
             layout.data.ends_with(pulse::archives::DATA),
             "the PSP disc resolved to {}",
@@ -118,9 +119,10 @@ fn both_sources_resolve_to_their_own_archives() {
     }
 
     if let Some(image) = image(PS2_IMAGE) {
-        let layout = pulse::Layout::resolve(&image.display().to_string()).expect("a PS2 layout");
+        let layout = oag_assets::Layout::resolve(&image.display().to_string(), oag_pulse::TITLE)
+            .expect("a PS2 layout");
         println!("{}", layout.describe());
-        assert_eq!(layout.platform, pulse::Platform::Ps2);
+        assert_eq!(layout.platform, oag_assets::Platform::Ps2);
         // Found by name, so nothing here may know the serial directory: what is
         // asserted is the archive's own name and that something preceded it.
         assert!(
@@ -259,7 +261,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
 /// The PS2 model-to-texture-set lookup, for ships: the archive entry directly
 /// before a `Ship.vex` decodes as its texture set, with exactly as many
 /// entries as the model has `Texture` nodes. See
-/// [`oag_assets::pulse::Archives::read_preceding`] and
+/// [`oag_assets::Archives::read_preceding`] and
 /// `docs/formats/ps2-texture.md`.
 ///
 /// Checked against **every** team, not just the default: a wrong or

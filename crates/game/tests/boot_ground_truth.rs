@@ -26,10 +26,10 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::pulse;
 use oag_game::boot;
 use oag_game::frontend::states;
 use oag_game::input::{Input, button};
+use oag_pulse as pulse;
 
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -392,9 +392,8 @@ fn the_string_table_names_the_race_modes() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("archives");
-    let entries = oag_assets::pulse::names::language_entries("PI012");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+    let entries = oag_pulse::names::language_entries("PI012");
     let blob = archives
         .read_name(&entries)
         .expect("the English string table");

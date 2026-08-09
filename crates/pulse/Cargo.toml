@@ -1,0 +1,20 @@
+[package]
+name = "oag-pulse"
+description = "What Wipeout Pulse ships: archive names, entry names and name hashes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# A title package is tables. `oag-assets` is here only so the two thin
+# convenience wrappers ([`open`] and [`read_image`]) can name `Archives`; no
+# decoding happens in this crate, and nothing here is reachable from a decode
+# path in `oag-formats` - that edge would be a cycle, and ADR-0021 says why the
+# class tables stay on the other side of it.
+[dependencies]
+oag-assets.workspace = true
+oag-title.workspace = true
+
+[lints]
+workspace = true

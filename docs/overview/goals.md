@@ -34,7 +34,7 @@ The project succeeds if all of these hold:
    decisions, race rules and timing match the original within the tolerances set
    out in the [verification protocol](../reverse-engineering/verification-protocol.md).
 2. **The simulation is deterministic.** The same inputs produce bit-identical
-   state on every platform we ship. See [determinism](../architecture/determinism.md).
+   state on every host we ship. See [determinism](../architecture/determinism.md).
 3. **The knowledge outlives the code.** Someone can understand the original
    engine from this documentation alone.
 4. **The second title is cheaper than the first.** The architecture, tooling and
@@ -60,7 +60,15 @@ notes are written for a stranger rather than for ourselves.
 
 ## Scope
 
-| Title | Platform | Status |
+Three axes are easy to confuse, so this page keeps them apart: **title** is the
+game (Pulse, Pure, HD/Fury, 2048), **console** is the machine the original ran
+on and where its assets come from (PSP, PS2, PS3, Vita), and **host** is what
+this reimplementation runs on (Linux, Windows, macOS, and the targets under
+[Hosts](#hosts) below). Title is a data axis and console is deliberately not a
+code axis at all - see [ADR-0021](../architecture/adr/0021-title-packages.md)
+and [ADR-0004](../architecture/adr/0004-asset-pipeline.md).
+
+| Title | Console | Status |
 | --- | --- | --- |
 | Wipeout Pulse | PSP (UCUS-98712 and friends) | Primary target |
 | Wipeout Pulse | PS2 (SCES-54748) | Cross-validation, alternate assets |
@@ -85,7 +93,7 @@ Explicitly **out of scope**: Wipeout (1995), 2097/XL, 64, 3, Fusion. They predat
 Pure and share little with it; including them would widen the problem without
 advancing the goal.
 
-## Platforms
+## Hosts
 
 First: Linux, Windows, macOS, Steam Deck. Rendering via wgpu, with Vulkan as the
 first backend.

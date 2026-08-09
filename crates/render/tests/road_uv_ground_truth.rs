@@ -75,7 +75,7 @@ const MOA_THERMA: &str = "03";
 const CORNER: [f32; 3] = [-410.0, 4.0, -200.0];
 const CORNER_RADIUS: f32 = 70.0;
 
-fn track(archives: &mut oag_assets::pulse::Archives, circuit: &str) -> Option<(Vec<u8>, Model)> {
+fn track(archives: &mut oag_assets::Archives, circuit: &str) -> Option<(Vec<u8>, Model)> {
     let name = format!(r"Data\Environments\{circuit}_Track\track.vex");
     let blob = archives.read_name(&name).ok()?;
     let model = mesh::build(&name, &blob).ok()?;
@@ -275,8 +275,7 @@ const MOA_THERMA_REPEAT: std::ops::Range<f64> = 22.5..23.5;
 #[ignore = "needs a disc image in data/images/"]
 fn every_circuit_lays_the_road_texture_down_at_the_same_scale() {
     let Some(image) = image() else { return };
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
     let mut measured = 0;
     for circuit in circuits() {
@@ -326,8 +325,7 @@ fn every_circuit_lays_the_road_texture_down_at_the_same_scale() {
 #[ignore = "needs a disc image in data/images/"]
 fn moa_therma_paints_the_reported_corner_from_f32_texture_coordinates() {
     let Some(image) = image() else { return };
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
     let (blob, model) = track(&mut archives, MOA_THERMA).expect("reading Moa Therma");
     let road = measure(&blob, &model);
 
@@ -371,8 +369,7 @@ fn moa_therma_paints_the_reported_corner_from_f32_texture_coordinates() {
 #[ignore = "needs a disc image in data/images/"]
 fn the_road_texture_is_one_shared_asset_not_a_per_circuit_variant() {
     let Some(image) = image() else { return };
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
     let mut reference: Option<(String, u32, u32, Vec<u8>)> = None;
     for circuit in circuits() {

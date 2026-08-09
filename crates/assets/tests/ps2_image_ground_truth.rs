@@ -1,5 +1,5 @@
 //! Validates the PS2 image substitution against the real discs: the entries
-//! `oag_assets::pulse::PS2_IMAGES` names really do hold the pictures the PSP
+//! `oag_pulse::PS2_IMAGES` names really do hold the pictures the PSP
 //! keeps under those `.mip` names.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
@@ -32,8 +32,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::pulse;
 use oag_formats::{ps2_texture, texture};
+use oag_pulse as pulse;
 
 /// How much of the silhouette has to agree before two images are the same
 /// picture. The three real pairs score 0.9946 to 0.9999 and the best
@@ -73,8 +73,8 @@ fn every_substituted_ps2_entry_holds_the_picture_the_psp_names() {
     else {
         return;
     };
-    let mut psp = pulse::Archives::open(&psp_path.to_string_lossy()).expect("open psp");
-    let mut ps2 = pulse::Archives::open(&ps2_path.to_string_lossy()).expect("open ps2");
+    let mut psp = pulse::open(&psp_path.to_string_lossy()).expect("open psp");
+    let mut ps2 = pulse::open(&ps2_path.to_string_lossy()).expect("open ps2");
 
     assert!(!pulse::PS2_IMAGES.is_empty(), "the table is not empty");
 
@@ -120,9 +120,8 @@ fn every_substituted_ps2_entry_holds_the_picture_the_psp_names() {
         );
 
         // And the read the game actually performs resolves to the same bytes.
-        let via_read_image = ps2
-            .read_image(name)
-            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let via_read_image =
+            oag_pulse::read_image(&mut ps2, name).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(
             ps2_texture::parse(&via_read_image).map(|t| (t.width, t.height)),
             Ok((got.width, got.height)),
@@ -137,7 +136,7 @@ fn the_psp_path_is_untouched_by_the_substitution() {
     let Some(path) = image("pulse-psp-eu.chd") else {
         return;
     };
-    let mut psp = pulse::Archives::open(&path.to_string_lossy()).expect("open");
+    let mut psp = pulse::open(&path.to_string_lossy()).expect("open");
 
     // Every substituted name is a real PSP entry, so `read_image` must never
     // reach the table there: it has to return exactly what `read_name` does.
@@ -145,9 +144,8 @@ fn the_psp_path_is_untouched_by_the_substitution() {
         let by_name = psp
             .read_name(name)
             .unwrap_or_else(|e| panic!("{name}: {e}"));
-        let by_image = psp
-            .read_image(name)
-            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let by_image =
+            oag_pulse::read_image(&mut psp, name).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(by_name, by_image, "{name}: read_image diverged on the PSP");
     }
 }
@@ -158,7 +156,7 @@ fn game_sharing_art_is_confirmed_absent_rather_than_unlooked_for() {
     let Some(path) = image("pulse-ps2-eu.chd") else {
         return;
     };
-    let mut ps2 = pulse::Archives::open(&path.to_string_lossy()).expect("open");
+    let mut ps2 = pulse::open(&path.to_string_lossy()).expect("open");
 
     let name = r"Data\FE\Images\gameshare_backdrop.mip";
     assert!(
@@ -172,7 +170,7 @@ fn game_sharing_art_is_confirmed_absent_rather_than_unlooked_for() {
          against all 28 same-shaped PS2 textures peaks at 0.02"
     );
     assert!(
-        ps2.read_image(name).is_err(),
+        oag_pulse::read_image(&mut ps2, name).is_err(),
         "{name} still fails, and says so with its own name"
     );
 }

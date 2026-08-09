@@ -109,8 +109,7 @@ fn the_authored_boxes_place_most_of_a_tracks_geometry() {
 }
 
 fn sweep(image: &Path, minimum: usize) {
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
     let mut measured = 0usize;
     let mut worst_track = (String::new(), 0.0f64);

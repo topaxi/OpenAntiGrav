@@ -106,7 +106,7 @@ impl Assets {
         let mut tips = Vec::new();
         let mut strip = None;
 
-        match oag_assets::pulse::Archives::open(source) {
+        match oag_pulse::open(source) {
             Ok(mut archives) => {
                 match archives
                     .read_name(TIPS_ENTRY)

@@ -62,8 +62,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::pulse;
 use oag_formats::vex;
+use oag_pulse as pulse;
 use oag_render::mesh;
 
 fn image() -> Option<PathBuf> {
@@ -104,8 +104,7 @@ fn every_psp_teams_boost_plume_decodes_with_two_meshes_and_its_texture() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
     for team in TEAMS {
         let name = format!(r"Data\Ships\{team}\shipboost.vex");
@@ -168,8 +167,7 @@ fn every_psp_teams_boost_plume_vertex_alpha_is_bimodal() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
     for team in TEAMS {
         let name = format!(r"Data\Ships\{team}\shipboost.vex");
@@ -211,8 +209,7 @@ fn the_three_ps2_only_teams_have_no_psp_boost_plume() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
     for team in ["Auricom", "Harimau", "Icaras"] {
         let name = format!(r"Data\Ships\{team}\shipboost.vex");
@@ -241,8 +238,7 @@ fn every_psp_teams_boost_plume_batches_are_additive_blend() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
     for team in TEAMS {
         let name = format!(r"Data\Ships\{team}\shipboost.vex");
@@ -330,8 +326,7 @@ fn every_psp_teams_boost_plume_samples_one_texture_column() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
     for team in TEAMS {
         let name = format!(r"Data\Ships\{team}\shipboost.vex");

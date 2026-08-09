@@ -7,16 +7,31 @@ snapshot in and emits a state snapshot out. Everything else - drawing, audio,
 windowing, file I/O - happens outside it.
 
 This is not architectural taste. It is what makes the simulation testable
-without a GPU, deterministic without a scheduler, portable to a platform with no
+without a GPU, deterministic without a scheduler, portable to a host with no
 windowing system, and comparable against a trace from the original. Every other
 rule here follows from it.
+
+## Vocabulary
+
+Three axes get confused if they share a word, so they do not share one here:
+
+- **title** - Wipeout Pulse, Pure, HD/Fury, 2048. A data axis, per
+  [ADR-0021](adr/0021-title-packages.md): tables, never dispatch.
+- **console** (also **source**) - PSP, PS2, PS3, Vita. The machine the original
+  ran on, and where its assets come from. Deliberately *not* a code axis, per
+  [ADR-0004](adr/0004-asset-pipeline.md).
+- **host** - Linux, Windows, macOS, and later the handheld and web targets. What
+  this reimplementation runs on.
+
+Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
+"platform" for the first two; read them with this distinction in mind.
 
 ## Crates that exist
 
 | Crate | Path | Purpose |
 | --- | --- | --- |
 | `oag-core` | `crates/core` | Deterministic math, fixed-timestep clock, seeded PRNG, state hashing. Depended on by everything. |
-| `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, platform identification. |
+| `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, console identification. |
 | `oag-formats` | `crates/formats` | Asset container identification and parsing. Currently triage only; parsers land as formats are decoded. |
 | `oag-tools` | `crates/tools` | Command line tools: `oag-unpack`, `oag-wad`. |
 | `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track-ribbon builder, cameras. Owns no window, so the viewer and the game can each keep their own. |
@@ -27,6 +42,10 @@ rule here follows from it.
 | `oag-physics` | `crates/physics` | Ship dynamics and collision. |
 | `oag-race` | `crates/race` | Race rules, lap timing, track progress. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct and the input snapshot the simulation consumes. |
+| `oag-audio` | `crates/audio` | The mixer and playback device; see [ADR-0018](adr/0018-audio-mixer-architecture.md). |
+| `oag-title` | `crates/title` | The engine-side *types* a title package fills in. Tables, no data. |
+| `oag-pulse` | `crates/pulse` | Wipeout Pulse's tables: what that title ships. |
+| `oag-pure` | `crates/pure` | Wipeout Pure's tables, in the same shape. |
 | `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. |
 
 ## Crates that do not exist yet
@@ -38,10 +57,39 @@ crate created before its shape is understood tends to get the wrong shape.
 | --- | --- | --- |
 | `oag-weapons` | M5 | Pickups, projectiles, damage. |
 | `oag-ai` | M5 | Opponent behaviour. |
-| `oag-audio` | M5 | Mixing and playback. |
 | `oag-ui` | M5 | HUD and menus. |
 | `oag-replay` | M7 | Input recording and playback. |
 | `oag-net` | M8 | Multiplayer. |
+
+## Title packages
+
+[ADR-0021](adr/0021-title-packages.md) splits two questions that used to be one.
+
+**"How does this byte stream decode?" is answered by the file, inside
+`oag-formats`.** Class-ID tables, header shapes and schema variants are selected
+from the artifact's own version word - `vex::classes::{V6, V4, V3}` and the
+equivalents for `collision`, `track` and `handling`. The decoder never learns
+which title a file came from, and no caller tells it. This is why `oag-formats`
+has no dependency on any title crate, and must not grow one: the reverse edge
+exists, so a forward edge is a cycle.
+
+**"What does this title ship?" is answered by a title package.** Archive
+candidate lists, entry names, name hashes, team lists, HUD and front-end names:
+`oag-pulse` and `oag-pure`. `oag-title` holds the types, and deliberately only
+for the axes where two corpora have actually been measured - archive candidates,
+entry names, handling schema version. Presentation vocabulary stays as plain
+constants inside `oag-pulse` until Pure forces its shape.
+
+Title crates are tables, so they depend on `oag-core` and `oag-formats` and
+nothing else. That keeps them readable from both sides of the simulation
+boundary, and it is why they are listed among the gameplay crates in
+`scripts/check-dependency-rules.py` - rule 1 applies to them unchanged.
+
+The simulation's own Pulse constants - the physics literals, the Zone scoring,
+`START_LINE_OFFSET`, the handling scale factors - have their seam defined but
+have **not** moved into `oag-pulse`. [ADR-0009](adr/0009-multi-game-fanout.md)
+item 2 gates second-title simulation work on M4's exit criterion, and the force
+law is that milestone's live blocker. The move is mechanical once it clears.
 
 ## Dependency rules
 
@@ -53,9 +101,11 @@ crate created before its shape is understood tends to get the wrong shape.
     oag-disc            oag-physics          oag-render
         |                oag-ai                  |
    oag-formats          oag-weapons          oag-audio
-        |                oag-race             oag-input
-    oag-assets               |                    |
-        |                    |                    |
+        |     \           oag-race             oag-input
+    oag-assets  oag-title      |                    |
+        |         /   \        |                    |
+        |   oag-pulse oag-pure |                    |
+        |         \   /        |                    |
         +----------> oag-gameplay <---------------+
                             |
                         oag-game
@@ -86,8 +136,11 @@ surface to itself.
 
 `oag-assets` and `oag-game` both arrived earlier than the table above expected:
 the front end needed asset access and a binary before any of M4 existed.
-`oag-assets` is currently only asset *access*, not the platform-normalising
-registry it is meant to become, and it does not yet know about PS2 assets.
+`oag-assets` has since become the console-normalising registry it was meant to
+be - it reads both the PSP and the PS2 asset paths, and per
+[ADR-0004](adr/0004-asset-pipeline.md) nothing downstream branches on which. Its
+`Layout` candidate resolution is the *mechanism*; the candidate lists themselves
+are title data and live in the title crates.
 
 The three older copies of "open a disc image, find a `.wad`, read its
 directory, decompress a blob" that used to live in `oag-tools`'s `oag-wad`,

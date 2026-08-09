@@ -1626,6 +1626,8 @@ version = "0.1.0"
 dependencies = [
  "oag-disc",
  "oag-formats",
+ "oag-pulse",
+ "oag-title",
  "thiserror 2.0.19",
 ]
 
@@ -1682,6 +1684,7 @@ dependencies = [
  "oag-gameplay",
  "oag-input",
  "oag-physics",
+ "oag-pulse",
  "oag-race",
  "oag-render",
  "oag-trace",
@@ -1720,6 +1723,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-pulse"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-title",
+]
+
+[[package]]
 name = "oag-race"
 version = "0.1.0"
 dependencies = [
@@ -1736,8 +1747,16 @@ dependencies = [
  "oag-assets",
  "oag-core",
  "oag-formats",
+ "oag-pulse",
  "pollster",
  "wgpu",
+]
+
+[[package]]
+name = "oag-title"
+version = "0.1.0"
+dependencies = [
+ "oag-disc",
 ]
 
 [[package]]
@@ -1762,6 +1781,7 @@ dependencies = [
  "oag-formats",
  "oag-gameplay",
  "oag-physics",
+ "oag-pulse",
  "oag-race",
  "thiserror 2.0.19",
 ]

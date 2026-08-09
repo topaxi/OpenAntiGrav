@@ -1311,7 +1311,7 @@ impl Frontend {
 
 /// The line height of a font id, in the PSP's own pixel units.
 ///
-/// Matches the `.fnt` files named in `oag_assets::pulse::names::fonts`:
+/// Matches the `.fnt` files named in `oag_pulse::names::fonts`:
 /// `Default` is `pulse_text.fnt` (13px), `Menu` is `Pulse_20.fnt` (22px),
 /// `Title`, `Small`, `InGame` and `Stats` are `Pulse_14.fnt` (17px), `HUD` is
 /// `PulseHud.fnt` (25px) and `HUDSmall` is `small.fnt` (10px). The XML is

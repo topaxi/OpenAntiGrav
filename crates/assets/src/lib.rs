@@ -28,9 +28,10 @@
 //! the caller's problem, which is what keeps this testable without a GPU.
 
 pub mod archive;
-pub mod pulse;
+pub mod source;
 
 pub use archive::Archive;
+pub use source::{Archives, Layout, Platform, read_loose_file};
 
 /// Something that went wrong reaching an asset.
 #[derive(Debug, thiserror::Error)]

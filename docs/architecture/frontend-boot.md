@@ -296,7 +296,7 @@ Pure, which is exactly how it was reported. `Data\Movies\Intro.PMF` and
 Pure disc: `71d3c1ec` and `18c51e58` are absent from Pure's `Data.wad`.
 
 `b1ba72c3`, the European cut, is what `--reel` defaults to, via
-`oag_assets::pulse::hashes::DEVPUB_REEL_SCEE`. Confidence **75**. The disc this
+`oag_pulse::hashes::DEVPUB_REEL_SCEE`. Confidence **75**. The disc this
 project reads has a `UCUS-98712` serial in its `PARAM.SFO` and that is the *only*
 American thing about it:
 
@@ -638,7 +638,7 @@ the file and [asserted](../../crates/game/tests/boot_ground_truth.rs).
 
 A PAL disc will have a different set, which is why the list is read rather than
 hard-coded. The plugin ids in
-[`oag-assets::pulse`](../../crates/assets/src/pulse.rs) are the candidates to
+[`oag-assets::pulse`](../../crates/pulse/src/lib.rs) are the candidates to
 probe, not the answer.
 
 ### What the screen does not yet do faithfully
@@ -651,7 +651,7 @@ probe, not the answer.
   scaled by `MenuScale`), which is the same quantity a line of that font steps
   by anywhere else it is used, but it is an inference rather than a value read
   off the disc. Confidence **60**: the font-name-to-line-height mapping is
-  real (`oag_assets::pulse::names::fonts`), but nothing here confirms a `Menu`
+  real (`oag_pulse::names::fonts`), but nothing here confirms a `Menu`
   list actually paces its rows by its font's line height rather than some other
   constant - no runtime capture of the picker exists to check against (see
   below).

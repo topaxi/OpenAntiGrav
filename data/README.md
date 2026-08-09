@@ -41,7 +41,7 @@ is always safe**. It is rebuilt from your disc image on demand.
 
 Tooling looks for these names. Copy your own images here and rename:
 
-| Name | Title | Platform | Region |
+| Name | Title | Console | Region |
 | --- | --- | --- | --- |
 | `pulse-psp-usa.chd` | Wipeout Pulse | PSP | USA |
 | `pulse-ps2-eu.chd` | Wipeout Pulse | PS2 | Europe |
@@ -49,8 +49,40 @@ Tooling looks for these names. Copy your own images here and rename:
 | `pure-psp-usa.chd` | Wipeout Pure | PSP | USA |
 | `pure-psp-eu.chd` | Wipeout Pure | PSP | Europe |
 | `hdfury-ps3-eu.iso` | WipEout HD / Fury | PS3 | Europe |
+| `2048-vita-usa.pkg` | WipEout 2048 | Vita | USA (`PCSA00015`) |
+| `2048-vita-eu.pkg` | WipEout 2048 | Vita | Europe (`PCSF00007`) |
 
 `.iso` works anywhere `.chd` does; the tools sniff the container.
+
+### The PS3 and Vita images are encrypted, and nothing here decrypts them yet
+
+Both are readable at the *directory* level and opaque at the *content* level,
+in two different ways, and both are ordinary tooling problems rather than
+research ones:
+
+- **PS3.** `hdfury-ps3-eu.iso` is a standard redump encrypted image: the ISO
+  9660 filesystem is plaintext (`PS3_DISC.SFB`, `PARAM.SFO` and `ICON0.PNG` all
+  read normally, and `oag-unpack list` walks it fine), while everything under
+  `PS3_GAME/USRDIR/` - `DATA00..06.PSARC`, `EBOOT.BIN`, `DFENGINE.SPRX` - is
+  AES-encrypted under the disc key. Decrypting needs this pressing's redump
+  `.dkey`, then `PS3Dec`; the SELF then needs `scetool` before Ghidra, with
+  [Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) for the
+  PPC64/PRX side.
+- **Vita.** In a 2048 PKG, `sce_sys/param.sfo` and `sce_pfs/files.db` (magic
+  `SCENGPFS`) are plaintext, but everything inside the PFS layer is encrypted -
+  `eboot.bin`, `PSP2/data1.psarc`, `data2.psarc`, even the manual PNGs. A
+  `pkg2zip` run that produces a readable directory tree full of high-entropy
+  files has done the PKG's AES-CTR layer but not the PFS layer, i.e. it ran
+  without a zRIF. Supply the zRIF (or use `psvpfsparser` with the klicensee),
+  then decrypt the Vita SELF, then
+  [VitaLoaderRedux](https://github.com/CreepNT/VitaLoaderRedux) for Ghidra.
+
+Note what these two share and Pulse/Pure do not: **HD/Fury and 2048 both ship
+PSARC archives rather than WADs**, and 2048 arrives as a PKG rather than a disc
+filesystem at all. That is why the content-source layer is written against
+"archives resolved by name from a source's own file list" rather than "a disc
+image containing WADs" - see
+[ADR-0021](../docs/architecture/adr/0021-title-packages.md).
 
 `pulse-psp-eu.chd` is not one of `oag-game`'s auto-detected `IMAGE_NAMES` (it
 is a reverse-engineering reference disc, not the played-from target) - point

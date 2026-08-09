@@ -71,7 +71,7 @@ hashes on the disc, the directory-position rules that solve models and fonts do
 not apply, and a repeated 3,656-byte blob beside the HUD assets that looked
 like a name table was checked and ruled out. The entry was found by its picture
 and is recorded as a hash in
-[`oag_assets::pulse::PS2_IMAGES`](../../crates/assets/src/pulse.rs), which is
+[`oag_pulse::PS2_IMAGES`](../../crates/pulse/src/lib.rs), which is
 what that module exists for. See its documentation for the evidence and
 `crates/assets/tests/ps2_image_ground_truth.rs` for the check that re-derives
 it rather than asserting the constant against itself. **Confidence 90.**

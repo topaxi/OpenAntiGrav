@@ -78,7 +78,7 @@ fn have_ffmpeg() -> bool {
 }
 
 fn read(source: &Path, path: &str) -> Vec<u8> {
-    let (found, blob) = oag_assets::pulse::read_loose_file(&source.display().to_string(), &[path])
+    let (found, blob) = oag_assets::read_loose_file(&source.display().to_string(), &[path])
         .expect("reading the disc")
         .unwrap_or_else(|| panic!("{path} is not on the disc"));
     assert!(

@@ -9,8 +9,8 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use oag_assets::pulse;
 use oag_formats::fexml;
+use oag_pulse as pulse;
 
 use crate::frontend::Frontend;
 use crate::language::{Language, StringTable};
@@ -111,7 +111,7 @@ pub struct Options {
 /// Loads everything and builds the sequence.
 pub fn load(options: &Options) -> Result<Boot> {
     let mut report = Vec::new();
-    let mut archives = pulse::Archives::open(&options.source)
+    let mut archives = pulse::open(&options.source)
         .with_context(|| format!("opening the archives in {}", options.source))?;
     report.push(archives.layout.describe());
     report.push(format!(
@@ -392,7 +392,7 @@ fn load_movie_sound(
 ///   whereas the menus open on a keypress out of a race, where a
 ///   thirteen-second freeze would read as a hang.
 fn load_backdrop(
-    archives: &mut oag_assets::pulse::Archives,
+    archives: &mut oag_assets::Archives,
     options: &Options,
     report: &mut Vec<String>,
 ) -> Option<Movie> {
@@ -425,11 +425,11 @@ fn load_backdrop(
 /// size, which makes `FE.wad` look sufficient; `gameshare_backdrop.mip` is in
 /// `Data.wad` only, which proves it is not. The order is deliberate and is
 /// therefore written here rather than taken from
-/// [`oag_assets::pulse::Archives::read_name`], which searches the *bulk* archive
+/// [`oag_assets::Archives::read_name`], which searches the *bulk* archive
 /// first because that is the right default for a race: same size is not same
 /// bytes, and a front-end image should come off the front end's own archive.
 fn load_sprites(
-    archives: &mut oag_assets::pulse::Archives,
+    archives: &mut oag_assets::Archives,
     screens: &Screens,
     report: &mut Vec<String>,
 ) -> crate::sprite::Sheet {
@@ -467,16 +467,16 @@ fn load_sprites(
 
 /// Reads a front-end asset, preferring the companion archive over the bulk one.
 ///
-/// The mirror image of [`oag_assets::pulse::Archives::read_name`]'s order, for the
+/// The mirror image of [`oag_assets::Archives::read_name`]'s order, for the
 /// callers that want a front-end asset specifically. See [`load_sprites`] for the
 /// two entries that decide it.
 ///
 /// A name neither archive has falls through to
-/// [`oag_assets::pulse::Archives::read_image`], which knows the handful of
+/// [`oag_assets::Archives::read_image`], which knows the handful of
 /// images the PS2 keeps under an entry its own XML's name does not hash to -
 /// `pulse_logo.mip` among them.
 fn read_front_end_first(
-    archives: &mut oag_assets::pulse::Archives,
+    archives: &mut oag_assets::Archives,
     name: &str,
 ) -> oag_assets::Result<Vec<u8>> {
     if let Some(fe) = archives.fe.as_mut()
@@ -484,7 +484,7 @@ fn read_front_end_first(
     {
         return Ok(blob);
     }
-    archives.read_image(name)
+    oag_pulse::read_image(archives, name)
 }
 
 /// Reads the front end's own font, falling back to the built-in glyphs.
@@ -496,16 +496,13 @@ fn read_front_end_first(
 /// while in exactly that state: its `.fnt` decodes as far as the metrics and
 /// then stops, because the glyph sheet is a separate archive entry.
 ///
-/// Which is why this goes through [`oag_assets::pulse::Archives::read_font`]
+/// Which is why this goes through [`oag_assets::Archives::read_font`]
 /// rather than [`read_front_end_first`] plus a parse: locating the atlas is the
 /// archive's problem, not the front end's. The two archives hold byte-identical
 /// copies of all five fonts on the PSP, checked, so reading the bulk one costs
 /// nothing there.
-fn load_font(
-    archives: &mut oag_assets::pulse::Archives,
-    report: &mut Vec<String>,
-) -> crate::font::Atlas {
-    let name = oag_assets::pulse::names::DEFAULT_FONT;
+fn load_font(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -> crate::font::Atlas {
+    let name = oag_pulse::names::DEFAULT_FONT;
     match archives.read_font(name).map_err(|e| e.to_string()) {
         Ok(font) => {
             let atlas = crate::font::Atlas::from_font(&font);
@@ -525,10 +522,7 @@ fn load_font(
     }
 }
 
-fn load_screens(
-    archives: &mut oag_assets::pulse::Archives,
-    report: &mut Vec<String>,
-) -> Result<Screens> {
+fn load_screens(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -> Result<Screens> {
     // The one piece with no degraded form: a front end with no screens is not a
     // front end. The message names the archives searched, because on a source
     // whose front-end root has never been located that is the useful half.
@@ -576,7 +570,7 @@ fn load_screens(
 /// captions, and it does not go through the boot path that used to be the only
 /// caller. See [`load_strings`].
 pub fn load_languages(
-    archives: &mut oag_assets::pulse::Archives,
+    archives: &mut oag_assets::Archives,
     report: &mut Vec<String>,
 ) -> Vec<Language> {
     let mut out = Vec::new();
@@ -612,7 +606,7 @@ pub fn load_languages(
 /// still boots, still races the default track, and the menus' circuit row draws
 /// as one with nothing to offer rather than the game refusing to start.
 fn load_tracks(
-    archives: &mut pulse::Archives,
+    archives: &mut oag_assets::Archives,
     report: &mut Vec<String>,
 ) -> Vec<crate::catalogue::Track> {
     let name = pulse::names::GAME_PLUGIN_DEFINITION;
@@ -635,7 +629,7 @@ fn load_tracks(
 /// Public for the same reason [`load_languages`] is: the HUD resolves `IG_HUD_*`
 /// keys through this, and a race reaches it without booting the front end.
 pub fn load_strings(
-    archives: &mut oag_assets::pulse::Archives,
+    archives: &mut oag_assets::Archives,
     languages: &[Language],
     preferred: Option<&str>,
     report: &mut Vec<String>,
@@ -784,7 +778,7 @@ impl std::fmt::Display for EntryRef {
 ///
 /// See `docs/ps2/pulse-disc-layout.md`.
 fn load_movie(
-    archives: &mut oag_assets::pulse::Archives,
+    archives: &mut oag_assets::Archives,
     options: &Options,
     report: &mut Vec<String>,
 ) -> Result<Option<Movie>> {
@@ -955,7 +949,7 @@ fn load_loose_movie(
     let Some(candidates) = loose_candidates(name) else {
         return Ok(None);
     };
-    let Some((path, blob)) = pulse::read_loose_file(&options.source, candidates)? else {
+    let Some((path, blob)) = oag_assets::read_loose_file(&options.source, candidates)? else {
         return Ok(None);
     };
 

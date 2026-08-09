@@ -72,10 +72,10 @@
 //! `#[ignore]`d and never run in CI: it needs `data/traces/` and a disc image
 //! under `data/images/`, both gitignored. Run it with `just test-data`.
 
-use oag_assets::pulse;
 use oag_formats::{collision, handling};
 use oag_gameplay::{collision_world, handling_for};
 use oag_physics::{Environment, Handling, wall};
+use oag_pulse as pulse;
 use oag_trace::Trace;
 use oag_trace::replay::{Basis, initial_state};
 use oag_trace::trace::AngularReading;
@@ -119,7 +119,7 @@ const RECORDED_WALL_TICK: usize = 187;
 const ALLOWED_TICK_GAP: usize = 6;
 
 fn load() -> (Handling, oag_physics::CollisionWorld, Trace) {
-    let mut archives = pulse::Archives::open(
+    let mut archives = pulse::open(
         workspace(IMAGE)
             .to_str()
             .expect("the image path is not valid UTF-8"),

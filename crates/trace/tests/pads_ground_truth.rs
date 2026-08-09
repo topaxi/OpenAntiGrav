@@ -30,8 +30,7 @@ fn load() -> Option<(Vec<u8>, Course)> {
         println!("skipping: {} is missing", image.display());
         return None;
     }
-    let mut archives =
-        oag_assets::pulse::Archives::open(image.to_str().expect("utf-8 path")).expect("the image");
+    let mut archives = oag_pulse::open(image.to_str().expect("utf-8 path")).expect("the image");
     let blob = archives.read_name(TRACK).expect("the track");
 
     let nodes = vex::nodes(&blob).expect("the .vex decodes");

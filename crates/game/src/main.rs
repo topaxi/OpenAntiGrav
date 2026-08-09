@@ -65,7 +65,7 @@ struct Cli {
     ///
     /// Either release: the archives are found by name, so
     /// `data/images/pulse-ps2-eu.chd` works as well as the PSP default. See
-    /// `oag_assets::pulse::Layout`.
+    /// `oag_assets::Layout`.
     ///
     /// Left out, it is searched for: `data/images/` in the current directory,
     /// then beside the AppImage, then `<data dir>/oag/images`. `oag_game::source`
@@ -1008,8 +1008,7 @@ fn parse_progress(spec: &str) -> Result<prefetch::Progress> {
         failed: 0,
         // A real label, built the way `prefetch` builds one, so the line reads
         // as the thing it will read as in a window rather than as filler.
-        current: (done < total)
-            .then(|| format!("Data.wad {}", oag_assets::pulse::names::INTRO_MOVIE)),
+        current: (done < total).then(|| format!("Data.wad {}", oag_pulse::names::INTRO_MOVIE)),
         finished: done == total,
     })
 }

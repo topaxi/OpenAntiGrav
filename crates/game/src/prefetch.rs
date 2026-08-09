@@ -50,7 +50,7 @@
 //! wrong**: the PS2's four loose movies are always counted. A cache name is
 //! built from the file's path and its length, and getting a length out of a
 //! disc image without reading the file means walking the ISO directory - which
-//! [`pulse::read_loose_file`] does not expose, and which is a second copy of
+//! [`oag_assets::read_loose_file`] does not expose, and which is a second copy of
 //! its path matching to write for four files. So they are visited every run,
 //! and [`movie::open`] returns each one from the cache in milliseconds. The 115
 //! PSP assets, which is where the ten minutes actually is, are checked exactly.
@@ -74,8 +74,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
-use oag_assets::pulse;
 use oag_formats::wad::Compression;
+use oag_pulse as pulse;
 
 use crate::movie::{self, Extent};
 
@@ -373,7 +373,7 @@ fn convert(task: &Task, archives: &mut [oag_assets::Archive], options: &Options)
             // Read whole, unlike the WAD movies: a loose file's cache key is
             // its path and its length, and reaching a PS2 movie at all goes
             // through `read_loose_file`, which reads it whole anyway.
-            let Some((found, blob)) = pulse::read_loose_file(&options.source, &[path])? else {
+            let Some((found, blob)) = oag_assets::read_loose_file(&options.source, &[path])? else {
                 anyhow::bail!("{path} is no longer on the source");
             };
             let key = format!("{}-{}", found.replace(['/', '\\'], "_"), blob.len());
@@ -420,7 +420,7 @@ struct Plan {
 
 /// Walks the source and works out what is left to do.
 fn plan(options: &Options) -> Result<Plan> {
-    let layout = pulse::Layout::resolve(&options.source)
+    let layout = oag_assets::Layout::resolve(&options.source, oag_pulse::TITLE)
         .with_context(|| format!("resolving the archives in {}", options.source))?;
 
     let mut archives = Vec::new();
@@ -493,7 +493,7 @@ fn plan(options: &Options) -> Result<Plan> {
         }
     }
 
-    if layout.platform == pulse::Platform::Ps2 {
+    if layout.platform == oag_assets::Platform::Ps2 {
         // Listed unconditionally, unlike everything above: see the module
         // documentation for why a loose file's cache name cannot be built
         // without reading it. `movie::open` returns a cached one at once, so a
@@ -529,7 +529,7 @@ fn plan(options: &Options) -> Result<Plan> {
 /// the middle of a boot. Converting both pairs is the point of prefetching.
 ///
 /// Matched by trailing path components through
-/// [`pulse::read_loose_file`], so the disc's serial-named directory - `54748/`
+/// [`oag_assets::read_loose_file`], so the disc's serial-named directory - `54748/`
 /// on this pressing - does not have to be spelled out. See
 /// `docs/ps2/pulse-disc-layout.md`.
 const PS2_MOVIES: &[&str] = &[
@@ -599,7 +599,7 @@ fn existing(cache_dir: &Path) -> Vec<String> {
 
 /// Every archive worth walking, in the order they are opened.
 ///
-/// [`pulse::Layout`] resolves the two archives the game itself reads - the bulk
+/// [`oag_assets::Layout`] resolves the two archives the game itself reads - the bulk
 /// one and its companion - because those are the two anything else needs.
 /// `FEData.wad` and `BEData.wad` are neither, and between them they hold five
 /// of the disc's 22 movies and one of its 93 sounds, so a prefetch that skipped
@@ -610,11 +610,11 @@ fn existing(cache_dir: &Path) -> Vec<String> {
 /// the trailing file name is correct for both. Only on a PSP source: the PS2's
 /// bulk archive is `WADS2.WAD` and the derivation would produce a name no disc
 /// has, which would open as nothing and be reported as a skip for no reason.
-fn archive_specs(layout: &pulse::Layout) -> Vec<String> {
+fn archive_specs(layout: &oag_assets::Layout) -> Vec<String> {
     let mut specs = vec![layout.data.clone()];
     specs.extend(layout.fe.clone());
 
-    if layout.platform == pulse::Platform::Psp
+    if layout.platform == oag_assets::Platform::Psp
         && let Some(stem) = layout.data.strip_suffix("Data.wad")
     {
         specs.push(format!("{stem}FEData.wad"));
@@ -699,8 +699,8 @@ mod tests {
     /// specifier, because a disc spec carries a colon the plain path does not.
     #[test]
     fn a_psp_source_walks_all_four_of_its_archives() {
-        let layout = pulse::Layout {
-            platform: pulse::Platform::Psp,
+        let layout = oag_assets::Layout {
+            platform: oag_assets::Platform::Psp,
             data: "image.chd:PSP_GAME/USRDIR/Data.wad".to_string(),
             fe: Some("image.chd:PSP_GAME/USRDIR/FE.wad".to_string()),
         };
@@ -714,7 +714,7 @@ mod tests {
             ]
         );
 
-        let extracted = pulse::Layout {
+        let extracted = oag_assets::Layout {
             data: "extracted/PSP_GAME/USRDIR/Data.wad".to_string(),
             fe: None,
             ..layout
@@ -733,8 +733,8 @@ mod tests {
     /// would name files no pressing has.
     #[test]
     fn a_ps2_source_derives_no_siblings() {
-        let layout = pulse::Layout {
-            platform: pulse::Platform::Ps2,
+        let layout = oag_assets::Layout {
+            platform: oag_assets::Platform::Ps2,
             data: "image.chd:54748/WADS2.WAD".to_string(),
             fe: Some("image.chd:54748/WADSP.WAD".to_string()),
         };

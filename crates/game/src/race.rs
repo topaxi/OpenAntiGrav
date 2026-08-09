@@ -63,7 +63,6 @@
 //! its evidence written next to it.
 
 use anyhow::{Context, Result};
-use oag_assets::pulse;
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
 use oag_core::{Rng, TickClock, TickRate};
@@ -76,6 +75,7 @@ use oag_gameplay::{
 };
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
+use oag_pulse as pulse;
 use oag_race::{Course, Mode, RaceState};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::camera::internal::InternalParams;
@@ -269,10 +269,10 @@ pub fn boost_entry_name(team: &str, mode: Mode) -> String {
 /// it must never have the chance to overwrite a model that already decoded
 /// correctly on its own.
 ///
-/// See [`pulse::Archives::read_preceding`] for the rule itself and the
+/// See [`oag_assets::Archives::read_preceding`] for the rule itself and the
 /// evidence behind it.
 fn ps2_texture_set(
-    archives: &mut pulse::Archives,
+    archives: &mut oag_assets::Archives,
     entry_name: &str,
 ) -> Option<Vec<Option<mesh::ModelTexture>>> {
     let blob = archives.read_preceding(entry_name).ok()?;
@@ -578,7 +578,7 @@ fn collision_fx_locators(ship_blob: &[u8]) -> Vec<Vec3> {
 /// different problems with different fixes (name mining versus the decoder), and a
 /// silent fallback hides which one happened.
 fn mip_texture(
-    archives: &mut pulse::Archives,
+    archives: &mut oag_assets::Archives,
     name: &str,
 ) -> std::result::Result<(FlareTexture, String), String> {
     let blob = archives
@@ -615,7 +615,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `Data\Ships\<Team>\handlingstats.xml` and `Data\Environments\<n>_Track\...`
     // under the names the PSP uses - so the layout is the whole of the
     // difference. See `docs/formats/handling-stats.md`.
-    let mut archives = pulse::Archives::open(&options.source)?;
+    let mut archives = pulse::open(&options.source)?;
     report.push(archives.layout.describe());
 
     let spec = archives
@@ -637,7 +637,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ai.point_count()
     ));
 
-    let read = |archives: &mut pulse::Archives, name: &str| -> Result<Vec<u8>> {
+    let read = |archives: &mut oag_assets::Archives, name: &str| -> Result<Vec<u8>> {
         archives
             .read_name(name)
             .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))
@@ -1271,7 +1271,7 @@ pub const fn hud_layout(mode: Mode) -> &'static str {
 /// it looks: a HUD drawn in the 5x7 fallback font looks like a rendering bug, and
 /// a silent fallback would send someone looking in the shader.
 fn load_hud(
-    archives: &mut pulse::Archives,
+    archives: &mut oag_assets::Archives,
     mode: Mode,
     report: &mut Vec<String>,
 ) -> crate::hud::Assets {
@@ -1310,7 +1310,7 @@ fn load_hud(
     let mut sheet = crate::sprite::Sheet::default();
     // `read_image`, not `read_name`: the PS2 keeps this atlas under an entry
     // its own XML's name does not hash to. See `pulse::PS2_IMAGES`.
-    match archives.read_image(crate::hud::ATLAS) {
+    match oag_pulse::read_image(archives, crate::hud::ATLAS) {
         Ok(blob) => {
             let mut notes = Vec::new();
             let built =
@@ -1358,7 +1358,7 @@ fn load_hud(
 ///
 /// The same shape as `crate::boot::load_font`, which reads the front end's
 /// `Default` font, and now the same read: both go through
-/// [`pulse::Archives::read_font`], so a PS2 source finds the glyph atlas the
+/// [`oag_assets::Archives::read_font`], so a PS2 source finds the glyph atlas the
 /// disc keeps in the entry after the `.fnt` rather than falling back to 5x7.
 /// Kept separate only so the report line says which font is being talked about.
 ///
@@ -1366,7 +1366,7 @@ fn load_hud(
 /// covering glyph *plus* border - so `Atlas::from_font`'s body/outline split
 /// applies unchanged here; see `docs/formats/fnt.md`.
 fn hud_font(
-    archives: &mut pulse::Archives,
+    archives: &mut oag_assets::Archives,
     name: &str,
     report: &mut Vec<String>,
 ) -> crate::font::Atlas {

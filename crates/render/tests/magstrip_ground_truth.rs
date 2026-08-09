@@ -91,13 +91,13 @@ fn image(name: &str) -> Option<PathBuf> {
     None
 }
 
-fn open(image: &Path) -> oag_assets::pulse::Archives {
-    oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives")
+fn open(image: &Path) -> oag_assets::Archives {
+    oag_pulse::open(&image.display().to_string()).expect("opening archives")
 }
 
 /// Reads a circuit's track model, with the PS2 external-texture fallback the
 /// game itself uses (`crates/game/src/race.rs`).
-fn track(archives: &mut oag_assets::pulse::Archives, circuit: &str) -> Option<(Vec<u8>, Model)> {
+fn track(archives: &mut oag_assets::Archives, circuit: &str) -> Option<(Vec<u8>, Model)> {
     let name = format!(r"Data\Environments\{circuit}_Track\track.vex");
     let blob = archives.read_name(&name).ok()?;
     let mut model = mesh::build(&name, &blob).ok()?;

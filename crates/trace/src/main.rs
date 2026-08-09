@@ -21,7 +21,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use oag_assets::pulse;
 use oag_core::math::Vec3;
 use oag_formats::{collision, handling, track};
 use oag_gameplay::ControlScheme;
@@ -29,6 +28,7 @@ use oag_gameplay::input::button_from_name;
 use oag_gameplay::spawn::{Pose, box_inertia, spawn_height};
 use oag_gameplay::{Ship, collision_world, handling_for};
 use oag_physics::{CollisionWorld, Environment, Handling, Ray, Raycaster, SpeedClass};
+use oag_pulse as pulse;
 use oag_race::Course;
 use oag_trace::compare::Tolerances;
 use oag_trace::replay::{Basis, DeltaSource, DriveOptions, Held, Inputs, Options};
@@ -1137,7 +1137,7 @@ fn off_spline(position: oag_core::math::Vec3, samples: &[track::Sample]) -> f32 
 /// error: a track without one is a track a ship starts on the spline of, the
 /// same fallback `oag_game::race` takes.
 fn load_start_position(source: &str, name: &str) -> Result<Option<track::StartPosition>> {
-    let mut archives = pulse::Archives::open(source)?;
+    let mut archives = pulse::open(source)?;
     let blob = archives
         .read_name(name)
         .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))?;
@@ -1157,7 +1157,7 @@ fn load_start_position(source: &str, name: &str) -> Result<Option<track::StartPo
 /// Reads a track's `WO Track` spline graph out of its `.vex`, for `track` and
 /// for `drive`.
 fn read_track_blob(source: &str, name: &str) -> Result<Vec<u8>> {
-    let mut archives = pulse::Archives::open(source)?;
+    let mut archives = pulse::open(source)?;
     archives
         .read_name(name)
         .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))
@@ -1541,7 +1541,7 @@ fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
 ///
 /// **Which archives the source has, not which archives a PSP disc has.** Both
 /// entry names below are spelled the same on both releases, so the layout is the
-/// whole of the difference - [`pulse::Archives`] finds `Data.wad` or `WADS2.WAD`
+/// whole of the difference - [`oag_assets::Archives`] finds `Data.wad` or `WADS2.WAD`
 /// by name and searches the companion archive too. This deliberately prints
 /// nothing extra: `run` output is compared byte-for-byte against earlier
 /// captures, so the layout appears only in an error's context.
@@ -1551,7 +1551,7 @@ fn load(
     team: &str,
     class: SpeedClass,
 ) -> Result<(Handling, CollisionWorld)> {
-    let mut archives = pulse::Archives::open(source)?;
+    let mut archives = pulse::open(source)?;
     let where_from = archives.layout.describe();
 
     let track_blob = archives

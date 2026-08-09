@@ -16,6 +16,7 @@ name = "oag-game"
 path = "src/main.rs"
 
 [dependencies]
+oag-pulse.workspace = true
 oag-assets.workspace = true
 # The mixer and the device. The composition root is the only crate allowed to
 # hold one: `scripts/check-dependency-rules.py` fails the build if a gameplay
@@ -23,7 +24,7 @@ oag-assets.workspace = true
 oag-audio.workspace = true
 oag-core.workspace = true
 # Read straight off the disc, for one thing only: `PS2MUSIC.WAD` is 585 MiB and
-# `oag_assets::pulse::read_loose_file` reads a loose file whole, so a single
+# `oag_assets::read_loose_file` reads a loose file whole, so a single
 # 35 MiB track would cost the other fifteen. `DiscImage::read_entry_range`
 # reads the 196-byte directory and then exactly one entry. See
 # `crate::audio::load_ps2_track`.

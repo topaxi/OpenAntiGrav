@@ -65,8 +65,7 @@ fn image() -> Option<PathBuf> {
 #[ignore = "needs a disc image in data/images/"]
 fn every_team_has_two_hinged_airbrake_flaps() {
     let Some(image) = image() else { return };
-    let mut archives =
-        oag_assets::pulse::Archives::open(&image.display().to_string()).expect("opening archives");
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
     let mut missing = Vec::new();
     let mut same_side = Vec::new();

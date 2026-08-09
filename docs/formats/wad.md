@@ -312,7 +312,7 @@ maintainer's machine is quota-limited well below the project's own disk.
 Scanning through `oag_assets::Archive` in memory, with no extraction at all, is
 both faster and avoids the trap.
 
-**`oag_assets::pulse::OTHER_TITLES` is a deny-list, not an allow-list, on
+**`oag_title::ForeignSerial` is a deny-list, not an allow-list, on
 purpose.** The two Pulse serials this project has verified (`UCUS-98712`,
 `SCES-54748`) are not the full universe of legitimate pressings. Allow-listing
 known-good serials would hard-reject a real player's own legitimately-owned

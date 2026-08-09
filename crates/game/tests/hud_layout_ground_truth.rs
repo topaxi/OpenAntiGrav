@@ -51,8 +51,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::pulse;
 use oag_game::hud::{self, Layout};
+use oag_pulse as pulse;
 
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -94,12 +94,12 @@ const EXPECTED: &[(&str, usize, usize, usize, usize)] = &[
     (hud::layouts::MP_TAG, 0, 0, 8, 0),
 ];
 
-fn open() -> Option<pulse::Archives> {
+fn open() -> Option<oag_assets::Archives> {
     let image = image()?;
-    pulse::Archives::open(&image.display().to_string()).ok()
+    pulse::open(&image.display().to_string()).ok()
 }
 
-fn layout_of(archives: &mut pulse::Archives, entry: &str) -> Layout {
+fn layout_of(archives: &mut oag_assets::Archives, entry: &str) -> Layout {
     let blob = archives
         .read_name(entry)
         .unwrap_or_else(|e| panic!("reading {entry}: {e}"));

@@ -70,7 +70,9 @@ appending a dated pass to it.
 
 ## Where the project stands
 
-M4. The force law, the angular-momentum model, the contact response and the
+M4, with an engine/title split in flight alongside it (see the next section).
+
+The force law, the angular-momentum model, the contact response and the
 mag-lock attitude hold are all recovered at instruction level and implemented,
 and **every fitted constant that once stood in for a recovered one has been
 retired** - `YAW_DRIVE_CALIBRATION`, `ALIGNMENT_INERTIA` and the
@@ -437,6 +439,68 @@ pixel argument about the exhaust.
   no-cull decision is renderer-wide, and we are already *under* the original's
   extent, so removing geometry moves the wrong way.
 
+## The engine/title split (2026-08-09, stages 1-2 of 7 landed)
+
+Work in flight, on a user directive to make Pure workable in parallel with
+Pulse. Governed by [ADR-0021](docs/architecture/adr/0021-title-packages.md),
+which supersedes **ADR-0009 item 3 only** - items 1, 2 and 4 stand, and item 2
+in particular still gates second-title *simulation* work behind M4's exit.
+
+**The rule that decides every question this split raises.** Two questions were
+being conflated, and they have different answers:
+
+- *"How does this byte stream decode?"* - answered by the **file**, inside
+  `oag-formats`, from its own version word. Class-ID tables, header shapes and
+  schema variants stay there. `oag-formats` must never depend on a title crate:
+  the reverse edge exists, so that one is a cycle.
+- *"What does this title ship?"* - answered by a **title package**. Archive
+  names, entry names, name hashes: `oag-pulse`, and later `oag-pure`.
+
+Landed:
+
+- **`oag-title`** - `Title`, `ArchiveCandidates`, `ForeignSerial`. Types only.
+  Scoped deliberately to the three axes with two measured corpora; presentation
+  vocabulary stays as plain constants in `oag-pulse` until Pure forces its
+  shape, because `pure-status.md` measured none of it.
+- **`oag-pulse`** - what used to be `oag_assets::pulse`'s tables.
+- **`oag-assets::source`** (was `assets/src/pulse.rs`) - the mechanism, now
+  taking a `&Title`. Its unit tests run against a *fixture* title, so the
+  crate's own tests no longer depend on Pulse's constants.
+- Both new crates are in `scripts/check-dependency-rules.py`'s
+  `GAMEPLAY_CRATES`. **That script validates every name against
+  `cargo metadata`**, so a crate cannot be listed ahead of its own creation the
+  way `oag-audio` once was - `oag-pure` joins in the change that creates it.
+
+Two behaviours changed, both deliberate:
+
+- **`Archives::read_image` is gone**; it is `oag_pulse::read_image(&mut
+  archives, name)`. The PS2 name-to-hash substitution is a fact about Pulse's
+  PS2 pressing, not about archives.
+- **The Pure deny-list is per-title.** `OTHER_TITLES` was a hardcoded "reject
+  Pure" inside the engine, which becomes actively wrong the moment `oag-pure`
+  exists. It is now `Title::foreign_serials`: each title names the *others* it
+  rules out. The one-directional policy is unchanged - it rules out, never in.
+
+Remaining, in order: **(3)** version-keyed class tables in `oag-formats`
+(`vex::classes::{V6, V4, V3}` and the same for `collision`/`track`/`handling`) -
+the load-bearing stage, and the one where Pure's files start decoding;
+**(4)** presentation tables to `oag-pulse`, folding in `frontend::SCREEN`
+per-source; **(5)** an `oag-pure` skeleton whose acceptance test is `just view`
+drawing a Pure ship; **(6)** the physics seam **without** relocating constants;
+**(7)** docs and hygiene. The full plan, with per-stage oracles, is in the
+session plan file referenced by the commit that lands stage 3.
+
+**Stage 3 has one precondition that is easy to miss.** Pure ships model textures
+pre-swizzled, flagged at `Texture` payload `+0x06`, and `vex::textures` never
+reads that byte today. Starting to read it is a *Pulse* change if any Pulse
+texture sets the bit - verify it is zero across Pulse's corpus first, or gate
+the read on version word <= 4.
+
+**Stage 6 is deliberately half-done and must stay that way until M4 closes.**
+The physics, Zone and `START_LINE_OFFSET` constants get a seam but do not move.
+The force law is M4's live blocker and relocating its constants mid-investigation
+is the one part of this refactor with real downside.
+
 ## Open threads
 
 Each is a real, named next step. Task numbers are the ones the agent passes
@@ -528,7 +592,8 @@ the past.
 | **The collision stun is not armed by track contact** | The original's is gated on a pending impulse the contact path never writes. |
 | **Sweep and prune is not reimplemented** | The original's packing clamps world space rather than rebasing it, so it never drops a genuinely overlapping pair; ours does the same job without the packing. |
 | **The four-corner hover variant** | Not implemented. Its selector is known (`DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, which also disables the brakes and the weapons) and it is not the racing configuration. |
-| **Pure asset work** | Deferred behind M4's exit per [ADR-0009](docs/architecture/adr/0009-multi-game-fanout.md); the probe ran and [`pure-status.md`](docs/formats/pure-status.md) records what it found. |
+| **Pure asset work** | No longer deferred as a whole. [ADR-0021](docs/architecture/adr/0021-title-packages.md) opened the format and asset layers on the strength of [`pure-status.md`](docs/formats/pure-status.md)'s measurements; ADR-0009 item 2 still defers Pure *simulation* work behind M4's exit. |
+| **PS3 and Vita content** | Paused 2026-08-09, on the toolchain rather than on the research. Both are encrypted - see [`data/README.md`](data/README.md#the-ps3-and-vita-images-are-encrypted-and-nothing-here-decrypts-them-yet) for the two different mechanisms and the tools each needs. None of `PS3Dec`/`scetool`/`pkg2zip`/`psvpfsparser` is installed and there is no RPCS3 install to borrow a decrypted copy from. The one architecturally relevant fact was free: **HD/Fury and 2048 both ship PSARC, not WAD**, and 2048 arrives as a PKG rather than a disc filesystem. |
 | **A "CPU renderer" switch** | There is nothing to switch. wgpu ships no software rasteriser (`Backend::Noop` draws nothing), so CPU rendering exists only via a system Vulkan implementation such as lavapipe, selected outside the process. |
 | **RENDERER applies on the next launch** | The device is made once at boot and everything hangs off it. Live switching means tearing down the surface, the pipelines and every GPU resource. |
 | **PS2 `.PSS`/`.IPF` through GStreamer** | [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md). |

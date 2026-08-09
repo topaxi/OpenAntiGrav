@@ -26,7 +26,20 @@ ROOT = Path(__file__).resolve().parent.parent
 # it is added. oag-core is included too: oag-render also depends on it, so it
 # is not exclusive to the gameplay branch, but a forbidden dependency landing
 # there would reach oag-gameplay just as surely as one added directly.
-GAMEPLAY_CRATES = {"oag-core", "oag-gameplay", "oag-physics", "oag-race"}
+# oag-title and oag-pulse are here for the reason ADR-0021 gives: a title
+# package is tables, readable from both sides of the simulation boundary, so
+# rule 1 has to cover them or a Pulse constant becomes the back door a texture
+# handle walks through. oag-pure joins them in the same change that creates it;
+# this script validates that every name here is a real workspace member, so it
+# cannot be listed ahead of time the way oag-audio once was.
+GAMEPLAY_CRATES = {
+    "oag-core",
+    "oag-gameplay",
+    "oag-physics",
+    "oag-pulse",
+    "oag-race",
+    "oag-title",
+}
 FORBIDDEN_FOR_GAMEPLAY = {"oag-render", "oag-audio", "oag-input", "winit", "wgpu"}
 
 # Rule 2: no crate may depend on the composition root.

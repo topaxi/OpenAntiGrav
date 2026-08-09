@@ -329,7 +329,7 @@ smoother     {"linear": 185, "psmt8": 4856}
 **Solved for ships (confidence 90) and, separately, for tracks (confidence
 88 - see below).** A model's texture set is never looked up by name or hash
 at all - it is the archive entry **directly before** the model's own entry
-in the WAD directory. `oag_assets::pulse::Archives::read_preceding`
+in the WAD directory. `oag_assets::Archives::read_preceding`
 implements this, and `oag_game::race::load` uses it for a ship and for the
 track file: when a model's embedded texture slots are all empty (the PS2
 signature), it reads the preceding entry and tries it as a texture set.
@@ -434,7 +434,7 @@ ruled out: none of its 914 words is an entry hash in either archive.
 silhouette against a runner-up field below 0.71, visual confirmation, and for
 the atlas the independent UV agreement. Short of 94 because the mapping is
 recovered rather than declared and no executable path has been read. Recorded
-in [`oag_assets::pulse::PS2_IMAGES`](../../crates/assets/src/pulse.rs) and
+in [`oag_pulse::PS2_IMAGES`](../../crates/pulse/src/lib.rs) and
 pinned by `crates/assets/tests/ps2_image_ground_truth.rs`, which re-derives the
 match instead of asserting the constants against themselves.
 

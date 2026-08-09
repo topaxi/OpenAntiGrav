@@ -1,0 +1,115 @@
+//! What a title ships, described in types a title package fills in.
+//!
+//! This crate is the *vocabulary* half of [ADR-0021]. It holds no constant that
+//! belongs to any game: `oag-pulse` and `oag-pure` supply those, and
+//! `oag-assets` reads them.
+//!
+//! # Two questions, and only one of them is here
+//!
+//! **"How does this byte stream decode?" is answered by the file**, inside
+//! `oag-formats`, from the artifact's own version word. Class-ID tables, header
+//! shapes and schema variants live there and are selected per blob, the same way
+//! PSP and PS2 have always been told apart. No type in this crate describes a
+//! file's contents, and adding one would be the first step toward a decoder that
+//! has to be told which disc it is reading.
+//!
+//! **"What does this title ship?" is answered here.** Which archives exist and
+//! what they are called is not in any file - it is a property of the release -
+//! so it is the one thing a title package has to state.
+//!
+//! # Why this is so small
+//!
+//! ADR-0021 supersedes ADR-0009's refusal to abstract at n=1, but only for the
+//! axes where a second corpus has actually been measured. `pure-status.md`
+//! measured Pure's archive layout; it did not map Pure's entry names, its HUD
+//! atlas, its front-end screens or its mode set. Types for those would be
+//! designed from one example, which is the failure ADR-0009 named and ADR-0021
+//! does not license. They stay as plain constants inside the title crate that
+//! knows them until a second title forces their shape.
+//!
+//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+
+pub use oag_disc::Platform;
+
+/// One title's release-level facts.
+///
+/// A `&'static Title` is chosen once, by the composition root, from the title
+/// crate the build is for. Nothing dispatches through it per call, and it is
+/// deliberately a struct of tables rather than a trait: the differences between
+/// two Wipeout releases are data, and a trait would put a virtual boundary
+/// exactly where the PSP/PS2 split proved none is needed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Title {
+    /// The title as a person would name it, for reports and error messages.
+    pub name: &'static str,
+    /// Which bulk and companion archives its releases carry.
+    pub archives: ArchiveCandidates,
+    /// Serials known to belong to a *different* title. See
+    /// [`ArchiveCandidates`] for why name matching alone cannot tell them apart.
+    pub foreign_serials: &'static [ForeignSerial],
+}
+
+/// The archive names a title's releases carry, in the order they are tried.
+///
+/// **Names, not paths, and found rather than derived.** The candidates are
+/// matched against a source's own file list by trailing path component, so a
+/// PS2 pressing whose serial directory differs needs no change here, and a
+/// source that identifies as neither console still opens if it holds an archive
+/// one of them would recognise. A path constant would be right for exactly one
+/// pressing.
+///
+/// The [`Platform`] on each candidate is what the archive *implies* about its
+/// source, used only when the source itself says nothing. Nothing branches on
+/// it: every decode this project has is chosen by the data rather than by the
+/// disc it came off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArchiveCandidates {
+    /// The bulk archive: tracks, ships, handling.
+    pub data: &'static [(&'static str, Platform)],
+    /// The companion archive, for the releases that have one.
+    pub fe: &'static [(&'static str, Platform)],
+}
+
+/// A serial positively identified as belonging to some other title.
+///
+/// **This rules a source out, never in, and that asymmetry is the point.** The
+/// serials any one title has actually been verified against are not the full
+/// universe of its legitimate pressings, so an allow-list would hard-reject a
+/// real player's own disc - worse than not checking at all. A serial absent from
+/// every list gets no verdict and still has to find its archives by name.
+///
+/// The check exists because sibling titles ship archives under identical names:
+/// Pure's PSP disc carries `Data.wad` and `FE.wad` exactly as Pulse does, so
+/// name matching alone would open it as if it were Pulse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForeignSerial {
+    /// The serial, normalised as `AAAA-NNNNN`.
+    pub serial: &'static str,
+    /// What it actually is, for the error message.
+    pub title: &'static str,
+}
+
+impl Title {
+    /// What `serial` really belongs to, if this title knows it belongs to
+    /// something else.
+    #[must_use]
+    pub fn foreign_title(&self, serial: &str) -> Option<&'static str> {
+        self.foreign_serials
+            .iter()
+            .find(|known| known.serial == serial)
+            .map(|known| known.title)
+    }
+
+    /// Every archive name this title's releases might carry, bulk first.
+    ///
+    /// For the "looked for" list in a "no archive here" error.
+    #[must_use]
+    pub fn archive_names(&self) -> Vec<String> {
+        self.archives
+            .data
+            .iter()
+            .chain(self.archives.fe)
+            .map(|(name, _)| (*name).to_string())
+            .collect()
+    }
+}

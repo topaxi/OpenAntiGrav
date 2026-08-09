@@ -10,8 +10,10 @@ members = [
   "crates/gameplay",
   "crates/input",
   "crates/physics",
+  "crates/pulse",
   "crates/race",
   "crates/render",
+  "crates/title",
   "crates/tools",
   "crates/trace",
   "crates/view",
@@ -33,8 +35,10 @@ oag-formats = { path = "crates/formats" }
 oag-gameplay = { path = "crates/gameplay" }
 oag-input = { path = "crates/input" }
 oag-physics = { path = "crates/physics" }
+oag-pulse = { path = "crates/pulse" }
 oag-race = { path = "crates/race" }
 oag-render = { path = "crates/render" }
+oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
 
 anyhow = "1"

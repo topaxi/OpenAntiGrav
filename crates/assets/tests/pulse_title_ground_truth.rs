@@ -12,7 +12,7 @@
 //! # What this is for
 //!
 //! Wipeout Pure ships its PSP archives (`Data.wad`, `FE.wad`) under the exact
-//! same names Pulse does, so [`pulse::Layout::resolve`] cannot tell the two
+//! same names Pulse does, so [`oag_assets::Layout::resolve`] cannot tell the two
 //! apart by archive name alone - before this check existed, a directory or
 //! disc holding only a Pure image would open exactly as if it were Pulse,
 //! silently. This is the regression guard: opening Pure's own disc through
@@ -22,7 +22,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::{Error, pulse};
+use oag_assets::Error;
+use oag_pulse as pulse;
 
 fn image(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -49,7 +50,7 @@ fn opening_pure_through_pulse_archives_is_rejected_by_name() {
         return;
     };
 
-    match pulse::Archives::open(&image.display().to_string()) {
+    match pulse::open(&image.display().to_string()) {
         Err(Error::WrongTitle { serial, title, .. }) => {
             assert_eq!(serial, "UCUS-98612");
             assert_eq!(title, "Wipeout Pure");

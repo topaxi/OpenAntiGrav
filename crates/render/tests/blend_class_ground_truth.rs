@@ -38,8 +38,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::pulse;
 use oag_formats::vex::BlendClass;
+use oag_pulse as pulse;
 use oag_render::mesh;
 
 fn image() -> Option<PathBuf> {
@@ -59,7 +59,7 @@ fn image() -> Option<PathBuf> {
 }
 
 /// Counts per class for one model, as `(alpha_over, additive, unblended, unset)`.
-fn census(archives: &mut pulse::Archives, name: &str) -> (usize, usize, usize, usize) {
+fn census(archives: &mut oag_assets::Archives, name: &str) -> (usize, usize, usize, usize) {
     let blob = archives
         .read_name(name)
         .unwrap_or_else(|e| panic!("reading {name}: {e}"));
@@ -94,8 +94,7 @@ fn shipped_content_mixes_the_transparent_blend_classes() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
     for name in [
         r"Data\Environments\01_Track\track.vex",
@@ -149,8 +148,7 @@ fn most_batches_are_culled_but_not_all_of_them() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
     for name in [
         r"Data\Environments\01_Track\track.vex",
@@ -189,8 +187,7 @@ fn no_checked_model_uses_the_unblended_transparent_class() {
     let Some(image) = image() else {
         return;
     };
-    let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the PSP archives");
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
     for name in [
         r"Data\Environments\01_Track\track.vex",

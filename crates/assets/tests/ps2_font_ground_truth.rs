@@ -29,8 +29,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::pulse;
 use oag_formats::{fnt, ps2_texture};
+use oag_pulse as pulse;
 
 /// The five fonts, by the names hashed into both discs' archives.
 const FONTS: [&str; 5] = [
@@ -65,7 +65,7 @@ fn every_ps2_font_reads_its_atlas_out_of_the_following_entry() {
     let Some(path) = image("pulse-ps2-eu.chd") else {
         return;
     };
-    let mut archives = pulse::Archives::open(&path.to_string_lossy()).expect("open");
+    let mut archives = pulse::open(&path.to_string_lossy()).expect("open");
 
     for name in FONTS {
         let blob = archives
@@ -161,7 +161,7 @@ fn the_psmt4_unswizzle_puts_every_lit_texel_inside_a_glyph_box() {
     let Some(path) = image("pulse-ps2-eu.chd") else {
         return;
     };
-    let mut archives = pulse::Archives::open(&path.to_string_lossy()).expect("open");
+    let mut archives = pulse::open(&path.to_string_lossy()).expect("open");
 
     // `pulse_text` and no other font, deliberately. The other four bake an
     // outline into the atlas that sits *outside* the declared box, and three of

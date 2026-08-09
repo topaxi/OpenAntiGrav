@@ -11,7 +11,7 @@
 //!
 //! 1. The **command-line argument**, used verbatim. A file, a directory
 //!    extracted with `oag-unpack`, or an `image:path` archive spec - whatever
-//!    `oag_assets::pulse::Archives::open` accepts.
+//!    `oag_assets::Archives::open` accepts.
 //! 2. **`$OAG_IMAGE`**, the same three things.
 //! 3. **`settings.toml`'s `[source] image`**, the same three things again,
 //!    persisted so a player who always plays off one disc does not have to

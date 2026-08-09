@@ -1,0 +1,19 @@
+[package]
+name = "oag-title"
+description = "The engine-side types a title package fills in: tables, never data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# Deliberately thin. `oag-disc` is here for `Platform`, which an archive
+# candidate is tagged with; nothing else is needed to describe what a title
+# ships. In particular there is no `oag-assets` dependency: this crate holds the
+# vocabulary, `oag-assets` holds the mechanism that reads it, and the edge runs
+# that way round so a title crate never has to link the archive reader.
+[dependencies]
+oag-disc.workspace = true
+
+[lints]
+workspace = true

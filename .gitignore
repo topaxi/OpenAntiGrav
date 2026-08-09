@@ -24,6 +24,17 @@
 *.bin
 *.img
 *.gcm
+*.vpk
+*.edat
+
+# PS3 and Vita. HD/Fury and 2048 ship PSARC archives rather than WADs, their
+# modules are `.sprx`/`.suprx`/`.skprx`, and `.dkey` is the PS3 disc key - not
+# content itself, but the one thing that decrypts a disc image.
+*.psarc
+*.sprx
+*.suprx
+*.skprx
+*.dkey
 
 # SMAA's own precomputed lookup textures (AreaTex/SearchTex), MIT-licensed
 # third-party shader data - not extracted disc content. See

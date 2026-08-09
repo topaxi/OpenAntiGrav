@@ -24,9 +24,13 @@ from pathlib import Path
 # extracted asset formats). See docs/overview/legal.md.
 EXTENSIONS = [
     # Disc images and packaged formats
-    "chd", "iso", "cso", "pkg", "pbp", "umd", "gcm",
+    "chd", "iso", "cso", "pkg", "pbp", "umd", "gcm", "vpk",
     # PSP/PS2 executables and containers
-    "wad", "elf", "prx", "self", "bin", "img",
+    "wad", "elf", "prx", "self", "bin", "img", "edat",
+    # PS3/Vita containers and modules. HD/Fury and 2048 ship PSARC archives
+    # rather than WADs, and Vita modules are `.suprx`/`.skprx`. `dkey` is the
+    # PS3 disc key: not content itself, but the thing that decrypts it.
+    "psarc", "sprx", "suprx", "skprx", "dkey",
     # Emulator save states
     "ppst", "p2s", "state",
     # Rendered/extracted reproductions this project itself writes

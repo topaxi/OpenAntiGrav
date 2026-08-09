@@ -199,7 +199,7 @@ impl std::fmt::Display for MusicSource {
 /// **Neither a file name nor a disc serial is enough here, and both were tried
 /// first.** `crate::source::IMAGE_NAMES` does not cover every regional
 /// pressing - `pulse-psp-eu.chd` is not on it - and a file somebody renamed is
-/// still a valid source. `oag_assets::pulse::Layout::resolve` looked like the
+/// still a valid source. `oag_assets::Layout::resolve` looked like the
 /// answer, but its deny-list is deliberately *positive-only*: it rules out the
 /// one Pure serial this project has verified (`UCUS-98612`) and gives an
 /// unlisted serial no verdict, because allow-listing would hard-reject a
@@ -240,7 +240,7 @@ impl MusicDiscs {
     #[must_use]
     pub fn survey(booted: &str) -> Self {
         let mut discs = Self::default();
-        let Ok(layout) = oag_assets::pulse::Layout::resolve(booted) else {
+        let Ok(layout) = oag_assets::Layout::resolve(booted, oag_pulse::TITLE) else {
             return discs;
         };
         discs.booted = Some(layout.platform);
@@ -342,7 +342,7 @@ fn find_release(booted: &str, wanted: Platform, mine: &Soundtrack) -> Option<Str
             if source == booted {
                 continue;
             }
-            if !oag_assets::pulse::Layout::resolve(&source)
+            if !oag_assets::Layout::resolve(&source, oag_pulse::TITLE)
                 .is_ok_and(|layout| layout.platform == wanted)
             {
                 continue;
@@ -898,7 +898,7 @@ const TICK_HZ: u32 = 60;
 ///
 /// It is 585 MiB on the EU disc and one track is about 35 of them, so this
 /// reads the 4-byte header, then the directory those 4 bytes size, then exactly
-/// the entry asked for. [`oag_assets::pulse::read_loose_file`] would have been
+/// the entry asked for. [`oag_assets::read_loose_file`] would have been
 /// the obvious call and reads a loose file whole; that is right for a movie
 /// container and wrong by a factor of sixteen here.
 fn load_ps2_track(source: &str, index: usize) -> Result<Option<Sound>> {
@@ -1124,7 +1124,7 @@ fn psp_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
     // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
     // path, so a directory somebody extracted with `oag-unpack` answers the
     // same as a disc image does.
-    let Ok(mut archives) = oag_assets::pulse::Archives::open(source) else {
+    let Ok(mut archives) = oag_pulse::open(source) else {
         return Ok(None);
     };
     if archives.layout.platform != Platform::Psp {
@@ -1186,8 +1186,7 @@ fn load_track(source: &str, platform: Platform, track: Track, cache_dir: &Path) 
 /// It is the *decoded* form that is large - 33 MiB of PCM for three minutes -
 /// and that is what the cache in [`crate::at3`] exists to avoid paying twice.
 fn load_psp_entry(source: &str, name_hash: u32, cache_dir: &Path) -> Result<Sound> {
-    let mut archives =
-        oag_assets::pulse::Archives::open(source).with_context(|| format!("opening {source}"))?;
+    let mut archives = oag_pulse::open(source).with_context(|| format!("opening {source}"))?;
     let at3 = archives
         .data
         .read_hash(name_hash)
@@ -1243,7 +1242,7 @@ fn load_psp_track(source: &str, cache_dir: &Path) -> Result<Option<Sound>> {
     // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
     // path, so a directory somebody extracted with `oag-unpack` answers the
     // same as a disc image does.
-    let Ok(mut archives) = oag_assets::pulse::Archives::open(source) else {
+    let Ok(mut archives) = oag_pulse::open(source) else {
         return Ok(None);
     };
     if archives.locate(PSP_MUSIC_NAME).is_none() {
@@ -1507,7 +1506,7 @@ mod tests {
     /// A *different game's* soundtrack must not be taken for the counterpart,
     /// and this is the case that made the check necessary rather than
     /// hypothetical: `pure-psp-eu.chd` carries the serial `UCES-00001`, which
-    /// `oag_assets::pulse::Layout::resolve` gives no verdict on by design, and
+    /// `oag_assets::Layout::resolve` gives no verdict on by design, and
     /// was reported as the PSP counterpart until a soundtrack had to pair.
     ///
     /// Both listings are read values - Pulse's sixteen from the USA UMD, Pure's

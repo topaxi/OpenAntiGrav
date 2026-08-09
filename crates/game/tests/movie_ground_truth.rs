@@ -27,9 +27,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use oag_assets::pulse;
 use oag_game::boot;
 use oag_game::movie;
+use oag_pulse as pulse;
 
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -120,7 +120,7 @@ fn load_whole() -> Option<boot::Boot> {
 /// demuxed bytes in memory and never touches the cache directory at all).
 fn intro_elementary_stream(image: &Path) -> Vec<u8> {
     let mut archives =
-        pulse::Archives::open(&image.display().to_string()).expect("opening the disc's archives");
+        pulse::open(&image.display().to_string()).expect("opening the disc's archives");
     let blob = archives
         .read_name(pulse::names::INTRO_MOVIE)
         .expect("reading the intro movie out of its archive");

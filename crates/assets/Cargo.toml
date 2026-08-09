@@ -10,7 +10,11 @@ rust-version.workspace = true
 [dependencies]
 oag-disc.workspace = true
 oag-formats.workspace = true
+oag-title.workspace = true
 thiserror.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+oag-pulse.workspace = true

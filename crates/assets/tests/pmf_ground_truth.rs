@@ -28,8 +28,9 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_assets::{Archive, pulse};
+use oag_assets::Archive;
 use oag_formats::pmf;
+use oag_pulse as pulse;
 
 /// How many `.PMF` blobs the USA disc holds. Fewer means the scan missed some.
 const EXPECTED_MOVIES: usize = 17;
