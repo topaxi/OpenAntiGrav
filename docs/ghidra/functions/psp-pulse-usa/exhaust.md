@@ -1608,19 +1608,43 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   | build | plume px | mean | `b - r` | orange px |
   | --- | ---: | --- | ---: | ---: |
   | the original | 9,435 | `(220, 165, 237)` | +17.6 | 230 |
-  | ours, authored UVs | 4,467 | `(183, 142, 205)` | +22.0 | 2,394 |
-  | **ours, texgen + `SrcAlpha`** | **6,076** | `(197, 150, 212)` | **+15.0** | **1,767** |
-  | ours, texgen + `One`/`One` | 2,017 | `(240, 177, 225)` | -14.4 | 6,750 |
+  | ours, authored UVs | 4,480 | `(184, 143, 203)` | +19.0 | 2,679 |
+  | **ours, texgen + `SrcAlpha`** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
+  | ours, texgen + `One`/`One` | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
 
-  `One`/`One` restores the authored `(255, 98, 5)` rim at full strength: **29x
+  **Re-measured 2026-08-09 after the trace harness showed the first run's pose
+  was wrong**, so the flags are part of the result: `--pose-tick 62
+  --pose-boost 0.517752 --pose-intensity 0.1250567 --pose-speed 148.8853`. The
+  first table used `--pose-boost 0.5`, seeded intensity from the entry tick
+  rather than the one before it, and was taken while `force_boost_state`
+  charged the boost accumulator 100x too slowly. Every number moved 2-15 %.
+
+  `One`/`One` restores the authored `(255, 98, 5)` rim at full strength: **31x
   the original's orange pixel count**, red-dominant where the original is
   blue-dominant, at 21 % of its extent. The capture's own connected-component
   pass says the same independently - the original's plume and ribbon are one
   violet family and neither is near that orange. **So a term in the recovered
-  blend chain is still missing**: the GE state was read carefully and does not
-  reproduce the picture, while an unrecovered source-alpha weight does. Kept
-  because it measures better, not because it is understood - and that is the
-  live open item this replaces the old one with.
+  blend chain is still missing**: the GE state has since been read
+  exhaustively - all five setters to their command byte, `Gu_TexFunc` confirmed
+  `MODULATE`/`TCC_RGBA`, negative at confidence 92 - and it does not reproduce
+  the picture, while an unrecovered source-alpha weight does. Kept because it
+  measures better, not because it is understood.
+
+  **One conclusion reversed on re-measurement and is recorded rather than
+  buried**: on `b - r` alone the authored-UV build is now closer to the
+  original (+19.0 against +17.6) than the generated-UV one (+13.3), where the
+  first table read +22.0 against +15.0 and pointed the other way. It is not
+  acted on, for two reasons. `b - r` is a mean over a mask of a different size
+  in every row, so it is not a like-for-like colour comparison, and that mask
+  includes a saturated white core pulling every build toward neutral. The
+  extent and orange columns, which do compare the same quantity across rows,
+  both still favour generated coordinates - by +34 % and -24 % - as does the
+  streak structure the whole change was made for.
+
+  **The extent column is not a calibrated ratio.** Our craft renders about
+  `1.4x` too large at this same camera pose, so every pixel count here carries
+  an unresolved scale error; see `HANDOVER.md`, "The craft render scale
+  invalidates matched-pose pixel comparison".
 - **Superseded phrasing kept for one revision**, because two passes cited it:
   the old question assumed some GE path weighted a mesh batch by source alpha. None does. And the two prebuilt
   lists at `mesh+0x70` `+0x48`/`+0x70` are now read: they hold **light 0 and

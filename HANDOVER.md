@@ -720,16 +720,33 @@ blast radius `mesh-draw.md` has twice refused off one pass, and the reported
 symptom does not need it.
 
 **Measured against the original at its own pose**, `data/traces/pad0-boost.csv`
-tick 62 (boost age `0.5` s, entry intensity `0.1292`) against
-`data/shots/pad0-boost/tick00062.png`, over that capture's own plume mask
-(`min(r, b) - g > 25`, `luma > 60`):
+tick 62 against `data/shots/pad0-boost/tick00062.png`, over that capture's own
+plume mask (`min(r, b) - g > 25`, `luma > 60`). **Re-measured 2026-08-09 after
+the trace harness showed the first run's pose was wrong**, so the flags are part
+of the result: `--pose-tick 62 --pose-boost 0.517752 --pose-intensity 0.1250567
+--pose-speed 148.8853`. The first version used `--pose-boost 0.5`, seeded
+intensity from the entry tick instead of the one before it, and ran while
+`force_boost_state` charged the boost accumulator 100x too slowly. Every number
+moved 2-15 %.
 
 | build | plume px | mean | `b - r` | orange px |
 | --- | ---: | --- | ---: | ---: |
 | the original | 9,435 | `(220, 165, 237)` | +17.6 | 230 |
-| ours, authored UVs (what shipped before) | 4,467 | `(183, 142, 205)` | +22.0 | 2,394 |
-| **ours, texgen (this)** | **6,076** | `(197, 150, 212)` | **+15.0** | **1,767** |
-| ours, texgen + the recovered `One`/`One` blend | 2,017 | `(240, 177, 225)` | -14.4 | 6,750 |
+| ours, authored UVs (what shipped before) | 4,480 | `(184, 143, 203)` | +19.0 | 2,679 |
+| **ours, texgen (this)** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
+| ours, texgen + the recovered `One`/`One` blend | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
+
+**One conclusion reversed on re-measurement**, and it is here rather than
+buried: on `b - r` alone the authored-UV build is now *closer* to the original
+(+19.0 against +17.6) than the generated-UV one (+13.3), where the first table
+read +22.0 against +15.0 and pointed the other way. Not acted on, because
+`b - r` is a mean over a mask of a different size in every row - not a
+like-for-like colour comparison - and that mask contains a saturated white core
+that pulls every build toward neutral. The extent and orange columns, which do
+compare the same quantity across rows, still favour generated coordinates by
++34 % and -24 %, as does the streak structure the change was made for. **But
+this is what a metric looks like when it is about to stop being trustworthy**,
+and the extent column has its own problem: see the craft-scale section below.
 
 **The last row is the one worth carrying forward, because it is a negative
 result about something this project believes it has recovered.** `SrcAlpha`
@@ -777,7 +794,7 @@ Three things that would have been easy to miss:
   normal-driven texgen those shade differently rather than merely overdrawing.
   **Not acted on**, for two reasons: the no-cull decision is renderer-wide with
   its own stated rationale, and we are already *under* the original's extent
-  (6,076 against 9,435), so removing geometry moves the wrong way. Recorded
+  (5,996 against 9,435), so removing geometry moves the wrong way. Recorded
   because it is now a live term in the plume's appearance where before it was
   only overdraw.
 

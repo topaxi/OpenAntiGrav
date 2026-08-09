@@ -3857,31 +3857,56 @@ impl Scene {
         // GE state really is `GU_FIX` white on both sides, `SrcAlpha` was only
         // ever introduced as a substitute for the missing texture falloff, and
         // that falloff now exists. So it was tried, at the original's own pose
-        // (`data/traces/pad0-boost.csv` tick 62, boost age `0.5` s, entry
-        // intensity `0.1292`), against the original's own frame
-        // (`data/shots/pad0-boost/tick00062.png`), over the capture's own
+        // (`data/traces/pad0-boost.csv` tick 62), against the original's own
+        // frame (`data/shots/pad0-boost/tick00062.png`), over the capture's own
         // plume mask (`min(r, b) - g > 25` and `luma > 60`):
         //
         // | build | plume px | mean | `b - r` | orange px |
         // | --- | ---: | --- | ---: | ---: |
         // | the original | 9,435 | `(220, 165, 237)` | +17.6 | 230 |
-        // | ours, authored UVs (what shipped before) | 4,467 | `(183, 142, 205)` | +22.0 | 2,394 |
-        // | **ours, texgen + `SrcAlpha` (this)** | **6,076** | `(197, 150, 212)` | **+15.0** | **1,767** |
-        // | ours, texgen + `TRAIL_BLEND` (the recovered blend) | 2,017 | `(240, 177, 225)` | -14.4 | 6,750 |
+        // | ours, authored UVs (what shipped before) | 4,480 | `(184, 143, 203)` | +19.0 | 2,679 |
+        // | **ours, texgen + `SrcAlpha` (this)** | **5,996** | `(197, 150, 210)` | +13.3 | **2,041** |
+        // | ours, texgen + `TRAIL_BLEND` (the recovered blend) | 1,958 | `(243, 181, 227)` | -15.6 | 7,030 |
+        //
+        // **Re-measured 2026-08-09 after the harness found the first run's
+        // pose was wrong**, and the flags matter: `--pose-tick 62 --pose-boost
+        // 0.517752 --pose-intensity 0.1250567 --pose-speed 148.8853`. The
+        // earlier table used `--pose-boost 0.5` and seeded intensity from the
+        // entry tick, and was taken while `force_boost_state` charged the boost
+        // accumulator 100x too slowly. Every number moved by 2-15 %.
         //
         // `One`/`One` restores the authored `(255, 98, 5)` rim at full
-        // strength and the result is **29x the original's orange pixel count**
+        // strength and the result is **31x the original's orange pixel count**
         // and red-dominant where the original is blue-dominant, at 21 % of its
-        // extent. The capture's own section 9 says the same thing
-        // independently: the original's plume and its trail ribbon are one
-        // violet family and "neither is anywhere near the `(255, 98, 5)`
-        // orange rim recorded for the plume mesh".
+        // extent. The capture's own connected-component pass says the same
+        // thing independently: the original's plume and its trail ribbon are
+        // one violet family and neither is anywhere near that orange.
+        //
+        // **One row's conclusion did change, and it is stated rather than
+        // buried.** On `b - r` alone the authored-UV build is now *closer* to
+        // the original (+19.0 against +17.6) than this one (+13.3); before the
+        // correction it read +22.0 against +15.0 and pointed the other way.
+        // Two reasons not to act on that. The metric is weak: `b - r` is a mean
+        // over a mask that is a different size in every row, so it is not a
+        // like-for-like colour comparison, and the mask includes a saturated
+        // white core that pulls every build toward neutral. And the extent and
+        // orange columns - which do compare the same thing across rows - both
+        // still favour generated coordinates, by +34 % and -24 % respectively,
+        // as does the streak structure that was the reported symptom.
         //
         // **So something in the recovered blend chain is still incomplete**,
         // and that is worth stating rather than papering over: the GE state
-        // was read carefully and it does not reproduce the picture, while an
-        // unrecovered source-alpha weight does. `SrcAlpha` is kept because it
-        // measures better, not because it is understood.
+        // was read exhaustively - all five setters to their command byte,
+        // `Gu_TexFunc` confirmed `MODULATE`/`TCC_RGBA` - and it does not
+        // reproduce the picture, while an unrecovered source-alpha weight does.
+        // `SrcAlpha` is kept because it measures better, not because it is
+        // understood.
+        //
+        // **Do not read the extent column as a calibrated ratio.** Our craft
+        // renders about 1.4x too large at this very camera pose, so anything
+        // measured in pixels here carries an unresolved scale error; see
+        // `HANDOVER.md`, "The craft render scale invalidates matched-pose pixel
+        // comparison".
         // See `docs/ghidra/functions/psp-pulse-usa/exhaust.md` and
         // `mesh-draw.md`.
         let boost = boost_model
