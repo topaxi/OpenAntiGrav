@@ -31,7 +31,7 @@ values it cycles and the observed period all agree with it.
 | A third parameter block for an internal view | answered: there are **five** blocks |
 | Whether the view is persisted to the profile save | answered: yes, as a string setting |
 | Where the 3/4 factor on the external offsets comes from | answered 2026-08-08: `g_craft_scale`, a code literal |
-| How the internal rig applies `pitch` and `headtilt` | answered 2026-08-08: `pitch` is a rise over a run of 10; `headtilt` rolls the up vector by an unidentified per-craft term |
+| How the internal rig applies `pitch` and `headtilt` | answered 2026-08-08: `pitch` is a rise over a run of 10; `headtilt` rolls the up vector by `craft+0x844`, **identified 2026-08-09 as a smoothed steering-driven lean** - see below |
 | How many camera rigs a craft has | answered 2026-08-08: **four**, internal / backward / external close / external far |
 | Whether the external rig is reproduced | answered 2026-08-08, third pass: yes, to `0.008` RMS over a 150-tick capture of the original |
 
@@ -995,9 +995,69 @@ this function is the internal rig.
 
 That last row is the `headtilt` application this page records as parsed but
 unapplied: `up' = up - side * craft[0x844] * headtilt`, now read at instruction
-level rather than inferred. **`craft+0x844` itself is still unidentified**, so
-the sign and scale of the lean remain unknown and that open item stands - but
-the shape of the expression and which axis it rolls are no longer in doubt.
+level rather than inferred.
+
+### `craft+0x844` is a smoothed steering lean, and the headtilt item is closed
+
+**Identified 2026-08-09**, which was the whole of the remaining work on
+`headtilt`: the sign and scale of the lean are now knowable.
+
+`craft+0x844` has exactly **two readers in the whole image** - the `headtilt`
+expression above, and its own producer. That producer is a two-stage filter,
+evaluated per frame at `0x0883fab4`:
+
+```c
+target  = steer * 0.01;                       /* *(*(craft+0x94) + 0x78), first float */
+if (craft[0x8a4] > 0) target -= 10.0;         /* two flags, symmetric */
+if (craft[0x8a8] > 0) target += 10.0;
+if (craft[0x860] & 2) target = -target;       /* a mirror flag */
+
+rate = clamp(target - craft[0x848], +/-0.6 or +/-0.3) * 5.4;  /* limit depends on
+                                                 the sign of the raw input */
+craft[0x848] += rate * dt;                    /* rate-limited follower */
+craft[0x844] += (craft[0x848] - craft[0x844]) * dt * 4.0;     /* first-order smooth */
+```
+
+So the lean **leans into the turn**, is driven by steering, is rate-limited and
+then smoothed with a `4/s` first-order filter, and saturates at `0.6` (or `0.3`
+on the other sign). A port needs no new capture: everything above is arithmetic
+on values this project already has.
+
+The same function computes a **second** pair the same way - `craft+0x858` as the
+follower at rate `5.0` and `craft+0x854` smoothed at `3.0` - from a richer input
+(`steer * 0.01` minus and plus two `0.005` terms, gated off by
+`craft[0x860] & 0x1000`). **`craft+0x854` is not a camera value**: its only
+consumer outside this function is `FUN_088418e0`, the contact-reaction function.
+That is why nothing here is renamed - see below.
+
+**Confidence 80** for the arithmetic, read end to end at instruction level, with
+the reader and writer sets established by an operand scan over all 635,908
+instructions rather than by an xref search. **Confidence 0** for what either
+quantity *means* physically: `*(craft+0x94) + 0x78`'s fields are not identified,
+and the `+/-10.0` contributions from `craft+0x8a4`/`0x8a8` are large against a
+`steer * 0.01` term, which says the input's units are not what a first reading
+assumes.
+
+### A wrong name was live in the Ghidra database, on this very function
+
+`0x0883fab4` was named **`Ship_UpdateStartBoost`** in the database. It is not:
+it has no boost window, no `craft+0x294`, and it computes the two lean filters
+above. The real `Ship_UpdateStartBoost` is
+[`0x0883fdec`](engine.md), which is what
+`names.tsv` records and what `engine.md` describes - so **two different
+functions carried the same name**, and only one of them legitimately.
+
+This is [the workflow page's](../../workflow.md) "the database can disagree with
+`names.tsv` and the docs win" trap, live and costing a reading: the decompiler
+answers to the name, so a search for the start boost lands on a steering filter.
+`names.tsv` is unchanged and was never wrong; the database had acquired an extra
+copy of the name, most likely from one of the fuzzy cross-application sweeps.
+
+**Reverted to `FUN_0883fab4` rather than renamed to something better**, which the
+[rubric](../../../reverse-engineering/confidence-rubric.md) requires: what the
+function computes is read, what its two outputs *are* is not, and its consumers
+span two subsystems, so any name would be a guess dressed up. A wrong name stops
+people looking, and this one already had.
 
 Confidence **80** for the store and its constant read directly, **88** with the
 pixel confirmation; **75** for the decomposition, up from 0, on one capture of
