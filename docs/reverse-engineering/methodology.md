@@ -150,3 +150,98 @@ recorded against it, and the evidence must be checkable by someone else.
 
 **Leaving a contradiction unrecorded** because resolving it would take time. Write
 it down; that is the cheap part.
+
+## Rules learned the expensive way
+
+Each of these cost at least a session before it was written down. They lived on
+`HANDOVER.md` until 2026-08-09; they are here because they are properties of the
+method rather than of any pass.
+
+**Decode, then ask "can this change a pixel?", then report - not the other way
+round.** Three times in one session a recovered GE mechanism was reported as a
+finding and turned out to be **inert**: the boost plume's alpha test
+(`GU_GREATER, 0` discards exactly the fragments a `SrcAlpha` blend already
+weights to zero), its colour test (an RGB-zero fragment adds nothing under an
+additive blend - redundant *algebraically*, for any content), and the spark
+streak's `v` layout (a real difference, but `oag_render::sparks` binds no
+texture at all). Each check was cheap - a vertex-alpha histogram, one line of
+algebra, a grep for a texture bind - and each would have taken minutes *before*
+the write-up rather than after. The general form: **recovering a GE call is not
+by itself an argument for implementing it.** A fixed-function console programs
+per-fragment tests to avoid paying for writes the blend would have made
+invisible; fill rate is the scarcest resource on the part. On a reimplementation
+with a different fill budget those are recovered-but-inert state - correct to
+document, wrong to port, and actively harmful to port as a "fix".
+
+**An xref count on a class descriptor bounds *authored* instances only.** One
+pass concluded that racing craft have no exhaust trail, because `Trail`'s class
+descriptor is referenced by nothing but its own registration function and no
+`Ship.vex` authors a `Trail` node. Both facts are true; the conclusion is false.
+The descriptor is used **only** by the class-table lookup the `.vex` loader
+takes to instantiate a node by ID - code that builds an object directly calls
+its constructor and assigns the vtable itself, which is exactly what
+`ExhaustFlare_Init` does. What refuted it was **looking at the emulator**, which
+shows a trail plainly. Take a side-by-side before concluding anything is absent
+from a *visible* subsystem. The same asymmetry runs the other way: "has
+instances" and "has a handler" are independent properties of a class -
+`exitglow` is authored 13 times on `16_Track` and has no registration site at
+all - so no census reads as a to-do list.
+
+**A claim that the crate is missing a term is a claim about the crate.** It has
+been wrong three times - the airbrake drag term, the hover downforce magnitude
+and the roll-oscillator note were each recorded as unimplemented in prose nobody
+had checked against the code, and twice the correct value was sitting in the
+same file a hundred lines above the claim.
+
+**A page can go stale while a sibling page in the same tree already carries the
+correction**, and so can the code. It has happened four times (the front-end
+font claim; the airbrake drag term in four places; M4's blocker for 31 commits;
+and `rigid-body.md` recording that `<Misc>`'s dimensions are scaled by `0.75`
+before reaching the box collider while `crates/physics/src/wall.rs` built that
+box unscaled for two days). `git log -S <symbol>` against the doc's own
+last-touched commit settles it in one command, and `git grep` for a constant
+across `docs/` costs less than rediscovering the instruction sequence behind it.
+
+**Never write a fitted constant in as a recovered value.** Every one that has
+been chased turned out to be something real - an inverse-inertia entry, a box
+tensor, a friction coefficient - and writing the fit in would have closed the
+question at exactly the wrong moment.
+
+**A number in authored data that looks like a height usually is not one.**
+`Start Position`'s `y` reads exactly like a ride height on `01_Track` (2.42,
+between the surface and the lifted spline) and is not one: measured against each
+track's own collision mesh it ranges **1.03 to 7.36** across the 40 files.
+Checking it on one track would have shipped a spawn that only works there. Ask
+what an authored constant is a height *above*, then measure that on every file
+rather than the convenient one.
+
+**When position and heading disagree about whether a reading is right, the
+heading is the one that can carry the argument.** The authored grid slot is
+139.7 units from where the original's craft actually starts, which is equally
+consistent with a misread matrix and with a grid behind the line. Its forward
+agreeing to 1.12 degrees is consistent with only one of those. Rotations have no
+free parameters; positions have three.
+
+**"Read far enough to rule X out" is how 80 instructions of a different
+mechanism stay unread for three passes.** `Ship_UpdateMagLock` had been opened
+twice, each time only to the depth that day's question needed; its tail turned
+out to rewrite the basis directly and was the whole of the remaining attitude
+gap.
+
+**Time-boxing pays anyway.** Two unread leads (the PS2 PAL/NTSC selector's
+trigger, the `.IPF` container) were left alone deliberately and the video got
+playing regardless, because the measured facts did not need them.
+
+**Diff the output, not the compile.** A shader uniform field existing is not the
+same as a shader reading it: `Draw::Video`'s `rect` was computed and discarded
+on the way to the GPU, and the first "fix" produced a pixel-identical screenshot
+while silently doing nothing.
+
+**A fidelity fix that changes nothing measurable is still a finding.**
+`raycast_all` moved the whole-lap scenario by not one digit and single-sided
+rejection moved it by 1.1 units - both real divergences from
+`Collision_BoxAgainstMesh` that `16_Track`'s geometry never exercises. Written
+down, that is knowledge; unwritten, it gets re-litigated. (Both figures were
+measured from the old spline-sample-0 spawn and do not reproduce since `4b2236a`
+moved the start onto the authored grid slot; the finding stands, the numbers do
+not.)

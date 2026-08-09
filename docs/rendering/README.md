@@ -79,6 +79,92 @@ affine texture mapping artefacts, a specific fog curve. Where such an artefact
 is part of the game's identity rather than an accident, it gets reproduced
 deliberately and documented as a choice.
 
+## Measuring a renderer change
+
+Moved here from `HANDOVER.md` on 2026-08-09, because each of these is a standing
+property of how this renderer gets judged rather than a note about one pass.
+`just compare-upscalers` cites this section.
+
+**Before believing anything about one object's size on screen, measure the
+background in the same frame.** Five passes over six days concluded our craft was
+drawn `1.3x`-`1.74x` too large and hunted a second `0.75` in the executable to
+explain it. The craft is correct to **0.15 %**; the whole frame was zoomed,
+because the original widens its field of view with speed and we do not, and the
+craft merely inherited it. (The widen is a store read out of the executable -
+`0.075 * dot(fwd, vel)` additive degrees - which the pixels then *corroborate*
+rather than supply; the pixel fit's job was to identify which of several
+candidates was responsible, not to invent a constant.) The clause that hid this
+was a single unchecked one -
+"with the track and buildings behind aligning" - written into the measurement's
+own record. Far scenery cannot be moved by any mesh scale, which makes it a free
+control that decides between "our model is wrong" and "our camera is wrong" in
+one extra measurement. The instrument, its validation and the recovered fov term
+are on
+[projection-vs-the-original.md](projection-vs-the-original.md).
+
+**The recurring failure is not a wrong measurement - it is a control that was
+available and never run.** Four instances in two days, each caught only after it
+had misled someone: the background alignment that was *asserted* rather than
+registered (six days of hunting a craft-scale error that did not exist); a
+correlation sweep whose peak sat on the range's own edge and was written up as
+`1.2500`; a registration box with HUD text inside it, which cannot scale and
+pulled the answer to 1.01 from 1.14; and a band quoted to three digits when
+sweeping it at two step sizes would have shown it moving 1.5 %. In every case the
+check cost one extra command and the assertion cost days. **Before believing a
+pixel measurement, name the control that could have refuted it - and if you
+cannot name one, that is the finding.**
+
+**A brightness threshold cannot compare two renderers, and there is a metric that
+can.** Every threshold, hue and saturation rule tried against the original failed,
+each for its own reason, because our frame is ~2x darker with no bright pass and
+the two renderers' bloom differs at low frequency. What works is **similarity
+registration on high-passed gradient magnitude**: the same mesh with the same
+texture carries the same internal pattern in both frames, and correlating that
+pattern has no threshold in it anywhere. Validated to 0.26 % against known resize
+factors, with the HUD - which no camera parameter can scale - as a free control
+at 0.997.
+
+**An aggregate statistic can rank a broken change as the better one.** The first
+mesh-to-section rule placed a draw call by the single section holding its
+bounding-sphere *centre*. It reported **fewer** draw calls surviving the cull -
+which reads as better culling - and it deleted a ridge line and a building from
+the frame, because geometry wider than a section has its centre in only one of
+them. A screenshot comparison caught it and no counter would. `--screenshot`
+honours both culling settings precisely so this comparison is runnable; two
+captures at the same `--ticks` differing only by a setting must be
+byte-identical. The same trap is why `just compare-upscalers` produces images
+and deliberately no numbers: an aggregate ranks a sharpener below a blur every
+time.
+
+**Do not add per-frame work to save per-draw work without measuring both
+sides.** Building the PVS visible set needs the craft and the camera located on
+the spline, and `Spline::nearest` walks all ~3,400 samples - twice a frame would
+have cost the same order as the frustum tests it saves. The craft's index is
+already cached in `Ship::segment` by the simulation's own tick, and the camera
+is found in a 96-sample window around it.
+
+**Brightness thresholding measures the circuit, not the effect.** On Talon's
+Junction's start straight the road's own light strips saturate a **245-pixel**
+run in a band with no exhaust in it, against 108 px in the band containing the
+ship, so any "widest saturated run" statistic is dominated by scenery - and it
+reads as a clean number. Our own frames do not have this problem (a flat ribbon
+over black), which makes the comparison asymmetric in exactly the direction that
+flatters us. Capture on a dark part of the circuit, pick the frame by *both*
+speed and mean frame luma, and prefer a metric that normalises by the pixel's
+own luminance so a global brightness change cannot move it.
+
+**An exhaust comparison has two independent inputs and both have to be pinned.**
+Flare intensity is driven by time under thrust (`+0.25`/s to a ceiling of `1.0`)
+and ribbon length by speed (`10 samples x speed`). Matching only speed produced
+a pair 3x apart on brightness and an "our flare is too dim" reading; matching
+only thrust time gives the opposite. `oag-game`'s `--pose-intensity`,
+`--pose-speed` and `--pose-boost` exist so a posed frame can pin all of them.
+
+**Never cite a screenshot without measuring it first.** `magick f.png -format
+"%[fx:mean*255]" info:` costs nothing, and an all-black reference frame from an
+off-canvas Xvfb capture sat in the repository as the only original-side
+comparison for a week.
+
 ## Prerequisites
 
 Requires [asset archaeology](../architecture/asset-pipeline.md) (M1). There is

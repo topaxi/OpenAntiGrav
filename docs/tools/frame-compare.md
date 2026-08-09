@@ -55,10 +55,26 @@ committed.
 
 ## What to trust, and how far
 
-- **Geometry and framing: trust.** From a captured row, our render reproduces
-  the original's framing to the point where an fov sweep's RMSE minimum lands
-  on the authored value. A wrong camera reading is *loud* - the row-vs-column
-  finding showed up as a visibly different view of the same corridor.
+- **Geometry and framing: trust at rest, and only at rest.** From a captured
+  row, our render reproduces the original's framing to the point where an fov
+  sweep's RMSE minimum lands on the authored value. A wrong camera reading is
+  *loud* - the row-vs-column finding showed up as a visibly different view of
+  the same corridor.
+
+  **But that measurement was taken on a stationary craft, and it had to be**
+  (see the moving-shot bullet below, which recommends exactly that). The
+  original adds `0.075 * dot(fwd, vel)` **degrees** to its fov every frame, so
+  at `speed = 0` the term is zero and the authored value is the whole answer -
+  which is why the calibration landed cleanly *and* why the speed term went
+  unnoticed for months, until a comparison at 150 units/s put the whole frame
+  1.26x out. See
+  [projection-vs-the-original.md](../rendering/projection-vs-the-original.md).
+
+  **So: any comparison at speed is misregistered until we implement the term.**
+  Pass `--camera-fov` computed from the capture's own forward velocity, or
+  compare at a low-speed tick. The general form of the lesson is worth more than
+  the fix: *a calibration performed at one point of a parameter's range confirms
+  the value there and says nothing about the slope.*
 - **Pixels: compare, do not diff to zero.** Different renderer, different
   filtering, different anti-aliasing; the difference image is for spotting
   *structural* disagreement (missing mesh, wrong culling, fog at the wrong

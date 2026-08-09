@@ -2976,6 +2976,23 @@ impl Race {
     /// `near` is 1.0 rather than something tiny: track half-widths are tens of
     /// units, so a near plane at 0.01 spends the depth range on nothing and
     /// z-fights in the distance.
+    ///
+    /// # Known gap: the original's field widens with speed and this one does not
+    ///
+    /// `Ship_UpdateCameraRigs` adds `craft+0x790` to both tripod fovs every
+    /// frame, and that term is `0.075 * dot(forward, velocity)` **additive
+    /// degrees** - recovered at instruction level and confirmed against 16
+    /// frames of the original, which put the coefficient at `0.07685` with
+    /// `0.075` inside its 95 % interval and the intercept on the authored `60`.
+    /// See `docs/rendering/projection-vs-the-original.md`.
+    ///
+    /// Nothing here implements it. [`Self::boost_kick`] is not it and is not a
+    /// port of it: the original's term is present with no boost at all, is
+    /// driven by speed rather than by a pad, and adds degrees where
+    /// `BoostFovKick` multiplies a tangent. **Until it lands, every matched-pose
+    /// pixel comparison against the original is misregistered by 1.12-1.26x
+    /// depending on the tick's speed** - pass `--camera-fov` computed from the
+    /// capture's own forward velocity when taking one.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: crate::display::Fov) -> Mat4 {
         // An overridden fov stands in for the authored one and still passes
@@ -3048,29 +3065,29 @@ impl Race {
     /// measures them unit-length over 200 ticks - so the scale is not already
     /// arriving through `body.orientation`, and this is where it belongs.
     ///
-    /// # A residual remains, and it is a separate bug
+    /// # There is no residual: the craft is the right size, and the old gap was the projection
     ///
-    /// **`0.75` does not fully close the measured gap, and that is deliberately
-    /// not absorbed here.** From the original's own recorded camera, with the
-    /// track and buildings behind aligning, the wingtip lamp centroids sit
-    /// `108.8 px` apart in the original against `189.3 px` in ours at scale
-    /// `1.0` - a ratio of `1.740`, where `1/0.75` is `1.333`. Something else
-    /// also makes our craft too large, by roughly a further `1.3x`.
+    /// This comment used to record a further `~1.3x` gap and name
+    /// `1/0.75^2 = 1.7778` as the live hypothesis for it. **That is refuted, and
+    /// the constant here must not be widened to swallow anything.**
     ///
-    /// Do **not** widen this constant to swallow that. `1/0.75^2 = 1.7778` sits
-    /// 2.2 % from the measurement, which makes "the original scales the mesh
-    /// twice" the live hypothesis, but the second site was searched for and not
-    /// found, and the lamp-centroid metric is **not linear in the scale it
-    /// measures** (`1.0` -> `1.740`, `0.75` -> `1.191`, `0.5625` -> `1.067`,
-    /// where linear would give `1.305` and `0.979`), so it cannot tell one
-    /// candidate factor from another. A factor chosen to make it read `1.000`
-    /// would be fitted to the instrument. The two unopened calls in
-    /// `Craft_Construct_q` (`Ship_LoadModel`, `FUN_0884dab4`) and our own
-    /// per-batch position scale in `oag_formats::vex` are where to look next;
-    /// a non-emissive silhouette measurement is what would replace the metric.
+    /// Measured 2026-08-09 by similarity registration on high-passed gradient
+    /// magnitude - no brightness threshold anywhere in it - against 16 emulator
+    /// frames: **craft-only boxes register at `0.9989`/`0.9985`/`0.9987` once the
+    /// background is zeroed, so the mesh is correct to 0.15 %.** The old figure
+    /// came from a lamp-centroid metric that is not linear in the scale it
+    /// measures (`1.0` -> `1.740`, `0.75` -> `1.191`, `0.5625` -> `1.067`), and
+    /// from one false clause: that measurement was recorded as taken "with the
+    /// track and buildings behind aligning", and they do not align. Far scenery,
+    /// which no mesh scale can move, registers at `1.1195` in the same frame.
     ///
-    /// What ships here is the confirmed constant, applied once, with the
-    /// unexplained remainder left visible rather than cancelled.
+    /// What is actually missing is in [`Race::projection`], not here: the
+    /// original adds `0.075 * dot(forward, velocity)` **degrees** to both tripod
+    /// fovs every frame, so its field widens with speed and ours does not. See
+    /// `docs/rendering/projection-vs-the-original.md`.
+    ///
+    /// What ships here is the confirmed constant, applied once - which turns out
+    /// to be the whole of it.
     #[must_use]
     pub fn ship_model_matrix(&self) -> Mat4 {
         let body = &self.ship().physics.body;
@@ -3863,8 +3880,14 @@ impl Scene {
         // alpha alone recovers the hue but draws the fins as hard-edged solid
         // wedges, which is the 2026-08-07 and 2026-08-08 result reproduced
         // exactly, and `SrcAlpha` is what supplies the falloff those wedges are
-        // missing. Still 22% of the original's extent - the rest is a missing
-        // bright-pass and a craft drawn too large, both recorded on the page.
+        // missing. Still 22% of the original's extent - but that comparison is
+        // against the original's frame, so it is one of the readings the
+        // 2026-08-09 projection finding invalidates: our whole image is zoomed
+        // 1.12-1.26x depending on speed, because the original widens its fov
+        // with speed and we do not. Re-take it with `--camera-fov` before
+        // leaning on the number. The missing bright-pass is unaffected and
+        // still real; "a craft drawn too large" was the wrong half and is
+        // withdrawn - see `docs/rendering/projection-vs-the-original.md`.
         //
         // **This is an empirical approximation and the real mechanism is
         // something else.** The GE state for the transparent mesh pass is now
@@ -3926,13 +3949,16 @@ impl Scene {
         // `SrcAlpha` is kept because it measures better, not because it is
         // understood.
         //
-        // **Do not read the extent column as a calibrated ratio.** Our craft
-        // renders about 1.4x too large at this very camera pose, so anything
-        // measured in pixels here carries an unresolved scale error; see
-        // `HANDOVER.md`, "The craft render scale invalidates matched-pose pixel
-        // comparison".
-        // See `docs/ghidra/functions/psp-pulse-usa/exhaust.md` and
-        // `mesh-draw.md`.
+        // **Do not read any column stated against the original as calibrated.**
+        // This comment used to blame a craft that "renders about 1.4x too
+        // large"; that is refuted - the mesh is correct to 0.15 % and the whole
+        // frame is zoomed, because the original widens its fov with speed and
+        // we do not. At this capture's 148.9 units/s that is roughly 1.25x, and
+        // it shifts which of the original's pixels fall inside the mask. The
+        // ours-versus-ours results above are unaffected: all three builds
+        // render at the same pose, so they share one zoom and a ratio between
+        // them cancels it. See `docs/rendering/projection-vs-the-original.md`,
+        // `docs/ghidra/functions/psp-pulse-usa/exhaust.md` and `mesh-draw.md`.
         let boost = boost_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {

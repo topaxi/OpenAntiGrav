@@ -1242,7 +1242,8 @@ that scale, so the hull box was a third larger in every dimension than the
 original's - and `docs/ghidra/functions/psp-pulse-usa/rigid-body.md` had already
 noted the same `0.75` scale in passing, two days earlier, while establishing
 that the inertia tensor is a code literal. It just never reached the collision
-code; see HANDOVER's working rules on sibling-doc staleness.
+code; see
+[the sibling-doc staleness rule](../reverse-engineering/methodology.md#rules-learned-the-expensive-way).
 
 **Applying the scale did not close the gap to zero - it crossed to the other
 side.** Re-run after the fix (2026-07-30):

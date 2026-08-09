@@ -905,11 +905,43 @@ while an external view is selected was not established, and it is the obvious ne
 check - if it does not, the two write sites are simply never live at the same time,
 which is also why one pc was reported on every hit.
 
-`craft+0x7c` is unidentified. It has to carry most of the *non*-linear part of that
-section's measured series (`+6` at 120 and `+3` at 100 do not fit a line through
-`+9.4` at 130), so the decomposition of that series into these two terms is **not**
-settled and no number here should be used to tune anything. Confidence **80** for
-the store and its constant, read directly; **0** for the decomposition.
+### Confirmed against the original's own pixels, 2026-08-09, and the decomposition with it
+
+**Both constants of this store are now independently recovered from 16 frames of
+the original**, and the puzzle the paragraph below this used to pose dissolves.
+
+Registering our render against the emulator's frames over `pad0-boost.csv`
+measures the fov the original must have been using at each tick. Fitting exactly
+the form above - `dot(fwd, vel)` from the capture's own basis and velocity
+columns - gives `fov = 60.181 + 0.07685 * dot(fwd, vel)`, rms 0.407 degrees, with
+95 % intervals of `[0.0710, 0.0827]` on the coefficient and `[59.54, 60.82]` on
+the intercept. The recovered `0.075` and the authored `<ExternalCameraFar fov>`
+of `60` both sit inside. See
+[`projection-vs-the-original.md`](../../../rendering/projection-vs-the-original.md)
+for the instrument, its three validations and the out-of-sample check.
+
+Three consequences:
+
+- **`craft+0x7c` is 0 to within +/-0.64 degrees** across 148 ticks and a
+  41-151 units/s range. The additive term is the speed-proportional store and
+  nothing else.
+- **The `+9.4 / +6 / +3 / +0.5` series above is not this term.** It is the
+  `Hud_Update` shake decaying after the craft was placed - which is exactly what
+  "a decaying oscillation" described, and it falls off faster than speed because
+  it is not a function of speed at all. The two measurements were never of the
+  same quantity, which is why one could not be fitted to the other.
+- **This store does run while an external view is selected**, since the capture
+  it was measured in is the external chase view. That is inference from effect
+  rather than from execution; an exec breakpoint on `0x088455ec` under an
+  external view would settle it directly and costs one emulator session.
+
+Confidence **80** for the store and its constant read directly, **88** with the
+pixel confirmation; **75** for the decomposition, up from 0, on one capture of
+one ship on one circuit.
+
+`craft+0x7c` is still unidentified as a *field* - what is established is only
+that it is quiescent on a clean run, so a capture with an impact in it could
+still show it carrying something.
 
 ## Applied renames, 2026-08-08 (second pass)
 

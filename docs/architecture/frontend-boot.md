@@ -551,8 +551,27 @@ name hash and size so a different disc image cannot collide:
 
 `av1ll` in the name is the encoding, and it is in the **filename** so that
 changing the encoder invalidates by name rather than silently reusing an older
-file. That matters because `ffmpeg`'s `-lossless 1` on its own is ignored and
-produces a lossy encode - see the trap in [`HANDOVER.md`](../../HANDOVER.md).
+file. That matters because of the encoder traps below.
+
+**Three tool traps in this chain, each of which fails silently.** Moved here
+from `HANDOVER.md` on 2026-08-09.
+
+- **`ffmpeg -lossless 1` on its own is silently a lossy encode.** The quantiser
+  must be pinned and rate control disabled too: `-b:v 0 -crf 0 -qmin 0 -qmax 0
+  -aom-params lossless=1`. Even then `-cpu-used` below 6 is reproducibly not
+  bit-exact; 6 and 8 are exact, and faster.
+- **`ffprobe -show_entries` does not print fields in the order requested** - it
+  uses its own. Parse `key=value` pairs by name (`-of
+  default=noprint_wrappers=1`, keys kept); positional parsing reads the wrong
+  field and says nothing.
+- **A GStreamer `appsrc` set to `AppStreamType::Seekable` performs an initial
+  seek on start, and that seek can fail with no exception at the call site that
+  set the property.** `pipeline.set_state(Playing)` just returns `Err` with an
+  empty bus; `GST_DEBUG=3` is what shows `gst_app_src_do_seek: seek failed`
+  underneath it. `crates/game/src/movie/gst.rs`
+  ([ADR-0017](adr/0017-gstreamer-native-video.md)) pushes one whole buffer and
+  calls `end_of_stream()`, which is exactly what `AppStreamType::Stream`
+  describes; `Seekable` is for sources that support real seeking.
 
 **Every frame is converted**, because `LogoFMV` plays the movie to its end and
 its last frame is the Wipeout Pulse logo - a cap would stop the sequence before
@@ -763,10 +782,10 @@ Compared byte-for-byte against `pulse-psp-usa.chd`'s `Data.wad`, per
   environment's `ppsspp.ini`) matching an available plugin, auto-selecting
   and skipping the picker the same way a real console with its system
   language already set would - rather than on the number of on-disc
-  languages, which is 5 for both regions, not 1. **The existing HANDOVER.md
-  claim that USA "never shows the picker... because the build is
-  English-only" is not supported by this session's static findings** (the
-  USA manifest also lists 5 languages) and is corrected below. No screenshot
+  languages, which is 5 for both regions, not 1. **The once-repeated claim
+  that USA "never shows the picker... because the build is English-only" is
+  not supported by this session's static findings** (the USA manifest also
+  lists 5 languages) and is corrected below. No screenshot
   of a rendered picker was captured this session - the state never stayed up
   long enough to reach one.
 

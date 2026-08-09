@@ -140,8 +140,8 @@ play-screenshots out="/tmp":
 
 # One race frame per upscaler, plus a supersampled reference, for judging a
 # resampler by looking rather than by counting. An aggregate statistic ranks a
-# sharpener below a blur every time - see HANDOVER, "Measuring a renderer
-# change" - so this recipe produces images and deliberately no numbers.
+# sharpener below a blur every time - see docs/rendering/README.md, "Measuring a
+# renderer change" - so this recipe produces images and deliberately no numbers.
 #
 # `--presented` is what puts the render scale, the upscaler and the grade in the
 # way; without it a capture never reaches the blit and every image would be

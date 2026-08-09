@@ -4,74 +4,58 @@ State that is **not** inferrable from the repository itself. Everything about
 formats, decisions and the plan lives in [`docs/`](docs/README.md); this file
 covers what a fresh reader would otherwise have to rediscover.
 
-**Pruned 2026-07-29.** Until then this was an append-only session log that had
-reached 4,393 lines, most of it superseded by the docs pages each pass wrote as
-it went. Nothing is lost: `git show 0c3e78d:HANDOVER.md` is the last full
-edition and `git log -p HANDOVER.md` is every intermediate one. What survives
-here is what is still true and still needed. **Keep it that way** - a finding
-belongs on a docs page with its evidence and its confidence score, and this file
-points at it. Prune again rather than appending indefinitely.
+**Pruned 2026-08-09**, from 1,794 lines and 267 KB. The previous prune
+(2026-07-29) had shrunk an append-only session log from 4,393 lines; it grew
+back, because six passes on the same subject each appended their own narrative
+instead of replacing the last. Nothing is lost: `git show
+73e8567:HANDOVER.md` is the pre-prune edition and `git log -p HANDOVER.md` is
+every intermediate one. What changed this time, besides the length:
+
+- **The measurement and reverse-engineering rules moved into `docs/`**, where
+  they belong, and this file points at them. See
+  [methodology](docs/reverse-engineering/methodology.md#rules-learned-the-expensive-way),
+  [verification protocol](docs/reverse-engineering/verification-protocol.md#reading-a-capture-rules-that-each-cost-a-session),
+  [rendering](docs/rendering/README.md#measuring-a-renderer-change),
+  [WAD](docs/formats/wad.md#traps-when-surveying-a-disc),
+  [Ghidra workflow](docs/ghidra/workflow.md#the-database-can-disagree-with-namestsv-and-the-docs-win)
+  and [the PPSSPP page](docs/reverse-engineering/ppsspp-debugger.md#session-hygiene).
+- **Open threads are only what is still open.** A row whose work landed is
+  deleted, not annotated; its evidence is on the docs page it always cited.
+
+**Keep it that way.** A finding belongs on a docs page with its evidence and its
+confidence score, and this file points at it. Rewrite a section rather than
+appending a dated pass to it.
 
 ## Read this first
 
-- **The disc images are in place.** `data/images/` holds `pulse-psp-usa.chd`,
-  `pulse-ps2-eu.chd` and `pure-psp-usa.chd`, all three hashes matching
+- **The disc images are in place** - all six, in `data/images/`:
+  `pulse-psp-usa.chd`, `pulse-psp-eu.chd`, `pulse-ps2-eu.chd`,
+  `pure-psp-usa.chd`, `pure-psp-eu.chd` and `hdfury-ps3-eu.iso`. Hashes match
   [`source-images.md`](docs/reverse-engineering/source-images.md), so
-  `just test-data` works. Earlier sessions have lost them and spent the session
-  unable to verify anything - check they are still there before concluding a
-  ground-truth test "cannot run".
-- **`data/traces/` is a different story, and it has already bitten once.** The
-  2026-07-29 pass found `talons-junction-time-trial-lap.csv`, `-lap-omega.csv`
-  and `talons-junction-standing-start.csv` all gone, leaving only `steer-left`,
-  `steer-right` and `venom-assegai`. `force-balance-ground-truth.md`,
-  `contact-response.md` and three citations inside `wall.rs` point at files that
-  were not there. **Derived evidence under `data/` is not durable; the scenarios
-  and scripts that regenerate it are.**
-- **`rg` and `fd` cannot tell you either of the above.** Both respect
-  `.gitignore` and `data/` is gitignored, so both return nothing with exit code
-  0 whether the directory is full or empty - no error, no warning, and it reads
-  exactly like "there is nothing here". Use `--no-ignore`, or `/bin/ls` /
-  `find` / `grep`. Note plain `ls` may be shell-aliased (`ls -la` failing with
-  `ls:1: command not found: -la` reads like a broken argument and is not), and a
-  spawned agent has a second, independent reason to see `data/` as empty: being
-  gitignored, it does not travel into a worktree or a restricted sandbox.
+  `just test-data` works. Earlier sessions have believed them lost and spent the
+  session unable to verify anything - check before concluding a ground-truth
+  test "cannot run".
+- **`rg` and `fd` cannot tell you that.** Both respect `.gitignore` and `data/`
+  is gitignored, so both return nothing with exit code 0 whether the directory
+  is full or empty - no error, no warning, and it reads exactly like "there is
+  nothing here". Use `--no-ignore`, or `/bin/ls` / `find` / `grep`. Note plain
+  `ls` may be shell-aliased (`ls -la` failing with `ls:1: command not found:
+  -la` reads like a broken argument and is not), and a spawned agent has a
+  second, independent reason to see `data/` as empty: being gitignored, it does
+  not travel into a worktree or a restricted sandbox.
+- **Derived evidence under `data/` is not durable; the scenarios and scripts
+  that regenerate it are.** A 2026-07-29 pass found three reference traces gone,
+  leaving `force-balance-ground-truth.md`, `contact-response.md` and three
+  citations inside `wall.rs` pointing at files that were not there. Anything
+  under `data/traces/`, `data/shots/` or `data/cache/` can be absent; the
+  committed `verification/scenarios/*.inputs` are what reproduce it.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **A screenshot comparison against the original (2026-08-04) found rendering
-  fidelity gaps that are mostly not bugs.** Bloom, colour grading and every
-  authored light class (`AmbientLight`/`DirectionalLight`/etc.) are still
-  unchecked M6 roadmap items - the flat/dark look this produces is a known,
-  documented gap, not something to guess-fix from a screenshot. One real
-  regression *was* tried and rejected: swapping `mesh_render::TRANSPARENT_BLEND`
-  to the pure-additive equation `mesh-draw.md` recovers blows out 01_Track's
-  glass canopy panels (see that page's own record of it) - don't retry without
-  first reading the two `Gu_CallList` lists that page names as the way to
-  settle whether `GU_BLEND` is actually enabled on that branch. Separately, a
-  specific track-side sign (`col_banners2_ADD.tga` on `16_Track`, visible
-  near the Talon's Junction start line) renders as a blown-out white block in
-  ours; its own texture data is confirmed **not** white (a dark, low-alpha
-  ticker-font strip), ruling out a bad decode, and the blend-equation swap
-  above changed nothing about it either. **Resolved 2026-08-08, and the sign
-  was never the culprit.** Node-level isolation (`oag-view --draws` and
-  `--only`, both added for this) showed the banner resolving its texture
-  correctly and sitting in the blend list, and hiding every `col_banners2`
-  draw left the white block exactly where it was; hiding the *opaque* list
-  removed it. It is the start-line gantry's advertising board,
-  `billboard8.tga`, an 8x8 4-bit texture that `oag_formats::vex::textures`
-  read back to back where the format pads every texture row to 16 bytes. The
-  padded stride now reproduces all 5,017 declared texel-block sizes on the
-  disc against the old reading's 775, and 509 textures had a wrong base level
-  - see [`vex.md`](docs/formats/vex.md#texture-rows-are-padded-to-16-bytes).
-  **The general lesson is worth more than the fix**: a texture *name* is not
-  evidence about which draw call paints a pixel, and `--draws`/`--only` are
-  now the cheap way to find out which one does.
-- **Gate status:** green at 1,268 tests (2026-08-04), `audit-leakage` clean.
-  The 1,049 this line used to carry was stale, and that is measured rather than
-  assumed: `git stash && just test` on the tree before this pass reads **1,257**,
-  so the pass added eleven and the old figure had been drifting for a while.
-  Re-measure the same way rather than trusting the number here. `just test-data`
-  is 1039 of 1040 (with `--no-fail-fast`; without it, the failure below stops
-  the run at 362), and **the one failure is the machine rather than the code**:
+- **Gate status:** last measured green at 1,268 tests (2026-08-04),
+  `audit-leakage` clean; a later pass reports 1,314. Re-measure rather than
+  trusting the number here - `git stash && just test` is how the drift was
+  caught last time. `just test-data` is 1039 of 1040 (with `--no-fail-fast`),
+  and **the one failure is the machine rather than the code**:
   `oag-disc::ground_truth listing_matches_chdman_and_the_reference_iso` shells
   out to `chdman extractdvd` into `/tmp/oag-ground-truth.iso`, `/tmp` here is a
   6.8 G tmpfs, and the extracted PSP ISO does not fit in what is free. It fails
@@ -79,6 +63,10 @@ points at it. Prune again rather than appending indefinitely.
   which `nextest` reports as `chdman extractdvd failed` two frames up and reads
   like a broken invocation. Free `/tmp` or point the test elsewhere; do not go
   looking for a disc bug.
+- **Rendering fidelity gaps are mostly not bugs.** Bloom, colour grading and
+  every authored light class (`AmbientLight`/`DirectionalLight`/etc.) are still
+  unchecked M6 roadmap items - the flat, dark look that produces is a known,
+  documented gap, not something to guess-fix from a screenshot.
 
 ## Where the project stands
 
@@ -92,40 +80,19 @@ and [`angular-velocity-column.md`](docs/physics/angular-velocity-column.md)) and
 under [`docs/ghidra/functions/`](docs/ghidra/functions/README.md) - `engine.md`,
 `rigid-body.md`, `contact-response.md`, `craft-update.md`.
 
-**The wedge is gone, and it was never physics.** For one session the blocker was
-stated as "618 units of path against the original's 1,045, wedged at one place on
-the circuit" - a craft that stopped dead with full thrust. It was the capture
-harness. `psp-trace.py --script-lead 2` sends the script's tick `k + 2` at the
-breakpoint for tick `k`, which cancels the emulator's three-frame input latency
-correctly for every transition *after* the start and, in doing so, **never sends
-the script's first two states at all**: at tick 0 the pointer already stands at
-index 2. Our replay applied them. Two ticks of head start, and they do not wash
-out, because `ramp_steering` travels toward its target without clamping to it and
-a saturated axis oscillates around it forever - unlike the airbrake ramp, which
-clamps and resynchronises on every transition. The whole chain is measured in
-[`oag-trace.md`](docs/tools/oag-trace.md#the-first-two-ticks-of-a-script-never-reach-the-emulator):
-a standing 17 % steering offset, 8 degrees of heading by tick 70, 15 units wide of
-the original on a half-width of 17.9, and a wall at tick 147 the original never
-touches.
-
-`oag-trace run --script-lead N` and `drive --script-lead N` now exist to release
-the same ticks. **Pass `--script-lead 2` against everything in `data/traces/`**,
-and pass it on both sides of any new capture.
-
-The two facts that made this findable, if a comparable thing ever comes up again:
-the offset shows on `throttle` and `airbrake_r` as well as `steer`, on **two
-independent captures**, and the *control columns are a pure function of the script
-and `dt`* - they do not depend on the trajectory at all, so a mismatch there is
-never a physics symptom.
-
-**One older hypothesis stays dead.** The run report's angular velocity averages
-21.2 rad/s over the lap, which reads like a craft spinning three and a half times
-a second. The original reads **22.96 rad/s on the same scenario**, slightly
-*higher* than ours. Whatever that column is, both sides do the same thing with it.
+**Pass `--script-lead 2` against everything in `data/traces/`**, and on both
+sides of any new capture. `psp-trace.py --script-lead 2` cancels the emulator's
+three-frame input latency for every transition after the start and, in doing so,
+**never sends the script's first two states at all**. Our replay applied them,
+and the resulting two-tick head start was diagnosed as a physics wedge for a
+session and a half. The whole chain is measured in
+[`oag-trace.md`](docs/tools/oag-trace.md#the-first-two-ticks-of-a-script-never-reach-the-emulator);
+`oag-trace run --script-lead N` and `drive --script-lead N` exist to release the
+same ticks on our side.
 
 **Read lap fidelity off the *seeded* comparison** (`oag-trace run --reseed N`),
-never the open-loop one, and note the roadmap's exit criterion is now stated as
-two decidable numbers for exactly this reason. The original integrates the frame
+never the open-loop one, and note the roadmap's exit criterion is stated as two
+decidable numbers for exactly this reason. The original integrates the frame
 duration it measured
 ([ADR-0007](docs/architecture/adr/0007-fixed-timestep-vs-original.md)), those
 durations follow host load, and **two runs of the original itself, from a start
@@ -134,1177 +101,366 @@ agreeing on about 1 % of ticks. A 3,146-tick single-seeded trajectory comparison
 measures the emulator's scheduler, not the force law, and a byte-exact
 implementation would fail it.
 
-**Score the lap on the window where the capture is clean - and a fresh, far
-cleaner capture now exists (2026-07-30).** The 2026-07-29 recapture was
-wall-free on only 32.7 % of its ticks; `data/traces/talons-junction-clean-lap.csv`
-(a fresh `just autopilot` lap, not a replay of any committed file) is wall-free
-on **96.3 %**, both now `oag-trace show`'s own numbers rather than an ad hoc
-count, see [`oag-trace.md`](docs/tools/oag-trace.md#show-and-the-cleanliness-report-in-it).
-It still first touches a wall at tick **256**, not much past the old 171 - a
-second attempt chasing the lifted centre line (`--column lift`) landed at 249,
-no better, so per this pass's plan two attempts with no material gain is the
-stopping point, not a reason to keep tuning the autopilot's steering.
-`--script-lead 2` is confirmed correct for this capture too (`throttle`/`brake`
-bit-exact across all 2,977 ticks only at lead 2, same check as before, run
-again because this capture came from `psp-autopilot.py` rather than
-`psp-trace.py --script`).
+**The reference lap is `data/traces/talons-junction-clean-lap.csv`** (regenerate
+with `just drive menu` + `just drive restart` + `just autopilot --spline ...
+--laps 1`; script and trace come from the same run, which matters - a
+closed-loop recording replayed open-loop drifts into walls). It is wall-free on
+**96.3 %** of its ticks against the previous capture's 32.7 %, and first touches
+a wall at tick 256. Two attempts at pushing that further gained nothing, which
+was the agreed stopping point.
 
-**The real finding is that the wall was never the whole story.** Even inside
-this capture's own clean window, single-seeded position error is already 17.5
-units by tick 180 and 44.1 by tick 240 - **47.76 max / 13.28 mean over ticks
-0-255**, while the same ticks 0-170 window used before still reads 10.12
-max / 2.50 mean, consistent with the old 6.54/2.41 (a different lap through the
-same opening straight, not a regression). So closing the wall-contact ceiling
-from 171 to 256 did not buy 85 more ticks of "the physics agrees" - it exposed
-that the force law itself, not contact geometry, was already the thing limiting
-comparison length well inside the old window's tolerance. That is the harder
-problem left blocking M4's single-seeded number, not another capture. Under
-`--reseed 60` this capture reads **28.86** at tick 1,739 (bounded) and worst
-orientation axis **0.4858** rad at tick 1,129 (bounded) - both larger than the
-old capture's 10.3/0.0824. **Checked before attributing that to the lap
-rather than the collision-box scale fix that landed the same session**:
-re-run under today's physics, the old capture's worst reseeded orientation
-axis is 0.0541 rad, a modest shift from 0.0824 and nowhere near the new
-capture's 6x jump - so the gap is this lap holding racing speed and cornering
-hard throughout rather than spending most of its length wedged at low speed
-against a wall, not the physics regressing. The whole-run single-seeded
-figure is 1,245 units at tick 1,628 and growing - same character as the old
-capture's 253.7 at tick 2,494, not comparable tick-for-tick across two
-different trajectories, and meaningless past a few hundred ticks either way.
-(The tool's own "first divergence at tick 0, field angular_velocity" headline
-for this capture is the `1e-4` tolerance floor on an idle craft, not a
-tracking failure - read the position row, not the top line.)
+**The real finding is that the wall was never the whole story.** Inside that
+capture's own clean window, single-seeded position error is already 17.5 units
+by tick 180 and 44.1 by tick 240 - **47.76 max / 13.28 mean over ticks 0-255**.
+So raising the wall-contact ceiling from 171 to 256 did not buy 85 more ticks of
+"the physics agrees"; it exposed that **the force law, not contact geometry, is
+what limits comparison length**. That is the harder problem left blocking M4's
+single-seeded number, not another capture. Under `--reseed 60` this capture
+reads 28.86 at tick 1,739 (bounded) and worst orientation axis 0.4858 rad at
+tick 1,129 (bounded). Checked before attributing that to a regression: re-run
+under today's physics, the *old* capture's worst reseeded orientation axis is
+0.0541 rad against its recorded 0.0824 - a modest shift, nowhere near the new
+capture's jump - so the gap is this lap holding racing speed and cornering hard
+throughout rather than spending most of its length wedged against a wall.
 
 **Do not read `grounded` as the headline it looks like.** The original's column
-is `1.0` on all 3,146 ticks of this capture, so agreement means only that our
-ship also never leaves the ground - a real improvement over the 2026-07-28 run,
-which read `0.5` against `1.0` and then left the surface for good at tick 313,
-but no evidence that the hover model quantises contact the way the original
-does. A constant column cannot test that, and under `--reseed` the field is one
-of the ones the seed restores anyway.
-
-**The standing start was retaken too, and it is the pass's best result.**
-`verification/scenarios/standing-start.inputs` is new - 300 ticks of held thrust
-from the start line - and it reconstructs a capture that was lost before
-scenarios were committed. It reproduces *both* legs of the force-balance
-conclusion on data that did not exist when they were derived, from a run that is
-demonstrably not the same one (clean for 186 ticks rather than 66; hits the wall
-at 119 units/s rather than 54):
-
-- **launch acceleration 32.69** on its third tick, against the recorded 32.52
-  and the predicted 31.8. *"Third tick" now has an explanation rather than being
-  a quirk of the capture: it is the first tick the emulator was sent thrust, the
-  first two having been eaten by the lead.* Both legs are properties of the
-  capture, so neither moves with the replay fix;
-- **the `0.035` contact-friction floor never crossed** - minimum loss 3.534 %
-  over 114 contact ticks, decaying 3.835 % -> 3.633 %, with **0 of 114** ticks
-  above 5 units/s falling below it.
-
-One condition on ever re-running that test, learned by getting it wrong on the
-lap capture first: it only measures friction while the craft is *moving*. Below
-a few units per second the normal impulse dominates and restitution can push
-`|velocity|` above `speed`, giving a negative loss - the lap capture has ticks
-reading `-380 %` on a craft wedged at 0.15 units/s.
-
-**A clean lap scenario was re-derived (2026-07-30), and it is what the section
-above scores.** The old committed lap script had stopped flying clean when
-replayed open-loop (67.3 % wall contact, down from 95.2 % on an earlier
-capture of the same script) because it was recorded *closed-loop* and an
-open-loop replay drifts into walls - the same negative seen from the
-authoring side. `just drive menu` (cold boot) + `just drive restart` +
-`just autopilot --spline /tmp/spline.csv --laps 1` produced
-`talons-junction-clean-lap.{inputs,csv}` fresh, script and trace from the same
-run, which is now the committed scenario and the capture both. First-attempt
-stalls are still worth one retry before diagnosing: this capture's own first
-attempt at the earlier committed script timed out at tick 561
-(`never stopped at 0x08849618`) and completed on a straight retry after
-restarting PPSSPP.
-
-**A save-state fixed start was investigated and not adopted - `--start-heading`
-above already beats it.** The unchecked M3 roadmap item asked for a save-state
-driven fixed start; `--state=FILE` turns out to exist (the websocket debugger's
-own `savestate.*` commands do not, confirmed by string-dumping the binary) and
-`wtype` (Wayland's virtual-keyboard protocol) can drive PPSSPP's own Escape
-overlay to create one - both undocumented before this pass, both now on
-[ppsspp-debugger.md](docs/reverse-engineering/ppsspp-debugger.md#save-states-and-the-input-recording-api-that-may-replace-them).
-But measured against two independent loads of the same state (craft cut at a
-settled start-line pose), the pose disagreed by **0.031 units / 1.41 degrees** -
-no tighter than the plain `restart` menu walk's 0.03/2.51, and two orders of
-magnitude worse than `--start-heading`'s already-committed 0.0022/0.0001. The
-roadmap checkbox is now closed **via heading-pinning, not a save state** -
-[see above](#where-the-project-stands) - and the state-loading mechanism is
-kept documented rather than wired in, in case a future need a heading pin
-cannot reach (mid-race state, a different track's start) makes it worth
-returning to. `.ppst`/`.p2s`/`.state` are now in `just audit-leakage`'s
-extension list, which did not cover them before.
-
-## The speed-pad boost visual pass (2026-08-07)
-
-The first tick-addressable capture of a real pad crossing exists
-(`psp-drive.py place` + a tuned steering script + `psp-trace.py --camera
---shot-every 2`; regenerate under `data/traces/pad0-ref.csv` +
-`data/shots/pad0-ref/` - derived data, not durable). What it settled is on
-[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md) (2026-08-07
-history entry): the flare is a **view-space billboard** (the "post-projection,
-constant screen size" reading is dead, `HALF_SIZE_TO_WORLD` is `1.0`), the
-**original widens its fov during a boost** (~90-95 deg against the authored
-60 - **but see 2026-08-08 below: `BoostFovKick` is a deliberate invention of
-this project, not a reimplementation, and the parenthetical this sentence
-used to carry - "`BoostFovKick` is real, its DEFAULT is far subtler than the
-measured original" - is withdrawn as a calibration instruction**), and the
-plume's authored vertex alpha visibly reaches the
-original's picture despite the recovered fixed-factor blend (premultiplied in
-`race.rs`, mechanism open). `--pose-boost SECONDS` on `oag-game` forces the
-exhaust state for posed captures, which is what makes matched-pose boost
-comparisons possible (`--pose-from row --pose-boost age` against the shot at
-that row). Traps that cost time here: the place->capture handover free-runs
-the emulator and decays the craft's speed (chain the two commands, or accept
-a slow crossing); pad 0 sits ~8 units right of the spline so a spline
-placement misses it laterally; the standing-start pose veers right naturally
-and "right" input steers toward +z. The three items this pass left in
-exhaust.md's Open list were worked through on 2026-08-08, below: the flare
-stretch is closed (there isn't one), the fov item is **withdrawn** (ours by
-choice, not an RE target), and only the plume's alpha is still genuinely
-open. Comparison montages from the pass: crawl-speed crossing whites
-out the frame for ~10 ticks (matched by ours after the fixes); ours still
-reads whiter/less orange than the original at mid-boost from high-rear
-angles.
-
-**The colour-space audit that pass commissioned found the pipeline
-inconsistent, and one piece is fixed.** The PSP GE blends raw framebuffer
-bytes - gamma space. Our flare and trail sample their textures raw
-(`FlareTexture::bind` uploads `Rgba8Unorm`) and so feed the additive blender
-PSP-shaped values; but every `Drawable` texture - the boost plume included -
-uploads `Rgba8UnormSrgb` (`mesh_render.rs` `make`), whose sampler linearises,
-and `One`/`One` addition on linear light crushes the halo mid-tones (PSP:
-`0.4 + 0.5 = 0.90`; linearised: `0.133 + 0.214 = 0.347 -> 0.62` encoded,
-~30% lost). `race.rs` now re-encodes the plume's texels on load (exact
-piecewise sRGB) so the decode hands the shader the disc's own bytes. **The
-larger decision is untaken**: the windowed surface is sRGB (linear dst
-blending) while the ordinary `--screenshot` target is `Rgba8Unorm` (raw), so
-no single path is PSP-consistent end to end, and the ordinary capture also
-still stores the meshes' linear light unencoded (`race.rs`'s own open
-question, same failure `mesh_render.rs:186-201` measured for the viewer).
-Whichever space is made authoritative, `exhaust.rs`'s raw upload and
-`mesh_render.rs`'s sRGB upload cannot both stay.
-
-### The decision, worked through (2026-08-09)
-
-**Recommendation: gamma is authoritative. `exhaust.rs`'s raw upload is the one
-that stays.** The reasoning is one line: **the GE is the specification, and every
-blend equation this project has recovered is defined on framebuffer bytes.**
-`Mesh_SetBatchDrawState`'s `Gu_BlendFunc(GU_ADD, GU_FIX 0xffffff, GU_FIX
-0xffffff)` means "add the stored bytes"; performing that addition on linear light
-is not a more accurate version of it, it is a different equation. The same goes
-for `MODULATE`, for the ribbon's `sceGuAmbient` grey ramp, and for the lighting
-rig - the GE runs all of them on gamma-space values, and the art was authored
-against that.
-
-**The three stages, as they actually are today.** Verified rather than assumed -
-the vertex-colour row is the one that was inherited and is now read:
-
-| Stage | Plume today | Other meshes today | PSP |
-| --- | --- | --- | --- |
-| Texel into the shader | **gamma** (`race.rs` pre-encodes, sRGB sampler decodes it back) | **linear** (sRGB sampler decodes) | gamma |
-| Vertex colour into the shader | **gamma** | **gamma** | gamma |
-| `mesh.wgsl` output | gamma x gamma | linear x gamma | - |
-| `--screenshot` target `Rgba8Unorm` | stored raw | stored raw | gamma |
-| Window surface `Rgba8UnormSrgb` | encoded **again** | encoded | gamma |
-
-The vertex-colour row is not a hardware sRGB path at all: `mesh.rs:731-736`
-builds `colour` as `f32::from(byte) / 255.0` and nothing transforms it, and
-vertex attributes are never sRGB-decoded by hardware. So **the vertex colour has
-always been in gamma space**, on every path, and only the texel's space varies.
-
-**Two consequences fall straight out, and the second one changes how the exhaust
-is measured.**
-
-1. *Nothing here can be the boost plume's missing rim multiplier.* See
-   [exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md) - the argument is
-   a monotonicity proof, not a measurement.
-2. **A `--screenshot` and a window disagree about the plume by up to 73/255**,
-   because the plume's shader output is already gamma and the window surface
-   encodes it a second time:
-
-   | shader out | `--screenshot` (`Rgba8Unorm`) | window (`Rgba8UnormSrgb`) | delta |
-   | ---: | ---: | ---: | ---: |
-   | 0.10 | 26 | 89 | +63 |
-   | 0.20 | 51 | 124 | +73 |
-   | 0.40 | 102 | 170 | +68 |
-   | 0.60 | 153 | 203 | +50 |
-   | 0.80 | 204 | 231 | +27 |
-
-   And in the same capture the *scene behind it* is stored as unencoded linear
-   light, so it reads too dark. **Any plume-versus-background measurement taken
-   from an ordinary capture is therefore measuring two different colour spaces at
-   once** - the plume roughly right, the background too dark, which inflates the
-   plume's apparent prominence. `--presented` does not have this problem
-   (`race.rs:4501` targets `Rgba8UnormSrgb`), which makes it the honest capture
-   path until this is fixed.
-
-**What changes, and what breaks.** All of it in one change, because none of the
-pieces is correct on its own:
-
-- `mesh_render.rs` `make`: `Rgba8UnormSrgb` -> `Rgba8Unorm` (sampler stops
-  linearising).
-- `race.rs`'s load-time plume re-encode: **deleted.** It exists only to cancel
-  that sampler, and against a raw upload it becomes a double-encode - the same
-  bug in the other direction. It must go in the same commit, not after.
-- `mesh_render::screenshot`'s `Rgba8UnormSrgb` target: reverts to `Rgba8Unorm`.
-- The window surface must stop encoding, or `mesh.wgsl` must encode on write -
-  one or the other, not neither.
-
-**HANDOVER row 969's measurement is not contradicted by this, and the
-distinction matters.** That row measured, for `oag-view`, that the
-texture-format fork is wrong (mean 54.6/255) and encode-on-write is right. That
-result is **conditional on textures being linearised**: given a linear texel
-multiplied by a light rig, the multiply lands between decode and encode and only
-encode-on-write is equivalent. It says nothing about whether linearising was the
-right premise. Change the premise and the conclusion is not inherited - but the
-54.6/255 figure is exactly the size of error a *partial* migration would
-reintroduce, which is why the four bullets above are one change.
-
-**Row 973's open question is answered "no" by this**, and its stated risk
-inverts. That row asks whether the game's capture paths need encode-on-write and
-worries that switching them would also encode the HUD's and front end's authored
-text and fill colours, which were tuned against a window. Under
-gamma-authoritative nothing gains an encode: the capture stays raw and the
-*window* stops encoding, so authored sprite and text colours reach the screen as
-authored on both paths and the two stop disagreeing. That is the arrangement the
-front end's colours were tuned for in the first place.
-
-**This is a recommendation with the arithmetic attached, not an applied
-decision.** Whoever acts on it should land it as an ADR - it is exactly the shape
-[ADR](docs/architecture/adr/README.md) exists for, it supersedes the reasoning in
-`mesh_render.rs:186-201`, and a decision this wide should not live only in a
-handover note. The one thing that would change the recommendation is evidence
-that the GE's *lighting* runs on linearised values; nothing read so far suggests
-it does, and `Gfx_Init`'s `GU_TFX_MODULATE` on raw bytes says it does not.
-
-## The boost, compared against a real capture (2026-08-08, second pass)
-
-The first pass that had **an emulator frame of a real pad crossing beside one of
-ours at the same pose**. Two renderer bugs fixed, the plume's alpha question
-closed after four passes, and two "decode bugs" shown not to be bugs. Full
-evidence on [`exhaust.md`](docs/ghidra/functions/psp-pulse-usa/exhaust.md) and
-[`mesh-draw.md`](docs/ghidra/functions/psp-pulse-usa/mesh-draw.md); what belongs
-here is the method and the traps.
-
-**The capture recipe that works, and why the old reference was useless.**
-`data/shots/boost-visuals/original-boost-0.5.png` is 1280x720 and measures
-`mean = 0, max = 0` - a solid black frame, the off-canvas Xvfb trap this file
-already documents, and it had been sitting there as the only original-side
-reference. **Never cite a screenshot without measuring it first**
-(`magick f.png -format "%[fx:mean*255]" info:` costs nothing). What removes the
-trap structurally rather than working around it:
-
-```sh
-Xvfb :97 -screen 0 960x544x24 &                 # exactly 2x PSP, aspect-exact
-DISPLAY=:97 SDL_VIDEODRIVER=x11 setsid PPSSPPSDL --appendconfig=/tmp/debugger.ini \
-    --fullscreen --xres 960 --yres 544 data/cache/pulse-psp-usa.iso &
-export OAG_SHOT_DISPLAY=:97                     # REQUIRED, see below
-```
-
-Fullscreen on a canvas the game's own aspect means `import -window root` *is*
-the game window - no positioning, no cropping, and `frame-compare`'s `480x272!`
-resize stays aspect-exact. **`OAG_SHOT_DISPLAY` is not optional**: without it
-`niri_shot.find_window()` looks for a niri window, does not find PPSSPP on
-`:97`, returns `None`, and `psp-trace.py` `parser.error`s out before capturing
-anything.
-
-**Placing a craft on a pad: two failure modes, both silent.** `just pads`'
-`--before N` approach points are on the **course ring**, and a pad can sit ~8
-units to the side of it (pad 0 on Talon's Junction does), so an on-ring approach
-drives *past* the pad. Walk back along the **pad's own push axis** instead
-(`centre - dir * N`, height from the ring point) and the crossing is head-on.
-Separately, `--settle 8` is not enough: the hover shoves a freshly-placed craft
-several units up and it flies over the plate with `grounded = 0` for the whole
-run. `--settle 30` at 110 units/s settles it. **Check `grounded` and
-`boost_timer` in the capture before believing it** - the first two attempts
-produced 140 clean-looking rows with `max boost_timer = 0.0`.
-
-**`psp-trace.py --flare` is new** and records the craft's `Engine Flare` per
-tick - `boost_timer`, `plume_timer`, `intensity`, `half_size`. It walks
-`craft+0x1c4 -> +0x78` and **refuses to record unless the flare's own `+0xc0`
-owner field reads back as the pointer it walked through**, because a wrong
-pointer still yields plausible floats. That column set is what makes a boost
-comparison quantitative: it confirmed `BOOST_SECONDS` (`max = 0.783316` =
-`0.8 - dt`), the `dt` decay, the plume's 1.5 s timer zeroed at the reveal, and
-the half-size law to four digits.
-
-**`--pose-intensity` and `--pose-speed` are new, and a posed frame was lying
-before them.** `force_boost_state` saturated the intensity ramp; a teleported
-capture enters a pad at `0.1292`, because the ramp climbs at only `0.25`/s.
-Intensity sets the flare's resting half-size and all three ribbon layer alphas,
-so a saturated render against an unsaturated capture differs in **state** before
-it differs in anything a renderer does. Posed frames also had **no trail at
-all** - the ring needs ten pushed samples and `--ticks 0` pushes none - so the
-element carrying most of the exhaust's colour was simply absent from every
-comparison taken before this pass.
-
-**The two fixes.** The plume's authored alpha was premultiplied into the vertex
-RGB *at the vertices*; premultiplying then interpolating is not interpolating
-then multiplying, and since the rim is `(255, 98, 5)` at alpha `0`, it mapped to
-black and the authored orange existed nowhere on the fin. Weighting per fragment
-(`exhaust::BLEND`, `SrcAlpha`) fixes it: magenta extent 4x, red/blue balance from
-48 apart to 16 against the original's 1.
-
-**Two "decode bugs" that were not bugs.** The plume's single-texel UVs are
-authored and *unused* - the transparent pass generates coordinates by
-environment mapping - and `u8` texcoords over the GE's `/128` give exactly the
-`0.008`/`0.031` that read like a stride error.
-`crates/formats/tests/vex_batch_layout_ground_truth.rs` now pins the layout
-disc-wide.
-
-### The craft is drawn too big, and the factor is not established
-
-**Do not reapply `CRAFT_ROW_SCALE` to `ship_model_matrix` on the strength of the
-measurement alone** - it was tried this pass and reverted deliberately; that
-function's doc comment says so at length.
-
-What is solid: from the original's own recorded camera, with the track and
-buildings behind aligning, the wingtip lamp centroids sit `108.8 px` apart in the
-original and `189.3 px` in ours. Our craft is too big.
-
-What is **not** solid is the factor, and the reason is worth keeping because it
-is a lesson about the instrument rather than about the game. Measured ratios at
-three scales - `1.0` -> `1.740`, `0.75` -> `1.191`, `0.5625` -> `1.067` - are
-**not linear in the scale being measured** (linear would give `1.305` and
-`0.979`). A glowing lamp's centroid moves with its own brightness and with which
-pixels clear the threshold. **The metric establishes "too big" and nothing
-finer**; any factor chosen to make it read `1.000` is fitted to the instrument.
-A non-emissive silhouette measurement is what would replace it.
-
-`1 / 0.75^2 = 1.7778` sits 2.2 % from `1.740` and `g_craft_scale`
-(`0x08ab0e1c`) is confirmed read by four other consumers, so "the original
-scales the mesh twice and we scale it never" is the live hypothesis - but the
-second site was searched for and **not found**. See
-[`camera.md`](docs/ghidra/functions/psp-pulse-usa/camera.md).
-
-### Still not matched, each with its measurement
-
-- **Bloom.** Mean luminance in rings out from the exhaust core: the original
-  holds a flat shoulder near `150` out to ~100 px and then falls; ours peaks at
-  `201` and falls monotonically to `92`. Same energy, spread against
-  concentrated - the bright-pass signature, and `roadmap.md`'s unchecked M6
-  item. **The PSP has no programmable shaders at all**, so "find the shader" is
-  the wrong search.
-- **Environment-mapped UV generation** for the transparent pass. The recovered
-  mechanism for the plume's falloff, deliberately unported: it would change
-  every transparent batch on every track and ship, the same blast radius
-  `mesh-draw.md` already refused for `TRANSPARENT_BLEND`.
-- **`<Special speedpad_jump>`.** Recovered here, **applied 2026-08-08** - see the
-  section below. Left in place because the measurements are the evidence:
-  `craft+0x160` is the **hull up axis** (live dot `+1.000000` against
-  `body+0x010`, `0.000000` against the other two) and the gating
-  `controls->0x24 & 1` is **D-pad Up**, from a one-hot sweep of all twelve
-  buttons against `*(craft+0x78)+0x24`. At the live `0.1` that is a **5.71
-  degree** tilt of the boost direction and **0.5 %** more force, for at most the
-  class `time` - `0.27/0.27/0.27/0.24 s`, also read live, which independently
-  confirms the flare's `0.8 s` outliving every one of them. A hover spring
-  absorbs most of it, which is why no jump is visible in the original.
-
-## Two recovered behaviours ported, and one correction found by porting them (2026-08-08, third pass)
-
-Both were things the project had **read at instruction level and knowingly not
-implemented**. Neither is new recovery. What is new is a measurement that only
-existed once they were both in.
-
-### The chase camera: rigid radius, `pos_height` after the spring - and where the craft scale goes
-
-`crates/render/src/camera/chase.rs` now reproduces `Ship_UpdateCameraRigs`
-(`0x08845ed0`) whole. The instrument is `data/traces/pad0-boost.csv`, the only
-capture carrying the original's **craft pose and camera pose on the same tick**,
-150 of them at 40-154 units/s. Driving our camera with that pose and its own
-`dt`, seeded from its tick 0, against the recorded `cam_pos_*`:
-
-| Model | RMS, world units | Max |
-| --- | ---: | ---: |
-| free spring, `pos_height` before the spring (what shipped) | 4.938 | 6.824 |
-| `pos_height` after the spring only | 4.954 | 6.831 |
-| rigid radius only | 0.415 | 0.556 |
-| both, craft scale pre-multiplied into the four offsets | 0.121 | 0.332 |
-| **both, craft scale applied about the craft after the spring** | **0.008** | **0.060** |
-
-Three things worth carrying forward:
-
-- **Neither half is worth landing alone.** `pos_height` after the spring, on its
-  own, is *worse* than what it replaces. That is the shape of a change that would
-  have been reverted by anyone who tried half of it and looked at a screenshot.
-- **The fourth row is a correction to a doc claim, and it was not expected.**
-  `camera.md` recorded `eye = shipPos + (eye - shipPos) * g_craft_scale` as "the
-  same thing as scaling all four offsets". True of the rigid look-at point, false
-  of the sprung eye: the original scales *after* writing its spring state back, so
-  its state is unscaled, while pre-multiplied offsets keep a scaled state - and
-  the craft those are measured from moved in between.
-  `ChaseParams::craft_scale` exists because of this. Both `camera.md` and
-  `race::chase_params` carry the correction.
-- **A settled camera cannot see any of it.** All the models agree exactly at
-  rest, which is why every static probe and every `--pose-from --ticks 0`
-  screenshot this project has ever taken was blind to a 4.9-unit error. **A
-  camera can only be judged while it is lagging.**
-
-`crates/game/tests/chase_camera_ground_truth.rs` is the comparison, `#[ignore]`d
-(it needs a disc image *and* the capture). It also pins, as a by-product, the
-`pos_length`/`lookat_length` signs, the first-order lag, and the craft-frame
-spring split - break any of those and it moves by tenths or units rather than
-thousandths.
-
-### `<Special speedpad_jump>`, and one judgement call
-
-Implemented as described in the entry above. Three things a reader should not
-have to rediscover:
-
-- **The value comes off the disc**, not from a constant here:
-  `oag_formats::handling::Special` decodes `<Global><Special speedpad_jump>` and
-  it threads through `handling_for` beside `<SpeedupPads>`.
-- **The gate is on the *negative* side of the pitch axis.**
-  `oag_gameplay::ship_controls` maps d-pad Up to `steer_y = -1`, because up on the
-  stick pitches the nose down in this game and the inversion lives at the input
-  boundary. `SPEEDPAD_JUMP_THRESHOLD` (`0.5`) is **this project's own number** -
-  the original tests a bit and `ShipControls` is normalised by contract - and it
-  is the one judgement call in the change.
-- **`dir` is recomputed every tick inside the timer block**, so the tilt tracks
-  the button and can start or stop while a boost runs on behind the pad.
-
-### The determinism reference moved, and the check that says why
-
-`crates/physics/tests/determinism.rs`, two of its three rows. **This is
-legitimate and it is not the tilt on its own**: until this pass no probe script
-ever set `pad_hit`, so step 15 of 15 was the one force term the gate did not
-cover at all - and a new branch inside an uncovered term lands with the hashes
-*not* moving, which is the worst outcome available. `probe::environment` is new
-and the scenario now crosses a pad twice, once on each side of the tilt's
-threshold.
-
-Two checks, both run rather than argued:
-
-- **The 600-tick row does not move.** No `ShipState` field was added, so the hash
-  stream is the same length; the first crossing is at tick 1600. A hash-input
-  change moves every row, a behaviour change moves only the rows that reach it.
-- **With `environment` returning `Environment::default()` and nothing else
-  touched, all three rows reproduce the old constants bit for bit.** The two
-  crossings are deliberately placed inside stretches of `probe::controls` that
-  already hold the pitch axis on either side of the threshold, so **no input in
-  the script changed** and there is exactly one cause to attribute the movement
-  to.
-
-### What was deliberately not done
-
-- **`Race::ship_model_matrix` and the craft model scale** - out of scope for this
-  pass by instruction, and being worked on separately at the same time. Note the
-  two changes **partially cancel in apparent craft size**, so a screenshot taken
-  now contains both.
-- **The boost field-of-view kick, bloom, and environment-mapped UV generation**,
-  each for the reason its own page already gives.
-
-## The three boost-visual opens, worked through (2026-08-08)
-
-**One is closed, one is recovered, one is sharpened.** Target of record for
-this pass was **psp-pulse-usa**, not EU: only `/psp-pulse-usa/BOOT.BIN` was
-loaded in Ghidra, and every address exhaust.md and camera.md already carry is
-a USA one, so cross-verification on EU is still owed.
-
-**The flare stretch is closed, and the answer is that there isn't one.**
-`ExhaustFlare_Draw` loads `half_size` into `f13` once and writes `cx +/- f13`
-into x and `cy +/- f13` into y (`0x08904b58`..`0x08904ba4`) - one register,
-both axes. `ExhaustFlare_Init`'s four UVs span the whole texture, and
-`grabbedEngineFlare128x64x8.mip`'s glow measures
-`sigma_u / sigma_v = 1.007` **in UV space** (2:1 in pixels only because the
-image is 128x64 - it is authored round *for* a square quad). And the
-projection read live at a breakpoint on the draw is
-`m11 / m00 = 1.764706` exactly, aspect-correct for 480x272. All three say a
-view-space square renders square. `oag_render::exhaust::FLARE_ASPECT` is
-retired; `Exhaust::vertices` carries the three readings so nobody reinstates
-it. The 2026-08-07 "visible glow measures 1.7:1" observation is not
-reproduced, and its companion "a square flare read narrower" (2026-08-02) was
-taken while `HALF_SIZE_TO_WORLD` was still the fitted `2.15`, so it measured
-size rather than aspect.
-
-**The fov chain is recovered end to end**, on
-[camera.md](docs/ghidra/functions/psp-pulse-usa/camera.md), and the method is
-the transferable part: the store-offset sweep bottomed out (87 `swc1 ...,
-0x50(reg)` sites, none of them the camera), so each link was pinned with a
-**PPSSPP memory write breakpoint** instead - `memory.breakpoint.add` with
-`write: true`, resume, read the pc off the `cpu.stepping` event. Every link
-reported a single pc on every sample. `Camera_SubmitScene` (`0x08878874`)
-builds `m11 = 1/tan(fov*pi/180*0.5)`, `m00 = m11/1.7647059`;
-`g_camera_fov_degrees` (`0x08b34310`) is written only by
-`Camera_PublishTripod` (`0x08885d78`) from `tripod+0x50`, which is written
-only by `Ship_UpdateCameraRigs` (`0x08845ed0`) from `ship->0x850`, which is
-the authored `<ExternalCamera* fov>` **plus `ship->0x790`** - a 4 Hz decaying
-cosine shake clamped to +/-30 degrees, written only by `Hud_Update`
-(`0x0881bf50`). Two things fall out for free: the fov unit is **vertical
-degrees** at a hardcoded `480.0/272.0` (both literals are in
-`Camera_PublishTripod`), confirming camera.md's RMSE reading at instruction
-level, and the resting vertical fov measures **60.04** against the authored
-60. Which of the two paths a speed pad uses was not established - every
-`+0x790` burst captured coincided with a speed drop, i.e. an impact.
-
-**None of that fov work is owed a port, and the item is withdrawn from the
-open list rather than left as an RE target.** `BoostFovKick` is a
-**deliberate invention of this project**: a boost reads better with a fov
-kick, and that is the whole justification. It is not a reimplementation of
-`ship+0x790` or of anything else above, it is not being fitted to the
-original, and its `DEFAULT` is a taste decision rather than a measurement.
-So **do not retune it against the "90-95 degrees" figure**, and do not
-re-open "what widens the fov" as a gap - the 2026-08-07 entry that framed it
-that way mis-stated its status, and exhaust.md's Open list now says so.
-What the chain above is *for* is the two facts underneath it that the
-projection genuinely depends on and that were inferred before rather than
-measured: the fov unit is vertical degrees, and the aspect is a hardcoded
-480/272. Both are already what `Race::projection` assumes.
-
-**The plume's alpha is sharpened, not closed, and the premultiply stays.**
-Two facts from the data reframe the question. The blend cannot be overridden:
-the literal call is `Gu_BlendFunc(0, 10, 10, 0xffffff, 0xffffff)` and
-`FUN_089307b4`'s transparent group replays the material's own display list
-*before* `Mesh_SetBatchDrawState`, so the fixed-factor equation is the one
-that stands. And the authored alpha is not a fade at all: on every batch of
-all eight PSP teams the vertex colours take exactly two values,
-`(255, 98, 5, 0)` orange on the rim and `(255, 255, 255, 255)` white in the
-core, 29 and 22 of a 51-vertex batch, with nothing between - while
-`pulse_boost2_ADD`'s alpha is a **constant 238**, so the texture supplies no
-gradient either. That one split explains both failures: premultiplied, the
-orange rim maps to black and the plume reads white (the reported symptom);
-raw, the rim draws at full orange and the fins are hard-edged solid orange
-wedges (rebuilt and screenshotted, reproducing the 2026-08-07 result rather
-than contradicting it). The truth is between the two. **Next suspect is on
-our side**: those wedges read as flat saturated orange rather than the
-texture's own mean-108 streak gradient, so check whether the plume's texture
-reaches our shader at all before hunting another GE path.
-
-**Three follow-ups, later the same day.**
-
-**The plume's texture does reach our shader, and the wedges' UVs are
-degenerate.** Replacing `pulse_boost2_ADD` with hard horizontal stripes puts
-visible bands on the plume's two trailing streaks and leaves the wedges flat,
-so the sampler, the bind and the draw's texture index are all correct. The
-wedges are the two short batches (9 and 10 vertices), and they decode to a
-**single-point UV** - `u [0.008, 0.008]`, `v [0.031, 0.031]` - so no texture
-content can reach them whatever the scale. Whether that is our decode or the
-authored data is the live question for the plume-alpha open. A first stripe
-test striped `u`, the axis the geometry does *not* vary in, and showed
-nothing: **stripe the axis the geometry actually varies in**, or the test only
-proves the constant axis is constant. Mipmaps were also ruled out (plume at
-mip 0 only: RMSE 0.007 against the shipped build, i.e. the whole-scene noise
-floor).
-
-**EU cross-verification: two of six, and a base trap.**
-`Camera_SubmitScene` is EU `0x088786d0` and `Camera_PublishTripod` is EU
-`0x08885bd4`, both **body-identical** to their USA counterparts including the
-`1.7647059`, the `65.0 / fov` near-plane term and the literal `480.0 / 272.0`
-- decompiled and compared directly, confidence 90, rows in
-`psp-pulse-eu/names.tsv`, page at `psp-pulse-eu/camera.md`. The other four
-were not located and are listed as not-checked rather than guessed. **The
-trap: `/psp-pulse-eu/BOOT.BIN`'s data references decode into a different base
-from its code** - `Camera_PublishTripod` writes its fov global at
-`0x0005aec0` while sitting at `0x0888xxxx` - so USA data addresses have no
-arithmetic relationship to EU ones and **no EU data rows should be added
-until that import is rebased**.
-
-**The matched-pose reference frame was not produced, after three routes
-failed.** `import -window root` on Xvfb `:97` returns a blank frame (PPSSPP's
-GL window never composites into the root X sees - the lead confirmed this
-independently); the debugger's own `gpu.buffer.screenshot` exists and takes
-`type: "base64"`, but answers `Could not download output` at a CPU
-breakpoint on the GL backend; and `psp-trace.py --shot-every` routes through
-the same `import` path under `OAG_SHOT_DISPLAY`, so it inherits failure one.
-**The untried route is `PPSSPPHeadless --graphics=software`**, whose
-framebuffer lives in RAM and should answer `gpu.buffer.screenshot` - at the
-cost of a fresh boot and menu walk under software rendering. Stopped rather
-than ground on, per instruction.
-
-**Two corrections made in passing.** `FUN_0891e988`'s fourth argument is a
-**depth bias** (`sceGuDepthRange(ref*6 + lo, ref*6 + hi)`), not the
-"alpha-ref byte" mesh-draw.md called it. And the PSP `Camera_UpdatePlayerView`
-*does* contain the `min(|delta|-1, 3)` clamp, the geometry probe, the
-half-step low-pass and the 7.5 vertical lift that camera.md presents as the
-PS2's distinguishing algorithm - only the 0.75 is unshared.
-
-**Verification note:** `crates/view/src/draws.rs` is mid-edit by another
-agent (`isolate_node` unresolved), so `just`'s `fmt-check` and `lint` fail on
-`oag-view` and `oag-view` will not build. `cargo fmt`/`clippy`/`nextest` over
-`oag-render` and `oag-game` are clean, and `check-docs`, `check-deps` and
-`audit-leakage` pass. Re-run the full gate once that crate compiles.
-
-**The Ghidra corroboration also landed** (same pass, second agent):
-`Gu_SetMatrix` index mapping pinned at command-byte level (0=projection 4x4
-`0x3e/0x3f`, 1=view `0x3c/0x3d`, 2=world `0x3a/0x3b`, 3=texgen), the scene
-projection builder located at `FUN_08901dc4` (fov degrees at `cam+0x50`,
-near hardcoded `1.2`, far `2000.0` from `g_display+0x1698`, standard RH
-perspective; installs into the display's projection stack at `+0x1190` and
-`Gu_SetMatrix(0,..)`), the display's `+0x1410` stack confirmed as the view
-stack (camera world-to-view written by `FUN_08900884`/`FUN_08900a9c` from
-`obj+0x50`), and `FUN_0891e9d0` identified as fog re-evaluation
-(`Fog_FindVolume` then GE state 7), not matrix code. None of it renamed in
-Ghidra yet - a future pass should write these onto `camera.md` and
-`names.tsv` properly.
-
-## The boost plume was sampling one white pixel (2026-08-09)
-
-Reported as "a yellowish solid mesh, instead of particles flying from the wings
-backwards joining the exhaust trail". Both halves of that report are now
-answered, and the second half is the more useful one.
-
-**There are no boost particles in the original.** None of the 35 authored
-`.pob` effects is a boost or speed-pad effect
-([pob.md](docs/formats/pob.md) carries the full name list), and that page
-separately records that the exhaust flare and trail are a hand-authored code
-path with no `.pob` at all. What reads as particles is a texture. **Do not go
-looking for an emitter to port.**
-
-**The cause, and it is a single sentence.** `Data\Ships\<Team>\shipboost.vex`'s
-authored texture coordinates pin `u` to texel **column 0**, and column 0 of
-`Data\Tex\pulse_boost2_ADD.tga` is a uniform `(250, 248, 250)` down all sixteen
-rows. So the texture multiplied every fin by a constant white, the plume drew
-as flat vertex colour, and it read as two hard-edged orange wedges. The
-original never reads those coordinates: `Mesh_BeginTransparentPass` sets
-`TEXMAPMODE` uvgen 2 and nothing in the batch loop undoes it, so the GE
-generates them per vertex from the normal and lights 0/1.
-
-**What the rest of that 64x16 texture holds** - measured, and worth having
-because it is what the effect actually *is*:
-
-| axis | content |
-| --- | --- |
-| `u` | brightness ramp: `(250, 248, 250)` at column 0, violet `(143, 72, 218)` mid, `(10, 4, 18)` at the far end |
-| `v` | at any column but 0, the rows alternate **hard** between a bright magenta `(241, 110, 253)` and a dark navy `(20, 5, 122)`, irregularly |
-
-The `v` axis is the streak pattern - it is what breaks a continuous fin into
-discrete bright bands. Column 0 is the one column where that alternation
-vanishes, which is exactly the column the authored coordinates sample. That
-also settles a colour gap this project had measured and could not explain: the
-original's boost region reads magenta `(223, 164, 224)` against ours at
-`(159, 118, 175)`, because with column 0 as the only sample **there was no
-magenta anywhere in our pipeline** for the additive blend to reach.
-
-**The two light vectors are recovered, not fitted**, and the space they are in
-is the part a reader is most likely to get wrong.
-[mesh-draw.md](docs/ghidra/functions/psp-pulse-usa/mesh-draw.md) has the full
-account; the short form is that `Vex_LoadModel` and `Vex_UpdateLightLists_q`
-both write the `+0x48`/`+0x70` lists and `model+0x1a8` decides which. The
-**runtime** branch reads rows 0 and 1 of the live view matrix and genuinely is
-a matcap. The plume does **not** take it: `ExhaustFlare_Init` (`0x08905444`)
-sets the boost model's parent link to the craft-class ancestor immediately
-before loading it, so the ancestor walk matches on its first step, `model+0x1a8
-= 1`, and the model takes the **load-time fixed-basis** path -
-`Rx(-1.0) * Ry(0.3)` from two read-only literals, columns 0 and 1:
-
-```text
-dir0 = ( 0.9553365, -0.2486722, -0.1596704 )   -> u
-dir1 = ( 0.0,        0.5403023, -0.8414710 )   -> v
-```
-
-So the UVs move when the **ship** rotates and stay put when the **camera**
-moves. A plume that shimmers as the camera orbits a stationary ship has it
-wrong. Confidence **85** on the numeric vectors (the `vmmul` operand order is
-derived from PPSSPP's matrix-register semantics, not measured) and **95** on
-the two angle constants; if the plume ever reads mirrored against a capture,
-the transposed reading is the first thing to try and the two are
-distinguishable by eye - this one has `dir1.x == 0` exactly, the alternative
-has `dir0.y == 0` exactly.
-
-**Implemented in `oag_render::texgen`, for the boost plume alone.** On the CPU,
-per vertex, because uvgen is a transform-stage operation on real hardware and
-the plume is 121 vertices. The general transparent pass is deliberately
-untouched - switching every transparent batch on every track and ship is the
-blast radius `mesh-draw.md` has twice refused off one pass, and the reported
-symptom does not need it.
-
-**Measured against the original at its own pose**, `data/traces/pad0-boost.csv`
-tick 62 against `data/shots/pad0-boost/tick00062.png`, over that capture's own
-plume mask (`min(r, b) - g > 25`, `luma > 60`). **Re-measured 2026-08-09 after
-the trace harness showed the first run's pose was wrong**, so the flags are part
-of the result: `--pose-tick 62 --pose-boost 0.517752 --pose-intensity 0.1250567
---pose-speed 148.8853`. The first version used `--pose-boost 0.5`, seeded
-intensity from the entry tick instead of the one before it, and ran while
-`force_boost_state` charged the boost accumulator 100x too slowly. Every number
-moved 2-15 %.
-
-**The table itself now lives in one place** -
-[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md), "The `SrcAlpha`
-blend was re-tested" - because it was duplicated across three files and drifted
-every time it was re-measured, which was four times. What belongs here is the
-method and the traps, not the numbers.
-
-**It has been re-measured four times and each retraction had a different
-cause**, which is the part worth carrying: (1) the wrong pose age and a boost
-accumulator charging 100x too slowly, both found by the trace harness; (2) those
-fixed; (3) invalidated by ADR-0020 moving background luminance 54 %; (4) the
-mask replaced. **The common thread was the instrument, not the renderer.** A
-`luma > 60` gate makes every row hostage to a global brightness change; the
-replacement normalises chroma by the pixel's own luminance and is immune to one
-by construction.
-
-Two results survive all four: generated coordinates beat authored ones on every
-column, and the recovered `One`/`One` blend is far worse than `SrcAlpha` on
-every column. One did not - a `b - r` reversal recorded in the third revision
-was a mask artefact and is withdrawn.
-
-**And the fourth measurement opened a gap the old pipeline was hiding**: over
-the same mask ours reads `(143, 110, 178)` against the original's
-`(193, 147, 218)`, about 26 % dimmer. Before ADR-0020 our capture stored the
-plume in gamma and the background in linear, which flattered the plume's
-prominence. Same direction as the luminance profile down the exhaust axis, and
-it points at the flare and the missing bright-pass rather than at the plume.
-
-**The last row is the one worth carrying forward, because it is a negative
-result about something this project believes it has recovered.** `SrcAlpha`
-(`exhaust::BLEND`) was introduced only as a stand-in for the missing texture
-falloff, so once the falloff existed the obvious next move was to put the plume
-back on the recovered `GU_FIX`/`GU_FIX` blend. It was tried and it is far
-worse: `One`/`One` restores the authored `(255, 98, 5)` rim at full strength,
-giving **29x the original's orange pixel count**, red-dominant where the
-original is blue-dominant, at 21 % of its extent. The capture's own
-connected-component pass agrees independently - the original's plume and its
-trail ribbon are one violet family and neither is anywhere near that orange.
-**So a term in the recovered blend chain is still missing.** The GE state was
-read carefully and does not reproduce the picture; an unrecovered source-alpha
-weight does. `SrcAlpha` is kept because it measures better, not because it is
-understood, and **do not "fix" it back to the recovered blend without
-re-running this table.**
-
-Three things that would have been easy to miss:
-
-- **Check for strobing before believing a still frame.** A texture whose `v`
-  axis alternates hard between two colours is a high-frequency response to
-  small normal changes, and the UVs are regenerated every frame from a pose
-  that jitters under the hover spring. Measured: consecutive-tick RMSE in the
-  plume region is within **0.003** of the pre-fix build on every pair, so the
-  generated coordinates add essentially nothing to the frame-to-frame
-  difference. A strobing plume would have been worse than a solid wedge and no
-  screenshot would have shown it.
-- **A two-heading A/B is not a heading A/B unless the poses match.** The first
-  attempt here compared frames at 440 and 85 km/h, so the hover spring had the
-  craft at different pitch and roll and the comparison measured pose as much as
-  heading.
-- **The camera-independence check passes, and it is worth re-running after any
-  change here.** A normal-driven texgen that accidentally picks up the view
-  matrix becomes a matcap, and the difference is invisible on a single frame.
-  Two cameras at the *same* ship pose (`--pose-tick 62` with and without
-  `--no-camera`) give plume means `(197.2, 149.7, 212.2)` and
-  `(198.1, 149.1, 209.6)` - within three counts per channel, against pixel
-  counts that differ by 40 % because the projection does. Structurally it
-  cannot drift either: `texgen::environment_map` takes no view matrix.
-- `*batch & 0x0020` is **set** on every plume batch, so `Batch::is_culled()` is
-  true for all 32 across the 8 teams - and **our renderer sets `cull_mode:
-  None` everywhere**, deliberately (`mesh_render.rs`: strip winding is
-  reconstructed rather than read, so culling would turn a winding mistake into
-  missing geometry). So we draw back faces the original discards, and under a
-  normal-driven texgen those shade differently rather than merely overdrawing.
-  **Not acted on**, for two reasons: the no-cull decision is renderer-wide with
-  its own stated rationale, and we are already *under* the original's extent
-  (5,996 against 9,435), so removing geometry moves the wrong way. Recorded
-  because it is now a live term in the plume's appearance where before it was
-  only overdraw.
-
-**The original-side reference this was checked against is
-`data/shots/pad0-boost/measurements.md`** - 648 lines, regenerable with the
-`measure.py` beside it, derived data rather than durable. It is the first
-capture in this project that answers "particles or geometry?" with pixels, and
-its verdict is **a continuous surface carrying discrete lengthwise streaks**:
-
-- the emission mask is dominated by exactly **two** connected components, one
-  per side, carrying 60-99 % of all emission pixels, every other component 1-3
-  px;
-- the two are mirror images about the craft centreline to **0-6 px** over a
-  130-row span, which a stochastic emitter cannot be;
-- a least-squares line through the outer boundary has an RMS residual of
-  **3.5-5.3 px** over 111 rows - a polygon silhouette, not a spray;
-- but at 1 px resolution one lobe carries **2-4 local maxima** with troughs
-  8-65 % below their flanking peaks - banding **across** the fin, on a surface
-  continuous **along** it.
-
-It also corrects the obvious reading of the user's report: the lobes and the
-trail ribbon are **not** one connected component. The ribbon sits on the
-centreline, both lobes sit ~70 px outboard of it; they converge on the exhaust
-and overlap near the nozzle, which is what makes them read as "joining the
-exhaust trail", but they are two adjacent elements drawn in the same violet.
-
-Still not matched, and unchanged by this: the bloom / bright-pass shoulder, and
-the craft's residual render scale. Both are recorded on
-[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md).
-
-## The craft render scale invalidates matched-pose pixel comparison (2026-08-09)
-
-**Read this before trusting any matched-pose exhaust measurement, including the
-ones in the section above.**
-
-Chasing "our boost still looks nowhere near the original", three sweeps were run
-and all three came back saying the reimplementation is *right*:
-
-- **`engine_fire` (`0x3e5`) is authored on zero of the 340 VEXX files on the PSP
-  disc**, and `exitglow` (`0x3e4`) on 25, all track geometry, none ship-side.
-  That closes exhaust.md's open item about the two unregistered classes from the
-  data side: unregistered *and* uninstanced. `crates/assets/examples/class-sweep.rs`
-  was written for this and then deleted; it walks every WAD entry by index and
-  reports nodes of a given class with their parents, and is worth rewriting if
-  the question recurs.
-- **`Trail` (`0x3c8`) appears on exactly three files disc-wide**, which closes
-  exhaust.md's "whether `Trail` appears outside `shipwreck.vex`, four files
-  checked": `Assegai\shipwreck.vex` (`trail_con_left_wing` /
-  `trail_con_right_wing`), `Triakis\shipwreck.vex`, and one unidentified entry
-  (index 809, hash `0xb980d0b7`, 73 nodes, 96,224 bytes) that hashes to no
-  `Ship`/`shipwreck`/`shipboost` of any of the eight PSP teams, nor to
-  Mirage/Van_Uber/Auricom/Harimau/Icaras. **Every instance is a left/right
-  pair**, which looked like the answer - two wing-mounted ribbons where we run
-  one - but no racing `Ship.vex` authors one at all, and the racing trail is
-  code-created from preset 2, so the pairs are a wreck thing and this is not
-  evidence about the racing craft. Entry 809 was later resolved by targeted
-  hash brute force as `Data\Ships\Triakis\livery.vex`, whose two `Trail` nodes
-  are **byte-identical** to that team's wreck. All six payloads are 64 bytes -
-  identity 3x3 plus a translation, no length, sample count, width or colour.
-- **The racing craft builds exactly one trail, and this is settled at
-  instruction level.** `Trail_InitPreset` (`0x0892a050`) has exactly **two**
-  callers in the whole binary. `ExhaustFlare_Init` makes **one** `0x210`
-  allocation at `flare+0x64` followed by **one** `Trail_InitPreset(obj, 2)` -
-  no loop, no second allocation - and the `Engine Flare` node is authored once
-  per `Ship.vex` on all eight teams. The other caller is the **missile**
-  constructor, which makes *two* allocations at `+0x5c`/`+0x60`, each at preset
-  **0**. So twin trails do exist in this engine and they belong to missiles,
-  not to craft. **Our one-ribbon-at-the-nozzle topology already matches the
-  original**, and no amount of measurement disagreement should be read as a
-  missing second ribbon again.
-- **Every recovered ribbon constant matches**: ring capacity `10`, taper rate
-  `-4.5`, head taper `1.0`, layer count `3`, per-layer half-widths
-  `[1.0, 0.7, 0.5]`, the `intensity * 0.35 + 0.2` width scale, the four-fin
-  cross, and the `~3.5`-unit direction stretch. And the **state** matches too:
-  a `--pose-intensity 0.1292277 --pose-boost 0.5` render reaches `0.2542`
-  against the capture's recorded `0.2544947`.
-
-**And yet the picture does not.** Luminance down the exhaust axis at matched
-pose and matched intensity, plume expired so only the ribbon draws, each
-normalised by its own frame's wingtip-lamp span:
-
-| threshold | the original | ours |
-| --- | --- | --- |
-| luma > 200 | 0.93 spans | 0.20 |
-| luma > 150 | 1.59 | 0.26 |
-| luma > 100 | 2.01 | 0.50 |
-| luma > 70 | 2.42 | 1.14 |
-
-Note the gap is **worst at the bright core and narrows as the threshold drops**,
-which is the opposite of what a missing bloom would do - bloom spreads dim light
-outward and would inflate the low thresholds while leaving the core alone. So
-"it is the unimplemented bright-pass" does not fit this measurement.
-
-**The most likely explanation is the instrument.** Our craft renders too large
-at the original's own recorded camera pose. **The `1.43x` this paragraph
-originally reported is withdrawn** - it came from the *inner* wing-marker pair
-rather than the wingtips. **No sound figure exists yet** - see "The craft render
-scale: our side is settled, the original's is not" below, where a `1.30x`
-replacement was also withdrawn after a cross-tick check. The range is `1.18`-`1.30`.
-Normalising by craft span assumes the scene
-scales uniformly, and it does not for geometry extending *toward* the camera,
-which is exactly what an exhaust ribbon is. **Every matched-pose pixel
-comparison in this project inherits that error**, including the four-row blend
-table in the section above.
-
-Two consequences, and they are the actionable part:
-
-- **The craft scale stops being a cosmetic open item and becomes a blocker for
-  the comparison method** - and an attempt to replace the metric on
-  2026-08-09 **did not produce one**, which is worth knowing before anyone
-  spends the afternoon again. The task was to build a non-emissive silhouette
-  measurement that is stable across brightness thresholds and linear in the
-  model scale; it did not settle, and the likeliest reason is not the metric
-  but the capture path. **An ordinary `--screenshot` currently stores the scene
-  as unencoded linear light while some elements are written in gamma**, so any
-  threshold over absolute brightness is measuring two colour spaces at once.
-  ADR-0020 makes gamma authoritative and removes that. **It landed, the
-  silhouette measurement was retried, and it failed again for a second and
-  independent reason - so do not simply try harder at it.**
-
-  The retry used a hue silhouette with no brightness threshold at all:
-  blue-dominance normalised by the pixel's own luminance,
-  `(b - g) / luma > k` and `(b - r) / luma > k`. **The craft's blue hull is not
-  separable from the background by hue in these frames**, because the tunnel
-  and trackside geometry are blue-tinted too. The mask runs to the crop edge at
-  every `k` from `0.06` to `0.20`, and a connected-component pass seeded at the
-  craft's centre does not help: the hull is *touching* the blue background, so
-  the flood fill merges them and returns 80,000+ px with a 620 px width for a
-  craft whose lamps are 93 px apart. Both frames behave the same way, so it is
-  not a rendering difference - it is the scene.
-
-  **The method that should work next converts this from measuring two images to
-  measuring one.** We know the recorded camera pose (`pad0-boost.csv` carries
-  it per tick), our own projection, and the craft model's vertex positions. So
-  **project our wingtip-lamp vertices through the recorded camera analytically
-  and compare where they land against where the original's lamps actually
-  are.** Our side then has no threshold in it at all, and the original's side
-  is a *position* measurement on a small bright blob rather than an *extent*
-  measurement on a silhouette - far less sensitive to which pixels clear a
-  threshold, which is the exact failure mode HANDOVER already records for the
-  centroid metric. What is needed first is the lamp vertices' model-space
-  positions, findable in `Ship.vex` from their saturated-red vertex colour or
-  from a named mesh.
-
-  See the `1/0.75^2` lead in the Open threads table.
-  Note this 1.43 does not agree with the 1.191 that table records after the
-  `0.75` landed; HANDOVER already warns the lamp-centroid metric "establishes
-  'too big' and nothing finer", and two different detectors disagreeing by that
-  much is the warning being earned. A non-emissive silhouette measurement is
-  what would replace it.
-- **State comparison does not inherit the error, and that is why the trace
-  harness is worth more than another screenshot.** `boost_timer`, `plume_timer`,
-  `intensity` and `half_size` are numbers on both sides and care nothing about
-  render scale. The flare column group and `oag-game --trace-out` exist for
-  exactly this; prefer them over any pixel argument about the exhaust.
-
-## The boost has exactly three elements, so the gap is in one of them (2026-08-09)
-
-A shortlist of "what else might emit at the engines during a boost" was drawn up
-this session - `glowingShape`, `self_illuminatedShape`,
-`underbrake_flashleft/rightShape`, all on `colours_flashing_GLOW.tga`. **It is a
-dead end, and there is a recovered fact that kills it and every future version
-of it at once.**
-
-`boost_timer` (`flare+0xb8`) reaches **exactly three things**, from an
-exhaustive read of `Exhaust_Update` at confidence 90 (see
-[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md), "What a boost
-actually changes"): the flare's half-size, the reveal of the `<Team>boost.vex`
-plume, and the `engine_on` flag. Nothing else in the function reads it. So **no
-other mesh on the ship can change when a pad fires** - if a surface looks
-different during a boost it is because the *camera*, the *speed* or the
-*intensity* changed, not the boost. The `colours_flashing_GLOW` family are the
-blink lights, already implemented as `oag_render::mesh::ANIMATED_TEXTURES`, and
-they flash on their own cycle whether or not a pad was crossed.
-
-**Which leaves three suspects and no others**: the flare billboard, the plume
-mesh, and the ribbon. Of those, the plume's geometry and the ribbon's constants
-have now been checked against the recovered values and match, and the exhaust
-*state* matches the capture to within a fixed-timestep residual. That points at
-the flare, and there is a specific reason to look there:
+is `1.0` on all 3,146 ticks, so agreement means only that our ship also never
+leaves the ground. A constant column cannot test whether the hover model
+quantises contact the way the original does, and under `--reseed` the field is
+one of the ones the seed restores anyway.
+
+**The standing start is the best-conditioned scenario.**
+`verification/scenarios/standing-start.inputs` - 300 ticks of held thrust from
+the start line - reproduces *both* legs of the force-balance conclusion on data
+that did not exist when they were derived: **launch acceleration 32.69** on its
+third tick against the recorded 32.52 and the predicted 31.8, and **the `0.035`
+contact-friction floor never crossed** (minimum loss 3.534 % over 114 contact
+ticks, 0 of 114 ticks above 5 units/s below it). "Third tick" is not a quirk of
+the capture - it is the first tick the emulator was sent thrust, the first two
+having been eaten by the lead.
+
+**One older hypothesis stays dead.** The run report's angular velocity averages
+21.2 rad/s over the lap, which reads like a craft spinning three and a half
+times a second. The original reads **22.96 rad/s on the same scenario**,
+slightly *higher* than ours. Whatever that column is, both sides do the same
+thing with it.
+
+**A save-state fixed start was investigated and not adopted.** `--state=FILE`
+exists and `wtype` can drive PPSSPP's own overlay to create one - both now on
+[ppsspp-debugger.md](docs/reverse-engineering/ppsspp-debugger.md#save-states-and-the-input-recording-api-that-may-replace-them)
+- but two loads of the same state disagreed by 0.031 units / 1.41 degrees
+against `--start-heading`'s 0.0022/0.0001. The roadmap checkbox is closed via
+heading-pinning; the state-loading mechanism is kept documented rather than
+wired in, for a future need a heading pin cannot reach (mid-race state, a
+different track's start). `.ppst`/`.p2s`/`.state` are in `just audit-leakage`'s
+extension list.
+
+## The exhaust and the boost visuals
+
+Six passes between 2026-08-02 and 2026-08-09 worked this subject, each partly
+withdrawing the last. **The evidence is on
+[`exhaust.md`](docs/ghidra/functions/psp-pulse-usa/exhaust.md),
+[`mesh-draw.md`](docs/ghidra/functions/psp-pulse-usa/mesh-draw.md) and
+[`camera.md`](docs/ghidra/functions/psp-pulse-usa/camera.md)** - this is the net
+state and the traps, not the history.
+
+**The boost has exactly three elements and no others.** `boost_timer`
+(`flare+0xb8`) reaches the flare's half-size, the reveal of the
+`<Team>boost.vex` plume, and the `engine_on` flag - nothing else in
+`Exhaust_Update` reads it (confidence 90). So **no other mesh on the ship can
+change when a pad fires**; a shortlist of `glowingShape` /
+`self_illuminatedShape` / `underbrake_flash*` was drawn up and is a dead end,
+and every future version of it is too. Those are the blink lights
+(`oag_render::mesh::ANIMATED_TEXTURES`), flashing on their own cycle.
+
+**There are no boost particles.** None of the 35 authored `.pob` effects is a
+boost or speed-pad effect ([pob.md](docs/formats/pob.md)), and the flare and
+trail are a hand-authored code path with no `.pob` at all. What reads as
+particles is a texture. Do not go looking for an emitter to port.
+
+**The racing craft builds exactly one trail, settled at instruction level.**
+`Trail_InitPreset` has two callers: `ExhaustFlare_Init`, which makes one `0x210`
+allocation and one `Trail_InitPreset(obj, 2)` with no loop, and the **missile**
+constructor, which makes two at preset 0. Twin trails belong to missiles. Our
+one-ribbon-at-the-nozzle topology already matches the original, and no
+measurement disagreement should be read as a missing second ribbon again.
+
+**Every recovered ribbon constant matches, and so does the state**: ring
+capacity 10, taper rate `-4.5`, head taper `1.0`, three layers, per-layer
+half-widths `[1.0, 0.7, 0.5]`, the `intensity * 0.35 + 0.2` width scale, the
+four-fin cross and the `~3.5` direction stretch; and a
+`--pose-intensity 0.1292277 --pose-boost 0.5` render reaches `0.2542` against
+the capture's recorded `0.2544947`.
+
+**The plume's texgen is recovered and implemented, and it fixed the reported
+"yellowish solid mesh".** `shipboost.vex`'s authored UVs pin `u` to texel column
+0, the one column of `pulse_boost2_ADD` that is flat down every row - so the
+texture multiplied every fin by a constant white. The original never reads those
+coordinates: `Mesh_BeginTransparentPass` sets `TEXMAPMODE` uvgen 2 and nothing
+in the batch loop undoes it. The two light vectors are recovered from
+`Rx(-1.0) * Ry(0.3)` (confidence 85 on the numbers, 95 on the angles) and the
+UVs move with the **ship**, not the camera - a plume that shimmers as the camera
+orbits a stationary ship has it wrong, and `texgen::environment_map` takes no
+view matrix so it cannot drift into a matcap structurally. Implemented in
+`oag_render::texgen` **for the boost plume alone**: switching every transparent
+batch on every track and ship is a blast radius `mesh-draw.md` has twice
+refused off one pass.
+
+**`exhaust::BLEND` (`SrcAlpha`) is kept because it measures better, not because
+it is understood, and this is a negative result about something the project
+believes it has recovered.** Putting the plume back on the recovered
+`GU_FIX`/`GU_FIX` blend restores the authored `(255, 98, 5)` rim at full
+strength: **29x the original's orange pixel count**, red-dominant where the
+original is blue-dominant, at 21 % of its extent. So a term in the recovered
+blend chain is still missing - the GE state was read carefully and does not
+reproduce the picture; an unrecovered source-alpha weight does. **Do not "fix"
+it back without re-running exhaust.md's table.**
+
+**Colour space is settled: [ADR-0020](docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
+made gamma authoritative.** The GE is the specification and every blend equation
+this project has recovered is defined on framebuffer bytes. That ADR also
+absorbs the `mesh_render.rs` sRGB fork, the `race.rs` load-time plume re-encode
+(deleted), the 54.6/255 measurement and the capture-path question this file used
+to carry as an open row.
+
+**Withdrawn, and stated here because the earlier text is still quoted.**
+`BoostFovKick` is a **deliberate invention of this project**, not a
+reimplementation of anything: a boost reads better with a fov kick, its
+`DEFAULT` is a taste decision, and it is not being fitted to the original. **Do
+not retune it against the "90-95 degrees" figure.** The fov chain *was* recovered
+end to end ([camera.md](docs/ghidra/functions/psp-pulse-usa/camera.md)), and two
+of the facts it establishes are ones `Race::projection` already assumes: the fov
+unit is **vertical degrees** and the aspect is a hardcoded `480.0/272.0`.
+`FLARE_ASPECT` is likewise retired - the flare quad is square, confirmed three
+independent ways.
+
+**Corrected 2026-08-09: "what widens the fov" *is* a live gap after all**, just
+not a boost one. The original widens with **speed**, additively in degrees, with
+no boost involved - see the craft-render-scale section below and the open-thread
+row. This does not license retuning `BoostFovKick`, which remains an invention;
+it means a second, separate term is missing.
 
 **`HALF_SIZE_TO_WORLD` is this project's own constant, fitted on a *resting*
-frame**, and it is the only free scale between the recovered `half_size` and
-the quad we actually draw. The size law itself is confirmed exactly -
-`(intensity * 0.6 + 0.4) * 2.5 + boost_timer * 8.0`, giving `2.5` at rest and
-`8.9` at a pad's armed `0.8` - so the *ratio* is the original's, but the
-absolute world size is ours. A constant fitted at `2.5` and then used at `3.96`
-(tick 62) or `8.9` (entry) has never been checked in the regime where it
-matters most. **The flare is also the brightest element, and the measured gap is
-worst at the bright core** (4.6x at luma > 200, narrowing to 2.1x at luma > 70),
-which is the signature of a too-small bright source rather than a missing halo.
+frame, and it is the next thing to measure.** The size law is confirmed exactly
+(`(intensity * 0.6 + 0.4) * 2.5 + boost_timer * 8.0`, giving 2.5 at rest and 8.9
+at a pad's armed 0.8), so the *ratio* is the original's but the absolute world
+size is ours - and a constant fitted at 2.5 has never been checked at 3.96 or
+8.9. The trace harness makes checking it cheap: `psp-trace.py --flare` records
+`half_size` per tick, so a matched-pose render can be compared against a frame
+whose flare size is *known*.
 
-That is the next thing to measure, and the trace harness makes it cheap: the
-capture records `half_size` per tick, so a matched-pose render can be compared
-against a frame whose flare size is *known* rather than inferred.
+**But the pixel argument that pointed at the flare has to be re-taken before it
+is leaned on.** "The gap is worst at the bright core - 4.6x at luma > 200,
+narrowing to 2.1x at luma > 70, which is the signature of a too-small bright
+source rather than a missing halo" was measured between frames now known to be
+misregistered by **1.19-1.25x at those very ticks**, and the misregistration is
+speed-dependent rather than a constant that divides out. The same applies to the
+bloom shoulder (the original holding a flat luminance profile near 150 out to
+~100 px where ours peaks at 201 and falls monotonically) and to the plume mask
+reading `(143, 110, 178)` against the original's `(193, 147, 218)`, about 26 %
+dimmer. **None of the three is withdrawn - all three are unmeasured until
+re-taken**, either at a `--camera-fov` computed from the capture's own speed
+column or at a low-speed tick where the error is smallest. See the resolved
+section below and
+[projection-vs-the-original.md](docs/rendering/projection-vs-the-original.md).
 
-## The craft render scale: our side is settled, the original's is not (2026-08-09)
+**Still not matched, and unaffected by that:** the bright pass itself is
+unimplemented, and **the PSP has no programmable shaders at all**, so "find the
+shader" is the wrong search.
 
-**A previous revision of this section claimed `1.30x`, "measured soundly at
-last", and confirmed `0.75^2` to 2.6 %. That claim is withdrawn.** It rested on
-one tick. Repeating the same measurement across ticks - the cross-tick soundness
-check that should have come first - gives:
+### Closed: the craft is the right size, and the zoom was our projection (2026-08-09)
 
-| tick | ours (projected) | the original | ratio |
-| ---: | ---: | ---: | ---: |
-| 12 | 195.4 | 166.2 | 1.176 |
-| 20 | 194.9 | 164.7 | 1.183 |
-| 28 | 194.7 | 160.8 | 1.211 |
-| 62 | 195.0 | 150.2 | **1.298** |
+**This section used to say our craft renders too large and that the mechanism was
+`0.75` applied twice. That is refuted.** Six days and five failed detectors went
+into measuring a craft-specific error that does not exist. The evidence, the
+instrument and its three validations are on
+[projection-vs-the-original.md](docs/rendering/projection-vs-the-original.md);
+what belongs here is only what a fresh reader needs to not restart the hunt.
 
-**10.4 % spread across ticks**, on a quantity that must be constant: ours is
-constant to 0.4 % over the same ticks, and the craft is rigid. The `1.30` was
-the outlier and it was the tick I happened to measure. **`0.75^2` is neither
-confirmed nor refuted** - `1/0.75` is `1.333` and the range is `1.18`-`1.30`,
-which excludes nothing useful.
+**The craft mesh is correct to 0.15 %.** With the background zeroed, craft-only
+boxes register at 0.9989/0.9985/0.9987. Across 16 frames, `craft / far scenery`
+is **0.992 +/- 0.007** - and far scenery is at effectively infinite distance,
+so no mesh scale can move it. The whole frame was zoomed 1.12-1.26x and the
+craft merely inherited it. `1/0.75^2 = 1.7778` is dead, and **the planned
+red-hulled-team capture is no longer needed** - do not spend the emulator time.
 
-The failure is on the original's side and it is the fifth distinct one in this
-thread: a red-dominance detector finds a different feature set as the frame's
-lighting changes (group counts run 5, 5, 6, 7 across those ticks; three other
-ticks return no usable pair at all), so the *pair* it locks onto is not the same
-pair each time. Threshold-stability was verified and held at 0.3 px - but
-stability against **threshold** is not stability across **frames**, and only the
-second one matters here.
+**What was actually missing is a speed-dependent fov widen**, and it is
+recovered rather than fitted: the original adds `0.075 * dot(fwd, vel)` additive
+**degrees** to both tripod fovs every frame. Fitting exactly that form to the 16
+frames gives `fov = 60.181 + 0.07685 * dot(fwd, vel)`, with the recovered
+`0.075` and the authored `60` both inside the fit's 95 % intervals. It is
+**unimplemented** in `Race::projection`, which is the one live consequence.
 
-### What is settled, and it is half the problem
+**Matched-pose pixel comparisons are still invalid**, for this reason rather
+than the craft's size, and with a fix: re-take with `--camera-fov` computed from
+the capture's own forward velocity, or at a low-speed tick. The three readings
+that depend on it are listed in the exhaust section above. **One boundary is
+worth stating**, because it decides which past results survive: a comparison
+between two of *our own* renders at the same pose is safe, since a shared
+registration error cancels - but only while it is a ratio. Anything in
+*absolute* pixels (a width, a saturated-run length, a count above a luma cut) is
+still unsafe between two of our own frames if their poses differ in speed.
 
-**Our side is proven three ways and is not in doubt: 195 px at 960x544.**
+**The instrument is committed now**, as
+[`scripts/frame-register.py`](scripts/frame-register.py), because it is the
+metric for every future comparison against the original and its scratch original
+lived in gitignored `data/`. It **errors out when the correlation peak lands on
+an end of the sweep** rather than returning it - the failure that produced the
+`1.2500` readings, which read exactly like measurements.
 
-| tick | projected wingtip separation | exact silhouette width | agreement |
-| ---: | ---: | ---: | ---: |
-| 12 | 195.4 | 195 | 100.2 % |
-| 20 | 194.9 | 195 | 99.9 % |
-| 24 | 194.7 | 195 | 99.9 % |
-| 28 | 194.7 | 194 | 100.4 % |
+**Two traps worth keeping out of all that failed work.** (1) **Measure the
+background before believing anything about a foreground object's size** - the
+clause that hid this for six days was "with the track and buildings behind
+aligning", written into the measurement's own record and never checked; the far
+scenery read 1.1195. (2) **The camera node stores its rotation transposed**, so
+a projection using the trace's `cam_*` rows directly lands on empty track; sample
+our own render at the predicted pixels against a ship-free render of the same
+pose, and if neither pixel differs, the projection is wrong.
 
-An analytic vertex projection and a **threshold-free** pixel difference against
-a ship-free render of the same pose, agreeing to 0.1-0.4 % across four ticks.
-Neither involves a brightness threshold or a hue rule.
+**State comparison never inherited any of this, which is why the trace harness
+is worth more than another screenshot.** `boost_timer`, `plume_timer`,
+`intensity` and `half_size` are numbers on both sides and care nothing about
+render scale. Prefer the flare column group and `oag-game --trace-out` over any
+pixel argument about the exhaust.
 
-**And one control did pass, which is worth keeping**: the red pair's *midpoint*
-sits at `478.5`-`479.9` at every tick that yields one, against a projected craft
-centre of `478.7`. So those features are borne by the craft and not trackside
-lighting - the separation is unreliable, the centring is not.
+### Capturing a boost, and what silently goes wrong
 
-### The five failures, and the one route left
-
-Every attempt has died on the **original's** side, each for a different reason,
-and naming them is the useful part:
-
-1. **Lamp centroids** - brightness-sensitive, and non-linear in the very
-   quantity being measured (`1.740`/`1.191`/`1.067` at model scales
-   `1.0`/`0.75`/`0.5625`).
-2. **Hue silhouette** - the craft's blue hull is not separable from
-   blue-tinted tunnel geometry; every threshold runs to the crop edge and a
-   connected-component pass merges hull with background.
-3. **Saturation** - at boost ticks the wingtip region is clipped to white in
-   both frames.
-4. **Photometric indistinctness** - at pre-boost ticks the wingtips are
-   geometry rather than lamps, so a luma profile finds trackside lighting
-   instead. Caught by a control: the same outer runs appear in *our* frame with
-   the ship removed entirely.
-5. **Frame-to-frame feature drift** - the red-dominance detector above.
-
-**The one route not yet tried is a red-hulled team**, and it now has a clear
-rationale rather than being a guess. Our side needs no hue rule at all - the
-ship-free difference gives an exact silhouette on any hull colour. **Only the
-original's side needs the craft separable from the track**, and that is exactly
-what an `AG_Systems` or `Piranha` hull on a blue-tinted circuit buys. The
-earlier caution that a red hull would swallow the red lamps does not bite,
-because the measurement is no longer lamps - it is silhouette width.
-
-**That needs a new emulator capture**: the same pad approach on a red-hulled
-team, `psp-trace.py --camera`, screenshots every two ticks, at a **pre-boost**
-tick. Verify from a render that the team really is red-hulled before spending
-the emulator time.
-
-**Why this one is trustworthy on our side, where four attempts were not:**
-
-- **Our side has no threshold at all.** `Ship.vex`'s `glowingShape` node has an
-  exactly symmetric outermost vertex pair at `x = +/-2.7425, y = -1.0334,
-  z = -2.1890` (model space, after the node's transform chain), which projects
-  through the camera pose recorded in `pad0-boost.csv`. Two known vertices, no
-  centroid, no brightness dependence. **Cross-checked by a second, independent
-  route**: differencing our render against a ship-free render of the same pose
-  gives the exact silhouette with no hue or threshold involved, and it measures
-  **196 px** against the projection's **195.0** - agreement to 0.5 %. The
-  wingtips are the widest points of both `glowingShape` and `shipShape` (both
-  span `x = +/-2.742`), so the two should coincide, and they do.
-- **The original's side is threshold-stable.** Its outermost red wingtip points
-  measure `403.5` and `553.6` px, separation **150.1 px**, and sweeping the
-  red-dominance threshold from 40 to 90 moves it by **0.3 px**. That is the
-  property the centroid metric fails.
-
-**Two traps that produced the earlier wrong numbers, both worth knowing.**
-
-- **There are two red feature pairs on the hull, not one**, and they are 60 px
-  apart in separation. The *inner* pair - rectangular markers on the upper
-  wings - reads ~93 px; the *outer* pair, the actual wingtips, reads ~150 px. A
-  "largest red cluster" detector locks onto the inner pair and a "extreme
-  clusters" detector onto the outer, which is exactly why two passes over the
-  same frame reported 92.9 and 151. **Take the extreme clusters, and look at
-  the frame once to confirm which pair you have.** The `1.43x` recorded earlier
-  in this file came from the inner pair and is withdrawn.
-- **The camera node stores its rotation transposed**, which this file already
-  warned about, and a projection that uses the trace's `cam_*` rows directly
-  lands on empty track. The check that catches it costs nothing and should be
-  standard: sample our own render at the predicted pixels against a ship-free
-  render of the same pose, and if neither pixel differs, the projection is
-  wrong. A first attempt reported `159.90 px` from the untransposed basis and
-  is withdrawn.
-
-**What is still not recovered is the mechanism.** `g_craft_scale`
-(`0x08ab0e1c`) is confirmed read by `Craft_Construct_q` for the collider and the
-initial body height, and the craft world matrix's rows were live-confirmed
-carrying `0.75` - but the *second* application site was searched for and not
-found. So squaring the constant in `ship_model_matrix` would be applying a
-**measured** factor, not a recovered one, and the code should say so if it is
-done. `ship_model_matrix`'s doc comment currently records the opposite decision -
-"the confirmed constant, applied once, with the unexplained remainder left
-visible rather than cancelled" - which was the right call on the evidence
-available then, because that evidence was a metric that "establishes 'too big'
-and nothing finer". It no longer is.
+- **`OAG_SHOT_DISPLAY` is not optional.** Without it `niri_shot.find_window()`
+  looks for a niri window, does not find PPSSPP on the Xvfb display, returns
+  `None`, and `psp-trace.py` `parser.error`s out before capturing anything. The
+  recipe that removes the off-canvas trap structurally is a `960x544` Xvfb
+  (exactly 2x PSP, aspect-exact) with PPSSPP fullscreen on it, so `import
+  -window root` *is* the game window.
+- **Placing a craft on a pad has two silent failure modes.** `just pads`'
+  `--before N` approach points are on the **course ring** and a pad can sit ~8
+  units to the side of it (pad 0 on Talon's Junction does), so an on-ring
+  approach drives *past* the pad - walk back along the **pad's own push axis**
+  instead. And `--settle 8` is not enough: the hover shoves a freshly-placed
+  craft several units up and it flies over the plate with `grounded = 0` for the
+  whole run. `--settle 30` at 110 units/s settles it. **Check `grounded` and
+  `boost_timer` in the capture before believing it** - two attempts produced 140
+  clean-looking rows with `max boost_timer = 0.0`.
+- **A posed frame lies unless every input is pinned.** `--pose-intensity`,
+  `--pose-speed` and `--pose-boost` exist because intensity ramps at only
+  `0.25`/s, so a teleported capture enters a pad at `0.1292` while
+  `force_boost_state` saturates ours. Posed frames also had **no trail at all**
+  until `--ticks` pushed the ring's ten samples, so the element carrying most of
+  the exhaust's colour was simply absent from every comparison before that.
+- **Check for strobing before believing a still frame.** A texture whose `v`
+  axis alternates hard between two colours is a high-frequency response to small
+  normal changes, and the UVs regenerate every frame from a pose that jitters
+  under the hover spring. Measured: consecutive-tick RMSE in the plume region is
+  within 0.003 of the pre-texgen build on every pair.
+- **A two-heading A/B is not a heading A/B unless the poses match.** The first
+  attempt compared frames at 440 and 85 km/h, so the hover spring had the craft
+  at different pitch and roll.
+- **The plume measurement has been retracted five times and the instrument was
+  the cause every time.** A `luma > 60` gate makes every row hostage to a global
+  brightness change; its replacement normalises chroma by the pixel's own
+  luminance and is immune to one by construction - but the **fifth** cause was
+  outside the mask entirely: every one of those revisions normalised by craft
+  span, which the projection finding makes 12-25 % wrong and *tick-dependent*,
+  so it does not divide out. **The blend table needs a sixth taking**, at a
+  `--camera-fov` matched to the capture's speed column. **What survives the sixth
+  taking, and what does not, splits on one line: does the column compare two of
+  *our* renders, or one of ours against the original's frame?** All three builds
+  in that table render at the same `--pose-tick 62`, so they share one
+  whole-frame zoom and any ratio between them cancels it exactly. That keeps the
+  ordinal results - generated coordinates beat authored ones on extent and
+  orange count, and `One`/`One` is the worst build on every column. It does
+  **not** keep the `b - r`-closest-to-the-original leg, or the 26 %-dimmer
+  reading, or anything else stated as a distance to the original: a zoom shifts
+  which of the original's pixels fall inside the mask, and no ours-vs-ours
+  cancellation reaches that. Note the cancellation is also only good while the
+  error is a pure whole-frame zoom and the poses match in speed - an absolute
+  pixel count compared across two of our own frames at *different* speeds moves
+  too.
+- **A matched-pose *reference* frame from the emulator is still unobtainable
+  here**, after three routes failed: `import -window root` on Xvfb returns a
+  blank frame (PPSSPP's GL window never composites into the root X sees), the
+  debugger's `gpu.buffer.screenshot` answers `Could not download output` at a
+  CPU breakpoint on the GL backend, and `--shot-every` inherits the first
+  failure. **The untried route is `PPSSPPHeadless --graphics=software`**, whose
+  framebuffer lives in RAM.
+- `*batch & 0x0020` is **set** on every plume batch, so the original culls all
+  32 across the 8 teams, while **our renderer sets `cull_mode: None`
+  everywhere** deliberately (strip winding is reconstructed rather than read).
+  We draw back faces the original discards, and under a normal-driven texgen
+  those shade differently rather than merely overdrawing. Not acted on: the
+  no-cull decision is renderer-wide, and we are already *under* the original's
+  extent, so removing geometry moves the wrong way.
 
 ## Open threads
 
-Each is a real, named next step. The Task numbers are the ones the agent passes
+Each is a real, named next step. Task numbers are the ones the agent passes
 used, kept because commits and docs cite them.
 
 | Thread | What is known, and the next step |
 | --- | --- |
-| **Selectable camera perspectives landed, and they closed the 3/4 mystery - but two recovered chase behaviours are still unported** | **2026-08-08.** The three views the original cycles with SELECT are implemented, cycled with the same button, and persisted to `[graphics] camera_view`; see [camera.md](docs/ghidra/functions/psp-pulse-usa/camera.md)'s second 2026-08-08 pass for the evidence. **The one thing to carry forward is what was recovered and deliberately *not* implemented**, because both are visible differences and both are cheap to lose track of. (1) **The chase eye's distance from the look-at point is rigid in the original** - `Ship_UpdateCameraRigs` springs the eye and then re-projects it onto the sphere of radius `|anchorPos - anchorLook|` about the aim point, so the spring *rotates* the eye and never moves it nearer or further. Read at instruction level **and** independently measured: the 150-tick capture holds the eye at 11.6 units while the along-forward component moves 10.9 -> 9.5, which a freely sprung eye cannot produce. `oag_render::camera::chase::Chase::advance` springs the position freely. (2) **`pos_height` is applied *after* the spring**, so the vertical offset is rigid; `chase::anchor` folds it in before. Fixing either rewrites `Chase::advance` and several of its tests, which is why they were left out of a change about a button. Both are recorded in `chase.rs`'s own module doc as well, so the next person to touch that file reads them without opening the docs tree. **Also carried forward, unresolved**: `<InternalCamera headtilt>` is parsed and **not applied** - the original rolls the view's up vector by `side * craft[0x844] * headtilt` and `craft+0x844` was not identified, so the sign and scale of the lean are unknown; identifying that one field is the whole remaining work. And `craft+0x790`'s **second** write site (in the internal rig's update, `dot(forward, velocity) * 0.075 + craft[0x7c]`) means the fov-shake section's "written only at `0x0881c2b4`" is wrong; the obvious next check is whether the internal rig's update runs at all while an external view is selected, which would explain why a write breakpoint reported one pc every time. |
-| **Lead for the craft-model-too-large question: the ratio is close to `0.75` squared** | **2026-08-08, arithmetic on someone else's measurement rather than a reading - treat it as a lead, not a finding.** The reported wingtip-lamp separation is 189.3 px ours against 108.8 px the original's, from the original's own recorded camera pose, ratio **1.740**. `1 / 0.75**2 = 1.7778`, which is 2.2 % away - within the pixel-centroid noise of a 108.8 px measurement. One `0.75` is accounted for: `g_craft_scale` (`0x08ab0e1c`) is read by `Craft_Construct_q` on the three `<Misc>` hull dimensions on their way into the collider and on the initial body height, and [exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md) separately live-confirmed the craft world matrix's rows carrying `0.75`. **If both are real and independent, the drawn mesh is scaled twice in the original and once nowhere in ours**, which is exactly a factor of `1/0.5625`. What was *not* done: finding the second site. `Ship_LoadModel` and `FUN_0884dab4` are the two calls in `Craft_Construct_q` that could set a node scale and neither was opened, and the reciprocal `0x08ab0e20` (`1.3333334`) is read only by the two hover springs, so it is not the second factor. Checked and **not** the answer: nothing in the `<ExternalCamera*>` blocks or the camera path carries any scale beyond `g_craft_scale` itself. |
-| ~~**The boost plume's two wedge batches decode to a single-point UV - our decode, or the authored data?**~~ | **Closed 2026-08-09: the authored data, and it does not matter, because the original never reads it.** A transparent batch's texture coordinates are *generated* - `Mesh_BeginTransparentPass` sets `TEXMAPMODE` uvgen 2 and nothing in the batch loop undoes it - so the single point was a real authored value that the GE discards. What made it look like a decode bug is that it was, by coincidence, the one degenerate sample: `u` at texel column 0, the only column of `pulse_boost2_ADD` that is flat down every row. See the 2026-08-09 section above. |
-| **The per-material `Gu_TexScale`/`Gu_TexOffset` transform is real and unported** | **2026-08-08**, found while chasing the plume and worth its own line because it is a general renderer feature, not a plume bug. [`texture-animation.md`](docs/ghidra/functions/psp-pulse-usa/texture-animation.md) carried `FUN_089271cc` at confidence 45 as "the most likely home of a general per-material texture transform"; **its gate is now read at instruction level at three call sites in `FUN_089307b4`** and the page is at 75: `if ((*(u16 *)(*(int *)(mesh + 0x5c) + material_index * 0x14) & 0x10) != 0)`, choosing between `Gu_CallList(*(int *)(mesh + 0x64) + index * 0x18)` and `FUN_089271cc(*(int *)(mesh + 0x60) + index * 0x40)`, the latter submitting scale from `+0x18`/`+0x1c` and offset from `+0x20`/`+0x24`. So `& 0x10` on a material's first `u16` is the "this surface has a texture transform" bit, and `Data\Ships\<Team>\shipboost.vex`'s material carries `0x212`, which has it. **Still unread: where the block's values come from.** The on-disc material's `+0x0c..0x14` is zero on that ship exactly as it is on every track surface, so the loader gets them from somewhere else. Note this does *not* contradict the live negative on the same page - that measured `Gu_TexOffset` only, and a scale with a zero offset would look identical to it. Nothing renamed: the gate is read but the data path is not. |
-| **Reference frames from the original are unobtainable on this setup, and one route is untried** | **2026-08-08.** A matched-pose comparison against the original needs a frame out of PPSSPP, and three routes failed here. (1) `import -window root` on Xvfb `:97` returns a blank image - PPSSPP's GL window never composites into the root X sees, confirmed independently. (2) `psp-trace.py --shot-every` routes through that same `import` when `OAG_SHOT_DISPLAY` is set, so it inherits (1); it is only the proven path on a **real compositor**, through the niri clipboard, which this machine does not have. (3) The debugger's own `gpu.buffer.screenshot` **exists**, takes `type: "base64"` (not `"screenshot"`, which errors), and needs the CPU stepping - which a breakpoint gives - but then answers `Could not download output` on the GL backend. **The untried route is `PPSSPPHeadless --graphics=software`**, whose framebuffer lives in RAM and should therefore answer `gpu.buffer.screenshot`, at the cost of a fresh boot and menu walk under software rendering. Everything except the grab is already built: `data/scratch/boost-visuals/refcapture.py` places the craft, arms the boost by writing `flare+0xb8` (the field `--pose-boost` models on our side), writes a `--pose-from` CSV from the same stopped frame, and calls the grab. Two operational notes for whoever retries: run every script as `uv run --with websocket-client scripts/...` (plain `python3` dies on the missing `websocket` module), and if the emulator is stuck in **`Race End Photo`**, neither `psp-drive.py restart` nor `menu` can leave it - press `cross`/`start`/`circle` in a loop for about five rounds to walk out through `EndRace Results`/`Rewards`/`Menu` to `Main Menu`. |
-| **Task #7: PRESS START does not fade in or throb, and the numbers to make it are unmeasured** | **2026-08-08, the named residual of the intro -> `Show Logo` transition, and the reason that defect is only *partly* closed.** The black-frame half is fixed (see the backdrop-continuity row below); this is the other half, and it is why a user may still report the handoff as not matching the original. `BOOT_PRESS_START` carries **`pulse="true"`** and **`delay="1"`** in `Skin.xml` on both PSP discs and on the PS2, so on hardware the line fades in about a second after the screen appears and then throbs. Ours pops on at once, at full opacity, and stands still - `frontend.rs`'s `Show Logo` arm has carried a comment saying so for some time. Confidence **90** that the attributes mean fade-in-delay and pulse; what is missing is **the pulse's period and depth**, which no document here states and no capture has measured, and inventing them would be inventing presentation. **Measurement recipe.** This needs the emulator, and it needs a real display - the reason it is parked rather than done: on this machine's DRI-less Xvfb an accelerated window's contents never reach the root framebuffer, so `ffmpeg -f x11grab` and `import -window root` both return uniformly black for PPSSPP *and* for our own window (see the capture-traps rows). Do **not** start a second emulator while another pass owns one; PPSSPP's debugger port is single-occupancy and a second instance silently becomes "secondary instance" with no debugger. On a real display: `just launch-pulse-psp data/images/pulse-psp-eu.chd`, let it reach PRESS START, record the screen, then step frames and read the text's alpha over ~4 seconds. Two numbers come out - the period between peaks and the min/max alpha - and both go straight into the `Draw::Text` colour for that widget. The `delay="1"` second is separately checkable as the gap between the logo appearing and the text first showing. **Do not measure it off our own build**: ours is static, so a capture of it would confirm nothing. |
-| **Task #8: `escape` -> menus still shows 1-3 black frames, the fourth instance of the backdrop-seeding bug** | **2026-08-08, found while closing the START-press flicker and deliberately recorded rather than fixed** - nobody has reported this transition, and the wind-down said document it. **The mechanism is exactly mechanism (2) of the row below**: `Session::open_menus` seeds the new renderer's video planes from the front-end stage's held picture, and on the race -> menus path there *is* no front-end stage, so `seed` is `None`, `Backdrop::shown` starts `None`, and the menus draw their rows on black until the restarted feed produces frame 0. One to three frames. `Backdrop::shown`'s own doc comment in `main.rs` already says this in place, so the code is not silent about it. **Fix shape**, and it is the same shape as the one that closed the boot path: stash a picture on `Session` when a race starts - beside the playhead, if the loop-phase question below is settled at the same time - and hand it to `open_menus` so it can seed the planes and `shown` before the first menu frame. Nothing new is needed; `held_backdrop`/`HeldFrame` and the seeding code already exist. **Settle it together with the loop-phase judgement call**, which is the open question in the same area: that the loop *restarts* on this path is a deliberate reading (`FE Screen` torn down for a race and rebuilt with its `autostart` movie starting again) that nobody has measured against the original; that it shows **black** first is not deliberate and the original would show frame 0 whichever way the phase question goes. **Verification recipe**, since neither `--screenshot` nor `--menu-page` can see this path: run the windowed build under Xvfb with a temporary probe printing `Backdrop::shown` and what `take_upto` returned per frame, force a race and then `escape`; before the fix the first menu frames read `take=None shown=None video=TRIMMED`. Dump frames to `data/cache`, never the session scratchpad, and arm the dump **on** the defect rather than over a frame range - a range-gated readback slows the loop enough to hide the very timing it is meant to catch. |
-| **PS2 sky and pads drew untextured because `build_sky`/`build_pads` never took the external texture set** | **2026-08-07, from a user report: the skybox is white on Moa Therma with PS2 assets.** Root cause was a leftover `external: None` hardcoded into `oag_render::mesh::build_sky` and `build_pads` - the two builders beside `mesh::build_with_textures` (the track's own art mesh) that never got the same external-set argument added when PS2 support landed for ships and tracks (see [`ps2-texture.md`](docs/formats/ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name)). A PS2 `.vex` embeds no texture block at all, so every material in the `Skycube` and `Speedup Pad` classes resolved to `None` and drew white/untextured - the sky worst of all, since it has no lighting to darken the fallback. **Fixed**: both functions now take the same `external: Option<Vec<Option<ModelTexture>>>` `build_with_textures` does; `oag_game::race::load` resolves the PS2 texture set once against the track model and passes the identical resolved `Vec` into `build_sky` and `build_pads` too, rather than each doing its own `read_preceding` - correct because a `Skycube`/`Speedup Pad` material's texture ordinal indexes into the *whole file's* `Texture` nodes, the same space the track mesh's own materials index into, not a per-class one. `oag-view`'s `--textures` flag (previously documented as skinning only `--mesh`) now also applies to `--sky` and `--pads`. Verified with real before/after screenshots on `03_Track` (Moa Therma, the reported circuit) - solid white sky before, a real sky with clouds after - and checked for regressions on the two circuits whose PS2 texture set is short 1-2 slots (`02_Track`, `12_Track`: both skies draw fully textured, the missing ordinals aren't among the sky's own) and on the PSP path (`external` stays `None` there by construction, unaffected). `just`, `cargo nextest run --workspace` (1314 tests) and `just check-docs`/`just check-deps` all green. Docs updated: [`skycube.md`](docs/formats/skycube.md#open) and [`ps2-texture.md`](docs/formats/ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name). **Not yet done**: the other 30 PS2 circuits weren't screenshotted individually, only reasoned about from the same shared texture-set resolution that already covers the track model - worth a quick visual sweep if anyone doubts it generalises. |
-| **PS2 menus drew in the 5x7 fallback font, because a PS2 `.fnt` has no atlas in it - closed** | **2026-08-08, from a user report: PS2 menu fonts do not render.** They rendered, in the built-in 5x7 approximation, and the boot report said so on every run: `font Data\FE\Fonts\pulse_text.fnt unavailable (need at least 48 bytes, got 0)`. Not a missing entry - all five `.fnt` names hash to real entries in `WADS2.WAD`. **A PS2 `.fnt` is metrics-only**: its `+0x18` atlas offset equals the file's own length, so `Font::parse` reached the atlas block, found nothing there and failed, exactly the way a truncated file would. The glyph sheet is the **next entry in the directory** - the mirror of the texture set that *precedes* a model - as a `PSMT4` PS2 texture, and those five blobs are precisely the five that [`ps2-texture.md`](docs/formats/ps2-texture.md) had recorded as "recognised but not decoded", so this closed two threads at once. **The `PSMT4` unswizzle was derived, not recalled**: it is `psmt8_offset` with `PSMT4`'s page (128x128) and block (32x16) geometry, whose only new fact is that `PSMT4`'s block grid is the transpose of `PSMCT32`'s within a page - and that transposition is not a coin-flip between two readings, because without it the mapping is not a bijection and a unit test kills it before any pixel is looked at. **Fixed**: `ps2_texture::psmt4_offset` plus `Layout::Psmt4` support in `parse`; `fnt::Metrics` split out of `Font::parse` with `Font::with_atlas` for the external case; `pulse::Archives::read_following` beside `read_preceding`; and `pulse::Archives::read_font`, which tries the embedded atlas first so the PSP path needs no platform test. `boot::load_font` and `race::hud_font` both go through it, so the in-race HUD fonts load on the PS2 too. **Traps worth keeping**: the PS2 palette is on the GS's 0-128 alpha scale and has to be doubled, or every string draws at half opacity - a screenshot catches that and a decode test does not; and `Pulse_14`/`Pulse_20` bake an outline in on the PS2 where their PSP counterparts do not, so anything wiring those two needs the `luma_at` body/outline split. Verified with before/after screenshots of two PS2 menu pages (`--menu-page main`, `--menu-page options`), a PSP page that is **byte-identical** before and after, and PS2 and PSP race frames. **`just` is not green, and not because of this**: `fmt-check` and `lint` fail on `crates/view/src/draws.rs` (`needless_range_loop` at line 37), `crates/view/src/main.rs` and `crates/game/src/main.rs`, three files another agent had open mid-edit in the same tree and this pass did not touch - deliberately not reformatted. `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` are clean on `oag-formats`, `oag-assets` and `oag-game`; `cargo nextest run --workspace` is 1432 passed; `check-docs`, `check-deps` and `audit-leakage` all green. Both new `#[ignore]`d ground-truth tests were run for real against the disc, as was the whole 5,348-texture PS2 texture survey (all decode now, `refused` 0). Docs: [`fnt.md`](docs/formats/fnt.md#the-ps2-keeps-the-same-five-fonts-and-moves-the-pixels-out) at **90**, [`ps2-texture.md`](docs/formats/ps2-texture.md) `PSMT4` at **93**. **Still open, and not font problems**: the PS2 in-race HUD draws nothing because `Data\XML\TimeTrial_HUD.xml` has no `<code>` dictionary element on that disc and `Data\HUD\Textures\PulseHUD.mip` is not in its WADs; **the PS2's `Show Logo` still draws no text, and the font was not the reason** - the before and after screenshots of that screen are byte-identical. Its screen *does* carry a real `<Text idstring="BOOT_PRESS_START" font="Menu">` widget, and the PSP's equivalent draws `START-Taste drucken` correctly, so this is a live front-end bug and not a missing string. **The cause is the coordinate space**: the PS2 `Skin.xml` authors to **640x448** (that text is at x=613 y=362, the logo image at y=119) and `oag_game::frontend::SCREEN` is a hardcoded 480x272, so every PS2 widget lands off the bottom right of the viewport. Fixing it means making `SCREEN` per-source and re-checking every rect and pillarbox in `frontend.rs` - **deliberately not done here**, because another agent had that file's neighbours open and it is front-end layout work rather than font work. This is the rest of task #37's "no logo *or text*", now diagnosed. Only `pulse_text.fnt` is wired to the menus - the other four decode and are unused. |
-| **The PS2 in-race HUD drew nothing, for two independent reasons - closed** | **2026-08-08.** Two failures, each of which hid the other, so fixing either alone changes nothing on screen. **(1) Shortening is per file, not per platform.** The PS2's `Skin.xml` is shortened but its five `Data\XML\*_HUD.xml` layouts are plain `<?xml`, and `race::load_hud` called `fexml::expand` unconditionally - which refuses a blob with no `<code>` dictionary, so the layout never parsed and the whole HUD went with it. New `fexml::text` decides from the blob's own first bytes via the existing `is_fexml`; `expand` keeps refusing, and its test still asserts that. `loading.rs`'s tips read had the same unguarded call and got the same fix. **(2) The atlas is not under the name the layout asks for.** `Data\HUD\Textures\PulseHUD.mip` hashes to `57d37d8c`, which is in neither PS2 archive, and **60 spellings** across path shape, case and extension miss all 7,393 hashes on the disc; the directory-position rules that solve PS2 models and fonts do not apply either, since the `*_HUD.xml` entries sit in a run of XML with no texture near them. **Found by the picture instead**: decode the PSP `.mip`, reduce to a silhouette (one bit per pixel, is this texel's palette entry transparent - a measure that survives the two builds ordering their palettes differently), and compare against every same-shaped PS2 texture. `PulseHUD` -> entries 3518 **and** 3583 at 0.9999 against a 0.7085 runner-up (a real duplicate, mirroring the PSP shipping it twice, not an ambiguity); `pulse_logo` -> 3421 at 0.9946; `pulse_assets` -> 3420 at 0.9999. All three decoded and looked at. A fourth, independent agreement for the atlas: the PS2 layouts' `U`/`V`/`TxtrWidth`/`TxtrHeight` boxes are **identical** to the PSP's, so both discs index the same 256x256 arrangement. Recorded as hashes in `oag_assets::pulse::PS2_IMAGES` with `Archives::read_image` (declared name first, so the PSP path is untouched by construction) and `Archives::read_hash`; `sprite::Sheet` now decodes either disc's texture format. **This also closed the logo half of task #37 for free**, since the front-end sheet goes through the same read. **Confidence 90** - exact shape, 0.99+ silhouette against a field below 0.71, visual confirmation, plus the UV agreement; short of 94 because the mapping is recovered rather than declared. **How the game resolves these names is unknown** and a repeated 3,656-byte blob beside the HUD assets that looked like a name table was checked and ruled out (none of its 914 words is an entry hash). **What this does NOT fix, deliberately**: the HUD still lands in the wrong place, because the PS2 authors to 640x448 - `SpeedBarBg` is x=8 y=16 w=224 h=43 against the PSP's x=6 y=10 w=168 h=26, exactly 640/480 and 448/272. That is the `SCREEN` thread, owned separately; the completion bar here is "the layout parses and every sprite resolves to real art", which it does (10 sprites, 25 labels, 2 models, atlas 256x256 8bpp). Verified headlessly on both discs; the PSP race frame's only differing pixels are the exhaust plume, another agent's concurrent change, with every HUD region bit-identical. Docs: [`hud.md`](docs/ui/hud.md#the-ps2-ships-the-same-hud-and-hides-both-halves-of-it) and [`ps2-texture.md`](docs/formats/ps2-texture.md#the-front-end-and-hud-images-are-not-under-the-names-their-xml-uses). Pinned by `crates/assets/tests/ps2_image_ground_truth.rs`, which re-derives the match rather than asserting the constants against themselves. |
-| **Audio: both discs make sound; movie audio and race SFX are what is left** | **2026-08-07.** M5's audio work opened. Phase 0 landed three things. **The `.bnk` self-name field is an abbreviation, not a truncation** - this page's own name-mining premise was wrong, and so was `psp-audio.md`'s: `FRNTEND` is not a prefix of `frontend`, `gentrak` is not a prefix of `generaltrack`, so the documented exhaustive-completion search could never have worked. Twelve bank paths came out of `BOOT.BIN` strings instead, hash-confirmed against `Data.wad` on **both** USA and EU discs. **`PRERACE.WAD` is not "unknown, mostly empty"**: it is the same count-first container as `PS2MUSIC.WAD`, parses with `ps2_music` unchanged, and holds 32 dual-mono PCM voice clips (L==R at exactly 1.0000, all 32; chain closes to the byte) at **44,100 Hz**, and they are **the same 32 master recordings the PSP ships as ATRAC3plus** - a 32-for-32 cross-correlation bijection at mean +0.99931, plus a pad of exactly 44,100 silent frames at each end of every clip. Confidence 94, and six clips carry a single edit difference. `docs/formats/ps2-voice.md`. **Phase 1 is done and the game makes sound.** `oag-audio` (`Mixer`/`Output`/null backend, 32 voices, two buses) plus `crates/game/src/audio.rs`, a Music Volume setting and an AUDIO menu page. The PS2 soundtrack plays, and is verified **sample-exact rather than merely audible**: `--dump-audio` renders at 48 kHz so the resample step is exactly 1.0, and the WAV's data chunk is byte-identical to `PS2MUSIC.WAD` five seconds in (`16 fc c7 fb e0 fb bb fb ...` on both). **`--dump-audio` is the audio counterpart of `--screenshot` and is the only end-to-end check this headless environment can run** - it is refused without `--screenshot`, because the windowed path has no end and the buffer would grow unbounded. **Phase 2 landed the ATRAC3+ decoder, so the PSP plays too.** `crates/game/src/at3.rs` shells out to `ffmpeg` per [ADR-0019](docs/architecture/adr/0019-atrac3plus-out-of-process.md), caching into `data/cache/audio/` keyed by FNV-1a over the exact input bytes (`oag_core::hash::StateHasher`, **not** `RandomState` - a per-process seed misses the cache every run). The music is `Data\Music\FEMusic\frontend1.at3` (`Data.wad` 474), found by expanding the runtime template at `0x08a88e94`; entries exist for 1-8, none for 0, and **which of the eight belongs to which menu is not established**, so the first plays. Verified by the cache file being byte-identical to a hand-run `ffmpeg`, and the USA disc hitting the EU cache without re-decoding. **The transcode of one front-end track is 77 ms** (cold boot 0.497 s vs warm 0.421 s, for a 29.6 s track). **Do not generalise that figure, which this page did and was wrong to**: it is audio-only and on-demand, the two assumptions that make it meaningless for the cost of transcoding everything. Measured properly on 2026-08-08: all 93 ATRAC3plus streams take **5.5 s** and produce **0.70 GB** of PCM, but `Intro.PMF` alone is **57 s** (1200 frames of 480x272 at 48 ms/frame, AV1 lossless), so all ~13,000 PSP movie frames are **~10 minutes**. Video is ~99% of the cost, and a prefetch-everything mode genuinely does need a loading screen with progress. **`--prefetch` now exists** (`crates/game/src/prefetch.rs`, opt-in, default stays lazy at 0.48 s boot): a full PSP run is **521 s**, 111 assets, 12,993 movie frames, +267 MB video and +663 MB audio in `data/cache/`. A second run is `0 to convert, 115 already cached` in 0.3 s. **Content-keyed caching absorbs more than resumability**: 111 planned items make only **88 `ffmpeg` invocations**, because 23 assets are byte-identical duplicates within and across archives (`67d718ad` is item 1 of `Data.wad` and item 110 of `FEData.wad`), so a duplicate costs one read rather than one transcode. Three traps it had to avoid, each recorded in that module: compressed entries must be filtered **before** peeking or `Archive::peek` falls back to a full decompressed read of all 7,200 LZSS entries in `WADS2.WAD`; the worker must spawn **after** `boot::load`, which transcodes the intro and backdrop itself, or two `ffmpeg` processes race one cache file; and `Drop` must not join, or every early return in `main` becomes a ten-minute silence. **The measuring trap, hit once here**: the 260-frame dev/pub reel encodes at 6 ms/frame because it is a near-static logo, which extrapolates to 1.3 minutes and is 8x wrong. Time real footage. Three traps recorded: `Archive` cannot stream `PS2MUSIC.WAD` (count-first container, not a WAD - streaming goes through `DiscImage::read_entry_range`); ffmpeg's `mpegps` demuxer cannot see a PMF's audio track at all, so `pmf::demux` stays load-bearing; and ffmpeg logs `non monotonically increasing dts` at **error** level once per ATRAC3+ block, 638 lines for a 30 s track, so `-loglevel error` cannot filter it. **Next**: movie audio and A/V sync. The 52-byte RIFF wrapper for bare frames is implemented (`at3::riff`) and has no caller yet; the clock rule is audio-clocked when a movie has an audio stream, tick-clocked otherwise, because `Backdrop.PMF` has none and plays most. **The blocker for race SFX is unchanged and is research**: per-sound boundaries inside a race `.bnk`. `frontend.bnk` degenerates usefully and the other banks do not, so menu sound is reachable and engine/weapon sound is not. Two untried angles, cheapest first: name the cue-string lookup that the 37 `FUN_089392b0` callers feed, or back-walk from `__sceSasSetVoice`, which is where a waveform address and length finally reach the hardware. Plan: `~/.claude/plans/investigate-plan-to-add-dreamy-toast.md`. |
-| **Planned input scripts: `oag-trace plan` works in our simulation, has never been replayed into the emulator** | **2026-08-07.** New `oag-trace plan` subcommand plus `crates/trace/src/plan.rs`: a pure-pursuit controller run against our own physics through the new `replay::drive_with`, whose per-tick recording of what it pressed *is* the emitted input script. Motivating case done: from the emulator's Talon's Junction Time Trial start `(6.07, -50.07, -196.10)` it crosses speed pad 0 **0.09 units right of the pad's centre line at 110.8**, inside the pad's own trigger box from tick 159, in 221 ticks - committed as `verification/scenarios/talons-junction-pad-0.inputs`, and reproduced frame-for-frame by `oag-trace drive --start`. `scripts/psp-autopilot.py` gained `--gate/--gate-dir/--gate-after` for the same target driven *live* off emulator state. **Next step is the only thing that settles it**: `psp-trace.py --script verification/scenarios/talons-junction-pad-0.inputs --script-lead 2` and compare against `plan --trace-out`. Design, evidence and the full untested list: `docs/tools/autopilot-planning.md`. Watch the start-pose trap - `drive`'s default `Start Position` on `16_Track` is ~138 units behind the time-trial line. |
-| **M6 authored lighting: `AmbientLight`/`DirectionalLight` registered, `PointLight` genuinely isn't, and no hardware light slot is enabled in the mesh-draw functions this pass read** | **2026-08-05.** First real exercise of the target-of-record flip below, in `/psp-pulse-eu/BOOT.BIN`, cross-verified against `/psp-pulse-usa/BOOT.BIN`. Format decode is done and validated (`docs/formats/lighting.md`, `crates/formats/src/lighting.rs`). Ghidra: `AmbientLight_RegisterClass` (`0x0892d960`, 90) and `DirectionalLight_RegisterClass` (`0x08934fc8`, 90) found and cross-verified on both binaries; `PointLight 0x132` has **no** `Vex_RegisterClass` call site on either binary - all 46 sites on each read individually, a counting argument, not an inference. **The bigger finding**: following `Gu_Ambient`'s callers instead of the (unreachable - see below) per-class init functions found `Mesh_ApplyMaterialLighting` (`0x0890cea8`, 78) and `Mesh_ApplyShinemapReflection_q` (`0x0890d8d4`, 55, `_q`), the two real ambient consumers in the mesh path - both read ambient as **one flat global RGB triple**, and both **explicitly disable all four `GU_LIGHT0..3` slots** even in the branch where `GU_LIGHTING` is on. All seven sibling display-list-builder functions were read too; none enables `0xb`-`0xe` either. This refutes the premise this pass was opened to test (`13_Track`'s 8 authored lights against 4 hardware slots implies a selection function) - the evidence found says hardware per-light GU lighting isn't used in the mesh draw path at all, not that a selector is hiding. **This changes M6 Stage 3's design** (`/home/topaxi/.claude/plans/polymorphic-imagining-whistle.md`'s `GpuLight; 4]` slot array is premised on hardware slots being used somewhere) and was surfaced to the user before touching `oag_render`, per the plan's own stated policy on scope changes. Full evidence: `docs/ghidra/functions/psp-pulse-eu/lighting.md`. Also recorded there, project-wide rather than lighting-specific: every class's method-table population goes through a compiler-emitted "return &self" stub (`lui/addiu/jr ra`), confirmed on four samples across two binaries - this is *why* the per-class init/bind body can't be reached by following the stored method pointer, not a lighting quirk. | **Settled same day, by live capture: `AmbientLight` never reaches the global.** A PPSSPP capture (headless/Xvfb after an agent's first attempt spawned a visible window - see the `ppsspp-debugger.md` row below) read the ambient triple at five points across two tracks with sharply different authored colours (Talon's Junction `(0.169, 0.193, 0.207)`, Moa Therma two instances up to `(0.440, 0.375, 0.348)`); it stayed at the compiled default `(0.2, 0.8, 1.0)` **every single read**, fresh boot through five in-race checkpoints. Not a static-analysis gap - genuinely never written, the strongest evidence tier this project's rubric has. `AmbientLight` joins `PointLight` as confirmed inert on the render side; `material+0x6c` (a second, separate `Mesh_ApplyMaterialLighting` input, gating *whether* its ambient branch runs at all) wasn't live-tested and stays open. A one-step-deeper Ghidra follow found `World_CollectMarkerLists_q` (`0x0887a1c4`, 65 `_q`): a track-load function that collects `DirectionalLight` into a list capped at exactly 4 - real positive evidence, short of a confirmed final reader. **Decision, taken with an advisor consult**: don't chase `World_LoadTrack` (1,228 instructions, the same shape as the self-address-stub detour that already cost a session); one breakpoint at the call site reading `world+0x40` live is more decisive - dispatched, and it came back decisive: **9 breakpoint hits during one Talon's Junction (`16_Track`) load, the primary `World_LoadTrack` call site firing once with `$a0` (world pointer) `0x08f19080` and three independent count fields - `+0x3c` `AmbientLight` 1, `+0x40` `DirectionalLight` 3, `+0x4c` wopoint 21 - all three matching `oag-view --nodes` ground truth on the disc exactly.** `DirectionalLight` is not inert like the other two: its collection is live-confirmed correct, real per-track data. Renamed `World_CollectMarkerLists` (confidence 65→85, `_q` dropped) on the strength of that match. What's still missing is any downstream reader of the list it builds - real, bounded follow-up, not closed out with the other two classes. `+0x44`/`+0x48` (two more count fields the function sums but never writes) read `0` on this one track, inconclusive either way. **Stage 3 still does not build a GPU rig**: no mesh-draw function this pass reached ever enables a `GU_LIGHT0..3` slot, so even a confirmed `DirectionalLight` reader would consume the list some other way, not through hardware slots - the roadmap's `AmbientLight`/`DirectionalLight`/`PointLight` line stays `[~]`, reworded to reflect `DirectionalLight`'s different status from the other two. Two corrections the capturing agent surfaced: Talon's Junction is `16_Track`, not `13_Track` as this thread's own task framing said (an earlier `13_Track` mention in this row was about `PointLight`'s real cluster, which is correct); and EU's `g_state_machine` is not at USA's `0x08b31784` - the Ghidra-visible EU address returns `Invalid address` live, so EU menu walks need screenshot-based navigation under Xvfb, not USA's state-name polling. **Two more passes (one live capture, one broader Ghidra sweep, both dispatched in parallel and time-boxed) converged on a negative result for the reader search specifically.** The live capture dumped a real `DirectionalLight` node in full: `+0x04` class stub, `+0x44` class id `0x131`, `+0x60..0x6c` a unit direction vector, `+0x70..0x7c` the documented `{r,g,b,intensity}` payload - and one ambiguous touch from `FUN_0890ed84` at `node+0x90`. The Ghidra sweep retired that touch as an out-of-bounds artifact: `DirectionalLight_Construct`/`_Init` (`0x08934d94`/`0x08934cb0`, 88/85) and `AmbientLight_Construct`/`_Init` (`0x0892d7ec`/`0x0892d708`, 88/85, newly named) show the real object is `0x80` (128) and `0x70` (112) bytes respectively - both end exactly at their own payload, `+0x90` is 16 bytes past `DirectionalLight`'s real end. The same sweep exhaustively checked `DirectionalLight`'s class stub (`0x08a6b35c`): **exactly 5 references in the whole binary, all read, no consumer among them.** Every sibling display-list function and `FUN_0890ed84` itself (one hop) also checked clean. **Genuinely converged, not abandoned**: the only path left unexplored is `World_LoadTrack`'s own 1,228 instructions traced directly, which this thread has now judged not worth it twice given known `search_instructions` tooling blind spots on that function. Bonus finding along the way: `FUN_08a6b5bc`/`FUN_08a6b5c8` are World/Scene container class stubs, not lighting-related - recorded so a future pass doesn't re-open them expecting a lighting connection. The runtime direction vector is new, useful evidence for `docs/formats/lighting.md`'s open rotation-vs-translation question even though the reader search itself came up empty. Full account: `docs/ghidra/functions/psp-pulse-eu/lighting.md`'s "The object itself" section. |
-| **`apply-ghidra-names.py`'s default run silently skipped four of five binaries' `names.tsv`, `psp-pulse-eu` included** | **2026-08-05, found while writing up the row above.** `scripts/apply-ghidra-names.py`'s `DEFAULT_INPUTS` was hardcoded to `psp-pulse-usa/names.tsv` plus `psp-imports.tsv` only - a leftover from before the target-of-record flip below, never updated when it landed. `just apply-names` with no arguments therefore could not replay `psp-pulse-eu` (273 rows, including every rename this session made), `psp-pure-usa`/`psp-pure-eu` (6 each) or `ps2-pulse-eu` (138) into a fresh Ghidra import at all - silently: the script printed "610 applied" and exited 0, with no signal that four other binaries' worth of documented names had gone untouched. This directly undermines the reproducibility guarantee CLAUDE.md calls load-bearing ("a fresh import starts at `FUN_08940d0c` again ... the only thing that makes the database reproducible from the repository"). **Fixed**: a `BINARY_PROGRAMS` map (directory name -> Ghidra program path) drives a default run that applies every `docs/ghidra/functions/<binary>/names.tsv` that exists to its own program, grouped so files sharing a program (`psp-pulse-usa`'s own plus `psp-imports.tsv`) still get one combined duplicate-address check. Explicit positional args plus `--program` still work exactly as before, for one-off single-target runs. Dry-run verified against all five binaries post-fix - `psp-pulse-usa` group unchanged at 610, the other four now visible and clean (`273`/`6`/`6`/`138` applied, 0 failed each). Not run for real against the live bridge in this pass (`ps2-pulse-eu` isn't currently open in the running Ghidra instance, per `list_instances`) - next `just apply-names` (no args) will exercise it live. |
-| **Ghidra target of record flipped from psp-pulse-usa to psp-pulse-eu** | **2026-08-05.** The row directly below this one, and `docs/ghidra/functions/psp-pulse-eu/corroboration.md`'s original framing, call `/psp-pulse-usa/BOOT.BIN` the "primary target" and treat `psp-pulse-eu` as pure corroboration - four sweeps under that policy carried 268 of `psp-pulse-usa/names.tsv`'s 304 names across via fuzzy matching, all still valid and kept as history. Per explicit direction, that policy is reversed going forward: **`psp-pulse-eu` is now the preferred first target for new investigation; `psp-pulse-usa` (and `ps2-pulse-eu` where relevant) are the cross-verification sources.** Rationale: EU is the more complete release - Pulse PSP's DLC shipped on the EU disc only, the USA release never got any, and Pulse PS2 was **EU-only, no USA disc exists**, so `ps2-pulse-eu` was already this project's sole PS2 reference; this keeps PSP's primary target in the same region. `corroboration.md` carries a dated notice at its top recording the same reversal; `psp-pulse-eu/names.tsv`'s header comment is updated to say rows from this date on may be independent derivations at the normal confidence rubric, not just capped carryovers. No ADR conflict - ADR-0005 names `docs/ghidra/functions/<binary>/` generically and never hardcoded a primary target. | First real exercise of this is the M6 authored-lighting Ghidra pass (`AmbientLight`/`DirectionalLight`/`PointLight` - `Vex_RegisterClass` xrefs, payload confirmation, the 4-hardware-slot selection question): search/decompile in `/psp-pulse-eu/BOOT.BIN` first, cross-verify against `/psp-pulse-usa/BOOT.BIN` with `find_similar_functions_fuzzy`/`diff_functions` after naming, document under `docs/ghidra/functions/psp-pulse-eu/`. |
-| **EU discs acquired for Pulse and Pure (`UCES-00465`, `UCES-00001`); the Ghidra project is now folder-organised per binary, matching the region-coded docs dirs** | **2026-08-04.** Closes the inference in `pulse-psp-usa.chd`'s own record (SCEE publisher, `UCES00465` boot tree) with a real disc: `data/images/pulse-psp-eu.chd`, hashed and recorded in `source-images.md`. **Its `BOOT.BIN` is a genuinely different binary from the USA disc's** - 3,844,732 vs 3,854,564 bytes, different SHA-256 - so the "EU build" claim about the USA disc's strings does not mean byte-identical code; nothing has been diffed yet. **User's own hypothesis, unconfirmed**: the difference is mostly networking code, since Pulse's PSP multiplayer used region-specific services. Also acquired the same day, `data/images/pure-psp-eu.chd` (`UCES-00001`, a very early PSP launch serial), pairing with the existing `pure-psp-usa.chd` the same way. **Final Ghidra project layout, one folder per binary**: `/psp-pulse-usa/BOOT.BIN` (primary target, 10,703 functions, `names.tsv`-backed, moved by the user via the GUI, untouched throughout), `/ps2-pulse-eu/SCES_547.48` (also user-moved, 5,234 functions, untouched), `/psp-pulse-eu/BOOT.BIN` (Pulse EU corroboration, 10,671 functions), `/psp-pure-usa/BOOT.BIN` (6,927 functions) and `/psp-pure-eu/BOOT.BIN` (6,934 functions) - all four secondary programs rebased with `set_image_base` from `00000000` to `08804000` to match the primary target's addressing, since **Ghidra's ELF auto-loader does not always place a PSP `BOOT.BIN` at the conventional `0x08804000`** - it uses whatever the ELF's own program headers specify, and these builds' headers all say `0`. Pure's two builds landed close together (6,927 vs 6,934) unlike Pulse's EU import, which is reassuring rather than incidental - see the resolved mess below. Also acquired the same day: two Pulse beta builds (`UCET-00713`, v0.02 and v0.07, both still only in `~/Downloads`, not imported), four Pulse EU DLC packs and seven Pure EU DLC packs (`data/dlc/`). **The two titles' DLC land on opposite sides of the encryption question, checked by reading the actual bytes in both cases**: Pulse's `.edat`-named payload is not encrypted at all (parses as an ordinary `oag-wad` archive; the wrong "encrypted" assumption almost shipped in `data/README.md` uncorrected); Pure's `pi.wad` payload genuinely is (flat 8.0 bits/byte entropy, `oag-wad` refuses it, not reverse-engineered). See `data/README.md`. `just play` now defaults to the EU Pulse disc (`psp-usa`/`usa` for the primary target, `ps2` unchanged). **The Pulse EU import went through a real mess, now resolved**: five separate import/rebase attempts left four stray files across two folders (one of them stuck at only 7,932 functions for unexplained reasons, another the abandoned-but-actually-best 10,671-function analysis sitting in the wrong, pre-rename folder). The user cleaned this up directly in the Ghidra GUI - deleted the weaker duplicates, moved the genuinely-best one into `/psp-pulse-eu/`, renamed it to plain `BOOT.BIN`. **`delete_file`/`close_program` via this MCP bridge could not reliably delete or release a lock on any of the four stray files, reproduced across five attempts on four different files - a bridge limitation, not a retry-fixable issue.** When cleaning up a botched Ghidra import again, do the delete/rename in the GUI directly rather than trying the API repeatedly. | **No diffing done yet.** Run `diff_functions`/`compare_programs_documentation` between `/psp-pulse-usa/BOOT.BIN` and `/psp-pulse-eu/BOOT.BIN` to test the networking-code hypothesis - that is the actual payoff of this import, not yet cashed in. Same opportunity exists for the two Pure builds, with no hypothesis yet to test. |
-| **Frame comparison pipeline: landed, and it settled the fov unit** | **2026-08-04.** One frame of the original and one of ours from the same captured state: `psp-trace.py --camera` records the player camera per tick (the node stores its rotation **transposed** - the one-shot probe in camera.md could not see that; `oag_trace::replay::camera_orientation_of` undoes it), `--shot-every` takes tick-addressed window shots, `just drive place` teleports the craft to a pad approach from `just pads` (memory writes proven, pad boost fires for a teleported craft), and `oag-game --pose-from CSV --pose-tick N` renders our frame from the row's ship *and camera* through a `Race::view()` override. Measured on the way: **the camera fov unit is degrees** (RMSE-minimum of a sweep lands on the authored 60, +/-2 deg, confidence 85 - `race.rs`'s "unrecovered" caveat can be retired to "measured, one ship/view"), **two execution breakpoints cannot coexist on v1.20.4** (only the most recently added fires - the reason `--camera` learns the node address once instead), and the niri clipboard lags one shot behind (now detected, `.stale.png`). Workflow and open ends: `docs/tools/frame-compare.md`. Three deferred follow-ups, none blocking: (1) the fov measurement is one ship, one view - a second team's different authored value plus the internal view closes it fully, about an hour of emulator time; (2) the shot-vs-row phase is bounded at two ticks but not pinned - only a fast-moving per-tick capture can pin it, and only quantitative fast-motion comparison would need that; (3) `place` always writes the basis rows and the `+0xc0` transpose together, so whether the integrator's own post-loop rebuild would cover the transpose alone was never isolated - academic while the pair works. |
-| **Moa Therma's magstrip: closed - the overlay was the track's far-LOD copy, and draw placement now follows the authored section groups** | **2026-08-03, fourth pass, and this one ends in an implementation.** The previous entry left one question: what the engine does with the overlay's pass `0x0021`. The answer is **nothing special - the engine never draws it while racing, because it is not an effect at all: it is a coarse far-LOD copy of the track surface**, and the original hides it with the authored PVS. The chain, each link measured: the overlay meshes live in their own sibling group under one transform whose `section` child is **id 62** (artist name `_59_TRACK_07_LOD`); a `section` node governs its parent's whole subtree - **every one of Moa Therma's 64 sections has exactly this sibling-group shape**, and the rule assigns a governing section to 97-100% of the draw calls of all 40 PSP track files; and **no racing section's mask lists 62** - only four distant vantage sections (2, 11, 12, 51) do, and **no shipped mask names both 62 and a detailed section the copy coincides with**, so the artists authored a LOD swap: from the start valley you see the copy and not the far detail, from the loop the detail and never the copy. Meanwhile the copy's *geometry* sits inside the racing sections' boxes - which is why our geometric draw placement (ADR-0011's rule, validated only as "changes nothing versus culling nothing") could never hide it, and why the z-fight appeared in our renderer and not the original's. **Two changes, both landed**: `oag_formats::pvs::governing_sections` derives the per-node authored section by the sibling-group rule and `DrawCall` now carries its source node, so `oag_render::pvs` places each draw call at its group's single bit (`ALWAYS` when ungoverned - unknown still draws); and **padding now contributes the neighbours' bits, not their masks** - the mask-union padding was the second half of the bug, because two spline hops from the loop sit sections 2/11/51, exactly the vantage sections whose masks pull the copy back in; the craft's own section (26) correctly excludes it. Verified: the loop pose draws the strip's lines smooth and continuous, matching the skip-the-overlay experiment frame; Vertica's trackside barrier panels stop double-drawing the same way (its 8k-pixel PVS-on/off diff is all coincident-copy resolution, nothing vanishes); a follow-up census of coincident vertices across mask-exclusive section pairs shows the pattern on **11 of 14 measured circuits** (only 04 and 10 are clean; 01 has ~25 swap pairs including its own magstrip and road surfaces, Moa has a second region at sections 49/57 besides the loop's 50/62, and 06's is the Ant_rock cliff faces), so the fix applies track-wide, not just to Moa; **and the remaining generic hole is now closed too (ADR-0015)**: the per-frame visible set is a union built for a chase camera the original does not cull to, and while craft and camera straddle a swap boundary (Moa's racing line crosses 51 -> 26 right before the loop; 51's mask shows the copy, 26's the detail) the plain union briefly showed both halves again. `SwapConflicts` recovers the alternative-relation at load - section pairs that are mask-exclusive **and** share >= 4 bit-identical vertex positions (the loop pair shares ~4,900; two weaker geometric tests, box-touch and box-containment, were tried and rejected measured: 155 false pairs on one circuit, and containment cannot tell a stacked copy from a tunnel nested in its mountain) - and `VisibleSet::around` now builds craft-mask, then camera-mask, then padding bits, each later source dropping bits that are alternatives of anything already accepted. Pair counts match the coincidence census exactly on every file (0-25 per track, 04/10 clean), the sibling-group governance is now validated on the **PS2 disc too** (54 files, 92.7-100% governed), survivors drop to ~13-26%, the loop pose renders byte-identical to the pre-swap fix, and the straddle both-halves/filtered assertions are pinned in `far_lod_sections` on real data; **A separate user report at `(-530.4, 7.3, -258.5)` (spline ~32, the sweeping curve by the glass dome) is measured and answered: the road looks rough there because it is authored that way on PSP.** The stretch is `_surface6_1.tga` at **V repeat 39.6** world units - nearly double the canonical 20.4-20.7 - on both encodings at once (445 `0x13b` + 142 `0x139` triangles agree), so neither quantisation nor decode; a PPSSPP screenshot of the same spot (ship parked by the user) shows the same wide soft bands near the craft that our render does, and **the PS2 build maps the same stretch at 29.7** - per-platform authoring, PSP a third coarser than PS2 here. This also explains the old census note that Moa's `0x13b` road median (23.85) sits 16% above every other circuit: stretches like this drag it. Watch for the near/far confusion that bit the first pass: from a distance this stretch's lines *minify* into crisp thin pairs, so judge width only close to the craft; and the follow-up "ours does not draw a smooth arc" resolved by tint probe: the road there is a **patchwork, not a layering** - the stretch under the craft is `0x13b`/f32 (section 52), the stretch across the seam at `z ~ -282` is `0x139`/u8 (section 51), 12 shared seam vertices, and the kinked line lies on the u8 side where one V LSB is 39.6/128 = **0.31 world units** of sideways line step (double the canonical stretch's 0.16, the authored magnification amplifying the authored quantisation). The emulator screenshot's smooth arc is the *f32* patch - to compare the kink fairly, aim PPSSPP at the stretch beyond `z ~ -282` toward the covered section; **the user then aimed PPSSPP at the u8 patch (craft read from the debugger at `(-511.6, 7.0, -235.9)`, matched in ours with yaw 317) and the comparison came back decisive: the emulator draws that stretch's line as a smooth arc where ours draws a hard sawtooth - a difference in renderers, not data - and the mechanism survived every candidate we could test, so it is parked as an open thread.** Eliminated by experiment, one each: not the LodGroup twin (the road here is two two-child LodGroups, #531 and #543, whose coarse children are 45- and 33-vertex copies with every position shared with the detailed child - but `--lod single` provably removes them and the sawtooth stays, on the *single detailed mesh*); not the section system (craft's own section governs the patch); not vertex colours (forced white, band unchanged - it is the sampled texture); not wrap-seam bleeding (a provably-behaviour-preserving clamp-when-in-range sampler variant was implemented, verified active, and changed nothing - reverted rather than kept, since its motivating hypothesis failed); not mip *selection* (forcing `lod_max_clamp` 0 changed pixels but not the band). What `--anisotropy off` does: removes the hard band at distance at the price of mip mush - but the user reports **close-up jagged parts survive even with anisotropy off**, so the fold shows through plain bilinear magnification too. That splits the artifact in two for the revisit: the *distant band* is the filtering interaction unfold-plus-MirrorRepeat targets (it fixes gradients, so it should cure exactly that), while the *close-up jaggies* under pure bilinear are either the fold path's own authored tessellation - check the emulator close up at the fold before chasing, since bilinear-identical means the original would show them too - or something still unidentified that no sampler change will touch. The live hypothesis for the revisit: **the whole appearance is our two sampling enhancements interacting with PSP-authored content** - the road's V mapping mirror-folds hugging edge-texel centres (stored V exactly `1/128` and `127/128`), our renderer *invents* a mip chain (`mesh_render::mip_chain`; the `.vex` embedded textures ship a single level, so the GE most plainly samples bilinear mip 0 always) and layers anisotropic taps on top, and near a fold the tap line integrates the dark rows into a band that traces the fold polyline. PPSSPP under (presumably) faithful settings shows the crisp-smooth look bilinear-mip-0 would give. **Two candidate fixes for the revisit, in order.** (1) **Unfold-plus-MirrorRepeat, the one that could make anisotropy *correct* rather than suppressed**: the mesh authors the mirror by reflecting coordinate values (V runs 1 -> 127 -> 1 across the road), so the UV gradient flips sign at every fold - a derivative discontinuity the filtering hardware has to eat. Detect the fold at decode, rewrite the coordinates to run monotonically (1 -> 127 -> 253 -> ...), and sample that axis with a `MirrorRepeat` sampler: under bilinear this is mathematically identical to the authored mapping - mirror-repeat of the texture *is* the fold - but the gradients become continuous, so anisotropic footprints and mip selection behave. Content-preserving by construction, no asset touched (the same decode-time transform category as our invented mip chain). Watch the u8 range while rewriting: unfolded V can exceed the 0..2 the stored encoding spans, so the rewrite happens on the decoded f32s. (2) **A `[graphics] filtering = original` mode** - bilinear, mip 0, no aniso - as the faithful baseline, keeping the enhancement modes as options. Both cheap to try, both judged against the PPSSPP frames archived in this session's scratchpad (`emu-u8patch.png`, `ours-u8patch-hi.png`), and committed only if the A/B shows smooth *and* faithful. Ghidra could still sharpen it: whether Pulse ever calls `sceGuTexMode` with mip levels or sets `sceGuTexFilter` beyond bilinear, and where material flag bits map to `Gu_TexWrap` - none of it blocking, since the artifact is ours, not a mis-decode; culling improves from ~50-78% of draws surviving tier one to ~20-29% on the live camera-trailing average; `just` green, `just test-data` green except two pre-existing `oag-trace` wall-contact failures that fail identically on the unmodified tree. Docs: **ADR-0014** supersedes ADR-0011's placement and padding rules, `track.md` records the sibling-group governance (confidence 75 - measured shape and matching behaviour, loader walk not yet read), and `magstrip_ground_truth.rs` gained `far_lod_sections`, which pins ids 62/26, the box overlap, and the mask exclusion. **Ghidra by-catch, recorded here because it cost the detour that found the real answer**: class `0x3d4` `MeshNode_Ghost` registers a vtable at `0x08ad171c` (registration `FUN_08911480`; the generic mesh class `0x125` registers `0x08ad1694` in `FUN_089100a0`, vtable entries at base `+0xc`, 8-byte stride) overriding submit (`FUN_08910320`, enqueues the same mesh up to three times with sort keys `0x4d000000|0..2`) and draw (`FUN_08910fe0`, a 3-phase state machine: phase 0 untextured depth-lay, phase 1 per-material texture with `Gu_DepthFunc(EQUAL)` and fixed-colour blend whose brightness ramps with distance to the player ship over 5..25 units, phase 2 `Data\Tex\staticglow.mip` projected through a **texture matrix** - `Gu_SetMatrix(3, world x view x scale/offset)`, `TexMapMode(matrix)`, scale globals 4.0/1.8 at `0x08abf4c4/c8`, offsets re-randomised per frame at `0x08abf4e4/e8` by `FUN_0891055c` - with stencil and alpha-test `GEQUAL 0x80`). Reads as the **time-trial ghost ship renderer** (proximity fade plus sparkle), confidence ~55, no renames made. Separately: mesh material byte `+0x03` bits 2..7 index a 64-entry runtime table `DAT_08b323c0` of render environments (mode 0: animated texture matrix + stencil; mode 1: bind a runtime-rendered texture) - the render-to-texture/mirror system, untouched. And batch `+0x14` is a per-batch `f32` in 28..431 (distinct per batch, plausibly a fade or LOD distance), still undetermined. | **Remaining, in rough order.** (1) **Confirm the loader's section walk in `BOOT.BIN`** (raise the confidence-75 governance claim): find where mesh objects inherit their group's section - the earlier candidate `obj+0x7a` turned out to be the material-driven render-environment index, so the real storage is unread; the known mask lookup at `0x0891e908` is the downstream consumer. (2) **PPSSPP check when available**: the loop should draw smooth on the original, and the far-LOD copy should be visible from the start-valley vantage sections - both now predictions of this model, cheap to falsify. (3) The magstrip's own animation, if any (`_magsurface3_1verb`'s `verb` suffix is unexplained; material `+0x10` flag drives `FUN_0892733c` texture-matrix uploads in the batch walker `FUN_0890d0cc` - unexamined). (4) Batch `+0x14` and pass bit `0x1000` (present on every magstrip batch except the far-LOD copy's; meaning still open, no longer load-bearing). (5) The corner tick-frame reproduction only if anyone still cares - the magnification-artifact explanation stands. (6) `--pose` attitude source independent of the spline (unchanged). **Traps, kept**: PPSSPP debugger port **47810**; unfocused PPSSPP throttles into websocket timeouts; `niri` screenshots land in `~/Pictures/Screenshots/`; judge line width at native 480x272 only; `fd`/`rg` return nothing under `data/` without `--no-ignore`; and **`XDG_CONFIG_HOME` is how you point `oag-game` at a scratch `settings.toml`** for A/B config captures without touching `~/.config/oag/`. |
-| **`<GravityMul airborne>` decoded, and it scales the *grounded* gravity term** | **2026-08-03.** `g_class_gravity_scale` (`0x08ab0dcc`) sat at confidence 78 with its values "not read" and `Environment::class_gravity_scale` defaulting to the identity. It is filled by `<GlobalClass><GravityMul airborne/>` in the engine-wide `Data\XML\HandlingStats.xml` - the same element that carries `<SpeedupPads>` - and is now read off the player's disc. Raised to **90**: the table has exactly three references in the binary, one write in `Xml_ReadGlobalSettings` and two reads in `Ship_UpdateCraft`, and all three have been read. **The finding: the attribute is named `airborne` and the scale is applied to the term that acts on the ground.** The gravity site builds four VFPU pairs - `C600 = (normal_gravity, flight_gravity)`, `C610 = (scale, 1.0)` via `viim.s`, `C620 = (mass, mass)`, `C630 = (grounded, 1-grounded)` via `vocp.s` - and multiplies them; the scale is on lane 0, which is the lane multiplied by `grounded`. The airborne lane gets a literal `1.0`. Whether the name records an intent the code never implemented, or a rename nobody propagated, is **not** answered. **Two physics pages are corrected**: `docs/physics/README.md` said "the shipped table reads `1.0` for all four, so the identity is also the value" and `docs/physics/angular-velocity-column.md` repeats the same parenthetical **inside a derivation**. The four classes carry four different values and the class the reference captures use is not one holding `1.0`, so that page's rest-compression prediction of `1.25` was computed with the wrong scale and needs re-deriving. **The live probe read (`1.237`) is unaffected** - it came off the running original, which always used the real value - so what moves is the prediction, not the measurement, and whether the `1 %` agreement survives is now open. A ground-truth test asserts on both discs that the four classes are *not* all the same, so the retired claim cannot come back. **A bonus confirmation**: `HandlingXml_ParsePhysical` (`0x08838f50`) stores `flight_gravity` to `+0xfc`, `mass` to `+0xf4`, `normal_gravity` to `+0xf8` and `track_gravity` to `+0x100`, with a `0x80` per-class stride matching the `sll a0, a0, 0x7` at the gravity site - independently confirming engine.md's `Physical` row and confirming `track_gravity` takes no part in gravity at all. This was checked *before* wiring, because a swapped `+0xf8`/`+0xfc` would have meant feeding the air lane the wrong number and turning on a real scale is exactly the regime where that first becomes visible. | Measured effect on a race, headless: `--race --hold cross` on `01_Track` moves the reported height above the spline by `0.01` units and leaves speed unchanged to two decimals at every logged tick. **The re-derivation is done and it came out better, not worse**: `angular-velocity-column.md`'s resting-compression prediction goes from `1.2500` to `1.2390` against a live probe read of `1.237`, i.e. `0.16 %` error where it was `1.05 %` - a factor of `6.6`. **And it independently picks the lane**: `z` is a resting quantity containing `normal_gravity` and `track_gravity` but not `flight_gravity`, so had the scale gone on the airborne term the prediction would not have moved at all. A capture taken long before this table was decoded therefore agrees with the `vmul.p` chain about which term the number reaches. Nothing is left open on this thread. |
-| **Speed pads are done end to end: decoded, drawn, triggered and boosting** | **2026-08-03.** `Speedup Pad` `0x3bd` had no consumer anywhere - and the thing that unblocked it was one decompile, not a research programme: **the pad's bind handler (`Pad_Bind`, `0x089264f4`) calls the `Mesh` bind first**, so a pad *is* a `Mesh`, its payload is a mesh payload, and it carries its own geometry inside the track file. `oag_render::mesh::build_pads` is `build_class` pointed at a third class id, the same trick `build_sky` was. That also retires the standing puzzle in the texture-animation row below: the `Data\Pads\` models on the disc are never loaded **because they are not needed**, not because pads go undrawn. The trigger volume shares those bytes - the mesh's own bounding box at `+0x10`/`+0x20`, expanded `min.y -= 2.0` / `max.y += 8.0` at bind, in **pad-local space**, so containment is an oriented-box test and not a world AABB. **Two readings in `engine.md` are corrected**: what `Ship_ApplySpeedupPad` locates is a pad's **matrix** (row 2 = the push direction), not a track "section" with a "direction at `+0x20`"; and the block guarded by "section changed" is pad-visit statistics, not lap and sector counting. **`docs/formats/track.md`'s "eight zeroed words, almost certainly per-ship trigger latches" is also wrong** - they are at object `+0x1d0`, and they are a per-racer **distance cache**, decremented by how far that racer moved so the containment test only runs once a craft could have reached the pad. New: [pads.md](docs/formats/pads.md) and [pads.md](docs/ghidra/functions/psp-pulse-usa/pads.md); `Pad_Bind` and `Pad_ContainsPoint` at 85, `Pad_SweptTest_q`/`Pads_TestCraft_q` at 65. **The blocking check, done before any code**: the bind copies the box floats raw and adds literal `-2.0`/`+8.0` while the `Mesh` base divides the same floats by a quantisation scale, so the literals only mean anything if that scale is `1.0` - and a wrong scale would have broken every trigger while leaving the *geometry* drawing perfectly, i.e. invisible to a screenshot. Settled from data: all **544** `Speedup Pad` boxes across the 40 PSP track files come out between **9.55 and 9.71 units wide**, one authored size, a craft's width. **The user's note that Zone races score speed pads is confirmed and quantified**: `Ship_ApplySpeedupPad` sets `DAT_08b3435c` on entering a new pad, gated on this repo's own Zone selector (`DAT_08ab07e3 == 0 && DAT_08b31048 == 6`), and `Zone_Update` consumes it for **+100** - corroborated because `Zone_Update`'s three other constants are exactly the ones `crates/race/src/zone.rs` already carries from unrelated evidence. **Second pass, same day: the boost is implemented and the chain runs end to end.** `<GlobalClass><SpeedupPads amount time/>` is read off the player's own disc (`oag_formats::handling::Global`), step 15 of `Ship_UpdateCraft` is `oag_physics::engine::speedup_pad`, the trigger in `oag_game::race` reimplements the per-racer distance cache as a broadphase, Zone pays +100 per new pad, and `Exhaust::boost` is finally armed - the writer of `flare+0xb8` the exhaust row below had been waiting for. Verified on real data: a `--race --hold cross` run on `01_Track` climbs steadily to 121 units/s by tick 190, then jumps to 156 at 200 and peaks 166 at 210 before decaying, which is the shape `cornering-ground-truth.md` measured on the original. **Three findings this pass, all of which change what was going to be written.** (1) **`craft+0x2cc` is not the contact ratio.** The plan had `f *= grounded` at confidence 60; an instruction search for its writers found `Ship_UpdateEngine`'s prologue doing `craft+0x2cc = (flags & 0x200) ? 0.0 : craft+0x2cc + dt`, i.e. an unbounded accumulator of seconds since an undecoded flag, which cannot be a `0..1` groundedness. The scale is **not ported**, and the trace's full-magnitude peaks say `0x200` is not set during ordinary racing anyway. (2) **Both tunables are stored unscaled** - `Xml_ReadGlobalSettings` puts `Xml_AttributeAsFloat`'s return straight into the tables, unlike the four fields `SCALED_FIELDS` names - and **`craft+0x298` is re-armed every tick inside a pad**, not set on entry, so a slow crossing boosts for longer and `Environment::pad_hit` had to be a per-tick containment answer rather than an edge. (3) **The global XML authors five `<GlobalClass>` blocks, `VECTOR` first, and there are four speed classes.** The original does not recognise it either: it matches against a four-entry table and on no match leaves `g_handling_parse_class` holding the previous value, so `VECTOR` lands in a stale slot and is overwritten by the four that follow. We skip unrecognised names, which reproduces the outcome. **This only holds while `VECTOR` is authored first.** Whether Pulse exposes a fifth class anywhere - HD's ladder does begin at Vector - is unanswered and was not chased. **Still open**: the `controls->0x24 & 1` jump branch (`<Special speedpad_jump>`), the `craft+0x2cc` fade-in, the `racer+0x368 == 0` gate on the Zone score and the visit statistics, and `pad+0x1a0` - a field that gates every hit, whose writer is unfound, carried inert in `crates/formats/src/pads.rs` rather than dropped. Also newly *available* and deliberately not taken: **`<GravityMul airborne>` fills `g_class_gravity_scale`**, which `Environment::class_gravity_scale` documents as "table not read" - it is readable from this same file, but decoding it changes how every ship falls and belongs to its own change. The **field-of-view kick is authored, not recovered** (`[graphics] boost_fov_kick`, on by default), on the same standing as `oag_render::sparks`. `Weapon Pad` `0x3be` decodes identically and is asserted against the disc, but has nothing to hand out. | Run `just view <image>:PSP_GAME/USRDIR/Data.wad --pads 'Data\Environments\01_Track\track.vex'` to see the nine pads alone, or drive to one: the race load report now prints how far the nearest pad is from the grid (231 units on `01_Track`, about tick 185 at full thrust from `--race --hold cross`). |
-| **The sky draws, and it cost far less than budgeted because the payload was not a new format** | **2026-08-02.** `Skycube` `0x3c6` was the least-researched thing in the repo - name only, zero payload bytes, no handler on either platform - and the plan for it was a multi-session Ghidra effort: stand up the project, walk the 46 `Vex_RegisterClass` call sites, decompile the handler, capture its GE display list. **None of that was needed to get a sky on screen.** Three cheap observations settled it first: `Data\Defaults\Skycube.vex` resolves in `Data.wad` (entry 58, hash `7b245803`) and is a six-faced `skybx1..6_nomip` cube; every track file authors exactly one `Skycube` node parented to the world node; and its payload's header arithmetic **matches a `Mesh` `0x125` payload exactly** - the material count at `+0x02` reads 6, putting the array's end at `0xa8`, and `+0x04`'s geometry offset reads `0xb0`, the next alignment boundary. So `vex::mesh_materials`/`mesh_batches` read it unchanged and `oag_render::mesh::build_sky` is the existing builder pointed at a different class id. **The lesson worth keeping: a class having its own id does not mean it has its own layout, and checking that costs one hexdump.** Validated over all 40 sky nodes (`crates/formats/tests/skycube_ground_truth.rs`), including three constraints a near-miss cannot pass together - texture indices inside the file's own `Texture` count, a real bounding box, every vertex inside its own batch's declared bounds. **Two readings shipped data refuted along the way**, both recorded in the test: geometry does *not* start immediately after the materials (`06_Track` puts `0x1a8` bytes of stale-pointer records between them), and a sky is *not* always six-faced (5 on 22 files, 1 on the 12 Zone variants). `fogCube` `0x3d3` is **decoded but not drawn** - a 64-byte 4x4 box volume then two `{rgb, 0, near, far}` sets, 128 bytes, on 36 of 40 files; `06_Track` authors none. Its per-track colours corroborate the sky decode independently (`05_Track`: warm orange fog, red sunset skyline). **The executable side is now partly open, not wholly.** `Gu_Fog` (`0x08811748`) is recovered at confidence 95 - the GE command bytes `0xcd`/`0xce`/`0xcf` are in its own body and the arithmetic is `sceGuFog`'s exactly - along with `Fog_Apply` (`0x0891ea14`) and `Fog_Disable` (`0x0891e9b4`); see [fog.md](docs/ghidra/functions/psp-pulse-usa/fog.md). Two results that matter beyond fog: `GU_FOG` is state `7`, decoded from `Trail_BuildStateList` naming fourteen states that *all* agree with the pspsdk enum (the four consecutive `GU_LIGHT0..3` disables right after `GU_LIGHTING` pin the numbering by position), and **`Fog_Apply` reads six floats `{r,g,b,a,near,far}` zeroing the fourth - the same six-float block with a hole in slot four that the `fogCube` payload was decoded to hold, derived independently from shipped data.** **Then the whole `fogCube` runtime fell out of one more pull on the same thread.** `fogCube` `0x3d3` **is** registered - `FogCube_RegisterClass` (`0x08906b60`) - which retires the standing worry, carried from `engine_fire`/`exitglow`/`gate`, that it might not be; the trick is that `Vex_RegisterClass`'s *second argument* is the class id, so it is the one place an id appears as an immediate in a binary where `vex.md` correctly says searching for ids as constants finds nothing. From there: `FogCube_Init` (`0x089068f8`) advances the bind cursor by **`0x80` = 128 bytes, the payload length already measured from shipped data** - two independent derivations of the same number - and derives the box from `payload+0x74`, which settles the "500.0 on every track, unknown" float as the **cube's edge length**. `FogCube_Sample` (`0x089069b0`) reads the matrix at `+0x00` and the two parameter sets at `+0x40`/`+0x58` - **every offset one this project had decoded from data alone** - and `Fog_FindVolume` (`0x08887764`) walks the world's fogCube list, which `World_CollectNodeLists` (`0x088879d4`) populates by filtering on the fogCube type token, closing the last link with no inference in it. **The fog "curve" is resolved and it is not a curve**: the GE ramp is linear within a frame, and `FogCube_Sample` re-interpolates colour, near *and* far every frame from where the camera sits across the volume's local Z - which also explains why 28 of 36 shipped nodes have byte-identical parameter sets and 8 do not. A linear ramp is correct; **do not "fix" it into a curve**. **Fog is now implemented off that recovery**: `oag_formats::fog` decodes the volume and reimplements `FogCube_Sample`, `race::Scene` samples it at the eye each frame, and `mesh.wgsl` applies the linear ramp through **its own bind group (group 2), not by growing the shared `Uniforms` block** - that block is mirrored in four `.wgsl` files plus `oag-view`'s own buffer sizing, and a separate group also means the exhaust keeps `FOG` disabled for free, exactly as `Trail_BuildStateList` does. The sky is deliberately unfogged: it rides the camera at radius 18-62 while fog starts at 30-250, so fogging it would drown it. **One divergence recorded rather than hidden**: the shader measures radial distance from the eye where the GE uses view-space depth, differing by up to `1/cos(fov/2)` - about 15% at the screen corners - because the view matrix is not in the uniform block that would fix it. **A trap the ground-truth suite caught and no unit test would have**: adding a third bind group to the pipeline layout silently breaks every pass that does not bind it, and `crates/render/tests/msaa_resolve.rs` failed with exactly that wgpu validation error on the first `just test-data` after the change - a reminder that the GPU integration tests are the only thing checking bind-group completeness. Still open: no `Skycube` *draw* handler, so the depth state (`Always`, no write, drawn first, camera-centred) remains *chosen to work rather than measured* - and `FogCube_RegisterClass` is now the worked example for finding it. Also open: `FUN_08906188` builds two fog GE lists differing only in `FCOL` (one the fog colour, one **black**) and has **no callers** and no method-table slot, so what dispatches it is unknown; the two-list split is very likely the additive-versus-alpha distinction and is deliberately unnamed. **A trap worth recording: the GE fog command numbers are `0xcd`/`0xce`/`0xcf`, not the `0x55`/`0x56`/`0x5b` a first pass assumed from memory** - `0x55`-`0x58` are the material colours (`FUN_088126ac` writes one colour to three of them by mask, i.e. `sceGuMaterial`) and `0x5b` is specular power. Reading the command byte out of each wrapper's own body is what caught it, twice. The `Vex_RegisterClass` walk is still the route, and `engine_fire`/`exitglow`/`gate` are the standing warning that `Skycube` may have no registration site at all. See [`skycube.md`](docs/formats/skycube.md). |
-| **The `.pob`/`SYSP` container and its slot table are decoded and corroborated on a second binary; a resolved record's own field layout is not** | **2026-07-31, two passes.** First pass closed the container by black-box census (magic, the `+0x04` size field, slot count, name field position - see `pob.md`) after static Ghidra reading hit the same ceiling as the collision-sparks trigger (`FUN_089156a0`'s caller is an unresolved indirect call). Second pass went live: a PPSSPP session (`PPSSPPSDL` + `scripts/ppsspp_debugger.py`, breakpointing `Resource_LoadFile` and `FUN_088f8e38` during the real "loading the race" preload) caught `WO_SHIP_COLL_SPARK_DAMAGE` loading fresh and read its 26 real slots before and after the fixup function ran. **Every slot's raw value is a *fixup-site* offset, not a data offset**: `FUN_088f8e38` reads a second, baked value stored there and adds the resource's own base (`HEADER_LEN + slot_count*4`) to it in place - confirmed on `26 of 26` sites live, and the same two-hop resolution lands in bounds on **436 of 436 real slots across all 35 PSP files**, computed entirely from file bytes with no runtime needed once the mechanism was known. This retires the earlier "slot 0 is invariant at 1220, so it can't be an offset" puzzle - 1220 is just the first file's fixup-site offset, not meaningful data. Implemented as `ParticleSystem::resolve_slot` in `oag_formats::pob`. **New finding**: 43% of resolved targets are readable NUL-terminated developer strings - texture paths (`Z:\WipeoutPSP\X2\Data\Psys\Tex\orange_glow2.tga`) and short layer names (`GLOW`, `debris`) - so a slot is `{ texture-path-or-name, small parameter block }`, not a pure numeric curve as the previous pass's naive float-scan suggested. **Then corroborated on PS2**: `SCES_547.48/WADS2.WAD` has 41 `SYSP` blobs (32 sharing a hash, hence a path, with PSP; 9 PS2-only), all 41 parse and all 266 real slots resolve with the *same, unmodified* PSP-derived parser - a genuine second-binary agreement, not just a bigger PSP sample. **What remains open has since narrowed sharply (2026-08-01)**: the *emitter-level* record layout is now fully decoded and the runtime interpreter traced end to end - see [particle-system.md](docs/ghidra/functions/psp-pulse-usa/particle-system.md) and pob.md's "The emitter record layout is decoded" - leaving open only the slot-resolved records' internals, a slot's *position* semantics (the attribute-mapper hypothesis, still 30), and `FUN_089156a0`'s indirect caller (the preload path-string addresses `0x08a886f8`-`0x08a8877c` remain the untried xref target). **A live-capture trap worth recording**: extracting a full PS2 WAD (`WADS2.WAD`, 377 MB compressed) to `/tmp` hit an `EDQUOT` that broke the shell entirely (every command failed, even `echo`, until the partial extraction was deleted) - `/tmp` here is quota-limited well below the project's own disk; scanning through `oag_assets::Archive` in memory, with no extraction at all, is both faster and avoids the trap. |
-| **The hull-spark visual trigger is found: `ShipCollisionFx_Trigger` (`0x089246b4`), renamed and documented** | **2026-07-31, two passes.** First pass read `FUN_088418e0`'s three reactions to a contact (camera shake, hull damage, shield flash) and found none of them spawned a particle, leaving a flag-bit consumer on `craft+0x860` as the one remaining candidate (see the row this one replaces, in earlier history). Second pass, prompted by "if we can get it right from the beginning, it might be cheaper in the long run": batch-decompiling the `Ship Collision Fx` `0x3d0` class's sibling functions found `ShipCollisionFx_Trigger` directly - the flag-bit lead was a dead end, not the answer. It is reached from what this page previously mislabelled "camera shake": `Ship_DispatchCollisionFx` (`0x0883de90`, confidence 80) finds the nearest of up to 10 attached `Ship Collision Fx` instances and **unconditionally** calls the trigger; a proximity-gated sound cue is a separate, secondary effect in the same function, not a camera shake (no camera API is called anywhere in it - that reading is retracted). `ShipCollisionFx_Trigger` (confidence 85) names all three spark variants as literal strings (`WO_SHIP_COLL_SPARK_NODAMAGE`/`_DAMAGE`/`_LEACHBEAM`, plus `WO_WEAPON_ABSORB` for an unrelated shield ability), enforces a 0.8s per-instance cooldown on the two collision variants only, and computes `intensity * 2.0 + 0.4` as a recovered severity parameter for the two "damaged" variants - `intensity` being the same raw contact-impulse magnitude already scaled elsewhere on this path (`* 0.0125` for the sound, `* 0.05 * 0.7` for hull damage), so the formula is usable in units this project already has. Full detail, confidence and the two non-collision callers (ship death, shield absorb) are in [contact-response.md](docs/ghidra/functions/psp-pulse-usa/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function). Both functions are renamed in `names.tsv`/Ghidra. **Retuned same day, in two rounds - the second corrects the first.** Round one ported `oag_render::sparks::COLLISION_COOLDOWN` (`0.8`), replacing the one-shot edge latch with a periodic re-fire, and separately concluded the severity formula (`intensity * 2.0 + 0.4`) was an **unbounded, unusable multiplier** - reproducing `resolve_contact` against this crate's own impulse magnitudes gave `69`-`165` for realistic speeds, nowhere near a sane range. **That conclusion was wrong, and a live PPSSPP capture caught it.** The user asked to keep aligning with the original; a fresh live capture (`docs/reverse-engineering/ppsspp-debugger.md`'s methodology, breakpointed on `ShipCollisionFx_Trigger`'s own severity write during a real wall crash on Talon's Junction) read six real `intensity` values of `0.011`-`0.070` at craft speeds `21.7`-`112.4` units/s - flatly incompatible with the "raw, unscaled impulse" premise round one's math rested on. Re-reading `FUN_088418e0` fresh (not trusting the earlier paraphrase) found the actual line: `fVar21 = min(|impulse| * 0.0125, 1.0)` - `intensity` is clamped to `[0, 1]` **before** `Ship_DispatchCollisionFx` or `ShipCollisionFx_Trigger` ever see it, using the same `0.0125` `oag_render::sparks::SEVERITY_SCALE` already borrowed. So `intensity * 2.0 + 0.4` ranges over a sane, bounded `[0.4, 2.4]`, not unbounded, and **is now genuinely ported**: `SEVERITY_SLOPE` (`2.0`) and `SEVERITY_FLOOR` (`0.4`) apply the recovered shape on top of the existing clamp. What is still open is narrower than round one framed it: not "is the severity number usable" (yes), but what the six derived fields `FUN_088f4910` multiplies it against (`+0x58`/`+0x5c`/`+0x60`/`+0x64`/`+0x68`/`+0x6c` on the spawned `ParticleSystem` instance) actually mean - spawn count, colour, velocity spread. Worth keeping as a lesson: a wrong conclusion reached by decompiling real functions and doing real arithmetic still needs a live check before it gets trusted, and `docs/formats/pob.md`, `contact-response.md` and `oag_render::sparks`'s own doc comment all carry the correction, not just this row. **Same-day follow-up, third pass**: the "still needs the `.pob` record layout decoded" framing above turned out to be one level off. `FUN_088f4910`'s `iVar1` pointer - the base the six derived fields are read from - is not a third indirection through the still-undecoded slot mechanism, it **is `resource_base` itself**: a live capture read its first 0x20 bytes and got the resource's own name (`"WO_SHIP_COLL_SPARK_DAMAGE\0"`), and reading the same six fixed offsets from the extracted file's raw bytes reproduced the live values exactly. Feeding those six file values through `FUN_088f4910`'s own arithmetic (full decompile now in contact-response.md) reproduces all six of the live-captured *derived* outputs to the same precision - an end-to-end, byte-exact chain from disk bytes to spawn-time values, no runtime needed to reproduce it on any of the other 34 PSP files. **Closed the next day (2026-08-01), and it went further than the question asked.** Tracing every consumer of the derived fields decoded the whole emitter model: the six outputs are the severity-scaled emitter extents, ejection speed centre/spread (world units per *tick*), a flag-gated gravity and a playback rate; severity also multiplies each particle's drawn size per tick (the user-visible "harder hit, bigger sparks"). The file itself turned out to be a **four-emitter tree** (root smoke + nested `WO_SHIP_COLL_SPARK` bright sparks + `bits` debris + `_TRAIL` embers, chained via `+0x94c`), all live-confirmed emitting with severity propagating uniformly to the siblings. `oag_render::sparks` is rewritten around the recovered `EMITTERS` table - counts, schedules, lifetimes, speeds, drag, colour endpoints, alpha ramps all recovered; the authored `BURST_COUNT`/`LIFETIME`/`CONE_HALF_ANGLE`/`GRAVITY`/`EJECTION_SCALE`/`COLOUR` constants are retired. Evidence: [particle-system.md](docs/ghidra/functions/psp-pulse-usa/particle-system.md), pob.md's emitter-record and four-emitter-tree sections. **A same-day second pass, driven by the user's visual comparison against the running original (smoke invisible, sparks not spiky, bursts not tracking the hull), traced the draw layer too** - `ParticleSystem_DrawParticle` (`0x089186bc`, found through the blend table's own xrefs), `ParticleSystem_DrawStreak`, `ParticleSystem_ApplyBlendClass` - and all three reports resolved into recovered facts: the smoke emitter is **alpha-over** (blend class 3 at `res+0xc0`) while the bright three are additive, which an all-additive port renders invisible; the bright emitters draw as **two-point streak quads**, with `WO_SHIP_COLL_SPARK`'s second point pinned at its spawn position (flag `0x2000000`) so its streaks radiate as spikes; and the burst anchors to the `Ship Collision Fx` **hull locators** (the Assegai authors 6; `race.rs` now picks the one nearest the contact, like `Ship_DispatchCollisionFx`, and rides it through the ship's transform). `sparks.rs` implements all three (blend-split pipeline pair, streak geometry, locator anchoring). Still approximated, each with a doc note: colour endpoints instead of the 256-entry tables (ADR-0006; runtime disc-load is the recorded follow-up), cone aims along the contact normal instead of the authored emitter-node frame, and the streak end-cap stretch factor (untraced resource field; the size stands in). A side-by-side `just play` wall hit against the original remains the open visual check. |
-| **The original's camera/HUD shake on impact is untraced** | User observation (2026-08-01, while aligning the sparks): a hard wall hit in the original visibly shakes the camera/HUD, scaling with impact. No candidate function is located - and one *wrong* candidate is already ruled out on record: `Ship_DispatchCollisionFx` was once mislabelled "camera shake" and calls no camera API (contact-response.md carries the retraction). `FUN_088418e0`'s documented reactions (sound, hull damage, shield flash) don't shake anything either, so the consumer is elsewhere - likely the camera update reading impact state off the craft, or a screen-space offset in the HUD draw. The severity/intensity plumbing recovered for the sparks (`min(\|impulse\| * 0.0125, 1)`) is the obvious input to look for. Untraced, unported; `oag_render` has no shake at all today. |
-| **PVS culling is on, and the ceiling on it is our own batching** | **2026-07-30.** The track's authored `section` `0x3c9` payload is decoded (`oag_formats::pvs`, validated over both discs) and culls before the frustum test (`oag_render::pvs`, `[graphics] pvs_culling`, on by default). See [ADR-0011](docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md). **No baker was written and none should be** - the artists' visibility set ships on the disc, so the "sample a camera per segment and raycast" design is reimplementing shipped data, and the up-vector-on-inverted-track hazard that design has to solve does not exist when there is no sampling camera. Three next steps, in value order: **(1)** the saving is capped at 22-66% (median ~47%) because a `DrawCall` is one material run whose bounding sphere reaches 6-14 of the 64 sections - **splitting batches by section at load** is the only lever that moves this, and it trades draw-call count for it, so measure before building; **(2)** which section a *mesh* belongs to is still unrecovered - `oag_render::pvs` invents it by sphere-versus-box overlap and says so, and recovering the original's association would retire the only invented part of the pipeline; **(3)** moving entities (rival craft, weapons) have no section and so are never culled by tier one. |
-| **The HUD draws, and the four things left on it are named** | **The layout was never a reverse-engineering problem** - Pulse ships five HUD layouts in `Data.wad` as `Data\XML\*_HUD.xml`, exact pixel rectangles, atlas UVs, colour constants and font roles, and they decode with the `fexml` machinery this project already had. A pass concluded the opposite from *negative* evidence (no HUD element in `fexml.md`'s known-element table) and planned to measure rectangles off screenshots; the cheap check that would have caught it - grep the archive listing for `HUD` - was never run. See [hud.md](docs/ui/hud.md). What is left: **(1)** the default outline colour is the layout's `HudBGColour` at 25 % alpha and the original's reads crisper, so measure it off a frame; **(2)** `TotalTime` overflows the right edge by 12 px and it is not clear whether the original clips too; **(3)** whether `SpeedBarMark` slides with speed - needs one frame at speed, the start-line frame cannot say; **(4)** a mode's code substitutes string keys into widgets the layout positioned - a time trial's top right reads `record` (`IG_HUD_RECORD`) where `TimeTrial_HUD.xml` says `IG_HUD_TOTAL`, and 26 of the binary's 38 `IG_HUD_*` keys appear in no layout at all - so the substitution rule is unread and is deliberately **not** worked around by hardcoding. Zone, Eliminator, the `<Mode3D>` countdown and sights, and text outlines as a second pass are all scoped out and listed on the page. |
-| **The two HUD fonts are pre-outlined, and one doc claim was wrong about it** | `font.rs` asserted the `.fnt` palette was "an alpha ramp over a single RGB … so the colour carries no information the vertex colour does not already supply". True of the three menu fonts, **false of `PulseHud.fnt` and `small.fnt`**: they carry six distinct greys where the menu fonts carry one white, alpha is the silhouette of glyph *plus* a baked outline, and the grey level separates body from outline. Reading alpha alone filled the outline with glyph and turned a 25-pixel lap time into a solid white box. The glyph atlas is `Rg8Unorm` now and text composites `mix(BorderColor, Color, mask)`, which is exactly the two colours the XML supplies. Menu fonts are unaffected *by construction* (constant mask) and that was checked on screen, not assumed. Pinned by `fnt_ground_truth` asserting exactly two of five fonts are outlined. **A screenshot caught this and no test would have** - the arithmetic was all correct. |
-| **Capturing a PPSSPP reference frame has three traps worth not rediscovering** | **`RemoteISOPort` does not pin the debugger port** - PPSSPP bound an ephemeral 46659 while `psp-drive.py` defaults to 47810, so `preflight` reported no debugger at all; read the real port off `ss -ltnp \| grep PPSSPP` and pass `--port`. **An unfocused window grabs as pure black** with no error, the documented SDL throttle - focus it and check the grab's mean luma before reading anything off it. **`niri msg windows` prints no absolute coordinates** but `niri msg --json windows` gives `tile_pos_in_workspace_view`, which is what `grim -g` wants; getting it wrong crops a corner and looks like a HUD missing half its widgets. Also note **two emulator instances can be running** (another agent's), so match on pid and window id rather than on app id. |
-| **The HUD art is raster, and 26 mesh files named after HUD elements are referenced by nothing** | Everything drawn today is pixels authored for 480x272 - `PulseHUD.mip` is 256x256 8 bpp paletted, both HUD fonts are 4 bpp paletted bitmap atlases - so a modern window magnifies it (the project's 1440x816 captures are already ~3x, 4K is ~8x). Meanwhile 26 `Data\HUD\*.vex` files are **polygonal geometry** named exactly after the elements (`Bar_1`, `Speed`, `Shield`, `Lap`, `Position`, `Thrust`, eleven `Weapon_*`, `Zone_Bar_*`), with Maya node names `polySurfaceShape1`, `Cube1_nolight`, `Lap1_nolight` and `AnimEnd` markers. No layout's `Src=` and no string in `BOOT.BIN` mentions them, and they are `.vex` **version 4** with root class `0x0ee`, which [vex.md](docs/formats/vex.md) says does not occur in Pulse. **What that means is not established** - baked source, abandoned approach, or another platform's path - and the decoder for that class does not exist yet. Do not write it up as "the HUD was vector". **Redrawing the art as vector is a live future option** and the useful part is the ADR-0006 asymmetry: a transcription of the disc's layout cannot be committed, but art we draw ourselves can, so this is the part of a "commit an artifact" idea that is actually available. Keep the *layout* disc-derived. See [hud.md](docs/ui/hud.md#the-shipped-art-is-raster-and-the-disc-suggests-it-was-not-always). |
-| **The six-tick-early wall contact is resolved into a real bug fix, and a smaller, reversed residual** | **2026-07-30.** The named next step - reading `Collider_BoxSamplePoints` and `Body_SetBoxDimensions`/`Collider_SetBoxDimensions` for both axes - found that `Ship_InitCraft` (`0x08841360`-`0x0884139c`) scales `<Misc width height length>` by `0.75` (the same global `hover::TARGET_GLOBAL_SCALE` already reads for the hover target height) **before** building the collider, and `crates/physics/src/wall.rs::hull_sample_points`/`hull_extent` never applied that scale - the hull box was a third larger than the original's in every dimension. The same read also settles the width/length ordering `Body_SetBoxInertia`'s square `(12, 8, 12)` box couldn't: confidence on the axis-to-dimension mapping goes **88 -> 95**. See [collision.md](docs/ghidra/functions/psp-pulse-usa/collision.md#the-dimensions-feeding-the-collider-are-scaled-not-the-authored-misc-values). **The fact was already on record** - [rigid-body.md](docs/ghidra/functions/psp-pulse-usa/rigid-body.md) noted the same `0.75` scale in passing on 2026-07-28, while establishing the inertia tensor is a code literal - and never reached the collision code; see the working rule below, now a fourth instance. Fixing it moved the physics determinism reference hashes (regenerated deliberately, `crates/physics/tests/determinism.rs`) and six unit tests in `wall.rs` whose fixtures hardcoded the old, unscaled half-extents. **The gap did not close to zero - it crossed it.** `wall_contact_ground_truth.rs`'s two ignored tests, re-run after the fix: our hull now finds the standing-start wall at tick **190** against the original's **187** (3 ticks *late*, was 6 early) and the lap's at **176** against **171** (5 late, was 3 early) - both a smaller magnitude than before, on the other side, and by *different* amounts on the two captures, which argues for an approach-angle-dependent residual rather than a second uniform scale error. **Do not fit a second scale to close this** - `0.75` is recovered, not fitted. Instrumented (`firing_probe_index` in the test file): the probe that fires is still a lower corner (index 2 on the standing start, index 1 on the lap; `hull_sample_points`' `0..3` range), not the flank pair the scale shrank furthest, so this is the same *kind* of probe, just no longer at the same corner-to-wall distance. The ground-truth tests now assert the sign explicitly (not just a magnitude bound), so a regression back to the unscaled box fails loudly rather than passing inside a symmetric tolerance - checked directly by reverting the scale and re-running. |
-| **Race modes run; the start line is measured on one circuit only** | **2026-08-02.** New `oag-race` crate: time trial (3 laps), speed lap and Zone, offered on the RACE menu page and by `--mode`. Lap counting is a **wrap of a travel-ordered ring**, walked from the junction graph by `next_primary` - the traversal is the original's own at confidence 88, so the loop's *shape* is not invented. **Where the lap begins is**, at confidence 55, and it is the thing most likely to be wrong: arc-zero sits `Course::START_LINE_OFFSET` = **137.9 units** along the ring from the authored grid slot, taken from the one captured time trial on the one circuit that has a capture. Placing it at the slot instead - which the first implementation did - makes the counter tick over partway down the starting straight, and that is exactly how it was caught: by driving a time trial on Moa Therma. **Corroborated on a second circuit, by eye**: Moa Therma - no capture - counts its laps in the right place with the same constant, so the offset is no longer suspected of belonging to Talon's Junction alone. Confidence 55 -> **65**; it is not 88 because watching a counter tick is not measuring, and two circuits whose real offsets differ slightly would both look right. **The lead worth following is `Course::path_boundaries`**, now printed in the load report next to the start line: `16_Track` reads boundaries `[0, 1752]` against a line at `3415`. If a boundary lands on the visible line across circuits, the start line is authored data at confidence 88 and the constant goes away. Two guards exist because both failed in practice: `RaceState::lap_gate` requires the near half *then* the far half of a lap, because the ship spawns behind the line (so its first line crossing is a real wrap and not a lap), and because rocking over the line would otherwise record an unbeatable best lap. Lap 1's clock starts at the line rather than at the standing start, since our spawn is on the slot while the original's craft is on the line. |
-| **Zone is recovered but has no ending** | **2026-08-02.** `Zone_Update` (`0x0882f5cc`) read end to end - see [zone-mode.md](docs/ghidra/functions/psp-pulse-usa/zone-mode.md). The mode identification rose from **50 to 84**: the mode factory picks the Zone HUD constructor with the byte-identical selector `Ship_UpdateEngine`'s four-corner branch uses, so the four-corner hover, the disabled brakes and the auto-speed law are all Zone. The zone steps every **10.0 s** of accumulated frame time and nothing else, and the accumulator resets to `0` rather than subtracting - a recovered drift, with a test so nobody tidies it away. **The three floats were the surprise**: they are not in the executable and not in the per-team `handlingstats.xml` either, but in `<Handling><Global><Zone/></Global>` inside **`Data\XML\HandlingStats.xml`**, a second file that goes through the same `Handling_ParseStats`. All sixteen shipped per-team files were checked and carry `<Stats>` alone. So Zone needs no invented constants. **What it needs is an ending**: the original ends a run on bit 12 of `entity+0x860` and *nothing was found that sets that bit*. Confidence 60 for "craft eliminated", **25** for "shield reached zero" - too low to implement, so a Zone run does not end. Shield depletion is unimplemented project-wide, which is the real blocker. |
-| **The grid: one slot is recovered, seven are not** | **Resolved half.** `Start Position` (class `0x3bc`) is decoded and `oag_game::race` and `oag-trace drive` both spawn on it rather than on spline sample 0, which was never a recovered value. The reading is confirmed against the running game by *heading*: the slot's forward is within **1.12 degrees** of the original's craft at the start of a captured time trial. What it is **not** is pole - the capture starts 137.9 units ahead of the slot and 22.4 to its left, both about 10 units off the centreline on opposite sides. Those three numbers are what an account of the grid has to explain and no account is offered. Exactly **one** node per track on all 40 files, so the other seven slots are laid out by unread code. **One coincidence is recorded with its refutation attached**: `track_reversed.vex`'s slot is 2.2 units from the capture's start, `y` agreeing to 0.0096, and 4.011 above its own surface against a 4.002-4.009 resting craft height - but the recorded craft faces along `track.vex`'s tangent at `+0.9999` and the reversed variant's at `-0.9999`, so `DEFAULT_TRACK` is right. That check was worth writing down because **M3 identified the track by casting positions against collision geometry, which the forward and reversed variants share** - the `01_Track` trap one level down, and nothing had ruled it out. **Next step is that code**, not more data: nothing in `.vex` will produce slot 2. Two traps recorded on [`track.md`](docs/formats/track.md#start-position): the authored `y` is **not** a ride height (1.03-7.36 units above the collision surface across the 40 files, so the spawn raycasts instead), and `just scripted-sim`'s path length is still not comparable to a capture's - it now starts from the grid rather than 51 units past the line, but that is a third journey, not the capture's. Use `run --script --script-lead 2`. |
-| **Answered: `talons-junction-time-trial-lap.csv` is not a lap** | **2026-08-02.** The doubt recorded here was right, and the third reading was the correct one. Measured off the capture's own `position` and `speed` columns against the ring, in `crates/trace/tests/lap_capture_ground_truth.rs`: the ship drives **432 of the circuit's 5,094 units - 8.5 %** - in the first ten seconds, then sits between **0.0 and 3.4 units/s for roughly a thousand ticks**, then **drives back the way it came, past the start line**, and carries on away from it for the rest of the recording. It contains no lap, so a lap counter cannot be confirmed against it, and the 0.33 units/tick figure is simply what a run that stalls and reverses looks like. **Anything calling this file a whole lap is wrong** - `crates/physics/src/wall.rs:225` and `docs/tools/oag-trace.md` both do, and were deliberately not swept in the same change. The one thing it is good for is the start line: its first frame resolves to the *same ring point* the lap counter starts a lap at, which is the strongest check `Course::START_LINE_OFFSET` has. **Next step is a real lap capture**; until there is one, no exit-criterion argument may lean on this file. |
-| **The exhaust trail is recovered end to end, and the ~6x prominence gap is explained and closed** | **2026-08-02.** The named decisive read (is `Trail_DrawRibbon` gated off?) dissolved on decompiling it - its only gates are ring-full, camera-exists, `count > 1`; the `& 0x20` claim was wrong - and the real answer was **four separate misreadings stacked**, all now fixed in `oag_render::exhaust` and documented with live evidence in [`exhaust.md`](docs/ghidra/functions/psp-pulse-usa/exhaust.md): **(1)** the ribbon's blend is **pure additive `dst + src`** (`GU_FIX`/`GU_FIX` white, from its own display list at `DAT_08b65700`, recorded by `Trail_BuildStateList` `0x089296f8`), not the flare's alpha-weighted one - so "ramp squared" was wrong; **(2)** the authored blue/magenta/white layer colours are **alive**, baked into the ring's vertex colours at init by `Trail_BakeVertexColours` (`0x08929c8c`) *before* `Exhaust_Update` ever overwrites the ring fields, and the GE multiplies them by the per-frame grey ramp via `sceGuAmbient` + lighting-on/lights-off + `sceGuColorMaterial(7)`; **(3)** the baked colours carry a **`powf(1 - 0.1·i, 1/0.3)` head-to-tail fade** - under 0.05 by sample 6 - which is the single biggest reason the original reads as a compact bloom (live-confirmed byte-exact: `0xd2 0x63 0x26 0x09 0x00` on the white layer at samples 0/2/4/6/8); **(4)** `ring+0x1c` is not the init-time `1.0` - `Exhaust_Update` writes `intensity*0.35+0.2` there every frame (live `0.3737` at intensity `0.497`), so widths run at 0.2-0.55 scale. Also recovered: the geometry is a **four-fin diamond tube** (camera columns, `v` once around the rim in quarters), the backwards stretch is real (`-(craft row2)*200000`, row carries the 0.75 scale → ~3.5 units at the tail; "numerically nil" retracted), `u` steps 0.1/sample, texwrap repeat/repeat, and the stepped tail value is a **stencil** ramp (`Gu_StencilFunc`, func ALWAYS - dest-alpha bookkeeping, visually inert), not `sceGuAlphaFunc`. The tint at `flare+0x68` is confirmed written `(1,1,1,1)` every frame. 18 new symbols named (`Gu_Ambient`, `Gu_BlendFunc`, `Gu_Start`, `Trail_ApplyPreset`, ...), the enable/disable pair's "argument pattern only" caveat retired by reading the bodies. **Side-by-side after the port**: ours at 459 km/h saturated vs original at 83 km/h saturated - same compact violet-white bloom, same short fading streak, trail length scaling with speed exactly as the 10-tick history predicts. **Still open**: the ribbon's `TFX` (inherited state, presumed modulate, conf 60), and **what arms the boost timer** (`flare+0xb8`) - everything downstream is recovered (flare `+boost_timer*8`, boost model reveal at `>0.2`), the writer is unfound and is gameplay code for when M5 opens pads/pickups; a user note (2026-08-02) records boost visibly strengthens the exhaust and that a boost-pad trigger would be the cheapest arm to wire. Remaining ours-not-theirs: `HALF_SIZE_TO_WORLD` (now **2.15 measured**, conf 65 - see below) and the flare's post-projection-to-world-space adaptation - the trail no longer carries any invented constant. **Same-day follow-up, from the user's "ours is not as wide" observation on the side-by-side**: the flare was wrong three ways, all now fixed. **(1)** `ExhaustFlare_Draw`'s equal `+/- half_size` extents are post-projection, and the PSP viewport maps NDC `x` to 240 px against 136 for `y` - the shipped flare renders **1.76x wider than tall** (`FLARE_ASPECT = 480/272`), which is also the aspect the `128x64` art is authored for; drawing it square squeezed the horizontal lobes. **(2)** The flare is **one quad with one colour** (all four vertices take `flare+0xc8`: white, flickered alpha) - the three concentric quads our port drew from the layer ramps were an invention from before the ramps were known to be the ribbon's; consequence: an idle engine shows a small glow (size `0.4` of saturated) rather than nothing, as the original does on the start line. **(3)** `HALF_SIZE_TO_WORLD` was measured for the first time: visible-core-to-hull-width ratio on two intensity-saturated frames (original 83 km/h, ours 459 - both cameras at their recovered speed-independent distance, same art both sides so the ratio compares quad sizes) gave original `0.56` vs ours `0.26` at `1.0` → **2.15**, and the recapture confirms core `0.37`/glow `0.6` hull-widths on both sides. Measurement trap for whoever repeats it: a naive bright-pixel box around the original's bloom caught the `83 kmh` HUD text and read 285 px of "bloom" - mask the HUD first. Residual known difference: our flare's thin diagonal rays read slightly longer/brighter than the original's, plausibly the linear-vs-sRGB additive-blend question already on record in the capture-paths row - not an exhaust constant. **Third same-day pass, from the user's "trail-edge bands too translucent" observation - verified rather than tuned, and the verdict is that no constant was wrong.** Every register the ribbon's colour rides on is now pinned live (see exhaust.md's GE-state section): texfunc modulate/`TCC_RGBA`/**colour-double off** (a full-frame command-stream scan including all CALLed sub-lists found zero `0xc9` writes; the once-only set is `Gfx_Init`'s, and the driver shadow at `ctx+0xe4/e8/ec` read `0/0/1` live), `MATERIALEMISSIVE` has **no emitter in the entire binary**, materials white, the state list byte-identical to the static decode, and `boost_timer` reads `0.000` across 17 s of pad-free driving with the boost model hidden. `Engine_noise` measures mean grey `0.325`/max `0.94`, which caps the per-quad contribution well below white - **the original's big saturated plumes are additive stacking, not amplitude**: ~9 segments x 2 tube surfaces x 3 layers pile into the same pixels at low speed (23 u/s puts the whole ring in ~4 world units), corners curl the ribbon across itself, and pads light the boost visual. A straight-line 94 km/h original frame captured mid-acceleration matches our render's character closely. So cross-speed comparisons measure segment overlap, not fidelity - compare like-for-like or not at all. One real fix did fall out: the bake writes u16 texcoords as `x65535` but the GE decodes them `/32768` unsigned (PPSSPP `Step_TcU16ToFloat`), so effective texcoords are ~2x the baked fractions - noise twice as fine, wrapping twice around the tube - now ported as `TEXCOORD_U16_GAIN`. Capture niceties learned: `niri msg action screenshot-window --id N` captures a live frame even with PPSSPP on an inactive workspace (lands in `~/Pictures/Screenshots/`), and `psp-drive.py drive` from a `restart` does accept input (the old "menu from cold boot" caveat did not reproduce) but the standing-start script walls at ~tick 187 - screenshot before that. | Capture recipe for the emulator side is unchanged from the 2026-07-30 entry (`psp-drive.py` on port 47810, `menu` from cold boot, focus the window before `grim`, luma-check the grab, expect open-loop thrust to wedge into a wall eventually - a wedged craft reads `speed: 1.5` and its trail collapses to a point). |
-| **Trackside texture animation is implemented, measured against the original, and switched off** | **2026-07-30.** Eight track textures animate by V-axis scroll, the ship blink lights' mechanism generalised (`oag_render::mesh::ANIMATED_TEXTURES`, `[graphics] animated_textures`). **The enabling fix was a parser gap, not a rendering one**: `vex::textures` read a texture's name only from the node *header*, and a track's `Texture` nodes use the short 32-byte header with the name field zeroed, so every track texture came back unnamed. The runtime path at payload **`+0x38`** - a field [vex.md](docs/formats/vex.md) had documented all along - is the only name a track texture has. Ships worked by accident: their header holds the `Z:/WipeoutPSP/...` authoring path, which happens to contain the matched substring. **A doc claim was right for the wrong reason and is corrected with a `## History` entry**: "no track resolves to `colours_flashing_GLOW.tga`" held on re-checking, but the check that produced it could not have found a match whatever the data said, and the same gap hid every other animated track texture. **Two readings are ruled out rather than untested**: material `+0x0c..0x14` is `0` on every material of all 12 circuits, so there is no authored scroll rate, and the material `flags` word does not separate animated from static (`hub_banner_GLOW` and `flicker1nonalpha_GLOW` both `0x91`). So the key is an enumerated list, and each entry earns its place by a **per-draw** V-span measurement - narrow band means a quad picks a phase by V; full-tile means a scroll would slide the artwork. **Measured per draw, never aggregated**: separate quads sit at different V deliberately, and a per-texture min/max reads a narrow-band texture as a wide one - which is what the first pass did, making the ship control look wide too. The separation is total: entries at or under 1.50 rows, exclusions at or above 31.94, pinned by `crates/render/tests/animated_uv_ground_truth.rs` from both sides. **What is not established is that the original animates any of them** - confidence **65**, and every rate reuses the blink light's 2 sweeps per 120 ticks because it is the only one ever measured. The next step is a PPSSPP capture at `07_Track`'s pulse lights and `col_display7_GLOW` (on all twelve circuits); if a surface is static there, delete the entry rather than turning the setting off. **A capture must isolate the tick**: a race with `--hold cross` drifts into walls, and on/off comparisons at ticks 300-1800 came back byte-identical simply because no tagged surface was in frame. Ticks 2 vs 62 at the start line on `07_Track` shows it - 6,957 pixels, 0.59 %, confined to the track-edge light band. **`flicker1/2nonalpha_GLOW` looks like the best candidate on the disc and is deliberately excluded**: banded exactly like the blink palette, and every circuit embeds it - but **zero materials reference it** on eleven of twelve, its draws tile ~4x vertically, and the `Data\Pads\` geometry that would use it is never loaded. `Speedup Pad`/`Weapon Pad` have no consumer at all. **The capture was then run, and it refuted the mechanism.** A breakpoint on `Gu_TexOffset` through a live Time Trial on Talon's Junction - a circuit carrying two of the eight - hit 60 times from three sites, and **the only non-zero offsets came from `Trail_DrawRibbon`** (9 calls, 9 distinct advancing values); the other 51 passed exactly `(0,0)`. `Gfx_BindTexture` hit 80 times over the same window, so the track was drawing. Five candidate palettes were byte-static over 3.5 s, so a CLUT scroll is not it either. **So `[graphics] animated_textures` defaults off**, and the table is kept only because the geometry that selected it is a real measurement. **This also supersedes part of a 85-confidence claim in vex.md**: the ship lights' *pulse* is measured and stands, but the *mechanism* read off it - the engine scrolling the shared texture's V - is contradicted, because no such offset is ever submitted for the ship either. The untested candidate that fits everything is an animated per-draw **colour**; `Trail_DrawRibbon` already sets one via `FUN_0881125c`. **The generalisable lesson**: a filmstrip-shaped texture plus a measured pulse does not identify the mechanism, and the cheap check was a breakpoint rather than a screen capture - no window focus, no compositor traps, five minutes. Reach for the debugger before `grim`. Also two GU primitives named on evidence, `Gu_TexOffset` `0x08811630` and `Gu_TexScale` `0x08810ab4` - see [texture-animation.md](docs/ghidra/functions/psp-pulse-usa/texture-animation.md), which also records that **`Gfx_BindTexture`'s `0.2` threshold is a VRAM re-upload heuristic, not an animation clock**, and that the global scroll clock is still unfound. |
-| **The airbrake flaps deploy, and one HANDOVER claim was wrong about why they could not** | **2026-08-04.** This file previously recorded that `Airbrake` (`0x3c5`) nodes are *siblings* of the ship meshes and parent nothing, and concluded the feature needed a renderer rewrite before it could start. That was read off **`shipboost.vex`** - true there, false for `Ship.vex`, where the class sits between a hinge `Transform` (a 64-byte 4x4) and the flap `Mesh`, on all eight playable teams, with the two locators mirrored in X. **Check the file the feature is actually about.** Implemented: `oag_render::mesh::Flap` carries the vertex span and hinge, `Flap::deflect` is `hinge * R * hinge^-1` because the builder bakes ancestor transforms into vertices, and the ship `Drawable` rewrites the two flaps' ~40 vertices each per frame rather than growing a per-draw uniform or duplicating the ship's texture set into separate drawables. Evidence and the units argument for `up_speed`/`down_speed` (`500` against `80-120` on every team, so the airbrake's own `0..=100` scale and not fractions) are in [`ship-parts.md`](docs/ghidra/functions/psp-pulse-usa/ship-parts.md). **The rotation axis is chosen, not recovered, and the reason is worth knowing before anyone retries**: the node's payload is zero bytes, its class descriptor carries no handler pointer, no `0x3c5` immediate exists in the binary, `Vex_FindClassDescriptor`'s only two callers are load-time, and `Exhaust_Update` - the same shape - has no direct callers either. There is no per-class function to decompile; the way in is a live read under PPSSPP, watching which node matrix moves when the airbrake goes down. |
-| **`engine_fire` and `exitglow` are authored but never registered** | Neither has one of `Vex_RegisterClass`'s 46 call sites - alphabetical order puts neither between `Engine Flare` and `fogCube` - yet `exitglow` is authored **13 times** on `16_Track`. Same shape as `gate`, which [vex.md](docs/formats/vex.md) already records as never registered. So "has instances" and "has a handler" are independent properties of a class, which is worth knowing before reading any census as a to-do list. |
-| **The `.vex` class-ID table's extent is still unknown** | All ~55 game classes are transcribed into [vex.md](docs/formats/vex.md) and `vex::CLASS_NAMES`, self-validating at 95 against the ten IDs earlier passes had found independently. But the walk stopped at `0x08ab26a0` without reaching the `id == -1` terminator, so the generic Maya classes past `0x3eb` are only partly covered. Cheap to finish; nothing depends on it. |
-| **The five teams whose `Ship.vex` does not resolve by name** | `Auricom`, `Harimau`, `Icaras`, `Mirage`, `Van_Uber` have no `Data.wad` entry hashing to `Data\Ships\<Team>\Ship.vex` on the PSP disc, so eight of thirteen teams were censused. A `mine-names` job, not a format one. Note the path templates resolve with the **FE team-model name**, whose default is the literal `"ship"` at `0x08a84cb4` - hence `shipwreck.vex` and `shipboost.vex`, *not* `Assegaiwreck.vex`. Guessing the team name into those templates 404s, which cost a wrong conclusion once. |
+| **Two recovered chase-camera behaviours are ported; `headtilt` is not** | `crates/render/src/camera/chase.rs` reproduces `Ship_UpdateCameraRigs` whole - rigid radius, `pos_height` after the spring, craft scale applied about the craft after the spring - measured against `data/traces/pad0-boost.csv` at **RMS 0.008 / max 0.060** world units against the shipped model's 4.938 / 6.824. Two things to carry forward. **Neither half was worth landing alone**: `pos_height` after the spring, on its own, is *worse* than what it replaced, which is the shape of a change anyone trying half of it would have reverted off a screenshot. And **a settled camera cannot see any of it** - all the models agree exactly at rest, so every static probe and every `--pose-from --ticks 0` screenshot this project ever took was blind to a 4.9-unit error. **A camera can only be judged while it is lagging.** `crates/game/tests/chase_camera_ground_truth.rs` pins it (`#[ignore]`d; needs a disc image *and* the capture). **Still open:** `<InternalCamera headtilt>` is parsed and not applied - the original rolls the view's up vector by `side * craft[0x844] * headtilt` and `craft+0x844` was never identified, so the sign and scale are unknown. Identifying that one field is the whole remaining work. Also `craft+0x790` has a **second** write site (the internal rig's update, `dot(forward, velocity) * 0.075 + craft[0x7c]`), so camera.md's "written only at `0x0881c2b4`" is wrong; the next check is whether the internal rig updates at all while an external view is selected. |
+| **The original's fov widens with speed, and `Race::projection` does not** | **2026-08-09, and it replaces the "craft model is too large" thread, which is closed - see the section above.** There is no second scale site to find; there never was one. What is real and unported is `craft[0x790] = dot(fwd, vel) * 0.075 + craft[0x7c]` (`FUN_088455ec`, `0.075` at `0x08a7b6a0`), added to both tripod fovs every frame in `Ship_UpdateCameraRigs`' tail. Both constants are now confirmed against 16 frames of the original's own pixels: the fit is `60.181 + 0.07685 * dot(fwd, vel)` degrees, bracketing `0.075` and the authored `60`. **Do the one-breakpoint read first**: `g_camera_fov_degrees` (`0x08b34310`) at the exact tick `data/shots/pad0-boost/tick00000.png` was captured, speed 71.84. `~65.4` confirms the whole finding from the executable's own state rather than from pixels; `~60` refutes the interpretation while leaving the registration intact. Two things in the repo still numerically contradict the finding - `exhaust.md`'s 136-edge world fit (slope 0.4 % where a 1.1195 zoom needs 12 %) and the B2 tower's "90-95 degrees" - and that one read disposes of both; the docs page carries the arithmetic and the pairing hypothesis for the first. **Then it is a decision, not research**: port it into `Race::projection` as additive degrees (it does *not* compose like `BoostFovKick`, which multiplies a tangent), and decide what happens to the captures - every `data/traces/` CSV was taken with the old projection, and `Fov::apply`'s zero case exists precisely so those stay bit-identical. **Costed, so the decision is not blind**: exactly one test fails, `the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing` (`race.rs:5296`), which captures `resting` at tick 0 and then compares it bit-exactly against races that have since accelerated - its intent survives and it needs `resting` re-read at a matched speed. There are **no golden or screenshot frame-hash tests anywhere in `crates/`**, and `projection` feeds no simulation state, so **determinism is untouched**. The additive form needs no `speed == 0.0` short-circuit either, unlike the `boost_kick` zero case sitting right beside it: `authored + 0.0` is bit-exact where `2.0 * atan(tan(x) * 1.0)` is not. Two loose ends worth an emulator session each: an exec breakpoint on `0x088455ec` under an external view would turn "runs in external view" from inference into measurement, and `craft+0x7c` is only shown quiescent on a *clean* run, so a capture with an impact in it could still show it carrying something. |
+| **The per-material `Gu_TexScale`/`Gu_TexOffset` transform is real and unported** | Found while chasing the plume, and general rather than exhaust-specific: a material flag bit selects a per-material texture transform, and `Data\Ships\<Team>\shipboost.vex`'s material carries `0x212`, which has it. **Still unread: where the block's values come from** - the on-disc material's `+0x0c..0x14` is zero on that ship exactly as on every track surface, so the loader gets them elsewhere. This does *not* contradict the live negative on the same page, which measured `Gu_TexOffset` only and a scale with a zero offset looks identical to it. Nothing renamed: the gate is read, the data path is not. |
+| **Task #7: PRESS START does not fade in or throb** | `BOOT_PRESS_START` carries `pulse="true"` and `delay="1"`; ours appears at once, at full opacity, and stands still. Neither attribute is decoded. The two numbers needed are the period between peaks and the min/max alpha, both readable off a real display: `just launch-pulse-psp data/images/pulse-psp-eu.chd`, reach PRESS START, record, step frames over ~4 seconds. **Do not measure it off our own build** - ours is static, so a capture would confirm nothing. Full context on [frontend-boot.md](docs/architecture/frontend-boot.md). |
+| **Task #8: `escape` -> menus shows 1-3 black frames** | The fourth instance of the backdrop-seeding bug; the other three are fixed and written up on [menus.md](docs/architecture/menus.md#a-continuous-playhead-is-not-a-continuous-picture). The fix is the same one that closed the boot path: stash a picture beside the playhead when a race starts. Neither `--screenshot` nor `--menu-page` can see this path. The way in: run the windowed build under Xvfb with a temporary probe printing `Backdrop::shown` and what `take_upto` returned per frame, force a race and then `escape` - before the fix the first menu frames read `take=None shown=None video=TRIMMED`. Dump frames to `data/cache`, never the session scratchpad, and arm the dump **on** the defect rather than over a frame range: a range-gated readback slows the loop enough to hide the timing it is meant to catch. |
+| **PS2 front-end layout is hardcoded to 480x272** | `oag_game::frontend::SCREEN` is a hardcoded PSP resolution, so every PS2 widget lands off the bottom right of the viewport. Fixing it means making `SCREEN` per-source and re-checking every rect and pillarbox in `frontend.rs` - deliberately not done in the font pass that diagnosed it, because it is front-end layout work. This is the rest of task #37's "no logo *or text*". Only `pulse_text.fnt` is wired to the menus; the other four decode and are unused. |
+| **PS2 sky and pads: 30 circuits unswept** | `build_sky`/`build_pads` never took the external texture set, which is fixed and documented on [`skycube.md`](docs/formats/skycube.md#open) and [`ps2-texture.md`](docs/formats/ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name). **Not done**: the other 30 PS2 circuits were reasoned about from the same shared texture-set resolution rather than screenshotted - worth a visual sweep if anyone doubts it generalises. |
+| **Audio: race SFX is blocked on research, not on code** | Both discs make sound and menu sound is reachable, because `frontend.bnk` degenerates usefully. **The blocker is per-sound boundaries inside a race `.bnk`**, which the other banks do not give up. Two untried angles, cheapest first: name the cue-string lookup that the 37 `FUN_089392b0` callers feed, or back-walk from `__sceSasSetVoice`, where a waveform address and length finally reach the hardware. Plan (outside the repo): `~/.claude/plans/investigate-plan-to-add-dreamy-toast.md`. Movie audio is separate and equally open - ATRAC3+ is demuxed and discarded, and whenever it arrives the playhead becomes something two consumers pace against rather than one; `movie::Player` is the place that changes, not `Feed`. |
+| **`oag-trace plan` has never been replayed into the emulator** | The subcommand works in our simulation and `scripts/psp-autopilot.py` gained `--gate/--gate-dir/--gate-after` for the same target driven live. **The only thing that settles it**: `psp-trace.py --script verification/scenarios/talons-junction-pad-0.inputs --script-lead 2`, compared against `plan --trace-out`. Design and the full untested list: [`autopilot-planning.md`](docs/tools/autopilot-planning.md). Watch the start-pose trap - `drive`'s default `Start Position` on `16_Track` is ~138 units behind the time-trial line. |
+| **M6 authored lighting: no hardware light slot found enabled** | `AmbientLight`/`DirectionalLight` are registered, `PointLight` genuinely is not, and none of the mesh-draw functions read so far enables a GE light slot. The runtime direction vector recovered along the way is useful evidence for [`lighting.md`](docs/formats/lighting.md)'s open rotation-versus-translation question. Recorded so a future pass does not reopen them: `FUN_08a6b5bc`/`FUN_08a6b5c8` are World/Scene container class stubs, not lighting. Full account on [`psp-pulse-eu/lighting.md`](docs/ghidra/functions/psp-pulse-eu/lighting.md). |
+| **Ghidra target of record is `psp-pulse-eu`; EU cross-verification is owed** | Search and decompile in `/psp-pulse-eu/BOOT.BIN` first, cross-verify against `/psp-pulse-usa/BOOT.BIN` with `find_similar_functions_fuzzy`/`diff_functions`, document under `docs/ghidra/functions/psp-pulse-eu/`. **The camera pass got two of six**: `Camera_SubmitScene` (EU `0x088786d0`) and `Camera_PublishTripod` (EU `0x08885bd4`) are body-identical to their USA counterparts including the `1.7647059`, the `65.0 / fov` near-plane term and the literal `480.0 / 272.0` (confidence 90); the other four are listed as not-checked rather than guessed. Data rows stay out until the import is rebased - see [the workflow page](docs/ghidra/workflow.md#psp-pulse-eus-data-addresses-do-not-share-usas-base). |
+| **The EU/Pure imports have never been diffed** | Both Pulse builds and both Pure builds are imported and folder-organised per binary. **The payoff has not been cashed in**: run `diff_functions`/`compare_programs_documentation` between `/psp-pulse-usa/BOOT.BIN` and `/psp-pulse-eu/BOOT.BIN` to test the networking-code hypothesis. Same opportunity for the two Pure builds, with no hypothesis yet to test. When cleaning up a botched import, do the delete/rename in the Ghidra GUI - the bridge does not reliably release a program. |
+| **Ghidra names owed from the camera/matrix corroboration** | `FUN_08901dc4` (the scene projection builder), `FUN_08900884`/`FUN_08900a9c` (the view-stack writers) and the `Gu_SetMatrix` index mapping are all read and written up on [`exhaust.md`](docs/ghidra/functions/psp-pulse-usa/exhaust.md), but **none is renamed in Ghidra or in `names.tsv`**. Same for the two plugin-manifest functions [`frontend-boot.md`](docs/architecture/frontend-boot.md) reads at confidence 80 (`FUN_0888b7dc` and its caller). A future pass should land the rows properly. |
+| **The ghost-ship renderer is read and written down nowhere else** | Ghidra by-catch from the magstrip detour, kept here because it exists in no docs page and nothing is renamed (confidence ~55). Class `0x3d4` `MeshNode_Ghost` registers a vtable at `0x08ad171c` from `FUN_08911480` (the generic `Mesh` class `0x125` registers `0x08ad1694` in `FUN_089100a0`; vtable entries at base `+0xc`, 8-byte stride). It overrides submit - `FUN_08910320`, which enqueues the same mesh up to three times with sort keys `0x4d000000 \| 0..2` - and draw, `FUN_08910fe0`, a three-phase state machine: phase 0 untextured depth-lay, phase 1 per-material texture with `Gu_DepthFunc(EQUAL)` and a fixed-colour blend whose brightness ramps with distance to the player ship over 5..25 units, phase 2 `Data\Tex\staticglow.mip` projected through a **texture matrix** (`Gu_SetMatrix(3, world x view x scale/offset)`, `TexMapMode(matrix)`, scale globals `4.0`/`1.8` at `0x08abf4c4`/`c8`, offsets re-randomised per frame at `0x08abf4e4`/`e8` by `FUN_0891055c`), with stencil and alpha-test `GEQUAL 0x80`. Reads as the **time-trial ghost renderer** - proximity fade plus sparkle. [roadmap M6](docs/overview/roadmap.md) has the checkbox; it needs replay data, so it lands late. |
+| **Magstrip leftovers, none load-bearing** | The overlay question is closed ([track.md](docs/formats/track.md)) and these four are what was left unexamined. (1) The magstrip's own animation, if any - `_magsurface3_1verb`'s `verb` suffix is unexplained, and material `+0x10`'s flag drives `FUN_0892733c` texture-matrix uploads in the batch walker `FUN_0890d0cc`. (2) Batch `+0x14`, and pass bit `0x1000` - present on every magstrip batch except the far-LOD copy's, meaning still open ([mesh-draw.md](docs/ghidra/functions/psp-pulse-usa/mesh-draw.md) also has `& 0x1000` undecoded). (3) Reproducing the corner tick-frames, only if anyone still cares - the magnification-artefact explanation stands. |
+| **Frame comparison: three residuals** | The pipeline landed and settled the fov unit. Left: (1) the fov reading rests on one ship and one view - a second team's authored value plus the internal view closes it fully, about an hour of emulator time; (2) the shot-versus-row phase is bounded at two ticks but not pinned, which only a fast-moving per-tick capture would do; (3) `place` always writes the basis rows and the `+0xc0` transpose together, so whether the integrator's post-loop rebuild covers the transpose alone was never isolated - academic while the pair works. |
+| **The hull sparks are approximated in three named ways** | `ShipCollisionFx_Trigger` (`0x089246b4`) is found, renamed and documented, and `sparks.rs` implements the blend-split pipeline pair, the streak geometry and the locator anchoring. Still approximated, each with a doc note: colour endpoints instead of the 256-entry tables (ADR-0006; runtime disc-load is the recorded follow-up), a cone aimed along the contact normal instead of the authored emitter-node frame, and the streak end-cap stretch (untraced resource field). **A side-by-side `just play` wall hit against the original is the open visual check.** |
+| **The original's camera/HUD shake on impact is untraced** | A hard wall hit in the original visibly shakes the camera/HUD; `oag_render` has no shake at all. The once-suspected function calls no camera API (contact-response.md carries the retraction) and `FUN_088418e0`'s reactions - sound, hull damage, shield flash - do not shake anything either, so the consumer is elsewhere: likely the camera update reading impact state off the craft, or a screen-space offset in the HUD draw. The severity plumbing recovered for the sparks (`min(|impulse| * 0.0125, 1)`) is the obvious input to look for. |
+| **PVS culling: three ceilings, one of them invented** | (1) A craft's bounding sphere reaches 6-14 of the 64 sections, and **splitting batches by section at load** is the only lever that moves this - it trades draw-call count, so measure before building. (2) Which section a *mesh* belongs to is still unrecovered: `oag_render::pvs` invents it by sphere-versus-box overlap and says so, and recovering the original's association would retire the only invented part of the pipeline. (3) Moving entities have no section and are never culled by tier one. |
+| **The HUD's four remaining items** | The layout was never an RE problem - Pulse ships five layouts as `Data\XML\*_HUD.xml`. What is left is on [hud.md](docs/ui/hud.md), and the one worth naming here: **a mode's code substitutes string keys into widgets the layout positioned** - a time trial's top right reads `IG_HUD_RECORD` where `TimeTrial_HUD.xml` says `IG_HUD_TOTAL`, and 26 of the binary's 38 `IG_HUD_*` keys appear in no layout at all. The substitution rule is unread and deliberately **not** worked around by hardcoding. Zone, Eliminator, `<Mode3D>` and text outlines are scoped out and listed on the page. |
+| **Race modes: the start line is measured on one circuit only** | Time trial, speed lap and Zone run. `Course::START_LINE_OFFSET` is fitted on `16_Track`; the authored `Start Position` frame would replace it at confidence 88 across all 40. Two guards exist because both failed in practice: `RaceState::lap_gate` requires the near half *then* the far half of a lap (the ship spawns behind the line, so its first crossing is a wrap, and rocking over the line would otherwise record an unbeatable best lap), and lap 1's clock starts at the line rather than at the standing start. |
+| **Zone has no ending** | `Zone_Update` (`0x0882f5cc`) is read end to end ([zone-mode.md](docs/ghidra/functions/psp-pulse-usa/zone-mode.md)) and needs no invented constants - all sixteen shipped per-team files carry `<Stats>` alone. The original ends a run on bit 12 of `entity+0x860` and **nothing was found that sets that bit**: confidence 60 for "craft eliminated", **25** for "shield reached zero", too low to implement. Shield depletion is unimplemented project-wide, which is the real blocker. |
+| **The grid: one slot is recovered, seven are not** | `Start Position` (class `0x3bc`) is decoded and both `oag_game::race` and `oag-trace drive` spawn on it. **The next step is code, not more data** - nothing in `.vex` will produce slot 2. Two traps on [`track.md`](docs/formats/track.md#start-position): the authored `y` is not a ride height (1.03-7.36 units above the collision surface across 40 files, so the spawn raycasts), and `just scripted-sim`'s path length is still not comparable to a capture's. |
+| **Nothing airborne has ever been captured** | `grip_air`, the airborne pitch gain and the `-0.3` airborne weathervane have no runtime leg at all. One capture with a real jump in it closes several at once. |
+| **Task #33: `oag-trace` cannot exercise the mag-lock hold** | `replay`/`drive` take one `Environment` for the whole run and the track samples change per tick, so a replay's blend is 0 by construction. Needs per-tick locator plumbing. It carries the locator-fidelity lead too: the hold explains 49.5 % of the inverted-section residual with nothing fitted, and the remaining magnitude points at the *locator* - our 4-per-segment resampled spline may not be the original's evaluated curve. |
+| **The hover probe takes only the deepest hit** | Eight probes, one contact, and no `cross(r, impulse)` angular response. [`oag-trace.md`](docs/tools/oag-trace.md) dates when it bites: the two sides agree to a unit for the first 75 ticks, and what fails afterwards is *staying on the track* - `grounded` dropping to `0.5` and then `0` while the original never leaves `1.0`. That is the named next piece of contact work. |
+| **Is there a fifth handling class?** | [`handling-stats.md`](docs/formats/handling-stats.md) resolves `VECTOR`/`PHANTOM` ordering but explicitly does not answer whether a fifth class exists anywhere in Pulse - Wipeout HD's ladder does begin at Vector. Open question, not chased. |
+| **Three places still call `talons-junction-time-trial-lap.csv` a lap** | It is not one: measured off the capture, it stalls and reverses. `crates/physics/src/wall.rs:225` and [`oag-trace.md`](docs/tools/oag-trace.md) both describe it as a whole lap and were deliberately not swept when that was settled. The one thing the file *is* good for is the start line - its first frame resolves to the same ring point the lap counter starts a lap at, which is the strongest check `Course::START_LINE_OFFSET` has. No exit-criterion argument may lean on it. |
 | **The 13 % roll-stiffness gap** | The recovered tensor runs the roll oscillator 13 % stiff against measurement. Untouched by the downforce fix by construction (the probes are on the centreline), so it is now the only gap of its kind. |
-| **Menus: rebinding is the one thing on them that does not work** | The shell navigates and every other row is live - see [menus.md](docs/architecture/menus.md). A `binding` row shows what `oag_input::keys::map_key` returns and cannot change it, because that function is a hardcoded `match`: rebinding needs a table, persistence and conflict handling. `keys::bound_keys` probes `map_key` with a candidate set rather than keeping a second table, so the page cannot drift from the game, but the candidate list can under-report a key added to `map_key` and not to it. **Escape now backs out of a race into the menus**, which is most of the road to a pause menu and is deliberately *not* one: the `World` is dropped rather than suspended, so re-entering loads a fresh race. Suspending it is the remaining work, and the menu stage already builds its own renderer so it can be opened from somewhere that is not the front end. |
-| **MONITOR has only ever run on a one-screen machine** | It landed with the DISPLAY/GRAPHICS split and it is the one row there with no coverage of its working path. The *miss* path is confirmed on `eDP-1`: a settings file naming `nope-not-here` prints `no monitor named ... (this machine has: eDP-1)` and falls back to the default. **Picking a second screen has never been executed**, in either window mode. `display::centred` and `Monitor::choose` are unit-tested; `centred_on` in `main.rs` is not, and it is the part that reads winit's rectangle and scale factor - a wrong scale factor offsets the window by the difference on any screen not at 100 %, and it centres on the *inner* extent while setting the *outer* position, so a decorated window sits high by about a title bar (known, documented on the function, not corrected). **Try it on two screens before leaning on it**: `just play`, OPTIONS -> DISPLAY -> MONITOR, windowed and borderless. Note the compositor may refuse all of it and a tiling one will. |
-| **Movie decode is off the render thread; what is left is the audio it has no counterpart for** | **Resolved, and measured on both sides.** `movie::Feed` owns the `FrameStore` on a worker thread, decodes four frames ahead into a ring, and hands the drawing thread the newest frame at or before the playhead; both call sites went through it, the menu backdrop and the intro (`FrontendStage::sync_video`, which had always done the same blocking decode). [ADR-0010](docs/architecture/adr/0010-movie-decode-thread.md) has the design, the rejected alternatives and the full tables. The headline, same 45-second run through both stages, same instrumentation: PSP menu at a 240 limit went from **197.7 fps min / 51.85 ms worst frame** to **240.0 / 4.71**, the PSP front end from 213.5/43.35 to 240.0/4.44, and the PS2's 512x512 `BG512.IPF` - the worst case at **82.25 ms** - to **7.04 ms**. **The "front end" figures are the intro's code path playing the *backdrop's* stream**, not `Intro.PMF`: every run passed `--movie 'Data\Movies\Backdrop.PMF'` so that one nine-second movie reaches both stages. Same cache format, same decoder, so `sync_video` is exercised faithfully - but a 240-limited loop over `Intro.PMF`'s own 1200 frames is the one thing nobody measured either side, and its cache is warm if anyone wants to. Unlimited, the PSP menu's worst frame went 46.51 -> 7.45 ms while the *median* barely moved (942 -> 1016 fps), which is the whole point: the average was never the symptom. **Three things worth knowing before touching it.** `--menu-page` cannot check this path - the capture goes through its own `Movie` whose frames were never taken, so it looks right even when a real window draws on black; use a screenshot of an actual window. `Feed::restart` carries an epoch because a restart can land mid-decode, and getting that wrong breaks the *second* menu open only. And the ring is deliberately not a channel: the consumer polls several times per movie frame and must be able to look at positions without consuming them. **What is genuinely left is not this**: the movie has no audio at all (ATRAC3+ is demuxed and discarded), and whenever it gets some, the playhead becomes something two consumers pace against rather than one - `movie::Player` is the place that changes, not `Feed`. |
-| **The menu backdrop is verified as a loop now, including the wrap and the reopen** | Was "verified as a still". The menus draw over `Data\Movies\Backdrop.PMF` (PS2: `BG512.IPF`), the movie `FE Screen`'s own `Movie` widget names - see [menus.md](docs/architecture/menus.md#the-background-the-menus-sit-on). **The playhead advancing is now confirmed on the running game rather than argued**: an instrumented run printed the frame actually in the renderer's planes beside `Player::position()` every 200 frames for 45 seconds and they tracked exactly, through the wrap (position 278 showing frame 8 of 270) and on both discs, with a live-window screenshot on each showing the picture and the PS2 pillarbox. `--no-video` is confirmed back to black. **Menu -> race -> escape -> menu was verified by forcing a second `open_menus()` rather than by pressing escape**, because no key-injection tool (`wtype`, `ydotool`) is installed - see the ESC row, which has the same gap. That is the `Feed::restart` path and it came back at frame 0 and wrapped again correctly. What nobody has done is *watch* it: `just play` and look at the background for twenty seconds. |
-| **The backdrop is one continuous playback across `Show Logo` -> menus, and both halves of the old split are fixed (2026-08-07)** | **Reported by the user against the original**: the picture restarted when the boot sequence handed off to the menus. It should not - `Show Logo` is a *child* of the `FE Screen` that owns the movie widget, so pressing START changes which widgets are drawn over a loop that never stops. Two independent defects, and each hid the other. **(1) Two playheads.** `Frontend` owned one `movie::Player` and `Session::open_menus` built a second at frame zero, rewinding the shared `movie::Feed` to match; the front end now hands its own over (`Frontend::take_backdrop` -> `menu_playhead` in `main.rs`) and nothing is rewound on that path. **(2) The feed was asked with a wrapped frame index.** `Draw::Video` carried only `frame`, which wraps at 270, while a `Feed` counts positions that never wrap - so nine seconds in, the front end asked for positions the feed was already past and took nothing ever again. The draw carries `position` now and the feed only ever sees that. A third thing follows from fixing those: **`FrontendStage::sync_video` pumps the backdrop's feed on every frame whether or not anything draws it** (uploading only when the backdrop is the movie on screen), because the playhead runs from boot while only `Show Logo` shows the picture, and a feed nobody takes from parks four frames in - without the pump, `Show Logo` would appear and then rush through nine seconds of movie at decode speed catching up. **Verified on the real EU PSP disc in a real window**, not by screenshot (`--screenshot` goes through `capture.rs`, which never builds a `Session` and so cannot see any of this - the same trap the `--menu-page` row records). A temporary probe printed the playhead beside the frame actually taken from the feed, with START injected at tick 900: the front end tracked exactly through the wrap (playhead 300 -> index 30), the handoff went `frontend playhead=420` -> `menu playhead=480` with **no return to zero**, and the menus carried on wrapping normally (playhead 540 -> index 0). The same probe with the old frame-based request reproduced the freeze exactly: takes stop dead after playhead 240 and never resume. Probe removed; no instrumentation is left in the tree. **One judgement call, not settled by any document**: leaving a race still starts the loop over (`escape` -> `open_menus` with nothing to carry, and the feed restarted to match), on the argument that `FE Screen` is torn down for a race and rebuilt after it with its `autostart` movie starting again. Nobody has measured the original's loop phase across a race. If it turns out to continue there too, the change is small - stash the playhead on `Session` when a race starts and hand it to `menu_playhead`, with no feed restart, since the feed parks at most four frames past where the menus stopped taking from it. [menus.md](docs/architecture/menus.md#one-playback-not-one-per-screen) and [frontend-boot.md](docs/architecture/frontend-boot.md) carry the full reasoning. **Follow-up (2026-08-08): the playhead was continuous and the picture still was not, and the user reported both handoffs again.** Three further mechanisms, each a black frame rather than a playhead, all measured on a real windowed EU-PSP run under Xvfb with a temporary probe printing the draw list's named movie, the position asked for, what the feed returned and whether the video draw survived. **(1) `Feed::take_upto` pops, and the pump discarded what it popped.** The pump is required, but the frame it took on a frame that was not drawing the backdrop was dropped, and a ring has no memory of what it handed over - so the first frame that wanted to *draw* the backdrop asked for a position the ring was already past. Caught in the act: frame 480 was `Language Selection`, drew no video, took position 119; frame 482 was `Show Logo` asking for 119 and getting `None`, so its draw was trimmed and the logo drew on black. **Timing-dependent, about one boot in three**, which is why it read as "sometimes not smooth". **(2) The menus get a fresh `Renderer`, and a fresh renderer is empty planes** - the user's own guess that the video surface is not reused was exactly right. `MenuStage` will not draw the quad before a frame arrives (zeroed I420 is green, not black), and the pump had just discarded the frame at the playhead, so the menus drew rows on black for **three frames on every single boot** - deterministic, unlike (1). **(3) `Launch Game` and `Language Selection` emitted no video draw at all**, which no feed bookkeeping could have covered. `Launch Game` is the one that matters: `Session::frame` draws it **once and then stalls** building the menus, so black-with-`LAUNCH GAME`-across-it is on screen for that whole load - a few hundred milliseconds, and most of what the START press looked like. Fixes: `FrontendStage::held_backdrop` keeps the newest picture taken instead of dropping it, with `backdrop_in_planes` tracking whether the planes still hold it (one set of planes serves both movies, so an intro upload displaces it); `open_menus` clones it into the new renderer before the first menu frame and seeds `Backdrop::shown`; and `Frontend::insert_backdrop` puts the loop under every screen between the intro and the menus. **Do not "fix" the pop** - popping is what frees a ring slot for the worker, so stop discarding, not popping. Pinned by `movie.rs`'s `a_frame_taken_is_a_frame_gone_even_at_the_same_position` and `frontend.rs`'s `the_screens_after_the_intro_all_sit_on_the_backdrop`. After: **zero** frames anywhere between the intro and the menus draw without the backdrop, over four runs including the timings that used to reproduce (1). Before/after frame dumps in `data/cache/fe-transitions/`. **Two traps worth keeping.** A frame dump into the session scratchpad filled quota-limited `/tmp` and broke the shell mid-run (7 MB a frame at window size) - dump to `data/cache` and gate on a trigger, not a frame range. And **the readback is an observer effect**: dumping every frame in a range slowed the loop enough that the playhead advanced on each one, which made (1) unreproducible; arming the dump *on* the defect keeps the frames before it at full speed. **Still open, and defect #1 is not fully closed by this**: `BOOT_PRESS_START` carries `pulse="true"` and `delay="1"`, so the disc fades PRESS START in a second late and throbs it while ours pops it on static - an independent discontinuity needing a period and depth nobody has measured. **And no pixel capture of the original exists - treat it as untried, not failed.** On this DRI-less Xvfb an accelerated window's contents never reach the root framebuffer: `ffmpeg -f x11grab` of our own window returned 2,400 uniformly black frames while the game was demonstrably drawing, which is what forced the in-process framebuffer readback that produced our own evidence. The PPSSPP leg is confounded rather than conclusive - `import -window root` was black and `[Recording] DumpFrames` produced no file in one attempt, but that run shared a display with another session's emulator. The structural claims above rest on the front-end XML, which is the stronger source for structure; only a transition *effect* needs pixels, and a maintainer with a real display can settle it with `just launch-pulse-psp data/images/pulse-psp-eu.chd` and any screen recorder. |
-| **Brightness and gamma are covered, and not by a screenshot** | Recorded because the obvious check is the wrong one. `--screenshot` and the race capture write the offscreen frame straight out and never run the blit that grades it - that is [deliberate](docs/architecture/menus.md#brightness-and-gamma), so **no capture will ever show these settings** and a picture that looks ungraded is not a bug. The real check is `upscale::tests::the_grade_moves_the_picture_in_the_direction_the_setting_names`, which builds the actual pipeline on a headless `Rgba8Unorm` target and reads the pixel back; it was mutation-checked by swapping brightness and the exponent in the shader, and it fails. It skips with a note where there is no adapter, so **a green CI run does not mean it ran**. |
-| **The ESC rewiring has no live-keypress check** | Escape is "back one level" - a race returns to the menus, a menu page pops, the front end and `--race` quit. `Menu::back` is unit-tested from both ends, and `Session::escape` in `main.rs` is not: it needs a window and a real keypress, and no key-injection tool (`wtype`, `ydotool`) was installed on the machine it was written on. **Press it once by hand before leaning on it**: `just play`, reach a race, escape; then `just play --race`, escape. Two things it would catch that the compiler will not - a held escape walking out through key repeat (guarded by `!event.repeat`, unverified), and re-entering the menus mid-race leaving a stale title or cursor. |
-| **Nothing airborne has ever been captured** | `grip_air`, the airborne pitch gain and the `-0.3` airborne weathervane consequently have no runtime leg at all. One capture with a real jump in it closes several at once. |
-| **Task #33: `oag-trace` cannot exercise the mag-lock hold** | `replay`/`drive` take one `Environment` for the whole run and the track samples change per tick, so a replay's blend is 0 by construction. Needs per-tick locator plumbing. It also carries the locator-fidelity lead: the hold explains 49.5 % of the inverted-section residual with nothing fitted, and the remaining magnitude points at the *locator* - our 4-per-segment resampled spline may not be the original's evaluated curve. |
-| **Ship-to-ship collision stun** | `stun_timer`, its constant and the engine gate all exist and nothing arms them, deliberately: track contact does not arm it in the original. Ship-to-ship needs the writer of the pending impulse at `entity->0x4c + 0x110`, plus `0x0884ef30` (the two-body resolver) and the `+0xb8 == 6` zero-friction entity class - all unread. |
-| **Sideshift's input side: closed - it was never one binding, it was two control schemes, and both are implemented** | **2026-08-04.** The two functions this row used to call unread are three lines each, and reading them opened the whole options module: the game binds **eight abstract actions**, and the options page pairs each index with its own localisation key, so `OPT_CTRL_SS` settles which one the sideshift is. Novice holds a dedicated button (`L`) and flicks the stick; veteran has no such button and **double-taps** an airbrake within `0.25 s`. `engine.md`'s "repeat lockout" reading of that branch was wrong and is corrected. Evidence, addresses and confidence: [`input-bindings.md`](docs/ghidra/functions/psp-pulse-usa/input-bindings.md). Ported: the armed latch, both tap windows and the `1.0 s` lockout are `ShipState` fields, `ship_controls` takes a `ControlScheme`, `advance_sideshift` runs both machines, `InputSnapshot` needed nothing new. Verified on both input producers - `verification/scenarios/sideshift-double-tap.inputs` moves the ship 11.7 units left through `oag-trace drive`, and `just play --race --hold cross --press l` moves it 28 through the live race loop. Both schemes are selectable three ways: the `SIDESHIFT` row on the menus' CONTROLS page, `[controls] scheme` in the settings file, and `--scheme` on `oag-game` and on `oag-trace drive`/`run`. It resolves once at startup and applies to the next race, not the running one - a scheme swapped mid-race would leave a half-finished gesture armed in `ShipState`. The novice flick has its own scenario, `sideshift-flick.inputs`, whose control is the same file under the other scheme - identical to tick 200, 4.0 units apart at 210. **Still open**: no capture of either gesture off the original exists, so every timing here is static analysis with no runtime leg; the recipe is on the page. |
-| **The barrel roll is identified, and it is unimplemented** | **2026-08-04.** `engine.md` parked the three-entry tap history inside `Ship_UpdateSideshiftInput_q` as "**not** read far enough to say what it is". It is the barrel roll: a left-right-left alternation on a `0.6 s` inter-tap timeout, paid for out of shield energy, arming a signed roll phase that completes rather than reverses, rewarded only if it finished before the craft landed. Confidence 80, chain read link by link in [`input-bindings.md`](docs/ghidra/functions/psp-pulse-usa/input-bindings.md#the-tap-history-path-is-the-barrel-roll). **A headline Pulse mechanic we do not have.** A follow-up needs two unread things: `FUN_08840770`'s energy cost, and what consumes `craft+0x1c0 & 0x400` - presumably the visual roll, which would decide whether the phase is an angle. `DAT_08b36bf0`, the ramp rate, is `.bss` and needs a live read.
+| **Ship-to-ship collision stun** | `stun_timer`, its constant and the engine gate all exist and nothing arms them, deliberately - track contact does not arm it in the original. Ship-to-ship needs the writer of the pending impulse at `entity->0x4c + 0x110`, plus `0x0884ef30` (the two-body resolver) and the `+0xb8 == 6` zero-friction entity class, all unread. |
+| **The barrel roll is identified and unimplemented** | A headline Pulse mechanic we do not have. The tap-history chain is read link by link at confidence 80 in [`input-bindings.md`](docs/ghidra/functions/psp-pulse-usa/input-bindings.md#the-tap-history-path-is-the-barrel-roll). A follow-up needs two unread things: `FUN_08840770`'s energy cost, and what consumes `craft+0x1c0 & 0x400` - presumably the visual roll, which would decide whether the phase is an angle. `DAT_08b36bf0`, the ramp rate, is `.bss` and needs a live read. |
+| **Sideshift has no runtime leg** | Both control schemes are implemented and `sideshift-flick.inputs` covers the novice gesture. **No capture of either gesture off the original exists**, so every timing is static analysis; the recipe is on the page. Note the scheme resolves once at startup and applies to the next race, not the running one. |
 | **Task #38: the penetration-escape surface gate** | The original gates escape on surface type 1 only; the crate uses 1-or-3. Noticed, not acted on. |
-| **Track art's texture pairing is now solved too, checked separately from ships** | The delta-(-1) directory rule (proven for ships, 11 of 11 exact) turns out to also hold, checked independently, for each circuit's own `track.vex`/`track_reversed.vex`: 27 of 32 exact, the other 5 short 1-2 slots. `oag_game::race::load` now tries it for the track model the same way it already did for a ship. What is **still** a separate, harder problem: a model built from several small pieces sharing one atlas (the disc-wide 535/975 figure is about that pool, not about tracks) - see [`ps2-texture.md`](docs/formats/ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name). |
-| **Task #37: the PS2 `.ipf` backdrop renders but is not wired as the looping FE Screen backdrop** | Boot never reaches FE Screen. Front-end work, not format work - [`ipf.md`](docs/formats/ipf.md) is closed at 92. **Largely closed, on both discs.** The boot now reaches a screen that *is* an `FE Screen` child - `Show Logo` - and draws that screen's parent's backdrop under it, so the `.ipf` is wired as a looping FE backdrop on the PS2 and confirmed by screenshot (pillarboxed, correct, not garbled). The front end has **one** video pipeline, sized from the intro, and `upload_frame` slices by those plane dimensions, so `boot::load` guards on the two movies' geometry matching and reports if it declines - but that branch fires on neither disc: PSP is 480x272/480x272 and PS2 is 512x512/512x512, the PS2's difference being display *aspect*, handled per-movie by the rect. **The PS2's `Show Logo` logo half is now closed**: `pulse_logo.mip` is not under that name in its WADs, and the entry that holds it (3421, hash `1e6c873e`) was found by matching the PSP picture's silhouette - see [`ps2-texture.md`](docs/formats/ps2-texture.md#the-front-end-and-hud-images-are-not-under-the-names-their-xml-uses) and `oag_assets::pulse::PS2_IMAGES`. The screen draws the logo now. `gameshare_backdrop.mip` is a separate case and is **confirmed absent** from the PS2 disc, which fits - Game Sharing is PSP ad-hoc. What remains of #37 is the menus' own use, not this. **The layout half is now closed too (2026-08-08).** The PS2's `Skin.xml` places widgets in a **640x448** grid, not the PSP's 480x272, so every PS2 widget landed off the bottom-right and `Show Logo` drew literally nothing. Identified by arithmetic rather than guessed: the PS2 layout is the PSP's scaled by exactly the resolution ratio - `BOOT_PRESS_START` `x` 613/460 = 1.3326 against 640/480 = 1.3333, the file's extreme `y` 415/252 = 1.6468 against 448/272 = 1.6471, the logo's `y` 119/72 = 1.6528 - every one inside a tenth of a percent. Confidence 95. **The `y` comparisons use the USA PSP's 220, not the EU's 230**: the EU PSP release moved that widget down 10px on its own and the PS2 EU disc did not follow, so the PS2 layout was scaled from USA-era artwork - `362/230` misses by 4% where `362/220` hits. **The trap, and it is silent on the PSP: a grid and the aspect it is *shown* as are two different numbers.** 640/448 = 1.429 but a PAL frame displays as 4:3 = 1.333. The renderer's `screen` uniform wants the grid; `render::letterbox_in` wants the display aspect (feeding it the grid leaves the front end 7% short of the window); and `frontend::pillarbox_in` wants **both** - it returns a grid-space rect but decides wider-or-narrower against display aspects, which is the one that stays wrong after the other two are fixed and is what `INTRO512.PSS` hits, being a 4:3 cut that a square-pixel comparison boxed inside a 4:3 screen. `frontend::Space` carries the pair, `boot::load` sets it from `archives.layout.platform`, and **`SCREEN` is deliberately left as the PSP constant** - `loading.rs`, the menus, `hud.rs`'s bounds checks and `oag_race::AUTHORED_ASPECT` are all written against it, so a source that authors elsewhere opts in instead. Both draw paths are wired, the window's *and* `capture.rs`'s, because `--screenshot --screen` is how this gets verified and a capture that disagreed with the window is exactly the divergence that bit task #2. **The logo draws too now, and the old "not found in its WADs" note was a misreading.** It needed a second, independent thing that landed the same day: the sprite sheet could not decode a PS2 texture at all, so `pulse_logo.mip` was *reported missing when it was merely unreadable*. `sprite.rs` now falls back to `ps2_texture::parse` and it decodes as 512x128, 8bpp. `read_front_end_first` had been searching the companion archive **and** the bulk one all along and reports only the bulk one's complaint, being the last tried - which reads as though the companion was never searched. `gameshare_backdrop.mip` genuinely is absent from that disc and is on no screen this build draws. So PS2 `Show Logo` now draws logo, text and the `.ipf` backdrop filling its 4:3 frame. Before/after at `data/cache/ps2-layout/`. |
+| **Task #31 residual: `race.rs`'s unguarded `slice(..)`** | `oag-view --collision`'s panic on an empty vertex buffer is fixed. `crates/game/src/race.rs:2764` has the same unguarded slice, left alone deliberately: a track always has collision geometry, so guarding it would be speculative. The `orbit` guard is the one with no coverage - it needs a window. |
+| **Menus: rebinding is the one thing that does not work** | The shell navigates and every other row is live ([menus.md](docs/architecture/menus.md)). Separately, **escape backs out of a race into the menus, and that is deliberately *not* a pause menu**: the `World` is dropped rather than suspended, so re-entering loads a fresh race. Suspending it is the remaining work, and the menu stage already builds its own renderer so it can be opened from somewhere that is not the front end. |
+| **The ESC rewiring has no live-keypress check** | The unit-testable half is tested; `main.rs`'s wiring needs a window and a real keypress, and no key-injection tool (`wtype`, `ydotool`) was installed on the machine it was written on. **Press it once by hand**: `just play`, reach a race, escape; then `just play --race`, escape. Two things it would catch that the compiler will not - a held escape walking out through key repeat (guarded by `!event.repeat`, unverified), and re-entering the menus mid-race leaving a stale title or cursor. |
+| **Nobody has *watched* the menu backdrop** | It is verified as a loop, including the wrap and the reopen, but menu -> race -> escape -> menu was verified by forcing a second `open_menus()` rather than by pressing escape, for the same missing-key-injection reason. `just play` and look at the background for twenty seconds. |
+| **MONITOR has only ever run on a one-screen machine** | The *miss* path is covered; the working path is not. A wrong scale factor offsets the window by the difference on any screen not at 100 %, and it centres on the *inner* extent while setting the *outer* position, so a decorated window sits high by about a title bar (known, documented, not corrected). **Try it on two screens**: `just play`, OPTIONS -> DISPLAY -> MONITOR, windowed and borderless. A tiling compositor may refuse all of it. |
+| **Do the game's capture paths need encode-on-write?** | Answered "no" by [ADR-0020](docs/architecture/adr/0020-gamma-authoritative-colour-space.md) for the colour-space question, but the front end's **authored text and fill colours** were tuned against a window and there is no measurement of the text case the way `render.rs` measured the sprite case (sprites are unlit, so that answer was clean). Settle it with a window-versus-capture comparison of a text-heavy screen before changing anything. |
+| **FSR 1's default is open** | `oag_render::post::fsr1` transliterates AMD's MIT `ffx_fsr1.h`; the route for FSR 3.1 is settled in [ADR-0012](docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md). It cannot reach the front end because `capture::run`'s front-end path has no `Framebuffer`, and giving it one is the same work as the UI-compositing restructure ([modern features](docs/overview/modern-features.md) has the prerequisite table). **Do not** read a menu capture taken with `--upscaler` as evidence either way: the flag changes the UPSCALER row's own text, so the two images differ for an unrelated reason - that nearly produced a false conclusion. |
+| **Two anti-aliasing residuals** | MSAA and FXAA/SMAA are in; TAA is deliberately not. (1) `Entry::warning` is a single `Option<Warning>` and cannot express two independently-triggered warnings without restructuring that type, so the 200 % render-scale case has no live warning. (2) There is no `--anti-aliasing` CLI flag, unlike `--upscaler`/`--render-scale`; add one the same way if an AA comparison capture needs it. Note **MSAA 2x fails wgpu validation here** - `sample_count 2` needs a device feature this project never requests. |
+| **Front-end gaps behind `Image`** | `screen.rs` reads only a screen's direct children, so `Show Logo`'s `BOOT_LEGAL` line is absent - now a *guarded* absence. The fix is not a scissor rect: the `Viewport` around it clips nothing vertically, and what the line needs is `widthlimited="true"`, i.e. wrapping a 118-character string, and `Draw::Text` has no width or wrap. That is text layout. USA disc only - EU drops both. An `Image` with no `x` is centred on a guess. |
+| **Pure's dangling `FEGlobals->TextColor`** | Referenced at seven sites in Pure's own `Skin.xml` and defined nowhere in that file. Either a base skin XML that `Screens::from_xml` does not merge across `LoadXML` includes defines it, or the original engine has a genuine dangling reference. **Not a parser bug on this side** - worth knowing before someone debugs one. |
+| **The `.pob` record's own field layout** | The container, the `SYSP` slot table and the names are decoded and corroborated on a second binary; a resolved record's fields are not. The preload path-string addresses `0x08a886f8`-`0x08a8877c` are the untried xref target. |
+| **The `.vex` class-ID table's extent** | All ~55 game classes are transcribed into [vex.md](docs/formats/vex.md) and `vex::CLASS_NAMES`, self-validating at 95. The walk stopped at `0x08ab26a0` without reaching the `id == -1` terminator, so generic Maya classes past `0x3eb` are only partly covered. Cheap to finish; nothing depends on it. |
+| **Five teams' `Ship.vex` does not resolve by name** | `Auricom`, `Harimau`, `Icaras`, `Mirage`, `Van_Uber` have no `Data.wad` entry hashing to `Data\Ships\<Team>\Ship.vex` on the PSP disc, so eight of thirteen teams were censused. A `mine-names` job, not a format one. The path templates resolve with the **FE team-model name**, whose default is the literal `"ship"` - hence `shipwreck.vex`, *not* `Assegaiwreck.vex`. Guessing the team name into those templates 404s, which cost a wrong conclusion once. |
+| **The airbrake flap rotation axis is chosen, not recovered** | The flaps deploy, and the reason to know this before retrying: the node's payload is zero bytes, its class descriptor carries no handler pointer, no `0x3c5` immediate exists in the binary, and `Vex_FindClassDescriptor`'s only two callers are load-time. **There is no per-class function to decompile** - the way in is a live read under PPSSPP, watching which node matrix moves when the airbrake goes down. |
+| **A model built from several small pieces sharing one atlas** | The delta-(-1) directory rule now covers ships (11 of 11 exact) and track art (27 of 32 exact, the rest short 1-2 slots), and `oag_game::race::load` tries it for both. The shared-atlas case is the separate, harder problem the disc-wide 535/975 figure is really about - see [`ps2-texture.md`](docs/formats/ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name). |
 | **Which movie cut plays, and what plays the three 260-frame reels** | The reel set is region-invariant, so the disc's region cannot be the picker, and nothing in the boot path plays them at all. [`pmf.md`](docs/formats/pmf.md). |
 | **The PS2 PAL/NTSC selector's ultimate trigger** | `Movie_ResolveSourcePath` picks on global `0x0027a85c`; what decides that value (a numbered case in dispatcher `FUN_00186ed8`) was time-boxed away deliberately and nothing needs it yet. |
-| **Task #31: `oag-view --collision` panicked - closed** | **2026-08-04.** On an empty vertex buffer, for any file with no recognised collision class. Found against Pure; a shipped tool bug. The backtrace is the thing worth keeping: `create_buffer(size: 0)` and `write_buffer(&[])` both *succeed*, and the panic is two frames later at `set_vertex_buffer`, inside `BufferSlice::size_expect_nonzero` - so "clamp the buffer to a nonzero size" is the fix that looks right and still crashes. `mesh_render::capture_from` and `oag_view::orbit` now skip every draw command on a model with no geometry (the pass still clears, so a valid frame comes out), and `oag-view --collision` bails with a non-zero exit before reaching them rather than writing a screenshot of nothing. Repro was `--collision 'n\Feisar\Ship.vex'` against Pulse's `Data.wad`, no Pure disc needed. Covered by `mesh_render::tests::an_empty_model_captures_a_frame_instead_of_panicking`, which is **not** `#[ignore]`d: it probes for an adapter and returns quietly without one, the pattern `post::fxaa`/`post::fsr1` already use, so it runs in plain `just` on any machine with a GPU and no-ops in CI. That is worth copying - `tests/collision_capture.rs`'s own header still says "no other test in this crate touches wgpu", which was never true of `post::` and is a reason `#[ignore]` got reached for by reflex. The `orbit` guard is the one with no coverage (it needs a window). See [pure-status.md](docs/formats/pure-status.md#tooling-defects-this-probe-surfaced). Left alone deliberately: `race.rs`'s own pipeline (`crates/game/src/race.rs:2764`) has the same unguarded `slice(..)`, but a track always has collision geometry, so guarding it would be speculative. |
 | **Two PS2 identifications, one of which is wrong** | `0x0015d058` zeroes the same four accumulators as the already-named `Body_ClearAccumulators` (`0x0015ca48`). Left unnamed per ADR-0005; cheap to resolve. |
 | **The SAP clamp globals** | Both are all-zero in shipped `.data` with no writer anywhere in the image (xrefs, operand scans over all 635,898 instructions, `.ctors` - all checked), so taken literally the clamp is degenerate. Confidence 45, and nothing depends on which way it resolves. |
-| **The sRGB lead: real, and *not* the sprite sheet's fix** | Confirmed and fixed for `oag-view`'s mesh capture: `mesh_render::screenshot` now targets `Rgba8UnormSrgb` so the hardware encodes on write, as a window's surface does. **The fix is different from the sprite sheet's, and that is the part worth remembering.** The sprite sheet forks its *texture* format on `format.is_srgb()`, which works only because sprites are unlit - at light 1.0, `enc(dec(s)) == s`. `mesh.wgsl` multiplies a linear texel by a light rig, so the multiply lands between decode and encode and the texture-format fork stops being equivalent. Measured on the Feisar livery, same view rendered both ways: encode-on-write reproduces `srgb_encode(old)` to 99.3 % within 1/255 (mean 0.29/255), while the texture-format fork differs from it by a mean of 54.6/255. Applying the sprite fix here would be the wrong one. |
-| **FSR 1 is in, off by default, and the default question is open** | `oag_render::post::fsr1` transliterates AMD's MIT `ffx_fsr1.h`; the route for FSR 3.1 is settled in [ADR-0012](docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md). On the GRAPHICS page as `[graphics] upscaler = off|fsr1`, honoured **only where it is magnifying** - it is a magnifier, and asked to minify it undoes the supersampling it was handed, so a 200 % capture with it on is byte-identical to one with it off, deliberately. **Verified**: constants against upstream's formulas; a hard-edge upscale read back; ringing pinned at 10/255 across a 128-level edge at the shipped sharpness (16/255 at maximum); and that switching it on does not move a flat colour, which is the whole colour-space arrangement in one assertion and fails by 5/255 if the sRGB decode is swapped for `pow(c, 2.2)`. **The one comparison run** - `just compare-upscalers <image> <scale>`, one frame of one track at 50 % - says FSR 1 is markedly sharper, while the aggregate error against a 200 % reference ranks it *worse*. That is the trap in "Measuring a renderer change" showing up twice in one session; trust the images. **Why the default did not move anyway**: one frame of one track is not the sample `animated_textures` was held to, and the specific doubt is about content that frame did not contain. `Framebuffer::resolve` runs for the front end and the menus too, and those are 480x272-era paletted sprite art and glyphs off an R8 coverage atlas - what a sharpener rings on. Modest ringing on a synthetic edge is not the same as invisible on a glyph. **What would settle it**: a few tracks including a dark one and one with heavy alpha, plus a menu page. **The menu page is the blocker** - `--presented` only reaches the race hand-off, because `capture::run`'s front-end path has no `Framebuffer`, and giving it one is the same piece of work as the UI-compositing restructure ([modern features](docs/overview/modern-features.md) has the prerequisite table). **Do not** read a menu capture taken with `--upscaler` as evidence either way: the flag changes the UPSCALER row's own text, so the two images differ for a reason unrelated to the resampler - that nearly produced a false conclusion here. |
-| **MSAA and FXAA/SMAA are in; TAA is deliberately not, and neither is a live warning for the 200 % render-scale case** | **2026-07-31.** `[graphics] anti_aliasing`: `off`/`fxaa`/`smaa`/`msaa4x`, one enum so the three classes cannot combine - see [ADR-0013](docs/architecture/adr/0013-anti-aliasing-architecture.md) for the class separation and why FXAA/SMAA run *before* the upscaler rather than after. MSAA multisamples the race scene's own pipelines and resolves at the end of `race::Scene::render`'s one pass; FXAA is an original single-tier implementation (not a transliteration - no upstream with clearable licensing was found, see `oag_render::post::fxaa`'s module docs); SMAA is transliterated from `iryoku/smaa` (MIT) at upstream's own **MEDIUM** preset (diagonal search and corner detection both off, matching `SMAA_PRESET_MEDIUM`'s own defines), lookup textures and all - see `oag_render::post::smaa`. **`Msaa2x` was built, then removed in the same session**: `crates/render/tests/msaa_resolve.rs` proved on a real adapter that `sample_count: 2` fails device validation here regardless of hardware, because nothing requests `wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` - see the ADR's Consequences before reintroducing it. **Verified only synthetically, not against real game content**: this pass ran in an isolated worktree where `data/images/` is empty (see "Read this first" above - gitignored content does not travel into a worktree), so every check is a unit test or a real-device test against synthetic textures (flat colour untouched, hard-edge/staircase blend behaviour, and - new this session - an actual MSAA 4x resolve read back and confirmed antialiased) - `cargo nextest run -p oag-render --run-ignored all -E 'test(fxaa) or test(smaa) or test(msaa_resolve)'`. **`just play --race` with each of the four settings, watched by eye against a real track, has not been done** and is the natural next step for whoever has the disc images mounted. **A plain `--screenshot` will not show it**: `Framebuffer` (where FXAA/SMAA and the upscaler live) is only constructed under `--presented`, so `--screenshot` alone exercises MSAA (baked into the scene's own pipelines) but never runs `resolve()` - the same trap this table already records for the upscaler and the colour grade; use `--presented --screenshot` to see FXAA/SMAA in a capture. Two things scoped out on purpose: **(1)** the >150 % render-scale redundancy guidance (SMAA/FXAA do little once supersampling is already doing the deblurring) is recorded as product policy in the ADR but not wired as a `warn_when` - the menu definition's `Entry::warning` is a single `Option<Warning>` and can't express two independently-triggered warnings without either overloading one message or restructuring that type, and this pass did not touch it. **(2)** No `--anti-aliasing` CLI flag, unlike `--upscaler`/`--render-scale` - those exist specifically so one command can produce one image of an upscaler comparison, and nothing this pass did needed that; add one the same way if an AA comparison capture turns out to need it. |
-| **Menu rows can now warn, not just grey** | `warn_when` marks a row whose setting is stored but currently doing nothing, in amber, with one message line under the page - as against `disabled_by`, which greys a row that cannot be changed *now*. The distinction is who caused it: a warned row is live and takes effect the moment the row it conflicts with moves. A warning takes **at least two** conditions and the loader enforces that, because a conflict is between settings plural; the first version named only the render scale and so fired whether or not the upscaler was even selected. Its value list is pinned to `upscale::magnifies` by a test, so the guard that declines to run the upscaler and the message that explains it cannot drift. [menus.md](docs/architecture/menus.md) has the rule. |
-| **Do the *game's* capture paths need the same encode-on-write?** | `race.rs`'s and `capture.rs`'s targets are still `Rgba8Unorm`, and the 3D scene in `race.rs` has exactly the defect `mesh_render` just had. What stops it being the same one-line change: switching the target also encodes the HUD's and the front end's **authored text and fill colours**, and whether that matches intent or breaks it is unestablished. `render.rs` measured the sprite case, and sprites are unlit so the answer was clean; text has no equivalent measurement and there are no committed reference PNGs to diff against. **Settle it with a window-versus-capture comparison of a text-heavy screen first** - do not apply it on the inference that the colours were tuned against the window, however likely that is. |
-| **Front-end gaps behind `Image`** | `screen.rs` reads only a screen's direct children, so `Show Logo`'s `BOOT_LEGAL` line is absent - now a *guarded* absence (`a_text_inside_a_viewport_is_not_collected`) rather than a silent one. **The blocker is not the clip rect.** The `Viewport` around it is 400x480 on a 480x272 screen, so it clips nothing vertically and the text starts at its own left edge; what the line actually needs is `widthlimited="true"`, i.e. wrapping a 118-character string to the viewport's width, and `Draw::Text` has no width or wrap. That is text layout, not a scissor rect. USA disc only - EU drops both. An `Image` with no `x` is centred on a guess (16 pixels either way, on the one case that exists). |
-| **Pure's dangling `FEGlobals->TextColor`** | Referenced at seven sites in Pure's own `Skin.xml` and defined nowhere in that file. Either a base skin XML that `Screens::from_xml` does not merge across `LoadXML` includes defines it, or the original engine has a genuine dangling reference. **Not a parser bug on this side** - worth knowing before someone debugs one. |
 | **SteamOS's own glibc version** | Unestablished. `just appimage-portable`'s floor is `GLIBC_2.34` (`objdump -T` and `readelf -V` agree, and the determinism test passes inside that container, so the two builds are interchangeable for the simulation). If `GLIBC_... not found` ever appears on a Deck, the version it names is the missing datum. [`packaging.md`](docs/tools/packaging.md). |
-| **The chase camera's 3/4 factor** | The eye sits at exactly 0.75 of the authored external offset, at rest and at speed alike, and where that factor comes from was not found - do not hardcode it. [`camera.md`](docs/ghidra/functions/psp-pulse-usa/camera.md) has the samples. The behaviour is right; only `chase.rs`'s prose is wrong, and the tidy-up (one sign flip in `oag_render::camera::chase::anchor` plus deleting `race::chase_pos_length`) is behaviour-neutral and undone. |
-| **The boost plume ships (2026-08-04); a few things about it are still open** | `<Team>boost.vex` now draws additively beside the ship whenever `Exhaust::plume_visible()` is true - `oag_render::exhaust` tracks its own 1.5 s reveal timer, `oag_game::race::Loaded::boost_model` loads it, `race::Scene`'s new `boost` `Drawable` overrides `mesh_render::build`'s new `blend` parameter with `exhaust::BLEND` rather than `TRANSPARENT_BLEND`. **Verified, not assumed**, that the override does anything: `crates/game/tests/boost_plume_ground_truth.rs` confirms all four of every team's batches land in `Model::transparent_draws` (the only list `blend_pipeline` draws), not the opaque or cutout lists - the failure mode if it had gone the other way would have been silent (no blending at all, not merely the wrong lerp blend). Mounting is settled at confidence 80 in [`exhaust.md`](docs/ghidra/functions/psp-pulse-usa/exhaust.md) - the two meshes are direct children of `World` with no `Transform` node between them, so the model draws once in ship space rather than through the `boost_flare`/`boost_flare1` locators `Ship.vex` carries, which look unused for this. **Still open, stated as such in `exhaust.md` rather than guessed**: whether the plume is fogged (`race::Scene` leaves it at `Fog::off` deliberately) and whether it depth-writes; and, unrelated to this feature, `BOOST_SECONDS`'s doc comment used to say `boost_timer` reaches "exactly two things" in the original - it is three, the third being the `engine_on` flag, corrected in the same pass. **A per-team surprise worth knowing before generalising from Assegai**: `shipboost.vex`'s junk nodes are not identical across teams - 6 of the 8 PSP-resolving teams carry only the three usual `0x000` nodes, Assegai carries one extra `Airbrake` node, and Goteki carries a `Transform` plus two `Airbrake` nodes. None of it reaches the decode (`mesh::build_with_textures` only reads `Mesh`/`Texture`), but a claim about "the fourth node" from one team's dump alone would have been wrong for the other seven - checked with an unfiltered `oag-view --nodes` sweep after a filtered one first missed it. |
-| **The loading screen's rippling band is procedural, and the `loading` plugin holds no video (2026-08-07)** | Opened to find a "wavy/liquid" loading movie separate from `LogoFMV`/`Backdrop.PMF`. **There is none.** `Loading_DrawWave` (`0x0890a8e4`) generates the band at runtime: two damped oscillator layers random-walked *across screen X* (not across time - the state array is zeroed every call), amplitude gated by a 24-entry `.rodata` envelope at `0x08a88034` whose two 99-peaks make it a heartbeat, drawn as 240 columns of 2x32 quads at y=220 out of one 32x32 cyan glow strip - `data/defaults/loading/LoadingPulseOverlay.mip`, whose only xref in the binary is this function. `Data\Plugins\loading\Definition.xml` (`Data.wad` 1126) is 30 `<PI_LoadingScreen>` tips, every `ImageSrc` a static `.mip`, zero movie references. `0x08abf45c` (was *not determined* on `main-loop.md`) is `g_loading_screen_type`: 0 boot logo, 3 teardown, 4/6 tip screen, 2 idle. **The decoy**: `Data\Tex\caustics\save.NN.mip`, 32 real water-ripple frames sitting immediately after `LoadingPulseOverlay.mip` in `.rodata` - they are in-game water (`Texture_BindCausticFrame`, `0x0890dcfc`, picks by track time), not the loading screen. EU corroborates: the 96-byte envelope table is byte-identical and unique in both binaries, and all five nearby strings keep identical relative offsets. [`docs/ghidra/functions/psp-pulse-usa/loading-screen.md`](docs/ghidra/functions/psp-pulse-usa/loading-screen.md). **PS2 checked too (same pass)**: `SCES_547.48` has the identical wave - same 96-byte envelope, same eleven tuning constants, same tip filter - and its `loading` plugin XML is 22 static `.mip` tips with zero movie references, so "not a video" holds on the platform where a video would have been cheap. Four divergences tabulated in [`docs/ghidra/functions/ps2-pulse-eu/loading-screen.md`](docs/ghidra/functions/ps2-pulse-eu/loading-screen.md): object not thread, type 0 is a five-language SCEE publisher plate, no time-based fade and no freeze-on-finish, and the X-ramp bounds (10,350)/(30,286) were never rescaled for the 640-wide loop. **Next steps**: (1) nothing here is runtime-verified - a PPSSPP capture of `g_loading_wave_phase` (`0x08abf470`) and the emitted vertex Y over a few frames of a type-4 screen would settle the motion model; (2) `LoadingPulseOverlay.mip` (`d857f34b`) was **not located on the PS2 disc** - absent from `WADS2.WAD`/`WADSP.WAD` directories and from a raw scan of all 85 MiB of `PRERACE.WAD`, though a nested archive inside an LZSS blob is not ruled out; (3) the 21 names were propagated to `psp-pulse-eu` in the same pass - 10 functions + 7 data landed (`Loading_DrawWave` EU `0x0890a264`, `Loading_Show` EU `0x0890a8a0`, envelope EU `0x00283814`), see corroboration.md's **fifth pass**. Two rejected: `Loading_ThreadMain` (independently reproduced *and* re-rejected at the fourth pass's own candidate `0x0890aef0` - treat as settled) and `Loading_DrawBootLogo` (EU is 18 instructions longer). **Trap hit and fixed in this pass**: `bulk_fuzzy_match`/`diff_functions` were unusable at the time because `/psp-eu/BOOT.BIN` in the shared Ghidra project was a raw re-import with **0 functions, 0 symbols, base 0x0** - the known PSP rebase gotcha ([`allegrex-vfpu.md`](docs/psp/allegrex-vfpu.md#setting-the-image-base)) had not been applied to this particular import, and both PSP programs are literally named `BOOT.BIN` so the bridge's `program` parameter cannot disambiguate them by name alone (use the full `/psp-eu/BOOT.BIN` path). A relocation-tolerant byte match on the two ELFs (mask only lui/addiu/ori/load-store immediates and j/jal targets, keep branch displacements intact, require a unique 4-aligned hit) substituted for it at the time and self-validated against three addresses derived independently by raw string search. **Since fixed**: rebased to `0x08804000` and re-analysed (7,932 functions, was 0) - `bulk_fuzzy_match`/`diff_functions` now work normally against this program. The EU rows are **still not applied to Ghidra** (`names.tsv` has them; the Ghidra database itself does not) - that's now unblocked, just not done in this pass. One real divergence found: EU creates the loading thread with a **12,000-byte stack against USA's 96,000**. **The renderer half now exists (2026-08-08)**: `oag_render::loading::Pipeline`, the crate's only 2D overlay pipeline - no camera, no depth, additive `SrcAlpha/One` - plus `GlowStrip::decode`/`placeholder` and a headless capture test that asserts on pixels (480x272 and 1920x1080 fed the same quads both put the band's intensity-weighted centre at 0.8117 of the height, against `BASELINE_Y / REF_HEIGHT` = 0.8088; the 0.003 is the amplitude floor, not a geometry error). Additive is not a stylistic pick: the across-screen ramp is a **colour** tint in the original (`0xff000000` to `0xff808080`, full alpha throughout), and `src.rgb * src.a` is the only blend under which `Quad::alpha` means what `Loading_DrawWave` computed. The strip's palette was measured while wiring this up - all 256 entries opaque - so the shader drops the texel's alpha and takes its shape from the colour ramp alone. **The game's own strip now goes end to end** (`the_games_own_glow_strip_reaches_the_shader`, `#[ignore]`d): `Data.wad` entry 68 through `GlowStrip::decode` into the shader, 12,398 lit pixels, brightest texel blue-dominant as the black-to-cyan palette requires. That check exists because a synthetic strip cannot reproduce the two ways this goes plausibly wrong - the blob is **swizzled** (bit 0 of `+0x07`), so a linear read gives a wrong-but-believable band, and its palette is **fully opaque**, so a shader that respected texel alpha would too. Capture at `data/cache/loading-wave-real.png`. **Still nothing runtime-verified against the original**, and no caller: the game does not draw a loading screen yet. |
+| **The chase camera's 3/4 factor** | The eye sits at exactly 0.75 of the authored external offset, at rest and at speed alike, and where that factor comes from was not found - do not hardcode it. [`camera.md`](docs/ghidra/functions/psp-pulse-usa/camera.md) has the samples. |
+| **The loading screen has no caller** | The rippling band is procedural and the `loading` plugin holds no video; the decode is pinned against the real blob (which is **swizzled**, bit 0 of `+0x07`, and **fully opaque**, so both plausible wrong readings are excluded by construction). **Nothing is runtime-verified against the original, and the game does not draw a loading screen yet.** |
+| **`engine_fire` and `exitglow` are authored but never registered** | Neither has one of `Vex_RegisterClass`'s 46 call sites, yet `exitglow` is authored 13 times on `16_Track` and `engine_fire` on zero of the disc's 340 VEXX files. Same shape as `gate`. Closed as an exhaust question - unregistered *and*, for `engine_fire`, uninstanced. |
+| **Trackside texture animation is implemented and switched off** | Measured against the original and deliberately disabled; the global scroll clock is still unfound. Two GU primitives were named on evidence along the way, and [texture-animation.md](docs/ghidra/functions/psp-pulse-usa/texture-animation.md) records that **`Gfx_BindTexture`'s `0.2` threshold is a VRAM re-upload heuristic, not an animation clock**. |
 
 ## Pending maintainer decision: shipped design data in tracked docs
 
 [`handling-stats.md`](docs/formats/handling-stats.md)'s own rule, per
-[ADR-0006](docs/architecture/adr/0006-no-copyrighted-content.md) - "a field name is a
-description of the format, a tuning table is the content itself" - is breached
-in places by earlier passes. `angular-velocity-column.md`'s shipped
+[ADR-0006](docs/architecture/adr/0006-no-copyrighted-content.md) - "a field name
+is a description of the format, a tuning table is the content itself" - is
+breached in places by earlier passes. `angular-velocity-column.md`'s shipped
 `Turning.amount` has been redacted, but it still quotes the Assegai `Misc` hull
 dimensions in its box-tensor refutation, and `force-balance-ground-truth.md`
 carries XML-side values from the force-law derivations (`accelcap`, an
@@ -1320,250 +476,37 @@ the past.
 
 | Decision | Why |
 | --- | --- |
-| **The Memory Stick and profile system** | One automatic save slot, the way a modern PC game does it. The disc's boot chain between `Language Selection` and `Main Menu` is eight screens, and all but two exist to serve Memory Stick mechanics. **Done**: `LogoFMV`, `LogoFMVRedirectScreen` and `Show Logo` are all modelled and the boot goes straight from `Show Logo` to `Launch Game`. `RemoveMemoryStickWarning`, `NameSetup2FromBoot`, `TagSetup2FromBoot` and `CreateFromBoot` are the four omitted on purpose - do not read them as unimplemented work. `Show Logo` advances on **START only, no timeout**, which is read off its own two `Redirect` widgets rather than assumed. |
-| **PSP over PS2 where they diverge** | User directive, now policy in [goals.md](docs/overview/goals.md#scope). PS2 stays the corroboration leg for confidence scoring; genuine behavioural divergences implement the PSP side and document the PS2 one in a table. |
-| **The collision stun is not armed by track contact** | The original's is gated on a pending impulse the contact path never writes, and `stun_timer` reads 0.0 on all 3,446 recorded ticks across both captures. The timer and its gate stay; nothing arms them yet. |
-| **Sweep and prune is not reimplemented** | The original's packing clamps world space rather than rebasing it, so it never drops a genuinely overlapping pair - it is an accelerator, and exact AABB overlap is a legal and strictly better substitute. The 1-unit quantisation and 1024-id cap are properties of the original's index, not of the format. |
-| **The four-corner hover variant** | Not implemented. Its selector is known (`DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, which also disables the brakes and swaps in an auto-speed law), and it is why the PS2's bank-to-yaw `50` was never a contradiction with the two-point path's `30`. |
-| **Pure asset work** | Deferred behind M4's exit per [ADR-0009](docs/architecture/adr/0009-multi-game-fanout.md); the probe ran and [`pure-status.md`](docs/formats/pure-status.md) has the table. Two render blockers: the `.vex` class-ID table is renumbered wholesale (five constants, but the right shape is a per-title table keyed off the version word, which is a design call), and Pure's embedded model textures ship pre-swizzled behind a flag byte at `+0x06` that `vex::textures` never reads. |
-| **A "CPU renderer" switch** | There is nothing to switch. wgpu ships no software rasteriser (`Backend::Noop` draws nothing), so CPU rendering exists only when the *system* has a driver - Mesa lavapipe, or WARP on Windows - which wgpu then enumerates as an ordinary adapter reporting `DeviceType::Cpu`. The GRAPHICS -> RENDERER row therefore lists what the machine actually has and tags that one `(cpu)`; it is absent on a machine without lavapipe rather than present and failing. `force_fallback_adapter` was rejected for exactly that reason. See `crates/game/src/adapter.rs`. |
-| **RENDERER applies on the next launch** | The device is made once at boot and everything hangs off it. Live switching means tearing down the surface, the upscaler framebuffer, every pipeline and the current `Stage`; that is a bigger change than the row and it buys a relaunch. What *is* handled now is recovery: `Gpu::bring_up` retries on `default` when the named adapter enumerates but will not produce a device or configure the surface, because `apply_setting` saves on every keypress and a setting reachable from inside the game must not be able to lock a player out of it. Verified by forcing an impossible `required_limits` on the named adapter. |
-| **PS2 `.PSS`/`.IPF` through GStreamer** | [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md) added a GStreamer-backed decode path for the PSP's `.PMF` H.264, and the same pipeline shape could decode the PS2's MPEG-2 `.PSS` too - raised twice as an argument for GStreamer, deferred both times, still deferred. Nothing in `open_mpeg2_ps`/`open_ipuf` changed; PS2 content always goes through the AV1 cache. |
-| **`just play`'s own default is not `oag-game`'s own default** | `native-video`'s Cargo feature is off by default (`cargo build`/`cargo test`/CI stay GStreamer-free, per ADR-0017), but `justfile`'s `play`/`play-screenshots` recipes add `--features native-video` themselves on `os() == "linux"` (`native_video_flags`). A movie's cache filename ending `-gst` instead of `-<size>-av1ll-<n>.ivf` in `just play`'s own output is that recipe default, not a sign the fallback broke - run `cargo run -p oag-game -- ...` directly (no `just`) to see the AV1-cache path `just` itself no longer exercises by default. |
-| **GStreamer for ATRAC3+** | Do not retry this. Extending the `native-video` path to audio was the intended route and it cannot work: gst-libav's codec map has no `AV_CODEC_ID_ATRAC3P` entry, so **0 of 1401** installed elements accept the codec, even though the plugin links the `libavcodec` that implements it. `strings libgstlibav.so \| grep -i atrac` returns three entries and none for ATRAC3+; `decodebin` over a real `.at3` dies with `wavparse: No caps found for format 0x0`. There is no second shape to try because there is no element to feed. Measured and recorded in [ADR-0019](docs/architecture/adr/0019-atrac3plus-out-of-process.md); decode goes out of process through `ffmpeg`, which handles the same file correctly. |
-| Everything else milestone-scoped | Weapons, AI, netcode, the shell: [roadmap](docs/overview/roadmap.md), not here. Audio is now in flight - see above. |
+| **The Memory Stick and profile system** | One automatic save slot, the way a modern PC game does it. Most of the disc's boot chain between `Language Selection` and the menus is deliberately out of scope. |
+| **PSP over PS2 where they diverge** | User directive, now policy in [goals.md](docs/overview/goals.md#scope). PS2 stays the corroboration leg for confidence, not the target. |
+| **The collision stun is not armed by track contact** | The original's is gated on a pending impulse the contact path never writes. |
+| **Sweep and prune is not reimplemented** | The original's packing clamps world space rather than rebasing it, so it never drops a genuinely overlapping pair; ours does the same job without the packing. |
+| **The four-corner hover variant** | Not implemented. Its selector is known (`DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, which also disables the brakes and the weapons) and it is not the racing configuration. |
+| **Pure asset work** | Deferred behind M4's exit per [ADR-0009](docs/architecture/adr/0009-multi-game-fanout.md); the probe ran and [`pure-status.md`](docs/formats/pure-status.md) records what it found. |
+| **A "CPU renderer" switch** | There is nothing to switch. wgpu ships no software rasteriser (`Backend::Noop` draws nothing), so CPU rendering exists only via a system Vulkan implementation such as lavapipe, selected outside the process. |
+| **RENDERER applies on the next launch** | The device is made once at boot and everything hangs off it. Live switching means tearing down the surface, the pipelines and every GPU resource. |
+| **PS2 `.PSS`/`.IPF` through GStreamer** | [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md). |
+| **`just play`'s default is not `oag-game`'s default** | `native-video`'s Cargo feature is off by default, so `cargo build`/`cargo test`/CI stay GStreamer-free; `just play` turns it on. |
+| **GStreamer for ATRAC3+** | **Do not retry this.** Extending the `native-video` path to audio was the intended route and it cannot work - see [ADR-0019](docs/architecture/adr/0019-atrac3plus-out-of-process.md). |
+| Everything else milestone-scoped | Weapons, AI, netcode, the shell: [roadmap](docs/overview/roadmap.md), not this file. |
 
 ## Working rules that were learned expensively
 
-- **Decode, then ask "can this change a pixel?", then report - not the other way
-  round.** Three times in one session a recovered GE mechanism was reported as a
-  finding and turned out to be **inert**: the plume's alpha test
-  (`GU_GREATER, 0` discards exactly the fragments a `SrcAlpha` blend already
-  weights to zero), its colour test (an RGB-zero fragment adds nothing under an
-  additive blend - redundant *algebraically*, for any content), and the streak
-  `v` layout (a real difference, but `oag_render::sparks` binds no texture at
-  all, so adopting it would fit an approximation to the coordinate convention of
-  a sprite we never sample). **Each check was cheap** - a vertex-alpha
-  histogram, one line of algebra, a grep for a texture bind - and each would
-  have taken minutes *before* the finding was written up rather than after.
-  The general form: **recovering a GE call is not by itself an argument for
-  implementing it.** A fixed-function console programs per-fragment tests to
-  avoid paying for writes the blend would have made invisible; fill rate is the
-  scarcest resource on the part. On a reimplementation with a different fill
-  budget those are recovered-but-inert state - correct to document, wrong to
-  port, and actively harmful to port as a "fix". The failure mode is reporting
-  at the moment a mechanism *decodes* rather than at the moment it is shown to
-  *matter*.
-- **Stability against a threshold is not stability across frames, and only the
-  second one usually matters.** A craft-scale measurement was published as
-  "measured soundly at last" on the strength of a 0.3 px spread across a 2.25x
-  threshold sweep - and withdrawn when the same measurement across four ticks
-  showed a **10.4 %** spread on a quantity that must be constant. The detector
-  was locking onto a different feature set as the lighting changed. Sweep the
-  *frame*, not just the parameter, and prefer a control that could refute the
-  claim: the measurements that survived this session all had one (an exposure
-  scale on an unchanged frame, a ship-free render, a vertex dump).
+**Most of them now live in `docs/`**, because they are properties of the method
+rather than of any pass:
 
-- **You cannot measure the original's exhaust by thresholding a screenshot, and the
-  exhaust has *two* independent inputs that both have to be matched.** Two traps, one
-  pass, both cost a wrong conclusion.
+- [Reverse engineering](docs/reverse-engineering/methodology.md#rules-learned-the-expensive-way) -
+  decode before reporting, xref counts bound authored instances only, sibling
+  pages go stale, never write a fitted constant in as a recovered one, and the
+  rest.
+- [Reading a capture](docs/reverse-engineering/verification-protocol.md#reading-a-capture-rules-that-each-cost-a-session) -
+  control columns first, unclamped ramps, clean-capture detection, ask the
+  tangent not the index, Left-Up-Forward, and threshold-versus-frame stability.
+- [Measuring a renderer change](docs/rendering/README.md#measuring-a-renderer-change) -
+  aggregates rank broken changes higher, brightness thresholds measure the
+  circuit, measure a screenshot before citing it.
 
-  First, **intensity is driven by time under thrust (+0.25/s to a ceiling of 1.0), and
-  ribbon length by speed (`10 samples x speed`)**. Matching only speed produced a pair
-  3x apart on brightness and an "our flare is too dim" reading; matching only thrust
-  time gives the opposite. A comparison frame is worthless unless it pins both, and our
-  craft reaches 64 units/s in 1.2 s where the emulator took roughly 6 s - so the two
-  may not be *able* to sit at the same speed and the same intensity at once. If so that
-  gap is a physics question surfacing through the exhaust, and it must be separated
-  before another exhaust constant is touched.
-
-  Second, **brightness thresholding measures Talon's Junction, not the plume.** On the
-  start straight the road's own light strips saturate a **245-pixel** run in a band
-  with no exhaust in it, against 108 px in the band containing the ship. Any
-  "widest saturated run" statistic is therefore dominated by scenery, and it reads as a
-  clean number. Our own frames do not have this problem (flat ribbon over black), which
-  makes the comparison asymmetric in exactly the direction that flatters us.
-
-  **The cheap remedy is to capture on a dark part of the circuit.** Talon's Junction
-  has tunnel sections where the scenery contributes almost nothing, and the plume
-  reads clearly against them; the start straight is the worst possible choice and is
-  what `straight-line.inputs` happens to run along. Pick the frame by *both* speed and
-  mean frame luma - a burst logging the two is a few lines - rather than by speed
-  alone.
-
-  **The rigorous method, if a number rather than a picture is wanted, is difference
-  imaging against the emulator's own memory**: break, capture, write zero into the trail's three layer-colour fields
-  (`child+0xf8` / `+0x128` / `+0x158`) or the intensity at `flare+0xbc`, capture again,
-  subtract. Same pose, exhaust removed, so the difference *is* the plume in isolation
-  and can be measured against hull width. The missing piece is the flare object's
-  runtime address - it is a scene-graph child of the craft, and `craft+0x794` is the
-  already-traced ship node to walk from. **Do that before tuning
-  `HALF_SIZE_TO_WORLD`**; until then it stays at 1.0 and confidence 55, and "our bloom
-  looks bigger" stays an impression rather than a measurement.
-- **An xref count on a class descriptor bounds *authored* instances only.** The
-  exhaust pass concluded that racing craft have no trail, because `Trail`'s class
-  descriptor is referenced by nothing but its own registration function and no
-  `Ship.vex` authors a `Trail` node. Both facts are true; the conclusion is false.
-  The descriptor is used **only** by the class-table lookup the `.vex` loader takes
-  to instantiate a node by ID - code that builds an object directly calls its
-  constructor and assigns the vtable itself, touching the descriptor never, which is
-  exactly what `ExhaustFlare_Init` does. **What refuted it was looking at the
-  emulator**, which shows a trail plainly. A side-by-side against PPSSPP costs
-  minutes and would have pre-empted a day's worth of wrong prose; take one before
-  concluding anything is absent from a *visible* subsystem.
-- **A claim that the crate is missing a term is a claim about the crate.** It
-  has been wrong three times - the airbrake drag term, the hover downforce
-  magnitude and the roll-oscillator note were each recorded as unimplemented in
-  prose nobody had checked against the code, and twice the correct value was
-  sitting in the same file a hundred lines above the claim.
-- **A page can go stale while a sibling page in the same tree already carries
-  the correction.** It has now happened three times (the front-end font claim,
-  the airbrake drag term in four places, M4's blocker for 31 commits).
-  `git log -S <symbol>` against the doc's own last-touched commit settles it in
-  one command. **A fourth, one hop further downstream: the *code* can be stale
-  while a doc already carries the correction**, for the same reason - nobody
-  reread the sibling page before writing the implementation. `rigid-body.md`
-  recorded on 2026-07-28, in passing, that `<Misc>`'s dimensions are scaled by
-  `0.75` before reaching the box collider; `crates/physics/src/wall.rs` kept
-  building that box unscaled for two days until a second, independent chase (the
-  six-tick-early wall contact) landed back on the same instructions. `git grep`
-  for a crate's own constants across `docs/` before implementing a value that
-  "must be" a plain field read costs less than rediscovering the same
-  instruction sequence.
-- **Never write a fitted constant in as a recovered value.** Every one that has
-  been chased turned out to be something real - an inverse-inertia entry, a box
-  tensor, a friction coefficient - and writing the fit in would have closed the
-  question at exactly the wrong moment.
-- **Check the control columns agree before reading anything else in a
-  comparison.** They are a pure function of the script and `dt` - no trajectory
-  reaches them - so a mismatch there is a harness bug by construction and every
-  physics number below it is meaningless. The two-tick lead offset sat in plain
-  sight in `oag-trace compare`'s own output (`throttle max error 1.000e2 at tick
-  1`) for a session while the rows underneath it were read as a wedge. **Read the
-  table from the top.**
-- **A control that ramps without clamping has no attractor, and an input error
-  in one never decays.** The steering ramp oscillates around a saturated target
-  forever; the airbrake ramp clamps and resynchronises on every transition. Same
-  two-tick error, one washed out in six ticks and the other survived 3,146.
-- **Check a capture is clean before fitting anything to it.** `speed` and
-  `|velocity|` agree to 1e-6 in free flight, so `speed/|velocity| == 1.0000` is
-  a free contact detector. Two reference captures were recorded scraping a wall
-  for their whole length, and the resulting "missing linear resistance" stood as
-  the M4 blocker for a session and a half.
-- **"Which way round the circuit" is not a question the sample index can
-  answer.** Asking whether the nearest-sample index rises or falls along a
-  capture pointed at the *wrong* variant: 278 ticks forward against 366 back on
-  the layout the craft is provably driving. Two reasons, both structural.
-  `Spline::from_track` concatenates paths in file order, so on a track with
-  junctions index order is not travel order; and on a capture averaging 0.33
-  units/tick with 67 % of its ticks in wall contact, 2,501 of 3,145 windows step
-  by zero and the rest are jitter. `dot(craft_forward, sample.tangent)` has
-  neither failure mode and reads `+0.9999` against `-0.9999`. **Ask the tangent,
-  not the index.**
-- **A number in authored data that looks like a height usually is not one.**
-  `Start Position`'s `y` reads exactly like a ride height on `01_Track` (2.42,
-  between the surface and the lifted spline) and is not one: measured against
-  each track's own collision mesh it ranges **1.03 to 7.36** across the 40 files.
-  Checking it on one track would have shipped a spawn that only works there. The
-  same shape of check is cheap for any authored constant: ask what it is a height
-  *above*, then measure that on every file rather than the convenient one.
-- **When position and heading disagree about whether a reading is right, the
-  heading is the one that can carry the argument.** The authored grid slot is
-  139.7 units from where the original's craft actually starts, which is equally
-  consistent with a misread matrix and with a grid behind the line. Its forward
-  agreeing to 1.12 degrees is consistent with only one of those. Rotations have
-  no free parameters; positions have three.
-- **A fidelity fix that changes nothing measurable is still a finding.**
-  `raycast_all` moved the whole-lap scenario by not one digit (617.538 units
-  either way) and single-sided rejection moved it by 1.1 - **both measured from
-  the old spline-sample-0 spawn, so neither figure reproduces since `4b2236a`
-  moved the start onto the authored grid slot; the finding stands, the absolute
-  numbers do not**; both were real
-  divergences from `Collision_BoxAgainstMesh` that `16_Track`'s geometry never
-  exercises. Written down, that is knowledge; unwritten, it gets re-litigated.
-- **The ramped columns (`craft+0x2c0`-`0x2c8`) lag the frame that used them by
-  one tick** - ramp-then-consume in one call, captures sample at entry. Naive
-  pairing multiplies a yaw fit's rms by 5.6.
-- **The recorded basis columns must be read as Left-Up-Forward.** Taken at their
-  column names the basis is a reflection, and a 1.25 rad/s residual reads as 32.
-- **Never read timing off the HUD under breakpoints.** The race clock does not
-  count emulated frames; laps of identical tick counts timed `0.50.25` and
-  `1.11.08`. The lap *counter* is unaffected.
-- **"Read far enough to rule X out" is how 80 instructions of a different
-  mechanism stayed unread for three passes.** `Ship_UpdateMagLock` had been
-  opened twice, each time only to the depth that day's question needed; its tail
-  turned out to rewrite the basis directly and was the whole of the remaining
-  attitude gap.
-- **Time-boxing pays.** Two unread leads (the PAL/NTSC selector's trigger, the
-  `.IPF` container) were left alone deliberately and the video got playing
-  anyway, because the measured facts did not need them.
-- **Diff the output, not the compile.** A shader uniform field existing is not
-  the same as a shader reading it: `Draw::Video`'s `rect` was computed and
-  discarded on the way to the GPU, and the first "fix" produced a
-  pixel-identical screenshot while silently doing nothing.
-
-## Traps that are live
-
-**Reading the discs:**
-
-- **`ends_with("Data.wad")` also matches `BEData.wad` and `FEData.wad`**, and
-  `BEData.wad` sorts first and holds no tracks. A survey written that way
-  reports **zero** section nodes on the PSP disc and reads exactly like "this
-  format is not on this platform". Cost a full detour on 2026-07-30. Match the
-  full path, the way `collision_ground_truth.rs` always has.
-- **Pure does not share Pulse's `.vex` class numbering.** Pure track files use
-  classes around `0x36f..0x393` where Pulse uses `0x3b9..0x3e9`, so any Pulse
-  `CLASS_*` constant matches nothing on that disc and every Pure survey comes
-  back empty. Pinned by `pure_does_not_share_pulses_class_numbering` so it is
-  not rediscovered as a parser bug. Recovering Pure's own table is open work.
-- **Shipped `section` data is not tidy, and a strict parser refuses real
-  tracks.** ~2 % of PVS mask bits name a section the file does not declare, one
-  id is authored three times over on four tracks, and 116 PS2 control points
-  name a section their file lacks. All benign; all would be "corruption" to a
-  parser that assumed otherwise. See `docs/formats/track.md`.
-- **`DEVPUB_REEL` (`crates/game/src/boot.rs`) is not disc misidentification.**
-  It is easy to misread as "a Pure disc booted as though it were Pulse" -
-  the doc comment's "looked like the wrong game" line invites exactly that -
-  but the actual bug was `--movie`/`DEFAULT_BOOT_MOVIE` selecting the wrong
-  *entry hash* inside an already-opened, correctly-identified Pulse archive.
-  That entry's three regional cuts just happen to ship byte-identical on
-  Wipeout Pure's own disc too (no Pulse branding, shared dev/pub content), so
-  the wrong movie *looked* like the wrong game. `oag_assets::Error::WrongTitle`
-  (2026-08, `Layout::resolve` rejecting a disc whose serial identifies as a
-  known non-Pulse title) is unrelated to this bug and does not fix it - it
-  guards a different failure, a source that never should have opened as
-  Pulse at all. Do not conflate the two in docs; an earlier draft of that
-  error's own doc comment did, and was corrected before landing.
-- **`oag_assets::pulse::OTHER_TITLES` is a deny-list, not an allow-list, on
-  purpose.** The two Pulse serials this project has verified (`UCUS-98712`,
-  `SCES-54748`) are not the full universe of legitimate pressings - the
-  disc's own executable strings already imply an unconfirmed EU PSP release,
-  `UCES-00465` (see `hashes::DEVPUB_REEL_SCEE`'s doc comment). Allow-listing
-  known-good serials would hard-reject a real player's own legitimately-owned
-  disc, which is worse than not checking at all. The table only records
-  serials positively proven to belong to a *different* title (one entry
-  today: Pure's `UCUS-98612`); an unrecognised serial gets no verdict and
-  still falls through to ordinary archive-name matching.
-
-**Measuring a renderer change:**
-
-- **An aggregate statistic can rank a broken change as the better one.** The
-  first mesh-to-section rule placed a draw call by the single section holding
-  its bounding-sphere *centre*. It reported **fewer** draw calls surviving the
-  cull - which reads as better culling - and it deleted a ridge line and a
-  building from the frame, because geometry wider than a section has its centre
-  in only one of them. **A screenshot comparison caught it and no counter
-  would.** `--screenshot` now honours both culling settings precisely so this
-  comparison is runnable; two captures at the same `--ticks` differing only by a
-  setting must be byte-identical.
-- **Do not add per-frame work to save per-draw work without measuring both
-  sides.** Building the PVS visible set needs the craft and the camera located
-  on the spline, and `Spline::nearest` walks all ~3,400 samples - twice a frame
-  would have cost the same order as the frustum tests it saves. The craft's
-  index is already cached in `Ship::segment` by the simulation's own tick, and
-  the camera is found in a 96-sample window around it.
-
-**Process, in a shared tree:**
+What stays here is what is about working in *this* repository, with other
+writers in it at the same time:
 
 - **`git-commit` does not isolate a pathspec - it commits everything staged.**
   `git add <paths> && git-commit` silently sweeps whatever another writer staged
@@ -1576,165 +519,50 @@ the past.
   concurrent uncommitted edits are indistinguishable from data loss to whoever
   looks second.
 
-**This machine:**
+## Traps that are live
 
-- `data/` is on `ecryptfs`. **`cp --reflink` does not work** (copying the three
-  images is a real 4 GB copy), and `ls`/`rg` intermittently fail with
-  "permission denied" or "no such file" on directories that plainly exist. `fd`,
-  `find` and absolute paths work.
+**Subsystem traps have moved to their pages**:
+[surveying a disc](docs/formats/wad.md#traps-when-surveying-a-disc),
+[the Ghidra database versus `names.tsv`](docs/ghidra/workflow.md#the-database-can-disagree-with-namestsv-and-the-docs-win),
+[PPSSPP session hygiene](docs/reverse-engineering/ppsspp-debugger.md#session-hygiene),
+and the `ffmpeg`/`ffprobe`/GStreamer traps on
+[frontend-boot.md](docs/architecture/frontend-boot.md). What is left is this
+machine and this checkout.
+
+- `data/` is on `ecryptfs`. **`cp --reflink` does not work** (copying the images
+  is a real multi-GB copy), and `ls`/`rg` intermittently fail with "permission
+  denied" or "no such file" on directories that plainly exist. `fd`, `find` and
+  absolute paths work.
 - **Backticks in a justfile are command substitution at parse time**, even
   inside an `@echo` string - an echoed example command once ran a full
   trace-compare on every `just` invocation, `just --list` included.
-
-**Tools that fail silently rather than erroring:**
-
-- **A GStreamer `appsrc` set to `AppStreamType::Seekable` performs an initial
-  seek on start, and that seek can fail with no exception at the call site
-  that set the property.** `pipeline.set_state(Playing)` just returns `Err`
-  with an empty bus - `GST_DEBUG=3` is what shows `gst_app_src_do_seek: seek
-  failed` and `Failed to perform initial seek` underneath it. This decoder
-  (`crates/game/src/movie/gst.rs`, [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md))
-  pushes one whole buffer and calls `end_of_stream()`, which is exactly what
-  `AppStreamType::Stream` describes; `Seekable` is for sources that support
-  real seeking, which this one never claimed to and does not need to.
-- **`ffprobe -show_entries` does not print fields in the order requested** - it
-  uses its own. Parse `key=value` pairs by name (`-of
-  default=noprint_wrappers=1`, keys kept); positional parsing reads the wrong
-  field and says nothing.
-- **`ffmpeg -lossless 1` on its own is silently a lossy encode.** The quantiser
-  must be pinned and rate control disabled too: `-b:v 0 -crf 0 -qmin 0 -qmax 0
-  -aom-params lossless=1`. Even then `-cpu-used` below 6 is reproducibly not
-  bit-exact; 6 and 8 are exact, and faster.
+- **`XDG_CONFIG_HOME` is how you point `oag-game` at a scratch `settings.toml`**
+  for A/B config captures without touching `~/.config/oag/`.
 - **A niri screenshot piped through `wl-paste` can return the PREVIOUS clipboard
   image.** One lap "verification" shot came out as a menu from an earlier
-  session. Check the image is what it claims before citing it.
-- **`apply-ghidra-names.py` can report a rename as applied when it did not
-  land.** Sweeping `psp-pulse-eu` (2026-08-05), the script printed `4 applied,
-  0 skipped, 1 failed` for a five-row batch, but `get_function_by_address`
-  right after showed only the one row it called a *failure* had actually been
-  renamed - the four it called successes were all still `FUN_*`. Calling
-  `rename_function_by_address` directly through the MCP bridge, one address
-  at a time, worked every time; only the script's own tight sequential loop
-  (no delay between calls) showed this. A new instance of the same class of
-  bridge flakiness already noted above for `delete_file`/`close_program`, this
-  time hitting renames rather than file lifecycle. **Verify with
-  `get_function_by_address` after running the script - do not trust its own
-  applied/skipped/failed count**, and if in doubt, rename through the MCP
-  tool directly rather than retrying the script.
-- **The live `psp-pulse-usa` Ghidra database has a name `names.tsv` does not
-  agree with.** A function at `0x0884de5c` is live-named `Body_Integrate`,
-  but `psp-pulse-usa/names.tsv` documents that address as `Body_Init`
-  (confidence 85, `rigid-body.md`) and puts `Body_Integrate` at a different
-  address, `0x0884e230`. Found twice independently (2026-08-05) while
-  cross-binary fuzzy-sweeping `psp-pulse-eu` and `psp-pure-usa`/`psp-pure-eu`
-  against the documented USA function list: `bulk_fuzzy_match` surfaces the
-  live (wrong) name as a source, not the documented one. Per
-  [ADR-0005](docs/architecture/adr/0005-ghidra-conventions.md), the docs win
-  when they and the database disagree - **only rename-sweep off addresses
-  actually listed in `names.tsv`, never off a live Ghidra name**, or a stray
-  in-database rename propagates into every binary corroborated from it.
-  Not yet root-caused or fixed; whichever address is wrong needs a project
-  rename to match its doc page, or a doc correction if the live name turns
-  out to be right and the page is stale.
-- **A second drift instance of the same pattern**: USA `0x08811630` is
-  live-named `Gu_Fog_q`, but `names.tsv` documents that address as
-  `Gu_TexOffset` (confidence 88, `texture-animation.md`) - `Gu_Fog` itself is
-  correctly at a different address, `0x08811748`. Found 2026-08-05 during the
-  structural sweep of `psp-pulse-eu`. Same rule applies: only sweep off the
-  address+name pair `names.tsv` records, never off whatever the live database
-  currently shows. Not investigated further, per the standing instruction not
-  to chase fixing these - just recording it so the next person doesn't
-  rediscover it.
-- **`psp-pulse-eu`'s `.data`/`.rodata`/BSS segments are not rebased to the
-  `0x088xxxxx`+ range the way its `.text`/code segment is - unlike every
-  function address in the binary, which does line up with USA's.** Found
-  2026-08-05 while resolving `psp-pulse-eu`'s `g_wad_crc_table`: USA's
-  `Wad_HashName` computes the table's address as `lui s1,0x8b0 / addiu
-  s1,s1,-0x4004` = `0x08afbffc` (the documented address), but EU's otherwise
-  byte-identical `Wad_HashName` computes `lui s1,0x2 / addiu s1,s1,0x2bac` =
-  `0x00022bac` - a completely different, low, non-`0x088`-prefixed address.
-  Every other EU data address resolved that session landed in the same kind
-  of low region (`0x0002xxxx`-`0x002xxxxx`, one at `0x0008b000`), across
-  multiple independently-decompiled functions, so this isn't a one-off
-  misread. Plausible explanation: EU's `BOOT.BIN` is genuinely smaller than
-  USA's (3,844,732 vs 3,854,564 bytes, see the EU-disc-acquisition entry
-  above), which shifts wherever the ELF loader places `.bss`/uninitialized
-  data if that placement isn't pinned to a fixed base the way the code
-  segment is. **Practical consequence**: don't assume a `psp-pulse-eu` data
-  symbol sits at "USA's address plus/minus a small relocation delta" the way
-  a function does - the deltas that work for code (tens to low-thousands of
-  bytes) do not apply to data, and a small-offset guess for a data address
-  will silently land on unrelated bytes rather than erroring. The only
-  reliable technique found so far is decompiling an already-matched
-  referencing function and reading the resolved `DAT_xxxxxxxx` symbol
-  Ghidra's decompiler already computed - see
-  [`psp-pulse-eu/corroboration.md`](docs/ghidra/functions/psp-pulse-eu/corroboration.md)'s
-  "Structural sweep" section for the ten data items resolved this way and
-  the fifteen still open. Not root-caused (why EU's `.bss` placement differs
-  from USA's specifically) and not fixed - just documented so the next data
-  pass doesn't rediscover it by trial and error.
-
-  **Hit again 2026-08-08, in the camera pass, with a fresh instance and a
-  standing rule.** `Camera_PublishTripod` is body-identical between the two
-  builds, sits at EU `0x08885bd4` against USA `0x08885d78`, and writes its fov
-  global through `lui a0, 0x6 / swc1 f12, -0x5140(a0)` - **`0x0005aec0`**,
-  against USA's `0x08b34310`. Its two neighbours land at `0x0005aec4` and
-  `0x0005aec8`, and `Camera_SubmitScene`'s cached matrices at
-  `0x00059870`..`0x000598ec`, all in the same low space. So the effect is
-  reproducible on demand and not confined to the 2026-08-05 sweep. **The rule
-  this pass adopted, and the reason `psp-pulse-eu/names.tsv` gained two
-  function rows and no data rows: do not add EU data rows at all until the
-  import is rebased** - a name pinned to `0x0005aec0` is a name a correct
-  import would move, which is worse than no name. Until then, record an EU
-  data finding as an offset from a named function's access, the way
-  [`psp-pulse-eu/camera.md`](docs/ghidra/functions/psp-pulse-eu/camera.md)
-  does. Rebasing that import properly is the actual fix and is nobody's task
-  yet.
-
-**PPSSPP** - the rest is in
-[`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md), worth
-reading before a capture session rather than after:
-
-- `pkill -f PPSSPPSDL` inside a shell command whose own text contains that
-  string kills the calling shell.
-- A `memory.write` with an empty base64 payload kills the emulator outright.
-  (`ppsspp_debugger.py`'s `write` wrapper now refuses one.)
-- **Only the most recently added execution breakpoint fires** on v1.20.4,
-  whatever `cpu.breakpoint.list` claims - two per-tick streams cannot be
-  interleaved with two breakpoints. Learn the second address from one hit and
-  read it from the surviving breakpoint instead; see the debugger page.
-- `psp-drive.py restart` fails about one time in three with a transient
-  `Invalid address` (the craft is read while the race loads) - retry.
-- `replay.flush` crashes v1.20.4 whenever the recording spans a screen
-  transition, three reproductions. The replay API is closed as an option.
-- Restore the savedata backup (move, do not delete) before concluding a session
-  that touched `~/.config/ppsspp/PSP/SAVEDATA/UCES00465P0000`.
-- **The EU PSP disc is now available here** (`data/images/pulse-psp-eu.chd`,
-  acquired 2026-08-04) - an earlier version of this note said one was
-  "neither... available here" and told readers not to suggest sourcing one;
-  that is stale. A 2026-08-05 pass compared it against the USA disc
-  statically (`Data.wad`/`Skin.xml`/plugin manifest - see
-  [frontend-boot.md](docs/architecture/frontend-boot.md#the-eu-disc-pulse-psp-euchd))
-  and captured its boot live under PPSSPP headless.
-- **The "USA disc is English-only, that's why the picker never shows" claim
-  above (this note, prior wording) is not supported by what the static
-  comparison found and should not be repeated as-is.** The USA executable's
-  own boot-time plugin manifest (`FUN_0888b980` at `0x08ab110c`) lists the
-  same five languages the EU disc has (English, French, German, Spanish,
-  Italian) - it is not a 1-language build. What both discs *do* share,
-  confirmed by live capture on the EU disc (headless, cold boot, breakpoints
-  on `StateMachine_TransitionTo` EU `0x08891064`): `Language Selection` is
-  entered and unconditionally exits to `LogoFMV` in well under one frame
-  (516,292/222,000,000 PSP cycles), and holding `down` through the transition
-  does not change that. So *something* skips the picker on both regions in
-  this capture environment, but "only one language" is the wrong explanation
-  for it - the more likely mechanism (not yet tested) is that the redirect is
-  gated on PPSSPP's configured PSP system language (`en_US` here) matching an
-  available plugin, the way a real console with its language already set
-  would auto-skip too. Live-capturing with PPSSPP's system language forced to
-  something *not* on the disc, to see whether the picker then stays up, is
-  the follow-up experiment that would settle this - not attempted this
-  session, out of time.
+  session. `psp-trace.py` now detects this and writes `.stale.png` rather than
+  citing it, but nothing else does. `niri` screenshots land in
+  `~/Pictures/Screenshots/`.
+- **`/tmp` here is quota-limited well below the project's own disk.** Extracting
+  a large WAD into it once broke the shell entirely - every command failed,
+  `echo` included, until the partial extraction was deleted. Scan through
+  `oag_assets::Archive` in memory instead.
+- **Shipped `section` data is not tidy, and a strict parser refuses real
+  tracks.** ~2 % of PVS mask bits name a section the file does not declare, one
+  id is authored three times over on four tracks, and 116 PS2 control points
+  name a section their file lacks. All benign; see
+  [`track.md`](docs/formats/track.md).
+- **No capture will ever show the BRIGHTNESS or GAMMA settings.** They apply at
+  the blit, which `--screenshot` and the race capture never reach, so a picture
+  that looks ungraded is not a bug. The real check is
+  `upscale::tests::the_grade_moves_the_picture_in_the_direction_the_setting_names`,
+  which builds the actual pipeline on a headless target and reads the pixel back
+  (mutation-checked by swapping brightness and the exponent in the shader). It
+  **skips with a note where there is no adapter**, so a green CI run does not
+  mean it ran.
+- **Judge line width at native 480x272 only.** Anything upscaled makes a
+  one-pixel authored line a magnification artefact argument rather than a
+  fidelity one.
 
 ## Verification status: what to lean on
 
@@ -1746,39 +574,43 @@ three axes, pitch to 0.13 % and the `I * omega` identity to 0.01 %; the pitch
 step response at 1.006x; the contact friction coefficient as a one-sided bound
 approached from above; the mag-lock probe re-finding the magstrip from geometry
 that knows nothing about the capture (91 % of inverted poses against 0.3 % of
-upright ones); and the authored `Start Position` frame, whose forward lands
-within **1.12 degrees** of the original's craft at the start line and whose left
-lands within 1.54 - read off the disc by a parser that knows nothing about the
-capture. Method and numbers in the two ground-truth pages under
-[`docs/physics/`](docs/physics/README.md). Add to that the whole-lap result
-above, now that the input is aligned: over the 170 ticks of the recapture that
-are wall-free, **position tracks to 6.54 units at the worst and 2.41 on average**
-on a craft doing 100 units/s, with speed inside 6.01 - and `grounded` exact on
-3,146 of 3,146 ticks. That is the broadest runtime evidence the harness has
-produced. Its limits are worth stating in the same breath: the capture is clean
-on only a third of its ticks, so nothing after tick 171 measures our physics, and
-`grounded` is a constant column on this capture, so agreeing with it says only
-that our ship also never left the ground.
+upright ones); the authored `Start Position` frame, whose forward lands within
+**1.12 degrees** of the original's craft at the start line and whose left lands
+within 1.54; and the chase camera at **RMS 0.008 world units** over 150 recorded
+ticks. Method and numbers in the two ground-truth pages under
+[`docs/physics/`](docs/physics/README.md) and in
+`crates/game/tests/chase_camera_ground_truth.rs`.
+
+Add the whole-lap result, with its limits stated in the same breath: over the
+clean window position tracks to **6.54 units at the worst and 2.41 on average**
+on a craft doing 100 units/s, with speed inside 6.01 - but that window is the
+first ~170 ticks, nothing after tick 256 measures our physics on the current
+capture, and `grounded` is a constant column so agreeing with it says only that
+our ship also never left the ground.
 
 **Instruction-level reading with no runtime leg yet.** Mag-lock's blend weights
-and its `|h - d| > 5.0` fallback; the swept collision path; everything airborne.
-Single-sided wall rejection is measured against the *data* rather than against
-the original running: **2,076 of 2,084 wall triangles on `16_Track` (99.6 %)**
-are wound toward the nearest point of the track's own spline, which is what
-makes reproducing the original's `dot(boxCentre - sample, n) > 0` rejection
-faithful rather than merely literal.
+and its `|h - d| > 5.0` fallback; the swept collision path; everything airborne;
+both sideshift gestures. Single-sided wall rejection is measured against the
+*data* rather than against the original running: **2,076 of 2,084 wall triangles
+on `16_Track` (99.6 %)** are wound toward the nearest point of the track's own
+spline, which is what makes reproducing the original's
+`dot(boxCentre - sample, n) > 0` rejection faithful rather than merely literal.
 
-**The determinism gate reaches the simulation now** (`dd53c1f`).
-`oag_physics::probe` steps the same `oag_physics::step` the race loop steps,
-over a scripted input and a synthetic corridor built in the file, so it runs in
-CI on all three OSes rather than needing a disc image. Two mechanisms keep the
-hashed field list from rotting and **both are needed**: exhaustive destructuring
-makes a new `ShipState`/`Body` field a compile error, and a perturbation test
-proves each field actually reaches the hash rather than merely being bound -
-that second test caught a real hole on its first run, since `time_since_landing`
-defaults to `1.0` and perturbing it *to* `1.0` was a vacuous no-op. What it does
-not cover is stated in its module docs: maglock, reset, and the swept tunnelling
-path.
+**The determinism gate reaches the simulation** (`dd53c1f`).
+`oag_physics::probe` steps the same `oag_physics::step` the race loop steps, over
+a scripted input and a synthetic corridor built in the file, so it runs in CI on
+all three OSes rather than needing a disc image. Two mechanisms keep the hashed
+field list from rotting and **both are needed**: exhaustive destructuring makes a
+new `ShipState`/`Body` field a compile error, and a perturbation test proves each
+field actually reaches the hash rather than merely being bound - that second test
+caught a real hole on its first run, since `time_since_landing` defaults to `1.0`
+and perturbing it *to* `1.0` was a vacuous no-op. What it does not cover is
+stated in its module docs: maglock, reset, and the swept tunnelling path.
+`probe::environment` now crosses a speed pad twice, once on each side of the
+`<Special speedpad_jump>` tilt threshold, because until it did, step 15 of 15 was
+the one force term the gate did not cover at all - and a new branch inside an
+uncovered term lands with the hashes *not* moving, which is the worst outcome
+available.
 
 **Two standing rules.** When the determinism test fails, find the bug - never
 update the reference constants to make it pass. And never raise a confidence

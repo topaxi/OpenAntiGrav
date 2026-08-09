@@ -1044,3 +1044,30 @@ measured behaviours:
   comparison the offset does not matter at all, which is how
   `docs/tools/frame-compare.md` calibrates fov. A fast-moving per-tick capture
   could pin it exactly; nothing needed it yet.
+
+## Session hygiene
+
+Moved here from `HANDOVER.md` on 2026-08-09; the traps above are about the
+protocol, these are about running the emulator at all.
+
+- **`pkill -f PPSSPPSDL` inside a shell command whose own text contains that
+  string kills the calling shell.**
+- **Two emulator instances can be running** (another agent's), so match on pid
+  and window id rather than on app id.
+- **An unfocused window grabs as pure black** with no error - the documented SDL
+  throttle. Focus it and check the grab's mean luma before reading anything off
+  it.
+- **`niri msg windows` prints no absolute coordinates**, but `niri msg --json
+  windows` gives `tile_pos_in_workspace_view`, which is what `grim -g` wants.
+  Getting it wrong crops a corner and looks like a HUD missing half its widgets.
+- **`RemoteISOPort` does not pin the debugger port** - PPSSPP has bound an
+  ephemeral 46659 while the config said 47810. Read the port out of the running
+  process rather than the config.
+- **Restore the savedata backup (move, do not delete)** before concluding a
+  session that touched `~/.config/ppsspp/PSP/SAVEDATA/UCES00465P0000`.
+- **Run every debugger script as `uv run --with websocket-client
+  scripts/...`** - plain `python3` dies on the missing `websocket` module.
+- **If the emulator is stuck in `Race End Photo`**, neither `psp-drive.py
+  restart` nor `menu` can leave it: press `cross`/`start`/`circle` in a loop for
+  about five rounds to walk out through `EndRace Results`/`Rewards`/`Menu` to
+  `Main Menu`.

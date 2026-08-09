@@ -284,3 +284,48 @@ oag-wad extract data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad -o /tmp/fe
 
 Extracted blobs are named `<index>_<hash>.<tag>`, because the real names are not
 available.
+
+## Traps when surveying a disc
+
+Moved here from `HANDOVER.md` on 2026-08-09. All three have made a survey report
+"this format is not on this platform" when it plainly is.
+
+**`ends_with("Data.wad")` also matches `BEData.wad` and `FEData.wad`**, and
+`BEData.wad` sorts first and holds no tracks. A survey written that way reports
+**zero** section nodes on the PSP disc. Match the full path, the way
+`collision_ground_truth.rs` always has. Cost a full detour on 2026-07-30.
+
+**Pure does not share Pulse's `.vex` class numbering.** Pure track files use
+classes around `0x36f..0x393` where Pulse uses `0x3b9..0x3e9`, so any Pulse
+`CLASS_*` constant matches nothing on that disc and every Pure survey comes back
+empty. Pinned by `pure_does_not_share_pulses_class_numbering` so it is not
+rediscovered as a parser bug. Recovering Pure's own table is open work.
+
+**`fd` and `rg` respect `.gitignore`, and `data/` is gitignored**, so both
+return nothing with exit code 0 whether a disc image is there or not. Use
+`--no-ignore`, or `/bin/ls` / `find` / `grep`, which do not filter at all.
+
+**Extracting a large WAD to `/tmp` can take the whole shell down.** `WADS2.WAD`
+(377 MB compressed) hit an `EDQUOT` that made every subsequent command fail,
+`echo` included, until the partial extraction was deleted - `/tmp` on the
+maintainer's machine is quota-limited well below the project's own disk.
+Scanning through `oag_assets::Archive` in memory, with no extraction at all, is
+both faster and avoids the trap.
+
+**`oag_assets::pulse::OTHER_TITLES` is a deny-list, not an allow-list, on
+purpose.** The two Pulse serials this project has verified (`UCUS-98712`,
+`SCES-54748`) are not the full universe of legitimate pressings. Allow-listing
+known-good serials would hard-reject a real player's own legitimately-owned
+disc, which is worse than not checking at all. The table records only serials
+positively proven to belong to a *different* title (one entry today: Pure's
+`UCUS-98612`); an unrecognised serial gets no verdict and falls through to
+ordinary archive-name matching.
+
+**`DEVPUB_REEL` (`crates/game/src/boot.rs`) is not disc misidentification**,
+however much its doc comment's "looked like the wrong game" line invites that
+reading. The bug was `--movie`/`DEFAULT_BOOT_MOVIE` selecting the wrong *entry
+hash* inside an already-opened, correctly-identified Pulse archive; that entry's
+three regional cuts happen to ship byte-identical on Wipeout Pure's disc too, so
+the wrong movie looked like the wrong game. `oag_assets::Error::WrongTitle`
+guards a different failure - a source that should never have opened as Pulse at
+all - and does not fix it. Do not conflate the two.

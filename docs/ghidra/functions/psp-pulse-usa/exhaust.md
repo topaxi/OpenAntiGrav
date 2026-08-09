@@ -1281,6 +1281,23 @@ recorded camera, 11.6 units back: the wingtip lamps span **172 px** in the
 original against **268 px** in ours while the track and the buildings behind
 them aligned. A field of view cannot do that - it scales the background too.
 
+> **Refuted 2026-08-09. Everything from here to the end of this subsection is
+> wrong, and it is kept because the *reasoning* is where the error is.**
+>
+> The sentence directly above is sound: a field of view cannot magnify the craft
+> without magnifying the background. Its premise is what failed. **The background
+> did not align** - it was never checked, only asserted, and the far scenery in
+> that very frame registers at **1.1195**. A field of view is exactly what did
+> it: the original adds `0.075 * dot(fwd, vel)` **degrees** to its fov every
+> frame and we add nothing, so our whole image is zoomed by 1.12-1.26x depending
+> on speed. Our craft is the right size to **0.15 %**, there is no second
+> `0.75`, and `Ship_LoadModel` and `FUN_0884dab4` need not be opened for this.
+>
+> See [projection-vs-the-original.md](../../../rendering/projection-vs-the-original.md).
+> The costly part was not the wrong number - it was that a one-line control
+> ("does the background register at 1.000?") was available the whole time and
+> the assertion stood in for it for six days.
+
 **The residual is 19 %, not 9 %, and it is not explained.** A lamp *span* is
 glow-sensitive, so it was re-measured on the two lamps' **centroids**, which
 bloom far less: separation `108.8 px` in the original against `189.3 px` in ours
@@ -1335,6 +1352,33 @@ slope is `0.4 %` and the residual swamps it. **So the track and the buildings ar
 the right size, and the recorded camera and our projection are right with them**
 - a wrong eye position or field of view would have bent that fit too. Only the
 craft is oversized, and it is oversized *relative to a track that matches*.
+
+> **Refuted 2026-08-09, and this conclusion is the stronger of the two wrong
+> ones on this page** - it has a 136-point fit behind it and it explicitly rules
+> out the mechanism that turned out to be responsible.
+>
+> **The background is not the right size, and the fit is 29x too small to have
+> seen it.** A zoom `z` about the principal point gives
+> `offset = (z - 1) * (x - centre)`. Image registration measures `z = 1.118` in
+> three separate background regions of this very frame, which is a slope of
+> `0.118`; this fit reports `0.00405`, implying `z = 1.004`. Two independent
+> sessions reproduced the registration number, and it is the fit that has no
+> validation behind it.
+>
+> **The likely mechanism, since the fit cannot be re-run**: a centred zoom is
+> almost exactly what a per-scanline translation absorbs, and nearest-neighbour
+> edge pairing does the rest - at `z = 1.118` the correct partner for an edge
+> near the frame border is ~57 px away, further than the spacing between
+> adjacent rails and barrier posts, so the pairing step matches each edge to the
+> *wrong* original edge and the fitted slope collapses toward zero with a
+> residual that reads as noise. Registration has no pairing step and no
+> per-scanline freedom, which is why it is not exposed to this.
+>
+> Everything downstream of this subsection goes with it, including "the hull
+> they sit behind was `1.33x` too big" and the claim that the
+> `HALF_SIZE_TO_WORLD` fit was contaminated by a craft-scale error. The real
+> cause is a missing speed-dependent field-of-view term; see
+> [projection-vs-the-original.md](../../../rendering/projection-vs-the-original.md).
 
 That excludes the most attractive candidate: **our per-batch position scale in
 `oag_formats::vex` is shared by every mesh including the track**, so a misread
@@ -1720,10 +1764,26 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   shorter at `luma > 200`, 2.1x at `luma > 70`), and it points at the flare and
   the unimplemented bright-pass rather than at the plume mesh.
 
-  **The extent column is not a calibrated ratio.** Our craft renders about
-  `1.4x` too large at this same camera pose, so every pixel count here carries
-  an unresolved scale error; see `HANDOVER.md`, "The craft render scale
-  invalidates matched-pose pixel comparison".
+  **The columns against the original are not calibrated, and the reason is not
+  the one this paragraph used to give.** It used to read "our craft renders
+  about `1.4x` too large at this same camera pose". **That is refuted** - the
+  craft mesh is correct to 0.15 %, and what is zoomed is the whole frame,
+  because the original widens its fov with speed and we do not
+  ([projection-vs-the-original.md](../../../rendering/projection-vs-the-original.md)).
+  The consequence for this table is the same size but a different shape: at
+  tick 62 the capture is doing 148.9 units/s, so the original's frame and ours
+  differ by a **whole-frame zoom of roughly 1.25x**, which shifts which of the
+  original's pixels fall inside the mask.
+
+  So the table splits. The three **ours-versus-ours** results hold, because all
+  three builds render at the same `--pose-tick 62` and therefore share one
+  zoom, which any ratio between them cancels: generated coordinates beat
+  authored ones on extent and orange, and `One`/`One` is the worst build on
+  every column. Every column stated as a **distance to the original** - the
+  `b - r` ranking, the 26 %-dimmer mean, the extent against 12,377 - is
+  uncalibrated until the table is re-taken with `--camera-fov` computed from
+  the capture's own speed column, or at a low-speed tick where the error is
+  smallest.
 - **Superseded phrasing kept for one revision**, because two passes cited it:
   the old question assumed some GE path weighted a mesh batch by source alpha. None does. And the two prebuilt
   lists at `mesh+0x70` `+0x48`/`+0x70` are now read: they hold **light 0 and

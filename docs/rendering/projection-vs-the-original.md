@@ -1,0 +1,399 @@
+# The projection, measured against the original's own frames
+
+**Our craft mesh is the right size. Our projection is too narrow, and the error
+tracks speed.** This page records the measurement that settles both halves,
+because the first half retires a blocker that three passes worked on under the
+opposite assumption, and the second half turns a `_q`-grade decompiled store
+into a confirmed one.
+
+Read [`camera.md`](../ghidra/functions/psp-pulse-usa/camera.md) first for the fov
+chain in the original - this page is the pixel-side evidence that lands on it.
+
+## What was believed, and why it was wrong
+
+From 2026-08-04 to 2026-08-09 the record said our craft renders **too large**:
+the wingtip lamp centroids sat `189.3 px` apart in ours against `108.8 px` in the
+original from the original's own recorded camera pose, a ratio of `1.740`, and
+`1 / 0.75^2 = 1.7778` is 2.2 % away - so "the original scales the mesh twice"
+became the live hypothesis. `Race::ship_model_matrix`'s doc comment carried it,
+and so did four sections of `HANDOVER.md`.
+
+**The clause that made it a craft-specific error was the one that was false.**
+That measurement was recorded as being taken "with the track and buildings behind
+aligning". They do not align. At the authored fov the tower, the barrier and the
+horizon are all discontinuous across a checkerboard interleave of the two frames,
+and the far scenery registers at **1.1195**, not `1.000`. Everything in the frame
+is magnified, and the craft was only the part anyone measured.
+
+The second failure was the instrument. The lamp-centroid metric is **not linear
+in the quantity it measures** - model scales `1.0 / 0.75 / 0.5625` read
+`1.740 / 1.191 / 1.067` where linear would give `1.305 / 0.979` - so it could not
+tell one candidate factor from another even in principle. Four later attempts
+(hue silhouette, saturation, luma profile, red-dominance clusters) each failed on
+the original's side for a different reason; they are catalogued in `HANDOVER.md`
+and are not repeated here.
+
+## The instrument that works
+
+**Similarity registration on high-passed gradient magnitude.** The craft is the
+same mesh with the same texture in both frames, so its internal structure - panel
+lines, intake grilles, the yellow spine, the canopy edge - is a rich non-emissive
+pattern. Find the uniform screen zoom `s` about the image centre, plus
+translation, that maximises masked normalised cross-correlation of our frame onto
+the original's.
+
+**There is no brightness threshold anywhere in it.** That is the whole point: the
+high-pass (sigma 6) removes exactly the low-frequency bloom difference that makes
+thresholds untransferable between the two renderers, and taking gradient
+magnitude makes it indifferent to a patch being dark-on-light in one frame and
+light-on-dark in the other. Pointed at a box containing only background, the same
+routine measures whether the *background* scales - which is how "our mesh is too
+big" is told apart from "our projection is too wide".
+
+Three validations, all of which the lamp metric fails:
+
+**1. Against known factors.** The original's own pixels resized by `magick
+-distort SRT`, an independent resampler:
+
+| true | measured | error |
+| ---: | ---: | ---: |
+| 0.70 | 0.6995 | -0.07 % |
+| 0.85 | 0.8481 | -0.22 % |
+| 0.95 | 0.9525 | +0.26 % |
+| 1.00 | 1.0000 | 0.00 % |
+| 1.05 | 1.0525 | +0.24 % |
+| 1.15 | 1.1494 | -0.05 % |
+| 1.25 | 1.2498 | -0.02 % |
+
+Worst error **0.26 %** over a 1.8x range. Resampling softens edges, so this is a
+harder test than the real one.
+
+**2. A free control that cannot move.** The HUD is a 2D layer at a fixed pixel
+size; no camera parameter can scale it. A band dominated by it (`y 470..544`)
+registers at **0.997**, while the 3D scene in the same frame registers at 1.12.
+
+> **The same property makes the HUD a contaminant, and it bit immediately.** A
+> second session registering the band left of the craft (`0,200,380,430`) got
+> **1.0106**, against 1.1119 for its mirror image on the right - a real global
+> correlation peak, not a weak one, and it reads exactly like a scene that
+> disagrees with this page. Cropping the two frames and *looking* at them
+> explains it in one glance: a strip of green HUD text sits inside the bottom of
+> that box, and the original's road surface there is blown out to white by a
+> bloom we do not have - so the HUD, which cannot scale, was one of the few
+> strong gradient features left in the band. **Excluding a 35-pixel-tall strip
+> moves the answer from 1.0106 to 1.1394**, and the band's upper half alone
+> gives 1.1375. All three background regions agree once the HUD is out.
+>
+> Two rules follow. **Exclude the HUD from every registration box** - it pulls
+> the answer toward 1.000, which is the answer that looks like "no problem
+> here". And **look at the crop when a band disagrees**: the anomaly was
+> invisible in the correlation curve and obvious in the picture.
+
+**3. A free precision check: sweep the same band at two step sizes.** Two
+sessions reported the HUD-excluded left band 1.5 % apart, which is six times the
+instrument's validation figure. The cause is the sweep **step** and not the
+search radius (`--search 70` and `90` agree exactly), and running the clean bands
+the same way turns an annoyance into a control:
+
+| band | step 0.01 | step 0.005 | spread |
+| --- | ---: | ---: | ---: |
+| sky (`0,20,960,200`) | 1.1195 | 1.1180 | 0.13 % |
+| trackside right (`580,200,960,430`) | 1.1119 | 1.1116 | 0.03 % |
+| left, HUD excluded (`0,200,380,430`) | 1.1394 | 1.1567 | **1.5 %** |
+
+**Step sensitivity measures peak sharpness**, so it says which bands are
+measurable. The clean bands are step-insensitive to ~0.1 %; the left band stays
+unreliable even with the HUD removed, because the original's road there is still
+blown out and there is little structure left to correlate. So the left band's
+right answer is "1.11-1.16, and this band should not be quoted to three digits" -
+which is enough to kill the 1.0106 reading and not enough to refine anything.
+
+**Run every band at two steps and treat disagreement beyond 0.26 % as the band
+declaring itself unmeasurable.** It costs one extra invocation and it is the
+check that would have caught this before two sessions compared third digits.
+
+**3. Linearity in the quantity measured.** A fixed eye with a varying fov is an
+exact screen-space zoom about the principal point, so `--camera-fov` is ground
+truth with no code change. Screen offsets scale as `1/tan(fov/2)`, so
+`measured * tan(fov/2)` must be constant:
+
+| fov | craft | far scenery | craft x tan(fov/2) |
+| ---: | ---: | ---: | ---: |
+| 54 | 1.2634 | 1.2695 | 0.6437 |
+| 57 | 1.1882 | 1.1927 | 0.6452 |
+| 60 | 1.1188 | 1.1197 | 0.6460 |
+| 63 | 1.0503 | 1.0554 | 0.6436 |
+| 65.75 | 0.9988 | 1.0009 | 0.6451 |
+| 69 | 0.9393 | 0.9417 | 0.6455 |
+| 72 | 0.8857 | 0.8918 | 0.6435 |
+
+**Constant to 0.39 %** over a 1.43x induced range.
+
+Note `--render-scale` is the wrong knob and was checked as such: it is internal
+resolution and does not change on-screen size at all.
+
+## The measurement: the craft is not the error
+
+Registering **far scenery** (`y 20..200` - buildings, tower, sky, at effectively
+infinite distance, which **no mesh scale can move**) against registering the
+**craft**, over `data/traces/pad0-boost.csv` and `data/shots/pad0-boost/`:
+
+| tick | speed | far scenery | craft | craft / far |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 71.84 | 1.1195 | 1.1186 | 0.999 |
+| 10 | 79.48 | 1.1251 | 1.1173 | 0.993 |
+| 20 | 87.39 | 1.1388 | 1.1352 | 0.997 |
+| 30 | 93.88 | 1.1504 | 1.1421 | 0.993 |
+| 40 | 133.25 | 1.2092 | 1.1919 | 0.986 |
+| 50 | 150.81 | 1.2508 | 1.2328 | 0.986 |
+| 60 | 149.94 | 1.2550 | 1.2424 | 0.990 |
+| 70 | 145.18 | 1.2485 | 1.2346 | 0.989 |
+| 80 | 141.54 | 1.2364 | 1.2226 | 0.989 |
+| 90 | 139.50 | 1.2329 | 1.2189 | 0.989 |
+| 100 | 137.99 | 1.2329 | 1.2153 | 0.986 |
+| 110 | 94.64 | 1.1625 | 1.1446 | 0.985 |
+| 120 | 65.26 | 1.1156 | 1.1072 | 0.992 |
+| 130 | 53.17 | 1.0652 | 1.0806 | 1.014 |
+| 140 | 42.76 | 1.0722 | 1.0647 | 0.993 |
+| 148 | 40.95 | 1.0703 | 1.0569 | 0.987 |
+
+**`craft / far` = 0.992 +/- 0.007 (sd) across 16 frames spanning a 1.17x range of
+absolute ratio.** Our craft is the same size as our scene; it inherits the zoom
+like everything else.
+
+*The table is the original pass's run.* Re-taken independently on the committed
+script, tick 0's far scenery reproduces exactly (**1.1195**) and the craft box
+quoted in "Reproducing" below reads **1.1211** rather than the table's 1.1186,
+for `craft / far` = **1.0014** instead of 0.999 - the craft column was measured
+on a different box. Both readings say the same thing, which is the point: the
+conclusion is that this ratio is 1, and it is 1 either way.
+
+Confirmed directly rather than only by ratio: rendered at the fov that zeroes the
+background for tick 0 (`--camera-fov 65.75`), three **craft-only** boxes
+containing no background at all register at **0.9989 / 0.9985 / 0.9987**. The
+craft mesh is correct to **0.15 %**.
+
+So `1 / 0.75^2 = 1.7778` is **refuted**, and the decision recorded in
+`ship_model_matrix` - ship the confirmed `0.75`, leave the remainder visible
+rather than cancelling it - was the right call for the wrong reason. The
+remainder was never in the mesh.
+
+## The projection error is the original's speed-proportional fov term
+
+Converting each frame's far-scenery ratio to the fov that would zero it
+(`tan(fov/2) = ratio * tan(30 deg)`) gives a fov that rises monotonically with
+speed across the whole capture. `camera.md` records a store, read at instruction
+level at the top of `FUN_088455ec`:
+
+```c
+craft[0x790] = dot(fwd, *(shipNode + 0x140)) * 0.075 + craft[0x7c];
+```
+
+with `0.075` a constant at `0x08a7b6a0`, and `craft+0x790` added to **both**
+tripod fovs every frame in `Ship_UpdateCameraRigs`' tail. That is
+`authored + 0.075 * forward_speed + craft[0x7c]`, in **additive degrees**.
+
+Fitting exactly that form against the pixels - `dot(fwd, vel)` computed from the
+capture's own `fwd_*` and `vel_*` columns, not the `speed` magnitude column:
+
+```
+fov_deg = 60.181 + 0.07685 * dot(fwd, vel)     residual rms 0.407 deg, max 0.888 deg
+```
+
+| quantity | recovered from the executable | fitted from 16 frames of pixels | 95 % interval |
+| --- | ---: | ---: | --- |
+| coefficient | **0.075** | 0.07685 | [0.0710, 0.0827] |
+| intercept | **60** (`<ExternalCameraFar fov>`, this ship) | 60.181 | [59.54, 60.82] |
+
+**Both recovered constants sit inside the pixel fit's interval**, from two
+completely independent routes - a disassembler and a photometric registration of
+16 emulator frames. That is the confirmation the store did not have.
+
+Three checks that could have broken it:
+
+- **`speed_ramp` is excluded as the driver**: fitting against it gives an
+  intercept of **62.0 deg**, which misses the authored value.
+
+**But the pixels do not choose between forward velocity and speed magnitude, and
+this page should not pretend otherwise.** `dot(fwd, vel)` and the `speed` column
+agree to three decimal places at **13 of these 16 ticks** - the craft is going
+where it is pointing for most of the capture. They separate only at ticks 110,
+120 and 130 (86.76/94.64, 61.35/65.26, 50.47/53.17), and those are precisely the
+three worst residuals of the fit (+1.23, +0.97, -0.60 deg). Fitting the `speed`
+column instead is marginally *better* (rms 0.344 deg, intercept 59.96). So the
+pixels confirm the **coefficient**; the **driver** comes from the disassembly
+alone, where the store plainly reads a dot product with the craft's forward axis.
+
+That is worth one follow-up rather than a caveat forever: `shipNode+0x140` is
+described in `camera.md` only as "a velocity-shaped vector" and has not been
+identified. If it is a smoothed or per-frame-delta velocity rather than the body
+velocity, the residuals at those three ticks have a mechanism and stop being
+noise - and those three ticks are where the craft is most off-axis, which is
+exactly where a smoothed vector would lag.
+- **Boost contributes nothing extra.** Adding a `boost_timer` term gives a
+  coefficient of **-0.0087** and barely moves the rms. Ticks 40-70 (boost active)
+  sit on the same line as ticks 80-148 (boost expired). The widen is present with
+  no boost at all, which is why `BoostFovKick` never accounted for it.
+- **Robust to the frame/trace lag.** `data/shots/pad0-boost/measurements.md`
+  records a +0..+2 tick ambiguity. Refitting at each lag moves the coefficient
+  over `0.0769 / 0.0759 / 0.0752` and the intercept over `60.18 / 60.29 / 60.47`
+  - every one of them still bracketing `0.075` and `60`. The lag does not decide
+  the constants.
+- **It is a fov error and not an aspect error.** A 2D search over independent
+  `(sx, sy)` peaks at `sy/sx = 1.000` (craft) and `0.989` (far scenery), within
+  one grid step of isotropic. `AUTHORED_ASPECT = 480/272` is exactly the 960x544
+  capture aspect, so `fit_vertical_fov` is the identity here and is not
+  implicated.
+
+**Validated out of sample, not only fitted.** Tick 60 (speed 150, the fastest
+frame) rendered at `--camera-fov 71.85`: far scenery **0.9995**, craft-only boxes
+0.9891 / 0.9899.
+
+### What this settles that reading alone could not
+
+`camera.md`'s correction section rates the **decomposition** of the additive term
+into `0.075 * speed` and `craft[0x7c]` at confidence **0**, because a live series
+of `+9.4` at 130 units/s, `+6` at 120, `+3` at 100 and `+0.5` at 75 does not fit a
+line. The pixels do fit a line, over 148 ticks and a 41-151 units/s range, with an
+intercept indistinguishable from the authored fov. So:
+
+- **`craft+0x7c` is 0 to within +/-0.64 degrees throughout a clean run.** The
+  additive fov term is the speed-proportional store and nothing else.
+- **That live series was therefore not this term.** It is the `Hud_Update` shake
+  path decaying after the craft was placed - which is what "a decaying
+  oscillation" described, and it decays faster than speed does because it is not
+  a function of speed at all. The two measurements were never of the same thing.
+- **`FUN_088455ec` runs while an external view is selected**, which `camera.md`
+  names as the obvious next check and leaves open. Our capture is the external
+  chase view, and the term is plainly present in it. This is inference from
+  effect rather than from execution, so it is worth the cheap direct
+  confirmation: an exec breakpoint on `0x088455ec` with an external view
+  selected.
+
+### Confidence
+
+| Claim | Score | On what |
+| --- | ---: | --- |
+| Our craft mesh is the correct size (0.15 %) | 85 | An instrument validated to 0.26 % against known factors, a control that cannot scale reading 0.997, and craft-only boxes at 0.999 with the background zeroed. Held below 90 for sampling, not for the instrument: one capture, one ship, one circuit |
+| The original's fov carries `+0.075 * forward_speed` degrees | 88 | A store read at instruction level, whose two constants are independently recovered from 16 frames of the original's own pixels and both fall inside the fit's 95 % interval |
+| `craft+0x7c` is ~0 during a clean run | 75 | One capture, one circuit, one ship. The residual is 0.41 deg rms against a term that would have to be several degrees to matter |
+| `1 / 0.75^2` scales the drawn mesh | **refuted** | Far scenery, which no mesh scale can touch, carries the same ratio as the craft in all 16 frames |
+
+## Two things in this repository still contradict it, and one read settles both
+
+Recorded rather than resolved, because a page that only lists its supporting
+evidence is the failure this whole thread was about.
+
+**1. The 136-edge world fit says the background is the right size.**
+[exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md) fits the horizontal
+displacement of 136 matched world edges against distance from the screen centre
+on a matched-pose frame and gets `offset = +0.00405 * (x - 480) + 1.37`, RMS
+residual 9.9 px, "implied world scale ours/theirs = 1.0041" - and concludes the
+track, the camera and our projection are all right.
+
+**That is numerically incompatible with a 1.1195 far-scenery zoom**, which is a
+slope of ~0.12 - thirty times the fitted one - and would put the frame edges
++/-57 px out. A 9.9 px residual cannot hide that, so one of the two instruments
+is broken.
+
+**The registration side has since been reproduced by a second session working
+independently**, on the committed script: sky `1.1180` against this page's
+`1.1195`, and trackside right of the craft `1.1119`. The band left of the craft
+needed the HUD excluded (see above), after which it reads `1.1394`. Three
+background regions, two sessions, one instrument with three validations - against
+one fit with none. The refutation is now written into `exhaust.md` beside the fit
+itself.
+
+The likeliest mechanism, and it is testable: **nearest-neighbour edge pairing
+absorbs a uniform zoom.** Under a 12 % zoom the correct partner for an edge near
+the frame edge is ~57 px away, further than the spacing between adjacent rails
+and barrier posts - so the pairing step silently matches each of our edges to a
+*different* original edge than it should, and a fit over wrong pairs collapses
+toward zero slope with a residual that looks like noise. The registration metric
+has no pairing step at all, which is why it is not exposed to this, and it
+carries three validations the edge fit has none of. That is the reason to back
+registration - not that it is newer.
+
+**2. The B2 tower reads 1.4-1.5x, not 1.17x.** exhaust.md separately measures the
+tower's width on **the original's own frames** at different boost ages and finds
+it ~1.4-1.5x smaller at boost age 0.3-0.7 s than at 1.3 s+, an fov sweep landing
+the boosted frame at "roughly 90-95 degrees against the authored 60". That is
+original-versus-original, so it involves no cross-renderer registration at all -
+and it is **independent corroboration that the original's fov moves with speed**,
+which is worth more than its disagreement costs.
+
+But it does not reconcile in magnitude. This page's law over the same speed range
+(150 down to ~40 units/s) predicts a tangent ratio of
+`tan(35.65) / tan(31.5) = 1.171`, not 1.4-1.5, and 90-95 degrees is far above
+`60 + 0.075 * 150 = 71.3`. Same sign, same driver, wrong size. Either the tower
+measurement conflates the zoom with the boost's own motion blur and the craft's
+changing distance to it, or the law is missing a term that only shows at boost
+speeds. Unresolved.
+
+### The one read that settles both, and it costs a single breakpoint
+
+`g_camera_fov_degrees` (`0x08b34310`) is the live projection's own fov, and
+`Camera_PublishTripod` is its only writer. **Read it at the exact tick
+`data/shots/pad0-boost/tick00000.png` was captured** - speed 71.84 units/s:
+
+- **~65.4** (`60 + 0.075 * 71.5`) confirms this page directly, from the
+  executable's own state rather than from pixels, and disposes of the edge fit.
+- **~60** means the original's fov was authored-flat at that moment, this page's
+  *interpretation* is wrong even if the registration is sound, and the zoom has
+  some other cause.
+
+Nothing else in the thread has this property: it reads the quantity in dispute,
+in the frame in dispute, with no instrument in between. Do it before spending
+effort on either contradiction above.
+
+## What follows from this
+
+**1. Do not apply any further factor to `ship_model_matrix`.** The mesh is right.
+
+**2. `Race::projection` is missing the term.** Our `widen` is driven by
+`boost_kick` only - which `camera.md` is explicit is *a deliberate invention of
+this project*, not a port - while the original's is driven by forward speed and
+is present with no boost at all. The recovered shape is additive degrees:
+`fov = authored + 0.075 * dot(fwd, vel)`, in the trace's own units/s. Note this
+composes differently from `BoostFovKick`, which multiplies a tangent.
+
+**3. Every matched-pose pixel comparison taken before this is suspect**, and the
+reason is worse than a constant offset: the frames were misregistered by
+1.12-1.26x depending on the tick's *speed*, so it is not a factor that divides
+out. Re-take them with `--camera-fov` computed from the capture's own forward
+velocity, or at a low-speed tick where the error is smallest. Named instances are
+tracked on `HANDOVER.md`.
+
+## Reproducing
+
+The metric is [`scripts/frame-register.py`](../../scripts/frame-register.py)
+(numpy and pillow only - scipy does not install here). It was written as a
+scratch script under `data/`, which is gitignored and therefore not durable; it
+is committed because it is the instrument for **every** future comparison
+against the original, not a note about this one.
+
+```sh
+cargo build --release -p oag-game
+# from the repo root, so data/ resolves:
+target/release/oag-game --race --pose-from data/traces/pad0-boost.csv \
+    --pose-tick 0 --ticks 0 --screenshot data/scratch/ours_t0.png --size 960x544
+
+# the free control, which is not optional - far scenery no mesh scale can move:
+python3 scripts/frame-register.py data/shots/pad0-boost/tick00000.png \
+    data/scratch/ours_t0.png --box 0,20,960,200 --range 0.80,1.30,0.01 --search 70
+#   => 1.1195
+
+# the craft, for comparison against it:
+python3 scripts/frame-register.py data/shots/pad0-boost/tick00000.png \
+    data/scratch/ours_t0.png --box 440,330,525,430 --range 0.80,1.30,0.01 --search 70
+```
+
+**The script refuses a peak that lands on an end of the sweep**, rather than
+returning it. That is not a nicety: an earlier sweep capped at 1.25 returned
+exactly `1.2500` for the three fastest ticks of this capture and those numbers
+were written up as measurements. `--allow-clamped` exists for deliberate
+one-sided probes and should be rare.
+
+The reference frames are `data/shots/pad0-boost/`, and `data/` is gitignored - so
+`rg` and `fd` return nothing there with exit code 0 whether it is full or empty.
+Use `/bin/ls`, `find`, `grep` or an absolute path.
