@@ -209,13 +209,36 @@ it also works after analysis, though rebasing first is cheaper.
 
 ### How
 
-1. `Window > Memory Map`
-2. Click **Set Image Base** in that window's toolbar (the small house icon)
-3. Enter `08804000`
-4. Then `Analysis > Auto Analyze`
+1. `Analysis > Auto Analyze`, at the **default image base**, and let it finish
+2. `Window > Memory Map`
+3. Click **Set Image Base** in that window's toolbar (the small house icon)
+4. Enter `08804000`
 
-**Rebase before analysing.** Both orders work, but analysing first means paying
-for it twice.
+> **Analyse first, then rebase. The orders are not equivalent** - this
+> corrects an earlier version of this page, which said to rebase first and
+> that "both orders work". Measured on `pure-psp-eu`, 2026-08-09:
+>
+> | | rebase, then analyse | analyse, then rebase |
+> | --- | ---: | ---: |
+> | functions found | 6,934 | **8,969** |
+> | `get_xrefs_to` on a used string | none resolve | **resolves** |
+>
+> Analysis is what turns `lui`/`addiu` pairs into references, and it can only
+> do that while the instruction stream and the data listing agree. Rebasing
+> first breaks that agreement - the immediates are still pre-relocation, so a
+> string pointer resolves to `0x248538`, below the image base, and **no
+> reference is created at all**. The database then answers "no references
+> found" for strings the binary demonstrably uses, with no error to warn you.
+> `/psp-pure-eu/BOOT.BIN` was built the wrong way round and cost a session to
+> diagnose; see
+> [the import procedure](../ghidra/workflow.md#importing-a-binary-analyse-then-rebase)
+> and [string-anchors.md](../ghidra/functions/psp-pure-eu/string-anchors.md).
+>
+> The `AllegrexRelocationFixupHandler` above keeps *references* correct across
+> the rebase, which is what makes this order work. It does **not** rewrite the
+> instruction bytes: after rebasing, `0x0898bab8` still reads `2800043c`
+> (`lui a0, 0x28`) and the decompiler still prints raw constants such as
+> `0x248538`. Add `0x08804000` when reading a constant out of a decompilation.
 
 ### On the value
 

@@ -37,6 +37,73 @@ Also a plain ELF, for the Emotion Engine. The `IOP/*.IRX` modules are separate
 ELF files for the I/O processor and can be imported alongside if the audio or
 storage paths become relevant.
 
+### Importing a binary: analyse, then rebase
+
+**Replicable procedure. Follow it in this order on every workstation** - the
+order is not cosmetic, and getting it wrong produces a database that looks
+finished and silently answers "no references" to every string query. Measured
+2026-08-09 on `pure-psp-eu`.
+
+All PSP binaries here are relocatable (`e_type` `0xffa0`) and declare `p_vaddr`
+`0x00000000`, so each has to be placed at `0x08804000` by hand.
+
+1. **Install the Allegrex processor module first** (`just build-allegrex`), for
+   the VFPU-decoding reason above. For PS2, the Emotion Engine module.
+2. **Import at the default image base** - do not set a base in the loader
+   options. Language should auto-detect as `Allegrex:LE:32:default`.
+3. **Run full auto-analysis and let it finish.** Poll until it settles;
+   `reanalyze` timing out is normal on a binary this size and means analysis
+   started, not that it failed.
+4. **Only then set the image base to `08804000`**, via `Window > Memory Map >
+   Set Image Base`, or `set_image_base` through the bridge.
+5. **Verify before trusting it** (see below).
+
+**Why this order.** Analysis is what turns `lui`/`addiu` pairs into references.
+Rebasing first leaves the instruction stream holding pre-relocation immediates
+while the data listing sits at `0x08804000`, so the analyser resolves a string
+pointer to `0x248538` - an address below the image base where nothing lives -
+and creates no reference at all. Analysing at base `0`, where code constants and
+data addresses agree, builds the references correctly; the later rebase slides
+them with everything else.
+
+Rebasing is safe to do after analysis - see
+[Allegrex and the VFPU](../psp/allegrex-vfpu.md#rebasing-is-safe-here-which-is-not-generally-true)
+for the `AllegrexRelocationFixupHandler` that makes it supported.
+
+#### Verifying an import
+
+Two checks, both cheap. On `pure-psp-eu`:
+
+```sh
+# 1. Function count. Wrong order gave 6,934; right order gives 8,969.
+#    A count well below the reference figure means analysis was crippled.
+# 2. A string must resolve back to code:
+curl -s 'http://127.0.0.1:8089/get_xrefs_to?address=0x08a4c538'
+#    -> "From 08898838 in FUN_08898594"   (Data\XML\HandlingStats.xml)
+#    -> "No references found"             = the import is bad, redo it
+```
+
+Pick any string the binary obviously uses; if `get_xrefs_to` on it says "No
+references found", the import is bad no matter how complete it looks.
+Decompilations full of `bad instruction data` and `halt_baddata()` truncations
+are the same signal.
+
+#### Known-imperfect, and why it does not block
+
+This procedure leaves **instruction bytes unrelocated** - `0x0898bab8` still
+reads `2800043c` (`lui a0, 0x28`), and the decompiler prints raw constants like
+`0x248538` rather than `0x08a4c538`. References are correct, so navigation and
+every string tool work; the displayed constant is what lies. Add `0x08804000`
+when reading a constant out of a decompilation.
+
+The Pulse databases do **not** have this wart - at `psp-pulse-usa` `0x0894f6d8`
+the file on disk holds `2800113c` while the database holds `a908113c`, so their
+instruction bytes were genuinely rewritten. **How they got that way is not
+established**; setting `Image Base` in the loader's import options is the
+leading hypothesis and is worth testing next, since it would remove the wart
+entirely. Until then, prefer the order above - it is measured, and it is a large
+improvement on what it replaces.
+
 ### Naming programs
 
 Name each program for its origin, so a documentation page's "Binary" field is
@@ -108,6 +175,34 @@ one. Two habits keep this useful:
   run. Call `reanalyze` (it times out, which is normal for a 1.9 MiB binary and
   means analysis started) and poll `analysis_status` until `analyzing` goes
   false. Judge the import on the count *after* that.
+- **Analyse first, rebase second - the order decides whether the database is
+  usable.** See [Importing a binary](#importing-a-binary-analyse-then-rebase)
+  below; `/psp-pure-eu/BOOT.BIN` is what the wrong order produces.
+- **The symptom of a wrongly-imported binary is that every address-based string
+  tool silently returns zero.**
+  `get_xrefs_to`, `find_undocumented_by_string` and `search_byte_patterns` on a
+  pointer all report no references for strings that are demonstrably in use - no
+  error, just an empty result that reads as "this string is unused". A string
+  listed at `0x08a4c538` is referenced in code as `0x248538`
+  (`data address = code constant + 0x08804000`), and the decompiler prints the
+  raw constant too. Measured **not** to affect either Pulse binary, including
+  the equally large `psp-pulse-eu`, so import size does not predict it;
+  `psp-pure-usa` is untested and is the same vintage. The search that does work,
+  and the `lui`-high-half check that avoids the false positives it invites, are
+  in [`psp-pure-eu/string-anchors.md`](functions/psp-pure-eu/string-anchors.md).
+- **Re-importing that binary correctly is worth ~2,000 functions and a large
+  drop in fuzzy-match noise.** A clean import (default base `0`, full
+  auto-analyze) yields **8,969** functions against the current database's
+  **6,934**, and the current database's decompilations are littered with
+  `bad instruction data` / `halt_baddata()` truncations that the clean one does
+  not have. Measured effect on cross-binary matching, using `psp-pulse-usa`'s
+  `Body_Integrate` as the probe: the best-match **score is identical** (0.8013
+  either way - the matcher normalises immediates, so relocation state does not
+  move scores), but candidates above threshold 0.7 fall from **72 to 5**. That
+  is aimed squarely at the "collision-prone" exclusions recorded in
+  [`psp-pure-eu/corroboration.md`](functions/psp-pure-eu/corroboration.md), so
+  **the fuzzy sweep is worth re-running once the binary is re-imported at
+  `0x08804000`** - not for better scores, but for far fewer false ties.
 - **Analyse multiple large programs one at a time, never concurrently.**
   Rebasing/analysing `SCES_547.48` alongside two `BOOT.BIN`s at once left
   `analysis_status` reporting `analyzing: true` with the function count

@@ -30,3 +30,31 @@
 0x0892eb8c	function	Ship_UpdateEngine	62	corroboration.md
 0x0892c53c	function	Ship_ApplyQuadraticDrag	60	corroboration.md
 0x0892c5c8	function	Ship_ApplyAngularDamping	60	corroboration.md
+
+# String-anchor pass (2026-08-09). Independent of the fuzzy sweep above:
+# these are named from the strings they reference, which survives the compiler
+# drift that defeated body matching.
+#
+# READ string-anchors.md BEFORE running any address-based string tool against
+# this binary. This import leaves code immediates UNRELOCATED while rebasing
+# the data listing (data address = code constant + 0x08804000), so
+# get_xrefs_to, find_undocumented_by_string and pointer byte-searches all
+# report zero references for strings that are demonstrably in use - silently,
+# with no error. The page documents the search that does work, and the
+# low-half collision that makes searching an `addiu` without checking its
+# `lui` produce false positives.
+#
+# Both rows below are browser middleware rather than game code, found while
+# establishing the technique. Pure embeds a web browser; a large share of this
+# binary is third-party middleware, which is a further explanation for the
+# poor Pulse fuzzy-match rate. Deprioritised as a subject on user direction -
+# the technique, not the browser, is the reusable result here.
+0x0898ba60	function	Browser_InitMessageQueues	78	string-anchors.md
+0x089ec21c	function	Browser_BuildCookieHeader	82	string-anchors.md
+
+# Front end. Resolves a "->"-separated element path against a screen, e.g.
+# "Main Menu->Mode". The spine of the front end: every call site carries a
+# literal element name, so naming outwards from here is cheap. See
+# string-anchors.md for the fe:: class taxonomy the front-end XML is built
+# from, and for the open question of which hash keys the child lists.
+0x088b595c	function	Screen_FindElementByPath	84	string-anchors.md
