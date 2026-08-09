@@ -1197,7 +1197,7 @@ craft's idle time left it, and this capture entered the pad at `0.1292`, not
 `oag-game` grew `--pose-intensity` and `--pose-speed` to pose a frame at a
 captured row's *measured* exhaust state rather than a saturated one.
 
-### The craft is measurably too big, and the `0.75` is deliberately NOT applied
+### The craft's `0.75` render scale, confirmed three ways - and a residual that is not it
 
 **This is a large part of why the boost reads weak, and it is not an exhaust bug
 at all.** [`CRAFT_ROW_SCALE`](../../../../crates/render/src/exhaust.rs) has
@@ -1207,9 +1207,23 @@ body's own rows are orthonormal - the capture harness measures them unit-length
 over 200 ticks - so the scale belongs to the **render** matrix, and
 `oag_game::race::Race::ship_model_matrix` builds rotation and translation only.
 
-**It was applied on 2026-08-08 and then deliberately reverted**; the reasoning
-is on that function's own doc comment and is summarised below. Treat the
-discrepancy as measured and open, not as fixed.
+**Applied 2026-08-08** after a third independent confirmation, and the full
+argument is on that function's own doc comment. It was briefly reverted the same
+day on the reasoning that a constant leaving a residual is a fix only in
+appearance; what changed that is the confirmation below, plus the point that a
+simulation scaled by `0.75` and a mesh drawn at `1.0` is the one combination
+that is certainly wrong.
+
+**The third confirmation is the drop shadow.** `FUN_089038c8` is a stencil
+shadow-volume pass over the craft; it computes its ground projection, scales it
+by `1.0 / g_craft_scale`, and then `Gu_SetMatrix(2, ...)` installs the node's own
+4x4 as the GE world matrix. **Dividing the scale back out is only correct if the
+matrix it draws under carries it.** With the live trail-direction read
+(`200000.0 * row2` measured `150,080`) that is two readings of the render path,
+and `oag_physics::hover::TARGET_GLOBAL_SCALE` is the same global already applied
+in the simulation - `g_craft_scale` has seventeen xrefs including
+`Ship_HoverFourCorner`, `Ship_InitCraft`, `Ship_UpdateCraft` and
+`Ship_UpdateCameraRigs`.
 
 Caught by putting a real emulator frame beside ours from the original's own
 recorded camera, 11.6 units back: the wingtip lamps span **172 px** in the
@@ -1223,8 +1237,8 @@ at scale `1.0` (ratio `1.740`) and `129.6 px` at `0.75` (ratio `1.191`). So the
 `0.75` is a large, correctly-signed improvement and demonstrably not the whole
 story - a pure `0.75` would land the ratio near `1.00`, and the factor the
 centroid measurement actually wants is nearer `0.575`, which is not a constant
-this project has recovered anywhere. **Not applied**, and the reason sharpened on the same day: **this metric cannot
-tell one candidate factor from another.** Measured lamp-centroid ratios at three
+this project has recovered anywhere. **The residual is not folded into this constant**, and the reason is that **the
+metric cannot tell one candidate factor from another.** Measured lamp-centroid ratios at three
 scales - `1.0` -> `1.740`, `0.75` -> `1.191`, `0.5625` -> `1.067` - are **not
 linear in the scale they are measuring**. A linear metric would put `0.75` at
 `1.740 * 0.75 = 1.305` and `0.5625` at `0.979`; it reads `1.191` and `1.067`
@@ -1235,6 +1249,9 @@ picked to make it read `1.000` would be fitted to an instrument, which is the
 kind of constant this project retires rather than adds (see
 `HALF_SIZE_TO_WORLD` and the deleted `FLARE_ASPECT`).
 
+`0.75` closes `1.740` only to `1.191`, so roughly a further `1.3x` is
+unexplained and stays visible rather than cancelled.
+
 **A second `0.75` is the live hypothesis, and it is arithmetic rather than a
 reading.** `1 / 0.75^2 = 1.7778` sits 2.2 % from the measured `1.740`, and
 `g_craft_scale` (`0x08ab0e1c`, a code literal `0.75` written once in
@@ -1243,14 +1260,46 @@ hull dimensions into the collider, the initial body height and both camera rigs
 - see [camera.md](camera.md). If the original also scales the drawn mesh by it,
 the craft is scaled twice where this project scales it never. **The second site
 was searched for and not found**; `Ship_LoadModel` and `FUN_0884dab4` are the
-two unopened calls in `Craft_Construct_q` that could set a node scale. Until one
-of them is read, or a non-emissive silhouette measurement replaces the lamp
-centroids, the factor is not established. More practically: the chase camera is separately known
+two unopened calls in `Craft_Construct_q` that could set a node scale. Our own per-batch position scale in `oag_formats::vex`
+(`s16 / 32768 * scale`, the `f32` at batch `+0x10`) was the third candidate and
+**is now excluded** - see below. More practically: the chase camera is separately known
 not to frame the craft the way the original's does and is being worked on, and a
 half-correct ship scale sitting in the tree while that happens is how a camera
 distance gets fitted to cancel a model error. One wrong constant is easier to
 find than two that cancel.
-What the remaining 19 % is stays open: candidates not separated here are a
+### The residual is the craft model alone: the track is the right size
+
+Fitting the horizontal displacement of **136 matched world edges** - track rails,
+barriers and trackside structures, in the columns either side of the craft,
+across fourteen scanlines of the same matched-pose frame - against distance from
+the screen centre:
+
+```text
+offset = +0.00405 * (x - 480) + 1.37      RMS residual 9.9 px
+implied world scale ours/theirs = 1.0041
+```
+
+A wrong world scale shows as a slope growing with distance from the centre. The
+slope is `0.4 %` and the residual swamps it. **So the track and the buildings are
+the right size, and the recorded camera and our projection are right with them**
+- a wrong eye position or field of view would have bent that fit too. Only the
+craft is oversized, and it is oversized *relative to a track that matches*.
+
+That excludes the most attractive candidate: **our per-batch position scale in
+`oag_formats::vex` is shared by every mesh including the track**, so a misread
+there would make the track wrong as well. It does not. Every remaining candidate
+is specific to the craft path - a second scale on the craft's own node (the two
+unopened calls in `Craft_Construct_q`, `Ship_LoadModel` and `FUN_0884dab4`), or
+the craft's authored vertex scale being consumed differently from a track's.
+
+One caveat on the *size* of the remainder, not on its existence: the `1.19`
+figure comes from lamp centroids, a metric shown above to be non-linear in the
+scale it measures, so it bounds the craft as "too big" without pinning the
+factor. The world fit is the trustworthy number here - 136 points, a slope and a
+residual.
+
+Superseded by the paragraph above, kept for one revision because two passes
+cited it: candidates not separated by the older reading were a
 second scale on the render node, a camera the recorded pose does not fully
 describe, and this measurement's own perspective sensitivity (the two frames put
 the craft at slightly different distances).

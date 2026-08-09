@@ -101,9 +101,10 @@
 //! is true of the rigid look-at point and false of the sprung eye. See that
 //! field's own documentation.
 //!
-//! The clamp in [`lag`] is the one thing here the original does not do, and at
-//! the shipped `spring_horiz`/`spring_vert` of 11-13 per second it never bites at
-//! any plausible `dt`.
+//! The clamp in [`lag`] is the one thing here the original does not do. At any
+//! spring rate a shipped block authors it never bites at any plausible `dt`,
+//! which is why the agreement above is not evidence *for* it - the capture never
+//! reaches the branch.
 
 use oag_core::math::{Mat4, Vec3, camera};
 

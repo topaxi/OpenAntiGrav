@@ -67,12 +67,12 @@ use oag_render::camera::chase::{Chase, Target};
 
 /// The largest per-tick eye error, in world units, this comparison may show.
 ///
-/// The measured maximum is `0.060` and the RMS is `0.008`, against a camera that
-/// sits `11.6` units from a craft moving at up to `153` units per second - so
-/// this is a bound of about half a percent of the rig's own size. Set from the
-/// measurement with a factor of two of headroom, and **not** loose enough to
-/// admit any of the models it replaces: the nearest of them misses by `0.121`
-/// RMS and `0.332` at worst, which is three times this bound.
+/// The measured maximum is `0.060` and the RMS is `0.008`, against a camera the
+/// capture measures at `11.6` units from a craft moving at up to `154` units per
+/// second - so this is a bound of about half a percent of the rig's own size.
+/// Set from the measurement with a factor of two of headroom, and **not** loose
+/// enough to admit any of the models it replaces: the nearest of them misses by
+/// `0.121` RMS and `0.332` at worst, which is three times this bound.
 const TOLERANCE: f32 = 0.12;
 
 /// The team whose `handlingstats.xml` the capture was taken with, and the track
@@ -207,9 +207,9 @@ fn the_chase_camera_reproduces_the_originals_eye_over_a_whole_capture() {
     );
 }
 
-/// The property the capture is really measuring, asserted directly against the
-/// original's numbers rather than against a synthetic fixture the way
-/// `chase.rs`'s own unit test does.
+/// The property the capture is really measuring, taken off the original's own
+/// recorded camera rather than off a synthetic fixture the way `chase.rs`'s unit
+/// test does.
 #[test]
 #[ignore = "needs a capture in data/traces/"]
 fn the_originals_own_camera_holds_a_constant_distance_from_the_craft() {
@@ -234,19 +234,27 @@ fn the_originals_own_camera_holds_a_constant_distance_from_the_craft() {
     }
     println!("camera-to-craft {min:.4}..{max:.4} over speeds {slowest:.1}..{fastest:.1} units/s");
 
-    // The authored close block is `pos_length -15`, `pos_height 4`, and
-    // `0.75 * hypot(15, 4) = 11.643`. That the *measured* distance sits on it
-    // across a 2.3x speed range is what retires "the chase distance grows with
-    // speed" - a reading this project has had to retire twice.
-    let authored = 0.75 * (15.0f32 * 15.0 + 4.0 * 4.0).sqrt();
-    assert!(
-        (min - authored).abs() < 0.15 && (max - authored).abs() < 0.15,
-        "{min:.4}..{max:.4} against an authored {authored:.4}"
-    );
+    // Flatness, and deliberately **only** flatness. What this test exists to
+    // retire is "the chase distance grows with speed", a reading this project
+    // has had to retire twice, and a spread this small across a 3.9x speed range
+    // retires it without reference to any authored number.
+    //
+    // The absolute check - that the distance is the one the ship's own block
+    // predicts - belongs to
+    // [`the_captures_first_tick_agrees_with_the_discs_own_close_block`], where
+    // the number comes off the player's disc at runtime. Writing it out here as
+    // a literal would put shipped design data in a tracked file, which
+    // `docs/architecture/adr/0006-no-copyrighted-content.md` forbids and which
+    // this file's own header cites.
     assert!(
         max - min < 0.15,
-        "the distance varies by {:.4} units, which is not a rigid rig",
+        "the distance varies by {:.4} units over {slowest:.1}..{fastest:.1} \
+         units/s, which is not a rigid rig",
         max - min
+    );
+    assert!(
+        fastest > slowest * 2.0,
+        "the capture must cover a speed range"
     );
 }
 

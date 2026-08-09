@@ -396,3 +396,4 @@
 0x08840c74	function	Craft_Construct	65	camera.md
 0x08885a1c	function	Tripod_LookAt	65	camera.md
 0x08ab0e1c	data	g_craft_scale	85	camera.md
+0x08b36bec	data	g_speedpad_jump	88	engine.md

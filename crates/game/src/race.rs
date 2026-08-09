@@ -747,17 +747,29 @@ pub fn load(options: &Options) -> Result<Loaded> {
         "{stats_name}: team {:?}, {:?} class, mass {}, ride_height {}",
         stats.team, options.class, handling.physical.mass, handling.antigrav.ride_height
     ));
+    // The eye offsets are reported **after** `craft_scale`, because that is
+    // where the eye actually ends up, and the two differ now that the scale is a
+    // rig parameter rather than a factor folded into the four offsets. Reporting
+    // the authored numbers under the word "eye" would be a report that lies -
+    // "eye 4 up" for a rig whose eye is 3 up.
+    let eye_offsets = |chase: &ChaseParams| {
+        (
+            chase.pos_height * chase.craft_scale,
+            chase.pos_length * chase.craft_scale,
+        )
+    };
+    let (far_up, far_back) = eye_offsets(&chase);
+    let (close_up, close_back) = eye_offsets(&chase_close);
     report.push(format!(
-        "<ExternalCameraFar>: fov {} read as degrees (the unit is unrecovered), \
-         pos_length {} on disc -> eye {} up and {} back",
-        chase.fov, far.pos_length, chase.pos_height, chase.pos_length
+        "<ExternalCameraFar>: fov {} as vertical degrees (confirmed against the \
+         original's own frame), pos_length {} on disc -> eye {far_up} up and \
+         {far_back} back (authored offsets times the craft's {} scale)",
+        chase.fov, far.pos_length, chase.craft_scale
     ));
     report.push(format!(
-        "<ExternalCameraClose>: fov {}, eye {} up and {} back; \
+        "<ExternalCameraClose>: fov {}, eye {close_up} up and {close_back} back; \
          <InternalCamera>: fov {}, eye {} up and {} forward, pitch {} over {} units",
         chase_close.fov,
-        chase_close.pos_height,
-        chase_close.pos_length,
         internal.fov,
         internal.height,
         internal.length,
@@ -2951,49 +2963,69 @@ impl Race {
 
     /// Where the ship is and how it is oriented, as the mesh shader's model matrix.
     ///
-    /// Rotation and translation only, so the shader's assumption of uniform scale -
-    /// which is what lets it rotate normals without an inverse transpose - holds.
-    /// The model's own origin is used as it is: no recentring, and the only rotation
-    /// composed in is [`MODEL_YAW`], which is a stated finding about the `.vex` and
-    /// not a nudge to make the picture look right.
+    /// Rotation, translation and the craft's recovered global scale. The scale is
+    /// **uniform**, so the shader's assumption - which is what lets it rotate
+    /// normals without an inverse transpose - still holds. The model's own origin
+    /// is used as it is: no recentring, and the only rotation composed in is
+    /// [`MODEL_YAW`], which is a stated finding about the `.vex` and not a nudge
+    /// to make the picture look right.
     ///
-    /// # The craft is measurably too big here, and the scale is deliberately not applied
+    /// # The `0.75` is recovered, confirmed three ways, and shared with physics
     ///
-    /// **Do not add `oag_render::exhaust::CRAFT_ROW_SCALE` here without reading
-    /// this.** It was tried on 2026-08-08 and reverted on purpose.
+    /// `g_craft_scale` (`0x08ab0e1c`) is a code literal `0.75` written once in
+    /// `Craft_Construct_q` and read by seventeen sites. Three of them establish
+    /// that it belongs on the **render** matrix and not only in the simulation:
     ///
-    /// The evidence that something is wrong is solid. The original's craft world
-    /// matrix carries a global `0.75` - `CRAFT_ROW_SCALE`, read out of the
-    /// magnitude of the per-sample trail direction `Exhaust_Update` stores
-    /// (`200000.0` times the craft's row 2, live `150,080`) - while the rigid
-    /// body's own basis rows are orthonormal, so the scale belongs to the render
-    /// matrix and this function does not have it. Measured against the first
-    /// matched-pose speed-pad capture, from the original's own recorded camera
-    /// 11.6 units back, with the track and the buildings behind aligning: the
-    /// two wingtip lamps' centroids sit `108.8 px` apart in the original and
-    /// `189.3 px` apart in ours, a ratio of `1.740`. No field of view can
-    /// produce that, because a field of view scales the background too.
+    /// 1. **The craft's world matrix rows carry it**, live-measured: the
+    ///    per-sample trail direction `Exhaust_Update` stores is `200000.0` times
+    ///    the craft's row 2, and it reads back `150,080` -
+    ///    `200000 * 0.75 = 150,000`. See
+    ///    `oag_render::exhaust::CRAFT_ROW_SCALE`.
+    /// 2. **The drop-shadow divides it back out.** `FUN_089038c8` - a stencil
+    ///    shadow-volume pass - computes its ground projection and then scales it
+    ///    by `1.0 / g_craft_scale` before `Gu_SetMatrix(2, ...)` installs the
+    ///    node's own 4x4 as the GE world matrix. Undoing the scale is only
+    ///    correct if the matrix it draws under has it.
+    /// 3. **Physics already applies it**, as
+    ///    `oag_physics::hover::TARGET_GLOBAL_SCALE` (confidence 92), and
+    ///    `Ship_HoverFourCorner`, `Ship_InitCraft`, `Ship_UpdateCraft`,
+    ///    `Ship_UpdateCameraRigs` and the `<Misc>` hull dimensions into the
+    ///    collider all read the same global. A simulation scaled by `0.75` and a
+    ///    mesh drawn at `1.0` is the one combination that is certainly wrong.
     ///
-    /// **But `0.75` does not account for it, which is why it is not applied.**
-    /// It takes the ratio to `1.191`, not to `1.00`; the factor that measurement
-    /// actually wants is nearer `0.575`, which is a constant this project has
-    /// recovered nowhere. Applying `0.75` would leave a 19 % residual dressed as
-    /// a fix, and would make the craft 25 % smaller in every race frame - which
-    /// is the shape of change that quietly invites a *second* wrong constant
-    /// somewhere else to compensate for it. The chase camera is separately known
-    /// not to frame the craft the way the original's does, and it is being
-    /// worked on; a half-correct ship scale sitting in the tree while that
-    /// happens is exactly how a camera distance gets fitted to cancel a model
-    /// error.
+    /// The rigid body's own basis rows are orthonormal - the capture harness
+    /// measures them unit-length over 200 ticks - so the scale is not already
+    /// arriving through `body.orientation`, and this is where it belongs.
     ///
-    /// So this stays as it is until the whole discrepancy is explained, and the
-    /// measurement above is the starting point for explaining it. See
-    /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
+    /// # A residual remains, and it is a separate bug
+    ///
+    /// **`0.75` does not fully close the measured gap, and that is deliberately
+    /// not absorbed here.** From the original's own recorded camera, with the
+    /// track and buildings behind aligning, the wingtip lamp centroids sit
+    /// `108.8 px` apart in the original against `189.3 px` in ours at scale
+    /// `1.0` - a ratio of `1.740`, where `1/0.75` is `1.333`. Something else
+    /// also makes our craft too large, by roughly a further `1.3x`.
+    ///
+    /// Do **not** widen this constant to swallow that. `1/0.75^2 = 1.7778` sits
+    /// 2.2 % from the measurement, which makes "the original scales the mesh
+    /// twice" the live hypothesis, but the second site was searched for and not
+    /// found, and the lamp-centroid metric is **not linear in the scale it
+    /// measures** (`1.0` -> `1.740`, `0.75` -> `1.191`, `0.5625` -> `1.067`,
+    /// where linear would give `1.305` and `0.979`), so it cannot tell one
+    /// candidate factor from another. A factor chosen to make it read `1.000`
+    /// would be fitted to the instrument. The two unopened calls in
+    /// `Craft_Construct_q` (`Ship_LoadModel`, `FUN_0884dab4`) and our own
+    /// per-batch position scale in `oag_formats::vex` are where to look next;
+    /// a non-emissive silhouette measurement is what would replace the metric.
+    ///
+    /// What ships here is the confirmed constant, applied once, with the
+    /// unexplained remainder left visible rather than cancelled.
     #[must_use]
     pub fn ship_model_matrix(&self) -> Mat4 {
         let body = &self.ship().physics.body;
         Mat4::from_rotation_translation(body.orientation, body.position)
             * Mat4::from_rotation_y(MODEL_YAW)
+            * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE))
     }
 }
 

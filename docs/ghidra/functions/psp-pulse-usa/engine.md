@@ -2227,6 +2227,7 @@ stored**. Same conclusion, now with the location.
 | `0x08848dc4` | `Ship_ApplyWeathervaneTorque` | 74 |
 | `0x08b36bfc` | `g_handling_parse_class` | 85 |
 | `0x08ab0dcc` | `g_class_gravity_scale` | 90 |
+| `0x08b36bec` | `g_speedpad_jump` | 88 |
 
 ## Cross-platform
 
