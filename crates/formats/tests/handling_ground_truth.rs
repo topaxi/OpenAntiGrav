@@ -141,11 +141,16 @@ fn check_every_team(blobs: &[(String, Vec<u8>)]) {
         // so a mapping that read one block into two places cannot pass.
         for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
             assert_eq!(
-                stats.classes[index].name, class,
-                "{name}: slot {index} holds {}",
+                stats.classes[index].name,
+                Some(class),
+                "{name}: slot {index} holds {:?}",
                 stats.classes[index].name
             );
-            assert_eq!(stats.class(class).name, class, "{name}: {class} lookup");
+            assert_eq!(
+                stats.class(class).expect("Pulse has all four rungs").name,
+                Some(class),
+                "{name}: {class} lookup"
+            );
         }
 
         // Four *distinct* blocks. Reading the same one four times would satisfy
@@ -155,7 +160,7 @@ fn check_every_team(blobs: &[(String, Vec<u8>)]) {
                 assert_ne!(
                     (a.engine, a.turning, a.physical),
                     (b.engine, b.turning, b.physical),
-                    "{name}: {} and {} are identical parameter sets",
+                    "{name}: {:?} and {:?} are identical parameter sets",
                     a.name,
                     b.name
                 );
@@ -170,10 +175,13 @@ fn check_every_team(blobs: &[(String, Vec<u8>)]) {
         assert!(stats.misc.length > 0.0, "{name}: hull length");
         assert!(stats.misc.width > 0.0, "{name}: hull width");
         assert!(stats.misc.shield > 0.0, "{name}: shield pool");
-        assert!(stats.misc.easyshield > 0.0, "{name}: easy shield pool");
+        assert!(
+            stats.misc.easyshield.is_some_and(|v| v > 0.0),
+            "{name}: easy shield pool"
+        );
 
         for class in SpeedClass::ALL {
-            let block = stats.class(class);
+            let block = stats.class(class).expect("Pulse has all four rungs");
             assert!(block.physical.mass > 0.0, "{name} {class}: mass");
             assert!(
                 block.antigrav.ride_height > 0.0,

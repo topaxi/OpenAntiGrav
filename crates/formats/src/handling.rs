@@ -393,11 +393,11 @@ pub struct Misc {
     pub shield: f32,
     /// Shield pool on the easier difficulties, which is what implies the pool is
     /// difficulty-scaled rather than the incoming damage.
-    pub easyshield: f32,
+    pub easyshield: Option<f32>,
     /// Hull width.
     pub width: f32,
     /// Fore/aft mass bias.
-    pub weight_distribution: f32,
+    pub weight_distribution: Option<f32>,
 }
 
 impl Misc {
@@ -409,9 +409,9 @@ impl Misc {
             height: number(node, e, "height")?,
             length: number(node, e, "length")?,
             shield: number(node, e, "shield")?,
-            easyshield: number(node, e, "easyshield")?,
+            easyshield: optional_number(node, e, "easyshield")?,
             width: number(node, e, "width")?,
-            weight_distribution: number(node, e, "weight_distribution")?,
+            weight_distribution: optional_number(node, e, "weight_distribution")?,
         })
     }
 }
@@ -746,7 +746,7 @@ pub struct Airbrake {
     /// Percent of lateral grip retained at full airbrake.
     pub slidegrip: f32,
     /// One-shot lateral impulse.
-    pub sideshift: f32,
+    pub sideshift: Option<f32>,
 }
 
 impl Airbrake {
@@ -761,7 +761,7 @@ impl Airbrake {
             gain: number(node, e, "gain")?,
             turn: number(node, e, "turn")?,
             slidegrip: number(node, e, "slidegrip")?,
-            sideshift: number(node, e, "sideshift")?,
+            sideshift: optional_number(node, e, "sideshift")?,
         })
     }
 }
@@ -868,10 +868,18 @@ impl Pitch {
 }
 
 /// One speed class's worth of tunables: a whole `<Class>` block.
-#[derive(Debug, Clone, Copy, PartialEq)]
+///
+/// No longer `Copy`, because [`Self::raw_name`] has to carry a rung this
+/// project has no enum variant for: Pure ships a fifth class below Pulse's
+/// slowest, and dropping its name to keep the type `Copy` would throw away the
+/// one fact about it worth recording.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Class {
-    /// Which class this block is, from its `name` attribute.
-    pub name: SpeedClass,
+    /// Which of Pulse's four this is, or `None` for a rung outside that ladder.
+    pub name: Option<SpeedClass>,
+    /// The `name` attribute exactly as written, which is the only handle on a
+    /// rung [`SpeedClass`] cannot name.
+    pub raw_name: String,
     /// `<Engine/>`.
     pub engine: Engine,
     /// `<Brakes/>`.
@@ -892,8 +900,18 @@ impl Class {
     const ELEMENT: &'static str = "Class";
 
     fn from_node(name: SpeedClass, node: &Node) -> Result<Self> {
+        Self::parse(Some(name), name.as_str(), node)
+    }
+
+    /// A `<Class>` block whose `name` is outside [`SpeedClass`].
+    fn from_node_named(raw_name: &str, node: &Node) -> Result<Self> {
+        Self::parse(None, raw_name, node)
+    }
+
+    fn parse(name: Option<SpeedClass>, raw_name: &str, node: &Node) -> Result<Self> {
         Ok(Self {
             name,
+            raw_name: raw_name.to_string(),
             engine: Engine::from_node(child(node, Engine::ELEMENT)?)?,
             brakes: Brakes::from_node(child(node, Brakes::ELEMENT)?)?,
             turning: Turning::from_node(child(node, Turning::ELEMENT)?)?,
@@ -926,19 +944,43 @@ pub struct Stats {
     pub misc: Misc,
     /// `<FE/>`: the ship-select bars. Presentation only.
     pub fe: Fe,
-    /// The four `<Class>` blocks, indexed by [`SpeedClass`].
+    /// The `<Class>` blocks, in ladder order, slowest first.
     ///
-    /// An array rather than a map, so "exactly four, one each" is a property of
-    /// the type instead of something a caller has to check, and so nothing
-    /// reaching the simulation is ordered by a hasher.
-    pub classes: [Class; 4],
+    /// Look one up with [`Self::class`], which matches on the rung's own name;
+    /// indexing by `SpeedClass as usize` would find the wrong block in a file
+    /// whose ladder is not Pulse's.
+    ///
+    /// A `Vec` rather than a fixed array, and reluctantly: "exactly four, one
+    /// each" was a property of the type until Pure turned out to ship **five**
+    /// speed classes, one below Pulse's slowest (`docs/formats/pure-status.md`).
+    /// The ordering guarantee survives - it is built in ladder order and never
+    /// from a hasher - but the count is now the file's business rather than the
+    /// type's, so [`Self::class`] returns an `Option`.
+    ///
+    /// Every Pulse file still yields exactly four, which
+    /// [`Self::has_pulse_class_ladder`] states as a checkable claim rather than
+    /// an assumption.
+    pub classes: Vec<Class>,
 }
 
 impl Stats {
-    /// The block for one speed class.
+    /// The block for one of Pulse's four speed classes, if this file has it.
+    ///
+    /// `None` where the file's ladder does not reach that far, which is not a
+    /// defect: a schema with a different ladder is a different generation of the
+    /// format, not a broken file.
     #[must_use]
-    pub fn class(&self, class: SpeedClass) -> &Class {
-        &self.classes[class as usize]
+    pub fn class(&self, class: SpeedClass) -> Option<&Class> {
+        self.classes.iter().find(|block| block.name == Some(class))
+    }
+
+    /// Whether this file carries exactly Pulse's four-class ladder.
+    ///
+    /// Every shipped Pulse `handlingstats.xml` does. Pure's do not - they carry
+    /// five, the extra one below `Venom`.
+    #[must_use]
+    pub fn has_pulse_class_ladder(&self) -> bool {
+        self.classes.len() == SpeedClass::ALL.len()
     }
 }
 
@@ -1106,17 +1148,24 @@ pub fn from_blob(data: &[u8]) -> Result<Stats> {
 /// One pass over the blocks the document actually has, which is what lets an
 /// extra block, a duplicate and an unknown name each be caught. Looking the four
 /// names up instead would silently ignore all three.
-fn classes(stats: &Node) -> Result<[Class; 4]> {
-    let mut found: [Option<Class>; 4] = [None; 4];
+fn classes(stats: &Node) -> Result<Vec<Class>> {
+    let mut found: [Option<Class>; 4] = [None, None, None, None];
+    // Blocks whose `name` is not one of Pulse's four. Pure's fifth class lives
+    // here rather than being rejected: an unrecognised rung is a different
+    // ladder, not a corrupt file, and `UnknownClass` was previously the reason
+    // this parser refused Pure's `handlingstats.xml` outright.
+    let mut extra: Vec<Class> = Vec::new();
 
     for node in stats.children_named(Class::ELEMENT) {
         let name = node.value("name").ok_or(Error::MissingAttribute {
             element: Class::ELEMENT,
             attribute: "name",
         })?;
-        let class = SpeedClass::from_name(name.trim()).ok_or_else(|| Error::UnknownClass {
-            name: name.trim().to_string(),
-        })?;
+        let name = name.trim();
+        let Some(class) = SpeedClass::from_name(name) else {
+            extra.push(Class::from_node_named(name, node)?);
+            continue;
+        };
 
         let slot = &mut found[class as usize];
         if slot.is_some() {
@@ -1125,6 +1174,12 @@ fn classes(stats: &Node) -> Result<[Class; 4]> {
         *slot = Some(Class::from_node(class, node)?);
     }
 
+    // A file that names *some* of Pulse's ladder must name all of it; a file
+    // that names none of it is another generation's ladder and is kept whole.
+    let named = found.iter().filter(|slot| slot.is_some()).count();
+    if named == 0 {
+        return Ok(extra);
+    }
     // Reported in `ALL` order so the message does not depend on document order.
     for class in SpeedClass::ALL {
         if found[class as usize].is_none() {
@@ -1132,7 +1187,14 @@ fn classes(stats: &Node) -> Result<[Class; 4]> {
         }
     }
 
-    Ok(found.map(|class| class.expect("every slot filled above")))
+    let mut out: Vec<Class> = found
+        .into_iter()
+        .map(|class| class.expect("every slot filled above"))
+        .collect();
+    // The extra rungs sit after the recognised ladder, so `SpeedClass`'s
+    // discriminant stays a valid index into the front of the vector.
+    out.extend(extra);
+    Ok(out)
 }
 
 /// The first child element with this name, or a typed error.
@@ -1160,6 +1222,23 @@ fn descendant<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
 /// `f32`'s parser accepts `"nan"` and `"inf"`, both of which would propagate
 /// silently through the whole simulation, so they are rejected here rather than
 /// found later in a state hash that will not reproduce.
+/// An attribute a *later* schema added, so its absence is a fact about the
+/// file's generation rather than a defect in it.
+///
+/// `Ok(None)` only for an attribute that is not there at all. A present but
+/// unparseable value is still an error: "Pure does not have this field" and
+/// "this number is broken" must not collapse into one answer.
+fn optional_number(
+    node: &Node,
+    element: &'static str,
+    attribute: &'static str,
+) -> Result<Option<f32>> {
+    if node.value(attribute).is_none() {
+        return Ok(None);
+    }
+    number(node, element, attribute).map(Some)
+}
+
 fn number(node: &Node, element: &'static str, attribute: &'static str) -> Result<f32> {
     let raw = node
         .value(attribute)
@@ -1267,7 +1346,7 @@ mod tests {
         assert_eq!(stats.external_camera_far.spring_vert, 21.0);
         assert_eq!(stats.external_camera_close.lookat_height, 23.0);
         assert_eq!(stats.airbrake_graphics.up_speed, 31.0);
-        assert_eq!(stats.misc.weight_distribution, 37.0);
+        assert_eq!(stats.misc.weight_distribution, Some(37.0));
         assert_eq!(stats.fe.shield, 41.0);
     }
 
@@ -1275,14 +1354,14 @@ mod tests {
     fn every_class_block_is_read_and_indexed_by_its_own_name() {
         let stats = parse(&all_four()).expect("well-formed fixture");
         for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
-            assert_eq!(stats.classes[index].name, class, "slot {index}");
-            assert_eq!(stats.class(class).name, class);
+            assert_eq!(stats.classes[index].name, Some(class), "slot {index}");
+            assert_eq!(stats.class(class).expect("four rungs").name, Some(class));
         }
-        let phantom = stats.class(SpeedClass::Phantom);
+        let phantom = stats.class(SpeedClass::Phantom).expect("four rungs");
         assert_eq!(phantom.engine.turbo, 5.0);
         assert_eq!(phantom.brakes.gain, 8.0);
         assert_eq!(phantom.turning.falloff, 10.0);
-        assert_eq!(phantom.airbrake.sideshift, 18.0);
+        assert_eq!(phantom.airbrake.sideshift, Some(18.0));
         assert_eq!(phantom.antigrav.ride_height, 24.0);
         assert_eq!(phantom.physical.mass, 26.0);
         assert_eq!(phantom.pitch.antigrav_height_adjust, 32.0);
@@ -1302,6 +1381,18 @@ mod tests {
         );
 
         for span in spans {
+            // The three attributes Pulse *added*. Their absence is a fact about
+            // an earlier schema, not a defect, so they are exempt here and
+            // pinned separately by
+            // `the_three_pulse_era_attributes_are_absent_rather_than_missing`.
+            let text = &doc[span.clone()];
+            if ["easyshield", "weight_distribution", "sideshift"]
+                .iter()
+                .any(|added| text.trim_start().starts_with(added))
+            {
+                continue;
+            }
+
             let mut broken = doc.clone();
             broken.replace_range(span.clone(), "");
             let result = parse(&broken);
@@ -1347,7 +1438,12 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_class_is_an_error() {
+    /// A file that names *some* of Pulse's ladder must name all of it.
+    ///
+    /// Narrowed rather than relaxed: the check now applies only where the file
+    /// has shown it is using Pulse's ladder, so a partial Pulse file is still an
+    /// error while a different generation's ladder is not.
+    fn a_partly_present_pulse_ladder_is_an_error() {
         assert_eq!(
             parse(&document(&["VENOM", "FLASH", "RAPIER"])),
             Err(Error::MissingClass {
@@ -1361,24 +1457,93 @@ mod tests {
             })
         );
         assert_eq!(
-            parse(&document(&[])),
+            parse(&document(&["VENOM"])),
             Err(Error::MissingClass {
-                class: SpeedClass::Venom
+                class: SpeedClass::Flash
             })
         );
     }
 
+    /// The three attributes Pulse added read as `None` when absent, and the
+    /// exemption goes no further than those three.
+    ///
+    /// `None` is "this schema predates the field", which is why it is not an
+    /// error - and why a *present but broken* value still is. Collapsing those
+    /// two would let a typo pass as an older file.
     #[test]
-    fn an_unknown_class_name_is_an_error() {
-        // All four valid classes are present, so a lookup-driven parser would
-        // never notice the fifth block.
-        let doc = document(&["VENOM", "FLASH", "RAPIER", "PHANTOM", "SUPERSONIC"]);
-        assert_eq!(
-            parse(&doc),
-            Err(Error::UnknownClass {
-                name: "SUPERSONIC".to_string()
-            })
+    fn the_three_pulse_era_attributes_are_absent_rather_than_missing() {
+        let doc = all_four();
+        for (attribute, value) in [
+            ("easyshield", "35"),
+            ("weight_distribution", "37"),
+            ("sideshift", "18"),
+        ] {
+            let stripped = doc.replace(&format!(r#" {attribute}="{value}""#), "");
+            assert_ne!(stripped, doc, "the fixture should carry {attribute}");
+            let stats = parse(&stripped)
+                .unwrap_or_else(|e| panic!("removing {attribute} should not be an error: {e:?}"));
+            let read = match attribute {
+                "easyshield" => stats.misc.easyshield,
+                "weight_distribution" => stats.misc.weight_distribution,
+                _ => {
+                    stats
+                        .class(SpeedClass::Venom)
+                        .expect("four rungs")
+                        .airbrake
+                        .sideshift
+                }
+            };
+            assert_eq!(read, None, "{attribute} should read as absent");
+        }
+
+        // Present but unparseable is still an error, for the same three.
+        let broken = doc.replace(r#"easyshield="35""#, r#"easyshield="oops""#);
+        assert!(
+            matches!(parse(&broken), Err(Error::NotANumber { .. })),
+            "a broken easyshield should not pass as an older schema"
         );
+    }
+
+    /// A rung outside Pulse's four is **kept**, not rejected.
+    ///
+    /// This used to be `Error::UnknownClass`, and that strictness was what made
+    /// this parser refuse Pure's `handlingstats.xml` outright: Pure ships a
+    /// fifth speed class below Pulse's slowest. An unrecognised rung is a
+    /// different ladder, not a corrupt file.
+    ///
+    /// What is still guaranteed: Pulse's four keep their `SpeedClass`
+    /// discriminants as indices into the front of the vector, so the extra rung
+    /// cannot displace them.
+    #[test]
+    fn a_class_name_outside_pulses_ladder_is_kept_after_the_four() {
+        let doc = document(&["VENOM", "FLASH", "RAPIER", "PHANTOM", "SUPERSONIC"]);
+        let stats = parse(&doc).expect("a fifth rung is a different ladder, not an error");
+
+        assert_eq!(stats.classes.len(), 5);
+        assert!(!stats.has_pulse_class_ladder());
+        for class in SpeedClass::ALL {
+            assert_eq!(
+                stats
+                    .class(class)
+                    .expect("Pulse's four are still here")
+                    .name,
+                Some(class),
+                "{class} moved when the fifth rung was added"
+            );
+        }
+        assert_eq!(stats.classes[4].name, None);
+        assert_eq!(stats.classes[4].raw_name, "SUPERSONIC");
+    }
+
+    /// A file naming *none* of Pulse's ladder is another generation's, and is
+    /// kept whole rather than reported as four missing classes.
+    #[test]
+    fn a_ladder_with_no_pulse_rung_at_all_is_kept_whole() {
+        let doc = document(&["ALPHA", "BETA"]);
+        let stats = parse(&doc).expect("a wholly different ladder still parses");
+        assert_eq!(stats.classes.len(), 2);
+        assert!(!stats.has_pulse_class_ladder());
+        assert_eq!(stats.class(SpeedClass::Venom), None);
     }
 
     #[test]
@@ -1427,7 +1592,14 @@ mod tests {
             r#"<Brakes><Values amount="6" falloff="7" gain="8"/></Brakes>"#,
         );
         let stats = parse(&doc).expect("a carrier is equivalent");
-        assert_eq!(stats.class(SpeedClass::Venom).brakes.amount, 6.0);
+        assert_eq!(
+            stats
+                .class(SpeedClass::Venom)
+                .expect("four rungs")
+                .brakes
+                .amount,
+            6.0
+        );
     }
 
     /// The files on disc are shortened, so the expander and the schema have to

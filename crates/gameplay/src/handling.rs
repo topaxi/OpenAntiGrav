@@ -166,7 +166,12 @@ pub fn handling_for(
     speedup_pads: fmt::SpeedupPads,
     special: fmt::Special,
 ) -> Handling {
-    let block = stats.class(to_format_class(class));
+    // Pulse ships all four rungs on every team, which `handling_ground_truth`
+    // checks against the disc. A file whose ladder does not reach this class is
+    // another generation of the schema, and this conversion is Pulse's.
+    let block = stats
+        .class(to_format_class(class))
+        .expect("a Pulse handlingstats.xml carries all four speed classes");
     Handling {
         speedup_pads: SpeedupPads {
             amount: speedup_pads.amount,
@@ -197,7 +202,9 @@ pub fn handling_for(
             gain: block.airbrake.gain,
             turn: block.airbrake.turn,
             slidegrip: block.airbrake.slidegrip * SLIDEGRIP_SCALE,
-            sideshift: block.airbrake.sideshift,
+            // Absent before Pulse added it; `oag_physics::Airbrake`'s own default
+            // for "no sideshift" is 0.0, so an earlier schema lands on it.
+            sideshift: block.airbrake.sideshift.unwrap_or(0.0),
         },
         antigrav: Antigrav {
             grip_air: block.antigrav.grip_air,
@@ -224,8 +231,11 @@ pub fn handling_for(
             length: stats.misc.length,
             width: stats.misc.width,
             shield: stats.misc.shield,
-            easyshield: stats.misc.easyshield,
-            weight_distribution: stats.misc.weight_distribution,
+            // Both absent before Pulse added them; `oag_physics::Misc` already
+            // defaults each to 0.0, so an earlier schema lands on that default
+            // rather than on a value invented here.
+            easyshield: stats.misc.easyshield.unwrap_or(0.0),
+            weight_distribution: stats.misc.weight_distribution.unwrap_or(0.0),
         },
     }
 }
@@ -406,7 +416,12 @@ mod tests {
     fn every_parameter_arrives_with_the_documents_value() {
         let stats = stats();
         for class in SpeedClass::ALL {
-            let block = stats.class(to_format_class(class));
+            // Pulse ships all four rungs on every team, which `handling_ground_truth`
+            // checks against the disc. A file whose ladder does not reach this class is
+            // another generation of the schema, and this conversion is Pulse's.
+            let block = stats
+                .class(to_format_class(class))
+                .expect("a Pulse handlingstats.xml carries all four speed classes");
             let mapped = handling_for(&stats, class, pads(), special());
 
             assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
@@ -441,7 +456,7 @@ mod tests {
                 mapped.airbrake.slidegrip,
                 block.airbrake.slidegrip * SLIDEGRIP_SCALE
             );
-            assert_eq!(mapped.airbrake.sideshift, block.airbrake.sideshift);
+            assert_eq!(Some(mapped.airbrake.sideshift), block.airbrake.sideshift);
 
             assert_eq!(mapped.antigrav.grip_air, block.antigrav.grip_air);
             assert_eq!(mapped.antigrav.grip_ground, block.antigrav.grip_ground);
@@ -516,7 +531,7 @@ mod tests {
     #[test]
     fn the_brake_parameter_arrives_negative() {
         let stats = stats();
-        let block = stats.class(FmtClass::Venom);
+        let block = stats.class(FmtClass::Venom).expect("four rungs");
         assert!(
             block.brakes.amount > 0.0,
             "the fixture's XML value is positive, or this test proves nothing"
@@ -589,13 +604,13 @@ mod tests {
     #[test]
     fn the_siblings_of_the_scaled_fields_are_untouched() {
         let stats = stats();
-        let block = stats.class(FmtClass::Venom);
+        let block = stats.class(FmtClass::Venom).expect("four rungs");
         let mapped = handling_for(&stats, SpeedClass::Venom, pads(), special());
         assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
         assert_eq!(mapped.engine.turbo, block.engine.turbo);
         assert_eq!(mapped.airbrake.drag, block.airbrake.drag);
         assert_eq!(mapped.airbrake.turn, block.airbrake.turn);
-        assert_eq!(mapped.airbrake.sideshift, block.airbrake.sideshift);
+        assert_eq!(Some(mapped.airbrake.sideshift), block.airbrake.sideshift);
         assert_eq!(mapped.physical.mass, block.physical.mass);
     }
 
