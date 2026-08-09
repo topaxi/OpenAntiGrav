@@ -248,15 +248,54 @@ craft's forward axis. A page that overrode an instruction-level read on the
 strength of three ticks would be repeating this thread's original mistake in the
 opposite direction.
 
-**The reconciliation is most likely `shipNode+0x140`**, which `camera.md`
-describes only as "a velocity-shaped vector" and which has never been identified.
-If it is a **smoothed** velocity rather than the instantaneous body velocity,
-then during off-axis motion the smoothed vector lags the craft's heading, so
-`dot(fwd, smoothed)` sits *between* `dot(fwd, vel)` and `speed` - which is
-exactly an off-axis coefficient strictly between 0 and the forward one, and
-exactly the three ticks where the craft is most off-axis. Identifying that one
-field would explain the discrepancy rather than arbitrate it, and it is the
-concrete next step on this sub-question.
+### Resolved: the field is the plain body velocity, and the three ticks are the instrument
+
+**A smoothed velocity was the proposed reconciliation. It is refuted.**
+`FUN_088455ec` reads `iVar12 = *(craft + 0x794)` and dots the craft's forward
+row with `iVar12 + 0x140`. The rigid body's own field map - measured at runtime
+and recorded in `scripts/psp_trace_fields.py` - puts `right`/`up`/`fwd`/`pos` at
+`+0x00`/`+0x10`/`+0x20`/`+0x30` and **`vel` at `+0x140`**, and the same function
+reads `+0x10` off that pointer as the up axis for the camera's height offset.
+So `shipNode` *is* the rigid body, `+0x140` *is* its instantaneous velocity, and
+the store computes exactly `dot(fwd, vel)` - the same quantity the CSV records
+and the fit already used. **There is no lag anywhere in it.**
+
+**Which leaves the three ticks, and they turn out to be the instrument.** The
+disagreement lives entirely at ticks 110, 120 and 130. Those are the three ticks
+where the craft is yawing hardest, by a wide margin:
+
+| tick | yaw rate (rad/s) | slip angle | residual |
+| ---: | ---: | ---: | ---: |
+| every other tick | 0.007 - 0.036 | 0.1 - 5.5 deg | within +/-0.6 |
+| 110 | **0.803** | 16.9 deg | +0.89 |
+| 120 | **0.605** | 12.0 deg | +0.67 |
+| 130 | **0.379** | 9.1 deg | -0.88 |
+
+`|residual|` correlates with yaw rate at **+0.781** and with slip angle at
++0.702. That is not a coincidence and it has a mechanism: **this metric fits a
+similarity transform - uniform zoom plus translation - and has no rotation term
+at all.** When the craft yaws hard, the two frames differ by an in-frame
+rotation and a parallax sweep that the model cannot represent, so the error goes
+somewhere, and where it goes is the zoom estimate.
+
+**And the confound is exact.** The craft slips *because* it is yawing, so
+"off-axis" and "the registration is degraded here" are not merely correlated -
+they are the same three frames. The discriminator's off-axis regressor therefore
+cannot separate a genuine speed-magnitude driver from a registration artefact,
+and the `t = +2.48` carries no weight against an instruction-level read.
+
+**So the driver is `dot(fwd, vel)`, at confidence 85.** The pixel objection is
+withdrawn - explained, not overruled. What would have made it survive is a
+capture with hard yaw *and* an independent check on the registration at those
+ticks; the honest statement is that this instrument does not measure a
+hard-turning frame.
+
+*Method note, since it is the general point.* The question that resolved this is
+the second of the pair on
+[methodology.md](../reverse-engineering/methodology.md#rules-learned-the-expensive-way):
+not "is my result significant" but "**what reading would let the harder evidence
+be right anyway?**" - and the answer came from one decompile and one column of
+the capture nobody had looked at.
 - **Boost contributes nothing extra.** Adding a `boost_timer` term gives a
   coefficient of **-0.0087** and barely moves the rms. Ticks 40-70 (boost active)
   sit on the same line as ticks 80-148 (boost expired). The widen is present with
@@ -303,7 +342,7 @@ intercept indistinguishable from the authored fov. So:
 | --- | ---: | --- |
 | Our craft mesh is the correct size (0.15 %) | 85 | An instrument validated to 0.26 % against known factors, a control that cannot scale reading 0.997, and craft-only boxes at 0.999 with the background zeroed. Held below 90 for sampling, not for the instrument: one capture, one ship, one circuit |
 | The original's fov carries a speed-proportional additive term, coefficient `0.075` degrees | 88 | A store read at instruction level, whose two constants are independently recovered from 16 frames of the original's own pixels and both fall inside the fit's 95 % interval |
-| That term's driver is `dot(fwd, vel)` specifically | 70 | The store plainly reads a dot product, but the pixels reject a *pure* forward-velocity driver at ~95 % on 3 of 16 ticks. Unresolved until `shipNode+0x140` is identified - see above |
+| That term's driver is `dot(fwd, vel)` specifically | 85 | `shipNode` is the rigid body and `+0x140` is its velocity, matched against the body field map measured at runtime; the same function reads `+0x10` off the same pointer as the up axis. The pixel objection is explained as a confound - it lives only in the three hardest-yawing ticks, where a rotation-free registration model degrades - rather than overruled |
 | `craft+0x7c` is ~0 during a clean run | 75 | One capture, one circuit, one ship. The residual is 0.41 deg rms against a term that would have to be several degrees to matter |
 | `1 / 0.75^2` scales the drawn mesh | **refuted** | Far scenery, which no mesh scale can touch, carries the same ratio as the craft in all 16 frames |
 

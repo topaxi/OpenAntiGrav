@@ -291,19 +291,27 @@ frames gives `fov = 60.181 + 0.07685 * dot(fwd, vel)`, with the recovered
 `0.075` and the authored `60` both inside the fit's 95 % intervals. It is
 **unimplemented** in `Race::projection`, which is the one live consequence.
 
-**The two halves of that do not carry the same weight, and the difference is
-load-bearing.** The **magnitude** is solid at confidence **88**; the **driver**
-is not, at **70**. Nesting both candidate drivers in one fit rejects a *pure*
-forward-velocity driver at about 95 % - but on 3 of 16 ticks, against a store
-that unambiguously reads a dot product, so it is **deliberately unresolved**
-rather than decided either way. `shipNode+0x140` being a **smoothed** velocity
-is the reconciliation worth testing, because it would put the true quantity
-between the two candidates exactly where the divergence lives. Both confidences
-and the fit are on
+**A pixel fit briefly appeared to reject the driver; it was a confound, and the
+resolution is the useful part.** Nesting both candidate drivers rejected a
+*pure* forward-velocity driver at about 95 % - but only on 3 of 16 ticks, and
+those three are the hardest-yawing ticks in the capture, where a registration
+metric that fits **no rotation term** degrades. `|residual|` correlates with yaw
+rate at +0.78, and the craft slips *because* it yaws, so "off-axis" and
+"the instrument is unreliable here" are the same three frames and cannot be
+separated. Meanwhile `shipNode+0x140` is now **identified** as the rigid body's
+own velocity - no smoothing, refuting the reconciliation this file previously
+named - so the store is exactly `dot(fwd, vel)`. Magnitude **88**, driver
+**85**. Both are on
 [camera.md](docs/ghidra/functions/psp-pulse-usa/camera.md) and
 [projection-vs-the-original.md](docs/rendering/projection-vs-the-original.md).
-**Do not quote the driver from this file** - point at those, which is what this
-file is for.
+**Do not quote either from this file** - point at those, which is what this file
+is for.
+
+**The general lesson outlived the number.** The metric does not measure a
+hard-turning frame, and nothing said so until a column of the capture that
+nobody had looked at was plotted against the residuals. Before a pixel result
+disagrees with a decompile, check what the craft was *doing* in the frames where
+it disagrees.
 
 **Matched-pose pixel comparisons are still invalid**, for this reason rather
 than the craft's size, and with a fix: re-take with `--camera-fov` computed from

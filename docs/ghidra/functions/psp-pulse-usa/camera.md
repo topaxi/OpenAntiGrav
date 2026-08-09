@@ -934,16 +934,40 @@ Three consequences:
   it was measured in is the external chase view. That is inference from effect
   rather than from execution; an exec breakpoint on `0x088455ec` under an
   external view would settle it directly and costs one emulator session.
-- **`shipNode+0x140` is worth identifying, and the pixels now say so.** Nesting
-  both candidate drivers in one fit - `speed = dot(fwd, vel) + off_axis` - gives
-  an off-axis coefficient of `0.1166 +/- 0.0469`, which **excludes zero**. So the
-  frames reject a *pure* instantaneous-forward-velocity driver at about 95 %,
-  while this store unambiguously reads a dot product. The reconciliation that
-  fits both is that `+0x140` holds a **smoothed** velocity: during off-axis
-  motion a smoothed vector lags the craft's heading, putting
-  `dot(fwd, smoothed)` between the two candidates, and the divergence lives
-  entirely in the three ticks where the craft is most off-axis. Identifying the
-  field would explain the discrepancy rather than arbitrate it.
+- **`shipNode+0x140` is identified: it is the rigid body's own velocity.**
+  `iVar12 = *(craft + 0x794)` is the body, and `scripts/psp_trace_fields.py`'s
+  runtime-measured field map puts `right`/`up`/`fwd`/`pos` at
+  `+0x00`/`+0x10`/`+0x20`/`+0x30` and **`vel` at `+0x140`** - the same pointer's
+  `+0x10` is read in this very function as the up axis for the camera's height
+  offset, which corroborates the base. So the store is exactly
+  `dot(fwd, vel) * 0.075 + craft[0x7c]`, with **no smoothing anywhere in it**.
+  A smoothed-velocity reading was proposed as the reconciliation for a pixel
+  objection and is **refuted**; the objection turned out to be a confound in the
+  measurement, living entirely in the three hardest-yawing ticks of the capture
+  (`|residual|` correlates with yaw rate at +0.78, and that metric fits no
+  rotation term). Driver confidence **85**. See
+  [projection-vs-the-original.md](../../../rendering/projection-vs-the-original.md).
+
+### Three more offsets fall out of the same read
+
+Recorded because they were free and two of them close questions this page asks
+elsewhere. All from `FUN_088455ec`, and all consistent with the camera-parameter
+block at `*(*(craft + 0x94) + 0x6c)` being `<InternalCamera>`'s
+`fov`/`height`/`length`/`pitch`/`headtilt` at `+0x00`/`+0x04`/`+0x08`/`+0x0c`/`+0x10`
+exactly as the parser table above has it - which is itself corroboration that
+this function is the internal rig.
+
+| Offset | What it is | How it is known |
+| --- | --- | --- |
+| `craft+0x794` | pointer to the **rigid body** | its `+0x140` is velocity and its `+0x10` is the up row, against the runtime field map |
+| `craft+0x374` | pointer to the body's **forward** row | its first row is scaled by the camera block's `length` and pushed along the eye offset |
+| `craft+0x37c` | pointer to the body's **side** row | its first row is scaled by `craft[0x844]` and then by the block's `headtilt`, and **subtracted from the up axis** |
+
+That last row is the `headtilt` application this page records as parsed but
+unapplied: `up' = up - side * craft[0x844] * headtilt`, now read at instruction
+level rather than inferred. **`craft+0x844` itself is still unidentified**, so
+the sign and scale of the lean remain unknown and that open item stands - but
+the shape of the expression and which axis it rolls are no longer in doubt.
 
 Confidence **80** for the store and its constant read directly, **88** with the
 pixel confirmation; **75** for the decomposition, up from 0, on one capture of
