@@ -355,10 +355,15 @@ pub struct CameraOverride {
     /// `-Z` is the look direction, `Y` is up. What
     /// [`oag_trace::replay::camera_orientation_of`] produces.
     pub orientation: Quat,
-    /// Replace the disc's authored fov (in the same unrecovered unit, read as
-    /// degrees) with this value. `None` keeps the authored one - the honest
-    /// default while the unit stands unrecovered, and the calibration knob for
-    /// settling it: iterate until the framing matches a captured shot.
+    /// Replace the disc's authored fov, in **vertical degrees**, with this
+    /// value. `None` keeps the authored one.
+    ///
+    /// This was the calibration knob for settling the unit, and the unit is now
+    /// settled (confidence 94). What it is *for* has changed rather than gone
+    /// away: a matched-pose render still needs it, because
+    /// [`oag_gameplay::spawn::Ship::place_at`] resets the body, so a posed craft
+    /// has zero velocity and never gets the original's speed-dependent widen.
+    /// Pass the fov computed from the captured tick's own forward velocity.
     pub fov_deg: Option<f32>,
 }
 
@@ -2990,8 +2995,10 @@ impl Race {
     /// The projection for a viewport of the given aspect ratio, with the
     /// player's field-of-view setting applied.
     ///
-    /// **`<ExternalCameraFar fov>`'s unit is unrecovered.** It is read here as
-    /// degrees, and `oag_render::camera::projection` names its parameter
+    /// **`<ExternalCameraFar fov>`'s unit is vertical degrees**, settled
+    /// 2026-08-09 at confidence 94 against `g_camera_fov_degrees`
+    /// (`0x08b34310`) on the running game, and read here as such.
+    /// `oag_render::camera::projection` still names its parameter
     /// `fov_radians` precisely so that the conversion has to be written at a call
     /// site rather than assumed in a library. The value read from the disc is
     /// printed in the load report, so the assumption is checkable by whoever looks.
@@ -3040,8 +3047,10 @@ impl Race {
     pub fn projection(&self, aspect: f32, far: f32, setting: crate::display::Fov) -> Mat4 {
         // An overridden fov stands in for the authored one and still passes
         // through the player's setting, whose default is identity; it exists to
-        // calibrate the authored value's unrecovered unit against a captured
-        // frame, so it must sit at exactly the same point in the chain.
+        // match a captured frame's own field exactly, so it must sit at the
+        // same point in the chain as the value it replaces. (It settled the
+        // authored unit once; that unit is now recovered, and the flag's job is
+        // matched-pose comparison - see `Options::fov_deg`.)
         // Each view authors its own fov, in the same unit at the same aspect, so
         // the live one is whichever perspective is being rendered - a cockpit
         // framed with the chase view's field would be the wrong picture with the

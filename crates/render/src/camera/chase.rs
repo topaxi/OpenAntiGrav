@@ -140,10 +140,15 @@ pub struct ChaseParams {
     /// the free spring's `4.938`, which is why the error was invisible until the
     /// rigid radius made the rest of the model right.
     pub craft_scale: f32,
-    /// Field of view, **as authored**. The file's unit (degrees or radians) is
-    /// unrecovered, so nothing here converts it; a caller that wants a projection
-    /// matrix decides what it means and passes radians to
-    /// [`super::projection`].
+    /// Field of view, **as authored**, in **vertical degrees** at the authored
+    /// 480x272 aspect - settled 2026-08-09 at confidence 94 by reading
+    /// `g_camera_fov_degrees` (`0x08b34310`) off the running game. Nothing here
+    /// converts it anyway: a caller that wants a projection matrix passes
+    /// radians to [`super::projection`], which keeps the conversion at a call
+    /// site rather than assumed in a library.
+    ///
+    /// *This field used to say the unit was unrecovered.* It was, from M4 until
+    /// that read; see `docs/rendering/projection-vs-the-original.md`.
     pub fov: f32,
     /// How far above the ship the camera aims, along the ship's up.
     pub lookat_height: f32,

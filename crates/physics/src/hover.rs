@@ -228,9 +228,13 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 ///
 /// which is exactly the component of `n` perpendicular to `up`: it points *from*
 /// `up` *toward* `n`. So `+k * cross(up, n)` aligns and `-k * cross(up, n)`
-/// diverges, and **no magnitude can change that**. The gain, the inertia tensor,
-/// the probe offsets and the target height are all unrecovered, and not one of
-/// them can flip the sign of that derivation. The page's own prose asserts
+/// diverges, and **no magnitude can change that**. Not one of the gain, the
+/// inertia tensor, the probe offsets or the target height can flip the sign of
+/// that derivation, whatever their values - which is the whole argument, and it
+/// never depended on their being unknown. (This sentence used to call all four
+/// unrecovered. Two of them since were: the divisor is the recovered box
+/// inertia from `Body_SetBoxInertia`, and the target-height scale is the
+/// recovered `0.75`.) The page's own prose asserts
 /// levelling as part of a force law scored at confidence 91, so it is the literal
 /// `-400` that has to be the transcription error: either the operands were
 /// transposed when the page was written, `cross(avgNormal, up)`, or the sign was.

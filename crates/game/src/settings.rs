@@ -484,14 +484,16 @@ pub struct Graphics {
     /// of the original wants [`crate::display::BoostFovKick::OFF`], and
     /// somebody who finds the default too subtle wants a stronger tier.
     ///
-    /// The original's own field of view is *not* static, and a 2026-08-08 pass
-    /// recovered what moves it (`authored + ship->0x790`, an additive-degrees
-    /// shake - see `docs/ghidra/functions/psp-pulse-usa/camera.md`), but that
-    /// is a different mechanism from this one and no attempt is being made to
-    /// match it. [`crate::display::BoostFovKick::OFF`] is still the setting for
-    /// a comparison, because it takes *our* effect out of the picture.
-    /// See `oag_render::sparks` for the same standing applied to the
-    /// collision burst.
+    /// The original's own field of view is *not* static: it carries
+    /// `authored + 0.075 * dot(fwd, vel)`, additive degrees driven by **forward
+    /// speed** - not the "shake" this comment used to call it, which was a
+    /// separate `Hud_Update` term the two measurements had been conflating.
+    /// That widen is recovered and **ported**, as `crate::race::SPEED_FOV_GAIN_DEG`.
+    ///
+    /// This setting is the other thing: a boost-gated tangent multiplier that is
+    /// ours by choice, composed on top. [`crate::display::BoostFovKick::OFF`] is
+    /// still the setting for a comparison against the original, because it takes
+    /// *our* effect out while leaving the recovered one in.
     #[serde(default = "default_boost_fov_kick")]
     pub boost_fov_kick: crate::display::BoostFovKick,
 

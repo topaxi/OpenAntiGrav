@@ -834,8 +834,11 @@ recipe and its three traps.
       brightness/gamma grade come from - one pass, so every stage is covered
       and a screenshot deliberately is not. A **field of view** row is in as a
       percentage of the disc's authored value rather than an angle, because
-      `<ExternalCameraFar fov>`'s unit is unrecovered and a row in degrees
-      would assert one. The settings are split into `[display]` and
+      an absolute angle would name a field the game only shows while
+      stationary - the original widens it with speed. (Until 2026-08-09 the
+      reason was that the unit itself was unrecovered; it is vertical degrees at
+      confidence 94, so this is now a presentation choice rather than a
+      blocked one.) The settings are split into `[display]` and
       `[graphics]` to match the two menu pages, with an older `[graphics]`-only
       file migrated on load. See [menus](../architecture/menus.md) and
       `oag_game::display`.

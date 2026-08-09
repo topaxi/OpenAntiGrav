@@ -33,10 +33,12 @@ use oag_core::math::{Mat4, camera};
 
 /// The projection every camera in this crate uses.
 ///
-/// `fov_radians` is the *vertical* field of view. The parameter is named for its
-/// unit deliberately: the fov values recovered from the game's data files are of
-/// unrecovered unit (see [`chase::ChaseParams::fov`]), and converting them is the
-/// caller's decision, not this function's.
+/// `fov_radians` is the *vertical* field of view. The parameter is still named
+/// for its unit deliberately, though no longer because the disc's unit is a
+/// mystery - it is **vertical degrees**, settled at confidence 94 (see
+/// [`chase::ChaseParams::fov`]). The name stays because a library taking a bare
+/// `fov` invites a caller to pass whatever it has, and the conversion belongs
+/// at the call site where the authored value's unit is known.
 #[must_use]
 pub fn projection(fov_radians: f32, aspect: f32, near: f32, far: f32) -> Mat4 {
     camera::perspective(fov_radians, aspect, near, far)

@@ -1065,10 +1065,12 @@ mod tests {
     /// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
     const RECORDED_YAW_RATE: f32 = 1.51;
 
-    /// What `YAW_INVERSE_INERTIA` stands in for: the recovered steering law is
-    /// verified at instruction level and predicts a yaw rate about 22x too high,
-    /// so a run without the calibration turns 22 times too fast. The open
-    /// question this column was added to move, `HANDOVER.md`.
+    /// The gap `YAW_INVERSE_INERTIA` closes: the recovered steering law is
+    /// verified at instruction level and predicts a yaw rate about 22x too
+    /// high, so a run without it turns 22 times too fast. **`YAW_INVERSE_INERTIA`
+    /// is itself recovered, not a stand-in** - it replaced the fitted
+    /// `YAW_DRIVE_CALIBRATION` once its writer was disassembled; this comment
+    /// described the old arrangement.
     const YAW_AUTHORITY_ERROR: f32 = 22.1;
 
     /// The same fixture with an angular velocity of `rate` about the up axis on

@@ -339,6 +339,27 @@ pub const ALPHA_FLICKER: (f32, f32) = (200.0 / 255.0, 1.0);
 /// shows `1.0` reproducing the original's flare-to-hull ratio where `2.15`
 /// read double. Confidence **85**: one live read, one binary, corroborated by
 /// the matched-pose frame.
+///
+/// # That corroboration was retracted, and it is reinstated here on purpose
+///
+/// `exhaust.md` retracted the matched-pose leg because our craft was believed
+/// to render `1.33x` too large, which would have contaminated any comparison
+/// scaled to the hull. **The premise is refuted**: the craft is the right size
+/// to 0.15 %, and what was actually wrong was a whole-frame zoom from the
+/// original's speed-dependent field of view
+/// (`docs/rendering/projection-vs-the-original.md`).
+///
+/// The retraction does not survive its premise, and the reason is worth stating
+/// rather than leaving as an absence: this leg is a **flare-to-hull ratio taken
+/// within each frame separately**, then compared. A uniform zoom about the
+/// principal point scales the flare and the hull by the same factor, so it
+/// cancels inside each frame's own ratio before the two are compared at all -
+/// which makes this measurement one of the few in that whole family that the
+/// misregistration could never have touched.
+///
+/// So the three legs stand and the confidence stays at 85. The live matrix read
+/// at `ExhaustFlare_Draw` (`0x08904a30`) is independent of all of this and
+/// `1.0` was never in doubt on its own.
 pub const HALF_SIZE_TO_WORLD: f32 = 1.0;
 
 /// Per-frame state of one ship's exhaust.

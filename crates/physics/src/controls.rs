@@ -39,9 +39,11 @@ use crate::ship::{ShipControls, ShipState};
 /// edit. It is falsified: the axis scale is right, `HandlingXml_ParseTurning`
 /// really does store `amount` verbatim (`swc1 f0,0xd0(a0)`), and the yaw error is
 /// **22x, not 100x**. Dividing by 100 here lands 4.7x too *weak* - measured, RMS
-/// error 1.05 rad/s against captures whose signal is 1.5. The real discrepancy and
-/// what stands in for it are documented at
-/// [`crate::forces::YAW_INVERSE_INERTIA`].
+/// error 1.05 rad/s against captures whose signal is 1.5. The real discrepancy
+/// and the recovered constant that closes it are documented at
+/// [`crate::forces::YAW_INVERSE_INERTIA`] - which is recovered rather than a
+/// stand-in, the fitted `YAW_DRIVE_CALIBRATION` it replaced having been retired
+/// when its writer was disassembled.
 pub const CONTROL_RANGE: f32 = 100.0;
 
 /// The brake state's ceiling, and so every control state's nominal maximum.

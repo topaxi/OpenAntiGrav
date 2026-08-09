@@ -67,8 +67,12 @@ pub struct RaceState {
     pub zone_dirty: bool,
     /// Whether the race has reached its finish condition.
     ///
-    /// Only a time trial ever sets this today. Speed lap has no end, and Zone's
-    /// end condition is unrecovered - see `docs/gameplay/race-modes.md`.
+    /// Only a time trial ever sets this today. Speed lap has no end. **Zone's
+    /// end condition is recovered** - a run ends when the ship is destroyed,
+    /// which the disc says outright in `ER_ZONE_DEST` ("Ship destroyed on
+    /// zone"), confidence 80. It is unimplemented because nothing depletes
+    /// shield yet, so what blocks it is collision damage rather than reverse
+    /// engineering. See `docs/gameplay/race-modes.md`.
     pub finished: bool,
     /// The ring point the ship was nearest last tick.
     ///

@@ -396,11 +396,15 @@ struct Cli {
     no_camera: bool,
 
     /// With `--pose-from`: render the recorded camera at this fov instead of
-    /// the disc's authored value, in the authored value's own (unrecovered,
-    /// read-as-degrees) unit.
+    /// the disc's authored value, in **vertical degrees** - the authored
+    /// value's own unit, settled at confidence 94 on 2026-08-09.
     ///
-    /// The calibration knob for that unit: iterate until our framing matches
-    /// the captured shot, and the value that matches is the measurement.
+    /// It was the calibration knob for settling that unit. It is now a
+    /// *measurement instrument* rather than a leftover: `place_at` resets the
+    /// body, so a posed craft has zero velocity and never receives the
+    /// original's speed-dependent widen. **Every matched-pose comparison needs
+    /// this flag**, set to `60 + 0.075 * dot(fwd, vel)` for the captured tick.
+    /// See `docs/rendering/projection-vs-the-original.md`.
     #[arg(long, requires = "pose_from")]
     camera_fov: Option<f32>,
 

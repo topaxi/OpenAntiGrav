@@ -29,11 +29,18 @@
 //!   ship happens to author. Confidence **85**: one site, read as instructions,
 //!   with the literal visible.
 //! - **`headtilt` is carried and deliberately *not applied*.** The original rolls
-//!   the view's up vector by `up - side * (craft[0x844] * headtilt)`, and
-//!   `craft+0x844` was not identified - so the *magnitude and sign* of the roll
-//!   are unknown even though its shape is not. A tilt applied with the wrong sign
-//!   leans the horizon the wrong way through every corner, which is worse than a
-//!   horizon that does not lean at all. See [`InternalParams::headtilt`].
+//!   the view's up vector by `up - side * (craft[0x844] * headtilt)`.
+//!   `craft+0x844` **was** identified on 2026-08-09 as a two-stage
+//!   steering-driven filter (`camera.md`), which settles the **sign** - the
+//!   craft leans *into* the turn - and leaves the **magnitude** open, because
+//!   the filter's own input is unidentified at confidence 0 and the constants
+//!   beside it say its units are not what a first reading assumes.
+//!
+//!   So the reason for holding this back has narrowed but not gone: a lean of
+//!   the right sign and the wrong scale still leans the horizon wrongly through
+//!   every corner. What would close it is one field - the first float of
+//!   `*(craft+0x94) + 0x78` - and not another capture.
+//!   See [`InternalParams::headtilt`].
 //!   The original discards `<BackwardCamera headtilt>` outright, so an unapplied
 //!   headtilt is at least a thing this format does elsewhere.
 //! - **No `0.75`.** The original scales both *external* rigs by a global length

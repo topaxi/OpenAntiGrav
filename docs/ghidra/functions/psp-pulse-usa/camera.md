@@ -533,7 +533,16 @@ multiplies it by a literal `480.0 / 272.0`. So the field really is a vertical
 fov in degrees at a hardcoded 480x272 aspect, and the projection read live off
 the running game reads `m11 / m00 = 1.764706` exactly with a vertical fov of
 **60.04 degrees** at rest, against the authored 60. Confidence for the unit
-rises to **95**.
+rises to **94**.
+
+*Corrected from 95 on 2026-08-09.* The evidence here is a runtime trace of one
+binary, statically read and live-confirmed, and the
+[rubric](../../../reverse-engineering/confidence-rubric.md)'s evidence table
+caps that at **94 until a second binary agrees** - the 95-100 band requires PSP
+*and* PS2. Nothing about the reading changed; it was scored one point above what
+its own evidence class allows.
+[projection-vs-the-original.md](../../../rendering/projection-vs-the-original.md)
+already used 94 for the same finding, so the two now agree.
 
 ## The field of view is dynamic, and this is the whole chain
 
@@ -1020,8 +1029,22 @@ craft[0x844] += (craft[0x848] - craft[0x844]) * dt * 4.0;     /* first-order smo
 
 So the lean **leans into the turn**, is driven by steering, is rate-limited and
 then smoothed with a `4/s` first-order filter, and saturates at `0.6` (or `0.3`
-on the other sign). A port needs no new capture: everything above is arithmetic
-on values this project already has.
+on the other sign).
+
+**This is not yet portable, and an earlier revision of this section said it was.**
+That claim - "a port needs no new capture: everything above is arithmetic on
+values this project already has" - contradicts the confidence note three
+paragraphs below, which puts **0** on what the input actually is. Both were
+written in the same pass and only one can be acted on. The *shape* of the filter
+is portable; its **input is not**, because `*(craft+0x94) + 0x78`'s first float
+is unidentified and the `+/-10.0` terms sitting beside a `steer * 0.01` say its
+units are not what a first reading assumes. Porting on the arithmetic alone
+would ship a lean of unknown magnitude and call it recovered.
+
+**What is settled is the sign**: the craft leans *into* the turn. What is not is
+the scale. Identifying that one field - the first float of
+`*(craft+0x94) + 0x78` - is what makes this portable, and it is a smaller job
+than the filter was.
 
 The same function computes a **second** pair the same way - `craft+0x858` as the
 follower at rate `5.0` and `craft+0x854` smoothed at `3.0` - from a richer input

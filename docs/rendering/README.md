@@ -41,10 +41,12 @@
   blend branch, the same equation the ribbon already uses, not the flare's
   alpha-weighted one; see
   [`mesh-draw.md`](../ghidra/functions/psp-pulse-usa/mesh-draw.md))
-  and collision sparks (**done**, `oag_render::sparks` -
-  currently **authored, not recovered**: the actual spark-spawn trigger,
-  `ShipCollisionFx_Trigger`, has since been found and read in full, naming
-  the three real spark resources and a usable severity formula - see
+  and collision sparks (**done** and **recovered**, no longer "authored":
+  `oag_render::sparks` reads `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB` at the emitter level, all
+  four emitters transcribed from the file's own bytes and corroborated live in
+  PPSSPP during real wall hits, with `ShipCollisionFx_Trigger` supplying the
+  severity formula. Three residual approximations remain, each labelled on its
+  own constant - see
   [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
   and the open thread on `HANDOVER.md` for whether `oag_render::sparks` gets
   retuned against it), then the general `ParticleSystem`

@@ -984,12 +984,18 @@ impl Gamma {
 /// How wide the camera's field of view is, as a percentage of the one the
 /// original's own data authored. 100 is the authored value.
 ///
-/// **A percentage of the authored field and not an absolute angle**, which is
-/// the whole point: `<ExternalCameraFar fov>` comes off the disc, its unit is
-/// unrecovered (see [`crate::race::Race::projection`]), and a row that let a
-/// player type `90` would be quietly asserting a unit this project has not
-/// established. A multiplier says what it does - wider or narrower than the
-/// game frames it - without claiming to know what the number underneath means.
+/// **A percentage of the authored field and not an absolute angle.** The
+/// original reason was that `<ExternalCameraFar fov>`'s unit was unrecovered, so
+/// a row letting a player type `90` would assert a unit this project had not
+/// established. **That reason expired on 2026-08-09**: the unit is vertical
+/// degrees at confidence 94 (see [`crate::race::Race::projection`]).
+///
+/// The row stays a percentage on a different and weaker argument, recorded so
+/// the next reader can overrule it rather than assume it was never revisited:
+/// the field the player actually sees is not the authored one. The original
+/// widens it with speed, so an absolute row would name a number the game only
+/// shows while stationary. A multiplier keeps its meaning at every speed.
+/// Switching to degrees is now a presentation decision, not a blocked one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "u32", into = "u32")]
 pub struct Fov(u32);
@@ -1070,14 +1076,18 @@ percentage!(Fov, AUTHORED, "field of view");
 ///
 /// - a 2026-08-07 matched-pose comparison against a captured PPSSPP pad
 ///   crossing on Talon's Junction shows the original's whole scene zoom out
-///   during a boost and settle back over roughly half a second - trackside
-///   geometry ~1.4-1.5x smaller at boost age 0.3-0.7 s than at 1.3 s+, with an
-///   fov sweep of our posed render landing the boosted frame near 90-95
-///   degrees against the authored 60;
-/// - the original's fov chain was then recovered on 2026-08-08
+///   and settle back - **but the "90-95 degrees against the authored 60"
+///   reading that used to sit here is refuted**, and the effect is not a boost
+///   effect at all. The fov's actual ceiling on that circuit is ~71 degrees at
+///   146 units/s, reached by *speed*; see
+///   `docs/rendering/projection-vs-the-original.md`, "What this retires";
+/// - the original's fov chain was recovered on 2026-08-08 and settled on the
+///   running game on 2026-08-09
 ///   (`docs/ghidra/functions/psp-pulse-usa/camera.md`): its fov is
-///   `authored + ship->0x790`, an additive **degrees** term on a `+/-30`
-///   clamp, which is a different shape from this type's tangent multiplier.
+///   `authored + 0.075 * dot(fwd, vel)`, additive **degrees** driven by forward
+///   speed, which is a different shape *and* a different driver from this
+///   type's boost-gated tangent multiplier. That term **is** ported, as
+///   `race::SPEED_FOV_GAIN_DEG`; this type is the separate, invented one.
 ///
 /// **Do not retune the tiers below against either.** They differ from the
 /// original by design, not by defect; an earlier version of this doc read as
