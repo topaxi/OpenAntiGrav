@@ -258,10 +258,20 @@ speed-dependent rather than a constant that divides out. The same applies to the
 bloom shoulder (the original holding a flat luminance profile near 150 out to
 ~100 px where ours peaks at 201 and falls monotonically) and to the plume mask
 reading `(143, 110, 178)` against the original's `(193, 147, 218)`, about 26 %
-dimmer. **None of the three is withdrawn - all three are unmeasured until
-re-taken**, either at a `--camera-fov` computed from the capture's own speed
-column or at a low-speed tick where the error is smallest. See the resolved
-section below and
+dimmer.
+
+**Two of the three were re-taken the same day; here is where each stands.**
+
+| reading | status |
+| --- | --- |
+| the plume mask, "26 % dimmer" | **Re-taken: 11 %, not 26.** And it is *mechanism* rather than a better measurement - a wider fov packs the plume's overlapping quads into fewer pixels, and an additive blend stacks more fragments per pixel. The corrected frame is a different and correct picture. |
+| the bloom shoulder / annuli table | **Re-taken and found unmeasurable**, and not because of the fov. The original's saturated core has no stable centre: widening the analysis box walks its centroid from `(469,422)` to `(602,452)` and flips the headline number's sign from -16 % to +21 %. **The M6 bright-pass item loses this as its supporting measurement** - though not the bright pass itself, which is directly visible anywhere the original's track is blown to white and ours is not. |
+| the flare's "4.6x at luma > 200" | **Still unmeasured.** Same family as the annuli reading and probably the same defect, since it is also a luma threshold centred on a saturated core. |
+
+Both re-takes used `--camera-fov` from the tick's own **forward velocity**
+(`60 + 0.075 * dot(fwd, vel)`), not the `speed` column, and the instruments are
+committed now: [`scripts/plume-mask.py`](scripts/plume-mask.py) and
+[`scripts/frame-register.py`](scripts/frame-register.py). See
 [projection-vs-the-original.md](docs/rendering/projection-vs-the-original.md).
 
 **Still not matched, and unaffected by that:** the bright pass itself is
