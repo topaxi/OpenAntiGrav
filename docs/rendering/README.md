@@ -112,7 +112,11 @@ pulled the answer to 1.01 from 1.14; and a band quoted to three digits when
 sweeping it at two step sizes would have shown it moving 1.5 %. In every case the
 check cost one extra command and the assertion cost days. **Before believing a
 pixel measurement, name the control that could have refuted it - and if you
-cannot name one, that is the finding.**
+cannot name one, that is the finding.** There is a second question that pairs
+with it, and it is not pixel-specific - the same failure has since happened with
+a regression outvoting a disassembly. Both, and why the *direction* of the error
+is what disguises it, are on
+[methodology.md](../reverse-engineering/methodology.md#rules-learned-the-expensive-way).
 
 **A brightness threshold cannot compare two renderers, and there is a metric that
 can.** Every threshold, hue and saturation rule tried against the original failed,

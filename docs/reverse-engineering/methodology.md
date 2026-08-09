@@ -157,6 +157,34 @@ Each of these cost at least a session before it was written down. They lived on
 `HANDOVER.md` until 2026-08-09; they are here because they are properties of the
 method rather than of any pass.
 
+**The cheap instrument keeps outvoting the expensive evidence, and the direction
+it points is what disguises it.** Two failures on the same thread, two days
+apart, opposite in direction and identical in shape. Six days went into a
+lamp-centroid metric that contradicted a background nobody had registered - and
+it *felt like diligence*, because the number kept moving and each pass refined
+it. Then a 3-of-16-tick fit rejected a driver that a store reads unambiguously
+at instruction level - and it *felt like rigour*, because it arrived with a
+t-statistic and a confidence interval. Both are a cheap, re-runnable measurement
+overruling an expensive one, and **neither announces itself as that**; a
+pixel metric and a regression are equally easy to keep re-running, which is
+exactly why they accumulate apparent weight.
+
+The habit that catches it is not general skepticism. It is two questions, and
+the second is the one this project kept arriving at late:
+
+1. **Name the control that could refute you.** If you cannot name one, that is
+   the finding. (Worked example, four instances deep, on
+   [the rendering page](../rendering/README.md#measuring-a-renderer-change).)
+2. **Name the reading under which the harder evidence survives your result
+   anyway.** Six days needed "the background registers at 1.000 - has anyone
+   checked?". The three ticks needed "what would make a dot-product store look
+   off-axis?" - and that one has an answer: a *smoothed* velocity, which lands
+   between the two candidates precisely where the divergence lives. Asking it is
+   what stopped the second failure from becoming another six-day one.
+
+Question 2 is the cheaper of the two and the one more often skipped, because a
+result that survives question 1 feels finished.
+
 **Decode, then ask "can this change a pixel?", then report - not the other way
 round.** Three times in one session a recovered GE mechanism was reported as a
 finding and turned out to be **inert**: the boost plume's alpha test
