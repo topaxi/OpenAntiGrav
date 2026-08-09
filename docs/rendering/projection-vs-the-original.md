@@ -89,7 +89,24 @@ registers at **0.997**, while the 3D scene in the same frame registers at 1.12.
 > here". And **look at the crop when a band disagrees**: the anomaly was
 > invisible in the correlation curve and obvious in the picture.
 
-**3. A free precision check: sweep the same band at two step sizes.** Two
+**3. Linearity in the quantity measured.** A fixed eye with a varying fov is an
+exact screen-space zoom about the principal point, so `--camera-fov` is ground
+truth with no code change. Screen offsets scale as `1/tan(fov/2)`, so
+`measured * tan(fov/2)` must be constant:
+
+| fov | craft | far scenery | craft x tan(fov/2) |
+| ---: | ---: | ---: | ---: |
+| 54 | 1.2634 | 1.2695 | 0.6437 |
+| 57 | 1.1882 | 1.1927 | 0.6452 |
+| 60 | 1.1188 | 1.1197 | 0.6460 |
+| 63 | 1.0503 | 1.0554 | 0.6436 |
+| 65.75 | 0.9988 | 1.0009 | 0.6451 |
+| 69 | 0.9393 | 0.9417 | 0.6455 |
+| 72 | 0.8857 | 0.8918 | 0.6435 |
+
+**Constant to 0.39 %** over a 1.43x induced range.
+
+**4. A free precision check: sweep the same band at two step sizes.** Two
 sessions reported the HUD-excluded left band 1.5 % apart, which is six times the
 instrument's validation figure. The cause is the sweep **step** and not the
 search radius (`--search 70` and `90` agree exactly), and running the clean bands
@@ -111,23 +128,6 @@ which is enough to kill the 1.0106 reading and not enough to refine anything.
 **Run every band at two steps and treat disagreement beyond 0.26 % as the band
 declaring itself unmeasurable.** It costs one extra invocation and it is the
 check that would have caught this before two sessions compared third digits.
-
-**3. Linearity in the quantity measured.** A fixed eye with a varying fov is an
-exact screen-space zoom about the principal point, so `--camera-fov` is ground
-truth with no code change. Screen offsets scale as `1/tan(fov/2)`, so
-`measured * tan(fov/2)` must be constant:
-
-| fov | craft | far scenery | craft x tan(fov/2) |
-| ---: | ---: | ---: | ---: |
-| 54 | 1.2634 | 1.2695 | 0.6437 |
-| 57 | 1.1882 | 1.1927 | 0.6452 |
-| 60 | 1.1188 | 1.1197 | 0.6460 |
-| 63 | 1.0503 | 1.0554 | 0.6436 |
-| 65.75 | 0.9988 | 1.0009 | 0.6451 |
-| 69 | 0.9393 | 0.9417 | 0.6455 |
-| 72 | 0.8857 | 0.8918 | 0.6435 |
-
-**Constant to 0.39 %** over a 1.43x induced range.
 
 Note `--render-scale` is the wrong knob and was checked as such: it is internal
 resolution and does not change on-screen size at all.
@@ -311,9 +311,42 @@ the capture nobody had looked at.
   capture aspect, so `fit_vertical_fov` is the identity here and is not
   implicated.
 
-**Validated out of sample, not only fitted.** Tick 60 (speed 150, the fastest
-frame) rendered at `--camera-fov 71.85`: far scenery **0.9995**, craft-only boxes
-0.9891 / 0.9899.
+**A note that used to claim more than it should.** Tick 60 rendered at
+`--camera-fov 71.85` gives far scenery **0.9995** and craft-only boxes
+0.9891 / 0.9899, and this was written up as out-of-sample validation of the fit.
+**It is not.** The recovered law puts tick 60 at `71.246` and the pixel fit at
+`71.704`; `71.85` is above both, so that render was made at a value neither
+model produced - it was swept until the background zeroed. What it actually
+measures is the residual below.
+
+### A residual of 0.4-1.1 % survives the correction, and it is not the fov
+
+Applying the **recovered** fov leaves a small, consistent over-scale:
+
+| tick | forward speed | recovered fov | far scenery after correction |
+| ---: | ---: | ---: | ---: |
+| 148 | 40.9 | 63.064 | 1.0051 |
+| 0 | 71.5 | 65.364 | 1.0043 |
+| 62 | 148.9 | 71.166 | 1.0093 |
+| 60 | 149.9 | 71.246 | ~1.010 (as the 71.85 sweep above implies) |
+
+**Do not sweep the fov to absorb this.** The fov is now known exactly from the
+executable - 0.0007 degrees over 19 live samples - so a swept value that zeroes
+the background is fitting the *camera* to cancel an error that is somewhere
+else, which is precisely the move this whole page exists to warn about. Passing
+the recovered fov is correct even where a swept one registers better.
+
+What the residual is not: it is not the camera position (a `--pose-from` render
+installs the capture's own eye and orientation), and it is not the frame-to-trace
+lag (at tick 62 the fov moves 0.07 degrees over two ticks, where 0.5 would be
+needed). It is roughly twice the instrument's 0.26 % validation figure at slow
+ticks and four times it at fast ones, and it is **not** monotonic in speed, so
+"a second speed term" does not fit it either. Unexplained, small, and recorded
+rather than absorbed.
+
+For comparison, the error this page's main finding removed was **12-26 %**. A
+1 % residual does not threaten any conclusion here; it is worth chasing only
+because it is the next thing in the way of a genuinely exact matched pose.
 
 ### What this settles that reading alone could not
 
@@ -512,12 +545,12 @@ target/release/oag-game --race --pose-from data/traces/pad0-boost.csv \
 
 # the free control, which is not optional - far scenery no mesh scale can move:
 python3 scripts/frame-register.py data/shots/pad0-boost/tick00000.png \
-    data/scratch/ours_t0.png --box 0,20,960,200 --range 0.80,1.30,0.01 --search 70
+    data/scratch/ours_t0.png --box 0,20,960,200 --range 0.70,1.40,0.01 --search 70
 #   => 1.1195
 
 # the craft, for comparison against it:
 python3 scripts/frame-register.py data/shots/pad0-boost/tick00000.png \
-    data/scratch/ours_t0.png --box 440,330,525,430 --range 0.80,1.30,0.01 --search 70
+    data/scratch/ours_t0.png --box 440,330,525,430 --range 0.70,1.40,0.01 --search 70
 ```
 
 **The script refuses a peak that lands on an end of the sweep**, rather than
@@ -525,6 +558,15 @@ returning it. That is not a nicety: an earlier sweep capped at 1.25 returned
 exactly `1.2500` for the three fastest ticks of this capture and those numbers
 were written up as measurements. `--allow-clamped` exists for deliberate
 one-sided probes and should be rare.
+
+**The `--range` floor has the identical failure mode and bites the command
+above.** The script sweeps the zoom applied to MOV, which is the *reciprocal* of
+the reported ratio, so an uncorrected fast tick at ratio `1.2550` needs
+`1/1.2550 = 0.797` - just under the `0.80` floor. Both sessions re-taking this
+hit the refusal on their first run. **Use `--range 0.70,1.40` for an uncorrected
+frame** and narrow it only once the answer is bracketed. The ceiling trap is
+famous here because it produced fake numbers; the floor is the same trap and
+only looks different because the guard catches it.
 
 The reference frames are `data/shots/pad0-boost/`, and `data/` is gitignored - so
 `rg` and `fd` return nothing there with exit code 0 whether it is full or empty.
