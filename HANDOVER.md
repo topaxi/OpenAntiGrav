@@ -288,6 +288,99 @@ question, same failure `mesh_render.rs:186-201` measured for the viewer).
 Whichever space is made authoritative, `exhaust.rs`'s raw upload and
 `mesh_render.rs`'s sRGB upload cannot both stay.
 
+### The decision, worked through (2026-08-09)
+
+**Recommendation: gamma is authoritative. `exhaust.rs`'s raw upload is the one
+that stays.** The reasoning is one line: **the GE is the specification, and every
+blend equation this project has recovered is defined on framebuffer bytes.**
+`Mesh_SetBatchDrawState`'s `Gu_BlendFunc(GU_ADD, GU_FIX 0xffffff, GU_FIX
+0xffffff)` means "add the stored bytes"; performing that addition on linear light
+is not a more accurate version of it, it is a different equation. The same goes
+for `MODULATE`, for the ribbon's `sceGuAmbient` grey ramp, and for the lighting
+rig - the GE runs all of them on gamma-space values, and the art was authored
+against that.
+
+**The three stages, as they actually are today.** Verified rather than assumed -
+the vertex-colour row is the one that was inherited and is now read:
+
+| Stage | Plume today | Other meshes today | PSP |
+| --- | --- | --- | --- |
+| Texel into the shader | **gamma** (`race.rs` pre-encodes, sRGB sampler decodes it back) | **linear** (sRGB sampler decodes) | gamma |
+| Vertex colour into the shader | **gamma** | **gamma** | gamma |
+| `mesh.wgsl` output | gamma x gamma | linear x gamma | - |
+| `--screenshot` target `Rgba8Unorm` | stored raw | stored raw | gamma |
+| Window surface `Rgba8UnormSrgb` | encoded **again** | encoded | gamma |
+
+The vertex-colour row is not a hardware sRGB path at all: `mesh.rs:731-736`
+builds `colour` as `f32::from(byte) / 255.0` and nothing transforms it, and
+vertex attributes are never sRGB-decoded by hardware. So **the vertex colour has
+always been in gamma space**, on every path, and only the texel's space varies.
+
+**Two consequences fall straight out, and the second one changes how the exhaust
+is measured.**
+
+1. *Nothing here can be the boost plume's missing rim multiplier.* See
+   [exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md) - the argument is
+   a monotonicity proof, not a measurement.
+2. **A `--screenshot` and a window disagree about the plume by up to 73/255**,
+   because the plume's shader output is already gamma and the window surface
+   encodes it a second time:
+
+   | shader out | `--screenshot` (`Rgba8Unorm`) | window (`Rgba8UnormSrgb`) | delta |
+   | ---: | ---: | ---: | ---: |
+   | 0.10 | 26 | 89 | +63 |
+   | 0.20 | 51 | 124 | +73 |
+   | 0.40 | 102 | 170 | +68 |
+   | 0.60 | 153 | 203 | +50 |
+   | 0.80 | 204 | 231 | +27 |
+
+   And in the same capture the *scene behind it* is stored as unencoded linear
+   light, so it reads too dark. **Any plume-versus-background measurement taken
+   from an ordinary capture is therefore measuring two different colour spaces at
+   once** - the plume roughly right, the background too dark, which inflates the
+   plume's apparent prominence. `--presented` does not have this problem
+   (`race.rs:4501` targets `Rgba8UnormSrgb`), which makes it the honest capture
+   path until this is fixed.
+
+**What changes, and what breaks.** All of it in one change, because none of the
+pieces is correct on its own:
+
+- `mesh_render.rs` `make`: `Rgba8UnormSrgb` -> `Rgba8Unorm` (sampler stops
+  linearising).
+- `race.rs`'s load-time plume re-encode: **deleted.** It exists only to cancel
+  that sampler, and against a raw upload it becomes a double-encode - the same
+  bug in the other direction. It must go in the same commit, not after.
+- `mesh_render::screenshot`'s `Rgba8UnormSrgb` target: reverts to `Rgba8Unorm`.
+- The window surface must stop encoding, or `mesh.wgsl` must encode on write -
+  one or the other, not neither.
+
+**HANDOVER row 969's measurement is not contradicted by this, and the
+distinction matters.** That row measured, for `oag-view`, that the
+texture-format fork is wrong (mean 54.6/255) and encode-on-write is right. That
+result is **conditional on textures being linearised**: given a linear texel
+multiplied by a light rig, the multiply lands between decode and encode and only
+encode-on-write is equivalent. It says nothing about whether linearising was the
+right premise. Change the premise and the conclusion is not inherited - but the
+54.6/255 figure is exactly the size of error a *partial* migration would
+reintroduce, which is why the four bullets above are one change.
+
+**Row 973's open question is answered "no" by this**, and its stated risk
+inverts. That row asks whether the game's capture paths need encode-on-write and
+worries that switching them would also encode the HUD's and front end's authored
+text and fill colours, which were tuned against a window. Under
+gamma-authoritative nothing gains an encode: the capture stays raw and the
+*window* stops encoding, so authored sprite and text colours reach the screen as
+authored on both paths and the two stop disagreeing. That is the arrangement the
+front end's colours were tuned for in the first place.
+
+**This is a recommendation with the arithmetic attached, not an applied
+decision.** Whoever acts on it should land it as an ADR - it is exactly the shape
+[ADR](docs/architecture/adr/README.md) exists for, it supersedes the reasoning in
+`mesh_render.rs:186-201`, and a decision this wide should not live only in a
+handover note. The one thing that would change the recommendation is evidence
+that the GE's *lighting* runs on linearised values; nothing read so far suggests
+it does, and `Gfx_Init`'s `GU_TFX_MODULATE` on raw bytes says it does not.
+
 ## The boost, compared against a real capture (2026-08-08, second pass)
 
 The first pass that had **an emulator frame of a real pad crossing beside one of
@@ -850,7 +943,21 @@ and all three came back saying the reimplementation is *right*:
   pair**, which looked like the answer - two wing-mounted ribbons where we run
   one - but no racing `Ship.vex` authors one at all, and the racing trail is
   code-created from preset 2, so the pairs are a wreck thing and this is not
-  evidence about the racing craft.
+  evidence about the racing craft. Entry 809 was later resolved by targeted
+  hash brute force as `Data\Ships\Triakis\livery.vex`, whose two `Trail` nodes
+  are **byte-identical** to that team's wreck. All six payloads are 64 bytes -
+  identity 3x3 plus a translation, no length, sample count, width or colour.
+- **The racing craft builds exactly one trail, and this is settled at
+  instruction level.** `Trail_InitPreset` (`0x0892a050`) has exactly **two**
+  callers in the whole binary. `ExhaustFlare_Init` makes **one** `0x210`
+  allocation at `flare+0x64` followed by **one** `Trail_InitPreset(obj, 2)` -
+  no loop, no second allocation - and the `Engine Flare` node is authored once
+  per `Ship.vex` on all eight teams. The other caller is the **missile**
+  constructor, which makes *two* allocations at `+0x5c`/`+0x60`, each at preset
+  **0**. So twin trails do exist in this engine and they belong to missiles,
+  not to craft. **Our one-ribbon-at-the-nozzle topology already matches the
+  original**, and no amount of measurement disagreement should be read as a
+  missing second ribbon again.
 - **Every recovered ribbon constant matches**: ring capacity `10`, taper rate
   `-4.5`, head taper `1.0`, layer count `3`, per-layer half-widths
   `[1.0, 0.7, 0.5]`, the `intensity * 0.35 + 0.2` width scale, the four-fin

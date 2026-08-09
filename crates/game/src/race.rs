@@ -196,6 +196,30 @@ pub fn ship_entry_name(team: &str, mode: Mode) -> String {
     format!(r"Data\Ships\{team}\{model}.vex")
 }
 
+/// The boost plume that goes with [`ship_entry_name`]'s hull.
+///
+/// **Zone mode has its own plume file and this used to load the wrong one.**
+/// `ship_entry_name` switches the hull between `Ship.vex` and `Zone.vex` on
+/// mode; the plume load hardcoded `shipboost.vex`, so a Zone race drew a
+/// `Zone.vex` hull with the `Ship.vex` plume. Every team ships a `Zoneboost.vex`
+/// beside its `Zone.vex`, so the pairing exists in the data and we simply were
+/// not using it.
+///
+/// Cosmetic today rather than visibly broken - Feisar's `Zoneboost.vex` decodes
+/// geometrically identical to its `shipboost.vex` - but "identical on the one
+/// team that was checked" is not a reason to keep loading the wrong file, and
+/// the caller's missing-entry path already handles a set that does not carry
+/// one.
+#[must_use]
+pub fn boost_entry_name(team: &str, mode: Mode) -> String {
+    let model = if mode == Mode::Zone {
+        "Zoneboost"
+    } else {
+        "shipboost"
+    };
+    format!(r"Data\Ships\{team}\{model}.vex")
+}
+
 /// Reads and decodes a model's external PS2 texture set, from the archive
 /// entry directly before it.
 ///
@@ -797,12 +821,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ship_model.radius
     ));
 
-    // `Data\Ships\<Team>\shipboost.vex` - the plume `ExhaustFlare_Init` reveals
-    // once `boost_timer` passes `exhaust::BOOST_GATE`. Absence is reported
+    // The plume `ExhaustFlare_Init` reveals once `boost_timer` passes
+    // `exhaust::BOOST_GATE` - `shipboost.vex`, or `Zoneboost.vex` in Zone mode,
+    // matching whichever hull `ship_entry_name` picked. Absence is reported
     // rather than failing the race: the PS2 set may not carry it under the
     // same name the PSP one does, and a missing boost plume is a missing
     // feature, not a broken load.
-    let boost_name = format!(r"Data\Ships\{}\shipboost.vex", options.team);
+    let boost_name = boost_entry_name(&options.team, options.mode);
     let boost_model = match archives.read_name(&boost_name) {
         Ok(blob) => match mesh::build_with_textures(&boost_name, &blob, None, options.lod) {
             Ok(mut model) => {
@@ -4704,6 +4729,32 @@ mod tests {
     use oag_formats::track;
     use oag_gameplay::input::button;
     use oag_input::keys::map_key;
+
+    /// The hull and its plume must come from the same family, which is the
+    /// regression this guards: the plume load hardcoded `shipboost.vex` while
+    /// the hull switched on mode, so a Zone race drew a `Zone.vex` hull with the
+    /// `Ship.vex` plume. Asserted as the *pairing* rather than as two
+    /// independent strings, because the pairing is the thing that was wrong.
+    #[test]
+    fn the_boost_plume_follows_the_hull_its_mode_selects() {
+        for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
+            let hull = ship_entry_name("Feisar", mode);
+            let plume = boost_entry_name("Feisar", mode);
+            let stem = if mode == Mode::Zone { "Zone" } else { "ship" };
+            assert!(
+                plume.contains(stem),
+                "{mode:?}: hull {hull} but plume {plume} - they are not the same family"
+            );
+        }
+        assert_eq!(
+            boost_entry_name("Feisar", Mode::Zone),
+            r"Data\Ships\Feisar\Zoneboost.vex"
+        );
+        assert_eq!(
+            boost_entry_name("Feisar", Mode::TimeTrial),
+            r"Data\Ships\Feisar\shipboost.vex"
+        );
+    }
 
     /// A model declaring `slots` texture slots of which the first `decoded` filled.
     fn model(slots: usize, decoded: usize) -> Model {
