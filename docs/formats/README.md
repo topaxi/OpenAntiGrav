@@ -62,8 +62,8 @@ what stops the next person re-running the probe.
 | ISO 9660 | - | both | Pulse, Pure | **understood** | [`oag-disc`](../../crates/disc/src/iso9660.rs) |
 | CHD | `.chd` | - | Pulse, Pure | **understood** | Via the `chd` crate; layout detection in [`chd_source.rs`](../../crates/disc/src/chd_source.rs) |
 | ELF | `.BIN`, `.IRX` | both | Pulse, Pure | identified | Both main executables are unencrypted ELF |
-| PSP `~PSP` | `.BIN` | PSP | Pulse | identified | Encrypted executable. Not needed: `BOOT.BIN` is plaintext. |
-| PSP `~SCE` | `.prx` | PSP | Pulse, Pure | identified | Relocatable library |
+| PSP `~PSP` | `.prx`, `.BIN` | PSP | Pulse, Pure | identified | Compressed/encrypted executable. Not needed: `BOOT.BIN` is plaintext. `sniff` finds 2 on Pulse's UMD and **9 on Pure's**, all `.prx` - Pure ships its network stack loose where Pulse packs most of it. |
+| PSP `~SCE` | `.prx` | PSP | Pulse | identified | Relocatable library. **Pulse only**: `sniff` finds 6 on Pulse's UMD and **zero on Pure's**, whose modules are all `~PSP` or plain ELF. |
 | PBP | `.BIN` | PSP | Pulse | identified | `GSHARE/SHARE.BIN` |
 | SFO | `.SFO` | PSP | Pulse, Pure | identified | Magic `\0PSF`. Key/value metadata. |
 | PSAR | `.BIN` | PSP | Pulse | identified | Firmware update archive. Not relevant. |
