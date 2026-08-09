@@ -450,14 +450,19 @@ fn normalize(v: [f32; 3]) -> Option<[f32; 3]> {
 /// Pure's `0x103` payloads were always inside what it accepts. Only *finding*
 /// the node was version-locked.
 ///
-/// **All eleven are converted as of 2026-08-09**, and one of them was not a
-/// test: `oag_trace`'s own `ai_of` looked the node up by the version-6 constant,
-/// so `oag-trace run --source` against a Pure disc would have reported "has no
-/// WO Track node" for a track that has one. Two spellings survive on purpose -
+/// **Five were converted on 2026-08-09**, and one of them was not a test:
+/// `oag_trace`'s own `ai_of` looked the node up by the version-6 constant, so
+/// `oag-trace track --source` against a Pure disc reported "has no WO Track
+/// node" for a track that has one. That is fixed and checked on
+/// `pure-psp-eu.chd`, which is the Pure pressing `oag_pulse`'s deny-list does
+/// not refuse - `pure-psp-usa.chd` is rejected at open by serial, so the bug was
+/// never reachable there. A sixth site, `pvs_ground_truth`'s section walk, went
+/// to [`vex::classes_of`] instead, because it wants every matching node rather
+/// than the first. Three spellings survive on purpose -
 /// `pvs_ground_truth::pure_does_not_share_pulses_class_numbering` counts nodes
 /// matching *Pulse's* id on Pure's disc, which is the whole claim it makes, and
-/// `track_ground_truth` restates `0x3bb` from `docs/formats/track.md` so the
-/// test checks the documented id rather than the crate's.
+/// `track_ground_truth` restates `0x3bb` from `docs/formats/track.md` at two
+/// sites so the test checks the documented id rather than the crate's.
 ///
 /// `None` for a file whose version has no class table, or whose table has no
 /// `WO Track` id recovered, as well as for a `.vex` that simply authors none.

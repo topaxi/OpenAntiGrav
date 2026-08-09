@@ -44,11 +44,18 @@ read. The cheap check that would have caught it - grep the archive listing for
 Same five layouts under the same names, the same widget counts, and - the part
 that settles it - the **same `U`/`V`/`TxtrWidth`/`TxtrHeight` boxes**, so both
 discs index the identical 256x256 atlas arrangement. Only the on-screen
-geometry differs, and it differs by exactly one ratio: `SpeedBarBg` is
+geometry differs, and **mostly** by one ratio: `SpeedBarBg` is
 `x=8 y=16 w=224 h=43` where the PSP has `x=6 y=10 w=168 h=26`, which is
-640/480 horizontally and 448/272 vertically. That is the front-end coordinate
-space, not a HUD question - see the `SCREEN` thread in
-[`HANDOVER.md`](../../HANDOVER.md).
+640/480 horizontally and 448/272 vertically.
+
+**Not every coordinate follows it**, and the exceptions are the reason a PS2
+sweep is not a one-line change. Measured across `Arcade_HUD.xml`'s 141
+coordinate values on both discs, 121 are the PSP's own scaled and rounded to an
+integer; the 20 that are not are the nine `<Mode3D><Model>` placements, which sit
+at the PSP's `x="-240" y="136"` unchanged in an orthographic mode, and
+`TimeDiffIcon`'s two small negative offsets. This paragraph said "exactly one
+ratio" until 2026-08-09. That is the front-end coordinate space, not a HUD
+question - see the `SCREEN` thread in [`HANDOVER.md`](../../HANDOVER.md).
 
 Two things kept it off the screen entirely, and each hid the other:
 

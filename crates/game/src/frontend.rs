@@ -244,9 +244,11 @@ pub enum Draw {
 /// - `oag_race::AUTHORED_ASPECT`, where the original's authored field of view is
 ///   only defined at the PSP's aspect;
 /// - [`crate::hud::inside_screen`], which is a **PSP-only** test helper and says
-///   so - the PS2's `Arcade_HUD.xml` is the PSP's layout scaled by exactly
-///   640/480 and 448/272, reaching `y=435`, so checking it against these numbers
-///   would fail on every widget rather than on a parser bug.
+///   so - the PS2's `Arcade_HUD.xml` authors the same layout in a 640x448 grid,
+///   reaching `y=435`, so checking it against these numbers would fail on nearly
+///   every widget rather than on a parser bug. **It is not a flat scaling**, and
+///   the exceptions matter to anyone attempting the sweep; the measurement is on
+///   [`crate::hud::inside_screen`] itself.
 pub const SCREEN: (f32, f32) = (480.0, 272.0);
 
 /// The coordinate space a source's front-end XML places widgets in, and what

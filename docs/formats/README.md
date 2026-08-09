@@ -15,19 +15,22 @@ Every distinct format found on an in-scope disc, with how well it is understood.
 
 These are the project's actual work.
 
-**The `Titles` column says which releases a row was validated against, not which
-it is believed to hold for.** `Pulse` alone means nobody has pointed the parser
-at another title's data, which is a statement about coverage rather than about
-portability; `Pulse, Pure` means it was, and what happened is on
-[pure-status](pure-status.md). Before that column existed every row read as
-`Pulse` implicitly, which is exactly the ambiguity
-[ADR-0021](../architecture/adr/0021-title-packages.md) exists to remove. Pure is
-PSP-only, so a PS2-only row can only ever say `Pulse`.
+**The `Titles` column says which releases the parser is validated as *working*
+on** - one definition, because the first draft carried two and the rows split
+along the seam between them. `Pulse, Pure` means Pure's own data goes through it;
+`Pulse` covers both "nobody has pointed it at another title" and "somebody did
+and it broke", and [pure-status](pure-status.md) is where that difference is
+recorded. It is not a portability claim either way: a `Pulse`-only row may well
+be portable and simply untried.
+
+Before this column existed every row read as `Pulse` implicitly, which is the
+ambiguity [ADR-0021](../architecture/adr/0021-title-packages.md) exists to
+remove. Pure is PSP-only, so a PS2-only row can only ever say `Pulse`.
 
 | Format | Extension | Platforms | Titles | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
 | [WAD container](wad.md) | `.wad` | PSP, PS2 | Pulse, Pure | **understood** | Implemented and validated against all nine archives, and the header/entry layout is [confirmed in a second binary](wad.md#and-now-a-second-binary-which-reads-the-layout-back-in-one-shot). Entry names are stored as a CRC-32 variant, [recovered and reimplemented](wad.md#the-name-hash); most names still have to be mined rather than read. |
-| [PSP indexed texture](psp-texture.md) | `.mip` | PSP | Pulse, Pure | **understood** | Implemented; renders correctly. Not swizzled. |
+| [PSP indexed texture](psp-texture.md) | `.mip` | PSP | Pulse, Pure | **understood** | Implemented; renders correctly. **Sometimes swizzled**, and `+0x07` bit 0 says which - this row read "Not swizzled" until 2026-08-09, which [psp-texture](psp-texture.md#is-the-pixel-data-swizzled-sometimes-and-0x07-says-which) had already corrected and `texture_swizzle_flag_ground_truth` counts at 88 of 5,375 Pulse PSP `Texture` nodes. |
 | [PS2 texture](ps2-texture.md) | - | PS2 | Pulse | **understood** | A GS upload packet, not a texture file: `PSMT8`- or `PSMT4`-swizzled texels and a `CSM1` palette. Implemented and validated over 5,348 blobs; all 5,348 decode, the five `PSMT4` ones being the [PS2 font atlases](fnt.md). The permutation is checked separately from the framing, by a corpus-wide smoothness comparison against the opposite reading. Which set belongs to which model is solved for ships and for each circuit's own `track.vex` (directory position, not a name); a model built from several small shared-atlas pieces is [still open](ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name). |
 | [LZSS](lzss.md) | - | PS2 | Pulse | **understood** | Implemented and verified against all 6,053 compressed entries. |
 | [`.vex` scene](vex.md) | `.vex` | PSP, PS2 | Pulse, Pure | **partial** | **The** 3D format. Node tree, scene hierarchy, geometry and embedded textures implemented on both platforms - PS2 batches are VIF packets rather than vertex arrays, validated over 11.8M vertices. PS2 textures are not in the file; they live in [separate archive entries](ps2-texture.md). A `Texture` node's **runtime asset path at payload `+0x38`** is now read: a track's node header carries no name at all, so it is the only name a track texture has, and reading it is what made trackside animated textures findable. Material entries are fully parsed; the unused `+0x0c..0x14` is proven zero on every material of all 12 circuits, which rules out an authored UV scroll rate. |
@@ -37,7 +40,7 @@ PSP-only, so a PS2-only row can only ever say `Pulse`.
 | [Track data](track.md) | - | PSP | Pulse, Pure | **understood** | The `WO Track` spline graph, racing line and AI corridor. Implemented, and validated against all 40 track files with nothing left over. The `section` PVS payload is documented but not implemented. |
 | [Collision geometry](collision.md) | - | PSP, PS2 | Pulse | **understood** | An indexed triangle soup in `.vex` nodes under five collision class IDs, separate from the render mesh. Implemented and validated on both discs: 319 of 319 nodes close exactly over 602,086 vertices. |
 | [Front-end XML](fexml.md) | `.xml` | PSP, PS2 | Pulse, Pure | **understood** | Name-shortened XML. Screens, widgets, handling stats. |
-| [Handling stats](handling-stats.md) | `.xml` | PSP, PS2 | Pulse, Pure | **understood** | Ship tuning is data, not code. Implemented and validated on both discs: 8 teams x 4 speed classes, every attribute required. Four fields are [pre-scaled at load](../ghidra/functions/psp-pulse-usa/engine.md). |
+| [Handling stats](handling-stats.md) | `.xml` | PSP, PS2 | Pulse | **understood** | Ship tuning is data, not code. Implemented and validated on both discs: 8 teams x 4 speed classes, every attribute required. Four fields are [pre-scaled at load](../ghidra/functions/psp-pulse-usa/engine.md). **`Pulse` and not `Pulse, Pure`**: Pure's whole element set is enumerated and every difference but one is handled, but `<pitch>` still makes the parser refuse all ten of its laddered files - see [pure-status](pure-status.md#handling-stats-the-schema-holds-the-parser-does-not). |
 | [PSP movie](pmf.md) | `.PMF` | PSP | Pulse, Pure | **understood** | PSMF header and MPEG program stream. Header and demuxer implemented and validated against all 17 movies; the H.264 inside is [transcoded out of process](../architecture/adr/0004-asset-pipeline.md) by default, or decoded through a system GStreamer install on Linux with `--features native-video` ([ADR-0017](../architecture/adr/0017-gstreamer-native-video.md)) - either way, no H.264 decoder ships in this repository. |
 | [Bitmap font](fnt.md) | `.fnt` | PSP, PS2 | Pulse, Pure | **understood** | Metrics and atlas both decoded and validated across all five fonts and 863 glyphs. On the PSP the atlas header is a 64-byte [`.vex`](vex.md) Texture node, not a `.mip` header, and its texels are the one thing on the disc stored **already swizzled**. The PS2 ships the same five fonts **metrics-only** and keeps each glyph sheet in the following archive entry as a `PSMT4` [PS2 texture](ps2-texture.md), on the GS's 0-128 alpha scale. |
 | [PSP sound bank](psp-audio.md) | `.bnk` | PSP | Pulse | **understood** | An `SBlk` descriptor block plus PS-ADPCM waveforms. Container, header and codec implemented and validated across all 39 banks and 546,681 audio blocks. **Per-sound boundaries and per-sound names are both resolved**, from the SCREAM engine's own arithmetic: 595 waveform spans [tile all 39 sections exactly](psp-audio.md#where-each-sound-starts), number each bank's declared `waveform_count`, and each carries its PS-ADPCM terminator in its final two blocks - the codec agreeing with the command table. 607 [sound names](psp-audio.md#every-sound-has-a-name), one per cue in every bank, including strings the disassembler found independently. The 43 unread command opcodes and the per-sound sample rate remain [open](psp-audio.md#not-determined). |
@@ -51,11 +54,13 @@ PSP-only, so a PS2-only row can only ever say `Pulse`.
 
 Documented elsewhere; we only need to read them.
 
-The `Titles` column means the same thing here, and mostly says `Pulse, Pure`
-for a reason worth stating: these are the console's formats rather than a
-game's, so a second title on the same hardware exercises them without changing
-anything. That is the null result the format layer wants, and recording it is
-what stops the next person re-running the probe.
+The `Titles` column means the same thing here. Five of the twelve rows say
+`Pulse, Pure`, and the reason is worth stating: these are the console's formats
+rather than a game's, so where a second title on the same hardware ships one it
+goes through unchanged. That is the null result the format layer wants, and
+recording it is what stops the next person re-running the probe. The other seven
+are `Pulse` because Pure simply does not ship that thing - no firmware update
+payload, no `GSHARE/SHARE.BIN`, no `~SCE` modules - not because anything failed.
 
 | Format | Extension | Platform | Titles | Status | Notes |
 | --- | --- | --- | --- | --- | --- |

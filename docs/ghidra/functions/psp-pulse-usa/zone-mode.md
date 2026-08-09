@@ -53,10 +53,14 @@ a second inference.
 --mesh` against the PSP disc, `AG_Systems\Zone.vex`, `Assegai\Zone.vex` and
 `Feisar\Zone.vex` all decode to the same 8 meshes / 1213 vertices / 1149
 triangles / radius 6.97, where their three `Ship.vex` files disagree on every
-one of those numbers. `oag-wad list`'s directory sizes agree across all eight
-shipped teams too: every `Zone.vex` is exactly 76944 bytes, where `Ship.vex`
-ranges from 74112 to 80080. So Zone mode flies one shared hull regardless of
-team - the per-team folder only supplies that hull's livery, the same way
+one of those numbers. **All eight were then decoded, and the inference no longer
+rests on file size.** Every one of the eight `Zone.vex` files reports the same 8
+meshes / 1213 vertices / 1149 triangles / radius 6.97 under `oag-view --mesh`.
+Corrected 2026-08-09: this paragraph used to generalise from three decodes to
+eight via "every `Zone.vex` is exactly 76944 bytes", and that equality is false -
+`EGX\Zone.vex` is **76880**, the other seven are 76944. The conclusion survives
+because the decodes were run; the size argument never supported it. So Zone mode
+flies one shared hull regardless of team - the per-team folder only supplies that hull's livery, the same way
 `Ship.vex`'s livery differs from team to team on the same underlying rig
 elsewhere in the format. Not checked against the PS2 disc (a different WAD
 layout, `WADS2.WAD` rather than `Data.wad`), so this is PSP-only for now.

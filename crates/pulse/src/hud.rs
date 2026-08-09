@@ -9,9 +9,14 @@
 
 /// The archive entry holding the atlas every HUD sprite samples.
 ///
-/// One texture serves 84 of the 100 `Src=` references across the five layouts;
-/// the other 16 are the `<Mode3D>` models. It ships **twice** on the PSP disc,
-/// in `FE.wad` and in `Data.wad`, byte-identical at 66,576 bytes.
+/// One texture serves **84 of the 110** `Src=` references across the five
+/// layouts; the other 26 are `<Mode3D>` models (`missile_sight_outer` x8,
+/// `leachbeam_sight` x8, `Pulse_Ready_Go` x4, `Cockpit_321GO` x4,
+/// `missile_sight_inner` x2). It ships **twice** on the PSP disc, in `FE.wad`
+/// and in `Data.wad`, byte-identical at 66,576 bytes.
+///
+/// The counts read `84 of the 100` and `16` until 2026-08-09; 84 + 16 = 100 is
+/// arithmetic that agrees with itself and not with the disc.
 pub const ATLAS: &str = r"Data\HUD\Textures\PulseHUD.mip";
 
 /// The five shipped layouts, by race mode.

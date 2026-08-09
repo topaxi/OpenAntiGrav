@@ -1370,15 +1370,20 @@ impl App {
         // rate, the rectangle - stays behind, because a `Feed` deals in pixels
         // and knows nothing about where they go. `repeat: true`, which is the
         // whole difference between this movie and the intro.
-        // The grid the backdrop's rect has to be in: the *source's*, not the
-        // PSP's. A PS2 disc authors at 640x448 shown as 4:3, so boxing its
-        // backdrop into a hardcoded 480x272 puts the rect in one grid while the
-        // renderer's `screen` uniform is in another - and it is silent on the
-        // PSP, where the two are the same numbers.
-        let space = self
-            .boot
-            .as_ref()
-            .map_or(frontend::Space::PSP, |loaded| loaded.frontend.space());
+        // **The menu's grid, which is ours and is the PSP's - not the source's.**
+        // This rect is drawn by `MenuStage`'s own renderer, and `open_menus`
+        // builds that one fresh and never calls `set_space`, so its `screen`
+        // uniform is `Space::PSP` whatever disc is mounted. The menu layout it
+        // sits behind is this project's own, authored at 480x272, which is why
+        // `capture.rs` pins `Space::PSP` on the same picture.
+        //
+        // Handing this the *source's* space instead was a regression: on a PS2
+        // disc it built the rect in a 640x448 grid for a shader normalising
+        // against 480x272, and `pillarbox_in` always fills one axis of the grid
+        // it is given, so the backdrop overflowed the screen on every aspect.
+        // Silent on the PSP, where the two grids are the same numbers, and
+        // invisible to `--menu-page`, which goes through `capture.rs`.
+        let space = frontend::Space::PSP;
         let (backdrop, backdrop_shape) =
             match self.boot.as_mut().and_then(|loaded| loaded.backdrop.take()) {
                 Some(movie) => {

@@ -18,10 +18,12 @@
 //! [ADR-0004]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0004-asset-pipeline.md
 //! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
 
-/// The disc entry holding the 30 `<PI_LoadingScreen>` tips.
+/// The disc entry holding the **26** `<PI_LoadingScreen>` tips.
 ///
-/// `Data.wad` entry 1126 on the PSP pressings, reached by name rather than by
-/// index so a source whose directory is ordered differently still finds it.
+/// `Data.wad` entry **1126** on the USA pressing and **1125** on the EU one -
+/// which is exactly why it is reached by name rather than by index. The count
+/// read 30 and the index was written as if both pressings shared it until
+/// 2026-08-09; both are measured now.
 pub const TIPS_ENTRY: &str = r"Data\Plugins\loading\Definition.xml";
 
 /// The 32x32 cyan strip every column of the wave samples.
