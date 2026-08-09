@@ -48,11 +48,30 @@
 //!   not model; both cones aim along the contact normal instead. The two
 //!   sphere emitters have no aim at all, so they are exact.
 //! - **Streak end caps**: `ParticleSystem_DrawStreak` (`0x08916820`)
-//!   extends the quad past both points by a per-system stretch factor
-//!   times the size; the factor's resource field is untraced, so this
-//!   module uses the size itself - which also keeps a zero-length streak
-//!   drawing a size-sized glow, the same degenerate case the original
-//!   handles. (The size channel's *unit* is no longer approximate: the
+//!   extends the quad past both points by a stretch factor times the size.
+//!   **That factor is `particle+0x64`, and it is one field feeding three
+//!   draw modes** - the cap ratio in mode 7, this stretch in mode 6, and the
+//!   width/height aspect in mode 3 - so whatever authored value initialises
+//!   it has to read sensibly as both a multiple of half-width and a ratio.
+//!   Its *writer* is still untraced: it is not stored by
+//!   `ParticleSystem_InitParticle` or `ParticleSystem_UpdateParticles` (all
+//!   store forms searched in both), so it arrives by a block copy at spawn
+//!   or a per-emitter cache. A whole-program float-store sweep is already
+//!   exhausted - see `particle-system.md` before repeating one. So this
+//!   module uses the size itself, which may well be exactly right, and
+//!   which also keeps a zero-length streak drawing a size-sized glow, the
+//!   same degenerate case the original handles.
+//!
+//!   **The other half of the streak's shape is deliberately not adopted
+//!   yet.** The original's body samples a *single* texture row stretched
+//!   over the whole span, with `v` variation only in the two caps
+//!   (`0`->`0.5`, `0.5`->`1`); this module maps `v` linearly across the
+//!   quad. That is a real difference - but it only means anything against
+//!   the authored sprite, and this module binds no texture at all (see the
+//!   procedural falloff below). Adopting the layout alone would fit one
+//!   approximation to the coordinate convention of a texture we never
+//!   sample. **Decode the sprite first, then take the `v` layout and the
+//!   cap ratio together.** (The size channel's *unit* is no longer approximate: the
 //!   draw dispatch's inline quad path spans `position ± size` in view
 //!   space, confirming world-unit half-sizes.)
 //!
