@@ -414,7 +414,9 @@ impl Exhaust {
         self.plume_timer += dt;
 
         self.speed_kmh = speed * SPEED_TO_KMH;
-        let ramp = ((self.speed_kmh - RAMP_FLOOR_KMH) / RAMP_SPAN_KMH).clamp(0.0, 1.0);
+        // `speed_ramp()` is this same expression over the field just
+        // written, so a caller reading it back gets what this tick used.
+        let ramp = self.speed_ramp();
 
         // The original charges per call and decays per call, neither scaled by
         // `dt`. Reproduced rather than corrected: at the fixed 60 Hz this project
@@ -600,7 +602,9 @@ impl Exhaust {
     /// carries the same idea as `snapped`.
     pub fn snap(&mut self, thrust: f32, speed: f32) {
         self.speed_kmh = speed * SPEED_TO_KMH;
-        let ramp = ((self.speed_kmh - RAMP_FLOOR_KMH) / RAMP_SPAN_KMH).clamp(0.0, 1.0);
+        // `speed_ramp()` is this same expression over the field just
+        // written, so a caller reading it back gets what this tick used.
+        let ramp = self.speed_ramp();
         self.boost_accumulator = ramp * RAMP_FLOOR_SHARE;
         self.engine_on = thrust > 0.0;
         self.intensity = if self.engine_on { 1.0 } else { 0.0 };
@@ -676,6 +680,36 @@ impl Exhaust {
     #[must_use]
     pub fn plume_visible(&self) -> bool {
         self.plume_visible
+    }
+
+    /// Seconds since the plume was revealed - the original's `flare+0x88`.
+    ///
+    /// **Not** [`Self::boost_timer`], and the difference is the whole reason
+    /// this is exposed separately: the reveal is edge-triggered, so this
+    /// restarts at a reveal and then runs its own [`PLUME_SECONDS`] span
+    /// regardless of how long the boost that caused it lasts. It also keeps
+    /// accumulating while the plume is hidden, matching the original adding to
+    /// `flare+0x88` at the top of every frame rather than only while visible.
+    ///
+    /// Exposed for `oag-game --race --trace-out`, which writes it into the
+    /// `plume_timer` column so our value can be differenced against a capture's.
+    #[must_use]
+    pub fn plume_timer(&self) -> f32 {
+        self.plume_timer
+    }
+
+    /// The clamped speed ramp - the original's `flare+0x90`.
+    ///
+    /// Recomputed from the stored [`Self::speed_kmh`] rather than cached, which
+    /// makes it exactly the local [`Self::advance`] derives and uses: there is
+    /// one formula, not two that could drift. Zero below [`RAMP_FLOOR_KMH`] and
+    /// one above `RAMP_FLOOR_KMH + RAMP_SPAN_KMH`.
+    ///
+    /// Exposed for the same reason as [`Self::plume_timer`]: the capture records
+    /// this field, so the comparison needs our side of it.
+    #[must_use]
+    pub fn speed_ramp(&self) -> f32 {
+        ((self.speed_kmh - RAMP_FLOOR_KMH) / RAMP_SPAN_KMH).clamp(0.0, 1.0)
     }
 
     /// Per-layer opacity, innermost first.

@@ -505,6 +505,15 @@ struct ToleranceArgs {
     /// Timers, absolute, in seconds.
     #[arg(long)]
     timer_absolute: Option<f32>,
+    /// `0..=1` quantities (intensity, speed ramp, boost accumulator), absolute.
+    #[arg(long)]
+    unit_interval_absolute: Option<f32>,
+    /// World-space lengths (the flare half-size), absolute, in units.
+    #[arg(long)]
+    length_absolute: Option<f32>,
+    /// The relative half of the length tolerance.
+    #[arg(long)]
+    length_relative: Option<f32>,
 }
 
 impl From<ToleranceArgs> for Tolerances {
@@ -525,6 +534,11 @@ impl From<ToleranceArgs> for Tolerances {
                 .angular_velocity_absolute
                 .unwrap_or(default.angular_velocity_absolute),
             timer_absolute: args.timer_absolute.unwrap_or(default.timer_absolute),
+            unit_interval_absolute: args
+                .unit_interval_absolute
+                .unwrap_or(default.unit_interval_absolute),
+            length_absolute: args.length_absolute.unwrap_or(default.length_absolute),
+            length_relative: args.length_relative.unwrap_or(default.length_relative),
         }
     }
 }

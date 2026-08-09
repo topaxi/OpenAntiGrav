@@ -64,4 +64,4 @@ pub mod trace;
 pub use compare::{Comparison, Divergence, Field, Tolerances, compare};
 pub use replay::{Options, replay};
 pub use script::Script;
-pub use trace::{Frame, Trace};
+pub use trace::{Flare, Frame, Trace};

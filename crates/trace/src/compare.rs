@@ -44,6 +44,30 @@ pub enum Quantity {
     /// error of one: every straight capture would report a divergence on tick 0
     /// and bury the real one. See [`Tolerances::angular_velocity_absolute`].
     AngularVelocity,
+    /// A quantity the model confines to `0..=1`.
+    ///
+    /// **Not in the protocol's table**: it predates the flare columns. Compared
+    /// **absolutely**, for the reason [`Self::AngularVelocity`] carries an
+    /// absolute floor - a ramp spends whole captures pinned at exactly `0` or
+    /// exactly `1`, and a relative test against zero calls any simulated `1e-9`
+    /// a relative error of one. An absolute tolerance on a quantity whose whole
+    /// range is `1.0` is also the more meaningful test: `1e-3` is a thousandth
+    /// of full scale either way, which a relative tolerance is not.
+    UnitInterval,
+    /// A length in world units, compared absolutely or relatively like a
+    /// position.
+    ///
+    /// Distinct from [`Self::Position`] because the only length compared here,
+    /// the flare's `half_size`, is **re-randomised every tick on both sides**:
+    /// the original multiplies its base size by `rand(0.75, 1.25)` and so do we,
+    /// from a different generator. So a per-tick match is not achievable even
+    /// when the model is exactly right, and the default tolerance below will be
+    /// exceeded on most ticks. That is deliberate and the divergence is
+    /// informational: what a reader should check is whether the error stays
+    /// inside the +/-25% flicker envelope of the recorded value, which says the
+    /// *base* size agrees. Neither side records the base separately, which is
+    /// the only thing that would make this a clean test.
+    Length,
     /// A timer counting down in seconds.
     ///
     /// **Not in the protocol's table**, whose "timers, counters: exact" row is
@@ -102,6 +126,28 @@ pub enum Field {
     AngularRate,
     /// The collision stun timer, which gates thrust and lateral grip.
     StunTimer,
+    /// Seconds left on the pad boost, `flare+0xb8`.
+    BoostTimer,
+    /// Seconds since the plume was revealed, `flare+0x88`. Not the boost timer.
+    PlumeTimer,
+    /// The `0..=1` engine intensity ramp, `flare+0xbc`.
+    Intensity,
+    /// The flare quad's half-extent in world units, `flare+0xc4`.
+    ///
+    /// **Both sides re-randomise this every tick**, so it is the one field here
+    /// that cannot agree tick-for-tick even when the model is right - see
+    /// [`Quantity::Length`].
+    HalfSize,
+    /// Whether the engine counts as lit, `flare+0x94`. Compared as a predicate:
+    /// the recorded column is an integer read through a float lens, so its value
+    /// means nothing and only its zero-ness does.
+    EngineOn,
+    /// Craft speed in km/h, `flare+0x8c`.
+    FlareSpeedKmh,
+    /// The clamped speed ramp, `flare+0x90`.
+    SpeedRamp,
+    /// The throttle-charge accumulator, `flare+0x60`.
+    BoostAccumulator,
 }
 
 impl Field {
@@ -123,6 +169,14 @@ impl Field {
         Self::AngularVelocity,
         Self::AngularRate,
         Self::StunTimer,
+        Self::BoostTimer,
+        Self::PlumeTimer,
+        Self::Intensity,
+        Self::HalfSize,
+        Self::EngineOn,
+        Self::FlareSpeedKmh,
+        Self::SpeedRamp,
+        Self::BoostAccumulator,
     ];
 
     /// The field's name in a report.
@@ -145,6 +199,14 @@ impl Field {
             Self::AngularVelocity => "angular_velocity",
             Self::AngularRate => "angular_rate",
             Self::StunTimer => "stun_timer",
+            Self::BoostTimer => "boost_timer",
+            Self::PlumeTimer => "plume_timer",
+            Self::Intensity => "intensity",
+            Self::HalfSize => "half_size",
+            Self::EngineOn => "engine_on",
+            Self::FlareSpeedKmh => "flare_speed_kmh",
+            Self::SpeedRamp => "speed_ramp",
+            Self::BoostAccumulator => "boost_accum",
         }
     }
 
@@ -162,7 +224,11 @@ impl Field {
             | Self::AirbrakeLeft
             | Self::AirbrakeRight => Quantity::Control,
             Self::AngularVelocity | Self::AngularRate => Quantity::AngularVelocity,
-            Self::StunTimer => Quantity::Timer,
+            Self::StunTimer | Self::BoostTimer | Self::PlumeTimer => Quantity::Timer,
+            Self::Intensity | Self::SpeedRamp | Self::BoostAccumulator => Quantity::UnitInterval,
+            Self::HalfSize => Quantity::Length,
+            Self::EngineOn => Quantity::Discrete,
+            Self::FlareSpeedKmh => Quantity::Velocity,
         }
     }
 
@@ -175,7 +241,8 @@ impl Field {
             Quantity::Velocity => "units/s",
             Quantity::AngularVelocity => "rad/s",
             Quantity::Timer => "s",
-            Quantity::Control | Quantity::Discrete => "",
+            Quantity::Length => "units",
+            Quantity::Control | Quantity::Discrete | Quantity::UnitInterval => "",
         }
     }
 }
@@ -185,7 +252,7 @@ impl Field {
 /// "Compared on" is the upper bound rather than the count: a field whose column
 /// is missing from either trace is skipped, and [`FieldSummary::compared_ticks`]
 /// is how many ticks it actually got.
-pub const FIELD_COUNT: usize = 16;
+pub const FIELD_COUNT: usize = 24;
 
 /// The tolerance table, from the verification protocol.
 ///
@@ -236,6 +303,20 @@ pub struct Tolerances {
     /// 60 Hz: a timer that runs a whole frame long is a divergence, a timer that
     /// differs by the capture's own `%.7g` rounding is not.
     pub timer_absolute: f32,
+    /// A `0..=1` quantity, absolute. `1e-3` is a thousandth of full scale - see
+    /// [`Quantity::UnitInterval`] for why this is not relative.
+    pub unit_interval_absolute: f32,
+    /// A world-space length, absolute, paired with [`Self::length_relative`] the
+    /// way position is. `0.01` units matches [`Self::position_absolute`].
+    pub length_absolute: f32,
+    /// The relative half of the length tolerance.
+    ///
+    /// `1e-3` rather than position's `1e-4` because the only length compared is
+    /// the flare's `half_size`, whose recorded value is a metre-scale number
+    /// rather than a track-scale one. **It will still be exceeded on most
+    /// ticks** (see [`Quantity::Length`]), and that is the honest outcome rather
+    /// than a tolerance widened until a randomised field passes.
+    pub length_relative: f32,
 }
 
 impl Default for Tolerances {
@@ -251,6 +332,9 @@ impl Default for Tolerances {
             angular_velocity_relative: 1e-3,
             angular_velocity_absolute: 1e-4,
             timer_absolute: 1e-3,
+            unit_interval_absolute: 1e-3,
+            length_absolute: 0.01,
+            length_relative: 1e-3,
         }
     }
 }
@@ -272,6 +356,11 @@ impl Tolerances {
                 self.angular_velocity_absolute,
             ),
             Quantity::Timer => format!("{:e} absolute", self.timer_absolute),
+            Quantity::UnitInterval => format!("{:e} absolute", self.unit_interval_absolute),
+            Quantity::Length => format!(
+                "{} absolute or {:e} relative",
+                self.length_absolute, self.length_relative
+            ),
             Quantity::Discrete => "exact".to_owned(),
         }
     }
@@ -290,6 +379,8 @@ impl Tolerances {
                 error > self.angular_velocity_absolute && relative > self.angular_velocity_relative
             }
             Quantity::Timer => error > self.timer_absolute,
+            Quantity::UnitInterval => error > self.unit_interval_absolute,
+            Quantity::Length => error > self.length_absolute && relative > self.length_relative,
             Quantity::Discrete => error != 0.0,
         }
     }
@@ -612,6 +703,31 @@ fn measure(field: Field, recorded: &Frame, simulated: &Frame) -> Option<(Sampled
         Field::AngularVelocity => vector(recorded.angular_velocity?, simulated.angular_velocity?),
         Field::AngularRate => vector(recorded.angular_rate?, simulated.angular_rate?),
         Field::StunTimer => scalar(recorded.stun_timer?, simulated.stun_timer?),
+        Field::BoostTimer => scalar(recorded.flare?.boost_timer, simulated.flare?.boost_timer),
+        Field::PlumeTimer => scalar(recorded.flare?.plume_timer, simulated.flare?.plume_timer),
+        Field::Intensity => scalar(recorded.flare?.intensity, simulated.flare?.intensity),
+        Field::HalfSize => scalar(recorded.flare?.half_size, simulated.flare?.half_size),
+        // Not `scalar`: the recorded column is an integer read as a float, so
+        // the difference between the two sides' raw values is meaningless. What
+        // is compared is whether both call the engine lit, reported as a `0`/`1`
+        // error so `Quantity::Discrete`'s `error != 0.0` test reads it.
+        Field::EngineOn => {
+            let recorded_set = recorded.flare?.engine_on_is_set();
+            let simulated_set = simulated.flare?.engine_on_is_set();
+            (
+                Sampled::Scalar {
+                    recorded: f32::from(u8::from(recorded_set)),
+                    simulated: f32::from(u8::from(simulated_set)),
+                },
+                f32::from(u8::from(recorded_set != simulated_set)),
+            )
+        }
+        Field::FlareSpeedKmh => scalar(recorded.flare?.speed_kmh, simulated.flare?.speed_kmh),
+        Field::SpeedRamp => scalar(recorded.flare?.speed_ramp, simulated.flare?.speed_ramp),
+        Field::BoostAccumulator => scalar(
+            recorded.flare?.boost_accumulator,
+            simulated.flare?.boost_accumulator,
+        ),
     })
 }
 
@@ -1042,7 +1158,19 @@ mod tests {
         let comparison = compare(&recorded, &recorded, &Tolerances::default());
         for summary in &comparison.fields {
             match summary.field {
-                Field::AngularVelocity | Field::AngularRate | Field::StunTimer => {
+                // Every optional group the fixture does not carry: the two
+                // angular readings, the stun timer, and the eight flare fields.
+                Field::AngularVelocity
+                | Field::AngularRate
+                | Field::StunTimer
+                | Field::BoostTimer
+                | Field::PlumeTimer
+                | Field::Intensity
+                | Field::HalfSize
+                | Field::EngineOn
+                | Field::FlareSpeedKmh
+                | Field::SpeedRamp
+                | Field::BoostAccumulator => {
                     assert_eq!(summary.compared_ticks, 0, "{:?}", summary.field);
                 }
                 other => assert_eq!(summary.compared_ticks, 40, "{other:?}"),

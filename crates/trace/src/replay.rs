@@ -627,7 +627,8 @@ where
 /// recorded number is reinterpreted on the way in. `timer_2e0` is `None` because
 /// nothing in [`ShipState`] models that gate - it is captured so a recording can
 /// say which of the two engine gates fired, and a field we do not simulate is
-/// reported as not compared rather than as agreement.
+/// reported as not compared rather than as agreement. The flare group is `None`
+/// for the same reason, with a dependency rule behind it - see the field.
 fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &Options) -> Frame {
     let body = &state.body;
     let (row0, up, forward) = options
@@ -659,6 +660,11 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         camera_up: None,
         camera_forward: None,
         camera_position: None,
+        // The flare state machine is `oag_render::exhaust::Exhaust`, and this
+        // crate must not depend on `oag-render` (`just check-deps`). So a replay
+        // reports the flare as not compared rather than as agreement; the side
+        // that *can* write it is `oag-game --race --trace-out`, which owns both.
+        flare: None,
         tick,
         dt,
         grounded: state.grounded,

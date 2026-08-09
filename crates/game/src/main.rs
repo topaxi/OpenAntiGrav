@@ -460,6 +460,23 @@ struct Cli {
     /// silently dropped. Refusing it says so instead.
     #[arg(long, value_name = "VIEW", requires = "screenshot")]
     camera_view: Option<display::CameraView>,
+
+    /// With `--race`: write our per-tick state to a CSV in the capture's own
+    /// columns, so it can be differenced against one from
+    /// `scripts/psp-trace.py`.
+    ///
+    /// **Simulation only** - no window, no GPU, no screenshot. The point is to
+    /// stop verifying the exhaust by looking at pictures: `oag-trace compare
+    /// data/traces/pad0-boost.csv ours.csv` puts a number on every column
+    /// instead. Writes the eight `--flare` columns beside the ship state, so a
+    /// capture taken with `psp-trace.py --flare` compares on all of them.
+    ///
+    /// Combining it with `--screenshot` is refused rather than ignored: the
+    /// screenshot route renders through `race::capture`, and threading a writer
+    /// into that loop is a change to a file this flag deliberately does not
+    /// touch. Run the two separately.
+    #[arg(long, value_name = "FILE.csv", conflicts_with = "screenshot")]
+    trace_out: Option<std::path::PathBuf>,
 }
 
 /// Parses `--pose`: three or four comma-separated numbers, the fourth a yaw in
@@ -1054,6 +1071,124 @@ const ESC_QUITS: &str = ", escape quits";
 /// performance overlay that the same file was setting for every other route -
 /// and the overlay is most wanted exactly here, where a track is on screen.
 /// Nothing on this path writes the file back.
+/// Our per-tick state, in the capture's own columns, written to `path`.
+///
+/// # Which of our values stands for which recovered field
+///
+/// This mapping is a **claim**, not a convenience: differencing two columns that
+/// do not mean the same thing produces a number that looks like a measurement
+/// and is not. Each row is one field of the original's flare object, at the
+/// offset `scripts/psp_trace_fields.py`'s `FLARE_FIELDS` reads it from.
+///
+/// | Column | Flare offset | Ours |
+/// | --- | --- | --- |
+/// | `boost_timer` | `+0xb8` | [`Exhaust::boost_timer`] |
+/// | `plume_timer` | `+0x88` | [`Exhaust::plume_timer`] |
+/// | `intensity` | `+0xbc` | [`Exhaust::intensity`] |
+/// | `half_size` | `+0xc4` | [`Exhaust::half_size`] |
+/// | `engine_on` | `+0x94` | [`Exhaust::engine_on`] |
+/// | `flare_speed_kmh` | `+0x8c` | [`Exhaust::speed_kmh`] |
+/// | `speed_ramp` | `+0x90` | [`Exhaust::speed_ramp`] |
+/// | `boost_accum` | `+0x60` | [`Exhaust::boost_accumulator`] |
+///
+/// Two of them are worth stating outright, because the obvious accessor is the
+/// wrong one:
+///
+/// - **`plume_timer` is the reveal timer, not the boost timer.** It is *not*
+///   [`Exhaust::plume_visible`], which is the bit the reveal sets; the column is
+///   the seconds-since-reveal that decides when that bit clears again.
+/// - **`engine_on` is written as `0` or `1` here, and the capture's column is
+///   neither.** The original's `+0x94` is an integer that `psp-trace.py` reads
+///   through `struct.unpack("<f", ..)`, so a set value arrives as the denormal
+///   `3.601337e-43`. `oag_trace::Flare::engine_on_is_set` is what both sides are
+///   compared through, so writing a plain `1.0` is correct and comparable - see
+///   `oag_trace::trace::FLARE_COLUMNS`.
+///
+/// # Row alignment
+///
+/// One row per tick, then one final row, mirroring `race::capture`: a row is
+/// emitted **before** the tick it labels, which is `scripts/psp-trace.py`'s own
+/// alignment ("the craft as this frame's update found it"), and the last row is
+/// the state a `--screenshot` of the same command line would draw - after
+/// `--pose-boost` has been applied, which `capture` also does after its loop.
+/// So `--ticks 0` writes exactly one row: the posed state, drawing nothing.
+fn write_trace(
+    loaded: race::Loaded,
+    cli: &Cli,
+    scheme: ControlScheme,
+    path: &std::path::Path,
+) -> Result<()> {
+    use oag_trace::{Flare, Frame, Trace};
+
+    let mut race = race::Race::start(loaded.setup);
+    race.set_control_scheme(scheme);
+
+    // Built from the world rather than from `Telemetry`, which carries a summary
+    // for the console and not the columns a comparison needs.
+    let frame_of = |race: &race::Race, dt: f32| {
+        let ship = &race.world.ships[0].physics;
+        let body = &ship.body;
+        let exhaust = race.exhaust();
+        Frame {
+            tick: race.world.tick,
+            dt,
+            grounded: ship.grounded,
+            throttle: ship.thrust,
+            brake: ship.brake,
+            steer: ship.steer,
+            airbrake_left: ship.airbrake_left,
+            airbrake_right: ship.airbrake_right,
+            speed_cached: body.linear_velocity.length(),
+            row0: body.right(),
+            up: body.up(),
+            forward: body.forward(),
+            position: body.position,
+            velocity: body.linear_velocity,
+            speed: body.linear_velocity.length(),
+            flare: Some(Flare {
+                boost_timer: exhaust.boost_timer(),
+                plume_timer: exhaust.plume_timer(),
+                intensity: exhaust.intensity(),
+                half_size: exhaust.half_size(),
+                engine_on: f32::from(u8::from(exhaust.engine_on())),
+                speed_kmh: exhaust.speed_kmh(),
+                speed_ramp: exhaust.speed_ramp(),
+                boost_accumulator: exhaust.boost_accumulator(),
+            }),
+            ..Frame::default()
+        }
+    };
+
+    let dt = oag_core::tick::TickRate::DEFAULT.dt();
+    let mut trace = Trace::default();
+    let mut held = race::HeldButtons::new(button_mask(cli.hold.as_deref()));
+    for tick in 0..cli.ticks {
+        trace.frames.push(frame_of(&race, dt));
+        held.pulse(
+            button_mask(cli.press.as_deref()),
+            button_mask(cli.hold.as_deref()),
+            tick.is_multiple_of(2),
+        );
+        let snapshot = held.snapshot();
+        race.tick(&snapshot);
+    }
+    if let Some(age) = cli.pose_boost {
+        race.force_boost_state(age, cli.pose_intensity, cli.pose_speed);
+    }
+    trace.frames.push(frame_of(&race, dt));
+
+    let csv = trace.to_csv();
+    std::fs::write(path, &csv)
+        .with_context(|| format!("writing {} for --trace-out", path.display()))?;
+    println!(
+        "trace: {} row(s), {} column(s) -> {}",
+        trace.len(),
+        trace.columns().len(),
+        path.display()
+    );
+    Ok(())
+}
+
 fn run_race(
     cli: &Cli,
     options: race::Options,
@@ -1072,6 +1207,11 @@ fn run_race(
     }
 
     let scheme = resolve_scheme(cli, settings);
+
+    if let Some(path) = cli.trace_out.clone() {
+        write_trace(loaded, cli, scheme, &path)?;
+        return audio.finish();
+    }
 
     if let Some(path) = cli.screenshot.clone() {
         // Same reasoning as the front end's own capture branch: no window to

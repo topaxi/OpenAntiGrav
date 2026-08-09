@@ -28,7 +28,7 @@ use oag_core::math::Vec3;
 /// column located in it - so a capture that grows a column stays readable.
 /// [`Trace::columns`] is what [`Trace::to_csv`] writes, which is this list
 /// filtered down to the columns the trace in hand actually carries.
-pub const COLUMNS: [&str; 45] = [
+pub const COLUMNS: [&str; 53] = [
     "tick",
     "dt",
     "grounded",
@@ -74,6 +74,14 @@ pub const COLUMNS: [&str; 45] = [
     "cam_pos_x",
     "cam_pos_y",
     "cam_pos_z",
+    "boost_timer",
+    "plume_timer",
+    "intensity",
+    "half_size",
+    "engine_on",
+    "flare_speed_kmh",
+    "speed_ramp",
+    "boost_accum",
 ];
 
 /// The columns every trace must carry, which is what the capture wrote before
@@ -115,7 +123,7 @@ pub const REQUIRED_COLUMNS: [&str; 25] = [
 ];
 
 /// The columns a trace may carry and an older one does not.
-pub const OPTIONAL_COLUMNS: [&str; 20] = [
+pub const OPTIONAL_COLUMNS: [&str; 28] = [
     "stun_timer",
     "timer_2e0",
     "avel_x",
@@ -136,6 +144,14 @@ pub const OPTIONAL_COLUMNS: [&str; 20] = [
     "cam_pos_x",
     "cam_pos_y",
     "cam_pos_z",
+    "boost_timer",
+    "plume_timer",
+    "intensity",
+    "half_size",
+    "engine_on",
+    "flare_speed_kmh",
+    "speed_ramp",
+    "boost_accum",
 ];
 
 /// The three columns of the angular **momentum** at `body+0x160`, which are all
@@ -173,6 +189,91 @@ pub const CAMERA_COLUMNS: [&str; 12] = [
     "cam_pos_y",
     "cam_pos_z",
 ];
+
+/// The eight exhaust-flare columns, written by `scripts/psp-trace.py --flare`:
+/// all present or all absent, for the same reason as [`CAMERA_COLUMNS`].
+///
+/// Each is one `f32` read straight out of the flare object the capture walks to
+/// as `craft+0x1c4` -> `+0x78`, at the offsets `scripts/psp_trace_fields.py`'s
+/// `FLARE_FIELDS` lists. Recording the offset each column came from matters more
+/// than usual here, because four of the eight have names that could plausibly
+/// belong to a different field:
+///
+/// | Column | Flare offset | What it is |
+/// | --- | --- | --- |
+/// | `boost_timer` | `+0xb8` | seconds left on the pad boost; `ExhaustFlare_OnSpeedupPad` stores `0.8` here |
+/// | `plume_timer` | `+0x88` | seconds since the `<Team>boost.vex` plume was **revealed** - not the boost timer |
+/// | `intensity` | `+0xbc` | the `0..=1` engine ramp the size and layer alphas read |
+/// | `half_size` | `+0xc4` | flare quad half-extent, world units, already flickered |
+/// | `engine_on` | `+0x94` | see below - an integer field, not a float |
+/// | `flare_speed_kmh` | `+0x8c` | craft speed in km/h |
+/// | `speed_ramp` | `+0x90` | `((flare_speed_kmh - 100) / 500)` clamped to `0..=1` |
+/// | `boost_accum` | `+0x60` | the throttle-charge accumulator |
+///
+/// **`engine_on` is an integer read through a float lens, and is compared as a
+/// predicate rather than by value.** The capture `struct.unpack("<f", ..)`s all
+/// eight, but `+0x94` holds a small integer, so the column comes out as a
+/// denormal: every non-zero row of `data/traces/pad0-boost.csv` reads
+/// `3.601337e-43`, which is the `f32` whose bit pattern is `257`. The two
+/// distinct values across that whole capture are exactly `0` and that denormal.
+/// Stored here as written rather than normalised - this crate converts nothing
+/// on the way in - so anything reading it must ask whether it is zero, never
+/// what it equals. See [`Flare::engine_on_is_set`].
+pub const FLARE_COLUMNS: [&str; 8] = [
+    "boost_timer",
+    "plume_timer",
+    "intensity",
+    "half_size",
+    "engine_on",
+    "flare_speed_kmh",
+    "speed_ramp",
+    "boost_accum",
+];
+
+/// The exhaust flare's eight fields for one tick.
+///
+/// One struct rather than eight `Option<f32>` on [`Frame`], because the group is
+/// all-or-nothing: a capture either ran `--flare` or it did not, and eight
+/// independently-optional fields would make "half a flare" representable when it
+/// is not a state any file can be in. The angular and camera groups get the same
+/// guarantee from [`Vec3`] being indivisible; this one has to spell it out.
+///
+/// Field order matches [`FLARE_COLUMNS`], which matches the capture's own header
+/// order, so a row written from this reads back into the same struct.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Flare {
+    /// Seconds left on the pad boost, `flare+0xb8`.
+    pub boost_timer: f32,
+    /// Seconds since the plume was revealed, `flare+0x88`. **Not** the boost
+    /// timer: the reveal is edge-triggered, so this restarts at a reveal and
+    /// then runs its own span regardless of how long the boost lasts.
+    pub plume_timer: f32,
+    /// The `0..=1` engine intensity ramp, `flare+0xbc`.
+    pub intensity: f32,
+    /// Flare quad half-extent in world units, `flare+0xc4`, flicker included.
+    pub half_size: f32,
+    /// Whether the engine counts as lit, `flare+0x94`.
+    ///
+    /// An integer field the capture reads as a float - see [`FLARE_COLUMNS`].
+    /// Read it through [`Self::engine_on_is_set`] rather than comparing it.
+    pub engine_on: f32,
+    /// Craft speed in km/h, `flare+0x8c`.
+    pub speed_kmh: f32,
+    /// The clamped speed ramp, `flare+0x90`.
+    pub speed_ramp: f32,
+    /// The throttle-charge accumulator, `flare+0x60`.
+    pub boost_accumulator: f32,
+}
+
+impl Flare {
+    /// Whether the engine-on field is set, which is the only question its raw
+    /// value can answer - see [`FLARE_COLUMNS`] for why it is not a `bool` here
+    /// and not comparable as a number.
+    #[must_use]
+    pub fn engine_on_is_set(&self) -> bool {
+        self.engine_on != 0.0
+    }
+}
 
 /// One tick of ship state, as the original held it.
 ///
@@ -302,6 +403,13 @@ pub struct Frame {
     /// eye and `scripts/psp-trace.py` flips it before writing, so this compares
     /// directly against a world position.
     pub camera_position: Option<Vec3>,
+    /// The exhaust flare's eight fields, or `None` for a capture taken without
+    /// `--flare`.
+    ///
+    /// Absent, not zeroed, for the same reason the angular columns are: a zero
+    /// `boost_timer` is a claim that the ship was not boosting, and a capture
+    /// that never looked at the flare must not be able to make it.
+    pub flare: Option<Flare>,
 }
 
 impl Default for Frame {
@@ -330,6 +438,7 @@ impl Default for Frame {
             camera_up: None,
             camera_forward: None,
             camera_position: None,
+            flare: None,
         }
     }
 }
@@ -427,6 +536,14 @@ impl Frame {
             "cam_pos_x" => self.camera_position?.x,
             "cam_pos_y" => self.camera_position?.y,
             "cam_pos_z" => self.camera_position?.z,
+            "boost_timer" => self.flare?.boost_timer,
+            "plume_timer" => self.flare?.plume_timer,
+            "intensity" => self.flare?.intensity,
+            "half_size" => self.flare?.half_size,
+            "engine_on" => self.flare?.engine_on,
+            "flare_speed_kmh" => self.flare?.speed_kmh,
+            "speed_ramp" => self.flare?.speed_ramp,
+            "boost_accum" => self.flare?.boost_accumulator,
             _ => return None,
         }))
     }
@@ -444,6 +561,7 @@ impl Frame {
             "cam_up_x" | "cam_up_y" | "cam_up_z" => self.camera_up.is_some(),
             "cam_fwd_x" | "cam_fwd_y" | "cam_fwd_z" => self.camera_forward.is_some(),
             "cam_pos_x" | "cam_pos_y" | "cam_pos_z" => self.camera_position.is_some(),
+            other if FLARE_COLUMNS.contains(&other) => self.flare.is_some(),
             other => REQUIRED_COLUMNS.contains(&other),
         }
     }
@@ -498,6 +616,22 @@ impl Frame {
             "cam_pos_x" => self.camera_position.get_or_insert(Vec3::ZERO).x = value,
             "cam_pos_y" => self.camera_position.get_or_insert(Vec3::ZERO).y = value,
             "cam_pos_z" => self.camera_position.get_or_insert(Vec3::ZERO).z = value,
+            // Same promotion rule as the vectors above: the eight arrive one at
+            // a time, so the first promotes the group out of `None`, and
+            // `Trace::parse` has already rejected a header carrying some of them
+            // and not the rest.
+            "boost_timer" => self.flare.get_or_insert_with(Flare::default).boost_timer = value,
+            "plume_timer" => self.flare.get_or_insert_with(Flare::default).plume_timer = value,
+            "intensity" => self.flare.get_or_insert_with(Flare::default).intensity = value,
+            "half_size" => self.flare.get_or_insert_with(Flare::default).half_size = value,
+            "engine_on" => self.flare.get_or_insert_with(Flare::default).engine_on = value,
+            "flare_speed_kmh" => self.flare.get_or_insert_with(Flare::default).speed_kmh = value,
+            "speed_ramp" => self.flare.get_or_insert_with(Flare::default).speed_ramp = value,
+            "boost_accum" => {
+                self.flare
+                    .get_or_insert_with(Flare::default)
+                    .boost_accumulator = value;
+            }
             _ => {}
         }
     }
@@ -562,7 +696,8 @@ impl Trace {
     /// [`Error::Empty`] for a file with no header, [`Error::MissingColumn`] for a
     /// header that does not carry every column of [`REQUIRED_COLUMNS`] - or that
     /// carries part of an all-or-nothing group ([`ANGULAR_COLUMNS`],
-    /// [`ANGULAR_RATE_COLUMNS`], [`CAMERA_COLUMNS`]) without the rest - and
+    /// [`ANGULAR_RATE_COLUMNS`], [`CAMERA_COLUMNS`], [`FLARE_COLUMNS`]) without
+    /// the rest - and
     /// [`Error::Width`] or [`Error::NotANumber`] for a malformed row.
     pub fn parse(text: &str) -> Result<Self, Error> {
         let mut lines = text
@@ -582,11 +717,14 @@ impl Trace {
         // `avel_y` is a truncated or edited file rather than an older capture,
         // and reading it as a rotation about one axis would be an invention.
         // The camera pose is one twelve-column group for the same reason: a
-        // basis without its eye, or rows without a third, is not a pose.
+        // basis without its eye, or rows without a third, is not a pose. The
+        // flare's eight are one group because they are one `--flare` read of one
+        // object: a file with `boost_timer` and no `plume_timer` was edited.
         for group in [
             &ANGULAR_COLUMNS[..],
             &ANGULAR_RATE_COLUMNS[..],
             &CAMERA_COLUMNS[..],
+            &FLARE_COLUMNS[..],
         ] {
             if group.iter().any(|c| header.contains(c)) {
                 for wanted in group {
@@ -1150,9 +1288,10 @@ stun_timer,timer_2e0,\
 right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,\
 pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,avel_x,avel_y,avel_z,omega_x,omega_y,omega_z,\
 cam_right_x,cam_right_y,cam_right_z,cam_up_x,cam_up_y,cam_up_z,\
-cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z
-0,0.016683,1,100,0,0,0,0,21.98,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-45
-1,0.016683,1,100,0,0,0,0,22,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-44.6
+cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z,\
+boost_timer,plume_timer,intensity,half_size,engine_on,flare_speed_kmh,speed_ramp,boost_accum
+0,0.016683,1,100,0,0,0,0,21.98,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-45,0.8,0.25,0.5,3.5,1,79.2,0.3125,0.1875
+1,0.016683,1,100,0,0,0,0,22,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-44.6,0.78,0.2666,0.52,3.55,1,79.56,0.3187,0.19
 ";
 
     /// The same two ticks as a capture taken **before** the angular-velocity and
@@ -1191,7 +1330,12 @@ pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed
     fn header_the_capture_script_writes() -> Vec<String> {
         const SCRIPT: &str = include_str!("../../../scripts/psp_trace_fields.py");
         let mut columns = vec!["tick".to_owned()];
-        for list in ["CRAFT_FIELDS = [", "BODY_FIELDS = [", "CAMERA_FIELDS = ["] {
+        for list in [
+            "CRAFT_FIELDS = [",
+            "BODY_FIELDS = [",
+            "CAMERA_FIELDS = [",
+            "FLARE_FIELDS = [",
+        ] {
             let start = SCRIPT
                 .find(list)
                 .unwrap_or_else(|| panic!("{list} is not in scripts/psp_trace_fields.py"))
@@ -1341,6 +1485,67 @@ grounded,dt,tick
         assert_eq!(frame.camera_up, Some(Vec3::Y));
         assert_eq!(frame.camera_forward, Some(Vec3::Z));
         assert_eq!(frame.camera_position, Some(Vec3::new(10.0, 8.0, -45.0)));
+    }
+
+    #[test]
+    fn the_flare_columns_are_read_when_they_are_there() {
+        let frame = Trace::parse(FIXTURE).unwrap().frames[0];
+        let flare = frame.flare.expect("the fixture carries the flare group");
+        assert_eq!(flare.boost_timer, 0.8);
+        assert_eq!(flare.plume_timer, 0.25);
+        assert_eq!(flare.intensity, 0.5);
+        assert_eq!(flare.half_size, 3.5);
+        assert_eq!(flare.speed_kmh, 79.2);
+        assert_eq!(flare.speed_ramp, 0.3125);
+        assert_eq!(flare.boost_accumulator, 0.1875);
+        assert!(flare.engine_on_is_set());
+    }
+
+    /// The mirror of [`the_legacy_fixture_is_exactly_the_required_columns`]: a
+    /// capture taken before `--flare` existed must keep parsing, with the group
+    /// **absent** rather than zeroed - a zero `boost_timer` would be a claim
+    /// that the ship was not boosting.
+    #[test]
+    fn a_trace_without_the_flare_columns_has_no_flare_rather_than_zeroes() {
+        let frame = Trace::parse(LEGACY_FIXTURE).unwrap().frames[0];
+        assert_eq!(frame.flare, None);
+        for column in FLARE_COLUMNS {
+            assert!(!frame.has(column), "{column} reported present");
+        }
+        assert!(
+            !Trace::parse(LEGACY_FIXTURE)
+                .unwrap()
+                .columns()
+                .iter()
+                .any(|c| FLARE_COLUMNS.contains(c))
+        );
+    }
+
+    /// The mirror of [`a_partial_angular_velocity_is_an_error`]: half a flare is
+    /// an edited file, not an older capture.
+    #[test]
+    fn a_partial_flare_group_is_an_error() {
+        let text = FIXTURE.replace(",plume_timer", "");
+        assert_eq!(
+            Trace::parse(&text),
+            Err(Error::MissingColumn("plume_timer".to_owned()))
+        );
+    }
+
+    /// `engine_on` is an integer field the capture reads as a float, so the
+    /// value that actually appears in `data/traces/pad0-boost.csv` is the
+    /// denormal whose bit pattern is `257`. It must read as *set*, and it must
+    /// survive a round trip - a reader that treated it as noise and zeroed it
+    /// would silently flip the only bit the column carries.
+    #[test]
+    fn the_engine_on_denormal_reads_as_set_and_round_trips() {
+        let raw = f32::from_bits(257);
+        let text = FIXTURE.replacen(",3.5,1,79.2,", &format!(",3.5,{raw:e},79.2,"), 1);
+        let trace = Trace::parse(&text).expect("the edited fixture");
+        let flare = trace.frames[0].flare.expect("the flare group");
+        assert!(flare.engine_on_is_set(), "{raw:e} must read as engine-on");
+        assert_eq!(flare.engine_on.to_bits(), 257);
+        assert_eq!(Trace::parse(&trace.to_csv()).unwrap(), trace);
     }
 
     /// Two thirds of a vector is a truncated or edited file, not an older
