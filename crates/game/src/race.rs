@@ -2726,6 +2726,27 @@ impl Race {
     /// `speed` is `None` for the racing `120` units/s. It reaches the picture
     /// only through the speed ramp's floor on the boost accumulator, so it
     /// matters when a capture's speed is far from that.
+    /// Held throttle on the original's `0..=100` scale, for
+    /// [`Race::force_boost_state`]'s synthetic warmup.
+    ///
+    /// **This constant exists because a `1.0` here was a 100x bug**, found by
+    /// the first numeric comparison of our exhaust state against a capture's
+    /// (`oag-game --trace-out` against `data/traces/pad0-boost.csv`). The live
+    /// path at [`Race::tick`] passes `ship.thrust`, and
+    /// `oag_physics::ship::Ship::thrust` is documented as the raw `0..=100`
+    /// throttle the original stores at `craft+0x2b8` - the capture reads
+    /// `throttle = 100` at the compared tick. Passing `1.0` charged the boost
+    /// accumulator at `1/3000` per tick instead of `100/3000`, so a posed frame
+    /// never left the speed ramp's floor: `0.5436` against the original's
+    /// saturated `1.0000`, an error that did **not** move when the pose age was
+    /// corrected, which is what proved it was the code rather than the
+    /// parameter.
+    ///
+    /// A named constant rather than a bare `100.0` so the scale is stated where
+    /// it is used; the two are easy to confuse precisely because
+    /// `ShipControls::thrust` on the *input* side is `0.0..=1.0`.
+    const FULL_THRUST: f32 = 100.0;
+
     pub fn force_boost_state(
         &mut self,
         age: f32,
@@ -2740,13 +2761,13 @@ impl Race {
         let warmup = (target / exhaust::INTENSITY_RISE / self.dt).ceil() as u32;
         for _ in 0..warmup {
             self.exhaust
-                .advance(self.dt, 1.0, speed, &mut self.exhaust_rng);
+                .advance(self.dt, Self::FULL_THRUST, speed, &mut self.exhaust_rng);
         }
         self.exhaust.boost(exhaust::BOOST_SECONDS);
         let aged = (age / self.dt).round() as u32;
         for _ in 0..aged {
             self.exhaust
-                .advance(self.dt, 1.0, speed, &mut self.exhaust_rng);
+                .advance(self.dt, Self::FULL_THRUST, speed, &mut self.exhaust_rng);
         }
 
         // **A posed frame otherwise has no ribbon at all, and that silently
