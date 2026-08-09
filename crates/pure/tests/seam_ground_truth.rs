@@ -87,16 +87,16 @@ fn pulse_refuses_pures_disc_by_serial() {
 /// # Currently red, deliberately, and this is the finding
 ///
 /// Pointing the parser at a real Pure file turned up **more schema differences
-/// than `pure-status.md` records**, one behind the other, each only visible
-/// once the one before it was fixed:
+/// than `pure-status.md` recorded at the time**, one behind the other, each only
+/// visible once the one before it was fixed. All four are on that page now:
 ///
-/// 1. five `<Class>` rungs rather than four - recorded, and handled
-/// 2. `easyshield`, `weight_distribution`, `sideshift` absent - recorded, and
-///    handled
-/// 3. **no `<FE>` element at all** - not recorded anywhere. Handled: `Stats::fe`
-///    is now an `Option`, which costs nothing because `<FE>` is presentation
-///    and no simulation path reads it
-/// 4. **no `<pitch>` element** - not recorded either, and *not* handled here
+/// 1. five `<Class>` rungs rather than four - was recorded, and handled
+/// 2. `easyshield`, `weight_distribution`, `sideshift` absent - was recorded,
+///    and handled
+/// 3. **no `<FE>` element at all** - unrecorded until this test found it.
+///    Handled: `Stats::fe` is now an `Option`, which costs nothing because
+///    `<FE>` is presentation and no simulation path reads it
+/// 4. **no `<pitch>` element** - unrecorded too, and *not* handled here
 ///
 /// Four is where this stops on purpose. `<pitch>` feeds `oag_physics::Pitch`,
 /// so making it optional is a change to a simulation input, and ADR-0009 item 2

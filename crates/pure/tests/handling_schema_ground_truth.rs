@@ -278,6 +278,45 @@ fn expected_pure_only() -> Vec<(String, Vec<String>)> {
     ])
 }
 
+/// The same schema off Pure's **other pressing**.
+///
+/// The cheapest confidence available on this page, per
+/// [the rubric](../../../docs/reverse-engineering/confidence-rubric.md): a second
+/// binary is priced above a second reading of the first, and both discs were
+/// already here. If the two pressings ever disagree, every claim above is about
+/// one pressing rather than about the title, which is a distinction worth having
+/// a test make rather than an assumption.
+///
+/// Values are not compared - only the element and attribute names - so this stays
+/// inside `docs/architecture/adr/0006-no-copyrighted-content.md` the same way the
+/// rest of the file does.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd and pure-psp-eu.chd"]
+fn both_pure_pressings_carry_the_identical_schema() {
+    let Some(usa) = image(PURE_IMAGE) else { return };
+    let Some(eu) = image("data/images/pure-psp-eu.chd") else {
+        return;
+    };
+
+    let (usa_schema, usa_files) = ship_schema(
+        &usa,
+        oag_pure::open,
+        oag_pure::names::GAME_PLUGIN_DEFINITION,
+    );
+    let (eu_schema, eu_files) =
+        ship_schema(&eu, oag_pure::open, oag_pure::names::GAME_PLUGIN_DEFINITION);
+
+    assert_eq!(
+        usa_files, eu_files,
+        "the two pressings ship a different roster"
+    );
+    assert_eq!(
+        render(&usa_schema),
+        render(&eu_schema),
+        "the two pressings ship a different handling schema"
+    );
+}
+
 /// The one-pass diff this file exists for.
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd and pulse-psp-usa.chd"]

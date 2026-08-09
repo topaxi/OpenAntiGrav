@@ -268,6 +268,11 @@ handling model grew between the titles rather than changing shape. Confidence
 **94**: an exact set comparison over 19 shipped files on two discs, run by a
 test rather than read by eye.
 
+**Pure's EU pressing carries the identical schema** - same eleven directories,
+same element and attribute sets, asserted by
+`both_pure_pressings_carry_the_identical_schema`. That is what makes the claims
+here about the title rather than about `pure-psp-usa.chd`.
+
 ### One Pure file has no `<Class>` blocks at all
 
 `Data\Ships\Zone_01\handlingstats.xml` - `<Stats team="ZoneMode">` - authors

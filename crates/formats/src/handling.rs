@@ -945,12 +945,16 @@ pub struct Stats {
     pub misc: Misc,
     /// `<FE/>`: the ship-select bars, when the file has them.
     ///
-    /// `None` on Pure, which omits the element entirely. A fourth schema
-    /// difference, and one nothing predicted - `pure-status.md` lists the team
-    /// count, the class count and three absent attributes, but not this. It was
-    /// found by pointing the parser at a real Pure file, which is the argument
-    /// for `oag-pure` existing at all. Presentation only, so nothing in the
-    /// simulation notices its absence.
+    /// `None` on Pure, which omits the element entirely. Presentation only, so
+    /// nothing in the simulation notices its absence.
+    ///
+    /// It was the fourth schema difference found, and the first one no survey
+    /// had predicted: it turned up by pointing the parser at a real Pure file,
+    /// which is the argument for `oag-pure` existing at all. Pure's whole
+    /// element set has since been enumerated in one pass against both discs -
+    /// see `docs/formats/pure-status.md` and
+    /// `crates/pure/tests/handling_schema_ground_truth.rs` - so this is now a
+    /// listed difference rather than a surprise.
     pub fe: Option<Fe>,
     /// The `<Class>` blocks, in ladder order, slowest first.
     ///
