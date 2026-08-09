@@ -934,6 +934,16 @@ Three consequences:
   it was measured in is the external chase view. That is inference from effect
   rather than from execution; an exec breakpoint on `0x088455ec` under an
   external view would settle it directly and costs one emulator session.
+- **`shipNode+0x140` is worth identifying, and the pixels now say so.** Nesting
+  both candidate drivers in one fit - `speed = dot(fwd, vel) + off_axis` - gives
+  an off-axis coefficient of `0.1166 +/- 0.0469`, which **excludes zero**. So the
+  frames reject a *pure* instantaneous-forward-velocity driver at about 95 %,
+  while this store unambiguously reads a dot product. The reconciliation that
+  fits both is that `+0x140` holds a **smoothed** velocity: during off-axis
+  motion a smoothed vector lags the craft's heading, putting
+  `dot(fwd, smoothed)` between the two candidates, and the divergence lives
+  entirely in the three ticks where the craft is most off-axis. Identifying the
+  field would explain the discrepancy rather than arbitrate it.
 
 Confidence **80** for the store and its constant read directly, **88** with the
 pixel confirmation; **75** for the decomposition, up from 0, on one capture of

@@ -214,22 +214,49 @@ Three checks that could have broken it:
 - **`speed_ramp` is excluded as the driver**: fitting against it gives an
   intercept of **62.0 deg**, which misses the authored value.
 
-**But the pixels do not choose between forward velocity and speed magnitude, and
-this page should not pretend otherwise.** `dot(fwd, vel)` and the `speed` column
-agree to three decimal places at **13 of these 16 ticks** - the craft is going
-where it is pointing for most of the capture. They separate only at ticks 110,
-120 and 130 (86.76/94.64, 61.35/65.26, 50.47/53.17), and those are precisely the
-three worst residuals of the fit (+1.23, +0.97, -0.60 deg). Fitting the `speed`
-column instead is marginally *better* (rms 0.344 deg, intercept 59.96). So the
-pixels confirm the **coefficient**; the **driver** comes from the disassembly
-alone, where the store plainly reads a dot product with the craft's forward axis.
+**The pixels mildly argue *against* pure forward velocity, and this page has to
+say so.** `dot(fwd, vel)` and the `speed` column agree to three decimal places at
+**13 of these 16 ticks** - the craft goes where it is pointing for most of the
+capture. They separate only at ticks 110, 120 and 130 (86.76/94.64, 61.35/65.26,
+50.47/53.17), which are also the three worst residuals. Fitting the `speed`
+column instead is marginally better (rms 0.344 vs 0.407 deg, intercept 59.96).
 
-That is worth one follow-up rather than a caveat forever: `shipNode+0x140` is
-described in `camera.md` only as "a velocity-shaped vector" and has not been
-identified. If it is a smoothed or per-frame-delta velocity rather than the body
-velocity, the residuals at those three ticks have a mechanism and stop being
-noise - and those three ticks are where the craft is most off-axis, which is
-exactly where a smoothed vector would lag.
+Nesting both in one fit is the discriminator, since
+`speed = dot(fwd, vel) + off_axis`. If the driver is forward velocity the
+off-axis coefficient is 0; if it is speed magnitude, the off-axis coefficient
+equals the forward one:
+
+```
+fov = 60.0 + 0.07879 * dot(fwd, vel) + 0.11657 * off_axis
+                +/- 0.00247            +/- 0.04694   (t = +2.48)
+off-axis 95 % CI [0.0152, 0.2180]  - excludes 0, contains 0.07879
+```
+
+So the pixels **reject a pure forward-velocity driver at about 95 %** and are
+consistent with speed magnitude. Three things stop that from being a conclusion:
+
+- It rests on **3 of 16 ticks**. Everywhere else the two columns are the same
+  number and carry no information about which is the driver.
+- The point estimate is **1.5x the forward coefficient**, where speed magnitude
+  predicts exactly 1.0x - so it does not cleanly match that model either.
+- Tick 130 keeps a **-0.9 deg** residual under *both* models, so neither is the
+  whole story. Otherwise there is no residual structure: 7 sign runs over 16
+  points against ~9 expected by chance.
+
+**And the disassembly is not ambiguous**: the store reads a dot product with the
+craft's forward axis. A page that overrode an instruction-level read on the
+strength of three ticks would be repeating this thread's original mistake in the
+opposite direction.
+
+**The reconciliation is most likely `shipNode+0x140`**, which `camera.md`
+describes only as "a velocity-shaped vector" and which has never been identified.
+If it is a **smoothed** velocity rather than the instantaneous body velocity,
+then during off-axis motion the smoothed vector lags the craft's heading, so
+`dot(fwd, smoothed)` sits *between* `dot(fwd, vel)` and `speed` - which is
+exactly an off-axis coefficient strictly between 0 and the forward one, and
+exactly the three ticks where the craft is most off-axis. Identifying that one
+field would explain the discrepancy rather than arbitrate it, and it is the
+concrete next step on this sub-question.
 - **Boost contributes nothing extra.** Adding a `boost_timer` term gives a
   coefficient of **-0.0087** and barely moves the rms. Ticks 40-70 (boost active)
   sit on the same line as ticks 80-148 (boost expired). The widen is present with
@@ -275,7 +302,8 @@ intercept indistinguishable from the authored fov. So:
 | Claim | Score | On what |
 | --- | ---: | --- |
 | Our craft mesh is the correct size (0.15 %) | 85 | An instrument validated to 0.26 % against known factors, a control that cannot scale reading 0.997, and craft-only boxes at 0.999 with the background zeroed. Held below 90 for sampling, not for the instrument: one capture, one ship, one circuit |
-| The original's fov carries `+0.075 * forward_speed` degrees | 88 | A store read at instruction level, whose two constants are independently recovered from 16 frames of the original's own pixels and both fall inside the fit's 95 % interval |
+| The original's fov carries a speed-proportional additive term, coefficient `0.075` degrees | 88 | A store read at instruction level, whose two constants are independently recovered from 16 frames of the original's own pixels and both fall inside the fit's 95 % interval |
+| That term's driver is `dot(fwd, vel)` specifically | 70 | The store plainly reads a dot product, but the pixels reject a *pure* forward-velocity driver at ~95 % on 3 of 16 ticks. Unresolved until `shipNode+0x140` is identified - see above |
 | `craft+0x7c` is ~0 during a clean run | 75 | One capture, one circuit, one ship. The residual is 0.41 deg rms against a term that would have to be several degrees to matter |
 | `1 / 0.75^2` scales the drawn mesh | **refuted** | Far scenery, which no mesh scale can touch, carries the same ratio as the craft in all 16 frames |
 
