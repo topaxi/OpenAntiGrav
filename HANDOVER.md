@@ -1005,6 +1005,46 @@ Two consequences, and they are the actionable part:
   render scale. The flare column group and `oag-game --trace-out` exist for
   exactly this; prefer them over any pixel argument about the exhaust.
 
+## The boost has exactly three elements, so the gap is in one of them (2026-08-09)
+
+A shortlist of "what else might emit at the engines during a boost" was drawn up
+this session - `glowingShape`, `self_illuminatedShape`,
+`underbrake_flashleft/rightShape`, all on `colours_flashing_GLOW.tga`. **It is a
+dead end, and there is a recovered fact that kills it and every future version
+of it at once.**
+
+`boost_timer` (`flare+0xb8`) reaches **exactly three things**, from an
+exhaustive read of `Exhaust_Update` at confidence 90 (see
+[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md), "What a boost
+actually changes"): the flare's half-size, the reveal of the `<Team>boost.vex`
+plume, and the `engine_on` flag. Nothing else in the function reads it. So **no
+other mesh on the ship can change when a pad fires** - if a surface looks
+different during a boost it is because the *camera*, the *speed* or the
+*intensity* changed, not the boost. The `colours_flashing_GLOW` family are the
+blink lights, already implemented as `oag_render::mesh::ANIMATED_TEXTURES`, and
+they flash on their own cycle whether or not a pad was crossed.
+
+**Which leaves three suspects and no others**: the flare billboard, the plume
+mesh, and the ribbon. Of those, the plume's geometry and the ribbon's constants
+have now been checked against the recovered values and match, and the exhaust
+*state* matches the capture to within a fixed-timestep residual. That points at
+the flare, and there is a specific reason to look there:
+
+**`HALF_SIZE_TO_WORLD` is this project's own constant, fitted on a *resting*
+frame**, and it is the only free scale between the recovered `half_size` and
+the quad we actually draw. The size law itself is confirmed exactly -
+`(intensity * 0.6 + 0.4) * 2.5 + boost_timer * 8.0`, giving `2.5` at rest and
+`8.9` at a pad's armed `0.8` - so the *ratio* is the original's, but the
+absolute world size is ours. A constant fitted at `2.5` and then used at `3.96`
+(tick 62) or `8.9` (entry) has never been checked in the regime where it
+matters most. **The flare is also the brightest element, and the measured gap is
+worst at the bright core** (4.6x at luma > 200, narrowing to 2.1x at luma > 70),
+which is the signature of a too-small bright source rather than a missing halo.
+
+That is the next thing to measure, and the trace harness makes it cheap: the
+capture records `half_size` per tick, so a matched-pose render can be compared
+against a frame whose flare size is *known* rather than inferred.
+
 ## Open threads
 
 Each is a real, named next step. The Task numbers are the ones the agent passes
