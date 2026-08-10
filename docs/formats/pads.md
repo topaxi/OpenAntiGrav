@@ -9,6 +9,32 @@ runtime side - bind, containment, the swept test - is
 [`docs/ghidra/functions/psp-pulse-usa/pads.md`](../ghidra/functions/psp-pulse-usa/pads.md);
 the force is in [`engine.md`](../ghidra/functions/psp-pulse-usa/engine.md).
 
+## Both classes are drawn
+
+`Weapon Pad` `0x3be` is a `Mesh` subclass exactly as `Speedup Pad` `0x3bd` is, so
+its geometry ships inside the track file and drawing it is the mesh builder
+pointed at a different class id - `oag_render::mesh::build_weapon_pads`. On
+`16_Track` that is **738 triangles across 27 materials** against the speed pads'
+612 and 51.
+
+Kept as a separate model and a separate draw rather than merged into one buffer,
+because the two are separate *gameplay* objects: a speed pad pushes and a weapon
+pad hands something out, and a merged buffer could not later show one without the
+other.
+
+**Nothing consumes a weapon pad.** Its trigger volumes decode and are carried on
+`oag_game::race::Setup::weapon_pads`; what a pad hands out is the weapons item on
+the [roadmap](../overview/roadmap.md).
+
+`crates/game/tests/race_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger`
+is what makes "drawn where they trigger" a fact rather than a hope: the geometry
+comes through the **mesh** path and the volumes through the **payload** path,
+neither knows about the other, and the test asserts every volume has drawn
+geometry inside it. That is the check that catches a transform applied on one
+side and not the other - which is the mistake this format invites, since a pad's
+payload is a mesh payload and its placement comes from the parent chain rather
+than from itself.
+
 ## A pad is a `Mesh`
 
 The single fact everything else follows from. The class `0x3bd` bind handler

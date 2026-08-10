@@ -500,8 +500,15 @@ seen from the authoring side.
       identity. Despite the attribute's name it scales the **grounded** term;
       see [handling stats](../formats/handling-stats.md). This corrected two
       physics pages that recorded the shipped table as `1.0` for every class.
-- [ ] Weapons and pickups, including `Weapon Pad` `0x3be` - which decodes today
-      alongside the speedup pads, but has nothing to hand out
+- [~] Weapons and pickups. **The pads are drawn** as of 2026-08-10 - `Weapon Pad`
+      `0x3be` is a `Mesh` subclass like the speedup pads, so it is the mesh
+      builder pointed at another class id (738 triangles on `16_Track`), and its
+      trigger volumes decode and are carried. A ground-truth test checks the two
+      against each other, the geometry coming through the mesh path and the
+      volumes through the payload path. **They hand nothing out**: the weapon
+      table, firing, and the `source == 2` damage path through
+      [`Ship_Damage`](../ghidra/functions/psp-pulse-usa/shield.md) are all
+      unstarted.
 - [~] **Shield and energy.** The pool, its maximum and the one thing that spends
       it are recovered and implemented: `*(craft+0x1c4) + 0x88` is the pool,
       `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its

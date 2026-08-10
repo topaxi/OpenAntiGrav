@@ -473,6 +473,15 @@ pub struct Setup {
     /// belong to the simulation half rather than to [`Loaded`], because a
     /// headless race has to be able to trigger a pad without a GPU.
     pub speedup_pads: Vec<oag_formats::pads::PadVolume>,
+    /// The track's weapon pads, as trigger volumes.
+    ///
+    /// Everything [`Self::speedup_pads`] says applies, one class over. **Nothing
+    /// consumes these** - a weapon pad has nothing to hand out until weapons
+    /// exist - so they are decoded and carried, which is what lets
+    /// `the_weapon_pads_are_drawn_where_they_trigger` check the geometry against
+    /// them. Two independent decodes of the same nodes agreeing is worth more
+    /// than either alone.
+    pub weapon_pads: Vec<oag_formats::pads::PadVolume>,
     /// Where [`Options::pose`] asked for the craft to start, already resolved
     /// against the spline. `None` uses the ordinary spawn.
     pub pose_override: Option<Pose>,
@@ -523,6 +532,12 @@ pub struct Loaded {
     /// `section` and the track model's draw calls are what the PVS indexes.
     /// `None` for a driveable-ribbon build and for any track that authors none.
     pub pad_model: Option<Model>,
+    /// The track's `Weapon Pad` geometry, when it authors any.
+    ///
+    /// Everything [`Self::pad_model`]'s note says applies here too; the two are
+    /// separate because they are separate gameplay objects. **Nothing consumes
+    /// a weapon pad yet** - it is drawn and no more.
+    pub weapon_pad_model: Option<Model>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` when the track declares no `section` nodes - a driveable-ribbon
@@ -720,6 +735,21 @@ pub fn load(options: &Options) -> Result<Loaded> {
             None => format!("{} speedup pad trigger volume(s)", speedup_pads.len()),
         });
     }
+    // The pickup pads, decoded the same way. Nothing triggers them; they are
+    // carried so the drawn geometry can be checked against them.
+    let weapon_pads = oag_formats::vex::nodes(&track_blob)
+        .map(|nodes| {
+            oag_formats::pads::volumes(&track_blob, &nodes, oag_formats::vex::CLASS_WEAPON_PAD)
+        })
+        .unwrap_or_default();
+    report.push(if weapon_pads.is_empty() {
+        "the track authors no Weapon Pad trigger volumes".to_string()
+    } else {
+        format!(
+            "{} weapon pad trigger volume(s), drawn but handing nothing out",
+            weapon_pads.len()
+        )
+    });
 
     let stats_name = handling::entry_name(&options.team);
     let stats_blob = read(&mut archives, &stats_name)?;
@@ -1074,6 +1104,28 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Some(pads)
         }
     };
+    // The pickup pads, built the same way and kept separate for the reason
+    // `mesh::build_weapon_pads` gives: they are a different gameplay object and
+    // a merged buffer could not show one without the other. **Nothing hands
+    // anything out yet** - this draws them and no more; see the roadmap's
+    // weapons item.
+    let weapon_pad_model = if options.ribbon {
+        None
+    } else {
+        let pads =
+            mesh::build_weapon_pads(&options.track, &track_blob, ps2_track_textures.clone())?;
+        if pads.indices.is_empty() {
+            report.push("the track authors no Weapon Pad geometry".to_string());
+            None
+        } else {
+            report.push(format!(
+                "drawing the track's weapon pads: {} triangle(s), {} material(s)",
+                pads.indices.len() / 3,
+                pads.draws.len() + pads.alpha_tested_draws.len() + pads.transparent_draws.len(),
+            ));
+            Some(pads)
+        }
+    };
     report.push(format!(
         "drawing the track's {}: {} triangle(s), radius {:.0}",
         if options.ribbon {
@@ -1090,6 +1142,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         Some(&track_model),
         sky_model.as_ref(),
         pad_model.as_ref(),
+        weapon_pad_model.as_ref(),
     ]
     .into_iter()
     .flatten()
@@ -1251,6 +1304,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             nozzle,
             collision_fx,
             speedup_pads,
+            weapon_pads,
             class_gravity_scale,
             pose_override,
             camera_override: options.camera,
@@ -1260,6 +1314,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         collision_model,
         sky_model,
         pad_model,
+        weapon_pad_model,
         fog_volumes,
         ship_model,
         boost_model,
@@ -3898,6 +3953,8 @@ pub struct Scene {
     /// `section`, so it is offered frustum culling but not the PVS. `None` when
     /// the track authors none.
     pads: Option<Drawable>,
+    /// The track's `Weapon Pad` geometry, drawn beside [`Self::pads`].
+    weapon_pads: Option<Drawable>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` for a track with no `section` nodes - every Pure track - and the
@@ -3974,6 +4031,7 @@ impl Scene {
         collision_model: Option<Model>,
         sky_model: Option<Model>,
         pad_model: Option<Model>,
+        weapon_pad_model: Option<Model>,
         boost_model: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -4048,21 +4106,25 @@ impl Scene {
                 )
             })
             .transpose()?;
-        let pads = pad_model
-            .filter(|model| !model.indices.is_empty())
-            .map(|model| {
-                Drawable::new(
-                    device,
-                    queue,
-                    model,
-                    format,
-                    anisotropy,
-                    sample_count,
-                    scene_depth,
-                    mesh_render::TRANSPARENT_BLEND,
-                )
-            })
-            .transpose()?;
+        let pad_drawable = |model: Option<Model>| {
+            model
+                .filter(|model| !model.indices.is_empty())
+                .map(|model| {
+                    Drawable::new(
+                        device,
+                        queue,
+                        model,
+                        format,
+                        anisotropy,
+                        sample_count,
+                        scene_depth,
+                        mesh_render::TRANSPARENT_BLEND,
+                    )
+                })
+                .transpose()
+        };
+        let pads = pad_drawable(pad_model)?;
+        let weapon_pads = pad_drawable(weapon_pad_model)?;
         // The boost plume, drawn additively. It is real geometry (a `.vex`
         // mesh, not a camera-facing quad), so it needs depth testing and a
         // model matrix, which is what `Drawable` already gives every other
@@ -4221,6 +4283,7 @@ impl Scene {
             collision,
             sky,
             pads,
+            weapon_pads,
             fog_volumes,
             exhaust,
             sparks,
@@ -4312,6 +4375,7 @@ impl Scene {
             Some(&self.track),
             self.collision.as_ref(),
             self.pads.as_ref(),
+            self.weapon_pads.as_ref(),
         ]
         .into_iter()
         .flatten()
@@ -4373,7 +4437,10 @@ impl Scene {
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         }
-        if let Some(pads) = &self.pads {
+        for pads in [self.pads.as_ref(), self.weapon_pads.as_ref()]
+            .into_iter()
+            .flatten()
+        {
             pads.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         }
 
@@ -4479,6 +4546,9 @@ impl Scene {
         // `section` id to look up - the same exemption the sky takes, for a
         // different reason.
         if let Some(pads) = &self.pads {
+            stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
+        }
+        if let Some(pads) = &self.weapon_pads {
             stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
         }
         // Skipped outright in the cockpit view rather than moved or scaled away:
@@ -4731,6 +4801,7 @@ pub fn capture(
         collision_model,
         sky_model,
         pad_model,
+        weapon_pad_model,
         boost_model,
         fog_volumes,
         visibility,
@@ -4812,6 +4883,7 @@ pub fn capture(
         collision_model,
         sky_model,
         pad_model,
+        weapon_pad_model,
         boost_model,
         flare,
         noise,
@@ -5314,6 +5386,7 @@ mod tests {
             // A synthetic track authors no pads, which is also what every Pure
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
+            weapon_pads: Vec::new(),
             // These tests run on a synthetic straight and want the ordinary
             // spawn and the ordinary chase camera; `--pose` and its camera are
             // capture aids with nothing to say here.

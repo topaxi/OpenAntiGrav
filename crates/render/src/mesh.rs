@@ -495,6 +495,25 @@ pub fn build_pads(
     build_class(label, data, external, Lod::Both, vex::CLASS_SPEEDUP_PAD)
 }
 
+/// The track's `Weapon Pad` geometry, the same way as [`build_pads`].
+///
+/// A separate model rather than a second class in the same buffer, because the
+/// two are separate *gameplay* objects: a speed pad pushes and a weapon pad
+/// hands something out, and a renderer that merged them could not later show one
+/// without the other. They share everything else - the same pipeline, the same
+/// textures, the same absence from the visibility partition.
+///
+/// `Weapon Pad` `0x3be` is a `Mesh` subclass exactly as `Speedup Pad` `0x3bd`
+/// is, so its geometry ships inside the track file and this is the mesh builder
+/// pointed at a different class id. See `docs/formats/pads.md`.
+pub fn build_weapon_pads(
+    label: &str,
+    data: &[u8],
+    external: Option<Vec<Option<ModelTexture>>>,
+) -> Result<Model> {
+    build_class(label, data, external, Lod::Both, vex::CLASS_WEAPON_PAD)
+}
+
 /// Flattens every node of one class into one buffer pair.
 ///
 /// The class is a parameter because `Skycube` and `Mesh` share a payload layout

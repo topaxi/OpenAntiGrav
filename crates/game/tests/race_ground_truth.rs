@@ -897,3 +897,52 @@ fn our_grid_is_the_originals_grid() {
     }
     println!("worst slot: {worst:.3} units");
 }
+
+/// The weapon pads are drawn where they trigger.
+///
+/// Two independent decodes of the same nodes have to agree: `mesh::build_weapon_pads`
+/// reads them as geometry through the mesh path, and `oag_formats::pads::volumes`
+/// reads them as trigger boxes through the payload path. Neither knows about the
+/// other, so a transform applied in one and not the other shows up here and
+/// nowhere else - and it is exactly the mistake that is easy to make, because a
+/// pad's payload is a *mesh* payload and its placement comes from the parent
+/// chain rather than from itself.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_weapon_pads_are_drawn_where_they_trigger() {
+    let Some(loaded) = load() else { return };
+    let model = loaded
+        .weapon_pad_model
+        .as_ref()
+        .expect("16_Track authors Weapon Pad geometry");
+    assert!(!model.indices.is_empty());
+
+    let volumes = &loaded.setup.weapon_pads;
+    assert!(
+        !volumes.is_empty(),
+        "the track decodes no weapon pad volumes"
+    );
+    println!(
+        "{} weapon pad volume(s), {} triangles drawn",
+        volumes.len(),
+        model.indices.len() / 3
+    );
+
+    // Every trigger volume has drawn geometry sitting in it. Ten units of slack
+    // because a pad's mesh is a flat plate and its volume is a box around the
+    // craft that crosses it, so the two are the same *place* rather than the
+    // same extent.
+    for (index, pad) in volumes.iter().enumerate() {
+        let centre = Vec3::from_array(pad.centre());
+        let nearest = model
+            .vertices
+            .iter()
+            .map(|v| (Vec3::from_array(v.position) - centre).length())
+            .fold(f32::INFINITY, f32::min);
+        assert!(
+            nearest < 10.0,
+            "weapon pad {index} triggers at {centre:?} and the nearest drawn \
+             vertex is {nearest:.2} away"
+        );
+    }
+}
