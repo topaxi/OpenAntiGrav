@@ -410,6 +410,65 @@ list comes from the order `Bloom_Draw` replays them in, which is a reading of
 the caller rather than of the callee - a strong reading, since the draw-buffer
 switches between them pin which surface each one targets, but a reading.
 
+## Measured after the port, and two earlier numbers retracted
+
+2026-08-10, third measurement pass. The glow mask is now readable **without any
+instrumentation**: `oag-game --screenshot` writes RGBA and the alpha channel of
+a capture *is* the mask, so it can be isolated exactly rather than inferred.
+Two earlier readings on this page's sibling were taken from clipped frames and
+do not survive.
+
+**The mask is exactly the recovered value.** Over the exhaust, a flat-mask
+build reads `115` at every percentile - `0.45 * 255` to the count, which is
+`intensity * 0.5 * 0.9` at saturation - and the ramped build spreads to
+`91..108`. The ramp reaches the picture; the visible trail in frame is simply
+all near-head, where the mask legitimately is near its maximum.
+
+**The `2.2x` light deficit on [`exhaust.md`](exhaust.md) is retracted as a
+measurement of the exhaust.** Taken at a matched pose - same track, same
+recorded camera, same tick, fov-corrected - where **neither side clips**
+(`0.006` and `0.020`):
+
+| | background | contribution | clipped |
+| --- | ---: | ---: | ---: |
+| the original | 127.7 | 54.2 | 0.006 |
+| ours | 133.2 | 36.8 | 0.020 |
+
+Backgrounds agree to 4 %, so this is the control every earlier comparison
+lacked. **Ours is 68 % of the original, not 45 %** - the `2.2x` figure came
+from bands where both frames were half clipped, and clipping truncates the
+brighter one more.
+
+**A posed capture cannot measure the bloom at all**, which is the trap worth
+recording. `Trail_DrawRibbon` refuses to draw until its ring is full, and
+`oag_render::exhaust` reproduces that, so a `--pose-from --ticks 0` frame has
+no ribbon, therefore no glow mask, therefore no bloom. The two rows above are
+identical to the digit with the bloom on and off. Every matched-pose
+comparison on these pages is a comparison of the **flare and plume only**.
+
+**At ordinary racing speed the bloom lands in the right range.** Same scene,
+three builds, per-row local background:
+
+| build | contribution | clipped |
+| --- | ---: | ---: |
+| no bloom | 166.4 | 0.371 |
+| bloom, flat mask | 250.2 | 0.599 |
+| **bloom, ramped mask** | **243.6** | **0.580** |
+| the original, tunnel | 213.4 - 344.4 | 0.476 - 0.538 |
+
+So the bloom moves clipping from below the original's range to just above it.
+**An earlier note that it "blows the exhaust out to a solid white cone" was
+drawn from a zoomed crop of a *forced-boost* frame** - the most extreme case
+available - and overstated the ordinary one.
+
+**What has not been achieved is a genuinely matched *bloom* comparison.** The
+one pose that matches camera and track cannot draw a ribbon, and the frames
+that do draw one are on a scene whose background is `131.6` against the
+original tunnel's `55.7`. Until a capture exists that both matches exposure
+and runs long enough to fill the ring, the residual is not attributable
+between the bloom, the exhaust's own amplitude and the standing scene-exposure
+gap.
+
 ## Porting notes
 
 Everything a reimplementation needs is above, and none of it requires
