@@ -242,6 +242,21 @@ fn the_ps2_grid_scales_most_of_skin_xml_and_these_are_the_exceptions() {
         "the coordinates that do scale: {scaled:#?}"
     );
 
+    // **The check that tells a changed layout from a changed key.** Everything
+    // above is computed over the coordinates the two files *share*, and `split`
+    // drops the rest silently - which is right, since neither disc has to carry
+    // the other's widgets, but it means a coordinate that stops being matched
+    // disappears from the scaled count and from both exception lists at once.
+    // `30 + 13` quietly becomes `29 + 12`, and the assert that fires blames the
+    // scaling for what is really `segment` keying a node differently. Pinning
+    // the total is what separates the two.
+    assert_eq!(
+        scaled.len() + not.len(),
+        43,
+        "the two files no longer share the coordinates they did, so every count \
+         above is about a different set"
+    );
+
     // The two extremes the `Space::PS2` doc cites, still checked, but now as two
     // members of a measured set rather than as the whole argument.
     let logo = "/Screen/Screen[Top FE Screen]/Screen[FE Screen]/Screen[Show Logo]/Text/Values";
@@ -283,6 +298,16 @@ fn the_two_psp_pressings_differ_in_exactly_one_coordinate() {
          nothing: {} keys",
         shared.len()
     );
+
+    // **Read before compared, and from two different discs.** The assert below
+    // is a difference list, and a difference list is satisfied by reading one
+    // disc twice. These two name the values the whole conclusion rests on, so a
+    // path that resolved to the same archive twice fails here rather than
+    // passing as agreement.
+    let press_start =
+        "/Screen/Screen[Top FE Screen]/Screen[FE Screen]/Screen[Show Logo]/Text/Values@y";
+    assert_eq!(usa[press_start], 220.0, "the USA pressing's PRESS START y");
+    assert_eq!(eu[press_start], 230.0, "the EU pressing's PRESS START y");
 
     let differ: Vec<String> = shared
         .iter()

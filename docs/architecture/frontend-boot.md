@@ -80,6 +80,12 @@ it an arithmetic identification rather than a guess:
 Every one lands within a tenth of a percent, and 640x448 is PAL's own frame.
 Pinned by `the_grid_ratio_is_the_one_the_scaling_coordinates_agree_on`.
 
+**The `y=220` in that table is the USA PSP disc's, not the EU one's.** The EU PSP
+release moved `BOOT_PRESS_START` down to `y=230` on its own (see below); the PS2
+EU disc did not follow it, and `362/230` misses the ratio by 4% while `362/220`
+hits it. So the PS2 layout was scaled from the USA-era artwork. A small thing,
+but it is why an EU-to-EU comparison of that one widget looks wrong.
+
 #### "Most", and why the word matters
 
 **This page said "scaled by exactly the resolution ratio" until 2026-08-10, and
@@ -109,12 +115,6 @@ since one group moves inward and the other outward.
 The identical over-reading was made about `Arcade_HUD.xml` and corrected in
 `3266e50`. Twice is a pattern, and the pattern is *deriving a universal from
 extremes*.
-
-**The `y=220` in that table is the USA PSP disc's, not the EU one's.** The EU PSP
-release moved `BOOT_PRESS_START` down to `y=230` on its own (see below); the PS2
-EU disc did not follow it, and `362/230` misses the ratio by 4% while `362/220`
-hits it. So the PS2 layout was scaled from the USA-era artwork. A small thing,
-but it is why an EU-to-EU comparison of that one widget looks wrong.
 
 **The grid and the display aspect are two numbers, and conflating them is a
 silent 7% error.** 640/448 is 1.429; a PAL frame is shown as 4:3 = 1.333,
