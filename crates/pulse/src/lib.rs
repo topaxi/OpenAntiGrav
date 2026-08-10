@@ -36,6 +36,7 @@ pub const TITLE: &Title = &Title {
         fe: FE_CANDIDATES,
     },
     foreign_serials: FOREIGN_SERIALS,
+    boot: frontend::BOOT_PROFILE,
 };
 
 /// The bulk archive's candidates, in the order they are tried.
@@ -184,6 +185,17 @@ pub mod names {
 
     /// The looping backdrop behind the main menu.
     pub const BACKDROP_MOVIE: &str = r"Data\Movies\Backdrop.PMF";
+
+    /// The dev/pub reel, addressed by hash because it has no recovered name.
+    ///
+    /// The European cut, whose contents fit `Intro Screen->IntroMovie1`'s own
+    /// constants - 260 frames, holds at 144 and 231. Spelled as an `EntryRef`
+    /// hash spec rather than a bare `u32` so it can stand where an entry name
+    /// stands; [`crate::hashes::DEVPUB_REEL_SCEE`] is the same number.
+    ///
+    /// A title fact rather than an engine one, which is why it lives here: the
+    /// reel is a thing this title ships, and `--reel` is a flag that asks for it.
+    pub const DEVPUB_REEL: &str = "hash:b1ba72c3";
 
     /// The five `.fnt` bitmap fonts, in `FE.wad`.
     ///

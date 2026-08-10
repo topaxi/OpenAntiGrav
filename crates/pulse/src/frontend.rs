@@ -61,3 +61,100 @@ pub mod states {
     /// Where picking a language goes, and where a race starts.
     pub const LAUNCH_GAME: &str = "Launch Game";
 }
+
+/// Pulse's boot sequence, cold-boot measured.
+///
+/// **The chain is the runtime's, not the XML's, and they disagree.** The disc's
+/// own `Skin.xml` runs `Language Selection` first, its `LanguageAutoRedirect`
+/// going on to `LogoFMV`. A cold boot of `pulse-psp-eu.chd` does not: the first
+/// frame after power-on is *inside* `Data\Movies\Intro.PMF` - the movie's own
+/// SCEE presents card, in a proportional font rather than the front end's bitmap
+/// one - and the sequence runs on to `Show Logo` with no picker in between.
+/// Confidence **90**, observed 2026-08-10; frames under
+/// `data/shots/pulse-cold-boot-2026-08-10/`.
+///
+/// This is the measurement that makes a boot sequence a per-title table rather
+/// than anything derivable: the same question asked of Pure's XML gets the right
+/// answer, and asked of Pulse's gets the wrong one. See [ADR-0023].
+///
+/// **Where the picker belongs on Pulse is still open.** This build puts it
+/// between `LogoFMV` and `Show Logo`, which is where it has always been and is
+/// the order that was asked for; the disc showed no picker there on a cold boot,
+/// and what it does with an unset language is not established. Recorded in the
+/// chain as this build's order, flagged here as unfinished rather than evidenced.
+///
+/// [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
+pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
+    chain: &[
+        oag_title::BootStep::playing(states::LOGO_FMV, crate::names::INTRO_MOVIE),
+        oag_title::BootStep::screen(states::LANGUAGE_SELECTION),
+        oag_title::BootStep::screen(states::SHOW_LOGO),
+    ],
+    // `Intro Screen->IntroMovie1` is real, evidenced code at `0x088d7e1c` with
+    // its own frame holds - and its trigger is unknown, so it is reached by
+    // `--reel` rather than at boot. See this module's own docs.
+    reel: Some(oag_title::BootStep::playing(
+        states::INTRO_MOVIE,
+        crate::names::DEVPUB_REEL,
+    )),
+    menu_backdrop: Some(crate::names::BACKDROP_MOVIE),
+    // The picker carries its own background on this title.
+    picker_backdrop_parent: None,
+    // Pulse's own `Skin.xml` declares every global its screens name.
+    fallback_globals: &[],
+};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_boot_leg_plays_the_movie_the_disc_opens() {
+        assert_eq!(BOOT_PROFILE.start().state, states::LOGO_FMV);
+        assert_eq!(
+            BOOT_PROFILE.start().movie,
+            Some(crate::names::INTRO_MOVIE),
+            "cold-boot confirmed: the first frame after power-on is inside this movie"
+        );
+    }
+
+    #[test]
+    fn nothing_plays_after_the_picker() {
+        // The regression guard for "Show Logo is static". It is Pulse's own
+        // counterpart to Pure's `FMV Intro`, and the difference between the two
+        // titles here is exactly what the profile exists to carry.
+        let after = BOOT_PROFILE
+            .next_after(states::LANGUAGE_SELECTION, |_| true)
+            .expect("the picker is not the last screen");
+        assert_eq!(after.state, states::SHOW_LOGO);
+        assert!(after.movie.is_none());
+    }
+
+    #[test]
+    fn the_reel_spec_spells_the_hash_this_crate_holds() {
+        let reel = BOOT_PROFILE
+            .reel
+            .expect("Pulse has an evidenced reel state");
+        assert_eq!(reel.state, states::INTRO_MOVIE);
+        assert_eq!(
+            reel.movie,
+            Some(crate::names::DEVPUB_REEL),
+            "the reel is addressed by hash, having no recovered name"
+        );
+        assert_eq!(
+            crate::names::DEVPUB_REEL,
+            format!("hash:{:08x}", crate::hashes::DEVPUB_REEL_SCEE),
+            "the text form and the number must not drift apart"
+        );
+    }
+
+    #[test]
+    fn pulse_ships_a_menu_backdrop_and_declares_all_its_globals() {
+        assert_eq!(
+            BOOT_PROFILE.menu_backdrop,
+            Some(crate::names::BACKDROP_MOVIE)
+        );
+        assert!(BOOT_PROFILE.fallback_globals.is_empty());
+        assert!(BOOT_PROFILE.picker_backdrop_parent.is_none());
+    }
+}

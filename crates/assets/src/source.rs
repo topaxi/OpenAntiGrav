@@ -627,6 +627,16 @@ mod tests {
             serial: "UCUS-98612",
             title: "Wipeout Pure",
         }],
+        // Present because `Title` carries it, and never read here: `oag-assets`
+        // resolves archives and has no business in a boot sequence. One screen is
+        // enough to be a valid profile.
+        boot: &oag_title::BootProfile {
+            chain: &[oag_title::BootStep::screen("Language Selection")],
+            reel: None,
+            menu_backdrop: None,
+            picker_backdrop_parent: None,
+            fallback_globals: &[],
+        },
     };
 
     /// The bulk archive's PSP and PS2 names, as the fixture spells them.

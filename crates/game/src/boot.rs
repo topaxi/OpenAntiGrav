@@ -1044,8 +1044,11 @@ fn default_boot_movie(leg: crate::frontend::Leg, screens: &Screens) -> Option<&'
 /// `SCEE`. Confidence 75; the selection itself has not been read out of the
 /// binary. `--movie hash:3d2c85f8` is the American cut.
 ///
+/// The reel itself is a thing Pulse ships, so the spelling lives in that title's
+/// own package; this stays as the name the CLI and the tests already use.
+///
 /// See `docs/architecture/frontend-boot.md`.
-pub const DEVPUB_REEL: &str = "hash:b1ba72c3";
+pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 
 /// How an archive entry was asked for.
 ///

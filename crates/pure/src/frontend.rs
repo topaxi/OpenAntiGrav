@@ -9,6 +9,60 @@
 
 /// State names this build drives, all literal screen names from the disc.
 pub mod states {
+    /// Pure's language picker, and **the screen its boot opens on**.
+    ///
+    /// The same literal Pulse's XML uses, restated here rather than borrowed
+    /// from `oag_pulse`: a title package must not read another's, and two discs
+    /// agreeing on a string is not the same as one of them owning it.
+    ///
+    /// Cold-boot confirmed on both pressings, 2026-08-10: the first frame after
+    /// power-on is this screen, with **no movie before it**. Confidence **90**.
+    /// See `docs/architecture/pure-boot.md`, which also records why an earlier
+    /// reading of this got it wrong.
+    pub const LANGUAGE_SELECTION: &str = "Language Selection";
+
+    /// The picker's parent, and where its white background comes from.
+    ///
+    /// `<Screen type="Intro" name="Intro Screen">` opens with a comment reading
+    /// `<?Background Image white?>` and a full-screen `Image` of `0xFFFFFFFF`.
+    /// The picker is a child screen carrying no fill of its own, so without the
+    /// parent's it would draw on black. This screen also holds all four of the
+    /// title's `Movie` widgets.
+    pub const INTRO_SCREEN: &str = "Intro Screen";
+
+    /// The publisher and developer cards, between the picker and
+    /// [`MEMORY_STICK_WARNING`].
+    ///
+    /// **Its content is engine-drawn, not declared.** The screen holds a
+    /// placeholder `Item` and one `Redirect` and nothing else, yet it teletypes
+    /// two phases: "SONY COMPUTER ENTERTAINMENT AMERICA PRESENTS", then "A
+    /// STUDIO LIVERPOOL GAME" with the Studio Liverpool logo and frame graphics.
+    /// Observed on `pure-psp-usa` at 0.5 s sampling, confidence **85** on the
+    /// phase structure and **60** on every duration; the teletype rate was not
+    /// measured, and the phase-1 string is region-specific so the EU wording is
+    /// **not established**. Advances on a timer at about 11 s with no input.
+    ///
+    /// See `docs/architecture/pure-boot.md`. Reimplementing it needs the string
+    /// source, the real timings and the logo assets out of the executable.
+    pub const DEVELOPER_PUBLISHER: &str = "Developer Publisher Screen";
+
+    /// The storage-access disclaimer, waiting on cross.
+    ///
+    /// Unlike [`DEVELOPER_PUBLISHER`], this screen's content **is** in the XML:
+    /// six `MSInfo`/`MSWarning` texts, two rule `Image`s, the `MSWarningScale`
+    /// and `MSWarningColour1`/`2` globals, and `MemoryStickRedirect`
+    /// (`StartEnabled="true"`, `Default goto="FMV Intro"`). Runtime-confirmed to
+    /// hold until cross is pressed - "PRESS X TO CONTINUE" - rather than timing
+    /// out. Confidence **90**.
+    ///
+    /// **This build deliberately rewords its text.** The disc's strings are
+    /// about a Memory Stick Duo being physically removed; this is a
+    /// reimplementation on hardware where storage is assumed present, so the
+    /// screen keeps its structure, colours and gate but takes its own wording,
+    /// phrased around autosave. A product decision, recorded so it is not
+    /// "fixed" back to the disc's strings later.
+    pub const MEMORY_STICK_WARNING: &str = "MemoryStickWarning";
+
     /// The WipEout Pure logo and PRESS START - Pure's own counterpart to
     /// Pulse's `Show Logo`.
     ///
@@ -88,3 +142,96 @@ pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
     ("DesignColor", "0xFF64DCF6"),
     ("TextColor", "0xFF88D6E8"),
 ];
+
+/// Pure's boot sequence, cold-boot measured on both pressings.
+///
+/// The chain is what the disc's own `Skin.xml` declares, redirect for redirect,
+/// **and** what its runtime does - the two agree here, which is what puts it at
+/// confidence 90. That agreement is not a general rule: Pulse's XML declares an
+/// entry point its runtime does not use, which is the whole reason this is a
+/// measured table per title rather than something derived. See
+/// `docs/architecture/pure-boot.md` and [ADR-0023].
+///
+/// **The boot step plays no movie.** `crate::names::INTRO_MOVIE` is real,
+/// present on both pressings and decodable - and byte-for-byte Pulse's American
+/// dev/pub reel - but it is not on this title's boot path, exactly as Pulse's own
+/// `Intro Screen->IntroMovie1` reel is not on Pulse's. It is declared as a
+/// `Movie` widget on a screen state the runtime never enters.
+///
+/// [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
+pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
+    chain: &[
+        oag_title::BootStep::screen(states::LANGUAGE_SELECTION),
+        oag_title::BootStep::screen(states::DEVELOPER_PUBLISHER),
+        oag_title::BootStep::screen(states::MEMORY_STICK_WARNING),
+        oag_title::BootStep::playing(states::FMV_INTRO, crate::names::FMV_INTRO_MOVIE),
+        oag_title::BootStep::screen(states::TITLE_SCREEN),
+    ],
+    // No evidenced off-path reel state. The reel *file* is here, and its widget
+    // is too; the state that plays it is not, so `--reel` has nothing to point at
+    // and is refused by name rather than sent to another title's screen.
+    reel: None,
+    // Neither pressing carries `Data\Movies\Backdrop.PMF`.
+    menu_backdrop: None,
+    picker_backdrop_parent: Some(states::INTRO_SCREEN),
+    fallback_globals: FALLBACK_GLOBALS,
+};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The fact an earlier pass got wrong, pinned as a compiled assertion.
+    ///
+    /// A stale PPSSPP save profile was skipping the real boot, and this build
+    /// played `IntroMovieP1_US.PMF` before the picker on that basis. A true cold
+    /// boot of both pressings opens on the picker with nothing before it.
+    #[test]
+    fn pures_boot_plays_no_movie() {
+        assert_eq!(BOOT_PROFILE.start().state, states::LANGUAGE_SELECTION);
+        assert!(
+            BOOT_PROFILE.start().movie.is_none(),
+            "cold-boot confirmed on both pressings; see docs/architecture/pure-boot.md"
+        );
+    }
+
+    #[test]
+    fn the_only_movie_in_the_chain_is_the_second_boot_movie() {
+        let movies: Vec<_> = BOOT_PROFILE
+            .chain
+            .iter()
+            .filter_map(|step| step.movie)
+            .collect();
+        assert_eq!(movies, vec![crate::names::FMV_INTRO_MOVIE]);
+    }
+
+    #[test]
+    fn the_chain_is_the_five_screens_the_disc_walks() {
+        let states: Vec<_> = BOOT_PROFILE.chain.iter().map(|step| step.state).collect();
+        assert_eq!(
+            states,
+            vec![
+                "Language Selection",
+                "Developer Publisher Screen",
+                "MemoryStickWarning",
+                "FMV Intro",
+                "Title Screen",
+            ]
+        );
+    }
+
+    #[test]
+    fn pure_ships_no_menu_backdrop_and_no_reel_state() {
+        assert!(BOOT_PROFILE.menu_backdrop.is_none());
+        assert!(BOOT_PROFILE.reel.is_none());
+    }
+
+    #[test]
+    fn the_picker_inherits_its_parents_background() {
+        assert_eq!(
+            BOOT_PROFILE.picker_backdrop_parent,
+            Some(states::INTRO_SCREEN),
+            "the picker carries no fill of its own and would draw on black"
+        );
+    }
+}

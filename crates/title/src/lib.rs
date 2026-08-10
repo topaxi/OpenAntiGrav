@@ -21,14 +21,23 @@
 //!
 //! ADR-0022 supersedes ADR-0009's refusal to abstract at n=1, but only for the
 //! axes where a second corpus has actually been measured. `pure-status.md`
-//! measured Pure's archive layout; it did not map Pure's entry names, its HUD
-//! atlas, its front-end screens or its mode set. Types for those would be
-//! designed from one example, which is the failure ADR-0009 named and ADR-0022
-//! does not license. They stay as plain constants inside the title crate that
-//! knows them until a second title forces their shape.
+//! measured Pure's archive layout; it did not map Pure's HUD atlas or its mode
+//! set. Types for those would be designed from one example, which is the failure
+//! ADR-0009 named and ADR-0022 does not license. They stay as plain constants
+//! inside the title crate that knows them until a second title forces their
+//! shape.
+//!
+//! [`boot`] is the one axis that has since been forced, and by measurement:
+//! both titles' boot sequences were cold-booted, they differ in length as well as
+//! in content, and neither can be derived from the other or from its own XML. See
+//! [ADR-0023], which supersedes ADR-0022 item 4 for that axis alone.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+//! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
+pub mod boot;
+
+pub use boot::{BootProfile, BootStep};
 pub use oag_disc::Platform;
 
 /// One title's release-level facts.
@@ -47,6 +56,19 @@ pub struct Title {
     /// Serials known to belong to a *different* title. See
     /// [`ArchiveCandidates`] for why name matching alone cannot tell them apart.
     pub foreign_serials: &'static [ForeignSerial],
+    /// How this title's own boot sequence goes. See [`boot::BootProfile`].
+    ///
+    /// Hung off `Title` rather than selected separately so that there is **one**
+    /// selection point: opening one title's archives while driving another's
+    /// chain is then not an inconsistency to be avoided but a state that cannot
+    /// be constructed. The build reached this design after three independent
+    /// screen-name probes had each been answering "which title is this?" in their
+    /// own words, with three chances to disagree.
+    ///
+    /// `oag-assets` receives this and never reads it, which is the price: the
+    /// asset layer holds a field of screen names it has no business in. Inert
+    /// data, and cheaper than two things to keep in step.
+    pub boot: &'static boot::BootProfile,
 }
 
 /// The archive names a title's releases carry, in the order they are tried.
