@@ -269,6 +269,14 @@ pub const BOOST_GATE: f32 = 0.2;
 /// Independent of [`BOOST_SECONDS`]: the plume's own accumulator only resets
 /// at the reveal, so once up it runs this full span regardless of how long
 /// `boost_timer` stays above [`BOOST_GATE`].
+///
+/// `flare+0x88` is also the **animation clock** of the plume's authored
+/// keyframed u-scroll, whose track spans exactly these 90 frames - measured
+/// at `TexAnim_UpdateTransform`'s entry, the time argument equals this timer
+/// on every hit. So each boost plays the bright-to-dark texture sweep once,
+/// ending as the plume hides; `race::Scene` reproduces that by sampling the
+/// track at [`Exhaust::plume_timer`]. See
+/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
 pub const PLUME_SECONDS: f32 = 1.5;
 
 /// How long a speed pad lights the flare for, in seconds.

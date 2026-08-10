@@ -2041,40 +2041,39 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   > quantity from the registration metric entirely.
 
   > **Sixth measurement, 2026-08-10 - the recovered UV mechanism replaces
-  > texgen.** The plume's compiled list was settled as replayed under
-  > `TEXMAPMODE` 0 (mesh-draw.md), and the authored keyframed u-scroll it
-  > samples through was recovered down to its bytes in the file
-  > (texture-animation.md). The build now applies exactly that -
-  > `Drawable::apply_uv_transform`, authored UVs through
-  > `TexOffset(u(t), 0)` - and the matched-pose row, same command as the
-  > shipped row plus nothing (`--pose-boost 0.517752`, `--camera-fov
-  > 71.1663`, scroll phase 0):
+  > texgen, and at the right animation phase it beats it on nearly every
+  > column.** The plume's compiled list was settled as replayed under
+  > `TEXMAPMODE` 0 (mesh-draw.md), the authored keyframed u-scroll it
+  > samples through was recovered down to its bytes in the file, and the
+  > scroll's clock was settled as `flare+0x88` - the plume's own life
+  > timer, reset at each reveal, so every boost plays the bright-to-dark
+  > 90-frame sweep exactly once (texture-animation.md). That clock makes
+  > the capture's phase *derivable*, not a nuisance variable: the boost
+  > timer decays at 1/s from `0.8`, so tick 62's recorded `0.517752` puts
+  > it **~17 frames after the reveal**. Rendered at exactly that phase
+  > (`--ticks 17 --pose-boost 0.801085`, everything else the shipped row's;
+  > `plume_timer` then reads 17 frames and the boost timer the recorded
+  > value at capture):
   >
-  > | build | px | mean | `b - r` | orange px |
-  > | --- | ---: | --- | ---: | ---: |
-  > | the original | 12,377 | `(193, 147, 218)` | +24.8 | 425 |
-  > | texgen + `SrcAlpha` (replaced) | 6,095 | `(171, 133, 194)` | +22.8 | 1,714 |
-  > | **authored UVs + u-scroll (this)** | **3,792** | `(131, 102, 171)` | +39.5 | **2,768** |
+  > | build | px | mean | `b - r` | orange px | mean luma |
+  > | --- | ---: | --- | ---: | ---: | ---: |
+  > | the original | 12,377 | `(193, 147, 218)` | +24.8 | 425 | 169.0 |
+  > | texgen + `SrcAlpha` (replaced) | 6,095 | `(171, 133, 194)` | +22.8 | 1,714 | 151.1 |
+  > | authored UVs + u-scroll, **wrong** phase 0 | 3,792 | `(131, 102, 171)` | +39.5 | 2,768 | 118.3 |
+  > | **authored UVs + u-scroll, derived phase 17** | **8,867** | `(190, 149, 202)` | +12.7 | **1,520** | **167.4** |
   >
-  > **This row measures worse than the one it replaces on every pair column,
-  > and it lands anyway** - deliberately, and the reasoning belongs here
-  > rather than in a commit message. The mechanism is no longer an empirical
-  > fit: it is what the executable does, settled at instruction level and
-  > confidence 92, and the project's own rule is that a measurement
-  > disagreeing with an instruction-level read suspects the measurement
-  > first. Three things this pair measurement cannot hold fixed: the
-  > **scroll phase** (the original's 1.5 s clock free-runs from race start,
-  > so tick 62's phase is unknowable; phase 0 samples the texture's bright
-  > column, and at unmatched later phases the mask reads px 4,200 and
-  > `b - r` +44), the **flare overlay** (brighter at this pose in the
-  > original, dominating its mask mean), and the **unrecovered brightness
-  > term** this page already carries open - the plume region reads
-  > mean luma 118 against the original's 169, the same "a term in the blend
-  > chain is still missing" gap `SrcAlpha` was kept to paper over. That gap
-  > is now the whole residual: hue family, streaking and the absence of the
-  > orange wedges all match by eye (crops in the session record), extent
-  > and brightness do not. The next lever is the missing weight, not the
-  > coordinates.
+  > Extent 0.72 of the original against texgen's 0.49; mean `r`/`g` within
+  > three counts; **the "~11 % dimmer" residual is gone** (167.4 vs 169.0).
+  > The phase-0 row is kept because it is the measurement that exposed how
+  > much of the long-open "a term in the blend chain is still missing" gap
+  > was actually *animation phase*: the same build, same pose, same blend,
+  > moves mean luma 118 -> 167 purely by sampling the texture column the
+  > original was sampling. What remains open, smaller than before: `b` runs
+  > 16 counts low (`b - r` +12.7 vs +24.8), the orange rim is still 3.6x
+  > the original's, and extent is 0.72. Whether that residue is the flare
+  > overlay's different footprint, the still-unexplained `SrcAlpha`-vs-
+  > `GU_FIX` question, or both, is the next lever - the coordinates are
+  > done.
 
   **Fourth measurement of this table, and the first with an instrument that
   does not break under it.** The first used the wrong pose age and a boost

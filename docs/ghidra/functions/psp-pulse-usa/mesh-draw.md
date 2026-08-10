@@ -385,11 +385,13 @@ transform.
 
 The scroll itself was recovered in the same session, down to its authored
 keyframes in the `.vex` file: `u` ramps `2/256 -> 253/256` over key times
-1..90 in 60 Hz frames and loops at the track span (~1.5 s), `v = 0`, scale
-constant `(1.0, 1.0)`. Mechanism, evaluator/updater names and the on-disc
-block layout: [texture-animation.md](texture-animation.md), "The values gap
-is closed"; file layout: `docs/formats/vex.md`, "The texture-transform
-keyframe block".
+1..90 in 60 Hz frames, `v = 0`, scale constant `(1.0, 1.0)`, evaluated at
+the flare's own life timer (`flare+0x88`, reset at each reveal) - so it
+plays **once per boost**, bright to dark, ending exactly as the plume's
+1.5 s life expires. Mechanism, clock, evaluator/updater names and the
+on-disc block layout: [texture-animation.md](texture-animation.md), "The
+values gap is closed"; file layout: `docs/formats/vex.md`, "The
+texture-transform keyframe block".
 
 Scripts for the whole read are session scratch
 (`plume-lists*.py`, `ge-walk*.py`); the reusable pieces are the harness

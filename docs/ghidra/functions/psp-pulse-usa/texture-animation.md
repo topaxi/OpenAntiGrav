@@ -192,17 +192,32 @@ Sampled per frame over 360 consecutive frames (breakpoint on
 meshes carry the **same** `u` at every sample, `v` is always exactly 0, the
 scale is always `(1.0, 1.0)`, and `u` ramps and wraps with period
 **amplitude/slope = 0.9805/0.010911 ≈ 89.9 frames ≈ 1.5 s** - the track's own
-span, so the upstream clock loops at the clip length. The rate is independent
-of the boost timer (measured identical at `boost_timer` 0.8 and 0.0) and the
-scroll keeps running briefly after the timer empties, then stops - the
-updater is gated on the mesh's time changing (`mesh+0x40` vs `mesh+0x18c`,
-per the writer chain above), not on the timer itself.
+span.
 
-The time argument is per-model: a breakpoint on `TexAnim_UpdateTransform`
-entry over one frame saw the same `521.68` (the race clock) for eleven world
-meshes and `4.80` for another - and the plume's loops at ~1.5 s. **Where the
-plume model's looping clock is advanced was not traced**; it behaves as
-`fmod(t, ~1.5 s)` upstream of the call.
+**The clock is settled (same day, follow-up session): the time argument is
+the flare's own life timer at `flare+0x88`, which resets to 0 at each plume
+reveal.** Measured at `TexAnim_UpdateTransform`'s entry with a conditional
+breakpoint on the plume's two blocks: `f12 == *(float *)(flare+0x88)` on
+every one of 90 hits across a single boost, `mesh+0x40` is written to the
+same value each frame, and the updater does not fire at all while the plume
+is hidden (0 hits over 3 idle seconds). `flare+0x88` was watched resetting
+`62.72 -> 0.000` at the reveal on two isolated boosts. So the plume's
+animation **plays the 90-frame track exactly once per reveal** - clamped at
+the bright first key at t < 1 frame, darkening down the ramp, reaching the
+last key exactly as the plume's own 1.5 s life
+(`oag_render::exhaust::PLUME_SECONDS`, `flare+0x88`'s hide threshold at
+preset 2) expires. Track span and plume life are both 1.5 s by authoring.
+The "looping" in the paragraph above is the held-boost artifact: pinning
+`boost_timer` at 0.8 re-reveals the plume the moment its 1.5 s expires,
+which resets the clock every 90 frames and reads as a sawtooth. A
+free-running or race-clock-driven scroll is therefore wrong in two visible
+ways - a boost can begin mid-ramp already faded, and one outliving the wrap
+re-brightens as a second pulse.
+
+The time argument for **world meshes** is different: the same one-frame
+census saw `521.68` (the race clock) for eleven of them and `4.80` for
+another, all through the same call site (`0x0890e1e4`). Each model appears
+to be updated with its own clock; only the plume's is pinned to a source.
 
 ### Two earlier readings this corrects
 
@@ -357,10 +372,11 @@ has seen half the mechanism.
   evidenced. (Less urgent as of 2026-08-10: trackside animation is now known
   to flow through the compiled-list path, which does not call `Gu_TexOffset`.)
 - **What sets `DAT_08ab0628`.**
-- **The per-model animation clock.** `TexAnim_UpdateTransform` receives the
-  race clock for world meshes but a ~1.5 s looping time for the plume model;
-  where that loop is advanced (and whether `LodGroup`-style clip metadata sets
-  its length) was not traced.
+- **The per-model animation clock, for models other than the plume.** The
+  plume's is settled: `flare+0x88`, reset at reveal (see "The values gap is
+  closed"). World meshes receive the race clock, and at least one object a
+  different local time (`4.80` observed); the general rule for which clock a
+  model gets was not traced.
 - **Whether the blink lights are a colour or a keyframe animation after all.**
   The seven-key plateau track observed on Talon's Junction scenery is exactly
   the blink shape; nothing yet ties such a track to

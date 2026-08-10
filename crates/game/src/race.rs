@@ -4571,12 +4571,21 @@ impl Scene {
         // `TEXMAPMODE` 0 (settled live - mesh-draw.md, "The plume is replayed
         // under `TEXMAPMODE` 0"), sampling its authored coordinates through
         // the keyframed `TEXSCALE`/`TEXOFFSET` transform the file itself
-        // carries. The clock loops over the track's own span, which is what
-        // the original's per-model animation time was measured doing
-        // (period = amplitude/slope = 89.9 +/- 0.2 frames against the track's
-        // 90). This replaced `oag_render::texgen` here 2026-08-10; texgen's
-        // environment mapping is real but belongs to the transparent-pass
-        // bracket, which the plume is not inside.
+        // carries. This replaced `oag_render::texgen` here 2026-08-10;
+        // texgen's environment mapping is real but belongs to the
+        // transparent-pass bracket, which the plume is not inside.
+        //
+        // The clock is the plume's own life timer, not the race clock: the
+        // original's updater receives `flare+0x88` verbatim (measured at its
+        // entry, t == the timer on every hit), and that field resets to 0 at
+        // each reveal. So every boost plays the 90-frame track exactly once -
+        // bright first key at reveal, darkening as it fades, clamped at the
+        // last key just as the plume hides (`PLUME_SECONDS` and the track
+        // span are both 1.5 s, by authoring, not coincidence). A free-running
+        // clock here is visibly wrong in both directions: a boost can start
+        // mid-ramp already faded, and one that outlives the wrap re-brightens
+        // as a second pulse. `Exhaust::plume_timer` carries exactly the
+        // original's reset-at-reveal semantics.
         if let Some(boost) = &self.boost
             && race.exhaust().plume_visible()
         {
@@ -4584,8 +4593,7 @@ impl Scene {
             boost.write(queue, view_projection, model, 0.0);
             let (scale, offset) = match &self.boost_uv_transform {
                 Some(transform) => {
-                    let period = transform.offset.period().max(1.0);
-                    let t = (race.world.tick % period as u64) as f32;
+                    let t = race.exhaust().plume_timer() * 60.0;
                     (transform.scale.sample(t), transform.offset.sample(t))
                 }
                 None => ((1.0, 1.0), (0.0, 0.0)),

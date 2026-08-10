@@ -258,10 +258,14 @@ carries as real-and-unported - **and it is ported now, for the plume**:
 `oag_formats::vex::mesh_tex_transform` parses the block,
 `boost_plume_ground_truth.rs` pins the identical track on all eight teams,
 and `race::Scene` samples it per frame onto the authored UVs
-(`Drawable::apply_uv_transform`), replacing `texgen` there. The matched-pose
-mask row measures worse than texgen's and landed anyway - the reasoning and
-the numbers are on exhaust.md's table ("Sixth measurement"); the residual is
-the still-open brightness/alpha-weight gap, not the coordinates. `texgen`'s
+(`Drawable::apply_uv_transform`), replacing `texgen` there. **The scroll's
+clock is the flare's own life timer (`flare+0x88`), reset at each reveal** -
+measured at the updater's entry, t equals the timer on every hit - so each
+boost plays the bright-to-dark sweep exactly once, which is what makes the
+capture's phase derivable. At the derived phase the matched-pose mask row
+beats texgen's on nearly every column and closes the "~11 % dimmer"
+residual entirely (exhaust.md, "Sixth measurement"); what remains open is
+smaller: b 16 counts low, orange rim 3.6x, extent 0.72. `texgen`'s
 empirical win was real but for the wrong reason. The texgen code itself and its two recovered light vectors
 remain correct *for the batches inside the bracket* (73 draws per frame use
 mode 2); only its application to the plume is wrong.
