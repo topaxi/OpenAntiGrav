@@ -219,6 +219,32 @@ census saw `521.68` (the race clock) for eleven of them and `4.80` for
 another, all through the same call site (`0x0890e1e4`). Each model appears
 to be updated with its own clock; only the plume's is pinned to a source.
 
+**The double-pad case is measured too, frame-exact, and a second pad never
+resets or overlaps the running sweep** - worth pinning because "surely a
+second pad should restart the animation" is the natural expectation and the
+original does not do it. Two simulated pads (`0.8` written to `flare+0xb8`
+at frame-counted spacings, every frame sampled):
+
+- **30 frames (0.5 s) apart**: across the second hit, `flare+0x88` runs
+  `0.467 -> 0.484 -> 0.501` and `u` runs `0.306 -> 0.317 -> 0.328` -
+  perfectly continuous; only the boost timer jumps (`0.316 -> 0.800`). The
+  sweep completes at ~frame 90 and no second sweep plays, because the
+  second pad's timer has already emptied (decay 1/s from 0.8) by then.
+  **Two quick pads share one animation.**
+- **72 frames (1.2 s) apart**: same non-reset at the hit, but at the
+  sweep's 1.5 s expiry the timer still reads `0.466` - above the reveal
+  gate - so the plume re-reveals at once: `flare+0x88` snaps to 0, `u`
+  restarts at `2/256`, and a second full sweep plays back-to-back.
+
+So the reveal rule composes into a ~0.9 s threshold: the timer holds above
+the gate for `(0.8 - 0.2) / 1.0 = 0.6 s` after a pad, so a second pad
+replays the sweep only when it lands inside the sweep's final 0.6 s - i.e.
+later than `1.5 - 0.6 = 0.9 s` after the reveal. What a mid-sweep pad
+*does* change is every
+timer-driven effect: the flare's half-size term, the engine note, the
+physics boost. `oag_render::exhaust`'s edge-triggered reveal plus
+next-tick re-reveal reproduces all three regimes.
+
 ### Two earlier readings this corrects
 
 - **"Every track material simply having no track data" (the writer-chain
