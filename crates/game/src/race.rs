@@ -3702,6 +3702,7 @@ impl Drawable {
         sample_count: u32,
         depth: mesh_render::Depth,
         blend: wgpu::BlendState,
+        glow: mesh_render::GlowMask,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -3724,6 +3725,7 @@ impl Drawable {
             sample_count,
             depth,
             blend,
+            glow,
         )?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
@@ -4120,6 +4122,7 @@ impl Scene {
                     sample_count,
                     mesh_render::Depth::Sky,
                     mesh_render::TRANSPARENT_BLEND,
+                    mesh_render::GlowMask::Protected,
                 )
             })
             .transpose()?;
@@ -4132,6 +4135,7 @@ impl Scene {
             sample_count,
             scene_depth,
             mesh_render::TRANSPARENT_BLEND,
+            mesh_render::GlowMask::Protected,
         )?;
         // One per grid slot. Built up front rather than on demand, because a
         // `Drawable` needs the device and the pass does not have it.
@@ -4150,6 +4154,7 @@ impl Scene {
                 sample_count,
                 scene_depth,
                 mesh_render::TRANSPARENT_BLEND,
+                mesh_render::GlowMask::Protected,
             )?);
         }
         let collision = collision_model
@@ -4163,6 +4168,7 @@ impl Scene {
                     sample_count,
                     scene_depth,
                     mesh_render::TRANSPARENT_BLEND,
+                    mesh_render::GlowMask::Protected,
                 )
             })
             .transpose()?;
@@ -4179,6 +4185,7 @@ impl Scene {
                         sample_count,
                         scene_depth,
                         mesh_render::TRANSPARENT_BLEND,
+                        mesh_render::GlowMask::Protected,
                     )
                 })
                 .transpose()
@@ -4333,6 +4340,12 @@ impl Scene {
                     sample_count,
                     scene_depth,
                     exhaust::BLEND,
+                    // **The plume feeds the bloom.** Its draw path in the
+                    // original opens the alpha channel unconditionally, unlike
+                    // the hull's - see `mesh_render::GlowMask`. Without this the
+                    // boost's brightest surface contributes nothing to the glow
+                    // mask, which is the shape of the effect a player notices.
+                    mesh_render::GlowMask::Written,
                 )
             })
             .transpose()?;

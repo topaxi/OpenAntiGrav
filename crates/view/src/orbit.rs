@@ -208,6 +208,8 @@ impl Session {
             1,
             mesh_render::Depth::Scene,
             mesh_render::TRANSPARENT_BLEND,
+            // The asset viewer runs no bloom, so the mask is moot here.
+            mesh_render::GlowMask::Protected,
         )?;
         let _ = placeholder_bind_group;
 
