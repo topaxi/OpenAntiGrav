@@ -444,11 +444,11 @@ pixel argument about the exhaust.
 
 **Finished.** The per-stage working handover has been deleted, as it said it
 should be; what follows is the part that outlives the effort. The durable record
-is [ADR-0021](docs/architecture/adr/0021-title-packages.md),
+is [ADR-0022](docs/architecture/adr/0022-title-packages.md),
 [workspace-layout](docs/architecture/workspace-layout.md), the module docs named
 below and this section.
 
-Done on a user directive to make Pure workable in parallel with Pulse. Governed by [ADR-0021](docs/architecture/adr/0021-title-packages.md),
+Done on a user directive to make Pure workable in parallel with Pulse. Governed by [ADR-0022](docs/architecture/adr/0022-title-packages.md),
 which supersedes **ADR-0009 item 3 only** - items 1, 2 and 4 stand, and item 2
 in particular still gates second-title *simulation* work behind M4's exit.
 
@@ -550,7 +550,7 @@ numbers are the ones to move first when it does: they are Pulse literals, and
 Pure ships zone mode too.
 
 **Decisions not to silently reverse.** No `trait Game`, no `enum Title`
-dispatch, no plugin registry - ADR-0021 answers the n=1 objection for the
+dispatch, no plugin registry - ADR-0022 answers the n=1 objection for the
 *format layer only*. No `oag-psp`/`oag-ps2` crates; ADR-0004 stands, and turning
 the console axis into a code axis forfeits the property that made the PS2 fan-out
 cost days. `classes_of` errors on an unknown version rather than defaulting to
@@ -659,7 +659,7 @@ the past.
 | **The collision stun is not armed by track contact** | The original's is gated on a pending impulse the contact path never writes. |
 | **Sweep and prune is not reimplemented** | The original's packing clamps world space rather than rebasing it, so it never drops a genuinely overlapping pair; ours does the same job without the packing. |
 | **The four-corner hover variant** | Not implemented. Its selector is known (`DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, which also disables the brakes and the weapons) and it is not the racing configuration. |
-| **Pure asset work** | No longer deferred as a whole. [ADR-0021](docs/architecture/adr/0021-title-packages.md) opened the format and asset layers on the strength of [`pure-status.md`](docs/formats/pure-status.md)'s measurements; ADR-0009 item 2 still defers Pure *simulation* work behind M4's exit. |
+| **Pure asset work** | No longer deferred as a whole. [ADR-0022](docs/architecture/adr/0022-title-packages.md) opened the format and asset layers on the strength of [`pure-status.md`](docs/formats/pure-status.md)'s measurements; ADR-0009 item 2 still defers Pure *simulation* work behind M4's exit. |
 | **PS3 and Vita content** | Paused 2026-08-09, on the toolchain rather than on the research. Both are encrypted - see [`data/README.md`](data/README.md#the-ps3-and-vita-images-are-encrypted-and-nothing-here-decrypts-them-yet) for the two different mechanisms and the tools each needs. None of `PS3Dec`/`scetool`/`pkg2zip`/`psvpfsparser` is installed and there is no RPCS3 install to borrow a decrypted copy from. The one architecturally relevant fact was free: **HD/Fury and 2048 both ship PSARC, not WAD**, and 2048 arrives as a PKG rather than a disc filesystem. |
 | **A "CPU renderer" switch** | There is nothing to switch. wgpu ships no software rasteriser (`Backend::Noop` draws nothing), so CPU rendering exists only via a system Vulkan implementation such as lavapipe, selected outside the process. |
 | **RENDERER applies on the next launch** | The device is made once at boot and everything hangs off it. Live switching means tearing down the surface, the pipelines and every GPU resource. |

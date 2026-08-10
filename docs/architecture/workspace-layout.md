@@ -16,7 +16,7 @@ rule here follows from it.
 Three axes get confused if they share a word, so they do not share one here:
 
 - **title** - Wipeout Pulse, Pure, HD/Fury, 2048. A data axis, per
-  [ADR-0021](adr/0021-title-packages.md): tables, never dispatch.
+  [ADR-0022](adr/0022-title-packages.md): tables, never dispatch.
 - **console** (also **source**) - PSP, PS2, PS3, Vita. The machine the original
   ran on, and where its assets come from. Deliberately *not* a code axis, per
   [ADR-0004](adr/0004-asset-pipeline.md).
@@ -63,7 +63,7 @@ crate created before its shape is understood tends to get the wrong shape.
 
 ## Title packages
 
-[ADR-0021](adr/0021-title-packages.md) splits two questions that used to be one.
+[ADR-0022](adr/0022-title-packages.md) splits two questions that used to be one.
 
 **"How does this byte stream decode?" is answered by the file, inside
 `oag-formats`.** Class-ID tables, header shapes and schema variants are selected

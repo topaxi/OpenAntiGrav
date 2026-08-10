@@ -24,7 +24,7 @@ recorded. It is not a portability claim either way: a `Pulse`-only row may well
 be portable and simply untried.
 
 Before this column existed every row read as `Pulse` implicitly, which is the
-ambiguity [ADR-0021](../architecture/adr/0021-title-packages.md) exists to
+ambiguity [ADR-0022](../architecture/adr/0022-title-packages.md) exists to
 remove. Pure is PSP-only, so a PS2-only row can only ever say `Pulse`.
 
 | Format | Extension | Platforms | Titles | Status | Notes |

@@ -58,7 +58,7 @@ pub const REF_HEIGHT: f32 = 272.0;
 /// The wave's own numbers, all of them Pulse's: `oag_pulse::loading`.
 ///
 /// [`COLUMNS`], [`BANDS`], [`BASELINE_Y`], [`STRIP_SIZE`], [`ENVELOPE`] and the
-/// rest moved to the title package under [ADR-0021]. They came out of
+/// rest moved to the title package under [ADR-0022]. They came out of
 /// `Loading_DrawWave` and the `.rodata` beside it, so they are facts about what
 /// this release ships; the algorithm below is the mechanism and stays here.
 ///
@@ -67,7 +67,7 @@ pub const REF_HEIGHT: f32 = 272.0;
 /// space rather than anything a second title would restate.
 ///
 /// [ADR-0004]: ../../../docs/architecture/adr/0004-asset-pipeline.md
-/// [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+/// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::loading::{
     ALPHA_RAMP, AMPLITUDE_RAMP, BANDS, BASELINE_Y, BLEND_WEIGHTS, COLUMNS, ENERGY_DAMPING,
     ENERGY_IMPULSE, ENVELOPE, ENVELOPE_FLOOR, ENVELOPE_PEAK, LAYER_RATES, SLEW_DEADBAND, SLEW_STEP,

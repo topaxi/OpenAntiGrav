@@ -19,7 +19,7 @@ out to be wrong.
 | [0006](0006-no-copyrighted-content.md) | No copyrighted content in the repository | Accepted |
 | [0007](0007-fixed-timestep-vs-original.md) | Keep a fixed timestep, and diverge from the original | Accepted |
 | [0008](0008-av1-movie-cache.md) | Cache movies as lossless AV1, and decode them in process | Accepted |
-| [0009](0009-multi-game-fanout.md) | Fan out to other games by verified layer, not by date | Accepted; the no-abstraction-at-n=1 item superseded by [ADR-0021](0021-title-packages.md) |
+| [0009](0009-multi-game-fanout.md) | Fan out to other games by verified layer, not by date | Accepted; the no-abstraction-at-n=1 item superseded by [ADR-0022](0022-title-packages.md) |
 | [0010](0010-movie-decode-thread.md) | Decode movie frames on a worker thread, one per movie | Accepted |
 | [0011](0011-authored-pvs-before-frustum-culling.md) | Cull with the track's authored PVS, before the view frustum | Accepted; placement and padding rules superseded by [ADR-0014](0014-authored-section-placement.md) |
 | [0012](0012-wgsl-upscalers-not-native-fidelityfx.md) | Port the FSR upscalers to WGSL rather than driving the native SDK | Accepted |
@@ -31,7 +31,7 @@ out to be wrong.
 | [0018](0018-audio-mixer-architecture.md) | Own the mixer, and treat cues as a per-tick output | Accepted |
 | [0019](0019-atrac3plus-out-of-process.md) | Decode ATRAC3+ out of process, into the movie cache | Accepted |
 | [0020](0020-gamma-authoritative-colour-space.md) | Gamma is the authoritative colour space; nothing linearises | Accepted |
-| [0021](0021-title-packages.md) | Title packages, and title as a data axis rather than a code axis | Accepted; supersedes [ADR-0009](0009-multi-game-fanout.md) item 3 |
+| [0022](0022-title-packages.md) | Title packages, and title as a data axis rather than a code axis | Accepted; supersedes [ADR-0009](0009-multi-game-fanout.md) item 3 |
 
 ## Format
 

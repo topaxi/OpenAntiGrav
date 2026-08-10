@@ -884,7 +884,7 @@ fn load_movie(
 
 // The loose-file table `loose_candidates` searches. Which movie a name resolves
 // to on which pressing is a fact about what Pulse shipped, so it lives in the
-// title package under ADR-0021 rather than here.
+// title package under ADR-0022 rather than here.
 use oag_pulse::movies::LOOSE_MOVIES;
 
 /// The loose files a movie name may be answered by, if any.

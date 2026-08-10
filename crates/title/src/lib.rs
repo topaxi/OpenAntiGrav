@@ -1,6 +1,6 @@
 //! What a title ships, described in types a title package fills in.
 //!
-//! This crate is the *vocabulary* half of [ADR-0021]. It holds no constant that
+//! This crate is the *vocabulary* half of [ADR-0022]. It holds no constant that
 //! belongs to any game: `oag-pulse` and `oag-pure` supply those, and
 //! `oag-assets` reads them.
 //!
@@ -19,15 +19,15 @@
 //!
 //! # Why this is so small
 //!
-//! ADR-0021 supersedes ADR-0009's refusal to abstract at n=1, but only for the
+//! ADR-0022 supersedes ADR-0009's refusal to abstract at n=1, but only for the
 //! axes where a second corpus has actually been measured. `pure-status.md`
 //! measured Pure's archive layout; it did not map Pure's entry names, its HUD
 //! atlas, its front-end screens or its mode set. Types for those would be
-//! designed from one example, which is the failure ADR-0009 named and ADR-0021
+//! designed from one example, which is the failure ADR-0009 named and ADR-0022
 //! does not license. They stay as plain constants inside the title crate that
 //! knows them until a second title forces their shape.
 //!
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 pub use oag_disc::Platform;
 

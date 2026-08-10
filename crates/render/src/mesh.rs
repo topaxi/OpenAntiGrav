@@ -95,14 +95,14 @@ pub struct DrawCall {
 
 /// Which textures animate and how fast: `oag_pulse::textures::ANIMATED_TEXTURES`.
 ///
-/// The table moved to the title package under [ADR-0021] - which surfaces move is
+/// The table moved to the title package under [ADR-0022] - which surfaces move is
 /// a fact about what Pulse ships, and every key is a `Data\Tex\` entry off its
 /// disc. The mechanism stays here: this lookup, the per-vertex
 /// [`GpuVertex::v_cycles`] attribute and the V offset in `mesh.wgsl`. The evidence
 /// for each entry is on the constant itself and in
 /// `crates/render/tests/animated_uv_ground_truth.rs`.
 ///
-/// [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+/// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::textures::ANIMATED_TEXTURES;
 
 /// The V scroll rate for a decoded texture, or `None` if it does not animate.

@@ -49,7 +49,7 @@
 //!
 //! # This file *is* the seam
 //!
-//! Stage 6 of the engine/title split ([ADR-0021]) asked where the boundary
+//! Stage 6 of the engine/title split ([ADR-0022]) asked where the boundary
 //! between "a number off the player's disc" and "a number out of the original's
 //! code" runs. For the per-team parameters the answer is here and needed no
 //! change: [`handling_for`] is the only place a document value becomes a
@@ -64,7 +64,7 @@
 //! `oag_physics::params`' module docs say which side of the line they are on and
 //! why none of them moved.
 //!
-//! [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
 use oag_formats::handling::{self as fmt, SpeedClass as FmtClass};
 use oag_physics::params::{

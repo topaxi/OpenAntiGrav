@@ -1,6 +1,6 @@
 //! Which of Pulse's textures animate, and how fast.
 //!
-//! A table, in the sense of [ADR-0021]: it names shipped assets and the rate
+//! A table, in the sense of [ADR-0022]: it names shipped assets and the rate
 //! each one scrolls at. The mechanism that consumes it - the per-vertex
 //! `v_cycles` attribute and the V offset in `mesh.wgsl` - is the renderer's and
 //! stays there. Which surfaces move is this title's business, because the names
@@ -10,7 +10,7 @@
 //! `crates/render/tests/animated_uv_ground_truth.rs`, which still owns the
 //! measurement; this file owns the conclusion.
 //!
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 /// How many whole V sweeps of the blink-light palette pass per
 /// `oag_game::race`'s `ANIM_PERIOD_TICKS`.

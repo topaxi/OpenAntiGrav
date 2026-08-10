@@ -38,10 +38,10 @@ use crate::prefetch::Progress;
 /// The two entries this screen reads: `oag_pulse::loading`.
 ///
 /// Both are `Data.wad` names off Pulse's disc, so they moved to the title package
-/// under [ADR-0021]. The frame counts below did not: they are this build's own
+/// under [ADR-0022]. The frame counts below did not: they are this build's own
 /// pacing choices, not the original's.
 ///
-/// [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+/// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::loading::{GLOW_STRIP_ENTRY, TIPS_ENTRY};
 
 /// Frames one tip stays up, at the 60 Hz the window steps at.

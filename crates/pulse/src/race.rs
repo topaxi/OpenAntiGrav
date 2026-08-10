@@ -1,12 +1,12 @@
 //! What a Pulse race loads: the default circuit and team, and how a ship's
 //! model entry is spelled.
 //!
-//! Names and defaults, in the [ADR-0021] sense. The mode that picks between a
+//! Names and defaults, in the [ADR-0022] sense. The mode that picks between a
 //! Zone hull and a normal one is `oag_game::race`'s, because `Mode` is the
 //! engine's type and a title package must not grow one; what this file owns is
 //! the four file names it picks between and the path they go into.
 //!
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 /// The circuit a race loads when the caller names none.
 ///

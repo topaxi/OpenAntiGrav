@@ -1,6 +1,6 @@
 //! Finding and opening the archives one source carries, whichever title it is.
 //!
-//! This is the *mechanism* half of [ADR-0021]. It knows how to walk a disc image
+//! This is the *mechanism* half of [ADR-0022]. It knows how to walk a disc image
 //! or an extracted directory, match archive names by trailing path component,
 //! and read entries by name, hash or directory position. It knows no archive
 //! name, no entry name and no title: those come in as an [`oag_title::Title`],
@@ -12,7 +12,7 @@
 //! recognise, and a PS2 pressing whose serial directory is not `54748/` needs no
 //! change here.
 //!
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 use oag_disc::DiscImage;
 use oag_title::Title;

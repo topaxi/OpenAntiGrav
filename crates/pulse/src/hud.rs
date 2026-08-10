@@ -1,11 +1,11 @@
 //! The HUD's atlas and its five layouts.
 //!
-//! Entry names, in the [ADR-0021] sense: which files Pulse ships and what is in
+//! Entry names, in the [ADR-0022] sense: which files Pulse ships and what is in
 //! each. Everything that *reads* them - the `<Image>`/`<Text>` widget model, the
 //! `<Item>` offset handling, the draw list - is `oag_game::hud` and stays there,
 //! because a second title with a different atlas would reuse all of it.
 //!
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 /// The archive entry holding the atlas every HUD sprite samples.
 ///

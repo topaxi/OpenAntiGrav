@@ -141,7 +141,7 @@ impl Course {
     ///
     /// **Neither, yet, and that is the finding rather than an omission.** The
     /// three constants stage 6 of the engine/title split
-    /// ([ADR-0021](../../../docs/architecture/adr/0021-title-packages.md)) looked
+    /// ([ADR-0022](../../../docs/architecture/adr/0022-title-packages.md)) looked
     /// at each land somewhere definite - the per-team parameters on the disc, the
     /// force-law literals in Pulse's code, Zone's scoring in Pulse's code - and
     /// this one lands nowhere, because **it stands in for a computation nobody

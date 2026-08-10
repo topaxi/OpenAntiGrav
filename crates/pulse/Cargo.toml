@@ -10,7 +10,7 @@ rust-version.workspace = true
 # A title package is tables. `oag-assets` is here only so the two thin
 # convenience wrappers ([`open`] and [`read_image`]) can name `Archives`; no
 # decoding happens in this crate, and nothing here is reachable from a decode
-# path in `oag-formats` - that edge would be a cycle, and ADR-0021 says why the
+# path in `oag-formats` - that edge would be a cycle, and ADR-0022 says why the
 # class tables stay on the other side of it.
 [dependencies]
 oag-assets.workspace = true

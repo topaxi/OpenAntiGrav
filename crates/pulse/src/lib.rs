@@ -1,7 +1,7 @@
 //! What Wipeout Pulse ships: which archives its releases carry, what the
 //! entries inside them are called, and the hashes of the ones nobody has named.
 //!
-//! This is a title package in the sense of [ADR-0021]: tables, not decoding.
+//! This is a title package in the sense of [ADR-0022]: tables, not decoding.
 //! Every constant here was resolved by hashing a candidate name and matching it
 //! against a real archive directory, not guessed. See
 //! `docs/architecture/frontend-boot.md` for how each one was found and what it
@@ -16,7 +16,7 @@
 //! decoder learns which it is holding by reading the file, never by being told
 //! which disc it came off.
 //!
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 pub mod frontend;
 pub mod hud;

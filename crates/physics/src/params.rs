@@ -45,7 +45,7 @@
 //!
 //! # Where the simulation's numbers come from: the seam, stated
 //!
-//! Stage 6 of the engine/title split ([ADR-0021]) is this paragraph and the ones
+//! Stage 6 of the engine/title split ([ADR-0022]) is this paragraph and the ones
 //! like it, and it deliberately **moves nothing**. Naming the boundary is the
 //! work; relocating constants across it is not, because
 //! [ADR-0009](../../../docs/architecture/adr/0009-multi-game-fanout.md) item 2
@@ -70,7 +70,7 @@
 //! Pure's simulation. Recording which side of the line each is on is what makes
 //! the move mechanical when M4 closes, and what stops it being guessed at now.
 //!
-//! [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
 /// Engine response. `<Engine accelcap amount falloff gain turbo/>`.
 ///

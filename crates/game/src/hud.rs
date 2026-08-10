@@ -44,11 +44,11 @@ use crate::screen::{argb_to_rgba, parse_argb};
 
 /// The atlas and the five layout entries: `oag_pulse::hud`.
 ///
-/// Which files Pulse ships is a title fact and moved there under [ADR-0021];
+/// Which files Pulse ships is a title fact and moved there under [ADR-0022];
 /// everything that reads them - the widget model, the `<Item>` offset handling,
 /// the draw list - is this module and is title-blind.
 ///
-/// [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+/// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::hud::{ATLAS, layouts};
 
 /// Which of the disc's fonts a widget draws in.

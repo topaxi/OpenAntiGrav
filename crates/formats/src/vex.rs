@@ -69,7 +69,7 @@ pub mod classes {
     //! wholesale between format versions, so `0x125` means `Mesh` in a version-6
     //! file and something else entirely in a version-4 one. Keying on which disc
     //! a file came off would be both wrong and unnecessary, and
-    //! [ADR-0021](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md)
+    //! [ADR-0022](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md)
     //! says why: the decoder reads the artifact and picks a table.
     //!
     //! **This is not a guess dressed up as a design.** The Pulse PSP disc ships

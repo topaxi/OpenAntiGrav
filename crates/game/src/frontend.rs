@@ -78,11 +78,11 @@ use crate::state_machine::{Event, StateMachine};
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
 ///
 /// Both are literals off Pulse's executable and its front-end XML, so they moved
-/// to the title package under [ADR-0021]. The state machine that drives them, and
+/// to the title package under [ADR-0022]. The state machine that drives them, and
 /// every divergence this build makes from the disc's own sequence, stay here - see
 /// the module docs.
 ///
-/// [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+/// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 
 /// Which movie leg the sequence boots into.
@@ -225,7 +225,7 @@ pub enum Draw {
 
 /// The PSP's screen, in the pixels our own layouts are written in.
 ///
-/// **Still a constant, and deliberately.** ADR-0021's stage 4 asked whether this
+/// **Still a constant, and deliberately.** ADR-0022's stage 4 asked whether this
 /// should become per-source, and the answer that came out of doing it is no: a
 /// source that authors somewhere else says so through [`Space`], which already
 /// carries a grid *and* the display aspect that grid is shown as - two numbers

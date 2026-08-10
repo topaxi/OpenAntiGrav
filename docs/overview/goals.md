@@ -65,7 +65,7 @@ game (Pulse, Pure, HD/Fury, 2048), **console** is the machine the original ran
 on and where its assets come from (PSP, PS2, PS3, Vita), and **host** is what
 this reimplementation runs on (Linux, Windows, macOS, and the targets under
 [Hosts](#hosts) below). Title is a data axis and console is deliberately not a
-code axis at all - see [ADR-0021](../architecture/adr/0021-title-packages.md)
+code axis at all - see [ADR-0022](../architecture/adr/0022-title-packages.md)
 and [ADR-0004](../architecture/adr/0004-asset-pipeline.md).
 
 | Title | Console | Status |

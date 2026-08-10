@@ -1,4 +1,4 @@
-# ADR-0021: Title packages, and title as a data axis rather than a code axis
+# ADR-0022: Title packages, and title as a data axis rather than a code axis
 
 ## Status
 

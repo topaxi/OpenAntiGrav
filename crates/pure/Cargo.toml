@@ -10,7 +10,7 @@ rust-version.workspace = true
 # A title package is tables. Deliberately thinner than `oag-pulse`: this holds
 # what `docs/formats/pure-status.md` actually measured and nothing more, and it
 # does not restate the `.vex` class sets - those are keyed by the file's own
-# version word inside `oag-formats`, per ADR-0021.
+# version word inside `oag-formats`, per ADR-0022.
 [dependencies]
 oag-assets.workspace = true
 oag-title.workspace = true

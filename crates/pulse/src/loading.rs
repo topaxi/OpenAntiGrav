@@ -3,7 +3,7 @@
 //! Every number here was read out of `Loading_DrawWave` (`0x0890a8e4`) or the
 //! `.rodata` beside it, and is documented at
 //! `docs/ghidra/functions/psp-pulse-usa/loading-screen.md`. A table in the
-//! [ADR-0021] sense: the algorithm that consumes them is
+//! [ADR-0022] sense: the algorithm that consumes them is
 //! [`oag_render::loading`] and stays there, because it is a mechanism rather
 //! than a fact about a release.
 //!
@@ -16,7 +16,7 @@
 //! would plant a second copy of a leak the split is trying to close.
 //!
 //! [ADR-0004]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0004-asset-pipeline.md
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 /// The disc entry holding the **26** `<PI_LoadingScreen>` tips.
 ///

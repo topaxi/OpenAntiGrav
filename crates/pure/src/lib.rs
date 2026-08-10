@@ -1,6 +1,6 @@
 //! What Wipeout Pure ships.
 //!
-//! A title package in the sense of [ADR-0021], and the one that proves the seam
+//! A title package in the sense of [ADR-0022], and the one that proves the seam
 //! is real rather than decorative: if `oag-assets` can open Pure's disc through
 //! the same mechanism it opens Pulse's, with nothing but a different table, then
 //! title is a data axis.
@@ -17,7 +17,7 @@
 //! because none of it is recovered. An empty module is the honest record of
 //! that; a plausible guess would not be.
 //!
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [`pure-status.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/pure-status.md
 
 use oag_assets::{Archives, Result};

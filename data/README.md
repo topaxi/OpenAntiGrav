@@ -82,7 +82,7 @@ PSARC archives rather than WADs**, and 2048 arrives as a PKG rather than a disc
 filesystem at all. That is why the content-source layer is written against
 "archives resolved by name from a source's own file list" rather than "a disc
 image containing WADs" - see
-[ADR-0021](../docs/architecture/adr/0021-title-packages.md).
+[ADR-0022](../docs/architecture/adr/0022-title-packages.md).
 
 `pulse-psp-eu.chd` is not one of `oag-game`'s auto-detected `IMAGE_NAMES` (it
 is a reverse-engineering reference disc, not the played-from target) - point

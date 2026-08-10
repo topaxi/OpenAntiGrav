@@ -10,7 +10,7 @@
 //!
 //! # What this is for
 //!
-//! ADR-0021 claims title is a data axis. That claim is cheap to make and easy to
+//! ADR-0022 claims title is a data axis. That claim is cheap to make and easy to
 //! satisfy decoratively - a crate of constants nobody exercises looks identical
 //! to a working seam. This is the difference: a second title's disc opening
 //! through the *same* code path, and a parser that used to refuse its file

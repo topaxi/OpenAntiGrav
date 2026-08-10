@@ -1,6 +1,6 @@
 //! What Pulse's own front end is called, and when its dev/pub reel acts.
 //!
-//! Literals, in the [ADR-0021] sense: every state name here is a string from the
+//! Literals, in the [ADR-0022] sense: every state name here is a string from the
 //! original's executable or from the front-end XML on the disc, and every frame
 //! count was read out of `0x088d7e1c`. The state *machine* that drives them is
 //! `oag_game::frontend` and stays there - a second title with different screen
@@ -10,7 +10,7 @@
 //! `docs/architecture/frontend-boot.md`, and the divergences are the composition
 //! root's, not this table's.
 //!
-//! [ADR-0021]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 /// Frame counts at which the dev/pub reel state acts, from `0x088d7e1c`.
 pub const PAUSE_FRAMES: [usize; 2] = [144, 231];

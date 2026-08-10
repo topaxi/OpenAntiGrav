@@ -26,11 +26,11 @@
 //! 100 for a new pad" is a claim about what Pulse scores, not about what a zone
 //! *is*, and nothing here has been checked against Pure's executable.
 //!
-//! Stage 6 of the engine/title split ([ADR-0021]) names that and **moves
+//! Stage 6 of the engine/title split ([ADR-0022]) names that and **moves
 //! nothing**. Relocating these into `oag-pulse` today would put four numbers in
 //! a title package with no second corpus to check them against, which is the n=1
 //! design [ADR-0009](../../../docs/architecture/adr/0009-multi-game-fanout.md)
-//! item 3 warned about and ADR-0021 does not license outside the format layer.
+//! item 3 warned about and ADR-0022 does not license outside the format layer.
 //! Item 2 of the same ADR gates second-title simulation work behind M4's exit
 //! anyway. What this paragraph is for is that when that gate opens, the question
 //! "is this Pulse's or is it the engine's?" is already answered for this file
@@ -40,7 +40,7 @@
 //! assigning into the craft, `thrust`'s shape - is the engine's and stays, the
 //! same split `oag_physics::params` draws for the force law.
 //!
-//! [ADR-0021]: ../../../docs/architecture/adr/0021-title-packages.md
+//! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
 /// Seconds of accumulated frame time between zone steps.
 ///
