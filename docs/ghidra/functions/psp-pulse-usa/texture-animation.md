@@ -183,6 +183,22 @@ resident flag, and *then* stores the global into `+0xb0`. So `+0xb0` is a
 last-uploaded timestamp and the `0.2` is a texture-cache re-upload heuristic.
 Recorded because the shape is genuinely misleading and cost a read.
 
+## The heuristic this page is the evidence for
+
+[`methodology.md`](../../../reverse-engineering/methodology.md) now carries
+"when something animates or glows, look at the texture-coordinate path first -
+but confirm before concluding" as a standing rule, with this page's live
+negative as the counterexample that keeps it a *hint*. Both halves matter: the
+mechanisms here are real and repeatedly the answer, and the one time the
+project asserted a scroll from a screenshot it was wrong.
+
+Worth adding for a future reader, from the boost-plume pass on 2026-08-10:
+`FUN_0892733c` is a bare thunk to `Gu_CallList` and is the **second** replay
+site for the per-material transform list, on `Mesh_CompileGeometryPass`'s draw
+path rather than `FUN_089307b4`'s. So a surface can receive an animated
+`TEXOFFSET` through either path, and a search that finds only `FUN_089271cc`
+has seen half the mechanism.
+
 ## Open
 
 - **The global V-scroll clock has not been found.** `vex.md` establishes the
