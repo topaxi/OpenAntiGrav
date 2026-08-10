@@ -4100,6 +4100,7 @@ impl Scene {
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
+        bloom_enabled: bool,
         visibility: Option<TrackVisibility>,
         anti_aliasing: crate::display::AntiAliasing,
         fog_volumes: Vec<oag_formats::fog::FogVolume>,
@@ -4364,8 +4365,11 @@ impl Scene {
         let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format, sample_count));
         // A failure here is reported and dropped rather than propagated: a race
         // without a bloom is a dimmer race, not a broken one.
-        let bloom = match oag_render::post::bloom::Bloom::new(device, format) {
-            Ok(bloom) => Some(bloom),
+        let bloom = match bloom_enabled
+            .then(|| oag_render::post::bloom::Bloom::new(device, format))
+            .transpose()
+        {
+            Ok(bloom) => bloom,
             Err(e) => {
                 eprintln!("bloom unavailable ({e}) - the frame draws without it");
                 None
@@ -4787,6 +4791,9 @@ pub struct CaptureOptions {
     pub aspect: crate::display::Aspect,
     /// Anisotropic filtering level for the track and ship textures.
     pub anisotropy: Anisotropy,
+    /// Whether the recovered bloom runs - see `crate::settings::Graphics::bloom`,
+    /// which defaults it **off** until its magnitude is calibrated.
+    pub bloom: bool,
     /// Which adapter to draw with, for the same reason `aspect` and `fov` are
     /// here: a capture is only evidence about what a player sees if it was
     /// drawn on the device they see it on. A driver is exactly the kind of
@@ -5012,6 +5019,7 @@ pub fn capture(
         format,
         scene_size,
         options.anisotropy,
+        options.bloom,
         visibility,
         options.anti_aliasing,
         fog_volumes,

@@ -402,6 +402,7 @@ pub fn run(
                 frustum_culling: options.settings.graphics.frustum_culling,
                 pvs_culling: options.settings.graphics.pvs_culling,
                 animated_textures: options.settings.graphics.animated_textures,
+                bloom: options.settings.graphics.bloom,
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 camera_view: options.settings.graphics.camera_view,
                 anti_aliasing: options.settings.graphics.anti_aliasing,
