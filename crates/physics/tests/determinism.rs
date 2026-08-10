@@ -51,7 +51,7 @@ use oag_core::hash::StateHasher;
 use oag_core::math::{Quat, Vec3};
 use oag_physics::maglock::MagContact;
 use oag_physics::probe::{self, Script};
-use oag_physics::{Environment, ShipState, step};
+use oag_physics::{CraftState, Environment, ShipState, step};
 
 /// `(ticks, script, final_hash, trajectory_hash)`.
 ///
@@ -151,24 +151,32 @@ use oag_physics::{Environment, ShipState, step};
 ///   `ShipState::default()` starts it at zero and an already-empty pool cannot be
 ///   depleted - `the_run_visits_the_paths_it_claims_to_cover` asserts the run
 ///   actually spends energy, for the same reason the speed-pad entry above exists.
+/// - **Regenerated 2026-08-10 a second time, and behaviour did not change
+///   either.** `ShipState` gained `craft_state` and `state_timer`, the three
+///   states the energy pool reaches (`crate::damage::CraftState`) and their
+///   timer. Nothing in the force law reads them and no probe script empties a
+///   pool, so both hold their defaults for every tick of every run - a longer
+///   hash stream and nothing else. Checked the same way: with the two writes at
+///   the end of `hash_state` commented out and every other change in place, the
+///   constants from earlier the same day reproduce bit for bit.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0xac62_c322_0710_c038,
-        0xa57a_5cb8_ebc9_9f1b,
+        0xad32_1a4c_5459_85a8,
+        0x9220_7924_fa4d_dafb,
     ),
     (
         3_600,
         Script::Corridor,
-        0x82fb_1776_d7a8_9da6,
-        0x79b5_1300_9fbf_2f5f,
+        0x9eb5_732a_f116_de6c,
+        0x8799_28cb_63d0_6e1a,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xca1c_af8c_845d_7b9b,
-        0x100a_e12e_20a9_f5c6,
+        0x9cb3_8272_be8b_262b,
+        0x7189_75cb_27ce_9bc1,
     ),
 ];
 
@@ -279,6 +287,8 @@ fn every_hashed_field_reaches_the_hash() {
             });
         }),
         ("shield", |s| s.shield = 1.0),
+        ("craft_state", |s| s.craft_state = CraftState::Eliminated),
+        ("state_timer", |s| s.state_timer = 1.0),
     ];
 
     for (name, apply) in moves {

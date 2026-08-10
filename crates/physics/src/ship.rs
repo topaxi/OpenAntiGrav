@@ -405,6 +405,17 @@ pub struct ShipState {
     /// simulation field the gate could not see. See
     /// [`crate::damage::apply_contact`].
     pub shield: f32,
+    /// Where the craft is in the destroyed sequence, the original's `entity+0x8c`.
+    ///
+    /// Only the three states the energy pool reaches; see
+    /// [`crate::damage::CraftState`].
+    pub craft_state: crate::damage::CraftState,
+    /// Seconds left on the current craft state, the original's `entity+0x874`.
+    ///
+    /// Only [`crate::damage::CraftState::Destroyed`] runs it down. Zero
+    /// otherwise, which keeps it out of the way of the determinism hash on every
+    /// tick of a race nobody dies in.
+    pub state_timer: f32,
 }
 
 impl Default for ShipState {
@@ -438,6 +449,8 @@ impl Default for ShipState {
             // builds a `ShipState::default()` silently start a race full.
             // `crate::damage::reset` is what fills it.
             shield: 0.0,
+            craft_state: crate::damage::CraftState::Racing,
+            state_timer: 0.0,
         }
     }
 }

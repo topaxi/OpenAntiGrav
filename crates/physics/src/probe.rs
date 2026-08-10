@@ -370,6 +370,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         pad_direction,
         mag_contact,
         shield,
+        craft_state,
+        state_timer,
     } = *state;
 
     hash_body(hasher, &body);
@@ -420,6 +422,17 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     // this field too. The probe scripts scrape a wall, so unlike `pad_timer`
     // this is not a fixed run of bytes.
     hasher.write_f32(shield);
+    // A discriminant byte and the timer. Both hold their defaults through every
+    // probe script - nothing here ever empties a pool - so they contribute a
+    // fixed run of bytes per tick, the same shape as `pad_timer` before the
+    // scenario crossed a pad. Hashed anyway, because the alternative is a
+    // destroyed craft that the gate cannot see.
+    hasher.write_u8(match craft_state {
+        crate::damage::CraftState::Racing => 0,
+        crate::damage::CraftState::Destroyed => 1,
+        crate::damage::CraftState::Eliminated => 2,
+    });
+    hasher.write_f32(state_timer);
 }
 
 /// The ship a run starts with: on the corridor's centre line, resting on the

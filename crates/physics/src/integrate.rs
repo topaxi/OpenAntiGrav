@@ -262,6 +262,7 @@ pub fn step<R: Raycaster + ?Sized>(
         env.damage_rules,
     );
     crate::damage::regenerate(state, &handling.dimensions, env.damage_rules, dt);
+    crate::damage::advance_state(state, dt);
 
     evaluated
 }

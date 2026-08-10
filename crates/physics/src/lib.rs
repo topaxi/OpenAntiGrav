@@ -87,7 +87,7 @@ pub use collide::{
     Aabb, CollisionWorld, Ray, RaycastHit, Raycaster, Surface, TriangleSoup, WALL_FRICTION,
     combine_friction, segment_triangle,
 };
-pub use damage::{DamageRules, Shield};
+pub use damage::{CraftState, DamageRules, Shield};
 pub use forces::{Accumulators, Environment, Evaluated};
 pub use integrate::{clamp_dt, integrate, step};
 pub use maglock::{Hold, MagContact, TrackSample};

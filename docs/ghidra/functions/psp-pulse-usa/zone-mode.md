@@ -257,7 +257,28 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
 
 ## Not determined
 
-1. **What *sets* bit 12.** `Zone_UpdateRacing` tests bit 12 (`0x1000`) of
+1. ~~**What *sets* bit 12.**~~ **Answered 2026-08-10: `Ship_SetState`
+   (`0x08844100`) case 5.** The search that produced the paragraph below was
+   looking at the wrong function - the bit is not set anywhere in the Zone code
+   or on the contact path, but in the craft's own state machine, three states
+   after the energy pool empties. The chain, end to end:
+
+   | Step | Where | What |
+   | --- | --- | --- |
+   | Pool reaches zero | `Ship_Damage` (`0x088439ac`) | `if (new <= 0.0) Ship_SetState(entity, 4)` |
+   | State 4, the explosion | `Ship_SetState` case 4 | plays `_BLOWUP`, hides the HUD, camera mode 5, and arms `entity+0x874 = 0.5` |
+   | Half a second later | `0x088404c8`, state 4's update | four lines: `0x874 -= dt`, and at or below zero `Ship_SetState(entity, 5)` |
+   | State 5 | `Ship_SetState` case 5 | **`entity+0x860 |= 0x1000`** - bit 12 - plus `0x874 = 1.5` and a render flag that hides the model |
+   | The mode notices | `Zone_UpdateRacing` | tests bit 12, moves to state 3 |
+
+   Confidence **88**: every step is a branch-clear decompile and the two halves
+   were recovered from opposite ends - the pool from
+   [`shield.md`](shield.md), the bit from this page - and met in the middle.
+   No runtime leg. Implemented as `oag_physics::damage::CraftState` and
+   `oag_race::RaceState::eliminate`.
+
+   The original text is kept below because its *negative* result is still
+   correct and still useful: `Zone_UpdateRacing` tests bit 12 (`0x1000`) of
    `entity+0x860` and moves the mode to state 3 on it, but the `sw ...,0x860(...)`
    sites that were read set `0x200000` and `0x400000`, never `0x1000`, so the
    write is composed somewhere not resolved.

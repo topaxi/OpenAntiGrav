@@ -440,8 +440,12 @@ seen from the authoring side.
       [lap counting](../gameplay/lap-counting.md) before trusting a lap time.
       Zone's ten-second step and its speed law are recovered
       ([zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md)) and its
-      numbers are read off the disc. **Grid and positions are untouched**, and
-      Zone has no end condition because the bit that ends a run is unidentified.
+      numbers are read off the disc. **Zone now ends**: the pool empties, the
+      craft blows up for half a second, and `Ship_SetState` case 5 sets the bit
+      `Zone_UpdateRacing` watches - which is the bit that page recorded as set by
+      nothing findable. What is absent is the *presentation* of it, the explosion
+      and the camera hand-off. **Positions are still untouched**, and the grid is
+      recovered but nothing spawns opponents onto it.
 - [~] HUD. **The disc's own layout is parsed and drawn.** All five
       `Data\XML\*_HUD.xml` layouts decode - exact rectangles, atlas UVs, colour
       constants, font roles - and a race draws the speed and shield bars, the lap

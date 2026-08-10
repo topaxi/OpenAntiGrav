@@ -125,17 +125,22 @@ that a run ends on bit 12 of `entity+0x860`, with 25 confidence that the bit mea
 shield depletion - a guess, and the reason the ending was left out. The string
 table corroborates it.
 
-**The pool it needs now exists.** Collision damage landed on 2026-08-10 and
-`oag_physics::damage::Shield::depleted` is the edge the original transitions on -
-`Ship_Damage` (`0x088439ac`) sets craft state 4 when the pool reaches zero or
-below. Zone is the only one of the three modes that races with damage on (see
-below), so it is the only one where that edge can fire.
+**Implemented 2026-08-10, and the chain is the original's own.** The pool
+empties, `Ship_Damage` (`0x088439ac`) puts the craft into state 4, the explosion
+runs for half a second, and state 5 sets **bit 12 of `entity+0x860`** - the bit
+`Zone_UpdateRacing` ends a run on, and the one
+[`zone-mode.md`](../ghidra/functions/psp-pulse-usa/zone-mode.md) recorded as set
+by nothing findable. `oag_physics::damage::CraftState` is the state machine and
+`oag_race::RaceState::eliminate` is the ending.
 
-**Still not implemented**, and what is left is no longer the pool: it is the
-destroyed *state*. Nothing in this engine transitions a craft out of racing -
-there is no explosion, no camera hand-off, no end-of-run screen - so the signal
-has nowhere to go and a Zone run keeps going until you leave. That is a smaller
-and better-defined piece of work than "recover collision damage" was.
+Zone is the only one of the three modes that can reach it, because it is the only
+one that races with damage on - see below.
+
+**What is deliberately absent is the presentation.** The original plays
+`_BLOWUP`, hides the HUD and swings the camera into its mode 5 on the way
+through state 4; this engine has none of those, so a wrecked run simply stops.
+That is a rendering and UI gap rather than a rules one, and `race.rs` says so at
+the point where it would go.
 
 `MSC_EVENT_ZONE` also ends *"Clear the target number of zones to win the event"*,
 so a Zone event has a target zone count. That is progression data - M7 - and is

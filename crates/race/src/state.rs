@@ -139,6 +139,40 @@ impl RaceState {
     /// touched track geometry this tick - a flag rather than a magnitude,
     /// because the original's own perfect-zone test reads a single bit
     /// (`entity+0x860 & 0x400000`) and not an impulse.
+    /// End the race because the craft was destroyed.
+    ///
+    /// **This is what Zone has been missing**, and it is the original's own
+    /// ending rather than an invention: `Zone_UpdateRacing` moves the mode out
+    /// of its racing state on bit 12 (`0x1000`) of `entity+0x860`, and
+    /// `Ship_SetState`'s case 5 is what sets that bit - reached half a second
+    /// after `Ship_Damage` drives the energy pool to zero. The disc's own
+    /// `ER_ZONE_DEST` reads *"Ship destroyed on zone"*. See
+    /// [`zone-mode.md`](../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md)
+    /// and [`shield.md`](../../../docs/ghidra/functions/psp-pulse-usa/shield.md).
+    ///
+    /// A method rather than a sixth argument to [`Self::update`] because that is
+    /// the shape the original has: the mode *watches a flag on the craft* rather
+    /// than being told each tick whether one is set. The caller does the same -
+    /// it holds the craft and this crate deliberately does not
+    /// (`oag-race`'s `Cargo.toml` says why it cannot see `oag-physics`).
+    ///
+    /// Returns whether this call is the one that ended the race, so a caller can
+    /// fire a sound or a screen on the edge. Idempotent: calling it every tick
+    /// of a wrecked craft returns `true` once.
+    ///
+    /// **Mode-agnostic on purpose.** Only Zone can reach it in practice, because
+    /// a time trial and a speed lap race with the original's `Damage` option off
+    /// and their pool floors at 20 - see `oag_gameplay::damage_rules`. Gating it
+    /// on the mode would encode that twice, and wrongly the day a mode with
+    /// damage on arrives.
+    pub fn eliminate(&mut self) -> bool {
+        if self.finished {
+            return false;
+        }
+        self.finished = true;
+        true
+    }
+
     pub fn update(
         &mut self,
         course: &Course,
@@ -648,5 +682,32 @@ mod tests {
         assert_eq!(state.lap_ticks(140), 40);
         assert_eq!(state.lap_ticks(100), 0);
         assert_eq!(state.lap_ticks(99), 0);
+    }
+}
+
+#[cfg(test)]
+mod elimination_tests {
+    use super::RaceState;
+    use crate::Mode;
+
+    /// The edge, which is what a caller hangs a sound or an end screen on.
+    #[test]
+    fn eliminating_a_craft_ends_the_race_once() {
+        let mut state = RaceState::new(Mode::Zone);
+        assert!(!state.finished);
+        assert!(state.eliminate(), "the first call should end the race");
+        assert!(state.finished);
+        assert!(
+            !state.eliminate(),
+            "a wrecked craft calling every tick must not re-fire"
+        );
+    }
+
+    /// A race already over for another reason is not ended twice.
+    #[test]
+    fn a_finished_race_is_not_eliminated_again() {
+        let mut state = RaceState::new(Mode::TimeTrial);
+        state.finished = true;
+        assert!(!state.eliminate());
     }
 }

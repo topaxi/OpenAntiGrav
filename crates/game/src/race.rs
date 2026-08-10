@@ -2347,6 +2347,23 @@ impl Race {
         // whole tick of error on a quantity whose job is to be exact at one
         // instant. A track with no closed ring simply has no lap counter; the
         // load report already said so.
+        // The craft finished blowing up this tick, so the race is over. Checked
+        // before the rules run rather than after, because a wrecked craft's
+        // position should not go on counting laps - and checked every tick
+        // because `RaceState::eliminate` is the thing that makes it idempotent.
+        //
+        // Only Zone can reach this: a time trial and a speed lap race with the
+        // original's `Damage` option off, which floors their pool at 20. See
+        // `oag_gameplay::damage_rules`.
+        if self.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
+            && self.world.race.eliminate()
+        {
+            // The original plays `_BLOWUP`, hides the HUD and swings the camera
+            // into its mode 5 on the way here. **None of that is built** - there
+            // is no explosion, no HUD hide and no camera mode - so the race
+            // simply stops. See `oag_physics::damage::CraftState`.
+        }
+
         if let Some(course) = &self.course {
             let position = self.world.ships[0].physics.body.position;
             // The same flag the collision sparks fire on, so "the HUD says that

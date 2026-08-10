@@ -79,6 +79,51 @@ pub const NO_WEAPONS_DAMAGE_SCALE: f32 = 0.5;
 /// would re-fire on every tick of a scrape.
 pub const CRITICAL_PERCENT: f32 = 20.0;
 
+/// Where a craft is in the destroyed sequence.
+///
+/// The original keeps a small state machine on the entity at `+0x8c`, read and
+/// written by `Ship_State` (`0x0883e64c`) and `Ship_SetState` (`0x08844100`).
+/// **Only three of its nine states are modelled here**, because they are the
+/// three the energy pool reaches; the rest are the race start, the respawn and
+/// the Eliminator's re-insertion, and inventing them would be claiming a
+/// sequence nobody has read.
+///
+/// The numbers beside each variant are the original's own, so a future pass can
+/// line them up without re-deriving the mapping.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CraftState {
+    /// State 1. Racing, and the only state that takes damage.
+    #[default]
+    Racing,
+    /// State 4. The explosion, which runs for [`DESTROYED_DURATION`].
+    ///
+    /// `Ship_SetState`'s case 4 plays `_BLOWUP`, hides the HUD and puts the
+    /// camera in mode 5 - **none of which this engine does**, because it has no
+    /// explosion, no HUD hide and no camera mode. What it does have is the
+    /// timer, which is what the transition below needs.
+    Destroyed,
+    /// State 5. Out of the race.
+    ///
+    /// This is the state that matters to a game mode: `Ship_SetState`'s case 5
+    /// **sets bit 12 (`0x1000`) of `entity+0x860`**, which is the bit
+    /// `Zone_UpdateRacing` ends a run on -
+    /// [`zone-mode.md`](../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md)
+    /// recorded that bit as set by nothing findable, and this is what sets it.
+    ///
+    /// The original moves on from here after 1.5 s, into a respawn or the
+    /// Eliminator's kill bookkeeping. **This engine stops here**, because a race
+    /// with one craft in it has nothing to move on to.
+    Eliminated,
+}
+
+/// How long the explosion runs before the craft is out of the race, in seconds.
+///
+/// `Ship_SetState`'s case 4 writes `0.5` into the state timer at `entity+0x874`,
+/// and state 4's own per-frame update (`0x088404c8`) is four lines: subtract
+/// `dt`, and at or below zero go to state 5. Confidence **88** - both halves are
+/// unambiguous, and neither has a runtime leg.
+pub const DESTROYED_DURATION: f32 = 0.5;
+
 /// The race options that reach the pool.
 ///
 /// Two of the three globals `Race_ReadSetupOptions` (`0x08896b84`) lowers; the
@@ -138,6 +183,22 @@ pub struct Shield {
     pub depleted: bool,
 }
 
+/// Advance the destroyed sequence, `0x088404c8`.
+///
+/// Separate from [`apply_contact`] because it runs on every tick rather than on
+/// a tick with contacts, and because a caller driving the force law directly
+/// still wants the craft to finish blowing up.
+pub fn advance_state(state: &mut ShipState, dt: f32) {
+    if state.craft_state != CraftState::Destroyed {
+        return;
+    }
+    state.state_timer -= dt;
+    if state.state_timer <= 0.0 {
+        state.state_timer = 0.0;
+        state.craft_state = CraftState::Eliminated;
+    }
+}
+
 /// Fill the pool, `Ship_ResetShield` (`0x0883dd24`).
 ///
 /// The only thing on the disc that sets the pool to its maximum outright; a
@@ -146,6 +207,8 @@ pub struct Shield {
 /// quantity.
 pub fn reset(state: &mut ShipState, dimensions: &Dimensions) {
     state.shield = dimensions.shield;
+    state.craft_state = CraftState::Racing;
+    state.state_timer = 0.0;
 }
 
 /// The energy a frame's contacts cost, before the pool is touched.
@@ -177,6 +240,13 @@ pub fn apply_contact(
     wall: &WallResponse,
     rules: DamageRules,
 ) -> Shield {
+    // `Ship_Damage` refuses outright outside the racing states - a craft already
+    // blowing up takes no further damage. The original's gate lists states 4, 5,
+    // 6 and 2; the three this crate models collapse to "not racing".
+    if state.craft_state != CraftState::Racing {
+        return Shield::default();
+    }
+
     let max = dimensions.shield;
     let before = state.shield;
     let lost = contact_damage(wall.impulse_sum, rules);
@@ -186,6 +256,11 @@ pub fn apply_contact(
     state.shield = (before - lost).clamp(0.0, max);
 
     let depleted = state.shield <= 0.0 && before > 0.0;
+    if depleted {
+        // `Ship_Damage`'s `if (new <= 0.0) Ship_SetState(entity, 4)`.
+        state.craft_state = CraftState::Destroyed;
+        state.state_timer = DESTROYED_DURATION;
+    }
     let crossed_critical =
         percent(before, max) > CRITICAL_PERCENT && percent(state.shield, max) <= CRITICAL_PERCENT;
 
@@ -365,6 +440,76 @@ mod tests {
         let mut s = state(100.0);
         regenerate(&mut s, &d, DamageRules::default(), 1.0);
         assert_eq!(s.shield, 100.0);
+    }
+
+    /// The whole destroyed sequence, in the order the original runs it.
+    #[test]
+    fn emptying_the_pool_blows_the_craft_up_and_then_eliminates_it() {
+        let d = dimensions(300.0);
+        let mut s = state(1.0);
+        let report = apply_contact(&mut s, &d, &wall(1000.0), DamageRules::default());
+
+        assert!(report.depleted);
+        assert_eq!(s.craft_state, CraftState::Destroyed);
+        assert_eq!(s.state_timer, DESTROYED_DURATION);
+
+        // The explosion runs for half a second and not a tick less.
+        let dt = 1.0 / 60.0;
+        for _ in 0..29 {
+            advance_state(&mut s, dt);
+            assert_eq!(s.craft_state, CraftState::Destroyed);
+        }
+        advance_state(&mut s, dt);
+        assert_eq!(s.craft_state, CraftState::Eliminated);
+        assert_eq!(s.state_timer, 0.0);
+    }
+
+    /// `Ship_Damage` refuses outright outside the racing states, so a craft
+    /// already blowing up cannot be blown up again - and `depleted` cannot fire
+    /// twice, which is what a mode ending on it depends on.
+    #[test]
+    fn a_destroyed_craft_takes_no_further_damage() {
+        let d = dimensions(300.0);
+        let mut s = state(1.0);
+        apply_contact(&mut s, &d, &wall(1000.0), DamageRules::default());
+        let pool = s.shield;
+
+        let again = apply_contact(&mut s, &d, &wall(1000.0), DamageRules::default());
+        assert_eq!(
+            again,
+            Shield::default(),
+            "a destroyed craft kept taking hits"
+        );
+        assert_eq!(s.shield, pool);
+        assert_eq!(s.state_timer, DESTROYED_DURATION, "the explosion restarted");
+    }
+
+    /// Nothing advances outside the explosion, so a racing craft's timer cannot
+    /// drift and an eliminated one stays eliminated.
+    #[test]
+    fn only_the_explosion_runs_the_state_timer_down() {
+        let mut racing = state(100.0);
+        racing.state_timer = 5.0;
+        advance_state(&mut racing, 1.0);
+        assert_eq!(racing.state_timer, 5.0);
+
+        let mut done = state(0.0);
+        done.craft_state = CraftState::Eliminated;
+        advance_state(&mut done, 1.0);
+        assert_eq!(done.craft_state, CraftState::Eliminated);
+    }
+
+    /// Taking the grid clears the sequence as well as filling the pool - a
+    /// restart must not leave the previous run's wreck in place.
+    #[test]
+    fn reset_puts_a_wrecked_craft_back_in_the_race() {
+        let mut s = state(0.0);
+        s.craft_state = CraftState::Eliminated;
+        s.state_timer = 3.0;
+        reset(&mut s, &dimensions(300.0));
+        assert_eq!(s.craft_state, CraftState::Racing);
+        assert_eq!(s.state_timer, 0.0);
+        assert_eq!(s.shield, 300.0);
     }
 
     /// A ship whose `<Misc>` never loaded has a zero maximum, and the HUD divides
