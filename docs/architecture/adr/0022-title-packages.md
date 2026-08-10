@@ -5,6 +5,11 @@
 Accepted. Supersedes [ADR-0009](0009-multi-game-fanout.md) **item 3 only**;
 items 1, 2 and 4 stand unchanged.
 
+**Item 4 below is itself partly superseded by
+[ADR-0023](0023-boot-sequence-as-title-data.md)**, which gives the boot sequence
+an engine-side type in `oag-title`. Item 4 continues to govern every other
+presentation axis it names.
+
 ## Context
 
 ADR-0009 item 3 refused a game abstraction "until a second title's real shape
