@@ -347,6 +347,33 @@ an earlier pass read the flag as clear on all four), and
 fountain, byte-identical fields, plus `bits`) with no smoke and no
 `_TRAIL` - the variant the trigger spawns when a contact dealt no damage.
 
+## The collision sprite is identified and measured (2026-08-10)
+
+The texture every collision-spark draw binds is now pinned live: with
+breakpoints on all three draw helpers during a wall crash, every hit's
+recorded stream ends in the same `TBP0`/`TSIZE0` pair - one **64x64
+texture**, and PPSSPP's `SaveNewTextures` dump of it is unmistakably the
+`orange_glow2.tga` the `.pob`'s authoring path names: a radial glow with a
+white-hot core (`(253, 235, 220)` at the centre) tightening to saturated
+orange by `r ≈ 0.15` and dimming linearly outward at constant hue. Radially
+averaged measurements: alpha fits `(1-r)^0.92` with a plateau inside
+`r < 0.06`; the texel colour itself also dims essentially linearly while
+staying at saturation `0.98`. `oag_render::sparks`'s shader carries exactly
+that split (measured constants, not the texels - ADR-0006), which is what
+keeps a spark's bright part small: at the same alpha curve, a flat-rgb quad
+reads about twice as wide.
+
+Two honest caveats from the same session. The identification ran during a
+low-speed grinding state and every sampled draw went through the **mode-3
+billboard** helper - no streak-helper hit was observed, so which draw class
+each collision emitter takes in practice rests on the blend-table nibbles
+(`rmode 5 -> 0x60000019`, class 6; `rmode 6 -> 0x70000019`, class 7) and
+the earlier static reads, not on a live dispatch trace. And the texture
+sits in main RAM (`0x090e9ea0` that session) with no WAD entry answering
+any hashable `Data\Psys\Tex\...` name - how the loader resolves the
+authored path into these pixels is still the unlocated
+texture-reference gap recorded in `docs/formats/pob.md`.
+
 ## Open, deliberately
 
 - `FUN_088fc634` (shape 3, cone *placement*) and shapes 1/2/8 are unread;

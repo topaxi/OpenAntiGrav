@@ -61,14 +61,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let across = abs(in.texcoord.y * 2.0 - 1.0);
     let d = length(vec2<f32>(along, across));
     let shape = clamp(1.0 - d, 0.0, 1.0);
-    let shape2 = shape * shape;
-    // The shape belongs on alpha only, the same split exhaust.wgsl uses
-    // (`shape * in.colour.a`, rgb untouched): the additive blend already
-    // multiplies rgb by alpha (`src.rgb * src.a`), so folding the same
-    // falloff into rgb here as well squares it a second time. That second
-    // squaring is what made a spark's already-small quad (a few pixels at
-    // any sensible camera distance) collapse to a sub-pixel bright dot no
-    // rasterizer sample ever landed on - it looked like nothing drew at all
-    // rather than like a dim one.
-    return vec4<f32>(in.colour.rgb, shape2 * in.colour.a);
+    // The profile is measured off the shipped sprite itself, radially
+    // averaged from a PPSSPP texture dump of the 64x64 glow the collision
+    // effect binds (orange_glow2.tga - identified live: every psys draw in
+    // a crash reads the same texture address, and the dump's pixels carry
+    // the authoring-path's promise). Measured: alpha falls essentially
+    // linearly (fit (1-r)^0.92, a touch faster mid-range, hence 1.2); the
+    // texel colour *also* dims linearly with radius while keeping its
+    // saturated hue, whitening only in the innermost ~15 %. Splitting the
+    // falloff between rgb and alpha the same way the sprite does is what
+    // keeps the bright part of a spark small - a flat-rgb quad reads twice
+    // as wide at the same alpha curve, which was the reported "too big,
+    // not line-like" look.
+    let core = pow(shape, 8.0);
+    let rgb = mix(in.colour.rgb, vec3<f32>(1.0, 1.0, 1.0), core * 0.85) * shape;
+    return vec4<f32>(rgb, pow(shape, 1.2) * in.colour.a);
 }
