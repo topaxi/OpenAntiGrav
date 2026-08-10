@@ -429,3 +429,72 @@ fn every_psp_teams_boost_plume_samples_one_texture_column() {
         );
     }
 }
+
+/// Every team's plume authors the **same** texture-transform keyframe track,
+/// on both meshes: `u` ramping `2/256 -> 253/256` over key times 1..90
+/// (60 Hz frames), `v` fixed at 0, scale constant `(1.0, 1.0)`.
+///
+/// This is the scroll `race::Scene` samples per frame and applies to the
+/// plume's authored UVs - the recovered replacement for environment-mapped
+/// generation, after the plume's compiled list was read to be replayed under
+/// `TEXMAPMODE` 0. Mechanism and evidence:
+/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The values
+/// gap is closed"; on-disc layout: `docs/formats/vex.md`, "The
+/// texture-transform keyframe block". The values here were verified live
+/// against PSP RAM on Assegai; this test pins that the other seven teams
+/// author the same track rather than a per-team variant.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_psp_teams_boost_plume_authors_the_same_uv_scroll_track() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
+
+    for team in TEAMS {
+        let name = format!(r"Data\Ships\{team}\shipboost.vex");
+        let blob = archives
+            .read_name(&name)
+            .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+        let nodes = vex::nodes(&blob).expect("nodes");
+
+        let mut meshes = 0usize;
+        for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+            let payload = &blob[node.payload()];
+            let transform = vex::mesh_tex_transform(payload)
+                .unwrap_or_else(|| panic!("{name}: a plume mesh carries no keyframe block"));
+            assert_eq!(
+                transform.offset.times,
+                vec![1, 90],
+                "{name}: offset key times differ from the recovered track"
+            );
+            assert_eq!(
+                transform.offset.values,
+                vec![(2, 0), (253, 0)],
+                "{name}: offset key values differ from the recovered track"
+            );
+            assert_eq!(
+                transform.scale.values,
+                vec![(256, 256)],
+                "{name}: the scale track is not the constant 1.0 the plume authors"
+            );
+            // The law the renderer runs: clamped at both ends, linear between.
+            let at = |t: f32| transform.offset.sample(t).0;
+            assert_eq!(at(0.0), 2.0 / 256.0, "{name}: below-first-key clamp");
+            assert_eq!(at(90.0), 253.0 / 256.0, "{name}: past-end clamp");
+            let mid = at(45.5);
+            let expected = (2.0 + (253.0 - 2.0) * (44.5 / 89.0)) / 256.0;
+            assert!(
+                (mid - expected).abs() < 1e-6,
+                "{name}: lerp at t=45.5 gives {mid}, expected {expected}"
+            );
+            assert_eq!(
+                transform.offset.sample(45.5).1,
+                0.0,
+                "{name}: v moved; the plume's track holds it at 0"
+            );
+            meshes += 1;
+        }
+        assert_eq!(meshes, 2, "{name}: {meshes} mesh(es) with a track, not 2");
+    }
+}

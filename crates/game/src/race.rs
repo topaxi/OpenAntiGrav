@@ -535,6 +535,13 @@ pub struct Loaded {
     /// between `World` and the two `Mesh` nodes), so this is drawn once in
     /// ship space rather than mounted on a locator.
     pub boost_model: Option<Model>,
+    /// The plume's authored texture-transform animation, from the keyframe
+    /// block after its mesh's material array - the mechanism the original
+    /// samples the plume's authored UVs through (`TEXMAPMODE` 0; see
+    /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The
+    /// values gap is closed"). `None` when the model is absent or its meshes
+    /// carry no keys, which is the engine's own identity default.
+    pub boost_uv_transform: Option<oag_formats::vex::TexTransform>,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,
     /// The track's authored `fogCube` volumes, for [`Scene`] to sample per
@@ -948,6 +955,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // same name the PSP one does, and a missing boost plume is a missing
     // feature, not a broken load.
     let boost_name = boost_entry_name(&options.team, options.mode);
+    let mut boost_uv_transform = None;
     let boost_model = match archives.read_name(&boost_name) {
         Ok(blob) => match mesh::build_with_textures(&boost_name, &blob, None, options.lod) {
             Ok(model) => {
@@ -1019,6 +1027,25 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 // linearised texels crushes the halo's mid-tones by ~30% of
                 // encoded brightness - which is why the fix moved to the
                 // upload rather than being dropped.
+                //
+                // The authored u-scroll: the keyframe block after each mesh's
+                // material array, which the engine lerps per frame and feeds
+                // the GE as `TEXOFFSET`/`TEXSCALE`. Both plume meshes carry
+                // the identical track on every team read, so the first mesh
+                // that has one speaks for the model.
+                boost_uv_transform = oag_formats::vex::nodes(&blob).ok().and_then(|nodes| {
+                    nodes
+                        .iter()
+                        .filter(|n| n.class_id == oag_formats::vex::CLASS_MESH)
+                        .find_map(|n| oag_formats::vex::mesh_tex_transform(&blob[n.payload()]))
+                });
+                if let Some(transform) = &boost_uv_transform {
+                    report.push(format!(
+                        "{boost_name}: authored uv scroll, {} offset key(s) over {} frames",
+                        transform.offset.times.len(),
+                        transform.offset.period(),
+                    ));
+                }
                 Some(model)
             }
             Err(e) => {
@@ -1356,6 +1383,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         fog_volumes,
         ship_model,
         boost_model,
+        boost_uv_transform,
         visibility,
         flare,
         noise,
@@ -3702,6 +3730,7 @@ impl Drawable {
         sample_count: u32,
         depth: mesh_render::Depth,
         blend: wgpu::BlendState,
+        glow: mesh_render::GlowMask,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -3724,6 +3753,7 @@ impl Drawable {
             sample_count,
             depth,
             blend,
+            glow,
         )?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
@@ -3770,37 +3800,35 @@ impl Drawable {
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
 
-    /// Regenerates this model's texture coordinates the way the PSP GE's
-    /// transparent pass does, and uploads them.
+    /// Applies a texture transform to this model's **authored** UVs and
+    /// uploads them: `uv' = uv * scale + offset`, the GE's own
+    /// `TEXSCALE`/`TEXOFFSET` arithmetic.
     ///
-    /// `Mesh_BeginTransparentPass` sets `TEXMAPMODE` uvgen 2 - environment
-    /// (shade) mapping from the vertex normal and lights 0/1 - and nothing in
-    /// the batch loop undoes it, so a transparent batch's **authored** texture
-    /// coordinates are never read on the original. See
-    /// [`oag_render::texgen`], which carries the formula and the measurement
-    /// of what feeding the authored ones instead did to the boost plume.
+    /// Called only for the plume, and only on the frames it is visible. This
+    /// replaced environment-mapped generation (`oag_render::texgen`) on
+    /// 2026-08-10: the plume's compiled list is replayed under `TEXMAPMODE` 0
+    /// (settled live - mesh-draw.md, "The plume is replayed under
+    /// `TEXMAPMODE` 0"), so the original reads the authored coordinates,
+    /// through the keyframed transform `Loaded::boost_uv_transform` carries.
     ///
-    /// Called only for the plume, and only on the frames it is visible. The
-    /// general transparent pass is deliberately left alone: switching every
-    /// transparent batch on every track and ship to generated coordinates is
-    /// the blast radius `mesh-draw.md` has twice refused to take off one
-    /// pass, and it is not what the reported symptom needs.
-    ///
-    /// Per frame rather than once at load, because the dot product is between
-    /// a world-space light direction and a world-space normal: the
-    /// coordinates move as the **ship** turns. From `self.model.vertices`
-    /// every time rather than from the last frame's buffer, for the same
-    /// reason [`Self::deflect_airbrakes`] does.
-    fn generate_env_uvs(&self, queue: &wgpu::Queue, model: Mat4) {
-        let mut generated = Vec::new();
-        oag_render::texgen::environment_map(
-            &self.model.vertices,
-            &mut generated,
-            model,
-            oag_render::texgen::PLUME_LIGHT_0,
-            oag_render::texgen::PLUME_LIGHT_1,
-        );
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&generated));
+    /// From `self.model.vertices` every time rather than from the last
+    /// frame's buffer, for the same reason [`Self::deflect_airbrakes`] does:
+    /// accumulating offsets would drift.
+    fn apply_uv_transform(&self, queue: &wgpu::Queue, scale: (f32, f32), offset: (f32, f32)) {
+        let transformed: Vec<_> = self
+            .model
+            .vertices
+            .iter()
+            .map(|v| {
+                let mut v = *v;
+                v.texcoord = [
+                    v.texcoord[0] * scale.0 + offset.0,
+                    v.texcoord[1] * scale.1 + offset.1,
+                ];
+                v
+            })
+            .collect();
+        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&transformed));
     }
 
     /// Swings this model's airbrake flaps to `left` and `right` radians.
@@ -4026,6 +4054,12 @@ pub struct Scene {
     /// [`Exhaust::plume_visible`] is true, with the ship's own model matrix,
     /// since the original parents it to the craft rather than to the flare.
     boost: Option<Drawable>,
+    /// The plume's authored texture-transform keyframes, sampled per frame
+    /// and applied to its authored UVs - the recovered mechanism
+    /// (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
+    /// `Loaded::boost_uv_transform`). `None` falls back to the engine's own
+    /// identity default.
+    boost_uv_transform: Option<oag_formats::vex::TexTransform>,
     /// The collision soup overlay, present only when `Options::collision` asked
     /// for it. Drawn with the identity transform, same as the track: the
     /// collision geometry is already in world space.
@@ -4040,6 +4074,14 @@ pub struct Scene {
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
+    /// The recovered bloom, run after the scene pass over whatever the frame
+    /// stamped into its alpha channel. `None` when the pipelines would not
+    /// build, which costs the glow and nothing else.
+    ///
+    /// **Not exhaust-specific**, even though the exhaust is currently its only
+    /// writer: it blooms the glow mask, and any surface that opts into the mask
+    /// is handled by the same three passes. See `oag_render::post::bloom`.
+    bloom: Option<oag_render::post::bloom::Bloom>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -4085,11 +4127,13 @@ impl Scene {
         weapon_pad_model: Option<Model>,
         mode: Mode,
         boost_model: Option<Model>,
+        boost_uv_transform: Option<oag_formats::vex::TexTransform>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
+        bloom_enabled: bool,
         visibility: Option<TrackVisibility>,
         anti_aliasing: crate::display::AntiAliasing,
         fog_volumes: Vec<oag_formats::fog::FogVolume>,
@@ -4112,6 +4156,7 @@ impl Scene {
                     sample_count,
                     mesh_render::Depth::Sky,
                     mesh_render::TRANSPARENT_BLEND,
+                    mesh_render::GlowMask::Protected,
                 )
             })
             .transpose()?;
@@ -4124,6 +4169,7 @@ impl Scene {
             sample_count,
             scene_depth,
             mesh_render::TRANSPARENT_BLEND,
+            mesh_render::GlowMask::Protected,
         )?;
         // One per grid slot. Built up front rather than on demand, because a
         // `Drawable` needs the device and the pass does not have it.
@@ -4142,6 +4188,7 @@ impl Scene {
                 sample_count,
                 scene_depth,
                 mesh_render::TRANSPARENT_BLEND,
+                mesh_render::GlowMask::Protected,
             )?);
         }
         let collision = collision_model
@@ -4155,6 +4202,7 @@ impl Scene {
                     sample_count,
                     scene_depth,
                     mesh_render::TRANSPARENT_BLEND,
+                    mesh_render::GlowMask::Protected,
                 )
             })
             .transpose()?;
@@ -4171,6 +4219,7 @@ impl Scene {
                         sample_count,
                         scene_depth,
                         mesh_render::TRANSPARENT_BLEND,
+                        mesh_render::GlowMask::Protected,
                     )
                 })
                 .transpose()
@@ -4256,13 +4305,15 @@ impl Scene {
         // across 8 teams - `cargo run -p oag-assets --example
         // boost_vertex_type`), so that generation has something to vary with.
         //
-        // **Environment-mapped UV generation is now implemented**, 2026-08-09,
-        // for this model alone - `oag_render::texgen`, called from
-        // `Drawable::generate_env_uvs`. Every transparent batch on every track
-        // and ship is still left on authored coordinates, which is the blast
-        // radius this comment used to give as the reason for not doing it at
-        // all; scoping it to the plume gets the recovered mechanism without
-        // taking that risk.
+        // **Environment-mapped UV generation was implemented here 2026-08-09
+        // and replaced 2026-08-10**: the plume's compiled list is replayed
+        // under `TEXMAPMODE` 0 (settled by reading the recorded frame stream
+        // in GE order - mesh-draw.md, "The plume is replayed under
+        // `TEXMAPMODE` 0"), so the original samples the *authored* UVs
+        // through the keyframed `TEXOFFSET` u-scroll authored in the file
+        // itself. `Drawable::apply_uv_transform` now does exactly that;
+        // `oag_render::texgen` remains correct for batches genuinely inside
+        // the transparent-pass bracket, which the plume is not.
         //
         // **`SrcAlpha` stays, and it is no longer a stand-in - it is a
         // measured choice that beat the recovered alternative.** The argument
@@ -4325,6 +4376,12 @@ impl Scene {
                     sample_count,
                     scene_depth,
                     exhaust::BLEND,
+                    // **The plume feeds the bloom.** Its draw path in the
+                    // original opens the alpha channel unconditionally, unlike
+                    // the hull's - see `mesh_render::GlowMask`. Without this the
+                    // boost's brightest surface contributes nothing to the glow
+                    // mask, which is the shape of the effect a player notices.
+                    mesh_render::GlowMask::Written,
                 )
             })
             .transpose()?;
@@ -4341,12 +4398,26 @@ impl Scene {
             sample_count,
         ));
         let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format, sample_count));
+        // A failure here is reported and dropped rather than propagated: a race
+        // without a bloom is a dimmer race, not a broken one.
+        let bloom = match bloom_enabled
+            .then(|| oag_render::post::bloom::Bloom::new(device, format))
+            .transpose()
+        {
+            Ok(bloom) => bloom,
+            Err(e) => {
+                eprintln!("bloom unavailable ({e}) - the frame draws without it");
+                None
+            }
+        };
 
         Ok(Self {
+            bloom,
             track,
             visibility,
             ships,
             boost,
+            boost_uv_transform,
             collision,
             sky,
             pads,
@@ -4392,6 +4463,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
+        device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
@@ -4494,12 +4566,39 @@ impl Scene {
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
         // for the stale buffer contents to affect either way.
+        //
+        // The UVs are the authored ones, scrolled: the plume draws under
+        // `TEXMAPMODE` 0 (settled live - mesh-draw.md, "The plume is replayed
+        // under `TEXMAPMODE` 0"), sampling its authored coordinates through
+        // the keyframed `TEXSCALE`/`TEXOFFSET` transform the file itself
+        // carries. This replaced `oag_render::texgen` here 2026-08-10;
+        // texgen's environment mapping is real but belongs to the
+        // transparent-pass bracket, which the plume is not inside.
+        //
+        // The clock is the plume's own life timer, not the race clock: the
+        // original's updater receives `flare+0x88` verbatim (measured at its
+        // entry, t == the timer on every hit), and that field resets to 0 at
+        // each reveal. So every boost plays the 90-frame track exactly once -
+        // bright first key at reveal, darkening as it fades, clamped at the
+        // last key just as the plume hides (`PLUME_SECONDS` and the track
+        // span are both 1.5 s, by authoring, not coincidence). A free-running
+        // clock here is visibly wrong in both directions: a boost can start
+        // mid-ramp already faded, and one that outlives the wrap re-brightens
+        // as a second pulse. `Exhaust::plume_timer` carries exactly the
+        // original's reset-at-reveal semantics.
         if let Some(boost) = &self.boost
             && race.exhaust().plume_visible()
         {
             let model = race.ship_model_matrix();
             boost.write(queue, view_projection, model, 0.0);
-            boost.generate_env_uvs(queue, model);
+            let (scale, offset) = match &self.boost_uv_transform {
+                Some(transform) => {
+                    let t = race.exhaust().plume_timer() * 60.0;
+                    (transform.scale.sample(t), transform.offset.sample(t))
+                }
+                None => ((1.0, 1.0), (0.0, 0.0)),
+            };
+            boost.apply_uv_transform(queue, scale, offset);
         }
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
@@ -4569,7 +4668,16 @@ impl Scene {
                     // `Aspect`'s bars are made of - and a bar has to read as a
                     // bar. The old value was 0.03/0.04/0.06, dark enough that
                     // losing it costs nothing inside the viewport either.
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    // Black, and **alpha zero**: alpha is the bloom's glow mask
+                    // and a frame starts with nothing glowing.
+                    // `wgpu::Color::BLACK` has `a: 1.0`, which would mask the
+                    // entire frame in and bloom everything.
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -4649,6 +4757,18 @@ impl Scene {
         // same reason.
         self.exhaust.borrow().draw(&mut pass);
         self.sparks.borrow().draw(&mut pass);
+        // The scene pass has to close before the bloom can sample what it drew,
+        // so this ends the borrow rather than waiting for the scope to.
+        drop(pass);
+
+        // The recovered post-process, reading the alpha channel the ribbon and
+        // the flare stamped and adding a blurred copy of the masked colour back
+        // over the frame. `view` is the resolved image in both the MSAA and the
+        // single-sample case, which is why this runs on it rather than on
+        // `attachment_view`. See `oag_render::post::bloom`.
+        if let Some(bloom) = &self.bloom {
+            bloom.render(device, encoder, view);
+        }
         stats
     }
 }
@@ -4734,6 +4854,9 @@ pub struct CaptureOptions {
     pub aspect: crate::display::Aspect,
     /// Anisotropic filtering level for the track and ship textures.
     pub anisotropy: Anisotropy,
+    /// Whether the recovered bloom runs - see `crate::settings::Graphics::bloom`,
+    /// which defaults it **off** until its magnitude is calibrated.
+    pub bloom: bool,
     /// Which adapter to draw with, for the same reason `aspect` and `fov` are
     /// here: a capture is only evidence about what a player sees if it was
     /// drawn on the device they see it on. A driver is exactly the kind of
@@ -4870,6 +4993,7 @@ pub fn capture(
         pad_model,
         weapon_pad_model,
         boost_model,
+        boost_uv_transform,
         fog_volumes,
         visibility,
         flare,
@@ -4954,11 +5078,13 @@ pub fn capture(
         weapon_pad_model,
         mode,
         boost_model,
+        boost_uv_transform,
         flare,
         noise,
         format,
         scene_size,
         options.anisotropy,
+        options.bloom,
         visibility,
         options.anti_aliasing,
         fog_volumes,
@@ -4975,7 +5101,11 @@ pub fn capture(
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        // `TEXTURE_BINDING` because the bloom's bright pass samples the frame
+        // it was just drawn into - see `oag_render::post::bloom`.
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     });
     let surface = target.create_view(&wgpu::TextureViewDescriptor::default());
@@ -5028,6 +5158,7 @@ pub fn capture(
     // one of them are how that tier gets validated - see
     // `CaptureOptions::frustum_culling` and `CaptureOptions::pvs_culling`.
     scene.render(
+        &device,
         &queue,
         &mut encoder,
         &view,

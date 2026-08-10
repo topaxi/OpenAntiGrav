@@ -485,7 +485,7 @@ Three consequences, each of which corrects an earlier claim on this page:
    `0xdc` = `sceGuStencilFunc`), with func `1` = `GU_ALWAYS` - so it tests
    nothing and, with `StencilOp REPLACE`, only writes the stepped value into
    the framebuffer's alpha/stencil bits. Destination-alpha bookkeeping,
-   visually inert for the ribbon itself. Its base `ring+0x20` is not the zero
+   **not** visually inert - corrected 2026-08-10, see below. Its base `ring+0x20` is not the zero
    `Trail_InitRing` leaves either: `Exhaust_Update` writes
    `intensity * 0.5 * 0.9` there every frame (live: `0.2233` at intensity
    `0.497`). Only the innermost layer (layer 0, drawn last, per-segment
@@ -541,6 +541,35 @@ straight-line, mid-intensity frame with none of those - captured live at
 reimplementation draws. Comparing trail prominence across *different* speeds
 measures segment overlap, not fidelity.
 
+### The stencil ramp is the bloom mask, not bookkeeping
+
+**Corrected 2026-08-10.** Three places on this page called the ribbon's
+per-segment stencil value "destination-alpha bookkeeping, visually inert for
+the ribbon itself". That was wrong, and the reason it looked right is that
+nothing *in the ribbon's own draw* reads it - which is true, and does not
+make it inert.
+
+[`bloom.md`](bloom.md) recovers a four-pass framebuffer post-process whose
+bright pass is
+
+```text
+scratch = framebuffer.rgb * framebuffer.a
+```
+
+so the alpha channel the ribbon writes through `sceGuStencilOp(KEEP, KEEP,
+REPLACE)` with `Gu_StencilFunc(GU_ALWAYS, ...)` is **exactly the channel that
+decides what blooms**. `Exhaust_Update` drives its base every frame with
+`intensity * 0.5 * 0.9`, so the exhaust's glow strength is authored and ramps
+with engine intensity - it simply reaches the picture one subsystem later.
+
+This is also the standing explanation for the brightness gap measured above:
+the original's exhaust is not only drawn, it is **masked into a bloom that
+adds `0.686 x` a 3.43x-gain blur of itself back over the frame**, and this
+project renders none of that. The lesson worth keeping is the general one -
+**"nothing in this draw reads it" is not "nothing reads it"**, and a write to
+a shared framebuffer channel needs the consumer found before it is called
+inert.
+
 ### The baked vertex colours: the authored colours are alive, and they fade
 
 `Trail_ApplyPreset` (`0x0892a724`) fills the per-layer vertex buffers once at
@@ -592,7 +621,7 @@ point is this scalar and the position occupies the other three**, which also exp
 
 The value stepped down toward the tail from `ring+0x20` feeds `Gu_StencilFunc`
 with func `GU_ALWAYS` - a stencil ramp, not the alpha test an earlier version of
-this page called it, and visually inert either way (see the GE-state section
+this page called it, and **not** visually inert either way (see the GE-state section
 above). **The visible fade toward the tail is real, but it is the baked vertex
 colour curve**, `powf(1 - 0.1 i, 3.333)` - see the bake section above. "There is
 no per-segment alpha fade for a racing craft" was true of the *alpha channel*
@@ -787,6 +816,49 @@ node the parser does not decode. Against the PSP disc's `Data.wad`:
   **`trail_con_left_wing`** and **`trail_con_right_wing`**. Both readings are true;
   the wreck one is not the whole story.
 
+### Every node class on a ship file, unfiltered - there is no missing boost asset
+
+2026-08-10, asked directly: could the boost visual be some asset other than
+`<Team>boost.vex`? **No.** Every earlier census on this page filtered to the
+classes it was already interested in (`Engine Flare`, `Trail`, `exitglow`),
+which cannot answer that question by construction. Run unfiltered over three
+teams:
+
+| `Ship.vex` class | Count | Names |
+| --- | ---: | --- |
+| `0x006e` `Transform` | 6-16 | `ship`, `shadow`, `canopy`, `locator1/2`, `lod` |
+| `0x00f4` | 1 | `world` |
+| `0x0125` `Mesh` | 7-9 | `shipShape`, `AirBrake_*Shape`, `canopyShape` |
+| `0x02ee` | 1 | `lodGroup1` |
+| `0x03bf` `Engine Flare` | **1** | `engine_flare` |
+| `0x03c1` `Texture` | 8 | the team's own textures plus `envtest4bit` |
+| `0x03c3` | 2 | `shadowShape`, `shadow_lodShape` |
+| `0x03c5` `Airbrake` | 2 | `AirBrake_Left/Right` |
+| `0x03d0` | 6-10 | `ship_collision_fx*` |
+| `0x03e2` | 1 | `ship_muzzle` |
+| `0x03eb` | 2 | `cannon_flash_left/right` |
+
+`shipboost.vex` is **seven or eight nodes total**: `world`, two `Mesh`, one
+`Texture` (`pulse_boost2_ADD.tga`), and the three Maya junk nodes. Nothing
+else.
+
+Two consequences:
+
+- **`engine_fire` (`0x3e5`) has no instances on a ship either.** This page's
+  Open list has carried it as a class with a name and no registration site;
+  it now also has no authored instance anywhere a craft would use one. The
+  open item stands as an RE curiosity and is **not** a candidate for missing
+  boost geometry.
+- **The boost visual is two meshes and one texture, and that is the whole of
+  it.** So any remaining fidelity gap is in *how those two meshes are drawn* -
+  the sampling mode, the blend, the falloff - and not in content this project
+  fails to load. That is worth stating plainly, because "we must be missing an
+  asset" is the cheaper hypothesis and it is now excluded.
+
+The per-team mesh names vary (`bflare1Shape`/`bflare2Shape` on Assegai,
+`bflareShape`/`bflare1Shape` on Feisar, `boost1:boost1:bflareShape`/
+`bflareShape` on Qirex), so nothing should match on those names.
+
 ### The ship's trail parameters, from preset 2
 
 `Trail_InitPreset` is a table of three presets and `ExhaustFlare_Init` passes **2**:
@@ -796,7 +868,7 @@ node the parser does not decode. Against the PSP disc's `Data.wad`:
 | `ring+0x04` | 10 | ring capacity, in samples |
 | `ring+0x08` | 0.1 | **per-sample colour fade step** for the vertex bake (a field the first reading skipped; presets 0/1 use 1/12 and 0.125) |
 | `ring+0x1c` | 1.0 at init | width scale - **overwritten every frame** by `Exhaust_Update` with `intensity * 0.35 + 0.2` (live: `0.3737` at intensity `0.497`), so the shipped `1.0` never survives a race tick |
-| `ring+0x20` | 0 at init | stencil ramp base - overwritten every frame with `intensity * 0.5 * 0.9` (live: `0.2233`); visually inert |
+| `ring+0x20` | 0 at init | stencil ramp base - overwritten every frame with `intensity * 0.5 * 0.9` (live: `0.2233`); **the bloom mask**, see [bloom.md](bloom.md) |
 | `ring+0x2c` | -4.5 | **taper rate**, derived as `-(ring[0x24] / (capacity * dt)) * 0.75` |
 | `ring+0x24` | 1.0 | **width taper at the head** |
 | `ring+0x64` | 3 | layer count |
@@ -1529,6 +1601,16 @@ results that bear on this page:
   hard negative for "something scales the rim down without discarding its hue"
   being GE state at all.
 
+**Overturned 2026-08-10 for the plume specifically.** The next two paragraphs
+were written for the transparent-pass bracket and attributed to the plume;
+the plume draws *outside* the bracket, under `TEXMAPMODE` 0, settled live at
+confidence 92 by walking the recorded frame stream in GE execution order to
+the plume's own draw words - see mesh-draw.md, "The plume is replayed under
+`TEXMAPMODE` 0". The plume's authored UVs *are* read, sampled through an
+animated per-material `TexOffset` u-scroll. The paragraphs stand as evidence
+about batches genuinely inside the bracket (73 `PRIM`s per frame draw under
+mode 2, measured in that section).
+
 **What supplies the falloff instead is the texture, reached through generated
 coordinates.** The transparent pass sets `TEXMAPMODE` uvgen `2` -
 **environment (shade) mapping** from the vertex normal and lights 0/1 - and
@@ -1547,7 +1629,11 @@ recorded here as a suspected decode bug. **The decode was correct all along.**
 And the two experiments this page cited as refutations - `u` scaled by 128, and
 `u`/`v` swapped, both "changing the picture not at all" - were manipulating
 coordinates the original never reads, so their conclusion stands but their
-reasoning does not.
+reasoning does not. *(2026-08-10: "coordinates the original never reads" is
+itself now overturned - the original reads them under mode 0. Why those two
+experiments changed nothing is re-opened; the animated `TexOffset` and the
+one-texel-wide authored `u` are the plausible reason a `u` rescale was
+invisible.)*
 
 The decisive check: every one of the **32** `shipboost.vex` batches across all
 eight PSP teams reads `vtype = 0x013d` - `tex=u8, col=8888, nrm=s8, pos=s16,
@@ -1581,6 +1667,107 @@ would change every transparent batch on every track and ship, and this repo
 already carries a rejected project-wide blend flip
 ([mesh-draw.md](mesh-draw.md)) as the precedent for not doing that off one
 pass's finding. It is the highest-value next step for this subsystem.
+
+### The ribbon measured against a gameplay capture, and what the "plasma balls" are
+
+2026-08-10, from seven PPSSPP screenshots of a real boost taken through a
+tunnel - the first comparison on this page against **ordinary play from the
+chase camera** rather than a placed pose. The report that opened it: the
+original's boost shows "small plasma glowing balls exiting the exhaust" where
+this project draws "an almost solid mesh".
+
+**The balls are the `Trail`, not `<Team>boost.vex`.** Two independent reasons,
+and the first is decisive on its own:
+
+- `Data\Tex\engineFlare\Engine_noise.mip` decodes to a **cloudy blob field** -
+  64x64, 8bpp, 4 mip levels, luma min `0.004`, mean `0.325`, max `0.941`, in
+  large soft lobes. That texture *is* the plasma-ball pattern, and the ribbon
+  is the only thing that samples it.
+- In the capture the mottled column sits on the craft centreline at the
+  nozzle, which is where the single `engine_flare` node's ribbon is; the
+  plume's two starbursts are the separate magenta spikes further out, off the
+  wings.
+
+So a search for the difference belongs in `Trail_DrawRibbon`'s parameters, not
+in the boost plume. Three candidate mechanisms were measured and **two are
+refuted**:
+
+#### The method, because the obvious one gives a wrong answer
+
+The two frames have very different backgrounds - the capture is a dark tunnel
+(`48/94/75`), ours is open bright track (`83/150/135`) - and the ribbon blends
+additively, so background brightness reaches the measurement directly. **A
+first pass subtracted a distant background patch and reported our trail at
+`1.00 / 0.21 / 0.80`. That number is an artefact and is retracted.**
+
+Two controls fixed it, and both are worth reusing:
+
+1. **Isolate ours exactly by differencing.** Render the same tick twice, once
+   with `trail_vertices` suppressed, and subtract. The background cancels to
+   the bit, so what remains is the ribbon's own additive contribution with no
+   estimator in the loop.
+2. **Validate the estimator against that known truth.** A per-row local
+   background (median of the 40 px either side of the ribbon, at the same
+   scanline) reproduces the differenced answer to `0.02` on green and `0.09`
+   on blue. Only then is it applied to the original, where differencing is
+   not available.
+
+#### The measurements
+
+| Measure | The original (3 frames) | Ours |
+| --- | --- | --- |
+| noise wavelength down the trail axis (detrended 1D power spectrum) | 23 px peak, 18.6-22.3 px centroid | 33.5 px peak, 25.2 px centroid |
+| normalised high-pass contrast (`rms(highpass) / mean luma`) | 0.077 | 0.086 |
+| additive contribution over the same band, per-row local background | `111/91/125`, `113/91/141`, `70/63/81` | `51/28/71` |
+| the same, normalised to red | 1.00 / 0.80-0.90 / 1.13-1.24 | 1.00 / **0.54** / **1.39** |
+| ours again, **exact**, by differencing | - | 1.00 / **0.56** / **1.30** |
+| trail pixels clipped at 255 in at least one channel | **0.48-0.54** | **0.30** |
+
+- **The tiling is the right order of magnitude.** A first reading of these
+  frames guessed ours was 3-4x too finely tiled; it is about 1.4x *coarser*.
+  The recovered constants survive: `Trail_BakeVertexColours` (`0x08929c8c`)
+  was re-read to the instruction for this and writes `u` as
+  `(short)(int)(frac * 65535.0)` stepping `ring+0x08` per sample and `v` as
+  `(short)(int)(i * 0.25 * 65535.0)` for `i = 0..4`, which is exactly what
+  [`TEXCOORD_U16_GAIN`](../../../../crates/render/src/exhaust.rs) and
+  `LAYER_TEX_SCALE_U` already encode. **Nothing here justifies moving them.**
+- **The modulation depth is not the problem either** - ours is slightly
+  *higher* than the original's, so the noise is reaching the picture.
+- **Our colour is faithful to the recovered constants, and that is now a
+  positive result rather than an absence of evidence.** The three authored
+  layer colours predict `1.00 / 0.60 / 1.27` summed at equal overlap and
+  `1.00 / 0.53 / 1.50` weighted by the layers' own widths; the differenced
+  measurement lands at `1.00 / 0.56 / 1.30`, between them. `LAYER_COLOUR`,
+  the staggered ramps and the fade curve are all reaching the picture
+  correctly.
+
+#### What the numbers actually say: ours is about 2.2x too dim
+
+The robust finding is the one that survives the clipping, and it is a
+brightness gap rather than a colour one:
+
+**The original's band puts `327` counts of light where ours puts `149`, and it
+clips half its pixels where ours clips a third - from the *darker* background
+of the two.** A brighter base makes clipping easier, so ours had the advantage
+and still clips less. Both figures are floors, and the original's is the
+looser one, so `2.2x` is a **lower bound** on how much brighter the original's
+exhaust is.
+
+That also explains the reported symptom without needing a second mechanism.
+Where a plume clips, the noise stops modulating anything and neighbouring
+lobes merge into one solid mass; where it sits just *below* clipping and
+blooms, the same noise reads as discrete glowing lobes. The original is bright
+enough for the second, ours only for a mid-tone wash - which is what "an
+almost solid mesh" describes.
+
+**So this points at the same unimplemented item the bloom paragraph below
+does** - [`roadmap.md`](../../../overview/roadmap.md)'s M6 "bloom and the
+bright-pass on the exhaust and lights" - plus whatever exposure difference
+carries the remaining factor, and **not** at any constant on this page.
+Confidence **75**: the ratio rests on three capture frames against one of
+ours, both clipped, at different track sections and different scene exposure.
+What would settle it is our renderer captured on a matched dark section, where
+neither side clips.
 
 ### What still does not match
 
@@ -1684,22 +1871,29 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   four are [downloadable content](../../../formats/dlc-pack.md) and the fifth is
   a Pure team. It was never a `mine-names` job.
 - **What writes `self+0x84`** the `1` and `2` values that gate submit and update.
-- **What arms `boost_timer` (`flare+0xb8`) in the *original binary*.**
-  Everything downstream of it is recovered - `Exhaust_UpdateEngineSound` decays
-  it, `engine_on` reads it against `0.2`, the half-size adds
-  `boost_timer * 8.0`, and `Exhaust_Update` reveals the `<Team>boost.vex`
-  model while it exceeds `0.2` (hiding it again once `flare+0x88` passes
-  `1.5` s). The *writer* - a boost-start, pad contact or pickup - was searched
-  for by store-offset and not found this pass; it is gameplay code, most
-  likely reached at the same site as `ExhaustFlare_OnSpeedupPad`
-  (`0x08904f10`, see `BOOST_SECONDS`'s doc comment). **This reimplementation's
-  own trigger is settled and shipped**, independently of finding that
-  original writer: `Race::test_speedup_pads` calls
-  `self.exhaust.boost(exhaust::BOOST_SECONDS)` on the same edge
-  `ExhaustFlare_OnSpeedupPad` fires on, and the plume now draws off that timer
-  end to end. What remains open here is purely the RE question of where in
-  `BOOT.BIN` the equivalent store happens, not whether the visual is
-  triggered.
+- ~~**What arms `boost_timer` (`flare+0xb8`) in the *original binary*.**~~ -
+  **not open, and it never was after 2026-08-03. This entry was stale, struck
+  2026-08-10.** `ExhaustFlare_OnSpeedupPad` (`0x08904f10`) *is* the writer:
+  its whole body is `flare->0xb8 = 0x3f4ccccd` (`0.8f`) followed by the
+  `"SPEEDUPPAD"` cue, and its one caller `Ship_ApplySpeedupPad`
+  (`0x08849078`) reaches it through `craft->0x1c4 -> +0x78` inside the
+  new-pad branch. Decompiled and written up on
+  [pads.md](pads.md#exhaustflare_onspeeduppad-0x08904f10), and
+  `oag_render::exhaust::BOOST_SECONDS`'s doc comment has cited the same store
+  all along - this page's Open list simply never caught up.
+
+  **Recorded because the failure mode is the expensive one**: the entry said
+  the writer "was searched for by store-offset and not found", which reads as
+  an open RE question and sent a later pass back into Ghidra to re-derive a
+  result the repository already held two copies of. When a sibling page closes
+  an item, strike it here in the same change.
+
+  Worth keeping from the old entry: the whole speed-pad chain contains **no
+  particle system and no second visual**. `Ship_ApplySpeedupPad` applies the
+  boost force and bumps the pad statistics, `ExhaustFlare_OnSpeedupPad` arms
+  the timer and plays a sound, and `Exhaust_Update` spends that timer on the
+  flare's half-size and the `<Team>boost.vex` reveal. Anyone hunting a missing
+  boost effect should look at how the existing three draw, not for a fourth.
 - ~~The ribbon's texture function~~ - **closed 2026-08-02** at 90: modulate /
   `TCC_RGBA` / colour-double off, set once by `Gfx_Init` and confirmed
   unchanged by a full-frame command-stream scan plus the driver's live shadow
@@ -1736,8 +1930,12 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   is in fact sharper: the authored alpha reaches the picture as a *weight* on
   the additive blend, which is exactly what `oag_render::exhaust::BLEND` already
   does.**) The falloff comes from the *texture*, sampled through
-  environment-generated coordinates. See the section above and
-  [mesh-draw.md](mesh-draw.md). What replaced it as the open item was narrower
+  environment-generated coordinates. (**Overturned for the plume 2026-08-10:
+  it draws under `TEXMAPMODE` 0 and samples its authored UVs through an
+  animated `TexOffset` u-scroll - see mesh-draw.md, "The plume is replayed
+  under `TEXMAPMODE` 0". The uvgen-2 recovery below stays correct for batches
+  inside the bracket; only its application to the plume is withdrawn.**)
+  What replaced it as the open item was narrower
   and was a **rendering** gap rather than an RE one - environment-mapped UV
   generation was not implemented - and **that is closed too, 2026-08-09, on
   both halves**. [mesh-draw.md](mesh-draw.md) carries the uvgen-2 equation, the
@@ -1842,6 +2040,41 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   > corrected render and the original, against 329 uncorrected - a different
   > quantity from the registration metric entirely.
 
+  > **Sixth measurement, 2026-08-10 - the recovered UV mechanism replaces
+  > texgen, and at the right animation phase it beats it on nearly every
+  > column.** The plume's compiled list was settled as replayed under
+  > `TEXMAPMODE` 0 (mesh-draw.md), the authored keyframed u-scroll it
+  > samples through was recovered down to its bytes in the file, and the
+  > scroll's clock was settled as `flare+0x88` - the plume's own life
+  > timer, reset at each reveal, so every boost plays the bright-to-dark
+  > 90-frame sweep exactly once (texture-animation.md). That clock makes
+  > the capture's phase *derivable*, not a nuisance variable: the boost
+  > timer decays at 1/s from `0.8`, so tick 62's recorded `0.517752` puts
+  > it **~17 frames after the reveal**. Rendered at exactly that phase
+  > (`--ticks 17 --pose-boost 0.801085`, everything else the shipped row's;
+  > `plume_timer` then reads 17 frames and the boost timer the recorded
+  > value at capture):
+  >
+  > | build | px | mean | `b - r` | orange px | mean luma |
+  > | --- | ---: | --- | ---: | ---: | ---: |
+  > | the original | 12,377 | `(193, 147, 218)` | +24.8 | 425 | 169.0 |
+  > | texgen + `SrcAlpha` (replaced) | 6,095 | `(171, 133, 194)` | +22.8 | 1,714 | 151.1 |
+  > | authored UVs + u-scroll, **wrong** phase 0 | 3,792 | `(131, 102, 171)` | +39.5 | 2,768 | 118.3 |
+  > | **authored UVs + u-scroll, derived phase 17** | **8,867** | `(190, 149, 202)` | +12.7 | **1,520** | **167.4** |
+  >
+  > Extent 0.72 of the original against texgen's 0.49; mean `r`/`g` within
+  > three counts; **the "~11 % dimmer" residual is gone** (167.4 vs 169.0).
+  > The phase-0 row is kept because it is the measurement that exposed how
+  > much of the long-open "a term in the blend chain is still missing" gap
+  > was actually *animation phase*: the same build, same pose, same blend,
+  > moves mean luma 118 -> 167 purely by sampling the texture column the
+  > original was sampling. What remains open, smaller than before: `b` runs
+  > 16 counts low (`b - r` +12.7 vs +24.8), the orange rim is still 3.6x
+  > the original's, and extent is 0.72. Whether that residue is the flare
+  > overlay's different footprint, the still-unexplained `SrcAlpha`-vs-
+  > `GU_FIX` question, or both, is the next lever - the coordinates are
+  > done.
+
   **Fourth measurement of this table, and the first with an instrument that
   does not break under it.** The first used the wrong pose age and a boost
   accumulator charging 100x too slowly; the second fixed those; the third was
@@ -1868,6 +2101,27 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   exhaustively, all five setters to their command byte with `Gu_TexFunc`
   confirmed `MODULATE`/`TCC_RGBA`, a negative at confidence 92 - and
   `SrcAlpha` is kept because it measures better, not because it is understood.
+
+  > **Closed 2026-08-10, and the answer is that `SrcAlpha` *is* the recovered
+  > blend.** `Gfx_BuildBatchStateList` (`0x0891f890`) - the state builder on
+  > the plume's own draw path, `Mesh_CompileGeometryPass`, not
+  > `FUN_089307b4`'s - decodes against the plume's measured
+  > `pass_mask = 0x1232` to
+  > `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX 0xffffff)`, i.e.
+  > `src.rgb * src.a + dst`. The branch is selected by `pass_mask & 0x200`,
+  > which [`oag_formats::vex::BlendClass`] has documented as "additive and
+  > source-alpha weighted" since the format pass.
+  >
+  > **The `GU_FIX`/`GU_FIX` reading this paragraph assumed came from
+  > `Mesh_SetBatchDrawState`, and the plume never takes that path.** So there
+  > was never a missing term in a blend chain - the chain being read was the
+  > wrong one. Nothing in `oag_render` changes: `race.rs`'s override to
+  > `exhaust::BLEND` already programs exactly this, and the batch's own
+  > `pass_mask` would have selected it unaided, which makes the override
+  > redundant rather than compensatory. What changes is its **status**, from an
+  > empirical fit to a read. Confidence 90.
+  >
+  > See [mesh-draw.md](mesh-draw.md) for the full state decode.
 
   **And a new gap opens that the old pipeline was hiding.** Ours reads
   `(143, 110, 178)` against the original's `(193, 147, 218)` over the same

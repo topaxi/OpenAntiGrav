@@ -482,6 +482,25 @@ pub struct Graphics {
     /// though this read shows it is not a UV offset.
     #[serde(default = "default_animated_textures")]
     pub animated_textures: bool,
+    /// Whether the recovered bloom post-process runs.
+    ///
+    /// **Defaults off, and the reason is honesty rather than taste.** The
+    /// passes are a faithful port - every constant is read out of `BOOT.BIN`,
+    /// see `oag_render::post::bloom` - but the *magnitude* reaching the picture
+    /// is not yet calibrated: measured on one boost frame it quadruples the
+    /// blown-out area (4,381 to 17,578 fully white pixels) and erases the
+    /// craft, where the original's shows the hull plainly with the plume as two
+    /// distinct wing spikes.
+    ///
+    /// The suspect is how much the glow mask accumulates rather than the bloom
+    /// arithmetic: `oag_render::exhaust::BLEND` weights alpha `SrcAlpha`/`One`,
+    /// so overlapping plume fins build the mask to saturation, while the
+    /// original's `GU_FIX 0xffffff` destination factor carries **no alpha**,
+    /// which would make it a replace. That is a PSP blend-semantics question
+    /// this project has not settled. Until it is, defaulting this on would ship
+    /// a known-wrong picture to make a recovered subsystem visible.
+    #[serde(default = "default_bloom")]
+    pub bloom: bool,
     /// How much crossing a speed pad widens the field of view for a moment.
     ///
     /// **[`crate::display::BoostFovKick::DEFAULT`] by default, and an authored
@@ -538,6 +557,11 @@ fn default_camera_view() -> crate::display::CameraView {
     crate::display::CameraView::default()
 }
 
+/// See [`Graphics::bloom`]: **off** until its magnitude is calibrated.
+fn default_bloom() -> bool {
+    false
+}
+
 fn default_animated_textures() -> bool {
     false
 }
@@ -557,6 +581,7 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             lod: Lod::default(),
             animated_textures: default_animated_textures(),
+            bloom: default_bloom(),
             boost_fov_kick: default_boost_fov_kick(),
             camera_view: default_camera_view(),
         }

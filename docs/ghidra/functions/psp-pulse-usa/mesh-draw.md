@@ -143,6 +143,393 @@ batch can be drawn with, which is what matters: a replayed list was the obvious
 place to look for a missing alpha path, and it is ruled out - see
 [exhaust.md](exhaust.md)'s section on the boost plume's vertex alpha.
 
+## Live: uvgen 2 is real, and it is bracketed around the transparent pass
+
+2026-08-10, measured on PPSSPP under Xvfb (`docs/reverse-engineering/ppsspp-debugger.md`'s
+preferred setup) with a breakpoint armed **before the race loaded**, so
+display-list compilation was in scope.
+
+**`Mesh_BeginTransparentPass` (`0x0890d904`) does run** - one hit, during the
+race load, immediately after the front end committed to TIME TRIAL. So the only
+site that programs `Gu_TexMapMode(2, 0, 1)` is live code, not a path the game
+never takes. That much is settled, and it is what `oag_render::texgen`
+reproduces.
+
+**It is scoped, not global.** Its caller `FUN_0890d508` is a three-line
+bracket:
+
+```c
+Mesh_BeginTransparentPass();   // Gu_TexMapMode(2, 0, 1) - environment map on
+FUN_0890db54(mesh, ...);       // the transparent draws
+FUN_0890dc20(...);             // Gu_TexMapMode(0, 0, 1) - back to authored coords
+```
+
+which identifies `FUN_0890dc20` - previously known only as "a tiny function
+that sets mode 0" - as the pass's **restore**.
+
+**Why a race-time breakpoint sees none of this.** Sampling `Gu_TexMapMode`
+during a moving race catches only mode `0` (from `0x08910e2c`) and mode `1`
+(`GU_TEXTURE_MATRIX`, from `0x08910dc0`), roughly 3:1, and **never mode 2** -
+because the mode-2 call happens once, at compilation, and is recorded into a
+display list rather than executed per frame. A stationary craft at the
+countdown produces no `Gu_TexMapMode` calls at all, which is a false negative
+worth naming: an earlier pass concluded from exactly that sample that the
+engine never programs the mode during a race.
+
+**What is still not settled is which list the plume's batches land in.**
+`Mesh_CompileDisplayLists` calls the bracket **twice** (`0x0890fcd4`,
+`0x0890fd54`) *and* `Mesh_CompileGeometryPass` twice (`0x0890feb8`,
+`0x0890ff38`), each preceded by its own `Gu_Start(GU_CALL, ...)`. So one model
+yields several independently-recorded lists, only some of them inside the
+uvgen-2 bracket. The plume's batches are on the geometry-pass side per this
+page's own earlier correction, and a freshly started list does not inherit the
+bracket's state - so the mode live when the plume's list is *replayed* is the
+open question, unchanged. **Since settled: mode 0 - see "The plume is replayed
+under `TEXMAPMODE` 0" below.**
+
+**Net effect on the implementation:** `oag_render::texgen` moves from
+"empirically better, with its mechanism attributed through a pass the plume
+does not take" to "the mechanism exists, is live, and is bracketed" - which is
+a real upgrade in status and still not a proof that the plume is inside it.
+
+### The live shadow reads mode 0 - and why that is weaker evidence than it looks
+
+`Gu_TexMapMode` keeps a shadow: it stores `mode & 3` into **`ctx+0xf4`**, where
+`ctx` is the sceGu context at **`0x08adc3ac`**. That address is the struct's
+**base, not a pointer to it** - a first attempt dereferenced it and got zero.
+**Corrected 2026-08-10:** `+0x08` is the master list's *start* (read live:
+`0x48bacc40` at two independent freezes - a "current write pointer" would not
+sit exactly at the start twice), and **`+0x0c` is the current write pointer**
+(read live: `0x48bad3a8`, mid-frame). Both are uncached mirrors of main RAM
+(`0x48bacc40 & 0x1fffffff = 0x08bacc40`), not VRAM as an earlier version of
+this paragraph said.
+
+The shadow is readable while the game free-runs, so it costs nothing and does
+not slow the emulator - the failure mode that defeated every breakpoint-based
+attempt. Sampled 160 times across a race with the boost armed by hand:
+
+| | samples |
+| --- | ---: |
+| mode 0, `GU_TEXTURE_COORDS` | **160** |
+| mode 1 / mode 2 | 0 |
+
+including all 160 taken while `boost_timer > 0.2`, i.e. with the plume
+revealed.
+
+**This does not show that mode 2 is unused, and it must not be cited that
+way.** Mode 2 is set inside `FUN_0890d508`'s bracket and restored a few draws
+later, so its window is microseconds per frame while the sampler polls over
+seconds; catching it would be luck. What the sample does establish is the
+**steady state** - what is live outside that bracket - and that is
+unambiguously authored coordinates.
+
+So the two live results are consistent and neither is decisive for the plume:
+`Mesh_BeginTransparentPass` genuinely runs (breakpoint, one hit, at load), and
+the steady-state mode is 0 (polling, 160 of 160). Which of the two the plume's
+own compiled list is replayed under still needs the list's bytes read
+directly - scan it for a `0xc0`-prefixed word - rather than any form of
+sampling. That is the one method left that has no timing exposure, and it is
+where the next pass should start.
+
+### A harness note worth keeping
+
+Crossing a speed pad from a teleported craft is unreliable - breakpoint
+stepping starves the approach, an unsteered run walks into a wall, and even a
+placement `0.2` units off pad 0's own axis at 120 units/s never reached it.
+**It is also unnecessary.** `ExhaustFlare_OnSpeedupPad` does exactly one thing
+to the visual, so the boost can be armed by hand:
+
+```text
+craft -> +0x1c4 -> +0x78 = the Engine Flare        (psp-trace's --flare chain)
+write 0.8f at flare+0xb8                            = the boost timer
+```
+
+Verified live: the value reads back, and `Exhaust_UpdateEngineSound` decays it
+exactly as the recovered code says. That reveals `<Team>boost.vex` with no
+driving at all.
+
+## Which `TEXMAPMODE` the plume gets was **not** settled, and this page overstated it
+
+**Since settled: mode 0, `GU_TEXTURE_COORDS` - see the next section.** This
+section stands as the record of why every earlier method fell short.
+
+2026-08-10. `Gu_TexMapMode` (`0x08811508`) has **13** callers, and reading the
+arguments at four of them shows the engine uses at least three different modes:
+
+| Site | In | Call | Meaning |
+| --- | --- | --- | --- |
+| `0x0890d948` | `Mesh_BeginTransparentPass` (`0x0890d904`) | `(2, 0, 1)` | environment map, LS0 = light 0, LS1 = light 1 |
+| `0x0890e584` | `FUN_0890e304` | `(1, 0, 0)` | `GU_TEXTURE_MATRIX` |
+| `0x0890e76c` | `FUN_0890e304` | `(0, 0, 0)` | `GU_TEXTURE_COORDS` - the authored UVs |
+| `0x0890dc30` | `FUN_0890dc20` | `(0, 0, 1)` | authored UVs |
+
+**The uvgen-2 finding this page carries was attributed through
+`Mesh_BeginTransparentPass`, and the plume does not take that path** - this
+page already corrected that scope once, for the alpha test, and the same
+correction applies here and was not made. Nor does the plume's own state
+builder set the mode: neither `Gfx_BuildBatchStateList` nor
+`Mesh_CompileGeometryPass` emits `0xc0`.
+
+And the plume's draws are **recorded into a display list at load** by
+`Mesh_CompileDisplayLists` (`0x0890fe...`, two call sites, each preceded by
+`Gu_Start(GU_CALL, ...)`), so the mode that applies is whatever is live when
+that list is *replayed* - ambient state, not something the list carries.
+
+**So "the transparent pass generates its texture coordinates" is true of the
+pass it was read from and unproven for the plume.** What keeps the
+implementation defensible meanwhile is empirical rather than structural:
+`oag_render::texgen` measurably improved the plume when it landed (extent
++12 %, orange -9 %, `b - r` closest to the original of three builds), which is
+evidence that *something* generates them, not proof of which mode.
+
+Settling it needs the replay site traced - which of the 13 setters last ran
+before the plume's list is called - or a live `0xc0` read at a breakpoint on
+the plume's draw. **Until then the plume's two short batches remain the open
+question they were**: 9 and 10 vertices whose authored UVs decode to a single
+point, harmless under generated coordinates and a flat one-texel sample under
+authored ones.
+
+## The plume is replayed under `TEXMAPMODE` 0 - settled, live
+
+**2026-08-10, confidence 92.** Runtime read on PPSSPP (remote debugger,
+`scripts/ppsspp_debugger.py` harness), Talon's Junction TIME TRIAL / VENOM,
+boost held up by rewriting `0.8f` at `flare+0xb8`. Single binary, so the
+rubric's runtime-trace ceiling of 94 applies; the two points under it are for
+one title, one track, one race mode.
+
+**The boost plume's batches draw with `TEXMAPMODE` mode 0,
+`GU_TEXTURE_COORDS` - the authored UVs.** Not mode 2. The environment-map
+bracket is real and runs every frame (73 `PRIM`s per frame execute under mode
+2, measured below), but the plume is not inside it, exactly as the
+geometry-pass structural reading predicted.
+
+### The chain, walked live
+
+```text
+craft 0x09a04170 -> +0x1c4 -> 0x09a031b0 (entity)
+                 -> +0x78  -> 0x09a2af50 (Engine Flare; +0xc0 owner check OK)
+                 -> +0x160 -> 0x09a2dbd0 (the <Team>boost.vex model)
+model+0x20 -> 0x09a2f230   mesh 1 (header 0x09a2e150, u16 flags 0x1232,
+                                   mesh+0x68 = 0 list-A, +0x6a = 2 list-B)
+sibling (signature scan) -> 0x09a2f460   mesh 2 (same shape)
+```
+
+Both meshes have `mesh+0x158 = 0` and their compiled geometry list at
+**`mesh+0x15c`** - the `list = 1` slot of the `mesh + list*4 + 0x158` table
+earlier on this page, consistent with the plume being list-B-only geometry.
+
+### Every byte of the replayed chain, read: no `0xc0` anywhere
+
+Mesh 1's `+0x15c` list is 21 words, and its entire recursive CALL closure was
+decoded word by word (mesh 2's is the same shape):
+
+```text
+BASE/CALL 0x0416b900    interned per-batch state list (EDRAM, 28 words) - no 0xc0
+BASE/CALL 0x09a2df80    per-material texture transform (5 words)        - no 0xc0
+BASE/CALL 0x09a2f6d0    texture bind list (16 words: TBP/TBW/TSIZE/
+                        CLUT/TFLUSH)                                    - no 0xc0
+VTYPE 0x1200013d, VADDR, PRIM (strip)      x2, one per batch
+RET
+```
+
+So the list carries no mode of its own, and the mode that applies is ambient
+state at replay - confirming the structural reading, and moving the question
+to what that ambient state is.
+
+Two side findings from the same read:
+
+- **The per-material texture transform list is compiled lazily, on first
+  draw.** Before the boost was armed, `0x09a2df80` was unwritten heap
+  (`0xfeadfead` canaries); after one armed frame it reads
+  `TexScale(1.0, 1.0)`, `TexOffset(u, 0)`, `RET` - with `u` **animating**
+  (read `0.956` and `0.504` at two freezes, per mesh). This is the
+  per-material `Gu_TexScale`/`Gu_TexOffset` transform HANDOVER.md carries as
+  real-and-unported, and it means the plume's authored UVs are sampled
+  *through a moving u-offset*, not statically.
+- **Nothing CPU-calls the compiled geometry lists per frame.** A breakpoint
+  on `Gu_CallList` (`0x08810598`) conditioned on `a0 ==` either list never
+  fires, and a full-RAM scan finds no `CALL` word targeting them anywhere.
+  Instead the deferred draw path re-records the same six-command sequence
+  into per-item EDRAM blocks each frame (found at `0x041b88xx`, `0x041c3dxx`
+  and mirrors - byte-identical to the compiled list, ending in `RET`), and
+  the master list at the sceGu context's list start (`0x08bacc40`) is a flat
+  run of `BASE`/`CALL` pairs into those blocks in sorted order, holding no
+  state words itself.
+
+### The decisive read: the recorded frame, walked in GE order
+
+With the CPU frozen mid-frame, a script walked the recorded stream exactly as
+the GE would - from the master list's start to its current write pointer,
+following `BASE`/`CALL`/`JUMP`/`RET`, tracking every `0xc0` word - and stopped
+at each plume `VADDR` (`0x01a2e240`, `0x01a2e680`, `0x01a2ed60`; the fourth
+batch sits between the same words in mesh 2's block). The mode live at the
+plume's own draw commands, in the order the GE consumes them:
+
+| Sample | plume batches reached | mode at each | PRIMs under mode 0 | under mode 2 |
+| ---: | ---: | --- | ---: | ---: |
+| 1-6 | 3 of 3 observed, every sample | **0, all** | 596-660 | 73 |
+
+The 73 mode-2 `PRIM`s per frame are the positive control: the walker's mode
+tracking does see the `Mesh_BeginTransparentPass` brackets (`0xc0000002` ...
+draws ... `0xc0000000`, visible as paired words in the trail), and the plume
+is never among them - it draws downstream of a bracket's *restore*, under
+mode 0, in six of six independently frozen frames.
+
+**What this kills:** `oag_render::texgen`'s environment-map coordinates are
+not what the original applies to the plume. The original samples the plume's
+authored UVs - two of its four batches decode to a single UV point - through
+the animated per-material `TexOffset` u-scroll above. The empirical
+improvement texgen bought (recorded in HANDOVER.md) was real but for the
+wrong reason; the recovered mechanism to port is authored UVs + the animated
+transform.
+
+The scroll itself was recovered in the same session, down to its authored
+keyframes in the `.vex` file: `u` ramps `2/256 -> 253/256` over key times
+1..90 in 60 Hz frames, `v = 0`, scale constant `(1.0, 1.0)`, evaluated at
+the flare's own life timer (`flare+0x88`, reset at each reveal) - so it
+plays **once per boost**, bright to dark, ending exactly as the plume's
+1.5 s life expires. Mechanism, clock, evaluator/updater names and the
+on-disc block layout: [texture-animation.md](texture-animation.md), "The
+values gap is closed"; file layout: `docs/formats/vex.md`, "The
+texture-transform keyframe block".
+
+Scripts for the whole read are session scratch
+(`plume-lists*.py`, `ge-walk*.py`); the reusable pieces are the harness
+recipe already on this page and `scripts/ppsspp_debugger.py`.
+
+## `Gfx_BuildBatchStateList` decoded, and the boost plume's blend with it
+
+`0x0891f890`, confidence **90**. This is the state builder on the path the
+boost plume actually takes (`Mesh_CompileGeometryPass`, `0x0890d0cc`), as
+opposed to `Mesh_SetBatchDrawState` on `FUN_089307b4`'s. Read 2026-08-10 while
+chasing the plume's fidelity; it settles a question `exhaust.md` had carried
+open for four passes.
+
+`param_2` is the batch's `pass_mask`, `param_3` a material flags word. Traced
+against the plume's own measured `pass_mask = 0x1232`:
+
+```text
+Gu_PixelMask(0)                                  every channel writable - the glow mask
+Gu_TexWrap(REPEAT, REPEAT)                       (& 4) and (& 8) both clear
+Gu_Disable(CULL_FACE)                            (& 0x20) set
+                                                 (& 0x700) = 0x200, so the blended group:
+Gu_DepthFunc(6);  Gu_DepthMask(1)
+                                                 (& 0x100) clear, (& 0x200) set:
+Gu_Enable(BLEND)
+Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX 0xffffff)
+Gu_ColorFunc(GU_NOTEQUAL, 0, 0xffffff);  Gu_Enable(COLOR_TEST)
+Gu_Enable(ALPHA_TEST);  Gu_AlphaFunc(GU_GREATER, 0, 0xff)
+                                                 (& 0xc0) clear, (& 0x700) set:
+Gu_StencilOp(KEEP, KEEP, KEEP);  Gu_Disable(STENCIL_TEST)
+```
+
+**The blend is `src.rgb * src.a + dst`** - the `SrcAlpha`/`One` that
+`oag_render::exhaust::BLEND` already programs and that `exhaust.md` recorded as
+an unexplained empirical fit. It is not a fit; `pass_mask & 0x200` selects it,
+and the format layer's `BlendClass` has described that bit as "additive and
+source-alpha weighted" all along. The competing `GU_FIX`/`GU_FIX` reading is
+`Mesh_SetBatchDrawState`'s, and **the plume never reaches that function**.
+
+Three smaller consequences:
+
+- **The plume disables the stencil test and stamps no reference**, so what it
+  contributes to the glow mask is its own fragment alpha through the blend,
+  not a stamped constant. That is what `mesh_render::GlowMask::Written` gives
+  it.
+- `Gu_ColorFunc(GU_NOTEQUAL, 0, 0xffffff)` discards fragments whose RGB is
+  exactly black. Under an additive blend that is **algebraically inert** for
+  any content - a fill-rate optimisation on a part where fill is the scarce
+  resource. Recovered-but-inert state, of the kind
+  [`methodology.md`](../../../reverse-engineering/methodology.md) warns against
+  porting as a "fix".
+- `FUN_088117cc` is `sceGuColorFunc`, read from its body: GE commands `0xd8`
+  `COLORTEST`, `0xd9` `COLORREF`, `0xda` `COLORTESTMASK`.
+
+## The texture filter is one global setting, and the mip chain is bounded by the asset
+
+Read 2026-08-10, chasing a reported difference in the exhaust's texture detail
+([exhaust.md](exhaust.md), "the ribbon measured against a gameplay capture").
+Both halves came back as **negatives against the reimplementation**, which is
+why they are recorded: each one is a search another pass would otherwise run
+again.
+
+### `Gu_TexFilter` (`0x088113f0`)
+
+| | |
+| --- | --- |
+| **Confidence** | 88 |
+
+```c
+void Gu_TexFilter(u32 min, u32 mag);   // emits mag << 8 | min | 0xc6000000
+```
+
+The body writes the GE command word directly, the same evidence class as the
+other `Gu_*` helpers this directory documents at 85-90, and `0xc6` is
+`TEXFILTER`. **It is the only `0xc6` emitter in the binary** - a `lui`
+scan over all 636,020 instructions returns exactly one match, at `0x08811404`.
+
+**All four call sites pass the same pair, `(min = 7, mag = 1)`:**
+
+| Call site | In |
+| --- | --- |
+| `0x0891e4d8` | `Gfx_FlushRenderManager` |
+| `0x0891f618` | `Gfx_Init` (`FUN_0891f320`) |
+| `0x0888b63c` | unnamed |
+| `0x088ef068` | unnamed |
+
+`min = 7` is `GU_LINEAR_MIPMAP_LINEAR` and `mag = 1` is `GU_LINEAR`, so the
+whole program draws **trilinear-minified, bilinear-magnified** and nothing ever
+selects a nearest filter. There is no per-material, per-pass or per-texture
+filter override anywhere, because there is nowhere for one to be emitted.
+
+**The consequence is a negative.** "The original keeps hard texel edges the
+reimplementation blurs away" is not available as an explanation for any
+difference in any textured surface - `oag_render`'s samplers already use
+`Linear`/`Linear`, which is the same state.
+
+### How many mip levels the GE actually gets
+
+`Texture_BuildBindList` (`0x08928d4c`, above) takes the level count from the
+**texture object's own `+0x05` byte** and uses it twice:
+
+```c
+u32 levels = texture[0x05];
+*out++ = 0xc2000000 | (levels - 1) << 16 | swizzle;   // TEXMODE, maxmips
+for (u32 i = 0; i < levels; i++)                      // TEXADDR/TEXBUFWIDTH/TEXSIZE
+    emit_level(i, width >> i, height >> i, ...);      // per level
+```
+
+That `+0x05` is the same field [`psp-texture.md`](../../../formats/psp-texture.md)
+records at `.mip` header `+0x06` and `oag_formats::texture` exposes as
+`Texture::mip_count`. So **the asset decides the chain depth, and the GE never
+samples below the level the artists shipped.** Measured on the two textures
+this mattered for: `pulse_boost2_ADD` (embedded in `shipboost.vex`) declares
+**2** levels, `Engine_noise.mip` declares **4**.
+
+`Gu_TexLevelMode` (`0x088114b0`, confidence 80) is the `0xc8` `TEXLEVEL`
+emitter - `(bias & 0xff) << 16 | mode | 0xc8000000`, the bias scaled by
+`DAT_08ab0524` and clamped to `[-0x80, 0x7f]`. `Gfx_FlushRenderManager` calls
+it `(mode = 2, bias = 1.0)`; `Texture_BuildBindList` emits mode `2` with a
+computed bias, or mode `0` with none, on the texture's `+0x06 & 0x18` bits.
+Either way level selection is automatic, as it is under wgpu.
+
+**This one is a real divergence and it is measured inert.** `oag_render`
+synthesises a **full** box-filtered chain down to 1x1 (`mesh_render::mip_chain`,
+7 levels for a 64x16 texture) and the exhaust path uploads **level 0 only** with
+no `mipmap_filter` at all - neither matches the asset's own count. Both were
+tested at the reference pose on 2026-08-10:
+
+| Experiment | Result |
+| --- | --- |
+| cap `mip_chain` at 2 levels, matching `pulse_boost2_ADD` | **3 pixels** differ by more than 4/255 across the whole frame |
+| give the exhaust textures a full chain and `MipmapFilterMode::Linear` | mean absolute difference **0.02/255**, max 20 |
+
+So neither surface is minified enough at race distance for the chain depth to
+reach the picture, and **neither is a candidate for any visible difference**.
+Worth fixing on its own account - a synthesised level is not the authored one,
+and `Texture::mip_count` is already parsed and currently ignored by every
+consumer - but not worth attributing a symptom to.
+
 **`mesh+0x70` is a pointer to the per-*model* object, not a per-mesh block** -
 also corrected 2026-08-08. It is `Vex_LoadModel`'s own object (`model+0x1a4` is
 the texture-pointer array, dereferenced as `*(int *)(mesh + 0x70) + 0x1a4` in
@@ -755,6 +1142,10 @@ previous pass on this subsystem got wrong.
 | --- | --- | --- | --- |
 | `0x08811b58` | function | `Gu_SetState` | 92 |
 | `0x08811814` | function | `Gu_AlphaFunc` | 92 |
+| `0x088113f0` | function | `Gu_TexFilter` | 88 |
+| `0x088117cc` | function | `Gu_ColorFunc` | 90 |
+| `0x0891f890` | function | `Gfx_BuildBatchStateList` | 90 |
+| `0x088114b0` | function | `Gu_TexLevelMode` | 80 |
 | `0x088126ac` | function | `Gu_Material` | 90 |
 | `0x088112c8` | function | `Gu_Color` | 88 |
 | `0x08811508` | function | `Gu_TexMapMode` | 88 |

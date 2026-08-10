@@ -1,14 +1,27 @@
 //! Environment ("shade") mapped texture-coordinate generation, the PSP GE's
 //! `TEXMAPMODE` uvgen mode 2.
 //!
+//! # Scope, corrected 2026-08-10
+//!
+//! **The boost plume no longer uses this module, and the plume-specific
+//! rationale below is retained as history.** The plume's compiled display
+//! list was read to be replayed under `TEXMAPMODE` 0 - authored coordinates,
+//! sampled through the keyframed `TEXOFFSET` u-scroll authored in
+//! `shipboost.vex` itself (see `mesh-draw.md`, "The plume is replayed under
+//! `TEXMAPMODE` 0", and `texture-animation.md`, "The values gap is closed").
+//! What this module implements stays real for the batches genuinely inside
+//! the `Mesh_BeginTransparentPass` bracket - 73 `PRIM`s per frame draw under
+//! mode 2 on Talon's Junction - but nothing in the reimplementation draws
+//! those yet, so the module currently has no caller.
+//!
 //! # Why this exists
 //!
 //! `Mesh_BeginTransparentPass` (`0x0890d904`) sets `Gu_TexMapMode(2, 0, 1)` -
 //! uvgen 2 with `TEXSHADELS` LS0 = light 0, LS1 = light 1 - and nothing inside
-//! the batch loop re-emits `0xc0` to undo it, so **a transparent batch's
-//! authored texture coordinates are never read**. The GE generates them per
-//! vertex from the vertex normal and two light directions instead. See
-//! [`mesh-draw.md`], "The transparent pass generates its texture coordinates".
+//! the batch loop re-emits `0xc0` to undo it, so a transparent batch inside
+//! that bracket never reads its authored texture coordinates. The GE
+//! generates them per vertex from the vertex normal and two light directions
+//! instead. See [`mesh-draw.md`].
 //!
 //! Until this module existed the reimplementation fed those authored
 //! coordinates to the sampler, and for `Data\Ships\<Team>\shipboost.vex` -

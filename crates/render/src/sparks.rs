@@ -848,7 +848,10 @@ impl Pipeline {
                     targets: &[Some(wgpu::ColorTargetState {
                         format,
                         blend: Some(blend),
-                        write_mask: wgpu::ColorWrites::ALL,
+                        // Colour only - the original's particle draw path
+                        // (`FUN_08915fd0`) calls `Bloom_SetPixelMask(g_bloom, 0)`,
+                        // protecting the glow mask. See `crate::post::bloom`.
+                        write_mask: wgpu::ColorWrites::COLOR,
                     })],
                     compilation_options: Default::default(),
                 }),

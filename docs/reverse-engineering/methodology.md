@@ -201,6 +201,37 @@ invisible; fill rate is the scarcest resource on the part. On a reimplementation
 with a different fill budget those are recovered-but-inert state - correct to
 document, wrong to port, and actively harmful to port as a "fix".
 
+**When something animates or glows, look at the texture-coordinate path
+first - but confirm before concluding, because this engine has already faked
+it once.** Three separate subsystems on this project turned out to move a
+texture rather than move geometry, and each was found late:
+
+| Mechanism | Where | How it animates |
+| --- | --- | --- |
+| a scroll advanced inside a draw loop | `Trail_DrawRibbon`, per layer, into `Gu_TexOffset`/`Gu_TexScale` | on a 60 Hz clock |
+| a per-material `TEXSCALE`/`TEXOFFSET` display list | built by `FUN_08927358` from a **curve evaluator** (`FUN_08927204`), gated on the material's `& 0x10` bit, replayed by `FUN_089271cc` on one draw path and `FUN_0892733c` on the other | on a time at `mesh+0x40` |
+| environment-mapped UV generation (uvgen 2) | `Mesh_BeginTransparentPass`, from the vertex normal and two fixed light vectors | as the **model** turns, not on a clock |
+
+The third is the trap inside the trap: it animates without any clock, so a
+search for "what advances the offset" finds nothing and the effect still moves.
+
+**And the counterexample is why this is a hint rather than a rule.** The ship's
+shoulder lights measurably pulse - 120 frame-accurate screenshots, pixels
+sampled at a real light - and [`vex.md`](../formats/vex.md) read that as the
+engine scrolling the shared texture's V globally. A breakpoint on
+`Gu_TexOffset` through a live race, 60 hits, found the exhaust ribbon to be the
+**only** non-zero offset the engine ever submits; no track surface and no ship
+receives one. The pulse is real and the mechanism was *not* a coordinate
+scroll. That cost a long pass, and the standing candidate is an animated
+*colour* instead - `Trail_DrawRibbon` already sets a per-draw colour through
+`Gu_Ambient`, and a per-object colour on a clock pulses a light without moving
+a UV or rewriting a palette.
+
+So: check the UV path early because it is cheap and it is often right, then
+**put a breakpoint on the two primitives before writing it down**. "It looks
+like a scroll" has already been wrong once, at length, and the write-up that
+believed it had to be retracted from a format page rather than a scratch note.
+
 **An xref count on a class descriptor bounds *authored* instances only.** One
 pass concluded that racing craft have no exhaust trail, because `Trail`'s class
 descriptor is referenced by nothing but its own registration function and no

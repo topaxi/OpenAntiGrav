@@ -269,6 +269,14 @@ pub const BOOST_GATE: f32 = 0.2;
 /// Independent of [`BOOST_SECONDS`]: the plume's own accumulator only resets
 /// at the reveal, so once up it runs this full span regardless of how long
 /// `boost_timer` stays above [`BOOST_GATE`].
+///
+/// `flare+0x88` is also the **animation clock** of the plume's authored
+/// keyframed u-scroll, whose track spans exactly these 90 frames - measured
+/// at `TexAnim_UpdateTransform`'s entry, the time argument equals this timer
+/// on every hit. So each boost plays the bright-to-dark texture sweep once,
+/// ending as the plume hides; `race::Scene` reproduces that by sampling the
+/// track at [`Exhaust::plume_timer`]. See
+/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
 pub const PLUME_SECONDS: f32 = 1.5;
 
 /// How long a speed pad lights the flare for, in seconds.
@@ -597,15 +605,19 @@ impl Exhaust {
                 let fade_b = ramp * trail_fade(k + 1);
                 let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
                 let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
+                // The glow mask ramps to zero along the ribbon - see
+                // [`trail_glow`]. Flat here reads as a solid white cone.
+                let glow_a = trail_glow(self.intensity, k);
+                let glow_b = trail_glow(self.intensity, k + 1);
                 let ua = k as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 let ub = (k + 1) as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 for fin in 0..TRAIL_FINS {
                     let va = fin as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
                     let vb = (fin + 1) as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
-                    let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va);
-                    let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb);
-                    let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va);
-                    let b1 = rib_vertex(pb + rim[fin + 1] * wb, cb, ub, vb);
+                    let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va, glow_a);
+                    let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb, glow_a);
+                    let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va, glow_b);
+                    let b1 = rib_vertex(pb + rim[fin + 1] * wb, cb, ub, vb, glow_b);
                     out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
                 }
             }
@@ -855,13 +867,15 @@ pub fn trail_taper(sample: usize) -> f32 {
 /// One ribbon vertex: the rgb already carries `authored colour x ramp x fade`,
 /// and the alpha channel is inert under the ribbon's pure-additive blend
 /// ([`TRAIL_BLEND`]).
-fn rib_vertex(p: Vec3, rgb: [f32; 3], u: f32, v: f32) -> GpuVertex {
+fn rib_vertex(p: Vec3, rgb: [f32; 3], u: f32, v: f32, glow: f32) -> GpuVertex {
     GpuVertex {
         position: p.to_array(),
         normal: [0.0, 0.0, 1.0],
-        // Alpha 1.0: under [`TRAIL_BLEND`] both factors are One, so the shader's
-        // alpha output never reaches the colour result - same as the GE.
-        colour: [rgb[0], rgb[1], rgb[2], 1.0],
+        // Alpha is the **glow mask**, not an opacity: [`TRAIL_BLEND`]'s colour
+        // factors are both One, so this never reaches the colour result - it is
+        // stamped into the target's alpha for the bloom's bright pass to weigh.
+        // See [`TRAIL_GLOW_GAIN`].
+        colour: [rgb[0], rgb[1], rgb[2], glow],
         texcoord: [u, v],
         // Emissive, like the flare: no light rig.
         lit: 0.0,
@@ -906,12 +920,71 @@ pub const TRAIL_BLEND: wgpu::BlendState = wgpu::BlendState {
         dst_factor: wgpu::BlendFactor::One,
         operation: wgpu::BlendOperation::Add,
     },
+    // **Alpha replaces rather than accumulates, and that is not the colour
+    // blend.** `Trail_BuildStateList` opens the alpha channel with
+    // `Gu_PixelMask(0)` and then writes it through
+    // `sceGuStencilOp(KEEP, KEEP, REPLACE)` with `Gu_StencilFunc(GU_ALWAYS, ...)`,
+    // so each fragment *stamps* the ribbon's glow value instead of adding to
+    // what is there. Additive alpha would saturate the mask almost immediately -
+    // twelve quads overlap at the nozzle - and the bloom reads that channel as
+    // its bright-pass weight. See `crate::post::bloom`.
     alpha: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::One,
-        dst_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::Zero,
         operation: wgpu::BlendOperation::Add,
     },
 };
+
+/// How much of the engine intensity reaches the glow mask, `ring+0x20`.
+///
+/// `Exhaust_Update` writes the ribbon's stencil base as `intensity * 0.5 * 0.9`
+/// every frame (live-confirmed at `0.2233` for an intensity of `0.497`), and
+/// `Trail_DrawRibbon` stamps it into the framebuffer's alpha. That channel is
+/// the bloom's bright-pass mask, so this is what makes the exhaust glow at all -
+/// see [`crate::post::bloom`].
+///
+/// **An earlier reading called this value "visually inert".** It is not; nothing
+/// in the ribbon's own draw reads it, but the post-process does. See
+/// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
+///
+/// The value is **not** flat along the ribbon: see [`trail_glow`].
+pub const TRAIL_GLOW_GAIN: f32 = 0.5 * 0.9;
+
+/// The glow mask at segment `k`, as a fraction of the head value.
+///
+/// Read at instruction level from `Trail_DrawRibbon` (`0x0892b214`-`0x0892b29c`)
+/// on 2026-08-10, which is the pass that made the bloom usable:
+///
+/// ```text
+/// f24  = 255.0                       ; lui a0, 0x437f
+/// f22  = ring[0x20] * f24            ; the head value, in 0..255
+/// f22  = f22 / n                     ; one step
+/// f20  = ring[0x20] * f24            ; the running value
+/// loop:  ref = trunc(f20) & 0xff     ; Gu_StencilFunc(GU_ALWAYS, ref, 0xff)
+///        f20 = f20 - f22
+/// ```
+///
+/// So the stencil reference is a **linear ramp from the head value down to
+/// zero at the tail**, in the byte range the framebuffer's alpha channel
+/// actually has. `ring[0x20]` is reloaded per layer, so each layer runs its
+/// own ramp rather than continuing the previous one.
+///
+/// **Getting this wrong is not subtle.** Stamping the flat head value on every
+/// segment - which this module did for one revision, because the step was
+/// recorded as unrecovered - makes the ribbon's whole length a full-strength
+/// bloom source and blows the exhaust out to a solid white cone. Measured
+/// 2026-08-10 against the same frame both ways.
+///
+/// Two known simplifications, both recorded rather than hidden: the original
+/// stamps one *constant* per segment where an interpolated vertex attribute
+/// ramps across it, and `& 0xff` cannot wrap here because the head value is at
+/// most `255`.
+#[must_use]
+pub fn trail_glow(intensity: f32, segment: usize) -> f32 {
+    let n = (TRAIL_SAMPLES - 1) as f32;
+    let fall = 1.0 - (segment as f32 / n);
+    intensity * TRAIL_GLOW_GAIN * fall.max(0.0)
+}
 
 /// The maximum vertices [`Pipeline`]'s buffer holds: the flare's one quad.
 ///
@@ -1026,57 +1099,72 @@ impl Pipeline {
             immediate_size: 0,
         });
 
-        let build_pipeline = |label: &str, blend: wgpu::BlendState| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[Some(wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![
-                            0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                            4 => Float32
-                        ],
-                    })],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some("fs_main"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: Some(blend),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState {
-                    // A camera-facing quad has no meaningful winding: the basis it
-                    // is built from flips as the camera orbits. The original
-                    // disables cull for both the flare and the ribbon.
-                    cull_mode: None,
-                    ..Default::default()
-                },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: crate::mesh_render::DEPTH_FORMAT,
-                    depth_write_enabled: Some(false),
-                    depth_compare: Some(wgpu::CompareFunction::Less),
-                    stencil: Default::default(),
-                    bias: Default::default(),
-                }),
-                multisample: wgpu::MultisampleState {
-                    count: sample_count,
-                    ..Default::default()
-                },
-                multiview_mask: None,
-                cache: None,
-            })
-        };
-        let pipeline = build_pipeline("exhaust", BLEND);
-        let trail_pipeline = build_pipeline("exhaust trail", TRAIL_BLEND);
+        let build_pipeline =
+            |label: &str, blend: wgpu::BlendState, write_mask: wgpu::ColorWrites| {
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some(label),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &[Some(wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &wgpu::vertex_attr_array![
+                                0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                                4 => Float32
+                            ],
+                        })],
+                        compilation_options: Default::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: Some("fs_main"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format,
+                            blend: Some(blend),
+                            write_mask,
+                        })],
+                        compilation_options: Default::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        // A camera-facing quad has no meaningful winding: the basis it
+                        // is built from flips as the camera orbits. The original
+                        // disables cull for both the flare and the ribbon.
+                        cull_mode: None,
+                        ..Default::default()
+                    },
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: crate::mesh_render::DEPTH_FORMAT,
+                        depth_write_enabled: Some(false),
+                        depth_compare: Some(wgpu::CompareFunction::Less),
+                        stencil: Default::default(),
+                        bias: Default::default(),
+                    }),
+                    multisample: wgpu::MultisampleState {
+                        count: sample_count,
+                        ..Default::default()
+                    },
+                    multiview_mask: None,
+                    cache: None,
+                })
+            };
+        // **The flare writes colour only, and that is a deliberate limit on the
+        // evidence rather than an oversight.** The ribbon's write to the bloom's
+        // glow mask is explicit and recovered - `Trail_BuildStateList` opens the
+        // channel and stamps a value through `sceGuStencilOp(..., REPLACE)`.
+        // `ExhaustFlare_BuildDisplayList` only calls `Gu_PixelMask(0)`, which
+        // opens every channel but is also just the default state, so "the flare
+        // opts into the mask" is an inference from a state reset, not a read of
+        // a write. Acting on it makes the flare's own alpha accumulate under
+        // `BLEND` (`SrcAlpha`/`One`) across a quad that is `6.5` world units
+        // wide during a boost, saturating the mask over most of the lower frame
+        // and blowing the whole picture out - measured 2026-08-10. Until the
+        // flare's contribution is read rather than inferred, only the ribbon
+        // feeds the bloom. See `crate::post::bloom` and
+        // `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
+        let pipeline = build_pipeline("exhaust", BLEND, wgpu::ColorWrites::COLOR);
+        let trail_pipeline = build_pipeline("exhaust trail", TRAIL_BLEND, wgpu::ColorWrites::ALL);
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("exhaust uniforms"),
@@ -1687,15 +1775,31 @@ mod tests {
             LAYER_WIDTH[0] * scale
         );
 
-        // Colour fades along the ribbon on the baked curve; alpha stays 1.0
-        // because the additive blend ignores it.
+        // Colour fades along the ribbon on the baked curve.
         let head_lum = v[0].colour[2];
         let tail_lum = v[per_layer - per_segment + 2].colour[2];
         assert!(
             tail_lum < head_lum * 0.01,
             "tail colour {tail_lum} must be under 1% of head {head_lum}"
         );
-        assert!(v.iter().all(|vert| vert.colour[3] == 1.0));
+
+        // **Alpha is the bloom's glow mask, not an opacity, and it is not 1.0.**
+        // This assertion used to read `colour[3] == 1.0` on the reasoning that
+        // the additive blend ignores alpha - true of the *colour* result, and
+        // the reason the value looked free to be anything. It is not free: the
+        // ribbon stamps `intensity * TRAIL_GLOW_GAIN` into the target's alpha
+        // for `oag_render::post::bloom`'s bright pass to weigh, reproducing
+        // `Trail_BuildStateList`'s stencil `REPLACE`. See [`TRAIL_GLOW_GAIN`].
+        assert!(
+            (v[0].colour[3] - trail_glow(1.0, 0)).abs() < 1e-6,
+            "the head carries the full glow value, not an opacity"
+        );
+        assert!(
+            v[per_layer - 1].colour[3] < v[0].colour[3] * 0.2,
+            "the glow ramps down along the ribbon: tail {} vs head {}",
+            v[per_layer - 1].colour[3],
+            v[0].colour[3]
+        );
 
         // Layer 0 is the authored deep blue times the ramp: red stays zero.
         assert_eq!(v[0].colour[0], 0.0);

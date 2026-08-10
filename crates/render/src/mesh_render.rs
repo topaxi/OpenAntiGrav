@@ -250,6 +250,8 @@ pub fn capture_from(
         1,
         Depth::Scene,
         TRANSPARENT_BLEND,
+        // The offscreen helper has no bloom behind it, so the mask is moot.
+        GlowMask::Protected,
     )?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -652,6 +654,43 @@ pub enum Depth {
 /// instead, because its `_ADD` texture is additive rather than a lerp - see
 /// `race::Scene`'s `boost` field.
 #[allow(clippy::too_many_arguments)]
+/// Whether a model's draws may write the scene target's alpha channel, which
+/// [`crate::post::bloom`] reads as its glow mask.
+///
+/// The original decides this **per draw path**, not per material, and the two
+/// paths disagree: `FUN_089307b4`'s batch group calls
+/// `Bloom_SetPixelMask(g_bloom, 0)`, masking alpha off, while the path the
+/// boost plume actually takes - `Mesh_CompileGeometryPass` (`0x0890d0cc`) with
+/// state from `Gfx_BuildBatchStateList` (`0x0891f890`) - opens every channel
+/// with an unconditional `Gu_PixelMask(0)` at the top of its state list. So a
+/// hull and a track surface leave the mask alone and the plume writes it, and
+/// that difference is a reading of the two functions rather than a look
+/// choice. See `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlowMask {
+    /// Colour only - the default, and what every authored batch measured on
+    /// the disc gets.
+    Protected,
+    /// Alpha reaches the target, so this model's fragments feed the bloom.
+    Written,
+}
+
+impl GlowMask {
+    /// The colour write mask this choice implies.
+    #[must_use]
+    pub fn writes(self) -> wgpu::ColorWrites {
+        match self {
+            Self::Protected => wgpu::ColorWrites::COLOR,
+            Self::Written => wgpu::ColorWrites::ALL,
+        }
+    }
+}
+
+// One knob per pipeline decision, and they are genuinely independent: format,
+// filtering, sample count, depth role, blend and glow mask do not group into a
+// meaningful struct without inventing a name for the grouping. The same call
+// `Drawable::new` already makes.
+#[allow(clippy::too_many_arguments)]
 pub fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -661,6 +700,7 @@ pub fn build(
     sample_count: u32,
     depth: Depth,
     blend: wgpu::BlendState,
+    glow: GlowMask,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -769,7 +809,12 @@ pub fn build(
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: Some("fs_main"),
-            targets: &[Some(format.into())],
+            // Alpha is the bloom's glow mask - see [`GlowMask`].
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: glow.writes(),
+            })],
             compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState {
@@ -818,7 +863,12 @@ pub fn build(
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: Some("fs_main_alpha_test"),
-            targets: &[Some(format.into())],
+            // Alpha is the bloom's glow mask - see [`GlowMask`].
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: glow.writes(),
+            })],
             compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState {
@@ -889,7 +939,9 @@ pub fn build(
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend,
-                    write_mask: wgpu::ColorWrites::ALL,
+                    // Alpha is the bloom's glow mask - see [`GlowMask`] for
+                    // which draw paths are allowed to write it and why.
+                    write_mask: glow.writes(),
                 })],
                 compilation_options: Default::default(),
             }),
