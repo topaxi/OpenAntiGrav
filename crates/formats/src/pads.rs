@@ -68,12 +68,15 @@ pub struct PadVolume {
     /// The original's own gate on a hit, at pad `+0x1a0`.
     ///
     /// `Pad_ContainsPoint` reports a hit only when this is `0.0`, so a non-zero
-    /// value disables the pad. **Nothing here ever writes it.** The writer was
-    /// not found, and a `Weapon Pad`'s `<WeaponPad refresh_time>` is the obvious
-    /// candidate, which would make this a pickup-respawn timer rather than
-    /// anything a speedup pad uses. Carried inert rather than dropped: a term
-    /// that is provably in the condition should be visible in the
-    /// reimplementation of that condition, even at zero.
+    /// value disables the pad. **Nothing here ever writes it.** The writer is
+    /// identified now - `WeaponPads_TestCraft` stamps a `Weapon Pad`'s own
+    /// `<WeaponPad refresh_time>` (or `elimination_refresh_time` under a mode
+    /// this project reads as Eliminator) on pickup, and `Pad_UpdateRefreshTimer`
+    /// counts it back down - but there is still no pickup system to drive it
+    /// from, `Weapon Pad` included. See `pads.md` in `docs/ghidra/functions/`.
+    /// Carried inert rather than dropped: a term that is provably in the
+    /// condition should be visible in the reimplementation of that condition,
+    /// even at zero.
     pub disabled: f32,
 }
 

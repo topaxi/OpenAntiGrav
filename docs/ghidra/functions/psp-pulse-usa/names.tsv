@@ -130,8 +130,11 @@
 0x088866bc	function	Pad_ContainsPoint	85	pads.md
 0x0888686c	function	Pad_SweptTest	65	pads.md
 0x08887144	function	Pads_TestCraft	90	pads.md
+0x0888727c	function	WeaponPads_TestCraft	90	pads.md
 0x08a6be7c	function	SpeedupPad_ClassTag	90	pads.md
 0x08a6ed40	function	WeaponPad_ClassTag	85	pads.md
+0x089265f0	function	Pad_UpdateRefreshTimer	90	pads.md
+0x0892c034	function	WeaponPad_UpdateRefreshTimer	90	pads.md
 0x08904f10	function	ExhaustFlare_OnSpeedupPad	88	pads.md
 0x0883f274	function	Ship_ApplyCollisionImpulse	85	engine.md
 0x0884d850	function	Body_SetMass	88	engine.md

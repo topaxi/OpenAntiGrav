@@ -15,8 +15,11 @@ The data side - the payload layout and what the shipped tracks author - is
 | `0x088866bc` | `Pad_ContainsPoint` | 85 |
 | `0x0888686c` | `Pad_SweptTest_q` | 65 |
 | `0x08887144` | `Pads_TestCraft` | 90 |
+| `0x0888727c` | `WeaponPads_TestCraft` | 90 |
 | `0x08a6be7c` | `SpeedupPad_ClassTag` | 90 |
 | `0x08a6ed40` | `WeaponPad_ClassTag` | 85 |
+| `0x089265f0` | `Pad_UpdateRefreshTimer` | 90 |
+| `0x0892c034` | `WeaponPad_UpdateRefreshTimer` | 90 |
 
 ## `Pad_Bind` (`0x089264f4`)
 
@@ -99,14 +102,74 @@ Three things fall out, and all three matter to a reimplementation:
    `.vex` uses, so `+0x20` is floats 8 to 10: **row 2, the pad's local `+Z`**.
    That is the direction the boost pushes along.
 3. **`pad+0x1a0` gates every hit.** A non-zero value suppresses a hit that is
-   geometrically inside. **The writer was not found.** A `Weapon Pad`'s
-   `<WeaponPad refresh_time>` is the obvious candidate, which would make this a
-   pickup-respawn timer that a speedup pad never sets. `crates/formats/src/pads.rs`
-   carries the term inert rather than dropping it.
+   geometrically inside, and it is a countdown, not a flag - see
+   `Pad_UpdateRefreshTimer` below.
 
 Confidence **85**: unambiguous decompilation, and the direction reading is
 corroborated by the pads' own geometry being flat plates whose local `+Z` runs
 along the track.
+
+### Retired: `pad+0x1a0`'s writer is `<WeaponPad refresh_time>`, exactly as guessed
+
+**Confidence 90.** The hypothesis this page carried since creation - "a
+`Weapon Pad`'s `<WeaponPad refresh_time>` is the obvious candidate" - is
+confirmed exactly, plus one detail nobody guessed: a second, mode-gated value.
+
+`Xml_ReadGlobalSettings` (`0x0883aa14`, already named) parses `<WeaponPad>`'s
+two float attributes into per-skill-class global arrays, not into any pad:
+
+```c
+if (Xml_AttributeNameIs(attr, "refresh_time"))
+    (&DAT_08b34328)[g_handling_parse_class] = Xml_AttributeAsFloat(attr);
+if (Xml_AttributeNameIs(attr, "elimination_refresh_time"))
+    (&DAT_08b34338)[g_handling_parse_class] = Xml_AttributeAsFloat(attr);
+```
+
+**`WeaponPads_TestCraft`** (`0x0888727c`) is the writer, and it is the exact
+mirror of `Pads_TestCraft` for the `+0x10c`/`+0x1d4` `Weapon Pad` list this
+page's other retired section documents - same swept test, same per-racer
+previous-position cache, but on a hit it stamps the pad:
+
+```c
+if (DAT_08ab07e3 == '\0' && DAT_08b31048 == 8)
+    value = (&DAT_08b34338)[DAT_08b31040];   // elimination_refresh_time
+else
+    value = (&DAT_08b34328)[DAT_08b31040];   // refresh_time
+*(int *)(pad + 0x1a0) = value;
+```
+
+(`DAT_08b31040` is the speed-class index this page already names below, in
+`ExhaustFlare_OnSpeedupPad`'s mode-constant paragraph.)
+
+`DAT_08b31048 == 8` is a **third** mode literal distinct from Zone's `6`
+([zone-mode.md](zone-mode.md)) and the `2` this page's `ExhaustFlare_OnSpeedupPad`
+section already flags as unidentified - `8` reads as Eliminator, Pulse's other
+pickup-centric mode, and would explain why only this one pad interaction cares
+about it.
+
+**`pad+0x1a0` counts back down every tick**, in the class's own `update`
+method - the method-table slot at `+0x24` of `node+0x38` that
+[`exhaust.md`](exhaust.md) established, corroborated here on a second class
+table (`Speedup Pad`'s `DAT_08adaa50`, `Weapon Pad`'s `DAT_08ad23ec`, both
+found off the pad node constructors' own `+0x38` store). Read directly off the
+disassembly, both classes' slots decode without a decompiler needed:
+
+- **`Pad_UpdateRefreshTimer`** (`0x089265f0`, `Speedup Pad`'s slot) is
+  `pad->0x1a0 = max(0.0, pad->0x1a0 - dt)` and nothing else - inert, since
+  nothing ever writes a `Speedup Pad`'s `+0x1a0` non-zero. This is what makes
+  `pad+0x1a0` a field on the shared base rather than something `Weapon Pad`
+  privately owns.
+- **`WeaponPad_UpdateRefreshTimer`** (`0x0892c034`) does the same decrement,
+  then, while cooling down, packs a fixed `0x3f3f3f` grey into `pad+0x6c`; once
+  the timer reaches zero it instead cross-fades `pad+0x6c` through a small
+  colour keyframe table at `1/3`-second steps (`param+500` ramping at `dt*3`,
+  indexing `pad+0x1f0`) - the pad's ready-to-collect colour cycle. `pad+0x6c`
+  and the colour table are observed, not named or implemented; recorded here
+  so a future weapon-pickup pass has the addresses rather than re-deriving them.
+
+`crates/formats/src/pads.rs` can drop "carries the term inert" - the term is
+identified, just still unconsumed because there is no pickup system yet (see
+"What is not implemented" below).
 
 ## `Pad_SweptTest_q` (`0x0888686c`)
 
@@ -144,6 +207,20 @@ would sample a line through arbitrary geometry. That reading is an inference fro
 the magnitude, not from anything the code says, which is what holds this at
 **65**. What would retire it: a breakpoint under PPSSPP showing the branch taken
 on a respawn and not in ordinary driving.
+
+**Checked, and it does not retire the reading, but it removes one alternative.**
+`Pads_TestCraft` and `WeaponPads_TestCraft` are the *only* writers of the
+per-racer previous-position cache (`world + slot*0x10 + 0xb50`) - every other
+reader of `DAT_08b32c88` (thirteen call sites checked) either reads a
+different field entirely or, in the two constructor cases, zeroes the whole
+block once at race start. So a respawn does **not** get a separate reset of
+this cache: whatever teleports a craft leaves last tick's real position
+sitting in `previous`, and the very next `Pads_TestCraft` call sees the full
+teleport distance as `moved` - there is no code path that could produce a
+large `moved` other than a respawn or the race-start zero-fill. That is
+consistent with the guard existing for exactly the reason this page already
+guesses, but it is a structural argument, not the requested live trace, so the
+number stays at **65** and the name keeps `_q`.
 
 ## `Pads_TestCraft` (`0x08887144`)
 
@@ -347,12 +424,15 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
 
 ## What is not implemented
 
-- **`pad+0x1a0`'s writer.** Carried inert. See `Pad_ContainsPoint` above.
-- **Weapon pads.** The payload decodes identically and is asserted against the
-  disc, but nothing consumes one: there is no pickup system.
+- **`Weapon Pad` pickups, `pad+0x1a0`/`pad+0x6c` included.** The payload
+  decodes identically and is asserted against the disc, and the refresh timer
+  and its colour-cycle writer are now identified (see `Pad_ContainsPoint`
+  above), but nothing consumes any of it: there is no pickup system.
 - **The `"SPEEDUPPAD"` sound.** There is no audio system yet, so neither emitter
   path is reproduced. `oag_game::race` arms the flare and nothing else.
 - **`craft+0x318`'s curve.** See the open question above.
+- **Mode `8`.** Read as Eliminator by elimination, not confirmed independently
+  - see `Pad_ContainsPoint` above.
 
 ## History
 
@@ -365,6 +445,19 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
   sets it. The list is `Speedup Pad` nodes only, structurally, not one shared
   list a caller filters - closing the "one list holding both pad classes"
   possibility this page carried since creation.
+- **2026-08-10, second pass** - found the writer of `pad+0x1a0`:
+  `WeaponPads_TestCraft` (`0x0888727c`, 90, the `Weapon Pad` mirror of
+  `Pads_TestCraft`), stamping `<WeaponPad refresh_time>` (or
+  `elimination_refresh_time` under a newly-seen mode `8`) on a hit, parsed by
+  the already-named `Xml_ReadGlobalSettings`. `Pad_UpdateRefreshTimer`
+  (`0x089265f0`, 90) and `WeaponPad_UpdateRefreshTimer` (`0x0892c034`, 90)
+  count it back down every tick and, for `Weapon Pad`, drive an unimplemented
+  `pad+0x6c` colour cycle - confirming the hypothesis this page carried since
+  creation exactly, including the detail nobody guessed. Also checked, without
+  retiring it: `Pads_TestCraft`/`WeaponPads_TestCraft` are the only writers of
+  the per-racer previous-position cache `Pad_SweptTest_q`'s `25.0` guard reads,
+  which rules out a separate respawn-reset path but is not the live trace the
+  confidence still calls for.
 - **2026-08-03** - page created. `Pad_Bind` and `Pad_ContainsPoint` at 85,
   `Pad_SweptTest_q` and `Pads_TestCraft_q` at 65. Supersedes two readings in
   `engine.md`: the record `Ship_ApplySpeedupPad` locates is a pad's **matrix**
