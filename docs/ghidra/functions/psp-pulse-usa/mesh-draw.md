@@ -143,6 +143,44 @@ batch can be drawn with, which is what matters: a replayed list was the obvious
 place to look for a missing alpha path, and it is ruled out - see
 [exhaust.md](exhaust.md)'s section on the boost plume's vertex alpha.
 
+## Which `TEXMAPMODE` the plume gets is **not** settled, and this page overstated it
+
+2026-08-10. `Gu_TexMapMode` (`0x08811508`) has **13** callers, and reading the
+arguments at four of them shows the engine uses at least three different modes:
+
+| Site | In | Call | Meaning |
+| --- | --- | --- | --- |
+| `0x0890d948` | `Mesh_BeginTransparentPass` (`0x0890d904`) | `(2, 0, 1)` | environment map, LS0 = light 0, LS1 = light 1 |
+| `0x0890e584` | `FUN_0890e304` | `(1, 0, 0)` | `GU_TEXTURE_MATRIX` |
+| `0x0890e76c` | `FUN_0890e304` | `(0, 0, 0)` | `GU_TEXTURE_COORDS` - the authored UVs |
+| `0x0890dc30` | `FUN_0890dc20` | `(0, 0, 1)` | authored UVs |
+
+**The uvgen-2 finding this page carries was attributed through
+`Mesh_BeginTransparentPass`, and the plume does not take that path** - this
+page already corrected that scope once, for the alpha test, and the same
+correction applies here and was not made. Nor does the plume's own state
+builder set the mode: neither `Gfx_BuildBatchStateList` nor
+`Mesh_CompileGeometryPass` emits `0xc0`.
+
+And the plume's draws are **recorded into a display list at load** by
+`Mesh_CompileDisplayLists` (`0x0890fe...`, two call sites, each preceded by
+`Gu_Start(GU_CALL, ...)`), so the mode that applies is whatever is live when
+that list is *replayed* - ambient state, not something the list carries.
+
+**So "the transparent pass generates its texture coordinates" is true of the
+pass it was read from and unproven for the plume.** What keeps the
+implementation defensible meanwhile is empirical rather than structural:
+`oag_render::texgen` measurably improved the plume when it landed (extent
++12 %, orange -9 %, `b - r` closest to the original of three builds), which is
+evidence that *something* generates them, not proof of which mode.
+
+Settling it needs the replay site traced - which of the 13 setters last ran
+before the plume's list is called - or a live `0xc0` read at a breakpoint on
+the plume's draw. **Until then the plume's two short batches remain the open
+question they were**: 9 and 10 vertices whose authored UVs decode to a single
+point, harmless under generated coordinates and a flat one-texel sample under
+authored ones.
+
 ## `Gfx_BuildBatchStateList` decoded, and the boost plume's blend with it
 
 `0x0891f890`, confidence **90**. This is the state builder on the path the
