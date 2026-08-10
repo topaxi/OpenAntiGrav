@@ -54,11 +54,18 @@
   gameplay-coupled
 - The HUD - **done** for the 2D layer, off the disc's own layouts; see
   [the HUD](../ui/hud.md). Its `<Mode3D>` layer is not
-- Post-processing, and the series' distinctive look
+- Post-processing, and the series' distinctive look. Bloom is **done** and
+  **recovered**; FXAA, SMAA, MSAA 4x and FSR 1 are built as modern additions.
+  [Motion blur](motion-blur.md) is **designed and costed but not built** - an
+  invented feature rather than a recovered one, written down because its
+  per-object velocity buffer is also two of the five things FSR 3.1 and TAA are
+  waiting on
 - Modern display features: ultrawide, HDR, VRR, dynamic resolution, and
   FSR-class upscaling - see [modern features](../overview/modern-features.md)
   for the licensing picture and the pipeline prerequisites (motion vectors,
-  depth, camera jitter) to design in from the start
+  depth, camera jitter) to design in from the start. The first two of those
+  three have a design: [motion blur](motion-blur.md) would deliver them as a
+  side effect
 
 ## The art is raster, and that has a consequence
 

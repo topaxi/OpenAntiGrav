@@ -935,7 +935,10 @@ recipe and its three traps.
       done**; FSR 3.1 is a WGSL port per
       [ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
       and still wants motion vectors, a readable depth buffer, camera jitter and
-      a scene with no UI in it. **FSR4 is not a plan**: it ships as signed DLLs
+      a scene with no UI in it - the first two of which
+      [motion blur](../rendering/motion-blur.md) would deliver as a side effect,
+      designed and costed at about a week and a half but **not built**.
+      **FSR4 is not a plan**: it ships as signed DLLs
       and its driver upgrade path does not reach a native Linux build
 
 **Exit criterion:** Pulse is feature complete, start to finish, on both asset

@@ -72,6 +72,16 @@ it only becomes visible once something downstream needs a scene it can reason
 about. FSR must consume a frame with no UI in it, and the UI must then be
 composited at presentation resolution.
 
+**Rows two and three now have a design.**
+[Motion blur](../rendering/motion-blur.md) wants exactly the same readable depth
+buffer and the same per-draw velocity target, so building it would clear both as
+a side effect - which is most of why the expensive per-object tier was chosen
+over cheap camera reprojection, the latter clearing only the depth row. It is
+specified and costed at about a week and a half, and not built. It touches the
+last row too, but only partly: its chain runs before the HUD is drawn, so it
+demonstrates that a UI-free scene exists at that point in the frame without
+handing one downstream.
+
 ## Steam Input
 
 **Licensing.** Steam Input is part of Steamworks, which is proprietary: the
