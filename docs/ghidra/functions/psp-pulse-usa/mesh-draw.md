@@ -143,6 +143,71 @@ batch can be drawn with, which is what matters: a replayed list was the obvious
 place to look for a missing alpha path, and it is ruled out - see
 [exhaust.md](exhaust.md)'s section on the boost plume's vertex alpha.
 
+## Live: uvgen 2 is real, and it is bracketed around the transparent pass
+
+2026-08-10, measured on PPSSPP under Xvfb (`docs/reverse-engineering/ppsspp-debugger.md`'s
+preferred setup) with a breakpoint armed **before the race loaded**, so
+display-list compilation was in scope.
+
+**`Mesh_BeginTransparentPass` (`0x0890d904`) does run** - one hit, during the
+race load, immediately after the front end committed to TIME TRIAL. So the only
+site that programs `Gu_TexMapMode(2, 0, 1)` is live code, not a path the game
+never takes. That much is settled, and it is what `oag_render::texgen`
+reproduces.
+
+**It is scoped, not global.** Its caller `FUN_0890d508` is a three-line
+bracket:
+
+```c
+Mesh_BeginTransparentPass();   // Gu_TexMapMode(2, 0, 1) - environment map on
+FUN_0890db54(mesh, ...);       // the transparent draws
+FUN_0890dc20(...);             // Gu_TexMapMode(0, 0, 1) - back to authored coords
+```
+
+which identifies `FUN_0890dc20` - previously known only as "a tiny function
+that sets mode 0" - as the pass's **restore**.
+
+**Why a race-time breakpoint sees none of this.** Sampling `Gu_TexMapMode`
+during a moving race catches only mode `0` (from `0x08910e2c`) and mode `1`
+(`GU_TEXTURE_MATRIX`, from `0x08910dc0`), roughly 3:1, and **never mode 2** -
+because the mode-2 call happens once, at compilation, and is recorded into a
+display list rather than executed per frame. A stationary craft at the
+countdown produces no `Gu_TexMapMode` calls at all, which is a false negative
+worth naming: an earlier pass concluded from exactly that sample that the
+engine never programs the mode during a race.
+
+**What is still not settled is which list the plume's batches land in.**
+`Mesh_CompileDisplayLists` calls the bracket **twice** (`0x0890fcd4`,
+`0x0890fd54`) *and* `Mesh_CompileGeometryPass` twice (`0x0890feb8`,
+`0x0890ff38`), each preceded by its own `Gu_Start(GU_CALL, ...)`. So one model
+yields several independently-recorded lists, only some of them inside the
+uvgen-2 bracket. The plume's batches are on the geometry-pass side per this
+page's own earlier correction, and a freshly started list does not inherit the
+bracket's state - so the mode live when the plume's list is *replayed* is the
+open question, unchanged.
+
+**Net effect on the implementation:** `oag_render::texgen` moves from
+"empirically better, with its mechanism attributed through a pass the plume
+does not take" to "the mechanism exists, is live, and is bracketed" - which is
+a real upgrade in status and still not a proof that the plume is inside it.
+
+### A harness note worth keeping
+
+Crossing a speed pad from a teleported craft is unreliable - breakpoint
+stepping starves the approach, an unsteered run walks into a wall, and even a
+placement `0.2` units off pad 0's own axis at 120 units/s never reached it.
+**It is also unnecessary.** `ExhaustFlare_OnSpeedupPad` does exactly one thing
+to the visual, so the boost can be armed by hand:
+
+```text
+craft -> +0x1c4 -> +0x78 = the Engine Flare        (psp-trace's --flare chain)
+write 0.8f at flare+0xb8                            = the boost timer
+```
+
+Verified live: the value reads back, and `Exhaust_UpdateEngineSound` decays it
+exactly as the recovered code says. That reveals `<Team>boost.vex` with no
+driving at all.
+
 ## Which `TEXMAPMODE` the plume gets is **not** settled, and this page overstated it
 
 2026-08-10. `Gu_TexMapMode` (`0x08811508`) has **13** callers, and reading the
