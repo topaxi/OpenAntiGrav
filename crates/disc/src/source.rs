@@ -16,7 +16,15 @@ pub const SECTOR_SIZE: usize = 2048;
 /// `Debug` is a supertrait so that types holding a boxed source can derive it.
 /// A blanket `Debug` impl on `Box<dyn SectorSource>` is not possible: it would
 /// overlap the standard library's impl for `Box<T: Debug>`.
-pub trait SectorSource: std::fmt::Debug {
+///
+/// `Send` is a supertrait because an opened image gets moved onto a worker
+/// thread: the game loads its movies off one while the window it is about to
+/// fill is already open (`oag_game::boot::MediaWorker`). Both implementors are
+/// a file handle and a decompression buffer, so this costs nothing and is
+/// stated here rather than discovered as an error at the one call site that
+/// needs it. It is deliberately **not** `Sync`: one thread owns a source at a
+/// time, because reading one seeks it.
+pub trait SectorSource: std::fmt::Debug + Send {
     /// Total number of logical sectors in the image.
     fn sector_count(&self) -> u32;
 

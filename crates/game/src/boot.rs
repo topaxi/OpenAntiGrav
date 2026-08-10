@@ -132,9 +132,178 @@ pub struct Options {
     pub no_video: bool,
 }
 
+/// A step the load has to be quick enough at for nobody to notice. Anything
+/// slower gets named in the report; anything faster would only be noise there.
+const FELT: std::time::Duration = std::time::Duration::from_millis(20);
+
+/// A stopwatch that names each step of the load as it passes.
+///
+/// The boot is the longest wait this build asks anyone to sit through and it
+/// used to be one opaque call, so "which part of it" was a question nobody
+/// could answer without a profiler. One [`Steps::lap`] per step answers it on
+/// every boot, in the report the load already prints, which is also what keeps
+/// the answer current: a step that gets slower says so rather than waiting to
+/// be re-measured.
+///
+/// Wall clock, deliberately, and this is the one place in the codebase that is
+/// allowed to be - see `docs/architecture/determinism.md`. Nothing here reaches
+/// the simulation: these are strings for a human.
+struct Steps {
+    at: std::time::Instant,
+    steps: Vec<(&'static str, std::time::Duration)>,
+}
+
+impl Steps {
+    fn new() -> Self {
+        Self {
+            at: std::time::Instant::now(),
+            steps: Vec::new(),
+        }
+    }
+
+    /// Closes the step that has been running since the last lap.
+    fn lap(&mut self, what: &'static str) {
+        let now = std::time::Instant::now();
+        self.steps.push((what, now - self.at));
+        self.at = now;
+    }
+
+    /// One line: the total, then the steps that were felt, slowest first.
+    ///
+    /// Slowest first rather than in load order because the reason to read this
+    /// line at all is "what am I waiting for", and that is the first name on it.
+    fn describe(&self, what: &str) -> String {
+        let total: std::time::Duration = self.steps.iter().map(|(_, took)| *took).sum();
+        let mut felt: Vec<_> = self
+            .steps
+            .iter()
+            .filter(|(_, took)| *took >= FELT)
+            .collect();
+        felt.sort_by_key(|(_, took)| std::cmp::Reverse(*took));
+        let named = felt
+            .iter()
+            .map(|(name, took)| format!("{name} {:.2}", took.as_secs_f32()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if named.is_empty() {
+            return format!("{what} took {:.2} s", total.as_secs_f32());
+        }
+        format!("{what} took {:.2} s - {named}", total.as_secs_f32())
+    }
+}
+
 /// Loads everything and builds the sequence.
+///
+/// **The blocking whole**, for callers with nothing to draw while they wait: a
+/// headless capture, the ground-truth tests. A window uses the three phases
+/// this is made of - [`load_shell`], [`load_media`] and [`assemble`] - so that
+/// it can put the loading screen up between them. See [`Shell`] for why the
+/// line falls where it does.
 pub fn load(options: &Options) -> Result<Boot> {
+    let (mut shell, archives) = load_shell(options)?;
+    let media = load_media(archives, &shell.screens, &shell.movie_name, options);
+    shell.report.extend(media.report.iter().cloned());
+    Ok(assemble(shell, media))
+}
+
+/// Everything a window needs before it can draw anything at all.
+///
+/// **The cheap half of the boot**, and cheap is measured rather than hoped:
+/// 0.05 s of the 4.93 s a `native-video` boot of the EU disc takes, the rest
+/// of it being the two movies in [`load_media`]. That ratio is the whole
+/// reason the line is here - a phase this short can run before the event loop
+/// with nobody noticing, and everything after it can run under a loading
+/// screen.
+///
+/// Carries no [`oag_assets::Archives`]: [`load_shell`] hands those back
+/// separately, because the next phase takes them onto a worker thread and
+/// this half stays on the one that owns the window.
+pub struct Shell {
+    /// The front-end XML. Cloned for the media worker, moved into
+    /// [`Frontend::booting`] by [`assemble`].
+    pub screens: Screens,
+    /// Every language this source offers.
+    pub languages: Vec<Language>,
+    /// The chosen language's strings. Also what
+    /// [`crate::loading::Assets::load`] needs to put a tip on the loading
+    /// screen, which is the other reason this phase exists.
+    pub strings: StringTable,
+    /// The raceable circuits, for the menus.
+    pub tracks: Vec<crate::catalogue::Track>,
+    /// The raceable teams, for the menus.
+    pub teams: Vec<crate::catalogue::Team>,
+    /// The text atlas.
+    pub font: crate::font::Atlas,
+    /// The front-end sprite sheet.
+    pub sprites: crate::sprite::Sheet,
+    /// The grid this source authors its widgets in, read off the archives'
+    /// own platform while they are still in hand - [`assemble`] has no
+    /// archives to ask by the time it needs this.
+    pub space: crate::frontend::Space,
+    /// Which entry this leg's movie is, resolved here because it depends on
+    /// [`Self::screens`] and the media phase needs it already answered.
+    pub movie_name: String,
+    /// Which leg the sequence boots into, carried for [`assemble`].
+    pub leg: crate::frontend::Leg,
+    /// What to print. [`assemble`] appends its own.
+    pub report: Vec<String>,
+}
+
+// Written out rather than derived, for the reason [`Boot`]'s is: the sprite
+// sheet and the string table are megabytes between them, and a `{:?}` of this
+// should say which source it came off rather than print the disc.
+impl std::fmt::Debug for Shell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Shell")
+            .field("movie_name", &self.movie_name)
+            .field("leg", &self.leg)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The slow half: the movies, and the intro's own sound.
+///
+/// Every field is what it is on a source that has none of it - `None` is an
+/// ordinary outcome throughout, exactly as it is on [`Boot`]'s own fields.
+/// [`Default`] is therefore a *meaningful* value here rather than a filler: it
+/// is the boot of a source that carries no movie at all, which the sequence
+/// plays out on black.
+#[derive(Default)]
+pub struct Media {
+    /// The intro reel.
+    pub movie: Option<Movie>,
+    /// Its ATRAC3+ track, decoded.
+    pub movie_sound: Option<crate::at3::Pcm>,
+    /// The looping menu backdrop.
+    pub backdrop: Option<Movie>,
+    /// Pure's second boot movie.
+    pub fmv_intro: Option<Movie>,
+    /// What to print, kept separate because this half may finish on another
+    /// thread and its lines must not interleave with the shell's.
+    pub report: Vec<String>,
+}
+
+// Same reasoning as [`Shell`]'s and [`Boot`]'s: the three movies are hundreds
+// of megabytes of decoded picture on a `native-video` build.
+impl std::fmt::Debug for Media {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Media")
+            .field("movie", &self.movie)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Opens the source and loads everything that is not a movie.
+///
+/// Returns the archives alongside, still open, for [`load_media`] to take.
+///
+/// # Errors
+///
+/// A source whose archives will not open, or which carries no front-end XML.
+/// Everything else degrades into a report line.
+pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let mut report = Vec::new();
+    let mut steps = Steps::new();
     let (packs, problems) = crate::dlc::packs(&options.dlc, &default_dlc_cache_dir());
     let mut archives = open_source(&options.source, packs)
         .with_context(|| format!("opening the archives in {}", options.source))?;
@@ -159,8 +328,11 @@ pub fn load(options: &Options) -> Result<Boot> {
         ));
     }
 
+    steps.lap("open");
     let font = load_font(&mut archives, &mut report);
+    steps.lap("font");
     let screens = load_screens(&mut archives, &mut report)?;
+    steps.lap("screens");
     let languages = load_languages(&mut archives, &mut report);
     let offered = languages.clone();
     let strings = load_strings(
@@ -169,21 +341,193 @@ pub fn load(options: &Options) -> Result<Boot> {
         options.language.as_deref(),
         &mut report,
     );
+    steps.lap("strings");
     let documents = definitions(&mut archives, &mut report);
     let tracks = load_tracks(&mut archives, &documents, &mut report);
     let teams = load_teams(&mut archives, &documents, &mut report);
+    steps.lap("catalogue");
+    let sprites = load_sprites(&mut archives, &screens, &mut report);
+    steps.lap("sprites");
     let movie_name = options
         .movie
         .clone()
         .unwrap_or_else(|| default_boot_movie(options.leg, &screens));
-    let movie = load_movie(&mut archives, &movie_name, options, &mut report)?;
+    // The grid this source authors in, needed before the front end is built so
+    // that a boot with no movie falls back to the *source's* shape rather than
+    // to the PSP's. `frontend.set_space` takes the same value.
+    let space = crate::frontend::Space::of(archives.layout.platform);
+    report.push(steps.describe("the boot's first half"));
+
+    Ok((
+        Shell {
+            screens,
+            languages: offered,
+            strings,
+            tracks,
+            teams,
+            font,
+            sprites,
+            space,
+            movie_name,
+            leg: options.leg,
+            report,
+        },
+        archives,
+    ))
+}
+
+/// Loads the movies and the intro's sound. **The slow half**, by a factor of a
+/// hundred on a `native-video` build - see [`Shell`].
+///
+/// Takes the archives by value because this is what runs on a worker thread
+/// while a window is already up, and a half-loaded boot is not something two
+/// threads should be reaching into. Never fails: every movie that will not load
+/// degrades into a report line and a `None`, which is what the sequence already
+/// copes with everywhere.
+pub fn load_media(
+    mut archives: oag_assets::Archives,
+    screens: &Screens,
+    movie_name: &str,
+    options: &Options,
+) -> Media {
+    let mut report = Vec::new();
+    let mut steps = Steps::new();
+    // Kept as a report line rather than propagated: by the time this runs the
+    // window is up and the loading screen is drawing, so a movie that will not
+    // open has to be survivable. `load` above is the caller that used to be
+    // able to fail here, and its `?` only ever fired on a *named* entry being
+    // absent - which `Movie: None` already describes.
+    let movie = match load_movie(&mut archives, movie_name, options, &mut report) {
+        Ok(movie) => movie,
+        Err(error) => {
+            report.push(format!("{movie_name}: {error:#}"));
+            None
+        }
+    };
+    steps.lap("intro");
     // Straight after the movie, so its report lines stay together, and while
     // `screens` is still in hand: the widget that decides whether this movie is
     // heard at all is in that XML.
-    let movie_sound = load_movie_sound(movie.as_ref(), &screens, &movie_name, options, &mut report);
+    let movie_sound = load_movie_sound(movie.as_ref(), screens, movie_name, options, &mut report);
+    steps.lap("intro sound");
     let backdrop = load_backdrop(&mut archives, options, &mut report);
-    let fmv_intro = load_fmv_intro(&mut archives, &screens, options, &mut report);
-    let sprites = load_sprites(&mut archives, &screens, &mut report);
+    steps.lap("backdrop");
+    let fmv_intro = load_fmv_intro(&mut archives, screens, options, &mut report);
+    steps.lap("fmv intro");
+    report.push(steps.describe("the boot's movies"));
+
+    Media {
+        movie,
+        movie_sound,
+        backdrop,
+        fmv_intro,
+        report,
+    }
+}
+
+/// [`load_media`] running on a thread of its own, so a window can open first.
+///
+/// **This is the whole reason the boot is in halves.** On a `native-video`
+/// build the movies are 4.9 of a 5.0-second boot of the EU disc - `GstDecoder`
+/// decodes every frame of both reels into memory before it returns - and all
+/// of that used to happen before winit had been told to make a window. There
+/// was nothing on screen to say the game had started because there was no
+/// screen.
+#[derive(Debug)]
+pub struct MediaWorker {
+    /// `None` once joined, which is what makes [`Self::join`] idempotent.
+    handle: Option<std::thread::JoinHandle<Media>>,
+}
+
+impl MediaWorker {
+    /// Starts the media phase in the background.
+    ///
+    /// Takes copies rather than borrows because the thread outlives this call
+    /// by seconds; `Screens` is a dozen parsed widget trees and `Options` a
+    /// handful of paths, which is nothing beside what the thread then decodes.
+    #[must_use]
+    pub fn spawn(archives: oag_assets::Archives, shell: &Shell, options: &Options) -> Self {
+        let screens = shell.screens.clone();
+        let movie_name = shell.movie_name.clone();
+        let options = options.clone();
+        let handle = std::thread::Builder::new()
+            // Named so it is obvious in a debugger and in `top` which thread
+            // the boot is waiting on, the same way `movie-decode` is.
+            .name("boot-media".to_string())
+            .spawn(move || load_media(archives, &screens, &movie_name, &options))
+            .expect("spawning the boot's media thread");
+        Self {
+            handle: Some(handle),
+        }
+    }
+
+    /// Whether the movies have arrived, so the loading screen may start fading.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.handle
+            .as_ref()
+            .is_none_or(std::thread::JoinHandle::is_finished)
+    }
+
+    /// Waits for the movies and takes them.
+    ///
+    /// **A worker that panicked yields a boot with no movies rather than a
+    /// panic here**, because the alternative is a loading screen that never
+    /// fades: the sequence copes with `None` on every one of these fields
+    /// already - that is what a source with no backdrop, or a machine with no
+    /// `ffmpeg`, has always produced - so the game reaches its menus and says
+    /// what happened. A second call yields the same empty `Media`, which
+    /// cannot happen today and would otherwise be a second panic.
+    pub fn join(&mut self) -> Media {
+        let Some(handle) = self.handle.take() else {
+            return Self::nothing("the boot's movies were already taken");
+        };
+        match handle.join() {
+            Ok(media) => media,
+            Err(_) => Self::nothing(
+                "the thread loading the movies panicked, so the sequence plays with no picture",
+            ),
+        }
+    }
+
+    fn nothing(why: &str) -> Media {
+        Media {
+            report: vec![why.to_string()],
+            ..Media::default()
+        }
+    }
+}
+
+/// Builds the sequence out of the two halves.
+///
+/// Everything here needs a frame count or a plane size, which is why it is a
+/// third phase rather than the tail of either: the front end cannot be
+/// constructed until the movies have been measured.
+#[must_use]
+pub fn assemble(shell: Shell, media: Media) -> Boot {
+    let Shell {
+        screens,
+        languages,
+        strings,
+        tracks,
+        teams,
+        font,
+        sprites,
+        space,
+        movie_name: _,
+        leg,
+        mut report,
+    } = shell;
+    let Media {
+        movie,
+        movie_sound,
+        backdrop,
+        fmv_intro,
+        report: _,
+    } = media;
+    // The picker inside the sequence and the menus' own row are two lists, and
+    // the sequence takes one of them by value. See `Boot::languages`.
+    let offered = languages.clone();
 
     // The cached frames when there are any, and the demuxed count when there
     // are not: `--no-video` and a missing `ffmpeg` still have to play the
@@ -200,10 +544,6 @@ pub fn load(options: &Options) -> Result<Boot> {
     let frame_rate = movie
         .as_ref()
         .map_or(movie::FRAME_RATE, |movie| movie.frame_rate);
-    // The grid this source authors in, needed before the front end is built so
-    // that a boot with no movie falls back to the *source's* shape rather than
-    // to the PSP's. `frontend.set_space` below takes the same value.
-    let space = crate::frontend::Space::of(archives.layout.platform);
     let video_aspect = movie
         .as_ref()
         .map_or((space.size.0 as u32, space.size.1 as u32), |movie| {
@@ -218,7 +558,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         .as_ref()
         .map_or(movie::FRAME_RATE, |movie| movie.frame_rate);
     let mut frontend = Frontend::booting(
-        options.leg,
+        leg,
         screens,
         strings.clone(),
         languages,
@@ -316,7 +656,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         ));
     }
 
-    Ok(Boot {
+    Boot {
         languages: offered,
         strings,
         tracks,
@@ -329,7 +669,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         fmv_intro,
         sprites,
         report,
-    })
+    }
 }
 
 /// Decodes the intro movie's ATRAC3+ track, if it should be heard at all.
