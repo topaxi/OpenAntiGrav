@@ -468,3 +468,5 @@
 0x08ab2344	data	g_bloom_composite_strength	85	bloom.md
 0x08ab2348	data	g_bloom_blur_weights	88	bloom.md
 0x08b32c60	data	g_bloom	80	bloom.md
+0x08927034	function	TexAnim_EvalKeyframes	90	texture-animation.md
+0x08927204	function	TexAnim_UpdateTransform	90	texture-animation.md

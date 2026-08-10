@@ -122,7 +122,112 @@ where this page already stood. See
 for the boost plume's missing rim multiplier, and defaulting to identity is what
 argues against it.
 
+## The values gap is closed: the keyframes are authored in the `.vex` file
+
+**2026-08-10, confidence 90.** The "still 0 on where any non-identity values
+would come from" above is resolved, live on PPSSPP (Talon's Junction TIME
+TRIAL, boost held up by rewriting `flare+0xb8`) and corroborated byte-for-byte
+on the disc. Two functions in the chain are now read to the instruction and
+named:
+
+| Address | Name | Conf | Signature |
+| --- | --- | ---: | --- |
+| `0x08927034` | `TexAnim_EvalKeyframes` | 90 | `int (float out[2], int count, u16 *times, s16 *values, int t_int, int step, float t_frac...)` - args in `a0`-`a3`, `t0`, `t1`, `f13` |
+| `0x08927204` | `TexAnim_UpdateTransform` | 90 | `void (anim_block *a0, float seconds in f12)` |
+
+`TexAnim_EvalKeyframes` is the "curve evaluator" the writer-chain paragraph
+above left unnamed. Read whole: keys are `u16` times paired with `s16`
+`(u, v)` values in **1/256 units** (it loads `0x3b800000` = 1/256 and scales
+both outputs); below `times[0]` it clamps to the first key, past
+`times[count-1]` to the last; between keys it lerps by
+`(t - t_prev) / (t_next - t_prev)` unless the step flag is set, in which case
+it snaps to the key. Returns 0 only for an empty track, which is what makes
+the identity default above fire.
+
+`TexAnim_UpdateTransform` (`FUN_08927204` above) drives it, twice per block -
+scale track then offset track, exactly the two calls at `0x089272cc` and
+`0x08927308`: it stores the absolute time (seconds) at `block+0x28`, wraps it
+with `fmodf(t, *(float *)(block+0x2c))`, divides by `block+0x0c`
+(`0.016667` = seconds-per-frame, so **key times are in 60 Hz frames**), and
+truncates to the integer key time. The low bit of the *word* at `+0x2c` is
+the step flag - the same word whose float value is the wrap period.
+
+### The block layout, and where it lives on disc
+
+The runtime block (`mesh+0x60 + material_index*0x40`, the one
+`FUN_089271cc` submits from) is the **file's own bytes, relocated in place**.
+On disc it sits immediately after the material array, at mesh payload
+`+0x30 + material_count*0x14`:
+
+```text
++0x00  u16   offset-track key count
++0x02  u16   scale-track key count
++0x04  u32   offset-track times,  relative to this block
++0x08  u32   scale-track times,   relative to this block
++0x0c  f32   seconds per key-time unit (1/60 on every block read)
++0x10  u32   offset-track values, relative to this block
++0x14  u32   scale-track values,  relative to this block
++0x18  f32[2] out: scale u, v     (initialised 1.0 in the file)
++0x20  f32[2] out: offset u, v
++0x28  f32   last update time, written at runtime
++0x2c  f32   wrap period, seconds (600.0 everywhere read); bit 0 = step flag
+```
+
+Verified two ways on `Data\Ships\Assegai\shipboost.vex` (and Feisar's, byte
+identical): the struct parses at `payload+0x30+0x14` on **both** plume meshes
+with counts `(2, 1)`, relative offsets landing on the key data, `1/60` and
+`600.0` in place; and the live block at `mesh_header+0x44` in PSP RAM is the
+same bytes with the relative offsets replaced by absolute pointers.
+
+### The boost plume's authored tracks, and the recovered law
+
+```text
+scale  track: times (90),    values (256, 256)            = constant (1.0, 1.0)
+offset track: times (1, 90), values (2, 0), (253, 0)      = u ramps 2/256 -> 253/256
+                                                            over frames 1..90, v = 0
+```
+
+Sampled per frame over 360 consecutive frames (breakpoint on
+`Ship_UpdateCraft`, reading the compiled five-word transform list): both plume
+meshes carry the **same** `u` at every sample, `v` is always exactly 0, the
+scale is always `(1.0, 1.0)`, and `u` ramps and wraps with period
+**amplitude/slope = 0.9805/0.010911 ≈ 89.9 frames ≈ 1.5 s** - the track's own
+span, so the upstream clock loops at the clip length. The rate is independent
+of the boost timer (measured identical at `boost_timer` 0.8 and 0.0) and the
+scroll keeps running briefly after the timer empties, then stops - the
+updater is gated on the mesh's time changing (`mesh+0x40` vs `mesh+0x18c`,
+per the writer chain above), not on the timer itself.
+
+The time argument is per-model: a breakpoint on `TexAnim_UpdateTransform`
+entry over one frame saw the same `521.68` (the race clock) for eleven world
+meshes and `4.80` for another - and the plume's loops at ~1.5 s. **Where the
+plume model's looping clock is advanced was not traced**; it behaves as
+`fmod(t, ~1.5 s)` upstream of the call.
+
+### Two earlier readings this corrects
+
+- **"Every track material simply having no track data" (the writer-chain
+  paragraph above) is wrong.** One frame of evaluator hits on Talon's
+  Junction shows scenery blocks with real authored tracks:
+  `(1, 240) -> (0,0), (3072,0)` (12 `u` tiles per 4 s), `(0, 60) -> (0,0),
+  (0,256)` (one `v` tile per second), and a seven-key `v` plateau track
+  `(0, 20, 59, 60, 130, 175, 200)` - authored texture-transform animation is
+  on the disc for track scenery too, not just the plume.
+- **The live negative below ("no track surface receives a texture-coordinate
+  offset") measured the wrong choke point.** The compiled-list path writes
+  the `0x48`-`0x4b` words straight into each material's five-word list
+  (`FUN_08927358`), never calling `Gu_TexOffset` - so a `Gu_TexOffset`
+  breakpoint cannot see it, and the negative's conclusion does not follow
+  from its measurement. What the negative still shows is that the
+  *immediate-mode* path (`FUN_089271cc`) is not the one running during a
+  race.
+
 ## Measured in a live race: only the trail scrolls
+
+**Scope corrected 2026-08-10: this negative covers the immediate-mode
+`Gu_TexOffset` path only.** The compiled-list path animates surfaces without
+ever calling `Gu_TexOffset` - see "Two earlier readings this corrects" above -
+so the section's final sentence is withdrawn; the measurement itself stands.
 
 **Confidence 88, and it is a negative.** A breakpoint on `Gu_TexOffset` through
 a running Time Trial on Talon's Junction, 60 hits:
@@ -249,5 +354,16 @@ has seen half the mechanism.
   currently reuses as a guess across every animated track surface.
 - **The nine unexamined `Gu_TexOffset` callers.** A caller inside track drawing
   would move the whole trackside-animation reading from inferred (65) to
-  evidenced.
+  evidenced. (Less urgent as of 2026-08-10: trackside animation is now known
+  to flow through the compiled-list path, which does not call `Gu_TexOffset`.)
 - **What sets `DAT_08ab0628`.**
+- **The per-model animation clock.** `TexAnim_UpdateTransform` receives the
+  race clock for world meshes but a ~1.5 s looping time for the plume model;
+  where that loop is advanced (and whether `LodGroup`-style clip metadata sets
+  its length) was not traced.
+- **Whether the blink lights are a colour or a keyframe animation after all.**
+  The seven-key plateau track observed on Talon's Junction scenery is exactly
+  the blink shape; nothing yet ties such a track to
+  `colours_flashing_GLOW.tga`'s material on a ship. Checking the eight ships'
+  `Ship.vex` material blocks for `& 0x10` and authored tracks is now a pure
+  file read.

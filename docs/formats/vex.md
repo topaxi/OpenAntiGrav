@@ -648,10 +648,51 @@ Mesh header:
 +0x10  f32[3]   bounding box min, model units
 +0x20  f32[3]   bounding box max, model units
 +0x30  material[material_count], stride 0x14
+after the materials: a 0x40-byte texture-transform keyframe block (see below)
 ```
 
 A batch belongs to list A while `pass_mask & 1` is set, and to list B while
 `pass_mask & 2` is set.
+
+### The texture-transform keyframe block, at `+0x30 + material_count * 0x14`
+
+**2026-08-10, confidence 90.** The mesh payload carries authored
+texture-transform animation - the data whose source
+[`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md)
+had at "confidence 0" until this read. Immediately after the material array:
+
+```text
++0x00  u16    offset-track key count
++0x02  u16    scale-track key count
++0x04  u32    offset-track times  (u16 each), relative to this block
++0x08  u32    scale-track times   (u16 each), relative to this block
++0x0c  f32    seconds per key-time unit - 1/60 on every block read
++0x10  u32    offset-track values (s16 u, s16 v per key, 1/256 units)
++0x14  u32    scale-track values  (same encoding; 256 = 1.0)
++0x18  f32[2] runtime out: scale u, v  (1.0, 1.0 in the file)
++0x20  f32[2] runtime out: offset u, v
++0x28  f32    runtime: last update time
++0x2c  f32    wrap period in seconds (600.0 everywhere read); bit 0 of the
+              word doubles as the step-vs-lerp flag
+```
+
+The engine relocates the two `times` and two `values` offsets to absolute
+pointers and then uses the block in place; `TexAnim_UpdateTransform`
+(`0x08927204`) evaluates both tracks per frame (clamp outside the key range,
+lerp inside) and the result reaches the GE as `TEXSCALE`/`TEXOFFSET` words in
+the material's five-word list, gated on the material's `& 0x10` flag.
+
+Read off `Data\Ships\Assegai\shipboost.vex` and Feisar's (byte-identical), on
+both meshes of each: scale constant `(1.0, 1.0)`, offset `u` ramping
+`2/256 -> 253/256` over key times 1..90 (frames), `v = 0` - the boost plume's
+u-scroll, confirmed live against PSP RAM. Track circuits carry non-identity
+blocks too (12-tile-per-4s `u` scrolls, 1-tile-per-second `v` scrolls, a
+seven-key plateau), observed live on `16_Track` scenery.
+
+**This narrows the older negative below rather than contradicting it**: the
+material's `+0x0c..0x14` really is zero everywhere - the animation is just
+not stored on the material. "Rules out the file as a source of animation
+data" was the wrong conclusion from a correct scan, and is withdrawn.
 
 ### List B is real, distinct geometry, not a second pass over list A
 
@@ -906,7 +947,9 @@ All three fields are read, as `oag_formats::vex::Material`.
 
 Two negative results, both from surveying every material of all 12 PSP circuits
 (1,524 on `07_Track` alone). They matter because between them they rule out the
-file as a source of animation data.
+**material record** as a source of animation data. (An earlier revision said
+"the file"; that was too broad - the animation is authored per *mesh*, in the
+keyframe block documented above, 2026-08-10.)
 
 **The unused tail is zero everywhere.** `+0x0c..0x14` is eight bytes wide - the
 right size for a `u`/`v` scroll rate pair, and the exhaust's `Trail` does carry
