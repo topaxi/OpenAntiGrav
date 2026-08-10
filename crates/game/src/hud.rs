@@ -1087,8 +1087,9 @@ impl Overlay {
 /// its own 640x448 grid. Checked coordinate by coordinate rather than by the
 /// extremes: `Data\XML\Arcade_HUD.xml` carries 141 coordinate values (69 `x`,
 /// 72 `y`) on both discs in the same order, and **121 of the 141 are the PSP's
-/// own value scaled by 640/480 or 448/272 and rounded to an integer**, the same
-/// scaling `crate::frontend::Space`'s PS2 evidence records for `Skin.xml`.
+/// own value scaled by 640/480 or 448/272 and rounded to an integer**.
+/// `Skin.xml` behaves the same way and was measured the same way - 30 of 43,
+/// with its own exceptions - in `crates/game/tests/frontend_grid_ground_truth.rs`.
 ///
 /// The 20 that are not divide cleanly, and neither is a counter-example:
 ///
@@ -1104,9 +1105,15 @@ impl Overlay {
 /// `y` reaches 435 - which would say nothing about the parser. **A PS2 sweep
 /// needs more than swapping in `Space::PS2.size` here**: the unscaled offsets
 /// above mean it also has to agree with the [`RUNTIME_ANCHORED`] skip about
-/// which coordinates are positions at all. Not done. The runtime draw path is
-/// unaffected either way, since it takes its `screen` uniform from the source's
-/// own space.
+/// which coordinates are positions at all.
+///
+/// That is now a fact about this XML dialect rather than about one file.
+/// `Skin.xml`'s `<Animation><Key>` carries `x`/`y` that are a *travel* and are
+/// byte-identical on both consoles, exactly as `TimeDiffIcon`'s are here - two
+/// files, two element names, one confusion. **`x` does not mean one thing**,
+/// and anything that reads a coordinate has to know which kind it holds before
+/// it can compare it to a screen. Not done. The runtime draw path is unaffected
+/// either way, since it takes its `screen` uniform from the source's own space.
 #[must_use]
 pub fn inside_screen(rect: [f32; 4]) -> bool {
     rect[0] >= 0.0

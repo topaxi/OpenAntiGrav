@@ -65,8 +65,9 @@ the boot order. See [what the disc actually does](#what-the-disc-actually-does-a
 **`Skin.xml` on the PS2 disc authors in 640x448, not the PSP's 480x272, and that
 grid is shown as 4:3 rather than as itself. Confidence 95.**
 
-The PS2 layout is the PSP's, scaled by exactly the resolution ratio - which is
-what makes it an arithmetic identification rather than a guess:
+Most of the PS2 layout is the PSP's scaled by the resolution ratio, and the
+coordinates that do scale agree on this grid and no other - which is what makes
+it an arithmetic identification rather than a guess:
 
 | Widget | PSP | PS2 | ratio | expected |
 | --- | --- | --- | --- | --- |
@@ -77,7 +78,37 @@ what makes it an arithmetic identification rather than a guess:
 | extreme `y` over the file | 252 | 415 | 1.6468 | 1.6471 |
 
 Every one lands within a tenth of a percent, and 640x448 is PAL's own frame.
-Pinned by `the_ps2_grid_is_the_psp_layout_scaled_by_the_resolution`.
+Pinned by `the_grid_ratio_is_the_one_the_scaling_coordinates_agree_on`.
+
+#### "Most", and why the word matters
+
+**This page said "scaled by exactly the resolution ratio" until 2026-08-10, and
+that was a reading the table above cannot support.** A table of extremes and
+hand-picked samples can show which ratio the scaling coordinates follow; it
+cannot show that every coordinate scales, because an exception in the middle is
+invisible to it. Measured one coordinate at a time - USA PSP against the PS2
+disc, in `crates/game/tests/frontend_grid_ground_truth.rs` - **30 of the 43
+coordinates the two files share land within a pixel of the ratio and 13 do
+not**:
+
+| Group | Count | What they are |
+| --- | --- | --- |
+| `<Animation><Key>` `y` | 3 | A *travel*, not a position - identical on both discs |
+| `Language Selection` confirm prompt | 4 | Re-placed on both axes, outward on `x` |
+| `NavigationController` prompts | 4 | `x` only; their `y` scales and their internal gap scales |
+| `TextInfo`, `USLegalText` `y` | 2 | 5 and 12 pixels short of the prediction |
+
+The first group is the one with consequences beyond this page: **`x` and `y` do
+not mean the same thing on every element**, so anything sweeping a layout for
+out-of-screen widgets has to know which kind of coordinate it is holding.
+`Arcade_HUD.xml`'s `TimeDiffIcon` is the same shape in the HUD - see
+`oag_game::hud::inside_screen`. No mechanism is claimed for the ten hand
+re-placements; a PAL title-safe inset is the obvious guess and does not fit,
+since one group moves inward and the other outward.
+
+The identical over-reading was made about `Arcade_HUD.xml` and corrected in
+`3266e50`. Twice is a pattern, and the pattern is *deriving a universal from
+extremes*.
 
 **The `y=220` in that table is the USA PSP disc's, not the EU one's.** The EU PSP
 release moved `BOOT_PRESS_START` down to `y=230` on its own (see below); the PS2

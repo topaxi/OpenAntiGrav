@@ -275,16 +275,32 @@ pub const SCREEN: (f32, f32) = (480.0, 272.0);
 ///
 /// # Evidence for the PS2 grid
 ///
-/// The PS2 `Skin.xml`'s layout is the PSP's, scaled by exactly the resolution
-/// ratio. `BOOT_PRESS_START` sits at `x=613 y=362` against the PSP's `460`/`230`
-/// on the same disc region, the `Show Logo` logo at `y=119` against `72`, and
-/// the extremes over the whole file are `x=613 y=415` against `x=460 y=252`.
-/// Every one of those matches 640/480 and 448/272 to better than a tenth of a
-/// percent: 613/460 = 1.3326 against 1.3333, and 415/252 = 1.6468 against
-/// 1.6471. Confidence **95** - the arithmetic is unambiguous and 640x448 is
-/// PAL's own frame; what is not independently confirmed is the *display*
-/// aspect, which is taken from `crate::display::Aspect::Ps2`'s existing 4:3
-/// rather than measured here.
+/// The file's own extremes are `x=613 y=415` on the PS2 against `x=460 y=252`
+/// on the PSP, and both ratios land on 640/480 and 448/272 to better than a
+/// tenth of a percent: 613/460 = 1.3326 against 1.3333, 415/252 = 1.6468
+/// against 1.6471. Confidence **95** - the arithmetic is unambiguous and
+/// 640x448 is PAL's own frame. What is not independently confirmed is the
+/// *display* aspect, which is taken from `crate::display::Aspect::Ps2`'s
+/// existing 4:3 rather than measured here.
+///
+/// # What the grid does not mean
+///
+/// **The PS2 layout is not the PSP's scaled.** This paragraph used to say it
+/// was, "by exactly the resolution ratio", at confidence 95, on the strength of
+/// the extremes above and three samples. Measured coordinate by coordinate, 30
+/// of the 43 coordinates the two files share land within a pixel of the ratio
+/// and **13 do not**: ten widgets the PS2 pressing re-placed by hand, and three
+/// `<Animation><Key>` values that are a *travel* rather than a position and are
+/// byte-identical across the consoles. Extremes cannot see an exception in the
+/// middle - the same reading, of `Arcade_HUD.xml`, was wrong the same way. The
+/// measurement is `crates/game/tests/frontend_grid_ground_truth.rs`, and
+/// [`crate::hud::inside_screen`] is where the mixed meaning of `x` matters.
+///
+/// One trap that measurement pins: the PRESS START text is at `y=220` on the
+/// **USA** PSP pressing and `y=230` on the EU one, and the PS2's 362 scales
+/// from 220. Since the only PS2 disc here is a EU one, the natural EU-to-EU
+/// comparison makes that coordinate look 4% off for a reason that has nothing
+/// to do with the console.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Space {
     /// The grid widget coordinates are in.
@@ -1329,14 +1345,20 @@ mod tests {
 
     const FRAME: f64 = 1001.0 / 30_000.0;
 
-    /// The PS2 grid is the PSP's, scaled by the resolution ratio.
+    /// The coordinates that *do* scale land on this grid and no other.
     ///
     /// Not a round-number check: `Skin.xml`'s own extremes are `x=613 y=415` on
     /// the PS2 against `x=460 y=252` on the PSP, and both ratios have to land on
     /// 640/480 and 448/272 for 640x448 to be the grid it authors in. They do, to
-    /// under a tenth of a percent. See [`Space`].
+    /// under a tenth of a percent.
+    ///
+    /// **This is four samples, and four samples is what it claims.** Thirteen of
+    /// the file's coordinates do not follow this ratio at all; whether the ones
+    /// here are representative is not a question a hardcoded quartet can answer,
+    /// and `crates/game/tests/frontend_grid_ground_truth.rs` is what answers it
+    /// against the discs. See [`Space`].
     #[test]
-    fn the_ps2_grid_is_the_psp_layout_scaled_by_the_resolution() {
+    fn the_grid_ratio_is_the_one_the_scaling_coordinates_agree_on() {
         let psp = Space::PSP.size;
         let ps2 = Space::PS2.size;
         assert!((613.0 / 460.0 - ps2.0 / psp.0).abs() < 0.002, "x extreme");

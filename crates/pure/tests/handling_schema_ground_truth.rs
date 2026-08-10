@@ -306,6 +306,22 @@ fn both_pure_pressings_carry_the_identical_schema() {
     let (eu_schema, eu_files) =
         ship_schema(&eu, oag_pure::open, oag_pure::names::GAME_PLUGIN_DEFINITION);
 
+    // **Both halves need a floor, and the count alone is not one.** The two
+    // asserts below are the only ones on this page that compare a disc against
+    // another disc rather than against a written-down expectation, so a failure
+    // that hits both pressings the same way - a rename in `oag_pure::names`, a
+    // regression in the WAD reader - makes them agree on nothing at all and
+    // pass. `0 == 0` is equal, and so is `"" == ""`.
+    assert!(
+        usa_files > 0 && eu_files > 0,
+        "neither pressing yielded a single handlingstats.xml, so the comparison \
+         below would be between two empty schemas"
+    );
+    assert!(
+        !usa_schema.is_empty(),
+        "the files were read and folded to nothing"
+    );
+
     assert_eq!(
         usa_files, eu_files,
         "the two pressings ship a different roster"
