@@ -426,6 +426,7 @@ pub fn run(
                 ticks: options.ticks.saturating_sub(ticks),
                 held: options.held,
                 pressed: options.pressed,
+                input_script: None,
                 scheme: options.scheme,
                 size: (width, height),
                 log_every: options.log_every,

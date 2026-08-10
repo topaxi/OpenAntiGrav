@@ -3490,6 +3490,20 @@ impl HeldButtons {
         self.keyboard.snapshot()
     }
 
+    /// Makes exactly `mask`'s buttons held, releasing everything else.
+    ///
+    /// For script-driven capture: each tick's authored state is a level, and
+    /// the keyboard path derives the edges (and the axes) from the level
+    /// changes exactly as it would for a real player. Unbound buttons are
+    /// skipped, same as [`Self::new`].
+    pub fn set_held(&mut self, mask: u32) {
+        for index in 0..32u8 {
+            if let Some(key) = key_for_button(index) {
+                self.keyboard.set_key(&key, mask & (1u32 << index) != 0);
+            }
+        }
+    }
+
     /// Sets `mask`'s buttons down and clears them, on top of what is held.
     ///
     /// For a gesture that needs *edges* rather than a level. A held button
@@ -4827,6 +4841,12 @@ pub struct CaptureOptions {
     pub ticks: u32,
     /// Buttons held on every one of those ticks.
     pub held: u32,
+    /// Drive the run from a committed `.inputs` script instead of `held`/
+    /// `pressed` - the same file `scripts/psp-trace.py --script` feeds the
+    /// emulator, so one authored input produces both sides of a visual
+    /// comparison. Ticks past the script's end coast with everything
+    /// released.
+    pub input_script: Option<oag_trace::script::Script>,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a
@@ -5007,7 +5027,11 @@ pub fn capture(
 
     let mut held = HeldButtons::new(options.held);
     for tick in 0..options.ticks {
-        held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
+        if let Some(script) = &options.input_script {
+            held.set_held(script.at(tick as usize).buttons);
+        } else {
+            held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
+        }
         let snapshot = held.snapshot();
         race.tick(&snapshot);
         // Inside the tick loop and not beside it, for the reason the exhaust
@@ -5326,6 +5350,22 @@ mod tests {
         assert!((anim_phase(ANIM_PERIOD_TICKS / 2) - 0.5).abs() < 1e-6);
         assert_eq!(anim_phase(ANIM_PERIOD_TICKS), 0.0);
         assert_eq!(anim_phase(ANIM_PERIOD_TICKS * 3), 0.0);
+    }
+
+    /// `HeldButtons::set_held` drives the keyboard path with per-tick levels:
+    /// the axes derive exactly as a real player's would, and releasing shows
+    /// up on the very next snapshot - what `--input-script` needs.
+    #[test]
+    fn set_held_levels_reach_the_snapshot_and_release() {
+        let mut held = HeldButtons::new(0);
+        held.set_held((1 << button::CROSS) | (1 << button::LEFT));
+        let snap = held.snapshot();
+        assert!(snap.buttons.is_held(button::CROSS));
+        assert!(snap.stick_x < 0.0, "left must steer negative x");
+        held.set_held(0);
+        let snap = held.snapshot();
+        assert!(!snap.buttons.is_held(button::CROSS));
+        assert_eq!(snap.stick_x, 0.0);
     }
 
     /// The blink light kept the exact behaviour it had when the scroll was a
