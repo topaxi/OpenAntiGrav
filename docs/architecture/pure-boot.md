@@ -16,7 +16,7 @@ reading of this same sequence was wrong.
 | # | State | What it does | Leaves on | Confidence |
 | --- | --- | --- | --- | --- |
 | 1 | `Language Selection` | The picker, on `Intro Screen`'s white. **No movie plays before it.** | cross confirms | 90 |
-| 2 | `Developer Publisher Screen` | Two teletyped phases; see below. Declares no widgets of its own. | a timer, ~11 s | 85 |
+| 2 | `Developer Publisher Screen` | Two teletyped phases; see below. Declares no widgets of its own. | a timer, ~11 s | 85 chain / 60 duration |
 | 3 | `MemoryStickWarning` | Storage-access disclaimer, six text widgets from the XML | cross ("PRESS X TO CONTINUE") | 90 |
 | 4 | `FMV Intro` | Plays `Data\Movies\WoFMVNew_US.PMF`, 2847 frames, ~95 s | plays out, or a skip | 90 |
 | 5 | `Title Screen` | "wipEout pure" and PRESS START BUTTON | **not established** | 90 |
@@ -110,13 +110,36 @@ supply. See `HANDOVER.md` for the Ghidra work this needs.
 - **`MemoryStickWarning`'s text is deliberately modernised.** The disc's six
   `MSInfo`/`MSWarning` strings are about a Memory Stick Duo being physically
   removed. This is a reimplementation on hardware where storage is assumed
-  present, so the screen keeps its structure, colours and cross gate but takes
-  its own wording, phrased around autosave rather than a removable card. A
+  present, so the screen keeps its structure, colours, rules and cross gate but
+  takes its own wording, phrased around autosave rather than a removable card. A
   deliberate product decision, not a faithfulness gap - recorded here so it is
-  not "fixed" later by someone reading the disc's strings.
-- **`Developer Publisher Screen` is a walked-through state** until the RE above
-  lands, so the transition chain is right while the screen itself is not yet
-  drawn.
+  not "fixed" later by someone reading the disc's strings. Everything geometric
+  *is* the disc's: rules at y=10 and y=240, body at x=15 from y=30, prompt at
+  y=245, and the screen's own `MSWarningColour1`/`MSWarningColour2`/
+  `MSWarningScale` globals.
+- **`Developer Publisher Screen` keeps its place and its timing, not its
+  content.** It is walked in order and holds for
+  `DEVELOPER_PUBLISHER_SECONDS` (11 s, confidence 60), drawing the parent's
+  white and nothing else. The two teletyped phases and the Studio Liverpool logo
+  are engine-drawn and need the Ghidra work above, so they are absent rather than
+  approximated. An honest gap inside a correct sequence.
+
+### The order was wrong once, for a structural reason worth remembering
+
+Between first implementing Pure's chain and this page's current form, the build
+walked `Language Selection` straight to `FMV Intro`, skipping both screens above.
+Two causes, and the second is the instructive one:
+
+1. Neither screen had any behaviour, so both were stepped over.
+2. **The mechanism could only resolve one step after the picker.** It carried a
+   `start` and an `after_language`, which is enough for Pulse's three screens and
+   cannot express five however much is implemented - so the order would have
+   stayed wrong even after both screens were drawn.
+
+The fix was to make the resolved sequence a *chain* the front end walks, with one
+`advance()` that every screen leaves through, rather than a `fire(...)` spelled
+out per screen. Each of those spellings was individually defensible and together
+they described Pulse's sequence on Pure's disc.
 
 ## Pulse boots differently, and that is measured too
 

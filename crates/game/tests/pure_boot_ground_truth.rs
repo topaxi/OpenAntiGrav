@@ -144,8 +144,40 @@ fn pures_picker_leads_to_its_second_boot_movie_then_the_title_screen() {
             "{label}: cross on the picker takes the highlighted language"
         );
         assert!(
+            loaded
+                .frontend
+                .machine()
+                .is(pure_states::DEVELOPER_PUBLISHER),
+            "{label}: the picker goes to the developer and publisher cards, which is what \
+             the disc does and what this build got wrong; got {:?}",
+            loaded.frontend.machine().current()
+        );
+
+        // The cards leave on a timer; the storage warning then waits for cross.
+        for _ in 0..1200 {
+            if loaded
+                .frontend
+                .machine()
+                .is(pure_states::MEMORY_STICK_WARNING)
+            {
+                break;
+            }
+            input.begin_frame(0);
+            loaded.frontend.update(1.0 / 60.0, &mut input, None);
+        }
+        assert!(
+            loaded
+                .frontend
+                .machine()
+                .is(pure_states::MEMORY_STICK_WARNING),
+            "{label}: the cards advance themselves; got {:?}",
+            loaded.frontend.machine().current()
+        );
+        input.begin_frame(1 << button::CROSS);
+        loaded.frontend.update(1.0 / 60.0, &mut input, None);
+        assert!(
             loaded.frontend.machine().is(pure_states::FMV_INTRO),
-            "{label}: the picker's own exit is the second boot movie, not Show Logo; got {:?}",
+            "{label}: acknowledging the warning reaches the second boot movie; got {:?}",
             loaded.frontend.machine().current()
         );
         assert!(
@@ -319,25 +351,26 @@ fn the_reel_flag_is_refused_by_name_rather_than_pointed_somewhere_else() {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_screens_this_build_cannot_drive_are_reported_rather_than_dropped_quietly() {
-    // Pure's chain has two screens between its picker and its movie that nothing
-    // here draws yet. Stepping over them is the deliberate choice; doing it
-    // silently is not, because a shortened sequence that says nothing reads as a
-    // finished one.
+fn the_whole_chain_is_walked_and_nothing_in_it_is_skipped() {
+    // The regression guard for the order defect. Descoping the two screens between
+    // the picker and the movie left the *order* wrong, not just their content, and
+    // a passing suite did not notice - the same shape of mistake as the stale-save
+    // profile this whole file exists for.
     for (label, image) in images() {
         let loaded = load(&image);
-        for skipped in [
+        assert!(
+            !loaded.report.iter().any(|line| line.contains("skipped")),
+            "{label}: every screen in Pure's chain is drivable now, so nothing should \
+             report as skipped; report was {:#?}",
+            loaded.report
+        );
+        for state in [
             pure_states::DEVELOPER_PUBLISHER,
             pure_states::MEMORY_STICK_WARNING,
         ] {
             assert!(
-                loaded
-                    .report
-                    .iter()
-                    .any(|line| line.contains(skipped) && line.contains("skipped")),
-                "{label}: {skipped:?} is in the disc's chain and is skipped, so it has to \
-                 say so; report was {:#?}",
-                loaded.report
+                loaded.frontend.screens().by_name(state).is_some(),
+                "{label}: the disc declares {state:?}"
             );
         }
     }

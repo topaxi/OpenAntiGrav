@@ -231,26 +231,40 @@ pub fn load(options: &Options) -> Result<Boot> {
             )
         })?,
     };
-    // And which step confirming a language goes to: the next one in the chain
-    // this pressing carries *and* this build can drive. Pure's chain has two
-    // screens between its picker and its movie that nothing here draws yet, so
-    // they are stepped over rather than stalling the boot on them - and the step
-    // that is skipped is reported, because a silently shortened sequence is
-    // exactly the kind of thing that reads as finished work.
-    let after_step = profile.next_after(crate::frontend::states::LANGUAGE_SELECTION, |state| {
-        screens.by_name(state).is_some() && crate::frontend::can_drive(state)
-    });
-    for step in profile.chain {
-        if step.state != crate::frontend::states::LANGUAGE_SELECTION
-            && screens.by_name(step.state).is_some()
-            && !crate::frontend::can_drive(step.state)
-        {
+    // The whole chain, filtered to the steps this pressing carries *and* this
+    // build can drive, in the title's own order. A step failing either test is
+    // stepped over **and reported**: a silently shortened sequence is exactly the
+    // kind of thing that reads as finished work, which is how this build shipped
+    // Pure's order wrong in the first place.
+    //
+    // The boot step itself is always kept, whatever `can_drive` says of it: a
+    // sequence with no first screen is not a sequence, and dropping it would turn
+    // a missing behaviour into an empty boot.
+    // The boot step first - which is the chain's own on a default boot and the
+    // reel's in place of it under `--reel`, since the reel *replaces* the movie
+    // the boot would have played rather than preceding it - then the rest of the
+    // chain in the title's own order.
+    let mut walked: Vec<&oag_title::BootStep> = vec![start_step];
+    for step in profile.chain.iter().skip(1) {
+        if screens.by_name(step.state).is_none() {
+            report.push(format!(
+                "the chain's {:?} is skipped: this pressing does not carry it",
+                step.state
+            ));
+        } else if crate::frontend::can_drive(step.state) {
+            walked.push(step);
+        } else {
             report.push(format!(
                 "the disc's {:?} is skipped: this build has no behaviour for it yet",
                 step.state
             ));
         }
     }
+    // The chain's *other* movie, if it has one - the step that plays something
+    // after the boot step, wherever in the chain it sits. Deliberately not "the
+    // step after the picker": on Pure that is the developer/publisher cards, which
+    // play nothing, and keying the movie off it loaded no movie at all.
+    let second_movie_step = walked.iter().skip(1).find(|step| step.movie.is_some());
 
     // `--movie` overrides whichever movie the boot leg would play, and asks for
     // one on a leg that plays none - it is a preview tool, so pointing it at a
@@ -278,7 +292,7 @@ pub fn load(options: &Options) -> Result<Boot> {
     // rather than probed for by screen name, and `None` covers both "this title's
     // next screen plays nothing" (Pulse's `Show Logo`) and "there is no next
     // screen this build can drive".
-    let after_language_movie_name = after_step.and_then(|step| step.movie);
+    let after_language_movie_name = second_movie_step.and_then(|step| step.movie);
     let mut after_language_movie = match after_language_movie_name {
         Some(name) => load_second_movie(&mut archives, name, options, &mut report),
         None => None,
@@ -343,19 +357,26 @@ pub fn load(options: &Options) -> Result<Boot> {
             },
         )
     };
+    // Each walked step with whichever movie was read for it. Only two steps in
+    // either title's chain name a movie at all, so the two loaded above cover it:
+    // the boot step's, and the one the after-language step plays.
+    let steps = walked
+        .iter()
+        .map(|step| crate::frontend::Step {
+            state: step.state,
+            movie: if std::ptr::eq(*step, start_step) {
+                plan(movie.as_ref())
+            } else if step.movie.is_some() {
+                plan(after_language_movie.as_ref())
+            } else {
+                plan(None)
+            },
+        })
+        .collect();
     let mut frontend = Frontend::booting(
         crate::frontend::Sequence {
-            start: start_step.state,
-            first: plan(movie.as_ref()),
-            // With no drivable step after the picker, the picker's exit is
-            // itself: it stays put rather than firing at a screen nothing can
-            // leave. Unreachable on either title today, both chains having one.
-            after_language: after_step
-                .map_or(crate::frontend::states::LANGUAGE_SELECTION, |step| {
-                    step.state
-                }),
-            after_language_movie: plan(after_language_movie.as_ref()),
-            picker_backdrop_parent: profile.picker_backdrop_parent,
+            steps,
+            backdrop_parent: profile.picker_backdrop_parent,
         },
         screens,
         strings.clone(),

@@ -72,7 +72,7 @@
 
 use crate::input::{Input, button};
 use crate::language::{Language, StringTable};
-use crate::screen::{Screen, Screens, argb_to_rgba};
+use crate::screen::{Screen, Screens, argb_to_rgba, parse_argb};
 use crate::state_machine::{Event, StateMachine};
 
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
@@ -85,6 +85,19 @@ use crate::state_machine::{Event, StateMachine};
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 use oag_pure::frontend::states as pure_states;
+
+/// How long `Developer Publisher Screen` stays up before advancing itself.
+///
+/// **Measured, not read out of the executable.** Filming a cold boot of
+/// `pure-psp-usa` at 0.5 s intervals from the language confirm puts the change to
+/// `MemoryStickWarning` between 12.5 s and 13.0 s, with the screen itself first
+/// drawn at about 1.5 s - so a shade over eleven seconds on screen. Confidence
+/// **60**: the ordering and the rough duration are solid, the exact figure is
+/// bounded only by the sampling interval, and the two teletype phases inside it
+/// have their own timings that were not measured at all.
+///
+/// See `docs/architecture/pure-boot.md`.
+pub const DEVELOPER_PUBLISHER_SECONDS: f64 = 11.0;
 
 /// Which leg the sequence boots into.
 ///
@@ -124,32 +137,63 @@ pub fn can_drive(state: &str) -> bool {
         states::SHOW_LOGO,
         states::LANGUAGE_SELECTION,
         states::LAUNCH_GAME,
+        pure_states::DEVELOPER_PUBLISHER,
+        pure_states::MEMORY_STICK_WARNING,
         pure_states::FMV_INTRO,
         pure_states::TITLE_SCREEN,
     ]
     .contains(&state)
 }
 
+/// One screen the boot walks, and the movie it plays there.
+#[derive(Debug, Clone)]
+pub struct Step {
+    pub state: &'static str,
+    pub movie: MoviePlan,
+}
+
 /// What `boot::load` resolved about the sequence before the front end existed.
 ///
-/// Every field here was a `screens.by_name(...)` probe in this file or in
+/// Every part of this was a `screens.by_name(...)` probe in this file or in
 /// `boot.rs` - four of them, three asking "is this Pure?" in different words.
 /// They are resolved once now, from the title's own table, and handed in. See
 /// [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md).
 #[derive(Debug, Clone)]
 pub struct Sequence {
+    /// Every screen this boot walks, in order, already filtered to the ones this
+    /// pressing carries and this build can drive.
+    ///
+    /// **A whole chain rather than a start and one next step.** An earlier shape
+    /// here carried exactly `start` and `after_language`, which was enough for
+    /// Pulse's three screens and structurally could not express Pure's five: a
+    /// single "where does the picker go" field cannot walk the two screens
+    /// between Pure's picker and its movie however they are implemented, so the
+    /// order came out wrong no matter what was drawn.
+    pub steps: Vec<Step>,
+    /// The screen whose fills the boot's own screens sit on, if they need one.
+    ///
+    /// Pure's picker, developer/publisher cards and storage warning are all
+    /// children of `Intro Screen` and carry no fill of their own; the real ones
+    /// are on that parent's white. `None` for a title whose screens carry their
+    /// own backgrounds.
+    pub backdrop_parent: Option<&'static str>,
+}
+
+impl Sequence {
     /// The screen the boot opens on.
-    pub start: &'static str,
-    /// The movie playing there, if any.
-    pub first: MoviePlan,
-    /// Where confirming a language goes - the next screen in the title's chain
-    /// that this pressing carries and this build can drive.
-    pub after_language: &'static str,
-    /// The movie playing *there*, if any. Pulse's `Show Logo` has none; Pure's
-    /// `FMV Intro` is its second boot movie.
-    pub after_language_movie: MoviePlan,
-    /// The screen whose fills the language picker inherits, if it needs one.
-    pub picker_backdrop_parent: Option<&'static str>,
+    ///
+    /// # Panics
+    ///
+    /// If there are no steps at all, which `boot::load` cannot produce: a title's
+    /// chain is a non-empty compile-time constant and the boot screen itself is
+    /// always drivable.
+    #[must_use]
+    pub fn start(&self) -> &'static str {
+        self.steps
+            .first()
+            .expect("a boot sequence has at least one screen")
+            .state
+    }
 }
 
 /// One boot movie, as the sequence needs to know it.
@@ -501,13 +545,11 @@ pub struct Frontend {
     placements: Vec<(String, crate::sprite::Placed)>,
     player: crate::movie::Player,
     /// The first boot movie, as the sequence needs to know it.
+    ///
+    /// Every *other* screen's movie is looked up from [`Self::steps`] by
+    /// [`Self::movie_of`]; this one is kept because the overlay's default and the
+    /// no-picture player length are decided from it before any step is entered.
     first: MoviePlan,
-    /// The second, kept apart from `player` so entering
-    /// [`pure_states::FMV_INTRO`] can rebuild the player for it - see
-    /// [`Self::confirm_language`]. [`MoviePlan::none`] on a source
-    /// [`Frontend::booting`] never got one for, matching how the first movie's
-    /// own absence is handled.
-    second: MoviePlan,
     /// The grid this source's XML places widgets in, and what it is shown as.
     ///
     /// [`Space::PSP`] unless a caller says otherwise, because every screen this
@@ -532,11 +574,14 @@ pub struct Frontend {
     /// Lines worth telling the user about, in order.
     notes: Vec<String>,
     finished: bool,
-    /// Where confirming a language goes, resolved from the title's own chain
-    /// before this existed. See [`Sequence::after_language`].
-    after_language: &'static str,
-    /// The screen whose fills the picker inherits, if it needs one.
-    picker_backdrop_parent: Option<&'static str>,
+    /// The chain this boot walks, resolved from the title's own table. See
+    /// [`Sequence::steps`].
+    steps: Vec<Step>,
+    /// The screen whose fills this boot's screens sit on, if they need one.
+    backdrop_parent: Option<&'static str>,
+    /// How long the current screen has been on, for the ones that leave on a
+    /// timer rather than on a press. See [`Frontend::update_timed`].
+    on_screen_for: f64,
 }
 
 impl Frontend {
@@ -554,19 +599,29 @@ impl Frontend {
         has_picture: bool,
     ) -> Self {
         let screen = (SCREEN.0 as u32, SCREEN.1 as u32);
-        // Pulse's own sequence, which is what every in-file test here parses.
+        // Pulse's own chain, which is what every in-file test here parses.
         Self::booting(
             Sequence {
-                start: states::LOGO_FMV,
-                first: MoviePlan {
-                    frames: movie_frames,
-                    frame_rate: crate::movie::FRAME_RATE,
-                    aspect: screen,
-                    has_picture,
-                },
-                after_language: states::SHOW_LOGO,
-                after_language_movie: MoviePlan::none(screen),
-                picker_backdrop_parent: None,
+                steps: vec![
+                    Step {
+                        state: states::LOGO_FMV,
+                        movie: MoviePlan {
+                            frames: movie_frames,
+                            frame_rate: crate::movie::FRAME_RATE,
+                            aspect: screen,
+                            has_picture,
+                        },
+                    },
+                    Step {
+                        state: states::LANGUAGE_SELECTION,
+                        movie: MoviePlan::none(screen),
+                    },
+                    Step {
+                        state: states::SHOW_LOGO,
+                        movie: MoviePlan::none(screen),
+                    },
+                ],
+                backdrop_parent: None,
             },
             screens,
             strings,
@@ -584,12 +639,11 @@ impl Frontend {
         languages: Vec<Language>,
         placements: Vec<(String, crate::sprite::Placed)>,
     ) -> Self {
+        let start = sequence.start();
+        let first = sequence.steps[0].movie;
         let Sequence {
-            start,
-            first,
-            after_language,
-            after_language_movie: second,
-            picker_backdrop_parent,
+            steps,
+            backdrop_parent,
         } = sequence;
         let mut machine = StateMachine::new();
         machine.register_all([
@@ -604,6 +658,8 @@ impl Frontend {
             // Every state this build can drive, whichever title is opened -
             // harmless on a source that never fires into one, and `can_drive` is
             // the same list stated once for the mechanism that skips the rest.
+            pure_states::DEVELOPER_PUBLISHER,
+            pure_states::MEMORY_STICK_WARNING,
             pure_states::TITLE_SCREEN,
             pure_states::FMV_INTRO,
         ]);
@@ -640,7 +696,6 @@ impl Frontend {
             space: Space::PSP,
             player: crate::movie::Player::new(frames, false, first.frame_rate),
             first,
-            second,
             backdrop: None,
             // Without a picture the movie is a black screen for as long as it
             // runs - forty seconds for the disc's own intro - so the counter is
@@ -653,11 +708,53 @@ impl Frontend {
             acted: Vec::new(),
             notes: Vec::new(),
             finished: false,
-            after_language,
-            picker_backdrop_parent,
+            steps,
+            backdrop_parent,
+            on_screen_for: 0.0,
         };
         frontend.machine.transition_to(start);
         frontend
+    }
+
+    /// The movie a named screen plays, or a silent, pictureless one.
+    fn movie_of(&self, state: &str) -> MoviePlan {
+        self.steps
+            .iter()
+            .find(|step| step.state == state)
+            .map_or(MoviePlan::none(self.first.aspect), |step| step.movie)
+    }
+
+    /// The step after whichever screen is current, if the chain has one.
+    fn next_step(&self) -> Option<&Step> {
+        let current = self.machine.current()?;
+        let at = self.steps.iter().position(|step| step.state == current)?;
+        self.steps.get(at + 1)
+    }
+
+    /// Leaves the current screen for the next one in the chain.
+    ///
+    /// **The one place the sequence moves forward**, so the order comes from the
+    /// title's own table at every step rather than from a `fire` spelled out in
+    /// each `update_*`. Those spellings are what made Pure's order wrong: each
+    /// one was individually defensible and together they described Pulse's chain.
+    ///
+    /// The player is rebuilt for the next screen's own movie when it has one,
+    /// which is safe because the previous screen's is idle by then - see
+    /// [`Self::is_playing_movie`].
+    ///
+    /// Nothing happens at the end of the chain. On Pure that is `Title Screen`,
+    /// whose own way out is not established, so staying put is the honest answer.
+    fn advance(&mut self, why: &str) {
+        let Some(step) = self.next_step().cloned() else {
+            return;
+        };
+        self.notes.push(format!("{why}, firing {}", step.state));
+        if step.movie.frames > 0 {
+            self.player =
+                crate::movie::Player::new(step.movie.frames, false, step.movie.frame_rate);
+        }
+        self.on_screen_for = 0.0;
+        self.machine.fire(step.state);
     }
 
     /// Draws or hides the intro's frame counter.
@@ -861,6 +958,8 @@ impl Frontend {
             player.update(dt);
         }
 
+        self.on_screen_for += dt;
+
         if self.machine.is(states::LOGO_FMV) {
             self.update_logo_fmv(dt, input, movie_playhead);
         } else if self.machine.is(states::INTRO_MOVIE) {
@@ -869,8 +968,18 @@ impl Frontend {
             || self.machine.is(states::LOGO_FMV_REDIRECT)
         {
             // A redirect state's whole job is to leave. Both of these are real
-            // screens with nothing in them but one `forward="none"` redirect.
-            self.machine.fire(states::LANGUAGE_SELECTION);
+            // screens with nothing in them but one `forward="none"` redirect, and
+            // neither is a chain step of its own: the boot movie fires into one
+            // and it leaves for whatever followed that movie. So the target is the
+            // step after the *boot* step - which is where both are only ever
+            // entered from, on either leg.
+            if let Some(after_boot) = self.steps.get(1).map(|step| step.state) {
+                self.machine.fire(after_boot);
+            }
+        } else if self.machine.is(pure_states::DEVELOPER_PUBLISHER) {
+            self.update_developer_publisher();
+        } else if self.machine.is(pure_states::MEMORY_STICK_WARNING) {
+            self.update_memory_stick_warning(input);
         } else if self.machine.is(states::LANGUAGE_SELECTION) {
             self.update_language_selection(input);
         } else if self.machine.is(states::SHOW_LOGO) {
@@ -915,11 +1024,7 @@ impl Frontend {
         if self.player.is_finished() {
             // The disc's `AutoRedirect` goes to `LogoFMV->Show Logo` here. This
             // build has the picker next instead; see the module docs.
-            self.notes.push(format!(
-                "the movie ended, firing {}",
-                states::LANGUAGE_SELECTION
-            ));
-            self.machine.fire(states::LANGUAGE_SELECTION);
+            self.advance("the movie ended");
         }
     }
 
@@ -1039,29 +1144,40 @@ impl Frontend {
 
     /// The screen this source's boot lands on after the language picker.
     ///
-    /// Resolved once, in `boot::load`, from the title's own chain - the next step
-    /// after the picker that this pressing carries and this build can drive. This
-    /// used to be a three-branch probe over `Show Logo`, then `FMV Intro`, then
-    /// `Title Screen`, which was a title guess dressed as a capability check: it
-    /// happened to give the right answer for the two titles that existed, and
-    /// would have gone on happening to until it did not. See
-    /// [`Sequence::after_language`].
+    /// Read out of the title's own chain rather than probed for. This used to be a
+    /// three-branch probe over `Show Logo`, then `FMV Intro`, then `Title Screen`,
+    /// which was a title guess dressed as a capability check: it happened to give
+    /// the right answer for the two titles that existed, and would have gone on
+    /// happening to until it did not.
     #[must_use]
     pub fn language_confirm_target(&self) -> &'static str {
-        self.after_language
+        self.steps
+            .iter()
+            .position(|step| step.state == states::LANGUAGE_SELECTION)
+            .and_then(|at| self.steps.get(at + 1))
+            .map_or(states::SHOW_LOGO, |step| step.state)
     }
 
-    /// Takes the highlighted language and leaves for
-    /// [`Self::language_confirm_target`].
+    /// The screen that plays the boot's second movie, if the chain has one.
+    ///
+    /// What a caller holding that movie's frames or its sound needs to know, so it
+    /// can hand over on the tick that screen is entered. Named by the chain rather
+    /// than spelled as one title's screen name at each call site.
+    #[must_use]
+    pub fn second_movie_state(&self) -> Option<&'static str> {
+        self.steps
+            .iter()
+            .skip(1)
+            .find(|step| step.movie.frames > 0)
+            .map(|step| step.state)
+    }
+
+    /// Takes the highlighted language and leaves for the next screen in the chain.
     fn confirm_language(&mut self) {
         let language = self.languages[self.selected].clone();
         let disc_goto = self.language_auto_redirect().map(str::to_string);
         let target = self.language_confirm_target();
         self.chosen = Some(language.name.clone());
-        self.notes.push(format!(
-            "language {} ({}) selected, firing {}",
-            language.name, language.native_name, target
-        ));
         if let Some(goto) = disc_goto
             && goto != target
         {
@@ -1069,20 +1185,47 @@ impl Frontend {
                 "note: the disc's own LanguageAutoRedirect goes to {goto}, not {target}"
             ));
         }
-        // `self.player` is idle from here on for the leg that just ended - see
-        // `Self::is_playing_movie` - so a movie on the next step reuses the same
-        // field rather than carrying a second one, rebuilt for that movie's own
-        // frame count and rate.
-        //
-        // Keyed on the step **having a movie** rather than on its name. It used to
-        // test `target == pure_states::FMV_INTRO`, which is one title's screen
-        // name standing in for the general question "does what comes next play
-        // something".
-        if self.second.frames > 0 {
-            self.player =
-                crate::movie::Player::new(self.second.frames, false, self.second.frame_rate);
+        let selected = format!(
+            "language {} ({}) selected",
+            language.name, language.native_name
+        );
+        self.advance(&selected);
+    }
+
+    /// `Developer Publisher Screen`: the publisher and developer cards.
+    ///
+    /// **Leaves on a timer, and draws almost nothing.** The screen declares no
+    /// content at all on the disc - a placeholder `Item` and one `Redirect` - and
+    /// what it really shows is two teletyped phases with the Studio Liverpool logo
+    /// and frame graphics, drawn by engine code this project has not read yet. So
+    /// the *timing* is reproduced and the *content* is not: this is an honest
+    /// eleven seconds of the parent's white rather than a guess at the cards.
+    ///
+    /// [`DEVELOPER_PUBLISHER_SECONDS`] is measured at 0.5 s sampling, confidence
+    /// 60 - see `docs/architecture/pure-boot.md` and
+    /// [`pure_states::DEVELOPER_PUBLISHER`]. No button leaves it: the disc's own
+    /// redirect names none, and pressing through the cards was not observed to
+    /// work.
+    fn update_developer_publisher(&mut self) {
+        if self.on_screen_for >= DEVELOPER_PUBLISHER_SECONDS {
+            self.advance("the developer and publisher cards ended");
         }
-        self.machine.fire(target);
+    }
+
+    /// `MemoryStickWarning`: the storage disclaimer, waiting on cross.
+    ///
+    /// **Cross and only cross, and no timeout.** `MemoryStickRedirect` carries
+    /// `StartEnabled="true"` and the screen reads "PRESS X TO CONTINUE"; a cold
+    /// boot sat on it indefinitely until cross was sent, which is how the two
+    /// screens before it were found at all.
+    ///
+    /// Its own text is deliberately not the disc's - see
+    /// [`pure_states::MEMORY_STICK_WARNING`] and [`Self::draw_storage_warning`].
+    fn update_memory_stick_warning(&mut self, input: &mut Input) {
+        if input.is_pressed(button::CROSS) {
+            input.consume_press(button::CROSS);
+            self.advance("the storage warning was acknowledged");
+        }
     }
 
     /// `Show Logo`: the Pulse logo, PRESS START, and nothing that moves.
@@ -1130,22 +1273,14 @@ impl Frontend {
         for button in [button::START, button::CROSS] {
             if input.is_pressed(button) {
                 input.consume_press(button);
-                self.notes.push(format!(
-                    "the video was skipped, firing {}",
-                    pure_states::TITLE_SCREEN
-                ));
-                self.machine.fire(pure_states::TITLE_SCREEN);
+                self.advance("the video was skipped");
                 return;
             }
         }
 
         self.advance_movie(dt, playhead);
         if self.player.is_finished() {
-            self.notes.push(format!(
-                "the video ended, firing {}",
-                pure_states::TITLE_SCREEN
-            ));
-            self.machine.fire(pure_states::TITLE_SCREEN);
+            self.advance("the video ended");
         }
     }
 
@@ -1236,15 +1371,16 @@ impl Frontend {
             // reassignment's own comment for why reuse is safe here: the
             // first movie's player is idle by the time this state is
             // reachable at all.
+            let plan = self.movie_of(pure_states::FMV_INTRO);
             let mut out = self.draw_screen(pure_states::FMV_INTRO);
-            if self.second.has_picture {
+            if plan.has_picture {
                 out.push(Draw::Video {
                     // **This movie's own aspect, not the first one's.** The two
                     // need not be the same shape, and a shared field drew this
                     // one pillarboxed for the other - correct only while both
                     // happen to be 480x272, which is exactly the kind of
                     // coincidence that survives review and then breaks.
-                    rect: pillarbox_in(self.space, self.second.aspect),
+                    rect: pillarbox_in(self.space, plan.aspect),
                     frame: self.player.frame(),
                     position: self.player.position(),
                     source: Video::Intro,
@@ -1254,7 +1390,35 @@ impl Frontend {
             // Pure it is the only movie the boot draws, so without `ffmpeg` the
             // whole leg is a blank screen for as long as the movie would have
             // run, with nothing to say it is progressing.
-            self.insert_movie_counter(&mut out, self.second.has_picture);
+            self.insert_movie_counter(&mut out, plan.has_picture);
+            self.insert_backdrop(&mut out);
+            return out;
+        }
+
+        if self.machine.is(pure_states::DEVELOPER_PUBLISHER) {
+            // **Deliberately almost empty, and the gap is the honest part.** The
+            // disc declares no content for this screen at all; what it really
+            // shows is two teletyped phases with the Studio Liverpool logo, drawn
+            // by engine code nobody here has read. So this reproduces the screen's
+            // *place in the sequence* and its background, and draws no cards
+            // rather than inventing them. See
+            // [`pure_states::DEVELOPER_PUBLISHER`].
+            //
+            // The parent's fills rather than `draw_screen`: the screen has no
+            // widgets to draw, and its background belongs to `Intro Screen`.
+            self.insert_backdrop_parent_fills(&mut out);
+            self.insert_backdrop(&mut out);
+            return out;
+        }
+
+        if self.machine.is(pure_states::MEMORY_STICK_WARNING) {
+            // **Not `draw_screen`, deliberately.** This screen's widgets *are* in
+            // the XML, and drawing them would put the disc's Memory-Stick-removal
+            // strings on screen - the one thing this build has decided not to say.
+            // Its geometry, colours and rules are reproduced from those widgets in
+            // `draw_storage_warning`, with wording that is true here.
+            self.insert_backdrop_parent_fills(&mut out);
+            self.draw_storage_warning(&mut out);
             self.insert_backdrop(&mut out);
             return out;
         }
@@ -1290,6 +1454,94 @@ impl Frontend {
             });
         }
         out
+    }
+
+    /// The fills of the screen this boot's own screens sit on, if it names one.
+    ///
+    /// Pure's picker, developer/publisher cards and storage warning are all
+    /// children of `Intro Screen` and declare no background of their own; the real
+    /// ones are on that parent's white, and without this they would draw on the
+    /// black this build clears to. Which screen - if any - is the title's own
+    /// table's answer, not a probe.
+    fn insert_backdrop_parent_fills(&self, out: &mut Vec<Draw>) {
+        let Some(parent) = self
+            .backdrop_parent
+            .and_then(|name| self.screens.by_name(name))
+        else {
+            return;
+        };
+        for &fill in &parent.fills {
+            out.push(Draw::Fill {
+                rect: [0.0, 0.0, self.space.size.0, self.space.size.1],
+                color: argb_to_rgba(fill),
+            });
+        }
+    }
+
+    /// This build's own storage warning, at the disc's own geometry.
+    ///
+    /// **The wording is deliberately not the disc's.** Its six `MSInfo`/`MSWarning`
+    /// strings are about a Memory Stick Duo being physically removed mid-write;
+    /// this is a reimplementation on hardware where storage is assumed present, so
+    /// the screen keeps its structure, its colours, its rules and its cross gate,
+    /// and says what is actually true here instead. A product decision, recorded
+    /// in [`pure_states::MEMORY_STICK_WARNING`] so it is not "fixed" back to the
+    /// disc's strings by someone reading the XML.
+    ///
+    /// Everything geometric *is* the disc's: the two rules at y=10 and y=240, the
+    /// body at x=15 from y=30, the prompt at y=245, and the
+    /// `MSWarningColour1`/`MSWarningColour2`/`MSWarningScale` globals the screen's
+    /// own widgets reference.
+    fn draw_storage_warning(&self, out: &mut Vec<Draw>) {
+        let global = |name: &str, fallback: u32| {
+            self.screens
+                .globals
+                .get(name)
+                .and_then(|value| parse_argb(value))
+                .unwrap_or(fallback)
+        };
+        let heading = argb_to_rgba(global("MSWarningColour1", 0xFF00_AEEF));
+        let body = argb_to_rgba(global("MSWarningColour2", 0xFF00_AEEF));
+        let scale = self
+            .screens
+            .globals
+            .get("MSWarningScale")
+            .and_then(|value| value.parse::<f32>().ok())
+            .unwrap_or(1.0);
+
+        for y in [10.0, 240.0] {
+            out.push(Draw::Fill {
+                rect: [0.0, y, self.space.size.0, 1.0],
+                color: heading,
+            });
+        }
+        for (index, line) in [
+            "THIS GAME SAVES AUTOMATICALLY.",
+            "PROGRESS IS WRITTEN WHEN A RACE ENDS AND",
+            "WHEN A SETTING CHANGES.",
+        ]
+        .iter()
+        .enumerate()
+        {
+            out.push(Draw::Text {
+                x: 15.0,
+                y: 30.0 + index as f32 * 15.0,
+                scale,
+                color: body,
+                border: None,
+                align: Align::Left,
+                text: (*line).to_string(),
+            });
+        }
+        out.push(Draw::Text {
+            x: 15.0,
+            y: 245.0,
+            scale,
+            color: heading,
+            border: None,
+            align: Align::Left,
+            text: "PRESS X TO CONTINUE".to_string(),
+        });
     }
 
     /// The frame counter `--overlay` puts over a movie leg.
@@ -1493,17 +1745,7 @@ impl Frontend {
         // the parent's images unconditionally would put a 512x512 profile
         // card over the language list. The one thing actually evidenced is
         // the background colour.
-        if let Some(parent) = self
-            .picker_backdrop_parent
-            .and_then(|name| self.screens.by_name(name))
-        {
-            for &fill in &parent.fills {
-                out.push(Draw::Fill {
-                    rect: [0.0, 0.0, self.space.size.0, self.space.size.1],
-                    color: argb_to_rgba(fill),
-                });
-            }
-        }
+        self.insert_backdrop_parent_fills(out);
 
         self.draw_backdrops(screen, out);
 
@@ -1815,22 +2057,57 @@ mod tests {
     fn pure(fmv_frames: usize) -> Frontend {
         Frontend::booting(
             Sequence {
-                start: pure_states::LANGUAGE_SELECTION,
-                first: MoviePlan::none(GRID),
-                after_language: pure_states::FMV_INTRO,
-                after_language_movie: MoviePlan {
-                    frames: fmv_frames,
-                    frame_rate: crate::movie::FRAME_RATE,
-                    aspect: GRID,
-                    has_picture: fmv_frames > 0,
-                },
-                picker_backdrop_parent: Some(pure_states::INTRO_SCREEN),
+                steps: vec![
+                    Step {
+                        state: pure_states::LANGUAGE_SELECTION,
+                        movie: MoviePlan::none(GRID),
+                    },
+                    Step {
+                        state: pure_states::DEVELOPER_PUBLISHER,
+                        movie: MoviePlan::none(GRID),
+                    },
+                    Step {
+                        state: pure_states::MEMORY_STICK_WARNING,
+                        movie: MoviePlan::none(GRID),
+                    },
+                    Step {
+                        state: pure_states::FMV_INTRO,
+                        movie: MoviePlan {
+                            frames: fmv_frames,
+                            frame_rate: crate::movie::FRAME_RATE,
+                            aspect: GRID,
+                            has_picture: fmv_frames > 0,
+                        },
+                    },
+                    Step {
+                        state: pure_states::TITLE_SCREEN,
+                        movie: MoviePlan::none(GRID),
+                    },
+                ],
+                backdrop_parent: Some(pure_states::INTRO_SCREEN),
             },
             Screens::from_xml(PURE_XML),
             StringTable::default(),
             languages(),
             Vec::new(),
         )
+    }
+
+    /// Walks a Pure boot from the picker to `FMV Intro`, the way the disc does.
+    ///
+    /// Confirm a language, sit out the developer/publisher cards, acknowledge the
+    /// storage warning. Three steps, because the disc has three - which is the
+    /// whole point of the chain being a chain.
+    fn reach_the_second_movie(frontend: &mut Frontend, input: &mut Input) {
+        input.begin_frame(1 << button::CROSS);
+        frontend.update(FRAME, input, None);
+        run_until(frontend, input, 1200, |f| {
+            f.machine().is(pure_states::MEMORY_STICK_WARNING)
+        });
+        input.begin_frame(0);
+        frontend.update(FRAME, input, None);
+        input.begin_frame(1 << button::CROSS);
+        frontend.update(FRAME, input, None);
     }
 
     /// The default leg: `LogoFMV`, playing the movie the disc plays.
@@ -1849,16 +2126,26 @@ mod tests {
     fn reel(frames: usize) -> Frontend {
         Frontend::booting(
             Sequence {
-                start: states::INTRO_MOVIE,
-                first: MoviePlan {
-                    frames,
-                    frame_rate: crate::movie::FRAME_RATE,
-                    aspect: GRID,
-                    has_picture: false,
-                },
-                after_language: states::SHOW_LOGO,
-                after_language_movie: MoviePlan::none(GRID),
-                picker_backdrop_parent: None,
+                steps: vec![
+                    Step {
+                        state: states::INTRO_MOVIE,
+                        movie: MoviePlan {
+                            frames,
+                            frame_rate: crate::movie::FRAME_RATE,
+                            aspect: GRID,
+                            has_picture: false,
+                        },
+                    },
+                    Step {
+                        state: states::LANGUAGE_SELECTION,
+                        movie: MoviePlan::none(GRID),
+                    },
+                    Step {
+                        state: states::SHOW_LOGO,
+                        movie: MoviePlan::none(GRID),
+                    },
+                ],
+                backdrop_parent: None,
             },
             Screens::from_xml(XML),
             StringTable::default(),
@@ -2131,14 +2418,16 @@ mod tests {
         let mut input = Input::new();
         // From wherever the boot leg starts to the picker. Which state that is
         // is Pure's own open question and not this test's business - see
-        // `pure-boot.md`; what matters here is the leg *after* the picker.
-        run_until(&mut frontend, &mut input, 600, |f| {
-            f.machine().is(states::LANGUAGE_SELECTION)
-        });
-        pick_a_language(&mut frontend, &mut input);
+        // `pure-boot.md`; what matters here is the movie leg.
+        assert!(
+            !frontend.is_playing_movie(),
+            "the picker is not a movie screen"
+        );
+        reach_the_second_movie(&mut frontend, &mut input);
         assert!(
             frontend.machine().is(pure_states::FMV_INTRO),
-            "the picker's own exit on Pure is its second boot movie, not Show Logo"
+            "the storage warning's exit is the second boot movie; got {:?}",
+            frontend.machine().current()
         );
         assert!(
             frontend.is_playing_movie(),
@@ -2152,6 +2441,104 @@ mod tests {
         assert!(
             !frontend.is_playing_movie(),
             "the movie is over by Title Screen, so its sound has to stop"
+        );
+    }
+
+    /// The order is the disc's, screen for screen.
+    ///
+    /// The regression guard for the defect this chain exists to fix: descoping the
+    /// two screens between the picker and the movie left the *order* wrong, not
+    /// just their content, because the mechanism could only resolve one step after
+    /// the picker however much was implemented.
+    #[test]
+    fn pure_walks_the_five_screens_the_disc_walks() {
+        let mut frontend = pure(60);
+        let mut input = Input::new();
+        assert!(frontend.machine().is(pure_states::LANGUAGE_SELECTION));
+
+        input.begin_frame(1 << button::CROSS);
+        frontend.update(FRAME, &mut input, None);
+        assert!(
+            frontend.machine().is(pure_states::DEVELOPER_PUBLISHER),
+            "the picker goes to the developer and publisher cards, not the movie; got {:?}",
+            frontend.machine().current()
+        );
+
+        // Timed, with no button: pressing through the cards was not observed to
+        // work, and the disc's own redirect names no button.
+        for _ in 0..600 {
+            if frontend.machine().is(pure_states::MEMORY_STICK_WARNING) {
+                break;
+            }
+            input.begin_frame(u32::MAX);
+            frontend.update(FRAME, &mut input, None);
+        }
+        assert!(
+            frontend.machine().is(pure_states::MEMORY_STICK_WARNING),
+            "the cards advance themselves after about {DEVELOPER_PUBLISHER_SECONDS} s; got {:?}",
+            frontend.machine().current()
+        );
+
+        // And this one waits, however long it is left.
+        for _ in 0..600 {
+            input.begin_frame(0);
+            frontend.update(FRAME, &mut input, None);
+        }
+        assert!(
+            frontend.machine().is(pure_states::MEMORY_STICK_WARNING),
+            "the storage warning has no timeout - it holds for cross"
+        );
+        input.begin_frame(1 << button::CROSS);
+        frontend.update(FRAME, &mut input, None);
+        assert!(frontend.machine().is(pure_states::FMV_INTRO));
+
+        run_until(&mut frontend, &mut input, 600, |f| {
+            f.machine().is(pure_states::TITLE_SCREEN)
+        });
+        assert_eq!(
+            frontend.machine().history(),
+            [
+                pure_states::LANGUAGE_SELECTION,
+                pure_states::DEVELOPER_PUBLISHER,
+                pure_states::MEMORY_STICK_WARNING,
+                pure_states::FMV_INTRO,
+                pure_states::TITLE_SCREEN,
+            ],
+            "the disc's own chain, cold-boot confirmed on both pressings"
+        );
+    }
+
+    /// The storage warning says what is true here, not what the disc said.
+    #[test]
+    fn the_storage_warning_is_worded_for_a_machine_with_storage() {
+        let mut frontend = pure(60);
+        let mut input = Input::new();
+        reach_the_second_movie(&mut frontend, &mut input);
+        // Back up: walk a fresh one only as far as the warning.
+        let mut frontend = pure(60);
+        let mut input = Input::new();
+        input.begin_frame(1 << button::CROSS);
+        frontend.update(FRAME, &mut input, None);
+        run_until(&mut frontend, &mut input, 1200, |f| {
+            f.machine().is(pure_states::MEMORY_STICK_WARNING)
+        });
+
+        let text: String = frontend
+            .draw_list()
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            text.contains("AUTOMATICALLY") && text.contains("PRESS X TO CONTINUE"),
+            "the screen keeps its gate and states the autosave behaviour; got {text:?}"
+        );
+        assert!(
+            !text.to_uppercase().contains("MEMORY STICK"),
+            "the disc's removable-card wording is deliberately not reproduced; got {text:?}"
         );
     }
 
