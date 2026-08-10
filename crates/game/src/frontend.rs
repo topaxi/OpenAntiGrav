@@ -84,6 +84,7 @@ use crate::state_machine::{Event, StateMachine};
 ///
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
+use oag_pure::frontend::states as pure_states;
 
 /// Which movie leg the sequence boots into.
 ///
@@ -506,6 +507,12 @@ impl Frontend {
             states::SHOW_LOGO,
             states::LANGUAGE_SELECTION,
             states::LAUNCH_GAME,
+            // Pure's own boot leg targets, registered unconditionally the same
+            // way Pulse's states are: harmless on a Pulse source, since
+            // nothing ever fires into them there. See
+            // `Self::language_confirm_target`.
+            pure_states::TITLE_SCREEN,
+            pure_states::FMV_INTRO,
         ]);
         // Every screen the XML declares becomes a state, so a transition name
         // recovered from the data resolves without being listed here.
@@ -758,6 +765,8 @@ impl Frontend {
             self.update_language_selection(input);
         } else if self.machine.is(states::SHOW_LOGO) {
             self.update_show_logo(input);
+        } else if self.machine.is(pure_states::FMV_INTRO) {
+            self.update_fmv_intro(input);
         }
 
         let events = self.machine.apply();
@@ -918,24 +927,51 @@ impl Frontend {
         }
     }
 
-    /// Takes the highlighted language and leaves for [`states::SHOW_LOGO`].
+    /// The screen this source's boot leg lands on after the language picker.
+    ///
+    /// [`states::SHOW_LOGO`] when the source has one - Pulse, unchanged from
+    /// what this build has always done. Sources that do not (Pure) fall back
+    /// to [`pure_states::FMV_INTRO`] when the source has *that* - Pure's real
+    /// chain plays its second boot movie before its own `Show Logo`
+    /// counterpart, unlike Pulse's, which reorders straight to the picker's
+    /// next screen with nothing between (see [`pure_states::FMV_INTRO`]'s own
+    /// doc comment for the runtime evidence). A source with `Title Screen`
+    /// but no `FMV Intro` - not measured, not expected, but cheap to keep
+    /// honest - falls back to [`pure_states::TITLE_SCREEN`] directly. A
+    /// fourth, uncatalogued source falls back to `SHOW_LOGO` too, the same
+    /// blank-if-absent behaviour this build already had before Pure was
+    /// reachable at all - not a regression, just an unlabelled one.
+    fn language_confirm_target(&self) -> &'static str {
+        if self.screens.by_name(states::SHOW_LOGO).is_some() {
+            states::SHOW_LOGO
+        } else if self.screens.by_name(pure_states::FMV_INTRO).is_some() {
+            pure_states::FMV_INTRO
+        } else if self.screens.by_name(pure_states::TITLE_SCREEN).is_some() {
+            pure_states::TITLE_SCREEN
+        } else {
+            states::SHOW_LOGO
+        }
+    }
+
+    /// Takes the highlighted language and leaves for
+    /// [`Self::language_confirm_target`].
     fn confirm_language(&mut self) {
         let language = self.languages[self.selected].clone();
         let disc_goto = self.language_auto_redirect().map(str::to_string);
+        let target = self.language_confirm_target();
         self.chosen = Some(language.name.clone());
         self.notes.push(format!(
             "language {} ({}) selected, firing {}",
-            language.name,
-            language.native_name,
-            states::SHOW_LOGO
+            language.name, language.native_name, target
         ));
-        if let Some(goto) = disc_goto {
+        if let Some(goto) = disc_goto
+            && goto != target
+        {
             self.notes.push(format!(
-                "note: the disc's own LanguageAutoRedirect goes to {goto}, not {}",
-                states::SHOW_LOGO
+                "note: the disc's own LanguageAutoRedirect goes to {goto}, not {target}"
             ));
         }
-        self.machine.fire(states::SHOW_LOGO);
+        self.machine.fire(target);
     }
 
     /// `Show Logo`: the Pulse logo, PRESS START, and nothing that moves.
@@ -967,6 +1003,36 @@ impl Frontend {
                 states::LAUNCH_GAME
             ));
             self.machine.fire(states::LAUNCH_GAME);
+        }
+    }
+
+    /// `FMV Intro`: Pure's second boot movie, on the way to
+    /// [`pure_states::TITLE_SCREEN`].
+    ///
+    /// **Picture not implemented yet** - see
+    /// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what that
+    /// needs (a decoded-frame slot the way the intro and the menu backdrop
+    /// each have one) and why it is not done here. This still advances the
+    /// state machine correctly, which is what a caller comparing against the
+    /// real disc's own timing can check today; the picture is a separate,
+    /// later piece of work.
+    ///
+    /// START and CROSS both leave, matching [`pure_states::FMV_INTRO`]'s own
+    /// doc comment - the runtime-observed button - and the screen's own
+    /// `FMVRedirect` has no frame counter or delay to model a natural end
+    /// against, so unlike [`Self::update_logo_fmv`] there is no timeout path
+    /// here to fall through to.
+    fn update_fmv_intro(&mut self, input: &mut Input) {
+        for button in [button::START, button::CROSS] {
+            if input.is_pressed(button) {
+                input.consume_press(button);
+                self.notes.push(format!(
+                    "the video was skipped, firing {}",
+                    pure_states::TITLE_SCREEN
+                ));
+                self.machine.fire(pure_states::TITLE_SCREEN);
+                return;
+            }
         }
     }
 
@@ -1062,6 +1128,26 @@ impl Frontend {
             // a second late and throbs instead of appearing at once and standing
             // still. See `docs/architecture/frontend-boot.md`.
             let mut out = self.draw_screen(states::SHOW_LOGO);
+            self.insert_backdrop(&mut out);
+            return out;
+        }
+
+        if self.machine.is(pure_states::FMV_INTRO) {
+            // The screen itself carries no widgets - see
+            // `pure_states::FMV_INTRO`'s own doc comment - so this is an
+            // honest blank frame over the backdrop, standing in for the
+            // second boot movie until it has its own decoded-frame slot.
+            let mut out = self.draw_screen(pure_states::FMV_INTRO);
+            self.insert_backdrop(&mut out);
+            return out;
+        }
+
+        if self.machine.is(pure_states::TITLE_SCREEN) {
+            // Pure's own counterpart to `Show Logo` above, and drawn the same
+            // way: its widgets and nothing else. See
+            // [`pure_states::TITLE_SCREEN`] for what advancing past it would
+            // need that is not yet evidenced.
+            let mut out = self.draw_screen(pure_states::TITLE_SCREEN);
             self.insert_backdrop(&mut out);
             return out;
         }

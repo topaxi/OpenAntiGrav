@@ -63,7 +63,7 @@ fn load_leg(leg: oag_game::frontend::Leg, movie: &str) -> Option<boot::Boot> {
         // mounted elsewhere.
         dlc: Vec::new(),
         leg,
-        movie: movie.to_string(),
+        movie: Some(movie.to_string()),
         // Nothing is written and ffmpeg is never run.
         cache: std::env::temp_dir().join("oag-boot-ground-truth"),
         audio_cache: oag_game::boot::default_audio_cache_dir(),

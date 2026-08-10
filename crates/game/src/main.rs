@@ -740,13 +740,10 @@ fn main() -> Result<()> {
         // the picker skipped.
         language: settings.language.clone(),
         leg,
-        movie: cli.movie.clone().unwrap_or_else(|| {
-            match leg {
-                frontend::Leg::LogoFmv => boot::DEFAULT_BOOT_MOVIE,
-                frontend::Leg::DevPubReel => boot::DEVPUB_REEL,
-            }
-            .to_string()
-        }),
+        // `None` when `--movie` was not given: which entry that is depends on
+        // the source's own title, not known here yet, so `boot::load` resolves
+        // it once the source is open. See `boot::Options::movie`.
+        movie: cli.movie.clone(),
         cache: cli.cache.clone().unwrap_or_else(boot::default_cache_dir),
         audio_cache: boot::default_audio_cache_dir(),
         // Every frame by default: the movie the disc plays is 1200 frames long

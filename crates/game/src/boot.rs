@@ -11,6 +11,9 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use oag_formats::fexml;
 use oag_pulse as pulse;
+use oag_pure::frontend::states as pure_states;
+
+use crate::title::open_source;
 
 use crate::frontend::Frontend;
 use crate::language::{Language, StringTable};
@@ -100,7 +103,16 @@ pub struct Options {
     /// Three of the disc's movies have no recovered name, and one of them is
     /// the reel `Intro Screen->IntroMovie1`'s frame counters describe, so a name
     /// is not enough to address every candidate. See [`EntryRef`].
-    pub movie: String,
+    ///
+    /// `None` is not "no movie" - it means "this leg's own default", resolved
+    /// in [`load`] once the source's title is known (`screens` is parsed by
+    /// then). Before this existed the default was baked into `Options` at
+    /// construction, in `main.rs`, which is exactly where the title is *not*
+    /// yet known - that was fine while every source was Pulse and wrong the
+    /// moment Pure could open at all, since Pulse's default names an entry
+    /// Pure does not have. `Some(name)` is a request, same as always, and is
+    /// used verbatim regardless of title.
+    pub movie: Option<String>,
     /// Where converted frames are cached.
     pub cache: std::path::PathBuf,
     /// Where decoded PCM is cached - see [`default_audio_cache_dir`].
@@ -119,7 +131,7 @@ pub struct Options {
 pub fn load(options: &Options) -> Result<Boot> {
     let mut report = Vec::new();
     let (packs, problems) = crate::dlc::packs(&options.dlc, &default_dlc_cache_dir());
-    let mut archives = pulse::open_with_packs(&options.source, packs)
+    let mut archives = open_source(&options.source, packs)
         .with_context(|| format!("opening the archives in {}", options.source))?;
     report.push(archives.layout.describe());
     if !archives.packs.is_empty() {
@@ -155,11 +167,15 @@ pub fn load(options: &Options) -> Result<Boot> {
     let documents = definitions(&mut archives, &mut report);
     let tracks = load_tracks(&mut archives, &documents, &mut report);
     let teams = load_teams(&mut archives, &documents, &mut report);
-    let movie = load_movie(&mut archives, options, &mut report)?;
+    let movie_name = options
+        .movie
+        .clone()
+        .unwrap_or_else(|| default_boot_movie(options.leg, &screens));
+    let movie = load_movie(&mut archives, &movie_name, options, &mut report)?;
     // Straight after the movie, so its report lines stay together, and while
     // `screens` is still in hand: the widget that decides whether this movie is
     // heard at all is in that XML.
-    let movie_sound = load_movie_sound(movie.as_ref(), &screens, options, &mut report);
+    let movie_sound = load_movie_sound(movie.as_ref(), &screens, &movie_name, options, &mut report);
     let backdrop = load_backdrop(&mut archives, options, &mut report);
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
@@ -321,6 +337,7 @@ pub fn load(options: &Options) -> Result<Boot> {
 fn load_movie_sound(
     movie: Option<&Movie>,
     screens: &Screens,
+    movie_name: &str,
     options: &Options,
     report: &mut Vec<String>,
 ) -> Option<crate::at3::Pcm> {
@@ -352,7 +369,7 @@ fn load_movie_sound(
     let silent = screens
         .with_movies()
         .filter_map(|screen| screen.movie.as_ref())
-        .any(|widget| widget.entry_name().eq_ignore_ascii_case(&options.movie) && !widget.sound);
+        .any(|widget| widget.entry_name().eq_ignore_ascii_case(movie_name) && !widget.sound);
     if silent {
         report.push(format!(
             "  audio: {} channel(s) at {} Hz, muted - the widget playing it is sound=\"false\"",
@@ -419,11 +436,10 @@ fn load_backdrop(
         return None;
     }
     let wanted = Options {
-        movie: pulse::names::BACKDROP_MOVIE.to_string(),
         extent: Extent::Whole,
         ..options.clone()
     };
-    match load_movie(archives, &wanted, report) {
+    match load_movie(archives, pulse::names::BACKDROP_MOVIE, &wanted, report) {
         Ok(movie) => movie,
         // Reported and dropped. `load_movie` only errors here on an entry it
         // cannot read, and the backdrop is not worth failing a boot over.
@@ -820,6 +836,28 @@ pub fn load_strings(
 /// `docs/ghidra/functions/psp-pulse-usa/frontend-video.md`.
 pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
 
+/// [`DEFAULT_BOOT_MOVIE`], generalised over which title `screens` came from.
+///
+/// `--reel` (`Leg::DevPubReel`) always wants [`DEVPUB_REEL`] - that leg is
+/// reached explicitly, by a flag, on Pulse alone, so the title makes no
+/// difference to it. `Leg::LogoFmv` is the one this build boots into by
+/// default for any source, and `DEFAULT_BOOT_MOVIE` names an entry only
+/// Pulse has - so a Pure source (detected the same way
+/// `Frontend::language_confirm_target` is: by whether its own `Title Screen`
+/// exists) gets [`oag_pure::names::INTRO_MOVIE`] instead.
+fn default_boot_movie(leg: crate::frontend::Leg, screens: &Screens) -> String {
+    match leg {
+        crate::frontend::Leg::DevPubReel => DEVPUB_REEL.to_string(),
+        crate::frontend::Leg::LogoFmv => {
+            if screens.by_name(pure_states::TITLE_SCREEN).is_some() {
+                oag_pure::names::INTRO_MOVIE.to_string()
+            } else {
+                DEFAULT_BOOT_MOVIE.to_string()
+            }
+        }
+    }
+}
+
 /// What `--reel` defaults to: the European cut of the dev/pub reel.
 ///
 /// Spelled as a hash because the reel has no recovered name. It is the reel
@@ -913,10 +951,11 @@ impl std::fmt::Display for EntryRef {
 /// See `docs/ps2/pulse-disc-layout.md`.
 fn load_movie(
     archives: &mut oag_assets::Archives,
+    movie_name: &str,
     options: &Options,
     report: &mut Vec<String>,
 ) -> Result<Option<Movie>> {
-    let entry = EntryRef::parse(&options.movie);
+    let entry = EntryRef::parse(movie_name);
     let hash = entry.hash();
     let data = &mut archives.data;
     let index = match data.index_of_hash(hash) {
@@ -924,8 +963,8 @@ fn load_movie(
         // Only the default boot movie has a loose-file fallback worth trying:
         // it is the PS2's own intro, a plain file outside every WAD. See
         // `load_loose_intro`.
-        None if loose_candidates(&options.movie).is_some() => {
-            if let Some(movie) = load_loose_movie(&options.movie, options, report)? {
+        None if loose_candidates(movie_name).is_some() => {
+            if let Some(movie) = load_loose_movie(movie_name, options, report)? {
                 return Ok(Some(movie));
             }
             report.push(format!(
@@ -935,7 +974,7 @@ fn load_movie(
             ));
             return Ok(None);
         }
-        None if options.movie == DEVPUB_REEL => {
+        None if movie_name == DEVPUB_REEL => {
             report.push(format!(
                 "{entry} is not in {}, so the sequence plays with no picture. The dev/pub \
                  reel has no PS2 equivalent",
@@ -946,21 +985,17 @@ fn load_movie(
         None => anyhow::bail!("{entry} is not in {}", data.label()),
     };
     let size = data.entry_len(index)?;
-    let options = &Options {
-        movie: entry.to_string(),
-        ..options.clone()
-    };
+    let movie_name = entry.to_string();
 
     if options.no_video {
         // The header alone is 2048 bytes, so this reads kilobytes rather than
         // megabytes when there is no picture to make.
         let head = data.peek(index, oag_formats::pmf::HEADER_LEN as u64)?;
         let header = oag_formats::pmf::Header::parse(&head)
-            .map_err(|e| anyhow::anyhow!("parsing {}: {e}", options.movie))?;
+            .map_err(|e| anyhow::anyhow!("parsing {movie_name}: {e}"))?;
         let video = header.video.context("the movie declares no video stream")?;
         report.push(format!(
-            "{}: {}x{}, {:.2}s, video disabled",
-            options.movie,
+            "{movie_name}: {}x{}, {:.2}s, video disabled",
             video.width,
             video.height,
             header.duration_seconds()
@@ -985,14 +1020,13 @@ fn load_movie(
 
     let blob = data
         .read(index)
-        .with_context(|| format!("reading {} out of {}", options.movie, data.label()))?;
+        .with_context(|| format!("reading {movie_name} out of {}", data.label()))?;
     let key = format!("{hash:08x}-{size}");
     let movie = movie::open(&blob, &key, &options.cache, options.extent, false)?;
 
     if let Some(header) = &movie.header {
         report.push(format!(
-            "{}: {}x{}, {:.2}s, {} frames, PSMF{}",
-            options.movie,
+            "{movie_name}: {}x{}, {:.2}s, {} frames, PSMF{}",
             movie.width,
             movie.height,
             header.duration_seconds(),

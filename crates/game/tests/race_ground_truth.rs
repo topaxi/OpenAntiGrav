@@ -251,7 +251,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         source: image.display().to_string(),
         dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
-        movie: boot::DEFAULT_BOOT_MOVIE.to_string(),
+        movie: Some(boot::DEFAULT_BOOT_MOVIE.to_string()),
         cache: std::env::temp_dir().join("oag-race-handoff"),
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),

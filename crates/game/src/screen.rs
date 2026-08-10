@@ -308,31 +308,56 @@ impl Screens {
         };
 
         for child in &node.children {
-            match child.name.to_ascii_lowercase().as_str() {
-                "image" => match child.value("src") {
-                    // A `src` names a texture; a bare colour is a backdrop.
-                    Some(src) => screen.images.push(self.image_from_node(child, src)),
-                    None => {
-                        if let Some(color) = child.value("color")
-                            && let Some(argb) = parse_argb(color)
-                        {
-                            screen.fills.push(argb);
-                        }
-                    }
-                },
-                "movie" => screen.movie = Some(Movie::from_node(child)),
-                "text" => screen.texts.push(self.text_from_node(child)),
-                "redirect" => screen.redirects.push(redirect_from_node(child)),
-                "displaylanguages" => screen.display_languages = true,
-                "menu" => screen.menu = Some(self.menu_from_node(child)),
-                _ => {}
-            }
+            self.collect_widgets(&mut screen, child);
         }
 
         self.screens.push(screen);
 
         for child in &node.children {
             self.collect(child, Some(&path));
+        }
+    }
+
+    /// A screen's own widgets, one node at a time - and, unlike [`Self::collect`],
+    /// recursing straight through a `Viewport` rather than stopping at it.
+    ///
+    /// **No offset applied.** A `Viewport` carries its own `x`/`y`/`width`/
+    /// `height` (see `Values` on the element itself), which on the one measured
+    /// case - Pulse's `Show Logo->Viewport`, `x="40" y="0" height="480"
+    /// width="400"` on a 480x272 screen - do not read as plausible screen-space
+    /// clip or offset numbers at all (480 exceeds the screen's own height).
+    /// Nothing here has worked out what they mean, so a nested widget keeps the
+    /// coordinates it was authored with, exactly as if the `Viewport` were not
+    /// there. That is a **no-op** for `Data\Plugins\PI001\GUI\Skin.xml`'s
+    /// `Title Screen` on `pure-psp-usa.chd`, whose own `Viewport` is `x="0"
+    /// y="0" width="480" height="272"` - the whole screen, verbatim - so this
+    /// gap costs nothing on the one case this build actually draws through it.
+    /// Confidence **60** on "no offset" as the right answer generally; **95**
+    /// that it is a correct no-op for that specific screen.
+    fn collect_widgets(&self, screen: &mut Screen, child: &Node) {
+        match child.name.to_ascii_lowercase().as_str() {
+            "image" => match child.value("src") {
+                // A `src` names a texture; a bare colour is a backdrop.
+                Some(src) => screen.images.push(self.image_from_node(child, src)),
+                None => {
+                    if let Some(color) = child.value("color")
+                        && let Some(argb) = parse_argb(color)
+                    {
+                        screen.fills.push(argb);
+                    }
+                }
+            },
+            "movie" => screen.movie = Some(Movie::from_node(child)),
+            "text" => screen.texts.push(self.text_from_node(child)),
+            "redirect" => screen.redirects.push(redirect_from_node(child)),
+            "displaylanguages" => screen.display_languages = true,
+            "menu" => screen.menu = Some(self.menu_from_node(child)),
+            "viewport" => {
+                for grandchild in &child.children {
+                    self.collect_widgets(screen, grandchild);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -692,11 +717,11 @@ mod tests {
     }
 
     #[test]
-    fn a_text_inside_a_viewport_is_not_collected() {
-        // `BOOT_LEGAL` sits inside a `Viewport` and only direct children are
-        // read, so the USA disc's legal line is absent by construction rather
-        // than by accident. This is the guard on that gap: when `Viewport` is
-        // decoded, this assertion is what has to change. See
+    fn a_text_inside_a_viewport_is_collected_alongside_its_siblings() {
+        // `BOOT_LEGAL` sits inside a `Viewport`, and `collect_widgets` recurses
+        // through one rather than stopping at it - so both the screen's direct
+        // text and its viewport-nested one are read. Order is document order:
+        // `BOOT_PRESS_START` is declared before the `Viewport`. See
         // `docs/architecture/frontend-boot.md`.
         let screens = Screens::from_xml(SAMPLE);
         let logo = screens.by_name("Show Logo").unwrap();
@@ -705,7 +730,7 @@ mod tests {
             .iter()
             .filter_map(|t| t.idstring.as_deref())
             .collect();
-        assert_eq!(ids, ["BOOT_PRESS_START"]);
+        assert_eq!(ids, ["BOOT_PRESS_START", "BOOT_LEGAL"]);
     }
 
     #[test]
