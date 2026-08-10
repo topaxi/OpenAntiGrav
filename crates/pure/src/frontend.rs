@@ -49,3 +49,36 @@ pub mod states {
     /// alone is an honest blank frame, not a bug standing in for the movie.
     pub const FMV_INTRO: &str = "FMV Intro";
 }
+
+/// `FEGlobals` colours `Title Screen`'s own widgets reference
+/// (`FEGlobals->TitleColor`, `FEGlobals->DesignColor`) that
+/// `Data\Plugins\PI001\GUI\Skin.xml` never declares - the disc's own copy
+/// authors exactly nine globals (`TitleScale`, `TitleXOffset`,
+/// `TitleYOffset`, `MenuScale`, `MenuXOffset`, `MSWarningScale`,
+/// `MSWarningColour1`, `MSWarningColour2`, `FMVFrameCount`), confirmed by
+/// reading the file directly. This is the same class of gap `HANDOVER.md`
+/// already had on file for `FEGlobals->TextColor` - either an unmerged
+/// `LoadXML` base skin defines these, or the original engine carries a
+/// compiled-in default table this project has not found. Neither is
+/// resolved; this is a **measured stand-in**, not a derivation.
+///
+/// **Measured by sampling pixels**, not read from any XML: driving
+/// `pure-psp-usa.chd` under PPSSPP (the same session `states::TITLE_SCREEN`
+/// was evidenced in) and reading the rendered "PRESS START BUTTON" and "HOLD
+/// ON!" text directly off the captured frame. `TitleColor` samples solid at
+/// RGB(237, 72, 150); `DesignColor` at RGB(100, 220, 246), which is close
+/// enough to Pulse's own `DesignColor` (`0xFF5FDBF6`, from
+/// `pulse-psp-usa.chd`'s `Skin.xml`) that the two may be the same constant -
+/// unconfirmed, and not assumed here; the value below is Pure's own
+/// measurement, not borrowed from Pulse's. `TitleColor` does **not** match
+/// Pulse's own same-named global (`0xFF000000`, black) - the two titles
+/// genuinely differ here, so borrowing Pulse's table wholesale would have
+/// been wrong. Confidence **65**: a real, repeatable pixel measurement, but
+/// of the *effect* rather than of the *source* - the true value could differ
+/// slightly from what antialiasing and video compression left in a captured
+/// frame, and the mechanism that is supposed to supply it is still unknown.
+///
+/// Consulted by `oag_game::boot::load`, merged in only for keys Pure's own
+/// `Skin.xml` left undeclared - a real declaration always wins.
+pub const FALLBACK_GLOBALS: &[(&str, &str)] =
+    &[("TitleColor", "0xFFED4896"), ("DesignColor", "0xFF64DCF6")];

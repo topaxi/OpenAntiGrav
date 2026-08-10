@@ -249,11 +249,35 @@ impl Screens {
     /// Reads a front-end XML file.
     #[must_use]
     pub fn from_xml(xml: &str) -> Self {
+        Self::from_xml_with_fallback_globals(xml, &[])
+    }
+
+    /// [`Self::from_xml`], with `fallback` globals seeded in wherever the
+    /// file itself leaves a name undeclared.
+    ///
+    /// **Before widget collection, not after** - a global has to exist while
+    /// [`Self::text_from_node`]/[`Self::image_from_node`] resolve `color`,
+    /// `x` and the rest, because those bake the resolved value into the
+    /// widget once and never look the name up again. Merging `fallback` into
+    /// [`Self::globals`] after `from_xml` has already returned looks
+    /// plausible and does nothing - every widget that needed it has already
+    /// been built with whatever `resolve` found at parse time.
+    ///
+    /// A real declaration always wins: `fallback` only fills a name the
+    /// file's own `<Variable global="...">` list never mentions, the same
+    /// contract `entry().or_insert()` gives everywhere else in this crate.
+    #[must_use]
+    pub fn from_xml_with_fallback_globals(xml: &str, fallback: &[(&str, &str)]) -> Self {
         let root = parse(xml);
         let mut out = Self::default();
 
         for node in &root.children {
             out.collect_globals(node);
+        }
+        for &(name, value) in fallback {
+            out.globals
+                .entry(name.to_string())
+                .or_insert_with(|| value.to_string());
         }
         for node in &root.children {
             out.collect(node, None);

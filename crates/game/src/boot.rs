@@ -579,7 +579,12 @@ fn load_screens(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -
         String::from_utf8(blob).context("the front-end XML is not text")?
     };
 
-    let screens = Screens::from_xml(&xml);
+    // Unconditional rather than title-gated: `or_insert` only fills a name
+    // Pulse's own `Skin.xml` leaves undeclared, and Pulse declares its own
+    // `TitleColor`/`DesignColor` (see `oag_pure::frontend::FALLBACK_GLOBALS`'s
+    // own doc comment), so this is a no-op there.
+    let screens =
+        Screens::from_xml_with_fallback_globals(&xml, oag_pure::frontend::FALLBACK_GLOBALS);
     report.push(format!(
         "{}: {} screens, {} globals, {} LoadXML includes",
         pulse::names::FRONTEND_ROOT,
