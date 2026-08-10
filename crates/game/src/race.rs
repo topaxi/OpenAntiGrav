@@ -2052,10 +2052,11 @@ impl Race {
         ship.handling = handling;
         ship.physics.body.mass = handling.physical.mass;
         ship.physics.body.inertia = box_inertia();
-        // The pool starts full. Nothing drains it yet - see `Ship::shield` - so
-        // this is what the bar reads all race, and what Zone's perfect-zone
-        // recharge clamps back up to.
-        ship.shield = handling.dimensions.shield;
+        // The pool starts full, which is `Ship_ResetShield` (`0x0883dd24`) - the
+        // only thing on the disc that sets it outright. Wall contact spends it
+        // from here (`oag_physics::damage`), and Zone's perfect-zone recharge
+        // adds back to it.
+        oag_physics::damage::reset(&mut ship.physics, &handling.dimensions);
         // The override wins outright rather than being an offset from the grid
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.
@@ -2310,6 +2311,12 @@ impl Race {
             auto_speed,
             pad_hit,
             class_gravity_scale: self.class_gravity_scale,
+            // The mode's own `Weapons`/`Damage` defaults, which decide both what
+            // a wall costs the energy pool and whether it recovers - a time trial
+            // and a speed lap run with both off, so their pool floors at 20 and
+            // regenerates, exactly as the disc's manual text describes. See
+            // `oag_gameplay::damage_rules`.
+            damage_rules: oag_gameplay::damage_rules(self.world.race.mode),
             ..Environment::default()
         };
         let evaluated = oag_physics::step(
@@ -2359,7 +2366,7 @@ impl Race {
             {
                 let ship = &mut self.world.ships[0];
                 let max = ship.handling.dimensions.shield;
-                ship.shield = (ship.shield + zone.recharge).min(max);
+                ship.physics.shield = (ship.physics.shield + zone.recharge).min(max);
             }
         }
 
@@ -2740,7 +2747,7 @@ impl Race {
             // unrecovered - so the bar reads full for the whole race. It is the
             // ship's own pool rather than the parameter now, because Zone's
             // perfect-zone recharge writes it.
-            shield: ship.shield,
+            shield: ship.physics.shield,
             shield_max: ship.handling.dimensions.shield,
             lap: if counted { race.lap } else { 0 },
             // A speed lap and a Zone run have no lap target. Zero is what the HUD

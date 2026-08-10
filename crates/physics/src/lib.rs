@@ -70,6 +70,7 @@
 pub mod airbrake;
 pub mod collide;
 pub mod controls;
+pub mod damage;
 pub mod engine;
 pub mod forces;
 pub mod hover;
@@ -86,6 +87,7 @@ pub use collide::{
     Aabb, CollisionWorld, Ray, RaycastHit, Raycaster, Surface, TriangleSoup, WALL_FRICTION,
     combine_friction, segment_triangle,
 };
+pub use damage::{DamageRules, Shield};
 pub use forces::{Accumulators, Environment, Evaluated};
 pub use integrate::{clamp_dt, integrate, step};
 pub use maglock::{Hold, MagContact, TrackSample};

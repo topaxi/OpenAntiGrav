@@ -250,10 +250,20 @@ pub struct Dimensions {
     pub length: f32,
     /// Hull width.
     pub width: f32,
-    /// Shield pool.
+    /// The energy pool this ship starts a race with, **already resolved for the
+    /// race's skill level**.
+    ///
+    /// `<Misc>` authors three slots and the original indexes them with the
+    /// `SkillLevel` race option; picking the slot is
+    /// `oag_formats::handling::Misc::shield_for`, and what arrives here is its
+    /// answer. This crate never sees the ladder, because the force law has no
+    /// business knowing what difficulty the race is on - it only needs the
+    /// number that bounds the pool.
+    ///
+    /// It is the maximum as well as the start: `Ship_SetShield` clamps every
+    /// write to it and never floors at zero. See
+    /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     pub shield: f32,
-    /// Shield pool on the easier difficulties.
-    pub easyshield: f32,
     /// Fore/aft mass bias.
     pub weight_distribution: f32,
 }
@@ -370,7 +380,6 @@ impl Handling {
             length: 0.0,
             width: 0.0,
             shield: 0.0,
-            easyshield: 0.0,
             weight_distribution: 0.0,
         },
         speedup_pads: SpeedupPads {

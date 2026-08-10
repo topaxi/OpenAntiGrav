@@ -36,6 +36,15 @@ SHIP_UPDATE_CRAFT = 0x08849618
 # the missing "12x of resistance" is really thrust the original never applied
 # stays an inference. They are also the cheapest wall-contact indicator the
 # already-documented fields offer.
+#
+# `shield` at +0x88 is the energy pool, from
+# docs/ghidra/functions/psp-pulse-usa/shield.md - the field `Ship_Shield` reads
+# and `Ship_SetShield` writes. It is here to give the recovered contact-damage
+# law `|p| * 0.035` its runtime leg: on a capture that touches a wall, the drop
+# in this column is predicted by the same impulse magnitude the trace's own
+# velocity change implies, and no other column can test it. Remember the
+# halving - `Ship_Damage` scales by 0.5 whenever the race has weapons off,
+# which a time trial does.
 CRAFT_FIELDS = [
     ("dt", 0x1C8),
     ("grounded", 0x2B0),
@@ -43,6 +52,7 @@ CRAFT_FIELDS = [
     ("airbrake_l", 0x2C4), ("airbrake_r", 0x2C8),
     ("speed_cached", 0x2EC),
     ("stun_timer", 0x290), ("timer_2e0", 0x2E0),
+    ("shield", 0x088),
 ]
 
 # Offsets into the rigid body, measured at runtime by diffing successive frames.

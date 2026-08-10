@@ -323,6 +323,18 @@ pub struct WallResponse {
     /// to edge-detect rather than fire on the level - see [`STUN_PER_CONTACT`]'s
     /// doc comment for what firing on the level costs.
     pub impact: bool,
+    /// The sum of `|p|` over every contact resolved this frame.
+    ///
+    /// `p` is the impulse `resolve_contact` applied, normal and tangential terms
+    /// together - the same quantity the original stores per contact record and
+    /// then reads back three ways. Summed rather than taken from the deepest
+    /// contact because `FUN_088418e0` walks the whole ring and reacts once per
+    /// record, so a frame with two contacts damages twice.
+    ///
+    /// This is the input to [`crate::damage::contact_damage`], and it is the one
+    /// field of this struct that physics writes for gameplay rather than for a
+    /// debug view.
+    pub impulse_sum: f32,
     /// The most inbound `normal_speed` across this frame's contacts, negated
     /// to a positive magnitude - `0.0` if [`Self::impact`] is `false`.
     ///
@@ -443,6 +455,7 @@ pub fn resolve<R: Raycaster + ?Sized>(
         response.angular_velocity_delta += applied.angular_velocity_delta;
         impact |= applied.normal_speed < 0.0;
         impact_speed = impact_speed.max(-applied.normal_speed);
+        response.impulse_sum += applied.impulse_magnitude;
 
         if deepest.is_none_or(|(d, _)| contact.depth > d.depth) {
             deepest = Some((*contact, friction));
@@ -471,6 +484,9 @@ struct Applied {
     angular_velocity_delta: Vec3,
     /// `dot(v_contactPoint, n)` before the impulse, for the stun edge test.
     normal_speed: f32,
+    /// `|p|`, the length of the impulse actually applied. Zero on the
+    /// degenerate-denominator path, which applies nothing.
+    impulse_magnitude: f32,
 }
 
 /// `Body_ResolveContact` (`0x0884e968`) for one contact, in full.
@@ -544,6 +560,7 @@ fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> App
             velocity_delta: Vec3::ZERO,
             angular_velocity_delta: Vec3::ZERO,
             normal_speed,
+            impulse_magnitude: 0.0,
         };
     }
 
@@ -602,6 +619,7 @@ fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> App
         velocity_delta,
         angular_velocity_delta,
         normal_speed,
+        impulse_magnitude: impulse.length(),
     }
 }
 

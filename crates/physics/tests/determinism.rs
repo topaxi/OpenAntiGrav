@@ -135,24 +135,40 @@ use oag_physics::{Environment, ShipState, step};
 ///     stretches of `probe::controls` that already hold the pitch axis on either
 ///     side of the tilt's threshold, so **not one byte of the input script
 ///     changed** and there is no second cause to disentangle.
+/// - **Regenerated 2026-08-10, and behaviour did *not* change.** `ShipState`
+///   gained `shield`, the energy pool at the original's `craft+0x88`, and
+///   `crate::damage::apply_contact` spends it out of the frame's contact
+///   impulses. **Nothing reads the pool back**, so no force term can see it and
+///   the trajectory is untouched; the movement is a longer hash stream, the same
+///   kind as the four bookkeeping entries above.
+///
+///   That is checked rather than argued, by the isolation those entries ask for:
+///   with `hasher.write_f32(shield)` alone commented out and every other change
+///   in place, **all six constants from 2026-08-08 reproduce bit for bit**. So
+///   the field reaches the hash and reaches nothing else.
+///
+///   `probe::start` now fills the pool through `crate::damage::reset`, because
+///   `ShipState::default()` starts it at zero and an already-empty pool cannot be
+///   depleted - `the_run_visits_the_paths_it_claims_to_cover` asserts the run
+///   actually spends energy, for the same reason the speed-pad entry above exists.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x8231_3864_e869_40f6,
-        0xa895_7fc2_7404_da03,
+        0xac62_c322_0710_c038,
+        0xa57a_5cb8_ebc9_9f1b,
     ),
     (
         3_600,
         Script::Corridor,
-        0x9e0c_b6e6_2a45_2e46,
-        0x8bfb_3a95_b9c7_06cd,
+        0x82fb_1776_d7a8_9da6,
+        0x79b5_1300_9fbf_2f5f,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x5ffa_e615_646e_7b6b,
-        0xa366_ca15_e12b_d283,
+        0xca1c_af8c_845d_7b9b,
+        0x100a_e12e_20a9_f5c6,
     ),
 ];
 
@@ -262,6 +278,7 @@ fn every_hashed_field_reaches_the_hash() {
                 normal: Vec3::ZERO,
             });
         }),
+        ("shield", |s| s.shield = 1.0),
     ];
 
     for (name, apply) in moves {
@@ -291,6 +308,8 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
     let mut yawed_left = false;
     let mut yawed_right = false;
     let mut sideshifted = false;
+    let full_pool = handling.dimensions.shield;
+    let mut lost_energy = false;
 
     for tick in 0..3_600 {
         let evaluated = step(
@@ -318,6 +337,7 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
         // pad hit would quietly turn that history note into a lie.
         assert_eq!(state.pad_timer, 0.0, "tick {tick}: the boost armed");
         assert_eq!(state.pad_direction, Vec3::ZERO);
+        lost_energy |= state.shield < full_pool;
     }
 
     assert!(was_grounded, "the run never found the floor");
@@ -325,4 +345,10 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
     assert!(touched_wall, "the run never reached a wall");
     assert!(sideshifted, "the sideshift never armed");
     assert!(yawed_left && yawed_right, "the run never yawed both ways");
+    // The pool is hashed, and a hashed field that never moves is coverage in
+    // name only - a new branch inside the damage law would land with the
+    // reference hashes unchanged, which is the worst outcome this gate has.
+    // `Environment::default()` has damage on, so the wall contacts above must
+    // cost something.
+    assert!(lost_energy, "the run never spent any energy on a wall");
 }

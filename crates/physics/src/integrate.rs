@@ -226,6 +226,19 @@ fn normalise_or_identity(q: Quat) -> Quat {
 /// The sweep it does starts from the position **after** force evaluation, not
 /// before, because the hover path's penetration escape is a deliberate teleport
 /// and sweeping across it would invent a contact out of it.
+///
+/// # The energy pool is charged after the contacts are resolved
+///
+/// [`crate::damage`] turns the frame's contact impulses into a subtraction from
+/// [`ShipState::shield`]. It runs here rather than in a caller because the input
+/// is `WallResponse::impulse_sum`, which is derived state a caller is told not to
+/// read - and because a pool written outside this crate is a simulation field the
+/// determinism gate cannot see. The original does the same thing at the same
+/// point, in `FUN_088418e0`'s contact loop, which walks the ring the physics step
+/// just filled.
+///
+/// [`Evaluated::shield`] carries what it did; a caller that ignores it loses a
+/// sound cue and nothing else.
 pub fn step<R: Raycaster + ?Sized>(
     state: &mut ShipState,
     controls: &ShipControls,
@@ -242,6 +255,13 @@ pub fn step<R: Raycaster + ?Sized>(
     let before_integration = state.body.position;
     integrate(&mut state.body, dt);
     evaluated.wall = wall::resolve(state, handling, env, raycaster, before_integration);
+    evaluated.shield = crate::damage::apply_contact(
+        state,
+        &handling.dimensions,
+        &evaluated.wall,
+        env.damage_rules,
+    );
+    crate::damage::regenerate(state, &handling.dimensions, env.damage_rules, dt);
 
     evaluated
 }

@@ -169,14 +169,23 @@ impl Ship {
     /// ship does not spawn using `landing_rebound`. The handling parameters and
     /// the slot's active flag are left alone, because respawning mid-race must
     /// not silently change which ship this is.
+    ///
+    /// **The energy pool is carried across too**, for the same reason and a
+    /// sharper one: this is the respawn path, and a respawn that refilled the
+    /// shield would make wall damage free. The original charges a respawn rather
+    /// than paying one out - `Ship_SetState`'s state-3 branch computes
+    /// `clamp(shield - 1, 0, 5)`. Filling the pool is `oag_physics::damage::reset`
+    /// and belongs to taking the grid, not to a pose.
     pub fn place_at(&mut self, pose: Pose) {
         let mass = self.physics.body.mass;
         let inertia = self.physics.body.inertia;
+        let shield = self.physics.shield;
         self.physics = oag_physics::ShipState::default();
         self.physics.body.position = pose.position;
         self.physics.body.orientation = pose.orientation;
         self.physics.body.mass = mass;
         self.physics.body.inertia = inertia;
+        self.physics.shield = shield;
     }
 }
 

@@ -5,8 +5,8 @@
 //! `docs/architecture/adr/0003-no-ecs.md` for why this is not an ECS.
 
 use oag_core::Rng;
-use oag_physics::{Handling, ShipState};
-use oag_race::RaceState;
+use oag_physics::{DamageRules, Handling, ShipState};
+use oag_race::{Mode, RaceState};
 
 /// The most ships a race can hold.
 ///
@@ -30,19 +30,6 @@ pub struct Ship {
     /// where the original counts laps is an open question, and `gate` has no
     /// runtime class at all. See `docs/formats/track.md`.
     pub segment: u16,
-    /// Shield energy remaining.
-    ///
-    /// **Nothing depletes this yet, deliberately.** Collision damage and the
-    /// weapons that would drain it are M5 work, so today the only thing that
-    /// writes it is Zone mode's perfect-zone recharge - which clamps to the
-    /// ship's maximum, so a full pool recharges to full and the HUD bar reads
-    /// full for the whole race. It is here rather than waiting because the
-    /// recharge itself is recovered (`docs/gameplay/race-modes.md`) and dropping
-    /// it would mean re-deriving it later.
-    ///
-    /// Zero on a default ship. [`Ship::place_at`] does not reset it: the pool is
-    /// a race-scale quantity, not part of a spawn pose.
-    pub shield: f32,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -53,9 +40,48 @@ impl Default for Ship {
             physics: ShipState::default(),
             handling: Handling::ZERO,
             segment: 0,
-            shield: 0.0,
             active: false,
         }
+    }
+}
+
+/// The `Weapons` and `Damage` race options a mode runs with.
+///
+/// **Recovered, not chosen.** `Race_ReadSetupOptions` (`0x08896b84`) takes a
+/// per-mode default before consulting the setup strings: `g_weapons_enabled` is
+/// cleared for game modes `{5, 9, 10, 0xf, 0x11}` and `g_damage_enabled` for
+/// `{5, 7, 10}`. Modes **5 and 10** are in both sets *and* share one constructor
+/// in `Race_CreateModeObject` (`0x0882112c`), which is exactly the relationship
+/// this project's time trial and speed lap have - speed lap is the time trial
+/// without the lap target.
+///
+/// The disc's own manual text closes it independently: `MAN_P3_PG1_ENER` reads
+/// *"The Time Trial and Speed Lap events will recover your ship energy
+/// automatically"*, and recovering energy automatically is precisely what
+/// clearing `g_damage_enabled` does - `oag_physics::damage::regenerate`, 4 a
+/// second with a floor of 20. A shipped string table and a switch statement
+/// agreeing is what puts this at confidence **85** rather than the 84 a
+/// decompile alone caps at.
+///
+/// Zone is game mode 6 and is in neither set, so it races with both on - which
+/// is what makes its shield deplete, and what its unimplemented "destroyed"
+/// ending depends on. See `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+///
+/// **Here rather than on [`oag_race::Mode`]**, because `oag-race` deliberately
+/// does not depend on `oag-physics` (see that crate's `Cargo.toml`) and this
+/// returns a physics type. This crate is the bridge between the two, which is
+/// what it is for.
+#[must_use]
+pub fn damage_rules(mode: Mode) -> DamageRules {
+    match mode {
+        Mode::TimeTrial | Mode::SpeedLap => DamageRules {
+            weapons: false,
+            damage: false,
+        },
+        Mode::Zone => DamageRules {
+            weapons: true,
+            damage: true,
+        },
     }
 }
 
@@ -132,7 +158,7 @@ mod tests {
     /// is here so that change is deliberate rather than incidental.
     #[test]
     fn a_default_ship_carries_no_shield_yet() {
-        assert_eq!(Ship::default().shield, 0.0);
+        assert_eq!(Ship::default().physics.shield, 0.0);
     }
 
     /// The array is the whole point: a race must not change the size of a

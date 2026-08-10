@@ -255,7 +255,8 @@ Three traps, all of which cost time here:
 | Is there an outline on widgets with no `BorderColor`? | **Yes.** Every HUD-font widget on the frame is outlined, `CurrentTime` and `BestTime` included. The earlier "draw it transparent" reading was wrong. |
 | What does `best` show with no best lap? | **`0.00.00`** - zeros, not a dash placeholder. |
 | What precision do times use? | **Both.** `best` is `m.ss.hh` (`0.00.00`) and `current` is `m.ss.h` (`1.27.9`), a few pixels apart. Running clocks carry tenths, a set time carries hundredths. `record` top-right is also tenths (`0.29.0`). |
-| What does `ShieldBarText` show? | **`100%`** - a percentage, not the raw `<Misc shield/>` pool. |
+| What does `ShieldBarText` show? | **`100%`** - a percentage, not the raw `<Misc shield/>` pool. Confirmed from the writer as of 2026-08-10: `Ship_SetShield` (`0x0883e6f4`) calls `Hud_SetEnergyBar((shield / max) * 100, ...)` itself, so the percentage is the original's own arithmetic rather than a reading of a frame. |
+| Does the shield bar move? | **Yes, now.** It read a constant full for as long as nothing depleted the pool; wall contact does as of the shield work, so `ShieldBar` and `ShieldBarText` are live. **In a time trial and a speed lap it will still sit near full**, and that is faithful rather than broken - both modes race with the original's `Damage` option off, which floors the pool at 20 and regenerates it at 4 a second. Zone is the mode where it visibly drains. See [shield](../ghidra/functions/psp-pulse-usa/shield.md). |
 | Where is `SpeedBarMark`? | At its authored position at zero speed, just left of the bar. Whether it *slides* with speed is still open - one frame at speed settles it. |
 
 ### And one structural finding

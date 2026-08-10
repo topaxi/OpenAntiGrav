@@ -357,6 +357,15 @@ pub struct Environment {
     /// and this crate does not know tracks exist. `oag_formats::pads` does the
     /// geometry and `oag_game::race` runs the test.
     pub pad_hit: Option<Vec3>,
+    /// The race's `Weapons` and `Damage` options, which decide what a wall costs
+    /// the energy pool.
+    ///
+    /// An input rather than something this crate derives, for the same reason
+    /// [`Self::auto_speed`] is: `Race_ReadSetupOptions` (`0x08896b84`) lowers them
+    /// out of the race setup, and this crate does not know races have setups. The
+    /// default is both on, which is the original's default for every game mode
+    /// except three. See [`crate::damage`].
+    pub damage_rules: crate::damage::DamageRules,
 }
 
 impl Default for Environment {
@@ -368,6 +377,7 @@ impl Default for Environment {
             self_collider: None,
             auto_speed: None,
             pad_hit: None,
+            damage_rules: crate::damage::DamageRules::default(),
         }
     }
 }
@@ -479,6 +489,14 @@ pub struct Evaluated {
     /// drives `evaluate` directly therefore sees "no wall response", which is the
     /// truth for that caller rather than a missing value.
     pub wall: crate::wall::WallResponse,
+    /// What this frame did to the energy pool, **after** the wall constraint ran.
+    ///
+    /// Left at its default by [`evaluate`] for the same reason [`Self::wall`] is:
+    /// the pool is charged from the contact impulses, which do not exist until
+    /// the body has moved. Both fields are edges, so a caller that reads this on
+    /// the tick after the one that produced it reads zeroes. See
+    /// [`crate::damage::Shield`].
+    pub shield: crate::damage::Shield,
 }
 
 /// Evaluates every force for one frame, at full `dt`, exactly once.
@@ -686,6 +704,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         control_grounded,
         contact_grounded,
         wall: crate::wall::WallResponse::default(),
+        shield: crate::damage::Shield::default(),
     }
 }
 

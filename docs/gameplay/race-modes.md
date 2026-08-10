@@ -107,10 +107,11 @@ says so rather than substituting numbers.
   when the test fails. Bit 0 is known to be the ground-contact bit - it is the
   same bit that gates the brakes - so groundedness stands in for it. Bit 1 is not
   decoded and is treated as always clear.
-- **The shield recharge is inert.** It is implemented, it clamps to the ship's
-  maximum the way `Ship_SetShield` does, and nothing depletes the pool - so a
-  clean zone recharges a full ship to full. Collision damage is M5 work; see
-  the [roadmap](../overview/roadmap.md).
+- **The shield recharge is live as of 2026-08-10.** It is implemented, it clamps
+  to the ship's maximum the way `Ship_SetShield` does, and the pool now depletes:
+  wall contact spends `|p| * 0.05 * 0.7` of it through `oag_physics::damage`. So
+  a clean zone pays back something a dirty run actually lost. See
+  [shield](../ghidra/functions/psp-pulse-usa/shield.md).
 
 ### Zone has no ending yet, and now we know what it should be
 
@@ -124,9 +125,17 @@ that a run ends on bit 12 of `entity+0x860`, with 25 confidence that the bit mea
 shield depletion - a guess, and the reason the ending was left out. The string
 table corroborates it.
 
-It is still not implemented, because it needs a **shield pool that depletes** and
-nothing depletes shield anywhere in this project yet. So a Zone run keeps going
-until you leave. What blocks it now is collision damage, not reverse engineering.
+**The pool it needs now exists.** Collision damage landed on 2026-08-10 and
+`oag_physics::damage::Shield::depleted` is the edge the original transitions on -
+`Ship_Damage` (`0x088439ac`) sets craft state 4 when the pool reaches zero or
+below. Zone is the only one of the three modes that races with damage on (see
+below), so it is the only one where that edge can fire.
+
+**Still not implemented**, and what is left is no longer the pool: it is the
+destroyed *state*. Nothing in this engine transitions a craft out of racing -
+there is no explosion, no camera hand-off, no end-of-run screen - so the signal
+has nowhere to go and a Zone run keeps going until you leave. That is a smaller
+and better-defined piece of work than "recover collision damage" was.
 
 `MSC_EVENT_ZONE` also ends *"Clear the target number of zones to win the event"*,
 so a Zone event has a target zone count. That is progression data - M7 - and is
@@ -137,7 +146,19 @@ not modelled.
 `MAN_P3_PG1_ENER`: *"The Time Trial and Speed Lap events will recover your ship
 energy automatically."* `MSC_EVENT_TT` and `MSC_EVENT_SL` each repeat it. So a
 depleting shield was never going to end those two modes, and the missing pool
-costs them nothing.
+cost them nothing.
+
+**That sentence turned out to be a description of a mechanism, not a design
+note.** `Race_ReadSetupOptions` (`0x08896b84`) clears `g_damage_enabled` for
+game modes `{5, 7, 10}`, and clearing it is what makes the pool recover: the
+original adds `dt * 4` a tick and floors the result at 20
+(`oag_physics::damage::regenerate`). Modes 5 and 10 also have weapons cleared
+and **share one constructor** in `Race_CreateModeObject` (`0x0882112c`), which
+is the time-trial/speed-lap relationship this page already describes. So the
+manual string and the switch statement are two independent records of the same
+rule, and `oag_gameplay::damage_rules` is the port of it - a time trial's pool
+recovers automatically because the original's does, not because this project
+decided it should.
 
 Both also grant *"a free turbo pickup once per lap"*, which is **not**
 implemented: `Engine::turbo` is read into `Handling` and never applied.

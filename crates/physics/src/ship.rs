@@ -379,6 +379,25 @@ pub struct ShipState {
     /// after the strip ends - so the hold's last five frames read a stale contact
     /// in the original too. `None` is a ship that has never touched a magstrip.
     pub mag_contact: Option<crate::maglock::MagContact>,
+    /// The energy pool, `craft+0x88`.
+    ///
+    /// Recovered in `docs/ghidra/functions/psp-pulse-usa/shield.md`. Bounded
+    /// above by [`crate::Dimensions::shield`] and floored at zero here, which is
+    /// the one place this crate knowingly departs from the original:
+    /// `Ship_SetShield` clamps above and **not** below, because `Ship_Damage`
+    /// tests the signed result against zero to transition the craft into its
+    /// destroyed state. There is no destroyed state in this engine yet, so a pool
+    /// allowed to run negative would be a number nothing could act on and the HUD
+    /// would have to special-case. When the destroyed transition lands, this floor
+    /// is what moves.
+    ///
+    /// **In this crate, and hashed by the determinism gate, because the original
+    /// keeps it on the craft.** It is gameplay-facing rather than dynamical -
+    /// nothing in the force law reads it - but it is written from the contact
+    /// response, and a pool that lived outside [`ShipState`] would be a
+    /// simulation field the gate could not see. See
+    /// [`crate::damage::apply_contact`].
+    pub shield: f32,
 }
 
 impl Default for ShipState {
@@ -407,6 +426,11 @@ impl Default for ShipState {
             pad_timer: 0.0,
             pad_direction: Vec3::ZERO,
             mag_contact: None,
+            // Zero, not a pool: a default ship has no `Dimensions` to take a
+            // maximum from, and inventing one here would make every test that
+            // builds a `ShipState::default()` silently start a race full.
+            // `crate::damage::reset` is what fills it.
+            shield: 0.0,
         }
     }
 }

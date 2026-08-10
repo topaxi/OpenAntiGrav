@@ -372,7 +372,6 @@ pub fn replay<R: Raycaster + ?Sized>(
         handling: *handling,
         segment: 0,
         active: true,
-        ..Ship::default()
     };
     world.ship_count = 1;
 
@@ -556,7 +555,6 @@ where
         handling: *handling,
         segment: 0,
         active: true,
-        ..Ship::default()
     };
     world.ship_count = 1;
 
@@ -654,6 +652,11 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         ),
         stun_timer: Some(state.stun_timer),
         timer_2e0: None,
+        // The replay simulates the pool, so it is compared. It starts full only
+        // if the caller filled it - `oag_physics::damage::reset` - and a replay
+        // that did not will read a flat zero against the capture's pool rather
+        // than silently agreeing.
+        shield: Some(state.shield),
         // The replay simulates the ship, not the original's camera rig, so the
         // camera pose is not compared rather than reported as agreement.
         camera_row0: None,

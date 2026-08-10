@@ -28,7 +28,7 @@ use oag_core::math::Vec3;
 /// column located in it - so a capture that grows a column stays readable.
 /// [`Trace::columns`] is what [`Trace::to_csv`] writes, which is this list
 /// filtered down to the columns the trace in hand actually carries.
-pub const COLUMNS: [&str; 53] = [
+pub const COLUMNS: [&str; 54] = [
     "tick",
     "dt",
     "grounded",
@@ -40,6 +40,7 @@ pub const COLUMNS: [&str; 53] = [
     "speed_cached",
     "stun_timer",
     "timer_2e0",
+    "shield",
     "right_x",
     "right_y",
     "right_z",
@@ -123,9 +124,10 @@ pub const REQUIRED_COLUMNS: [&str; 25] = [
 ];
 
 /// The columns a trace may carry and an older one does not.
-pub const OPTIONAL_COLUMNS: [&str; 28] = [
+pub const OPTIONAL_COLUMNS: [&str; 29] = [
     "stun_timer",
     "timer_2e0",
+    "shield",
     "avel_x",
     "avel_y",
     "avel_z",
@@ -384,6 +386,21 @@ pub struct Frame {
     /// (ADR-0005). Recorded because a capture is the only thing that can say
     /// which of the two gates fired.
     pub timer_2e0: Option<f32>,
+    /// The energy pool at `craft+0x88`, or `None` for a capture taken before the
+    /// column existed.
+    ///
+    /// The field `Ship_Shield` reads and `Ship_SetShield` writes, clamped above
+    /// by the skill-indexed `<Misc>` maximum and **not** floored at zero - see
+    /// `docs/ghidra/functions/psp-pulse-usa/shield.md`. It is the only column
+    /// that can test the recovered contact-damage law `|p| * 0.035`, and the
+    /// test has to allow for `Ship_Damage` halving the amount whenever the race
+    /// has weapons off, which a time trial does.
+    ///
+    /// **A flat column does not mean nothing happened.** With damage off the
+    /// original regenerates the pool at 4 a second and floors it at 20, so a
+    /// capture taken in that mode can absorb a real hit and read almost
+    /// unchanged one tick later.
+    pub shield: Option<f32>,
     /// Row 0 of the player camera node's basis, or `None` for a capture taken
     /// without `--camera`.
     ///
@@ -434,6 +451,7 @@ impl Default for Frame {
             angular_rate: None,
             stun_timer: None,
             timer_2e0: None,
+            shield: None,
             camera_row0: None,
             camera_up: None,
             camera_forward: None,
@@ -524,6 +542,7 @@ impl Frame {
             "omega_z" => self.angular_rate?.z,
             "stun_timer" => self.stun_timer?,
             "timer_2e0" => self.timer_2e0?,
+            "shield" => self.shield?,
             "cam_right_x" => self.camera_row0?.x,
             "cam_right_y" => self.camera_row0?.y,
             "cam_right_z" => self.camera_row0?.z,
@@ -557,6 +576,7 @@ impl Frame {
             "omega_x" | "omega_y" | "omega_z" => self.angular_rate.is_some(),
             "stun_timer" => self.stun_timer.is_some(),
             "timer_2e0" => self.timer_2e0.is_some(),
+            "shield" => self.shield.is_some(),
             "cam_right_x" | "cam_right_y" | "cam_right_z" => self.camera_row0.is_some(),
             "cam_up_x" | "cam_up_y" | "cam_up_z" => self.camera_up.is_some(),
             "cam_fwd_x" | "cam_fwd_y" | "cam_fwd_z" => self.camera_forward.is_some(),
@@ -604,6 +624,7 @@ impl Frame {
             "omega_z" => self.angular_rate.get_or_insert(Vec3::ZERO).z = value,
             "stun_timer" => self.stun_timer = Some(value),
             "timer_2e0" => self.timer_2e0 = Some(value),
+            "shield" => self.shield = Some(value),
             "cam_right_x" => self.camera_row0.get_or_insert(Vec3::ZERO).x = value,
             "cam_right_y" => self.camera_row0.get_or_insert(Vec3::ZERO).y = value,
             "cam_right_z" => self.camera_row0.get_or_insert(Vec3::ZERO).z = value,
@@ -1284,14 +1305,14 @@ mod tests {
     /// captured - a real trace is derived game data and cannot be committed.
     pub(crate) const FIXTURE: &str = "\
 tick,dt,grounded,throttle,brake,steer,airbrake_l,airbrake_r,speed_cached,\
-stun_timer,timer_2e0,\
+stun_timer,timer_2e0,shield,\
 right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,\
 pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,avel_x,avel_y,avel_z,omega_x,omega_y,omega_z,\
 cam_right_x,cam_right_y,cam_right_z,cam_up_x,cam_up_y,cam_up_z,\
 cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z,\
 boost_timer,plume_timer,intensity,half_size,engine_on,flare_speed_kmh,speed_ramp,boost_accum
-0,0.016683,1,100,0,0,0,0,21.98,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-45,0.8,0.25,0.5,3.5,1,79.2,0.3125,0.1875
-1,0.016683,1,100,0,0,0,0,22,0,0,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-44.6,0.78,0.2666,0.52,3.55,1,79.56,0.3187,0.19
+0,0.016683,1,100,0,0,0,0,21.98,0,0,300,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-45,0.8,0.25,0.5,3.5,1,79.2,0.3125,0.1875
+1,0.016683,1,100,0,0,0,0,22,0,0,296.5,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-44.6,0.78,0.2666,0.52,3.55,1,79.56,0.3187,0.19
 ";
 
     /// The same two ticks as a capture taken **before** the angular-velocity and

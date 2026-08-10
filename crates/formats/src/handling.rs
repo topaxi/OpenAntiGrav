@@ -389,11 +389,17 @@ pub struct Misc {
     pub height: f32,
     /// Hull length. Also sets where the two hover probes sit.
     pub length: f32,
-    /// Shield pool.
+    /// Shield pool. **A bulk default for all three difficulty slots**, not a
+    /// fourth value beside them - see [`Misc::shield_for`].
     pub shield: f32,
-    /// Shield pool on the easier difficulties, which is what implies the pool is
-    /// difficulty-scaled rather than the incoming damage.
+    /// Shield pool on the easy skill level, overriding [`Self::shield`] for that
+    /// slot alone.
     pub easyshield: Option<f32>,
+    /// Shield pool on the medium skill level. **No shipped file authors this**;
+    /// the PS2 parser accepts it, so the decoder does too.
+    pub mediumshield: Option<f32>,
+    /// Shield pool on the hard skill level. Also authored nowhere.
+    pub hardshield: Option<f32>,
     /// Hull width.
     pub width: f32,
     /// Fore/aft mass bias.
@@ -410,9 +416,33 @@ impl Misc {
             length: number(node, e, "length")?,
             shield: number(node, e, "shield")?,
             easyshield: optional_number(node, e, "easyshield")?,
+            mediumshield: optional_number(node, e, "mediumshield")?,
+            hardshield: optional_number(node, e, "hardshield")?,
             width: number(node, e, "width")?,
             weight_distribution: optional_number(node, e, "weight_distribution")?,
         })
+    }
+
+    /// The pool for a skill level, `0` easy through `2` hard.
+    ///
+    /// **Three slots, not two.** `HandlingXml_ParseMisc` (`0x0014db08` in the PS2
+    /// `SCES_547.48`) writes `easyshield`/`mediumshield`/`hardshield` to
+    /// `0x84`/`0x88`/`0x8c` on the stats base and plain `shield` to all three at
+    /// once, and the PSP's `Ship_SetShield` indexes exactly that range as
+    /// `0x84 + skill * 4`. A writer on one binary and a reader on the other,
+    /// which is what puts this at confidence 88 -
+    /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+    ///
+    /// Out-of-range skill levels clamp to hard rather than panicking: the index
+    /// comes from a race option, and the original reads three words whatever is
+    /// in it.
+    #[must_use]
+    pub fn shield_for(&self, skill: u8) -> f32 {
+        match skill {
+            0 => self.easyshield.unwrap_or(self.shield),
+            1 => self.mediumshield.unwrap_or(self.shield),
+            _ => self.hardshield.unwrap_or(self.shield),
+        }
     }
 }
 

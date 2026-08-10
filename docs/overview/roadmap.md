@@ -448,8 +448,11 @@ seen from the authoring side.
       block, the three clocks and the wrong-way warning through them, in the
       disc's `PulseHud`/`small` fonts off its own `PulseHUD.mip`. Verified against
       a PPSSPP reference frame. What it does **not** have is anything to show for
-      lap, position or a depleting shield, because none of those exists yet - the
-      widgets are omitted rather than filled with invented values. See
+      lap or position, because neither exists yet - the widgets are omitted
+      rather than filled with invented values. **The shield bar is no longer in
+      that list**: the pool depletes on wall contact as of the shield work
+      below, so `ShieldBar` and `ShieldBarText` are live readouts rather than a
+      constant 100 %. See
       [hud.md](../ui/hud.md) for the four named gaps and what is scoped out.
 - [x] **A race draws the map.** It used to draw the *driveable ribbon* - a flat
       coloured band over the spline - with the art meshes behind an opt-in
@@ -495,7 +498,23 @@ seen from the authoring side.
       physics pages that recorded the shipped table as `1.0` for every class.
 - [ ] Weapons and pickups, including `Weapon Pad` `0x3be` - which decodes today
       alongside the speedup pads, but has nothing to hand out
-- [ ] Shield and energy
+- [~] **Shield and energy.** The pool, its maximum and the one thing that spends
+      it are recovered and implemented: `craft+0x88` is the pool,
+      `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its
+      maximum (a PS2 *writer* and a PSP *reader* agreeing, confidence 88), and
+      wall contact costs `|p| * 0.05 * 0.7` of it through `Ship_Damage`
+      (`0x088439ac`) - **halved whenever the race has weapons off**, which a
+      time trial does. `oag_physics::damage` is the port, the pool is hashed by
+      the determinism gate, and the HUD's `ShieldBar` now moves. See
+      [shield](../ghidra/functions/psp-pulse-usa/shield.md).
+      **Three of the four things that touch the pool are not built**, none of
+      them guessable from here: weapon damage, weapon absorb and the pit-lane
+      recharge all need weapons. And the destroyed transition - `Ship_Damage`
+      sets craft state 4 at zero - has no state to move to yet, so the pool
+      floors instead and `damage::Shield::depleted` is the signal to build it
+      on. **No runtime leg**: the law is a branch-clear static read at
+      confidence 84, and `scripts/psp_trace_fields.py` now carries a `shield`
+      column so one capture that touches a wall settles it.
 - [ ] AI
 - [ ] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and

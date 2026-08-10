@@ -178,6 +178,21 @@ pub fn airbrake_graphics_for(stats: &fmt::Stats) -> AirbrakeGraphics {
 ///
 /// The four pre-scaled fields are converted here; every other field is moved
 /// unchanged, both of these included. See the module docs.
+/// The `SkillLevel` race option's own default, which is what picks a ship's
+/// shield pool out of `<Misc>`'s three slots.
+///
+/// `Race_ReadSetupOptions` (`0x08896b84`) sets `g_skill_level` to **1** whenever
+/// the setup carries no `SkillLevel` key, and 1 is the middle rung - the one no
+/// shipped file authors, so it falls back to plain `<Misc shield>`. See
+/// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+///
+/// **A constant rather than a parameter, deliberately.** Nothing selects a skill
+/// level yet: there is no menu row for it and no race option carrying it, so a
+/// parameter would be four call sites all passing the same literal. Wiring the
+/// option is the follow-up, and `oag_formats::handling::Misc::shield_for` already
+/// takes the index so that when it lands, only this line moves.
+pub const DEFAULT_SKILL_LEVEL: u8 = 1;
+
 #[must_use]
 pub fn handling_for(
     stats: &fmt::Stats,
@@ -249,11 +264,10 @@ pub fn handling_for(
             height: stats.misc.height,
             length: stats.misc.length,
             width: stats.misc.width,
-            shield: stats.misc.shield,
-            // Both absent before Pulse added them; `oag_physics::Misc` already
-            // defaults each to 0.0, so an earlier schema lands on that default
+            shield: stats.misc.shield_for(DEFAULT_SKILL_LEVEL),
+            // Absent before Pulse added it; `oag_physics::Dimensions` already
+            // defaults it to 0.0, so an earlier schema lands on that default
             // rather than on a value invented here.
-            easyshield: stats.misc.easyshield.unwrap_or(0.0),
             weight_distribution: stats.misc.weight_distribution.unwrap_or(0.0),
         },
     }

@@ -189,7 +189,6 @@ pub fn handling() -> Handling {
             length: 4.0,
             width: 2.0,
             shield: 100.0,
-            easyshield: 120.0,
             weight_distribution: 0.5,
         },
         // Both scripts cross a pad twice - see [`environment`] - so these are
@@ -370,6 +369,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         pad_timer,
         pad_direction,
         mag_contact,
+        shield,
     } = *state;
 
     hash_body(hasher, &body);
@@ -413,6 +413,13 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
             hasher.write_vec3(contact.normal);
         }
     }
+    // The energy pool. It reaches the hash even though nothing in the force law
+    // reads it, because a wall writes it: `crate::damage::apply_contact` turns
+    // this frame's contact impulses into a subtraction, so a change to the
+    // contact solver that this gate would otherwise see only as a velocity moves
+    // this field too. The probe scripts scrape a wall, so unlike `pad_timer`
+    // this is not a fixed run of bytes.
+    hasher.write_f32(shield);
 }
 
 /// The ship a run starts with: on the corridor's centre line, resting on the
@@ -426,6 +433,12 @@ pub fn start(handling: &Handling) -> ShipState {
     };
     state.body.mass = handling.physical.mass;
     state.body.position = Vec3::new(0.0, handling.antigrav.ride_height, 0.0);
+    // A full pool, because `ShipState::default()` starts at zero and a pool that
+    // is already empty cannot be depleted - the corridor script scrapes both
+    // walls, and hashing a field that never moves is coverage in name only. This
+    // is `crate::damage::reset`, which is what a race does when a ship takes the
+    // grid.
+    crate::damage::reset(&mut state, &handling.dimensions);
     state
 }
 
