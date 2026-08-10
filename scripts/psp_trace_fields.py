@@ -36,15 +36,6 @@ SHIP_UPDATE_CRAFT = 0x08849618
 # the missing "12x of resistance" is really thrust the original never applied
 # stays an inference. They are also the cheapest wall-contact indicator the
 # already-documented fields offer.
-#
-# `shield` at +0x88 is the energy pool, from
-# docs/ghidra/functions/psp-pulse-usa/shield.md - the field `Ship_Shield` reads
-# and `Ship_SetShield` writes. It is here to give the recovered contact-damage
-# law `|p| * 0.035` its runtime leg: on a capture that touches a wall, the drop
-# in this column is predicted by the same impulse magnitude the trace's own
-# velocity change implies, and no other column can test it. Remember the
-# halving - `Ship_Damage` scales by 0.5 whenever the race has weapons off,
-# which a time trial does.
 CRAFT_FIELDS = [
     ("dt", 0x1C8),
     ("grounded", 0x2B0),
@@ -52,7 +43,39 @@ CRAFT_FIELDS = [
     ("airbrake_l", 0x2C4), ("airbrake_r", 0x2C8),
     ("speed_cached", 0x2EC),
     ("stun_timer", 0x290), ("timer_2e0", 0x2E0),
-    ("shield", 0x088),
+]
+
+# The **ship entity**, one hop out at `craft+0x1c4` - the object `Ship_Shield`,
+# `Ship_Damage` and `FUN_088418e0` all take, and *not* the craft `CRAFT_FIELDS`
+# is indexed off. See docs/ghidra/functions/psp-pulse-usa/shield.md.
+#
+# **This offset was wrong for one commit and the wrongness was invisible**, which
+# is why the check below exists. `shield.md` first recorded the pool as
+# `craft+0x88`, reading the decompiler's parameter name as the same object the
+# trace breaks on. It is not: `craft+0x80..0xbc` is an orientation matrix, so a
+# `shield` column taken there reads a direction cosine - a smooth run of plausible
+# floats between -1 and 1 that looks exactly like a quantity going about its
+# business. Measured live 2026-08-10: craft `0x09a0c800` -> entity `0x09a0b840`,
+# whose `+0x88` holds a real pool while the craft's holds `0.0578`.
+#
+# `ENTITY_OWNER` is what makes the walk evidence rather than a second guess:
+# the entity's `+0x94` points **back** at the craft, so the two can be checked
+# against each other, the same reciprocal identity `FLARE_OWNER` gives the flare
+# below. `Ship_SetShield` needs that edge anyway - it reaches the stats base as
+# `*(*(entity + 0x94) + 0x6c)`, i.e. through the craft.
+#
+# The pool is what gives the recovered contact-damage law `|p| * 0.05 * 0.7` its
+# runtime leg. Two things about a Time Trial capture, both from the same page,
+# because either makes an honest capture read like a refutation: `Ship_Damage`
+# halves every amount while the race has weapons off, and with damage off the
+# pool regenerates 4 a second and floors at 20 - so a real hit can be nearly
+# recovered one tick later. Zone is the clean scenario for the law itself; a
+# Time Trial measures the regeneration instead, which is worth having too.
+ENTITY_POINTER = 0x1C4
+ENTITY_OWNER = 0x94
+
+ENTITY_FIELDS = [
+    ("shield", 0x88),
 ]
 
 # Offsets into the rigid body, measured at runtime by diffing successive frames.
@@ -150,7 +173,7 @@ CAMERA_FIELDS = [
 # inside `(0 * 0.6 + 0.4) * 2.5 = 1.0` times its recovered `rand(0.75, 1.25)`
 # flicker. Two independently-derived formulas landing on two live values is
 # what makes this an address book rather than a guess.
-RACER_POINTER = 0x1C4
+RACER_POINTER = ENTITY_POINTER
 FLARE_POINTER = 0x78
 FLARE_OWNER = 0xC0
 

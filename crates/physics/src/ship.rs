@@ -379,7 +379,14 @@ pub struct ShipState {
     /// after the strip ends - so the hold's last five frames read a stale contact
     /// in the original too. `None` is a ship that has never touched a magstrip.
     pub mag_contact: Option<crate::maglock::MagContact>,
-    /// The energy pool, `craft+0x88`.
+    /// The energy pool, the original's `entity+0x88`.
+    ///
+    /// **The ship entity, one hop out at `craft+0x1c4`** - *not* the craft the
+    /// trace harness breaks on, whose `+0x88` is an orientation-matrix element.
+    /// This comment named the wrong object for one commit and a capture taken
+    /// there read a direction cosine, which looks exactly like a quantity going
+    /// about its business. Settled live 2026-08-10 by the reciprocal pointer
+    /// identity: the entity's `+0x94` points back at the craft.
     ///
     /// Recovered in `docs/ghidra/functions/psp-pulse-usa/shield.md`. Bounded
     /// above by [`crate::Dimensions::shield`] and floored at zero here, which is

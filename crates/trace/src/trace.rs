@@ -386,8 +386,8 @@ pub struct Frame {
     /// (ADR-0005). Recorded because a capture is the only thing that can say
     /// which of the two gates fired.
     pub timer_2e0: Option<f32>,
-    /// The energy pool at `craft+0x88`, or `None` for a capture taken before the
-    /// column existed.
+    /// The energy pool at the original's `entity+0x88`, or `None` for a capture
+    /// taken before the column existed.
     ///
     /// The field `Ship_Shield` reads and `Ship_SetShield` writes, clamped above
     /// by the skill-indexed `<Misc>` maximum and **not** floored at zero - see
@@ -1351,8 +1351,14 @@ pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed
     fn header_the_capture_script_writes() -> Vec<String> {
         const SCRIPT: &str = include_str!("../../../scripts/psp_trace_fields.py");
         let mut columns = vec!["tick".to_owned()];
+        // In the order the capture writes them, which is **not** the order they
+        // are declared in: `ENTITY_FIELDS` sits between the craft and the body
+        // because that is where both writers splice it in. This list caught the
+        // drift when `shield` moved from `CRAFT_FIELDS` to `ENTITY_FIELDS`,
+        // which is the whole reason it reads the script rather than a copy.
         for list in [
             "CRAFT_FIELDS = [",
+            "ENTITY_FIELDS = [",
             "BODY_FIELDS = [",
             "CAMERA_FIELDS = [",
             "FLARE_FIELDS = [",

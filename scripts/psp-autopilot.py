@@ -40,7 +40,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import input_script
 from niri_shot import find_window, screenshot
 from ppsspp_debugger import Debugger
-from psp_trace_fields import BODY_FIELDS, CRAFT_FIELDS, SHIP_UPDATE_CRAFT
+from psp_trace_fields import (
+    BODY_FIELDS,
+    CRAFT_FIELDS,
+    ENTITY_FIELDS,
+    ENTITY_OWNER,
+    ENTITY_POINTER,
+    SHIP_UPDATE_CRAFT,
+)
 
 CRAFT_REGISTER = "a0"
 CRAFT_BYTES = 0x400
@@ -338,7 +345,11 @@ def main():
     if trace:
         trace.write(
             "tick,"
-            + ",".join([n for n, _ in CRAFT_FIELDS] + [n for n, _ in BODY_FIELDS])
+            + ",".join(
+                [n for n, _ in CRAFT_FIELDS]
+                + [n for n, _ in ENTITY_FIELDS]
+                + [n for n, _ in BODY_FIELDS]
+            )
             + "\n"
         )
 
@@ -458,6 +469,22 @@ def main():
 
             if trace:
                 values = [struct.unpack_from("<f", craft_blob, at)[0] for _, at in CRAFT_FIELDS]
+                # The energy pool, one hop out at craft+0x1c4 - the same walk
+                # psp-trace.py makes, with the same reciprocal check. Written
+                # here too so a lap capture carries the column: the whole point
+                # of one address book is that the two writers cannot drift.
+                entity = struct.unpack_from("<I", craft_blob, ENTITY_POINTER)[0]
+                if dbg.read_u32(entity + ENTITY_OWNER) != craft:
+                    raise SystemExit(
+                        "entity 0x%08x does not point back at craft 0x%08x - "
+                        "the chain in psp_trace_fields.py no longer holds"
+                        % (entity, craft)
+                    )
+                entity_blob = dbg.read(entity + ENTITY_FIELDS[0][1], 4 * len(ENTITY_FIELDS))
+                values += [
+                    struct.unpack_from("<f", entity_blob, at - ENTITY_FIELDS[0][1])[0]
+                    for _, at in ENTITY_FIELDS
+                ]
                 values += [struct.unpack_from("<f", body_blob, at)[0] for _, at in BODY_FIELDS]
                 trace.write("%d,%s\n" % (tick, ",".join("%.7g" % v for v in values)))
 

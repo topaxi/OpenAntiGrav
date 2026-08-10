@@ -46,6 +46,9 @@ from psp_trace_fields import (
     CAMERA_NODE_OFFSET,
     CAMERA_UPDATE_BREAK,
     CRAFT_FIELDS,
+    ENTITY_FIELDS,
+    ENTITY_OWNER,
+    ENTITY_POINTER,
     FLARE_FIELDS,
     FLARE_OWNER,
     FLARE_POINTER,
@@ -312,7 +315,11 @@ def main():
             # the script's first tick does not is released by the first send().
             dbg.hold(**{button: False for button in args.warmup_hold})
 
-        names = [name for name, _ in CRAFT_FIELDS] + [name for name, _ in BODY_FIELDS]
+        names = (
+            [name for name, _ in CRAFT_FIELDS]
+            + [name for name, _ in ENTITY_FIELDS]
+            + [name for name, _ in BODY_FIELDS]
+        )
         if args.camera:
             names += [name for name, _ in CAMERA_FIELDS]
         if args.flare:
@@ -324,6 +331,8 @@ def main():
         # re-walking them every tick would cost two extra reads a tick for a
         # constant. `None` until then.
         flare_node = None
+        # Same reasoning for the ship entity, which every capture reads.
+        entity = None
 
         # A race updates every craft from the same function, so the breakpoint
         # fires once per ship per tick and only one of those hits is the ship
@@ -387,6 +396,33 @@ def main():
                 args.start_heading = None
 
             values = [struct.unpack("<f", craft_blob[at : at + 4])[0] for _, at in CRAFT_FIELDS]
+            if entity is None:
+                entity = struct.unpack(
+                    "<I", craft_blob[ENTITY_POINTER : ENTITY_POINTER + 4]
+                )[0]
+                # The reciprocal identity, checked rather than assumed - the
+                # entity's +0x94 points back at the craft we came from. Refusing
+                # here instead of recording a column of garbage: the offset this
+                # replaces read an orientation-matrix element and looked entirely
+                # plausible. See psp_trace_fields.py.
+                owner = dbg.read_u32(entity + ENTITY_OWNER)
+                if owner != craft:
+                    print(
+                        "entity 0x%08x claims craft 0x%08x, not the 0x%08x it "
+                        "was reached from - the chain in psp_trace_fields.py no "
+                        "longer holds" % (entity, owner, craft),
+                        file=sys.stderr,
+                    )
+                    return 2
+                print(
+                    "entity 0x%08x (craft 0x%08x -> +0x1c4)" % (entity, craft),
+                    file=sys.stderr,
+                )
+            entity_blob = dbg.read(entity + ENTITY_FIELDS[0][1], 4 * len(ENTITY_FIELDS))
+            values += [
+                struct.unpack("<f", entity_blob[at - ENTITY_FIELDS[0][1] :][:4])[0]
+                for _, at in ENTITY_FIELDS
+            ]
             values += [struct.unpack("<f", body_blob[at : at + 4])[0] for _, at in BODY_FIELDS]
             if camera_node is not None:
                 # Read at the ship stop: the node holds whatever the last

@@ -136,7 +136,7 @@ use oag_physics::{Environment, ShipState, step};
 ///     side of the tilt's threshold, so **not one byte of the input script
 ///     changed** and there is no second cause to disentangle.
 /// - **Regenerated 2026-08-10, and behaviour did *not* change.** `ShipState`
-///   gained `shield`, the energy pool at the original's `craft+0x88`, and
+///   gained `shield`, the energy pool at the original's `entity+0x88`, and
 ///   `crate::damage::apply_contact` spends it out of the frame's contact
 ///   impulses. **Nothing reads the pool back**, so no force term can see it and
 ///   the trajectory is untouched; the movement is a longer hash stream, the same

@@ -1178,7 +1178,7 @@ fn write_trace(
             // The energy pool, so a comparison can put a number on the recovered
             // contact-damage law instead of watching the bar. `oag-trace
             // replay` writes it too; the capture side is
-            // `scripts/psp_trace_fields.py`'s `shield` at `craft+0x88`.
+            // `scripts/psp_trace_fields.py`'s `shield` at `entity+0x88`.
             shield: Some(ship.shield),
             flare: Some(Flare {
                 boost_timer: exhaust.boost_timer(),

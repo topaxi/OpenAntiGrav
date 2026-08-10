@@ -499,7 +499,7 @@ seen from the authoring side.
 - [ ] Weapons and pickups, including `Weapon Pad` `0x3be` - which decodes today
       alongside the speedup pads, but has nothing to hand out
 - [~] **Shield and energy.** The pool, its maximum and the one thing that spends
-      it are recovered and implemented: `craft+0x88` is the pool,
+      it are recovered and implemented: `*(craft+0x1c4) + 0x88` is the pool,
       `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its
       maximum (a PS2 *writer* and a PSP *reader* agreeing, confidence 88), and
       wall contact costs `|p| * 0.05 * 0.7` of it through `Ship_Damage`
@@ -512,9 +512,11 @@ seen from the authoring side.
       recharge all need weapons. And the destroyed transition - `Ship_Damage`
       sets craft state 4 at zero - has no state to move to yet, so the pool
       floors instead and `damage::Shield::depleted` is the signal to build it
-      on. **No runtime leg**: the law is a branch-clear static read at
-      confidence 84, and `scripts/psp_trace_fields.py` now carries a `shield`
-      column so one capture that touches a wall settles it.
+      on. **Measured against the running original** for the pool's location,
+      the two race-option globals, the regeneration branch and the weapons-off
+      halving - which comes out at 1.98 against a predicted 2.00. The damage
+      *coefficient* is still a static read at 84; the probe that would settle
+      it, and the one that provably will not, are on the shield page.
 - [ ] AI
 - [ ] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
