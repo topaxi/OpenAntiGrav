@@ -41,6 +41,11 @@ pub struct Boot {
     /// carry it, `--no-video`, or a missing `ffmpeg`. The menus draw on black
     /// there, which is what they did before this existed.
     pub backdrop: Option<Movie>,
+    /// Pure's second boot movie, played by the `FMV Intro` screen state - see
+    /// [`load_fmv_intro`]. `None` for any source that has no such state
+    /// (every Pulse source), the same way `backdrop` is `None` for a source
+    /// with no menu backdrop.
+    pub fmv_intro: Option<Movie>,
     /// Every front-end image the screens reference, in one texture.
     pub sprites: crate::sprite::Sheet,
     /// The text atlas: the disc's own font when it decodes, ours when it does
@@ -177,6 +182,7 @@ pub fn load(options: &Options) -> Result<Boot> {
     // heard at all is in that XML.
     let movie_sound = load_movie_sound(movie.as_ref(), &screens, &movie_name, options, &mut report);
     let backdrop = load_backdrop(&mut archives, options, &mut report);
+    let fmv_intro = load_fmv_intro(&mut archives, &screens, options, &mut report);
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
     // The cached frames when there are any, and the demuxed count when there
@@ -203,6 +209,14 @@ pub fn load(options: &Options) -> Result<Boot> {
         .map_or((space.size.0 as u32, space.size.1 as u32), |movie| {
             movie.display_aspect
         });
+    // Same shape as `frames`/`frame_rate` above, for the second boot movie.
+    // Both `None` on any source `load_fmv_intro` never attempted.
+    let fmv_intro_frames = fmv_intro.as_ref().map_or(0, |movie| {
+        movie.frames.as_ref().map_or(movie.frame_count, |f| f.len)
+    });
+    let fmv_intro_frame_rate = fmv_intro
+        .as_ref()
+        .map_or(movie::FRAME_RATE, |movie| movie.frame_rate);
     let mut frontend = Frontend::booting(
         options.leg,
         screens,
@@ -213,6 +227,11 @@ pub fn load(options: &Options) -> Result<Boot> {
         frame_rate,
         video_aspect,
         movie.as_ref().is_some_and(|movie| movie.frames.is_some()),
+        fmv_intro_frames,
+        fmv_intro_frame_rate,
+        fmv_intro
+            .as_ref()
+            .is_some_and(|movie| movie.frames.is_some()),
     );
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's
@@ -307,6 +326,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         movie,
         movie_sound,
         backdrop,
+        fmv_intro,
         sprites,
         report,
     })
@@ -445,6 +465,39 @@ fn load_backdrop(
         // cannot read, and the backdrop is not worth failing a boot over.
         Err(e) => {
             report.push(format!("no menu backdrop: {e:#}"));
+            None
+        }
+    }
+}
+
+/// Decodes Pure's second boot movie - see
+/// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what it is, how
+/// its name was found, and what it takes to actually draw it (the other half
+/// of that work, done alongside this function: see `crate::frontend::Frontend`
+/// and `crate::main::FrontendStage` for the rest).
+///
+/// `None`, and nothing attempted at all, for a source whose `screens` has no
+/// `FMV Intro` state - every Pulse source, and any future title this build
+/// has not seen. Checked against `screens` rather than tried unconditionally
+/// the way [`load_backdrop`] tries `BACKDROP_MOVIE` for every source: a miss
+/// there is silent by construction (no report line), but `FMV_INTRO_MOVIE` is
+/// a Pure-specific literal, and trying it against a Pulse source would add a
+/// "no second boot movie" line nobody asked about.
+fn load_fmv_intro(
+    archives: &mut oag_assets::Archives,
+    screens: &Screens,
+    options: &Options,
+    report: &mut Vec<String>,
+) -> Option<Movie> {
+    screens.by_name(pure_states::FMV_INTRO)?;
+    let wanted = Options {
+        extent: Extent::Whole,
+        ..options.clone()
+    };
+    match load_movie(archives, oag_pure::names::FMV_INTRO_MOVIE, &wanted, report) {
+        Ok(movie) => movie,
+        Err(e) => {
+            report.push(format!("no second boot movie: {e:#}"));
             None
         }
     }

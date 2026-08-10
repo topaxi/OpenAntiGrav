@@ -2121,10 +2121,21 @@ impl Stage {
                 .frames
                 .map(|frames| movie::Feed::spawn(frames, false, width, height))
         });
+        // Same construction as `feed`, for Pure's second boot movie - spawned
+        // now rather than lazily when `FMV Intro` is entered, because the
+        // `Movie` (and the frames inside it) only exist here, on `loaded`;
+        // `App::tick` swaps it into `feed` when the state is actually entered.
+        let fmv_intro_feed = loaded.fmv_intro.and_then(|movie| {
+            let (width, height) = (movie.width, movie.height);
+            movie
+                .frames
+                .map(|frames| movie::Feed::spawn(frames, false, width, height))
+        });
         Ok(Self::Frontend(Box::new(FrontendStage {
             renderer,
             frontend: loaded.frontend,
             feed,
+            fmv_intro_feed,
             shown: false,
             backdrop_shown: false,
             held_backdrop: None,
@@ -2447,6 +2458,11 @@ struct FrontendStage {
     /// under `--no-video`, and with no `ffmpeg` - and then the renderer was built
     /// with no video pipeline either, so the draw is skipped rather than green.
     feed: Option<movie::Feed>,
+    /// Pure's second boot movie, decoded the same way `feed` is and swapped
+    /// into it - see the `Event::Enter(pure_states::FMV_INTRO)` handling in
+    /// `App::tick`. `None` on every Pulse source and on any Pure source with
+    /// `--no-video` or no `ffmpeg`, the same reasons `feed` itself is `None`.
+    fmv_intro_feed: Option<movie::Feed>,
     /// Whether a picture has ever reached the planes. See
     /// [`FrontendStage::sync_video`].
     shown: bool,
@@ -3118,6 +3134,26 @@ impl Session {
                         stage
                             .frontend
                             .update(dt, self.controls.buttons_mut(), movie_playhead);
+                    // `feed` is spawned once, from the first boot movie, and
+                    // powers every `Video::Intro` draw - including `FMV
+                    // Intro`'s own, which reuses that variant rather than
+                    // adding a third (see `Frontend`'s own draw dispatch for
+                    // why that reuse is safe). So the moment the state
+                    // machine actually enters `FMV Intro`, the planes need
+                    // *that* movie's frames instead: swap in
+                    // `fmv_intro_feed` and reset the arrived-a-picture-yet
+                    // bookkeeping the same way a fresh boot starts with it
+                    // unset, or the first `FMV Intro` frame either shows the
+                    // first movie's last picture or is skipped as already
+                    // "shown".
+                    if events
+                        .iter()
+                        .any(|event| matches!(event, oag_game::state_machine::Event::Enter(name) if name == oag_pure::frontend::states::FMV_INTRO))
+                    {
+                        stage.feed = stage.fmv_intro_feed.take();
+                        stage.shown = false;
+                        stage.backdrop_in_planes = false;
+                    }
                     report(&events, stage.trace);
                     for note in stage.frontend.take_notes() {
                         println!("{note}");
