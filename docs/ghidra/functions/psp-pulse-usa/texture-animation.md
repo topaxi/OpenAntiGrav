@@ -183,6 +183,46 @@ resident flag, and *then* stores the global into `+0xb0`. So `+0xb0` is a
 last-uploaded timestamp and the `0.2` is a texture-cache re-upload heuristic.
 Recorded because the shape is genuinely misleading and cost a read.
 
+## The plume does not scroll, and the `& 0x10` bit does not mean it does
+
+2026-08-10, chasing a report that the boost plume's wing spikes read as "thick
+fog animating towards the camera". The chain was followed end to end and the
+answer is a **negative**, recorded because the bit makes it look like a yes.
+
+`FUN_08927204` is now read: it stores the time at block `+0x28`, wraps it by
+the period at `+0x2c`, divides by the duration at `+0x0c`, splits off the cycle
+count, and calls the keyframe sampler `FUN_08927034` **twice** - once writing
+the scale pair at `+0x18`/`+0x1c`, once the offset pair at `+0x20`/`+0x24`.
+Each call's return value is a found/not-found flag, and **the not-found path
+writes the identity**: `1.0`/`1.0` for the scale, `0`/`0` for the offset. Its
+driver `FUN_0890e160` walks the materials whenever `mesh+0x40` differs from
+`mesh+0x18c` and re-evaluates every material carrying `& 0x10`.
+
+So the mechanism is a genuine per-material keyframed UV transform. **What is
+missing is any authored track to feed it.** Measured through
+`oag_formats::vex` on the European disc, over the on-disc material record's
+`+0x0c..0x14`:
+
+| File | materials | with `& 0x10` | with a non-zero track |
+| --- | ---: | ---: | ---: |
+| `Assegai\shipboost.vex` | 2 | **2** | **0** |
+| `Assegai\Ship.vex` | 12 | 1 | **0** |
+| `16_Track\track.vex` | 1,717 | 104 | **0** |
+
+**Both of the plume's materials set the bit and neither carries a track**, so
+the transform it replays every frame is the identity, every frame. And the bit
+is not rare - 104 track materials have it - so `& 0x10` marks "this surface
+*may* carry a transform", not "this surface animates".
+
+That leaves the plume's apparent motion unexplained by this page's mechanism.
+The remaining candidate is the third row of
+[`methodology.md`](../../../reverse-engineering/methodology.md)'s table -
+**environment-mapped uvgen, which slides the coordinates as the model turns and
+needs no clock at all** - and that one is already implemented
+(`oag_render::texgen`). A boost changes the craft's attitude continuously, so
+its fins' generated coordinates really do flow without anything advancing a
+timer.
+
 ## The heuristic this page is the evidence for
 
 [`methodology.md`](../../../reverse-engineering/methodology.md) now carries
