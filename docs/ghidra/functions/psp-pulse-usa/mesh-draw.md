@@ -191,6 +191,41 @@ open question, unchanged.
 does not take" to "the mechanism exists, is live, and is bracketed" - which is
 a real upgrade in status and still not a proof that the plume is inside it.
 
+### The live shadow reads mode 0 - and why that is weaker evidence than it looks
+
+`Gu_TexMapMode` keeps a shadow: it stores `mode & 3` into **`ctx+0xf4`**, where
+`ctx` is the sceGu context at **`0x08adc3ac`**. That address is the struct's
+**base, not a pointer to it** - `+0x08` holds the current list write pointer
+(read live: `0x48bacc40`, in the uncached VRAM mirror), which is what
+identifies the layout. A first attempt dereferenced it and got zero.
+
+The shadow is readable while the game free-runs, so it costs nothing and does
+not slow the emulator - the failure mode that defeated every breakpoint-based
+attempt. Sampled 160 times across a race with the boost armed by hand:
+
+| | samples |
+| --- | ---: |
+| mode 0, `GU_TEXTURE_COORDS` | **160** |
+| mode 1 / mode 2 | 0 |
+
+including all 160 taken while `boost_timer > 0.2`, i.e. with the plume
+revealed.
+
+**This does not show that mode 2 is unused, and it must not be cited that
+way.** Mode 2 is set inside `FUN_0890d508`'s bracket and restored a few draws
+later, so its window is microseconds per frame while the sampler polls over
+seconds; catching it would be luck. What the sample does establish is the
+**steady state** - what is live outside that bracket - and that is
+unambiguously authored coordinates.
+
+So the two live results are consistent and neither is decisive for the plume:
+`Mesh_BeginTransparentPass` genuinely runs (breakpoint, one hit, at load), and
+the steady-state mode is 0 (polling, 160 of 160). Which of the two the plume's
+own compiled list is replayed under still needs the list's bytes read
+directly - scan it for a `0xc0`-prefixed word - rather than any form of
+sampling. That is the one method left that has no timing exposure, and it is
+where the next pass should start.
+
 ### A harness note worth keeping
 
 Crossing a speed pad from a teleported craft is unreliable - breakpoint
