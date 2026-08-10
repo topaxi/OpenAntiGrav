@@ -579,13 +579,19 @@ what a player sees defaults to whatever the original did.
 **Exit criterion:** an eight-ship race that is indistinguishable from the
 original to a player, and whose per-tick trace stays within tolerance.
 
-**One piece of the grid landed early, from M4's side.** A track's authored
-`Start Position` is decoded and a ship starts on it rather than on a spline
-index, with its heading checked against the original's own craft at the start
-line to 1.12 degrees. That is the *slot*, singular: one node per track, so
-grid *formation* — seven more slots, and which ship gets which — is still
-unread code and still blocks this milestone. See
-[`Start Position`](../formats/track.md#start-position).
+**Grid formation is recovered, and the authored node turned out to be the back
+of the grid rather than a lone slot.** A track's `Start Position` is **slot 8**:
+this project's spawn from it lands 1.84 units from where the original puts its
+own eighth craft, against 139.7 from where a time trial starts. The other seven
+run forward from it in two staggered columns - `19.79` per slot along forward,
+alternating `20.0` along row 0, all eight sharing one heading - measured off
+eight craft read out of the running original while the countdown held them in
+place. `oag_gameplay::spawn::grid_pose` is the port. Which ship gets which slot
+is a shipped permutation table, and a short field packs to the *back*. See
+[grid](../ghidra/functions/psp-pulse-usa/grid.md).
+
+**What still blocks the milestone is not the grid but the opponents**: nothing
+spawns seven more craft, because nothing drives them. That is the AI item.
 
 ---
 

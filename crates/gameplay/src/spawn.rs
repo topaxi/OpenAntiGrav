@@ -248,6 +248,71 @@ impl Ship {
 /// This is only where a ship *starts*: the height it settles at is emergent from the
 /// force law, as `oag_gameplay::spawn::Pose::from_sample` says. The two now agree,
 /// which is the point.
+/// How many craft a Pulse grid holds.
+pub const GRID_SLOTS: u8 = 8;
+
+/// How far ahead of its successor each grid slot sits, along the slot's forward
+/// axis.
+///
+/// **Measured, not read out of the original's code**, which is the distinction
+/// `docs/reverse-engineering/methodology.md` insists on: eight craft were read
+/// out of PPSSPP's memory while the countdown held them on the grid, and this is
+/// what the geometry says. Fourteen samples put the per-slot step between
+/// `19.763` and `19.862`, mean `19.79`. Whoever finds the literal in the
+/// executable should replace this and say so - a *recovered* number would be
+/// exact where this is a mean.
+pub const GRID_ROW_PITCH: f32 = 19.79;
+
+/// How far the odd-numbered slots sit to one side of the even-numbered ones.
+///
+/// The grid is two staggered columns, and this is the whole of the lateral
+/// pattern: even slots sit on the authored node's own line, odd slots sit
+/// `GRID_COLUMN_OFFSET` along its row 0. Measured the same way as
+/// [`GRID_ROW_PITCH`] and much tighter - the four odd slots read `19.882`,
+/// `19.993`, `20.035` and `20.016`, and the four even ones are within `0.05` of
+/// zero - so `20.0` is almost certainly the authored value rather than a mean.
+///
+/// **Row 0 is the craft's left**, not its right; see
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+pub const GRID_COLUMN_OFFSET: f32 = 20.0;
+
+/// The pose of one grid slot, given the track's authored `Start Position`.
+///
+/// **The authored node is slot 8**, the back of the grid, and that is measured
+/// rather than assumed: this crate's spawn from the node lands **1.84 units**
+/// from where the original puts its own eighth craft, against **139.7** from
+/// where a time trial starts. It also retires the puzzle
+/// [`track.md`](../../../docs/formats/track.md#start-position) recorded - the
+/// node being "3.2-20.5 units off the centreline" is not an authoring quirk, it
+/// is the lateral stagger, and "137.9 units behind where a time trial starts" is
+/// the length of the grid.
+///
+/// `slot` is 1-based, front to back, and out-of-range values clamp rather than
+/// panicking: the caller's slot comes from a race option in the original and
+/// there is no reason for a bad one to take the process down.
+///
+/// **All eight craft share one heading** - the orientation is the node's,
+/// unmodified, which fourteen samples agree on to four decimal places.
+///
+/// Full account, including how the ordering is chosen:
+/// [`grid.md`](../../../docs/ghidra/functions/psp-pulse-usa/grid.md).
+#[must_use]
+pub fn grid_pose(node: Pose, slot: u8) -> Pose {
+    let slot = slot.clamp(1, GRID_SLOTS);
+    let forward = node.orientation * Vec3::NEG_Z;
+    let row0 = node.orientation * Vec3::X;
+    let back = f32::from(GRID_SLOTS - slot);
+    let lateral = if slot % 2 == 1 {
+        GRID_COLUMN_OFFSET
+    } else {
+        0.0
+    };
+    Pose {
+        position: node.position + forward * (back * GRID_ROW_PITCH) + row0 * lateral,
+        orientation: node.orientation,
+    }
+}
+
 #[must_use]
 pub fn spawn_height(handling: &Handling) -> f32 {
     let target = oag_physics::hover::target_height(handling, 0.0, 0.0);
@@ -492,6 +557,85 @@ mod tests {
             "{:?} vs {:?}",
             from_slot.orientation,
             from_sample.orientation
+        );
+    }
+}
+
+#[cfg(test)]
+mod grid_tests {
+    use super::*;
+
+    /// The identity node, so a slot's offset reads directly as its own numbers.
+    fn node() -> Pose {
+        Pose {
+            position: Vec3::ZERO,
+            orientation: Quat::IDENTITY,
+        }
+    }
+
+    /// Slot 8 is the authored node itself - the measurement this whole layout
+    /// hangs off. If this ever fails, the grid has been re-anchored and every
+    /// other number here means something different.
+    #[test]
+    fn slot_eight_is_the_authored_node() {
+        assert_eq!(grid_pose(node(), 8).position, Vec3::ZERO);
+    }
+
+    /// Two staggered columns: odd slots offset along row 0, even slots on the
+    /// node's own line.
+    #[test]
+    fn the_columns_alternate() {
+        for slot in 1..=GRID_SLOTS {
+            let x = grid_pose(node(), slot).position.x;
+            if slot % 2 == 1 {
+                assert!(
+                    (x - GRID_COLUMN_OFFSET).abs() < 1e-4,
+                    "slot {slot} should sit on the offset column, sits at {x}"
+                );
+            } else {
+                assert!(x.abs() < 1e-4, "slot {slot} should sit on the node's line");
+            }
+        }
+    }
+
+    /// Slot 1 leads and slot 8 trails, with a constant step between them. The
+    /// original's own eight craft span 138.55 units nose to tail; ours must too.
+    #[test]
+    fn the_grid_runs_forward_from_the_node_at_a_constant_pitch() {
+        let z: Vec<f32> = (1..=GRID_SLOTS)
+            .map(|s| grid_pose(node(), s).position.z)
+            .collect();
+        for pair in z.windows(2) {
+            assert!(
+                (pair[1] - pair[0] - GRID_ROW_PITCH).abs() < 1e-3,
+                "the pitch is not constant: {pair:?}"
+            );
+        }
+        let span = z[0] - z[GRID_SLOTS as usize - 1];
+        assert!(
+            (span + 138.53).abs() < 0.1,
+            "the grid should span the original's measured 138.55 units, spans {span}"
+        );
+    }
+
+    /// Every craft on the grid faces the same way, which fourteen samples of the
+    /// original agree on to four decimal places.
+    #[test]
+    fn every_slot_shares_the_nodes_heading() {
+        let base = node();
+        for slot in 1..=GRID_SLOTS {
+            assert_eq!(grid_pose(base, slot).orientation, base.orientation);
+        }
+    }
+
+    /// The slot comes from a race option in the original, so a bad one clamps
+    /// rather than panicking.
+    #[test]
+    fn an_out_of_range_slot_clamps() {
+        assert_eq!(grid_pose(node(), 0).position, grid_pose(node(), 1).position);
+        assert_eq!(
+            grid_pose(node(), 99).position,
+            grid_pose(node(), GRID_SLOTS).position
         );
     }
 }

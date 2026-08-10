@@ -332,6 +332,18 @@ SATURATE = 8
 # which is the reference scenario's configuration.
 RACE_TYPE_TIME_TRIAL = 2
 
+# The same list's first entry, which the saturating `left` already lands on. A
+# single race is the only way to get a **full grid** in front of the debugger:
+# every other reachable race type is one craft, and eight craft is what
+# `docs/ghidra/functions/psp-pulse-usa/grid.md` needs in order to read the
+# formation out of memory rather than out of a decompiler.
+#
+# Selecting it does *not* inherit the time trial's side effects, which is the
+# point: WEAPONS and AI DIFFICULTY stay whatever the profile holds rather than
+# being forced to OFF and N/A. So a capture taken here is **not** the reference
+# scenario and must not be compared against one.
+RACE_TYPE_SINGLE_RACE = 0
+
 # Front-end states, from `0x08b31784+0x18c`. The menu tree announces itself; the
 # hex-grid cells do not, which is why the walk below verifies at these points and
 # counts presses in between.
@@ -455,11 +467,16 @@ def menu(args):
     expect(dbg, CUSTOM_RACE, "entering Custom Race")
 
     tap(dbg, "left", SATURATE, wait=0.3)  # RACE TYPE -> SINGLE RACE
-    tap(dbg, "right", RACE_TYPE_TIME_TRIAL, wait=0.4)  # -> TIME TRIAL
+    presses = RACE_TYPE_SINGLE_RACE if args.single_race else RACE_TYPE_TIME_TRIAL
+    if presses:
+        tap(dbg, "right", presses, wait=0.4)  # -> TIME TRIAL
     tap(dbg, "down")  # SPEED CLASS
     tap(dbg, "left", SATURATE, wait=0.3)  # -> VENOM
     tap(dbg, "up")
-    print("set TIME TRIAL / VENOM", file=sys.stderr)
+    print(
+        "set %s / VENOM" % ("SINGLE RACE" if args.single_race else "TIME TRIAL"),
+        file=sys.stderr,
+    )
 
     tap(dbg, "cross", 1, wait=3.0)
     expect(dbg, TRACK_SELECT, "confirming the race settings")
@@ -780,6 +797,13 @@ def main():
         action="store_true",
         help="warn instead of failing when the race did not come up on Talon's "
         "Junction. Track Select is a wrapping list this cannot read.",
+    )
+    p.add_argument(
+        "--single-race",
+        action="store_true",
+        help="walk into SINGLE RACE instead of TIME TRIAL, which is the only "
+        "reachable race type with a full grid. Not the reference scenario: "
+        "weapons and AI difficulty are left at whatever the profile holds.",
     )
     p.set_defaults(run=menu)
 

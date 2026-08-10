@@ -1,9 +1,10 @@
 # The starting grid
 
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
-**Status:** **half recovered.** How racers are *ordered* onto the grid is read
-end to end at confidence **82**; where slot N sits *in the world* is not found
-and is the open half.
+**Status:** **both halves answered.** How racers are *ordered* onto the grid is
+read end to end at confidence **82**; where slot N sits in the world is
+**measured against the running original** at confidence **94** - eight craft
+read out of memory while the countdown held them on the grid.
 
 This page exists because [`track.md`](../../../formats/track.md#start-position)
 established that a track authors exactly **one** `Start Position` node across
@@ -57,30 +58,58 @@ Three things follow:
   gets the small value. Confidence **75** on that reading - the arithmetic is
   unambiguous, what consumes the five fields is not read.
 
-## What is not answered: where slot N is
+## The geometry, measured
 
-Nothing found so far turns a slot index into a world pose. The two leads, in
-the order worth trying:
+**Two staggered columns, and the authored `Start Position` node is slot 8.**
 
-1. **`StartPosition_Bind` (`0x08926ae8`) does more than decode a matrix.** It
-   reads an integer `Position` attribute off the node, **registers the node in
-   the scene under the name `start_position_%d`**, and orthonormalises the
-   matrix in place (Gram-Schmidt: normalise row 1, orthogonalise row 2 against
-   it, cross for row 0). Crucially it does all of that **only when `Position ==
-   1`** - so the format supports more than one authored slot even though no
-   shipped track uses it. A consumer looking slots up by that name is the
-   obvious thing to search for, and the format string at `0x08a88864` has
-   **exactly one xref**, the writer. So either the lookup builds the name some
-   other way, or slots 2-8 are offsets from slot 1.
-2. **The offsets, if that is what they are, are not in `Ai_Construct`** - it
-   stores the slot and never touches a position.
+Eight craft were read out of PPSSPP's memory while the countdown held them on
+the grid: `scripts/psp-drive.py menu --single-race` walks the front end into the
+one reachable race type with a full field, and the racer table at
+`0x08b34420` (stride `0xdc * 4`, count at `0x08b35fa0`) gives every craft and
+its AI object, whose `+0x50` is the slot. Fourteen samples over the countdown,
+each craft's offset taken in its **predecessor's own basis** so track curvature
+cannot accumulate:
 
-**Not yet tried, and probably the fastest route**: a live read. Break at the
-start of a race with a full grid and read all eight craft positions; the
-formation falls out of the geometry directly, and a row/column spacing is much
-easier to recognise than to find in a decompiler. The obstacle is reaching an
-eight-ship race - `scripts/psp-drive.py menu` walks into a Time Trial, which has
-one craft, so this needs a different menu walk.
+| Measurement | Value | Spread |
+| --- | ---: | ---: |
+| Lateral step, slot to slot | alternating `+/-20.00` | sd `0.02` |
+| Forward step, slot to slot | `-19.79` | sd `0.07` |
+| Heading, any slot against slot 1 | `1.0000` | exact to 4 dp |
+| Grid span, slot 1 to slot 8 | `138.55` | sd `0.001` |
+
+Relative to slot 8, which is the anchor, the rule is:
+
+```
+position(slot) = node.position
+               + node.forward * (8 - slot) * 19.79
+               + node.row0    * (slot odd ? 20.0 : 0.0)
+orientation    = node.orientation
+```
+
+**That the node is slot 8 is measured, not assumed.** This project's spawn from
+the authored node lands **1.84 units** from where the original puts its own
+eighth craft, against **139.7** from where a time trial starts. Two things
+[`track.md`](../../../formats/track.md#start-position) recorded as puzzles fall
+out of it: the node being "3.2-20.5 units off the centreline" is the lateral
+stagger, and "137.9 units behind where a time trial starts" is the length of the
+grid.
+
+**The two constants are measured rather than read**, and this crate says so
+where it uses them (`oag_gameplay::spawn::GRID_ROW_PITCH`,
+`GRID_COLUMN_OFFSET`). `20.0` is almost certainly the authored value - the four
+odd slots read `19.882`, `19.993`, `20.035`, `20.016` and the even ones are
+within `0.05` of zero. `19.79` is a mean of per-step values between `19.763`
+and `19.862`, and a recovered literal would be exact where this is not.
+Whoever finds them in the executable should replace both and say so.
+
+**A note on `StartPosition_Bind` that this did not need but the next reader
+might.** It reads an integer `Position` attribute off the node, registers the
+node in the scene as `start_position_%d`, and orthonormalises the matrix in
+place (Gram-Schmidt: normalise row 1, orthogonalise row 2 against it, cross for
+row 0) - but **only when `Position == 1`**. So the format supports more authored
+slots than any shipped track uses, and the format string at `0x08a88864` has
+exactly one xref, the writer. Since the geometry turned out to be offsets from
+one node, that dead end is now explained rather than merely unexplored.
 
 ## Names landed
 
@@ -96,6 +125,21 @@ one craft, so this needs a different menu walk.
 not named**: it is only inferred from the call site's position in the
 `if`/`else`, and it has not been read.
 
+## What is still open
+
+- **What picks the permutation row.** `FUN_0894d440()` is unread, so whether the
+  order is per-race, per-championship-round or seeded is not known. The identity
+  row exists, so a single observation cannot tell "the table was consulted" from
+  "the table returned the identity" - and the one live run had the local player
+  as the last racer, which the identity row also puts in slot 8, so **that run
+  cannot separate the permutation from `Ai_Construct`'s forcing either**.
+- **Whether the constants are authored or derived**, above.
+- **Nothing spawns opponents yet.** `oag_gameplay::spawn::grid_pose` is the
+  geometry and is tested; putting seven more craft on it needs AI, which is a
+  separate M5 item.
+
 ## History
 
+- 2026-08-10: geometry measured against the running original; the authored node
+  identified as slot 8. Ordering recovered the same day.
 - 2026-08-10: page created. Ordering recovered; geometry open.
