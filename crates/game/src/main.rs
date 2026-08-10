@@ -796,10 +796,12 @@ fn main() -> Result<()> {
 
     let scheme = resolve_scheme(&cli, &settings);
 
-    // A source with no intro reel at all - which is every PS2 source, whose
-    // intro is an MPEG-2 program stream outside the archives - has no video
-    // format either, and the front end draws without one.
-    let video_format = loaded.movie.as_ref().and_then(VideoFormat::of);
+    // A source with no movie at all - which is every PS2 source, whose intro is
+    // an MPEG-2 program stream outside the archives - has no video format
+    // either, and the front end draws without one. A source with *some* movie
+    // gets a pipeline sized for it even when the first boot leg is not the one
+    // that plays it; see `Boot::video_format`.
+    let video_format = loaded.video_format();
 
     // Before the sequence's own capture, because it is a different picture
     // rather than a variation on that one: it runs no state machine, opens no

@@ -90,6 +90,30 @@ pub struct Boot {
     pub report: Vec<String>,
 }
 
+impl Boot {
+    /// The plane geometry the front end's one video pipeline is built for.
+    ///
+    /// The first boot movie when there is one, and the second when there is not.
+    /// That fallback is the whole point of the method: a source whose boot plays
+    /// no movie before its picker still draws a movie later, and taking the
+    /// format from the first movie alone would build a renderer with **no video
+    /// pipeline at all** - so the second movie's first frame would not merely be
+    /// skipped, it would fail the run, `upload_frame` returning "no video
+    /// pipeline".
+    ///
+    /// A method rather than a line at each call site because there are two of
+    /// them - the window and the headless capture - and they must not be able to
+    /// size the same pipeline differently. See [`same_planes`], which holds every
+    /// movie the front end draws to whatever this returns.
+    #[must_use]
+    pub fn video_format(&self) -> Option<crate::render::VideoFormat> {
+        self.movie
+            .as_ref()
+            .or(self.fmv_intro.as_ref())
+            .and_then(crate::render::VideoFormat::of)
+    }
+}
+
 impl std::fmt::Debug for Boot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Boot")
@@ -194,7 +218,27 @@ pub fn load(options: &Options) -> Result<Boot> {
     // heard at all is in that XML.
     let movie_sound = load_movie_sound(movie.as_ref(), &screens, &movie_name, options, &mut report);
     let backdrop = load_backdrop(&mut archives, options, &mut report);
-    let fmv_intro = load_fmv_intro(&mut archives, &screens, options, &mut report);
+    let mut fmv_intro = load_fmv_intro(&mut archives, &screens, options, &mut report);
+    // The same one-pipeline guard the backdrop goes through below, and the
+    // second movie needs it for the same reason: `upload_frame` slices by the
+    // pipeline's dimensions. Checked only when there *is* a first movie - when
+    // there is not, this movie is itself what the pipeline is sized from (see
+    // [`Boot::video_format`]) and has nothing to disagree with.
+    //
+    // Measured 2026-08-10: both Pure pressings carry `IntroMovieP1_US.PMF` and
+    // `WoFMVNew_US.PMF` at 480x272 with byte-identical PSMF stream descriptors,
+    // so this does not fire on any disc anyone has. It is what stops a future
+    // source, or a `--movie` override, from garbling the picture silently.
+    if let (Some(first), Some(second)) = (movie.as_ref(), fmv_intro.as_ref())
+        && !same_planes(second, first)
+    {
+        report.push(
+            "the second boot movie is skipped: its planes are not the first movie's, \
+             and the front end has one video pipeline"
+                .to_string(),
+        );
+        fmv_intro = None;
+    }
     // Same call, same rules, second movie: the widget that names
     // `FMV_INTRO_MOVIE` is the one that decides whether it is heard, and it is
     // in the same XML `screens` still holds.
@@ -207,53 +251,39 @@ pub fn load(options: &Options) -> Result<Boot> {
     );
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
-    // The cached frames when there are any, and the demuxed count when there
-    // are not: `--no-video` and a missing `ffmpeg` still have to play the
-    // sequence out over the movie's real duration rather than the reel's.
-    let frames = movie.as_ref().map_or(0, |movie| {
-        movie.frames.as_ref().map_or(movie.frame_count, |f| f.len)
-    });
     let placements = screens
         .screens
         .iter()
         .flat_map(|s| s.images.iter())
         .filter_map(|image| sprites.get(&image.src).map(|p| (image.src.clone(), p)))
         .collect();
-    let frame_rate = movie
-        .as_ref()
-        .map_or(movie::FRAME_RATE, |movie| movie.frame_rate);
     // The grid this source authors in, needed before the front end is built so
     // that a boot with no movie falls back to the *source's* shape rather than
     // to the PSP's. `frontend.set_space` below takes the same value.
     let space = crate::frontend::Space::of(archives.layout.platform);
-    let video_aspect = movie
-        .as_ref()
-        .map_or((space.size.0 as u32, space.size.1 as u32), |movie| {
-            movie.display_aspect
-        });
-    // Same shape as `frames`/`frame_rate` above, for the second boot movie.
-    // Both `None` on any source `load_fmv_intro` never attempted.
-    let fmv_intro_frames = fmv_intro.as_ref().map_or(0, |movie| {
-        movie.frames.as_ref().map_or(movie.frame_count, |f| f.len)
-    });
-    let fmv_intro_frame_rate = fmv_intro
-        .as_ref()
-        .map_or(movie::FRAME_RATE, |movie| movie.frame_rate);
+    // Both movies described the same way, each from its own container: the
+    // cached frame count when there is a cache and the demuxed one when there is
+    // not, because `--no-video` and a missing `ffmpeg` still have to play a leg
+    // out over its movie's real duration rather than the reel's.
+    let plan = |movie: Option<&Movie>| {
+        movie.map_or(
+            crate::frontend::MoviePlan::none((space.size.0 as u32, space.size.1 as u32)),
+            |movie| crate::frontend::MoviePlan {
+                frames: movie.frames.as_ref().map_or(movie.frame_count, |f| f.len),
+                frame_rate: movie.frame_rate,
+                aspect: movie.display_aspect,
+                has_picture: movie.frames.is_some(),
+            },
+        )
+    };
     let mut frontend = Frontend::booting(
         options.leg,
         screens,
         strings.clone(),
         languages,
         placements,
-        frames,
-        frame_rate,
-        video_aspect,
-        movie.as_ref().is_some_and(|movie| movie.frames.is_some()),
-        fmv_intro_frames,
-        fmv_intro_frame_rate,
-        fmv_intro
-            .as_ref()
-            .is_some_and(|movie| movie.frames.is_some()),
+        plan(movie.as_ref()),
+        plan(fmv_intro.as_ref()),
     );
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's
@@ -276,39 +306,26 @@ pub fn load(options: &Options) -> Result<Boot> {
     // away onto a decode thread immediately after this, so there is no second
     // moment where both halves exist.
     //
-    // **Only when the two movies have the same plane geometry**, which is a
-    // guard rather than a switch: the front end is drawn by one renderer with
-    // one set of I420 planes, sized once from the intro, and `upload_frame`
-    // slices a frame by *those* dimensions rather than by the frame's own - so
-    // handing it a differently-shaped picture is a garbled image rather than an
-    // error.
+    // **Only when it shares the pipeline's plane geometry** - see
+    // [`same_planes`], which the second boot movie is put through as well, so all
+    // three movies the front end can draw are checked against the one thing that
+    // draws them.
     //
-    // **Both current sources pass it**, and that was worth checking rather than
-    // assuming: the PSP's `Intro.PMF` and `Backdrop.PMF` are both 480x272, and
-    // the PS2's `INTRO512.PSS` and `BG512.IPF` are both 512x512. What differs on
-    // the PS2 is the *display aspect*, not the plane size, and that is already
-    // handled per-movie by the pillarbox rect rather than here. So this branch
-    // does not currently fire on any disc anyone has - it is what stops a future
-    // source, or a `--movie` override pointing the intro at something else, from
-    // drawing garbage instead of saying so.
+    // **Every current source passes it**, and that was worth checking rather
+    // than assuming: the PSP's `Intro.PMF` and `Backdrop.PMF` are both 480x272,
+    // the PS2's `INTRO512.PSS` and `BG512.IPF` are both 512x512, and Pure's two
+    // boot movies are both 480x272. So this branch does not fire on any disc
+    // anyone has - it is what stops a future source, or a `--movie` override
+    // pointing the intro at something else, from drawing garbage instead of
+    // saying so.
     // See `docs/architecture/frontend-boot.md`.
     if let Some(backdrop) = &backdrop {
-        let same_planes = crate::render::VideoFormat::of(backdrop)
-            .zip(movie.as_ref().and_then(crate::render::VideoFormat::of))
-            .is_some_and(|(back, intro)| {
-                (
-                    back.width,
-                    back.height,
-                    back.chroma_width,
-                    back.chroma_height,
-                ) == (
-                    intro.width,
-                    intro.height,
-                    intro.chroma_width,
-                    intro.chroma_height,
-                )
-            });
-        if same_planes {
+        // Against whichever movie the one pipeline is sized from, which is the
+        // first boot movie when there is one and the second when there is not -
+        // the same rule [`Boot::video_format`] applies, so the two cannot
+        // disagree about what the planes are.
+        let reference = movie.as_ref().or(fmv_intro.as_ref());
+        if reference.is_some_and(|reference| same_planes(backdrop, reference)) {
             // **The cache's length, not the container's frame count**, when
             // there is a cache. The playhead set here is the one the menus go
             // on running after the boot sequence hands it over, and it is
@@ -353,6 +370,27 @@ pub fn load(options: &Options) -> Result<Boot> {
         sprites,
         report,
     })
+}
+
+/// Whether two movies can share one set of I420 planes.
+///
+/// The front end is drawn by one renderer with one plane set, sized once from
+/// whichever movie [`Boot::video_format`] names, and
+/// [`crate::render::Renderer::upload_frame`] slices a frame by *those*
+/// dimensions rather than by the frame's own - so handing it a
+/// differently-shaped picture is a garbled image rather than an error. Every
+/// movie the front end draws is therefore checked against the one the pipeline
+/// was built for, and a mismatch is dropped with a report line instead.
+///
+/// The display aspect is deliberately **not** compared: that differs per movie
+/// on the PS2 and is handled by the pillarbox rect, not by the plane size.
+fn same_planes(a: &Movie, b: &Movie) -> bool {
+    crate::render::VideoFormat::of(a)
+        .zip(crate::render::VideoFormat::of(b))
+        .is_some_and(|(a, b)| {
+            (a.width, a.height, a.chroma_width, a.chroma_height)
+                == (b.width, b.height, b.chroma_width, b.chroma_height)
+        })
 }
 
 /// Decodes the intro movie's ATRAC3+ track, if it should be heard at all.

@@ -111,6 +111,43 @@ impl Leg {
     }
 }
 
+/// One boot movie, as the sequence needs to know it.
+///
+/// The four facts travel together because they are **per movie**, and that is
+/// the whole reason this type exists rather than four more arguments: a boot can
+/// play more than one movie, they need not be the same shape, and they do not
+/// decode or fail together. A single shared `video_aspect` drew the second movie
+/// at the first one's aspect - right only by coincidence on the PSP, where both
+/// happen to be 480x272, and wrong the moment either changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoviePlan {
+    /// How many frames it has. Zero means there is no movie at all, which still
+    /// plays a sequence out.
+    pub frames: usize,
+    pub frame_rate: (u64, u64),
+    /// Its own display aspect, as `(width, height)`. A `.PMF` is
+    /// square-pixelled, so this is its decoded size and the video quad fills
+    /// [`SCREEN`] exactly; a PS2 `.PSS` is not, and this is what keeps its
+    /// picture from being stretched. See `crate::movie::Movie::display_aspect`.
+    pub aspect: (u32, u32),
+    /// Whether there is a picture to draw. False under `--no-video`, with no
+    /// `ffmpeg`, and on a source that has no such movie.
+    pub has_picture: bool,
+}
+
+impl MoviePlan {
+    /// A leg with no movie: nothing to draw, nothing to time against.
+    #[must_use]
+    pub fn none(aspect: (u32, u32)) -> Self {
+        Self {
+            frames: 0,
+            frame_rate: crate::movie::FRAME_RATE,
+            aspect,
+            has_picture: false,
+        }
+    }
+}
+
 /// Horizontal alignment, as the XML spells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Align {
@@ -422,22 +459,14 @@ pub struct Frontend {
     /// a rectangle. A `Vec` keeps the order the screens declared.
     placements: Vec<(String, crate::sprite::Placed)>,
     player: crate::movie::Player,
-    /// The second boot movie's own frame count and rate, kept apart from
-    /// `player` so entering [`pure_states::FMV_INTRO`] can rebuild the player
-    /// for it - see [`Self::confirm_language`]. Zero/[`movie::FRAME_RATE`]
-    /// on a source [`Frontend::booting`] never got one for, matching how the
-    /// first movie's own absence is handled.
-    fmv_intro_frames: usize,
-    fmv_intro_frame_rate: (u64, u64),
-    /// Whether the second boot movie has a picture at all - the same
-    /// question `has_picture` answers for the first one.
-    fmv_intro_has_picture: bool,
-    /// The movie's own display aspect ratio, as `(width, height)`. A `.PMF` is
-    /// square-pixelled, so this is its decoded size and the video quad fills
-    /// [`SCREEN`] exactly, as it always did; a PS2 `.PSS` is not, and this is
-    /// what keeps its picture from being stretched into the wrong aspect. See
-    /// `crate::movie::Movie::display_aspect`.
-    video_aspect: (u32, u32),
+    /// The first boot movie, as the sequence needs to know it.
+    first: MoviePlan,
+    /// The second, kept apart from `player` so entering
+    /// [`pure_states::FMV_INTRO`] can rebuild the player for it - see
+    /// [`Self::confirm_language`]. [`MoviePlan::none`] on a source
+    /// [`Frontend::booting`] never got one for, matching how the first movie's
+    /// own absence is handled.
+    second: MoviePlan,
     /// The grid this source's XML places widgets in, and what it is shown as.
     ///
     /// [`Space::PSP`] unless a caller says otherwise, because every screen this
@@ -445,8 +474,6 @@ pub struct Frontend {
     /// archives' platform - see [`Space`] for why the PS2 needs it and what
     /// goes wrong silently without it.
     space: Space,
-    /// Whether a picture is available at all.
-    has_picture: bool,
     /// The looping backdrop `FE Screen` plays under `Show Logo`, and where it
     /// goes on screen. `None` on a source that has no backdrop, under
     /// `--no-video`, and when its plane geometry does not match the intro's -
@@ -480,19 +507,20 @@ impl Frontend {
         movie_frames: usize,
         has_picture: bool,
     ) -> Self {
+        let screen = (SCREEN.0 as u32, SCREEN.1 as u32);
         Self::booting(
             Leg::default(),
             screens,
             strings,
             languages,
             placements,
-            movie_frames,
-            crate::movie::FRAME_RATE,
-            (SCREEN.0 as u32, SCREEN.1 as u32),
-            has_picture,
-            0,
-            crate::movie::FRAME_RATE,
-            false,
+            MoviePlan {
+                frames: movie_frames,
+                frame_rate: crate::movie::FRAME_RATE,
+                aspect: screen,
+                has_picture,
+            },
+            MoviePlan::none(screen),
         )
     }
 
@@ -505,13 +533,8 @@ impl Frontend {
         strings: StringTable,
         languages: Vec<Language>,
         placements: Vec<(String, crate::sprite::Placed)>,
-        movie_frames: usize,
-        movie_frame_rate: (u64, u64),
-        video_aspect: (u32, u32),
-        has_picture: bool,
-        fmv_intro_frames: usize,
-        fmv_intro_frame_rate: (u64, u64),
-        fmv_intro_has_picture: bool,
+        first: MoviePlan,
+        second: MoviePlan,
     ) -> Self {
         let mut machine = StateMachine::new();
         machine.register_all([
@@ -537,12 +560,18 @@ impl Frontend {
 
         // With no movie at all - a source with nothing this build can read a
         // picture out of - the sequence still has to run and end. FINISH_FRAME
-        // is the reel's own length, which is as good a stand-in as any and is
+        // is Pulse's own reel length, which is as good a stand-in as any and is
         // bounded.
-        let frames = if movie_frames == 0 {
+        //
+        // It is nonetheless *Pulse's* number standing in on every title, which
+        // is only defensible while every title's boot leg plays a movie. A leg
+        // that plays none by design wants a zero-length player instead, and
+        // wants it stated rather than inferred from `frames == 0` - which cannot
+        // tell "no movie" from "a movie whose container reports nothing".
+        let frames = if first.frames == 0 {
             FINISH_FRAME
         } else {
-            movie_frames
+            first.frames
         };
 
         let mut frontend = Self {
@@ -555,18 +584,15 @@ impl Frontend {
             auto_confirm: false,
             placements,
             space: Space::PSP,
-            player: crate::movie::Player::new(frames, false, movie_frame_rate),
-            fmv_intro_frames,
-            fmv_intro_frame_rate,
-            fmv_intro_has_picture,
-            video_aspect,
-            has_picture,
+            player: crate::movie::Player::new(frames, false, first.frame_rate),
+            first,
+            second,
             backdrop: None,
             // Without a picture the movie is a black screen for as long as it
             // runs - forty seconds for the disc's own intro - so the counter is
             // the only sign it is running. With one it is clutter, and the
             // pacing can be read off the picture instead.
-            overlay: !has_picture,
+            overlay: !first.has_picture,
             hold: Hold::None,
             held_for: 0.0,
             dev_pub_redirect: Some(states::DEV_PUB_REDIRECT.to_string()),
@@ -1002,13 +1028,13 @@ impl Frontend {
         // `self.player` is idle from here on for the leg that just ended - see
         // `Self::is_playing_movie` - so `FMV Intro` reuses the same field
         // rather than carrying a second one, rebuilt for the second movie's
-        // own frame count and rate. Harmless when Pure has no second movie
-        // either (`fmv_intro_frames == 0`): `Player::new(0, ...)` is exactly
+        // own frame count and rate. Harmless when there is no second movie
+        // either (`second.frames == 0`): `Player::new(0, ...)` is exactly
         // what a source with no movie at all already gets in
         // [`Frontend::booting`].
         if target == pure_states::FMV_INTRO {
             self.player =
-                crate::movie::Player::new(self.fmv_intro_frames, false, self.fmv_intro_frame_rate);
+                crate::movie::Player::new(self.second.frames, false, self.second.frame_rate);
         }
         self.machine.fire(target);
     }
@@ -1111,9 +1137,9 @@ impl Frontend {
         }];
 
         if self.machine.is_in(states::INTRO) || self.machine.is(states::LOGO_FMV) {
-            if self.has_picture {
+            if self.first.has_picture {
                 out.push(Draw::Video {
-                    rect: pillarbox_in(self.space, self.video_aspect),
+                    rect: pillarbox_in(self.space, self.first.aspect),
                     frame: self.player.frame(),
                     // The same number as `frame` here, the intro being played
                     // once through rather than looped, and carried anyway so a
@@ -1122,7 +1148,7 @@ impl Frontend {
                     source: Video::Intro,
                 });
             }
-            self.insert_movie_counter(&mut out, self.has_picture);
+            self.insert_movie_counter(&mut out, self.first.has_picture);
             return out;
         }
 
@@ -1165,9 +1191,14 @@ impl Frontend {
             // first movie's player is idle by the time this state is
             // reachable at all.
             let mut out = self.draw_screen(pure_states::FMV_INTRO);
-            if self.fmv_intro_has_picture {
+            if self.second.has_picture {
                 out.push(Draw::Video {
-                    rect: pillarbox_in(self.space, self.video_aspect),
+                    // **This movie's own aspect, not the first one's.** The two
+                    // need not be the same shape, and a shared field drew this
+                    // one pillarboxed for the other - correct only while both
+                    // happen to be 480x272, which is exactly the kind of
+                    // coincidence that survives review and then breaks.
+                    rect: pillarbox_in(self.space, self.second.aspect),
                     frame: self.player.frame(),
                     position: self.player.position(),
                     source: Video::Intro,
@@ -1177,7 +1208,7 @@ impl Frontend {
             // Pure it is the only movie the boot draws, so without `ffmpeg` the
             // whole leg is a blank screen for as long as the movie would have
             // run, with nothing to say it is progressing.
-            self.insert_movie_counter(&mut out, self.fmv_intro_has_picture);
+            self.insert_movie_counter(&mut out, self.second.has_picture);
             self.insert_backdrop(&mut out);
             return out;
         }
@@ -1723,7 +1754,10 @@ mod tests {
 </Screen>
 "#;
 
-    /// A Pure-shaped boot whose second movie has `frames` frames of picture.
+    /// The grid every fixture in here authors in.
+    const GRID: (u32, u32) = (SCREEN.0 as u32, SCREEN.1 as u32);
+
+    /// A Pure-shaped boot whose second movie has `fmv_frames` frames of picture.
     fn pure(fmv_frames: usize) -> Frontend {
         Frontend::booting(
             Leg::LogoFmv,
@@ -1731,13 +1765,13 @@ mod tests {
             StringTable::default(),
             languages(),
             Vec::new(),
-            0,
-            crate::movie::FRAME_RATE,
-            (SCREEN.0 as u32, SCREEN.1 as u32),
-            false,
-            fmv_frames,
-            crate::movie::FRAME_RATE,
-            fmv_frames > 0,
+            MoviePlan::none(GRID),
+            MoviePlan {
+                frames: fmv_frames,
+                frame_rate: crate::movie::FRAME_RATE,
+                aspect: GRID,
+                has_picture: fmv_frames > 0,
+            },
         )
     }
 
@@ -1761,13 +1795,13 @@ mod tests {
             StringTable::default(),
             languages(),
             Vec::new(),
-            frames,
-            crate::movie::FRAME_RATE,
-            (SCREEN.0 as u32, SCREEN.1 as u32),
-            false,
-            0,
-            crate::movie::FRAME_RATE,
-            false,
+            MoviePlan {
+                frames,
+                frame_rate: crate::movie::FRAME_RATE,
+                aspect: GRID,
+                has_picture: false,
+            },
+            MoviePlan::none(GRID),
         )
     }
 

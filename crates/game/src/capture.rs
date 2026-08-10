@@ -248,6 +248,7 @@ pub fn run(
         mut frontend,
         movie,
         movie_sound,
+        fmv_intro,
         mut fmv_intro_sound,
         backdrop,
         font,
@@ -478,6 +479,21 @@ pub fn run(
                     let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
                     let format = showing.and_then(VideoFormat::of);
                     (backdrop, format, list, frontend.space())
+                }
+                // **`Video::Intro` names two different movies over a boot.** The
+                // first one, and - on a source that has one - the second, played
+                // by `FMV Intro`. The draw cannot say which, the variant being
+                // reused rather than a third added, so the state picks, exactly
+                // as `App::tick`'s own feed swap does. Without this the capture
+                // reads the *first* movie's frame at the *second* movie's
+                // playhead: the wrong picture, silently, which is the class of
+                // mistake this module's own docs above exist to rule out.
+                Some(crate::frontend::Video::Intro)
+                    if frontend.machine().is(oag_pure::frontend::states::FMV_INTRO) =>
+                {
+                    let showing = fmv_intro.as_ref().filter(|movie| movie.frames.is_some());
+                    let format = showing.and_then(VideoFormat::of);
+                    (fmv_intro, format, list, frontend.space())
                 }
                 _ => (movie, video_format, list, frontend.space()),
             }
