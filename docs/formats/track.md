@@ -603,7 +603,7 @@ The **eight zeroed words are not on the payload and are not trigger latches**.
 They sit at object `+0x1d0`, are zeroed at bind, and hold each racer's cached
 distance to this pad, decremented by how far that racer moved - an optimisation
 so the containment test only runs once a craft could have reached the pad. See
-[`pads.md`](../ghidra/functions/psp-pulse-usa/pads.md) for `Pad_SweptTest_q`.
+[`pads.md`](../ghidra/functions/psp-pulse-usa/pads.md) for `Pad_SweptTest`.
 
 ## Open questions
 

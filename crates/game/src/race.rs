@@ -1920,7 +1920,7 @@ pub struct Race {
     /// Distance from the ship to each pad, one entry per pad, in track units.
     ///
     /// The original's `pad+0x1d0`, reimplemented as a broadphase rather than as
-    /// the latch `docs/formats/track.md` used to guess it was: `Pad_SweptTest_q`
+    /// the latch `docs/formats/track.md` used to guess it was: `Pad_SweptTest`
     /// (`0x0888686c`) subtracts how far the craft moved from each entry every
     /// tick and only runs the real containment test on entries that reach zero,
     /// then stores the freshly measured distance back. A ship 900 units from a pad
@@ -2529,18 +2529,21 @@ impl Race {
     /// Below this much movement in a tick, the pad test is swept instead of a
     /// point.
     ///
-    /// `Pad_SweptTest_q`'s `25.0`. It reads backwards at first - the *slow* case
+    /// `Pad_SweptTest`'s `25.0`. It reads backwards at first - the *slow* case
     /// gets the more careful test - and the reason is that the interpolation is
     /// only worth anything when the step is short enough that four samples cover
     /// it. Past this the ship has moved further than a pad is deep and four points
     /// would not close the gap either, so the original stops paying for them.
-    /// Confidence 65: the threshold is read off the call site rather than out of a
-    /// named constant.
+    /// Confidence 88: measured live against a running PPSSPP session - a
+    /// stationary or driving craft never crosses it (`0.000162`/`0.778459`
+    /// units of movement observed), a scripted 200-unit same-tick teleport
+    /// does (`199.999969`, confirmed to take the direct-test branch by
+    /// breakpoint). See `pads.md`'s `Pad_SweptTest` section.
     const PAD_SWEEP_LIMIT: f32 = 25.0;
 
     /// How many interpolated points the swept test checks.
     ///
-    /// `Pad_SweptTest_q` walks `t = 0.25, 0.5, 0.75, 1.0` - the destination is
+    /// `Pad_SweptTest` walks `t = 0.25, 0.5, 0.75, 1.0` - the destination is
     /// included and the origin is not, because the origin was this test's
     /// destination last tick.
     const PAD_SWEEP_STEPS: u32 = 4;

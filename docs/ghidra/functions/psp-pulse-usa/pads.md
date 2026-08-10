@@ -13,7 +13,7 @@ The data side - the payload layout and what the shipped tracks author - is
 | --- | --- | --- |
 | `0x089264f4` | `Pad_Bind` | 85 |
 | `0x088866bc` | `Pad_ContainsPoint` | 85 |
-| `0x0888686c` | `Pad_SweptTest_q` | 65 |
+| `0x0888686c` | `Pad_SweptTest` | 88 |
 | `0x08887144` | `Pads_TestCraft` | 90 |
 | `0x0888727c` | `WeaponPads_TestCraft` | 90 |
 | `0x08a6be7c` | `SpeedupPad_ClassTag` | 90 |
@@ -59,7 +59,7 @@ The vertical expansion is asymmetric and in `+y`, which is world up (see
 turns a plate about 0.15 units thick into a volume about 10 units tall.
 
 The eight words zeroed at `+0x1d0` are one per racer. What they hold is not a
-latch - see `Pad_SweptTest_q` below.
+latch - see `Pad_SweptTest` below.
 
 ### The literals are only meaningful because the scale is 1
 
@@ -171,10 +171,7 @@ disassembly, both classes' slots decode without a decompiler needed:
 identified, just still unconsumed because there is no pickup system yet (see
 "What is not implemented" below).
 
-## `Pad_SweptTest_q` (`0x0888686c`)
-
-Named with `_q`: the function is read confidently, but the reading of its `25.0`
-branch below is an inference.
+## `Pad_SweptTest` (`0x0888686c`)
 
 ```c
 w = pad + slot * 4;
@@ -201,26 +198,48 @@ The four-point interpolation is a swept test against tunnelling: at 120 units a
 second and a 60 Hz step a craft moves about 2 units a tick, but a pad is only
 about 9 units long and a dropped frame is enough to step over one.
 
-**The `moved < 25.0` guard is read as a teleport reject** - a respawn or a
-warp moves further in one step than any craft drives, and sweeping across it
-would sample a line through arbitrary geometry. That reading is an inference from
-the magnitude, not from anything the code says, which is what holds this at
-**65**. What would retire it: a breakpoint under PPSSPP showing the branch taken
-on a respawn and not in ordinary driving.
+**The `moved < 25.0` guard is a teleport reject, confidence 88, measured live
+against the running original.** `Pads_TestCraft` and `WeaponPads_TestCraft`
+are the *only* writers of the per-racer previous-position cache
+(`world + slot*0x10 + 0xb50`) - every other reader of `DAT_08b32c88` (thirteen
+call sites checked) either reads a different field entirely or, in the two
+constructor cases, zeroes the whole block once at race start - so nothing
+resets this cache on a respawn separately, and whatever teleports a craft
+leaves last tick's real position sitting in `previous`.
 
-**Checked, and it does not retire the reading, but it removes one alternative.**
-`Pads_TestCraft` and `WeaponPads_TestCraft` are the *only* writers of the
-per-racer previous-position cache (`world + slot*0x10 + 0xb50`) - every other
-reader of `DAT_08b32c88` (thirteen call sites checked) either reads a
-different field entirely or, in the two constructor cases, zeroes the whole
-block once at race start. So a respawn does **not** get a separate reset of
-this cache: whatever teleports a craft leaves last tick's real position
-sitting in `previous`, and the very next `Pads_TestCraft` call sees the full
-teleport distance as `moved` - there is no code path that could produce a
-large `moved` other than a respawn or the race-start zero-fill. That is
-consistent with the guard existing for exactly the reason this page already
-guesses, but it is a structural argument, not the requested live trace, so the
-number stays at **65** and the name keeps `_q`.
+Measured 2026-08-10, PPSSPP v1.20.4 (SDL, `--graphics=gles` under Xvfb),
+`pulse-psp-usa.iso`, Talon's Junction: broke at the followed craft's own
+`Ship_UpdateCraft` entry, wrote a 200-unit jump into `body+0x030` (the same
+mechanism `scripts/psp-drive.py place` uses), then swapped the armed
+breakpoint to `Pad_SweptTest`'s entry before resuming, so that same tick's own
+pad test ran against the freshly-written position - and read `$f12` (`moved`
+at entry, confirmed at the instruction level: `sub.s f14,f14,f12` at `+0x14`
+consumes it first, then `lui 0x41c8`/`mtc1`/`c.lt.s f12,f14` at `+0x68`-`+0x70`
+is the `25.0` compare itself):
+
+| Condition | `moved` (all pads that tick, if any) | Guard's own branch |
+| --- | --- | --- |
+| Craft stationary (start line) | `0.000162` | neither call site reached - the `+0x1d0 > 0.0` distance-cache early-out above fires first, live confirmation of that mechanic too |
+| Craft driving, thrust held 2 s | `0.778459` (identical on 6/6 hits) | below `25.0` |
+| Craft teleported 200 units in one write | `199.999969` (identical on 6/6 hits, every pad that tick) | at/above `25.0` |
+
+**Independently confirmed by control flow, not just the register value.**
+`Pad_SweptTest`'s two calls to `Pad_ContainsPoint` are at different addresses -
+the sweep loop's at `0x088869f4`, the direct tail call's at `0x08886aa4` - so
+each is its own execution breakpoint. Armed alone (only one execution
+breakpoint fires at a time on this build - see `ppsspp-debugger.md`), the
+direct-call site (`0x08886aa4`) fired within the same tick as the 200-unit
+write; it does not fire during ordinary ticks in the table above.
+
+**What this does and does not retire.** It is a scripted `memory.write`
+teleport rather than the game's own fall-off-track respawn firing on its own,
+so it does not trace *that specific trigger* end to end - but the guard reads
+only `position` and its own cached `previous`, with no way to tell a script's
+write from the game's, so the mechanism measured is the one a real respawn
+would exercise too. Confidence **88** rather than higher for that reason: a
+live measurement of the actual branch, on the actual guard, at the actual
+threshold - short of also reverse-engineering and triggering the native
+respawn path itself.
 
 ## `Pads_TestCraft` (`0x08887144`)
 
@@ -229,14 +248,14 @@ moved = |position - *(world + slot * 0x10 + 0xb50)|;   // since last tick
 *out = 0;
 hit = false;
 for (i = 0; i < *(int *)(world + 0x108); i++)
-    hit |= Pad_SweptTest_q(moved, *(world + i * 4 + 0x40), position,
+    hit |= Pad_SweptTest(moved, *(world + i * 4 + 0x40), position,
                            world + slot * 0x10 + 0xb50, out, slot);
 *(world + slot * 0x10 + 0xb50) = position;             // for next tick
 return hit;
 ```
 
 Walks a list of pads and remembers each racer's previous position at
-`world + slot * 0x10 + 0xb50` - which is where `Pad_SweptTest_q`'s `previous`
+`world + slot * 0x10 + 0xb50` - which is where `Pad_SweptTest`'s `previous`
 comes from, and why the first tick of a race (`previous == 0`) skips the sweep.
 
 ### Retired: `world + 0x40` / `world + 0x108` hold `Speedup Pad` nodes only
@@ -314,10 +333,11 @@ The chain, each link read at instruction level:
    new node's own `+4`, the field `FUN_08a6ed64` compares against.
 
 **What this closes and what it doesn't.** It retires "does `+0x40` mix both
-pad classes" - it does not, structurally. It does not touch `Pad_SweptTest_q`'s
-own `_q` (the `25.0` teleport-reject reading), which is a separate inference
-and stays at 65, or `pad+0x1a0`'s writer, which this trail never reaches -
-`0x0892661c` only shows the field starts at zero.
+pad classes" - it does not, structurally. It does not touch `pad+0x1a0`'s
+writer, which this trail never reaches - `0x0892661c` only shows the field
+starts at zero. (`Pad_SweptTest`'s own `25.0` teleport-reject guard was a
+separate open item on this page and is retired further down, in its own
+section, by a live measurement rather than this trail.)
 
 ## `ExhaustFlare_OnSpeedupPad` (`0x08904f10`)
 
@@ -455,9 +475,21 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
   `pad+0x6c` colour cycle - confirming the hypothesis this page carried since
   creation exactly, including the detail nobody guessed. Also checked, without
   retiring it: `Pads_TestCraft`/`WeaponPads_TestCraft` are the only writers of
-  the per-racer previous-position cache `Pad_SweptTest_q`'s `25.0` guard reads,
-  which rules out a separate respawn-reset path but is not the live trace the
-  confidence still calls for.
+  the per-racer previous-position cache `Pad_SweptTest`'s `25.0` guard reads,
+  which rules out a separate respawn-reset path but was not yet the live trace
+  the confidence called for - see the third pass below.
+- **2026-08-10, third pass** - `Pad_SweptTest_q` renamed `Pad_SweptTest`,
+  65 -> 88, against a live PPSSPP session (Xvfb, `--graphics=gles`, SDL build).
+  Measured `$f12` (`moved`) at the function's own entry across three regimes -
+  stationary (`0.000162`), driving under thrust (`0.778459`), and a scripted
+  200-unit same-tick teleport (`199.999969`, at/above the `25.0` compare) - and
+  independently confirmed which of the two `Pad_ContainsPoint` call sites
+  (`0x088869f4` sweep, `0x08886aa4` direct) executes in each case by arming
+  each as its own execution breakpoint. The teleport reliably takes the direct
+  path; ordinary movement, including the stationary case, never reaches either
+  call site because the `+0x1d0 > 0.0` distance-cache early-out this page
+  documents above fires first - a live confirmation of that mechanic too, not
+  only the `25.0` one.
 - **2026-08-03** - page created. `Pad_Bind` and `Pad_ContainsPoint` at 85,
   `Pad_SweptTest_q` and `Pads_TestCraft_q` at 65. Supersedes two readings in
   `engine.md`: the record `Ship_ApplySpeedupPad` locates is a pad's **matrix**
