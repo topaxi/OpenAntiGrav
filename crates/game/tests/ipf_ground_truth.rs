@@ -227,6 +227,7 @@ fn the_front_ends_own_backdrop_name_resolves_to_the_pal_cut() {
         // No saved language: these boot a fresh install every time.
         language: None,
         source: image.display().to_string(),
+        dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
         movie: r"Data\Movies\Backdrop.ipf".to_string(),
         cache: std::env::temp_dir().join("oag-ipf-ground-truth"),

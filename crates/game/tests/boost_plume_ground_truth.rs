@@ -43,22 +43,28 @@
 //! `Texture` nodes - but a claim that every team's file is shaped identically
 //! would have been wrong.
 //!
-//! # Only eight of the thirteen candidate teams
+//! # Only eight of the twelve teams are on the disc, and the other four are DLC
 //!
-//! `Auricom`, `Harimau` and `Icaras` carry no `Ship.vex` - and so no
-//! `shipboost.vex` either - on the **PSP** disc at all; confirmed PS2-only
-//! (they resolve on that disc - see `ps2_source_ground_truth.rs`'s own
-//! `TEAMS`). Two more candidate names, `Mirage` and `Van_Uber`, resolve on
-//! **neither** disc under this project's current name-mining - an open gap,
-//! not evidence either way about which platform (or neither) ships them; see
-//! `docs/formats/handling-stats.md` and `exhaust.md`'s "eight teams" note for
-//! the same eight-of-thirteen count independently arrived at over
-//! `handlingstats.xml` and `Engine Flare`. This file only asserts what is
-//! actually established: the eight PSP-resolving teams' plume shape, and the
-//! three *confirmed* PS2-only teams' absence - not the other two's status,
-//! which stays open. Confirmed directly here too: querying any of the three
-//! confirmed-absent teams' `Ship.vex` by name hash comes back "no entry
-//! hashing to ...", not a decode failure - see [`TEAMS`].
+//! `Auricom`, `Harimau`, `Icaras` and `Mantis` carry no `Ship.vex` - and so no
+//! `shipboost.vex` either - on the **PSP** disc. They are not PS2-only, which
+//! is what this file used to say: they are the four teams Pulse sold as
+//! **downloadable content** for the PSP, and each one's ship is in its pack.
+//! See `docs/formats/dlc-pack.md`, and `dlc_ground_truth.rs`, which loads all
+//! four off the American disc with the European packs mounted.
+//!
+//! `Mantis` is why the old reading held for so long. The pack is sold as
+//! Mirage, the folder is `Mantis`, and every search for `Mirage` on either
+//! disc missed - so a team that is on the PS2 disc and in a PSP pack looked
+//! absent from both.
+//!
+//! `Van_Uber` is the one name still unaccounted for, and it is a *Pure* team
+//! rather than a Pulse one - see `docs/formats/pure-status.md`.
+//!
+//! This file asserts only what a bare disc offers: the eight teams' plume
+//! shape, and the four DLC teams' absence *from the disc itself*, by name-hash
+//! miss rather than decode failure - see [`TEAMS`]. That absence is now the
+//! evidence that they are downloadable, so it is worth keeping rather than
+//! deleting.
 
 use std::path::{Path, PathBuf};
 
@@ -85,8 +91,9 @@ fn image() -> Option<PathBuf> {
 
 /// The eight teams the PSP disc actually ships a `Ship.vex` for - see this
 /// file's own doc comment, and `docs/formats/handling-stats.md`'s independent
-/// count of eight `handlingstats.xml` files. Not the full eleven-team roster
-/// `ps2_source_ground_truth.rs`'s `TEAMS` checks, which is PS2-specific.
+/// count of eight `handlingstats.xml` files. Not the full twelve-team roster
+/// `ps2_source_ground_truth.rs`'s `TEAMS` checks: the PS2 disc bundles the four
+/// teams the PSP sold as downloadable content.
 const TEAMS: [&str; 8] = [
     "AG_Systems",
     "Assegai",
@@ -200,18 +207,22 @@ fn every_psp_teams_boost_plume_vertex_alpha_is_bimodal() {
     }
 }
 
-/// The three PS2-only teams have no `shipboost.vex` on the PSP disc - not a
-/// decode failure, an absent entry, which is what `Loaded::boost_model`'s
-/// `None` path exists for.
+/// The four DLC teams have no `shipboost.vex` on the PSP disc - not a decode
+/// failure, an absent entry, which is what `Loaded::boost_model`'s `None` path
+/// exists for.
+///
+/// **This is the disc on its own**, deliberately: with a pack mounted all four
+/// resolve, and `dlc_ground_truth.rs` is where that is asserted. Keeping both
+/// is what pins the pack as the thing that supplies them.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_three_ps2_only_teams_have_no_psp_boost_plume() {
+fn the_four_dlc_teams_have_no_boost_plume_on_the_disc_alone() {
     let Some(image) = image() else {
         return;
     };
     let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
 
-    for team in ["Auricom", "Harimau", "Icaras"] {
+    for team in ["Auricom", "Harimau", "Icaras", "Mantis"] {
         let name = format!(r"Data\Ships\{team}\shipboost.vex");
         assert!(
             archives.read_name(&name).is_err(),

@@ -756,9 +756,12 @@ change how this list should be read:
       [`ship-parts.md`](../ghidra/functions/psp-pulse-usa/ship-parts.md)
 - [ ] `engine_fire` `0x3e5` and `exitglow` `0x3e4` - both authored, neither
       registered; see the caution above
-- [ ] Livery and team variants across all thirteen teams. Five teams'
-      `Ship.vex` does not resolve by name yet, so eight of thirteen were
-      censused - a `mine-names` job, not a format one
+- [ ] Livery and team variants across all twelve teams. No longer blocked on
+      name mining: the four teams whose `Ship.vex` did not resolve are
+      [downloadable content](../formats/dlc-pack.md), the packs are mounted, and
+      all twelve are loadable. What is left is the *variants* - each
+      `PI_TeamModel` and `PI_ModelSkin` a definition declares, which nothing
+      collects or draws yet
 
 ### Particles
 

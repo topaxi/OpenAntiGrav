@@ -176,6 +176,19 @@ pub enum ValueSource {
     /// cannot reach it, which is the same argument [`Menu::is_disabled`] makes
     /// for greying a row rather than removing it.
     MusicSources,
+    /// The teams this source offers, from its own plugin definition and from
+    /// any [downloadable content](crate::dlc) mounted behind it.
+    ///
+    /// Supplied rather than spelled for the reason [`Self::Tracks`] is, and one
+    /// more: the roster is **not fixed**. A player who owns a pack has teams a
+    /// definition file in this repository could not have listed, and which of
+    /// them they own is not knowable until the archives are open.
+    ///
+    /// The value stored is the team **id** - the folder under `Data\Ships\` -
+    /// and the label is that id looked up in the string table, which is not the
+    /// same string: the Mirage pack's team is `Mantis`. See
+    /// [`crate::catalogue`].
+    Teams,
 }
 
 impl ValueSource {
@@ -189,6 +202,7 @@ impl ValueSource {
             Self::Renderers => "renderers",
             Self::RaceModes => "race_modes",
             Self::MusicSources => "music_sources",
+            Self::Teams => "teams",
         }
     }
 
@@ -202,6 +216,7 @@ impl ValueSource {
             "renderers" => Some(Self::Renderers),
             "race_modes" => Some(Self::RaceModes),
             "music_sources" => Some(Self::MusicSources),
+            "teams" => Some(Self::Teams),
             _ => None,
         }
     }
@@ -1818,10 +1833,11 @@ mod tests {
                 .unwrap_or_else(|| panic!("no choice edits {setting:?}"))
         };
 
-        assert_eq!(
-            values("race.team"),
-            oag_formats::handling::TEAMS,
-            "the team rows and the eight shipped handlingstats.xml files must be one list"
+        assert!(
+            values("race.team").is_empty(),
+            "the team row must be supplied, not spelled: the roster is what the \
+             source offers plus what a mounted pack adds, and no list in this \
+             repository can know either"
         );
         for name in values("race.class") {
             assert!(

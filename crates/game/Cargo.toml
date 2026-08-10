@@ -51,6 +51,13 @@ toml = "1"
 dirs = "6"
 serde = { version = "1", features = ["derive"] }
 thiserror.workspace = true
+# Unpacking a downloaded DLC zip into the cache, and nothing else. Deliberately
+# here rather than in `oag-assets`: `crate::dlc_cache` writes the members out as
+# plain files, so the asset layer only ever opens a `PACKn.edat` off disk and no
+# gameplay crate acquires a decompressor. Deflate only - the packs are
+# torrentzipped, and bzip2/zstd/aes would be dependencies for formats that
+# cannot appear here.
+zip = { version = "6", default-features = false, features = ["deflate"] }
 
 # Platform-native H.264 decode for the PSP `.PMF` path, behind the
 # `native-video` feature: `just build`/`just check`/CI never touch

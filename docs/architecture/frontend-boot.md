@@ -669,7 +669,7 @@ the file and [asserted](../../crates/game/tests/boot_ground_truth.rs).
 
 A PAL disc will have a different set, which is why the list is read rather than
 hard-coded. The plugin ids in
-[`oag-assets::pulse`](../../crates/pulse/src/lib.rs) are the candidates to
+[`oag-pulse`](../../crates/pulse/src/lib.rs) are the candidates to
 probe, not the answer.
 
 ### What the screen does not yet do faithfully

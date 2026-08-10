@@ -31,6 +31,7 @@ out to be wrong.
 | [0018](0018-audio-mixer-architecture.md) | Own the mixer, and treat cues as a per-tick output | Accepted |
 | [0019](0019-atrac3plus-out-of-process.md) | Decode ATRAC3+ out of process, into the movie cache | Accepted |
 | [0020](0020-gamma-authoritative-colour-space.md) | Gamma is the authoritative colour space; nothing linearises | Accepted |
+| [0021](0021-region-independent-dlc.md) | Mount downloadable content independently of region | Accepted |
 | [0022](0022-title-packages.md) | Title packages, and title as a data axis rather than a code axis | Accepted; supersedes [ADR-0009](0009-multi-game-fanout.md) item 3 |
 
 ## Format

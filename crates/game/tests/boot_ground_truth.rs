@@ -58,6 +58,10 @@ fn load_leg(leg: oag_game::frontend::Leg, movie: &str) -> Option<boot::Boot> {
         // No saved language: these boot a fresh install every time.
         language: None,
         source: image.display().to_string(),
+        // And no downloadable content: what is asserted below is what the disc
+        // alone offers, which is the thing that must not move when a pack is
+        // mounted elsewhere.
+        dlc: Vec::new(),
         leg,
         movie: movie.to_string(),
         // Nothing is written and ffmpeg is never run.

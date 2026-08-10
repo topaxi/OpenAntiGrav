@@ -238,6 +238,14 @@ pub struct Source {
     /// still wins over this for that one run; see `source::resolve`.
     #[serde(default)]
     pub image: Option<String>,
+    /// Directories holding downloadable content, searched when neither the
+    /// command line nor `$OAG_DLC` name any.
+    ///
+    /// A list rather than one path, because packs are bought one at a time and
+    /// end up wherever the player put each of them. Empty means "look in the
+    /// usual places"; see [`crate::source::resolve_dlc`].
+    #[serde(default)]
+    pub dlc: Vec<String>,
 }
 
 /// Which screen the game opens on, what kind of window it opens, and how a

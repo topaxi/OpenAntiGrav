@@ -133,6 +133,18 @@ pub struct Archives {
     pub data: Archive,
     /// The companion archive: `FE.wad` on the PSP, `WADSP.WAD` on the PS2.
     pub fe: Option<Archive>,
+    /// Mounted [downloadable content](crate::dlc), searched after the source's
+    /// own archives so the disc always wins a collision.
+    ///
+    /// Empty unless the caller passed packs to [`Archives::open_with_packs`].
+    pub packs: Vec<Archive>,
+    /// What those packs declare: the `PI_Team` and `PI_Track` fragments out of
+    /// [`crate::dlc::Pack::manifests`], concatenated in mount order.
+    ///
+    /// Carried here rather than handed back separately because every caller
+    /// that mounts packs also needs to know what they added, and threading two
+    /// values through the same six call sites is two chances to thread one.
+    pub manifests: Vec<String>,
 }
 
 impl Archives {
@@ -143,10 +155,93 @@ impl Archives {
     /// Propagates [`Layout::resolve`], and a directory or blob that will not
     /// open or parse.
     pub fn open(source: &str, title: &Title) -> Result<Self> {
+        Self::open_with_packs(source, title, Vec::new())
+    }
+
+    /// As [`Archives::open`], with downloadable content mounted behind the
+    /// source's own archives.
+    ///
+    /// # Ordering, and why the disc wins
+    ///
+    /// A pack is searched only after `data` and `fe` have both missed. Nothing
+    /// on the shipped discs collides with pack content - the four teams and
+    /// four circuits a pack adds are absent from the base archives, which is
+    /// what makes them downloadable content - so the order is not load-bearing
+    /// for any real pack. It is chosen for the case that is not real: a
+    /// modified pack that shadowed a disc entry would change the base game
+    /// silently, and this makes that impossible.
+    ///
+    /// Between packs, first mounted wins. The shipped packs overlap only where
+    /// they carry byte-identical copies of the same entry, so that rule cannot
+    /// pick between differing content; see
+    /// [`docs/formats/dlc-pack.md`](../../../docs/formats/dlc-pack.md).
+    ///
+    /// # Errors
+    ///
+    /// As [`Archives::open`]. The packs are already open, so mounting them
+    /// cannot fail.
+    ///
+    /// # Why `title` is here too
+    ///
+    /// Packs are mounted *behind* a source, and which archives that source has
+    /// is the title's question ([ADR-0022]) - so this needs the same axis
+    /// [`Archives::open`] does. A pack does not change which title it is.
+    ///
+    /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+    pub fn open_with_packs(
+        source: &str,
+        title: &Title,
+        packs: Vec<crate::dlc::Pack>,
+    ) -> Result<Self> {
         let layout = Layout::resolve(source, title)?;
         let data = Archive::open(&layout.data)?;
         let fe = layout.fe.as_deref().map(Archive::open).transpose()?;
-        Ok(Self { layout, data, fe })
+
+        let mut manifests = Vec::new();
+        let mut mounted = Vec::new();
+        for pack in packs {
+            manifests.extend(pack.manifests);
+            mounted.extend(pack.archives);
+        }
+
+        Ok(Self {
+            layout,
+            data,
+            fe,
+            packs: mounted,
+            manifests,
+        })
+    }
+
+    /// Which mounted archive holds this hash, if any.
+    ///
+    /// The one place the search order lives. Returning a position rather than a
+    /// reference keeps it usable from `&self` and from `&mut self` alike, which
+    /// is what lets [`Self::locate`] stay immutable while the readers below
+    /// share the same rule.
+    fn holder_of(&self, hash: u32) -> Option<Held> {
+        if self.data.index_of_hash(hash).is_some() {
+            return Some(Held::Data);
+        }
+        if self
+            .fe
+            .as_ref()
+            .is_some_and(|fe| fe.index_of_hash(hash).is_some())
+        {
+            return Some(Held::Fe);
+        }
+        self.packs
+            .iter()
+            .position(|pack| pack.index_of_hash(hash).is_some())
+            .map(Held::Pack)
+    }
+
+    fn held(&mut self, at: Held) -> &mut Archive {
+        match at {
+            Held::Data => &mut self.data,
+            Held::Fe => self.fe.as_mut().expect("holder_of found it here"),
+            Held::Pack(index) => &mut self.packs[index],
+        }
     }
 
     /// The specifier of the archive holding `name`, searching the bulk archive
@@ -156,33 +251,29 @@ impl Archives {
     /// is in `FE.wad` *and* `Data.wad` at the same size, which makes one look
     /// sufficient; `gameshare_backdrop.mip` is in `Data.wad` only, which proves
     /// it is not. On the PS2 both `WADS2.WAD` and `WADSP.WAD` carry models.
+    /// Mounted packs come last; see [`Self::open_with_packs`].
     #[must_use]
     pub fn locate(&self, name: &str) -> Option<&str> {
         let hash = oag_formats::wad::hash_name(name);
-        if self.data.index_of_hash(hash).is_some() {
-            return Some(self.data.label());
-        }
-        self.fe
-            .as_ref()
-            .filter(|fe| fe.index_of_hash(hash).is_some())
-            .map(Archive::label)
+        Some(match self.holder_of(hash)? {
+            Held::Data => self.data.label(),
+            Held::Fe => self.fe.as_ref().expect("holder_of found it here").label(),
+            Held::Pack(index) => self.packs[index].label(),
+        })
     }
 
     /// Reads and decompresses `name` out of whichever archive holds it.
     ///
     /// # Errors
     ///
-    /// [`Error::NoSuchEntry`] against the bulk archive when neither has it, so
+    /// [`Error::NoSuchEntry`] against the bulk archive when nothing has it, so
     /// the message names the archive a reader would look in first.
     pub fn read_name(&mut self, name: &str) -> Result<Vec<u8>> {
         let hash = oag_formats::wad::hash_name(name);
-        if let Some(fe) = self.fe.as_mut()
-            && self.data.index_of_hash(hash).is_none()
-            && fe.index_of_hash(hash).is_some()
-        {
-            return fe.read_name(name);
+        match self.holder_of(hash) {
+            Some(at) => self.held(at).read_name(name),
+            None => self.data.read_name(name),
         }
-        self.data.read_name(name)
     }
 
     /// Reads the entry with this name hash out of whichever archive holds it.
@@ -192,15 +283,12 @@ impl Archives {
     ///
     /// # Errors
     ///
-    /// [`Error::NoSuchEntry`] against the bulk archive when neither has it.
+    /// [`Error::NoSuchEntry`] against the bulk archive when nothing has it.
     pub fn read_hash(&mut self, hash: u32) -> Result<Vec<u8>> {
-        if let Some(fe) = self.fe.as_mut()
-            && self.data.index_of_hash(hash).is_none()
-            && fe.index_of_hash(hash).is_some()
-        {
-            return fe.read_hash(hash);
+        match self.holder_of(hash) {
+            Some(at) => self.held(at).read_hash(hash),
+            None => self.data.read_hash(hash),
         }
-        self.data.read_hash(hash)
     }
 
     /// Reads a `.fnt` and returns it with its glyph atlas attached, wherever
@@ -293,18 +381,15 @@ impl Archives {
         self.read_neighbour(name, Neighbour::After)
     }
 
+    /// Directory position is only meaningful **within one archive**, so the
+    /// neighbour is always taken from whichever archive held `name` - never
+    /// from a flattened view across all of them, which would hand a model the
+    /// last entry of the previous archive and decode it as a texture set.
     fn read_neighbour(&mut self, name: &str, which: Neighbour) -> Result<Vec<u8>> {
         let hash = oag_formats::wad::hash_name(name);
-        let in_fe = self.data.index_of_hash(hash).is_none()
-            && self
-                .fe
-                .as_ref()
-                .is_some_and(|fe| fe.index_of_hash(hash).is_some());
-
-        let archive = if in_fe {
-            self.fe.as_mut().expect("checked above")
-        } else {
-            &mut self.data
+        let archive = match self.holder_of(hash) {
+            Some(at) => self.held(at),
+            None => &mut self.data,
         };
         let index = archive
             .index_of_hash(hash)
@@ -327,6 +412,17 @@ impl Archives {
         })?;
         archive.read(neighbour)
     }
+}
+
+/// Which mounted archive an entry was found in.
+///
+/// A position rather than a reference so [`Archives::holder_of`] can be
+/// immutable; see it for the search order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Held {
+    Data,
+    Fe,
+    Pack(usize),
 }
 
 /// Which side of an entry [`Archives::read_neighbour`] wants.
@@ -536,6 +632,135 @@ mod tests {
     /// The bulk archive's PSP and PS2 names, as the fixture spells them.
     const PSP_DATA: &str = TITLE.archives.data[0].0;
     const PS2_DATA: &str = TITLE.archives.data[1].0;
+
+    use crate::testing;
+
+    /// Builds `Archives` over hand-authored files, so the search order can be
+    /// tested without a disc. `Layout::resolve` is bypassed on purpose: what is
+    /// under test is which archive answers, not how a source is recognised.
+    fn mounted(
+        dir: &std::path::Path,
+        data: &[(&str, &[u8])],
+        packs: Vec<crate::dlc::Pack>,
+    ) -> Archives {
+        let spec = testing::write_wad(dir, "Data.wad", data);
+        let mut manifests = Vec::new();
+        let mut mounted = Vec::new();
+        for pack in packs {
+            manifests.extend(pack.manifests);
+            mounted.extend(pack.archives);
+        }
+        Archives {
+            layout: Layout {
+                platform: Platform::Psp,
+                data: spec.clone(),
+                fe: None,
+            },
+            data: Archive::open(&spec).expect("the test archive"),
+            fe: None,
+            packs: mounted,
+            manifests,
+        }
+    }
+
+    fn pack(dir: &std::path::Path, name: &str, entries: &[(&str, &[u8])]) -> crate::dlc::Pack {
+        let sub = dir.join(name);
+        std::fs::create_dir_all(&sub).expect("a test pack directory");
+        let _ = testing::write_wad(&sub, "PACK.edat", entries);
+        crate::dlc::open_dir(&sub).expect("a pack")
+    }
+
+    /// The rule from [`Archives::open_with_packs`]: a pack cannot shadow the
+    /// disc, whatever it carries.
+    #[test]
+    fn the_source_wins_a_collision_with_a_pack() {
+        let dir = testing::temp_dir("mount-disc-wins");
+        let mut archives = mounted(
+            &dir,
+            &[("shared.bin", b"from the disc")],
+            vec![pack(&dir, "one", &[("shared.bin", b"from the pack")])],
+        );
+
+        assert_eq!(archives.read_name("shared.bin").unwrap(), b"from the disc");
+    }
+
+    #[test]
+    fn a_pack_answers_for_a_name_the_source_does_not_have() {
+        let dir = testing::temp_dir("mount-pack-only");
+        let mut archives = mounted(
+            &dir,
+            &[("base.bin", b"disc")],
+            vec![pack(&dir, "one", &[("extra.bin", b"pack")])],
+        );
+
+        assert_eq!(archives.read_name("extra.bin").unwrap(), b"pack");
+        assert_eq!(
+            archives.locate("extra.bin"),
+            Some(archives.packs[0].label()),
+            "and it reports which archive answered"
+        );
+    }
+
+    /// First mounted wins. The shipped packs only ever overlap on
+    /// byte-identical entries, so this rule never has to choose between two
+    /// different pictures - see `docs/formats/dlc-pack.md`.
+    #[test]
+    fn the_first_mounted_pack_wins_between_packs() {
+        let dir = testing::temp_dir("mount-first-wins");
+        let mut archives = mounted(
+            &dir,
+            &[("base.bin", b"disc")],
+            vec![
+                pack(&dir, "first", &[("shared.bin", b"first")]),
+                pack(&dir, "second", &[("shared.bin", b"second")]),
+            ],
+        );
+
+        assert_eq!(archives.read_name("shared.bin").unwrap(), b"first");
+    }
+
+    /// Directory position is per archive. Flattening the mounted archives into
+    /// one sequence would hand a PS2 model the tail of the previous archive and
+    /// decode it as a texture set, so the neighbour must come from the archive
+    /// that held the entry.
+    #[test]
+    fn a_neighbour_comes_from_the_archive_that_held_the_entry() {
+        let dir = testing::temp_dir("mount-neighbour");
+        let mut archives = mounted(
+            &dir,
+            &[("base.bin", b"disc last entry")],
+            vec![pack(
+                &dir,
+                "one",
+                &[("before.bin", b"the neighbour"), ("model.bin", b"model")],
+            )],
+        );
+
+        assert_eq!(
+            archives.read_preceding("model.bin").unwrap(),
+            b"the neighbour",
+            "not the disc's last entry"
+        );
+    }
+
+    /// An entry in nothing at all still fails against the bulk archive, so the
+    /// message names the file a reader would open first rather than whichever
+    /// pack happened to be mounted last.
+    #[test]
+    fn a_miss_is_reported_against_the_source() {
+        let dir = testing::temp_dir("mount-miss");
+        let mut archives = mounted(
+            &dir,
+            &[("base.bin", b"disc")],
+            vec![pack(&dir, "one", &[("extra.bin", b"pack")])],
+        );
+
+        let error = archives.read_name("absent.bin").unwrap_err();
+        let Error::NoSuchEntry { archive, .. } = error else {
+            panic!("expected a missing entry, got {error:?}");
+        };
+        assert!(archive.ends_with("Data.wad"), "{archive}");
+    }
 
     #[test]
     fn a_disc_image_is_joined_with_a_colon() {

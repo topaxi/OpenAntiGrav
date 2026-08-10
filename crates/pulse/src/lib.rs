@@ -80,6 +80,19 @@ pub fn open(source: &str) -> Result<Archives> {
     Archives::open(source, TITLE)
 }
 
+/// [`open`], with downloadable content mounted behind the source.
+///
+/// The packs are Pulse's, so the title they mount behind is Pulse's too - see
+/// [`Archives::open_with_packs`] for the search order and why the disc wins a
+/// collision.
+///
+/// # Errors
+///
+/// Propagates [`Archives::open_with_packs`].
+pub fn open_with_packs(source: &str, packs: Vec<oag_assets::dlc::Pack>) -> Result<Archives> {
+    Archives::open_with_packs(source, TITLE, packs)
+}
+
 /// Reads a front-end or HUD image the XML named, from wherever this source
 /// keeps it.
 ///

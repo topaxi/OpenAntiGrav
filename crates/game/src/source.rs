@@ -57,6 +57,71 @@ const EXTENSIONS: [&str; 2] = ["chd", "iso"];
 /// The environment variable that names an image outright.
 pub const IMAGE_ENV: &str = "OAG_IMAGE";
 
+/// The environment variable that names where downloadable content lives.
+///
+/// A path list, split the way the platform splits `$PATH`, so several folders
+/// can be named at once.
+pub const DLC_ENV: &str = "OAG_DLC";
+
+/// Where [`resolve_dlc`] looks for packs when nothing names one.
+///
+/// The same three places as [`search_path`], under `dlc/` rather than
+/// `images/`. Deliberately a sibling: content a player downloaded is content
+/// they own, and it belongs beside the disc image rather than inside the
+/// installation. `$APPDIR` is excluded here for exactly the reason it is
+/// excluded there - see the module docs and ADR-0006.
+#[must_use]
+pub fn dlc_search_path() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut push = |path: PathBuf| {
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    };
+
+    push(PathBuf::from("data/dlc"));
+
+    if let Some(appimage) = std::env::var_os("APPIMAGE")
+        && let Some(directory) = Path::new(&appimage).parent()
+    {
+        push(directory.join("dlc"));
+    }
+
+    if let Some(data) = dirs::data_dir() {
+        push(data.join("oag").join("dlc"));
+    }
+
+    paths
+}
+
+/// Resolves where to look for downloadable content.
+///
+/// The same precedence as [`resolve`] - command line, environment,
+/// `settings.toml`, then the search path - with one difference that matters:
+/// this **cannot fail**. No DLC is the ordinary state of a copy of the game,
+/// so a root that does not exist is not an error and an empty result is not a
+/// problem to report. Anything genuinely wrong shows up later, as a pack that
+/// would not unpack; see [`crate::dlc::packs`].
+#[must_use]
+pub fn resolve_dlc(given: &[String], from_settings: &[String]) -> Vec<PathBuf> {
+    if !given.is_empty() {
+        return given.iter().map(PathBuf::from).collect();
+    }
+
+    if let Some(from_env) = std::env::var_os(DLC_ENV) {
+        let paths: Vec<PathBuf> = std::env::split_paths(&from_env).collect();
+        if !paths.is_empty() {
+            return paths;
+        }
+    }
+
+    if !from_settings.is_empty() {
+        return from_settings.iter().map(PathBuf::from).collect();
+    }
+
+    dlc_search_path()
+}
+
 /// Resolves the source the game should open.
 ///
 /// `given` is the command line's, if it named one. `from_settings` is
@@ -202,6 +267,58 @@ mod tests {
             resolve(Some("nonexistent.chd"), None).unwrap(),
             "nonexistent.chd"
         );
+    }
+
+    /// The DLC roots follow the same precedence, with `$OAG_DLC` left out of
+    /// the test on purpose: setting a process-wide variable would race the
+    /// other tests in this binary, and what is worth pinning is the ordering
+    /// this function decides rather than that `var_os` works.
+    #[test]
+    fn dlc_roots_follow_the_command_line_then_the_settings_file() {
+        let cli = ["/from/cli".to_string()];
+        let settings = ["/from/settings".to_string()];
+
+        assert_eq!(
+            resolve_dlc(&cli, &settings),
+            [PathBuf::from("/from/cli")],
+            "the command line wins"
+        );
+        assert_eq!(
+            resolve_dlc(&[], &settings),
+            [PathBuf::from("/from/settings")],
+            "and the settings file is next"
+        );
+    }
+
+    /// No DLC is the ordinary state of a copy of the game, so the empty case
+    /// falls through to the search path rather than failing or returning
+    /// nothing.
+    #[test]
+    fn dlc_roots_fall_back_to_the_search_path_and_never_fail() {
+        // Only when the environment is not already pointing somewhere, which
+        // is a real thing a developer's shell may do.
+        if std::env::var_os(DLC_ENV).is_some() {
+            return;
+        }
+        assert_eq!(resolve_dlc(&[], &[]), dlc_search_path());
+        assert!(
+            dlc_search_path().contains(&PathBuf::from("data/dlc")),
+            "a checkout's own directory is always searched"
+        );
+    }
+
+    /// The images and the packs are looked for in sibling directories, never
+    /// the same one: a disc image is not a pack and scanning one folder for
+    /// both would make every image a candidate archive.
+    #[test]
+    fn the_dlc_search_path_is_a_sibling_of_the_image_search_path() {
+        for path in dlc_search_path() {
+            assert!(
+                !search_path().contains(&path),
+                "{} is searched for both images and packs",
+                path.display()
+            );
+        }
     }
 
     #[test]

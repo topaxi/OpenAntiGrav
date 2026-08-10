@@ -750,11 +750,13 @@ node the parser does not decode. Against the PSP disc's `Data.wad`:
 - **A ship has exactly one `Engine Flare`**, named `engine_flare`, a direct child
   of `world` with a 64-byte payload (a 4x4, like the other locator classes). So
   there is one nozzle, centred - not one per visible engine. Identical on all
-  eight teams whose `Ship.vex` resolves by name in `Data.wad` (`AG_Systems`,
-  `Assegai`, `EGX`, `Feisar`, `Goteki`, `Piranha`, `Qirex`, `Triakis`). The other
-  five (`Auricom`, `Harimau`, `Icaras`, `Mirage`, `Van_Uber`) have no entry
-  hashing to `Data\Ships\<Team>\Ship.vex` - a name-mining gap, not a decode
-  failure.
+  eight teams whose `Ship.vex` is in `Data.wad` (`AG_Systems`, `Assegai`,
+  `EGX`, `Feisar`, `Goteki`, `Piranha`, `Qirex`, `Triakis`). The other four
+  (`Auricom`, `Harimau`, `Icaras` and `Mantis`, the team sold as Mirage) have no
+  entry hashing to `Data\Ships\<Team>\Ship.vex` on the disc because they are
+  [downloadable content](../../../formats/dlc-pack.md) - their ships are in the
+  packs, where the same one-`engine_flare` shape holds. This was read as a
+  name-mining gap for a long time; it was not one.
 
 - **`Trail` reaches a racing ship in code, and an earlier version of this page said
   it could not. That was wrong.** The correction is recorded rather than quietly
@@ -1201,21 +1203,32 @@ accident** - the manipulator gizmos and the view compass - not a decode
 failure. Recorded so the next reader does not go looking for a class `0`
 handler.
 
-**Not every team ships one.** `Auricom`, `Harimau` and `Icaras` carry no
-`Ship.vex` - and so no `shipboost.vex` - on the PSP disc at all, and are
-confirmed PS2-only (they resolve there - see `ps2_source_ground_truth.rs`'s
-own `TEAMS`). Two more candidate names, `Mirage` and `Van_Uber`, resolve on
-**neither** disc under this project's current name-mining - an open gap,
-not evidence either way about which platform ships them - which is why the
-split above ("eight teams whose `Ship.vex` resolves by name") is phrased as
-eight of *thirteen* candidates, not eight of eleven; `docs/formats/handling-stats.md`
-counts the same eight independently, over `handlingstats.xml` rather than
-`Engine Flare`. `Loaded::boost_model` is `None` for a team with no entry
-rather than a load failure, and `crates/game/tests/boost_plume_ground_truth.rs`
-pins what is actually established: the eight PSP teams' `shipboost.vex`
-decoding with exactly two meshes, a resolved texture and all four batches
-landing in the transparent-draw list `exhaust::BLEND` needs to reach, and the
-three *confirmed* PS2-only teams having no PSP entry to find.
+**The disc alone does not ship one for every team, and an earlier version of
+this page drew the wrong conclusion from that.** It said `Auricom`, `Harimau`
+and `Icaras` were "confirmed PS2-only", and that `Mirage` and `Van_Uber` were an
+open name-mining gap. Both readings are now retired:
+
+- The four are **PSP downloadable content**. Each one's `Ship.vex` and
+  `shipboost.vex` are in its pack, and the PS2 release simply bundles what the
+  PSP sold separately - which is why they resolve on that disc and looked
+  PS2-*only*. See [the pack format](../../../formats/dlc-pack.md).
+- `Mirage` never resolved because it is a **display name**: the folder is
+  `Mantis`. The disc's own string table maps one to the other.
+- `Van_Uber` is a *Pure* team and was never a Pulse candidate.
+
+So the split above is eight of **twelve**, not eight of thirteen;
+`docs/formats/handling-stats.md` counts the same eight on the disc
+independently, over `handlingstats.xml` rather than `Engine Flare`, and each
+pack supplies its own team's file.
+
+`Loaded::boost_model` is `None` for a team with no entry rather than a load
+failure, and `crates/game/tests/boost_plume_ground_truth.rs` pins what a bare
+disc establishes: the eight disc teams' `shipboost.vex` decoding with exactly
+two meshes, a resolved texture and all four batches landing in the
+transparent-draw list `exhaust::BLEND` needs to reach, and the four DLC teams
+having no entry to find *on the disc*.
+`crates/game/tests/dlc_ground_truth.rs` is where the other half is asserted -
+all four loading, off the American disc, with the European packs mounted.
 
 ## The boost, measured against a real crossing end to end
 
@@ -1667,8 +1680,9 @@ Recorded rather than fixed, so the next pass starts from the measurement:
 - **Whether `Trail` appears outside `shipwreck.vex`.** Four files checked. A sweep
   over every `.vex` entry by index - names are unknown for most of `Data.wad`'s
   1,142 entries - would settle it.
-- **The five teams whose `Ship.vex` does not resolve by name.** A `mine-names`
-  job, not a format one.
+- ~~**The five teams whose `Ship.vex` does not resolve by name.**~~ Settled:
+  four are [downloadable content](../../../formats/dlc-pack.md) and the fifth is
+  a Pure team. It was never a `mine-names` job.
 - **What writes `self+0x84`** the `1` and `2` values that gate submit and update.
 - **What arms `boost_timer` (`flare+0xb8`) in the *original binary*.**
   Everything downstream of it is recovered - `Exhaust_UpdateEngineSound` decays

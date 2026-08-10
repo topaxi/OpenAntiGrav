@@ -45,9 +45,31 @@ impl Archive {
     /// Splitting on the last colon rather than the first keeps Windows drive
     /// letters working.
     pub fn open(spec: &str) -> Result<Self> {
-        let mut source = Self::open_source(spec)?;
-        let label = spec.to_string();
+        let source = Self::open_source(spec)?;
+        Self::from_source(source, spec.to_string())
+    }
 
+    /// Opens a file that is already known to be one, bypassing spec parsing.
+    ///
+    /// [`Archive::open`] takes a *spec*, and a spec is ambiguous: a last colon
+    /// means `<image>:<path-on-disc>`, and a missing extension means a mistyped
+    /// one. Both readings are right for something a user typed and wrong for a
+    /// path the program found itself - a pack in `data/dlc/Pulse: Mirage Pack/`
+    /// would be read as a disc image, and one renamed to plain `PACK3` would be
+    /// refused unopened. A caller walking a directory already knows it has a
+    /// file, so it should not have to spell it in a syntax that can mean
+    /// something else. See [`crate::dlc`].
+    ///
+    /// # Errors
+    ///
+    /// The file not opening, or its directory not parsing.
+    pub fn open_file(path: &std::path::Path) -> Result<Self> {
+        let file = std::fs::File::open(path)?;
+        let len = file.metadata()?.len();
+        Self::from_source(Source::File { file, len }, path.display().to_string())
+    }
+
+    fn from_source(mut source: Source, label: String) -> Result<Self> {
         let header = source.read(0, wad::HEADER_LEN as u64)?;
         let count = Directory::peek_entry_count(&header).map_err(|source| Error::BadDirectory {
             archive: label.clone(),

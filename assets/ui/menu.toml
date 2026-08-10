@@ -77,6 +77,13 @@ label = "SPEED CLASS"
 setting = "race.class"
 values = ["venom", "flash", "rapier", "phantom"]
 
+# The roster comes from the source for the same reason the circuits below do,
+# and one more: it is not fixed. A player who owns a downloadable pack has teams
+# no list in this repository could have named, and `values_from = "teams"` reads
+# the plugin definition and every mounted pack's manifest for them. The value
+# stored is the team id - the folder under `Data\Ships\` - and the label is that
+# id in the language's own string table, which is not always the same word.
+#
 # Zone forces the shared Zone hull regardless of team (see
 # `oag_game::race::ship_entry_name`), so the row is greyed rather than
 # offered as if it still picked the drawn model.
@@ -84,16 +91,7 @@ values = ["venom", "flash", "rapier", "phantom"]
 kind = "choice"
 label = "TEAM"
 setting = "race.team"
-values = [
-    "AG_Systems",
-    "Assegai",
-    "EGX",
-    "Feisar",
-    "Goteki",
-    "Piranha",
-    "Qirex",
-    "Triakis",
-]
+values_from = "teams"
 disabled_by = { setting = "race.mode", value = "zone" }
 
 # The circuits come from the source, not from this file, and so do their names:

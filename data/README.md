@@ -129,8 +129,19 @@ consistent with there being no per-title secret to find, though what (if
 anything) supplies a key at the OS level was not chased further once the file
 itself proved to be plaintext. `PARAM.pbp` is the standard, unencrypted PBP
 (title/icon metadata for the XMB). No decryption work was needed or done -
-the `PACKn_UIn.edat` files (front-end UI assets, presumably the same shape)
-have not been checked yet but are expected to match.
+and **the `PACKn_UIn.edat` files are now checked too**: same container, same
+plaintext, and `PACKn_UI1.edat` is where each pack's
+`Data\Ships\<Team>\handlingstats.xml` lives, so a pack needs all four archives
+mounted to be raceable rather than just visible.
+
+**The engine reads these directly.** `oag-game` finds a pack here, unpacks the
+zip into `data/cache/dlc/` once, and mounts it against whichever Pulse image is
+open - the European packs work against the American disc, which the original
+did not allow. Format and evidence:
+[`docs/formats/dlc-pack.md`](../docs/formats/dlc-pack.md); the decision to
+diverge: [ADR-0021](../docs/architecture/adr/0021-region-independent-dlc.md).
+One correction to the pack list above: the pack sold as **Mirage** declares its
+team as `Mantis`, which is the folder its ship is under.
 
 **Wipeout Pure EU** (per-pack folders like `UCES00001DDELTAPAK/`, seven
 packs: A7, Delta, Gamma 1, GamesRadar, Oblivion, Omega, Voice of Cod): each
