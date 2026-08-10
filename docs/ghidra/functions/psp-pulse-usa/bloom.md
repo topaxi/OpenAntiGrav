@@ -439,12 +439,33 @@ lacked. **Ours is 68 % of the original, not 45 %** - the `2.2x` figure came
 from bands where both frames were half clipped, and clipping truncates the
 brighter one more.
 
-**A posed capture cannot measure the bloom at all**, which is the trap worth
-recording. `Trail_DrawRibbon` refuses to draw until its ring is full, and
-`oag_render::exhaust` reproduces that, so a `--pose-from --ticks 0` frame has
-no ribbon, therefore no glow mask, therefore no bloom. The two rows above are
-identical to the digit with the bloom on and off. Every matched-pose
-comparison on these pages is a comparison of the **flare and plume only**.
+**The paragraph that stood here was wrong and is retracted the same day.** It
+claimed a posed capture cannot measure the bloom, on the reasoning that
+`Trail_DrawRibbon` refuses to draw until its ring is full and a
+`--pose-from --ticks 0` frame never runs a tick. The premise about the ring is
+true; the conclusion is not, because `Race::pose_boost` **already lays down a
+synthetic ten-sample ring** for exactly this reason, and says so in its own
+comment. The evidence offered - "identical to the digit with the bloom on and
+off" - was an artefact of a measurement band that did not cover where the
+bloom actually lands.
+
+Measured properly, by rendering the same matched pose with the composite
+disabled and differencing:
+
+| pose intensity | pixels changed by more than 4/255 | mean abs diff | max |
+| --- | ---: | ---: | ---: |
+| `0.125` (the capture's own) | 53,532 | 1.52 | 51 |
+| `1.0` | 93,447 | 8.45 | 175 |
+
+So the bloom runs in posed frames and its strength tracks the intensity ramp,
+which is what `TRAIL_GLOW_GAIN` predicts: the mask is `intensity * 0.45`, so a
+capture taken at `0.125` carries barely a tenth of the glow a racing craft
+does. **That, not a missing ribbon, is why tick 62 shows so little of it.**
+
+The lesson worth keeping: *a null result from a hand-placed measurement band
+is not a null result.* Two claims on these pages have now been retracted for
+the same reason - a band or a background patch chosen by eye rather than
+derived - and both times the differencing control settled it in one run.
 
 **At ordinary racing speed the bloom lands in the right range.** Same scene,
 three builds, per-row local background:
@@ -461,13 +482,18 @@ So the bloom moves clipping from below the original's range to just above it.
 drawn from a zoomed crop of a *forced-boost* frame** - the most extreme case
 available - and overstated the ordinary one.
 
-**What has not been achieved is a genuinely matched *bloom* comparison.** The
-one pose that matches camera and track cannot draw a ribbon, and the frames
-that do draw one are on a scene whose background is `131.6` against the
-original tunnel's `55.7`. Until a capture exists that both matches exposure
-and runs long enough to fill the ring, the residual is not attributable
-between the bloom, the exhaust's own amplitude and the standing scene-exposure
-gap.
+**What has not been achieved is a matched comparison at a *racing* intensity.**
+The one pose that matches camera and track is a teleported capture whose
+intensity is `0.125`, so both sides' bloom is near its floor there; the frames
+that run at a real intensity sit on a scene whose background is `131.6`
+against the original tunnel's `55.7`. Until a capture matches exposure *and*
+runs at a saturated ramp, the residual is not attributable between the bloom,
+the exhaust's own amplitude and the standing scene-exposure gap.
+
+**The port is wired and confirmed live on both render paths**, which is a
+separate question from whether it is calibrated: `--presented`, the
+window-equivalent path through the render scale, upscaler and grade, moves
+26,780 pixels with the composite enabled.
 
 ## Porting notes
 
