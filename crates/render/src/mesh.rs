@@ -50,7 +50,7 @@ pub struct Bounds {
 }
 
 /// A run of indices sharing one texture.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DrawCall {
     pub range: std::ops::Range<u32>,
     /// Index into [`Model::textures`], or `None` for untextured.
@@ -293,7 +293,13 @@ impl std::fmt::Display for Lod {
 }
 
 /// A model flattened into one vertex and one index buffer.
-#[derive(Debug)]
+///
+/// `Clone` so that one mesh can back several [`crate::mesh_render::Drawable`]s -
+/// eight craft on a starting grid are eight uniform buffers over the same
+/// geometry, and a `Drawable` owns its buffers. Real instancing would upload the
+/// vertices once instead; a ship is a few thousand triangles against a track's
+/// hundred and forty thousand, so the copy is not what to optimise first.
+#[derive(Debug, Clone)]
 pub struct Model {
     /// Human-readable source, for the window title.
     pub label: String,

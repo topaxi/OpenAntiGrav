@@ -594,8 +594,15 @@ place. `oag_gameplay::spawn::grid_pose` is the port. Which ship gets which slot
 is a shipped permutation table, and a short field packs to the *back*. See
 [grid](../ghidra/functions/psp-pulse-usa/grid.md).
 
-**What still blocks the milestone is not the grid but the opponents**: nothing
-spawns seven more craft, because nothing drives them. That is the AI item.
+**Eight craft now take the grid**, and every slot lands within **2.40 units** of
+where the original puts its own - a near-constant residual dominated by our
+anchor being 1.68 out, which is what says the layout is right rather than
+averaging out. `crates/game/tests/race_ground_truth.rs` pins it against the
+original's own eight positions.
+
+**Nothing drives the seven opponents.** They hold station on the grid, and they
+all wear the player's hull. That is the AI item and the livery item, not the
+grid one.
 
 ---
 
