@@ -720,18 +720,27 @@ impl Frontend {
         &self.player
     }
 
-    /// Whether the sequence is on one of its two movie screens.
+    /// Whether the sequence is on one of its movie screens.
     ///
     /// What a caller holding the movie's sound asks to know when to stop it,
-    /// and the reason it lives here is that it has to be true of **both** legs
+    /// and the reason it lives here is that it has to be true of **every** leg
     /// and of every way out of them. The movie ends on its own on one path and
     /// is cut short by START on four others - all five leave the state, and
     /// none of them finishes the player - so "is the player finished" is the
     /// wrong question and would leave the intro's sound playing under the
     /// language picker.
+    ///
+    /// [`pure_states::FMV_INTRO`] is here for the same reason the two Pulse
+    /// states are, and leaving it out was a real bug rather than an omission of
+    /// coverage: `main.rs` stops the movie's sound on every tick this returns
+    /// `false`, so Pure's second boot movie was torn down on the first tick of
+    /// its own state and then paced by `dt` instead of by its own audio, every
+    /// run.
     #[must_use]
     pub fn is_playing_movie(&self) -> bool {
-        self.machine.is(states::LOGO_FMV) || self.machine.is(states::INTRO_MOVIE)
+        self.machine.is(states::LOGO_FMV)
+            || self.machine.is(states::INTRO_MOVIE)
+            || self.machine.is(pure_states::FMV_INTRO)
     }
 
     /// Steps the sequence by `dt` seconds.
@@ -1113,26 +1122,7 @@ impl Frontend {
                     source: Video::Intro,
                 });
             }
-            if self.overlay {
-                out.push(Draw::Text {
-                    x: 8.0,
-                    y: 250.0,
-                    scale: 1.0,
-                    color: [1.0, 1.0, 1.0, 0.5],
-                    border: None,
-                    align: Align::Left,
-                    text: format!(
-                        "INTRO FRAME {} / {}{}",
-                        self.player.frames_produced(),
-                        self.player.frames(),
-                        if self.has_picture {
-                            ""
-                        } else {
-                            " (NO PICTURE)"
-                        }
-                    ),
-                });
-            }
+            self.insert_movie_counter(&mut out, self.has_picture);
             return out;
         }
 
@@ -1183,6 +1173,11 @@ impl Frontend {
                     source: Video::Intro,
                 });
             }
+            // This leg needs the counter more than `LogoFMV` does, not less: on
+            // Pure it is the only movie the boot draws, so without `ffmpeg` the
+            // whole leg is a blank screen for as long as the movie would have
+            // run, with nothing to say it is progressing.
+            self.insert_movie_counter(&mut out, self.fmv_intro_has_picture);
             self.insert_backdrop(&mut out);
             return out;
         }
@@ -1220,6 +1215,33 @@ impl Frontend {
         out
     }
 
+    /// The frame counter `--overlay` puts over a movie leg.
+    ///
+    /// Whether the movie on this leg has a picture is the caller's to say: the
+    /// sequence has more than one movie and they do not decode or fail together,
+    /// so a shared flag would report the wrong one. The counter exists for the
+    /// case where there is no picture at all - it is the only thing on screen
+    /// then, and the only sign the leg is running rather than hung.
+    fn insert_movie_counter(&self, out: &mut Vec<Draw>, has_picture: bool) {
+        if !self.overlay {
+            return;
+        }
+        out.push(Draw::Text {
+            x: 8.0,
+            y: 250.0,
+            scale: 1.0,
+            color: [1.0, 1.0, 1.0, 0.5],
+            border: None,
+            align: Align::Left,
+            text: format!(
+                "INTRO FRAME {} / {}{}",
+                self.player.frames_produced(),
+                self.player.frames(),
+                if has_picture { "" } else { " (NO PICTURE)" }
+            ),
+        });
+    }
+
     /// Puts the `FE Screen` backdrop at the bottom of a screen's draw list.
     ///
     /// At index 1, after the black fill a screen is cleared with and under
@@ -1236,7 +1258,28 @@ impl Frontend {
     /// disc's, so putting it on the same backdrop is a consistency judgement;
     /// `Launch Game` is a continuity requirement. See
     /// [menus.md](../../../docs/architecture/menus.md).
+    ///
+    /// # One video per list, and the renderer is what says so
+    ///
+    /// The single exception to "every screen gets it": a screen already drawing
+    /// a movie of its own does not also get the loop. This is not a stylistic
+    /// choice. The front end is drawn by one renderer with one set of I420
+    /// planes and one video draw ([`crate::render::Renderer::render`] keeps a
+    /// single `video_at`), so a list carrying two `Draw::Video`s would upload
+    /// one movie's frame and draw it at the *other* movie's rect - and the two
+    /// halves disagree about which, because `sync_video` takes the first video
+    /// in the list while the renderer takes the last.
+    ///
+    /// The two are alternatives by construction anyway: a foreground movie and
+    /// a background loop are never both wanted, and the loop keeps running
+    /// underneath unseen exactly as it does through `LogoFMV`. Unreachable on
+    /// today's discs - neither Pure pressing carries `Data\Movies\Backdrop.PMF`,
+    /// so `self.backdrop` is `None` wherever a foreground movie draws - which is
+    /// why this is asserted by a test rather than observed in a screenshot.
     fn insert_backdrop(&self, out: &mut Vec<Draw>) {
+        if out.iter().any(|draw| matches!(draw, Draw::Video { .. })) {
+            return;
+        }
         let Some((player, rect)) = &self.backdrop else {
             return;
         };
@@ -1644,6 +1687,60 @@ mod tests {
         .collect()
     }
 
+    /// Pure's shape, cut down to the screens the boot chain actually walks.
+    ///
+    /// Trimmed from `pure-psp-usa`'s own `Skin.xml` rather than invented: the
+    /// picker really is a child of `Intro Screen`, that parent really is where
+    /// the white background lives, and `FMV Intro` really does carry nothing but
+    /// a redirect. See [pure-boot.md](../../../docs/architecture/pure-boot.md).
+    ///
+    /// The two screens between the picker and `FMV Intro` on the real disc -
+    /// `Developer Publisher Screen` and `MemoryStickWarning` - are left out
+    /// here on purpose: this fixture exists to exercise the movie leg, and the
+    /// chain those two sit in is covered against the disc itself in
+    /// `pure_boot_ground_truth.rs`.
+    const PURE_XML: &str = r#"
+<Screen>
+  <Screen type="Intro" name="Intro Screen">
+    <Image><Values width="480" height="272" TxtrWidth="480" TxtrHeight="272" color="0xFFFFFFFF"></Values></Image>
+    <Movie name="FMV Movie"><Values src="Data\Movies\WoFMVNew" sound="true" autoredirect="1" localised="true"></Values></Movie>
+    <Screen type="Language Selection" name="Language Selection">
+      <DisplayLanguages><Values clear="true"></Values></DisplayLanguages>
+      <Menu name="Language"><Values align="left" font="Default" x="50" scale="1.0" y="46" color="0xFF88D6E8"></Values></Menu>
+      <Redirect name="LanguageAutoRedirect">
+        <Values backward="none"></Values>
+        <Default goto="Developer Publisher Screen"></Default>
+      </Redirect>
+    </Screen>
+    <Screen type="FMV" name="FMV Intro">
+      <Item></Item>
+      <Redirect name="FMVRedirect"><Default goto="Title Screen"></Default></Redirect>
+    </Screen>
+    <Screen type="Title" name="Title Screen">
+      <Text><Values align="right" idstring="PRESS START" font="Title" x="408" y="194" color="0xFFED4896"></Values></Text>
+    </Screen>
+  </Screen>
+</Screen>
+"#;
+
+    /// A Pure-shaped boot whose second movie has `frames` frames of picture.
+    fn pure(fmv_frames: usize) -> Frontend {
+        Frontend::booting(
+            Leg::LogoFmv,
+            Screens::from_xml(PURE_XML),
+            StringTable::default(),
+            languages(),
+            Vec::new(),
+            0,
+            crate::movie::FRAME_RATE,
+            (SCREEN.0 as u32, SCREEN.1 as u32),
+            false,
+            fmv_frames,
+            crate::movie::FRAME_RATE,
+            fmv_frames > 0,
+        )
+    }
+
     /// The default leg: `LogoFMV`, playing the movie the disc plays.
     fn frontend(frames: usize) -> Frontend {
         Frontend::new(
@@ -1924,6 +2021,78 @@ mod tests {
         input.begin_frame(0);
         input.begin_frame(1 << button::CROSS);
         frontend.update(FRAME, input, None);
+    }
+
+    /// Pure's second movie is a movie leg, so the sound has to survive it.
+    ///
+    /// This omission was a real defect rather than missing coverage: `main.rs`
+    /// stops the movie's sound on every tick `is_playing_movie` is false, so the
+    /// second boot movie was torn down on the first tick of its own state and
+    /// then paced by `dt` instead of by its own audio.
+    #[test]
+    fn the_second_boot_movie_counts_as_a_movie_leg() {
+        let mut frontend = pure(60);
+        let mut input = Input::new();
+        // From wherever the boot leg starts to the picker. Which state that is
+        // is Pure's own open question and not this test's business - see
+        // `pure-boot.md`; what matters here is the leg *after* the picker.
+        run_until(&mut frontend, &mut input, 600, |f| {
+            f.machine().is(states::LANGUAGE_SELECTION)
+        });
+        pick_a_language(&mut frontend, &mut input);
+        assert!(
+            frontend.machine().is(pure_states::FMV_INTRO),
+            "the picker's own exit on Pure is its second boot movie, not Show Logo"
+        );
+        assert!(
+            frontend.is_playing_movie(),
+            "FMV Intro is a movie screen; saying otherwise stops its sound on the \
+             first tick of the leg"
+        );
+
+        run_until(&mut frontend, &mut input, 600, |f| {
+            f.machine().is(pure_states::TITLE_SCREEN)
+        });
+        assert!(
+            !frontend.is_playing_movie(),
+            "the movie is over by Title Screen, so its sound has to stop"
+        );
+    }
+
+    /// One renderer, one set of planes, one video draw - so one video per list.
+    ///
+    /// `sync_video` takes the *first* video in a list and the renderer takes the
+    /// *last*, so a list carrying two would upload one movie and draw it at the
+    /// other's rect. Unreachable on today's discs, since no Pure pressing ships
+    /// `Data\Movies\Backdrop.PMF`, which is exactly why it is pinned here rather
+    /// than left to a screenshot to catch.
+    #[test]
+    fn no_screen_ever_draws_two_videos_at_once() {
+        for (what, mut frontend) in [("pulse", frontend(300)), ("pure", pure(60))] {
+            frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+            let mut input = Input::new();
+            let mut seen = 0;
+            // Every state the leg walks, the backdrop present throughout.
+            for _ in 0..1200 {
+                let videos = frontend
+                    .draw_list()
+                    .iter()
+                    .filter(|draw| matches!(draw, Draw::Video { .. }))
+                    .count();
+                assert!(
+                    videos <= 1,
+                    "{what}: state {:?} drew {videos} videos; the renderer draws one",
+                    frontend.machine().current()
+                );
+                seen += 1;
+                input.begin_frame(if seen % 120 == 0 {
+                    1 << button::CROSS
+                } else {
+                    0
+                });
+                frontend.update(FRAME, &mut input, None);
+            }
+        }
     }
 
     #[test]

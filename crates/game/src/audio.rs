@@ -749,16 +749,21 @@ impl Audio {
         Ok(soundtrack.nearest(wanted.seconds))
     }
 
-    /// Starts the boot sequence's movie sound, reporting what happened.
+    /// Starts one of the boot sequence's movie sounds, reporting what happened.
     ///
     /// The seam both tick loops go through - the window's and the headless
     /// capture's - so that the line on stdout, and the decision itself, cannot
     /// come out differently on one of them. `None` is the ordinary silent case
     /// and says so once; see [`crate::boot::Boot::movie_sound`] for the reasons
     /// it is `None`.
-    pub fn start_boot_movie(&mut self, sound: Option<crate::at3::Pcm>) {
+    ///
+    /// `what` names the movie, because a boot can start more than one of them:
+    /// Pure plays a second movie when `FMV Intro` is entered, and a report that
+    /// called both "the intro movie" would make the handover between them
+    /// invisible in exactly the place it needs to be visible.
+    pub fn start_boot_movie(&mut self, what: &str, sound: Option<crate::at3::Pcm>) {
         let Some(pcm) = sound else {
-            println!("audio: the intro movie plays silently");
+            println!("audio: {what} plays silently");
             return;
         };
         let seconds = pcm.samples.len() as f64
@@ -767,17 +772,15 @@ impl Audio {
         match Sound::new(pcm.samples, pcm.channels, pcm.sample_rate) {
             Ok(sound) => {
                 if self.start_movie(sound) {
-                    println!(
-                        "audio: the intro movie's own track, {seconds:.2} s, clocking the picture"
-                    );
+                    println!("audio: {what}'s own track, {seconds:.2} s, clocking the picture");
                 } else {
                     // A mixer with every slot busy, which cannot happen today -
                     // the music is the only other voice - but is reported rather
                     // than leaving a movie silent for no stated reason.
-                    println!("audio: no free voice for the intro movie, so it plays silently");
+                    println!("audio: no free voice for {what}, so it plays silently");
                 }
             }
-            Err(error) => println!("audio: the intro movie plays silently ({error:#})"),
+            Err(error) => println!("audio: {what} plays silently ({error:#})"),
         }
     }
 

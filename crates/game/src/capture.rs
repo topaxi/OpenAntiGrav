@@ -248,6 +248,7 @@ pub fn run(
         mut frontend,
         movie,
         movie_sound,
+        mut fmv_intro_sound,
         backdrop,
         font,
         sprites,
@@ -285,7 +286,7 @@ pub fn run(
     // screen the sequence opens on: the first tick's playhead has to be a real
     // zero rather than the absence of a voice, or that tick would be paced by
     // the wrong clock.
-    audio.start_boot_movie(movie_sound);
+    audio.start_boot_movie("the intro movie", movie_sound);
 
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
@@ -329,6 +330,18 @@ pub fn run(
         // moment it is a measurement rather than a prediction. See
         // `movie::Player::follow`.
         let events = frontend.update(dt, &mut input, audio.movie_playhead());
+        // The second boot movie's own track, started on the tick its state is
+        // entered - the same handover `App::tick` does, kept in step with it
+        // deliberately. Without it here, `--dump-audio` over a Pure boot would
+        // be silent for the whole `FMV Intro` leg while the window build sounded
+        // it, which is the divergence `movie_playhead`'s own doc comment warns
+        // about for the two tick loops.
+        if events.iter().any(|event| {
+            matches!(event, crate::state_machine::Event::Enter(name)
+                if name == oag_pure::frontend::states::FMV_INTRO)
+        }) {
+            audio.start_boot_movie("the second boot movie", fmv_intro_sound.take());
+        }
         // In the tick loop, next to the state machine it belongs to. See
         // [`crate::audio`] for why nothing here is per frame.
         audio.tick();

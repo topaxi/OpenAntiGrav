@@ -74,6 +74,18 @@ pub struct Boot {
     /// `ffmpeg` that is missing or failed, or `--no-video`, which never reads
     /// the movie at all. See [`load_movie_sound`].
     pub movie_sound: Option<crate::at3::Pcm>,
+    /// [`Self::fmv_intro`]'s own sound, on exactly the same terms.
+    ///
+    /// A second field rather than a second decode path: [`load_movie_sound`] is
+    /// already title-agnostic and decides silence from the source's own `Movie`
+    /// widget, so this is that function called again with the second movie's
+    /// entry name. Pure's `FMV Movie` widget carries `sound="true"`, so on a
+    /// Pure source this is `Some` whenever the movie itself was read.
+    ///
+    /// Kept apart from `movie_sound` because the two are played at different
+    /// moments - the first at boot, this one when `FMV Intro` is entered - and a
+    /// single field would have to be reloaded rather than handed over.
+    pub fmv_intro_sound: Option<crate::at3::Pcm>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
@@ -183,6 +195,16 @@ pub fn load(options: &Options) -> Result<Boot> {
     let movie_sound = load_movie_sound(movie.as_ref(), &screens, &movie_name, options, &mut report);
     let backdrop = load_backdrop(&mut archives, options, &mut report);
     let fmv_intro = load_fmv_intro(&mut archives, &screens, options, &mut report);
+    // Same call, same rules, second movie: the widget that names
+    // `FMV_INTRO_MOVIE` is the one that decides whether it is heard, and it is
+    // in the same XML `screens` still holds.
+    let fmv_intro_sound = load_movie_sound(
+        fmv_intro.as_ref(),
+        &screens,
+        oag_pure::names::FMV_INTRO_MOVIE,
+        options,
+        &mut report,
+    );
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
     // The cached frames when there are any, and the demuxed count when there
@@ -327,6 +349,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         movie_sound,
         backdrop,
         fmv_intro,
+        fmv_intro_sound,
         sprites,
         report,
     })

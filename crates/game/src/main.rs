@@ -39,8 +39,8 @@ use oag_game::input;
 use oag_game::keys;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{
-    adapter, audio, boot, capture, catalogue, display, loading, menu, movie, perf, prefetch, race,
-    report, settings, source, upscale,
+    adapter, at3, audio, boot, capture, catalogue, display, loading, menu, movie, perf, prefetch,
+    race, report, settings, source, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_gameplay::input::button;
@@ -2096,7 +2096,7 @@ impl Stage {
         // first frame of picture start on the same tick: `Session::frame` draws
         // before it ticks, and a movie whose voice started a frame late would
         // be a frame late for the whole reel.
-        audio.start_boot_movie(loaded.movie_sound.take());
+        audio.start_boot_movie("the intro movie", loaded.movie_sound.take());
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
@@ -2136,6 +2136,7 @@ impl Stage {
             frontend: loaded.frontend,
             feed,
             fmv_intro_feed,
+            fmv_intro_sound: loaded.fmv_intro_sound.take(),
             shown: false,
             backdrop_shown: false,
             held_backdrop: None,
@@ -2463,6 +2464,13 @@ struct FrontendStage {
     /// `App::tick`. `None` on every Pulse source and on any Pure source with
     /// `--no-video` or no `ffmpeg`, the same reasons `feed` itself is `None`.
     fmv_intro_feed: Option<movie::Feed>,
+    /// That movie's own track, waiting for the state that plays it.
+    ///
+    /// Held here rather than started at boot beside the first movie's, because
+    /// the two are the same voice: [`crate::audio::Audio::start_movie`] stops
+    /// whatever was playing, so starting both up front would mean the second
+    /// immediately silenced the first. Taken on the tick `FMV Intro` is entered.
+    fmv_intro_sound: Option<at3::Pcm>,
     /// Whether a picture has ever reached the planes. See
     /// [`FrontendStage::sync_video`].
     shown: bool,
@@ -2578,6 +2586,21 @@ impl FrontendStage {
         list: &mut Vec<frontend::Draw>,
         backdrop: Option<&mut movie::Feed>,
     ) -> Result<()> {
+        // `find_map` is only correct because a list carries at most one video,
+        // which `Frontend::insert_backdrop` is what guarantees - and the
+        // renderer would take the *last* one rather than this first one, so the
+        // two would disagree if that ever stopped holding. Asserted rather than
+        // handled: a second video needs a second plane set and a second bind
+        // group, which is a renderer feature and not something to paper over
+        // here.
+        debug_assert!(
+            list.iter()
+                .filter(|draw| matches!(draw, frontend::Draw::Video { .. }))
+                .count()
+                <= 1,
+            "a draw list carries at most one Draw::Video; the renderer draws one \
+             video quad from one plane set"
+        );
         let drawn = list.iter().find_map(|draw| match draw {
             frontend::Draw::Video {
                 position, source, ..
@@ -3153,6 +3176,14 @@ impl Session {
                         stage.feed = stage.fmv_intro_feed.take();
                         stage.shown = false;
                         stage.backdrop_in_planes = false;
+                        // Its sound on the same tick as its picture, and through
+                        // the same seam the first movie went through. One voice
+                        // serves both: `start_movie` stops the previous one, so
+                        // this is a handover rather than a second track, and it
+                        // is what makes `movie_playhead` report *this* movie's
+                        // position for `update_fmv_intro` to pace against.
+                        self.audio
+                            .start_boot_movie("the second boot movie", stage.fmv_intro_sound.take());
                     }
                     report(&events, stage.trace);
                     for note in stage.frontend.take_notes() {
