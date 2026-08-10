@@ -63,10 +63,16 @@ const FE_CANDIDATES: &[(&str, Platform)] = &[
 /// checking at all. So this table only rules a source *out*: a serial absent
 /// from it gets no verdict and still has to find its own archive by name,
 /// same as before this table existed.
-const FOREIGN_SERIALS: &[ForeignSerial] = &[ForeignSerial {
-    serial: "UCUS-98612",
-    title: "Wipeout Pure",
-}];
+const FOREIGN_SERIALS: &[ForeignSerial] = &[
+    ForeignSerial {
+        serial: "UCUS-98612",
+        title: "Wipeout Pure",
+    },
+    ForeignSerial {
+        serial: "UCES-00001",
+        title: "Wipeout Pure",
+    },
+];
 
 /// Opens whichever archives `source` carries, as Wipeout Pulse.
 ///
@@ -388,6 +394,7 @@ mod tests {
     #[test]
     fn only_a_known_foreign_serial_gets_a_verdict() {
         assert_eq!(TITLE.foreign_title("UCUS-98612"), Some("Wipeout Pure"));
+        assert_eq!(TITLE.foreign_title("UCES-00001"), Some("Wipeout Pure"));
         assert_eq!(TITLE.foreign_title("UCUS-98712"), None);
         assert_eq!(TITLE.foreign_title("SCES-54748"), None);
         assert_eq!(TITLE.foreign_title("UCES-00465"), None);

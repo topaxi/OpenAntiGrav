@@ -95,10 +95,14 @@ hash-images:
 # Boots the EU PSP disc (pulse-psp-eu.chd) by default - a British game, EU
 # build. `psp-usa`/`pulse-psp-usa`/`usa` swaps in the USA disc (the
 # reverse-engineering target of record - see source-images.md); `ps2`/
-# `pulse-ps2` swaps in the PS2 disc (EU). A bare flag (`--ticks 5`) still
-# gets the EU default; anything else (a path or `image:entry` spec) is
-# passed straight through unchanged, so `just play data/images/foo.chd
-# --ticks 5` still works.
+# `pulse-ps2` swaps in the PS2 disc (EU). `pure`/`pure-eu`/`pure-psp-eu`
+# swaps in the Pure EU PSP disc, `pure-usa`/`pure-psp-usa` the Pure USA one -
+# oag-game does not play Pure yet, so these fail fast with a named
+# `WrongTitle` error rather than booting a race; they exist so that error
+# path stays reachable by keyword, ready for whenever Pure becomes playable
+# (roadmap M8). A bare flag (`--ticks 5`) still gets the EU default; anything
+# else (a path or `image:entry` spec) is passed straight through unchanged,
+# so `just play data/images/foo.chd --ticks 5` still works.
 play *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -117,8 +121,14 @@ play *ARGS:
         pulse-ps2|ps2)
             args=("data/images/pulse-ps2-eu.chd" "${args[@]:1}")
             ;;
+        pure|pure-psp-eu|pure-eu)
+            args=("data/images/pure-psp-eu.chd" "${args[@]:1}")
+            ;;
+        pure-psp-usa|pure-usa)
+            args=("data/images/pure-psp-usa.chd" "${args[@]:1}")
+            ;;
     esac
-    ${OAG_PLAY_WRAPPER:-} cargo run -q --release -p oag-game {{native_video_flags}} -- "${args[@]}"
+    ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} -- "${args[@]}"
 
 # Same as `play`, but wrapped with MangoHud for an FPS/frametime overlay. Needs
 # `mangohud` installed; override the binary with `MANGOHUD_BIN`.

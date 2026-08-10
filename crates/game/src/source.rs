@@ -43,10 +43,12 @@ pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-usa.chd";
 /// them is found by name rather than by alphabetical luck - `oag-game` does
 /// not yet play either; opening one now fails with a clear error naming the
 /// title instead of silently loading it as Pulse. See ADR-0009 and roadmap
-/// M8.
-pub const IMAGE_NAMES: [&str; 4] = [
+/// M8. Pure's EU image is listed before its USA one so a directory holding
+/// both auto-detects as EU, matching the default region elsewhere.
+pub const IMAGE_NAMES: [&str; 5] = [
     "pulse-psp-usa.chd",
     "pulse-ps2-eu.chd",
+    "pure-psp-eu.chd",
     "pure-psp-usa.chd",
     "hdfury-ps3-eu.iso",
 ];
