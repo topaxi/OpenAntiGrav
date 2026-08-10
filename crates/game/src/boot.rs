@@ -11,7 +11,6 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use oag_formats::fexml;
 use oag_pulse as pulse;
-use oag_pure::frontend::states as pure_states;
 
 use crate::title::open_source;
 
@@ -45,7 +44,7 @@ pub struct Boot {
     /// [`load_fmv_intro`]. `None` for any source that has no such state
     /// (every Pulse source), the same way `backdrop` is `None` for a source
     /// with no menu backdrop.
-    pub fmv_intro: Option<Movie>,
+    pub after_language_movie: Option<Movie>,
     /// Every front-end image the screens reference, in one texture.
     pub sprites: crate::sprite::Sheet,
     /// The text atlas: the disc's own font when it decodes, ours when it does
@@ -74,7 +73,7 @@ pub struct Boot {
     /// `ffmpeg` that is missing or failed, or `--no-video`, which never reads
     /// the movie at all. See [`load_movie_sound`].
     pub movie_sound: Option<crate::at3::Pcm>,
-    /// [`Self::fmv_intro`]'s own sound, on exactly the same terms.
+    /// [`Self::after_language_movie`]'s own sound, on exactly the same terms.
     ///
     /// A second field rather than a second decode path: [`load_movie_sound`] is
     /// already title-agnostic and decides silence from the source's own `Movie`
@@ -85,7 +84,7 @@ pub struct Boot {
     /// Kept apart from `movie_sound` because the two are played at different
     /// moments - the first at boot, this one when `FMV Intro` is entered - and a
     /// single field would have to be reloaded rather than handed over.
-    pub fmv_intro_sound: Option<crate::at3::Pcm>,
+    pub after_language_movie_sound: Option<crate::at3::Pcm>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
@@ -109,7 +108,7 @@ impl Boot {
     pub fn video_format(&self) -> Option<crate::render::VideoFormat> {
         self.movie
             .as_ref()
-            .or(self.fmv_intro.as_ref())
+            .or(self.after_language_movie.as_ref())
             .and_then(crate::render::VideoFormat::of)
     }
 }
@@ -172,9 +171,16 @@ pub struct Options {
 pub fn load(options: &Options) -> Result<Boot> {
     let mut report = Vec::new();
     let (packs, problems) = crate::dlc::packs(&options.dlc, &default_dlc_cache_dir());
-    let mut archives = open_source(&options.source, packs)
+    let crate::title::Opened {
+        mut archives,
+        title,
+    } = open_source(&options.source, packs)
         .with_context(|| format!("opening the archives in {}", options.source))?;
+    // Which title this is was settled by the serial, above, and everything below
+    // asks `profile` rather than asking the XML again. See ADR-0023.
+    let profile = title.boot;
     report.push(archives.layout.describe());
+    report.push(format!("{}: boot sequence", title.name));
     if !archives.packs.is_empty() {
         report.push(format!(
             "dlc: {} archive(s) mounted behind this source",
@@ -196,7 +202,7 @@ pub fn load(options: &Options) -> Result<Boot> {
     }
 
     let font = load_font(&mut archives, &mut report);
-    let screens = load_screens(&mut archives, &mut report)?;
+    let screens = load_screens(&mut archives, profile.fallback_globals, &mut report)?;
     let languages = load_languages(&mut archives, &mut report);
     let offered = languages.clone();
     let strings = load_strings(
@@ -208,13 +214,51 @@ pub fn load(options: &Options) -> Result<Boot> {
     let documents = definitions(&mut archives, &mut report);
     let tracks = load_tracks(&mut archives, &documents, &mut report);
     let teams = load_teams(&mut archives, &documents, &mut report);
+    // Which step the boot opens on, from this title's own chain.
+    //
+    // `--reel` is refused by name on a title with no evidenced reel state rather
+    // than pointed at another title's screen. It used to send Pure to Pulse's
+    // `Intro Screen->IntroMovie1`, where it failed to find Pulse's European reel
+    // hash in Pure's archive and ran 260 frames of black through a screen that
+    // title does not have.
+    let start_step = match options.leg {
+        crate::frontend::Leg::LogoFmv => profile.start(),
+        crate::frontend::Leg::DevPubReel => profile.reel.as_ref().with_context(|| {
+            format!(
+                "--reel is Wipeout Pulse's own off-path dev/pub reel state; {} has no \
+                 equivalent anyone has found",
+                title.name
+            )
+        })?,
+    };
+    // And which step confirming a language goes to: the next one in the chain
+    // this pressing carries *and* this build can drive. Pure's chain has two
+    // screens between its picker and its movie that nothing here draws yet, so
+    // they are stepped over rather than stalling the boot on them - and the step
+    // that is skipped is reported, because a silently shortened sequence is
+    // exactly the kind of thing that reads as finished work.
+    let after_step = profile.next_after(crate::frontend::states::LANGUAGE_SELECTION, |state| {
+        screens.by_name(state).is_some() && crate::frontend::can_drive(state)
+    });
+    for step in profile.chain {
+        if step.state != crate::frontend::states::LANGUAGE_SELECTION
+            && screens.by_name(step.state).is_some()
+            && !crate::frontend::can_drive(step.state)
+        {
+            report.push(format!(
+                "the disc's {:?} is skipped: this build has no behaviour for it yet",
+                step.state
+            ));
+        }
+    }
+
     // `--movie` overrides whichever movie the boot leg would play, and asks for
     // one on a leg that plays none - it is a preview tool, so pointing it at a
     // source whose own boot is silent has to show something rather than nothing.
     let movie_name = options
         .movie
         .clone()
-        .or_else(|| default_boot_movie(options.leg, &screens).map(str::to_string));
+        .or_else(|| start_step.movie.map(str::to_string));
     let movie = match &movie_name {
         Some(name) => load_movie(&mut archives, name, options, &mut report)?,
         None => None,
@@ -226,8 +270,19 @@ pub fn load(options: &Options) -> Result<Boot> {
         Some(name) => load_movie_sound(movie.as_ref(), &screens, name, options, &mut report),
         None => None,
     };
-    let backdrop = load_backdrop(&mut archives, options, &mut report);
-    let mut fmv_intro = load_fmv_intro(&mut archives, &screens, options, &mut report);
+    let backdrop = match profile.menu_backdrop {
+        Some(name) => load_backdrop(&mut archives, name, options, &mut report),
+        None => None,
+    };
+    // The after-language step's own movie, if it has one. Named by the chain
+    // rather than probed for by screen name, and `None` covers both "this title's
+    // next screen plays nothing" (Pulse's `Show Logo`) and "there is no next
+    // screen this build can drive".
+    let after_language_movie_name = after_step.and_then(|step| step.movie);
+    let mut after_language_movie = match after_language_movie_name {
+        Some(name) => load_second_movie(&mut archives, name, options, &mut report),
+        None => None,
+    };
     // The same one-pipeline guard the backdrop goes through below, and the
     // second movie needs it for the same reason: `upload_frame` slices by the
     // pipeline's dimensions. Checked only when there *is* a first movie - when
@@ -238,7 +293,7 @@ pub fn load(options: &Options) -> Result<Boot> {
     // `WoFMVNew_US.PMF` at 480x272 with byte-identical PSMF stream descriptors,
     // so this does not fire on any disc anyone has. It is what stops a future
     // source, or a `--movie` override, from garbling the picture silently.
-    if let (Some(first), Some(second)) = (movie.as_ref(), fmv_intro.as_ref())
+    if let (Some(first), Some(second)) = (movie.as_ref(), after_language_movie.as_ref())
         && !same_planes(second, first)
     {
         report.push(
@@ -246,18 +301,21 @@ pub fn load(options: &Options) -> Result<Boot> {
              and the front end has one video pipeline"
                 .to_string(),
         );
-        fmv_intro = None;
+        after_language_movie = None;
     }
-    // Same call, same rules, second movie: the widget that names
-    // `FMV_INTRO_MOVIE` is the one that decides whether it is heard, and it is
-    // in the same XML `screens` still holds.
-    let fmv_intro_sound = load_movie_sound(
-        fmv_intro.as_ref(),
-        &screens,
-        oag_pure::names::FMV_INTRO_MOVIE,
-        options,
-        &mut report,
-    );
+    // Same call, same rules, second movie: the widget naming it is the one that
+    // decides whether it is heard, and it is in the same XML `screens` still
+    // holds.
+    let after_language_movie_sound = match after_language_movie_name {
+        Some(name) => load_movie_sound(
+            after_language_movie.as_ref(),
+            &screens,
+            name,
+            options,
+            &mut report,
+        ),
+        None => None,
+    };
     let sprites = load_sprites(&mut archives, &screens, &mut report);
 
     let placements = screens
@@ -286,13 +344,23 @@ pub fn load(options: &Options) -> Result<Boot> {
         )
     };
     let mut frontend = Frontend::booting(
-        options.leg,
+        crate::frontend::Sequence {
+            start: start_step.state,
+            first: plan(movie.as_ref()),
+            // With no drivable step after the picker, the picker's exit is
+            // itself: it stays put rather than firing at a screen nothing can
+            // leave. Unreachable on either title today, both chains having one.
+            after_language: after_step
+                .map_or(crate::frontend::states::LANGUAGE_SELECTION, |step| {
+                    step.state
+                }),
+            after_language_movie: plan(after_language_movie.as_ref()),
+            picker_backdrop_parent: profile.picker_backdrop_parent,
+        },
         screens,
         strings.clone(),
         languages,
         placements,
-        plan(movie.as_ref()),
-        plan(fmv_intro.as_ref()),
     );
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's
@@ -333,7 +401,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         // first boot movie when there is one and the second when there is not -
         // the same rule [`Boot::video_format`] applies, so the two cannot
         // disagree about what the planes are.
-        let reference = movie.as_ref().or(fmv_intro.as_ref());
+        let reference = movie.as_ref().or(after_language_movie.as_ref());
         if reference.is_some_and(|reference| same_planes(backdrop, reference)) {
             // **The cache's length, not the container's frame count**, when
             // there is a cache. The playhead set here is the one the menus go
@@ -392,8 +460,8 @@ pub fn load(options: &Options) -> Result<Boot> {
         movie,
         movie_sound,
         backdrop,
-        fmv_intro,
-        fmv_intro_sound,
+        after_language_movie,
+        after_language_movie_sound,
         sprites,
         report,
     })
@@ -538,8 +606,14 @@ fn load_movie_sound(
 ///   every run after, and boot is already paying that for the intro's 1200 -
 ///   whereas the menus open on a keypress out of a race, where a
 ///   thirteen-second freeze would read as a hang.
+///
+/// `name` is the title's own, from [`oag_title::BootProfile::menu_backdrop`]. It
+/// used to be `pulse::names::BACKDROP_MOVIE` for every source, which was a Pulse
+/// literal tried against every disc - silent on Pure, since the miss is
+/// unreported by construction, but a lookup that could only ever fail.
 fn load_backdrop(
     archives: &mut oag_assets::Archives,
+    name: &str,
     options: &Options,
     report: &mut Vec<String>,
 ) -> Option<Movie> {
@@ -550,7 +624,7 @@ fn load_backdrop(
         extent: Extent::Whole,
         ..options.clone()
     };
-    match load_movie(archives, pulse::names::BACKDROP_MOVIE, &wanted, report) {
+    match load_movie(archives, name, &wanted, report) {
         Ok(movie) => movie,
         // Reported and dropped. `load_movie` only errors here on an entry it
         // cannot read, and the backdrop is not worth failing a boot over.
@@ -561,31 +635,27 @@ fn load_backdrop(
     }
 }
 
-/// Decodes Pure's second boot movie - see
-/// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what it is, how
-/// its name was found, and what it takes to actually draw it (the other half
-/// of that work, done alongside this function: see `crate::frontend::Frontend`
-/// and `crate::main::FrontendStage` for the rest).
+/// Decodes the movie the after-language step plays, whichever title's it is.
 ///
-/// `None`, and nothing attempted at all, for a source whose `screens` has no
-/// `FMV Intro` state - every Pulse source, and any future title this build
-/// has not seen. Checked against `screens` rather than tried unconditionally
-/// the way [`load_backdrop`] tries `BACKDROP_MOVIE` for every source: a miss
-/// there is silent by construction (no report line), but `FMV_INTRO_MOVIE` is
-/// a Pure-specific literal, and trying it against a Pulse source would add a
-/// "no second boot movie" line nobody asked about.
-fn load_fmv_intro(
+/// `name` comes from that title's own chain, so this function knows nothing about
+/// which title it is serving. It used to gate on `screens.by_name("FMV Intro")`
+/// and name `oag_pure::names::FMV_INTRO_MOVIE` outright - a probe and a literal
+/// that between them assumed exactly one title could ever have a movie here.
+///
+/// Absence is reported and dropped rather than fatal: nothing on the command line
+/// asked for this movie, so a source that cannot produce it plays its sequence
+/// without one.
+fn load_second_movie(
     archives: &mut oag_assets::Archives,
-    screens: &Screens,
+    name: &str,
     options: &Options,
     report: &mut Vec<String>,
 ) -> Option<Movie> {
-    screens.by_name(pure_states::FMV_INTRO)?;
     let wanted = Options {
         extent: Extent::Whole,
         ..options.clone()
     };
-    match load_movie(archives, oag_pure::names::FMV_INTRO_MOVIE, &wanted, report) {
+    match load_movie(archives, name, &wanted, report) {
         Ok(movie) => movie,
         Err(e) => {
             report.push(format!("no second boot movie: {e:#}"));
@@ -701,7 +771,11 @@ fn load_font(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -> c
     }
 }
 
-fn load_screens(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -> Result<Screens> {
+fn load_screens(
+    archives: &mut oag_assets::Archives,
+    fallback_globals: &[(&str, &str)],
+    report: &mut Vec<String>,
+) -> Result<Screens> {
     // The one piece with no degraded form: a front end with no screens is not a
     // front end. The message names the archives searched, because on a source
     // whose front-end root has never been located that is the useful half.
@@ -723,12 +797,11 @@ fn load_screens(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -
         String::from_utf8(blob).context("the front-end XML is not text")?
     };
 
-    // Unconditional rather than title-gated: `or_insert` only fills a name
-    // Pulse's own `Skin.xml` leaves undeclared, and Pulse declares its own
-    // `TitleColor`/`DesignColor` (see `oag_pure::frontend::FALLBACK_GLOBALS`'s
-    // own doc comment), so this is a no-op there.
-    let screens =
-        Screens::from_xml_with_fallback_globals(&xml, oag_pure::frontend::FALLBACK_GLOBALS);
+    // This title's own measured stand-ins, not every title's. Pure's table used
+    // to be handed to every source on the grounds that `or_insert` made it a
+    // no-op on Pulse - true, and true only for as long as no two titles measured
+    // a *different* value for one name. Pulse's own table is empty.
+    let screens = Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
     report.push(format!(
         "{}: {} screens, {} globals, {} LoadXML includes",
         pulse::names::FRONTEND_ROOT,
@@ -987,43 +1060,6 @@ pub fn load_strings(
 /// See `docs/architecture/frontend-boot.md` and
 /// `docs/ghidra/functions/psp-pulse-usa/frontend-video.md`.
 pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
-
-/// [`DEFAULT_BOOT_MOVIE`], generalised over which title `screens` came from.
-///
-/// `--reel` (`Leg::DevPubReel`) always wants [`DEVPUB_REEL`] - that leg is
-/// reached explicitly, by a flag, on Pulse alone, so the title makes no
-/// difference to it.
-///
-/// # `None` is Pure's answer, and it is measured
-///
-/// `Leg::LogoFmv` is the leg a default boot runs, and on Pulse it plays
-/// [`DEFAULT_BOOT_MOVIE`]. **On Pure it plays nothing at all**: a true cold boot
-/// opens straight onto `Language Selection`, with no movie before it, confirmed
-/// on both pressings. `oag_pure::names::INTRO_MOVIE` is real, present and
-/// decodable - and byte-for-byte Pulse's American dev/pub reel - but it is not
-/// on Pure's boot path, exactly as Pulse's own `Intro Screen->IntroMovie1` reel
-/// is not on Pulse's. Returning it here was this build's own invention, made
-/// from a stale emulator save profile that was skipping the real boot.
-///
-/// See [pure-boot.md](../../../docs/architecture/pure-boot.md), which records
-/// the trap as well as the sequence.
-///
-/// Pure is detected the same way `Frontend::language_confirm_target` detects it,
-/// by whether its own `Title Screen` exists - a probe, and one of several asking
-/// the same question in different words. [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md)
-/// is what replaces them all with a table.
-fn default_boot_movie(leg: crate::frontend::Leg, screens: &Screens) -> Option<&'static str> {
-    match leg {
-        crate::frontend::Leg::DevPubReel => Some(DEVPUB_REEL),
-        crate::frontend::Leg::LogoFmv => {
-            if screens.by_name(pure_states::TITLE_SCREEN).is_some() {
-                None
-            } else {
-                Some(DEFAULT_BOOT_MOVIE)
-            }
-        }
-    }
-}
 
 /// What `--reel` defaults to: the European cut of the dev/pub reel.
 ///

@@ -22,6 +22,9 @@ oag-pulse.workspace = true
 # because Pure is a played title yet. See roadmap M8.
 oag-pure.workspace = true
 oag-assets.workspace = true
+# For `Title` and the boot profile it carries: the composition root consumes the
+# vocabulary both title packages fill in. See ADR-0023.
+oag-title.workspace = true
 # The mixer and the device. The composition root is the only crate allowed to
 # hold one: `scripts/check-dependency-rules.py` fails the build if a gameplay
 # crate ever reaches it. See docs/architecture/workspace-layout.md.

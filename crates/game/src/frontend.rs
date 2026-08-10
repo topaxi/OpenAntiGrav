@@ -86,29 +86,70 @@ use crate::state_machine::{Event, StateMachine};
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 use oag_pure::frontend::states as pure_states;
 
-/// Which movie leg the sequence boots into.
+/// Which leg the sequence boots into.
 ///
-/// See the module docs: one of these is on the disc's boot path and the other
-/// is a state whose trigger nobody has found.
+/// **A command-line intent, not a title fact.** It stays in this crate for that
+/// reason: which screen either leg starts on is the title's own business and
+/// lives in [`oag_title::BootProfile`], while whether `--reel` was given is the
+/// composition root's. This enum used to answer both questions, mapping an intent
+/// onto *Pulse's* screen names for every source.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Leg {
-    /// `LogoFMV`, playing `Data\Movies\Intro.PMF` straight through.
+    /// The title's own boot sequence, whatever it opens on.
     #[default]
     LogoFmv,
-    /// `Intro Screen->IntroMovie1`, with the frame-counted holds at 144, 231
-    /// and 260. Reached through `--reel`.
+    /// The off-path dev/pub reel state, for a title that has one. Reached
+    /// through `--reel`, and refused by name on a title that does not.
     DevPubReel,
 }
 
-impl Leg {
-    /// The state this leg starts in.
-    #[must_use]
-    pub fn state(self) -> &'static str {
-        match self {
-            Self::LogoFmv => states::LOGO_FMV,
-            Self::DevPubReel => states::INTRO_MOVIE,
-        }
-    }
+/// Whether this build has any behaviour for a screen at all.
+///
+/// A title's chain names every screen the disc walks, including ones nothing here
+/// draws or advances yet - Pure's `Developer Publisher Screen` and
+/// `MemoryStickWarning` are both in its chain and neither is implemented. The
+/// mechanism steps over them rather than stalling the boot on a screen with no
+/// way out, and this is the list it steps by.
+///
+/// **Adding a state here is a claim that it can be entered and left.** A screen
+/// listed but not driven is a hang; a screen driven but not listed is skipped.
+#[must_use]
+pub fn can_drive(state: &str) -> bool {
+    [
+        states::LOGO_FMV,
+        states::INTRO,
+        states::INTRO_MOVIE,
+        states::DEV_PUB_REDIRECT,
+        states::LOGO_FMV_REDIRECT,
+        states::SHOW_LOGO,
+        states::LANGUAGE_SELECTION,
+        states::LAUNCH_GAME,
+        pure_states::FMV_INTRO,
+        pure_states::TITLE_SCREEN,
+    ]
+    .contains(&state)
+}
+
+/// What `boot::load` resolved about the sequence before the front end existed.
+///
+/// Every field here was a `screens.by_name(...)` probe in this file or in
+/// `boot.rs` - four of them, three asking "is this Pure?" in different words.
+/// They are resolved once now, from the title's own table, and handed in. See
+/// [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md).
+#[derive(Debug, Clone)]
+pub struct Sequence {
+    /// The screen the boot opens on.
+    pub start: &'static str,
+    /// The movie playing there, if any.
+    pub first: MoviePlan,
+    /// Where confirming a language goes - the next screen in the title's chain
+    /// that this pressing carries and this build can drive.
+    pub after_language: &'static str,
+    /// The movie playing *there*, if any. Pulse's `Show Logo` has none; Pure's
+    /// `FMV Intro` is its second boot movie.
+    pub after_language_movie: MoviePlan,
+    /// The screen whose fills the language picker inherits, if it needs one.
+    pub picker_backdrop_parent: Option<&'static str>,
 }
 
 /// One boot movie, as the sequence needs to know it.
@@ -491,6 +532,11 @@ pub struct Frontend {
     /// Lines worth telling the user about, in order.
     notes: Vec<String>,
     finished: bool,
+    /// Where confirming a language goes, resolved from the title's own chain
+    /// before this existed. See [`Sequence::after_language`].
+    after_language: &'static str,
+    /// The screen whose fills the picker inherits, if it needs one.
+    picker_backdrop_parent: Option<&'static str>,
 }
 
 impl Frontend {
@@ -508,34 +554,43 @@ impl Frontend {
         has_picture: bool,
     ) -> Self {
         let screen = (SCREEN.0 as u32, SCREEN.1 as u32);
+        // Pulse's own sequence, which is what every in-file test here parses.
         Self::booting(
-            Leg::default(),
+            Sequence {
+                start: states::LOGO_FMV,
+                first: MoviePlan {
+                    frames: movie_frames,
+                    frame_rate: crate::movie::FRAME_RATE,
+                    aspect: screen,
+                    has_picture,
+                },
+                after_language: states::SHOW_LOGO,
+                after_language_movie: MoviePlan::none(screen),
+                picker_backdrop_parent: None,
+            },
             screens,
             strings,
             languages,
             placements,
-            MoviePlan {
-                frames: movie_frames,
-                frame_rate: crate::movie::FRAME_RATE,
-                aspect: screen,
-                has_picture,
-            },
-            MoviePlan::none(screen),
         )
     }
 
-    /// Builds the boot sequence on a named [`Leg`].
+    /// Builds the boot sequence a title's own table resolved to.
     #[must_use]
-    #[allow(clippy::too_many_arguments)]
     pub fn booting(
-        leg: Leg,
+        sequence: Sequence,
         screens: Screens,
         strings: StringTable,
         languages: Vec<Language>,
         placements: Vec<(String, crate::sprite::Placed)>,
-        first: MoviePlan,
-        second: MoviePlan,
     ) -> Self {
+        let Sequence {
+            start,
+            first,
+            after_language,
+            after_language_movie: second,
+            picker_backdrop_parent,
+        } = sequence;
         let mut machine = StateMachine::new();
         machine.register_all([
             states::LOGO_FMV,
@@ -546,10 +601,9 @@ impl Frontend {
             states::SHOW_LOGO,
             states::LANGUAGE_SELECTION,
             states::LAUNCH_GAME,
-            // Pure's own boot leg targets, registered unconditionally the same
-            // way Pulse's states are: harmless on a Pulse source, since
-            // nothing ever fires into them there. See
-            // `Self::language_confirm_target`.
+            // Every state this build can drive, whichever title is opened -
+            // harmless on a source that never fires into one, and `can_drive` is
+            // the same list stated once for the mechanism that skips the rest.
             pure_states::TITLE_SCREEN,
             pure_states::FMV_INTRO,
         ]);
@@ -558,38 +612,20 @@ impl Frontend {
         let paths: Vec<String> = screens.screens.iter().map(|s| s.path.clone()).collect();
         machine.register_all(paths.iter().map(String::as_str));
 
-        // **Where a boot starts is a per-title fact, not a per-leg one.**
-        // `Leg::state()` answers for Pulse, whose default leg opens on `LogoFMV`
-        // playing its intro - cold-boot confirmed, the first frame after
-        // power-on being inside that movie. Pure's own cold boot opens on the
-        // picker with no movie at all, so `LogoFMV` is not merely the wrong
-        // screen there, it is a screen that title does not have.
-        //
-        // Probed off `Title Screen` here, which is the fourth site in this build
-        // asking "is this Pure?" in its own words. See
-        // [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md):
-        // the table it describes is what deletes all four, and this one exists
-        // only until it lands.
-        let start = if screens.by_name(pure_states::TITLE_SCREEN).is_some() && leg == Leg::LogoFmv {
-            states::LANGUAGE_SELECTION
-        } else {
-            leg.state()
-        };
-
         // With no movie this build can read a picture out of, a leg that plays
         // one still has to run and end: `FINISH_FRAME` is Pulse's own reel
         // length, a bounded stand-in.
         //
         // **A leg that plays no movie by design gets nothing to run instead.**
-        // Borrowing Pulse's 260 there would give Pure's picker a player counting
-        // down a length belonging to another title's reel. Nothing reads it -
-        // `confirm_language` rebuilds the player for the second movie before any
-        // movie state is entered - but a number that is never read is still a
+        // Borrowing Pulse's 260 there would give a picker-first boot a player
+        // counting down a length belonging to another title's reel. Nothing reads
+        // it - `confirm_language` rebuilds the player for the second movie before
+        // any movie state is entered - but a number that is never read is still a
         // number no one can explain later.
-        let frames = match first.frames {
-            0 if start == states::LANGUAGE_SELECTION => 0,
-            0 => FINISH_FRAME,
-            frames => frames,
+        let frames = match (first.frames, first.has_picture) {
+            (0, false) if start == states::LANGUAGE_SELECTION => 0,
+            (0, _) => FINISH_FRAME,
+            (frames, _) => frames,
         };
 
         let mut frontend = Self {
@@ -617,6 +653,8 @@ impl Frontend {
             acted: Vec::new(),
             notes: Vec::new(),
             finished: false,
+            after_language,
+            picker_backdrop_parent,
         };
         frontend.machine.transition_to(start);
         frontend
@@ -999,31 +1037,18 @@ impl Frontend {
         }
     }
 
-    /// The screen this source's boot leg lands on after the language picker.
+    /// The screen this source's boot lands on after the language picker.
     ///
-    /// [`states::SHOW_LOGO`] when the source has one - Pulse, unchanged from
-    /// what this build has always done. Sources that do not (Pure) fall back
-    /// to [`pure_states::FMV_INTRO`] when the source has *that* - Pure's real
-    /// chain plays its second boot movie before its own `Show Logo`
-    /// counterpart, unlike Pulse's, which reorders straight to the picker's
-    /// next screen with nothing between (see [`pure_states::FMV_INTRO`]'s own
-    /// doc comment for the runtime evidence). A source with `Title Screen`
-    /// but no `FMV Intro` - not measured, not expected, but cheap to keep
-    /// honest - falls back to [`pure_states::TITLE_SCREEN`] directly. A
-    /// fourth, uncatalogued source falls back to `SHOW_LOGO` too, the same
-    /// blank-if-absent behaviour this build already had before Pure was
-    /// reachable at all - not a regression, just an unlabelled one.
+    /// Resolved once, in `boot::load`, from the title's own chain - the next step
+    /// after the picker that this pressing carries and this build can drive. This
+    /// used to be a three-branch probe over `Show Logo`, then `FMV Intro`, then
+    /// `Title Screen`, which was a title guess dressed as a capability check: it
+    /// happened to give the right answer for the two titles that existed, and
+    /// would have gone on happening to until it did not. See
+    /// [`Sequence::after_language`].
     #[must_use]
     pub fn language_confirm_target(&self) -> &'static str {
-        if self.screens.by_name(states::SHOW_LOGO).is_some() {
-            states::SHOW_LOGO
-        } else if self.screens.by_name(pure_states::FMV_INTRO).is_some() {
-            pure_states::FMV_INTRO
-        } else if self.screens.by_name(pure_states::TITLE_SCREEN).is_some() {
-            pure_states::TITLE_SCREEN
-        } else {
-            states::SHOW_LOGO
-        }
+        self.after_language
     }
 
     /// Takes the highlighted language and leaves for
@@ -1045,13 +1070,15 @@ impl Frontend {
             ));
         }
         // `self.player` is idle from here on for the leg that just ended - see
-        // `Self::is_playing_movie` - so `FMV Intro` reuses the same field
-        // rather than carrying a second one, rebuilt for the second movie's
-        // own frame count and rate. Harmless when there is no second movie
-        // either (`second.frames == 0`): `Player::new(0, ...)` is exactly
-        // what a source with no movie at all already gets in
-        // [`Frontend::booting`].
-        if target == pure_states::FMV_INTRO {
+        // `Self::is_playing_movie` - so a movie on the next step reuses the same
+        // field rather than carrying a second one, rebuilt for that movie's own
+        // frame count and rate.
+        //
+        // Keyed on the step **having a movie** rather than on its name. It used to
+        // test `target == pure_states::FMV_INTRO`, which is one title's screen
+        // name standing in for the general question "does what comes next play
+        // something".
+        if self.second.frames > 0 {
             self.player =
                 crate::movie::Player::new(self.second.frames, false, self.second.frame_rate);
         }
@@ -1446,15 +1473,18 @@ impl Frontend {
         // was evidenced in): the real picker sits on white, not the black this
         // build's own default canvas fill leaves it on without this.
         //
-        // **Deliberately not extended to Pulse.** The comment below on the
-        // text colour lift already covers why: whether Pulse's own picker
-        // inherits its parent's backdrop the same way is unconfirmed, and
-        // Pulse's `Language Selection` is not authored under `LogoFMV` at all
-        // in the disc's own screen tree (it is `Top FE Screen->FE
-        // Screen->Language Selection` there, reordered here - see the module
-        // docs) - so "draw the parent" is not even obviously the same parent.
-        // Scoping this to sources that have Pure's own `Title Screen` keeps
-        // Pulse's existing, separately-reasoned-about rendering untouched.
+        // **Only where the title's own table names a parent to inherit from.**
+        // Which screen that is - if any - is a per-title fact, so it comes from
+        // [`Sequence::picker_backdrop_parent`] rather than from a probe. It used
+        // to be scoped by "does this source have Pure's `Title Screen`", which
+        // asked about one screen in order to conclude something about a different
+        // one; Pulse gets `None` and is untouched, as it was, but now because its
+        // own table says so rather than because a probe missed.
+        //
+        // Whether Pulse's picker inherits its parent's backdrop the same way is
+        // still unconfirmed, and its `Language Selection` is authored under
+        // `Top FE Screen->FE Screen` rather than under the movie screen, so "draw
+        // the parent" would not even be the same parent there.
         //
         // **Fills only, not the parent's images.** `Intro Screen` also owns
         // `profileFrame` (`StartEnabled="false"`) and `ArrowSelect`, neither
@@ -1463,8 +1493,9 @@ impl Frontend {
         // the parent's images unconditionally would put a 512x512 profile
         // card over the language list. The one thing actually evidenced is
         // the background colour.
-        if self.screens.by_name(pure_states::TITLE_SCREEN).is_some()
-            && let Some(parent) = self.screens.by_name("Intro Screen")
+        if let Some(parent) = self
+            .picker_backdrop_parent
+            .and_then(|name| self.screens.by_name(name))
         {
             for &fill in &parent.fills {
                 out.push(Draw::Fill {
@@ -1777,20 +1808,28 @@ mod tests {
     const GRID: (u32, u32) = (SCREEN.0 as u32, SCREEN.1 as u32);
 
     /// A Pure-shaped boot whose second movie has `fmv_frames` frames of picture.
+    ///
+    /// The sequence is what `oag_pure::frontend::BOOT_PROFILE` resolves to
+    /// against this fixture's screens, written out rather than resolved so that
+    /// this file's tests stay independent of `boot::load`.
     fn pure(fmv_frames: usize) -> Frontend {
         Frontend::booting(
-            Leg::LogoFmv,
+            Sequence {
+                start: pure_states::LANGUAGE_SELECTION,
+                first: MoviePlan::none(GRID),
+                after_language: pure_states::FMV_INTRO,
+                after_language_movie: MoviePlan {
+                    frames: fmv_frames,
+                    frame_rate: crate::movie::FRAME_RATE,
+                    aspect: GRID,
+                    has_picture: fmv_frames > 0,
+                },
+                picker_backdrop_parent: Some(pure_states::INTRO_SCREEN),
+            },
             Screens::from_xml(PURE_XML),
             StringTable::default(),
             languages(),
             Vec::new(),
-            MoviePlan::none(GRID),
-            MoviePlan {
-                frames: fmv_frames,
-                frame_rate: crate::movie::FRAME_RATE,
-                aspect: GRID,
-                has_picture: fmv_frames > 0,
-            },
         )
     }
 
@@ -1809,18 +1848,22 @@ mod tests {
     /// The `--reel` leg: `Intro Screen->IntroMovie1`, with the frame holds.
     fn reel(frames: usize) -> Frontend {
         Frontend::booting(
-            Leg::DevPubReel,
+            Sequence {
+                start: states::INTRO_MOVIE,
+                first: MoviePlan {
+                    frames,
+                    frame_rate: crate::movie::FRAME_RATE,
+                    aspect: GRID,
+                    has_picture: false,
+                },
+                after_language: states::SHOW_LOGO,
+                after_language_movie: MoviePlan::none(GRID),
+                picker_backdrop_parent: None,
+            },
             Screens::from_xml(XML),
             StringTable::default(),
             languages(),
             Vec::new(),
-            MoviePlan {
-                frames,
-                frame_rate: crate::movie::FRAME_RATE,
-                aspect: GRID,
-                has_picture: false,
-            },
-            MoviePlan::none(GRID),
         )
     }
 

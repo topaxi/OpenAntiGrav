@@ -198,7 +198,7 @@ fn pures_second_boot_movie_is_the_one_the_disc_plays() {
     for (label, image) in images() {
         let loaded = load(&image);
         assert!(
-            loaded.fmv_intro.is_some(),
+            loaded.after_language_movie.is_some(),
             "{label}: the FMV Intro screen exists, so its movie has to load"
         );
         assert!(
@@ -209,7 +209,7 @@ fn pures_second_boot_movie_is_the_one_the_disc_plays() {
             "{label}: the report names the second movie; was {:#?}",
             loaded.report
         );
-        let movie = loaded.fmv_intro.as_ref().unwrap();
+        let movie = loaded.after_language_movie.as_ref().unwrap();
         // Measured 2026-08-10 by extracting both movies from both pressings and
         // reading their PSMF stream descriptors: 480x272, byte-identical
         // descriptors, and `WoFMVNew_US.PMF` byte-identical across regions.
@@ -279,11 +279,67 @@ fn the_two_pressings_name_their_movies_the_same_way() {
     for (label, image) in found {
         let loaded = load(&image);
         assert!(
-            loaded.fmv_intro.is_some(),
+            loaded.after_language_movie.is_some(),
             "{label}: {} did not resolve on this pressing; the localisation suffix rule \
              is what to re-measure, not the boot sequence",
             oag_pure::names::FMV_INTRO_MOVIE
         );
+    }
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_reel_flag_is_refused_by_name_rather_than_pointed_somewhere_else() {
+    // Pure ships the reel *file* and even a `Movie` widget for it, but no
+    // evidenced state that plays it. `--reel` used to send a Pure source to
+    // Pulse's `Intro Screen->IntroMovie1`, fail to find Pulse's European reel
+    // hash in Pure's archive, and run 260 frames of black through a screen this
+    // title does not have. A refusal that names the title is what "leave --reel
+    // alone for Pure" should mean.
+    for (label, image) in images() {
+        let options = boot::Options {
+            language: None,
+            source: image.display().to_string(),
+            dlc: Vec::new(),
+            leg: oag_game::frontend::Leg::DevPubReel,
+            movie: None,
+            cache: std::env::temp_dir().join("oag-pure-boot-ground-truth"),
+            audio_cache: oag_game::boot::default_audio_cache_dir(),
+            extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+            no_video: true,
+        };
+        let error = boot::load(&options).expect_err("Pure has no reel state");
+        let text = format!("{error:#}");
+        assert!(
+            text.contains("Wipeout Pure") && text.contains("--reel"),
+            "{label}: the refusal names the flag and the title; got {text:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_screens_this_build_cannot_drive_are_reported_rather_than_dropped_quietly() {
+    // Pure's chain has two screens between its picker and its movie that nothing
+    // here draws yet. Stepping over them is the deliberate choice; doing it
+    // silently is not, because a shortened sequence that says nothing reads as a
+    // finished one.
+    for (label, image) in images() {
+        let loaded = load(&image);
+        for skipped in [
+            pure_states::DEVELOPER_PUBLISHER,
+            pure_states::MEMORY_STICK_WARNING,
+        ] {
+            assert!(
+                loaded
+                    .report
+                    .iter()
+                    .any(|line| line.contains(skipped) && line.contains("skipped")),
+                "{label}: {skipped:?} is in the disc's chain and is skipped, so it has to \
+                 say so; report was {:#?}",
+                loaded.report
+            );
+        }
     }
 }
 

@@ -248,8 +248,8 @@ pub fn run(
         mut frontend,
         movie,
         movie_sound,
-        fmv_intro,
-        mut fmv_intro_sound,
+        after_language_movie,
+        mut after_language_movie_sound,
         backdrop,
         font,
         sprites,
@@ -338,14 +338,15 @@ pub fn run(
         // The second boot movie's own track, started on the tick its state is
         // entered - the same handover `App::tick` does, kept in step with it
         // deliberately. Without it here, `--dump-audio` over a Pure boot would
-        // be silent for the whole `FMV Intro` leg while the window build sounded
-        // it, which is the divergence `movie_playhead`'s own doc comment warns
-        // about for the two tick loops.
+        // be silent for the whole movie leg while the window build sounded it,
+        // which is the divergence `movie_playhead`'s own doc comment warns about
+        // for the two tick loops.
+        let after_language = frontend.language_confirm_target();
         if events.iter().any(|event| {
             matches!(event, crate::state_machine::Event::Enter(name)
-                if name == oag_pure::frontend::states::FMV_INTRO)
+                if name == after_language)
         }) {
-            audio.start_boot_movie("the second boot movie", fmv_intro_sound.take());
+            audio.start_boot_movie("the second boot movie", after_language_movie_sound.take());
         }
         // In the tick loop, next to the state machine it belongs to. See
         // [`crate::audio`] for why nothing here is per frame.
@@ -485,19 +486,21 @@ pub fn run(
                     (backdrop, format, list, frontend.space())
                 }
                 // **`Video::Intro` names two different movies over a boot.** The
-                // first one, and - on a source that has one - the second, played
-                // by `FMV Intro`. The draw cannot say which, the variant being
-                // reused rather than a third added, so the state picks, exactly
-                // as `App::tick`'s own feed swap does. Without this the capture
-                // reads the *first* movie's frame at the *second* movie's
-                // playhead: the wrong picture, silently, which is the class of
-                // mistake this module's own docs above exist to rule out.
+                // first one, and - on a title whose chain has one - the movie its
+                // after-language step plays. The draw cannot say which, the
+                // variant being reused rather than a third added, so the state
+                // picks, exactly as `App::tick`'s own feed swap does. Without this
+                // the capture reads the *first* movie's frame at the *second*
+                // movie's playhead: the wrong picture, silently, which is the
+                // class of mistake this module's own docs above exist to rule out.
                 Some(crate::frontend::Video::Intro)
-                    if frontend.machine().is(oag_pure::frontend::states::FMV_INTRO) =>
+                    if frontend.machine().is(frontend.language_confirm_target()) =>
                 {
-                    let showing = fmv_intro.as_ref().filter(|movie| movie.frames.is_some());
+                    let showing = after_language_movie
+                        .as_ref()
+                        .filter(|movie| movie.frames.is_some());
                     let format = showing.and_then(VideoFormat::of);
-                    (fmv_intro, format, list, frontend.space())
+                    (after_language_movie, format, list, frontend.space())
                 }
                 _ => (movie, video_format, list, frontend.space()),
             }

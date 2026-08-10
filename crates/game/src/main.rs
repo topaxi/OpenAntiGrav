@@ -2129,11 +2129,11 @@ impl Stage {
                 .frames
                 .map(|frames| movie::Feed::spawn(frames, false, width, height))
         });
-        // Same construction as `feed`, for Pure's second boot movie - spawned
-        // now rather than lazily when `FMV Intro` is entered, because the
-        // `Movie` (and the frames inside it) only exist here, on `loaded`;
-        // `App::tick` swaps it into `feed` when the state is actually entered.
-        let fmv_intro_feed = loaded.fmv_intro.and_then(|movie| {
+        // Same construction as `feed`, for the movie the after-language step
+        // plays - spawned now rather than lazily when that state is entered,
+        // because the `Movie` (and the frames inside it) only exist here, on
+        // `loaded`; `App::tick` swaps it into `feed` when the state is entered.
+        let fmv_intro_feed = loaded.after_language_movie.and_then(|movie| {
             let (width, height) = (movie.width, movie.height);
             movie
                 .frames
@@ -2144,7 +2144,7 @@ impl Stage {
             frontend: loaded.frontend,
             feed,
             fmv_intro_feed,
-            fmv_intro_sound: loaded.fmv_intro_sound.take(),
+            after_language_movie_sound: loaded.after_language_movie_sound.take(),
             shown: false,
             backdrop_shown: false,
             held_backdrop: None,
@@ -2478,7 +2478,7 @@ struct FrontendStage {
     /// the two are the same voice: [`crate::audio::Audio::start_movie`] stops
     /// whatever was playing, so starting both up front would mean the second
     /// immediately silenced the first. Taken on the tick `FMV Intro` is entered.
-    fmv_intro_sound: Option<at3::Pcm>,
+    after_language_movie_sound: Option<at3::Pcm>,
     /// Whether a picture has ever reached the planes. See
     /// [`FrontendStage::sync_video`].
     shown: bool,
@@ -3166,20 +3166,24 @@ impl Session {
                             .frontend
                             .update(dt, self.controls.buttons_mut(), movie_playhead);
                     // `feed` is spawned once, from the first boot movie, and
-                    // powers every `Video::Intro` draw - including `FMV
-                    // Intro`'s own, which reuses that variant rather than
-                    // adding a third (see `Frontend`'s own draw dispatch for
-                    // why that reuse is safe). So the moment the state
-                    // machine actually enters `FMV Intro`, the planes need
-                    // *that* movie's frames instead: swap in
-                    // `fmv_intro_feed` and reset the arrived-a-picture-yet
-                    // bookkeeping the same way a fresh boot starts with it
-                    // unset, or the first `FMV Intro` frame either shows the
-                    // first movie's last picture or is skipped as already
-                    // "shown".
+                    // powers every `Video::Intro` draw - including the
+                    // after-language step's own, which reuses that variant
+                    // rather than adding a third (see `Frontend`'s own draw
+                    // dispatch for why that reuse is safe). So the moment the
+                    // state machine actually enters that step, the planes need
+                    // *that* movie's frames instead: swap in `fmv_intro_feed`
+                    // and reset the arrived-a-picture-yet bookkeeping the same
+                    // way a fresh boot starts with it unset, or the first frame
+                    // there either shows the first movie's last picture or is
+                    // skipped as already "shown".
+                    //
+                    // The state is asked of the sequence rather than named as a
+                    // literal: which screen it is came out of the title's own
+                    // chain, and this used to spell Pure's `FMV Intro` outright.
+                    let after_language = stage.frontend.language_confirm_target();
                     if events
                         .iter()
-                        .any(|event| matches!(event, oag_game::state_machine::Event::Enter(name) if name == oag_pure::frontend::states::FMV_INTRO))
+                        .any(|event| matches!(event, oag_game::state_machine::Event::Enter(name) if name == after_language))
                     {
                         stage.feed = stage.fmv_intro_feed.take();
                         stage.shown = false;
@@ -3191,7 +3195,7 @@ impl Session {
                         // is what makes `movie_playhead` report *this* movie's
                         // position for `update_fmv_intro` to pace against.
                         self.audio
-                            .start_boot_movie("the second boot movie", stage.fmv_intro_sound.take());
+                            .start_boot_movie("the second boot movie", stage.after_language_movie_sound.take());
                     }
                     report(&events, stage.trace);
                     for note in stage.frontend.take_notes() {

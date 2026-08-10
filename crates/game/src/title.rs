@@ -9,6 +9,26 @@
 //! nothing past the menu (a race, DLC) plays it yet. See roadmap M8.
 
 use oag_assets::{Archives, Error, Result, dlc::Pack};
+use oag_title::Title;
+
+/// A source, opened as whichever title it turned out to be.
+#[derive(Debug)]
+pub struct Opened {
+    pub archives: Archives,
+    /// Which title identified it - carried rather than discarded.
+    ///
+    /// **This is the strongest evidence anyone gets about which title a source
+    /// is**, and it is available before a line of front-end XML has been parsed:
+    /// it comes from the serial in `UMD_DATA.BIN`, through the deny-list below.
+    /// This build used to throw it away here and then re-derive it four separate
+    /// times downstream by asking whether some screen name existed - three of
+    /// those asking in different words, each a fresh chance to disagree.
+    ///
+    /// It carries [`oag_title::Title::boot`] with it, which is what
+    /// [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md)
+    /// consumes.
+    pub title: &'static Title,
+}
 
 /// Opens `source` as whichever title it identifies as, Pulse or Pure.
 ///
@@ -28,10 +48,17 @@ use oag_assets::{Archives, Error, Result, dlc::Pack};
 /// # Errors
 ///
 /// Propagates [`oag_pulse::open_with_packs`] and [`oag_pure::open`].
-pub fn open_source(source: &str, packs: Vec<Pack>) -> Result<Archives> {
+pub fn open_source(source: &str, packs: Vec<Pack>) -> Result<Opened> {
     match oag_pulse::open_with_packs(source, packs) {
-        Err(Error::WrongTitle { title, .. }) if title == "Wipeout Pure" => oag_pure::open(source),
-        other => other,
+        Err(Error::WrongTitle { title, .. }) if title == "Wipeout Pure" => oag_pure::open(source)
+            .map(|archives| Opened {
+                archives,
+                title: oag_pure::TITLE,
+            }),
+        other => other.map(|archives| Opened {
+            archives,
+            title: oag_pulse::TITLE,
+        }),
     }
 }
 

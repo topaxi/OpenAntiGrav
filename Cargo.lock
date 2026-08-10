@@ -1719,6 +1719,7 @@ dependencies = [
  "oag-pure",
  "oag-race",
  "oag-render",
+ "oag-title",
  "oag-trace",
  "pollster",
  "serde",
