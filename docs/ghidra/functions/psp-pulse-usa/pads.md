@@ -14,7 +14,9 @@ The data side - the payload layout and what the shipped tracks author - is
 | `0x089264f4` | `Pad_Bind` | 85 |
 | `0x088866bc` | `Pad_ContainsPoint` | 85 |
 | `0x0888686c` | `Pad_SweptTest_q` | 65 |
-| `0x08887144` | `Pads_TestCraft_q` | 65 |
+| `0x08887144` | `Pads_TestCraft` | 90 |
+| `0x08a6be7c` | `SpeedupPad_ClassTag` | 90 |
+| `0x08a6ed40` | `WeaponPad_ClassTag` | 85 |
 
 ## `Pad_Bind` (`0x089264f4`)
 
@@ -143,7 +145,7 @@ the magnitude, not from anything the code says, which is what holds this at
 **65**. What would retire it: a breakpoint under PPSSPP showing the branch taken
 on a respawn and not in ordinary driving.
 
-## `Pads_TestCraft_q` (`0x08887144`)
+## `Pads_TestCraft` (`0x08887144`)
 
 ```c
 moved = |position - *(world + slot * 0x10 + 0xb50)|;   // since last tick
@@ -160,11 +162,85 @@ Walks a list of pads and remembers each racer's previous position at
 `world + slot * 0x10 + 0xb50` - which is where `Pad_SweptTest_q`'s `previous`
 comes from, and why the first tick of a race (`previous == 0`) skips the sweep.
 
-**65 rather than 85.** That `DAT_08b32c88` - the object `Ship_ApplySpeedupPad`
-passes as `world` - is specifically the *speedup*-pad list is inferred from the
-call site. The registrar that fills `+0x40` was not read, so nothing here rules
-out one list holding both pad classes and the caller filtering. What would retire
-it: reading the writer of `+0x108`.
+### Retired: `world + 0x40` / `world + 0x108` hold `Speedup Pad` nodes only
+
+**Confidence raised 65 -> 90.** The open question was whether the list
+`Ship_ApplySpeedupPad` passes as `world` (`DAT_08b32c88`) is a *speedup*-pad
+list, or one list shared with `Weapon Pad` that the caller filters. It is
+neither guess: the list is built once, at track load, by a **class-filtered
+scene-graph walk**, and the class it filters on is `0x3bd` - `Speedup Pad` -
+to the exclusion of everything else in the tree, `Weapon Pad` included.
+
+The chain, each link read at instruction level:
+
+1. **`World_LoadTrack`** (`0x08883794`, already named, `vex.md`) finds the
+   just-loaded track's root node in the World object's own child list, then
+   calls `World_CollectNodeLists` on it.
+2. **`World_CollectNodeLists`** (`0x088879d4`, already named, `fog.md`) is the
+   writer of `+0x40`/`+0x108`, and of two sibling lists the same way:
+
+   ```c
+   local_94 = 0;
+   FUN_08a6ed64(world, world + 0x40, 0x32, &local_94, filter);   // filter->class = SpeedupPad_ClassTag()
+   world->0x108 = local_94;
+
+   local_54 = 0;
+   FUN_08a6ee14(world, world + 0x10c, 0x32, &local_54, filter2); // filter2->class = WeaponPad_ClassTag()
+   world->0x1d4 = local_54;
+
+   local_14 = 0;
+   FUN_08a6eec4(world, world + 0x81c, 200, &local_14, filter3);
+   world->0xb3c = local_14;
+   ```
+
+   `+0x40`/`+0x108` (capacity 50) and `+0x10c`/`+0x1d4` (capacity 50) are built
+   by separate calls with separate class filters; `+0x81c`/`+0xb3c` (capacity
+   200, unrelated to pads) is the list `fog.md` already documents this
+   function for.
+3. **`FUN_08a6ed64`** is the generic collector each of those three calls uses:
+
+   ```c
+   if (node->class_tag == filter->class_tag && *count < cap) {
+       out[(*count)++] = node;
+   }
+   for (child = node->first_child; child != 0; child = child->next_sibling)
+       FUN_08a6ed64(child, out, cap, count, filter);
+   ```
+
+   A pre-order walk of the whole node tree (`+0x10` first-child / `+0xc`
+   next-sibling - the same layout `vex.md`'s `FUN_08a71364` walker uses),
+   collecting every node whose `+4` class-tag field matches the filter's, into
+   a fixed-capacity array plus a count. It is class-exclusive by construction:
+   a `Weapon Pad` node cannot pass the `+0x40` list's filter.
+4. **`SpeedupPad_ClassTag`** (`0x08a6be7c`) and **`WeaponPad_ClassTag`**
+   (`0x08a6ed40`) are the two filter values, and each is tied to its class by
+   the registration function that sets it, a `lui`/`ori`/`jal` triple down from
+   the `Vex_RegisterClass` call:
+
+   ```c
+   Vex_RegisterClass(&DAT_08b64370, 0x3bd);   // Speedup Pad
+   ...
+   DAT_08b64374 = SpeedupPad_ClassTag();
+   ```
+   ```c
+   Vex_RegisterClass(&DAT_08b65830, 0x3be);   // Weapon Pad
+   ...
+   DAT_08b65834 = WeaponPad_ClassTag();
+   ```
+
+   Both tag functions are the same idiom - `return <their own address>` - used
+   across the class table as a cheap unique token; each is a leaf with no
+   branches, so there is nothing left to misread. `SpeedupPad_ClassTag` is
+   corroborated a second way: the `Speedup Pad` node constructor
+   (`0x0892661c`, which also zeroes `pad+0x1a0` at construction - init only,
+   not the still-open writer of that field) stores exactly this value to the
+   new node's own `+4`, the field `FUN_08a6ed64` compares against.
+
+**What this closes and what it doesn't.** It retires "does `+0x40` mix both
+pad classes" - it does not, structurally. It does not touch `Pad_SweptTest_q`'s
+own `_q` (the `25.0` teleport-reject reading), which is a separate inference
+and stays at 65, or `pad+0x1a0`'s writer, which this trail never reaches -
+`0x0892661c` only shows the field starts at zero.
 
 ## `ExhaustFlare_OnSpeedupPad` (`0x08904f10`)
 
@@ -280,6 +356,15 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
 
 ## History
 
+- **2026-08-10** - `Pads_TestCraft_q` renamed `Pads_TestCraft`, 65 -> 90. Found
+  the writer of `world + 0x40` / `world + 0x108`: `World_LoadTrack` ->
+  `World_CollectNodeLists` -> a generic class-filtered scene-graph walk
+  (`FUN_08a6ed64`) keyed on a new pair of names, `SpeedupPad_ClassTag`
+  (`0x08a6be7c`, 90) and `WeaponPad_ClassTag` (`0x08a6ed40`, 85), each tied to
+  its class by the `Vex_RegisterClass(..., 0x3bd)` / `(..., 0x3be)` call that
+  sets it. The list is `Speedup Pad` nodes only, structurally, not one shared
+  list a caller filters - closing the "one list holding both pad classes"
+  possibility this page carried since creation.
 - **2026-08-03** - page created. `Pad_Bind` and `Pad_ContainsPoint` at 85,
   `Pad_SweptTest_q` and `Pads_TestCraft_q` at 65. Supersedes two readings in
   `engine.md`: the record `Ship_ApplySpeedupPad` locates is a pad's **matrix**
