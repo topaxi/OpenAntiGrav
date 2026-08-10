@@ -434,3 +434,8 @@
 0x08b30fa8	data	g_weapons_enabled	84	shield.md
 0x08b30fa9	data	g_damage_enabled	84	shield.md
 0x08b31044	data	g_skill_level	84	shield.md
+0x088247e0	function	Race_SpawnGrid	82	grid.md
+0x088253f8	function	Race_SpawnAiRacer	78	grid.md
+0x088536bc	function	Ai_Construct	80	grid.md
+0x08926ae8	function	StartPosition_Bind	82	grid.md
+0x08ab0a90	data	g_grid_orders	82	grid.md
