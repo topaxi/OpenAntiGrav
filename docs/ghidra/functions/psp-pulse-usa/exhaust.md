@@ -2040,6 +2040,42 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   > corrected render and the original, against 329 uncorrected - a different
   > quantity from the registration metric entirely.
 
+  > **Sixth measurement, 2026-08-10 - the recovered UV mechanism replaces
+  > texgen.** The plume's compiled list was settled as replayed under
+  > `TEXMAPMODE` 0 (mesh-draw.md), and the authored keyframed u-scroll it
+  > samples through was recovered down to its bytes in the file
+  > (texture-animation.md). The build now applies exactly that -
+  > `Drawable::apply_uv_transform`, authored UVs through
+  > `TexOffset(u(t), 0)` - and the matched-pose row, same command as the
+  > shipped row plus nothing (`--pose-boost 0.517752`, `--camera-fov
+  > 71.1663`, scroll phase 0):
+  >
+  > | build | px | mean | `b - r` | orange px |
+  > | --- | ---: | --- | ---: | ---: |
+  > | the original | 12,377 | `(193, 147, 218)` | +24.8 | 425 |
+  > | texgen + `SrcAlpha` (replaced) | 6,095 | `(171, 133, 194)` | +22.8 | 1,714 |
+  > | **authored UVs + u-scroll (this)** | **3,792** | `(131, 102, 171)` | +39.5 | **2,768** |
+  >
+  > **This row measures worse than the one it replaces on every pair column,
+  > and it lands anyway** - deliberately, and the reasoning belongs here
+  > rather than in a commit message. The mechanism is no longer an empirical
+  > fit: it is what the executable does, settled at instruction level and
+  > confidence 92, and the project's own rule is that a measurement
+  > disagreeing with an instruction-level read suspects the measurement
+  > first. Three things this pair measurement cannot hold fixed: the
+  > **scroll phase** (the original's 1.5 s clock free-runs from race start,
+  > so tick 62's phase is unknowable; phase 0 samples the texture's bright
+  > column, and at unmatched later phases the mask reads px 4,200 and
+  > `b - r` +44), the **flare overlay** (brighter at this pose in the
+  > original, dominating its mask mean), and the **unrecovered brightness
+  > term** this page already carries open - the plume region reads
+  > mean luma 118 against the original's 169, the same "a term in the blend
+  > chain is still missing" gap `SrcAlpha` was kept to paper over. That gap
+  > is now the whole residual: hue family, streaking and the absence of the
+  > orange wedges all match by eye (crops in the session record), extent
+  > and brightness do not. The next lever is the missing weight, not the
+  > coordinates.
+
   **Fourth measurement of this table, and the first with an instrument that
   does not break under it.** The first used the wrong pose age and a boost
   accumulator charging 100x too slowly; the second fixed those; the third was

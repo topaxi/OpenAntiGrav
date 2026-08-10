@@ -1564,6 +1564,118 @@ pub fn mesh_materials(payload: &[u8]) -> Vec<Option<Material>> {
         .collect()
 }
 
+/// One keyframe track of a mesh's texture-transform block: key times paired
+/// with `(u, v)` values.
+///
+/// Times are `u16`s in 60 Hz frames (the block's `+0x0c` is `1/60` on every
+/// block read); values are `s16` pairs in 1/256 units, so `256` is `1.0`.
+/// Recovered from `TexAnim_EvalKeyframes` (`0x08927034`) - see
+/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The values
+/// gap is closed", and `docs/formats/vex.md`, "The texture-transform keyframe
+/// block".
+#[derive(Debug, Clone, PartialEq)]
+pub struct TexTransformTrack {
+    /// Key times, 60 Hz frames, ascending.
+    pub times: Vec<u16>,
+    /// `(u, v)` at each key, in 1/256 units.
+    pub values: Vec<(i16, i16)>,
+}
+
+impl TexTransformTrack {
+    /// Evaluates the track at `t` frames, the way the engine's evaluator does:
+    /// clamp to the first key below `times[0]`, to the last key past the end,
+    /// linear interpolation between keys otherwise. Returns `(u, v)` in
+    /// texture units (the 1/256 scaling applied).
+    #[must_use]
+    pub fn sample(&self, t: f32) -> (f32, f32) {
+        let Some((&first, &last)) = self.times.first().zip(self.times.last()) else {
+            return (0.0, 0.0);
+        };
+        let scale = |(u, v): (i16, i16)| (f32::from(u) / 256.0, f32::from(v) / 256.0);
+        if t < f32::from(first) {
+            return scale(self.values[0]);
+        }
+        if t >= f32::from(last) {
+            return scale(self.values[self.values.len() - 1]);
+        }
+        let i = self
+            .times
+            .iter()
+            .position(|&key| t < f32::from(key))
+            .unwrap_or(self.times.len() - 1);
+        let (t0, t1) = (f32::from(self.times[i - 1]), f32::from(self.times[i]));
+        let frac = (t - t0) / (t1 - t0);
+        let (u0, v0) = scale(self.values[i - 1]);
+        let (u1, v1) = scale(self.values[i]);
+        (u0 + (u1 - u0) * frac, v0 + (v1 - v0) * frac)
+    }
+
+    /// The last key time, in frames - the span the engine's per-model clock
+    /// loops over for a looping animation like the boost plume's.
+    #[must_use]
+    pub fn period(&self) -> f32 {
+        self.times.last().copied().map_or(0.0, f32::from)
+    }
+}
+
+/// A mesh's authored texture-transform animation: the scale and offset
+/// keyframe tracks from the block after the material array.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TexTransform {
+    /// The `TEXOFFSET` track.
+    pub offset: TexTransformTrack,
+    /// The `TEXSCALE` track. A single key `(256, 256)` is the common
+    /// "constant 1.0" case.
+    pub scale: TexTransformTrack,
+}
+
+/// The texture-transform keyframe block of one mesh payload, if it carries
+/// any keys.
+///
+/// The block sits immediately after the material array, at
+/// `+0x30 + material_count * 0x14`; its two `times` and two `values` fields
+/// are offsets relative to the block itself. Returns `None` when the block
+/// (or any key data it points at) runs past the payload, or when both tracks
+/// are empty - which is the identity transform, per the engine's own default.
+#[must_use]
+pub fn mesh_tex_transform(payload: &[u8]) -> Option<TexTransform> {
+    if payload.len() < 0x30 {
+        return None;
+    }
+    let material_count = usize::from(u16_at(payload, 2));
+    let block = 0x30 + material_count * 0x14;
+    if block + 0x30 > payload.len() {
+        return None;
+    }
+    let offset_count = usize::from(u16_at(payload, block));
+    let scale_count = usize::from(u16_at(payload, block + 2));
+    if offset_count == 0 && scale_count == 0 {
+        return None;
+    }
+    let track = |count: usize, times_rel: usize, values_rel: usize| {
+        let times_at = block + u32_at(payload, block + times_rel) as usize;
+        let values_at = block + u32_at(payload, block + values_rel) as usize;
+        if times_at + count * 2 > payload.len() || values_at + count * 4 > payload.len() {
+            return None;
+        }
+        Some(TexTransformTrack {
+            times: (0..count)
+                .map(|i| u16_at(payload, times_at + i * 2))
+                .collect(),
+            values: (0..count)
+                .map(|i| {
+                    let at = values_at + i * 4;
+                    (u16_at(payload, at) as i16, u16_at(payload, at + 2) as i16)
+                })
+                .collect(),
+        })
+    };
+    Some(TexTransform {
+        offset: track(offset_count, 0x04, 0x10)?,
+        scale: track(scale_count, 0x08, 0x14)?,
+    })
+}
+
 /// Decodes the batches of one mesh payload.
 ///
 /// `payload` is the mesh node's data. `batch_list` selects list A (`0`) or list
@@ -2015,6 +2127,68 @@ fn emit_vif_chunk(
 
 #[cfg(test)]
 mod tests {
+
+    /// A minimal mesh payload carrying the boost plume's own keyframe block -
+    /// the bytes as they sit on disc (`docs/formats/vex.md`, "The
+    /// texture-transform keyframe block"), so the parser and the sampler are
+    /// covered without a disc image; `boost_plume_ground_truth.rs` pins the
+    /// same values against every team's real file.
+    #[test]
+    fn tex_transform_block_parses_and_samples_like_the_engine() {
+        let mut payload = vec![0u8; 0x30];
+        payload[2] = 1; // material_count
+        payload.extend([0u8; 0x14]); // one material
+        let block = payload.len(); // 0x44
+        payload.extend([0u8; 0x30]); // the block itself
+        let w =
+            |p: &mut Vec<u8>, at: usize, v: u32| p[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        payload[block..block + 2].copy_from_slice(&2u16.to_le_bytes()); // offset keys
+        payload[block + 2..block + 4].copy_from_slice(&1u16.to_le_bytes()); // scale keys
+        // key data appended after the block, offsets relative to the block
+        let scale_times = payload.len() - block;
+        payload.extend(90u16.to_le_bytes());
+        let scale_values = payload.len() - block;
+        payload.extend(256u16.to_le_bytes());
+        payload.extend(256u16.to_le_bytes());
+        let offset_times = payload.len() - block;
+        payload.extend(1u16.to_le_bytes());
+        payload.extend(90u16.to_le_bytes());
+        let offset_values = payload.len() - block;
+        for v in [2i16, 0, 253, 0] {
+            payload.extend(v.to_le_bytes());
+        }
+        w(&mut payload, block + 0x04, offset_times as u32);
+        w(&mut payload, block + 0x08, scale_times as u32);
+        w(&mut payload, block + 0x10, offset_values as u32);
+        w(&mut payload, block + 0x14, scale_values as u32);
+
+        let transform = super::mesh_tex_transform(&payload).expect("block parses");
+        assert_eq!(transform.offset.times, vec![1, 90]);
+        assert_eq!(transform.offset.values, vec![(2, 0), (253, 0)]);
+        assert_eq!(transform.scale.sample(45.0), (1.0, 1.0));
+        // Clamp below the first key and past the last, lerp between - the
+        // engine evaluator's own behaviour (`TexAnim_EvalKeyframes`).
+        assert_eq!(transform.offset.sample(0.0), (2.0 / 256.0, 0.0));
+        assert_eq!(transform.offset.sample(90.0), (253.0 / 256.0, 0.0));
+        assert_eq!(transform.offset.sample(500.0), (253.0 / 256.0, 0.0));
+        let (u, v) = transform.offset.sample(1.0 + 89.0 / 2.0);
+        assert!((u - (2.0 + 251.0 / 2.0) / 256.0).abs() < 1e-6);
+        assert_eq!(v, 0.0);
+        assert_eq!(transform.offset.period(), 90.0);
+    }
+
+    /// An empty block - both counts zero - is the engine's identity default,
+    /// not a parse failure, and a payload too short for a block is `None` too.
+    #[test]
+    fn tex_transform_block_absent_or_empty_is_none() {
+        let mut payload = vec![0u8; 0x30];
+        payload[2] = 1;
+        payload.extend([0u8; 0x14]);
+        payload.extend([0u8; 0x30]); // block present, counts 0/0
+        assert_eq!(super::mesh_tex_transform(&payload), None);
+        assert_eq!(super::mesh_tex_transform(&payload[..0x50]), None);
+        assert_eq!(super::mesh_tex_transform(&[0u8; 0x10]), None);
+    }
 
     #[test]
     fn a_version_word_selects_a_table_and_an_unknown_one_selects_none() {
