@@ -214,7 +214,7 @@ extract-iso image="data/images/pulse-psp-usa.chd" out="data/cache/pulse-psp-usa.
 # RPCS3_BIN, e.g. `PPSSPP_BIN=PPSSPP just launch-pulse-psp`.
 
 # Wipeout Pulse (PSP) in PPSSPP
-launch-pulse-psp image="data/images/pulse-psp-usa.chd" *ARGS:
+launch-pulse-psp image="data/images/pulse-psp-eu.chd" *ARGS:
     {{ppsspp_bin}} {{image}} {{ARGS}}
 
 # Wipeout Pulse (PS2) in PCSX2
@@ -222,7 +222,7 @@ launch-pulse-ps2 image="data/images/pulse-ps2-eu.chd" *ARGS:
     {{pcsx2_bin}} -fullscreen {{image}} {{ARGS}}
 
 # Wipeout Pure (PSP) in PPSSPP
-launch-pure-psp image="data/images/pure-psp-usa.chd" *ARGS:
+launch-pure-psp image="data/images/pure-psp-eu.chd" *ARGS:
     {{ppsspp_bin}} {{image}} {{ARGS}}
 
 # WipEout HD / Fury (PS3) in RPCS3. PS3 titles usually need installing rather than
