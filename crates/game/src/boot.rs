@@ -52,6 +52,11 @@ pub struct Boot {
     pub after_language_movie_sound: Option<crate::at3::Pcm>,
     /// Every front-end image the screens reference, in one texture.
     pub sprites: crate::sprite::Sheet,
+    /// How this title lays its menus out and colours them. See
+    /// [`Shell::menu_skin`].
+    pub menu_skin: &'static oag_title::MenuSkin,
+    /// The face menu rows are drawn in. See [`Shell::menu_font`].
+    pub menu_font: Option<crate::font::Atlas>,
     /// The text atlas: the disc's own font when it decodes, ours when it does
     /// not.
     pub font: crate::font::Atlas,
@@ -269,6 +274,16 @@ pub struct Shell {
     /// This title's own boot table, selected from the serial before any XML was
     /// parsed. Carried so the later phases ask it rather than the screens.
     pub profile: &'static oag_title::BootProfile,
+    /// This title's own menu layout and colours, carried the same way and for
+    /// the same reason as [`Self::profile`]: the serial settled which title
+    /// this is, so nothing downstream has to ask again.
+    ///
+    /// Presentation only. The menu *tree* is this build's own - see
+    /// `docs/architecture/menus.md`.
+    pub menu_skin: &'static oag_title::MenuSkin,
+    /// The face menu rows are drawn in, when the title names one and it
+    /// reads. `None` falls the menus back to [`Self::font`].
+    pub menu_font: Option<crate::font::Atlas>,
     /// The screens this boot walks, in the title's own order, already filtered
     /// to the ones this pressing carries and this build can drive.
     ///
@@ -403,6 +418,8 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
         &mut report,
     );
     steps.lap("strings");
+    let menu_font = load_menu_font(&mut archives, &languages, title.menu, &mut report);
+    steps.lap("menu font");
     let documents = definitions(&mut archives, &mut report);
     let tracks = load_tracks(&mut archives, &documents, &mut report);
     let teams = load_teams(&mut archives, &documents, &mut report);
@@ -484,6 +501,8 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
             sprites,
             space,
             profile,
+            menu_skin: title.menu,
+            menu_font,
             walked,
             movie_name,
             second_movie_name,
@@ -681,6 +700,8 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         sprites,
         space,
         profile,
+        menu_skin,
+        menu_font,
         walked,
         movie_name: _,
         second_movie_name: _,
@@ -853,6 +874,8 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     }
 
     Boot {
+        menu_skin,
+        menu_font,
         languages: offered,
         strings,
         tracks,
@@ -1172,6 +1195,46 @@ fn load_font(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -> c
         Err(why) => {
             report.push(format!("font {name} unavailable ({why}); drawing with 5x7"));
             crate::font::Atlas::build()
+        }
+    }
+}
+
+/// Reads the face this title draws menu *rows* in, when it names one.
+///
+/// Separate from [`load_font`] rather than replacing it: the default face is
+/// what the language picker, the loading tips and the HUD are drawn with, and
+/// the picker's layout is measured against it at confidence 95. Only the menus
+/// move to the bigger face.
+///
+/// The role comes from the title's own `MenuSkin` and the file it resolves to
+/// comes from the language plugin's `<Font>` slots, so neither the role list nor
+/// the filenames are hard-coded here. `None` whenever any link in that chain is
+/// missing - a title that never read its menu definitions, a plugin with no such
+/// slot, an unreadable `.fnt` - and the menus then draw in the default face
+/// exactly as they did before this existed.
+fn load_menu_font(
+    archives: &mut oag_assets::Archives,
+    languages: &[Language],
+    skin: &oag_title::MenuSkin,
+    report: &mut Vec<String>,
+) -> Option<crate::font::Atlas> {
+    let role = skin.menu_font?;
+    // Any language will do: the plugins differ in which glyphs a face carries,
+    // not in which file a role names.
+    let name = languages.iter().find_map(|language| language.font(role))?;
+    match archives.read_font(name) {
+        Ok(font) => {
+            report.push(format!(
+                "menu font {name} (role {role:?}): line height {}",
+                font.line_height
+            ));
+            Some(crate::font::Atlas::from_font(&font))
+        }
+        Err(why) => {
+            report.push(format!(
+                "menu font {name} (role {role:?}) unavailable ({why}); menus draw in the default face"
+            ));
+            None
         }
     }
 }

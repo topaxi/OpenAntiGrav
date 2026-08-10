@@ -31,6 +31,7 @@ pub const TITLE: &Title = &Title {
         fe: FE_CANDIDATES,
     },
     foreign_serials: FOREIGN_SERIALS,
+    menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
 };
 

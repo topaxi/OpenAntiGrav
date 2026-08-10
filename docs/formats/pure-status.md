@@ -390,6 +390,41 @@ None of that is on the roadmap, and this page does not put it there. What the
 probe establishes is the ADR-0009 premise: **the format layer is genuinely
 multi-title, and the places it is not are countable.**
 
+## Its front-end skin, and what it does not have
+
+Read off `pure-psp-eu.chd`'s own
+`Data\Plugins\PI001\GUI\Skin.xml`, which is plain `<?xml` - the finding above
+that not one of Pure's 291 XML entries begins `<code`, holding at the front
+end's own root file.
+
+Pure states **six** layout globals where Pulse states dozens, and disagrees with
+Pulse on every one they share:
+
+| | Pulse | Pure |
+| --- | --- | --- |
+| `MenuXOffset` / `MenuScale` | 50 / 1.0 | 21 / 1.15 |
+| `TitleXOffset` / `TitleYOffset` / `TitleScale` | 50 / 0 / 1.0 | 21 / 20 / 0.97 |
+| `MSWarningScale` | 1.0 | 0.8 |
+
+What it does **not** have matters as much, and is why `oag-pure`'s
+`MenuSkin` is mostly `None` rather than filled in from Pulse:
+
+- **No `TextColor` or `TitleColor`.** Both are already carried as measured
+  fallbacks - see `FALLBACK_GLOBALS`, confidence 65, pixel-sampled rather than
+  read - and Pure's `TitleColor` is pink where Pulse's is black, so borrowing
+  would have been wrong rather than merely unevidenced.
+- **No `MainMenu_Definition.xml`.** Its `LoadXML` list names `Teaser_`,
+  `Options_`, `Selection_` and `Multiplayer_Definition` instead, and none has
+  been read for row geometry. So Pure states no first row and no row pitch.
+- **No `LeftLayer` element anywhere.** Its `transition` durations are authored
+  (0, 0.25, 0.3, 0.5, against Pulse's 0, 0.2, 0.5, 0.7) but what they attach to
+  is unread.
+- **Three menu font roles** (`Title`, `Stats`, `scroll`) where Pulse names
+  `menu`, and which one its main list uses is unread.
+
+See [front-end menu definitions](fe-menu-definitions.md) and
+[the original's menus](../ui/menus-original.md).
+
 ## Reported elsewhere
 
 The `WO Track` result belongs on [track data](track.md) and was handed over

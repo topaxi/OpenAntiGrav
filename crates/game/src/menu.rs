@@ -1198,7 +1198,18 @@ pub struct Menu {
     /// "the window really is here now", which is what stops a cursor moving
     /// back up from snapping the list to the top.
     scroll: Vec<usize>,
+    /// How many rows fit on screen. See [`Self::set_visible_rows`].
+    visible: usize,
 }
+
+/// How many rows a page shows before the caller says otherwise.
+///
+/// **Ours**, and picked to match what a title-supplied skin will usually
+/// produce rather than to be round: seven is what the 480x272 screen fits at
+/// the 28-pixel pitch measured off the original, and is what the original's own
+/// main menu shows. [`visible_rows`] recomputes it from the live skin, so this
+/// is only ever what a `Menu` built without one uses.
+pub const DEFAULT_VISIBLE_ROWS: usize = 7;
 
 impl Menu {
     /// Opens a definition at its root page.
@@ -1212,6 +1223,7 @@ impl Menu {
             stack: vec![root],
             cursor,
             scroll,
+            visible: DEFAULT_VISIBLE_ROWS,
         }
     }
 
@@ -1388,7 +1400,24 @@ impl Menu {
             self.scroll[self.current()],
             self.selected(),
             self.page().entries.len(),
+            self.visible,
         )
+    }
+
+    /// How many rows fit on screen, which the row pitch decides.
+    ///
+    /// Set by whoever is drawing, from the live [`Skin`], because the pitch is
+    /// the title's and this type has no font: see [`visible_rows`]. Left at
+    /// [`DEFAULT_VISIBLE_ROWS`] by a caller that never sets it, so a menu built
+    /// in a test scrolls the same way one on screen does.
+    pub fn set_visible_rows(&mut self, rows: usize) {
+        self.visible = rows.max(3);
+    }
+
+    /// What [`Self::set_visible_rows`] last said.
+    #[must_use]
+    pub fn visible_rows(&self) -> usize {
+        self.visible
     }
 
     /// Index of the page being drawn.
@@ -1607,33 +1636,159 @@ impl Menu {
     }
 }
 
-/// Where the rows start and how they are spaced, in the 480x272 space the rest
-/// of the front end draws in.
+/// The right-hand edge a row's value is anchored to, in the 480x272 space the
+/// rest of the front end draws in.
 ///
-/// Round numbers rather than measured ones. Nothing here is recovered - the
-/// disc's own menu layout has not been read and this is not trying to look like
-/// it - so these are picked to be legible at the smallest window the game
-/// opens, and the value column is right-aligned against [`VALUE_RIGHT`] so a
-/// long label and a long value cannot collide.
-const MARGIN_X: f32 = 40.0;
+/// **Ours.** The original's menus have no value column at all - a Wipeout row
+/// is a label and nothing else, and every setting that needs one lives on a
+/// screen built for it. So this is picked rather than recovered, far enough
+/// from [`MenuSkin::menu_x`] that a long label and a long value cannot collide.
 const VALUE_RIGHT: f32 = 440.0;
-const TITLE_Y: f32 = 28.0;
-const FIRST_ROW_Y: f32 = 72.0;
-const ROW_HEIGHT: f32 = 20.0;
-const ROW_SCALE: f32 = 1.0;
 
-/// How many rows are on screen at once.
+/// The leading this build uses for a title that never measured its own.
 ///
-/// Derived from the three constants above and the 272-pixel screen rather than
-/// picked: rows start at [`FIRST_ROW_Y`] and are [`ROW_HEIGHT`] apart, and the
-/// noted-row message under them needs a line of its own, at `0.8` scale against
-/// a font whose line height is up to 25 pixels on the disc's own faces. Eight
-/// rows put the last one's baseline at 212 and the message at 238, which clears
-/// the bottom on every font this draws with; nine would not on the tallest.
+/// Pulse measured 6; Pure has not been captured. Handing this to
+/// [`oag_title::MenuSkin::row_pitch`] rather than letting the title table
+/// default is what keeps one title's measurement out of another's menu - see
+/// that method's own docs.
+const OUR_LEADING: f32 = 6.0;
+
+/// Where the rows start for a title whose own menu definitions are unread.
 ///
-/// Every page but `graphics` and `controls` is shorter than this, so on almost
-/// all of them nothing below scrolls at all.
-const VISIBLE_ROWS: usize = 8;
+/// **Ours**, and derived rather than a constant: a title can state where its
+/// *title* goes without stating where its rows go - Pure does exactly that,
+/// `TitleYOffset` 20 with no main-menu definition to read a first row out of -
+/// and a fixed 32 would then drop the first row almost onto the title. So the
+/// rows start one title-line plus one leading below the title, which is the
+/// same relationship Pulse's own authored 32 has to its title at 0.
+fn our_first_row_y(skin: &Skin) -> f32 {
+    let (_, title_y, title_scale) = skin.title_at();
+    title_y + skin.line_height * title_scale + OUR_LEADING
+}
+
+/// What this build draws a menu with, once a title's skin and the font in use
+/// have been put together.
+///
+/// The title supplies what its disc states; this fills the gaps with values
+/// marked as ours, so a field a title never measured shows up here as *this
+/// build's* choice rather than as the other title's number. Nothing in
+/// [`draw_list`] reads [`oag_title::MenuSkin`] directly, which is what makes
+/// that guarantee checkable in one place.
+#[derive(Debug, Clone, Copy)]
+pub struct Skin {
+    skin: &'static oag_title::MenuSkin,
+    line_height: f32,
+}
+
+impl Skin {
+    /// Pairs a title's skin with the line height of the face the rows will
+    /// actually be drawn in.
+    ///
+    /// The line height is passed in rather than looked up because the atlas is
+    /// the renderer's, and this module owns layout: the same split
+    /// [`draw_list`]'s `bindings` argument exists for.
+    #[must_use]
+    pub fn new(skin: &'static oag_title::MenuSkin, line_height: f32) -> Self {
+        Self { skin, line_height }
+    }
+
+    /// Left edge of the rows. `FEGlobals->MenuXOffset`.
+    #[must_use]
+    pub fn menu_x(&self) -> f32 {
+        self.skin.menu_x
+    }
+
+    /// Top of the first row's line box.
+    #[must_use]
+    pub fn first_row_y(&self) -> f32 {
+        self.skin
+            .first_row_y
+            .unwrap_or_else(|| our_first_row_y(self))
+    }
+
+    /// Distance between two rows. See [`oag_title::MenuSkin::row_pitch`].
+    #[must_use]
+    pub fn row_pitch(&self) -> f32 {
+        self.skin.row_pitch(self.line_height, OUR_LEADING)
+    }
+
+    /// The scale a row's text is drawn at. `FEGlobals->MenuScale`.
+    #[must_use]
+    pub fn row_scale(&self) -> f32 {
+        self.skin.menu_scale
+    }
+
+    /// An unselected row. `FEGlobals->TextColor`, or ours where undeclared.
+    #[must_use]
+    pub fn normal(&self) -> [f32; 4] {
+        self.skin.text.map_or(OUR_NORMAL, argb)
+    }
+
+    /// The selected row, brightened toward white rather than given a bar.
+    #[must_use]
+    pub fn selected(&self) -> [f32; 4] {
+        self.skin.selected.map_or(OUR_SELECTED, argb)
+    }
+
+    /// How long a page change takes. `transition=`.
+    #[must_use]
+    pub fn transition_secs(&self) -> f32 {
+        self.skin.transition_secs
+    }
+
+    /// Where the screen title sits, and how big.
+    #[must_use]
+    fn title_at(&self) -> (f32, f32, f32) {
+        (self.skin.title_x, self.skin.title_y, self.skin.title_scale)
+    }
+
+    /// The screen title's colour.
+    ///
+    /// **Not the disc's, deliberately.** Pulse authors `TitleColor` black,
+    /// because on hardware the title sits on a light angled top bar
+    /// (`topbarleft`/`topbarcenter`/`topbarright`) that this build does not
+    /// draw yet. Using the authored colour before the bar exists paints black
+    /// text on a dark backdrop - invisible, and wrong in a way that would look
+    /// like a bug rather than like a missing feature. The same substitution the
+    /// language picker already makes for the same reason.
+    #[must_use]
+    fn title_color(&self) -> [f32; 4] {
+        OUR_SELECTED
+    }
+}
+
+/// How many rows are on screen at once, given the pitch in use.
+///
+/// Derived rather than picked: rows start at the skin's first row and are one
+/// pitch apart, and the noted-row message under them needs a line of its own at
+/// `0.8` scale. The last row plus that message must clear the 272-pixel screen.
+///
+/// At Pulse's measured 28-pixel pitch that is seven rows, which is exactly what
+/// the original's own main menu shows.
+#[must_use]
+pub fn visible_rows(skin: &Skin) -> usize {
+    let pitch = skin.row_pitch().max(1.0);
+    let room = SCREEN_HEIGHT - skin.first_row_y() - skin.line_height * 0.8 - MESSAGE_GAP;
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to 1..=32 on the next line"
+    )]
+    let rows = (room / pitch).floor().max(1.0) as usize;
+    rows.clamp(1, 32)
+}
+
+/// The 272-pixel space every front-end coordinate in this build is in.
+const SCREEN_HEIGHT: f32 = 272.0;
+
+/// Room left under the last row for the noted-row message.
+const MESSAGE_GAP: f32 = 6.0;
+
+/// A packed `0xAARRGGBB` as the renderer's straight-alpha RGBA.
+fn argb(value: oag_title::menu::Argb) -> [f32; 4] {
+    let byte = |shift: u32| ((value >> shift) & 0xFF) as f32 / 255.0;
+    [byte(16), byte(8), byte(0), byte(24)]
+}
 
 /// Where the visible window starts, given where it was pushed to and where the
 /// cursor is.
@@ -1648,29 +1803,46 @@ const VISIBLE_ROWS: usize = 8;
 /// `pushed` is a hint and this is a pure function of it, which is what lets
 /// [`Menu::scroll`] be correct on a page whose stored window predates a jump:
 /// anything out of range is clamped back into one rather than trusted. The two
-/// ends cannot fight - `floor <= ceiling` needs only `VISIBLE_ROWS >= 3` - so
+/// ends cannot fight - `floor <= ceiling` needs only `visible >= 3` - so
 /// the `max` last is safe.
-fn window_start(pushed: usize, selected: usize, rows: usize) -> usize {
+///
+/// `visible` is passed in rather than a constant because the row pitch is now
+/// the title's, and a skin with a taller face fits fewer rows.
+fn window_start(pushed: usize, selected: usize, rows: usize, visible: usize) -> usize {
+    let visible = visible.max(3);
     // A page that fits never scrolls, whatever it was left holding.
-    if rows <= VISIBLE_ROWS {
+    if rows <= visible {
         return 0;
     }
-    let last = rows - VISIBLE_ROWS;
+    let last = rows - visible;
     // Far enough down that the row under the cursor is drawn - unless the
     // cursor is on the final row, where `min(rows)` says there is nothing left
     // to keep visible and the window stops at the end of the list.
-    let floor = (selected + 2).min(rows).saturating_sub(VISIBLE_ROWS);
+    let floor = (selected + 2).min(rows).saturating_sub(visible);
     // Not so far down that the row above the cursor is cut off, and not past
     // the top of the list when the cursor is on the first row.
     let ceiling = selected.saturating_sub(1);
     pushed.min(last).min(ceiling).max(floor)
 }
 
-/// The highlight behind the selected row, and the two text colours.
-const HIGHLIGHT: [f32; 4] = [0.37, 0.86, 0.96, 0.35];
-const SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-const NORMAL: [f32; 4] = [0.72, 0.78, 0.84, 1.0];
+/// An unselected row, for a title that declares no `TextColor`.
+///
+/// **Ours**, and only ever reached by a title whose own disc is silent. Pulse's
+/// `0xFF33A6B9` and Pure's measured `0xFF88D6E8` both come off their discs.
+const OUR_NORMAL: [f32; 4] = [0.72, 0.78, 0.84, 1.0];
+
+/// The selected row, for a title with no capture of one.
+///
+/// **Ours**, but shaped by what the original does: the capture shows selection
+/// as a brightening toward white rather than as a bar behind the row, so this
+/// is white rather than a fourth hue. Pulse supplies its own measured value.
+const OUR_SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+
 /// Rows that show something the player cannot change yet.
+///
+/// **Ours, and it has no counterpart on the disc.** The original has no
+/// disabled rows: a Wipeout menu either offers a thing or does not list it.
+/// This exists for `disabled_by`, which is a PC concern.
 const DIMMED: [f32; 4] = [0.45, 0.5, 0.56, 1.0];
 /// A setting that is stored but currently doing nothing.
 ///
@@ -1679,11 +1851,152 @@ const DIMMED: [f32; 4] = [0.45, 0.5, 0.56, 1.0];
 /// colour none of them use rather than a fourth shade of the row itself.
 const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 
+/// One page's draws, split by what a page change is allowed to move.
+///
+/// **The split is the original's, not a convenience.** A capture of Pulse
+/// changing pages shows the row block scaling up and fading while the top bar
+/// and the footer crossfade in place, so a flat list cannot express the
+/// transition: something has to say which draws zoom. See
+/// `docs/ui/menus-original.md`.
+///
+/// [`Self::flatten`] puts them back together for a caller that is not
+/// animating, in paint order.
+#[derive(Debug, Default, Clone)]
+pub struct Layers {
+    /// The looping movie behind everything. Never moves, never fades.
+    pub backdrop: Vec<Draw>,
+    /// Framing that stays put across a page change: the screen title.
+    pub chrome: Vec<Draw>,
+    /// The rows, which are what a page change animates.
+    pub body: Vec<Draw>,
+}
+
+impl Layers {
+    /// Every draw, back to front.
+    #[must_use]
+    pub fn flatten(self) -> Vec<Draw> {
+        let mut out = self.backdrop;
+        out.extend(self.chrome);
+        out.extend(self.body);
+        out
+    }
+
+    /// The body scaled about `origin` and faded to `alpha`.
+    ///
+    /// This is the whole of the page-change effect. A capture of the original
+    /// shows the outgoing page growing and fading while the incoming one grows
+    /// into place from smaller and fades in, with the chrome crossfading where
+    /// it stands - so one function, called twice with different arguments,
+    /// covers both halves.
+    ///
+    /// Only [`Self::body`] moves. The backdrop is a looping movie that runs
+    /// across page changes untouched, and the chrome is what the capture shows
+    /// staying put.
+    #[must_use]
+    pub fn zoomed(mut self, origin: (f32, f32), scale: f32, alpha: f32) -> Self {
+        for draw in &mut self.body {
+            zoom(draw, origin, scale, alpha);
+        }
+        for draw in &mut self.chrome {
+            // Faded but not moved, which is the split the capture shows.
+            fade(draw, alpha);
+        }
+        self
+    }
+}
+
+/// Scales one draw about a point and multiplies its alpha.
+///
+/// No new [`Draw`] variant is needed for any of this: `Text`, `Fill` and
+/// `Sprite` already carry a position, a size or a scale, and a colour whose
+/// fourth channel is the alpha.
+fn zoom(draw: &mut Draw, origin: (f32, f32), scale: f32, alpha: f32) {
+    let about = |value: f32, from: f32| from + (value - from) * scale;
+    match draw {
+        Draw::Text {
+            x,
+            y,
+            scale: size,
+            color,
+            ..
+        } => {
+            *x = about(*x, origin.0);
+            *y = about(*y, origin.1);
+            *size *= scale;
+            color[3] *= alpha;
+        }
+        Draw::Fill { rect, color } => {
+            rect[0] = about(rect[0], origin.0);
+            rect[1] = about(rect[1], origin.1);
+            rect[2] *= scale;
+            rect[3] *= scale;
+            color[3] *= alpha;
+        }
+        Draw::Sprite { rect, color, .. } => {
+            rect[0] = about(rect[0], origin.0);
+            rect[1] = about(rect[1], origin.1);
+            rect[2] *= scale;
+            rect[3] *= scale;
+            color[3] *= alpha;
+        }
+        // A movie has no alpha channel to fade and is never part of a page.
+        Draw::Video { .. } => {}
+    }
+}
+
+/// Multiplies one draw's alpha, leaving it where it is.
+fn fade(draw: &mut Draw, alpha: f32) {
+    match draw {
+        Draw::Text { color, .. } | Draw::Fill { color, .. } | Draw::Sprite { color, .. } => {
+            color[3] *= alpha;
+        }
+        Draw::Video { .. } => {}
+    }
+}
+
+/// How a page change looks, in the terms [`Layers::zoomed`] takes.
+///
+/// **Measured, then rounded.** A capture of Pulse going from `Main Menu` to
+/// `Grid Selection` puts the outgoing page at scale 1.19 six frames into a
+/// thirteen-frame transition and gone by the end, so it is still growing when
+/// it disappears; extrapolating the measured steps to the full duration gives
+/// roughly 1.5. The incoming page comes *from* smaller by the same argument
+/// run backwards. Alpha holds for the first two frames and then falls.
+///
+/// See `docs/ui/menus-original.md` for the frame-by-frame table.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Transition {
+    /// Where the zoom is centred, in the 480x272 space.
+    ///
+    /// Solving the measured positions puts this near the content block's own
+    /// centre rather than the screen's - confidence 55, so it is deliberately
+    /// approximate. See the doc page.
+    pub origin: (f32, f32),
+    /// What the outgoing page has grown to by the time it is gone.
+    pub out_scale: f32,
+    /// What the incoming page grows from.
+    pub in_scale: f32,
+}
+
+impl Default for Transition {
+    fn default() -> Self {
+        Self {
+            origin: (150.0, 127.0),
+            out_scale: 1.5,
+            in_scale: 0.7,
+        }
+    }
+}
+
 /// What one page looks like, as plain data.
 ///
 /// The same [`Draw`] vocabulary the language picker emits, so `main.rs`
 /// rasterises menus with the renderer it already has and there is one text
 /// path rather than two.
+///
+/// `skin` is where every position, size and colour comes from - see [`Skin`],
+/// which is also the one place this build's own fallbacks are applied. Nothing
+/// below reads a title package directly.
 ///
 /// `bindings` answers "what is this button bound to" and is passed in rather
 /// than looked up, because a keyboard is a device concern: `oag_input::keys`
@@ -1697,28 +2010,39 @@ const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 #[must_use]
 pub fn draw_list(
     menu: &Menu,
+    skin: &Skin,
     bindings: &dyn Fn(u8) -> Vec<&'static str>,
     backdrop: Option<Backdrop>,
-) -> Vec<Draw> {
+) -> Layers {
     let page = menu.page();
-    // First in the list, because the list is painted back to front.
-    let mut out: Vec<Draw> = backdrop
-        .map(|backdrop| Draw::Video {
-            rect: backdrop.rect,
-            frame: backdrop.frame,
-            position: backdrop.position,
-            // The same movie `Show Logo` sits on, still looping and still on the
-            // same playhead: the menus are where the disc's own `FE Screen` was
-            // going anyway.
-            source: crate::frontend::Video::Backdrop,
-        })
-        .into_iter()
-        .collect();
+    let margin_x = skin.menu_x();
+    let row_height = skin.row_pitch();
+    let row_scale = skin.row_scale();
+    let first_row_y = skin.first_row_y();
+    let visible = visible_rows(skin);
+    let (title_x, title_y, title_scale) = skin.title_at();
+
+    let mut layers = Layers {
+        backdrop: backdrop
+            .map(|backdrop| Draw::Video {
+                rect: backdrop.rect,
+                frame: backdrop.frame,
+                position: backdrop.position,
+                // The same movie `Show Logo` sits on, still looping and still on
+                // the same playhead: the menus are where the disc's own
+                // `FE Screen` was going anyway.
+                source: crate::frontend::Video::Backdrop,
+            })
+            .into_iter()
+            .collect(),
+        ..Layers::default()
+    };
+    let out = &mut layers.chrome;
     out.push(Draw::Text {
-        x: MARGIN_X,
-        y: TITLE_Y,
-        scale: 1.4,
-        color: SELECTED,
+        x: title_x,
+        y: title_y,
+        scale: title_scale,
+        color: skin.title_color(),
         border: None,
         align: Align::Left,
         text: page.title.clone(),
@@ -1739,32 +2063,22 @@ pub fn draw_list(
     let mut noted: Option<String> = None;
     let first = menu.scroll();
     let mut shown = 0usize;
-    for (row, entry) in page
-        .entries
-        .iter()
-        .enumerate()
-        .skip(first)
-        .take(VISIBLE_ROWS)
-    {
-        let y = FIRST_ROW_Y + (row - first) as f32 * ROW_HEIGHT;
+    let out = &mut layers.body;
+    for (row, entry) in page.entries.iter().enumerate().skip(first).take(visible) {
+        let y = first_row_y + (row - first) as f32 * row_height;
         shown += 1;
         let selected = row == menu.selected();
-        if selected {
-            out.push(Draw::Fill {
-                rect: [
-                    MARGIN_X - 8.0,
-                    y - 3.0,
-                    VALUE_RIGHT - MARGIN_X + 16.0,
-                    ROW_HEIGHT - 2.0,
-                ],
-                color: HIGHLIGHT,
-            });
-        }
+
+        // **No fill behind the selected row.** The original marks selection by
+        // brightening the row's own text toward white - a capture of its main
+        // menu shows no bar, and none of the pink `MenuHighLightArrowColor` the
+        // palette declares appears anywhere on that screen. This build used to
+        // draw a translucent bar here; it was invented, and it is gone.
 
         // A binding cannot be changed yet and a disabled row cannot be changed
         // now; both read as "this does nothing if you press it", which is what
-        // the dim colour says. The highlight bar is still drawn, so a disabled
-        // row can be selected and read rather than being unreachable.
+        // the dim colour says. A disabled row can still be selected and read
+        // rather than being unreachable.
         let inert = matches!(entry, Entry::Binding { .. }) || menu.is_disabled(entry);
         // Marked in the margin rather than by recolouring the row: the colour
         // already means selected, normal or inert, and a fourth meaning on the
@@ -1776,9 +2090,9 @@ pub fn draw_list(
         if let Some(message) = note {
             noted.get_or_insert(message.clone());
             out.push(Draw::Text {
-                x: MARGIN_X - 18.0,
+                x: margin_x - 18.0,
                 y,
-                scale: ROW_SCALE,
+                scale: row_scale,
                 color: WARNING,
                 border: None,
                 align: Align::Left,
@@ -1786,15 +2100,15 @@ pub fn draw_list(
             });
         }
         out.push(Draw::Text {
-            x: MARGIN_X,
+            x: margin_x,
             y,
-            scale: ROW_SCALE,
+            scale: row_scale,
             color: if inert {
                 DIMMED
             } else if selected {
-                SELECTED
+                skin.selected()
             } else {
-                NORMAL
+                skin.normal()
             },
             border: None,
             align: Align::Left,
@@ -1819,9 +2133,9 @@ pub fn draw_list(
             out.push(Draw::Text {
                 x: VALUE_RIGHT,
                 y,
-                scale: ROW_SCALE,
+                scale: row_scale,
                 color: if selected && entry.is_adjustable() && !inert {
-                    SELECTED
+                    skin.selected()
                 } else {
                     DIMMED
                 },
@@ -1837,9 +2151,9 @@ pub fn draw_list(
     // a scrolled page puts it under the window rather than off the bottom.
     if let Some(message) = noted {
         out.push(Draw::Text {
-            x: MARGIN_X - 18.0,
-            y: FIRST_ROW_Y + shown as f32 * ROW_HEIGHT + 6.0,
-            scale: ROW_SCALE * 0.8,
+            x: margin_x - 18.0,
+            y: first_row_y + shown as f32 * row_height + MESSAGE_GAP,
+            scale: row_scale * 0.8,
             color: WARNING,
             border: None,
             align: Align::Left,
@@ -1847,12 +2161,39 @@ pub fn draw_list(
         });
     }
 
-    out
+    layers
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [`draw_list`] flattened, which is what every test below wants: the
+    /// layer split exists for the transition, and none of these animate.
+    fn list(
+        menu: &Menu,
+        bindings: &dyn Fn(u8) -> Vec<&'static str>,
+        backdrop: Option<Backdrop>,
+    ) -> Vec<Draw> {
+        draw_list(menu, &skin(), bindings, backdrop).flatten()
+    }
+
+    /// The skin every test below draws with: Pulse's own table against the
+    /// 22-pixel face its menus name. Using the shipped table rather than a
+    /// fixture means a change to the recovered numbers shows up here, which is
+    /// the point - these tests are where the layout is pinned.
+    fn skin() -> Skin {
+        Skin::new(oag_pulse::TITLE.menu, PULSE_MENU_LINE_HEIGHT)
+    }
+
+    /// `Pulse_20.fnt`'s line height, per `docs/formats/fnt.md` and confirmed by
+    /// reading it back out of `Atlas::from_font`.
+    const PULSE_MENU_LINE_HEIGHT: f32 = 22.0;
+
+    /// How many rows that skin fits, which is what the window logic uses.
+    fn visible() -> usize {
+        visible_rows(&skin())
+    }
 
     /// The definition this build actually ships. Every test that can use it
     /// does, so the file is exercised rather than a fixture standing in for it.
@@ -2561,7 +2902,7 @@ mod tests {
             );
         }
         // And it still draws, label and all, rather than vanishing.
-        let drawn = draw_list(&menu, &|_| vec!["X"], None);
+        let drawn = list(&menu, &|_| vec!["X"], None);
         assert!(
             drawn.iter().any(|draw| matches!(
                 draw,
@@ -2611,7 +2952,7 @@ mod tests {
         }
 
         let label_colour = |menu: &Menu| {
-            let list = draw_list(menu, &|_| vec!["X"], None);
+            let list = list(menu, &|_| vec!["X"], None);
             list.iter()
                 .find_map(|draw| match draw {
                     Draw::Text { color, text, .. } if text == "FRAME LIMIT" => Some(*color),
@@ -2623,9 +2964,9 @@ mod tests {
         menu.seed("display.vsync", &Value::Text("on".to_string()));
         assert_eq!(label_colour(&menu), DIMMED);
         menu.seed("display.vsync", &Value::Text("off".to_string()));
-        assert_eq!(label_colour(&menu), SELECTED);
+        assert_eq!(label_colour(&menu), skin().selected());
         menu.seed("display.vsync", &Value::Text("smooth".to_string()));
-        assert_eq!(label_colour(&menu), SELECTED);
+        assert_eq!(label_colour(&menu), skin().selected());
     }
 
     /// `disabled_by` naming something nothing edits is a row that is never
@@ -2873,7 +3214,7 @@ disabled_by = { setting = "a.vsync", value = true }
         menu.in_effect("graphics.renderer", &[Value::Text("default".to_string())]);
 
         let amber = |menu: &Menu| {
-            draw_list(menu, &|_| vec!["X"], None)
+            list(menu, &|_| vec!["X"], None)
                 .into_iter()
                 .filter_map(|draw| match draw {
                     Draw::Text { color, text, .. } if color == WARNING => Some(text),
@@ -3078,10 +3419,14 @@ restart_required = "RESTART THE GAME"
 
     /// The labels actually on screen, top to bottom.
     fn rows_drawn(menu: &Menu) -> Vec<String> {
-        draw_list(menu, &no_bindings, None)
+        list(menu, &no_bindings, None)
             .into_iter()
             .filter_map(|draw| match draw {
-                Draw::Text { text, x, y, .. } if x == MARGIN_X && y >= FIRST_ROW_Y => Some(text),
+                Draw::Text { text, x, y, .. }
+                    if x == skin().menu_x() && y >= skin().first_row_y() =>
+                {
+                    Some(text)
+                }
                 _ => None,
             })
             .collect()
@@ -3093,21 +3438,21 @@ restart_required = "RESTART THE GAME"
     /// player is moving towards is on screen before they get to it.
     #[test]
     fn a_long_page_scrolls_one_row_before_the_cursor_reaches_the_bottom() {
-        let mut menu = Menu::new(long_page(VISIBLE_ROWS + 3));
+        let mut menu = Menu::new(long_page(visible() + 3));
         assert_eq!(menu.scroll(), 0);
-        assert_eq!(rows_drawn(&menu).len(), VISIBLE_ROWS, "the window is full");
+        assert_eq!(rows_drawn(&menu).len(), visible(), "the window is full");
 
         // Down to the second-last visible row. Nothing has moved yet: the last
         // one is still below the cursor, which is the lookahead.
-        for _ in 0..VISIBLE_ROWS - 2 {
+        for _ in 0..visible() - 2 {
             press(&mut menu, &[button::DOWN]);
         }
-        assert_eq!(menu.selected(), VISIBLE_ROWS - 2);
+        assert_eq!(menu.selected(), visible() - 2);
         assert_eq!(menu.scroll(), 0, "the page does not move until it must");
 
         // One more, and it moves by one - not by a screenful.
         press(&mut menu, &[button::DOWN]);
-        assert_eq!(menu.selected(), VISIBLE_ROWS - 1);
+        assert_eq!(menu.selected(), visible() - 1);
         assert_eq!(menu.scroll(), 1);
         assert_eq!(rows_drawn(&menu).first().map(String::as_str), Some("ROW1"));
 
@@ -3115,20 +3460,108 @@ restart_required = "RESTART THE GAME"
         assert_eq!(menu.scroll(), 2);
     }
 
+    /// The zoom moves the rows and leaves the chrome where it is.
+    ///
+    /// That split is the capture's, not a convenience: the original's top bar
+    /// and footer stay put across a page change while the row block grows.
+    #[test]
+    fn a_zoom_moves_the_body_and_not_the_chrome() {
+        let menu = Menu::new(long_page(3));
+        let settled = draw_list(&menu, &skin(), &no_bindings, None);
+        let chrome_before = first_text_at(&settled.chrome);
+        let body_before = first_text_at(&settled.body);
+
+        let zoomed = settled.clone().zoomed((150.0, 127.0), 2.0, 0.5);
+        assert_eq!(
+            first_text_at(&zoomed.chrome),
+            chrome_before,
+            "the chrome does not move"
+        );
+        let (x, y) = first_text_at(&zoomed.body).expect("a row");
+        let (was_x, was_y) = body_before.expect("a row");
+        assert!(
+            (x - (150.0 + (was_x - 150.0) * 2.0)).abs() < 0.001
+                && (y - (127.0 + (was_y - 127.0) * 2.0)).abs() < 0.001,
+            "the body scales about the origin: {x},{y} from {was_x},{was_y}"
+        );
+    }
+
+    /// Both layers fade, because the capture shows the chrome crossfading in
+    /// place rather than staying solid through a page change.
+    #[test]
+    fn a_zoom_fades_both_layers() {
+        let menu = Menu::new(long_page(3));
+        let faded = draw_list(&menu, &skin(), &no_bindings, None).zoomed((0.0, 0.0), 1.0, 0.25);
+        for draw in faded.chrome.iter().chain(faded.body.iter()) {
+            if let Draw::Text { color, .. } = draw {
+                assert!(color[3] <= 0.25 + 0.001, "alpha not applied: {color:?}");
+            }
+        }
+    }
+
+    /// The first left-aligned text's position, for the two tests above.
+    fn first_text_at(draws: &[Draw]) -> Option<(f32, f32)> {
+        draws.iter().find_map(|draw| match draw {
+            Draw::Text { x, y, .. } => Some((*x, *y)),
+            _ => None,
+        })
+    }
+
+    /// The rows land where a capture of the original puts them.
+    ///
+    /// Pinned here so an edit that drifts the layout fails a test rather than
+    /// quietly un-aligning the menus. The numbers are `docs/ui/menus-original.md`'s:
+    /// the rows' left edge measured at exactly x=50, the pitch at exactly 28 on
+    /// all seven rows of the main menu, and seven rows is what that menu shows.
+    ///
+    /// The first row's *glyphs* land at y=40 on hardware, not at 32 - the
+    /// 8-pixel difference is the glyph's inset inside its 22-pixel line box,
+    /// which the atlas already bakes into the cell, so 32 is what this emits.
+    #[test]
+    fn the_rows_land_where_the_capture_puts_them() {
+        let menu = Menu::new(long_page(7));
+        let rows: Vec<(f32, f32)> = list(&menu, &no_bindings, None)
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { x, y, align, .. } if align == Align::Left && y >= 32.0 => Some((x, y)),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(rows.len(), 7, "the original's main menu shows seven rows");
+        assert!(
+            rows.iter().all(|(x, _)| (x - 50.0).abs() < f32::EPSILON),
+            "measured left edge is exactly 50: {rows:?}"
+        );
+        assert!(
+            (rows[0].1 - 32.0).abs() < f32::EPSILON,
+            "MainMenu_Definition says y=32: {rows:?}"
+        );
+        for pair in rows.windows(2) {
+            assert!(
+                (pair[1].1 - pair[0].1 - 28.0).abs() < f32::EPSILON,
+                "measured pitch is exactly 28: {rows:?}"
+            );
+        }
+    }
+
     /// The last row is reachable and is drawn at the bottom of a full window,
     /// rather than the list scrolling past its own end.
     #[test]
     fn the_final_row_sits_at_the_bottom_of_a_full_window() {
-        let rows = VISIBLE_ROWS + 3;
+        let rows = visible() + 3;
         let mut menu = Menu::new(long_page(rows));
         for _ in 0..rows - 1 {
             press(&mut menu, &[button::DOWN]);
         }
         assert_eq!(menu.selected(), rows - 1);
-        assert_eq!(menu.scroll(), rows - VISIBLE_ROWS);
+        assert_eq!(menu.scroll(), rows - visible());
         let drawn = rows_drawn(&menu);
-        assert_eq!(drawn.len(), VISIBLE_ROWS);
-        assert_eq!(drawn.last().map(String::as_str), Some("ROW10"));
+        assert_eq!(drawn.len(), visible());
+        // Named from the count rather than spelled out: how many rows fit is
+        // the skin's business now, so a hard-coded `ROW10` would be asserting
+        // the row pitch by accident.
+        assert_eq!(drawn.last().cloned(), Some(format!("ROW{}", rows - 1)));
     }
 
     /// The mirror of the rule going down, and the reason the window is stored
@@ -3136,7 +3569,7 @@ restart_required = "RESTART THE GAME"
     /// row above the cursor visible and moves nothing until it has to.
     #[test]
     fn moving_back_up_scrolls_one_row_before_the_cursor_reaches_the_top() {
-        let rows = VISIBLE_ROWS + 3;
+        let rows = visible() + 3;
         let mut menu = Menu::new(long_page(rows));
         for _ in 0..rows - 1 {
             press(&mut menu, &[button::DOWN]);
@@ -3145,7 +3578,7 @@ restart_required = "RESTART THE GAME"
 
         // Back up to the second row of the window: still nothing to do, the row
         // above the cursor is drawn.
-        for _ in 0..VISIBLE_ROWS - 2 {
+        for _ in 0..visible() - 2 {
             press(&mut menu, &[button::UP]);
         }
         assert_eq!(menu.scroll(), bottom, "the window has not moved yet");
@@ -3160,7 +3593,7 @@ restart_required = "RESTART THE GAME"
     /// and off the top lands on the last with it at the end.
     #[test]
     fn wrapping_takes_the_window_with_it() {
-        let rows = VISIBLE_ROWS + 3;
+        let rows = visible() + 3;
         let mut menu = Menu::new(long_page(rows));
         for _ in 0..rows {
             press(&mut menu, &[button::DOWN]);
@@ -3171,7 +3604,7 @@ restart_required = "RESTART THE GAME"
 
         press(&mut menu, &[button::UP]);
         assert_eq!(menu.selected(), rows - 1);
-        assert_eq!(menu.scroll(), rows - VISIBLE_ROWS);
+        assert_eq!(menu.scroll(), rows - visible());
     }
 
     /// A page that fits never scrolls, whatever the cursor does on it. Most
@@ -3179,8 +3612,8 @@ restart_required = "RESTART THE GAME"
     /// the rows for no reason.
     #[test]
     fn a_page_that_fits_never_moves() {
-        let mut menu = Menu::new(long_page(VISIBLE_ROWS));
-        for _ in 0..VISIBLE_ROWS * 2 {
+        let mut menu = Menu::new(long_page(visible()));
+        for _ in 0..visible() * 2 {
             press(&mut menu, &[button::DOWN]);
             assert_eq!(menu.scroll(), 0, "on row {}", menu.selected());
         }
@@ -3202,7 +3635,7 @@ restart_required = "RESTART THE GAME"
             let mut menu = Menu::new(built_in());
             assert!(menu.open(&id));
             for _ in 0..menu.page().entries.len() {
-                for draw in draw_list(&menu, &no_bindings, None) {
+                for draw in list(&menu, &no_bindings, None) {
                     if let Draw::Text { y, scale, .. } = draw {
                         // The tallest disc font's line height, which is what a
                         // row is drawn with; see `crate::font::Atlas`.
@@ -3508,7 +3941,7 @@ restart_required = "RESTART THE GAME"
     fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
         let mut menu = Menu::new(fixture());
         press(&mut menu, &[button::CROSS]);
-        let list = draw_list(&menu, &no_bindings, None);
+        let list = list(&menu, &no_bindings, None);
 
         let texts: Vec<&String> = list
             .iter()
@@ -3528,11 +3961,22 @@ restart_required = "RESTART THE GAME"
             "a toggle draws ON or OFF: {texts:?}"
         );
 
-        let highlights = list
+        // **Selection is a colour, not a bar.** A capture of the original's
+        // main menu shows the selected row brightened toward white with nothing
+        // drawn behind it, so a fill here would be an invention - this build
+        // used to draw one, and the assertion used to require it.
+        assert!(
+            !list.iter().any(|draw| matches!(draw, Draw::Fill { .. })),
+            "the original marks selection by colour, not by a bar: {list:?}"
+        );
+        let highlighted = list
             .iter()
-            .filter(|draw| matches!(draw, Draw::Fill { .. }))
+            .filter(|draw| {
+                matches!(draw, Draw::Text { color, align, .. }
+                    if *color == skin().selected() && *align == Align::Left)
+            })
             .count();
-        assert_eq!(highlights, 1, "exactly one row is highlighted");
+        assert_eq!(highlighted, 1, "exactly one row label is highlighted");
     }
 
     /// The value column is right-aligned against a fixed edge, which is the
@@ -3542,7 +3986,7 @@ restart_required = "RESTART THE GAME"
     fn values_are_right_aligned_on_one_edge() {
         let mut menu = Menu::new(fixture());
         press(&mut menu, &[button::CROSS]);
-        for draw in draw_list(&menu, &no_bindings, None) {
+        for draw in list(&menu, &no_bindings, None) {
             if let Draw::Text { align, x, .. } = draw
                 && align == Align::Right
             {
@@ -3569,13 +4013,14 @@ restart_required = "RESTART THE GAME"
         )
         .expect("parse");
         let menu = Menu::new(definition);
-        let list = draw_list(&menu, &no_bindings, None);
+        let unbound = list(&menu, &no_bindings, None);
         assert!(
-            list.iter()
+            unbound
+                .iter()
                 .any(|draw| matches!(draw, Draw::Text { text, .. } if text == "UNBOUND")),
-            "{list:?}"
+            "{unbound:?}"
         );
-        let list = draw_list(&menu, &|_| vec!["ENTER", "X"], None);
+        let list = list(&menu, &|_| vec!["ENTER", "X"], None);
         assert!(
             list.iter()
                 .any(|draw| matches!(draw, Draw::Text { text, .. } if text == "ENTER / X")),
@@ -3595,7 +4040,7 @@ restart_required = "RESTART THE GAME"
         let mut menu = Menu::new(built_in());
         assert!(menu.open("display"));
 
-        let plain = draw_list(&menu, &no_bindings, None);
+        let plain = list(&menu, &no_bindings, None);
         assert!(
             !plain.iter().any(|draw| matches!(draw, Draw::Video { .. })),
             "no backdrop means no video draw at all: {plain:?}"
@@ -3609,7 +4054,7 @@ restart_required = "RESTART THE GAME"
             // `Backdrop::position`.
             position: 631,
         };
-        let with = draw_list(&menu, &no_bindings, Some(backdrop));
+        let with = list(&menu, &no_bindings, Some(backdrop));
         assert_eq!(
             with.first(),
             Some(&Draw::Video {

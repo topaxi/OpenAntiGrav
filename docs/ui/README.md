@@ -2,7 +2,10 @@
 
 > **In progress.** The **HUD layout is recovered and parsed** (M5) - see
 > [hud.md](hud.md). The menus exist and navigate (M7) - see
-> [menus.md](../architecture/menus.md).
+> [menus.md](../architecture/menus.md) for the tree, which is this project's
+> own, and [menus-original.md](menus-original.md) for the original's layout,
+> colours and page-change animation, which are measured and which this build
+> now draws with.
 
 ## The HUD is authored data
 

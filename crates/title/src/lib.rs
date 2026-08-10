@@ -36,8 +36,10 @@
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
 pub mod boot;
+pub mod menu;
 
 pub use boot::{BootProfile, BootStep};
+pub use menu::MenuSkin;
 pub use oag_disc::Platform;
 
 /// One title's release-level facts.
@@ -47,7 +49,12 @@ pub use oag_disc::Platform;
 /// deliberately a struct of tables rather than a trait: the differences between
 /// two Wipeout releases are data, and a trait would put a virtual boundary
 /// exactly where the PSP/PS2 split proved none is needed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Not `Eq`: [`menu::MenuSkin`] carries the front end's offsets and scales as
+/// `f32`, which is the unit the disc authors them in. Comparing two titles for
+/// equality is not something this build does - selection is by `&'static`
+/// identity - so the bound is not worth converting a layout table to fixed
+/// point for.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Title {
     /// The title as a person would name it, for reports and error messages.
     pub name: &'static str,
@@ -56,6 +63,14 @@ pub struct Title {
     /// Serials known to belong to a *different* title. See
     /// [`ArchiveCandidates`] for why name matching alone cannot tell them apart.
     pub foreign_serials: &'static [ForeignSerial],
+    /// How its front end lays menus out and moves between them. See
+    /// [`menu::MenuSkin`].
+    ///
+    /// A second measured axis, on the same footing as [`Self::boot`]: both
+    /// titles' `Skin.xml` files were read and they agree on nothing they share.
+    /// Presentation only - the menu tree itself is this project's, not the
+    /// disc's, and lives in `assets/ui/menu.toml`.
+    pub menu: &'static menu::MenuSkin,
     /// How this title's own boot sequence goes. See [`boot::BootProfile`].
     ///
     /// Hung off `Title` rather than selected separately so that there is **one**

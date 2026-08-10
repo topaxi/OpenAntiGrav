@@ -627,6 +627,22 @@ mod tests {
             serial: "UCUS-98612",
             title: "Wipeout Pure",
         }],
+        // Present for the same reason `boot` below is, and read even less: menu
+        // layout is the front end's business, and this crate opens archives.
+        menu: &oag_title::MenuSkin {
+            menu_x: 0.0,
+            menu_scale: 1.0,
+            title_x: 0.0,
+            title_y: 0.0,
+            title_scale: 1.0,
+            first_row_y: None,
+            row_extra_leading: None,
+            menu_font: None,
+            text: None,
+            title: None,
+            selected: None,
+            transition_secs: 0.0,
+        },
         // Present because `Title` carries it, and never read here: `oag-assets`
         // resolves archives and has no business in a boot sequence. One screen is
         // enough to be a valid profile.

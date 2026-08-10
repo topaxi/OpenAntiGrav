@@ -25,6 +25,7 @@
 //! `docs/architecture/adr/0019-atrac3plus-out-of-process.md`.
 
 pub mod adapter;
+pub mod anim;
 pub mod at3;
 pub mod audio;
 pub mod boot;

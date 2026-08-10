@@ -24,9 +24,23 @@ is neither faithful nor ours, and - worse for a project whose main deliverable i
 its documentation - **every entry we add starts to look like a recovered one.**
 A reader six months from now cannot tell which rows came off the disc.
 
-So the tree is ours and it is written down in one file that says so. What the
-disc's own menu XML contains is a separate, still-unread question, and it belongs
-on a page under [`docs/formats/`](../formats/README.md) when someone reads it.
+So the tree is ours and it is written down in one file that says so.
+
+**The disc's own menu XML has since been read**, and it went where this page
+said it would: [front-end menu definitions](../formats/fe-menu-definitions.md).
+That changes nothing above. The argument here was always about *structure* -
+which rows exist, and what a reader six months on can tell apart - and reading
+the file does not make the disc's row list any more the right one for a game
+with a monitor and a keyboard.
+
+What it did change is everything below the structure. See
+[the original's menus](../ui/menus-original.md) for where the rows sit, what
+colour they are, and how a page change moves; the numbers now come from the
+title's own table rather than from round numbers picked to be legible. The
+boundary is worth stating in one line, because it is the thing a reader will
+want:
+
+> **The tree is ours. The presentation is the disc's.**
 
 ## What still comes off the disc
 

@@ -74,6 +74,10 @@ pub struct Options {
     /// iterating on a layout otherwise costs. Takes no input and runs no state
     /// machine.
     pub menu_page: Option<String>,
+    /// How far into arriving that page is, `0..=1`. `None` draws it settled.
+    ///
+    /// See the CLI flag's own docs for why a still needs this at all.
+    pub menu_anim_phase: Option<f32>,
     /// The persisted settings, so `--menu-page` draws the rows a player would
     /// see rather than each list's first entry.
     pub settings: crate::settings::Settings,
@@ -110,6 +114,8 @@ fn menu_page(
     strings: &crate::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
     backdrop: Option<crate::menu::Backdrop>,
+    skin: &crate::menu::Skin,
+    phase: Option<f32>,
 ) -> Result<Vec<crate::frontend::Draw>> {
     let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN)
         .context("parsing the built-in menu definition")?;
@@ -220,11 +226,22 @@ fn menu_page(
         model.seed(key, &value);
     }
     model.open(page);
-    Ok(crate::menu::draw_list(
-        &model,
-        &oag_input::keys::bound_keys,
-        backdrop,
-    ))
+    // The same window the live menus use, so a captured page scrolls where a
+    // played one does rather than where a default happened to put it.
+    model.set_visible_rows(crate::menu::visible_rows(skin));
+    let layers = crate::menu::draw_list(&model, skin, &oag_input::keys::bound_keys, backdrop);
+    let Some(phase) = phase else {
+        return Ok(layers.flatten());
+    };
+    // The same arithmetic the live stage runs, through the same easing, so what
+    // this draws is a frame of the real transition rather than a picture of one.
+    let shape = crate::menu::Transition::default();
+    let mut tween = crate::anim::Tween::new(1.0);
+    tween.advance(phase.clamp(0.0, 1.0));
+    let t = tween.eased();
+    Ok(layers
+        .zoomed(shape.origin, shape.in_scale + (1.0 - shape.in_scale) * t, t)
+        .flatten())
 }
 
 /// Runs the sequence and writes one frame.
@@ -253,6 +270,8 @@ pub fn run(
         backdrop,
         font,
         sprites,
+        menu_skin,
+        menu_font,
         ..
     } = loaded;
 
@@ -499,6 +518,11 @@ pub fn run(
                 &strings,
                 &options.music_discs,
                 frame,
+                // The face the rows are drawn in, not the front end's
+                // default: the pitch comes off its line height, so reading
+                // the wrong one spaces the rows for a font nothing draws.
+                &crate::menu::Skin::new(menu_skin, menu_font.as_ref().unwrap_or(&font).line_height),
+                options.menu_anim_phase,
             )?;
             (backdrop, format, list, space)
         }
@@ -557,7 +581,16 @@ pub fn run(
     // Rgba8Unorm rather than the surface's sRGB format: the readback is written
     // straight into a PNG, so a second gamma encode would double-correct.
     let format = wgpu::TextureFormat::Rgba8Unorm;
-    let mut renderer = Renderer::new(&device, &queue, format, video_format, font, &sprites)?;
+    // Menu pages draw in the title's own menu face; every other capture in
+    // this path - a boot screen, the picker - draws in the default one. The
+    // face has to match the one whose line height set the row pitch above,
+    // or the rows are spaced for a font nothing draws them in.
+    let face = if options.menu_page.is_some() {
+        menu_font.clone().unwrap_or_else(|| font.clone())
+    } else {
+        font.clone()
+    };
+    let mut renderer = Renderer::new(&device, &queue, format, video_format, face, &sprites)?;
     renderer.set_space(space);
 
     if let (Some(frames), Some(wanted)) = (

@@ -34,9 +34,32 @@ pub struct Language {
     pub native_name: String,
     /// Archive entry holding the string table, if the plugin names one.
     pub entries: Option<String>,
+    /// Which `.fnt` each font *role* resolves to, in document order.
+    ///
+    /// `<Font><Values name="Menu" Src="Data\FE\Fonts\Pulse_20.fnt">` - the
+    /// role is what the screens and the title's `MenuSkin` name, and the file is
+    /// what has to be read to draw it. Kept as pairs rather than a map because
+    /// there are five of them and the order is the disc's.
+    ///
+    /// Read off the plugin rather than hard-coded, so a title whose roles
+    /// differ resolves its own without this build knowing either list: Pure
+    /// names `Title`, `Stats` and `scroll` where Pulse names `menu`.
+    pub fonts: Vec<(String, String)>,
 }
 
 impl Language {
+    /// The `.fnt` this language draws `role` in, matched case-insensitively.
+    ///
+    /// `None` for a role this plugin does not declare, which is an ordinary
+    /// answer: the caller falls back to the default face rather than failing.
+    #[must_use]
+    pub fn font(&self, role: &str) -> Option<&str> {
+        self.fonts
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(role))
+            .map(|(_, src)| src.as_str())
+    }
+
     /// Reads a language plugin's `Definition.xml`.
     ///
     /// Returns `None` when the file names no language, which is how a non-language
@@ -57,6 +80,7 @@ impl Language {
         }
 
         Some(Self {
+            fonts: font_slots(&root),
             plugin: plugin.to_string(),
             native_name: native_name.unwrap_or_else(|| name.clone()),
             name,
@@ -123,6 +147,31 @@ fn find_language_attribute(node: &Node) -> Option<String> {
         return Some(value.to_string());
     }
     node.children.iter().find_map(find_language_attribute)
+}
+
+/// Which file each `<Font name=... Src=...>` role names, in document order.
+///
+/// A slot with no `name` or no `Src` is skipped rather than guessed at: the
+/// role is the key every caller looks up by, and a nameless one could not be
+/// found again anyway.
+fn font_slots(node: &Node) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    collect_font_slots(node, &mut out);
+    out
+}
+
+fn collect_font_slots(node: &Node, out: &mut Vec<(String, String)>) {
+    if node.name.eq_ignore_ascii_case("Font")
+        && let Some(name) = node.value("name")
+        && let Some(src) = node.value("Src")
+        && !name.is_empty()
+        && !src.is_empty()
+    {
+        out.push((name.to_string(), src.to_string()));
+    }
+    for child in &node.children {
+        collect_font_slots(child, out);
+    }
 }
 
 /// Every `<Entry ID=... String=...>` in the tree, in document order.
