@@ -170,8 +170,16 @@ On disc it sits immediately after the material array, at mesh payload
 +0x18  f32[2] out: scale u, v     (initialised 1.0 in the file)
 +0x20  f32[2] out: offset u, v
 +0x28  f32   last update time, written at runtime
-+0x2c  f32   wrap period, seconds (600.0 everywhere read); bit 0 = step flag
++0x2c  f32   authored loop period, seconds; bit 0 of the word = step flag
 ```
+
+**`+0x2c` is per-block authored data, not a constant** - an earlier revision
+said "600.0 everywhere read", which was true of the two plume blocks it had
+read and wrong as a generalisation. Surveyed across all eight `Ship.vex`
+files and the `01_Track`/`16_Track` circuits: blink-light blocks author
+**1.0 s**, scenery authors 0.667, 0.833, 2, 4, 5 and 10 s - in every case
+the loop ≈ its track's own span - and the plume's 600 s is the outlier
+*because* its clock is externally reset per reveal rather than wrapped.
 
 Verified two ways on `Data\Ships\Assegai\shipboost.vex` (and Feisar's, byte
 identical): the struct parses at `payload+0x30+0x14` on **both** plume meshes
@@ -316,7 +324,11 @@ pulse a light without moving a UV or rewriting a palette. Not investigated.
 **off**. The eight track surfaces were selected on real geometry - narrow
 authored V bands against full-tile static art - and that measurement is kept,
 but making them scroll is a departure from the original rather than a
-reproduction of it.
+reproduction of it. *(2026-08-10: the ground has moved - the surfaces DO
+scroll in the original, driven by authored keyframe blocks; see "The values
+gap is closed". The default-off stays until the renderer reads the authored
+tracks instead of the table's chosen rates, at which point it becomes a
+reproduction and can default on.)*
 
 ## What was ruled out
 
@@ -403,9 +415,30 @@ has seen half the mechanism.
   closed"). World meshes receive the race clock, and at least one object a
   different local time (`4.80` observed); the general rule for which clock a
   model gets was not traced.
-- **Whether the blink lights are a colour or a keyframe animation after all.**
-  The seven-key plateau track observed on Talon's Junction scenery is exactly
-  the blink shape; nothing yet ties such a track to
-  `colours_flashing_GLOW.tga`'s material on a ship. Checking the eight ships'
-  `Ship.vex` material blocks for `& 0x10` and authored tracks is now a pure
-  file read.
+- ~~**Whether the blink lights are a colour or a keyframe animation after
+  all.**~~ **Settled same day, from the files: they are keyframe tracks.**
+  Every one of the eight teams' `colours_flashing_GLOW` meshes
+  (`glowingShape`, Feisar's `underbrake_flash*`/`self_illuminatedShape`,
+  material flags `0x91` - the `& 0x10` gate set) authors the identical
+  block: offset `v` from `0` to `-256` (one full tile) over key times 1..60,
+  scale constant `(1.0, 1.0)`, loop period **1.0 s** at `+0x2c`. So the
+  original's blink is the compiled-list texture transform - the "engine
+  scrolls the texture's V" reading vex.md retired in 2026-07-31 was right
+  about the mechanism, and the live negative that killed it was blind to
+  the list path (see the scope correction below). The "animated per-draw
+  colour" candidate is dead. The pulse rate this project measured from
+  pixels (~30 ticks per authored half-cycle, i.e. one V sweep per second)
+  **equals the authored rate**, so `oag_pulse::textures::BLINK_V_CYCLES`
+  is numerically right and can eventually be replaced by reading the block
+  itself - noting the authored scroll direction is **negative** `v`.
+  Confidence 85: the tracks, gate bits and rate agreement are file reads
+  corroborated by the pixel measurement; no breakpoint has watched a ship
+  glow mesh's updater specifically.
+- **Track scenery's tracks are authored too, with per-mesh phase.**
+  `16_Track` carries 92 animated mesh blocks (16 distinct
+  `(rate, span, loop)` shapes): continuous u/v scrolls at 0.667-10 s loops,
+  and **stepped** tracks (e.g. `v` dropping `-64` at key pairs `(3,4)`,
+  `(7,8)`, `(11,12)` over a 0.833 s loop, with sibling meshes carrying the
+  same steps phase-shifted) - the flicker-band sequences, authored with
+  per-mesh phase interleave. This is the data that can replace
+  `ANIMATED_TEXTURES`' chosen rates wholesale; the renderer port is open.

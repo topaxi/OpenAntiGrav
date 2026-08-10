@@ -1030,6 +1030,17 @@ producing a blink-tagged draw call.
 > See [`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md).
 > Read the section below as the survey of the texture's contents - which is what
 > it is good for - not as a recovered mechanism.
+>
+> **Un-superseded, 2026-08-10: the V scroll was the mechanism after all,
+> and it is authored per mesh.** The 2026-07-31 negative measured the wrong
+> choke point - the animated transform reaches the GE through per-material
+> compiled lists that never call `Gu_TexOffset` (see texture-animation.md,
+> "Two earlier readings this corrects"). Every team's
+> `colours_flashing_GLOW` mesh carries the texture-transform keyframe block
+> documented above with the identical track: `v` scrolling one full tile
+> over key times 1..60, looping at an authored 1.0 s. The colour candidate
+> is dead. The section below is therefore a recovered mechanism's *content*
+> half again, not just a texture survey.
 
 
 **Confidence: 85.** `colours_flashing_GLOW.tga` is 32x16. Its width (U) is the
