@@ -111,6 +111,52 @@ slots than any shipped track uses, and the format string at `0x08a88864` has
 exactly one xref, the writer. Since the geometry turned out to be offsets from
 one node, that dead end is now explained rather than merely unexplored.
 
+## Ported, and how close it lands
+
+`oag_gameplay::spawn::grid_pose` is the layout and `oag_game::race::grid_poses`
+drops each slot onto its own footprint. Eight craft take the grid on any track
+that authors a `Start Position`; **nothing drives the seven opponents**, so they
+hold station until AI lands.
+
+`crates/game/tests/race_ground_truth.rs::our_grid_is_the_originals_grid` compares
+every slot against the eight positions above, on the same track:
+
+| | worst | where it goes |
+| --- | ---: | --- |
+| Slot 8, our anchor | `1.68` | the authored node dropped onto the collision mesh |
+| Worst slot, whole grid | `2.40` | the anchor, plus about `0.7` |
+
+The residual is **near-constant across all eight** (`1.68` to `2.40`), which is
+what says the layout is right and the anchor is what is off: a wrong pitch or a
+wrong column would grow the error toward one end.
+
+Two known departures, both sub-unit and both stated rather than papered over:
+
+- **The original's grid follows the track's curve; ours does not.** Its
+  odd-column `z` runs `-195.945` to `-195.362` over the grid's length while ours
+  is flat at `-193.616`. The offsets are straight lines from one node, and the
+  original's evidently are not - or are taken from a curve this has not read.
+- **Each slot is re-dropped onto the collision surface under it**, which the
+  original may not do the same way. It is necessary here because a grid is 138
+  units long and no track is flat over that; sharing slot 8's `y` buried the
+  front of the field.
+
+### The sign that got it wrong first
+
+The lateral offset goes along the craft's **left**. Taking it along
+`oag_physics::Body::right` put the front of the grid off the outside of the
+first corner - visible in a screenshot, and caught properly by
+`the_whole_grid_lands_on_the_track`, which found slot 1 with no collision
+surface under it.
+
+The cause is the convention `engine.md` already records: **the original's row 0
+is the craft's left**, where this project's `Body::right` is its right. Measured
+directly on the same grid, the original's row 0 reads `(-0.006, -0.008, -0.9999)`
+where our own right axis reads `(0, 0, 1)`. The measurement had been projected
+onto the original's row 0 and then implemented against ours, and the two are
+opposite. **No unit test on an identity node can catch that** - it is a fact
+about which way the axis points on a real track, not about the arithmetic.
+
 ## Names landed
 
 | Address | Name | Confidence |
@@ -134,9 +180,9 @@ not named**: it is only inferred from the call site's position in the
   as the last racer, which the identity row also puts in slot 8, so **that run
   cannot separate the permutation from `Ai_Construct`'s forcing either**.
 - **Whether the constants are authored or derived**, above.
-- **Nothing spawns opponents yet.** `oag_gameplay::spawn::grid_pose` is the
-  geometry and is tested; putting seven more craft on it needs AI, which is a
-  separate M5 item.
+- **Nothing drives the opponents.** Eight craft take the grid and hold station;
+  the AI is a separate M5 item. They also all wear the player's hull, because
+  nothing collects the `PI_TeamModel` variants a team declares.
 
 ## History
 

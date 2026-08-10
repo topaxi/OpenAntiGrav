@@ -17,6 +17,10 @@ path = "src/main.rs"
 
 [dependencies]
 oag-pulse.workspace = true
+# Only for the boot sequence's title fallback (crate::boot::open_source) - a
+# Pure disc opens through here so its intro and menu are reachable, not
+# because Pure is a played title yet. See roadmap M8.
+oag-pure.workspace = true
 oag-assets.workspace = true
 # The mixer and the device. The composition root is the only crate allowed to
 # hold one: `scripts/check-dependency-rules.py` fails the build if a gameplay

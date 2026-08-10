@@ -81,7 +81,7 @@ fn load() -> Option<boot::Boot> {
         // No downloadable content either: a pack carries no movies.
         dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
-        movie: pulse::names::INTRO_MOVIE.to_string(),
+        movie: Some(pulse::names::INTRO_MOVIE.to_string()),
         cache: cache_dir(),
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Frames(FRAMES),
@@ -106,7 +106,7 @@ fn load_whole() -> Option<boot::Boot> {
         source: image.display().to_string(),
         dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
-        movie: pulse::names::INTRO_MOVIE.to_string(),
+        movie: Some(pulse::names::INTRO_MOVIE.to_string()),
         cache: cache_dir(),
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Whole,

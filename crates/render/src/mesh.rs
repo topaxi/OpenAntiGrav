@@ -50,7 +50,7 @@ pub struct Bounds {
 }
 
 /// A run of indices sharing one texture.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DrawCall {
     pub range: std::ops::Range<u32>,
     /// Index into [`Model::textures`], or `None` for untextured.
@@ -293,7 +293,13 @@ impl std::fmt::Display for Lod {
 }
 
 /// A model flattened into one vertex and one index buffer.
-#[derive(Debug)]
+///
+/// `Clone` so that one mesh can back several [`crate::mesh_render::Drawable`]s -
+/// eight craft on a starting grid are eight uniform buffers over the same
+/// geometry, and a `Drawable` owns its buffers. Real instancing would upload the
+/// vertices once instead; a ship is a few thousand triangles against a track's
+/// hundred and forty thousand, so the copy is not what to optimise first.
+#[derive(Debug, Clone)]
 pub struct Model {
     /// Human-readable source, for the window title.
     pub label: String,
@@ -487,6 +493,25 @@ pub fn build_pads(
     external: Option<Vec<Option<ModelTexture>>>,
 ) -> Result<Model> {
     build_class(label, data, external, Lod::Both, vex::CLASS_SPEEDUP_PAD)
+}
+
+/// The track's `Weapon Pad` geometry, the same way as [`build_pads`].
+///
+/// A separate model rather than a second class in the same buffer, because the
+/// two are separate *gameplay* objects: a speed pad pushes and a weapon pad
+/// hands something out, and a renderer that merged them could not later show one
+/// without the other. They share everything else - the same pipeline, the same
+/// textures, the same absence from the visibility partition.
+///
+/// `Weapon Pad` `0x3be` is a `Mesh` subclass exactly as `Speedup Pad` `0x3bd`
+/// is, so its geometry ships inside the track file and this is the mesh builder
+/// pointed at a different class id. See `docs/formats/pads.md`.
+pub fn build_weapon_pads(
+    label: &str,
+    data: &[u8],
+    external: Option<Vec<Option<ModelTexture>>>,
+) -> Result<Model> {
+    build_class(label, data, external, Lod::Both, vex::CLASS_WEAPON_PAD)
 }
 
 /// Flattens every node of one class into one buffer pair.

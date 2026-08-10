@@ -72,8 +72,8 @@ use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
 use oag_formats::{collision, handling};
 use oag_gameplay::{
-    ControlScheme, InputSnapshot, Pose, Ship, World, collision_world, handling_for, ship_controls,
-    to_format_class,
+    ControlScheme, GRID_SLOTS, InputSnapshot, Pose, Ship, World, collision_world, handling_for,
+    ship_controls, to_format_class,
 };
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
@@ -473,6 +473,15 @@ pub struct Setup {
     /// belong to the simulation half rather than to [`Loaded`], because a
     /// headless race has to be able to trigger a pad without a GPU.
     pub speedup_pads: Vec<oag_formats::pads::PadVolume>,
+    /// The track's weapon pads, as trigger volumes.
+    ///
+    /// Everything [`Self::speedup_pads`] says applies, one class over. **Nothing
+    /// consumes these** - a weapon pad has nothing to hand out until weapons
+    /// exist - so they are decoded and carried, which is what lets
+    /// `the_weapon_pads_are_drawn_where_they_trigger` check the geometry against
+    /// them. Two independent decodes of the same nodes agreeing is worth more
+    /// than either alone.
+    pub weapon_pads: Vec<oag_formats::pads::PadVolume>,
     /// Where [`Options::pose`] asked for the craft to start, already resolved
     /// against the spline. `None` uses the ordinary spawn.
     pub pose_override: Option<Pose>,
@@ -523,6 +532,12 @@ pub struct Loaded {
     /// `section` and the track model's draw calls are what the PVS indexes.
     /// `None` for a driveable-ribbon build and for any track that authors none.
     pub pad_model: Option<Model>,
+    /// The track's `Weapon Pad` geometry, when it authors any.
+    ///
+    /// Everything [`Self::pad_model`]'s note says applies here too; the two are
+    /// separate because they are separate gameplay objects. **Nothing consumes
+    /// a weapon pad yet** - it is drawn and no more.
+    pub weapon_pad_model: Option<Model>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` when the track declares no `section` nodes - a driveable-ribbon
@@ -720,6 +735,21 @@ pub fn load(options: &Options) -> Result<Loaded> {
             None => format!("{} speedup pad trigger volume(s)", speedup_pads.len()),
         });
     }
+    // The pickup pads, decoded the same way. Nothing triggers them; they are
+    // carried so the drawn geometry can be checked against them.
+    let weapon_pads = oag_formats::vex::nodes(&track_blob)
+        .map(|nodes| {
+            oag_formats::pads::volumes(&track_blob, &nodes, oag_formats::vex::CLASS_WEAPON_PAD)
+        })
+        .unwrap_or_default();
+    report.push(if weapon_pads.is_empty() {
+        "the track authors no Weapon Pad trigger volumes".to_string()
+    } else {
+        format!(
+            "{} weapon pad trigger volume(s), drawn but handing nothing out",
+            weapon_pads.len()
+        )
+    });
 
     let stats_name = handling::entry_name(&options.team);
     let stats_blob = read(&mut archives, &stats_name)?;
@@ -1074,6 +1104,28 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Some(pads)
         }
     };
+    // The pickup pads, built the same way and kept separate for the reason
+    // `mesh::build_weapon_pads` gives: they are a different gameplay object and
+    // a merged buffer could not show one without the other. **Nothing hands
+    // anything out yet** - this draws them and no more; see the roadmap's
+    // weapons item.
+    let weapon_pad_model = if options.ribbon {
+        None
+    } else {
+        let pads =
+            mesh::build_weapon_pads(&options.track, &track_blob, ps2_track_textures.clone())?;
+        if pads.indices.is_empty() {
+            report.push("the track authors no Weapon Pad geometry".to_string());
+            None
+        } else {
+            report.push(format!(
+                "drawing the track's weapon pads: {} triangle(s), {} material(s)",
+                pads.indices.len() / 3,
+                pads.draws.len() + pads.alpha_tested_draws.len() + pads.transparent_draws.len(),
+            ));
+            Some(pads)
+        }
+    };
     report.push(format!(
         "drawing the track's {}: {} triangle(s), radius {:.0}",
         if options.ribbon {
@@ -1090,6 +1142,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         Some(&track_model),
         sky_model.as_ref(),
         pad_model.as_ref(),
+        weapon_pad_model.as_ref(),
     ]
     .into_iter()
     .flatten()
@@ -1251,6 +1304,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             nozzle,
             collision_fx,
             speedup_pads,
+            weapon_pads,
             class_gravity_scale,
             pose_override,
             camera_override: options.camera,
@@ -1260,6 +1314,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         collision_model,
         sky_model,
         pad_model,
+        weapon_pad_model,
         fog_volumes,
         ship_model,
         boost_model,
@@ -1484,6 +1539,35 @@ fn spawn_pose(
     spline
         .start()
         .map(|sample| Pose::from_sample(sample, sample.racing_line, height))
+}
+
+/// Every grid slot's pose, front to back, re-dropped onto the track under each.
+///
+/// `base` is slot 8 - the authored `Start Position` node, which
+/// [`oag_gameplay::grid_pose`] establishes is the *back* of the grid. The other
+/// seven are offsets from it, and each is dropped onto the collision surface
+/// under its own footprint rather than inheriting slot 8's height: a grid is 138
+/// units long and no track is flat over that, so sharing one `y` would leave the
+/// front of the field buried or floating.
+///
+/// A slot with no surface under it keeps the offset height it was given, which is
+/// the same fallback [`spawn_pose`] already takes when a track authors no slot.
+fn grid_poses(base: Pose, collision: &CollisionWorld, height: f32) -> [Pose; GRID_SLOTS as usize] {
+    core::array::from_fn(|index| {
+        let slot = u8::try_from(index + 1).unwrap_or(GRID_SLOTS);
+        let mut pose = oag_gameplay::grid_pose(base, slot);
+        let up = pose.orientation * Vec3::Y;
+        // `base` already carries `height` along its own up axis, so the drop has
+        // to take it off before re-applying it under this slot - otherwise every
+        // craft gains a ride height per slot.
+        let foot = pose.position - up * height;
+        let origin = foot + Vec3::Y * SPAWN_PROBE_RISE;
+        let ray = oag_physics::Ray::new(origin, Vec3::NEG_Y, SPAWN_PROBE_REACH);
+        if let Some(hit) = oag_physics::Raycaster::raycast(collision, ray, None, false) {
+            pose.position = Vec3::new(foot.x, hit.point.y, foot.z) + up * height;
+        }
+        pose
+    })
 }
 
 /// How far up the track's own drop for a spawn probe starts, and how far it
@@ -1978,7 +2062,7 @@ pub struct Race {
     /// Where the ship was at the end of last tick, for the swept test.
     ///
     /// `None` on the first tick, which is the original's own "no previous
-    /// position" case in `Pads_TestCraft_q` and takes the single-point path.
+    /// position" case in `Pads_TestCraft` and takes the single-point path.
     pad_previous_position: Option<Vec3>,
     /// The burst's emitter anchor, **model space**: the `Ship Collision Fx`
     /// locator nearest the last impact, or the contact point itself mapped
@@ -2060,12 +2144,52 @@ impl Race {
         // The override wins outright rather than being an offset from the grid
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.
-        if let Some(pose) = pose_override
-            .or_else(|| spawn_pose(&spline, start_position.as_ref(), &collision, &handling))
-        {
+        let base = spawn_pose(&spline, start_position.as_ref(), &collision, &handling);
+        if let Some(pose) = pose_override.or(base) {
             ship.place_at(pose);
         }
-        world.ship_count = 1;
+
+        // The rest of the grid. **The player keeps slot 0 of the array and slot
+        // 8 of the grid**, which is not a coincidence: the array index is what
+        // every rule, camera and HUD in this file means by "the ship", and slot
+        // 8 is where the original puts the local player and where the authored
+        // `Start Position` node is. So the seven opponents are ahead of the
+        // player, which is what a Pulse grid looks like.
+        //
+        // **They do not move.** Nothing drives them - there is no AI - so they
+        // are placed and stepped by nothing, which is a deliberate stopping
+        // point rather than an oversight: an opponent stepped with the player's
+        // `Environment` would read the player's track sample and its own pose
+        // would drift off the strip it is parked on. See
+        // `docs/overview/roadmap.md`'s AI item.
+        //
+        // Skipped entirely when the caller overrode the pose: an override exists
+        // to put *one* craft somewhere specific, and surrounding it with a grid
+        // built from a different anchor would put opponents through the scenery.
+        //
+        // Also skipped when the track authors no `Start Position`. The whole
+        // layout is offsets from that node, which is slot 8; anchored on the
+        // spline fallback instead, the offsets would be measured from a pose
+        // nobody authored and the seven opponents would be a guess wearing the
+        // shape of a measurement.
+        if pose_override.is_none()
+            && start_position.is_some()
+            && let Some(base) = base
+        {
+            let poses = grid_poses(base, &collision, spawn_height(&handling));
+            for (index, pose) in poses.iter().enumerate().take(GRID_SLOTS as usize - 1) {
+                let opponent = &mut world.ships[index + 1];
+                opponent.active = true;
+                opponent.handling = handling;
+                opponent.physics.body.mass = handling.physical.mass;
+                opponent.physics.body.inertia = box_inertia();
+                oag_physics::damage::reset(&mut opponent.physics, &handling.dimensions);
+                opponent.place_at(*pose);
+            }
+            world.ship_count = GRID_SLOTS;
+        } else {
+            world.ship_count = 1;
+        }
 
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase);
 
@@ -2550,7 +2674,7 @@ impl Race {
 
     /// Which way the speed pad under the ship pushes, or `None` if there is none.
     ///
-    /// Reimplements `Pads_TestCraft_q` (`0x08887144`) and the two functions under
+    /// Reimplements `Pads_TestCraft` (`0x08887144`) and the two functions under
     /// it. Called once a tick with the position the tick *starts* at, and returns
     /// the direction `oag_physics`' step-15 term needs; see
     /// [`oag_physics::forces::Environment::pad_hit`], which is deliberately a
@@ -3208,11 +3332,38 @@ impl Race {
     /// to be the whole of it.
     #[must_use]
     pub fn ship_model_matrix(&self) -> Mat4 {
-        let body = &self.ship().physics.body;
-        Mat4::from_rotation_translation(body.orientation, body.position)
-            * Mat4::from_rotation_y(MODEL_YAW)
-            * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE))
+        model_matrix_of(self.ship())
     }
+
+    /// How many craft are in play, the player included.
+    #[must_use]
+    pub fn ship_count(&self) -> u8 {
+        self.world.ship_count
+    }
+
+    /// One model matrix per craft in play, the player's first.
+    ///
+    /// The player is index 0 and the seven opponents follow, which is the array
+    /// order and **not** the grid order - the player sits on grid slot 8. See
+    /// [`Race::start`].
+    #[must_use]
+    pub fn ship_model_matrices(&self) -> Vec<Mat4> {
+        self.world
+            .ships
+            .iter()
+            .take(self.world.ship_count as usize)
+            .filter(|ship| ship.active)
+            .map(model_matrix_of)
+            .collect()
+    }
+}
+
+/// A craft's model matrix, which is the only correct way to place its mesh.
+fn model_matrix_of(ship: &Ship) -> Mat4 {
+    let body = &ship.physics.body;
+    Mat4::from_rotation_translation(body.orientation, body.position)
+        * Mat4::from_rotation_y(MODEL_YAW)
+        * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE))
 }
 
 /// The chase camera's view of a ship.
@@ -3805,12 +3956,19 @@ pub struct Scene {
     /// `section`, so it is offered frustum culling but not the PVS. `None` when
     /// the track authors none.
     pads: Option<Drawable>,
+    /// The track's `Weapon Pad` geometry, drawn beside [`Self::pads`].
+    weapon_pads: Option<Drawable>,
     /// The track's authored visibility partition, when it decoded.
     ///
     /// `None` for a track with no `section` nodes - every Pure track - and the
     /// first tier is then skipped entirely rather than approximated.
     visibility: Option<TrackVisibility>,
-    ship: Drawable,
+    /// One drawable per craft, the player's first.
+    ///
+    /// Separate drawables over a cloned mesh rather than instancing: a
+    /// `Drawable` owns its uniform buffer, and eight craft need eight matrices a
+    /// frame. See `oag_render::mesh::Model`'s note on the trade.
+    ships: Vec<Drawable>,
     /// The boost plume: an ordinary `Drawable` with its blend pipeline
     /// overridden to [`exhaust::TRAIL_BLEND`] instead of
     /// [`mesh_render::TRANSPARENT_BLEND`].
@@ -3876,6 +4034,7 @@ impl Scene {
         collision_model: Option<Model>,
         sky_model: Option<Model>,
         pad_model: Option<Model>,
+        weapon_pad_model: Option<Model>,
         boost_model: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -3917,16 +4076,25 @@ impl Scene {
             scene_depth,
             mesh_render::TRANSPARENT_BLEND,
         )?;
-        let ship = Drawable::new(
-            device,
-            queue,
-            ship_model,
-            format,
-            anisotropy,
-            sample_count,
-            scene_depth,
-            mesh_render::TRANSPARENT_BLEND,
-        )?;
+        // One per grid slot. Built up front rather than on demand, because a
+        // `Drawable` needs the device and the pass does not have it.
+        // Every craft wears the player's hull for now. Per-team models are a
+        // separate item - the twelve teams load, but nothing collects the
+        // `PI_TeamModel` variants a definition declares. See the roadmap's
+        // livery item.
+        let mut ships = Vec::with_capacity(GRID_SLOTS as usize);
+        for _ in 0..GRID_SLOTS {
+            ships.push(Drawable::new(
+                device,
+                queue,
+                ship_model.clone(),
+                format,
+                anisotropy,
+                sample_count,
+                scene_depth,
+                mesh_render::TRANSPARENT_BLEND,
+            )?);
+        }
         let collision = collision_model
             .map(|model| {
                 Drawable::new(
@@ -3941,21 +4109,25 @@ impl Scene {
                 )
             })
             .transpose()?;
-        let pads = pad_model
-            .filter(|model| !model.indices.is_empty())
-            .map(|model| {
-                Drawable::new(
-                    device,
-                    queue,
-                    model,
-                    format,
-                    anisotropy,
-                    sample_count,
-                    scene_depth,
-                    mesh_render::TRANSPARENT_BLEND,
-                )
-            })
-            .transpose()?;
+        let pad_drawable = |model: Option<Model>| {
+            model
+                .filter(|model| !model.indices.is_empty())
+                .map(|model| {
+                    Drawable::new(
+                        device,
+                        queue,
+                        model,
+                        format,
+                        anisotropy,
+                        sample_count,
+                        scene_depth,
+                        mesh_render::TRANSPARENT_BLEND,
+                    )
+                })
+                .transpose()
+        };
+        let pads = pad_drawable(pad_model)?;
+        let weapon_pads = pad_drawable(weapon_pad_model)?;
         // The boost plume, drawn additively. It is real geometry (a `.vex`
         // mesh, not a camera-facing quad), so it needs depth testing and a
         // model matrix, which is what `Drawable` already gives every other
@@ -4109,11 +4281,12 @@ impl Scene {
         Ok(Self {
             track,
             visibility,
-            ship,
+            ships,
             boost,
             collision,
             sky,
             pads,
+            weapon_pads,
             fog_volumes,
             exhaust,
             sparks,
@@ -4203,12 +4376,13 @@ impl Scene {
             });
         for drawable in [
             Some(&self.track),
-            Some(&self.ship),
             self.collision.as_ref(),
             self.pads.as_ref(),
+            self.weapon_pads.as_ref(),
         ]
         .into_iter()
         .flatten()
+        .chain(self.ships.iter())
         {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&fog));
         }
@@ -4235,8 +4409,13 @@ impl Scene {
         }
         self.track
             .write(queue, view_projection, Mat4::IDENTITY, track_scroll);
-        self.ship
-            .write(queue, view_projection, race.ship_model_matrix(), scroll);
+        // Every craft in play, the player first. `zip` rather than an index so a
+        // race with fewer craft than the scene has drawables writes only the
+        // ones it has - the rest keep last frame's uniforms and are not drawn.
+        let matrices = race.ship_model_matrices();
+        for (drawable, matrix) in self.ships.iter().zip(&matrices) {
+            drawable.write(queue, view_projection, *matrix, scroll);
+        }
         // The flaps move in *model* space, before the ship's own matrix, so
         // this is a vertex write and not a second uniform - see
         // `Drawable::deflect_airbrakes`. Unconditional rather than
@@ -4244,7 +4423,9 @@ impl Scene {
         // to know they have not moved, and a gate would have to be invalidated
         // by anything that ever rebuilds the buffer.
         let [left, right] = race.airbrake_flaps();
-        self.ship.deflect_airbrakes(queue, left, right);
+        if let Some(player) = self.ships.first() {
+            player.deflect_airbrakes(queue, left, right);
+        }
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -4259,7 +4440,10 @@ impl Scene {
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         }
-        if let Some(pads) = &self.pads {
+        for pads in [self.pads.as_ref(), self.weapon_pads.as_ref()]
+            .into_iter()
+            .flatten()
+        {
             pads.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
         }
 
@@ -4367,12 +4551,21 @@ impl Scene {
         if let Some(pads) = &self.pads {
             stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
         }
+        if let Some(pads) = &self.weapon_pads {
+            stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
+        }
         // Skipped outright in the cockpit view rather than moved or scaled away:
         // the original sets one flag on the craft and draws no hull, and a draw
         // call not issued is the only version of that with no chance of a stray
         // polygon across the middle of the screen. See `Race::draws_own_ship`.
-        if race.draws_own_ship() {
-            stats.add(self.ship.draw(&mut pass, None, None, None));
+        // Only the *player's* hull is skipped in the cockpit view. The opponents
+        // in front are exactly what a cockpit view is for.
+        let drawn = usize::from(race.ship_count());
+        for (index, drawable) in self.ships.iter().take(drawn).enumerate() {
+            if index == 0 && !race.draws_own_ship() {
+                continue;
+            }
+            stats.add(drawable.draw(&mut pass, None, None, None));
         }
         // After the ship, so the hull's depth is already in the buffer: the
         // plume's own blend pipeline writes no depth, the same reasoning as
@@ -4611,6 +4804,7 @@ pub fn capture(
         collision_model,
         sky_model,
         pad_model,
+        weapon_pad_model,
         boost_model,
         fog_volumes,
         visibility,
@@ -4692,6 +4886,7 @@ pub fn capture(
         collision_model,
         sky_model,
         pad_model,
+        weapon_pad_model,
         boost_model,
         flare,
         noise,
@@ -5194,6 +5389,7 @@ mod tests {
             // A synthetic track authors no pads, which is also what every Pure
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
+            weapon_pads: Vec::new(),
             // These tests run on a synthetic straight and want the ordinary
             // spawn and the ordinary chase camera; `--pose` and its camera are
             // capture aids with nothing to say here.

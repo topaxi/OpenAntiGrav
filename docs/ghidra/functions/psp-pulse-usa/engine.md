@@ -956,7 +956,7 @@ Both were found by reading the trigger side; see
 So `+0x20` is floats 8 to 10 - **row 2**, the pad's local `+Z` axis. The boost
 pushes along the pad's own forward direction, which is why the reading still
 works out to "along the track": the pads are authored aligned with it. The
-function is now `Pads_TestCraft_q` (`0x08887144`, confidence 65), and the
+function is now `Pads_TestCraft` (`0x08887144`, confidence 90), and the
 containment it delegates to is `Pad_ContainsPoint` (`0x088866bc`, 85).
 
 **The `if (section changed)` block is not lap and sector counting.** It bumps

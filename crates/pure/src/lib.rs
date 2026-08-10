@@ -33,6 +33,8 @@ pub const TITLE: &Title = &Title {
     foreign_serials: FOREIGN_SERIALS,
 };
 
+pub mod frontend;
+
 /// The archives a PSP Pure disc ships, relative to the image root.
 ///
 /// **Three, not four.** `Data.wad`, `FE.wad` and `FEData.wad` are all present
@@ -72,6 +74,44 @@ pub mod names {
     pub fn handling_stats(team: &str) -> String {
         format!(r"Data\Ships\{team}\handlingstats.xml")
     }
+
+    /// The boot movie the `IntroMovie1` widget on `Intro Screen` plays.
+    ///
+    /// The widget's `src` is `Data\Movies\IntroMovieP1`, `localised="true"` -
+    /// `oag_game::screen::Movie::entry_name` appends `_US.PMF` for a localised
+    /// source with no extension of its own, per its own doc comment. Hashing
+    /// that gives `3d2c85f8`, a real entry in `pure-psp-usa.chd`'s `Data.wad` -
+    /// but that is not independent confirmation, since a wrong guess can still
+    /// land on a real entry by accident. **Checked properly**: extracted and
+    /// decoded (`ffmpeg` on the cached `.ivf`), frames 150 and 230 read
+    /// "SONY COMPUTER ENTERTAINMENT AMERICA" and "A STUDIO LIVERPOOL GAME" -
+    /// this is `oag_pulse`'s own `DEVPUB_REEL` (`hash:b1ba72c3` is the EU cut,
+    /// `hash:3d2c85f8` the American one both share), not new content. Pure's
+    /// disc genuinely opens on this reel; Pulse ships the identical asset
+    /// (`oag_pulse::DEVPUB_REEL`'s own doc comment already says the two discs
+    /// carry it byte-identically) but no longer plays it at boot.
+    ///
+    /// **Decodes correctly and does not currently draw.** `oag_game`'s reel
+    /// leg (`Leg::DevPubReel`, reached by `--reel`) shows the same blank white
+    /// frame for this exact video on `pulse-psp-usa.chd`, so this is a
+    /// pre-existing rendering gap in that leg, not something Pure's own
+    /// boot introduced - confirmed by comparison, not fixed here.
+    pub const INTRO_MOVIE: &str = r"Data\Movies\IntroMovieP1_US.PMF";
+
+    /// The second boot movie, played by the `FMV Intro` screen state.
+    ///
+    /// The widget's `src` is `Data\Movies\WoFMVNew`, also `localised="true"`,
+    /// declared as a sibling of `IntroMovie1` on `Intro Screen` rather than
+    /// owned by `FMV Intro` itself - `FMV Intro` carries no widgets of its own,
+    /// just a placeholder `Item` and a `Redirect` to `Title Screen`. Confirmed
+    /// present the same way as [`INTRO_MOVIE`] (`oag-wad hash` -> `03fff874`).
+    ///
+    /// **Not wired to playback yet.** `oag_game::frontend` reaches this state
+    /// and lets a button leave it, but does not yet decode or draw the movie -
+    /// that needs its own decoded-frame slot the way the intro and the menu
+    /// backdrop each have one (`crate::frontend::Video`, `Session::feed` /
+    /// `Session::backdrop` in `oag_game::main`), which is real, separate work.
+    pub const FMV_INTRO_MOVIE: &str = r"Data\Movies\WoFMVNew_US.PMF";
 }
 
 /// The bulk archive's candidates. Pure is PSP-only.
@@ -83,12 +123,20 @@ const FE_CANDIDATES: &[(&str, Platform)] = &[(archives::FE, Platform::Psp)];
 /// Serials positively identified as a Studio Liverpool title other than Pure.
 ///
 /// The mirror of `oag_pulse`'s list, and one-directional in the same way: it
-/// rules a source *out*, never in. Pulse's two verified serials are here
-/// because Pulse ships `Data.wad` and `FE.wad` under the identical names Pure
-/// does, so name matching alone would open one as if it were the other.
+/// rules a source *out*, never in. Pulse's verified serials are here because
+/// Pulse ships `Data.wad` and `FE.wad` under the identical names Pure does,
+/// so name matching alone would open one as if it were the other. `UCES-00465`
+/// is Pulse's EU/Australia PSP pressing, the same one `oag_pulse::FOREIGN_SERIALS`
+/// had to grow when Pure's own EU disc (`UCES-00001`) turned up missing from
+/// *that* list - the two are added in the same change here so the pair does
+/// not drift apart again.
 const FOREIGN_SERIALS: &[ForeignSerial] = &[
     ForeignSerial {
         serial: "UCUS-98712",
+        title: "Wipeout Pulse",
+    },
+    ForeignSerial {
+        serial: "UCES-00465",
         title: "Wipeout Pulse",
     },
     ForeignSerial {
@@ -114,6 +162,7 @@ mod tests {
     #[test]
     fn pulses_serials_are_ruled_out_and_pures_own_get_no_verdict() {
         assert_eq!(TITLE.foreign_title("UCUS-98712"), Some("Wipeout Pulse"));
+        assert_eq!(TITLE.foreign_title("UCES-00465"), Some("Wipeout Pulse"));
         assert_eq!(TITLE.foreign_title("SCES-54748"), Some("Wipeout Pulse"));
         assert_eq!(TITLE.foreign_title("UCUS-98612"), None);
         assert_eq!(TITLE.foreign_title("UCES-00001"), None);

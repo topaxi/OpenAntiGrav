@@ -267,8 +267,32 @@ neither guess: the list is built once, at track load, by a **class-filtered
 scene-graph walk**, and the class it filters on is `0x3bd` - `Speedup Pad` -
 to the exclusion of everything else in the tree, `Weapon Pad` included.
 
+**A same-day pass narrowed this first, and one of its two claims about
+`DAT_08b32c88` itself needs a correction.** It confirmed the global is the
+World object rather than a list (fifteen readers, none of them a pad-class
+comparison) and ruled out two things worth keeping ruled out:
+
+- **`Pad_Bind` does not register into any list.** It initialises the pad
+  node's own box at `+0x1b0`/`+0x1c0` and eight per-racer disable timers at
+  `+0x1d0`, and returns. The class distinction is not made at bind time.
+- **There is no sibling global.** `0x08b32c8c`, the next word after the world
+  pointer, has no references at all.
+
+But it named `FUN_08887094` as "the world constructor" on the strength of it
+being *a* writer of `DAT_08b32c88`, and that function's body is
+`DAT_08b32c88 = 0` - it **clears** the global, sharing an identical
+vtable-stamp preamble (`node+0x38`/`+0x3c`) with the function below, which
+reads as a destructor paired with that constructor rather than the
+constructor itself. The one that matters for this chain, and the one that
+actually sets `DAT_08b32c88` to a live object, is `FUN_08886af4` - traced
+below, since it is also where `World_LoadTrack` is called from.
+
 The chain, each link read at instruction level:
 
+0. **`FUN_08886af4`** is the World constructor: it stamps the vtable and class
+   tag, sets `DAT_08b32c88 = param_1` (the corrected attribution above), zeros
+   the per-racer position caches at `+0xb50`/`+0xbd0` for all eight racers, and
+   at its tail calls `World_LoadTrack` on the object it just built.
 1. **`World_LoadTrack`** (`0x08883794`, already named, `vex.md`) finds the
    just-loaded track's root node in the World object's own child list, then
    calls `World_CollectNodeLists` on it.
@@ -333,10 +357,14 @@ The chain, each link read at instruction level:
    new node's own `+4`, the field `FUN_08a6ed64` compares against.
 
 **What this closes and what it doesn't.** It retires "does `+0x40` mix both
-pad classes" - it does not, structurally. It does not touch `pad+0x1a0`'s
-writer, which this trail never reaches - `0x0892661c` only shows the field
-starts at zero. (`Pad_SweptTest`'s own `25.0` teleport-reject guard was a
-separate open item on this page and is retired further down, in its own
+pad classes" two independent ways - structurally, since `FUN_08a6ed64` filters
+on the node's own class tag, and behaviourally, since `Ship_ApplySpeedupPad`
+applies no class filter of its own to what `Pads_TestCraft` returns (every hit
+gets the boost, the flare and the telemetry - a `Weapon Pad` on the same list
+would boost the craft, which the game does not do). It does not touch
+`pad+0x1a0`'s writer, which this trail never reaches - `0x0892661c` only shows
+the field starts at zero. (`Pad_SweptTest`'s own `25.0` teleport-reject guard
+was a separate open item on this page and is retired further down, in its own
 section, by a live measurement rather than this trail.)
 
 ## `ExhaustFlare_OnSpeedupPad` (`0x08904f10`)

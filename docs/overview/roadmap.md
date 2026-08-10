@@ -500,8 +500,24 @@ seen from the authoring side.
       identity. Despite the attribute's name it scales the **grounded** term;
       see [handling stats](../formats/handling-stats.md). This corrected two
       physics pages that recorded the shipped table as `1.0` for every class.
-- [ ] Weapons and pickups, including `Weapon Pad` `0x3be` - which decodes today
-      alongside the speedup pads, but has nothing to hand out
+- [~] Weapons and pickups. **The pads are drawn** as of 2026-08-10 - `Weapon Pad`
+      `0x3be` is a `Mesh` subclass like the speedup pads, so it is the mesh
+      builder pointed at another class id (738 triangles on `16_Track`), and its
+      trigger volumes decode and are carried. A ground-truth test checks the two
+      against each other, the geometry coming through the mesh path and the
+      volumes through the payload path. **And the weapon table turned out to be
+      authored data**, not a table compiled into the executable:
+      `Data\XML\WeaponStats_Race.xml` carries all fourteen weapons' tunables,
+      the seven disturber effects, and the pickup distribution weighted per
+      speed class and separately for AI, human, front and back of the grid. See
+      [weapon stats](../formats/weapon-stats.md). That makes the item a format
+      decode plus behaviour rather than a recovery.
+      **They still hand nothing out**: what runs when a craft enters a pad,
+      firing, and the `source == 2` damage path through
+      [`Ship_Damage`](../ghidra/functions/psp-pulse-usa/shield.md) are all
+      unstarted. **Turbo, Shield and Autopilot are the cheap three** - they
+      share a two-attribute schema (`absorb`, `time`) and damage nobody, so
+      none of them needs a projectile or a target.
 - [~] **Shield and energy.** The pool, its maximum and the one thing that spends
       it are recovered and implemented: `*(craft+0x1c4) + 0x88` is the pool,
       `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its
@@ -594,8 +610,15 @@ place. `oag_gameplay::spawn::grid_pose` is the port. Which ship gets which slot
 is a shipped permutation table, and a short field packs to the *back*. See
 [grid](../ghidra/functions/psp-pulse-usa/grid.md).
 
-**What still blocks the milestone is not the grid but the opponents**: nothing
-spawns seven more craft, because nothing drives them. That is the AI item.
+**Eight craft now take the grid**, and every slot lands within **2.40 units** of
+where the original puts its own - a near-constant residual dominated by our
+anchor being 1.68 out, which is what says the layout is right rather than
+averaging out. `crates/game/tests/race_ground_truth.rs` pins it against the
+original's own eight positions.
+
+**Nothing drives the seven opponents.** They hold station on the grid, and they
+all wear the player's hull. That is the AI item and the livery item, not the
+grid one.
 
 ---
 

@@ -267,13 +267,20 @@ pub const GRID_ROW_PITCH: f32 = 19.79;
 ///
 /// The grid is two staggered columns, and this is the whole of the lateral
 /// pattern: even slots sit on the authored node's own line, odd slots sit
-/// `GRID_COLUMN_OFFSET` along its row 0. Measured the same way as
+/// `GRID_COLUMN_OFFSET` to the craft's **left**. Measured the same way as
 /// [`GRID_ROW_PITCH`] and much tighter - the four odd slots read `19.882`,
 /// `19.993`, `20.035` and `20.016`, and the four even ones are within `0.05` of
 /// zero - so `20.0` is almost certainly the authored value rather than a mean.
 ///
-/// **Row 0 is the craft's left**, not its right; see
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+/// **Left, and that is a trap this got wrong once.** The measurement is a
+/// projection onto the original's row 0, and the original's row 0 is the craft's
+/// *left* where [`oag_physics::Body::right`] is its right - see
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`. Measured directly on the same
+/// grid: the original's row 0 reads `(-0.006, -0.008, -0.9999)` where our own
+/// right axis reads `(0, 0, 1)`, exactly opposite. Taking the offset along
+/// `Body::right` instead put the front of the grid off the outside of the
+/// track's first corner, which `the_whole_grid_lands_on_the_track` catches and
+/// no unit test on an identity node could.
 pub const GRID_COLUMN_OFFSET: f32 = 20.0;
 
 /// The pose of one grid slot, given the track's authored `Start Position`.
@@ -300,7 +307,9 @@ pub const GRID_COLUMN_OFFSET: f32 = 20.0;
 pub fn grid_pose(node: Pose, slot: u8) -> Pose {
     let slot = slot.clamp(1, GRID_SLOTS);
     let forward = node.orientation * Vec3::NEG_Z;
-    let row0 = node.orientation * Vec3::X;
+    // The craft's **left**, which is the original's row 0 - see
+    // [`GRID_COLUMN_OFFSET`] for why this is not `Vec3::X`.
+    let left = node.orientation * Vec3::NEG_X;
     let back = f32::from(GRID_SLOTS - slot);
     let lateral = if slot % 2 == 1 {
         GRID_COLUMN_OFFSET
@@ -308,7 +317,7 @@ pub fn grid_pose(node: Pose, slot: u8) -> Pose {
         0.0
     };
     Pose {
-        position: node.position + forward * (back * GRID_ROW_PITCH) + row0 * lateral,
+        position: node.position + forward * (back * GRID_ROW_PITCH) + left * lateral,
         orientation: node.orientation,
     }
 }
@@ -586,10 +595,11 @@ mod grid_tests {
     #[test]
     fn the_columns_alternate() {
         for slot in 1..=GRID_SLOTS {
+            // The identity node's left is `-X`, so an odd slot lands negative.
             let x = grid_pose(node(), slot).position.x;
             if slot % 2 == 1 {
                 assert!(
-                    (x - GRID_COLUMN_OFFSET).abs() < 1e-4,
+                    (x + GRID_COLUMN_OFFSET).abs() < 1e-4,
                     "slot {slot} should sit on the offset column, sits at {x}"
                 );
             } else {

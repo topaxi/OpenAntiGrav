@@ -229,7 +229,7 @@ fn the_front_ends_own_backdrop_name_resolves_to_the_pal_cut() {
         source: image.display().to_string(),
         dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
-        movie: r"Data\Movies\Backdrop.ipf".to_string(),
+        movie: Some(r"Data\Movies\Backdrop.ipf".to_string()),
         cache: std::env::temp_dir().join("oag-ipf-ground-truth"),
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Whole,

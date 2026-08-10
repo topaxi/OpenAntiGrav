@@ -251,7 +251,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         source: image.display().to_string(),
         dlc: Vec::new(),
         leg: oag_game::frontend::Leg::LogoFmv,
-        movie: boot::DEFAULT_BOOT_MOVIE.to_string(),
+        movie: Some(boot::DEFAULT_BOOT_MOVIE.to_string()),
         cache: std::env::temp_dir().join("oag-race-handoff"),
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
@@ -757,4 +757,192 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
         "the ship spawned {above:.3} above the surface, wanted {:.3}",
         race::spawn_height(&handling)
     );
+}
+
+/// The whole grid lands on the track, in the formation measured off the
+/// original, and every craft is over solid geometry.
+///
+/// The unit tests in `oag_gameplay::spawn` pin the *arithmetic* against an
+/// identity node; this pins it against a real track, where each slot is dropped
+/// onto its own footprint and the surface is neither flat nor straight over the
+/// grid's 138 units. A layout that is right in the abstract and buries the front
+/// row is still wrong.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_whole_grid_lands_on_the_track() {
+    let Some(loaded) = load() else { return };
+    let bound = envelope(&loaded);
+    let colliders = loaded.setup.collision.clone();
+    let race = race::Race::start(loaded.setup);
+
+    assert_eq!(race.ship_count(), 8, "16_Track should field a full grid");
+    let ships: Vec<_> = race.world.ships.iter().filter(|s| s.active).collect();
+    assert_eq!(ships.len(), 8);
+
+    // The player is array index 0 and grid slot 8, so it is the rearmost. Every
+    // opponent is ahead of it along its own forward axis.
+    let player = ships[0].physics.body;
+    let forward = player.forward();
+    for (index, ship) in ships.iter().enumerate().skip(1) {
+        let ahead = (ship.physics.body.position - player.position).dot(forward);
+        assert!(
+            ahead > 0.0,
+            "ship {index} is {ahead:.2} along the player's forward, so it is behind them"
+        );
+    }
+
+    // Two staggered columns, across the player's own **left**. Slot 8 is the
+    // player and sits on the node's line; the odd slots sit off it. A whole unit of
+    // tolerance because each slot was re-dropped onto its own footprint and the
+    // track rolls under the grid.
+    let left = -player.right();
+    for (index, ship) in ships.iter().enumerate() {
+        let slot = if index == 0 { 8 } else { index as u8 };
+        let lateral = (ship.physics.body.position - player.position).dot(left);
+        let expected = if slot % 2 == 1 {
+            oag_gameplay::GRID_COLUMN_OFFSET
+        } else {
+            0.0
+        };
+        assert!(
+            (lateral - expected).abs() < 1.0,
+            "slot {slot} sits {lateral:.2} across the grid, expected about {expected:.1}"
+        );
+    }
+
+    // And every one of them is over the track rather than over a gap, inside a
+    // wall or out in the scenery. Two independent checks, because either alone
+    // passes somewhere a race never goes: near the driveable line, and with
+    // collision geometry underneath.
+    for (index, ship) in ships.iter().enumerate() {
+        let position = ship.physics.body.position;
+        let distance = race
+            .spline()
+            .distance_to(position)
+            .expect("the track has samples");
+        assert!(
+            distance < bound,
+            "ship {index} is {distance:.2} from the driveable line, \
+             outside the {bound:.2} envelope"
+        );
+        let origin = position + Vec3::Y * 20.0;
+        let ray = oag_physics::Ray::new(origin, Vec3::NEG_Y, 80.0);
+        assert!(
+            oag_physics::Raycaster::raycast(&colliders, ray, None, false).is_some(),
+            "ship {index} has no collision surface under it"
+        );
+    }
+}
+
+/// Where the original's own eight craft sit on Talon's Junction's grid.
+///
+/// Read out of PPSSPP's memory on 2026-08-10 while the countdown held them in
+/// place, slot 1 first: `psp-drive.py menu --single-race`, then the racer table
+/// at `0x08b34420`. Fourteen samples agreed to a thousandth, so these are the
+/// original's numbers rather than one noisy frame. Method and the rest of the
+/// measurement: `docs/ghidra/functions/psp-pulse-usa/grid.md`.
+///
+/// Slot 1 is worth recognising: `(6.125, -50.064, -195.945)` is where a *time
+/// trial* starts, which is the other end of the same grid.
+const ORIGINAL_GRID: [[f32; 3]; 8] = [
+    [6.125, -50.064, -195.945],
+    [-13.537, -49.709, -175.897],
+    [-33.428, -50.121, -195.817],
+    [-53.161, -49.696, -175.727],
+    [-72.998, -50.026, -195.615],
+    [-92.777, -49.651, -175.494],
+    [-112.565, -49.847, -195.362],
+    [-132.304, -49.577, -175.223],
+];
+
+/// Our grid is the original's grid, slot for slot, on the same track.
+///
+/// The strongest check available on this layout, and much stronger than the
+/// envelope test above: it compares against the thing itself rather than against
+/// a bound. Every slot has to land, so a formation that is right on average and
+/// wrong at one end fails here.
+///
+/// **Three units of tolerance, and where it goes.** Our anchor is the authored
+/// `Start Position` node dropped onto the collision mesh, and that lands 1.84
+/// units from the original's own slot 8 - so about two units of the budget is
+/// spent before the layout is consulted at all. The rest covers each slot being
+/// re-dropped onto its own footprint, which the original may not do the same way.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn our_grid_is_the_originals_grid() {
+    let Some(loaded) = load() else { return };
+    let race = race::Race::start(loaded.setup);
+    assert_eq!(race.ship_count(), 8);
+
+    // Array index 0 is the player and grid slot 8; indices 1..=7 are slots 1..=7.
+    let slot_of = |index: usize| if index == 0 { 8 } else { index };
+    let mut worst = 0.0f32;
+    for (index, ship) in race
+        .world
+        .ships
+        .iter()
+        .enumerate()
+        .filter(|(_, ship)| ship.active)
+    {
+        let slot = slot_of(index);
+        let want = Vec3::from_array(ORIGINAL_GRID[slot - 1]);
+        let got = ship.physics.body.position;
+        let error = (got - want).length();
+        worst = worst.max(error);
+        println!("slot {slot}: ours {got:?}, original {want:?}, {error:.3} apart");
+        assert!(
+            error < 3.0,
+            "slot {slot} is {error:.3} from where the original puts it"
+        );
+    }
+    println!("worst slot: {worst:.3} units");
+}
+
+/// The weapon pads are drawn where they trigger.
+///
+/// Two independent decodes of the same nodes have to agree: `mesh::build_weapon_pads`
+/// reads them as geometry through the mesh path, and `oag_formats::pads::volumes`
+/// reads them as trigger boxes through the payload path. Neither knows about the
+/// other, so a transform applied in one and not the other shows up here and
+/// nowhere else - and it is exactly the mistake that is easy to make, because a
+/// pad's payload is a *mesh* payload and its placement comes from the parent
+/// chain rather than from itself.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_weapon_pads_are_drawn_where_they_trigger() {
+    let Some(loaded) = load() else { return };
+    let model = loaded
+        .weapon_pad_model
+        .as_ref()
+        .expect("16_Track authors Weapon Pad geometry");
+    assert!(!model.indices.is_empty());
+
+    let volumes = &loaded.setup.weapon_pads;
+    assert!(
+        !volumes.is_empty(),
+        "the track decodes no weapon pad volumes"
+    );
+    println!(
+        "{} weapon pad volume(s), {} triangles drawn",
+        volumes.len(),
+        model.indices.len() / 3
+    );
+
+    // Every trigger volume has drawn geometry sitting in it. Ten units of slack
+    // because a pad's mesh is a flat plate and its volume is a box around the
+    // craft that crosses it, so the two are the same *place* rather than the
+    // same extent.
+    for (index, pad) in volumes.iter().enumerate() {
+        let centre = Vec3::from_array(pad.centre());
+        let nearest = model
+            .vertices
+            .iter()
+            .map(|v| (Vec3::from_array(v.position) - centre).length())
+            .fold(f32::INFINITY, f32::min);
+        assert!(
+            nearest < 10.0,
+            "weapon pad {index} triggers at {centre:?} and the nearest drawn \
+             vertex is {nearest:.2} away"
+        );
+    }
 }

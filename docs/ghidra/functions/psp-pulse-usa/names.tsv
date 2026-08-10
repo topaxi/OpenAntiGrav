@@ -444,3 +444,7 @@
 0x088536bc	function	Ai_Construct	80	grid.md
 0x08926ae8	function	StartPosition_Bind	82	grid.md
 0x08ab0a90	data	g_grid_orders	82	grid.md
+0x0880db7c	function	WeaponStats_Parse	88	../../../formats/weapon-stats.md
+0x0880c92c	function	WeaponStats_ParseTurbo	88	../../../formats/weapon-stats.md
+0x0880ca2c	function	WeaponStats_ParseShield	88	../../../formats/weapon-stats.md
+0x0880cb2c	function	WeaponStats_ParseAutopilot	88	../../../formats/weapon-stats.md
