@@ -570,8 +570,6 @@ impl Exhaust {
         let ramps = self.layer_alphas();
         let samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
         let width_scale = self.intensity * TRAIL_WIDTH_GAIN + TRAIL_WIDTH_BASE;
-        // `ring+0x20`, stamped into the target's alpha for the bloom.
-        let glow = self.intensity * TRAIL_GLOW_GAIN;
 
         let mut out = Vec::with_capacity(MAX_TRAIL_VERTICES);
         // The rim, in `Trail_DrawRibbon`'s own order. The fifth entry closes
@@ -599,15 +597,19 @@ impl Exhaust {
                 let fade_b = ramp * trail_fade(k + 1);
                 let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
                 let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
+                // The glow mask ramps to zero along the ribbon - see
+                // [`trail_glow`]. Flat here reads as a solid white cone.
+                let glow_a = trail_glow(self.intensity, k);
+                let glow_b = trail_glow(self.intensity, k + 1);
                 let ua = k as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 let ub = (k + 1) as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 for fin in 0..TRAIL_FINS {
                     let va = fin as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
                     let vb = (fin + 1) as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
-                    let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va, glow);
-                    let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb, glow);
-                    let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va, glow);
-                    let b1 = rib_vertex(pb + rim[fin + 1] * wb, cb, ub, vb, glow);
+                    let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va, glow_a);
+                    let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb, glow_a);
+                    let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va, glow_b);
+                    let b1 = rib_vertex(pb + rim[fin + 1] * wb, cb, ub, vb, glow_b);
                     out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
                 }
             }
@@ -937,10 +939,44 @@ pub const TRAIL_BLEND: wgpu::BlendState = wgpu::BlendState {
 /// in the ribbon's own draw reads it, but the post-process does. See
 /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
 ///
-/// The original additionally steps the value down per segment toward the tail on
-/// the innermost layer only. **That step is not recovered**, so the ribbon here
-/// stamps the flat base on every segment rather than inventing a slope.
+/// The value is **not** flat along the ribbon: see [`trail_glow`].
 pub const TRAIL_GLOW_GAIN: f32 = 0.5 * 0.9;
+
+/// The glow mask at segment `k`, as a fraction of the head value.
+///
+/// Read at instruction level from `Trail_DrawRibbon` (`0x0892b214`-`0x0892b29c`)
+/// on 2026-08-10, which is the pass that made the bloom usable:
+///
+/// ```text
+/// f24  = 255.0                       ; lui a0, 0x437f
+/// f22  = ring[0x20] * f24            ; the head value, in 0..255
+/// f22  = f22 / n                     ; one step
+/// f20  = ring[0x20] * f24            ; the running value
+/// loop:  ref = trunc(f20) & 0xff     ; Gu_StencilFunc(GU_ALWAYS, ref, 0xff)
+///        f20 = f20 - f22
+/// ```
+///
+/// So the stencil reference is a **linear ramp from the head value down to
+/// zero at the tail**, in the byte range the framebuffer's alpha channel
+/// actually has. `ring[0x20]` is reloaded per layer, so each layer runs its
+/// own ramp rather than continuing the previous one.
+///
+/// **Getting this wrong is not subtle.** Stamping the flat head value on every
+/// segment - which this module did for one revision, because the step was
+/// recorded as unrecovered - makes the ribbon's whole length a full-strength
+/// bloom source and blows the exhaust out to a solid white cone. Measured
+/// 2026-08-10 against the same frame both ways.
+///
+/// Two known simplifications, both recorded rather than hidden: the original
+/// stamps one *constant* per segment where an interpolated vertex attribute
+/// ramps across it, and `& 0xff` cannot wrap here because the head value is at
+/// most `255`.
+#[must_use]
+pub fn trail_glow(intensity: f32, segment: usize) -> f32 {
+    let n = (TRAIL_SAMPLES - 1) as f32;
+    let fall = 1.0 - (segment as f32 / n);
+    intensity * TRAIL_GLOW_GAIN * fall.max(0.0)
+}
 
 /// The maximum vertices [`Pipeline`]'s buffer holds: the flare's one quad.
 ///
@@ -1746,10 +1782,15 @@ mod tests {
         // ribbon stamps `intensity * TRAIL_GLOW_GAIN` into the target's alpha
         // for `oag_render::post::bloom`'s bright pass to weigh, reproducing
         // `Trail_BuildStateList`'s stencil `REPLACE`. See [`TRAIL_GLOW_GAIN`].
-        let glow = 1.0 * TRAIL_GLOW_GAIN;
         assert!(
-            v.iter().all(|vert| (vert.colour[3] - glow).abs() < 1e-6),
-            "every ribbon vertex carries the glow value {glow}, not an opacity"
+            (v[0].colour[3] - trail_glow(1.0, 0)).abs() < 1e-6,
+            "the head carries the full glow value, not an opacity"
+        );
+        assert!(
+            v[per_layer - 1].colour[3] < v[0].colour[3] * 0.2,
+            "the glow ramps down along the ribbon: tail {} vs head {}",
+            v[per_layer - 1].colour[3],
+            v[0].colour[3]
         );
 
         // Layer 0 is the authored deep blue times the ramp: red stays zero.
