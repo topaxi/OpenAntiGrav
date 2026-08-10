@@ -143,6 +143,54 @@ batch can be drawn with, which is what matters: a replayed list was the obvious
 place to look for a missing alpha path, and it is ruled out - see
 [exhaust.md](exhaust.md)'s section on the boost plume's vertex alpha.
 
+## `Gfx_BuildBatchStateList` decoded, and the boost plume's blend with it
+
+`0x0891f890`, confidence **90**. This is the state builder on the path the
+boost plume actually takes (`Mesh_CompileGeometryPass`, `0x0890d0cc`), as
+opposed to `Mesh_SetBatchDrawState` on `FUN_089307b4`'s. Read 2026-08-10 while
+chasing the plume's fidelity; it settles a question `exhaust.md` had carried
+open for four passes.
+
+`param_2` is the batch's `pass_mask`, `param_3` a material flags word. Traced
+against the plume's own measured `pass_mask = 0x1232`:
+
+```text
+Gu_PixelMask(0)                                  every channel writable - the glow mask
+Gu_TexWrap(REPEAT, REPEAT)                       (& 4) and (& 8) both clear
+Gu_Disable(CULL_FACE)                            (& 0x20) set
+                                                 (& 0x700) = 0x200, so the blended group:
+Gu_DepthFunc(6);  Gu_DepthMask(1)
+                                                 (& 0x100) clear, (& 0x200) set:
+Gu_Enable(BLEND)
+Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX 0xffffff)
+Gu_ColorFunc(GU_NOTEQUAL, 0, 0xffffff);  Gu_Enable(COLOR_TEST)
+Gu_Enable(ALPHA_TEST);  Gu_AlphaFunc(GU_GREATER, 0, 0xff)
+                                                 (& 0xc0) clear, (& 0x700) set:
+Gu_StencilOp(KEEP, KEEP, KEEP);  Gu_Disable(STENCIL_TEST)
+```
+
+**The blend is `src.rgb * src.a + dst`** - the `SrcAlpha`/`One` that
+`oag_render::exhaust::BLEND` already programs and that `exhaust.md` recorded as
+an unexplained empirical fit. It is not a fit; `pass_mask & 0x200` selects it,
+and the format layer's `BlendClass` has described that bit as "additive and
+source-alpha weighted" all along. The competing `GU_FIX`/`GU_FIX` reading is
+`Mesh_SetBatchDrawState`'s, and **the plume never reaches that function**.
+
+Three smaller consequences:
+
+- **The plume disables the stencil test and stamps no reference**, so what it
+  contributes to the glow mask is its own fragment alpha through the blend,
+  not a stamped constant. That is what `mesh_render::GlowMask::Written` gives
+  it.
+- `Gu_ColorFunc(GU_NOTEQUAL, 0, 0xffffff)` discards fragments whose RGB is
+  exactly black. Under an additive blend that is **algebraically inert** for
+  any content - a fill-rate optimisation on a part where fill is the scarce
+  resource. Recovered-but-inert state, of the kind
+  [`methodology.md`](../../../reverse-engineering/methodology.md) warns against
+  porting as a "fix".
+- `FUN_088117cc` is `sceGuColorFunc`, read from its body: GE commands `0xd8`
+  `COLORTEST`, `0xd9` `COLORREF`, `0xda` `COLORTESTMASK`.
+
 ## The texture filter is one global setting, and the mip chain is bounded by the asset
 
 Read 2026-08-10, chasing a reported difference in the exhaust's texture detail
@@ -841,6 +889,8 @@ previous pass on this subsystem got wrong.
 | `0x08811b58` | function | `Gu_SetState` | 92 |
 | `0x08811814` | function | `Gu_AlphaFunc` | 92 |
 | `0x088113f0` | function | `Gu_TexFilter` | 88 |
+| `0x088117cc` | function | `Gu_ColorFunc` | 90 |
+| `0x0891f890` | function | `Gfx_BuildBatchStateList` | 90 |
 | `0x088114b0` | function | `Gu_TexLevelMode` | 80 |
 | `0x088126ac` | function | `Gu_Material` | 90 |
 | `0x088112c8` | function | `Gu_Color` | 88 |

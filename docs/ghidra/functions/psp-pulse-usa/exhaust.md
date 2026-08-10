@@ -2006,6 +2006,27 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   confirmed `MODULATE`/`TCC_RGBA`, a negative at confidence 92 - and
   `SrcAlpha` is kept because it measures better, not because it is understood.
 
+  > **Closed 2026-08-10, and the answer is that `SrcAlpha` *is* the recovered
+  > blend.** `Gfx_BuildBatchStateList` (`0x0891f890`) - the state builder on
+  > the plume's own draw path, `Mesh_CompileGeometryPass`, not
+  > `FUN_089307b4`'s - decodes against the plume's measured
+  > `pass_mask = 0x1232` to
+  > `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX 0xffffff)`, i.e.
+  > `src.rgb * src.a + dst`. The branch is selected by `pass_mask & 0x200`,
+  > which [`oag_formats::vex::BlendClass`] has documented as "additive and
+  > source-alpha weighted" since the format pass.
+  >
+  > **The `GU_FIX`/`GU_FIX` reading this paragraph assumed came from
+  > `Mesh_SetBatchDrawState`, and the plume never takes that path.** So there
+  > was never a missing term in a blend chain - the chain being read was the
+  > wrong one. Nothing in `oag_render` changes: `race.rs`'s override to
+  > `exhaust::BLEND` already programs exactly this, and the batch's own
+  > `pass_mask` would have selected it unaided, which makes the override
+  > redundant rather than compensatory. What changes is its **status**, from an
+  > empirical fit to a read. Confidence 90.
+  >
+  > See [mesh-draw.md](mesh-draw.md) for the full state decode.
+
   **And a new gap opens that the old pipeline was hiding.** Ours reads
   `(143, 110, 178)` against the original's `(193, 147, 218)` over the same
   mask - **about 26 % dimmer**. Before ADR-0020 our capture stored the plume in
