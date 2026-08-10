@@ -1301,6 +1301,41 @@ impl Frontend {
             return;
         };
 
+        // Pure only: `Language Selection` is a child of `Intro Screen`, which
+        // owns the white background `Language Selection` itself carries no
+        // `Image` or fill of its own - confirmed by driving `pure-psp-usa.chd`
+        // under PPSSPP (2026-08-10, same session `pure_states::TITLE_SCREEN`
+        // was evidenced in): the real picker sits on white, not the black this
+        // build's own default canvas fill leaves it on without this.
+        //
+        // **Deliberately not extended to Pulse.** The comment below on the
+        // text colour lift already covers why: whether Pulse's own picker
+        // inherits its parent's backdrop the same way is unconfirmed, and
+        // Pulse's `Language Selection` is not authored under `LogoFMV` at all
+        // in the disc's own screen tree (it is `Top FE Screen->FE
+        // Screen->Language Selection` there, reordered here - see the module
+        // docs) - so "draw the parent" is not even obviously the same parent.
+        // Scoping this to sources that have Pure's own `Title Screen` keeps
+        // Pulse's existing, separately-reasoned-about rendering untouched.
+        //
+        // **Fills only, not the parent's images.** `Intro Screen` also owns
+        // `profileFrame` (`StartEnabled="false"`) and `ArrowSelect`, neither
+        // of which belongs on the picker - this build has no model of
+        // `StartEnabled` at all (`Image` carries no such field), so drawing
+        // the parent's images unconditionally would put a 512x512 profile
+        // card over the language list. The one thing actually evidenced is
+        // the background colour.
+        if self.screens.by_name(pure_states::TITLE_SCREEN).is_some()
+            && let Some(parent) = self.screens.by_name("Intro Screen")
+        {
+            for &fill in &parent.fills {
+                out.push(Draw::Fill {
+                    rect: [0.0, 0.0, self.space.size.0, self.space.size.1],
+                    color: argb_to_rgba(fill),
+                });
+            }
+        }
+
         self.draw_backdrops(screen, out);
 
         // The picker's own `Text` widgets, at their own coordinates, in their own
