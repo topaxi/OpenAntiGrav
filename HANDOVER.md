@@ -70,8 +70,35 @@ appending a dated pass to it.
 
 ## Where the project stands
 
-M4, with one M5 item landed alongside it: **the energy pool depletes** as of
-2026-08-10. `entity+0x88` (that is `*(craft + 0x1c4) + 0x88` - **not** the
+**M4, with a run of M5 items landed alongside it on 2026-08-10.** In the order
+they were done, because each unblocked the next:
+
+| Landed | State |
+| --- | --- |
+| Shield and energy | pool, maximum, contact damage, all measured against the original |
+| Zone's ending | the bit nobody could find is set three states after the pool empties |
+| The starting grid | order *and* geometry; the authored node is **slot 8** |
+| Eight craft on the grid | placed and drawn; **nothing drives the seven opponents** |
+| Weapon pads | drawn, and checked against their own trigger volumes |
+| The weapon table | `WeaponStats_*.xml` decodes - the weapons are authored data |
+
+**What to pick up next, and it is one narrow thing**: what runs when a craft
+enters a `Weapon Pad`. The turbo force is already recovered and unapplied
+(`oag_physics::engine`), its tunables decode (`oag_formats::weapons`), and the
+pads are drawn - only the trigger is missing. Three hypotheses about it are dead
+and the one remaining lead is written down; see the open thread. `craft+0x1c0`'s
+bits gate the same thing from the other side and are also unread.
+
+**What blocks M5 beyond that is the AI.** Seven craft sit on the grid and nothing
+drives them, which also blocks race positions, and weapons-with-targets. Nothing
+else in M5 depends on work that has not started.
+
+The rest of this section is M4.
+
+---
+
+The energy-pool detail, kept because the offsets are easy to get wrong: as of
+2026-08-10 it depletes. `entity+0x88` (that is `*(craft + 0x1c4) + 0x88` - **not** the
 craft the trace harness breaks on), its skill-indexed `<Misc>` maximum,
 `Ship_Damage` (`0x088439ac`) and the contact law `|p| * 0.05 * 0.7` are
 recovered ([shield.md](docs/ghidra/functions/psp-pulse-usa/shield.md)) and
@@ -79,9 +106,8 @@ ported (`oag_physics::damage`), the pool is hashed by the determinism gate, and
 the HUD's `ShieldBar` moves. **Measured against the running original** for the
 pool's location, the two race-option globals, the regeneration branch and the
 weapons-off halving (1.98 against a predicted 2.00), and for the coefficient
-itself - `amount / |p|` is `0.035000` on 25 of 25 `Ship_Damage` calls. Two
-things it unblocks that are not done: Zone's ending needs a destroyed *state* now rather than a pool, and
-weapon damage needs weapons.
+itself - `amount / |p|` is `0.035000` on 25 of 25 `Ship_Damage` calls. Zone's ending was
+built on it the same day; weapon damage still needs weapons.
 
 M4 itself: The engine/title split that ran alongside it is finished (see the next
 section).
