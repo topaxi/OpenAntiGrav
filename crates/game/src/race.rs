@@ -2707,8 +2707,7 @@ impl Race {
                 })
                 .unwrap_or_else(|| model_matrix.inverse().transform_point3(surface));
             self.sparks_anchor = Some(anchor_model);
-            self.sparks
-                .ignite(surface, contact.normal, evaluated.wall.impact_speed);
+            self.sparks.ignite(surface, evaluated.wall.impact_speed);
             self.sparks_cooldown = sparks::COLLISION_COOLDOWN;
         }
         // Unconditional, like the exhaust: the emitters keep trickling and

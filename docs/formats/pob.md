@@ -265,7 +265,7 @@ resource in a live PPSSPP session:
 | `+0x3c` | u32 | radius shaping: 0 exact, 1 spread, 2 `* sin(U(0,π/2))` (2) |
 | `+0x44` | u32 | velocity mode: 0/2 cone, 1 aimed, 2 tangent on spheres (1) |
 | `+0x48`,`+0x4c` | f32 | ejection speed centre, spread - units/**tick**, severity-scaled (0.048, 0) |
-| `+0x50`,`+0x54` | f32 | aim yaw, pitch, radians (0, 0) |
+| `+0x50`,`+0x54` | f32 | aim **elevation** over the emitter's horizontal plane, and **azimuth offset** added to the spawn direction's heading - radians (0, 0). An earlier revision guessed "yaw, pitch"; the convention is pinned by `ParticleSystem_AimedVelocity`'s instruction-level read and live-measured distributions, see [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md), "The emit frame and the velocity dispatch, settled". **Inert on sphere/hemisphere-shaped emitters**, whose velocity is radial for modes 0 and 1 alike. |
 | `+0x58` | f32 | cone half-angle, **degrees** (0) |
 | `+0x5c`,`+0x60` | i32 | particle lifetime centre, spread - integer **ticks** (16, 0) |
 | `+0x64`,`+0x68` | i32 | emission interval min, max - ticks (4, 4) |
