@@ -78,9 +78,17 @@ is what this USA-serial disc writes) and later boots skip straight to the menu.
 **The SDL build is worth reaching for over headless** when either of two
 things matter: it renders fast enough to sit through menus at 30-60 fps rather
 than software rendering's crawl, and its window can be **screenshotted**,
-which turns blind state-name navigation into sighted navigation. Pulse's menus
-are a hex grid whose state name stays `Cell Selection` across every cell, so a
-screenshot is the difference between navigating and guessing. **Run it under
+which turns blind state-name navigation into sighted navigation. Pulse's race
+campaign is a hex grid whose state name stays the same across every cell, so a
+screenshot is the difference between navigating and guessing.
+
+**That grid is not the main menu**, though this page used to imply it was. It is
+`CellMode_Definition.xml`'s `Grid Selection`, reached from `RACE CAMPAIGN`; the
+main menu itself is a plain vertical list of seven rows. See
+[front-end menu definitions](../formats/fe-menu-definitions.md). The point about
+sighted navigation stands either way, and for a better reason: **state names do
+not match screen titles at all**, so a screenshot is the only thing that says
+which screen a name is. **Run it under
 Xvfb by default** (see below) - the screenshot recipe there
 (`import -window root`) works the same way against a virtual display as this
 one does against a real compositor:
