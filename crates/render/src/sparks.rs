@@ -633,8 +633,11 @@ impl Sparks {
                 Blend::Additive => &mut additive,
                 Blend::AlphaOver => &mut alpha_over,
             };
-            let (centre, axis_a, axis_b) = match particle.render {
-                Render::Billboard => (particle.position, right * half, up * half),
+            let (centre, axis_a, axis_b, cap) = match particle.render {
+                // `cap = 0.5` makes the shader's cap/cross profile collapse
+                // to the plain radial falloff a round sprite wants - see
+                // `sparks.wgsl`.
+                Render::Billboard => (particle.position, right * half, up * half, 0.5),
                 Render::StreakFromSpawn | Render::StreakPerTick => {
                     let centre = (particle.position + particle.origin) * 0.5;
                     let along = particle.position - particle.origin;
@@ -648,10 +651,16 @@ impl Sparks {
                     // Half the span plus a size-sized cap at each end, the
                     // way the original extends the quad past both points -
                     // a zero-length streak still draws a `half`-sized glow.
-                    (centre, dir * (length * 0.5 + half), perp * half)
+                    // The cap's share of the half-length tells the shader
+                    // where the body's constant-width core begins; the
+                    // original gets the same geometry by stretching a
+                    // single row of `orange_glow2.tga` over the body with
+                    // `v` variation only in the caps.
+                    let half_span = length * 0.5 + half;
+                    (centre, dir * half_span, perp * half, half / half_span)
                 }
             };
-            out.extend_from_slice(&quad(centre, axis_a, axis_b, particle.colour, alpha));
+            out.extend_from_slice(&quad(centre, axis_a, axis_b, cap, particle.colour, alpha));
         }
         (additive, alpha_over)
     }
@@ -783,14 +792,24 @@ fn aimed_direction(elevation: f32, cone: f32, rng: &mut Rng) -> Vec3 {
 /// `Z:\WipeoutPSP\X2\Data\Psys\Tex\quakesmoke32x32.tga`, a soft 32x32
 /// puff - which the falloff approximates; decoding the shipped texture is a
 /// possible follow-up now that its identity is known.
-fn quad(centre: Vec3, right: Vec3, up: Vec3, colour: [f32; 3], alpha: f32) -> [GpuVertex; 6] {
+fn quad(
+    centre: Vec3,
+    right: Vec3,
+    up: Vec3,
+    cap: f32,
+    colour: [f32; 3],
+    alpha: f32,
+) -> [GpuVertex; 6] {
     let corner = |sx: f32, sy: f32, u: f32, v: f32| GpuVertex {
         position: (centre + right * sx + up * sy).to_array(),
         normal: [0.0, 0.0, 1.0],
         colour: [colour[0], colour[1], colour[2], alpha],
         texcoord: [u, v],
-        // Emissive: sparks must not pick up the mesh light rig.
-        lit: 0.0,
+        // The `lit` slot is repurposed by this pipeline: sparks are emissive
+        // (never lit by the mesh rig, which is a different pipeline), so the
+        // attribute carries the cap fraction the fragment profile needs -
+        // see `sparks.wgsl`.
+        lit: cap,
         v_cycles: 0.0,
     };
     let bl = corner(-1.0, -1.0, 0.0, 1.0);
