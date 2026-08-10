@@ -4040,6 +4040,14 @@ pub struct Scene {
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
+    /// The recovered bloom, run after the scene pass over whatever the frame
+    /// stamped into its alpha channel. `None` when the pipelines would not
+    /// build, which costs the glow and nothing else.
+    ///
+    /// **Not exhaust-specific**, even though the exhaust is currently its only
+    /// writer: it blooms the glow mask, and any surface that opts into the mask
+    /// is handled by the same three passes. See `oag_render::post::bloom`.
+    bloom: Option<oag_render::post::bloom::Bloom>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -4341,8 +4349,18 @@ impl Scene {
             sample_count,
         ));
         let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format, sample_count));
+        // A failure here is reported and dropped rather than propagated: a race
+        // without a bloom is a dimmer race, not a broken one.
+        let bloom = match oag_render::post::bloom::Bloom::new(device, format) {
+            Ok(bloom) => Some(bloom),
+            Err(e) => {
+                eprintln!("bloom unavailable ({e}) - the frame draws without it");
+                None
+            }
+        };
 
         Ok(Self {
+            bloom,
             track,
             visibility,
             ships,
@@ -4392,6 +4410,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
+        device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
@@ -4569,7 +4588,16 @@ impl Scene {
                     // `Aspect`'s bars are made of - and a bar has to read as a
                     // bar. The old value was 0.03/0.04/0.06, dark enough that
                     // losing it costs nothing inside the viewport either.
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    // Black, and **alpha zero**: alpha is the bloom's glow mask
+                    // and a frame starts with nothing glowing.
+                    // `wgpu::Color::BLACK` has `a: 1.0`, which would mask the
+                    // entire frame in and bloom everything.
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -4649,6 +4677,18 @@ impl Scene {
         // same reason.
         self.exhaust.borrow().draw(&mut pass);
         self.sparks.borrow().draw(&mut pass);
+        // The scene pass has to close before the bloom can sample what it drew,
+        // so this ends the borrow rather than waiting for the scope to.
+        drop(pass);
+
+        // The recovered post-process, reading the alpha channel the ribbon and
+        // the flare stamped and adding a blurred copy of the masked colour back
+        // over the frame. `view` is the resolved image in both the MSAA and the
+        // single-sample case, which is why this runs on it rather than on
+        // `attachment_view`. See `oag_render::post::bloom`.
+        if let Some(bloom) = &self.bloom {
+            bloom.render(device, encoder, view);
+        }
         stats
     }
 }
@@ -4975,7 +5015,11 @@ pub fn capture(
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        // `TEXTURE_BINDING` because the bloom's bright pass samples the frame
+        // it was just drawn into - see `oag_render::post::bloom`.
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     });
     let surface = target.create_view(&wgpu::TextureViewDescriptor::default());
@@ -5028,6 +5072,7 @@ pub fn capture(
     // one of them are how that tier gets validated - see
     // `CaptureOptions::frustum_culling` and `CaptureOptions::pvs_culling`.
     scene.render(
+        &device,
         &queue,
         &mut encoder,
         &view,

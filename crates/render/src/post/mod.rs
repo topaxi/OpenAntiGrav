@@ -30,6 +30,7 @@
 //! tonemapping either side of accumulation - which is why the scene target's
 //! encoding is a per-upscaler decision rather than a setting made once.
 
+pub mod bloom;
 pub mod fsr1;
 pub mod fxaa;
 pub mod smaa;

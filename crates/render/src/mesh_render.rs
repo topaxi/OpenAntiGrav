@@ -769,7 +769,14 @@ pub fn build(
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: Some("fs_main"),
-            targets: &[Some(format.into())],
+            // Colour only: alpha is the bloom's glow mask, which ordinary
+            // geometry must not touch. See the blended pipeline below and
+            // `crate::post::bloom`.
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::COLOR,
+            })],
             compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState {
@@ -818,7 +825,14 @@ pub fn build(
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: Some("fs_main_alpha_test"),
-            targets: &[Some(format.into())],
+            // Colour only: alpha is the bloom's glow mask, which ordinary
+            // geometry must not touch. See the blended pipeline below and
+            // `crate::post::bloom`.
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::COLOR,
+            })],
             compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState {
@@ -889,7 +903,15 @@ pub fn build(
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend,
-                    write_mask: wgpu::ColorWrites::ALL,
+                    // **Colour only: alpha is the bloom's glow mask.**
+                    // `Mesh_SetBatchDrawState` protects the alpha channel for
+                    // every batch that does not set `pass_mask & 0x40`, and a
+                    // census of 6,923 authored batches across four circuits and
+                    // two ship files found **none** that do. So ordinary
+                    // geometry never writes the mask in the original, and must
+                    // not here either - see `crate::post::bloom` and
+                    // `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
+                    write_mask: wgpu::ColorWrites::COLOR,
                 })],
                 compilation_options: Default::default(),
             }),

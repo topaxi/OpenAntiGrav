@@ -2774,6 +2774,7 @@ impl RaceStage {
         animated_textures: bool,
     ) -> race::SceneStats {
         let stats = self.scene.render(
+            &gpu.device,
             &gpu.queue,
             encoder,
             view,

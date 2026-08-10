@@ -850,7 +850,13 @@ reproduced deliberately and documented as a choice.
       across the fog volume's local Z. Reproducing the look needs the volume and
       the lerp, not a shaping function - see
       [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md)
-- [ ] Bloom and the bright-pass on the exhaust and lights
+- [ ] Bloom and the bright-pass on the exhaust and lights - **the original's is
+      fully recovered**, so this is a port rather than a look choice: a
+      destination-alpha bright pass at half resolution, a separable 11-tap blur
+      (`20 30 40 50 64 64 64 50 40 30 20`, gain `1.85` per axis) and an additive
+      composite at `175/255`. See
+      [`bloom.md`](../ghidra/functions/psp-pulse-usa/bloom.md). The prerequisite
+      is a scene target with a meaningful alpha channel, which nothing writes yet.
 - [ ] Colour grading
 - [ ] Motion blur / speed streaking. Visible in the reference frames captured for
       the HUD, so this is observed rather than assumed

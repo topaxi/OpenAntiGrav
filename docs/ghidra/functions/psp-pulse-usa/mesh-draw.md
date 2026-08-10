@@ -143,6 +143,91 @@ batch can be drawn with, which is what matters: a replayed list was the obvious
 place to look for a missing alpha path, and it is ruled out - see
 [exhaust.md](exhaust.md)'s section on the boost plume's vertex alpha.
 
+## The texture filter is one global setting, and the mip chain is bounded by the asset
+
+Read 2026-08-10, chasing a reported difference in the exhaust's texture detail
+([exhaust.md](exhaust.md), "the ribbon measured against a gameplay capture").
+Both halves came back as **negatives against the reimplementation**, which is
+why they are recorded: each one is a search another pass would otherwise run
+again.
+
+### `Gu_TexFilter` (`0x088113f0`)
+
+| | |
+| --- | --- |
+| **Confidence** | 88 |
+
+```c
+void Gu_TexFilter(u32 min, u32 mag);   // emits mag << 8 | min | 0xc6000000
+```
+
+The body writes the GE command word directly, the same evidence class as the
+other `Gu_*` helpers this directory documents at 85-90, and `0xc6` is
+`TEXFILTER`. **It is the only `0xc6` emitter in the binary** - a `lui`
+scan over all 636,020 instructions returns exactly one match, at `0x08811404`.
+
+**All four call sites pass the same pair, `(min = 7, mag = 1)`:**
+
+| Call site | In |
+| --- | --- |
+| `0x0891e4d8` | `Gfx_FlushRenderManager` |
+| `0x0891f618` | `Gfx_Init` (`FUN_0891f320`) |
+| `0x0888b63c` | unnamed |
+| `0x088ef068` | unnamed |
+
+`min = 7` is `GU_LINEAR_MIPMAP_LINEAR` and `mag = 1` is `GU_LINEAR`, so the
+whole program draws **trilinear-minified, bilinear-magnified** and nothing ever
+selects a nearest filter. There is no per-material, per-pass or per-texture
+filter override anywhere, because there is nowhere for one to be emitted.
+
+**The consequence is a negative.** "The original keeps hard texel edges the
+reimplementation blurs away" is not available as an explanation for any
+difference in any textured surface - `oag_render`'s samplers already use
+`Linear`/`Linear`, which is the same state.
+
+### How many mip levels the GE actually gets
+
+`Texture_BuildBindList` (`0x08928d4c`, above) takes the level count from the
+**texture object's own `+0x05` byte** and uses it twice:
+
+```c
+u32 levels = texture[0x05];
+*out++ = 0xc2000000 | (levels - 1) << 16 | swizzle;   // TEXMODE, maxmips
+for (u32 i = 0; i < levels; i++)                      // TEXADDR/TEXBUFWIDTH/TEXSIZE
+    emit_level(i, width >> i, height >> i, ...);      // per level
+```
+
+That `+0x05` is the same field [`psp-texture.md`](../../../formats/psp-texture.md)
+records at `.mip` header `+0x06` and `oag_formats::texture` exposes as
+`Texture::mip_count`. So **the asset decides the chain depth, and the GE never
+samples below the level the artists shipped.** Measured on the two textures
+this mattered for: `pulse_boost2_ADD` (embedded in `shipboost.vex`) declares
+**2** levels, `Engine_noise.mip` declares **4**.
+
+`Gu_TexLevelMode` (`0x088114b0`, confidence 80) is the `0xc8` `TEXLEVEL`
+emitter - `(bias & 0xff) << 16 | mode | 0xc8000000`, the bias scaled by
+`DAT_08ab0524` and clamped to `[-0x80, 0x7f]`. `Gfx_FlushRenderManager` calls
+it `(mode = 2, bias = 1.0)`; `Texture_BuildBindList` emits mode `2` with a
+computed bias, or mode `0` with none, on the texture's `+0x06 & 0x18` bits.
+Either way level selection is automatic, as it is under wgpu.
+
+**This one is a real divergence and it is measured inert.** `oag_render`
+synthesises a **full** box-filtered chain down to 1x1 (`mesh_render::mip_chain`,
+7 levels for a 64x16 texture) and the exhaust path uploads **level 0 only** with
+no `mipmap_filter` at all - neither matches the asset's own count. Both were
+tested at the reference pose on 2026-08-10:
+
+| Experiment | Result |
+| --- | --- |
+| cap `mip_chain` at 2 levels, matching `pulse_boost2_ADD` | **3 pixels** differ by more than 4/255 across the whole frame |
+| give the exhaust textures a full chain and `MipmapFilterMode::Linear` | mean absolute difference **0.02/255**, max 20 |
+
+So neither surface is minified enough at race distance for the chain depth to
+reach the picture, and **neither is a candidate for any visible difference**.
+Worth fixing on its own account - a synthesised level is not the authored one,
+and `Texture::mip_count` is already parsed and currently ignored by every
+consumer - but not worth attributing a symptom to.
+
 **`mesh+0x70` is a pointer to the per-*model* object, not a per-mesh block** -
 also corrected 2026-08-08. It is `Vex_LoadModel`'s own object (`model+0x1a4` is
 the texture-pointer array, dereferenced as `*(int *)(mesh + 0x70) + 0x1a4` in
@@ -755,6 +840,8 @@ previous pass on this subsystem got wrong.
 | --- | --- | --- | --- |
 | `0x08811b58` | function | `Gu_SetState` | 92 |
 | `0x08811814` | function | `Gu_AlphaFunc` | 92 |
+| `0x088113f0` | function | `Gu_TexFilter` | 88 |
+| `0x088114b0` | function | `Gu_TexLevelMode` | 80 |
 | `0x088126ac` | function | `Gu_Material` | 90 |
 | `0x088112c8` | function | `Gu_Color` | 88 |
 | `0x08811508` | function | `Gu_TexMapMode` | 88 |
