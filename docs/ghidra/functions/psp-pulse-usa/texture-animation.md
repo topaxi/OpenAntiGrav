@@ -271,6 +271,41 @@ next-tick re-reveal reproduces all three regimes.
   *immediate-mode* path (`FUN_089271cc`) is not the one running during a
   race.
 
+## The reveal chain, read statically, and four names recovered
+
+**2026-08-10, follow-up Ghidra session** (live `psp-pulse-usa/BOOT.BIN`
+project). The whole reveal-and-animate chain is now read at decompiler
+level, and it confirms every live measurement above instruction by
+instruction:
+
+`Exhaust_Update` (`0x089058b0`, already named) carries the reveal verbatim -
+both `0.2` gates are literals in its body:
+
+```c
+flare->0x88 += dt;                                       // free-running life
+engine_on = thrust > 0 || flare->0xb8 > 0.2;             // gate literal 1
+if (engine_on && 0.2 < flare->0xb8                        // gate literal 2
+    && (boost_model->0x2c & 4) == 0) {                    // hidden -> visible
+    boost_model->0x2c |= 4;                               // show
+    Node_SetAnimTimeTree(0.0, boost_model);               // zero the anim clock
+    flare->0x88 = 0;                                      // zero the life
+}
+if (1.5 <= flare->0x88) boost_model->0x2c &= ~4;          // hide
+```
+
+So the updater's time argument is the **model's own animation clock**, not
+`flare+0x88` read directly - the two are zeroed in the same statement and
+advance together while the model updates, which is why the live trace saw
+them equal on every hit, and why `u` freezes at hide while `flare+0x88`
+runs on. One refinement to the section above, no behavioural change.
+
+| Address | Name | Conf | What was read |
+| --- | --- | ---: | --- |
+| `0x0890e160` | `Mesh_UpdateTextureTransforms` | 90 | Decompiles whole: fires when `mesh+0x40 != mesh+0x18c`, walks the materials (`mesh+0x5c`, stride `0x14`), and for each `& 0x10` calls `TexAnim_UpdateTransform(time, mesh+0x60 + i*0x40)` then `TexAnim_CompileTransformList(mesh+0x64 + i*0x18, block)`, caching the time at `+0x18c`. Live-corroborated: the updater breakpoint's return address `0x0890e1e4` sits inside it and its time argument was sampled. |
+| `0x08927358` | `TexAnim_CompileTransformList` | 90 | Decompiles whole: builds exactly the five words read live from the plume's list - `float_bits >> 8 \| 0x48/0x49/0x4a/0x4b << 24` from block `+0x18..+0x24`, then `RET`, then `sceKernelDcacheWritebackRange` - direct memory writes, no `Gu_TexScale`/`Gu_TexOffset` call, which is the instruction-level proof of the choke-point correction above. |
+| `0x089114fc` | `Node_SetAnimTimeTree` | 75 | Recursive node-tree walk: for nodes of three classes (Mesh's class-identity `0x08a6bb84` plus two unidentified), dispatches vtable slot `+0x84` with the payload offset short at `+0x80`, then recurses into children. Named from the one dispatch target read (below) and the reveal call site passing `0.0`; the two other classes' methods are unread. Thin wrapper `FUN_08912890` (the reveal's call) tail-calls it, left unnamed. |
+| `0x0890e240` | `Mesh_SetAnimTime` | 78 | The Mesh class's `+0x84` method, found through the vtable at `0x08ad1994` (init slot `+0x7c` = `0x0891ff50`, the `Mesh_InitFromPayload` trampoline, which pins the base). First instruction `swc1 f12, 0x40(a0)` - stores the time argument to `mesh+0x40`, the exact field `Mesh_UpdateTextureTransforms` gates on. A tail also copies a global reference mesh's `+0x40` (from `DAT_08ab0818`, else `DAT_08b317b0`) into `mesh+0x194`; that purpose is unread, which is what holds this below 85. |
+
 ## Measured in a live race: only the trail scrolls
 
 **Scope corrected 2026-08-10: this negative covers the immediate-mode

@@ -470,3 +470,7 @@
 0x08b32c60	data	g_bloom	80	bloom.md
 0x08927034	function	TexAnim_EvalKeyframes	90	texture-animation.md
 0x08927204	function	TexAnim_UpdateTransform	90	texture-animation.md
+0x0890e160	function	Mesh_UpdateTextureTransforms	90	texture-animation.md
+0x08927358	function	TexAnim_CompileTransformList	90	texture-animation.md
+0x089114fc	function	Node_SetAnimTimeTree	75	texture-animation.md
+0x0890e240	function	Mesh_SetAnimTime	78	texture-animation.md
