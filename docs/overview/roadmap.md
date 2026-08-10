@@ -505,10 +505,19 @@ seen from the authoring side.
       builder pointed at another class id (738 triangles on `16_Track`), and its
       trigger volumes decode and are carried. A ground-truth test checks the two
       against each other, the geometry coming through the mesh path and the
-      volumes through the payload path. **They hand nothing out**: the weapon
-      table, firing, and the `source == 2` damage path through
+      volumes through the payload path. **And the weapon table turned out to be
+      authored data**, not a table compiled into the executable:
+      `Data\XML\WeaponStats_Race.xml` carries all fourteen weapons' tunables,
+      the seven disturber effects, and the pickup distribution weighted per
+      speed class and separately for AI, human, front and back of the grid. See
+      [weapon stats](../formats/weapon-stats.md). That makes the item a format
+      decode plus behaviour rather than a recovery.
+      **They still hand nothing out**: what runs when a craft enters a pad,
+      firing, and the `source == 2` damage path through
       [`Ship_Damage`](../ghidra/functions/psp-pulse-usa/shield.md) are all
-      unstarted.
+      unstarted. **Turbo, Shield and Autopilot are the cheap three** - they
+      share a two-attribute schema (`absorb`, `time`) and damage nobody, so
+      none of them needs a projectile or a target.
 - [~] **Shield and energy.** The pool, its maximum and the one thing that spends
       it are recovered and implemented: `*(craft+0x1c4) + 0x88` is the pool,
       `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its
