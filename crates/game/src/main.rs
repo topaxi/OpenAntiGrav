@@ -842,15 +842,9 @@ fn main() -> Result<()> {
     }
 
     if let Some(path) = cli.screenshot {
-        // Started here rather than in `main`'s setup, and only on this branch:
-        // a capture has no window to lag behind, but it does have a tick loop,
-        // and the music has to be running before that loop's first tick or the
-        // dump would open on silence. See the comment above `Audio::open`.
-        audio.start_music(
-            &music_discs,
-            settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
-        );
+        // No `start_music` here: this leg runs the boot sequence, so the music
+        // waits behind the intro exactly as the window's does, and `capture::run`
+        // starts it from its own tick loop. See `Audio::start_music`.
         capture::run(
             loaded,
             video_format,
@@ -1458,21 +1452,20 @@ impl App {
         let Some(mut audio) = self.audio.take() else {
             return Ok(None);
         };
-        // Started here, with the window already open above, rather than back
-        // in `main` before the front end's own load - which used to run
-        // seconds of `Data.wad` parsing and `ffmpeg` transcoding with the
-        // music already looping and no window yet on screen to account for
-        // it. This is the earliest point a player has something to look at,
-        // so it is also the latest point sound may start without noticeably
-        // leading the picture.
-        audio.start_music(
-            &self.music_discs,
-            self.settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
-        );
-
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
+            // Straight away on this leg only: `--race` has no boot sequence, so
+            // there is no intro for the music to wait behind. The front end's
+            // legs below start it from the tick loop instead, the moment the
+            // sequence leaves its movie - see `Audio::start_music`. Here rather
+            // than back in `main` before the load, which used to run seconds of
+            // parsing and transcoding with the music already looping and no
+            // window yet on screen to account for it.
+            audio.start_music(
+                &self.music_discs,
+                self.settings.audio.music_source,
+                &boot::default_audio_cache_dir(),
+            );
             Stage::race(
                 &gpu,
                 loaded,
@@ -3174,8 +3167,20 @@ impl Session {
                     // The movie's sound outlives neither leg, and a skip leaves
                     // the state without finishing the player - see
                     // `Frontend::is_playing_movie`.
+                    //
+                    // The same test hands the menu music its cue, because the
+                    // two are one decision: the intro's track and the menu loop
+                    // are both on `Bus::Music` and the disc plays one at a
+                    // time. Every tick rather than on the edge - the state is
+                    // what is asked, not a transition - which `start_music` is
+                    // built to absorb.
                     if !stage.frontend.is_playing_movie() {
                         self.audio.stop_movie();
+                        self.audio.start_music(
+                            &self.music_discs,
+                            self.settings.audio.music_source,
+                            &boot::default_audio_cache_dir(),
+                        );
                     }
                 }
                 Stage::Menu(stage) => {

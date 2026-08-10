@@ -287,6 +287,17 @@ pub fn run(
     // the wrong clock.
     audio.start_boot_movie(movie_sound);
 
+    // Those two draw one thing and step nothing, so no movie ever ends to hand
+    // the music its cue the way the loop below does. A `--dump-audio` run of
+    // either would otherwise be silence.
+    if options.screen.is_some() || options.menu_page.is_some() {
+        audio.start_music(
+            &options.music_discs,
+            options.settings.audio.music_source,
+            &crate::boot::default_audio_cache_dir(),
+        );
+    }
+
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
     // somewhere the capture then ignores.
@@ -334,9 +345,17 @@ pub fn run(
         audio.tick();
         // The movie's sound outlives neither leg: see
         // `Frontend::is_playing_movie` for why the state is what is asked
-        // rather than the player.
+        // rather than the player. The same test starts the menu music, because
+        // the intro's track and that loop share `Bus::Music` and the disc plays
+        // one at a time - `Audio::start_music` is idempotent so that this can
+        // be asked every tick.
         if !frontend.is_playing_movie() {
             audio.stop_movie();
+            audio.start_music(
+                &options.music_discs,
+                options.settings.audio.music_source,
+                &crate::boot::default_audio_cache_dir(),
+            );
         }
         crate::report(&events, options.trace);
         for note in frontend.take_notes() {
