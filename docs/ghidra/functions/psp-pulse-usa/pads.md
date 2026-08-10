@@ -160,11 +160,32 @@ Walks a list of pads and remembers each racer's previous position at
 `world + slot * 0x10 + 0xb50` - which is where `Pad_SweptTest_q`'s `previous`
 comes from, and why the first tick of a race (`previous == 0`) skips the sweep.
 
-**65 rather than 85.** That `DAT_08b32c88` - the object `Ship_ApplySpeedupPad`
-passes as `world` - is specifically the *speedup*-pad list is inferred from the
-call site. The registrar that fills `+0x40` was not read, so nothing here rules
-out one list holding both pad classes and the caller filtering. What would retire
-it: reading the writer of `+0x108`.
+**Corrected 2026-08-10: `DAT_08b32c88` is the world object, not a pad list.** It
+has fifteen readers across unrelated subsystems - the attract mode, the camera,
+the collision path - and one writer, `FUN_08887094`, which is the world
+constructor. So the list `Pads_TestCraft_q` walks is `world + 0x40`, and the
+question of *which* pads are on it is a question about that field's registrar, not
+about the global. Confidence on the walk itself is unchanged.
+
+**And the "one list, caller filters" hypothesis is dead.**
+`Ship_ApplySpeedupPad` applies **no class filter** to what `Pads_TestCraft_q`
+returns: every hit gets the boost, the flare and the telemetry. If weapon pads
+were on the same list, crossing one would boost the craft, which the game plainly
+does not do. So `world + 0x40` holds speedup pads alone, and **the weapon-pad
+consumer is a separate walker that has not been found**.
+
+Two more things this pass ruled out, recorded so they are not re-tried:
+
+- **`Pad_Bind` does not register into any list.** It initialises the pad node's
+  own box at `+0x1b0`/`+0x1c0` and eight per-racer disable timers at `+0x1d0`,
+  and returns. The class distinction is not made at bind time.
+- **There is no sibling global.** `0x08b32c8c`, the next word after the world
+  pointer, has no references at all.
+
+What is left, and it is now the only lead: **read the writer of `world + 0x40`
+and `world + 0x108`**. Whatever fills that list either takes a class argument -
+in which case there is a second call for weapon pads - or does not, in which case
+the weapon pads are reached some other way entirely.
 
 ## `ExhaustFlare_OnSpeedupPad` (`0x08904f10`)
 
