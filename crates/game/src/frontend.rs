@@ -2060,6 +2060,9 @@ mod tests {
             name: name.into(),
             native_name: native.into(),
             entries: None,
+            // The picker draws in the default face whatever the plugin's slots
+            // say, so these fixtures need none.
+            fonts: Vec::new(),
         })
         .collect()
     }

@@ -155,6 +155,56 @@ pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
     ("TextColor", "0xFF88D6E8"),
 ];
 
+/// How Pure lays its menus out, as far as its own disc states it.
+///
+/// **Deliberately thinner than Pulse's, and thin in the places Pure is
+/// genuinely unread.** `docs/formats/pure-status.md` holds this crate to what
+/// has been measured, and four things separate the two titles here:
+///
+/// - Pure's `Skin.xml` is plain `<?xml`, not `<code>`-shortened, and it
+///   declares **six** layout globals where Pulse declares dozens.
+/// - There is **no `MainMenu_Definition.xml`** on this disc. Its `LoadXML` list
+///   names `Teaser_`, `Options_`, `Selection_` and `Multiplayer_Definition`
+///   instead, and none of them has been read for row geometry - hence
+///   [`oag_title::MenuSkin::first_row_y`] and
+///   [`oag_title::MenuSkin::row_extra_leading`] left `None`.
+/// - Pure's menus name **three** font roles (`Title`, `Stats`, `scroll`) and
+///   which one its main list uses is unread, so `menu_font` is `None` too.
+/// - There is **no `LeftLayer` element anywhere** in Pure's GUI definitions,
+///   so where its `transition` attaches is unknown even though the durations
+///   are authored.
+///
+/// The numbers that *are* here were read off `pure-psp-eu.chd`'s own
+/// `Skin.xml`, and every one of them differs from Pulse's: `MenuXOffset` 21
+/// against 50, `MenuScale` 1.15 against 1.0, `TitleScale` 0.97 against 1.0,
+/// `TitleYOffset` 20 against 0. Borrowing Pulse's table would have been wrong
+/// on all four.
+pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
+    menu_x: 21.0,
+    menu_scale: 1.15,
+    title_x: 21.0,
+    title_y: 20.0,
+    title_scale: 0.97,
+    // Unread: this disc carries no main-menu definition to read a first row or
+    // a pitch out of, and Pulse's measurements are Pulse's.
+    first_row_y: None,
+    row_extra_leading: None,
+    menu_font: None,
+    // The same pixel measurements [`FALLBACK_GLOBALS`] carries, restated in the
+    // units this type uses. Confidence 65, and of the *effect* rather than of
+    // the source - see that constant's own docs.
+    text: Some(0xFF88_D6E8),
+    title: Some(0xFFED_4896),
+    // No capture of a Pure menu with a cursor on it exists.
+    selected: None,
+    // Authored, but as one of four values this disc uses (0, 0.25, 0.3, 0.5)
+    // rather than the single dominant one Pulse has. 0.5 is the most common of
+    // them in the five definition files read; which value a *menu* page change
+    // takes is unread, because the element carrying it on Pulse does not exist
+    // here.
+    transition_secs: 0.5,
+};
+
 /// Pure's boot sequence, cold-boot measured on both pressings.
 ///
 /// The chain is what the disc's own `Skin.xml` declares, redirect for redirect,

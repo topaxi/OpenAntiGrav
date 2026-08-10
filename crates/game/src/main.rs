@@ -257,6 +257,18 @@ struct Cli {
     #[arg(long, value_name = "PAGE")]
     menu_page: Option<String>,
 
+    /// With `--menu-page`, draw that page part-way through arriving.
+    ///
+    /// `0` is the instant a page change starts and `1` is the end of it. A
+    /// still cannot otherwise show a transition at all: `--menu-page` runs no
+    /// clock, and `--ticks` does nothing alongside it, so without this the only
+    /// way to look at the effect is to play the game and watch.
+    ///
+    /// Shows the *arriving* half only. The page being left is whatever the
+    /// player came from, which a one-page capture has no way to know.
+    #[arg(long, value_name = "0..1")]
+    menu_anim_phase: Option<f32>,
+
     /// Show the language picker even when a language is already chosen.
     ///
     /// Without this the picker is skipped once `settings.toml` names a
@@ -840,6 +852,8 @@ fn main() -> Result<()> {
             .map(|language| menu::Choice::labelled(&language.name, &language.native_name))
             .collect(),
         font: boot_shell.font.clone(),
+        menu_skin: boot_shell.menu_skin,
+        menu_font: boot_shell.menu_font.clone(),
         sprites: boot_shell.sprites.clone(),
     };
 
@@ -1005,6 +1019,7 @@ fn run_windowless(
                 size: parse_size(&cli.size)?,
                 screen: cli.screen.clone(),
                 menu_page: cli.menu_page.clone(),
+                menu_anim_phase: cli.menu_anim_phase,
                 presented: cli.presented,
                 // The clone is overridden rather than `settings` itself, so
                 // `--camera-view` reaches the race this capture may hand over to
@@ -2332,6 +2347,17 @@ impl Stage {
 struct MenuStage {
     renderer: Renderer,
     menu: menu::Menu,
+    /// Where every row goes and what colour it is. Built once, when the menus
+    /// open, from the title's own table and the line height of the face that
+    /// will draw the rows - the two halves `menu::Skin` exists to join.
+    skin: menu::Skin,
+    /// The page change in flight, if one is.
+    ///
+    /// **The page the player left is kept as a finished draw list, not as a
+    /// `Menu` to re-draw.** The transition only ever scales and fades what was
+    /// already on screen, so a snapshot is both cheaper and more honest than a
+    /// second model that would keep answering input.
+    change: Option<PageChange>,
     /// Where the disc's looping backdrop has got to, and where it goes on
     /// screen. `None` when this source has no backdrop, and then the rows are
     /// drawn on black exactly as they were before it existed.
@@ -2344,6 +2370,20 @@ struct MenuStage {
     /// rebuilt, so the loop never restarts on the handoff. See
     /// [`menu_playhead`].
     backdrop: Option<Backdrop>,
+}
+
+/// A page change part-way through.
+///
+/// Held for as long as the tween runs and then dropped. See
+/// [`menu::Layers::zoomed`] for the effect and `docs/ui/menus-original.md` for
+/// the capture it came off.
+struct PageChange {
+    /// The page being left, as it looked on its last frame.
+    leaving: menu::Layers,
+    /// The clock both halves share.
+    tween: oag_game::anim::Tween,
+    /// How far each half travels.
+    shape: menu::Transition,
 }
 
 /// The looping menu picture: a player, where it goes, and which frame is up.
@@ -2429,6 +2469,37 @@ impl MenuStage {
         if let Some(backdrop) = &mut self.backdrop {
             backdrop.player.update(dt);
         }
+        // The same fixed `dt` the backdrop is stepped with, and for the same
+        // reason: nothing on this stage reads the wall clock, so two runs of
+        // the same `--ticks` produce the same picture. See `oag_game::anim`.
+        if let Some(change) = &mut self.change {
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a tick is milliseconds; f32 holds it exactly"
+            )]
+            change.tween.advance(dt as f32);
+            if change.tween.done() {
+                self.change = None;
+            }
+        }
+    }
+
+    /// Starts a page change, snapshotting the page being left.
+    ///
+    /// Called after the model has already moved, so `leaving` is passed in
+    /// rather than drawn here - the page it holds no longer exists as far as
+    /// the model is concerned.
+    ///
+    /// A transition already in flight is **replaced**, not queued: a player
+    /// holding a direction moves faster than half a second a page, and queueing
+    /// would run the menus behind the input by however long the player kept
+    /// going.
+    fn begin_change(&mut self, leaving: menu::Layers) {
+        self.change = Some(PageChange {
+            leaving,
+            tween: oag_game::anim::Tween::new(self.skin.transition_secs()),
+            shape: menu::Transition::default(),
+        });
     }
 
     /// Draws the page, uploading whatever backdrop frame the decode thread has
@@ -2496,7 +2567,31 @@ impl MenuStage {
             // over the menu rather than a missing picture.
             _ => None,
         };
-        let list = menu::draw_list(&self.menu, &keys::bound_keys, shown);
+        let arriving = menu::draw_list(&self.menu, &self.skin, &keys::bound_keys, shown);
+        let list = match &self.change {
+            // The page being left grows and fades out; the one arriving grows
+            // into place from smaller and fades in. Both run off one tween, so
+            // they cannot drift apart. The backdrop is drawn once, by the page
+            // arriving, because it is the same looping movie either way.
+            Some(change) => {
+                let t = change.tween.eased();
+                let shape = &change.shape;
+                let going = change.leaving.clone().zoomed(
+                    shape.origin,
+                    1.0 + (shape.out_scale - 1.0) * t,
+                    1.0 - t,
+                );
+                let coming =
+                    arriving.zoomed(shape.origin, shape.in_scale + (1.0 - shape.in_scale) * t, t);
+                let mut list = coming.backdrop.clone();
+                list.extend(going.chrome);
+                list.extend(going.body);
+                list.extend(coming.chrome);
+                list.extend(coming.body);
+                list
+            }
+            None => arriving.flatten(),
+        };
         self.renderer
             .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
         Ok(())
@@ -3033,6 +3128,12 @@ struct Shell {
     modes: Vec<menu::Choice>,
     font: oag_game::font::Atlas,
     sprites: oag_game::sprite::Sheet,
+    /// How this title lays its menus out and colours them, carried from the
+    /// serial that identified the source. See `boot::Shell::menu_skin`.
+    menu_skin: &'static oag_title::MenuSkin,
+    /// The face menu rows are drawn in, which is a bigger one than the rest
+    /// of the front end uses. `None` draws them in `font`.
+    menu_font: Option<oag_game::font::Atlas>,
 }
 
 impl Shell {
@@ -3486,7 +3587,18 @@ impl Session {
                 }
                 Stage::Menu(stage) => {
                     stage.tick(dt);
+                    // Snapshotted *before* the input is consumed, because the
+                    // page being left stops existing the moment the model
+                    // moves. Compared by page id rather than by stack depth:
+                    // `back` and `open` both change the page, and a jump
+                    // between two pages at the same depth is still a change.
+                    let before = stage.menu.page().id.clone();
+                    let leaving =
+                        menu::draw_list(&stage.menu, &stage.skin, &keys::bound_keys, None);
                     let events = stage.menu.update(self.controls.buttons_mut());
+                    if stage.menu.page().id != before {
+                        stage.begin_change(leaving);
+                    }
                     for event in events {
                         self.handle_menu(&event);
                     }
@@ -3652,6 +3764,17 @@ impl Session {
         // Everything below this is a load, and a load is not a frame time.
         self.stalled = true;
         let mut model = menu::Menu::new(shell.definition.clone());
+        // The skin decides the row pitch, and the pitch decides how many rows a
+        // page shows - so the window has to be told before anything scrolls.
+        // The face the rows will be drawn in, which is also the face whose
+        // line height sets the pitch - so the two are chosen together or the
+        // rows would be spaced for a font they are not drawn in.
+        let rows_face = shell
+            .menu_font
+            .clone()
+            .unwrap_or_else(|| shell.font.clone());
+        let skin = menu::Skin::new(shell.menu_skin, rows_face.line_height);
+        model.set_visible_rows(menu::visible_rows(&skin));
         // Supplied before seeding, because a value cannot be seeded onto a list
         // that is not there yet.
         let tracks: Vec<menu::Choice> = shell
@@ -3781,7 +3904,7 @@ impl Session {
             &self.gpu.queue,
             self.gpu.config.format,
             format,
-            shell.font,
+            rows_face,
             &shell.sprites,
         )?;
         // **The picture moves across as well as the playhead**, and it has to,
@@ -3823,6 +3946,11 @@ impl Session {
         self.stage = Stage::Menu(Box::new(MenuStage {
             renderer,
             menu: model,
+            skin,
+            // Opening the menus is not a page change: the front end's own
+            // hand-off already had its moment, and starting a transition here
+            // would zoom the first page in from nothing on every boot.
+            change: None,
             backdrop: shape.map(|shape| Backdrop {
                 player: menu_playhead(carried, frames, shape.frame_rate),
                 rect: shape.rect,

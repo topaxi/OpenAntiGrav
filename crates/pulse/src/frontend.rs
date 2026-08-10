@@ -104,6 +104,39 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     fallback_globals: &[],
 };
 
+/// How Pulse lays its menus out and moves between them.
+///
+/// **Presentation, not structure.** The tree these numbers arrange is this
+/// project's own (`assets/ui/menu.toml`, and `docs/architecture/menus.md` for
+/// why); what is Pulse's here is where the rows sit, what colour they are, and
+/// how a page change moves.
+///
+/// Every value is either read out of `Data\Plugins\PI001\GUI\Skin.xml`'s
+/// `FEGlobals` block and `MainMenu_Definition.xml`, or measured off a capture
+/// of the original under an emulator. `oag_title::MenuSkin`'s own field docs say
+/// which is which, and `docs/ui/menus-original.md` carries the captures and the
+/// confidence scores.
+pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
+    // `FEGlobals->MenuXOffset`, and a capture puts the rows' left edge at
+    // exactly 50.0.
+    menu_x: 50.0,
+    menu_scale: 1.0,
+    title_x: 50.0,
+    title_y: 0.0,
+    title_scale: 1.0,
+    // `MainMenu_Definition.xml`'s menu widget, `y="32"`.
+    first_row_y: Some(32.0),
+    // Measured, not authored - see the field's own docs for the four menus this
+    // came off and why the authored `gap` is not it.
+    row_extra_leading: Some(6.0),
+    menu_font: Some("menu"),
+    text: Some(0xFF33_A6B9),
+    title: Some(0xFF00_0000),
+    // Measured. The XML states no selected colour at all.
+    selected: Some(0xFF9D_FFFF),
+    transition_secs: 0.5,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
