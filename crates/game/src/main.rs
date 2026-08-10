@@ -2098,13 +2098,6 @@ impl Stage {
         // first frame of picture start on the same tick: `Session::frame` draws
         // before it ticks, and a movie whose voice started a frame late would
         // be a frame late for the whole reel.
-        // Only when there *is* a first movie. Reporting "the intro movie plays
-        // silently" on a boot that opens straight onto its picker names a movie
-        // the sequence does not have, which reads as a decode failure rather than
-        // as the title's own design.
-        if loaded.movie.is_some() {
-            audio.start_boot_movie("the intro movie", loaded.movie_sound.take());
-        }
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
@@ -2123,34 +2116,57 @@ impl Stage {
         // with: everything else it carried - the frame count, the rate, the
         // aspect - was read into the sequence and the renderer before this.
         // `repeat: false`, because the intro ends rather than starting again.
-        let feed = loaded.movie.and_then(|movie| {
-            let (width, height) = (movie.width, movie.height);
-            movie
-                .frames
-                .map(|frames| movie::Feed::spawn(frames, false, width, height))
-        });
-        // Same construction as `feed`, for the movie the after-language step
-        // plays - spawned now rather than lazily when that state is entered,
-        // because the `Movie` (and the frames inside it) only exist here, on
-        // `loaded`; `App::tick` swaps it into `feed` when the state is entered.
-        let fmv_intro_feed = loaded.after_language_movie.and_then(|movie| {
-            let (width, height) = (movie.width, movie.height);
-            movie
-                .frames
-                .map(|frames| movie::Feed::spawn(frames, false, width, height))
-        });
-        Ok(Self::Frontend(Box::new(FrontendStage {
+        let spawn = |movie: Option<movie::Movie>| {
+            movie.and_then(|movie| {
+                let (width, height) = (movie.width, movie.height);
+                movie
+                    .frames
+                    .map(|frames| movie::Feed::spawn(frames, false, width, height))
+            })
+        };
+        // **Every movie is keyed to the screen that plays it**, and installed on
+        // the tick that screen is entered - including the first, whose screen is
+        // the boot step on Pulse but *not* on Pure, where the reel plays two steps
+        // in. Starting it at load would sound the reel under Pure's language
+        // picker, which `--pick-language` makes plainly audible.
+        //
+        // Spawned now rather than lazily, because the `Movie` and the frames
+        // inside it only exist here, on `loaded`.
+        let states = loaded.frontend.movie_states();
+        let mut pending: Vec<PendingMovie> = Vec::new();
+        for (at, sound, film) in [
+            (0usize, loaded.movie_sound.take(), loaded.movie),
+            (
+                1,
+                loaded.after_language_movie_sound.take(),
+                loaded.after_language_movie,
+            ),
+        ] {
+            if let Some(state) = states.get(at).copied() {
+                pending.push(PendingMovie {
+                    state,
+                    feed: spawn(film),
+                    sound,
+                });
+            }
+        }
+        let mut stage = FrontendStage {
             renderer,
             frontend: loaded.frontend,
-            feed,
-            fmv_intro_feed,
-            after_language_movie_sound: loaded.after_language_movie_sound.take(),
+            feed: None,
+            pending,
             shown: false,
             backdrop_shown: false,
             held_backdrop: None,
             backdrop_in_planes: false,
             trace,
-        })))
+        };
+        // The boot screen gets no `Enter` event - it is where the machine starts -
+        // so its own movie, if it has one, is installed here.
+        if let Some(state) = stage.frontend.machine().current().map(str::to_string) {
+            stage.install_movie(&state, audio);
+        }
+        Ok(Self::Frontend(Box::new(stage)))
     }
 
     /// `size` is the **framebuffer's**, not the window's: the scene's depth
@@ -2467,18 +2483,14 @@ struct FrontendStage {
     /// under `--no-video`, and with no `ffmpeg` - and then the renderer was built
     /// with no video pipeline either, so the draw is skipped rather than green.
     feed: Option<movie::Feed>,
-    /// Pure's second boot movie, decoded the same way `feed` is and swapped
-    /// into it - see the `Event::Enter(pure_states::FMV_INTRO)` handling in
-    /// `App::tick`. `None` on every Pulse source and on any Pure source with
-    /// `--no-video` or no `ffmpeg`, the same reasons `feed` itself is `None`.
-    fmv_intro_feed: Option<movie::Feed>,
-    /// That movie's own track, waiting for the state that plays it.
+    /// Every movie still waiting for the screen that plays it.
     ///
-    /// Held here rather than started at boot beside the first movie's, because
-    /// the two are the same voice: [`crate::audio::Audio::start_movie`] stops
-    /// whatever was playing, so starting both up front would mean the second
-    /// immediately silenced the first. Taken on the tick `FMV Intro` is entered.
-    after_language_movie_sound: Option<at3::Pcm>,
+    /// Held rather than started up front because they share one voice:
+    /// [`crate::audio::Audio::start_movie`] stops whatever was playing, so
+    /// starting two at load would mean the second silenced the first. Each is
+    /// installed on the tick its own screen is entered - see
+    /// [`FrontendStage::install_movie`].
+    pending: Vec<PendingMovie>,
     /// Whether a picture has ever reached the planes. See
     /// [`FrontendStage::sync_video`].
     shown: bool,
@@ -2510,6 +2522,17 @@ struct FrontendStage {
     trace: bool,
 }
 
+/// One boot movie, waiting for the screen that plays it.
+struct PendingMovie {
+    /// The screen this movie belongs to, from the title's own chain.
+    state: &'static str,
+    /// Its frames, already decoding on a worker thread. `None` under
+    /// `--no-video`, with no `ffmpeg`, or when the movie could not be read.
+    feed: Option<movie::Feed>,
+    /// Its own track. `None` whenever the movie should be silent.
+    sound: Option<at3::Pcm>,
+}
+
 /// A decoded backdrop picture kept past the moment it was taken from the feed.
 ///
 /// The index rather than the position, because that is what a draw list reports
@@ -2520,6 +2543,28 @@ struct HeldFrame {
 }
 
 impl FrontendStage {
+    /// Puts `state`'s own movie on screen and in the mixer, if it has one.
+    ///
+    /// One set of I420 planes serves every movie the front end draws, and one
+    /// voice serves every movie's sound, so this is a **handover** rather than an
+    /// addition: the feed is replaced and `start_movie` stops whatever was
+    /// sounding. The arrived-a-picture-yet bookkeeping resets with it, or the new
+    /// movie's first frame would either show the previous movie's last picture or
+    /// be skipped as already shown.
+    ///
+    /// Idempotent by construction - the entry is taken out of `pending` - so a
+    /// state re-entered later does not restart its movie.
+    fn install_movie(&mut self, state: &str, audio: &mut audio::Audio) {
+        let Some(at) = self.pending.iter().position(|movie| movie.state == state) else {
+            return;
+        };
+        let PendingMovie { feed, sound, .. } = self.pending.remove(at);
+        self.feed = feed;
+        self.shown = false;
+        self.backdrop_in_planes = false;
+        audio.start_boot_movie(state, sound);
+    }
+
     fn render(
         &mut self,
         gpu: &Gpu,
@@ -3165,37 +3210,20 @@ impl Session {
                         stage
                             .frontend
                             .update(dt, self.controls.buttons_mut(), movie_playhead);
-                    // `feed` is spawned once, from the first boot movie, and
-                    // powers every `Video::Intro` draw - including the
-                    // after-language step's own, which reuses that variant
-                    // rather than adding a third (see `Frontend`'s own draw
-                    // dispatch for why that reuse is safe). So the moment the
-                    // state machine actually enters that step, the planes need
-                    // *that* movie's frames instead: swap in `fmv_intro_feed`
-                    // and reset the arrived-a-picture-yet bookkeeping the same
-                    // way a fresh boot starts with it unset, or the first frame
-                    // there either shows the first movie's last picture or is
-                    // skipped as already "shown".
+                    // One set of planes and one voice serve every movie the front
+                    // end draws, so each is installed on the tick its own screen
+                    // is entered - picture and sound together, which is what makes
+                    // `movie_playhead` report *that* movie's position for the
+                    // screen's own update to pace against.
                     //
-                    // The state is asked of the sequence rather than named as a
-                    // literal: which screen it is came out of the title's own
-                    // chain, and this used to spell Pure's `FMV Intro` outright.
-                    let after_language = stage.frontend.language_confirm_target();
-                    if events
-                        .iter()
-                        .any(|event| matches!(event, oag_game::state_machine::Event::Enter(name) if name == after_language))
-                    {
-                        stage.feed = stage.fmv_intro_feed.take();
-                        stage.shown = false;
-                        stage.backdrop_in_planes = false;
-                        // Its sound on the same tick as its picture, and through
-                        // the same seam the first movie went through. One voice
-                        // serves both: `start_movie` stops the previous one, so
-                        // this is a handover rather than a second track, and it
-                        // is what makes `movie_playhead` report *this* movie's
-                        // position for `update_fmv_intro` to pace against.
-                        self.audio
-                            .start_boot_movie("the second boot movie", stage.after_language_movie_sound.take());
+                    // Every entered state is offered rather than one named screen:
+                    // which screens play movies came out of the title's own chain,
+                    // and Pure's two are neither its boot step nor the step after
+                    // its picker.
+                    for event in &events {
+                        if let oag_game::state_machine::Event::Enter(name) = event {
+                            stage.install_movie(name, &mut self.audio);
+                        }
                     }
                     report(&events, stage.trace);
                     for note in stage.frontend.take_notes() {

@@ -89,28 +89,46 @@ fn load(image: &Path) -> boot::Boot {
 fn pures_boot_plays_no_movie_before_the_picker() {
     for (label, image) in images() {
         let loaded = load(&image);
-        assert!(
-            loaded.movie.is_none(),
-            "{label}: Pure's boot opens on its picker with no movie before it - a cold \
-             boot's first frame is the picker itself. Loading one here is the bug this \
-             test exists for; see docs/architecture/pure-boot.md"
+        // The picker is the boot screen and plays nothing, which is the narrow
+        // claim a cold boot established. The reel *is* loaded - it plays one step
+        // later, on `Developer Publisher Screen` - so this asserts the sequence's
+        // first *screen*, not the absence of the movie.
+        assert_eq!(
+            loaded.frontend.machine().current(),
+            Some(states::LANGUAGE_SELECTION),
+            "{label}: the first frame after power-on is the picker itself"
         );
-        assert!(
-            loaded.movie_sound.is_none(),
-            "{label}: no movie means no movie sound"
+        assert_eq!(
+            loaded.frontend.movie_states().first().copied(),
+            Some(pure_states::DEVELOPER_PUBLISHER),
+            "{label}: the first movie plays after the picker, not before it"
         );
-        // `IntroMovieP1_US.PMF` is real and decodable and is *not* on the boot
-        // path. It is still declared as a `Movie` widget on `Intro Screen`, so
-        // the report names it in the widget listing - what must not appear is a
-        // *load* line, which `load_movie` writes as `<entry>: <geometry>, ...`.
-        let loaded_movie = format!("{}: ", oag_pure::names::INTRO_MOVIE);
+    }
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_developer_publisher_screen_plays_the_reel() {
+    // The correction this file's own history turns on. The screen declares no
+    // widgets, and this build read that as "its cards are drawn by engine code" -
+    // wrong, because a Pure child screen inherits its parent's widgets. It plays
+    // `IntroMovie1` off `Intro Screen`, and the cards are frames 144 and 231.
+    for (label, image) in images() {
+        let loaded = load(&image);
         assert!(
-            !loaded
-                .report
-                .iter()
-                .any(|line| line.starts_with(&loaded_movie)),
-            "{label}: the off-path reel was opened; report was {:#?}",
+            loaded.movie.is_some(),
+            "{label}: the reel is on the boot path and has to load"
+        );
+        let named = format!("{}: ", oag_pure::names::INTRO_MOVIE);
+        assert!(
+            loaded.report.iter().any(|line| line.starts_with(&named)),
+            "{label}: the report names the reel it opened; report was {:#?}",
             loaded.report
+        );
+        assert_eq!(
+            loaded.frontend.movie_states(),
+            vec![pure_states::DEVELOPER_PUBLISHER, pure_states::FMV_INTRO,],
+            "{label}: two movies, on the two screens the disc plays them on"
         );
     }
 }
@@ -321,13 +339,10 @@ fn the_two_pressings_name_their_movies_the_same_way() {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_reel_flag_is_refused_by_name_rather_than_pointed_somewhere_else() {
-    // Pure ships the reel *file* and even a `Movie` widget for it, but no
-    // evidenced state that plays it. `--reel` used to send a Pure source to
-    // Pulse's `Intro Screen->IntroMovie1`, fail to find Pulse's European reel
-    // hash in Pure's archive, and run 260 frames of black through a screen this
-    // title does not have. A refusal that names the title is what "leave --reel
-    // alone for Pure" should mean.
+fn the_reel_flag_opens_the_screen_the_disc_itself_plays_it_on() {
+    // `--reel` was refused on Pure while this build believed the title had no reel
+    // state. It has a better-evidenced one than Pulse: on the boot path, one step
+    // after the picker. So the flag now opens that screen rather than erroring.
     for (label, image) in images() {
         let options = boot::Options {
             language: None,
@@ -340,11 +355,15 @@ fn the_reel_flag_is_refused_by_name_rather_than_pointed_somewhere_else() {
             extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
             no_video: true,
         };
-        let error = boot::load(&options).expect_err("Pure has no reel state");
-        let text = format!("{error:#}");
+        let loaded = boot::load(&options).expect("Pure's reel state is on its boot path");
+        assert_eq!(
+            loaded.frontend.machine().current(),
+            Some(pure_states::DEVELOPER_PUBLISHER),
+            "{label}: --reel opens the screen the reel plays on"
+        );
         assert!(
-            text.contains("Wipeout Pure") && text.contains("--reel"),
-            "{label}: the refusal names the flag and the title; got {text:?}"
+            loaded.movie.is_some(),
+            "{label}: and that screen's movie is the reel"
         );
     }
 }

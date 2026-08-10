@@ -249,7 +249,7 @@ pub fn run(
         movie,
         movie_sound,
         after_language_movie,
-        mut after_language_movie_sound,
+        after_language_movie_sound,
         backdrop,
         font,
         sprites,
@@ -283,14 +283,28 @@ pub fn run(
     let mut input = Input::new();
     let mut ticks = 0u32;
 
-    // Started before the first tick, because the movie is `autostart` on the
-    // screen the sequence opens on: the first tick's playhead has to be a real
-    // zero rather than the absence of a voice, or that tick would be paced by
-    // the wrong clock.
-    // Conditional for the same reason `App::tick`'s own call is: a boot with no
-    // first movie has nothing to report as silent.
-    if movie.is_some() {
-        audio.start_boot_movie("the intro movie", movie_sound);
+    // Each movie's sound keyed to the screen that plays it, the same way
+    // `App::tick` installs them - kept in step with that loop deliberately, since
+    // a movie sounding on one path and not the other is the divergence
+    // `movie_playhead`'s own doc comment warns about.
+    //
+    // The boot screen gets no `Enter` event, being where the machine starts, so
+    // its own movie's sound (if it has one) starts here. On Pulse that is the
+    // intro; on Pure the boot screen is the picker and plays nothing.
+    let movie_states = frontend.movie_states();
+    let mut pending_sound: Vec<(&'static str, Option<crate::at3::Pcm>)> = Vec::new();
+    for (at, sound) in [(0usize, movie_sound), (1, after_language_movie_sound)] {
+        if let Some(state) = movie_states.get(at).copied() {
+            pending_sound.push((state, sound));
+        }
+    }
+    if let Some(current) = frontend.machine().current().map(str::to_string)
+        && let Some(at) = pending_sound
+            .iter()
+            .position(|(state, _)| *state == current)
+    {
+        let (state, sound) = pending_sound.remove(at);
+        audio.start_boot_movie(state, sound);
     }
 
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
@@ -335,18 +349,15 @@ pub fn run(
         // moment it is a measurement rather than a prediction. See
         // `movie::Player::follow`.
         let events = frontend.update(dt, &mut input, audio.movie_playhead());
-        // The second boot movie's own track, started on the tick its state is
-        // entered - the same handover `App::tick` does, kept in step with it
-        // deliberately. Without it here, `--dump-audio` over a Pure boot would
-        // be silent for the whole movie leg while the window build sounded it,
-        // which is the divergence `movie_playhead`'s own doc comment warns about
-        // for the two tick loops.
-        let after_language = frontend.language_confirm_target();
-        if events.iter().any(|event| {
-            matches!(event, crate::state_machine::Event::Enter(name)
-                if name == after_language)
-        }) {
-            audio.start_boot_movie("the second boot movie", after_language_movie_sound.take());
+        // Every entered screen offered its own movie's track, the same handover
+        // `App::tick` does.
+        for event in &events {
+            if let crate::state_machine::Event::Enter(name) = event
+                && let Some(at) = pending_sound.iter().position(|(state, _)| state == name)
+            {
+                let (state, sound) = pending_sound.remove(at);
+                audio.start_boot_movie(state, sound);
+            }
         }
         // In the tick loop, next to the state machine it belongs to. See
         // [`crate::audio`] for why nothing here is per frame.

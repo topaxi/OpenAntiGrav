@@ -92,12 +92,46 @@ pub mod names {
     /// (`oag_pulse::DEVPUB_REEL`'s own doc comment already says the two discs
     /// carry it byte-identically) but no longer plays it at boot.
     ///
-    /// **Decodes correctly and does not currently draw.** `oag_game`'s reel
-    /// leg (`Leg::DevPubReel`, reached by `--reel`) shows the same blank white
-    /// frame for this exact video on `pulse-psp-usa.chd`, so this is a
-    /// pre-existing rendering gap in that leg, not something Pure's own
-    /// boot introduced - confirmed by comparison, not fixed here.
+    /// **It plays on `Developer Publisher Screen`**, the step straight after the
+    /// picker - inherited from the parent `Intro Screen` that declares the widget.
+    /// Confirmed by matching captured frames against the decoded video: frame 144
+    /// is the "PRESENTS" card and frame 231 the "A STUDIO LIVERPOOL GAME" card,
+    /// each within resampling noise. See
+    /// [`crate::frontend::states::DEVELOPER_PUBLISHER`].
+    ///
+    /// **This name is one of four, and picking it unconditionally is a known
+    /// bug.** See [`INTRO_MOVIE_CUTS`]: `oag_game::screen::Movie::entry_name`
+    /// appends `_US.PMF` to every `localised="true"` widget on every source, so a
+    /// European pressing is currently shown the American card.
     pub const INTRO_MOVIE: &str = r"Data\Movies\IntroMovieP1_US.PMF";
+
+    /// Every regional cut of the dev/pub reel, by the name that resolves it.
+    ///
+    /// **All four are on both Pure pressings** (the Korean one only on the EU
+    /// disc), and all three of the cuts Pulse ships are here too - the reel is a
+    /// shared asset across both titles, played by Pure and carried unused by
+    /// Pulse. Each name was recovered by hashing the `_<REGION>` suffix pattern
+    /// and confirming the entry exists, then cross-validated against the matching
+    /// [`FMV_INTRO_MOVIE_CUTS`] set.
+    ///
+    /// This is what `localised="true"` selects between. The suffix the original
+    /// picks for a given pressing has **not** been read out of any binary; that
+    /// the EU disc carries an `_EU` cut whose frame 144 reads "EUROPE" is the
+    /// evidence that it picks one at all.
+    pub const INTRO_MOVIE_CUTS: &[(&str, &str)] = &[
+        ("EU", r"Data\Movies\IntroMovieP1_EU.PMF"),
+        ("US", r"Data\Movies\IntroMovieP1_US.PMF"),
+        ("JAP", r"Data\Movies\IntroMovieP1_JAP.PMF"),
+        ("KO", r"Data\Movies\IntroMovieP1_KO.PMF"),
+    ];
+
+    /// The same four cuts of the second boot movie, on the same evidence.
+    pub const FMV_INTRO_MOVIE_CUTS: &[(&str, &str)] = &[
+        ("EU", r"Data\Movies\WoFMVNew_EU.PMF"),
+        ("US", r"Data\Movies\WoFMVNew_US.PMF"),
+        ("JAP", r"Data\Movies\WoFMVNew_JAP.PMF"),
+        ("KO", r"Data\Movies\WoFMVNew_KO.PMF"),
+    ];
 
     /// The second boot movie, played by the `FMV Intro` screen state.
     ///

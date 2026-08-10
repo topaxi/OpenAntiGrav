@@ -86,18 +86,18 @@ use crate::state_machine::{Event, StateMachine};
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 use oag_pure::frontend::states as pure_states;
 
-/// How long `Developer Publisher Screen` stays up before advancing itself.
+/// How long `Developer Publisher Screen` takes, as the reel's own length.
 ///
-/// **Measured, not read out of the executable.** Filming a cold boot of
-/// `pure-psp-usa` at 0.5 s intervals from the language confirm puts the change to
-/// `MemoryStickWarning` between 12.5 s and 13.0 s, with the screen itself first
-/// drawn at about 1.5 s - so a shade over eleven seconds on screen. Confidence
-/// **60**: the ordering and the rough duration are solid, the exact figure is
-/// bounded only by the sampling interval, and the two teletype phases inside it
-/// have their own timings that were not measured at all.
+/// **Derived rather than timed.** The screen plays the dev/pub reel and holds at
+/// two of its frames, so its duration is the video's 260 frames at 29.97 fps plus
+/// two [`HOLD_SECONDS`] pauses: 12.68 s. A cold boot measured 11-12.5 s at 0.5 s
+/// sampling, which rules out the 8.68 s the reel would take without the holds.
 ///
-/// See `docs/architecture/pure-boot.md`.
-pub const DEVELOPER_PUBLISHER_SECONDS: f64 = 11.0;
+/// Kept as a documented figure rather than a timer the code reads: nothing counts
+/// seconds on this screen any more, the reel running out is what leaves it. See
+/// `docs/architecture/pure-boot.md`.
+pub const DEVELOPER_PUBLISHER_SECONDS: f64 =
+    260.0 / (30000.0 / 1001.0) + 2.0 * oag_pulse::frontend::HOLD_SECONDS;
 
 /// Which leg the sequence boots into.
 ///
@@ -919,6 +919,7 @@ impl Frontend {
     pub fn is_playing_movie(&self) -> bool {
         self.machine.is(states::LOGO_FMV)
             || self.machine.is(states::INTRO_MOVIE)
+            || self.machine.is(pure_states::DEVELOPER_PUBLISHER)
             || self.machine.is(pure_states::FMV_INTRO)
     }
 
@@ -977,7 +978,7 @@ impl Frontend {
                 self.machine.fire(after_boot);
             }
         } else if self.machine.is(pure_states::DEVELOPER_PUBLISHER) {
-            self.update_developer_publisher();
+            self.update_developer_publisher(dt, input, movie_playhead);
         } else if self.machine.is(pure_states::MEMORY_STICK_WARNING) {
             self.update_memory_stick_warning(input);
         } else if self.machine.is(states::LANGUAGE_SELECTION) {
@@ -1158,18 +1159,21 @@ impl Frontend {
             .map_or(states::SHOW_LOGO, |step| step.state)
     }
 
-    /// The screen that plays the boot's second movie, if the chain has one.
+    /// Every screen in the chain that plays a movie, in order.
     ///
-    /// What a caller holding that movie's frames or its sound needs to know, so it
-    /// can hand over on the tick that screen is entered. Named by the chain rather
-    /// than spelled as one title's screen name at each call site.
+    /// What a caller holding those movies' frames and sound needs, so it can hand
+    /// each over on the tick its screen is entered. **Not "the boot screen and the
+    /// one after the picker"**: on Pure neither movie is on the boot step - the
+    /// reel plays on the developer/publisher screen and the FMV two steps later -
+    /// so any rule phrased in terms of a particular screen gets one of the two
+    /// titles wrong.
     #[must_use]
-    pub fn second_movie_state(&self) -> Option<&'static str> {
+    pub fn movie_states(&self) -> Vec<&'static str> {
         self.steps
             .iter()
-            .skip(1)
-            .find(|step| step.movie.frames > 0)
+            .filter(|step| step.movie.frames > 0)
             .map(|step| step.state)
+            .collect()
     }
 
     /// Takes the highlighted language and leaves for the next screen in the chain.
@@ -1192,23 +1196,70 @@ impl Frontend {
         self.advance(&selected);
     }
 
-    /// `Developer Publisher Screen`: the publisher and developer cards.
+    /// `Developer Publisher Screen`: the dev/pub reel, with its frame holds.
     ///
-    /// **Leaves on a timer, and draws almost nothing.** The screen declares no
-    /// content at all on the disc - a placeholder `Item` and one `Redirect` - and
-    /// what it really shows is two teletyped phases with the Studio Liverpool logo
-    /// and frame graphics, drawn by engine code this project has not read yet. So
-    /// the *timing* is reproduced and the *content* is not: this is an honest
-    /// eleven seconds of the parent's white rather than a guess at the cards.
+    /// **This is the same reel state Pulse's `Intro Screen->IntroMovie1` is**, and
+    /// finding that out corrected a wrong reading recorded here for a while. The
+    /// screen declares no widgets, and this build concluded its two cards were
+    /// therefore drawn by engine code - a false dichotomy, since a Pure child
+    /// screen inherits its parent's widgets, which is exactly how the picker gets
+    /// its background. It plays `IntroMovie1` off `Intro Screen`, and the "two
+    /// teletyped phases" are frames 144 and 231 of that video, matched
+    /// pixel-for-pixel against the decoded reel.
     ///
-    /// [`DEVELOPER_PUBLISHER_SECONDS`] is measured at 0.5 s sampling, confidence
-    /// 60 - see `docs/architecture/pure-boot.md` and
-    /// [`pure_states::DEVELOPER_PUBLISHER`]. No button leaves it: the disc's own
-    /// redirect names none, and pressing through the cards was not observed to
-    /// work.
-    fn update_developer_publisher(&mut self) {
-        if self.on_screen_for >= DEVELOPER_PUBLISHER_SECONDS {
-            self.advance("the developer and publisher cards ended");
+    /// The holds are Pure's own, not borrowed: `144`, `231` and `260` are three
+    /// `li` immediates in Pure's `BOOT.BIN`, the only such site in the binary, each
+    /// starting an identical pause-and-reload block. [`HOLD_SECONDS`] is still
+    /// Pulse's measurement - Pure loads its hold duration from a global rather
+    /// than an immediate, so the *value* has not been read out of Pure.
+    ///
+    /// See `docs/architecture/pure-boot.md`.
+    fn update_developer_publisher(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
+        for button in [button::START, button::CROSS] {
+            if input.is_pressed(button) {
+                input.consume_press(button);
+                self.advance("the reel was skipped");
+                return;
+            }
+        }
+
+        // Before the hold, so the audio clock can discount it - see
+        // `Self::update_intro`, which does this for the same reel.
+        self.advance_movie(dt, playhead);
+
+        if let Hold::Held { finish } = self.hold {
+            self.held_for += dt;
+            if self.held_for >= HOLD_SECONDS {
+                self.hold = Hold::None;
+                self.held_for = 0.0;
+                self.player.resume();
+                if finish {
+                    self.advance("the reel finished");
+                }
+            }
+            return;
+        }
+
+        let produced = self.player.frames_produced();
+        if produced >= FINISH_FRAME && !self.acted.contains(&FINISH_FRAME) {
+            self.acted.push(FINISH_FRAME);
+            self.begin_hold(true);
+            return;
+        }
+        for &frame in &PAUSE_FRAMES {
+            if produced >= frame && !self.acted.contains(&frame) {
+                self.acted.push(frame);
+                self.begin_hold(false);
+                self.notes.push(format!(
+                    "the reel paused at frame {frame} for {HOLD_SECONDS}s"
+                ));
+                return;
+            }
+        }
+
+        // A reel shorter than its own finish frame still has to end.
+        if self.player.is_finished() {
+            self.advance("the reel ended");
         }
     }
 
@@ -1396,17 +1447,20 @@ impl Frontend {
         }
 
         if self.machine.is(pure_states::DEVELOPER_PUBLISHER) {
-            // **Deliberately almost empty, and the gap is the honest part.** The
-            // disc declares no content for this screen at all; what it really
-            // shows is two teletyped phases with the Studio Liverpool logo, drawn
-            // by engine code nobody here has read. So this reproduces the screen's
-            // *place in the sequence* and its background, and draws no cards
-            // rather than inventing them. See
-            // [`pure_states::DEVELOPER_PUBLISHER`].
-            //
-            // The parent's fills rather than `draw_screen`: the screen has no
-            // widgets to draw, and its background belongs to `Intro Screen`.
+            // The dev/pub reel, played off the parent's `IntroMovie1` widget -
+            // the cards are frames of this video, not text this build draws. See
+            // [`Self::update_developer_publisher`].
+            let plan = self.movie_of(pure_states::DEVELOPER_PUBLISHER);
             self.insert_backdrop_parent_fills(&mut out);
+            if plan.has_picture {
+                out.push(Draw::Video {
+                    rect: pillarbox_in(self.space, plan.aspect),
+                    frame: self.player.frame(),
+                    position: self.player.position(),
+                    source: Video::Intro,
+                });
+            }
+            self.insert_movie_counter(&mut out, plan.has_picture);
             self.insert_backdrop(&mut out);
             return out;
         }

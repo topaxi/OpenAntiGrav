@@ -260,19 +260,27 @@ pub fn load(options: &Options) -> Result<Boot> {
             ));
         }
     }
-    // The chain's *other* movie, if it has one - the step that plays something
-    // after the boot step, wherever in the chain it sits. Deliberately not "the
-    // step after the picker": on Pure that is the developer/publisher cards, which
-    // play nothing, and keying the movie off it loaded no movie at all.
-    let second_movie_step = walked.iter().skip(1).find(|step| step.movie.is_some());
+    // Every step in the walked chain that plays something, in order. Pulse has
+    // one (its boot step); Pure has two, and **neither is its boot step** - the
+    // reel plays on the developer/publisher screen and the FMV on `FMV Intro`.
+    // Keying either off "the boot step" or "the step after the picker" gets one of
+    // the two titles wrong, which is how the reel came to be loaded as the FMV.
+    let playing: Vec<&oag_title::BootStep> = walked
+        .iter()
+        .copied()
+        .filter(|step| step.movie.is_some())
+        .collect();
+    let first_movie_step = playing.first().copied();
+    let second_movie_step = playing.get(1).copied();
 
     // `--movie` overrides whichever movie the boot leg would play, and asks for
     // one on a leg that plays none - it is a preview tool, so pointing it at a
     // source whose own boot is silent has to show something rather than nothing.
-    let movie_name = options
-        .movie
-        .clone()
-        .or_else(|| start_step.movie.map(str::to_string));
+    let movie_name = options.movie.clone().or_else(|| {
+        first_movie_step
+            .and_then(|step| step.movie)
+            .map(str::to_string)
+    });
     let movie = match &movie_name {
         Some(name) => load_movie(&mut archives, name, options, &mut report)?,
         None => None,
@@ -357,16 +365,16 @@ pub fn load(options: &Options) -> Result<Boot> {
             },
         )
     };
-    // Each walked step with whichever movie was read for it. Only two steps in
-    // either title's chain name a movie at all, so the two loaded above cover it:
-    // the boot step's, and the one the after-language step plays.
+    // Each walked step with whichever movie was read for it, matched by position
+    // rather than by which screen it happens to be: at most two steps in either
+    // title's chain name a movie, and the two loaded above are those two in order.
     let steps = walked
         .iter()
         .map(|step| crate::frontend::Step {
             state: step.state,
-            movie: if std::ptr::eq(*step, start_step) {
+            movie: if first_movie_step.is_some_and(|first| std::ptr::eq(*step, first)) {
                 plan(movie.as_ref())
-            } else if step.movie.is_some() {
+            } else if second_movie_step.is_some_and(|second| std::ptr::eq(*step, second)) {
                 plan(after_language_movie.as_ref())
             } else {
                 plan(None)
@@ -454,7 +462,10 @@ pub fn load(options: &Options) -> Result<Boot> {
     // whose boot plays nothing.
     if let Some(goto) = frontend.language_auto_redirect() {
         let target = frontend.language_confirm_target();
-        let order = if movie.is_some() {
+        // Whether the *boot screen itself* played something, not whether the
+        // sequence has a movie anywhere: Pure loads two and plays neither before
+        // its picker.
+        let order = if start_step.movie.is_some() {
             ", having played the boot movie first"
         } else {
             ", with no movie before it"
@@ -500,13 +511,23 @@ pub fn load(options: &Options) -> Result<Boot> {
 ///
 /// The display aspect is deliberately **not** compared: that differs per movie
 /// on the PS2 and is handled by the pillarbox rect, not by the plane size.
+/// **Unknown geometry is not disagreeing geometry.** `VideoFormat::of` answers
+/// `None` for a movie with no decoded frames - `--no-video`, no `ffmpeg`, a
+/// failed transcode - and there are then no planes to conflict over, because
+/// nothing will be uploaded. Reading that as a mismatch dropped the second movie
+/// on every `--no-video` load, which is exactly the configuration the
+/// ground-truth tests use.
 fn same_planes(a: &Movie, b: &Movie) -> bool {
-    crate::render::VideoFormat::of(a)
-        .zip(crate::render::VideoFormat::of(b))
-        .is_some_and(|(a, b)| {
+    match (
+        crate::render::VideoFormat::of(a),
+        crate::render::VideoFormat::of(b),
+    ) {
+        (Some(a), Some(b)) => {
             (a.width, a.height, a.chroma_width, a.chroma_height)
                 == (b.width, b.height, b.chroma_width, b.chroma_height)
-        })
+        }
+        _ => true,
+    }
 }
 
 /// Decodes the intro movie's ATRAC3+ track, if it should be heard at all.

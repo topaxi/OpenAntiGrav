@@ -30,20 +30,32 @@ pub mod states {
     /// title's `Movie` widgets.
     pub const INTRO_SCREEN: &str = "Intro Screen";
 
-    /// The publisher and developer cards, between the picker and
-    /// [`MEMORY_STICK_WARNING`].
+    /// The dev/pub reel, between the picker and [`MEMORY_STICK_WARNING`].
     ///
-    /// **Its content is engine-drawn, not declared.** The screen holds a
-    /// placeholder `Item` and one `Redirect` and nothing else, yet it teletypes
-    /// two phases: "SONY COMPUTER ENTERTAINMENT AMERICA PRESENTS", then "A
-    /// STUDIO LIVERPOOL GAME" with the Studio Liverpool logo and frame graphics.
-    /// Observed on `pure-psp-usa` at 0.5 s sampling, confidence **85** on the
-    /// phase structure and **60** on every duration; the teletype rate was not
-    /// measured, and the phase-1 string is region-specific so the EU wording is
-    /// **not established**. Advances on a timer at about 11 s with no input.
+    /// **It plays [`crate::names::INTRO_MOVIE`], and this is the same state
+    /// Pulse's `Intro Screen->IntroMovie1` is.** The screen declares only a
+    /// placeholder `Item` and a `DevPubRedirect` to `MemoryStickWarning`; the
+    /// movie is the `IntroMovie1` widget on the parent `Intro Screen`, inherited
+    /// the same way the picker inherits that parent's white background.
     ///
-    /// See `docs/architecture/pure-boot.md`. Reimplementing it needs the string
-    /// source, the real timings and the logo assets out of the executable.
+    /// Confirmed by matching captured frames against the decoded video: the
+    /// "SONY COMPUTER ENTERTAINMENT ... PRESENTS" card is frame 144 and
+    /// "A STUDIO LIVERPOOL GAME" is frame 231, each within resampling noise of
+    /// the capture. Confidence **95**. Everything on those cards - the logo, the
+    /// frame graphics, the barcode, even the small arrow glyph - is video
+    /// content.
+    ///
+    /// **The frame holds are Pure's own.** `144`, `231` and `260` appear as three
+    /// `li` immediates in Pure's `BOOT.BIN`, the only such site in the binary,
+    /// each beginning an identical pause-and-reload block - so this title
+    /// implements the pause logic itself rather than inheriting it. The hold
+    /// *duration* is loaded from a global rather than an immediate, so
+    /// `oag_pulse::frontend::HOLD_SECONDS` remains Pulse's measurement.
+    ///
+    /// An earlier reading recorded here had the cards as engine-drawn teletyped
+    /// text. That was wrong, and wrong from reasoning about a screenshot's
+    /// appearance instead of checking the asset; see
+    /// `docs/architecture/pure-boot.md`.
     pub const DEVELOPER_PUBLISHER: &str = "Developer Publisher Screen";
 
     /// The storage-access disclaimer, waiting on cross.
@@ -152,25 +164,29 @@ pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
 /// measured table per title rather than something derived. See
 /// `docs/architecture/pure-boot.md` and [ADR-0023].
 ///
-/// **The boot step plays no movie.** `crate::names::INTRO_MOVIE` is real,
-/// present on both pressings and decodable - and byte-for-byte Pulse's American
-/// dev/pub reel - but it is not on this title's boot path, exactly as Pulse's own
-/// `Intro Screen->IntroMovie1` reel is not on Pulse's. It is declared as a
-/// `Movie` widget on a screen state the runtime never enters.
+/// **The boot step plays no movie, and the step after the picker does.** Nothing
+/// runs before `Language Selection`; `crate::names::INTRO_MOVIE` - the dev/pub
+/// reel, byte-for-byte the one Pulse ships - plays on
+/// [`states::DEVELOPER_PUBLISHER`] straight after it. So this title's boot is
+/// **two** movies, not one, and the reel is very much on its path.
 ///
 /// [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     chain: &[
         oag_title::BootStep::screen(states::LANGUAGE_SELECTION),
-        oag_title::BootStep::screen(states::DEVELOPER_PUBLISHER),
+        oag_title::BootStep::playing(states::DEVELOPER_PUBLISHER, crate::names::INTRO_MOVIE),
         oag_title::BootStep::screen(states::MEMORY_STICK_WARNING),
         oag_title::BootStep::playing(states::FMV_INTRO, crate::names::FMV_INTRO_MOVIE),
         oag_title::BootStep::screen(states::TITLE_SCREEN),
     ],
-    // No evidenced off-path reel state. The reel *file* is here, and its widget
-    // is too; the state that plays it is not, so `--reel` has nothing to point at
-    // and is refused by name rather than sent to another title's screen.
-    reel: None,
+    // Pure's reel state is on its boot path, so `--reel` has a real target here -
+    // and a better-evidenced one than Pulse's, whose own reel state is never
+    // entered at boot. Naming it means the flag shows the same screen the disc
+    // shows rather than being refused.
+    reel: Some(oag_title::BootStep::playing(
+        states::DEVELOPER_PUBLISHER,
+        crate::names::INTRO_MOVIE,
+    )),
     // Neither pressing carries `Data\Movies\Backdrop.PMF`.
     menu_backdrop: None,
     picker_backdrop_parent: Some(states::INTRO_SCREEN),
@@ -195,14 +211,58 @@ mod tests {
         );
     }
 
+    /// Two movies, and which screens play them.
+    ///
+    /// The dev/pub reel was recorded here for a while as "not on this title's boot
+    /// path", on the strength of `Developer Publisher Screen` declaring no widgets
+    /// of its own. It inherits the parent's, and frames 144 and 231 of that reel
+    /// are the two cards the screen shows.
     #[test]
-    fn the_only_movie_in_the_chain_is_the_second_boot_movie() {
+    fn the_chain_plays_two_movies_and_names_the_screens_that_play_them() {
         let movies: Vec<_> = BOOT_PROFILE
             .chain
             .iter()
-            .filter_map(|step| step.movie)
+            .filter_map(|step| step.movie.map(|movie| (step.state, movie)))
             .collect();
-        assert_eq!(movies, vec![crate::names::FMV_INTRO_MOVIE]);
+        assert_eq!(
+            movies,
+            vec![
+                (states::DEVELOPER_PUBLISHER, crate::names::INTRO_MOVIE),
+                (states::FMV_INTRO, crate::names::FMV_INTRO_MOVIE),
+            ]
+        );
+    }
+
+    /// The reel state is on the boot path, which is the whole correction.
+    #[test]
+    fn the_reel_is_a_step_of_the_boot_rather_than_an_off_path_curiosity() {
+        let reel = BOOT_PROFILE.reel.expect("Pure plays its reel at boot");
+        assert_eq!(reel.state, states::DEVELOPER_PUBLISHER);
+        assert_eq!(reel.movie, Some(crate::names::INTRO_MOVIE));
+        assert_eq!(
+            BOOT_PROFILE
+                .step(states::DEVELOPER_PUBLISHER)
+                .map(|s| s.movie),
+            Some(reel.movie),
+            "--reel shows the screen the disc itself shows, rather than being refused"
+        );
+    }
+
+    /// Every cut is a `_<REGION>` spelling of the same two names.
+    #[test]
+    fn the_regional_cuts_share_one_naming_rule() {
+        for (region, name) in crate::names::INTRO_MOVIE_CUTS {
+            assert_eq!(*name, format!(r"Data\Movies\IntroMovieP1_{region}.PMF"));
+        }
+        for (region, name) in crate::names::FMV_INTRO_MOVIE_CUTS {
+            assert_eq!(*name, format!(r"Data\Movies\WoFMVNew_{region}.PMF"));
+        }
+        assert!(
+            crate::names::INTRO_MOVIE_CUTS
+                .iter()
+                .any(|(_, name)| *name == crate::names::INTRO_MOVIE),
+            "the cut this build picks is one of the four it knows"
+        );
     }
 
     #[test]
@@ -221,9 +281,8 @@ mod tests {
     }
 
     #[test]
-    fn pure_ships_no_menu_backdrop_and_no_reel_state() {
+    fn pure_ships_no_menu_backdrop() {
         assert!(BOOT_PROFILE.menu_backdrop.is_none());
-        assert!(BOOT_PROFILE.reel.is_none());
     }
 
     #[test]
