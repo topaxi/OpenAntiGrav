@@ -287,7 +287,11 @@ pub fn run(
     // screen the sequence opens on: the first tick's playhead has to be a real
     // zero rather than the absence of a voice, or that tick would be paced by
     // the wrong clock.
-    audio.start_boot_movie("the intro movie", movie_sound);
+    // Conditional for the same reason `App::tick`'s own call is: a boot with no
+    // first movie has nothing to report as silent.
+    if movie.is_some() {
+        audio.start_boot_movie("the intro movie", movie_sound);
+    }
 
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine

@@ -558,20 +558,38 @@ impl Frontend {
         let paths: Vec<String> = screens.screens.iter().map(|s| s.path.clone()).collect();
         machine.register_all(paths.iter().map(String::as_str));
 
-        // With no movie at all - a source with nothing this build can read a
-        // picture out of - the sequence still has to run and end. FINISH_FRAME
-        // is Pulse's own reel length, which is as good a stand-in as any and is
-        // bounded.
+        // **Where a boot starts is a per-title fact, not a per-leg one.**
+        // `Leg::state()` answers for Pulse, whose default leg opens on `LogoFMV`
+        // playing its intro - cold-boot confirmed, the first frame after
+        // power-on being inside that movie. Pure's own cold boot opens on the
+        // picker with no movie at all, so `LogoFMV` is not merely the wrong
+        // screen there, it is a screen that title does not have.
         //
-        // It is nonetheless *Pulse's* number standing in on every title, which
-        // is only defensible while every title's boot leg plays a movie. A leg
-        // that plays none by design wants a zero-length player instead, and
-        // wants it stated rather than inferred from `frames == 0` - which cannot
-        // tell "no movie" from "a movie whose container reports nothing".
-        let frames = if first.frames == 0 {
-            FINISH_FRAME
+        // Probed off `Title Screen` here, which is the fourth site in this build
+        // asking "is this Pure?" in its own words. See
+        // [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md):
+        // the table it describes is what deletes all four, and this one exists
+        // only until it lands.
+        let start = if screens.by_name(pure_states::TITLE_SCREEN).is_some() && leg == Leg::LogoFmv {
+            states::LANGUAGE_SELECTION
         } else {
-            first.frames
+            leg.state()
+        };
+
+        // With no movie this build can read a picture out of, a leg that plays
+        // one still has to run and end: `FINISH_FRAME` is Pulse's own reel
+        // length, a bounded stand-in.
+        //
+        // **A leg that plays no movie by design gets nothing to run instead.**
+        // Borrowing Pulse's 260 there would give Pure's picker a player counting
+        // down a length belonging to another title's reel. Nothing reads it -
+        // `confirm_language` rebuilds the player for the second movie before any
+        // movie state is entered - but a number that is never read is still a
+        // number no one can explain later.
+        let frames = match first.frames {
+            0 if start == states::LANGUAGE_SELECTION => 0,
+            0 => FINISH_FRAME,
+            frames => frames,
         };
 
         let mut frontend = Self {
@@ -600,7 +618,7 @@ impl Frontend {
             notes: Vec::new(),
             finished: false,
         };
-        frontend.machine.transition_to(leg.state());
+        frontend.machine.transition_to(start);
         frontend
     }
 
@@ -995,7 +1013,8 @@ impl Frontend {
     /// fourth, uncatalogued source falls back to `SHOW_LOGO` too, the same
     /// blank-if-absent behaviour this build already had before Pure was
     /// reachable at all - not a regression, just an unlabelled one.
-    fn language_confirm_target(&self) -> &'static str {
+    #[must_use]
+    pub fn language_confirm_target(&self) -> &'static str {
         if self.screens.by_name(states::SHOW_LOGO).is_some() {
             states::SHOW_LOGO
         } else if self.screens.by_name(pure_states::FMV_INTRO).is_some() {

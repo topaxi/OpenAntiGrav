@@ -2098,7 +2098,13 @@ impl Stage {
         // first frame of picture start on the same tick: `Session::frame` draws
         // before it ticks, and a movie whose voice started a frame late would
         // be a frame late for the whole reel.
-        audio.start_boot_movie("the intro movie", loaded.movie_sound.take());
+        // Only when there *is* a first movie. Reporting "the intro movie plays
+        // silently" on a boot that opens straight onto its picker names a movie
+        // the sequence does not have, which reads as a decode failure rather than
+        // as the title's own design.
+        if loaded.movie.is_some() {
+            audio.start_boot_movie("the intro movie", loaded.movie_sound.take());
+        }
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,

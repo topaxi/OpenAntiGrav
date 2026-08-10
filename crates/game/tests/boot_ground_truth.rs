@@ -149,7 +149,7 @@ fn the_front_end_root_names_the_intro_movie() {
 
     let movies: Vec<String> = screens
         .with_movies()
-        .filter_map(|s| s.movie.as_ref().map(|m| m.entry_name()))
+        .flat_map(|s| s.movies.iter().map(oag_game::screen::Movie::entry_name))
         .collect();
 
     assert!(

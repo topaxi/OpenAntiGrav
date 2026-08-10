@@ -203,8 +203,15 @@ pub struct Screen {
     pub fills: Vec<u32>,
     /// `Image` widgets that name a texture, in document order.
     pub images: Vec<Image>,
-    /// The `Movie` widget, if the screen has one.
-    pub movie: Option<Movie>,
+    /// `Movie` widgets in document order.
+    ///
+    /// **A `Vec`, because one screen really does declare several.** Pure's
+    /// `Intro Screen` carries four - `IntroMovie1`, `FMV Movie`, `ProfileMovie1`
+    /// and `ProfileMovie2` - and a single slot kept whichever came last, so the
+    /// three before it were invisible. That silently broke the rule that
+    /// [`crate::boot`] applies to a movie's sound: a widget carrying
+    /// `sound="false"` could not be found and so could not mute anything.
+    pub movies: Vec<Movie>,
     /// `Text` widgets in document order.
     pub texts: Vec<Text>,
     /// `Redirect` widgets in document order.
@@ -371,7 +378,7 @@ impl Screens {
                     }
                 }
             },
-            "movie" => screen.movie = Some(Movie::from_node(child)),
+            "movie" => screen.movies.push(Movie::from_node(child)),
             "text" => screen.texts.push(self.text_from_node(child)),
             "redirect" => screen.redirects.push(redirect_from_node(child)),
             "displaylanguages" => screen.display_languages = true,
@@ -473,7 +480,7 @@ impl Screens {
 
     /// Every screen that plays a movie, in document order.
     pub fn with_movies(&self) -> impl Iterator<Item = &Screen> {
-        self.screens.iter().filter(|s| s.movie.is_some())
+        self.screens.iter().filter(|s| !s.movies.is_empty())
     }
 }
 
@@ -600,7 +607,7 @@ mod tests {
     #[test]
     fn values_children_carry_their_parents_attributes() {
         let screens = Screens::from_xml(SAMPLE);
-        let movie = screens.by_name("LogoFMV").unwrap().movie.clone().unwrap();
+        let movie = screens.by_name("LogoFMV").unwrap().movies[0].clone();
         assert_eq!(movie.src, r"Data\Movies\Intro");
         assert!(movie.sound);
         assert!(movie.autostart);
@@ -608,10 +615,56 @@ mod tests {
         assert!(!movie.repeat);
     }
 
+    /// A screen with several `Movie` widgets keeps all of them.
+    ///
+    /// Pure's `Intro Screen` declares four - `IntroMovie1`, `FMV Movie`,
+    /// `ProfileMovie1`, `ProfileMovie2` - and a single-slot field kept whichever
+    /// parsed last, so `boot`'s "the widget decides whether it is heard" rule
+    /// could not find the widget for any of the other three. Shaped after the
+    /// real disc rather than invented.
+    #[test]
+    fn a_screen_keeps_every_movie_widget_it_declares() {
+        let screens = Screens::from_xml(
+            r#"
+<Screen>
+  <Screen type="Intro" name="Intro Screen">
+    <Movie name="IntroMovie1"><Values src="Data\Movies\IntroMovieP1" sound="true" localised="true"></Values></Movie>
+    <Movie name="FMV Movie"><Values src="Data\Movies\WoFMVNew" sound="true" localised="true"></Values></Movie>
+    <Movie name="ProfileMovie1"><Values src="Data\Movies\Profile_part1" sound="false"></Values></Movie>
+  </Screen>
+</Screen>
+"#,
+        );
+        let screen = screens.by_name("Intro Screen").unwrap();
+        let names: Vec<String> = screen.movies.iter().map(Movie::entry_name).collect();
+        assert_eq!(
+            names,
+            vec![
+                r"Data\Movies\IntroMovieP1_US.PMF",
+                r"Data\Movies\WoFMVNew_US.PMF",
+                r"Data\Movies\Profile_part1.PMF",
+            ],
+            "document order, and none of them dropped"
+        );
+        // The whole point: a widget that is neither first nor last is findable,
+        // so its own `sound` is what decides.
+        let found = screen
+            .movies
+            .iter()
+            .find(|m| m.entry_name() == r"Data\Movies\WoFMVNew_US.PMF")
+            .expect("the second boot movie's widget");
+        assert!(found.sound);
+        assert!(
+            !screen.movies[2].sound,
+            "a sound=\"false\" widget behind others still mutes its own movie"
+        );
+        assert_eq!(screens.with_movies().count(), 1);
+    }
+
     #[test]
     fn the_movie_filename_is_built_from_src() {
         let screens = Screens::from_xml(SAMPLE);
-        let movie = screens.by_name("LogoFMV").unwrap().movie.clone().unwrap();
+        let movie = screens.by_name("LogoFMV").unwrap().movies[0].clone();
         assert_eq!(movie.entry_name(), r"Data\Movies\Intro.PMF");
 
         let localised = Movie {
@@ -627,7 +680,7 @@ mod tests {
         // .PMF to either asks for a file that exists nowhere, which is what
         // this build did before: `Data\Movies\Backdrop.ipf.PMF`.
         let screens = Screens::from_xml(SAMPLE);
-        let template = screens.by_name("LogoFMV").unwrap().movie.clone().unwrap();
+        let template = screens.by_name("LogoFMV").unwrap().movies[0].clone();
 
         for src in [r"Data\Movies\Intro.pss", r"Data\Movies\Backdrop.ipf"] {
             let movie = Movie {
@@ -649,7 +702,7 @@ mod tests {
         // The PSP rule is settled and this is its guard: nothing about the PS2
         // divergence may change what `Data\Movies\Intro` resolves to.
         let screens = Screens::from_xml(SAMPLE);
-        let movie = screens.by_name("LogoFMV").unwrap().movie.clone().unwrap();
+        let movie = screens.by_name("LogoFMV").unwrap().movies[0].clone();
         assert!(!has_movie_extension(&movie.src));
         assert_eq!(movie.entry_name(), r"Data\Movies\Intro.PMF");
     }

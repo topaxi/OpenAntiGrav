@@ -208,15 +208,24 @@ pub fn load(options: &Options) -> Result<Boot> {
     let documents = definitions(&mut archives, &mut report);
     let tracks = load_tracks(&mut archives, &documents, &mut report);
     let teams = load_teams(&mut archives, &documents, &mut report);
+    // `--movie` overrides whichever movie the boot leg would play, and asks for
+    // one on a leg that plays none - it is a preview tool, so pointing it at a
+    // source whose own boot is silent has to show something rather than nothing.
     let movie_name = options
         .movie
         .clone()
-        .unwrap_or_else(|| default_boot_movie(options.leg, &screens));
-    let movie = load_movie(&mut archives, &movie_name, options, &mut report)?;
+        .or_else(|| default_boot_movie(options.leg, &screens).map(str::to_string));
+    let movie = match &movie_name {
+        Some(name) => load_movie(&mut archives, name, options, &mut report)?,
+        None => None,
+    };
     // Straight after the movie, so its report lines stay together, and while
     // `screens` is still in hand: the widget that decides whether this movie is
     // heard at all is in that XML.
-    let movie_sound = load_movie_sound(movie.as_ref(), &screens, &movie_name, options, &mut report);
+    let movie_sound = match &movie_name {
+        Some(name) => load_movie_sound(movie.as_ref(), &screens, name, options, &mut report),
+        None => None,
+    };
     let backdrop = load_backdrop(&mut archives, options, &mut report);
     let mut fmv_intro = load_fmv_intro(&mut archives, &screens, options, &mut report);
     // The same one-pipeline guard the backdrop goes through below, and the
@@ -347,12 +356,30 @@ pub fn load(options: &Options) -> Result<Boot> {
         }
     }
 
+    // The disc's own next-after-the-picker against this build's, so the
+    // difference is visible at startup rather than buried. Both halves are
+    // resolved rather than named: the target from the sequence itself, and
+    // whether a movie ran first from whether one was loaded at all - this line
+    // used to assert `Show Logo` and "having played it first" on every source,
+    // which was two false claims at once on a title whose picker comes first and
+    // whose boot plays nothing.
     if let Some(goto) = frontend.language_auto_redirect() {
-        report.push(format!(
-            "the disc's Language Selection redirects to {goto}; this build goes to {}, \
-             having played it first",
-            crate::frontend::states::SHOW_LOGO
-        ));
+        let target = frontend.language_confirm_target();
+        let order = if movie.is_some() {
+            ", having played the boot movie first"
+        } else {
+            ", with no movie before it"
+        };
+        if goto == target {
+            report.push(format!(
+                "the disc's Language Selection redirects to {goto}, and so does this build{order}"
+            ));
+        } else {
+            report.push(format!(
+                "the disc's Language Selection redirects to {goto}; this build goes to \
+                 {target}{order}"
+            ));
+        }
     }
 
     Ok(Boot {
@@ -447,9 +474,12 @@ fn load_movie_sound(
         return None;
     };
 
+    // Every `Movie` widget on every screen, not one per screen: Pure declares
+    // four of them on `Intro Screen` alone, and the one naming this movie is not
+    // necessarily the first or the last.
     let silent = screens
         .with_movies()
-        .filter_map(|screen| screen.movie.as_ref())
+        .flat_map(|screen| screen.movies.iter())
         .any(|widget| widget.entry_name().eq_ignore_ascii_case(movie_name) && !widget.sound);
     if silent {
         report.push(format!(
@@ -707,7 +737,10 @@ fn load_screens(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -
         screens.load_xml.len()
     ));
     for screen in screens.with_movies() {
-        if let Some(movie) = &screen.movie {
+        // One line per widget. A screen with four of them used to report one,
+        // whichever the parser happened to keep last, which made the other three
+        // look absent from the disc.
+        for movie in &screen.movies {
             report.push(format!(
                 "  screen {:?} plays {}",
                 screen.name,
@@ -959,19 +992,34 @@ pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
 ///
 /// `--reel` (`Leg::DevPubReel`) always wants [`DEVPUB_REEL`] - that leg is
 /// reached explicitly, by a flag, on Pulse alone, so the title makes no
-/// difference to it. `Leg::LogoFmv` is the one this build boots into by
-/// default for any source, and `DEFAULT_BOOT_MOVIE` names an entry only
-/// Pulse has - so a Pure source (detected the same way
-/// `Frontend::language_confirm_target` is: by whether its own `Title Screen`
-/// exists) gets [`oag_pure::names::INTRO_MOVIE`] instead.
-fn default_boot_movie(leg: crate::frontend::Leg, screens: &Screens) -> String {
+/// difference to it.
+///
+/// # `None` is Pure's answer, and it is measured
+///
+/// `Leg::LogoFmv` is the leg a default boot runs, and on Pulse it plays
+/// [`DEFAULT_BOOT_MOVIE`]. **On Pure it plays nothing at all**: a true cold boot
+/// opens straight onto `Language Selection`, with no movie before it, confirmed
+/// on both pressings. `oag_pure::names::INTRO_MOVIE` is real, present and
+/// decodable - and byte-for-byte Pulse's American dev/pub reel - but it is not
+/// on Pure's boot path, exactly as Pulse's own `Intro Screen->IntroMovie1` reel
+/// is not on Pulse's. Returning it here was this build's own invention, made
+/// from a stale emulator save profile that was skipping the real boot.
+///
+/// See [pure-boot.md](../../../docs/architecture/pure-boot.md), which records
+/// the trap as well as the sequence.
+///
+/// Pure is detected the same way `Frontend::language_confirm_target` detects it,
+/// by whether its own `Title Screen` exists - a probe, and one of several asking
+/// the same question in different words. [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md)
+/// is what replaces them all with a table.
+fn default_boot_movie(leg: crate::frontend::Leg, screens: &Screens) -> Option<&'static str> {
     match leg {
-        crate::frontend::Leg::DevPubReel => DEVPUB_REEL.to_string(),
+        crate::frontend::Leg::DevPubReel => Some(DEVPUB_REEL),
         crate::frontend::Leg::LogoFmv => {
             if screens.by_name(pure_states::TITLE_SCREEN).is_some() {
-                oag_pure::names::INTRO_MOVIE.to_string()
+                None
             } else {
-                DEFAULT_BOOT_MOVIE.to_string()
+                Some(DEFAULT_BOOT_MOVIE)
             }
         }
     }
