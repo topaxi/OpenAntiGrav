@@ -2,11 +2,12 @@
 
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
 **Status:** the pool, its maximum, its one initialiser and its one damage
-entry point are read end to end, and **four of the claims now have a runtime
-leg** (2026-08-10, PPSSPP). Confidence **94** for where the pool and its
-maximum live, **92** for the two race-option globals and the regeneration
-branch, **90** for the weapons-off halving, **84** for the damage
-coefficient itself, **60** for the entity field that gates the whole path.
+entry point are read end to end, and **every claim except one now has a
+runtime leg** (2026-08-10, PPSSPP). Confidence **94** for where the pool and
+its maximum live, for the damage coefficient and for the one-call-per-contact
+loop; **92** for the two race-option globals and the regeneration branch;
+**90** for the weapons-off halving; **60** for the entity field that gates
+the whole path.
 
 What is measured and what is not is set out under
 [the runtime leg](#the-runtime-leg-and-what-it-did-not-reach); the
@@ -279,16 +280,33 @@ decompile alone:
   so the contacts themselves differ - which is why the residual 1 % is not
   worth chasing. Confidence **90**.
 
-**What it did not reach: the `0.05 * 0.7` coefficient itself.** Testing that
-needs `|p|`, the per-contact impulse magnitude, beside the pool. **The obvious
-probe was tried and does not work**, and is recorded so nobody repeats it: the
-contact ring lives on the rigid body at `+0x190 + n * 0x40` with its count at
-`+0x370`, both inside the blob a capture already reads - and the count reads
-**0 on every one of 199 ticks**, because the breakpoint is on
-`Ship_UpdateCraft`'s entry and the ring has already been consumed and cleared
-by then. The probe that would work is a breakpoint *inside* `FUN_088418e0`'s
-contact loop, after `|p|` is computed and before `Ship_Damage` is called. That
-is a new capability for the harness rather than a new column.
+### The coefficient is exactly `0.035`, measured
+
+**`amount / |p| = 0.035000` on 25 of 25 calls** - median, minimum and maximum
+all identical to six figures, over amounts spanning `0.0117` to `2.63`, a
+factor of 225. That is float precision, not a fit.
+
+The probe is a breakpoint on `Ship_Damage` itself, and the reason it works is
+worth stating: **the contact ring is still intact there**. `FUN_088418e0`'s
+loop is the ring's only consumer and calls `Ship_Damage` from inside it, so the
+record being processed has not been cleared. An earlier attempt read the ring at
+`Ship_UpdateCraft`'s entry instead and found the count `0` on all 199 ticks,
+because by then the ring has already been drained - recorded here so the cheap
+probe is not tried a third time.
+
+Two things fell out of the same 25 calls:
+
+- **One call per ring record, confirmed.** A tick whose count was `4` produced
+  **four** `Ship_Damage` calls, each matching a different record's `|p|` at
+  exactly `0.035`. So a frame with several contacts is damaged several times,
+  which is what `oag_physics::wall::WallResponse::impulse_sum` sums for.
+- **`source` is `0` on every wall contact**, with `a1`, `a2` and `a3` all zero,
+  which is what the contact loop passes and what fixes `0` as track/wall.
+
+**The calling convention is not what o32 would predict, and this cost an
+attempt**: the entity is in **`a0`** and the float amount in **`f12`** - the
+leading float does not reserve `a0`. Reading the entity from `a1` gives a zero
+and an "Invalid address" from the debugger, which at least fails loudly.
 
 ## What is not verified
 
@@ -315,8 +333,9 @@ is a new capability for the harness rather than a new column.
   smoothly between -1 and 1 - a wrong offset here does not produce garbage, it
   produces a plausible-looking quantity.
 - 2026-08-10: runtime leg (above). The pool, the two globals, the regeneration
-  branch and the weapons-off halving move to 90-94; the damage coefficient
-  stays at 84.
+  branch and the weapons-off halving move to 90-94, and **the `0.035`
+  coefficient measures exact on 25 of 25 calls**, so it moves to 94 too. Only
+  `entity + 0x368` is left unmeasured.
 - 2026-08-10: page created. `Ship_ResetShield`, `Ship_Damage`, `Ship_State`,
   `Ship_SetState`, `g_weapons_enabled`, `g_damage_enabled` and `g_skill_level`
   named; the `0x84 + skill * 4` maximum joined to the PS2 parser's three

@@ -514,9 +514,10 @@ seen from the authoring side.
       floors instead and `damage::Shield::depleted` is the signal to build it
       on. **Measured against the running original** for the pool's location,
       the two race-option globals, the regeneration branch and the weapons-off
-      halving - which comes out at 1.98 against a predicted 2.00. The damage
-      *coefficient* is still a static read at 84; the probe that would settle
-      it, and the one that provably will not, are on the shield page.
+      halving - which comes out at 1.98 against a predicted 2.00 - and for the
+      **coefficient itself**, which measures `0.035000` exactly on 25 of 25
+      `Ship_Damage` calls spanning a factor of 225 in magnitude. The one claim
+      left unmeasured is `entity + 0x368`, the field gating the damage path.
 - [ ] AI
 - [ ] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and

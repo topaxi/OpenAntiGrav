@@ -54,9 +54,13 @@ use crate::{ShipState, params::Dimensions, wall::WallResponse};
 /// and `0.7` appear in [`crate::wall`]'s scrape friction, which is not a
 /// coincidence and is the point of naming them the same way twice.
 ///
-/// **Confidence 84, and unverified against a running original.** The reading is
-/// branch-clear but static; `scripts/psp_trace_fields.py` carries the `shield`
-/// column so a capture that touches a wall can test it directly.
+/// **Confidence 94, measured against the running original.** A breakpoint on
+/// `Ship_Damage` - where the contact ring is still intact, unlike at
+/// `Ship_UpdateCraft`'s entry - puts `amount / |p|` at `0.035000` on 25 of 25
+/// calls, minimum and maximum identical to six figures over amounts spanning a
+/// factor of 225. The same 25 calls also confirm **one call per ring record**:
+/// a tick with four contacts produced four calls, each matching a different
+/// record. That is what [`crate::wall::WallResponse::impulse_sum`] sums for.
 pub const CONTACT_DAMAGE_SCALE: f32 = 0.05 * 0.7;
 
 /// What `Ship_Damage` multiplies the amount by when the race has weapons off.
