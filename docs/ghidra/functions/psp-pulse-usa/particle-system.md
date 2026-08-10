@@ -32,7 +32,7 @@ ParticleSystem_Update            0x088f5b9c   per-instance tick
 │       ├─ 6: ParticleSystem_EmitBox    0x088fc040
 │       └─ each → ParticleSystem_InitParticle 0x088f6e6c
 │                 ├─ ParticleSystem_ConeVelocity 0x088fc37c   (velocity mode 0/2)
-│                 └─ ParticleSystem_AimedVelocity_q 0x088fc490 (velocity mode 1)
+│                 └─ ParticleSystem_AimedVelocity 0x088fc490 (velocity mode 1)
 └─ ParticleSystem_UpdateParticles 0x088f635c  integrate, colour, size, expire
     └─ ParticleSystem_OnParticleDeath 0x088f4994 ("DEAT"/"DEAS" child spawn)
 ```
@@ -137,10 +137,13 @@ sub-frame-spread flag (`DAT_08b620a0`, resource flag `0x20`) is on.
 Velocity inits: `ParticleSystem_ConeVelocity` (`0x088fc37c`, **80**) draws
 an angle `U(-a, a)` with `a = res+0x58` **in degrees** (the `π/180` is in
 the code), takes its sin/cos, and scales by the speed spread.
-`ParticleSystem_AimedVelocity_q` (`0x088fc490`, **65**) adds the same
-±cone jitter to authored yaw/pitch base angles at `res+0x50`/`+0x54`
-(radians) - `_q` because the axis convention of the two angles was not
-pinned down.
+`ParticleSystem_AimedVelocity` (`0x088fc490`, **88** - the `_q` is
+resolved, see "The emit frame and the velocity dispatch, settled" below)
+builds `y = sin(res+0x50 + jitter)`, horizontal components scaled by the
+matching cosine with their heading taken from the input direction's rotated
+by `res+0x54 + jitter` - so **`+0x50` is an elevation over the emitter's
+horizontal plane and `+0x54` an azimuth offset**, both radians, both
+jittered by `±res+0x58` degrees.
 
 ## `ParticleSystem_InitParticle` (`0x088f6e6c`)
 
@@ -303,6 +306,73 @@ port.
    (`res = resource_base + 0xd20` - the **nested** record, not the
    standalone file of the same name) both emit, counts 1 and 3, the root
    on its 4-tick cadence.
+
+## The emit frame and the velocity dispatch, settled (2026-08-10)
+
+Chased down because `oag_render::sparks` aimed everything at the contact
+normal and its wall hits read as a symmetric starburst where the original's
+read as an upward fan with lines hugging the wall. Three readings, each at
+instruction or byte level, two live-corroborated:
+
+- **`ParticleSystem_EmitSphere`'s velocity dispatch is read whole**:
+  velocity mode `2` builds a tangent (cross of the sphere direction with a
+  second random direction, normalised); **modes `0` and `1` are both
+  radial** - the sphere/hemisphere direction times `Psys_RandSpread(speed)`.
+  A sphere-shaped emitter therefore never calls the aimed or cone velocity
+  functions and its `+0x50`/`+0x54`/`+0x58` fields are **inert** - which a
+  live breakpoint on `ParticleSystem_AimedVelocity`'s exit confirms: across
+  a real crash, `bits` and `_TRAIL` hit it and the sphere-shaped bright
+  spark emitter never does. The hemisphere's forced-positive axis is the
+  **emitter-local `+Y`** (the `abs()` lands on the `y` lane of the
+  direction before scaling).
+- **`ParticleSystem_AimedVelocity`'s axis convention is pinned** (the old
+  `_q`): `res+0x50` is elevation, `res+0x54` azimuth offset - see the
+  velocity-inits paragraph above. Live-measured distributions at its exit
+  match the authored angles exactly: `bits` (authored `0.6283` rad ± 30°)
+  sampled elevations `+6.8°..+50.5°`; `_TRAIL` (authored `0` ± 21.82°)
+  sampled `-18.8°..+21.3°`. Confidence **88**.
+- **The emit frame is the hull locator's, and every locator is a pure
+  translation.** `ShipCollisionFx_Trigger` parents the instance to the
+  nearest `Ship Collision Fx` node; all six such nodes on Assegai's
+  `Ship.vex` (and spot-checks elsewhere) author **identity rotations**. So
+  "emitter-local `+Y`" is world up, and **the contact normal appears
+  nowhere in the effect** - the wall-hugging look of a scrape's sparks is
+  the near-horizontal half of a `+Y` hemisphere, not aiming.
+
+Two file-byte corrections to the collision-spark table found on the way,
+both fed back into `oag_render::sparks`: the **`bits` emitter has the
+gravity flag set** (`flags 0x80000202`, `+0x74 = -0.015` units/tick² -
+an earlier pass read the flag as clear on all four), and
+`WO_SHIP_COLL_SPARK_NODAMAGE.POB` decodes as a two-emitter tree (the bright
+fountain, byte-identical fields, plus `bits`) with no smoke and no
+`_TRAIL` - the variant the trigger spawns when a contact dealt no damage.
+
+## The collision sprite is identified and measured (2026-08-10)
+
+The texture every collision-spark draw binds is now pinned live: with
+breakpoints on all three draw helpers during a wall crash, every hit's
+recorded stream ends in the same `TBP0`/`TSIZE0` pair - one **64x64
+texture**, and PPSSPP's `SaveNewTextures` dump of it is unmistakably the
+`orange_glow2.tga` the `.pob`'s authoring path names: a radial glow with a
+white-hot core (`(253, 235, 220)` at the centre) tightening to saturated
+orange by `r ≈ 0.15` and dimming linearly outward at constant hue. Radially
+averaged measurements: alpha fits `(1-r)^0.92` with a plateau inside
+`r < 0.06`; the texel colour itself also dims essentially linearly while
+staying at saturation `0.98`. `oag_render::sparks`'s shader carries exactly
+that split (measured constants, not the texels - ADR-0006), which is what
+keeps a spark's bright part small: at the same alpha curve, a flat-rgb quad
+reads about twice as wide.
+
+Two honest caveats from the same session. The identification ran during a
+low-speed grinding state and every sampled draw went through the **mode-3
+billboard** helper - no streak-helper hit was observed, so which draw class
+each collision emitter takes in practice rests on the blend-table nibbles
+(`rmode 5 -> 0x60000019`, class 6; `rmode 6 -> 0x70000019`, class 7) and
+the earlier static reads, not on a live dispatch trace. And the texture
+sits in main RAM (`0x090e9ea0` that session) with no WAD entry answering
+any hashable `Data\Psys\Tex\...` name - how the loader resolves the
+authored path into these pixels is still the unlocated
+texture-reference gap recorded in `docs/formats/pob.md`.
 
 ## Open, deliberately
 

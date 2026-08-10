@@ -476,6 +476,14 @@ struct Cli {
     #[arg(long, value_name = "UNITS_PER_S", requires = "pose_boost")]
     pose_speed: Option<f32>,
 
+    /// With `--race --screenshot`: drive the run from a committed `.inputs`
+    /// script (see `scripts/input_script.py` for the format) instead of
+    /// `--hold`/`--press` - the same file `scripts/psp-trace.py --script`
+    /// feeds the emulator, so one authored input produces both sides of a
+    /// visual comparison. Ticks past the script's end hold its last state.
+    #[arg(long, value_name = "FILE.inputs", requires = "race")]
+    input_script: Option<std::path::PathBuf>,
+
     /// Which of the three in-race camera perspectives to fly with, overriding
     /// `[graphics] camera_view` for this run: `internal`, `close` or `far`.
     ///
@@ -1328,6 +1336,16 @@ fn run_race(
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
+                input_script: cli
+                    .input_script
+                    .as_deref()
+                    .map(|path| -> anyhow::Result<_> {
+                        let text = std::fs::read_to_string(path)
+                            .with_context(|| format!("reading {}", path.display()))?;
+                        oag_trace::script::Script::parse(&text)
+                            .map_err(|e| anyhow::anyhow!("parsing {}: {e}", path.display()))
+                    })
+                    .transpose()?,
                 scheme,
                 size: parse_size(&cli.size)?,
                 log_every: cli.log_every,

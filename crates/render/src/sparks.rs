@@ -43,10 +43,16 @@
 //!   two-colour gradients, so each [`Colour::Gradient`] holds the measured
 //!   endpoints and samples uniformly between them. Loading the real table
 //!   from the user's disc at runtime is the exact-fidelity follow-up.
-//! - **Emitter-local frames**: `bits` and `_TRAIL` aim their cones through
-//!   authored yaw/pitch in the hull node's own frame, which this module does
-//!   not model; both cones aim along the contact normal instead. The two
-//!   sphere emitters have no aim at all, so they are exact.
+//! - **Emitter frames are settled, 2026-08-10, and the contact normal is
+//!   out.** The instance is parented to the nearest `Ship Collision Fx`
+//!   locator (`ShipCollisionFx_Trigger` decompiled), every such locator on
+//!   every team authors an **identity rotation** (read from the ships'
+//!   `.vex` bytes), so the emit frame's `+Y` is up. The hemisphere `abs()`es
+//!   that `+Y`; the aimed cones are elevation-over-horizontal
+//!   distributions; nothing anywhere reads the contact normal. See
+//!   [`Shape`]. What remains approximate is only that a banked craft tilts
+//!   the frame with it and this module keeps world up - sub-degree during
+//!   any survivable scrape.
 //! - **Streak end caps**: `ParticleSystem_DrawStreak` (`0x08916820`)
 //!   extends the quad past both points by a stretch factor times the size,
 //!   and **that factor is a hard-coded `1.0`, so this module's cap is not an
@@ -74,12 +80,21 @@
 //!   draw dispatch's inline quad path spans `position ± size` in view
 //!   space, confirming world-unit half-sizes.)
 //!
-//! Also dormant on purpose: every emitter authors a per-tick gravity value
-//! (`resource + 0x74`), and every one of the four has the gravity flag
-//! (`0x200`) clear, so the original never applies it to this effect - the
-//! previous authored `GRAVITY` here is deleted rather than replaced. Sparks
-//! decelerate by per-axis exponential drag instead, from the asset's own
-//! type-3 modifier nodes.
+//! Gravity: an earlier revision read the `0x200` flag as clear on all four
+//! emitters and kept the effect gravity-free. The file's bytes say
+//! otherwise for **`bits`** (`flags 0x80000202`, `+0x74 = -0.015`
+//! units/tick²), and its white debris arcs and falls in the original's own
+//! frames. The other three really do have the flag clear and decelerate by
+//! per-axis exponential drag alone.
+//!
+//! The disc also ships `WO_SHIP_COLL_SPARK_NODAMAGE.POB` - the variant
+//! `ShipCollisionFx_Trigger` spawns when the contact dealt no damage - a
+//! two-emitter tree that is exactly this file's bright fountain plus
+//! `bits`, same bytes for every shared field, no smoke and no embers. A
+//! live time-trial crash spawns the damage tree (its `_TRAIL` instances
+//! were caught emitting), so this module plays the damage set for every
+//! ignite and leaves the no-damage split to whoever wires a damage flag
+//! through [`Sparks::ignite`].
 //!
 //! # Two halves, deliberately
 //!
@@ -117,18 +132,48 @@ pub const TICK_HZ: f32 = 60.0;
 pub const MAX_SPARKS: usize = 64;
 
 /// How a particle picks its initial direction.
+///
+/// Recovered whole 2026-08-10 (`ParticleSystem_EmitSphere` decompiled to its
+/// velocity dispatch, `ParticleSystem_AimedVelocity`'s VFPU read at
+/// instruction level, both live-corroborated - see
+/// `docs/ghidra/functions/psp-pulse-usa/particle-system.md`, "The emit frame
+/// and the velocity dispatch, settled"). Two corrections over the earlier
+/// reading, and both were the reported "boring particles" symptom:
+///
+/// - **The contact normal never enters the original's directions.** The
+///   hemisphere's forced-positive axis is the emitter's local **+Y** - world
+///   up, since every `Ship Collision Fx` locator authors an identity
+///   rotation - and the aimed cones' angles are elevation/azimuth in that
+///   same frame. Sparks hug the wall during a scrape because roughly half a
+///   +Y hemisphere is near-horizontal, not because anything aims along the
+///   wall.
+/// - **Sphere-shaped emitters ignore the aim fields.** Velocity modes 0 and
+///   1 are both radial there; only mode 2 (tangent) differs. The bright
+///   spark fountain is radial-over-hemisphere at 1.56 ± 0.936 units/tick.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Shape {
     /// Uniform over the unit sphere; velocity is radial. The original's own
     /// construction (`z` uniform in `[-1, 1]`, azimuth uniform) is used
     /// verbatim - emitter shape 4 in `ParticleSystem_EmitSphere`.
     Sphere,
-    /// [`Shape::Sphere`] with the component along the contact normal forced
-    /// positive - emitter shape 7, which forces `abs()` on the local up.
+    /// [`Shape::Sphere`] with the world-up component forced positive -
+    /// emitter shape 7, which `abs()`es the emitter-local `+Y`.
     Hemisphere,
-    /// Inside a cone of this half-angle (radians) around the contact
-    /// normal - emitter shape 3, aim approximated (see the module doc).
-    Cone(f32),
+    /// The aimed-velocity law of `ParticleSystem_AimedVelocity`
+    /// (`0x088fc490`): elevation `base ± cone` above the horizontal plane
+    /// (`y = sin`, horizontal scaled by `cos`), azimuth uniform (the input
+    /// heading is the random spawn offset's) plus the same `± cone` jitter,
+    /// which uniform azimuth absorbs. Both angles radians here; the file
+    /// stores the jitter half-angle in degrees and converts exactly as
+    /// [`aimed_direction`] does.
+    Aimed {
+        /// Elevation above the emitter's horizontal plane, radians -
+        /// `res+0x50` (the field an earlier pass labelled "yaw").
+        elevation: f32,
+        /// Jitter half-angle applied to the elevation (and azimuth),
+        /// radians - `res+0x58`, authored in degrees.
+        cone: f32,
+    },
 }
 
 /// How a particle's drawn half-size evolves, world units, before the
@@ -207,11 +252,18 @@ pub struct EmitterSpec {
     /// Ejection speed, centre and spread, world units **per tick**
     /// (`+0x48`/`+0x4c`), multiplied by severity.
     pub speed: (f32, f32),
-    /// Direction distribution (`+0x30` shape, `+0x58` cone half-angle).
+    /// Direction distribution (`+0x30` shape, `+0x50` elevation, `+0x58`
+    /// cone half-angle).
     pub shape: Shape,
     /// Per-axis exponential velocity decay per tick, from the emitter's
     /// type-3 modifier node; `1.0` where the emitter has none.
     pub drag_per_tick: f32,
+    /// Downward acceleration, world units per tick², applied when the
+    /// emitter's `0x200` flag is set - `res+0x74`, negative down. `0.0`
+    /// where the flag is clear. An earlier revision read the flag as clear
+    /// on all four emitters; the file's bytes have it **set on `bits`**
+    /// (`flags 0x80000202`), whose white debris arcs and falls.
+    pub gravity_per_tick: f32,
     /// Drawn half-size channel (`+0x4d8` block), multiplied by severity.
     pub size: Size,
     /// Fraction of life at full alpha before the linear fade to zero
@@ -241,6 +293,7 @@ pub const EMITTERS: [EmitterSpec; 4] = [
         speed: (0.048, 0.0),
         shape: Shape::Sphere,
         drag_per_tick: 0.98,
+        gravity_per_tick: 0.0,
         size: Size::Lerp(0.5, 2.5),
         alpha_hold: 0.215_39,
         alpha_max: 200.0 / 255.0,
@@ -260,6 +313,7 @@ pub const EMITTERS: [EmitterSpec; 4] = [
         speed: (1.56, 0.936),
         shape: Shape::Hemisphere,
         drag_per_tick: 0.85,
+        gravity_per_tick: 0.0,
         size: Size::Random(0.0, 0.312),
         alpha_hold: 0.459,
         alpha_max: 1.0,
@@ -277,8 +331,15 @@ pub const EMITTERS: [EmitterSpec; 4] = [
         per_emission: 2,
         lifetime_ticks: (16.0, 6.0),
         speed: (0.295, 0.142),
-        shape: Shape::Cone(30.0 * std::f32::consts::PI / 180.0),
+        // `res+0x50 = 0.6283` rad (36 deg) elevation, 30 deg jitter -
+        // live-measured at `ParticleSystem_AimedVelocity`'s exit: elevations
+        // +6.8 to +50.5 deg across a real crash.
+        shape: Shape::Aimed {
+            elevation: 0.6283,
+            cone: 30.0 * std::f32::consts::PI / 180.0,
+        },
         drag_per_tick: 1.0,
+        gravity_per_tick: -0.015,
         size: Size::Lerp(0.6, 0.004),
         alpha_hold: 1.0,
         alpha_max: 1.0,
@@ -293,8 +354,15 @@ pub const EMITTERS: [EmitterSpec; 4] = [
         per_emission: 1,
         lifetime_ticks: (20.0, 10.0),
         speed: (0.0, 0.3),
-        shape: Shape::Cone(21.82 * std::f32::consts::PI / 180.0),
+        // `res+0x50 = 0` - the embers scatter about the horizontal plane
+        // (live-measured elevations -18.8 to +21.3 deg), not about the
+        // contact normal.
+        shape: Shape::Aimed {
+            elevation: 0.0,
+            cone: 21.82 * std::f32::consts::PI / 180.0,
+        },
         drag_per_tick: 0.95,
+        gravity_per_tick: 0.0,
         size: Size::Random(0.05, 0.2),
         alpha_hold: 0.459,
         alpha_max: 1.0,
@@ -360,6 +428,9 @@ struct Particle {
     alpha_hold: f32,
     alpha_max: f32,
     drag_per_tick: f32,
+    /// Downward acceleration, world units per second² (converted once at
+    /// spawn from the emitter's per-tick² value).
+    gravity: f32,
     render: Render,
     blend: Blend,
 }
@@ -377,6 +448,7 @@ impl Particle {
         alpha_hold: 1.0,
         alpha_max: 0.0,
         drag_per_tick: 1.0,
+        gravity: 0.0,
         render: Render::Billboard,
         blend: Blend::Additive,
     };
@@ -415,9 +487,6 @@ pub struct Sparks {
     /// particles along the wall rather than clustering at the first contact
     /// point.
     anchor: Vec3,
-    /// Outward contact normal at ignite time, the axis for
-    /// [`Shape::Hemisphere`] and [`Shape::Cone`].
-    normal: Vec3,
     /// Total [`Sparks::ignite`] calls, for the caller's tests: the trigger
     /// cadence is observable here even while particles from consecutive
     /// bursts overlap.
@@ -442,24 +511,23 @@ impl Sparks {
             }; EMITTERS.len()],
             severity: 0.0,
             anchor: Vec3::ZERO,
-            normal: Vec3::Y,
             ignitions: 0,
         }
     }
 
-    /// Starts the four-emitter burst at `point`, with `normal` the outward
-    /// contact normal and `speed` the contact's impact speed in world units
-    /// per second.
+    /// Starts the four-emitter burst at `point`, with `speed` the contact's
+    /// impact speed in world units per second.
     ///
-    /// Nothing spawns here; the first particles appear on the next
-    /// [`Sparks::advance`], exactly like the original's first emitter
+    /// No contact normal: the original's directions never read one - the
+    /// emit frame is the hull locator's, identity-rotated, so up is up (see
+    /// [`Shape`]). Nothing spawns here; the first particles appear on the
+    /// next [`Sparks::advance`], exactly like the original's first emitter
     /// update. Unconditional - the cooldown discipline belongs to the
     /// caller (see the module doc comment).
-    pub fn ignite(&mut self, point: Vec3, normal: Vec3, speed: f32) {
+    pub fn ignite(&mut self, point: Vec3, speed: f32) {
         let intensity = (speed * SEVERITY_SCALE).clamp(0.0, 1.0);
         self.severity = intensity * SEVERITY_SLOPE + SEVERITY_FLOOR;
         self.anchor = point;
-        self.normal = normal;
         for (state, spec) in self.emitters.iter_mut().zip(&EMITTERS) {
             state.ticks_left = spec.duration_ticks;
             state.until_next = 0.0;
@@ -476,7 +544,7 @@ impl Sparks {
         let dt_ticks = dt * TICK_HZ;
         self.anchor = anchor;
 
-        let (severity, anchor, normal) = (self.severity, self.anchor, self.normal);
+        let (severity, anchor) = (self.severity, self.anchor);
         for (state, spec) in self.emitters.iter_mut().zip(&EMITTERS) {
             if state.ticks_left <= 0.0 {
                 continue;
@@ -487,7 +555,7 @@ impl Sparks {
             while state.until_next <= 0.0 {
                 state.until_next += spec.interval_ticks;
                 for _ in 0..spec.per_emission {
-                    let particle = spawn(spec, severity, anchor, normal, rng);
+                    let particle = spawn(spec, severity, anchor, rng);
                     let slot = expendable_slot(&self.particles);
                     self.particles[slot] = particle;
                 }
@@ -513,6 +581,10 @@ impl Sparks {
             // a different step stays correct.
             let drag = particle.drag_per_tick.powf(dt_ticks);
             particle.velocity *= drag;
+            // `bits` alone carries gravity (see `EmitterSpec::gravity_per_tick`):
+            // the original adds it to the velocity each tick, after the
+            // modifier's drag.
+            particle.velocity.y += particle.gravity * dt;
             particle.position += particle.velocity * dt;
             particle.life -= dt;
             if particle.life <= 0.0 {
@@ -561,8 +633,11 @@ impl Sparks {
                 Blend::Additive => &mut additive,
                 Blend::AlphaOver => &mut alpha_over,
             };
-            let (centre, axis_a, axis_b) = match particle.render {
-                Render::Billboard => (particle.position, right * half, up * half),
+            let (centre, axis_a, axis_b, cap) = match particle.render {
+                // `cap = 0.5` makes the shader's cap/cross profile collapse
+                // to the plain radial falloff a round sprite wants - see
+                // `sparks.wgsl`.
+                Render::Billboard => (particle.position, right * half, up * half, 0.5),
                 Render::StreakFromSpawn | Render::StreakPerTick => {
                     let centre = (particle.position + particle.origin) * 0.5;
                     let along = particle.position - particle.origin;
@@ -576,10 +651,16 @@ impl Sparks {
                     // Half the span plus a size-sized cap at each end, the
                     // way the original extends the quad past both points -
                     // a zero-length streak still draws a `half`-sized glow.
-                    (centre, dir * (length * 0.5 + half), perp * half)
+                    // The cap's share of the half-length tells the shader
+                    // where the body's constant-width core begins; the
+                    // original gets the same geometry by stretching a
+                    // single row of `orange_glow2.tga` over the body with
+                    // `v` variation only in the caps.
+                    let half_span = length * 0.5 + half;
+                    (centre, dir * half_span, perp * half, half / half_span)
                 }
             };
-            out.extend_from_slice(&quad(centre, axis_a, axis_b, particle.colour, alpha));
+            out.extend_from_slice(&quad(centre, axis_a, axis_b, cap, particle.colour, alpha));
         }
         (additive, alpha_over)
     }
@@ -606,21 +687,18 @@ fn expendable_slot(particles: &[Particle]) -> usize {
 }
 
 /// One new particle for `spec`, at the emitter's anchor.
-fn spawn(spec: &EmitterSpec, severity: f32, anchor: Vec3, normal: Vec3, rng: &mut Rng) -> Particle {
+fn spawn(spec: &EmitterSpec, severity: f32, anchor: Vec3, rng: &mut Rng) -> Particle {
     let direction = match spec.shape {
         Shape::Sphere => sphere_direction(rng),
         Shape::Hemisphere => {
-            let d = sphere_direction(rng);
-            // The original forces abs() on the local up component
-            // (`ParticleSystem_EmitSphere`'s shape-7 flag); mapped to the
-            // contact frame that is "never into the wall".
-            if d.dot(normal) < 0.0 {
-                d - normal * (2.0 * d.dot(normal))
-            } else {
-                d
-            }
+            // `ParticleSystem_EmitSphere`'s shape-7 branch: `abs()` on the
+            // emitter-local up, which is world up (identity locator
+            // rotations) - never the contact normal.
+            let mut d = sphere_direction(rng);
+            d.y = d.y.abs();
+            d
         }
-        Shape::Cone(half_angle) => cone_direction(normal, half_angle, rng),
+        Shape::Aimed { elevation, cone } => aimed_direction(elevation, cone, rng),
     };
     // `centre + spread * U(-1, 1)`, the original's own random helper
     // (`Psys_RandSpread`), units per tick converted to per second once.
@@ -657,6 +735,7 @@ fn spawn(spec: &EmitterSpec, severity: f32, anchor: Vec3, normal: Vec3, rng: &mu
         alpha_hold: spec.alpha_hold,
         alpha_max: spec.alpha_max,
         drag_per_tick: spec.drag_per_tick,
+        gravity: spec.gravity_per_tick * TICK_HZ * TICK_HZ,
         render: spec.render,
         blend: spec.blend,
     }
@@ -688,22 +767,22 @@ fn sphere_direction(rng: &mut Rng) -> Vec3 {
     Vec3::new(r * cos_p, r * sin_p, z)
 }
 
-/// A unit direction inside `half_angle` of `normal`.
+/// The aimed-velocity direction: elevation `base ± cone` over the
+/// horizontal plane, azimuth uniform.
 ///
-/// Not solid-angle-uniform - it biases slightly toward the cone's edge - but
-/// the original's own cone (`ParticleSystem_ConeVelocity`) is a two-angle
-/// jitter that is not solid-angle-uniform either, so the approximation is
-/// not worth a rejection sampler over.
-fn cone_direction(normal: Vec3, half_angle: f32, rng: &mut Rng) -> Vec3 {
-    let tangent = normal.cross(Vec3::Y).try_normalize().unwrap_or(Vec3::X);
-    let bitangent = normal.cross(tangent);
-
-    let theta = rng.next_f32() * half_angle;
-    let phi = rng.next_f32() * std::f32::consts::TAU;
-    let (sin_t, cos_t) = theta.sin_cos();
-    let (sin_p, cos_p) = phi.sin_cos();
-
-    (normal * cos_t + (tangent * cos_p + bitangent * sin_p) * sin_t).normalize()
+/// `ParticleSystem_AimedVelocity`'s own arithmetic (`0x088fc490`, read at
+/// instruction level): `y = sin(elevation)`, the horizontal components
+/// scaled by `cos(elevation)`, the heading taken from the (uniform) spawn
+/// direction plus an authored offset that is `0` on every collision
+/// emitter - uniform plus jitter is uniform, so one draw serves.
+/// Live-measured distributions match: `bits` +6.8 to +50.5 degrees,
+/// `_TRAIL` -18.8 to +21.3.
+fn aimed_direction(elevation: f32, cone: f32, rng: &mut Rng) -> Vec3 {
+    let elev = elevation + cone * signed_unit(rng);
+    let azimuth = rng.next_f32() * std::f32::consts::TAU;
+    let (sin_e, cos_e) = elev.sin_cos();
+    let (sin_a, cos_a) = azimuth.sin_cos();
+    Vec3::new(cos_a * cos_e, sin_e, sin_a * cos_e)
 }
 
 /// Six vertices - two triangles - for one camera-facing quad.
@@ -713,14 +792,24 @@ fn cone_direction(normal: Vec3, half_angle: f32, rng: &mut Rng) -> Vec3 {
 /// `Z:\WipeoutPSP\X2\Data\Psys\Tex\quakesmoke32x32.tga`, a soft 32x32
 /// puff - which the falloff approximates; decoding the shipped texture is a
 /// possible follow-up now that its identity is known.
-fn quad(centre: Vec3, right: Vec3, up: Vec3, colour: [f32; 3], alpha: f32) -> [GpuVertex; 6] {
+fn quad(
+    centre: Vec3,
+    right: Vec3,
+    up: Vec3,
+    cap: f32,
+    colour: [f32; 3],
+    alpha: f32,
+) -> [GpuVertex; 6] {
     let corner = |sx: f32, sy: f32, u: f32, v: f32| GpuVertex {
         position: (centre + right * sx + up * sy).to_array(),
         normal: [0.0, 0.0, 1.0],
         colour: [colour[0], colour[1], colour[2], alpha],
         texcoord: [u, v],
-        // Emissive: sparks must not pick up the mesh light rig.
-        lit: 0.0,
+        // The `lit` slot is repurposed by this pipeline: sparks are emissive
+        // (never lit by the mesh rig, which is a different pipeline), so the
+        // attribute carries the cap fraction the fragment profile needs -
+        // see `sparks.wgsl`.
+        lit: cap,
         v_cycles: 0.0,
     };
     let bl = corner(-1.0, -1.0, 0.0, 1.0);
@@ -990,7 +1079,7 @@ mod tests {
 
     fn ignited(speed: f32) -> (Sparks, Rng) {
         let mut sparks = Sparks::new();
-        sparks.ignite(Vec3::ZERO, Vec3::Y, speed);
+        sparks.ignite(Vec3::ZERO, speed);
         (sparks, rng())
     }
 
@@ -1053,14 +1142,17 @@ mod tests {
         assert_eq!(gentle.alive_count(), hard.alive_count());
 
         // Same seed, same draw sequence: every particle pair differs only
-        // by the severity factor, 2.4 / 0.4 = 6x.
+        // by the severity factor, 2.4 / 0.4 = 6x. Gravity is authored per
+        // emitter and NOT severity-scaled (`ParticleSystem_DeriveScaledParams`
+        // multiplies ejection speed and extent only), so back it out of the
+        // one tick both pools have integrated before comparing.
         let ratio = (SEVERITY_SLOPE + SEVERITY_FLOOR) / SEVERITY_FLOOR;
         for (g, h) in gentle.particles.iter().zip(hard.particles.iter()) {
             if !g.alive() {
                 continue;
             }
-            let g_speed = g.velocity.length();
-            let h_speed = h.velocity.length();
+            let g_speed = (g.velocity - Vec3::Y * (g.gravity * DT)).length();
+            let h_speed = (h.velocity - Vec3::Y * (h.gravity * DT)).length();
             if g_speed > 0.0 {
                 assert!((h_speed / g_speed - ratio).abs() < 1e-3);
             }
@@ -1092,7 +1184,7 @@ mod tests {
     fn particles_spawn_at_the_anchor_the_caller_moves() {
         let (mut sparks, mut r) = ignited(80.0);
         let point = Vec3::new(3.0, 4.0, 5.0);
-        sparks.ignite(point, Vec3::Y, 80.0);
+        sparks.ignite(point, 80.0);
 
         // The hull node has moved 2 units by the first advance.
         let anchor = point + Vec3::new(2.0, 0.0, 0.0);
@@ -1143,32 +1235,34 @@ mod tests {
         // caller ever could.
         for i in 0..200 {
             if i % 10 == 0 {
-                sparks.ignite(Vec3::ZERO, Vec3::Y, 200.0);
+                sparks.ignite(Vec3::ZERO, 200.0);
             }
             sparks.advance(DT, Vec3::ZERO, &mut r);
             assert!(sparks.alive_count() <= MAX_SPARKS);
         }
     }
 
-    /// The hemisphere never ejects into the wall, mirroring the original's
-    /// abs() on the up component.
+    /// The hemisphere never ejects downward, mirroring the original's
+    /// abs() on the emitter-local up (`ParticleSystem_EmitSphere` shape 7 -
+    /// world up through the identity locator rotations, never the contact
+    /// normal).
     #[test]
-    fn hemisphere_particles_never_eject_into_the_wall() {
+    fn hemisphere_particles_never_eject_downward() {
         let (mut sparks, mut r) = ignited(80.0);
-        let normal = Vec3::new(0.0, 0.0, 1.0);
-        sparks.ignite(Vec3::ZERO, normal, 80.0);
+        sparks.ignite(Vec3::ZERO, 80.0);
         for _ in 0..6 {
             sparks.advance(DT, Vec3::ZERO, &mut r);
         }
         // Only the hemisphere emitter is direction-constrained; sphere
         // particles may go anywhere, so check the invariant on the ones
-        // that are constrained by construction: no particle from the
-        // hemisphere spec starts with negative normal component. All
-        // hemisphere particles have alpha_max 1.0 and drag 0.85 - unique
-        // among the four specs - which identifies them without a tag field.
+        // that are constrained by construction. All hemisphere particles
+        // have alpha_max 1.0 and drag 0.85 - unique among the four specs -
+        // which identifies them without a tag field. Spawn velocity is
+        // upward; one tick of drag cannot flip its sign (no gravity on this
+        // emitter), so a small negative tolerance suffices.
         for p in sparks.particles.iter().filter(|p| p.alive()) {
             if p.drag_per_tick == 0.85 {
-                assert!(p.velocity.dot(normal) >= -1e-4);
+                assert!(p.velocity.y >= -1e-4);
             }
         }
     }
@@ -1177,8 +1271,8 @@ mod tests {
     fn ignitions_counts_every_ignite() {
         let mut sparks = Sparks::new();
         assert_eq!(sparks.ignitions(), 0);
-        sparks.ignite(Vec3::ZERO, Vec3::Y, 10.0);
-        sparks.ignite(Vec3::ZERO, Vec3::Y, 10.0);
+        sparks.ignite(Vec3::ZERO, 10.0);
+        sparks.ignite(Vec3::ZERO, 10.0);
         assert_eq!(sparks.ignitions(), 2);
     }
 }
