@@ -804,6 +804,25 @@ machine and this checkout.
 - **Judge line width at native 480x272 only.** Anything upscaled makes a
   one-pixel authored line a magnification artefact argument rather than a
   fidelity one.
+- **`--features native-video` makes the boot fifty times slower, and `just play`
+  turns it on** (Linux only, `justfile:25`). Measured on `pulse-psp-eu.chd`,
+  caches warm: **4.9 s** of boot with it (intro 2.7, backdrop 2.2) against
+  **0.08 s** without. `GstDecoder::open` decodes every frame into memory before
+  it returns - ~288 MiB for the two reels - where the AV1 cache path decodes on
+  demand. [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md) chose
+  that deliberately but costed it at 270 frames and 53 MiB, which is the
+  *backdrop*; the intro is 1200. **The boot now prints its own timings** (`the
+  boot's first half took ...`, `the boot's movies took ...`), so this is
+  re-measurable rather than folklore, and it is covered by the loading screen
+  rather than by an empty desktop. Making the GStreamer path lazy would remove
+  the wait rather than hide it, and is not done.
+- **Two things convert into `data/cache/movies` and they must never overlap.**
+  The boot's own two reels and the `--prefetch` worker both shell out to
+  `ffmpeg`, and two processes writing one cache file is a corrupt file rather
+  than a race that resolves. The ordering used to come free from `boot::load`
+  being blocking; now that the movies run on `boot::MediaWorker`,
+  `Session::start_prefetch` is the only thing holding it, and it is one `if` in
+  `Session::frame`.
 
 ## Verification status: what to lean on
 

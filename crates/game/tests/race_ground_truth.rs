@@ -103,6 +103,25 @@ fn load() -> Option<race::Loaded> {
     Some(loaded)
 }
 
+/// The grid measurement's own scenario: [`Options::opponents`] forced on, since
+/// none of the three modes this crate implements races with a grid on its own -
+/// see `Mode::has_opponents`. Only [`our_grid_is_the_originals_grid`] wants this;
+/// every other test in this file wants a solo ship, which is what [`load`] gives.
+fn load_with_opponents() -> Option<race::Loaded> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: SpeedClass::Venom,
+        opponents: true,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    for line in &loaded.report {
+        println!("{line}");
+    }
+    Some(loaded)
+}
+
 /// The track's own scale for "still roughly on the track".
 ///
 /// Two of the widest half-width the track has anywhere, which on the default track
@@ -770,7 +789,9 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_whole_grid_lands_on_the_track() {
-    let Some(loaded) = load() else { return };
+    let Some(loaded) = load_with_opponents() else {
+        return;
+    };
     let bound = envelope(&loaded);
     let colliders = loaded.setup.collision.clone();
     let race = race::Race::start(loaded.setup);
@@ -870,7 +891,9 @@ const ORIGINAL_GRID: [[f32; 3]; 8] = [
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn our_grid_is_the_originals_grid() {
-    let Some(loaded) = load() else { return };
+    let Some(loaded) = load_with_opponents() else {
+        return;
+    };
     let race = race::Race::start(loaded.setup);
     assert_eq!(race.ship_count(), 8);
 

@@ -332,6 +332,17 @@ struct Cli {
     #[arg(long)]
     collision: bool,
 
+    /// Spawn the rest of the grid even though `--mode` races solo in the
+    /// original.
+    ///
+    /// A verification aid - see `race::Options::opponents` - for looking at
+    /// the measured grid layout without a mode that actually fields one.
+    /// `time_trial`, `speed_lap` and `zone` all race with `AI DIFFICULTY`
+    /// greyed to `N/A` on the real Custom Race screen, and this flag exists
+    /// despite that rather than because of it.
+    #[arg(long)]
+    opponents: bool,
+
     /// In a race, print a telemetry line every this many ticks. Zero prints
     /// none.
     #[arg(long, default_value_t = 60)]
@@ -654,7 +665,7 @@ fn main() -> Result<()> {
     // headless, so that a player never hears the front end before the window
     // that shows it exists. See the two call sites below and
     // `App::open`.
-    let mut audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
+    let audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
     // Surveyed once, here, because it is what decides whether the AUDIO page
     // offers MUSIC SOURCE at all - and answering it means opening every disc
     // image on the search path, which is not something to do while a menu is on
@@ -693,6 +704,7 @@ fn main() -> Result<()> {
         ribbon: cli.ribbon,
         collision: cli.collision,
         lod: cli.lod.unwrap_or(settings.graphics.lod),
+        opponents: cli.opponents,
         pose,
         camera,
     };
@@ -755,7 +767,149 @@ fn main() -> Result<()> {
         no_video: cli.no_video,
     };
 
-    let mut loaded = boot::load(&options)?;
+    // Every leg with no window loads the whole boot here and now, blocking, and
+    // then leaves. Only a window has anywhere to *show* a wait, so only a
+    // window earns the machinery below that defers one.
+    if cli.dry_run || cli.screenshot.is_some() {
+        return run_windowless(
+            cli,
+            &options,
+            &settings,
+            race_options,
+            anisotropy,
+            audio,
+            music_discs,
+        );
+    }
+
+    // **The cheap half of the boot, and the only part a window waits on.**
+    // Measured on the EU disc: 0.05 s here against 4.9 s for the movies, which
+    // `MediaWorker` now runs on a thread of its own while winit opens the
+    // window and the loading screen goes up over it. Before this split the
+    // whole 5 seconds ran before winit had been asked for a window at all, so
+    // there was nothing on screen to say the game had started - which is the
+    // bug this shape exists to fix. See `boot::Shell`.
+    let (mut boot_shell, archives) = boot::load_shell(&options)?;
+    // Drained rather than iterated: `boot::assemble` appends its own lines to
+    // this same list, and the hand-off prints what it finds there. Leaving
+    // these in would print the whole first half twice, seconds apart, which
+    // reads as the disc having been opened again.
+    for line in boot_shell.report.drain(..) {
+        println!("{line}");
+    }
+    let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);
+
+    // Parsed here rather than when the menus open, so a broken definition is a
+    // startup error and not something a player meets after the intro.
+    let definition = match cli.menu.as_deref() {
+        Some(path) => {
+            let text = std::fs::read_to_string(path)
+                .with_context(|| format!("reading {}", path.display()))?;
+            menu::Definition::parse(&text).with_context(|| format!("parsing {}", path.display()))?
+        }
+        None => menu::Definition::parse(menu::BUILT_IN)
+            .context("parsing the built-in menu definition")?,
+    };
+    // The three lists that come off the disc rather than out of the definition:
+    // what is raceable, who can be raced for, and what languages exist. All
+    // carry a label the player reads and a value the settings file stores, and
+    // on a circuit or a team those are different strings - `16_Track` and
+    // `Mantis` against their localised names, which are shipped content and
+    // only ever live in memory.
+    let shell = Shell {
+        definition,
+        modes: menu::mode_choices(&boot_shell.strings),
+        teams: boot_shell
+            .teams
+            .iter()
+            .map(|team| menu::Choice::labelled(&team.id, boot_shell.strings.get_or_id(&team.id)))
+            .collect(),
+        tracks: boot_shell
+            .tracks
+            .iter()
+            .map(|track| {
+                (
+                    track.clone(),
+                    boot_shell.strings.get_or_id(&track.id).to_string(),
+                )
+            })
+            .collect(),
+        languages: boot_shell
+            .languages
+            .iter()
+            .map(|language| menu::Choice::labelled(&language.name, &language.native_name))
+            .collect(),
+        font: boot_shell.font.clone(),
+        sprites: boot_shell.sprites.clone(),
+    };
+
+    println!("\n{MENU_KEYS}");
+
+    // Unconditional now, where it used to be `--prefetch` only. Its two extra
+    // archive reads used to buy nothing on a boot that went straight to the
+    // front end; every windowed boot now shows the loading screen while the
+    // movies decode, so every windowed boot needs the tips and the glow strip.
+    let loading_assets = {
+        let assets = loading::Assets::load(&source, &boot_shell.strings);
+        for note in &assets.notes {
+            println!("{note}");
+        }
+        assets
+    };
+
+    let event_loop = EventLoop::new()?;
+    // Poll rather than Wait: the intro is animated whether or not input arrives.
+    event_loop.set_control_flow(ControlFlow::Poll);
+
+    let mut app = App {
+        boot_shell: Some(boot_shell),
+        media: Some(media),
+        boot_overlay: cli.overlay,
+        pick_language: cli.pick_language,
+        race: None,
+        race_options,
+        trace: cli.trace,
+        log_every: cli.log_every,
+        anisotropy,
+        scheme: resolve_scheme(&cli, &settings),
+        settings,
+        shell: Some(shell),
+        audio: Some(audio),
+        music_discs,
+        // Asked for, not started: see `App::prefetch`.
+        prefetch: cli.prefetch.then(|| prefetch::Options {
+            source: source.clone(),
+            movies: options.cache.clone(),
+            audio: boot::default_audio_cache_dir(),
+        }),
+        loading_assets,
+        state: None,
+    };
+    event_loop.run_app(&mut app)?;
+    app.finish_audio()?;
+    app.finish_prefetch();
+    Ok(())
+}
+
+/// Every leg that never opens a window: `--dry-run` and the three captures.
+///
+/// **Split off from `main` because the boot is loaded differently here.** A
+/// window defers the movies onto a worker and covers the wait with the loading
+/// screen (`boot::MediaWorker`); none of these legs has anywhere to show that,
+/// and a capture must not race a worker for the frames it is about to draw, so
+/// every one of them takes the whole boot in one blocking `boot::load` exactly
+/// as the game always did. The body below is that former part of `main`,
+/// unchanged.
+fn run_windowless(
+    cli: Cli,
+    options: &boot::Options,
+    settings: &settings::Settings,
+    race_options: race::Options,
+    anisotropy: Anisotropy,
+    mut audio: audio::Audio,
+    music_discs: audio::MusicDiscs,
+) -> Result<()> {
+    let mut loaded = boot::load(options)?;
     if cli.overlay {
         loaded.frontend.set_overlay(true);
     }
@@ -788,13 +942,13 @@ fn main() -> Result<()> {
     // cached and the worker's planning pass skips them by name.
     let mut prefetch = cli.prefetch.then(|| {
         prefetch::Prefetch::spawn(prefetch::Options {
-            source: source.clone(),
+            source: options.source.clone(),
             movies: options.cache.clone(),
             audio: boot::default_audio_cache_dir(),
         })
     });
 
-    let scheme = resolve_scheme(&cli, &settings);
+    let scheme = resolve_scheme(&cli, settings);
 
     // A source with no movie at all - which is every PS2 source, whose intro is
     // an MPEG-2 program stream outside the archives - has no video format
@@ -808,7 +962,7 @@ fn main() -> Result<()> {
     // movie and reaches the GPU through `capture::loading`.
     if let (Some(path), Some(spec)) = (&cli.screenshot, &cli.loading_screen) {
         let progress = parse_progress(spec)?;
-        let assets = loading::Assets::load(&source, &loaded.strings);
+        let assets = loading::Assets::load(&options.source, &loaded.strings);
         for note in &assets.notes {
             println!("{note}");
         }
@@ -832,15 +986,9 @@ fn main() -> Result<()> {
     }
 
     if let Some(path) = cli.screenshot {
-        // Started here rather than in `main`'s setup, and only on this branch:
-        // a capture has no window to lag behind, but it does have a tick loop,
-        // and the music has to be running before that loop's first tick or the
-        // dump would open on silence. See the comment above `Audio::open`.
-        audio.start_music(
-            &music_discs,
-            settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
-        );
+        // No `start_music` here: this leg runs the boot sequence, so the music
+        // waits behind the intro exactly as the window's does, and `capture::run`
+        // starts it from its own tick loop. See `Audio::start_music`.
         capture::run(
             loaded,
             video_format,
@@ -889,90 +1037,7 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
-
-    // Parsed here rather than when the menus open, so a broken definition is a
-    // startup error and not something a player meets after the intro.
-    let definition = match cli.menu.as_deref() {
-        Some(path) => {
-            let text = std::fs::read_to_string(path)
-                .with_context(|| format!("reading {}", path.display()))?;
-            menu::Definition::parse(&text).with_context(|| format!("parsing {}", path.display()))?
-        }
-        None => menu::Definition::parse(menu::BUILT_IN)
-            .context("parsing the built-in menu definition")?,
-    };
-    // The three lists that come off the disc rather than out of the definition:
-    // what is raceable, who can be raced for, and what languages exist. All
-    // carry a label the player reads and a value the settings file stores, and
-    // on a circuit or a team those are different strings - `16_Track` and
-    // `Mantis` against their localised names, which are shipped content and
-    // only ever live in memory.
-    let shell = Shell {
-        definition,
-        modes: menu::mode_choices(&loaded.strings),
-        teams: loaded
-            .teams
-            .iter()
-            .map(|team| menu::Choice::labelled(&team.id, loaded.strings.get_or_id(&team.id)))
-            .collect(),
-        tracks: loaded
-            .tracks
-            .iter()
-            .map(|track| {
-                (
-                    track.clone(),
-                    loaded.strings.get_or_id(&track.id).to_string(),
-                )
-            })
-            .collect(),
-        languages: loaded
-            .languages
-            .iter()
-            .map(|language| menu::Choice::labelled(&language.name, &language.native_name))
-            .collect(),
-        font: loaded.font.clone(),
-        sprites: loaded.sprites.clone(),
-    };
-
-    println!("\n{MENU_KEYS}");
-
-    // Only when there is a conversion to wait on. Two extra archive reads, and
-    // they buy nothing on a boot that goes straight to the front end - which is
-    // every boot without `--prefetch`, and which is why this is not in
-    // `boot::load`.
-    let loading_assets = prefetch.is_some().then(|| {
-        let assets = loading::Assets::load(&source, &loaded.strings);
-        for note in &assets.notes {
-            println!("{note}");
-        }
-        assets
-    });
-
-    let event_loop = EventLoop::new()?;
-    // Poll rather than Wait: the intro is animated whether or not input arrives.
-    event_loop.set_control_flow(ControlFlow::Poll);
-
-    let mut app = App {
-        boot: Some(loaded),
-        race: None,
-        video_format,
-        race_options,
-        trace: cli.trace,
-        log_every: cli.log_every,
-        anisotropy,
-        scheme,
-        settings,
-        shell: Some(shell),
-        audio: Some(audio),
-        music_discs,
-        prefetch: prefetch.take(),
-        loading_assets,
-        state: None,
-    };
-    event_loop.run_app(&mut app)?;
-    app.finish_audio()?;
-    app.finish_prefetch();
-    Ok(())
+    unreachable!("every branch above returns")
 }
 
 /// Turns a comma-separated list of abstract button names into a mask.
@@ -1301,9 +1366,11 @@ fn run_race(
     // Poll rather than Wait: the simulation runs whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = App {
-        boot: None,
+        boot_shell: None,
+        media: None,
+        boot_overlay: false,
+        pick_language: false,
         race: Some(loaded),
-        video_format: None,
         race_options: options,
         trace: cli.trace,
         log_every: cli.log_every,
@@ -1321,7 +1388,9 @@ fn run_race(
         // the front end's movies and sounds, which a race never opens - so
         // there is nothing to wait on here and no loading screen to wait with.
         prefetch: None,
-        loading_assets: None,
+        // Nor anything to draw one with: this route never opens the archives
+        // the tips and the glow strip come out of.
+        loading_assets: loading::Assets::default(),
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -1330,11 +1399,23 @@ fn run_race(
 
 /// One application handler for both ways in, because there is one window.
 struct App {
-    /// The boot sequence, when the game boots into the front end.
-    boot: Option<boot::Boot>,
+    /// The cheap half of the boot, loaded before the window opened.
+    ///
+    /// Half a boot rather than a whole one because the other half - the movies -
+    /// is still decoding on [`Self::media`] while this window opens. See
+    /// `boot::Shell`.
+    boot_shell: Option<boot::Shell>,
+    /// The movies, arriving on a thread of their own.
+    ///
+    /// Joined by [`Session::finish_loading`], which is also where the two
+    /// halves become a `boot::Boot`.
+    media: Option<boot::MediaWorker>,
+    /// `--overlay`, applied to the sequence once it exists.
+    boot_overlay: bool,
+    /// `--pick-language`: show the picker even when the settings name one.
+    pick_language: bool,
     /// A race loaded before the window opened, which is what `--race` does.
     race: Option<race::Loaded>,
-    video_format: Option<VideoFormat>,
     /// What a race started from `Launch Game` is flown on.
     race_options: race::Options,
     trace: bool,
@@ -1360,13 +1441,19 @@ struct App {
     /// run rather than of what is on screen - and it is here rather than in
     /// `Shell` because `--race` has no shell and still has music.
     music_discs: audio::MusicDiscs,
-    /// The conversion `--prefetch` started, and the only reason there is a
-    /// loading screen at all. `None` on every ordinary boot.
-    prefetch: Option<prefetch::Prefetch>,
-    /// The wave's glow strip and the disc's tips, read only when there is a
-    /// loading screen to draw them on. `None` without `--prefetch`, which is
-    /// what keeps an ordinary boot's two extra archive reads at zero.
-    loading_assets: Option<loading::Assets>,
+    /// What `--prefetch` asked for, **not started yet**.
+    ///
+    /// It may not start until the boot's own movies are done: both convert
+    /// through `ffmpeg` into the same cache directory, and two processes
+    /// writing one file is a corrupt file rather than a race that resolves.
+    /// [`Session::start_prefetch`] is where it actually spawns, the moment
+    /// [`Self::media`] reports finished. `None` on every ordinary boot.
+    prefetch: Option<prefetch::Options>,
+    /// The wave's glow strip and the disc's tips.
+    ///
+    /// Read on every windowed boot now, not only under `--prefetch`: the
+    /// loading screen covers the movie decode on all of them.
+    loading_assets: loading::Assets,
     state: Option<Session>,
 }
 
@@ -1414,32 +1501,6 @@ impl App {
         // it is given, so the backdrop overflowed the screen on every aspect.
         // Silent on the PSP, where the two grids are the same numbers, and
         // invisible to `--menu-page`, which goes through `capture.rs`.
-        let space = frontend::Space::PSP;
-        let (backdrop, backdrop_shape) =
-            match self.boot.as_mut().and_then(|loaded| loaded.backdrop.take()) {
-                Some(movie) => {
-                    let shape = BackdropShape {
-                        frame_rate: movie.frame_rate,
-                        // Pillarboxed rather than stretched, because the PS2's cut is
-                        // not the PSP's shape: an `.IPF` declares its own display
-                        // aspect. The PSP's `.PMF` is already 480x272, so this is the
-                        // full screen there and changes nothing.
-                        rect: frontend::pillarbox_in(space, movie.display_aspect),
-                    };
-                    let (width, height) = (movie.width, movie.height);
-                    // No frames is no backdrop, and then there is no shape to keep
-                    // either: the two are `Some` and `None` together everywhere below.
-                    match movie.frames {
-                        Some(frames) => (
-                            Some(movie::Feed::spawn(frames, true, width, height)),
-                            Some(shape),
-                        ),
-                        None => (None, None),
-                    }
-                }
-                None => (None, None),
-            };
-
         // Taken before the stage rather than after it, because building the
         // front end is what starts the intro's sound and that needs the mixer
         // in hand. Moved rather than cloned: there is one mixer per run, and a
@@ -1448,21 +1509,20 @@ impl App {
         let Some(mut audio) = self.audio.take() else {
             return Ok(None);
         };
-        // Started here, with the window already open above, rather than back
-        // in `main` before the front end's own load - which used to run
-        // seconds of `Data.wad` parsing and `ffmpeg` transcoding with the
-        // music already looping and no window yet on screen to account for
-        // it. This is the earliest point a player has something to look at,
-        // so it is also the latest point sound may start without noticeably
-        // leading the picture.
-        audio.start_music(
-            &self.music_discs,
-            self.settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
-        );
-
         let stage = if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
+            // Straight away on this leg only: `--race` has no boot sequence, so
+            // there is no intro for the music to wait behind. The front end's
+            // legs below start it from the tick loop instead, the moment the
+            // sequence leaves its movie - see `Audio::start_music`. Here rather
+            // than back in `main` before the load, which used to run seconds of
+            // parsing and transcoding with the music already looping and no
+            // window yet on screen to account for it.
+            audio.start_music(
+                &self.music_discs,
+                self.settings.audio.music_source,
+                &boot::default_audio_cache_dir(),
+            );
             Stage::race(
                 &gpu,
                 loaded,
@@ -1471,16 +1531,20 @@ impl App {
                 &self.settings,
                 self.scheme,
             )?
-        } else if let Some(loaded) = self.boot.take() {
-            // The loading screen only exists while there is something to wait
-            // for. Without `--prefetch` there is nothing, and the front end
-            // takes the window straight away exactly as it always has.
-            match (&self.prefetch, &self.loading_assets) {
-                (Some(_), Some(assets)) => {
-                    Stage::loading(&gpu, loaded, assets, self.video_format, self.trace)?
-                }
-                _ => Stage::frontend(&gpu, loaded, self.video_format, self.trace, &mut audio)?,
-            }
+        } else if let Some(shell) = self.boot_shell.take() {
+            // **Always the loading screen**, where this used to be `--prefetch`
+            // only. Every windowed boot now has something to wait for - the
+            // movies, which are still decoding on `self.media` as this window
+            // opens - and this is the frame that says so instead of a desktop
+            // with nothing on it. `finish_loading` swaps in the front end the
+            // moment they land.
+            Stage::loading(
+                &gpu,
+                shell,
+                self.media.take(),
+                &self.loading_assets,
+                self.trace,
+            )?
         } else {
             return Ok(None);
         };
@@ -1526,11 +1590,18 @@ impl App {
             settings: self.settings.clone(),
             shell: self.shell.clone(),
             quit: false,
-            backdrop,
-            backdrop_shape,
-            // Moved rather than borrowed, for the same reason the mixer is:
-            // there is one worker per run, and the session is what polls it.
-            prefetch: self.prefetch.take(),
+            // Both filled by `finish_loading`, off the movies the boot's own
+            // worker is still decoding as this window opens. `--race` never
+            // fills them at all.
+            backdrop: None,
+            backdrop_shape: None,
+            // Nothing running yet on either line: the conversion may not start
+            // until the boot's own movies are done with the cache, which is
+            // what `start_prefetch` waits for.
+            prefetch: None,
+            prefetch_pending: self.prefetch.take(),
+            boot_overlay: self.boot_overlay,
+            pick_language: self.pick_language,
         }))
     }
 
@@ -2034,18 +2105,21 @@ enum Stage {
 }
 
 impl Stage {
-    /// The loading screen, holding the front end it will hand the window to.
+    /// The loading screen, holding the half-boot it will hand the window to.
     ///
     /// **The boot sequence is carried as data rather than built and paused.**
     /// [`Stage::frontend`] spawns the intro's decode thread, and starting that
     /// ten minutes before anything reads a frame would leave a worker filling a
     /// ring nobody drains. So the front end is built at the hand-off, in
-    /// [`Session::finish_loading`], and until then this owns the `Boot`.
+    /// [`Session::finish_loading`], and until then this owns the two halves.
+    ///
+    /// `media` is the worker still decoding the movies, `None` only if it was
+    /// already taken - which cannot happen today, the window opening once.
     fn loading(
         gpu: &Gpu,
-        loaded: boot::Boot,
+        shell: boot::Shell,
+        media: Option<boot::MediaWorker>,
         assets: &loading::Assets,
-        video_format: Option<VideoFormat>,
         trace: bool,
     ) -> Result<Self> {
         // The **disc's** font, not the built-in 5x7 set: the tips are the
@@ -2058,8 +2132,8 @@ impl Stage {
             &gpu.queue,
             gpu.config.format,
             None,
-            loaded.font.clone(),
-            &loaded.sprites,
+            shell.font.clone(),
+            &shell.sprites,
         )?;
         // Sample count 1, matching `upscale::Framebuffer`'s target, which is
         // what this draws into.
@@ -2071,12 +2145,12 @@ impl Stage {
             1,
         );
         Ok(Self::Loading(Box::new(LoadingStage {
-            atlas: loaded.font.clone(),
+            atlas: shell.font.clone(),
             renderer,
             wave,
             screen: loading::Screen::new(assets.tips.clone()),
-            boot: Some(loaded),
-            video_format,
+            shell: Some(shell),
+            media,
             trace,
         })))
     }
@@ -2213,6 +2287,7 @@ impl Stage {
             sky_model,
             pad_model,
             weapon_pad_model,
+            setup.mode,
             boost_model,
             flare,
             noise,
@@ -2440,11 +2515,22 @@ struct LoadingStage {
     /// The atlas the layout measures its wrapping and eliding with. [`Renderer`]
     /// owns a copy and does not lend it out.
     atlas: oag_game::font::Atlas,
-    /// Handed to [`Stage::frontend`] when the fade runs out. `None` once taken,
-    /// which is also what stops the hand-off happening twice.
-    boot: Option<boot::Boot>,
-    video_format: Option<VideoFormat>,
+    /// The cheap half of the boot, waiting for the other one. `None` once
+    /// taken, which is also what stops the hand-off happening twice.
+    shell: Option<boot::Shell>,
+    /// The movies, still decoding. **What this screen is actually waiting for**
+    /// on an ordinary boot - `--prefetch`, when it is on, is waited for as well.
+    media: Option<boot::MediaWorker>,
     trace: bool,
+}
+
+impl LoadingStage {
+    /// Whether the movies have landed, so the fade may start.
+    fn media_ready(&self) -> bool {
+        self.media
+            .as_ref()
+            .is_none_or(boot::MediaWorker::is_finished)
+    }
 }
 
 impl LoadingStage {
@@ -2889,6 +2975,15 @@ struct Session {
     /// still to convert. Here it outlives every stage and is joined once, at the
     /// exit, by [`App::finish_prefetch`].
     prefetch: Option<prefetch::Prefetch>,
+    /// What `--prefetch` asked for, until it is safe to start. See
+    /// [`App::prefetch`] and [`Session::start_prefetch`].
+    prefetch_pending: Option<prefetch::Options>,
+    /// `--overlay`, applied when the sequence is assembled. Not to be confused
+    /// with [`Self::overlay`] above, which is the performance overlay's own
+    /// renderer: this one draws the intro's frame counter.
+    boot_overlay: bool,
+    /// `--pick-language`, read at the same moment.
+    pick_language: bool,
 }
 
 /// What the menus need to know about the backdrop besides its pixels.
@@ -3043,13 +3138,37 @@ impl Session {
         }
     }
 
+    /// Starts `--prefetch`, now that the boot's own movies are out of the cache.
+    ///
+    /// **Not before.** Both convert through `ffmpeg` into the same directory,
+    /// and the boot's two reels are on the worker's list too - two processes
+    /// writing one file is a corrupt cache, not a race that resolves. The
+    /// ordering used to come free from `boot::load` being blocking; now that
+    /// the movies run on a thread, it is this call that keeps it. Taking the
+    /// options is what makes it once-only.
+    fn start_prefetch(&mut self) {
+        let Some(options) = self.prefetch_pending.take() else {
+            return;
+        };
+        self.prefetch = Some(prefetch::Prefetch::spawn(options));
+    }
+
     /// How far the conversion has got, right now.
     ///
     /// A run with no worker reads as finished rather than as
     /// [`prefetch::Progress::default`], which would be "nothing done of
     /// nothing" - true, but it is `finished: false`, and a loading screen shown
     /// that would never freeze or hand the window on.
+    ///
+    /// **A worker that has been asked for and not yet started reads as
+    /// unfinished**, which is the one case the sentence above does not cover:
+    /// between the window opening and [`Self::start_prefetch`] there is no
+    /// handle, and reading that as "nothing to wait for" would fade the loading
+    /// screen out a moment before the conversion it exists for even began.
     fn prefetch_progress(&self) -> prefetch::Progress {
+        if self.prefetch_pending.is_some() {
+            return prefetch::Progress::default();
+        }
         self.prefetch.as_ref().map_or(
             prefetch::Progress {
                 finished: true,
@@ -3061,18 +3180,105 @@ impl Session {
 
     /// Hands the window to the front end once the loading screen's fade is out.
     ///
-    /// Taking the `Boot` is what makes this idempotent: a second call finds
+    /// **Also where the boot's two halves become one.** The movies have landed
+    /// by now - the fade does not start until they have, see
+    /// [`LoadingStage::media_ready`] - so joining here never actually waits,
+    /// and `boot::assemble` is the tail of the load that could not run until
+    /// the reels had been measured.
+    ///
+    /// Taking the `Shell` is what makes this idempotent: a second call finds
     /// `None` and does nothing, so a failed `Stage::frontend` cannot be retried
     /// once a frame for the rest of the run.
     fn finish_loading(&mut self) -> Result<()> {
-        let (loaded, video_format, trace) = match &mut self.stage {
+        let (shell, mut media, trace) = match &mut self.stage {
             Stage::Loading(stage) if stage.screen.is_done() => {
-                let Some(loaded) = stage.boot.take() else {
+                let Some(shell) = stage.shell.take() else {
                     return Ok(());
                 };
-                (loaded, stage.video_format, stage.trace)
+                (shell, stage.media.take(), stage.trace)
             }
             _ => return Ok(()),
+        };
+        let media = media
+            .as_mut()
+            .map(boot::MediaWorker::join)
+            .unwrap_or_default();
+        for line in &media.report {
+            println!("{line}");
+        }
+        let mut loaded = boot::assemble(shell, media);
+        if self.boot_overlay {
+            loaded.frontend.set_overlay(true);
+        }
+        // A language chosen on an earlier run skips the picker. Reported either
+        // way: silently not asking is indistinguishable from a broken picker,
+        // and silently asking again is indistinguishable from a setting that
+        // did not save. Here rather than before the window, which is where it
+        // used to be: the sequence this asks does not exist until the two
+        // halves have met.
+        match (self.pick_language, self.settings.language.as_deref()) {
+            (false, Some(name)) if loaded.frontend.preselect_language(name) => {
+                println!("language {name} from settings, skipping the picker");
+            }
+            (false, Some(name)) => {
+                eprintln!("this source does not offer {name:?}, so the picker is shown");
+            }
+            _ => {}
+        }
+        for line in &loaded.report {
+            println!("{line}");
+        }
+        // A source with no intro reel at all - which is every PS2 source, whose
+        // intro is an MPEG-2 program stream outside the archives - has no video
+        // format either, and the front end draws without one.
+        let video_format = loaded.movie.as_ref().and_then(VideoFormat::of);
+
+        // Taken out of the boot before the front end takes the rest: it belongs
+        // to the menus, which outlive the sequence that loaded it.
+        //
+        // Split in two here, and this is the last place both halves are in one
+        // hand: the frames move onto a decode thread and the presentation - the
+        // rate, the rectangle - stays behind, because a `Feed` deals in pixels
+        // and knows nothing about where they go. `repeat: true`, which is the
+        // whole difference between this movie and the intro.
+        //
+        // **The menu's grid, which is ours and is the PSP's - not the
+        // source's.** This rect is drawn by `MenuStage`'s own renderer, and
+        // `open_menus` builds that one fresh and never calls `set_space`, so
+        // its `screen` uniform is `Space::PSP` whatever disc is mounted. The
+        // menu layout it sits behind is this project's own, authored at
+        // 480x272, which is why `capture.rs` pins `Space::PSP` on the same
+        // picture.
+        //
+        // Handing this the *source's* space instead was a regression: on a PS2
+        // disc it built the rect in a 640x448 grid for a shader normalising
+        // against 480x272, and `pillarbox_in` always fills one axis of the grid
+        // it is given, so the backdrop overflowed the screen on every aspect.
+        // Silent on the PSP, where the two grids are the same numbers, and
+        // invisible to `--menu-page`, which goes through `capture.rs`.
+        let space = frontend::Space::PSP;
+        (self.backdrop, self.backdrop_shape) = match loaded.backdrop.take() {
+            Some(movie) => {
+                let shape = BackdropShape {
+                    frame_rate: movie.frame_rate,
+                    // Pillarboxed rather than stretched, because the PS2's cut is
+                    // not the PSP's shape: an `.IPF` declares its own display
+                    // aspect. The PSP's `.PMF` is already 480x272, so this is the
+                    // full screen there and changes nothing.
+                    rect: frontend::pillarbox_in(space, movie.display_aspect),
+                };
+                let (width, height) = (movie.width, movie.height);
+                // No frames is no backdrop, and then there is no shape to keep
+                // either: the two are `Some` and `None` together everywhere below.
+                match movie.frames {
+                    Some(frames) => (
+                        Some(movie::Feed::spawn(frames, true, width, height)),
+                        Some(shape),
+                    ),
+                    None => (None, None),
+                }
+            }
+            None => (None, None),
         };
         // Building the front end spawns the intro's decode thread and uploads a
         // sprite sheet; that is a load, and a load is not a frame time.
@@ -3150,6 +3356,14 @@ impl Session {
         let steps = self.clock.advance(nanos);
         let dt = f64::from(self.clock.rate().dt());
 
+        // Before the snapshot below, because it is what makes the snapshot
+        // start meaning anything: `--prefetch` may not run until the boot's own
+        // movies are done with the cache, so this is the frame that starts it.
+        // A no-op on every frame but one, and on every run without the flag.
+        if matches!(&self.stage, Stage::Loading(stage) if stage.media_ready()) {
+            self.start_prefetch();
+        }
+
         // One snapshot for the whole frame, taken outside the tick loop: it is a
         // lock and a clone, and the ticks in one frame cannot have seen the
         // worker at different points anyway.
@@ -3204,7 +3418,16 @@ impl Session {
                 // thread ran it at 30; ours is one beat per 24 ticks either way,
                 // and a frame-rate-dependent heartbeat is exactly the thing
                 // ADR-0007 fixed the timestep to avoid.
-                Stage::Loading(stage) => stage.screen.advance(progress.finished),
+                // Two waits, one screen: the boot's own movies, and the
+                // `--prefetch` conversion when there is one. The fade starts
+                // when both are done - `Screen::advance` holds at full opacity
+                // until then - and `finish_loading` hands the window on when it
+                // has run out.
+                Stage::Loading(stage) => {
+                    stage
+                        .screen
+                        .advance(progress.finished && stage.media_ready());
+                }
                 Stage::Frontend(stage) => {
                     let events =
                         stage
@@ -3232,8 +3455,28 @@ impl Session {
                     // The movie's sound outlives neither leg, and a skip leaves
                     // the state without finishing the player - see
                     // `Frontend::is_playing_movie`.
+                    //
                     if !stage.frontend.is_playing_movie() {
                         self.audio.stop_movie();
+                    }
+                    // The menu music's cue is **no movies left**, not "not in one
+                    // right now". The two are the same question only on a title
+                    // whose boot opens on its movie: Pure opens on its language
+                    // picker, so "not in a movie" is true before its reel has
+                    // played at all, and starting the loop there put it under the
+                    // reel - which is the overlap this test was written to stop.
+                    // `pending` empties as each movie is installed, so it is
+                    // exactly "none still to come".
+                    //
+                    // Every tick rather than on the edge - the state is what is
+                    // asked, not a transition - which `start_music` absorbs by
+                    // being idempotent.
+                    if !stage.frontend.is_playing_movie() && stage.pending.is_empty() {
+                        self.audio.start_music(
+                            &self.music_discs,
+                            self.settings.audio.music_source,
+                            &boot::default_audio_cache_dir(),
+                        );
                     }
                 }
                 Stage::Menu(stage) => {

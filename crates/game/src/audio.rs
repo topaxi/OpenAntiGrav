@@ -389,6 +389,14 @@ pub struct Audio {
     /// The looping music voice, so a later volume change or stop can address
     /// it. `None` when this source carries no decodable music.
     music: Option<VoiceId>,
+    /// Whether [`Audio::start_music`] has already run, whatever it decided.
+    ///
+    /// Separate from [`Self::music`] being `Some` because the two tick loops
+    /// ask **every tick** - the music's cue is the intro's end, and neither
+    /// loop tracks an edge - and a source with no decodable music leaves
+    /// `music` at `None` for ever. Guarding on `music` alone would then re-read
+    /// a disc, re-run `ffmpeg` and re-print the failure sixty times a second.
+    music_attempted: bool,
     /// Which release the playing music came off, **when what is playing is one
     /// of the sixteen soundtrack tracks**.
     ///
@@ -512,6 +520,7 @@ impl Audio {
                 samples: Vec::new(),
             }),
             music: None,
+            music_attempted: false,
             music_from: None,
             held: Vec::new(),
             movie: None,
@@ -543,6 +552,16 @@ impl Audio {
 
     /// Starts the music this source plays under the front end, looping.
     ///
+    /// **Not at boot: the intro's own track comes first.** The reel that
+    /// `LogoFMV` plays carries its own sound, and both it and this go on
+    /// [`Bus::Music`] - the disc plays one of them at a time, and starting this
+    /// while the intro runs mixes the menu loop over the movie. So the front
+    /// end's two tick loops call this once the sequence has left a movie state
+    /// (`Frontend::is_playing_movie`, which is also what stops the movie's own
+    /// voice), whether the intro ended or was skipped. Callers with no
+    /// sequence to wait on - a race, a single-screen capture - start it
+    /// outright.
+    ///
     /// **The two releases play different things here, and that is the disc's
     /// doing rather than a choice made in this module.** The PSP has front-end
     /// music of its own - [`PSP_MUSIC_NAME`], a 28-second loop - and that is
@@ -563,9 +582,14 @@ impl Audio {
     /// `ffmpeg` on `PATH` is that case for a PSP disc, and the message names
     /// the tool.
     pub fn start_music(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
-        if self.music.is_some() {
+        // Idempotent by design, not by accident: the front end's two tick loops
+        // call this every tick from the moment the intro is over, because that
+        // end is the cue and neither loop tracks the edge. See
+        // [`Self::music_attempted`] for why the flag rather than `music`.
+        if self.music_attempted {
             return;
         }
+        self.music_attempted = true;
         // The PS2's front-end music **is** a soundtrack track, so it goes
         // through `fetch` and comes back stamped with the release it came off -
         // which is what makes the row able to move it. The PSP's is not one,
@@ -1631,6 +1655,7 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            music_attempted: false,
             music_from: None,
             held: vec![
                 (Platform::Psp, Arc::clone(&psp)),
@@ -1686,6 +1711,96 @@ mod tests {
         assert_eq!(audio.playhead(), Some(before));
     }
 
+    /// **Asked every tick, acted on once.** The menu music's cue is the intro
+    /// reel ending, and neither tick loop tracks that as an edge - both simply
+    /// ask "is the sequence still in a movie state" every tick and call
+    /// [`Audio::start_music`] when it is not. So the second ask, and the
+    /// hundredth, have to be free and have to leave the playing track alone.
+    ///
+    /// The failure this pins down is not a duplicate voice but a *restart*: a
+    /// guard that only compared voice ids would still re-read the disc, and a
+    /// music loop that jumps back to zero once a second is the audible form of
+    /// the bug. Twenty seconds are put on the playhead first so a restart could
+    /// not hide.
+    #[test]
+    fn asking_for_the_music_again_never_restarts_it() {
+        let discs = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Ps2),
+        };
+        let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: Some(Dump {
+                path: PathBuf::from("unused"),
+                samples: Vec::new(),
+            }),
+            music: None,
+            music_attempted: false,
+            music_from: None,
+            held: vec![(Platform::Ps2, Arc::clone(&ps2))],
+            movie: None,
+        };
+
+        audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
+        let voice = audio.music.expect("the held track plays");
+        for _ in 0..(60 * 20) {
+            audio.tick();
+        }
+
+        for _ in 0..600 {
+            audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
+        }
+        assert_eq!(audio.music, Some(voice), "the same voice throughout");
+        let at = audio.playhead().expect("music is playing");
+        assert!(
+            (at - 20.0).abs() < 0.01,
+            "ten seconds of asking must not move the playhead: {at} s"
+        );
+    }
+
+    /// The same guard, for the case that would actually cost something: a
+    /// source whose music will not load leaves no voice behind, so "is a voice
+    /// playing" is not a usable test for "has this already been tried". Without
+    /// [`Audio::music_attempted`] a tick loop would re-open a disc, re-run
+    /// `ffmpeg` and re-print the failure sixty times a second.
+    #[test]
+    fn a_source_with_no_music_is_not_retried_every_tick() {
+        let nothing = MusicDiscs {
+            psp: None,
+            ps2: None,
+            booted: None,
+        };
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: None,
+            music: None,
+            music_attempted: false,
+            music_from: None,
+            held: Vec::new(),
+            movie: None,
+        };
+        audio.start_music(&nothing, MusicSource::Auto, Path::new("unused"));
+        assert!(audio.music.is_none(), "there was nothing to play");
+        assert!(audio.music_attempted, "and it has now been tried");
+
+        // A second ask, this time with a release whose track is already in hand
+        // and so certain to load. It is declined anyway: the first ask is the
+        // only one, whatever it decided.
+        let discs = MusicDiscs {
+            psp: None,
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Ps2),
+        };
+        audio.held.push((
+            Platform::Ps2,
+            Arc::new(Sound::new(vec![0i16; 48_000 * 2], 2, 48_000).expect("a sound")),
+        ));
+        audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
+        assert!(audio.music.is_none(), "the second ask does nothing at all");
+    }
+
     /// **The scope of the row, and the reason it has one.** The PSP front
     /// end's own music is not one of the sixteen and has no counterpart on the
     /// PS2 disc, so no value of MUSIC SOURCE may touch it - not even to the
@@ -1716,6 +1831,7 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            music_attempted: false,
             music_from: None,
             // The PS2 track is *there to be chosen* and still must not be, so
             // this cannot pass by the swap merely failing to find anything.
@@ -1765,6 +1881,7 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            music_attempted: false,
             music_from: None,
             held: Vec::new(),
             movie: None,
@@ -1807,6 +1924,7 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            music_attempted: false,
             music_from: None,
             held: Vec::new(),
             movie: None,
@@ -1848,6 +1966,7 @@ mod tests {
             output: Output::null(DUMP_SAMPLE_RATE),
             dump: None,
             music: None,
+            music_attempted: false,
             music_from: None,
             held: Vec::new(),
             movie: None,
@@ -1873,6 +1992,7 @@ mod tests {
                 samples: Vec::new(),
             }),
             music: None,
+            music_attempted: false,
             music_from: None,
             held: Vec::new(),
             movie: None,
@@ -1895,6 +2015,7 @@ mod tests {
             output: Output::null(DUMP_SAMPLE_RATE),
             dump: None,
             music: None,
+            music_attempted: false,
             music_from: None,
             held: Vec::new(),
             movie: None,

@@ -125,6 +125,46 @@ impl Mode {
     pub const fn is_auto_throttle(self) -> bool {
         matches!(self, Self::Zone)
     }
+
+    /// Whether the original races this mode with other craft on the grid.
+    ///
+    /// **`false` for all three, measured on the running original rather than
+    /// assumed from "single-ship" in this module's own name.** Selecting
+    /// TIME TRIAL, SPEED LAP or ZONE on the Custom Race screen greys
+    /// `AI DIFFICULTY` to `N/A`, the same tell `race-modes.md` already uses for
+    /// weapons - see [`Self::weapons_enabled`]. `SINGLE RACE`, `HEAD TO HEAD`,
+    /// `TOURNAMENT` and `ELIMINATOR` all leave it selectable; none of those four
+    /// is a mode this crate implements yet.
+    #[must_use]
+    pub const fn has_opponents(self) -> bool {
+        false
+    }
+
+    /// Whether the original arms `Weapon Pad`s for this mode.
+    ///
+    /// **`false` for all three, measured on the running original.** Selecting
+    /// each of TIME TRIAL, SPEED LAP and ZONE on the Custom Race screen greys
+    /// the `WEAPONS` row to `OFF` and the setting cannot be changed - confirmed
+    /// live, 2026-08-10, PPSSPP v1.20.4 under Xvfb, one screenshot per race
+    /// type. `Race_ReadSetupOptions` (`0x08896b84`) corroborates it in code:
+    /// modes `5`/`10` (time trial/speed lap) hard-code
+    /// `g_weapons_enabled = 0` and route around the `<Weapons>` setup
+    /// attribute entirely, so no menu path can turn it back on. Zone (mode
+    /// `6`) defaults the global to `1` but the front end always supplies an
+    /// explicit `<Weapons>Off</Weapons>` for it, which is what the greyed row
+    /// is showing.
+    ///
+    /// The original does more than skip the pickup logic when this is `false`:
+    /// `World_CollectNodeLists` (`0x088879d4`) clears every `Weapon Pad`
+    /// node's visibility bit (`node+0x2c &= ~4`, the same bit
+    /// `exhaust.md` names for the boost plume) and zeroes the trigger list's
+    /// own count, so a weapons-off race neither draws them nor can trigger
+    /// them - not merely "nothing happens if you cross one". See
+    /// [`docs/ghidra/functions/psp-pulse-usa/pads.md`](../../../docs/ghidra/functions/psp-pulse-usa/pads.md).
+    #[must_use]
+    pub const fn weapons_enabled(self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -172,5 +212,22 @@ mod tests {
         assert!(Mode::Zone.is_auto_throttle());
         assert!(!Mode::TimeTrial.is_auto_throttle());
         assert!(!Mode::SpeedLap.is_auto_throttle());
+    }
+
+    #[test]
+    fn none_of_the_three_single_ship_modes_have_opponents() {
+        for mode in Mode::ALL {
+            assert!(!mode.has_opponents(), "{mode:?} should have no opponents");
+        }
+    }
+
+    #[test]
+    fn none_of_the_three_single_ship_modes_arm_weapon_pads() {
+        for mode in Mode::ALL {
+            assert!(
+                !mode.weapons_enabled(),
+                "{mode:?} should race with weapons off"
+            );
+        }
     }
 }

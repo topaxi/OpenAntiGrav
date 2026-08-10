@@ -40,11 +40,16 @@ pub struct Boot {
     /// carry it, `--no-video`, or a missing `ffmpeg`. The menus draw on black
     /// there, which is what they did before this existed.
     pub backdrop: Option<Movie>,
-    /// Pure's second boot movie, played by the `FMV Intro` screen state - see
-    /// [`load_fmv_intro`]. `None` for any source that has no such state
-    /// (every Pulse source), the same way `backdrop` is `None` for a source
-    /// with no menu backdrop.
+    /// The second movie this title's chain names, if it names one - see
+    /// [`load_second_movie`]. `None` for a title whose boot plays only one movie,
+    /// the same way `backdrop` is `None` for a source with no menu backdrop.
     pub after_language_movie: Option<Movie>,
+    /// That movie's own sound, on exactly the same terms as [`Self::movie_sound`].
+    ///
+    /// Kept apart because the two are played at different moments - each on the
+    /// tick its own screen is entered - and one field would have to be reloaded
+    /// rather than handed over.
+    pub after_language_movie_sound: Option<crate::at3::Pcm>,
     /// Every front-end image the screens reference, in one texture.
     pub sprites: crate::sprite::Sheet,
     /// The text atlas: the disc's own font when it decodes, ours when it does
@@ -73,18 +78,6 @@ pub struct Boot {
     /// `ffmpeg` that is missing or failed, or `--no-video`, which never reads
     /// the movie at all. See [`load_movie_sound`].
     pub movie_sound: Option<crate::at3::Pcm>,
-    /// [`Self::after_language_movie`]'s own sound, on exactly the same terms.
-    ///
-    /// A second field rather than a second decode path: [`load_movie_sound`] is
-    /// already title-agnostic and decides silence from the source's own `Movie`
-    /// widget, so this is that function called again with the second movie's
-    /// entry name. Pure's `FMV Movie` widget carries `sound="true"`, so on a
-    /// Pure source this is `Some` whenever the movie itself was read.
-    ///
-    /// Kept apart from `movie_sound` because the two are played at different
-    /// moments - the first at boot, this one when `FMV Intro` is entered - and a
-    /// single field would have to be reloaded rather than handed over.
-    pub after_language_movie_sound: Option<crate::at3::Pcm>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
@@ -92,18 +85,16 @@ pub struct Boot {
 impl Boot {
     /// The plane geometry the front end's one video pipeline is built for.
     ///
-    /// The first boot movie when there is one, and the second when there is not.
-    /// That fallback is the whole point of the method: a source whose boot plays
-    /// no movie before its picker still draws a movie later, and taking the
-    /// format from the first movie alone would build a renderer with **no video
-    /// pipeline at all** - so the second movie's first frame would not merely be
-    /// skipped, it would fail the run, `upload_frame` returning "no video
-    /// pipeline".
+    /// The first movie when there is one, and the second when there is not. That
+    /// fallback is the whole point of the method: a title whose boot screen plays
+    /// nothing still draws a movie later, and taking the format from the first
+    /// alone would build a renderer with **no video pipeline at all** - so that
+    /// movie's first frame would not merely be skipped, it would fail the run,
+    /// `upload_frame` returning "no video pipeline".
     ///
     /// A method rather than a line at each call site because there are two of
     /// them - the window and the headless capture - and they must not be able to
-    /// size the same pipeline differently. See [`same_planes`], which holds every
-    /// movie the front end draws to whatever this returns.
+    /// size the same pipeline differently.
     #[must_use]
     pub fn video_format(&self) -> Option<crate::render::VideoFormat> {
         self.movie
@@ -167,16 +158,213 @@ pub struct Options {
     pub no_video: bool,
 }
 
+/// A step the load has to be quick enough at for nobody to notice. Anything
+/// slower gets named in the report; anything faster would only be noise there.
+const FELT: std::time::Duration = std::time::Duration::from_millis(20);
+
+/// A stopwatch that names each step of the load as it passes.
+///
+/// The boot is the longest wait this build asks anyone to sit through and it
+/// used to be one opaque call, so "which part of it" was a question nobody
+/// could answer without a profiler. One [`Steps::lap`] per step answers it on
+/// every boot, in the report the load already prints, which is also what keeps
+/// the answer current: a step that gets slower says so rather than waiting to
+/// be re-measured.
+///
+/// Wall clock, deliberately, and this is the one place in the codebase that is
+/// allowed to be - see `docs/architecture/determinism.md`. Nothing here reaches
+/// the simulation: these are strings for a human.
+struct Steps {
+    at: std::time::Instant,
+    steps: Vec<(&'static str, std::time::Duration)>,
+}
+
+impl Steps {
+    fn new() -> Self {
+        Self {
+            at: std::time::Instant::now(),
+            steps: Vec::new(),
+        }
+    }
+
+    /// Closes the step that has been running since the last lap.
+    fn lap(&mut self, what: &'static str) {
+        let now = std::time::Instant::now();
+        self.steps.push((what, now - self.at));
+        self.at = now;
+    }
+
+    /// One line: the total, then the steps that were felt, slowest first.
+    ///
+    /// Slowest first rather than in load order because the reason to read this
+    /// line at all is "what am I waiting for", and that is the first name on it.
+    fn describe(&self, what: &str) -> String {
+        let total: std::time::Duration = self.steps.iter().map(|(_, took)| *took).sum();
+        let mut felt: Vec<_> = self
+            .steps
+            .iter()
+            .filter(|(_, took)| *took >= FELT)
+            .collect();
+        felt.sort_by_key(|(_, took)| std::cmp::Reverse(*took));
+        let named = felt
+            .iter()
+            .map(|(name, took)| format!("{name} {:.2}", took.as_secs_f32()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if named.is_empty() {
+            return format!("{what} took {:.2} s", total.as_secs_f32());
+        }
+        format!("{what} took {:.2} s - {named}", total.as_secs_f32())
+    }
+}
+
 /// Loads everything and builds the sequence.
+///
+/// **The blocking whole**, for callers with nothing to draw while they wait: a
+/// headless capture, the ground-truth tests. A window uses the three phases
+/// this is made of - [`load_shell`], [`load_media`] and [`assemble`] - so that
+/// it can put the loading screen up between them. See [`Shell`] for why the
+/// line falls where it does.
 pub fn load(options: &Options) -> Result<Boot> {
+    let (mut shell, archives) = load_shell(options)?;
+    let media = load_media(archives, &shell.screens, &shell.media_plan(), options);
+    shell.report.extend(media.report.iter().cloned());
+    Ok(assemble(shell, media))
+}
+
+/// Everything a window needs before it can draw anything at all.
+///
+/// **The cheap half of the boot**, and cheap is measured rather than hoped:
+/// 0.05 s of the 4.93 s a `native-video` boot of the EU disc takes, the rest
+/// of it being the two movies in [`load_media`]. That ratio is the whole
+/// reason the line is here - a phase this short can run before the event loop
+/// with nobody noticing, and everything after it can run under a loading
+/// screen.
+///
+/// Carries no [`oag_assets::Archives`]: [`load_shell`] hands those back
+/// separately, because the next phase takes them onto a worker thread and
+/// this half stays on the one that owns the window.
+pub struct Shell {
+    /// The front-end XML. Cloned for the media worker, moved into
+    /// [`Frontend::booting`] by [`assemble`].
+    pub screens: Screens,
+    /// Every language this source offers.
+    pub languages: Vec<Language>,
+    /// The chosen language's strings. Also what
+    /// [`crate::loading::Assets::load`] needs to put a tip on the loading
+    /// screen, which is the other reason this phase exists.
+    pub strings: StringTable,
+    /// The raceable circuits, for the menus.
+    pub tracks: Vec<crate::catalogue::Track>,
+    /// The raceable teams, for the menus.
+    pub teams: Vec<crate::catalogue::Team>,
+    /// The text atlas.
+    pub font: crate::font::Atlas,
+    /// The front-end sprite sheet.
+    pub sprites: crate::sprite::Sheet,
+    /// The grid this source authors its widgets in, read off the archives'
+    /// own platform while they are still in hand - [`assemble`] has no
+    /// archives to ask by the time it needs this.
+    pub space: crate::frontend::Space,
+    /// This title's own boot table, selected from the serial before any XML was
+    /// parsed. Carried so the later phases ask it rather than the screens.
+    pub profile: &'static oag_title::BootProfile,
+    /// The screens this boot walks, in the title's own order, already filtered
+    /// to the ones this pressing carries and this build can drive.
+    ///
+    /// Resolved in this phase because it depends on [`Self::screens`], and the
+    /// media phase needs the answer to know which movies to read. See
+    /// [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md).
+    pub walked: Vec<&'static oag_title::BootStep>,
+    /// Which entry the first movie in that chain is, if it has one.
+    ///
+    /// `None` for a boot that plays nothing anywhere - and **not** the same
+    /// question as "does the boot screen play something": on Pure neither movie is
+    /// on the boot step, so this names the reel that plays one screen later.
+    pub movie_name: Option<String>,
+    /// The chain's second movie, on the same terms.
+    pub second_movie_name: Option<&'static str>,
+    /// Which leg the sequence boots into, carried for [`assemble`].
+    pub leg: crate::frontend::Leg,
+    /// What to print. [`assemble`] appends its own.
+    pub report: Vec<String>,
+}
+
+impl Shell {
+    /// What the media phase should read, from what this phase resolved.
+    #[must_use]
+    pub fn media_plan(&self) -> MediaPlan {
+        MediaPlan {
+            movie_name: self.movie_name.clone(),
+            second_movie_name: self.second_movie_name,
+            menu_backdrop: self.profile.menu_backdrop,
+        }
+    }
+}
+
+// Written out rather than derived, for the reason [`Boot`]'s is: the sprite
+// sheet and the string table are megabytes between them, and a `{:?}` of this
+// should say which source it came off rather than print the disc.
+impl std::fmt::Debug for Shell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Shell")
+            .field("movie_name", &self.movie_name)
+            .field("leg", &self.leg)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The slow half: the movies, and the intro's own sound.
+///
+/// Every field is what it is on a source that has none of it - `None` is an
+/// ordinary outcome throughout, exactly as it is on [`Boot`]'s own fields.
+/// [`Default`] is therefore a *meaningful* value here rather than a filler: it
+/// is the boot of a source that carries no movie at all, which the sequence
+/// plays out on black.
+#[derive(Default)]
+pub struct Media {
+    /// The intro reel.
+    pub movie: Option<Movie>,
+    /// Its ATRAC3+ track, decoded.
+    pub movie_sound: Option<crate::at3::Pcm>,
+    /// The looping menu backdrop.
+    pub backdrop: Option<Movie>,
+    /// The chain's second movie, and its own track.
+    pub after_language_movie: Option<Movie>,
+    pub after_language_movie_sound: Option<crate::at3::Pcm>,
+    /// What to print, kept separate because this half may finish on another
+    /// thread and its lines must not interleave with the shell's.
+    pub report: Vec<String>,
+}
+
+// Same reasoning as [`Shell`]'s and [`Boot`]'s: the three movies are hundreds
+// of megabytes of decoded picture on a `native-video` build.
+impl std::fmt::Debug for Media {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Media")
+            .field("movie", &self.movie)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Opens the source and loads everything that is not a movie.
+///
+/// Returns the archives alongside, still open, for [`load_media`] to take.
+///
+/// # Errors
+///
+/// A source whose archives will not open, or which carries no front-end XML.
+/// Everything else degrades into a report line.
+pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let mut report = Vec::new();
+    let mut steps = Steps::new();
     let (packs, problems) = crate::dlc::packs(&options.dlc, &default_dlc_cache_dir());
     let crate::title::Opened {
         mut archives,
         title,
     } = open_source(&options.source, packs)
         .with_context(|| format!("opening the archives in {}", options.source))?;
-    // Which title this is was settled by the serial, above, and everything below
+    // Which title this is was settled by the serial, here, and everything below
     // asks `profile` rather than asking the XML again. See ADR-0023.
     let profile = title.boot;
     report.push(archives.layout.describe());
@@ -201,8 +389,11 @@ pub fn load(options: &Options) -> Result<Boot> {
         ));
     }
 
+    steps.lap("open");
     let font = load_font(&mut archives, &mut report);
+    steps.lap("font");
     let screens = load_screens(&mut archives, profile.fallback_globals, &mut report)?;
+    steps.lap("screens");
     let languages = load_languages(&mut archives, &mut report);
     let offered = languages.clone();
     let strings = load_strings(
@@ -211,41 +402,38 @@ pub fn load(options: &Options) -> Result<Boot> {
         options.language.as_deref(),
         &mut report,
     );
+    steps.lap("strings");
     let documents = definitions(&mut archives, &mut report);
     let tracks = load_tracks(&mut archives, &documents, &mut report);
     let teams = load_teams(&mut archives, &documents, &mut report);
-    // Which step the boot opens on, from this title's own chain.
-    //
-    // `--reel` is refused by name on a title with no evidenced reel state rather
-    // than pointed at another title's screen. It used to send Pure to Pulse's
-    // `Intro Screen->IntroMovie1`, where it failed to find Pulse's European reel
-    // hash in Pure's archive and ran 260 frames of black through a screen that
-    // title does not have.
+    steps.lap("catalogue");
+    let sprites = load_sprites(&mut archives, &screens, &mut report);
+    steps.lap("sprites");
+    // Which step the boot opens on, from this title's own chain. `--reel`
+    // replaces the boot step rather than preceding it, and is refused by name on
+    // a title with no evidenced reel state rather than pointed at another
+    // title's screen.
     let start_step = match options.leg {
         crate::frontend::Leg::LogoFmv => profile.start(),
         crate::frontend::Leg::DevPubReel => profile.reel.as_ref().with_context(|| {
             format!(
-                "--reel is Wipeout Pulse's own off-path dev/pub reel state; {} has no \
-                 equivalent anyone has found",
+                "--reel is an off-path dev/pub reel state; {} has no equivalent anyone \
+                 has found",
                 title.name
             )
         })?,
     };
-    // The whole chain, filtered to the steps this pressing carries *and* this
-    // build can drive, in the title's own order. A step failing either test is
-    // stepped over **and reported**: a silently shortened sequence is exactly the
-    // kind of thing that reads as finished work, which is how this build shipped
-    // Pure's order wrong in the first place.
-    //
-    // The boot step itself is always kept, whatever `can_drive` says of it: a
-    // sequence with no first screen is not a sequence, and dropping it would turn
-    // a missing behaviour into an empty boot.
-    // The boot step first - which is the chain's own on a default boot and the
-    // reel's in place of it under `--reel`, since the reel *replaces* the movie
-    // the boot would have played rather than preceding it - then the rest of the
-    // chain in the title's own order.
-    let mut walked: Vec<&oag_title::BootStep> = vec![start_step];
+    // The rest of the chain, filtered to what this pressing carries *and* this
+    // build can drive. A step failing either is stepped over **and reported**: a
+    // silently shortened sequence is exactly the kind of thing that reads as
+    // finished work, which is how this build once shipped Pure's order wrong.
+    let mut walked: Vec<&'static oag_title::BootStep> = vec![start_step];
     for step in profile.chain.iter().skip(1) {
+        // A reel step that is *also* a chain step - Pure's, which is on its boot
+        // path - would otherwise be walked twice and its movie read twice.
+        if step.state == start_step.state {
+            continue;
+        }
         if screens.by_name(step.state).is_none() {
             report.push(format!(
                 "the chain's {:?} is skipped: this pressing does not carry it",
@@ -260,61 +448,104 @@ pub fn load(options: &Options) -> Result<Boot> {
             ));
         }
     }
-    // Every step in the walked chain that plays something, in order. Pulse has
-    // one (its boot step); Pure has two, and **neither is its boot step** - the
-    // reel plays on the developer/publisher screen and the FMV on `FMV Intro`.
-    // Keying either off "the boot step" or "the step after the picker" gets one of
-    // the two titles wrong, which is how the reel came to be loaded as the FMV.
-    let playing: Vec<&oag_title::BootStep> = walked
+    // Every step that plays something, in order. Pulse has one (its boot step);
+    // Pure has two, and **neither is its boot step** - the reel plays on the
+    // developer/publisher screen and the FMV two steps later. Keying either off
+    // "the boot step" or "the step after the picker" gets one of the two titles
+    // wrong.
+    let playing: Vec<&'static oag_title::BootStep> = walked
         .iter()
         .copied()
         .filter(|step| step.movie.is_some())
         .collect();
-    let first_movie_step = playing.first().copied();
-    let second_movie_step = playing.get(1).copied();
-
-    // `--movie` overrides whichever movie the boot leg would play, and asks for
-    // one on a leg that plays none - it is a preview tool, so pointing it at a
-    // source whose own boot is silent has to show something rather than nothing.
+    // `--movie` overrides whichever movie the sequence draws first, so the flag
+    // stays a preview tool on a title whose own boot screen is silent.
     let movie_name = options.movie.clone().or_else(|| {
-        first_movie_step
+        playing
+            .first()
             .and_then(|step| step.movie)
             .map(str::to_string)
     });
-    let movie = match &movie_name {
-        Some(name) => load_movie(&mut archives, name, options, &mut report)?,
+    let second_movie_name = playing.get(1).and_then(|step| step.movie);
+    // The grid this source authors in, needed before the front end is built so
+    // that a boot with no movie falls back to the *source's* shape rather than
+    // to the PSP's. `frontend.set_space` takes the same value.
+    let space = crate::frontend::Space::of(archives.layout.platform);
+    report.push(steps.describe("the boot's first half"));
+
+    Ok((
+        Shell {
+            screens,
+            languages: offered,
+            strings,
+            tracks,
+            teams,
+            font,
+            sprites,
+            space,
+            profile,
+            walked,
+            movie_name,
+            second_movie_name,
+            leg: options.leg,
+            report,
+        },
+        archives,
+    ))
+}
+
+/// Loads the movies and the intro's sound. **The slow half**, by a factor of a
+/// hundred on a `native-video` build - see [`Shell`].
+///
+/// Takes the archives by value because this is what runs on a worker thread
+/// while a window is already up, and a half-loaded boot is not something two
+/// threads should be reaching into. Never fails: every movie that will not load
+/// degrades into a report line and a `None`, which is what the sequence already
+/// copes with everywhere.
+pub fn load_media(
+    mut archives: oag_assets::Archives,
+    screens: &Screens,
+    plan: &MediaPlan,
+    options: &Options,
+) -> Media {
+    let mut report = Vec::new();
+    let mut steps = Steps::new();
+    // Kept as a report line rather than propagated: by the time this runs the
+    // window is up and the loading screen is drawing, so a movie that will not
+    // open has to be survivable. `load` above is the caller that used to be
+    // able to fail here, and its `?` only ever fired on a *named* entry being
+    // absent - which `Movie: None` already describes.
+    let movie = match &plan.movie_name {
+        Some(name) => match load_movie(&mut archives, name, options, &mut report) {
+            Ok(movie) => movie,
+            Err(error) => {
+                report.push(format!("{name}: {error:#}"));
+                None
+            }
+        },
         None => None,
     };
+    steps.lap("intro");
     // Straight after the movie, so its report lines stay together, and while
     // `screens` is still in hand: the widget that decides whether this movie is
     // heard at all is in that XML.
-    let movie_sound = match &movie_name {
-        Some(name) => load_movie_sound(movie.as_ref(), &screens, name, options, &mut report),
+    let movie_sound = match &plan.movie_name {
+        Some(name) => load_movie_sound(movie.as_ref(), screens, name, options, &mut report),
         None => None,
     };
-    let backdrop = match profile.menu_backdrop {
+    steps.lap("intro sound");
+    let backdrop = match plan.menu_backdrop {
         Some(name) => load_backdrop(&mut archives, name, options, &mut report),
         None => None,
     };
-    // The after-language step's own movie, if it has one. Named by the chain
-    // rather than probed for by screen name, and `None` covers both "this title's
-    // next screen plays nothing" (Pulse's `Show Logo`) and "there is no next
-    // screen this build can drive".
-    let after_language_movie_name = second_movie_step.and_then(|step| step.movie);
-    let mut after_language_movie = match after_language_movie_name {
+    steps.lap("backdrop");
+    let mut after_language_movie = match plan.second_movie_name {
         Some(name) => load_second_movie(&mut archives, name, options, &mut report),
         None => None,
     };
-    // The same one-pipeline guard the backdrop goes through below, and the
-    // second movie needs it for the same reason: `upload_frame` slices by the
-    // pipeline's dimensions. Checked only when there *is* a first movie - when
-    // there is not, this movie is itself what the pipeline is sized from (see
-    // [`Boot::video_format`]) and has nothing to disagree with.
-    //
-    // Measured 2026-08-10: both Pure pressings carry `IntroMovieP1_US.PMF` and
-    // `WoFMVNew_US.PMF` at 480x272 with byte-identical PSMF stream descriptors,
-    // so this does not fire on any disc anyone has. It is what stops a future
-    // source, or a `--movie` override, from garbling the picture silently.
+    // The same one-pipeline guard the backdrop goes through: `upload_frame`
+    // slices by the pipeline's dimensions, so a movie of another shape is a
+    // garbled picture rather than an error.
     if let (Some(first), Some(second)) = (movie.as_ref(), after_language_movie.as_ref())
         && !same_planes(second, first)
     {
@@ -325,20 +556,148 @@ pub fn load(options: &Options) -> Result<Boot> {
         );
         after_language_movie = None;
     }
-    // Same call, same rules, second movie: the widget naming it is the one that
-    // decides whether it is heard, and it is in the same XML `screens` still
-    // holds.
-    let after_language_movie_sound = match after_language_movie_name {
+    let after_language_movie_sound = match plan.second_movie_name {
         Some(name) => load_movie_sound(
             after_language_movie.as_ref(),
-            &screens,
+            screens,
             name,
             options,
             &mut report,
         ),
         None => None,
     };
-    let sprites = load_sprites(&mut archives, &screens, &mut report);
+    steps.lap("second movie");
+    report.push(steps.describe("the boot's movies"));
+
+    Media {
+        movie,
+        movie_sound,
+        backdrop,
+        after_language_movie,
+        after_language_movie_sound,
+        report,
+    }
+}
+
+/// What the media phase is being asked to read, resolved by the shell phase.
+///
+/// A struct rather than three arguments because the three travel together across
+/// a thread boundary and are all answers to the same question - which movies this
+/// title's chain names - decided where the chain is.
+#[derive(Debug, Clone)]
+pub struct MediaPlan {
+    pub movie_name: Option<String>,
+    pub second_movie_name: Option<&'static str>,
+    pub menu_backdrop: Option<&'static str>,
+}
+
+/// [`load_media`] running on a thread of its own, so a window can open first.
+///
+/// **This is the whole reason the boot is in halves.** On a `native-video`
+/// build the movies are 4.9 of a 5.0-second boot of the EU disc - `GstDecoder`
+/// decodes every frame of both reels into memory before it returns - and all
+/// of that used to happen before winit had been told to make a window. There
+/// was nothing on screen to say the game had started because there was no
+/// screen.
+#[derive(Debug)]
+pub struct MediaWorker {
+    /// `None` once joined, which is what makes [`Self::join`] idempotent.
+    handle: Option<std::thread::JoinHandle<Media>>,
+}
+
+impl MediaWorker {
+    /// Starts the media phase in the background.
+    ///
+    /// Takes copies rather than borrows because the thread outlives this call
+    /// by seconds; `Screens` is a dozen parsed widget trees and `Options` a
+    /// handful of paths, which is nothing beside what the thread then decodes.
+    #[must_use]
+    pub fn spawn(archives: oag_assets::Archives, shell: &Shell, options: &Options) -> Self {
+        let screens = shell.screens.clone();
+        let plan = shell.media_plan();
+        let options = options.clone();
+        let handle = std::thread::Builder::new()
+            // Named so it is obvious in a debugger and in `top` which thread
+            // the boot is waiting on, the same way `movie-decode` is.
+            .name("boot-media".to_string())
+            .spawn(move || load_media(archives, &screens, &plan, &options))
+            .expect("spawning the boot's media thread");
+        Self {
+            handle: Some(handle),
+        }
+    }
+
+    /// Whether the movies have arrived, so the loading screen may start fading.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.handle
+            .as_ref()
+            .is_none_or(std::thread::JoinHandle::is_finished)
+    }
+
+    /// Waits for the movies and takes them.
+    ///
+    /// **A worker that panicked yields a boot with no movies rather than a
+    /// panic here**, because the alternative is a loading screen that never
+    /// fades: the sequence copes with `None` on every one of these fields
+    /// already - that is what a source with no backdrop, or a machine with no
+    /// `ffmpeg`, has always produced - so the game reaches its menus and says
+    /// what happened. A second call yields the same empty `Media`, which
+    /// cannot happen today and would otherwise be a second panic.
+    pub fn join(&mut self) -> Media {
+        let Some(handle) = self.handle.take() else {
+            return Self::nothing("the boot's movies were already taken");
+        };
+        match handle.join() {
+            Ok(media) => media,
+            Err(_) => Self::nothing(
+                "the thread loading the movies panicked, so the sequence plays with no picture",
+            ),
+        }
+    }
+
+    fn nothing(why: &str) -> Media {
+        Media {
+            report: vec![why.to_string()],
+            ..Media::default()
+        }
+    }
+}
+
+/// Builds the sequence out of the two halves.
+///
+/// Everything here needs a frame count or a plane size, which is why it is a
+/// third phase rather than the tail of either: the front end cannot be
+/// constructed until the movies have been measured.
+#[must_use]
+pub fn assemble(shell: Shell, media: Media) -> Boot {
+    let Shell {
+        screens,
+        languages,
+        strings,
+        tracks,
+        teams,
+        font,
+        sprites,
+        space,
+        profile,
+        walked,
+        movie_name: _,
+        second_movie_name: _,
+        leg: _,
+        mut report,
+    } = shell;
+    let Media {
+        movie,
+        movie_sound,
+        backdrop,
+        after_language_movie,
+        after_language_movie_sound,
+        report: _,
+    } = media;
+    // The picker inside the sequence and the menus' own row are two lists, and
+    // the sequence takes one of them by value. See `Boot::languages`.
+    let offered = languages.clone();
 
     let placements = screens
         .screens
@@ -346,14 +705,10 @@ pub fn load(options: &Options) -> Result<Boot> {
         .flat_map(|s| s.images.iter())
         .filter_map(|image| sprites.get(&image.src).map(|p| (image.src.clone(), p)))
         .collect();
-    // The grid this source authors in, needed before the front end is built so
-    // that a boot with no movie falls back to the *source's* shape rather than
-    // to the PSP's. `frontend.set_space` below takes the same value.
-    let space = crate::frontend::Space::of(archives.layout.platform);
-    // Both movies described the same way, each from its own container: the
-    // cached frame count when there is a cache and the demuxed one when there is
-    // not, because `--no-video` and a missing `ffmpeg` still have to play a leg
-    // out over its movie's real duration rather than the reel's.
+    // Both movies described the same way, each from its own container: the cached
+    // frame count when there is a cache and the demuxed one when there is not,
+    // because `--no-video` and a missing `ffmpeg` still have to play a leg out
+    // over its movie's real duration rather than the reel's.
     let plan = |movie: Option<&Movie>| {
         movie.map_or(
             crate::frontend::MoviePlan::none((space.size.0 as u32, space.size.1 as u32)),
@@ -365,16 +720,21 @@ pub fn load(options: &Options) -> Result<Boot> {
             },
         )
     };
-    // Each walked step with whichever movie was read for it, matched by position
-    // rather than by which screen it happens to be: at most two steps in either
-    // title's chain name a movie, and the two loaded above are those two in order.
-    let steps = walked
+    // Each walked step with whichever movie was read for it, matched by position:
+    // at most two steps in either title's chain name a movie, and the two the
+    // media phase read are those two in order.
+    let playing: Vec<&'static str> = walked
+        .iter()
+        .filter(|step| step.movie.is_some())
+        .map(|step| step.state)
+        .collect();
+    let steps: Vec<crate::frontend::Step> = walked
         .iter()
         .map(|step| crate::frontend::Step {
             state: step.state,
-            movie: if first_movie_step.is_some_and(|first| std::ptr::eq(*step, first)) {
+            movie: if playing.first() == Some(&step.state) {
                 plan(movie.as_ref())
-            } else if second_movie_step.is_some_and(|second| std::ptr::eq(*step, second)) {
+            } else if playing.get(1) == Some(&step.state) {
                 plan(after_language_movie.as_ref())
             } else {
                 plan(None)
@@ -412,26 +772,39 @@ pub fn load(options: &Options) -> Result<Boot> {
     // away onto a decode thread immediately after this, so there is no second
     // moment where both halves exist.
     //
-    // **Only when it shares the pipeline's plane geometry** - see
-    // [`same_planes`], which the second boot movie is put through as well, so all
-    // three movies the front end can draw are checked against the one thing that
-    // draws them.
+    // **Only when the two movies have the same plane geometry**, which is a
+    // guard rather than a switch: the front end is drawn by one renderer with
+    // one set of I420 planes, sized once from the intro, and `upload_frame`
+    // slices a frame by *those* dimensions rather than by the frame's own - so
+    // handing it a differently-shaped picture is a garbled image rather than an
+    // error.
     //
-    // **Every current source passes it**, and that was worth checking rather
-    // than assuming: the PSP's `Intro.PMF` and `Backdrop.PMF` are both 480x272,
-    // the PS2's `INTRO512.PSS` and `BG512.IPF` are both 512x512, and Pure's two
-    // boot movies are both 480x272. So this branch does not fire on any disc
-    // anyone has - it is what stops a future source, or a `--movie` override
-    // pointing the intro at something else, from drawing garbage instead of
-    // saying so.
+    // **Both current sources pass it**, and that was worth checking rather than
+    // assuming: the PSP's `Intro.PMF` and `Backdrop.PMF` are both 480x272, and
+    // the PS2's `INTRO512.PSS` and `BG512.IPF` are both 512x512. What differs on
+    // the PS2 is the *display aspect*, not the plane size, and that is already
+    // handled per-movie by the pillarbox rect rather than here. So this branch
+    // does not currently fire on any disc anyone has - it is what stops a future
+    // source, or a `--movie` override pointing the intro at something else, from
+    // drawing garbage instead of saying so.
     // See `docs/architecture/frontend-boot.md`.
     if let Some(backdrop) = &backdrop {
-        // Against whichever movie the one pipeline is sized from, which is the
-        // first boot movie when there is one and the second when there is not -
-        // the same rule [`Boot::video_format`] applies, so the two cannot
-        // disagree about what the planes are.
-        let reference = movie.as_ref().or(after_language_movie.as_ref());
-        if reference.is_some_and(|reference| same_planes(backdrop, reference)) {
+        let same_planes = crate::render::VideoFormat::of(backdrop)
+            .zip(movie.as_ref().and_then(crate::render::VideoFormat::of))
+            .is_some_and(|(back, intro)| {
+                (
+                    back.width,
+                    back.height,
+                    back.chroma_width,
+                    back.chroma_height,
+                ) == (
+                    intro.width,
+                    intro.height,
+                    intro.chroma_width,
+                    intro.chroma_height,
+                )
+            });
+        if same_planes {
             // **The cache's length, not the container's frame count**, when
             // there is a cache. The playhead set here is the one the menus go
             // on running after the boot sequence hands it over, and it is
@@ -456,16 +829,13 @@ pub fn load(options: &Options) -> Result<Boot> {
     // The disc's own next-after-the-picker against this build's, so the
     // difference is visible at startup rather than buried. Both halves are
     // resolved rather than named: the target from the sequence itself, and
-    // whether a movie ran first from whether one was loaded at all - this line
-    // used to assert `Show Logo` and "having played it first" on every source,
-    // which was two false claims at once on a title whose picker comes first and
-    // whose boot plays nothing.
+    // whether a movie ran first from whether the *boot screen* played one. This
+    // line used to assert `Show Logo` and "having played it first" on every
+    // source, which was two false claims at once on a title whose picker comes
+    // first and whose boot screen is silent.
     if let Some(goto) = frontend.language_auto_redirect() {
         let target = frontend.language_confirm_target();
-        // Whether the *boot screen itself* played something, not whether the
-        // sequence has a movie anywhere: Pure loads two and plays neither before
-        // its picker.
-        let order = if start_step.movie.is_some() {
+        let order = if walked.first().is_some_and(|step| step.movie.is_some()) {
             ", having played the boot movie first"
         } else {
             ", with no movie before it"
@@ -482,7 +852,7 @@ pub fn load(options: &Options) -> Result<Boot> {
         }
     }
 
-    Ok(Boot {
+    Boot {
         languages: offered,
         strings,
         tracks,
@@ -496,27 +866,25 @@ pub fn load(options: &Options) -> Result<Boot> {
         after_language_movie_sound,
         sprites,
         report,
-    })
+    }
 }
 
 /// Whether two movies can share one set of I420 planes.
 ///
-/// The front end is drawn by one renderer with one plane set, sized once from
-/// whichever movie [`Boot::video_format`] names, and
+/// The front end is drawn by one renderer with one plane set, and
 /// [`crate::render::Renderer::upload_frame`] slices a frame by *those*
 /// dimensions rather than by the frame's own - so handing it a
-/// differently-shaped picture is a garbled image rather than an error. Every
-/// movie the front end draws is therefore checked against the one the pipeline
-/// was built for, and a mismatch is dropped with a report line instead.
+/// differently-shaped picture is a garbled image rather than an error.
 ///
-/// The display aspect is deliberately **not** compared: that differs per movie
-/// on the PS2 and is handled by the pillarbox rect, not by the plane size.
+/// The display aspect is deliberately **not** compared: that differs per movie on
+/// the PS2 and is handled by the pillarbox rect, not by the plane size.
+///
 /// **Unknown geometry is not disagreeing geometry.** `VideoFormat::of` answers
 /// `None` for a movie with no decoded frames - `--no-video`, no `ffmpeg`, a
 /// failed transcode - and there are then no planes to conflict over, because
 /// nothing will be uploaded. Reading that as a mismatch dropped the second movie
-/// on every `--no-video` load, which is exactly the configuration the
-/// ground-truth tests use.
+/// on every `--no-video` load, which is the configuration the ground-truth tests
+/// use.
 fn same_planes(a: &Movie, b: &Movie) -> bool {
     match (
         crate::render::VideoFormat::of(a),
@@ -584,9 +952,6 @@ fn load_movie_sound(
         return None;
     };
 
-    // Every `Movie` widget on every screen, not one per screen: Pure declares
-    // four of them on `Intro Screen` alone, and the one naming this movie is not
-    // necessarily the first or the last.
     let silent = screens
         .with_movies()
         .flat_map(|screen| screen.movies.iter())
@@ -648,11 +1013,6 @@ fn load_movie_sound(
 ///   every run after, and boot is already paying that for the intro's 1200 -
 ///   whereas the menus open on a keypress out of a race, where a
 ///   thirteen-second freeze would read as a hang.
-///
-/// `name` is the title's own, from [`oag_title::BootProfile::menu_backdrop`]. It
-/// used to be `pulse::names::BACKDROP_MOVIE` for every source, which was a Pulse
-/// literal tried against every disc - silent on Pure, since the miss is
-/// unreported by construction, but a lookup that could only ever fail.
 fn load_backdrop(
     archives: &mut oag_assets::Archives,
     name: &str,
@@ -677,16 +1037,19 @@ fn load_backdrop(
     }
 }
 
-/// Decodes the movie the after-language step plays, whichever title's it is.
+/// Decodes Pure's second boot movie - see
+/// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what it is, how
+/// its name was found, and what it takes to actually draw it (the other half
+/// of that work, done alongside this function: see `crate::frontend::Frontend`
+/// and `crate::main::FrontendStage` for the rest).
 ///
-/// `name` comes from that title's own chain, so this function knows nothing about
-/// which title it is serving. It used to gate on `screens.by_name("FMV Intro")`
-/// and name `oag_pure::names::FMV_INTRO_MOVIE` outright - a probe and a literal
-/// that between them assumed exactly one title could ever have a movie here.
-///
-/// Absence is reported and dropped rather than fatal: nothing on the command line
-/// asked for this movie, so a source that cannot produce it plays its sequence
-/// without one.
+/// `None`, and nothing attempted at all, for a source whose `screens` has no
+/// `FMV Intro` state - every Pulse source, and any future title this build
+/// has not seen. Checked against `screens` rather than tried unconditionally
+/// the way [`load_backdrop`] tries `BACKDROP_MOVIE` for every source: a miss
+/// there is silent by construction (no report line), but `FMV_INTRO_MOVIE` is
+/// a Pure-specific literal, and trying it against a Pulse source would add a
+/// "no second boot movie" line nobody asked about.
 fn load_second_movie(
     archives: &mut oag_assets::Archives,
     name: &str,
@@ -841,8 +1204,8 @@ fn load_screens(
 
     // This title's own measured stand-ins, not every title's. Pure's table used
     // to be handed to every source on the grounds that `or_insert` made it a
-    // no-op on Pulse - true, and true only for as long as no two titles measured
-    // a *different* value for one name. Pulse's own table is empty.
+    // no-op on Pulse - true, and true only for as long as no two titles measure a
+    // *different* value for one name. Pulse's own table is empty.
     let screens = Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
     report.push(format!(
         "{}: {} screens, {} globals, {} LoadXML includes",
@@ -1121,9 +1484,6 @@ pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
 /// and no `UCUS` string at all - and the ISO's volume id and publisher are both
 /// `SCEE`. Confidence 75; the selection itself has not been read out of the
 /// binary. `--movie hash:3d2c85f8` is the American cut.
-///
-/// The reel itself is a thing Pulse ships, so the spelling lives in that title's
-/// own package; this stays as the name the CLI and the tests already use.
 ///
 /// See `docs/architecture/frontend-boot.md`.
 pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
@@ -1436,20 +1796,21 @@ fn cache_dir_named(what: &str) -> std::path::PathBuf {
 mod tests {
     use super::{DEVPUB_REEL, EntryRef, pulse};
 
-    /// The CLI default spells the reel's hash as text, and the title package
-    /// holds it as a number. Two spellings of one fact can drift silently -
-    /// nothing would fail, `--reel` would simply address an entry that is not
-    /// there - so the text form is checked against the number rather than
-    /// trusted to stay in step.
+    /// The CLI default names the reel, and the title package holds its hash as a
+    /// number. Two spellings of one fact can drift silently - nothing would fail,
+    /// `--reel` would simply address an entry that is not there - so the name is
+    /// checked against the number rather than trusted to stay in step.
+    ///
+    /// This used to assert a `hash:` spelling. The name was recovered from the
+    /// `_<REGION>` suffix rule the localised movie widgets use, so the constant is
+    /// now what the disc itself calls the file.
     #[test]
-    fn the_reel_default_spells_the_hash_the_title_package_holds() {
-        assert_eq!(
-            DEVPUB_REEL,
-            format!("hash:{:08x}", pulse::hashes::DEVPUB_REEL_SCEE)
-        );
+    fn the_reel_default_names_the_entry_the_title_package_hashes() {
+        assert_eq!(DEVPUB_REEL, r"Data\Movies\IntroMovieP1_EU.PMF");
         assert_eq!(
             EntryRef::parse(DEVPUB_REEL).hash(),
-            pulse::hashes::DEVPUB_REEL_SCEE
+            pulse::hashes::DEVPUB_REEL_SCEE,
+            "the recovered name has to hash to the reel this title ships"
         );
     }
 

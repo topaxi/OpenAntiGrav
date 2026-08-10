@@ -29,6 +29,61 @@ just play --screenshot /tmp/logo.png --until "Show Logo" --press start,cross
 just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross --ticks 60
 ```
 
+## What is on screen before the intro, and why the disc has nothing there
+
+**The window opens in a twentieth of a second and shows the loading screen
+until the movies are ready.** The disc does nothing of the kind - its boot goes
+straight to the reel - so this is a divergence, and it exists because the wait
+is *ours* rather than the original's: the PSP decoded `Intro.PMF` from the UMD
+as it played, and this build has to have every frame of it in hand first.
+
+The numbers, measured on `pulse-psp-eu.chd` with every cache already warm and
+printed by the boot itself on every run (`the boot's first half took ...`):
+
+| | `--features native-video` (what `just play` uses on Linux) | default build |
+| --- | --- | --- |
+| Archives, XML, strings, font, sprites | 0.03 s | 0.03 s |
+| The intro reel | 2.7 s | 0.03 s |
+| The menu backdrop | 2.2 s | ~0 |
+| **Total before the window could open** | **4.9 s** | **0.08 s** |
+
+The native path decodes **every frame eagerly into memory** and hands back an
+array - see [ADR-0017](adr/0017-gstreamer-native-video.md), which chose that
+deliberately and costed it at "the PSP intro's 270 frames ... about 53 MiB".
+That figure is the *backdrop*; the intro is 1200 frames, so the two together
+are nearer 288 MiB and five seconds. The AV1 cache path (ADR-0008) decodes a
+frame at a time on demand and so costs nothing here.
+
+Either way the load is now in two halves, which is what lets the window come
+first:
+
+- `boot::load_shell` - archives, front-end XML, language plugins, the string
+  table, the font, the sprite sheet. Hundredths of a second, and enough to
+  build both the loading screen and the menus. Runs before the event loop.
+- `boot::load_media` - the intro, its ATRAC3+ track, the backdrop, Pure's
+  second reel. Runs on a `boot::MediaWorker` thread while the window is already
+  up and the wave is drawing.
+- `boot::assemble` - joins the two into a `boot::Boot`. It cannot run earlier:
+  `Frontend::booting` needs the reels' frame counts.
+
+`boot::load` still does all three back to back, blocking, and that is what
+`--dry-run`, every `--screenshot` leg and the ground-truth tests use: none of
+them has anywhere to show a wait.
+
+The loading screen therefore now appears on **every** windowed boot rather than
+only under `--prefetch`. With no conversion to count it draws the wave, a tip
+and the word `LOADING` - no bar and no `0 / 0`, because there is no count
+behind them. `--prefetch` adds its own wait to the same screen, and the
+conversion deliberately does not start until the boot's own movies are done:
+both write `ffmpeg` output into `data/cache/movies`, and two processes writing
+one file is a corrupt cache.
+
+```sh
+# Both states, without a display.
+just play --screenshot /tmp/loading.png --loading-screen 0/0 --ticks 1
+just play --screenshot /tmp/converting.png --loading-screen 37/115 --ticks 1
+```
+
 ## The sequence
 
 | State | What happens |

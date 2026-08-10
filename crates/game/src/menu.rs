@@ -1187,6 +1187,17 @@ pub struct Menu {
     /// not the second, which is the difference between a menu that is pleasant
     /// to use and one that is merely correct.
     cursor: Vec<usize>,
+    /// How far the visible window has been pushed down, **per page** and
+    /// parallel to [`Definition::pages`] for the reason [`Self::cursor`] is.
+    ///
+    /// A hint rather than the answer: [`Self::scroll`] clamps it against the
+    /// page it is read for, so a window left somewhere that no longer holds the
+    /// cursor - because [`Self::open`] jumped, or because a page was left near
+    /// its end and re-entered - draws correctly without every caller having to
+    /// remember to reset it. Only [`Self::update`] writes it, and only to say
+    /// "the window really is here now", which is what stops a cursor moving
+    /// back up from snapping the list to the top.
+    scroll: Vec<usize>,
 }
 
 impl Menu {
@@ -1195,10 +1206,12 @@ impl Menu {
     pub fn new(definition: Definition) -> Self {
         let root = definition.root;
         let cursor = vec![0; definition.pages.len()];
+        let scroll = vec![0; definition.pages.len()];
         Self {
             definition,
             stack: vec![root],
             cursor,
+            scroll,
         }
     }
 
@@ -1362,6 +1375,22 @@ impl Menu {
         self.cursor[self.current()]
     }
 
+    /// First row of the page being drawn that is actually on screen.
+    ///
+    /// Zero on every page that fits, which is most of them; the graphics and
+    /// controls pages do not, and a row a player cannot see is a row they
+    /// cannot set. Derived from the stored push rather than returned raw, so
+    /// this is always a window that holds the cursor - see [`window_start`] for
+    /// the rule and for why the list moves on the second-last visible row.
+    #[must_use]
+    pub fn scroll(&self) -> usize {
+        window_start(
+            self.scroll[self.current()],
+            self.selected(),
+            self.page().entries.len(),
+        )
+    }
+
     /// Index of the page being drawn.
     fn current(&self) -> usize {
         *self.stack.last().expect("the stack is never empty")
@@ -1384,11 +1413,22 @@ impl Menu {
         let rows = self.page().entries.len();
 
         let page = self.current();
+        let mut moved = false;
         if take(input, button::DOWN) && rows > 0 {
             self.cursor[page] = (self.cursor[page] + 1) % rows;
+            moved = true;
         }
         if take(input, button::UP) && rows > 0 {
             self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
+            moved = true;
+        }
+        // The window follows the cursor and then **stays there**. Storing it is
+        // the whole difference between a list that scrolls and one that snaps:
+        // without this the window is only ever the tightest one holding the
+        // cursor, so stepping back up off the last row would jump the page to
+        // the top instead of revealing the row above.
+        if moved {
+            self.scroll[page] = self.scroll();
         }
 
         let right = take(input, button::RIGHT);
@@ -1582,6 +1622,50 @@ const FIRST_ROW_Y: f32 = 72.0;
 const ROW_HEIGHT: f32 = 20.0;
 const ROW_SCALE: f32 = 1.0;
 
+/// How many rows are on screen at once.
+///
+/// Derived from the three constants above and the 272-pixel screen rather than
+/// picked: rows start at [`FIRST_ROW_Y`] and are [`ROW_HEIGHT`] apart, and the
+/// noted-row message under them needs a line of its own, at `0.8` scale against
+/// a font whose line height is up to 25 pixels on the disc's own faces. Eight
+/// rows put the last one's baseline at 212 and the message at 238, which clears
+/// the bottom on every font this draws with; nine would not on the tallest.
+///
+/// Every page but `graphics` and `controls` is shorter than this, so on almost
+/// all of them nothing below scrolls at all.
+const VISIBLE_ROWS: usize = 8;
+
+/// Where the visible window starts, given where it was pushed to and where the
+/// cursor is.
+///
+/// The rule is one row of lookahead at each end: the row after the selected one
+/// is always drawn, so a player moving down sees where they are going before
+/// they get there, and the list starts moving when the cursor reaches the
+/// **second-last** visible row rather than the last. The same on the way up.
+/// That is the `floor`/`ceiling` pair below, and it is why a menu never scrolls
+/// with the cursor pinned to the bottom edge.
+///
+/// `pushed` is a hint and this is a pure function of it, which is what lets
+/// [`Menu::scroll`] be correct on a page whose stored window predates a jump:
+/// anything out of range is clamped back into one rather than trusted. The two
+/// ends cannot fight - `floor <= ceiling` needs only `VISIBLE_ROWS >= 3` - so
+/// the `max` last is safe.
+fn window_start(pushed: usize, selected: usize, rows: usize) -> usize {
+    // A page that fits never scrolls, whatever it was left holding.
+    if rows <= VISIBLE_ROWS {
+        return 0;
+    }
+    let last = rows - VISIBLE_ROWS;
+    // Far enough down that the row under the cursor is drawn - unless the
+    // cursor is on the final row, where `min(rows)` says there is nothing left
+    // to keep visible and the window stops at the end of the list.
+    let floor = (selected + 2).min(rows).saturating_sub(VISIBLE_ROWS);
+    // Not so far down that the row above the cursor is cut off, and not past
+    // the top of the list when the cursor is on the first row.
+    let ceiling = selected.saturating_sub(1);
+    pushed.min(last).min(ceiling).max(floor)
+}
+
 /// The highlight behind the selected row, and the two text colours.
 const HIGHLIGHT: [f32; 4] = [0.37, 0.86, 0.96, 0.35];
 const SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
@@ -1647,9 +1731,23 @@ pub fn draw_list(
     // order wins, because they are the same kind of thing to a player - "this
     // row is not doing what it says" - and ranking them would mean deciding
     // which of two true sentences to hide.
+    //
+    // Only the rows on screen are considered, markers and message alike: the
+    // message sits under the rows and the markers say which of them, so a note
+    // belonging to a row that has scrolled away would be a sentence about
+    // nothing the player can see.
     let mut noted: Option<String> = None;
-    for (row, entry) in page.entries.iter().enumerate() {
-        let y = FIRST_ROW_Y + row as f32 * ROW_HEIGHT;
+    let first = menu.scroll();
+    let mut shown = 0usize;
+    for (row, entry) in page
+        .entries
+        .iter()
+        .enumerate()
+        .skip(first)
+        .take(VISIBLE_ROWS)
+    {
+        let y = FIRST_ROW_Y + (row - first) as f32 * ROW_HEIGHT;
+        shown += 1;
         let selected = row == menu.selected();
         if selected {
             out.push(Draw::Fill {
@@ -1734,12 +1832,13 @@ pub fn draw_list(
         }
     }
 
-    // Under the last row rather than at a fixed height, so it sits with the
-    // page it belongs to instead of floating away from a short one.
+    // Under the last row *drawn* rather than at a fixed height, so it sits with
+    // the page it belongs to instead of floating away from a short one - and so
+    // a scrolled page puts it under the window rather than off the bottom.
     if let Some(message) = noted {
         out.push(Draw::Text {
             x: MARGIN_X - 18.0,
-            y: FIRST_ROW_Y + page.entries.len() as f32 * ROW_HEIGHT + 6.0,
+            y: FIRST_ROW_Y + shown as f32 * ROW_HEIGHT + 6.0,
             scale: ROW_SCALE * 0.8,
             color: WARNING,
             border: None,
@@ -2962,6 +3061,162 @@ restart_required = "RESTART THE GAME"
         assert_eq!(menu.selected(), 0, "past the last row wraps to the first");
         press(&mut menu, &[button::UP]);
         assert_eq!(menu.selected(), 1, "and back off the top wraps to the last");
+    }
+
+    /// A page with more rows than fit, built here rather than taken off the
+    /// shipped definition so the scrolling tests below say what they mean even
+    /// after someone adds or removes a graphics setting.
+    fn long_page(rows: usize) -> Definition {
+        let mut text = String::from("version = 1\nroot = \"main\"\n[[page]]\nid = \"main\"\n");
+        for row in 0..rows {
+            text.push_str(&format!(
+                "[[page.entry]]\nkind = \"action\"\nlabel = \"ROW{row}\"\naction = \"quit\"\n"
+            ));
+        }
+        Definition::parse(&text).expect("the fixture must parse")
+    }
+
+    /// The labels actually on screen, top to bottom.
+    fn rows_drawn(menu: &Menu) -> Vec<String> {
+        draw_list(menu, &no_bindings, None)
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, x, y, .. } if x == MARGIN_X && y >= FIRST_ROW_Y => Some(text),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The point of the whole thing: a page longer than the screen shows a
+    /// window into itself, and the window moves when the cursor reaches the
+    /// **second-last** visible row rather than the last one, so the row a
+    /// player is moving towards is on screen before they get to it.
+    #[test]
+    fn a_long_page_scrolls_one_row_before_the_cursor_reaches_the_bottom() {
+        let mut menu = Menu::new(long_page(VISIBLE_ROWS + 3));
+        assert_eq!(menu.scroll(), 0);
+        assert_eq!(rows_drawn(&menu).len(), VISIBLE_ROWS, "the window is full");
+
+        // Down to the second-last visible row. Nothing has moved yet: the last
+        // one is still below the cursor, which is the lookahead.
+        for _ in 0..VISIBLE_ROWS - 2 {
+            press(&mut menu, &[button::DOWN]);
+        }
+        assert_eq!(menu.selected(), VISIBLE_ROWS - 2);
+        assert_eq!(menu.scroll(), 0, "the page does not move until it must");
+
+        // One more, and it moves by one - not by a screenful.
+        press(&mut menu, &[button::DOWN]);
+        assert_eq!(menu.selected(), VISIBLE_ROWS - 1);
+        assert_eq!(menu.scroll(), 1);
+        assert_eq!(rows_drawn(&menu).first().map(String::as_str), Some("ROW1"));
+
+        press(&mut menu, &[button::DOWN]);
+        assert_eq!(menu.scroll(), 2);
+    }
+
+    /// The last row is reachable and is drawn at the bottom of a full window,
+    /// rather than the list scrolling past its own end.
+    #[test]
+    fn the_final_row_sits_at_the_bottom_of_a_full_window() {
+        let rows = VISIBLE_ROWS + 3;
+        let mut menu = Menu::new(long_page(rows));
+        for _ in 0..rows - 1 {
+            press(&mut menu, &[button::DOWN]);
+        }
+        assert_eq!(menu.selected(), rows - 1);
+        assert_eq!(menu.scroll(), rows - VISIBLE_ROWS);
+        let drawn = rows_drawn(&menu);
+        assert_eq!(drawn.len(), VISIBLE_ROWS);
+        assert_eq!(drawn.last().map(String::as_str), Some("ROW10"));
+    }
+
+    /// The mirror of the rule going down, and the reason the window is stored
+    /// rather than recomputed from the cursor alone: stepping back up keeps the
+    /// row above the cursor visible and moves nothing until it has to.
+    #[test]
+    fn moving_back_up_scrolls_one_row_before_the_cursor_reaches_the_top() {
+        let rows = VISIBLE_ROWS + 3;
+        let mut menu = Menu::new(long_page(rows));
+        for _ in 0..rows - 1 {
+            press(&mut menu, &[button::DOWN]);
+        }
+        let bottom = menu.scroll();
+
+        // Back up to the second row of the window: still nothing to do, the row
+        // above the cursor is drawn.
+        for _ in 0..VISIBLE_ROWS - 2 {
+            press(&mut menu, &[button::UP]);
+        }
+        assert_eq!(menu.scroll(), bottom, "the window has not moved yet");
+        assert_eq!(menu.selected(), bottom + 1);
+
+        press(&mut menu, &[button::UP]);
+        assert_eq!(menu.scroll(), bottom - 1, "one row, not a screenful");
+    }
+
+    /// Wrapping is the one jump the cursor makes, and the window has to go with
+    /// it: off the last row lands on the first with the page back at the top,
+    /// and off the top lands on the last with it at the end.
+    #[test]
+    fn wrapping_takes_the_window_with_it() {
+        let rows = VISIBLE_ROWS + 3;
+        let mut menu = Menu::new(long_page(rows));
+        for _ in 0..rows {
+            press(&mut menu, &[button::DOWN]);
+        }
+        assert_eq!(menu.selected(), 0, "past the last row wraps to the first");
+        assert_eq!(menu.scroll(), 0);
+        assert_eq!(rows_drawn(&menu).first().map(String::as_str), Some("ROW0"));
+
+        press(&mut menu, &[button::UP]);
+        assert_eq!(menu.selected(), rows - 1);
+        assert_eq!(menu.scroll(), rows - VISIBLE_ROWS);
+    }
+
+    /// A page that fits never scrolls, whatever the cursor does on it. Most
+    /// pages are this one, and a window that crept off zero on them would move
+    /// the rows for no reason.
+    #[test]
+    fn a_page_that_fits_never_moves() {
+        let mut menu = Menu::new(long_page(VISIBLE_ROWS));
+        for _ in 0..VISIBLE_ROWS * 2 {
+            press(&mut menu, &[button::DOWN]);
+            assert_eq!(menu.scroll(), 0, "on row {}", menu.selected());
+        }
+    }
+
+    /// The check that matters for the definition this build ships: no page
+    /// draws a row below the bottom of the screen, on any row the cursor can
+    /// be on. This is the failure the scrolling exists to fix, and it is worth
+    /// asserting against the real asset rather than a fixture.
+    #[test]
+    fn no_shipped_page_draws_a_row_off_the_bottom_of_the_screen() {
+        let definition = built_in();
+        for id in definition
+            .pages
+            .iter()
+            .map(|page| page.id.clone())
+            .collect::<Vec<_>>()
+        {
+            let mut menu = Menu::new(built_in());
+            assert!(menu.open(&id));
+            for _ in 0..menu.page().entries.len() {
+                for draw in draw_list(&menu, &no_bindings, None) {
+                    if let Draw::Text { y, scale, .. } = draw {
+                        // The tallest disc font's line height, which is what a
+                        // row is drawn with; see `crate::font::Atlas`.
+                        let bottom = y + 25.0 * scale;
+                        assert!(
+                            bottom <= crate::frontend::SCREEN.1,
+                            "page {id:?} draws to {bottom} with the cursor on row {}",
+                            menu.selected()
+                        );
+                    }
+                }
+                press(&mut menu, &[button::DOWN]);
+            }
+        }
     }
 
     /// Going into a page and back out again must land on the row that was

@@ -85,6 +85,24 @@ pub struct Assets {
     pub notes: Vec<String>,
 }
 
+impl Default for Assets {
+    /// No tips and the authored stand-in strip.
+    ///
+    /// The same thing [`Assets::load`] falls back to when the disc's own strip
+    /// will not decode, so this is a drawable screen rather than an empty
+    /// husk - which matters because `--race` carries one it never draws, and a
+    /// zero-sized texture would be a validation error the moment anything did.
+    fn default() -> Self {
+        Self {
+            tips: Vec::new(),
+            strip: oag_render::loading::GlowStrip::placeholder(
+                oag_render::loading::STRIP_SIZE as u32,
+            ),
+            notes: Vec::new(),
+        }
+    }
+}
+
 impl Assets {
     /// Reads both entries out of `source`, degrading rather than failing.
     ///
@@ -306,36 +324,40 @@ impl Screen {
         // The bar and the counts say the same thing twice on purpose: the bar is
         // what is read at a glance across ten minutes, and the figures are what
         // distinguish "slow" from "stuck" when the bar has not visibly moved.
-        let filled = progress.fraction().clamp(0.0, 1.0) * BAR_WIDTH;
-        out.push(Draw::Fill {
-            rect: [BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT],
-            color: dim(BAR_TROUGH),
-        });
-        if filled > 0.0 && !progress.planning {
+        //
+        // All of it together, or none of it: see [`counted`].
+        if counted(progress) {
+            let filled = progress.fraction().clamp(0.0, 1.0) * BAR_WIDTH;
             out.push(Draw::Fill {
-                rect: [BAR_X, BAR_Y, filled, BAR_HEIGHT],
-                color: dim(BAR_FILL),
+                rect: [BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT],
+                color: dim(BAR_TROUGH),
+            });
+            if filled > 0.0 && !progress.planning {
+                out.push(Draw::Fill {
+                    rect: [BAR_X, BAR_Y, filled, BAR_HEIGHT],
+                    color: dim(BAR_FILL),
+                });
+            }
+
+            out.push(Draw::Text {
+                x: BAR_X,
+                y: COUNTS_Y,
+                scale: COUNTS_SCALE,
+                color: dim(COUNTS),
+                border: None,
+                align: Align::Left,
+                text: counts(progress),
+            });
+            out.push(Draw::Text {
+                x: BAR_X + BAR_WIDTH,
+                y: COUNTS_Y,
+                scale: COUNTS_SCALE,
+                color: dim(COUNTS),
+                border: None,
+                align: Align::Right,
+                text: percentage(progress),
             });
         }
-
-        out.push(Draw::Text {
-            x: BAR_X,
-            y: COUNTS_Y,
-            scale: COUNTS_SCALE,
-            color: dim(COUNTS),
-            border: None,
-            align: Align::Left,
-            text: counts(progress),
-        });
-        out.push(Draw::Text {
-            x: BAR_X + BAR_WIDTH,
-            y: COUNTS_Y,
-            scale: COUNTS_SCALE,
-            color: dim(COUNTS),
-            border: None,
-            align: Align::Right,
-            text: percentage(progress),
-        });
 
         if let Some(current) = &progress.current {
             out.push(Draw::Text {
@@ -358,10 +380,31 @@ fn heading(progress: &Progress) -> String {
     if progress.planning {
         return "READING THE ARCHIVES".to_string();
     }
+    if !counted(progress) {
+        // The ordinary boot: the screen is up for the movies rather than for a
+        // conversion, and there is no count behind this word. See [`counted`].
+        return "LOADING".to_string();
+    }
     if progress.finished {
         return "READY".to_string();
     }
     "CONVERTING ASSETS".to_string()
+}
+
+/// Whether there is a conversion being counted, and so whether the bar, the
+/// done/total pair and the percentage have anything to say.
+///
+/// **`false` is the ordinary boot.** The loading screen is up on every windowed
+/// start now, covering the seconds the boot's own two movies take to decode -
+/// one wait, not a count of many - and `--prefetch` is the only thing that ever
+/// fills these numbers in. Drawing them anyway gave `0 / 0 converted` beside a
+/// full bar reading `100%`, which describes nothing and looks like a bug in the
+/// counter rather than an absence of one. The three are one row and go together.
+///
+/// `planning` counts as counted: a worker that has not finished its walk has a
+/// total of zero and is certainly converting something.
+fn counted(progress: &Progress) -> bool {
+    progress.planning || progress.total > 0
 }
 
 /// The done/total pair, and the two counts that only matter when they are not
@@ -667,6 +710,45 @@ mod tests {
             "{drawn:?}"
         );
         assert!(drawn.iter().any(|line| line == "a tip"), "{drawn:?}");
+    }
+
+    /// **The ordinary boot draws no counter at all.** Without `--prefetch`
+    /// there is no conversion behind this screen - it is up for the boot's own
+    /// movies - and every number on it would be zero. The bar, the `0 / 0
+    /// converted` and the `100%` are one row and are all absent together; the
+    /// tip and the wave are what is left, which is the whole screen a player
+    /// ordinarily sees.
+    #[test]
+    fn a_boot_with_nothing_to_convert_draws_no_bar_and_no_counts() {
+        let atlas = Atlas::build();
+        let screen = Screen::new(vec!["a tip".to_string()]);
+        // What `Session::prefetch_progress` reports on a run with no worker.
+        let state = Progress {
+            finished: true,
+            ..Progress::default()
+        };
+        let list = screen.draw_list(&state, &atlas);
+        let drawn = text_of(&list);
+
+        assert!(
+            !drawn.iter().any(|line| line.contains("converted")),
+            "no done/total pair: {drawn:?}"
+        );
+        assert!(
+            !drawn.iter().any(|line| line.ends_with('%')),
+            "no percentage: {drawn:?}"
+        );
+        assert!(drawn.iter().any(|line| line == "a tip"), "{drawn:?}");
+        assert!(
+            drawn.iter().any(|line| line == "LOADING"),
+            "the heading says what is happening rather than READY: {drawn:?}"
+        );
+        // The backdrop fill is the only one left: no trough, no filled half.
+        let fills = list
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Fill { .. }))
+            .count();
+        assert_eq!(fills, 1, "only the backdrop, no bar: {list:?}");
     }
 
     /// Nothing counted yet is not `100%` - see [`percentage`].

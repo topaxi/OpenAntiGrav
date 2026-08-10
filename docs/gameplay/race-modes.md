@@ -5,6 +5,32 @@ Three single-ship modes are implemented: **time trial**, **speed lap** and
 first - they are the part of the race layer that can be finished rather than
 stubbed.
 
+**Neither is invented - both are measured on the running original and now
+enforced in code, not just true by construction.** `Mode::has_opponents` and
+`Mode::weapons_enabled` return `false` for all three: the Custom Race screen
+greys `AI DIFFICULTY` to `N/A` and `WEAPONS` to `Off` for time trial, speed lap
+and Zone alike, screenshotted for all seven of the original's race types on
+2026-08-10 - see
+[shield.md](../ghidra/functions/psp-pulse-usa/shield.md#g_weapons_enableds-per-mode-default-spelled-out-and-checked-against-every-race-type).
+Two consequences in `crates/game/src/race.rs`:
+
+- **The grid never spawns opponents for these three modes.** It used to spawn
+  the full eight-craft grid whenever a track authored a `Start Position`,
+  regardless of mode - correct arithmetic ([grid.md](../ghidra/functions/psp-pulse-usa/grid.md)
+  measured it against a *Single Race*, the "one reachable race type with a
+  full field", never against one of the three modes this crate races), wired
+  to the wrong condition. `Options::opponents` is the escape hatch the grid
+  measurement's own ground-truth test and `--opponents` on `just play` use to
+  see a full grid without a fourth mode existing yet.
+- **`Weapon Pad`s decode but are never drawn.** The original does the
+  equivalent at a different layer - `World_CollectNodeLists` clears the
+  node's own visibility bits rather than skipping the decode - documented on
+  [pads.md](../ghidra/functions/psp-pulse-usa/pads.md#a-weapons-off-race-neither-draws-weapon-pads-nor-can-trigger-them).
+  `Scene::new` makes the same "decoded, never uploaded" choice for the same
+  reason: the geometry decode is asset-pipeline correctness, mode-independent,
+  and `the_weapon_pads_are_drawn_where_they_trigger` checks exactly that on
+  every mode's own default settings.
+
 The rules live in `crates/race`; how a lap is decided at all is
 [lap counting](lap-counting.md), and it is a convention rather than a recovery.
 

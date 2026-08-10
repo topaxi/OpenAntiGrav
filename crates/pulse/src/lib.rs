@@ -186,16 +186,24 @@ pub mod names {
     /// The looping backdrop behind the main menu.
     pub const BACKDROP_MOVIE: &str = r"Data\Movies\Backdrop.PMF";
 
-    /// The dev/pub reel, addressed by hash because it has no recovered name.
+    /// The dev/pub reel: the European cut, by name.
     ///
-    /// The European cut, whose contents fit `Intro Screen->IntroMovie1`'s own
-    /// constants - 260 frames, holds at 144 and 231. Spelled as an `EntryRef`
-    /// hash spec rather than a bare `u32` so it can stand where an entry name
-    /// stands; [`crate::hashes::DEVPUB_REEL_SCEE`] is the same number.
+    /// **The name was recovered, and this used to be `hash:b1ba72c3`.** The reel
+    /// is `localised="true"` and ships in four regional cuts, so the naming rule
+    /// is a `_<REGION>` suffix - `_EU` here, hashing to
+    /// [`crate::hashes::DEVPUB_REEL_SCEE`], verified by resolving it on both
+    /// titles' discs. The other three are
+    /// `oag_pure::names::INTRO_MOVIE_CUTS`; the reel is a shared asset, and Pure
+    /// is the title that actually plays it.
+    ///
+    /// Its contents fit `Intro Screen->IntroMovie1`'s own constants - 260 frames,
+    /// holds at 144 and 231 - which is what those constants describe: **Pure's
+    /// developer/publisher screen**, inherited into Pulse's executable and never
+    /// entered at boot there.
     ///
     /// A title fact rather than an engine one, which is why it lives here: the
     /// reel is a thing this title ships, and `--reel` is a flag that asks for it.
-    pub const DEVPUB_REEL: &str = "hash:b1ba72c3";
+    pub const DEVPUB_REEL: &str = r"Data\Movies\IntroMovieP1_EU.PMF";
 
     /// The five `.fnt` bitmap fonts, in `FE.wad`.
     ///

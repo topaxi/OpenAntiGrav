@@ -444,8 +444,13 @@ seen from the authoring side.
       craft blows up for half a second, and `Ship_SetState` case 5 sets the bit
       `Zone_UpdateRacing` watches - which is the bit that page recorded as set by
       nothing findable. What is absent is the *presentation* of it, the explosion
-      and the camera hand-off. **Positions are still untouched**, and the grid is
-      recovered but nothing spawns opponents onto it.
+      and the camera hand-off. **The grid geometry is recovered and measured**
+      ([grid.md](../ghidra/functions/psp-pulse-usa/grid.md)), but none of the
+      three modes here spawns opponents onto it, because none of the three
+      races with any in the original either - `AI DIFFICULTY` greys to `N/A`
+      for all three on the real Custom Race screen, confirmed live for every
+      race type. See [race-modes.md](../gameplay/race-modes.md). The AI item
+      below is what a fourth, opponent-bearing mode is waiting on.
 - [~] HUD. **The disc's own layout is parsed and drawn.** All five
       `Data\XML\*_HUD.xml` layouts decode - exact rectangles, atlas UVs, colour
       constants, font roles - and a race draws the speed and shield bars, the lap
@@ -610,15 +615,19 @@ place. `oag_gameplay::spawn::grid_pose` is the port. Which ship gets which slot
 is a shipped permutation table, and a short field packs to the *back*. See
 [grid](../ghidra/functions/psp-pulse-usa/grid.md).
 
-**Eight craft now take the grid**, and every slot lands within **2.40 units** of
+**Eight craft can take the grid**, and every slot lands within **2.40 units** of
 where the original puts its own - a near-constant residual dominated by our
 anchor being 1.68 out, which is what says the layout is right rather than
 averaging out. `crates/game/tests/race_ground_truth.rs` pins it against the
-original's own eight positions.
+original's own eight positions. "Can" rather than "does": none of the three
+modes this crate implements races with opponents in the original either, so a
+real race spawns the player alone - `race::Options::opponents` is what the
+ground-truth test above sets to exercise the full grid without a fourth,
+opponent-bearing mode existing yet.
 
-**Nothing drives the seven opponents.** They hold station on the grid, and they
-all wear the player's hull. That is the AI item and the livery item, not the
-grid one.
+**Nothing drives the seven opponents, when a build asks for them at all.** They
+hold station on the grid, and they all wear the player's hull. That is the AI
+item and the livery item, not the grid one.
 
 ---
 

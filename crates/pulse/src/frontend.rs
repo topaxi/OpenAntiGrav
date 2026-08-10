@@ -131,20 +131,16 @@ mod tests {
     }
 
     #[test]
-    fn the_reel_spec_spells_the_hash_this_crate_holds() {
+    fn the_reel_names_the_entry_this_crate_hashes() {
         let reel = BOOT_PROFILE
             .reel
             .expect("Pulse has an evidenced reel state");
         assert_eq!(reel.state, states::INTRO_MOVIE);
-        assert_eq!(
-            reel.movie,
-            Some(crate::names::DEVPUB_REEL),
-            "the reel is addressed by hash, having no recovered name"
-        );
+        assert_eq!(reel.movie, Some(crate::names::DEVPUB_REEL));
         assert_eq!(
             crate::names::DEVPUB_REEL,
-            format!("hash:{:08x}", crate::hashes::DEVPUB_REEL_SCEE),
-            "the text form and the number must not drift apart"
+            r"Data\Movies\IntroMovieP1_EU.PMF",
+            "the name was recovered from the localised movie widgets' suffix rule"
         );
     }
 

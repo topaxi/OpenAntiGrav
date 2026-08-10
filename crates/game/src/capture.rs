@@ -307,6 +307,17 @@ pub fn run(
         audio.start_boot_movie(state, sound);
     }
 
+    // Those two draw one thing and step nothing, so no movie ever ends to hand
+    // the music its cue the way the loop below does. A `--dump-audio` run of
+    // either would otherwise be silence.
+    if options.screen.is_some() || options.menu_page.is_some() {
+        audio.start_music(
+            &options.music_discs,
+            options.settings.audio.music_source,
+            &crate::boot::default_audio_cache_dir(),
+        );
+    }
+
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
     // somewhere the capture then ignores.
@@ -367,6 +378,17 @@ pub fn run(
         // rather than the player.
         if !frontend.is_playing_movie() {
             audio.stop_movie();
+        }
+        // The menu music's cue is **no movies left**, kept in step with
+        // `App::tick`'s own: "not in a movie" is true before a picker-first
+        // title's reel has played at all, and starting the loop there puts it
+        // under the reel.
+        if !frontend.is_playing_movie() && pending_sound.is_empty() {
+            audio.start_music(
+                &options.music_discs,
+                options.settings.audio.music_source,
+                &crate::boot::default_audio_cache_dir(),
+            );
         }
         crate::report(&events, options.trace);
         for note in frontend.take_notes() {
