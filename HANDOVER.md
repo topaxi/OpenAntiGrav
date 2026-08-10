@@ -238,19 +238,27 @@ four-fin cross and the `~3.5` direction stretch; and a
 `--pose-intensity 0.1292277 --pose-boost 0.5` render reaches `0.2542` against
 the capture's recorded `0.2544947`.
 
-**The plume's texgen is recovered and implemented, and it fixed the reported
-"yellowish solid mesh".** `shipboost.vex`'s authored UVs pin `u` to texel column
-0, the one column of `pulse_boost2_ADD` that is flat down every row - so the
-texture multiplied every fin by a constant white. The original never reads those
-coordinates: `Mesh_BeginTransparentPass` sets `TEXMAPMODE` uvgen 2 and nothing
-in the batch loop undoes it. The two light vectors are recovered from
-`Rx(-1.0) * Ry(0.3)` (confidence 85 on the numbers, 95 on the angles) and the
-UVs move with the **ship**, not the camera - a plume that shimmers as the camera
-orbits a stationary ship has it wrong, and `texgen::environment_map` takes no
-view matrix so it cannot drift into a matcap structurally. Implemented in
-`oag_render::texgen` **for the boost plume alone**: switching every transparent
-batch on every track and ship is a blast radius `mesh-draw.md` has twice
-refused off one pass.
+**Overturned 2026-08-10: the plume is replayed under `TEXMAPMODE` 0 and the
+original DOES read the authored UVs. `oag_render::texgen` is the wrong
+mechanism for the plume.** Settled live at confidence 92 - the recorded frame
+stream was walked in GE execution order to the plume's own `VADDR`/`PRIM`
+words, six independently frozen frames, all mode 0, with 73 mode-2 `PRIM`s
+per frame as the positive control that the walker does see the env-map
+brackets. Full method and evidence: mesh-draw.md, "The plume is replayed
+under `TEXMAPMODE` 0". The earlier text here claimed
+`Mesh_BeginTransparentPass` sets uvgen 2 and "nothing in the batch loop
+undoes it" - the bracket is real but the plume draws outside it, downstream
+of its restore. What replaces texgen as the recovered mechanism: **authored
+UVs sampled through an animated per-material `TexOffset` u-scroll** - the
+plume's texture-transform list (compiled lazily on first draw; `0xfeadfead`
+heap canaries until then) reads `TexScale(1,1)` + `TexOffset(u, 0)` with `u`
+animating (`0.956`, `0.504` at two freezes). That is the same per-material
+`Gu_TexScale`/`Gu_TexOffset` transform the open-threads table below already
+carries as real-and-unported; porting it is now the plume's fidelity path,
+and `texgen`'s empirical win (extent +12 %, orange -9 %) was real but for the
+wrong reason. The texgen code itself and its two recovered light vectors
+remain correct *for the batches inside the bracket* (73 draws per frame use
+mode 2); only its application to the plume is wrong.
 
 **`exhaust::BLEND` (`SrcAlpha`) is kept because it measures better, not because
 it is understood, and this is a negative result about something the project

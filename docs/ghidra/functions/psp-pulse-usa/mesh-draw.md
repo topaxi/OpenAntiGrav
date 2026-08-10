@@ -184,7 +184,8 @@ yields several independently-recorded lists, only some of them inside the
 uvgen-2 bracket. The plume's batches are on the geometry-pass side per this
 page's own earlier correction, and a freshly started list does not inherit the
 bracket's state - so the mode live when the plume's list is *replayed* is the
-open question, unchanged.
+open question, unchanged. **Since settled: mode 0 - see "The plume is replayed
+under `TEXMAPMODE` 0" below.**
 
 **Net effect on the implementation:** `oag_render::texgen` moves from
 "empirically better, with its mechanism attributed through a pass the plume
@@ -195,9 +196,13 @@ a real upgrade in status and still not a proof that the plume is inside it.
 
 `Gu_TexMapMode` keeps a shadow: it stores `mode & 3` into **`ctx+0xf4`**, where
 `ctx` is the sceGu context at **`0x08adc3ac`**. That address is the struct's
-**base, not a pointer to it** - `+0x08` holds the current list write pointer
-(read live: `0x48bacc40`, in the uncached VRAM mirror), which is what
-identifies the layout. A first attempt dereferenced it and got zero.
+**base, not a pointer to it** - a first attempt dereferenced it and got zero.
+**Corrected 2026-08-10:** `+0x08` is the master list's *start* (read live:
+`0x48bacc40` at two independent freezes - a "current write pointer" would not
+sit exactly at the start twice), and **`+0x0c` is the current write pointer**
+(read live: `0x48bad3a8`, mid-frame). Both are uncached mirrors of main RAM
+(`0x48bacc40 & 0x1fffffff = 0x08bacc40`), not VRAM as an earlier version of
+this paragraph said.
 
 The shadow is readable while the game free-runs, so it costs nothing and does
 not slow the emulator - the failure mode that defeated every breakpoint-based
@@ -243,7 +248,10 @@ Verified live: the value reads back, and `Exhaust_UpdateEngineSound` decays it
 exactly as the recovered code says. That reveals `<Team>boost.vex` with no
 driving at all.
 
-## Which `TEXMAPMODE` the plume gets is **not** settled, and this page overstated it
+## Which `TEXMAPMODE` the plume gets was **not** settled, and this page overstated it
+
+**Since settled: mode 0, `GU_TEXTURE_COORDS` - see the next section.** This
+section stands as the record of why every earlier method fell short.
 
 2026-08-10. `Gu_TexMapMode` (`0x08811508`) has **13** callers, and reading the
 arguments at four of them shows the engine uses at least three different modes:
@@ -280,6 +288,104 @@ the plume's draw. **Until then the plume's two short batches remain the open
 question they were**: 9 and 10 vertices whose authored UVs decode to a single
 point, harmless under generated coordinates and a flat one-texel sample under
 authored ones.
+
+## The plume is replayed under `TEXMAPMODE` 0 - settled, live
+
+**2026-08-10, confidence 92.** Runtime read on PPSSPP (remote debugger,
+`scripts/ppsspp_debugger.py` harness), Talon's Junction TIME TRIAL / VENOM,
+boost held up by rewriting `0.8f` at `flare+0xb8`. Single binary, so the
+rubric's runtime-trace ceiling of 94 applies; the two points under it are for
+one title, one track, one race mode.
+
+**The boost plume's batches draw with `TEXMAPMODE` mode 0,
+`GU_TEXTURE_COORDS` - the authored UVs.** Not mode 2. The environment-map
+bracket is real and runs every frame (73 `PRIM`s per frame execute under mode
+2, measured below), but the plume is not inside it, exactly as the
+geometry-pass structural reading predicted.
+
+### The chain, walked live
+
+```text
+craft 0x09a04170 -> +0x1c4 -> 0x09a031b0 (entity)
+                 -> +0x78  -> 0x09a2af50 (Engine Flare; +0xc0 owner check OK)
+                 -> +0x160 -> 0x09a2dbd0 (the <Team>boost.vex model)
+model+0x20 -> 0x09a2f230   mesh 1 (header 0x09a2e150, u16 flags 0x1232,
+                                   mesh+0x68 = 0 list-A, +0x6a = 2 list-B)
+sibling (signature scan) -> 0x09a2f460   mesh 2 (same shape)
+```
+
+Both meshes have `mesh+0x158 = 0` and their compiled geometry list at
+**`mesh+0x15c`** - the `list = 1` slot of the `mesh + list*4 + 0x158` table
+earlier on this page, consistent with the plume being list-B-only geometry.
+
+### Every byte of the replayed chain, read: no `0xc0` anywhere
+
+Mesh 1's `+0x15c` list is 21 words, and its entire recursive CALL closure was
+decoded word by word (mesh 2's is the same shape):
+
+```text
+BASE/CALL 0x0416b900    interned per-batch state list (EDRAM, 28 words) - no 0xc0
+BASE/CALL 0x09a2df80    per-material texture transform (5 words)        - no 0xc0
+BASE/CALL 0x09a2f6d0    texture bind list (16 words: TBP/TBW/TSIZE/
+                        CLUT/TFLUSH)                                    - no 0xc0
+VTYPE 0x1200013d, VADDR, PRIM (strip)      x2, one per batch
+RET
+```
+
+So the list carries no mode of its own, and the mode that applies is ambient
+state at replay - confirming the structural reading, and moving the question
+to what that ambient state is.
+
+Two side findings from the same read:
+
+- **The per-material texture transform list is compiled lazily, on first
+  draw.** Before the boost was armed, `0x09a2df80` was unwritten heap
+  (`0xfeadfead` canaries); after one armed frame it reads
+  `TexScale(1.0, 1.0)`, `TexOffset(u, 0)`, `RET` - with `u` **animating**
+  (read `0.956` and `0.504` at two freezes, per mesh). This is the
+  per-material `Gu_TexScale`/`Gu_TexOffset` transform HANDOVER.md carries as
+  real-and-unported, and it means the plume's authored UVs are sampled
+  *through a moving u-offset*, not statically.
+- **Nothing CPU-calls the compiled geometry lists per frame.** A breakpoint
+  on `Gu_CallList` (`0x08810598`) conditioned on `a0 ==` either list never
+  fires, and a full-RAM scan finds no `CALL` word targeting them anywhere.
+  Instead the deferred draw path re-records the same six-command sequence
+  into per-item EDRAM blocks each frame (found at `0x041b88xx`, `0x041c3dxx`
+  and mirrors - byte-identical to the compiled list, ending in `RET`), and
+  the master list at the sceGu context's list start (`0x08bacc40`) is a flat
+  run of `BASE`/`CALL` pairs into those blocks in sorted order, holding no
+  state words itself.
+
+### The decisive read: the recorded frame, walked in GE order
+
+With the CPU frozen mid-frame, a script walked the recorded stream exactly as
+the GE would - from the master list's start to its current write pointer,
+following `BASE`/`CALL`/`JUMP`/`RET`, tracking every `0xc0` word - and stopped
+at each plume `VADDR` (`0x01a2e240`, `0x01a2e680`, `0x01a2ed60`; the fourth
+batch sits between the same words in mesh 2's block). The mode live at the
+plume's own draw commands, in the order the GE consumes them:
+
+| Sample | plume batches reached | mode at each | PRIMs under mode 0 | under mode 2 |
+| ---: | ---: | --- | ---: | ---: |
+| 1-6 | 3 of 3 observed, every sample | **0, all** | 596-660 | 73 |
+
+The 73 mode-2 `PRIM`s per frame are the positive control: the walker's mode
+tracking does see the `Mesh_BeginTransparentPass` brackets (`0xc0000002` ...
+draws ... `0xc0000000`, visible as paired words in the trail), and the plume
+is never among them - it draws downstream of a bracket's *restore*, under
+mode 0, in six of six independently frozen frames.
+
+**What this kills:** `oag_render::texgen`'s environment-map coordinates are
+not what the original applies to the plume. The original samples the plume's
+authored UVs - two of its four batches decode to a single UV point - through
+the animated per-material `TexOffset` u-scroll above. The empirical
+improvement texgen bought (recorded in HANDOVER.md) was real but for the
+wrong reason; the recovered mechanism to port is authored UVs + the animated
+transform.
+
+Scripts for the whole read are session scratch
+(`plume-lists*.py`, `ge-walk*.py`); the reusable pieces are the harness
+recipe already on this page and `scripts/ppsspp_debugger.py`.
 
 ## `Gfx_BuildBatchStateList` decoded, and the boost plume's blend with it
 

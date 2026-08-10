@@ -1601,6 +1601,16 @@ results that bear on this page:
   hard negative for "something scales the rim down without discarding its hue"
   being GE state at all.
 
+**Overturned 2026-08-10 for the plume specifically.** The next two paragraphs
+were written for the transparent-pass bracket and attributed to the plume;
+the plume draws *outside* the bracket, under `TEXMAPMODE` 0, settled live at
+confidence 92 by walking the recorded frame stream in GE execution order to
+the plume's own draw words - see mesh-draw.md, "The plume is replayed under
+`TEXMAPMODE` 0". The plume's authored UVs *are* read, sampled through an
+animated per-material `TexOffset` u-scroll. The paragraphs stand as evidence
+about batches genuinely inside the bracket (73 `PRIM`s per frame draw under
+mode 2, measured in that section).
+
 **What supplies the falloff instead is the texture, reached through generated
 coordinates.** The transparent pass sets `TEXMAPMODE` uvgen `2` -
 **environment (shade) mapping** from the vertex normal and lights 0/1 - and
@@ -1619,7 +1629,11 @@ recorded here as a suspected decode bug. **The decode was correct all along.**
 And the two experiments this page cited as refutations - `u` scaled by 128, and
 `u`/`v` swapped, both "changing the picture not at all" - were manipulating
 coordinates the original never reads, so their conclusion stands but their
-reasoning does not.
+reasoning does not. *(2026-08-10: "coordinates the original never reads" is
+itself now overturned - the original reads them under mode 0. Why those two
+experiments changed nothing is re-opened; the animated `TexOffset` and the
+one-texel-wide authored `u` are the plausible reason a `u` rescale was
+invisible.)*
 
 The decisive check: every one of the **32** `shipboost.vex` batches across all
 eight PSP teams reads `vtype = 0x013d` - `tex=u8, col=8888, nrm=s8, pos=s16,
@@ -1916,8 +1930,12 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   is in fact sharper: the authored alpha reaches the picture as a *weight* on
   the additive blend, which is exactly what `oag_render::exhaust::BLEND` already
   does.**) The falloff comes from the *texture*, sampled through
-  environment-generated coordinates. See the section above and
-  [mesh-draw.md](mesh-draw.md). What replaced it as the open item was narrower
+  environment-generated coordinates. (**Overturned for the plume 2026-08-10:
+  it draws under `TEXMAPMODE` 0 and samples its authored UVs through an
+  animated `TexOffset` u-scroll - see mesh-draw.md, "The plume is replayed
+  under `TEXMAPMODE` 0". The uvgen-2 recovery below stays correct for batches
+  inside the bracket; only its application to the plume is withdrawn.**)
+  What replaced it as the open item was narrower
   and was a **rendering** gap rather than an RE one - environment-mapped UV
   generation was not implemented - and **that is closed too, 2026-08-09, on
   both halves**. [mesh-draw.md](mesh-draw.md) carries the uvgen-2 equation, the
