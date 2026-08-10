@@ -247,7 +247,21 @@ at frame-counted spacings, every frame sampled):
 So the reveal rule composes into a ~0.9 s threshold: the timer holds above
 the gate for `(0.8 - 0.2) / 1.0 = 0.6 s` after a pad, so a second pad
 replays the sweep only when it lands inside the sweep's final 0.6 s - i.e.
-later than `1.5 - 0.6 = 0.9 s` after the reveal. What a mid-sweep pad
+later than `1.5 - 0.6 = 0.9 s` after the reveal. The boundary was swept
+live at 6-frame resolution: timer `0.183` at expiry does not replay,
+`0.283` does, bracketing the `0.2` gate.
+
+**And the simulated write is a proven proxy for a real pad, so these
+results are the real-pad behaviour.** Two legs, same day: (1)
+`Ship_ApplySpeedupPad` (`0x08848f9c`) is now read whole - on a new pad
+identity (`craft+0x1d0` edge, so two *different* pads both fire even
+back-to-back) it zeroes `craft+0x318`, calls `ExhaustFlare_OnSpeedupPad`
+(**its only exhaust interaction**), bumps the pad-hit stats, and arms the
+physics shove from the class tables; nothing else in the path touches the
+flare or the boost model. (2) One *real* pad crossing was captured during
+a breakpoint-paced autopilot lap (pad 4, Talon's Junction): plume idle,
+`flare+0x88` 8.54 -> 0.017 at the hit, `u` restarting at `2/256` - the
+same reveal the writes produce. What a mid-sweep pad
 *does* change is every
 timer-driven effect: the flare's half-size term, the engine note, the
 physics boost. `oag_render::exhaust`'s edge-triggered reveal plus
