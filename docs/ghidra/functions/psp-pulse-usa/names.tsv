@@ -435,7 +435,7 @@
 0x088439ac	function	Ship_Damage	84	shield.md
 0x0883e64c	function	Ship_State	84	shield.md
 0x08844100	function	Ship_SetState	84	shield.md
-0x08896b84	function	Race_ReadSetupOptions	80	shield.md
+0x08896b84	function	Race_ReadSetupOptions	88	shield.md
 0x08b30fa8	data	g_weapons_enabled	84	shield.md
 0x08b30fa9	data	g_damage_enabled	84	shield.md
 0x08b31044	data	g_skill_level	84	shield.md

@@ -181,9 +181,11 @@ which is why that page calls this the gameplay-facing twin.
 
 ## The two race options that reach the pool
 
-`Race_ReadSetupOptions` (`0x08896b84`, named this pass at confidence 80 - the
-body is a flat run of key lookups and the keys are literal strings, but no
-caller was read) reads the race setup as string key/value pairs - `Team`,
+`Race_ReadSetupOptions` (`0x08896b84`, confidence **88** as of 2026-08-10 -
+was 80, the body is a flat run of key lookups on literal-string keys and no
+caller has been read, but every mode-keyed branch its `g_weapons_enabled`
+switch takes is now independently checked against the Custom Race screen
+itself, below) reads the race setup as string key/value pairs - `Team`,
 `Livery`, `Mode`, `Class`, `Track`, `Opponents`, `Weapons`, `Damage`,
 `SkillLevel`, `Tournament` - and lowers three of them into globals this page
 needs. `FUN_08973424` is a string compare returning zero on equal, and
@@ -201,6 +203,72 @@ on the game mode at `DAT_08b31048`.
 `g_skill_level`'s default of 1 is the middle rung of the three-slot ladder
 above, which is the cross-check that the ladder is ordered easy-first rather
 than hard-first.
+
+### `g_weapons_enabled`'s per-mode default, spelled out, and checked against every race type
+
+**The switch, read in full (`FUN_08896b84`, i.e. this function):**
+
+```c
+switch (DAT_08b31048) {
+    case 5: case 9: case 10: case 15: case 17:
+        g_weapons_enabled = 0;   // time trial (5), speed lap (10), + three more
+        break;
+    default:                    // 6, 7, 8, 11-14, 16 and anything else
+        g_weapons_enabled = 1;
+}
+// Whether the <Weapons> setup attribute is even consulted afterward is a
+// SECOND, separate switch:
+switch (DAT_08b31048) {
+    case 5: case 8: case 9: case 10: case 15: case 17:
+        override_allowed = false;   // the default above is final
+        break;
+    case 6: case 7: case 11: case 12: case 13: case 14: case 16:
+        override_allowed = true;
+        break;
+    default:
+        override_allowed = true;
+}
+if (override_allowed && <Weapons> is present)
+    g_weapons_enabled = (<Weapons> == "On");
+```
+
+So three groups, not two: modes `5`/`9`/`10`/`15`/`17` are weapons-off and
+**locked** (no setup string can turn them on); mode `8` is weapons-**on** and
+equally locked; everything else defaults on but is a normal setup switch.
+
+**Checked against the Custom Race screen directly, 2026-08-10** - PPSSPP
+v1.20.4 (SDL, `--graphics=gles`, under Xvfb), one screenshot per RACE TYPE
+entry, saturating left then stepping right through the whole list:
+
+| Race type | `WEAPONS` shown | Editable | Reads as mode |
+| --- | --- | --- | --- |
+| Single Race | On | yes | not `5/8/9/10/15/17` |
+| Head to Head | Off | **no** (greyed) | one of `5/9/10/15/17` |
+| Time Trial | Off | **no** (greyed) | `5` (confirmed live below) |
+| Speed Lap | Off | **no** (greyed) | `10` (confirmed live below) |
+| Tournament | On | yes | not `5/8/9/10/15/17` |
+| Zone | Off | **no** (greyed) | `6` (confirmed live: `Zone_Update`'s own selector) |
+| Eliminator | On | **no** (greyed) | `8` |
+
+Two things this settles that the switch alone could not:
+
+- **Eliminator is mode `8`**, confirmed independently of the
+  `<WeaponPad elimination_refresh_time>` naming hypothesis in
+  [pads.md](pads.md) - both now point at the same mode number from opposite
+  directions (a locked-on `WEAPONS` row here, a distinct
+  `DAT_08b31048 == 8` branch in `WeaponPads_TestCraft` there).
+- **Zone's `WEAPONS: Off` is the front end supplying `<Weapons>Off</Weapons>`
+  explicitly, not the code default** - `6` is in the *on*-by-default,
+  override-*allowed* group above, so without that explicit XML, Zone would
+  race with weapons on. The greyed row means the front end also refuses to let
+  the *player* override its own override, which the switch alone does not
+  show - only the menu does.
+
+`AI DIFFICULTY` greys to `N/A` on exactly the same three modes (Time Trial,
+Speed Lap, Zone) plus Head to Head - screenshotted in the same pass - which is
+the live confirmation behind `oag_race::Mode::has_opponents` returning `false`
+for all three modes this crate implements. See
+[race-modes.md](../../../gameplay/race-modes.md).
 
 ### Damage off does not mean no subtraction - it means regeneration
 
@@ -325,6 +393,16 @@ and an "Invalid address" from the debugger, which at least fails loudly.
 
 ## History
 
+- 2026-08-10, second pass: `Race_ReadSetupOptions`'s `g_weapons_enabled` switch
+  spelled out in full (three groups, not two: locked-off, locked-on, and
+  overridable) and checked against a live menu walk of all seven RACE TYPE
+  entries, 65 -> 88. Settles `oag_race::Mode::weapons_enabled` and
+  `Mode::has_opponents` for the three modes this crate implements (all
+  `false`, all confirmed against the greyed `WEAPONS`/`AI DIFFICULTY` rows),
+  and independently corroborates Eliminator as mode `8` from
+  [pads.md](pads.md)'s `elimination_refresh_time` reading. See
+  [race-modes.md](../../../gameplay/race-modes.md) for what changed in the
+  reimplementation.
 - 2026-08-10: **the pool's object corrected from the craft to the ship
   entity**, `*(craft + 0x1c4) + 0x88`. The first reading took the
   decompiler's `craft` parameter name for the object the trace harness breaks

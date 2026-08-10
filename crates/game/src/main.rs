@@ -332,6 +332,17 @@ struct Cli {
     #[arg(long)]
     collision: bool,
 
+    /// Spawn the rest of the grid even though `--mode` races solo in the
+    /// original.
+    ///
+    /// A verification aid - see `race::Options::opponents` - for looking at
+    /// the measured grid layout without a mode that actually fields one.
+    /// `time_trial`, `speed_lap` and `zone` all race with `AI DIFFICULTY`
+    /// greyed to `N/A` on the real Custom Race screen, and this flag exists
+    /// despite that rather than because of it.
+    #[arg(long)]
+    opponents: bool,
+
     /// In a race, print a telemetry line every this many ticks. Zero prints
     /// none.
     #[arg(long, default_value_t = 60)]
@@ -693,6 +704,7 @@ fn main() -> Result<()> {
         ribbon: cli.ribbon,
         collision: cli.collision,
         lod: cli.lod.unwrap_or(settings.graphics.lod),
+        opponents: cli.opponents,
         pose,
         camera,
     };
@@ -2177,6 +2189,7 @@ impl Stage {
             sky_model,
             pad_model,
             weapon_pad_model,
+            setup.mode,
             boost_model,
             flare,
             noise,

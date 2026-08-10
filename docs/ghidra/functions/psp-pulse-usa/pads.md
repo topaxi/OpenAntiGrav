@@ -367,6 +367,40 @@ the field starts at zero. (`Pad_SweptTest`'s own `25.0` teleport-reject guard
 was a separate open item on this page and is retired further down, in its own
 section, by a live measurement rather than this trail.)
 
+### A weapons-off race neither draws `Weapon Pad`s nor can trigger them
+
+**Not a separate mystery - the same function, a branch this page had not yet
+quoted.** `World_CollectNodeLists` builds the `+0x10c`/`+0x1d4` list above
+unconditionally, then immediately does this to it:
+
+```c
+if (g_weapons_enabled == '\0') {
+    for (i = 0; i < *(world + 0x1d4); i++)
+        *(uint *)(*(world + 0x10c + i*4) + 0x2c) &= 0xfffffff9;  // clear bits 0x2, 0x4
+    *(world + 0x1d4) = 0;   // the trigger list's own count, zeroed
+}
+```
+
+`+0x2c`'s bit `0x4` is already named on this project's own evidence - the
+visibility bit `exhaust.md` reads the boost plume clearing on the same field
+(`+0x2c &= ~4`, "hidden from birth"). So a weapons-off race does not merely
+skip granting the pickup: it hides the mesh (both bits, `0x2` and `0x4`) and
+empties `WeaponPads_TestCraft`'s own loop bound, so the trigger side sees zero
+pads for the rest of the race. Bit `0x2` is not independently identified; read
+here as gating the same visibility path rather than something else, on the
+strength of the two bits always being cleared together.
+
+**`g_weapons_enabled` is `0` for every mode this crate implements**, checked
+live against the Custom Race screen for all seven of the original's race
+types - see
+[shield.md](shield.md#g_weapons_enableds-per-mode-default-spelled-out-and-checked-against-every-race-type),
+which is where `Race_ReadSetupOptions` (the writer of the global this branch
+reads) is decoded in full. `oag_race::Mode::weapons_enabled` is the port, and
+`Scene::new` in `crates/game/src/race.rs` is where the reimplementation makes
+the same "decoded, but never uploaded to the GPU" choice this branch does -
+see its own doc comment for why the mesh decode itself stays unconditional
+where this branch's visibility clear does not.
+
 ## `ExhaustFlare_OnSpeedupPad` (`0x08904f10`)
 
 What the original does to the *picture* when a craft enters a new pad. One
@@ -518,6 +552,16 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
   call site because the `+0x1d0 > 0.0` distance-cache early-out this page
   documents above fires first - a live confirmation of that mechanic too, not
   only the `25.0` one.
+- **2026-08-10, fourth pass** - documented `World_CollectNodeLists`'
+  `g_weapons_enabled` branch, previously quoted on this page with that part
+  cut: a weapons-off race clears every `Weapon Pad` node's visibility bits
+  (`+0x2c`, the same field `exhaust.md` names for the boost plume) and zeroes
+  the trigger list's own count. `g_weapons_enabled` is `0` for every mode this
+  crate implements - see [shield.md](shield.md), where the writer
+  (`Race_ReadSetupOptions`) is checked live against all seven of the
+  original's race types. Ported as `oag_race::Mode::weapons_enabled`, gating
+  `Scene::new`'s upload rather than the mesh decode - see that function's own
+  comment for why the two are deliberately different.
 - **2026-08-03** - page created. `Pad_Bind` and `Pad_ContainsPoint` at 85,
   `Pad_SweptTest_q` and `Pads_TestCraft_q` at 65. Supersedes two readings in
   `engine.md`: the record `Ship_ApplySpeedupPad` locates is a pad's **matrix**

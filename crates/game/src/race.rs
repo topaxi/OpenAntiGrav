@@ -317,6 +317,20 @@ pub struct Options {
     /// Whether ship and track models draw every child of an authored
     /// `LodGroup`, or only the higher-detail first one. See [`mesh::Lod`].
     pub lod: mesh::Lod,
+    /// Force the rest of the grid to spawn even though `mode` says nothing
+    /// races there.
+    ///
+    /// **A verification aid, not a menu choice - the same shape as [`pose`]
+    /// and [`camera`] below.** [`Mode::has_opponents`] is `false` for every
+    /// mode this crate implements, because the original races all three
+    /// single-ship; this exists so `crates/game/tests/race_ground_truth.rs`'s
+    /// grid-geometry check and `just play`'s own visual QA can still put
+    /// eight craft on the grid without pretending a fourth mode exists.
+    /// `false` follows the mode, which is what every real race does.
+    ///
+    /// [`pose`]: Options::pose
+    /// [`camera`]: Options::camera
+    pub opponents: bool,
     /// Put the craft here instead of on its grid slot.
     ///
     /// **A capture aid, not a spawn.** The point is that two circuits, or a
@@ -391,6 +405,7 @@ impl Default for Options {
             ribbon: false,
             collision: false,
             lod: mesh::Lod::Both,
+            opponents: false,
             pose: None,
             camera: None,
         }
@@ -405,6 +420,13 @@ impl Default for Options {
 pub struct Setup {
     /// Which mode's rules the race runs under.
     pub mode: Mode,
+    /// Whether to spawn the rest of the grid regardless of what `mode` says.
+    ///
+    /// The resolved form of [`Options::opponents`] - see its doc comment.
+    /// `mode.has_opponents()` already decides this correctly for every mode
+    /// this crate implements; the field exists only so a verification build
+    /// can override that decision.
+    pub opponents: bool,
     /// The decoded spline graph, as the file has it.
     pub ai: AiTrack,
     /// The spline resampled for locating a ship, and for placing it.
@@ -735,8 +757,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
             None => format!("{} speedup pad trigger volume(s)", speedup_pads.len()),
         });
     }
-    // The pickup pads, decoded the same way. Nothing triggers them; they are
-    // carried so the drawn geometry can be checked against them.
+    // The pickup pads, decoded the same way and **unconditionally**, unlike the
+    // mesh below: nothing triggers them yet, so this is asset data rather than
+    // gameplay, and `the_weapon_pads_are_drawn_where_they_trigger` checks the
+    // decode against the drawn geometry regardless of mode. The original
+    // decodes them unconditionally too - `World_CollectNodeLists` always walks
+    // the tree - it only suppresses what a *weapons-off* mode does with the
+    // result afterward, which is what `weapon_pad_model`'s own report line
+    // below says plainly rather than repeating here.
     let weapon_pads = oag_formats::vex::nodes(&track_blob)
         .map(|nodes| {
             oag_formats::pads::volumes(&track_blob, &nodes, oag_formats::vex::CLASS_WEAPON_PAD)
@@ -745,10 +773,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     report.push(if weapon_pads.is_empty() {
         "the track authors no Weapon Pad trigger volumes".to_string()
     } else {
-        format!(
-            "{} weapon pad trigger volume(s), drawn but handing nothing out",
-            weapon_pads.len()
-        )
+        format!("{} weapon pad trigger volume(s)", weapon_pads.len())
     });
 
     let stats_name = handling::entry_name(&options.team);
@@ -1107,8 +1132,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The pickup pads, built the same way and kept separate for the reason
     // `mesh::build_weapon_pads` gives: they are a different gameplay object and
     // a merged buffer could not show one without the other. **Nothing hands
-    // anything out yet** - this draws them and no more; see the roadmap's
-    // weapons item.
+    // anything out yet** - see the roadmap's weapons item.
+    //
+    // **Decoded here regardless of `options.mode`.** Whether it actually reaches
+    // the screen is a `Scene::new` decision, not this one - see its own comment,
+    // and `Mode::weapons_enabled`. Keeping the decode unconditional is what lets
+    // `the_weapon_pads_are_drawn_where_they_trigger` check the geometry against
+    // the trigger volumes on every mode's own default `Options`, and it mirrors
+    // the original's own order of operations: `World_CollectNodeLists` always
+    // walks the tree before anything asks whether weapons are on.
     let weapon_pad_model = if options.ribbon {
         None
     } else {
@@ -1119,7 +1151,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
             None
         } else {
             report.push(format!(
-                "drawing the track's weapon pads: {} triangle(s), {} material(s)",
+                "{} the track's weapon pads: {} triangle(s), {} material(s)",
+                if options.mode.weapons_enabled() {
+                    "drawing"
+                } else {
+                    "decoded but not drawing (weapons off in this mode)"
+                },
                 pads.indices.len() / 3,
                 pads.draws.len() + pads.alpha_tested_draws.len() + pads.transparent_draws.len(),
             ));
@@ -1290,6 +1327,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     Ok(Loaded {
         setup: Setup {
             mode: options.mode,
+            opponents: options.opponents,
             zone,
             ai,
             spline,
@@ -2111,6 +2149,7 @@ impl Race {
     pub fn start(setup: Setup) -> Self {
         let Setup {
             mode,
+            opponents,
             zone,
             spline,
             course,
@@ -2163,6 +2202,14 @@ impl Race {
         // would drift off the strip it is parked on. See
         // `docs/overview/roadmap.md`'s AI item.
         //
+        // **Gated on the mode first of all.** `mode.has_opponents()` is `false`
+        // for every mode this crate implements - measured live, confirmed on
+        // the running original, AI DIFFICULTY greyed to N/A the same way
+        // WEAPONS is - so a time trial, speed lap or Zone race spawns the
+        // player alone, the way the original does. `opponents` is the
+        // verification override [`Setup::opponents`] documents; nothing that
+        // reaches this from the menu ever sets it.
+        //
         // Skipped entirely when the caller overrode the pose: an override exists
         // to put *one* craft somewhere specific, and surrounding it with a grid
         // built from a different anchor would put opponents through the scenery.
@@ -2174,6 +2221,7 @@ impl Race {
         // shape of a measurement.
         if pose_override.is_none()
             && start_position.is_some()
+            && (mode.has_opponents() || opponents)
             && let Some(base) = base
         {
             let poses = grid_poses(base, &collision, spawn_height(&handling));
@@ -4035,6 +4083,7 @@ impl Scene {
         sky_model: Option<Model>,
         pad_model: Option<Model>,
         weapon_pad_model: Option<Model>,
+        mode: Mode,
         boost_model: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -4127,7 +4176,22 @@ impl Scene {
                 .transpose()
         };
         let pads = pad_drawable(pad_model)?;
-        let weapon_pads = pad_drawable(weapon_pad_model)?;
+        // The original does not draw these either, in every mode this crate
+        // implements: `World_CollectNodeLists` clears the node's own
+        // visibility bit whenever `g_weapons_enabled` is `0`, which the front
+        // end forces for time trial, speed lap and Zone alike - see
+        // `Mode::weapons_enabled`. The geometry is still decoded and still in
+        // `Loaded` either way (`the_weapon_pads_are_drawn_where_they_trigger`
+        // checks the decode, not the mode), so this is the one place that
+        // decision turns into "never uploaded to the GPU at all" rather than
+        // "decoded, then hidden" - closer to what clearing a visibility bit
+        // before the submit pass actually does than a flag checked at draw
+        // time would be.
+        let weapon_pads = if mode.weapons_enabled() {
+            pad_drawable(weapon_pad_model)?
+        } else {
+            None
+        };
         // The boost plume, drawn additively. It is real geometry (a `.vex`
         // mesh, not a camera-facing quad), so it needs depth testing and a
         // model matrix, which is what `Drawable` already gives every other
@@ -4812,6 +4876,7 @@ pub fn capture(
         noise,
         ..
     } = loaded;
+    let mode = setup.mode;
     let mut race = Race::start(setup);
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_camera_view(options.camera_view);
@@ -4887,6 +4952,7 @@ pub fn capture(
         sky_model,
         pad_model,
         weapon_pad_model,
+        mode,
         boost_model,
         flare,
         noise,
@@ -5329,6 +5395,7 @@ mod tests {
                 down_speed: 30.0,
             },
             mode: Mode::TimeTrial,
+            opponents: false,
             // A time trial does not read it, and these tests never run a Zone
             // race: the numbers are the disc's and there is no disc here.
             zone: None,
