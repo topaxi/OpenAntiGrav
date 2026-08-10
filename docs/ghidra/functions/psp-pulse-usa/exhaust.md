@@ -816,6 +816,49 @@ node the parser does not decode. Against the PSP disc's `Data.wad`:
   **`trail_con_left_wing`** and **`trail_con_right_wing`**. Both readings are true;
   the wreck one is not the whole story.
 
+### Every node class on a ship file, unfiltered - there is no missing boost asset
+
+2026-08-10, asked directly: could the boost visual be some asset other than
+`<Team>boost.vex`? **No.** Every earlier census on this page filtered to the
+classes it was already interested in (`Engine Flare`, `Trail`, `exitglow`),
+which cannot answer that question by construction. Run unfiltered over three
+teams:
+
+| `Ship.vex` class | Count | Names |
+| --- | ---: | --- |
+| `0x006e` `Transform` | 6-16 | `ship`, `shadow`, `canopy`, `locator1/2`, `lod` |
+| `0x00f4` | 1 | `world` |
+| `0x0125` `Mesh` | 7-9 | `shipShape`, `AirBrake_*Shape`, `canopyShape` |
+| `0x02ee` | 1 | `lodGroup1` |
+| `0x03bf` `Engine Flare` | **1** | `engine_flare` |
+| `0x03c1` `Texture` | 8 | the team's own textures plus `envtest4bit` |
+| `0x03c3` | 2 | `shadowShape`, `shadow_lodShape` |
+| `0x03c5` `Airbrake` | 2 | `AirBrake_Left/Right` |
+| `0x03d0` | 6-10 | `ship_collision_fx*` |
+| `0x03e2` | 1 | `ship_muzzle` |
+| `0x03eb` | 2 | `cannon_flash_left/right` |
+
+`shipboost.vex` is **seven or eight nodes total**: `world`, two `Mesh`, one
+`Texture` (`pulse_boost2_ADD.tga`), and the three Maya junk nodes. Nothing
+else.
+
+Two consequences:
+
+- **`engine_fire` (`0x3e5`) has no instances on a ship either.** This page's
+  Open list has carried it as a class with a name and no registration site;
+  it now also has no authored instance anywhere a craft would use one. The
+  open item stands as an RE curiosity and is **not** a candidate for missing
+  boost geometry.
+- **The boost visual is two meshes and one texture, and that is the whole of
+  it.** So any remaining fidelity gap is in *how those two meshes are drawn* -
+  the sampling mode, the blend, the falloff - and not in content this project
+  fails to load. That is worth stating plainly, because "we must be missing an
+  asset" is the cheaper hypothesis and it is now excluded.
+
+The per-team mesh names vary (`bflare1Shape`/`bflare2Shape` on Assegai,
+`bflareShape`/`bflare1Shape` on Feisar, `boost1:boost1:bflareShape`/
+`bflareShape` on Qirex), so nothing should match on those names.
+
 ### The ship's trail parameters, from preset 2
 
 `Trail_InitPreset` is a table of three presets and `ExhaustFlare_Init` passes **2**:
