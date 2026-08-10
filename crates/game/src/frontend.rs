@@ -422,6 +422,16 @@ pub struct Frontend {
     /// a rectangle. A `Vec` keeps the order the screens declared.
     placements: Vec<(String, crate::sprite::Placed)>,
     player: crate::movie::Player,
+    /// The second boot movie's own frame count and rate, kept apart from
+    /// `player` so entering [`pure_states::FMV_INTRO`] can rebuild the player
+    /// for it - see [`Self::confirm_language`]. Zero/[`movie::FRAME_RATE`]
+    /// on a source [`Frontend::booting`] never got one for, matching how the
+    /// first movie's own absence is handled.
+    fmv_intro_frames: usize,
+    fmv_intro_frame_rate: (u64, u64),
+    /// Whether the second boot movie has a picture at all - the same
+    /// question `has_picture` answers for the first one.
+    fmv_intro_has_picture: bool,
     /// The movie's own display aspect ratio, as `(width, height)`. A `.PMF` is
     /// square-pixelled, so this is its decoded size and the video quad fills
     /// [`SCREEN`] exactly, as it always did; a PS2 `.PSS` is not, and this is
@@ -480,6 +490,9 @@ impl Frontend {
             crate::movie::FRAME_RATE,
             (SCREEN.0 as u32, SCREEN.1 as u32),
             has_picture,
+            0,
+            crate::movie::FRAME_RATE,
+            false,
         )
     }
 
@@ -496,6 +509,9 @@ impl Frontend {
         movie_frame_rate: (u64, u64),
         video_aspect: (u32, u32),
         has_picture: bool,
+        fmv_intro_frames: usize,
+        fmv_intro_frame_rate: (u64, u64),
+        fmv_intro_has_picture: bool,
     ) -> Self {
         let mut machine = StateMachine::new();
         machine.register_all([
@@ -540,6 +556,9 @@ impl Frontend {
             placements,
             space: Space::PSP,
             player: crate::movie::Player::new(frames, false, movie_frame_rate),
+            fmv_intro_frames,
+            fmv_intro_frame_rate,
+            fmv_intro_has_picture,
             video_aspect,
             has_picture,
             backdrop: None,
@@ -766,7 +785,7 @@ impl Frontend {
         } else if self.machine.is(states::SHOW_LOGO) {
             self.update_show_logo(input);
         } else if self.machine.is(pure_states::FMV_INTRO) {
-            self.update_fmv_intro(input);
+            self.update_fmv_intro(dt, input, movie_playhead);
         }
 
         let events = self.machine.apply();
@@ -971,6 +990,17 @@ impl Frontend {
                 "note: the disc's own LanguageAutoRedirect goes to {goto}, not {target}"
             ));
         }
+        // `self.player` is idle from here on for the leg that just ended - see
+        // `Self::is_playing_movie` - so `FMV Intro` reuses the same field
+        // rather than carrying a second one, rebuilt for the second movie's
+        // own frame count and rate. Harmless when Pure has no second movie
+        // either (`fmv_intro_frames == 0`): `Player::new(0, ...)` is exactly
+        // what a source with no movie at all already gets in
+        // [`Frontend::booting`].
+        if target == pure_states::FMV_INTRO {
+            self.player =
+                crate::movie::Player::new(self.fmv_intro_frames, false, self.fmv_intro_frame_rate);
+        }
         self.machine.fire(target);
     }
 
@@ -1009,20 +1039,13 @@ impl Frontend {
     /// `FMV Intro`: Pure's second boot movie, on the way to
     /// [`pure_states::TITLE_SCREEN`].
     ///
-    /// **Picture not implemented yet** - see
-    /// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what that
-    /// needs (a decoded-frame slot the way the intro and the menu backdrop
-    /// each have one) and why it is not done here. This still advances the
-    /// state machine correctly, which is what a caller comparing against the
-    /// real disc's own timing can check today; the picture is a separate,
-    /// later piece of work.
-    ///
-    /// START and CROSS both leave, matching [`pure_states::FMV_INTRO`]'s own
-    /// doc comment - the runtime-observed button - and the screen's own
-    /// `FMVRedirect` has no frame counter or delay to model a natural end
-    /// against, so unlike [`Self::update_logo_fmv`] there is no timeout path
-    /// here to fall through to.
-    fn update_fmv_intro(&mut self, input: &mut Input) {
+    /// START and CROSS both skip it, matching [`pure_states::FMV_INTRO`]'s own
+    /// doc comment - the runtime-observed button. The screen's own
+    /// `FMVRedirect` has no frame counter or delay of its own to hold against,
+    /// so unlike [`Self::update_logo_fmv`] there is no *held* pause here - the
+    /// only other way out is the movie running out on its own, the same
+    /// `player.is_finished()` check `Self::update_logo_fmv` ends on.
+    fn update_fmv_intro(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
         for button in [button::START, button::CROSS] {
             if input.is_pressed(button) {
                 input.consume_press(button);
@@ -1033,6 +1056,15 @@ impl Frontend {
                 self.machine.fire(pure_states::TITLE_SCREEN);
                 return;
             }
+        }
+
+        self.advance_movie(dt, playhead);
+        if self.player.is_finished() {
+            self.notes.push(format!(
+                "the video ended, firing {}",
+                pure_states::TITLE_SCREEN
+            ));
+            self.machine.fire(pure_states::TITLE_SCREEN);
         }
     }
 
@@ -1134,10 +1166,23 @@ impl Frontend {
 
         if self.machine.is(pure_states::FMV_INTRO) {
             // The screen itself carries no widgets - see
-            // `pure_states::FMV_INTRO`'s own doc comment - so this is an
-            // honest blank frame over the backdrop, standing in for the
-            // second boot movie until it has its own decoded-frame slot.
+            // `pure_states::FMV_INTRO`'s own doc comment - so this is the
+            // video and nothing else, the same shape `LogoFMV`'s own draw
+            // has above. `self.player` was rebuilt for this movie's own
+            // frame count in `Self::confirm_language`, and `Video::Intro` is
+            // reused rather than a third `Video` variant added - see that
+            // reassignment's own comment for why reuse is safe here: the
+            // first movie's player is idle by the time this state is
+            // reachable at all.
             let mut out = self.draw_screen(pure_states::FMV_INTRO);
+            if self.fmv_intro_has_picture {
+                out.push(Draw::Video {
+                    rect: pillarbox_in(self.space, self.video_aspect),
+                    frame: self.player.frame(),
+                    position: self.player.position(),
+                    source: Video::Intro,
+                });
+            }
             self.insert_backdrop(&mut out);
             return out;
         }
@@ -1622,6 +1667,9 @@ mod tests {
             frames,
             crate::movie::FRAME_RATE,
             (SCREEN.0 as u32, SCREEN.1 as u32),
+            false,
+            0,
+            crate::movie::FRAME_RATE,
             false,
         )
     }
