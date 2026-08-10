@@ -109,8 +109,8 @@ simulation.
 
 ### `<Pickupodds class="...">`: what a pad hands out
 
-One block per speed class - `Vector`, `Venom`, `Flash`, `Rapier`, `Phantom` -
-each listing every weapon with `<Stats ai back front human/>`.
+One block per speed class, each listing every weapon with
+`<Stats ai back front human/>`.
 
 Four weights, and their shape is the whole pickup design:
 
@@ -119,11 +119,23 @@ Four weights, and their shape is the whole pickup design:
 - **`front` and `back`** weight it by grid position, which is what stops the
   leader being handed the same thing as the tail.
 
-`Vector` is authored here even though
-[handling-stats.md](handling-stats.md) leaves open whether Pulse has a fifth
-speed class - so this file is evidence toward that question, and the parser
-reads `Vector` without storing a class index for it while `Venom`/`Flash`/
-`Rapier`/`Phantom` store 0/1/2/3.
+### The fifth class: the code knows the name, the data does not use it
+
+`WeaponStats_Parse` tests the `class` attribute against **`Vector`** and then
+**discards the result**, before testing `Venom`, `Flash`, `Rapier` and `Phantom`,
+each of which stores a class index of 0/1/2/3. So the executable carries a fifth
+name with nothing behind it.
+
+The shipped race table authors **four** blocks and no `Vector`, which is measured
+rather than inferred: `crates/formats/tests/weapons_ground_truth.rs` asserts both
+halves. This page said the opposite for the length of one draft, having read the
+parser and not the file - the ground-truth test is what caught it, which is what
+it is for.
+
+That is evidence toward [handling-stats.md](handling-stats.md)'s open question of
+whether Pulse has a fifth speed class, and it points **away** from one: a class
+the code names, discards, and no shipped file authors is a leftover rather than a
+rung.
 
 ## What this does not answer
 

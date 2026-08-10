@@ -48,5 +48,6 @@ pub mod track;
 pub mod vex;
 pub mod vif;
 pub mod wad;
+pub mod weapons;
 
 pub use signature::{Signature, identify};
