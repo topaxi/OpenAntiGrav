@@ -133,10 +133,21 @@ struct Session {
     /// Bind group 2. The viewer never fogs, so this stays at
     /// [`mesh_render::Fog::off`] for the session's lifetime.
     fog_bind: wgpu::BindGroup,
+    /// Bind group 3, rewritten every frame from the model's authored
+    /// texture-transform tracks.
+    anim_bind: wgpu::BindGroup,
+    anim_buffer: wgpu::Buffer,
     model: Model,
     orbit: Orbit,
     held: Held,
     last: Instant,
+    /// When this session opened, driving the texture animation.
+    ///
+    /// Wall clock, unlike the race, which drives the same tracks off
+    /// `world.tick`. Nothing here is simulated or replayed, so there is no
+    /// determinism claim to break - and an asset viewer that showed animated
+    /// surfaces frozen would hide exactly what it exists to show.
+    opened: Instant,
 }
 
 impl Session {
@@ -199,6 +210,8 @@ impl Session {
             texture_binds,
             fog_bind,
             fog_buffer: _,
+            anim_bind,
+            anim_buffer,
         } = mesh_render::build(
             &device,
             &queue,
@@ -249,10 +262,13 @@ impl Session {
             index_buffer,
             texture_binds,
             fog_bind,
+            anim_bind,
+            anim_buffer,
             model,
             orbit,
             held: Held::default(),
             last: Instant::now(),
+            opened: Instant::now(),
         })
     }
 
@@ -290,6 +306,13 @@ impl Session {
 
         self.orbit = advance(self.orbit, &self.held, dt);
 
+        let anims = mesh_render::TexAnims::sample(
+            &self.model,
+            now.duration_since(self.opened).as_secs_f32(),
+        );
+        self.queue
+            .write_buffer(&self.anim_buffer, 0, bytemuck::bytes_of(&anims));
+
         let aspect = self.config.width as f32 / self.config.height.max(1) as f32;
         mesh_render::write_uniforms(
             &self.queue,
@@ -299,7 +322,6 @@ impl Session {
             self.orbit.yaw,
             self.orbit.pitch,
             self.orbit.zoom,
-            0.0,
         );
 
         let frame = match self.surface.get_current_texture() {
@@ -360,6 +382,7 @@ impl Session {
                 // The asset viewer never fogs: it shows what is on the disc, and fog
                 // is a property of the race the asset sits in, not of the asset.
                 pass.set_bind_group(2, &self.fog_bind, &[]);
+                pass.set_bind_group(3, &self.anim_bind, &[]);
                 pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 

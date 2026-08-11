@@ -183,7 +183,7 @@ mod tests {
             colour: [1.0; 4],
             texcoord: [0.5, 0.5],
             lit: 0.0,
-            v_cycles: 0.0,
+            anim: 0,
         }
     }
 
@@ -261,7 +261,7 @@ mod tests {
         v.position = [1.0, 2.0, 3.0];
         v.colour = [0.25, 0.5, 0.75, 1.0];
         v.lit = 1.0;
-        v.v_cycles = 2.0;
+        v.anim = 3;
 
         let mut out = Vec::new();
         environment_map(&[v], &mut out, Mat4::IDENTITY, Vec3::Z, Vec3::Y);
@@ -270,7 +270,7 @@ mod tests {
         assert_eq!(out[0].normal, v.normal);
         assert_eq!(out[0].colour, v.colour);
         assert_eq!(out[0].lit, v.lit);
-        assert_eq!(out[0].v_cycles, v.v_cycles);
+        assert_eq!(out[0].anim, v.anim);
         assert_ne!(out[0].texcoord, v.texcoord);
     }
 

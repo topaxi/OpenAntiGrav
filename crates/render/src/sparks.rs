@@ -810,7 +810,7 @@ fn quad(
         // attribute carries the cap fraction the fragment profile needs -
         // see `sparks.wgsl`.
         lit: cap,
-        v_cycles: 0.0,
+        anim: 0,
     };
     let bl = corner(-1.0, -1.0, 0.0, 1.0);
     let br = corner(1.0, -1.0, 1.0, 1.0);

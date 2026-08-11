@@ -1,14 +1,29 @@
 //! Which of Pulse's textures animate, and how fast.
 //!
 //! A table, in the sense of [ADR-0022]: it names shipped assets and the rate
-//! each one scrolls at. The mechanism that consumes it - the per-vertex
-//! `v_cycles` attribute and the V offset in `mesh.wgsl` - is the renderer's and
-//! stays there. Which surfaces move is this title's business, because the names
-//! are `Data\Tex\` entries off Pulse's own disc and no other title ships them.
+//! each one scrolls at. Which surfaces move is this title's business, because
+//! the names are `Data\Tex\` entries off Pulse's own disc and no other title
+//! ships them.
 //!
 //! The evidence for every entry was measured by
 //! `crates/render/tests/animated_uv_ground_truth.rs`, which still owns the
 //! measurement; this file owns the conclusion.
+//!
+//! # Nothing draws through this any more
+//!
+//! It was the renderer's animation source while nothing on the disc was known
+//! to say which surfaces animate or how fast. Something does: each animated
+//! material carries its own keyframed `TEXSCALE`/`TEXOFFSET` block, and
+//! `oag_render::mesh_render::TexAnims` replays those instead - see
+//! `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
+//!
+//! **Where the two disagree, this table is the one that is wrong.** Its rates
+//! were chosen rather than recovered, and its axis was inferred: it scrolls
+//! `col_display7_GLOW` in V, where all twelve circuits author that surface as
+//! a **U** scroll. What it is still good for is the question it was built to
+//! answer - which surfaces on a circuit are *meant* to move - which makes it a
+//! useful cross-check on the authored reading and the only record of the
+//! narrow-V-band survey.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 

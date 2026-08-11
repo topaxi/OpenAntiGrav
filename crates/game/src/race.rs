@@ -3559,7 +3559,11 @@ fn key_for_button(index: u8) -> Option<winit::keyboard::Key> {
 struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
-    anim_phase: f32,
+    /// Unused, and padding rather than removed - see
+    /// `mesh_render`'s own mirror of this layout. Was a global
+    /// texture-animation phase, replaced by the authored per-material
+    /// keyframe tracks in `mesh_render::TexAnims`.
+    _unused: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
@@ -3721,6 +3725,12 @@ struct Drawable {
     /// or left at [`mesh_render::Fog::off`] for the sky and for a track that
     /// authors no fog.
     fog: wgpu::Buffer,
+    /// Bind group 3: this drawable's authored texture transforms, sampled for
+    /// the current tick.
+    anim_bind: wgpu::BindGroup,
+    /// The buffer behind it. Rewritten each frame by [`Self::write_anims`], or
+    /// left all-identity for a model that authors no track.
+    anims: wgpu::Buffer,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -3757,6 +3767,8 @@ impl Drawable {
             texture_binds: textures,
             fog_bind,
             fog_buffer,
+            anim_bind,
+            anim_buffer,
         } = mesh_render::build(
             device,
             queue,
@@ -3798,19 +3810,40 @@ impl Drawable {
             textures,
             fog_bind,
             fog: fog_buffer,
+            anim_bind,
+            anims: anim_buffer,
         })
     }
 
-    fn write(&self, queue: &wgpu::Queue, view_projection: Mat4, model: Mat4, anim_phase: f32) {
+    fn write(&self, queue: &wgpu::Queue, view_projection: Mat4, model: Mat4) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             model: model.to_cols_array_2d(),
-            anim_phase,
+            _unused: 0.0,
             _pad0: 0.0,
             _pad1: 0.0,
             _pad2: 0.0,
         };
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
+    }
+
+    /// Samples every authored texture-transform track this model carries at
+    /// `seconds` and uploads the table the vertex shader indexes.
+    ///
+    /// One buffer write per drawable per frame, whatever the geometry: the
+    /// curve is evaluated once per *track*, not per vertex or per draw call.
+    ///
+    /// **Not called for the boost plume**, whose table stays all-identity.
+    /// The plume needs its own clock - its flare's life timer, reset at every
+    /// reveal, rather than the race's - and already gets it through
+    /// [`Self::apply_uv_transform`], which rewrites its vertices directly.
+    /// Driving it from here as well would apply the transform twice.
+    fn write_anims(&self, queue: &wgpu::Queue, seconds: f32) {
+        if self.model.anim_tracks.is_empty() {
+            return;
+        }
+        let anims = mesh_render::TexAnims::sample(&self.model, seconds);
+        queue.write_buffer(&self.anims, 0, bytemuck::bytes_of(&anims));
     }
 
     /// Applies a texture transform to this model's **authored** UVs and
@@ -3924,6 +3957,8 @@ impl Drawable {
         // Bound once for the whole drawable: fog is per-frame, not per draw call,
         // and group 2 survives the `set_pipeline` calls below.
         pass.set_bind_group(2, &self.fog_bind, &[]);
+        // Same reasoning as fog: the table is per frame, not per draw call.
+        pass.set_bind_group(3, &self.anim_bind, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
@@ -3991,34 +4026,6 @@ impl Drawable {
         }
         stats
     }
-}
-
-/// The period of the global texture-animation clock, in ticks.
-///
-/// Every animated surface is a whole number of V sweeps per this period (see
-/// `oag_render::mesh::ANIMATED_TEXTURES`), which is what makes the wrap back to
-/// phase zero seamless instead of a visible jump: at the wrap every surface is
-/// an exact number of full texture heights along, and V wraps too.
-///
-/// 120 rather than 60 so a surface running at half the blink light's speed can
-/// still be expressed as an integer.
-const ANIM_PERIOD_TICKS: u64 = 120;
-
-/// The global texture-animation clock's phase for `tick`, 0.0 up to 1.0.
-///
-/// **Confidence: 85** for the mechanism (a V-axis palette scroll - see
-/// `docs/formats/vex.md`, "The animation is authored in the texture, on its V
-/// axis"), and a narrower, separately-checkable claim for the rate. A live
-/// capture (120 frame-accurate PPSSPP screenshots, pixels sampled at a real
-/// light) measured one authored 8-row cycle repeating every 29-31 ticks; the
-/// blink texture repeats that 8-row cycle twice across its 16 rows, so one full
-/// scroll of all 16 rows is twice that, 60 ticks - which is `BLINK_V_CYCLES`
-/// (2.0) sweeps per this 120-tick period, one second at the fixed 60 Hz.
-///
-/// From `world.tick`, never the wall clock, so a replay of the same tick draws
-/// the same frame.
-fn anim_phase(tick: u64) -> f32 {
-    (tick % ANIM_PERIOD_TICKS) as f32 / ANIM_PERIOD_TICKS as f32
 }
 
 /// The track and the ship on the GPU, drawn from a chase camera.
@@ -4502,11 +4509,19 @@ impl Scene {
                 let (craft, camera) = race.visibility_sections();
                 visibility.set(craft, camera)
             });
-        let scroll = anim_phase(race.world.tick);
-        // The ship's lights keep scrolling either way: `[graphics]
-        // animated_textures` exists to test the *inferred* track entries
-        // against a capture, and the ship's behaviour is not inferred.
-        let track_scroll = if animated_textures { scroll } else { 0.0 };
+        // The animation clock, in seconds, from the tick and never the wall
+        // clock - so a replay of the same tick draws the same frame. The
+        // original passes the race clock to every world mesh's updater
+        // (`docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The
+        // values gap is closed"), and each authored track wraps on its own
+        // period, so there is no global phase to keep in step.
+        let seconds = race.world.tick as f32 / 60.0;
+        // `[graphics] animated_textures` no longer gates a guess, so it no
+        // longer gates the track: what draws now is the material's own
+        // authored keyframe block. The setting stays as a way to freeze every
+        // animated surface at its authored coordinates, which is what a
+        // still-frame comparison against a capture wants.
+        let track_seconds = if animated_textures { seconds } else { 0.0 };
         // Fog, sampled where the eye is. `oag_formats::fog::sample` reimplements
         // `FogCube_Sample`: the camera is transformed into the volume's space,
         // rejected if outside, and all six parameters interpolated across the
@@ -4535,6 +4550,25 @@ impl Scene {
         {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&fog));
         }
+        // The scenery, on the clock `[graphics] animated_textures` can freeze.
+        for drawable in [
+            Some(&self.track),
+            self.sky.as_ref(),
+            self.collision.as_ref(),
+            self.pads.as_ref(),
+            self.weapon_pads.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            drawable.write_anims(queue, track_seconds);
+        }
+        // The craft always animate. Their blink lights are the one animation
+        // on the disc confirmed against a frame-accurate capture of the
+        // original, so there is nothing about them for that switch to test.
+        for drawable in &self.ships {
+            drawable.write_anims(queue, seconds);
+        }
         // `self.boost` is deliberately left out of this list, at `Fog::off`
         // from `mesh_render::build`. Whether the original fogs the plume is
         // unrecovered - it is scene geometry like the ship, but additive like
@@ -4553,17 +4587,15 @@ impl Scene {
                 queue,
                 view_projection,
                 Mat4::from_translation(race.camera_position()),
-                0.0,
             );
         }
-        self.track
-            .write(queue, view_projection, Mat4::IDENTITY, track_scroll);
+        self.track.write(queue, view_projection, Mat4::IDENTITY);
         // Every craft in play, the player first. `zip` rather than an index so a
         // race with fewer craft than the scene has drawables writes only the
         // ones it has - the rest keep last frame's uniforms and are not drawn.
         let matrices = race.ship_model_matrices();
         for (drawable, matrix) in self.ships.iter().zip(&matrices) {
-            drawable.write(queue, view_projection, *matrix, scroll);
+            drawable.write(queue, view_projection, *matrix);
         }
         // The flaps move in *model* space, before the ship's own matrix, so
         // this is a vertex write and not a second uniform - see
@@ -4603,7 +4635,7 @@ impl Scene {
             && race.exhaust().plume_visible()
         {
             let model = race.ship_model_matrix();
-            boost.write(queue, view_projection, model, 0.0);
+            boost.write(queue, view_projection, model);
             let (scale, offset) = match &self.boost_uv_transform {
                 Some(transform) => {
                     let t = race.exhaust().plume_timer() * 60.0;
@@ -4614,13 +4646,13 @@ impl Scene {
             boost.apply_uv_transform(queue, scale, offset);
         }
         if let Some(collision) = &self.collision {
-            collision.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
+            collision.write(queue, view_projection, Mat4::IDENTITY);
         }
         for pads in [self.pads.as_ref(), self.weapon_pads.as_ref()]
             .into_iter()
             .flatten()
         {
-            pads.write(queue, view_projection, Mat4::IDENTITY, track_scroll);
+            pads.write(queue, view_projection, Mat4::IDENTITY);
         }
 
         // The camera's own axes, read out of the view matrix: for a view matrix
@@ -5340,16 +5372,9 @@ mod tests {
                 .collect(),
             centre: [0.0; 3],
             radius: 1.0,
+            anim_tracks: Vec::new(),
             mesh_count: 1,
         }
-    }
-
-    #[test]
-    fn anim_phase_starts_at_zero_and_wraps_every_period() {
-        assert_eq!(anim_phase(0), 0.0);
-        assert!((anim_phase(ANIM_PERIOD_TICKS / 2) - 0.5).abs() < 1e-6);
-        assert_eq!(anim_phase(ANIM_PERIOD_TICKS), 0.0);
-        assert_eq!(anim_phase(ANIM_PERIOD_TICKS * 3), 0.0);
     }
 
     /// `HeldButtons::set_held` drives the keyboard path with per-tick levels:
@@ -5368,16 +5393,45 @@ mod tests {
         assert_eq!(snap.stick_x, 0.0);
     }
 
-    /// The blink light kept the exact behaviour it had when the scroll was a
-    /// dedicated 60-tick uniform rather than a shared 120-tick clock with a
-    /// per-vertex rate: 2 sweeps per 120 ticks is 1 sweep per 60.
+    /// The blink light keeps the behaviour it had under the old global
+    /// 120-tick clock and its per-vertex rate: one full sweep of the palette
+    /// per 60 ticks, backwards through the rows.
+    ///
+    /// The block here is the one every team's glow mesh authors, read off the
+    /// disc and recorded in `texture-animation.md` - offset `v` from 0 to
+    /// -256 over key times 1..60, constant scale, loop period 1.0 s. It is
+    /// worth pinning synthetically because this is the **one** animation on
+    /// the disc confirmed against a frame-accurate capture of the original, so
+    /// it is what fixes the sign, the 1/256 units and the tick-to-seconds
+    /// conversion for every other surface.
     #[test]
     fn the_blink_light_still_sweeps_once_every_sixty_ticks() {
-        let sweeps = |tick| anim_phase(tick) * oag_render::mesh::ANIMATED_TEXTURES[0].1;
-        assert_eq!(sweeps(0), 0.0);
-        assert!((sweeps(30) - 0.5).abs() < 1e-6);
-        assert!((sweeps(60) - 1.0).abs() < 1e-6);
-        assert!((sweeps(90) - 1.5).abs() < 1e-6);
+        let blink = vex::TexTransform {
+            offset: vex::TexTransformTrack {
+                times: vec![1, 60],
+                values: vec![(0, 0), (0, -256)],
+            },
+            scale: vex::TexTransformTrack {
+                times: vec![60],
+                values: vec![(256, 256)],
+            },
+            seconds_per_key: 1.0 / 60.0,
+            loop_seconds: 1.0,
+            step: false,
+        };
+        // The same conversion `Scene::draw` uses.
+        let at = |tick: u64| blink.sample(tick as f32 / 60.0);
+        assert_eq!(at(0).1, [0.0, 0.0], "clamped to the first key");
+        // Negative, and that is the authored direction: the palette's white
+        // column rises fast and fades slow, so playing it forwards reads as
+        // backwards. See `docs/formats/vex.md`.
+        let (scale, half) = at(30);
+        assert_eq!(scale, [1.0, 1.0]);
+        assert!((half[1] + 29.0 / 59.0).abs() < 1e-6, "{half:?}");
+        // One whole sweep, then the wrap puts it back where it started rather
+        // than sliding on into a second tile.
+        assert_eq!(at(60).1, at(0).1);
+        assert_eq!(at(90).1, at(30).1);
     }
 
     /// The PS2 shape, measured: five slots declared and none of them filled.

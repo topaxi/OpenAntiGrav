@@ -16,7 +16,11 @@ use oag_formats::vex;
 struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
-    anim_phase: f32,
+    /// Unused. Was the phase of a global texture-animation clock; the authored
+    /// per-material keyframe blocks in [`TexAnims`] replaced it. Kept as
+    /// padding because this layout is mirrored by `mesh.wgsl`, by four other
+    /// pipelines in this crate and by the asset viewer's own buffer sizing.
+    _unused: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
@@ -30,19 +34,7 @@ struct Uniforms {
 /// bounding-box assertion in `oag-formats` is.
 ///
 /// `zoom` scales the orbit distance; 1.0 is the default framing described above.
-///
-/// `anim_phase` is the blink-light palette scroll offset - see
-/// `oag_render::mesh::GpuVertex::glow` - in the texture's own V (row) units.
-/// Callers with no game clock (this crate's own viewer and capture paths)
-/// pass `0.0`, which shows every blink light at its authored, unanimated row.
-fn matrices(
-    model: &Model,
-    aspect: f32,
-    yaw: f32,
-    pitch: f32,
-    zoom: f32,
-    anim_phase: f32,
-) -> Uniforms {
+fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32, zoom: f32) -> Uniforms {
     let distance = model.radius * 3.0 * zoom;
     let eye = Vec3::new(
         distance * yaw.cos() * pitch.cos(),
@@ -57,7 +49,7 @@ fn matrices(
     Uniforms {
         view_projection: (projection * view).to_cols_array_2d(),
         model: Mat4::from_translation(-centre).to_cols_array_2d(),
-        anim_phase,
+        _unused: 0.0,
         _pad0: 0.0,
         _pad1: 0.0,
         _pad2: 0.0,
@@ -82,9 +74,8 @@ pub fn write_uniforms(
     yaw: f32,
     pitch: f32,
     zoom: f32,
-    anim_phase: f32,
 ) -> Mat4 {
-    let uniforms = matrices(model, aspect, yaw, pitch, zoom, anim_phase);
+    let uniforms = matrices(model, aspect, yaw, pitch, zoom);
     queue.write_buffer(buffer, 0, bytemuck::bytes_of(&uniforms));
     Mat4::from_cols_array_2d(&uniforms.view_projection)
 }
@@ -162,10 +153,75 @@ impl Fog {
 /// Size, in bytes, of the fog uniform buffer.
 pub const FOG_SIZE: u64 = std::mem::size_of::<Fog>() as u64;
 
+/// The texture-transform table `mesh.wgsl` reads from bind group 3: one
+/// `(scale, offset)` pair per entry of [`Model::anim_tracks`], already sampled
+/// for this frame.
+///
+/// Slot 0 is the identity, which is what [`GpuVertex::anim`] `== 0` selects, so
+/// the shader needs no branch for the overwhelming majority of vertices.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct TexAnims {
+    /// `[scale_u, scale_v, offset_u, offset_v]` per track.
+    pub transform: [[f32; 4]; crate::mesh::ANIM_TRACK_LIMIT],
+}
+
+impl Default for TexAnims {
+    fn default() -> Self {
+        Self {
+            transform: [[1.0, 1.0, 0.0, 0.0]; crate::mesh::ANIM_TRACK_LIMIT],
+        }
+    }
+}
+
+impl TexAnims {
+    /// Samples every track of `model` at `seconds` and packs the table.
+    ///
+    /// `seconds` is the model's animation clock. The original gives each model
+    /// its own - the boost plume's is its flare's life timer, reset at every
+    /// reveal - but for **world meshes** it passes the race clock, which is
+    /// what a track's scenery gets here. See
+    /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The values
+    /// gap is closed"; one mesh in that page's one-frame census was seen on a
+    /// different clock, and which models get their own is not recovered.
+    ///
+    /// Every track wraps on its own authored period, so there is no shared
+    /// phase to keep them in step and nothing to seam at a global wrap.
+    ///
+    /// Clamped to the table's size here as well as in the builder, because
+    /// [`Model`] is a plain struct anyone can fill in and [`crate::mesh::merge`]
+    /// concatenates track lists without re-checking the ceiling. A model past
+    /// it animates its first [`crate::mesh::ANIM_TRACK_LIMIT`] `- 1` tracks and
+    /// leaves the rest at identity, which is what the builder does too.
+    #[must_use]
+    pub fn sample(model: &Model, seconds: f32) -> Self {
+        let mut out = Self::default();
+        for (slot, track) in model
+            .anim_tracks
+            .iter()
+            .take(crate::mesh::ANIM_TRACK_LIMIT - 1)
+            .enumerate()
+        {
+            let (scale, offset) = track.sample(seconds);
+            out.transform[slot + 1] = [scale[0], scale[1], offset[0], offset[1]];
+        }
+        out
+    }
+}
+
+/// Size, in bytes, of the [`TexAnims`] uniform buffer.
+pub const TEX_ANIMS_SIZE: u64 = std::mem::size_of::<TexAnims>() as u64;
+
 /// Renders one frame of `model` to a PNG from a given orbit angle.
 ///
 /// `pitch` near zero looks along the ground; near `PI / 2` looks straight down,
 /// which is what a track wants and a model does not.
+///
+/// `seconds` is where on their authored loops the model's texture-transform
+/// tracks are sampled - `0.0` for the first frame of every one of them. It is
+/// a parameter rather than a fixed zero because this is the **only** headless
+/// way to see an animated surface move: two captures at two times, differenced.
+#[allow(clippy::too_many_arguments)]
 pub fn capture_from(
     model: &Model,
     path: &Path,
@@ -174,6 +230,7 @@ pub fn capture_from(
     yaw: f32,
     pitch: f32,
     anisotropy: Anisotropy,
+    seconds: f32,
 ) -> Result<()> {
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -241,6 +298,8 @@ pub fn capture_from(
         texture_binds,
         fog_bind,
         fog_buffer: _,
+        anim_bind,
+        anim_buffer,
     } = build(
         &device,
         &queue,
@@ -268,7 +327,12 @@ pub fn capture_from(
         yaw,
         pitch,
         1.0,
-        0.0,
+    );
+
+    queue.write_buffer(
+        &anim_buffer,
+        0,
+        bytemuck::bytes_of(&TexAnims::sample(model, seconds)),
     );
 
     // The bind group must reference the buffer we just filled.
@@ -342,6 +406,7 @@ pub fn capture_from(
             // is bound once here rather than per draw call. The capture path leaves
             // it at `Fog::off`.
             pass.set_bind_group(2, &fog_bind, &[]);
+            pass.set_bind_group(3, &anim_bind, &[]);
             pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
@@ -608,6 +673,11 @@ pub struct Built {
     pub fog_bind: wgpu::BindGroup,
     /// The buffer behind [`Built::fog_bind`], initialised to [`Fog::off`].
     pub fog_buffer: wgpu::Buffer,
+    /// Bind group 3, holding [`TexAnims`]. Bound by every draw; write
+    /// [`Built::anim_buffer`] once a frame to animate.
+    pub anim_bind: wgpu::BindGroup,
+    /// The buffer behind [`Built::anim_bind`], initialised to all-identity.
+    pub anim_buffer: wgpu::Buffer,
 }
 
 /// Which depth state [`build`] gives a model's pipelines.
@@ -784,9 +854,47 @@ pub fn build(
         }],
     });
 
+    let anim_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("texture animation"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+
+    // Initialised to all-identity for the same reason the fog buffer is
+    // initialised to `Fog::off`: a caller that never writes it draws every
+    // surface at its authored, unanimated coordinates.
+    let anim_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("texture animation"),
+        size: TEX_ANIMS_SIZE,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&anim_buffer, 0, bytemuck::bytes_of(&TexAnims::default()));
+    let anim_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("texture animation"),
+        layout: &anim_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: anim_buffer.as_entire_binding(),
+        }],
+    });
+
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("mesh"),
-        bind_group_layouts: &[Some(&layout), Some(&texture_layout), Some(&fog_layout)],
+        bind_group_layouts: &[
+            Some(&layout),
+            Some(&texture_layout),
+            Some(&fog_layout),
+            Some(&anim_layout),
+        ],
         immediate_size: 0,
     });
 
@@ -801,7 +909,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Float32
+                    4 => Float32, 5 => Uint32
                 ],
             })],
             compilation_options: Default::default(),
@@ -855,7 +963,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Float32
+                    4 => Float32, 5 => Uint32
                 ],
             })],
             compilation_options: Default::default(),
@@ -928,7 +1036,7 @@ pub fn build(
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                        4 => Float32, 5 => Float32
+                        4 => Float32, 5 => Uint32
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -1104,6 +1212,8 @@ pub fn build(
     });
 
     Ok(Built {
+        anim_bind,
+        anim_buffer,
         fog_bind,
         fog_buffer,
         pipeline,
@@ -1158,7 +1268,7 @@ mod tests {
         assert!(model.vertices.is_empty() && model.indices.is_empty());
 
         let path = std::env::temp_dir().join("oag-empty-model.png");
-        capture_from(&model, &path, 64, 64, 0.9, 0.85, Anisotropy::default())
+        capture_from(&model, &path, 64, 64, 0.9, 0.85, Anisotropy::default(), 0.0)
             .expect("capturing an empty model");
 
         // Checked through the PNG header rather than the pixels: reaching this

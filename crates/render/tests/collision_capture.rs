@@ -104,6 +104,7 @@ fn a_synthetic_corridor_renders_through_the_capture_path() {
             0.9,
             0.85,
             oag_render::mesh_render::Anisotropy::default(),
+            0.0,
         )
         .expect("capturing the collision view");
 

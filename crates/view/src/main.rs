@@ -126,6 +126,17 @@ struct Cli {
     #[arg(long, default_value_t = 0.9)]
     yaw: f32,
 
+    /// With `--screenshot`, how far into their authored loops to sample the
+    /// model's texture-transform tracks, in seconds.
+    ///
+    /// A window animates these from its own clock; a capture is one frame and
+    /// has to be told which. Two captures at two times, differenced, is the
+    /// only headless way to see that an animated surface moves at all - and
+    /// the rates are authored per material, so a time that shows one surface
+    /// mid-sweep may leave another at its first key.
+    #[arg(long, default_value_t = 0.0)]
+    anim_seconds: f32,
+
     /// Camera pitch in radians. Near zero looks along the ground, near 1.5
     /// straight down, which is what a track wants and a model does not.
     #[arg(long)]
@@ -540,7 +551,16 @@ fn main() -> Result<()> {
         // Tracks are flat and wide, so look down at them rather than along.
         let pitch = cli.pitch.unwrap_or(1.15);
         if let Some(path) = &cli.screenshot {
-            mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch, cli.anisotropy)?;
+            mesh_render::capture_from(
+                &model,
+                path,
+                1280,
+                960,
+                cli.yaw,
+                pitch,
+                cli.anisotropy,
+                cli.anim_seconds,
+            )?;
             println!("wrote {}", path.display());
             return Ok(());
         }
@@ -571,7 +591,16 @@ fn main() -> Result<()> {
         // Tracks are flat and wide, so look down at them rather than along.
         let pitch = cli.pitch.unwrap_or(1.15);
         if let Some(path) = &cli.screenshot {
-            mesh_render::capture_from(&model, path, 1280, 960, cli.yaw, pitch, cli.anisotropy)?;
+            mesh_render::capture_from(
+                &model,
+                path,
+                1280,
+                960,
+                cli.yaw,
+                pitch,
+                cli.anisotropy,
+                cli.anim_seconds,
+            )?;
             println!("wrote {}", path.display());
             return Ok(());
         }
@@ -613,7 +642,16 @@ fn main() -> Result<()> {
         // faces towards you.
         let pitch = cli.pitch.unwrap_or(0.0);
         if let Some(path) = &cli.screenshot {
-            mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch, cli.anisotropy)?;
+            mesh_render::capture_from(
+                &model,
+                path,
+                960,
+                720,
+                cli.yaw,
+                pitch,
+                cli.anisotropy,
+                cli.anim_seconds,
+            )?;
             println!("wrote {}", path.display());
             return Ok(());
         }
@@ -654,7 +692,16 @@ fn main() -> Result<()> {
         // each other.
         let pitch = cli.pitch.unwrap_or(1.4);
         if let Some(path) = &cli.screenshot {
-            mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch, cli.anisotropy)?;
+            mesh_render::capture_from(
+                &model,
+                path,
+                960,
+                720,
+                cli.yaw,
+                pitch,
+                cli.anisotropy,
+                cli.anim_seconds,
+            )?;
             println!("wrote {}", path.display());
             return Ok(());
         }
@@ -695,7 +742,16 @@ fn main() -> Result<()> {
         );
         let pitch = cli.pitch.unwrap_or(0.35);
         if let Some(path) = &cli.screenshot {
-            mesh_render::capture_from(&model, path, 960, 720, cli.yaw, pitch, cli.anisotropy)?;
+            mesh_render::capture_from(
+                &model,
+                path,
+                960,
+                720,
+                cli.yaw,
+                pitch,
+                cli.anisotropy,
+                cli.anim_seconds,
+            )?;
             println!("wrote {}", path.display());
             return Ok(());
         }

@@ -66,11 +66,14 @@ fn every_team_has_a_glow_tagged_vertex() {
         let name = ship_entry_name(team);
         let blob = archives.read_name(&name).expect("reading Ship.vex");
         let model = mesh::build(&name, &blob).expect("decoding Ship.vex");
-        let glow_vertices = model.vertices.iter().filter(|v| v.v_cycles != 0.0).count();
+        let glow_vertices = model.vertices.iter().filter(|v| v.anim != 0).count();
         // The predicate itself, against the label the decoder actually
-        // produced - not only the tagging it feeds. `v_cycles` is now set from
-        // `ANIMATED_TEXTURES`, so without this the ship-specific claim
-        // `is_blink_light_texture` makes would have no test of its own left.
+        // produced. `anim` is now set from the material's own authored
+        // keyframe block rather than from `ANIMATED_TEXTURES`, so the two
+        // halves of this test are now genuinely independent: the count says
+        // every ship authors a texture transform, and this says every ship
+        // still carries the shared blink palette the ship-specific claim
+        // `is_blink_light_texture` is about.
         let labelled = model
             .textures
             .iter()
@@ -96,7 +99,9 @@ fn every_team_has_a_glow_tagged_vertex() {
     );
     assert!(
         teams_without_glow.is_empty(),
-        "team(s) with no glow-tagged vertex: {teams_without_glow:?} - \
-         ANIMATED_TEXTURES no longer matches every ship's real data"
+        "team(s) with no vertex on an authored texture-transform track: \
+         {teams_without_glow:?} - every team's blink-light mesh authors one \
+         (offset v from 0 to -256 over frames 1..60, loop 1.0 s), so an empty \
+         count means the block is no longer being read"
     );
 }

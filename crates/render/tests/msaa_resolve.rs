@@ -38,7 +38,7 @@ fn triangle_model() -> Model {
             colour: [1.0, 1.0, 1.0, 1.0],
             texcoord: [0.0, 0.0],
             lit: 0.0,
-            v_cycles: 0.0,
+            anim: 0,
         },
         GpuVertex {
             position: [0.0, 1.0, -1.0],
@@ -46,7 +46,7 @@ fn triangle_model() -> Model {
             colour: [1.0, 1.0, 1.0, 1.0],
             texcoord: [0.0, 0.0],
             lit: 0.0,
-            v_cycles: 0.0,
+            anim: 0,
         },
         GpuVertex {
             position: [0.0, 0.0, 1.0],
@@ -54,7 +54,7 @@ fn triangle_model() -> Model {
             colour: [1.0, 1.0, 1.0, 1.0],
             texcoord: [0.0, 0.0],
             lit: 0.0,
-            v_cycles: 0.0,
+            anim: 0,
         },
     ];
     Model {
@@ -77,6 +77,7 @@ fn triangle_model() -> Model {
         textures: Vec::new(),
         centre: [0.0, 0.0, 0.0],
         radius: 2.0,
+        anim_tracks: Vec::new(),
         mesh_count: 1,
         vertices,
     }
@@ -103,6 +104,7 @@ fn render_and_resolve(
         index_buffer,
         texture_binds,
         fog_bind,
+        anim_bind,
         ..
     } = mesh_render::build(
         device,
@@ -131,7 +133,7 @@ fn render_and_resolve(
             resource: uniform_buffer.as_entire_binding(),
         }],
     });
-    write_uniforms(queue, &uniform_buffer, model, 1.0, 0.0, 0.0, 1.0, 0.0);
+    write_uniforms(queue, &uniform_buffer, model, 1.0, 0.0, 0.0, 1.0);
 
     let resolve_target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("msaa_resolve target"),
@@ -222,6 +224,10 @@ fn render_and_resolve(
         // bound even when it does nothing, which is what this line is for - and
         // the first run of this test after fog landed is what caught that.
         pass.set_bind_group(2, &fog_bind, &[]);
+        // Group 3 is the texture-transform table. Left at the all-identity
+        // buffer `build` initialises: this test is about MSAA resolve, not
+        // animation, and an identity transform draws the authored UVs.
+        pass.set_bind_group(3, &anim_bind, &[]);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         pass.set_bind_group(1, &texture_binds[0], &[]);

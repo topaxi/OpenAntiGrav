@@ -95,6 +95,32 @@ decode: the class name means a **literal six-faced cube**, and the sky is
 **unlit** (`_nolight`) and **unmipped** (`_nomip`). The `Skies\Default\` path
 also implies non-default sky texture sets, which is what the per-track skies are.
 
+### One shipped sky animates: Vertica's
+
+**Confidence 85, measured 2026-08-11.** A `Skycube` payload being a `Mesh`
+payload goes further than the decode: it also means a sky can carry the
+per-material [texture-transform keyframe block](vex.md#the-texture-transform-keyframe-block-at-0x30--material_count--0x14),
+and exactly one does. `06_Track`'s (Vertica, both layouts - the forward and
+reversed files share the circuit's sky) drifts its texture one whole tile
+**diagonally**, `(0, 0)` to `(255, 255)` over key times 0..1997, on a
+**33.3-second** loop, across 71 of the sky's 494 vertices. A slow cloud layer,
+and by a wide margin the slowest authored track on the disc - the next slowest
+is 10 s.
+
+Swept over all 40 shipped sky nodes; the other 39 author nothing. Worth
+recording because "the sky is static" is the natural assumption, is what this
+project's own test asserted first, and is wrong for one circuit.
+
+It also matters as a decode check in the other direction. Arbitrary bytes read
+as a *plausible* keyframe block often enough to be dangerous, so a sky picking
+one up is exactly what a mis-parse looks like. What separates the two is the
+material's `& 0x10` flag, which is the engine's own gate
+(`Mesh_UpdateTextureTransforms`, `0x0890e160`) and which
+`oag_formats::vex::mesh_tex_transform` now applies:
+`crates/render/tests/authored_uv_ground_truth.rs` asserts that no *other* sky
+animates and that this one's period stays in cloud-layer territory rather than
+sliding the horizon.
+
 ## `fogCube`
 
 128 bytes on every track that authors one, and the layout is legible on sight:

@@ -369,15 +369,22 @@ rather than an animated coordinate: `Trail_DrawRibbon` already sets a per-draw
 colour through `FUN_0881125c`, and a per-object colour advanced on a clock would
 pulse a light without moving a UV or rewriting a palette. Not investigated.
 
-**Consequence for the renderer**: `[graphics] animated_textures` now defaults
-**off**. The eight track surfaces were selected on real geometry - narrow
-authored V bands against full-tile static art - and that measurement is kept,
-but making them scroll is a departure from the original rather than a
-reproduction of it. *(2026-08-10: the ground has moved - the surfaces DO
-scroll in the original, driven by authored keyframe blocks; see "The values
-gap is closed". The default-off stays until the renderer reads the authored
-tracks instead of the table's chosen rates, at which point it becomes a
-reproduction and can default on.)*
+**Consequence for the renderer**: `[graphics] animated_textures` defaulted
+**off** while the eight track surfaces were selected on geometry alone - narrow
+authored V bands against full-tile static art - because making them scroll on
+chosen rates was a departure from the original rather than a reproduction of
+it.
+
+***(2026-08-11: done, and the default is now on.)*** The renderer reads the
+authored blocks: `oag_formats::vex::mesh_tex_transforms` parses the
+per-material array, `TexTransform::sample` reproduces
+`TexAnim_UpdateTransform`'s wrap-divide-clamp-lerp, and
+`oag_render::mesh_render::TexAnims` samples every track of a model once a frame
+into a uniform table that `mesh.wgsl` indexes per vertex. The name table stays
+as the record of the geometric survey and no longer draws anything - the two
+disagree, and the table was wrong: `col_display7_GLOW` is authored as a **U**
+scroll on all twelve circuits and the table scrolled it in V.
+`crates/render/tests/authored_uv_ground_truth.rs` is the evidence.
 
 ## What was ruled out
 
@@ -483,11 +490,19 @@ has seen half the mechanism.
   Confidence 85: the tracks, gate bits and rate agreement are file reads
   corroborated by the pixel measurement; no breakpoint has watched a ship
   glow mesh's updater specifically.
-- **Track scenery's tracks are authored too, with per-mesh phase.**
-  `16_Track` carries 92 animated mesh blocks (16 distinct
-  `(rate, span, loop)` shapes): continuous u/v scrolls at 0.667-10 s loops,
-  and **stepped** tracks (e.g. `v` dropping `-64` at key pairs `(3,4)`,
-  `(7,8)`, `(11,12)` over a 0.833 s loop, with sibling meshes carrying the
-  same steps phase-shifted) - the flicker-band sequences, authored with
-  per-mesh phase interleave. This is the data that can replace
-  `ANIMATED_TEXTURES`' chosen rates wholesale; the renderer port is open.
+- ~~**Track scenery's tracks are authored too, with per-mesh phase.**~~
+  **Read, and the renderer port is closed (2026-08-11).** `16_Track` carries
+  90 animated meshes authoring **17 distinct tracks**: continuous `u`, `v` and
+  diagonal scrolls at 0.667-10 s loops, and **stepped** tracks (`v` dropping
+  `-64` at key pairs `(3,4)`, `(7,8)`, `(11,12)`, with sibling families at
+  `(5,6)...` and `(11,12)...` carrying the same steps phase-shifted) over one
+  shared **50-frame** loop. Two things this settles that the earlier summary
+  got wrong: the loop is the block's `+0x2c` and **not** the last key time -
+  those three families end at frames 12, 18 and 24 - and the blocks are **per
+  material**, with a later block's key offsets relative to the array base
+  rather than to itself.
+
+  The surface that prompted the port: **Talon's Junction's turn arrows**
+  (`col_arrows1_GLOW_ADD`, three meshes, material flags `0x0292`) author `v`
+  from 0 to one whole tile over 40 frames on a 40-frame loop. They were drawn
+  frozen until this landed.
