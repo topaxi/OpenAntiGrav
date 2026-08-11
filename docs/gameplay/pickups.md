@@ -200,10 +200,42 @@ the original does: the stamp is unconditional and the grant is not.
   Nothing read says so, and the inventory here is one slot.
 - **The `front`/`back` odds columns**, which need race positions, which need
   opponents that move.
-- **The per-pad refresh timers are not in the determinism hash.** They are
-  genuine simulation state; the hash covers `ShipState` and the tick, and
-  widening it is a change to the gate rather than to this feature. A replay of a
-  single race would need them.
+## The determinism gate does not see any of this, and it should
+
+**The simulation is still deterministic.** Nothing here reads a wall clock, OS
+entropy or a `HashMap` iteration order; every draw goes through the seeded
+`World::rng`, so the same seed and the same inputs give the same race. That part
+of [the rules](../architecture/determinism.md) holds.
+
+**What does not hold is that the gate can see it.** The committed hash covers
+`ShipState` and the tick
+(`oag_physics::probe::hash_state`, `crates/physics/tests/determinism.rs`), and
+three pieces of simulation state this feature added sit outside it:
+
+- the per-pad refresh timers, on `Race`;
+- the inventory, on `oag_gameplay::Ship`;
+- the generator's own position, which nothing has ever hashed.
+
+`ShipState::turbo_timer` *is* hashed, so what a fired Turbo does to the force law
+is covered - but what decides whether it is ever fired is not.
+
+**The consequence is sharper than "an uncovered field", and it is why this is
+written down rather than left implicit.** A pad's refresh timer decides whether
+`pickup::draw` is called, and `draw` consumes `World::rng`. So a change that
+moved a refresh timer by one tick would shift the whole generator stream from
+there on, changing every later draw in the race - and the gate would report
+green, because none of the three fields above reaches the hash. That is exactly
+the class of silent divergence the gate exists to catch.
+
+Two things follow for whoever picks this up. A **snapshot-based replay** cannot
+restore a single race today, because the pads' state is not in the snapshot the
+determinism rules are shaped around. And **widening the hash is the fix**, not
+moving the fields: they are on `Race` and `Ship` for good reasons -
+`oag-physics` depends on nothing but `oag-core` and cannot name a `Weapon`, and
+pad timers belong to the track rather than to a craft. What is needed is a
+race-level hash beside the ship-level one. None exists yet; the only thing
+shaped like one lives inside
+`cycling_the_camera_changes_no_simulation_state`.
 
 ## See also
 

@@ -428,11 +428,18 @@ pub fn engine(
 /// Counts a fired Turbo pickup down.
 ///
 /// Called once a tick from [`crate::step`], **after** the force law has read the
-/// timer, so a pickup fired with `time` seconds on it boosts for exactly that
-/// many seconds' worth of ticks rather than one fewer. That ordering is this
-/// project's, not a reading: the original's equivalent is a bit and a timer in
-/// two undecoded words, and nothing has been read that says when the bit clears.
-/// See [`ENGINE_PICKUP_SPEEDUP`].
+/// timer, so the tick a pickup is fired on is boosted rather than skipped. That
+/// ordering is this project's, not a reading: the original's equivalent is a bit
+/// and a timer in two undecoded words, and nothing has been read that says when
+/// the bit clears. See [`ENGINE_PICKUP_SPEEDUP`].
+///
+/// **It boosts for one tick more than the arithmetic suggests**, measured rather
+/// than intended: a `0.75` second pickup runs 46 ticks at 60 Hz, not 45. The
+/// timer is read before it is decremented, and 45 sequential `f32` subtractions
+/// of `1/60` from `0.75` leave a residue above zero, so a forty-sixth read still
+/// sees a live boost. A sixtieth of a second, pinned by
+/// `a_fired_turbo_multiplies_thrust_for_its_authored_duration` so that changing
+/// the ordering fails a test rather than moving a number nobody is watching.
 ///
 /// Floored at zero rather than allowed to go negative, so
 /// `turbo_timer > 0.0` is the whole of the gate and a long-expired pickup does

@@ -6460,6 +6460,72 @@ mod tests {
         assert_eq!(granted, 1, "the pad fired {granted} times for one crossing");
     }
 
+    /// **Leaving a pad and coming back before its timer expires gets nothing**,
+    /// and coming back after it does gets a second pickup.
+    ///
+    /// The case `sitting_on_a_weapon_pad_does_not_refill_the_slot` cannot
+    /// reach: an enveloping pad never lets the ship out, so that test exercises
+    /// the entry edge and never the cooldown.
+    ///
+    /// **The pad is moved rather than the ship**, because there is no public way
+    /// to teleport a craft mid-race and driving one out of an enveloping volume
+    /// is not possible by construction. Two consequences the first draft of this
+    /// test got wrong, both worth knowing:
+    ///
+    /// - **Emptying the pad list is not the same as leaving a pad.**
+    ///   [`Race::test_weapon_pads`] returns before the countdown when there is
+    ///   nothing to test, which is right - the original runs the timer as the
+    ///   pad class's own `update` method, so no pads means no timers to run -
+    ///   but it means a test that clears the list freezes every cooldown.
+    /// - **The broadphase assumes a pad does not move.** `weapon_pad_distance`
+    ///   caches how far the craft was from each pad and spends that distance
+    ///   before testing again, so a pad teleported back under the ship is
+    ///   skipped for as many ticks as the fake distance bought. `Pad_Bind`
+    ///   zeroes the same cache at load; a test that moves a pad has to do the
+    ///   same, which is what the assignment below is.
+    #[test]
+    fn a_pad_re_entered_within_its_cooldown_hands_out_nothing() {
+        // A whole second, so a handful of ticks cannot run it out by accident.
+        let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        let far_away = pad_at(Vec3::splat(1.0e6), 1.0);
+
+        // Moves the pad under the ship or a long way from it, invalidating the
+        // broadphase either way.
+        let place = |race: &mut Race, pad: oag_formats::pads::PadVolume| {
+            race.weapon_pads[0] = pad;
+            race.weapon_pad_distance[0] = 0.0;
+        };
+
+        race.tick(&InputSnapshot::default());
+        assert!(race.ship_pickup().is_some(), "the first crossing must pay");
+        race.world.ships[0].pickup.weapon = None;
+
+        // Off the pad, then back on, well inside the cooldown.
+        place(&mut race, far_away);
+        race.tick(&InputSnapshot::default());
+        place(&mut race, enveloping_pad()[0]);
+        race.tick(&InputSnapshot::default());
+        assert_eq!(
+            race.ship_pickup(),
+            None,
+            "a pad re-entered inside its refresh time paid a second time"
+        );
+
+        // And once the timer has run out it pays again. Away while it expires,
+        // so the return is a fresh entry edge rather than a craft that never
+        // left - and the timer keeps running, because the list is not empty.
+        place(&mut race, far_away);
+        for _ in 0..90 {
+            race.tick(&InputSnapshot::default());
+        }
+        place(&mut race, enveloping_pad()[0]);
+        race.tick(&InputSnapshot::default());
+        assert!(
+            race.ship_pickup().is_some(),
+            "the pad never became collectable again"
+        );
+    }
+
     /// Firing a Turbo sets the timer from the file's own `<Turbo time>` and the
     /// engine multiplies its thrust while it runs - the recovered `1.2`. Read as
     /// a *difference* against an identical race that never fired, because the
@@ -6511,10 +6577,23 @@ mod tests {
             ticks += 1;
             assert!(ticks < 600, "the turbo never expired");
         }
-        let expected = (FIXTURE_TURBO_TIME / fired.dt()).round() as u32;
-        assert!(
-            ticks.abs_diff(expected) <= 1,
-            "the turbo ran {ticks} tick(s) against the authored {expected}"
+        // **Exact, not within one, and the exact answer is one *more* than the
+        // arithmetic suggests.** A tolerance of one tick passes whether the
+        // countdown runs before or after the force law reads it, which is the
+        // thing `oag_physics::engine::advance_turbo` makes a claim about - so a
+        // tolerant assertion would leave that claim untested. It ran 46 ticks
+        // for 45 ticks' worth of seconds, and the extra one is real: the timer
+        // is read before it is decremented, and 45 sequential `f32`
+        // subtractions of `1/60` from `0.75` leave a residue above zero, so a
+        // forty-sixth read still sees a live boost. Harmless - a sixtieth of a
+        // second - and pinned rather than tolerated so that a change to the
+        // ordering shows up here.
+        let whole = (FIXTURE_TURBO_TIME / fired.dt()).round() as u32;
+        assert_eq!(
+            ticks,
+            whole + 1,
+            "the turbo ran {ticks} tick(s) against the authored {whole} plus the \
+             float residue"
         );
     }
 
