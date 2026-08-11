@@ -301,7 +301,7 @@ geometry - the geometry is 95 throughout.
 | Speed | `SpeedBar`, `SpeedBarBg`, `SpeedBarMark`, `SpeedBarText` | 90 | `speed * 3.6`, the recovered km/h factor |
 | Shield | `ShieldBar`, `ShieldBarBg`, `ShieldBarMark`, `ShieldBarText` | 75 | no runtime pool exists yet; see [roadmap](../overview/roadmap.md) M5 |
 | Lap | `Lap`, `LapOf`, `Lap Outof`, `LapTxt` | 60 | **lap counting is unrecovered** - see below |
-| Position | `Position`, `PositionOf`, `Position Outof`, `PositionTxt` | 60 | needs a grid; seven of eight slots are unread code |
+| Position | `Position`, `PositionOf`, `Position Outof`, `PositionTxt` | 75 | **drawn** as of 2026-08-11, from `Race::places()`; only `Arcade_HUD.xml` carries them, and they take the anchor off `TotalTime` - see below |
 | Times | `CurrentTime`, `BestTime`, `TotalTime`, `CountdownTime`, `TimeDiffText`, `TimeDiffIcon`, `TimeIcon` | 70 | format `m.ss.hh`, observed as `1.11.08` on the running game |
 | Weapon | `PickupBackground`, `SubWeapon`, **13** `<Type>Icon` widgets | 95 | **drawn**; the icon is found by *name* - see below. `SubWeapon` is not driven |
 | Warnings | `ForwardWarningIcons`, `RearWarningIcons` and children | 55 | incoming-weapon indicators; nothing drives them |
@@ -345,6 +345,48 @@ icon is invisible inside an opaque white hexagon. The original must set a colour
 at runtime and that is unrecovered; this build draws the backdrop in the
 layout's own `HudBGColour` instead. The measurement and what is and is not
 claimed are on [pickups](../gameplay/pickups.md).
+
+### The place and the total time are authored at one anchor, so one of them has to go
+
+`Arcade_HUD.xml` - the single-race and tournament layout, and **the only one of the
+five that carries the place widgets at all** - authors `TotalTime` and `Position`
+inside the same `<Item OffsetX="445" OffsetY="5">` with the same everything:
+
+```text
+<Text name="TotalTime"><Values scale="1.0" font="HUD" align="right" vertalign="bottom" x="0" y="30" .../>
+<Text name="Position"> <Values scale="1.0" font="HUD" align="right" vertalign="bottom" x="0" y="30" .../>
+```
+
+Both resolve to `(445, 35)`, right-aligned, so the place's single digit lands on
+the last digit of the time. The captions collide too, less exactly: `TotalTimeTxt`
+is right-aligned to 445 and `PositionTxt` to 460, which is inside a `HUDSmall`
+`"TOTAL"`.
+
+**Coincidence is this dialect's way of saying "at most one of these is live"**, and
+the precedent is in the same file: thirteen weapon icons, every one at `x=240 y=35`,
+of which the code draws the one being carried. **Confidence 95** for the
+coincidence - it is measured, and reproducible with
+
+```sh
+# The backslashes are doubled on purpose: `just` runs the recipe through a shell,
+# which eats one layer. Single backslashes here hash to a name no archive has, and
+# the error reads `no entry named DataXMLArcade_HUD.xml`.
+just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\\XML\\Arcade_HUD.xml'
+```
+
+**Which of the two wins is inference, confidence 55.** This build draws the place
+and drops the total time, because the place only exists in a race with a field
+while `TimeTrial`, `Zone` and `Elimination` all carry `TotalTime` and no place - so
+the clock is not homeless without this anchor and the place would be. No frame of
+the original has been read to confirm it. **What settles it**: the PPSSPP recipe
+above driven to a full field with `psp-drive.py menu --single-race`, then read the
+top-right corner. The rule is `oag_game::hud::place_owns_the_anchor` and it asks
+the *layout*, not just the readout, so `Elimination_HUD.xml` keeps its clock.
+
+Found by `no_two_live_widgets_share_an_anchor_on_any_shipped_layout`, which is a
+new ground-truth check and reported this collision the first time it ran. Its unit
+counterpart in `oag_game::hud` had claimed for months that the shipped layouts were
+checked; they were not.
 
 **A bar and its background share a rectangle exactly**, differing only in colour -
 pinned by `each_bar_exactly_overlays_its_own_background`. So the fill can only be

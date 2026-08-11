@@ -1446,3 +1446,96 @@ fn the_field_is_placed_by_how_far_round_it_is() {
         "slot {leader} is placed first but slot {furthest} is further round"
     );
 }
+
+/// The place reaches the HUD, which is the only place a player can read it.
+///
+/// `Race::places` had no reader outside the tests until 2026-08-11 - the table was
+/// computed every tick and shown to nobody - so this asserts the *wiring* rather
+/// than the ordering: the readout's place is the player's place, the field size is
+/// the grid, and both halves of the widget group have a value at the same time.
+/// `the_field_is_placed_by_how_far_round_it_is` above is what checks the ordering.
+///
+/// A single race is the mode that has a field at all, and `Arcade_HUD.xml` is the
+/// only shipped layout with the place widgets - see
+/// `oag_game::hud::place_owns_the_anchor`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_players_place_reaches_the_hud() {
+    let Some(loaded) = load_single_race() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup);
+    assert_eq!(
+        race.ship_count(),
+        8,
+        "a single race with no field cannot test a place"
+    );
+
+    for _ in 0..900 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+
+    let readout = race.readout();
+    let course = race.course().expect("16_Track closes");
+    let places = race.places();
+    for (slot, place) in places.iter().enumerate() {
+        let standing = race.world.ships[slot].standing;
+        println!(
+            "slot {slot}: place {place}, lap {}, progress {:?}, distance {:.1}",
+            standing.lap,
+            standing.progress.map(|p| p.round()),
+            standing.distance(course)
+        );
+    }
+    println!(
+        "the player is {} of {} after {} tick(s)",
+        readout.place, readout.ships, 900
+    );
+    assert_eq!(readout.place, u32::from(race.player_place()));
+    assert!(
+        (1..=8).contains(&readout.place),
+        "the HUD would draw a place of {}, which is not a position in a field of eight",
+        readout.place
+    );
+    assert_eq!(readout.ships, 8);
+
+    // Both halves together or neither: a lone `8` beside the `POS` caption was
+    // what this HUD drew before the place was wired up.
+    let layout = loaded
+        .hud
+        .layout
+        .as_ref()
+        .expect("Arcade_HUD.xml parses; the widget-count test pins it");
+    let frame = oag_game::hud::draw_list(
+        &oag_game::hud::Context {
+            default_border: layout.default_border(),
+            layout,
+            strings: &loaded.hud.strings,
+            atlas_origin: loaded.hud.atlas_origin(),
+            hud_line_height: loaded.hud.font.line_height,
+            small_line_height: loaded.hud.small_font.line_height,
+        },
+        &readout,
+    );
+    let drawn: Vec<&str> = frame
+        .hud_text
+        .iter()
+        .filter_map(|draw| match draw {
+            oag_game::frontend::Draw::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    println!("the HUD's own font pass draws {drawn:?}");
+    assert!(
+        drawn.contains(&readout.place.to_string().as_str()),
+        "the place is not on screen: {drawn:?}"
+    );
+    assert!(
+        drawn.contains(&"8"),
+        "the field size is not on screen: {drawn:?}"
+    );
+    assert!(
+        drawn.contains(&"/"),
+        "the separator is not on screen: {drawn:?}"
+    );
+}

@@ -691,10 +691,15 @@ fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
 /// that have a real source. The alternative, drawing every widget and letting the
 /// empty ones be invisible, hides the difference between "no value" and "not
 /// wired up".
+///
+/// `place_shown` is the one decision this function cannot make from its own
+/// arguments: whether *this layout* is drawing a place at all, which decides who
+/// owns the top-right anchor. See [`place_owns_the_anchor`].
 fn text_for(
     label: &Label,
     readout: &Readout,
     strings: &crate::language::StringTable,
+    place_shown: bool,
 ) -> Option<String> {
     // A literal in the XML wins for the widgets that have one: `LapOf`'s "/" is
     // the separator between lap and total, and it is authored rather than
@@ -711,10 +716,28 @@ fn text_for(
         "Lap" => (readout.lap > 0).then(|| readout.lap.to_string()),
         "Lap Outof" => (readout.laps > 0).then(|| readout.laps.to_string()),
         "Position" => (readout.place > 0).then(|| readout.place.to_string()),
-        "Position Outof" => (readout.ships > 0).then(|| readout.ships.to_string()),
+        // Both halves of the place are gated on the *place*, not on the field
+        // size. The field size is known from the moment a race is set up, so
+        // gating this half on `ships` alone drew the caption and a bare `8` with
+        // no number and no separator - which is what a single race showed until
+        // 2026-08-11.
+        "Position Outof" => {
+            (readout.place > 0 && readout.ships > 0).then(|| readout.ships.to_string())
+        }
         // Running clocks: tenths. See [`Precision`].
         "CurrentTime" => Some(format_lap_time(readout.lap_ticks, Precision::Tenths)),
-        "TotalTime" => Some(format_lap_time(readout.race_ticks, Precision::Tenths)),
+        // The total time and its caption yield the top-right anchor to the place.
+        // See [`place_owns_the_anchor`].
+        "TotalTime" => {
+            (!place_shown).then(|| format_lap_time(readout.race_ticks, Precision::Tenths))
+        }
+        "TotalTimeTxt" => (!place_shown).then(|| caption(label, strings)).flatten(),
+        // The one caption gated on its own value, because the widget beside it is a
+        // *different group's* caption rather than blank space: a `POS` with nothing
+        // under it, three pixels from a `TOTAL` with a time under it, reads as a
+        // rendering fault. The reachable case is a single race on a track with no
+        // authored `Start Position`, which grids one craft and so has no place.
+        "PositionTxt" => place_shown.then(|| caption(label, strings)).flatten(),
         // A time that has been set: hundredths. With none set the original shows
         // zeros rather than a dash placeholder - `best 0.00.00` on the reference
         // frame - so an absent best formats as zero rather than as its own string.
@@ -751,11 +774,60 @@ fn text_for(
 
         // Static labels: anything with an `idstring` that this function has not
         // already claimed. These are the `IG_HUD_*` captions beside the values.
-        _ => label
-            .idstring
-            .as_deref()
-            .map(|id| strings.get_or_id(id).to_string()),
+        _ => caption(label, strings),
     }
+}
+
+/// A widget's `idstring` resolved through the language's table, or `None` when it
+/// carries no id and so has no caption to draw.
+fn caption(label: &Label, strings: &crate::language::StringTable) -> Option<String> {
+    label
+        .idstring
+        .as_deref()
+        .map(|id| strings.get_or_id(id).to_string())
+}
+
+/// Whether the place, rather than the total time, owns the top-right anchor.
+///
+/// # Why the total time disappears when a place appears
+///
+/// **`Arcade_HUD.xml` authors `TotalTime` and `Position` at exactly the same
+/// anchor**, inside the same `<Item OffsetX="445" OffsetY="5">`:
+///
+/// ```text
+/// <Text name="TotalTime"><Values scale="1.0" font="HUD" align="right" vertalign="bottom" x="0" y="30" .../>
+/// <Text name="Position"> <Values scale="1.0" font="HUD" align="right" vertalign="bottom" x="0" y="30" .../>
+/// ```
+///
+/// Same `x`, same `y`, same font, same scale, same alignment on both axes - so the
+/// place's digit lands on the last digit of the time and at most one of the two can
+/// be on screen. The captions overlap too: `TotalTimeTxt` is right-aligned to 445
+/// and `PositionTxt` to 460, which is inside a `HUDSmall` "TOTAL".
+///
+/// **Coincidence is this dialect's way of saying "at most one of these is live"** -
+/// the precedent is the thirteen weapon icons, every one authored at `x=240 y=35`,
+/// of which [`pickup_sprites`] draws the one being carried. Confidence **95**;
+/// reproduce with
+///
+/// ```sh
+/// # Doubled backslashes: `just` runs the recipe through a shell, which eats one layer.
+/// just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\\XML\\Arcade_HUD.xml'
+/// ```
+///
+/// **Which of the two wins is inference, at confidence 55.** `Position` is here
+/// because the place is the readout that only exists in a race with a field, and
+/// `Arcade_HUD.xml` is the only one of the five layouts that carries the place
+/// group at all - `TimeTrial`, `Zone` and `Elimination` have the total time and no
+/// place, so the time is not homeless without this anchor. No frame of the
+/// original has been read to confirm it. **What settles it**: the PPSSPP recipe in
+/// `docs/ui/hud.md` driven to a full field with `psp-drive.py menu --single-race`,
+/// then read the top-right corner.
+///
+/// The choice is per *layout*, not per readout: `Elimination_HUD.xml` has a
+/// `TotalTime` and no `Position`, so a race with a field still shows its clock
+/// there - which is why this asks the layout and not only the readout.
+fn place_owns_the_anchor(layout: &Layout, readout: &Readout) -> bool {
+    readout.place > 0 && layout.label("Position").is_some()
 }
 
 /// Sprite widgets drawn whenever the HUD is up.
@@ -978,11 +1050,15 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         }
     }
 
+    // Decided once for the frame rather than per widget: it is a fact about the
+    // layout and the readout together, and two widgets have to agree on it.
+    let place_shown = place_owns_the_anchor(cx.layout, readout);
+
     for label in &cx.layout.labels {
         if !is_screen_positioned(&label.name) {
             continue;
         }
-        let Some(text) = text_for(label, readout, cx.strings) else {
+        let Some(text) = text_for(label, readout, cx.strings, place_shown) else {
             continue;
         };
         if text.is_empty() {
@@ -1305,6 +1381,194 @@ mod tests {
 </Screen>
 </Screen>
 "#;
+
+    /// The top-right corner of the real `Arcade_HUD.xml`, verbatim.
+    ///
+    /// Six widgets in one `<Item>`, and the point of the fixture is the two
+    /// **coincident** anchors it contains - `TotalTime` and `Position` share `x`,
+    /// `y`, font, scale and both alignments. Copied off the USA PSP disc with
+    /// `just wad cat --expand`, attribute order included, so a reader can check it
+    /// against the file rather than against this comment. See
+    /// [`place_owns_the_anchor`].
+    const TOP_RIGHT: &str = r#"
+<Screen>
+<Screen name="HUD">
+<Variable global="HudColour2"><Values String="0xFF7DEFC0"></Values></Variable>
+<Variable global="HudBGColour"><Values String="0x40000000"></Values></Variable>
+<Item OffsetX="445" OffsetY="5">
+<Text name="TotalTimeTxt">
+<Values idstring="IG_HUD_TOTAL" font="HUDSmall" align="right" scale="1.0" x="0" y="0" CalcBlur="1" Color="FEConst->HudColour2"></Values>
+</Text>
+<Text name="TotalTime">
+<Values scale="1.0" font="HUD" align="right" vertalign="bottom" x="0" y="30" CalcBlur="1"/>
+</Text>
+<Text name="PositionTxt">
+<Values idstring="IG_HUD_POS" font="HUDSmall" align="right" scale="1.0" x="15" y="0" CalcBlur="1" Color="FEConst->HudColour2" BorderColor="FEConst->HudBGColour"></Values>
+</Text>
+<Text name="Position">
+<Values scale="1.0" font="HUD" align="right" vertalign="bottom" x="0" y="30" CalcBlur="1" BorderColor="FEConst->HudBGColour"/>
+</Text><Text name="PositionOf">
+<Values string="/" scale="0.6" font="HUD" align="left" vertalign="bottom" x="3" y="31" CalcBlur="1" Color="FEConst->HudColour2" BorderColor="FEConst->HudBGColour"/>
+</Text>
+<Text name="Position Outof">
+<Values scale="0.6" font="HUD" align="left" vertalign="bottom" x="16" y="34" CalcBlur="1" BorderColor="FEConst->HudBGColour"/>
+</Text>
+</Item>
+</Screen>
+</Screen>
+"#;
+
+    /// The readout a racer in a field has: third of eight.
+    fn placed() -> Readout {
+        Readout {
+            place: 3,
+            ships: 8,
+            ..Readout::blank()
+        }
+    }
+
+    /// The whole point of the widget group: a place the player can read.
+    #[test]
+    fn the_place_and_the_field_size_are_drawn_with_their_separator() {
+        let layout = Layout::from_xml(TOP_RIGHT);
+        let strings = strings();
+        let frame = draw_list(&context(&layout, &strings), &placed());
+
+        let texts: Vec<&str> = frame
+            .hud_text
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(texts, ["3", "/", "8"], "{frame:?}");
+    }
+
+    /// The field size is never drawn on its own.
+    ///
+    /// **This was live, not hypothetical**: `Position Outof` gated on `ships > 0`
+    /// alone, and the field size is known from the moment a race is set up, so a
+    /// single race drew the `POS` caption and a bare `8` with no number and no
+    /// separator.
+    #[test]
+    fn the_field_size_is_not_drawn_without_a_place() {
+        let layout = Layout::from_xml(TOP_RIGHT);
+        let strings = strings();
+        let readout = Readout {
+            place: 0,
+            ships: 8,
+            ..Readout::blank()
+        };
+        let frame = draw_list(&context(&layout, &strings), &readout);
+
+        for draw in frame.hud_text.iter().chain(frame.small_text.iter()) {
+            let Draw::Text { text, .. } = draw else {
+                continue;
+            };
+            assert_ne!(
+                text, "8",
+                "the field size is drawn with no place: {frame:?}"
+            );
+            assert_ne!(text, "/", "the separator is drawn with no place: {frame:?}");
+        }
+    }
+
+    /// A caption with nothing under it is a rendering fault, so the `POS` caption
+    /// goes with its number.
+    ///
+    /// The reachable case: a single race on a track with no authored `Start
+    /// Position` grids one craft, which has no place, and the arcade layout still
+    /// carries the widgets.
+    #[test]
+    fn the_place_caption_is_not_drawn_on_its_own() {
+        let layout = Layout::from_xml(TOP_RIGHT);
+        let strings = strings();
+        let readout = Readout {
+            place: 0,
+            ships: 1,
+            ..Readout::blank()
+        };
+        let frame = draw_list(&context(&layout, &strings), &readout);
+
+        let captions: Vec<&str> = frame
+            .small_text
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        // `strings()` is empty, so `get_or_id` falls back to the key itself, which
+        // is what makes the two captions distinguishable here.
+        assert_eq!(captions, ["IG_HUD_TOTAL"], "{frame:?}");
+    }
+
+    /// The two coincident widgets are never both live. See
+    /// [`place_owns_the_anchor`].
+    #[test]
+    fn the_total_time_yields_its_anchor_to_the_place() {
+        let layout = Layout::from_xml(TOP_RIGHT);
+        let strings = strings();
+
+        // The anchor the two share, which is what makes this exclusive rather than
+        // a preference: read off the fixture rather than asserted from memory.
+        let total = layout.label("TotalTime").expect("the fixture has one");
+        let position = layout.label("Position").expect("the fixture has one");
+        assert_eq!((total.x, total.y), (position.x, position.y));
+        assert_eq!(total.scale, position.scale);
+        assert_eq!(total.align, position.align);
+        assert_eq!(total.vertalign, position.vertalign);
+        assert_eq!(total.font, position.font);
+
+        let names = |readout: &Readout| -> Vec<String> {
+            layout
+                .labels
+                .iter()
+                .filter(|label| {
+                    text_for(
+                        label,
+                        readout,
+                        &strings,
+                        place_owns_the_anchor(&layout, readout),
+                    )
+                    .is_some()
+                })
+                .map(|label| label.name.clone())
+                .collect()
+        };
+
+        // In a field: the place and its caption, and no clock.
+        let racing = names(&placed());
+        assert!(racing.contains(&"Position".to_string()), "{racing:?}");
+        assert!(racing.contains(&"PositionTxt".to_string()), "{racing:?}");
+        assert!(!racing.contains(&"TotalTime".to_string()), "{racing:?}");
+        assert!(!racing.contains(&"TotalTimeTxt".to_string()), "{racing:?}");
+
+        // Alone: the clock and its caption, and no place.
+        let solo = names(&Readout::blank());
+        assert!(solo.contains(&"TotalTime".to_string()), "{solo:?}");
+        assert!(solo.contains(&"TotalTimeTxt".to_string()), "{solo:?}");
+        assert!(!solo.contains(&"Position".to_string()), "{solo:?}");
+    }
+
+    /// A layout with a clock and no place keeps its clock in a race with a field.
+    ///
+    /// `Elimination_HUD.xml` is that layout: it carries `TotalTime` and no
+    /// `Position` at all, so the yield above has to be a question about the layout
+    /// and not only about the readout - otherwise an Eliminator race loses its
+    /// clock to a widget that is not there.
+    #[test]
+    fn a_layout_with_no_place_widget_keeps_its_total_time() {
+        let layout = Layout::from_xml(
+            r#"<Screen><Item OffsetX="445" OffsetY="5">
+            <Text name="TotalTime"><Values scale="1.0" font="HUD" align="right" vertalign="bottom" x="0" y="30"/></Text>
+            </Item></Screen>"#,
+        );
+        let strings = strings();
+        let frame = draw_list(&context(&layout, &strings), &placed());
+        assert_eq!(frame.hud_text.len(), 1, "{frame:?}");
+    }
 
     #[test]
     fn the_sample_yields_every_widget_it_declares() {
@@ -1893,8 +2157,13 @@ mod tests {
     }
 
     /// Splitting text into two passes gives up strict document paint order between
-    /// fonts, which is only safe if no two live labels overlap. Checked here on the
-    /// sample and on the shipped layouts by the ground-truth suite.
+    /// fonts, which is only safe if no two live labels overlap.
+    ///
+    /// Here on the sample, and on the shipped files by
+    /// `hud_layout_ground_truth::no_two_live_widgets_share_an_anchor_on_any_shipped_layout`,
+    /// which is where the property is really tested and which **found a collision**
+    /// the first time it ran: see [`place_owns_the_anchor`]. This comment claimed
+    /// the ground-truth check existed before it did.
     #[test]
     fn no_two_live_labels_overlap() {
         let layout = Layout::from_xml(SAMPLE);

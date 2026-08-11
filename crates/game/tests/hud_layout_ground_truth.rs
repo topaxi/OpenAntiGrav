@@ -295,6 +295,98 @@ fn every_sprite_samples_the_hud_atlas_and_every_constant_resolves() {
     }
 }
 
+/// No two widgets the HUD draws may share an anchor, on any shipped layout.
+///
+/// `oag_game::hud::Frame` splits text into two font passes, which gives up
+/// document paint order *between* fonts, so two live labels at one anchor would
+/// leave which of them is visible to the order the renderer happens to bind the
+/// atlases in. The unit test of the same name checks a hand-written sample; this
+/// checks the disc.
+///
+/// **It has already caught one.** `Arcade_HUD.xml` authors `TotalTime` and
+/// `Position` at exactly `(445, 35)`, right-aligned, same font and scale - see
+/// `oag_game::hud::place_owns_the_anchor`, which is the rule that keeps at most
+/// one of them live and is why this passes rather than a coincidence that it does.
+///
+/// The readout is deliberately the *busiest* one a race can produce: a place in a
+/// field, a lap of a lap count, a best lap set, a pickup held and the wrong-way
+/// warning up. A quiet readout would pass this test by drawing almost nothing.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+
+    let readout = hud::Readout {
+        speed_kmh: 300.0,
+        shield: 50.0,
+        shield_max: 100.0,
+        lap: 2,
+        laps: 3,
+        place: 3,
+        ships: 8,
+        race_ticks: 3600,
+        lap_ticks: 1200,
+        best_lap_ticks: Some(3000),
+        wrong_way: true,
+        zone: 4,
+        score: 1234,
+        pickup: Some(oag_formats::weapons::Weapon::Rocket),
+        ..hud::Readout::blank()
+    };
+    let strings = oag_game::language::StringTable::default();
+
+    let mut checked = 0usize;
+    for &(entry, ..) in EXPECTED {
+        let layout = layout_of(&mut archives, entry);
+        let frame = hud::draw_list(
+            &hud::Context {
+                default_border: layout.default_border(),
+                layout: &layout,
+                strings: &strings,
+                atlas_origin: (0.0, 0.0),
+                // The real line heights of `PulseHud.fnt` and `small.fnt`. They
+                // only move the anchors vertically and together, so the exact
+                // values do not decide this test - but a wrong one could hide a
+                // collision, so they are the disc's.
+                hud_line_height: 25.0,
+                small_line_height: 10.0,
+            },
+            &readout,
+        );
+
+        let mut anchors: Vec<(String, f32, f32)> = Vec::new();
+        for draw in frame.hud_text.iter().chain(frame.small_text.iter()) {
+            let oag_game::frontend::Draw::Text { x, y, text, .. } = draw else {
+                continue;
+            };
+            if let Some((other, ..)) = anchors
+                .iter()
+                .find(|(_, at_x, at_y)| *at_x == *x && *at_y == *y)
+            {
+                panic!(
+                    "{entry}: {text:?} and {other:?} are both live at ({x}, {y}), so paint \
+                     order between the two font passes decides which is visible"
+                );
+            }
+            anchors.push((text.clone(), *x, *y));
+            checked += 1;
+        }
+    }
+
+    println!(
+        "{checked} live label(s) checked across {} layout(s)",
+        EXPECTED.len()
+    );
+    // A busy readout across five layouts draws dozens of labels. A handful would
+    // mean the readout stopped driving anything and the test proves nothing.
+    assert!(
+        checked > 30,
+        "only {checked} live label(s) were drawn at all; this test has stopped checking anything"
+    );
+}
+
 /// The atlas the layouts name must actually be on the disc, in both archives.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

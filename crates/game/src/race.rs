@@ -3992,9 +3992,24 @@ impl Race {
             // A speed lap and a Zone run have no lap target. Zero is what the HUD
             // already reads as "unknown" and it omits the "of N" half.
             laps: race.laps_target.filter(|_| counted).unwrap_or(0),
-            // One ship on the grid until grid formation is recovered: seven of the
-            // eight slots are laid out by unread code.
-            place: 0,
+            // The player's place in the field, from the same table the results
+            // will read - [`Self::player_place`], slot 0 of [`Self::places`].
+            //
+            // Two gates, both meaning "there is no place to report" rather than
+            // "the place is one". `counted`, because with no closed ring there is
+            // no distance round the circuit to order the field by and
+            // [`Self::places`] answers "everyone is first" - honest as a return
+            // value and a lie on screen. And a field of **more than one craft**,
+            // because a place is a position among opponents: a time trial, a speed
+            // lap and a Zone run all grid the player alone, and so does a single
+            // race on a track with no authored `Start Position` node. `1 / 1` is
+            // arithmetic rather than a standing, and the widget group is omitted
+            // the same way the lap group is on a track that cannot count.
+            place: if counted && self.world.ship_count > 1 {
+                u32::from(self.player_place())
+            } else {
+                0
+            },
             ships: u32::from(self.world.ship_count),
             race_ticks: self.world.tick,
             lap_ticks: if counted {
@@ -6651,10 +6666,14 @@ mod tests {
     fn setup(handling: Handling) -> Setup {
         let ai = straight_track();
         let spline = Spline::from_track(&ai);
-        // A straight is not a loop, so there is no ring and no lap counter. That
-        // is the point for these tests: they are about the force law and the
-        // camera, and a `None` course is the honest state for the track they run
-        // on rather than a stub that counts laps on a line.
+        // **This does produce a ring, and the comment here said otherwise until
+        // 2026-08-11.** The blob's junction record is all zeros, so path 0's `next`
+        // reads as path 0 and the chain closes on itself: `Course::from_track`
+        // returns 32 points over 136.6 units, and every test built on this fixture
+        // has lap counting *on*, over a circuit that is geometrically a straight
+        // line. Harmless for what these tests assert - the force law and the camera
+        // do not read the course - but a test that wants the no-ring path has to
+        // build its own `None` rather than assume this one is it.
         let course = Course::from_track(&ai, None);
         Setup {
             airbrake_graphics: oag_gameplay::AirbrakeGraphics {
@@ -8769,6 +8788,34 @@ mod tests {
             race.tick(&InputSnapshot::default());
             assert_eq!(race.respawns(), 1, "respawned again inside the cooldown");
         }
+    }
+
+    /// A field of one reports **no** place, rather than "first of one".
+    ///
+    /// Which is every solo mode: a time trial, a speed lap and a Zone run all grid
+    /// the player alone, and so does a single race on a track with no authored
+    /// `Start Position`. `1 / 1` is arithmetic rather than a standing.
+    ///
+    /// The other half - a real place from a real field - needs a grid, so it is
+    /// `the_players_place_reaches_the_hud` in the ground-truth suite, which CI never
+    /// runs. This is the half that *can* run everywhere, and it exists because the
+    /// readout carried a hardcoded `place: 0` for months: a future edit that puts a
+    /// constant back fails a test that always runs rather than one that needs a
+    /// disc image.
+    #[test]
+    fn a_field_of_one_reports_no_place() {
+        let race = Race::start(setup(Handling::ZERO));
+        assert_eq!(race.world.ship_count, 1);
+
+        let readout = race.readout();
+        assert_eq!(readout.place, 0);
+        // Known regardless of the field size. The HUD is what decides not to draw a
+        // field size with no place beside it - see `oag_game::hud::text_for`.
+        assert_eq!(readout.ships, 1);
+        // The *table* still says first, because a lone craft leads the race it is
+        // in. The readout is where that stops being reported as a standing, so a
+        // gate that only consulted `places()` would not pass this.
+        assert_eq!(race.player_place(), 1);
     }
 
     /// A ship must arrive on the track with its mass in the body, or the hover

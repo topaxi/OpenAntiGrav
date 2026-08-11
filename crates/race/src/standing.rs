@@ -123,9 +123,40 @@ impl Standing {
     /// Laps times the circuit plus the distance into the current one, so one
     /// number orders the whole field. A craft with no fix yet reads as being at
     /// the very start, which is where it is.
+    ///
+    /// # The grid straddles the start line, so lap 1 needs one more rule
+    ///
+    /// **A craft that has not yet reached the line for the first time is *behind*
+    /// it, not a whole lap ahead of it**, and without that the whole first lap is
+    /// ordered backwards. This is not a corner case, it is every race: the grid is
+    /// laid out from the authored `Start Position` node, which on `16_Track` sits
+    /// ~138 units *before* the line, and the eight slots run ~19.8 units apart
+    /// forward from it - so the field spans the line at the moment the lights go
+    /// out. Measured, on a real load: the parked player read `progress 4956` of a
+    /// 5,094-unit circuit while seven craft that had crossed and driven on read
+    /// `1500`, which made the craft in last place first.
+    ///
+    /// The marker for "has not crossed yet" is the lap gate rather than the
+    /// distance: [`LapGate::NeedsNearHalf`] means this craft has never been seen in
+    /// the half of the circuit that follows the line, which is exactly the state a
+    /// craft sitting behind it on the grid is in, and which it leaves on its first
+    /// crossing. Keying on the distance alone would also catch a craft on its way
+    /// round lap 1 having already crossed once - a craft the gate has moved on.
+    ///
+    /// One tick is still not ordered: before the first fix nobody has a progress at
+    /// all, every craft reads `0`, and the field is ordered by slot. That is the
+    /// tick before the first physics step, and the original spends it in a
+    /// countdown.
+    ///
+    /// [`LapGate::NeedsNearHalf`]: crate::LapGate::NeedsNearHalf
     #[must_use]
     pub fn distance(&self, course: &Course) -> f32 {
-        (self.lap.saturating_sub(1)) as f32 * course.length() + self.progress.unwrap_or(0.0)
+        let progress = self.progress.unwrap_or(0.0);
+        if self.lap == 1 && self.gate == LapGate::NeedsNearHalf && progress > course.length() * 0.5
+        {
+            return progress - course.length();
+        }
+        (self.lap.saturating_sub(1)) as f32 * course.length() + progress
     }
 }
 
@@ -173,9 +204,35 @@ mod tests {
         testing::ring_course()
     }
 
+    /// A craft that started at the line and has driven to `progress` on `lap`.
+    ///
+    /// **The gate is part of that claim, not a detail.** A craft that drove here
+    /// from the line was seen in the near half on the way, so its gate has left
+    /// [`LapGate::NeedsNearHalf`] - and a standing that says otherwise describes a
+    /// craft that is three quarters round a lap it has never started, which
+    /// [`Standing::distance`] now reads as a craft still sitting on the grid. Use
+    /// [`on_the_grid`] for that craft.
     fn at(lap: u32, progress: f32) -> Standing {
+        let half = course().length() * 0.5;
         Standing {
             lap,
+            progress: Some(progress),
+            gate: if progress >= half {
+                LapGate::Ready
+            } else {
+                LapGate::NeedsFarHalf
+            },
+            ..Standing::default()
+        }
+    }
+
+    /// A craft on the grid at `progress`, before its first crossing of the line.
+    ///
+    /// Which is where a real grid is: the slots straddle the line, so most of the
+    /// field spawns in the *last* few percent of the circuit. The default gate is
+    /// what says "has not crossed yet".
+    fn on_the_grid(progress: f32) -> Standing {
+        Standing {
             progress: Some(progress),
             ..Standing::default()
         }
@@ -218,6 +275,38 @@ mod tests {
             ..Standing::default()
         };
         assert_eq!(places(&[late, early], &course), [2, 1]);
+    }
+
+    /// **The first lap of every race**: the grid straddles the start line, so some
+    /// craft are a few units *before* it and some a few units after, and the ones
+    /// before must not be placed a whole lap ahead.
+    ///
+    /// Three craft a unit apart across the line - one just short of it, two just
+    /// over - in the order a grid puts them, back to front. The right answer is that
+    /// the one short of the line is last; the arithmetic this replaced made it first
+    /// by nearly a whole circuit.
+    #[test]
+    fn a_craft_that_has_not_reached_the_line_is_behind_one_just_past_it() {
+        let course = course();
+        let behind = on_the_grid(course.length() - 1.0);
+        let over = on_the_grid(0.5);
+        let further = on_the_grid(1.0);
+        assert_eq!(places(&[behind, over, further], &course), [3, 2, 1]);
+        assert_eq!(behind.distance(&course), -1.0);
+    }
+
+    /// The gate is what separates the two, not the distance: a craft that *has*
+    /// crossed and come round to the far half of lap 1 is ahead of the field, not
+    /// behind it.
+    #[test]
+    fn a_craft_already_round_to_the_far_half_of_lap_one_is_not_read_as_on_the_grid() {
+        let course = course();
+        let far = course.length() * 0.75;
+        let round = at(1, far);
+        let grid = on_the_grid(far);
+        assert_eq!(round.distance(&course), far);
+        assert_eq!(grid.distance(&course), far - course.length());
+        assert_eq!(places(&[grid, round], &course), [2, 1]);
     }
 
     /// Eight craft on the grid have no fix at all and are all at distance zero.

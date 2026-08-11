@@ -23,10 +23,10 @@
 
 - [x] Laps and finishing conditions, for the single-ship modes
 - [x] Game modes: time trial, Zone, speed lap
-- [~] Race rules: grid order is recovered, eight craft are **driven**, and the
-      field is **placed** - every craft counts its own laps through
-      `oag_race::Standing`. What is missing is a lap *time* per craft and a HUD
-      that shows a position
+- [~] Race rules: grid order is recovered, eight craft are **driven**, the field
+      is **placed** - every craft counts its own laps through `oag_race::Standing`
+      - and the player's place is **on the HUD**. What is missing is a lap *time*
+      per craft and a position for anyone but the player
 - [~] Game modes: **single race** fields a driven grid; tournament and
       Eliminator do not exist
 - [~] Weapons: a pad hands out a pickup and Turbo has an effect; the other

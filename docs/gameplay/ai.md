@@ -478,14 +478,34 @@ the grid are at exactly the same distance before anyone has a fix, and a
 comparison that left that to chance would feed an arbitrary result into
 simulation state.
 
+**The place reaches the HUD as of 2026-08-11**, which is what makes any of this
+visible: `Race::readout()` fills `place` from `player_place()` and
+`Arcade_HUD.xml`'s `Position` group draws it. Two things had to be settled to get
+it on screen, both on [hud.md](../ui/hud.md): the layout authors `Position` and
+`TotalTime` at the *same* anchor, so one of them has to yield; and the field size
+was being drawn without the place, so a single race showed `POS` beside a bare
+`8`.
+
+**And one real bug fell out of running it**, worth reading before trusting a
+first-lap position: `Standing::distance` measured lap 1 from the start *line*,
+while the grid straddles that line - the authored `Start Position` on `16_Track`
+sits ~138 units before it and the eight slots run forward from there. So a craft
+still on the grid read as almost a full circuit *ahead* of one that had crossed
+and driven on. Measured on a real load: the parked player read `progress 4956` of
+5,094 units against seven craft on 1,500, and was placed **first** while last.
+The fix is one rule in `Standing::distance` - a craft whose lap gate has never
+seen the near half has not reached the line yet, so its distance is negative -
+and the same run now places that player 8th of 8.
+
 ### What an opponent still does not get
 
 Each is separate work, and each is listed so nobody assumes otherwise: an exhaust
 trail of its own, a lap *time* of its own (the standing counts laps; only the
 player has a clock), a respawn when it falls off, anything at all happening when
 it is eliminated, a weapon aimed at anybody, and a livery that is not the
-player's. Nothing shows a position on screen yet either - the HUD's place widget
-is unbuilt, so `places()` has no reader outside the tests.
+player's. The player's *own* position is on screen now; an opponent's is not -
+`PosTag0`-`PosTag7`, the floating name tags, are runtime-anchored to a rival's
+projected screen position and nothing computes that.
 
 **Craft-to-craft collision landed 2026-08-11**, and it was never an AI gap - the
 engine had no two-body path for anybody. `Body_ResolveContactPair`
