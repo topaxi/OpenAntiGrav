@@ -1107,8 +1107,13 @@ fn a_yielding_leader_gives_way_where_a_covering_one_does_not() {
     let gave_way = drive_two_round_the_oval(1800, [&yielding, &chaser]);
     let covered = drive_two_round_the_oval(1800, [&covering, &chaser]);
 
+    // **A tenth of a unit of mean offset, held over 1,800 ticks.** The margin
+    // is small because the social lean is deliberately a minority share of the
+    // aim budget - see `SOCIAL_MAX`, which exists because an unbounded version
+    // of this term was swerving craft into the player and then into a wall.
+    // What is asserted is a consistent bias over a whole run, not a lurch.
     assert!(
-        gave_way.mean_offset[0] > covered.mean_offset[0] + 0.25,
+        gave_way.mean_offset[0] > covered.mean_offset[0] + 0.1,
         "a yielding leader should move away from a chaser on its left, and a \
          covering one toward it: {:.2} against {:.2}",
         gave_way.mean_offset[0],

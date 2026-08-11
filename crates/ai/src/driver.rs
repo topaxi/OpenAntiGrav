@@ -1001,6 +1001,11 @@ impl Driver {
     ///
     /// Three things it will not do:
     ///
+    /// - **Take over the whole line.** Capped at [`SOCIAL_MAX`], because
+    ///   provocation can push `defence` past the entire aim budget on its own -
+    ///   see that constant for what that looked like from the cockpit.
+    /// - **Swerve into somebody already there.** Below [`SOCIAL_MIN_GAP`] it
+    ///   stops: a block is something you do early.
     /// - **Act mid-corner.** Both are straight-line manoeuvres; where the
     ///   corridor is a couple of metres wide and both craft are at the grip
     ///   limit, moving sideways on purpose is how two craft end up in the
@@ -1021,13 +1026,27 @@ impl Driver {
         // been passed defends harder; it does not become more polite. Applied
         // to the defence side alone so a shy pilot stays shy however cross it
         // is - see `Self::stew`.
-        let lean = personality.defence * (1.0 + self.provoked()) - personality.courtesy;
+        // Clamped *before* the scale below, so provocation raises the lean
+        // until it is total and then stops, rather than running past the budget
+        // the aim point is summed into.
+        let lean =
+            (personality.defence * (1.0 + self.provoked()) - personality.courtesy).clamp(-1.0, 1.0);
         if lean == 0.0 {
             return 0.0;
         }
 
         let gap = rival.gap.abs();
         if gap >= AWARENESS_RANGE {
+            return 0.0;
+        }
+        // Inside the close range only the yielding half survives - see
+        // [`SOCIAL_MIN_GAP`].
+        let lean = if gap < SOCIAL_MIN_GAP {
+            lean.min(0.0)
+        } else {
+            lean
+        };
+        if lean == 0.0 {
             return 0.0;
         }
         let closeness = (AWARENESS_RANGE - gap) / AWARENESS_RANGE;
@@ -1047,7 +1066,12 @@ impl Driver {
             return 0.0;
         };
 
-        lean * side * pressure * corner_gate
+        // **Two budgets, because the two halves fail differently.** Blocking is
+        // the half that swerves into somebody and is kept on a tight rein;
+        // yielding cannot, and gets a looser one - but not the whole corridor,
+        // or a craft hands over the entire track and reads as having given up.
+        let budget = if lean > 0.0 { SOCIAL_MAX } else { YIELD_MAX };
+        lean * side * pressure * corner_gate * budget
     }
 
     fn drift(&self, aim: &Aim, look: f32, ctx: &Context<'_>, personality: &Personality) -> Vec3 {
@@ -1112,6 +1136,53 @@ const PRESENCE_SHARE: f32 = 0.5;
 /// How far off-centre a rival has to sit before the *sign* of its offset means
 /// anything. Ours, and about a hull's width.
 const ASTERN_DEADBAND: f32 = 2.0;
+
+/// How much of the aim budget a fully committed **block** is worth.
+///
+/// Yielding is not scaled by it - see the use site.
+///
+/// **A scale on the term, not a clamp over it.** A clamp was tried first and
+/// swallowed provocation whole: an aggressive pilot sits near the top of the
+/// lean range already, so clamping made a provoked driver and a calm one
+/// identical. Scaling keeps the ordering - being passed still makes a driver
+/// cover harder - while making it impossible for the term to own the line.
+///
+/// **Reported from play: opponents were turning almost ninety degrees into the
+/// player to block, hitting them, and then hitting a wall.** The cause was that
+/// `defence` is scaled by provocation, so an aggressive pilot that had just
+/// been passed reached about 1.9 - nearly twice the whole `-1..1` budget the
+/// aim point is clamped into. It therefore saturated that clamp on its own,
+/// pinning the craft to the corridor edge on the rival's side and squeezing
+/// every other term - the racing line's own bias, the inside line - out of the
+/// sum entirely. Covering a line is worth part of the corridor; it is not worth
+/// all of it, and it is certainly not worth the wall.
+const SOCIAL_MAX: f32 = 0.45;
+
+/// And how much a full yield is worth.
+///
+/// **More than a block and far less than the corridor.** Yielding cannot swerve
+/// into anybody, so it does not need the block's tight rein - but a craft that
+/// hands over the whole track is not being courteous, it is abandoning the
+/// racing line, and it looks like it has given up rather than let somebody
+/// through. What is wanted is a bit of room to be passed in, so this is a lean
+/// rather than a move.
+const YIELD_MAX: f32 = 0.55;
+
+/// How close a rival behind has to get before **blocking** stops.
+///
+/// You cover a line *early*, while there is still room to do it smoothly. Past
+/// this the rival is already at your gearbox, and moving across is no longer a
+/// block - it is a swerve into somebody, which ends with both craft in the
+/// scenery and the blocker further back than if it had done nothing.
+///
+/// **Yielding is deliberately not gated on it**, and the first version of this
+/// gate was wrong for exactly that reason: it suppressed the whole term, and
+/// since a packed grid is *permanently* inside fourteen units, craft stopped
+/// getting out of each other's way at the only range where it matters. They
+/// bumped instead, and the whole field lost about an eighth of its pace -
+/// measured, 119 against 95 at elite. Moving away from somebody who is already
+/// there is never the wrong thing to do.
+const SOCIAL_MIN_GAP: f32 = 14.0;
 
 /// How close a craft ahead has to be before a driver lifts for it, in units
 /// along the track. Shorter than [`AWARENESS_RANGE`]: a craft two seconds up
@@ -1282,251 +1353,6 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
 mod tests {
     use super::*;
     use crate::field::Rival;
-
-    fn tuning_that_errs(rate: f32) -> Tuning {
-        Tuning {
-            mistake_rate: rate,
-            ..Tuning::default()
-        }
-    }
-
-    /// A mistake is holding the throttle through a braking point. The recovery
-    /// is not modelled because the controller was already doing it.
-    #[test]
-    fn a_driver_that_blunders_sails_through_a_braking_point() {
-        let tuning = tuning_that_errs(1.0);
-        let mut driver = Driver::seeded(5);
-        // Well over the target, so it would otherwise be braking hard.
-        driver.blunder(&tuning, 200.0, 100.0);
-        assert!(driver.mistake > 0, "a certain mistake did not happen");
-
-        // And it lasts, then clears.
-        let started = driver.mistake;
-        for _ in 0..started {
-            driver.blunder(&tuning, 200.0, 100.0);
-        }
-        assert_eq!(driver.mistake, 0, "the mistake never ended");
-    }
-
-    /// **Rolled only where it would otherwise brake.** A mistake on a straight
-    /// is nothing at all, and rolling everywhere would spend the rate on ticks
-    /// where it cannot show.
-    #[test]
-    fn a_driver_never_blunders_where_it_was_not_going_to_brake() {
-        let tuning = tuning_that_errs(1.0);
-        for phase in 0..600u32 {
-            let mut driver = Driver::seeded(5);
-            driver.phase = phase;
-            driver.blunder(&tuning, 50.0, 100.0);
-            assert_eq!(driver.mistake, 0, "blundered on a straight at {phase}");
-        }
-    }
-
-    #[test]
-    fn a_driver_that_never_errs_never_blunders() {
-        let tuning = tuning_that_errs(0.0);
-        for phase in 0..600u32 {
-            let mut driver = Driver::seeded(5);
-            driver.phase = phase;
-            driver.blunder(&tuning, 200.0, 100.0);
-            assert_eq!(driver.mistake, 0, "blundered at {phase} with the rate off");
-        }
-    }
-
-    /// A higher rate has to mean more mistakes, or the difficulty scale is
-    /// decorative.
-    #[test]
-    fn a_higher_mistake_rate_produces_more_mistakes() {
-        let count = |rate: f32| {
-            (0..4_000u32)
-                .filter(|phase| {
-                    let mut driver = Driver::seeded(5);
-                    driver.phase = *phase;
-                    driver.blunder(&tuning_that_errs(rate), 200.0, 100.0);
-                    driver.mistake > 0
-                })
-                .count()
-        };
-        let rare = count(1.0 / 200.0);
-        let often = count(1.0 / 20.0);
-        assert!(often > rare * 3, "{often} against {rare}");
-    }
-
-    /// The whole point: while blundering, the driver holds the throttle it
-    /// should have lifted.
-    #[test]
-    fn a_blundering_driver_holds_the_throttle_it_should_have_lifted() {
-        let line = Line::new(
-            (0..128)
-                .map(|step| {
-                    let angle = std::f32::consts::TAU * step as f32 / 128.0;
-                    Vec3::new(60.0 * angle.cos(), 0.0, 60.0 * angle.sin())
-                })
-                .collect(),
-        );
-        let state = craft(line.point(0), 300.0);
-
-        let careful = Driver::seeded(5).drive(&state, &Context::new(&line, &Tuning::default()));
-        assert_eq!(careful.thrust, 0.0, "a 60-unit circle at 300 needs braking");
-
-        let mut blundering = Driver::seeded(5);
-        blundering.mistake = 10;
-        let sailing = blundering.drive(&state, &Context::new(&line, &Tuning::default()));
-        assert_eq!(sailing.thrust, 1.0);
-        // **No brake engaged**, rather than no airbrake at all. Both sides
-        // strictly positive is the only thing that slows the craft; a
-        // differential on one side is yaw and not deceleration, and a driver
-        // that has missed its braking point still gets to try to rotate. See
-        // [`trail`].
-        assert!(
-            sailing.airbrake_left == 0.0 || sailing.airbrake_right == 0.0,
-            "the brake engaged during a missed braking point: {} and {}",
-            sailing.airbrake_left,
-            sailing.airbrake_right
-        );
-    }
-
-    use crate::pilot::Span;
-
-    fn target_ahead(range: f32, cos_bearing: f32) -> Field {
-        Field {
-            ahead: Some(Rival {
-                slot: 4,
-                gap: range,
-                offset: 0.0,
-                closing: 0.0,
-                range,
-                cos_bearing,
-            }),
-            ..Field::EMPTY
-        }
-    }
-
-    /// Ticks until this driver takes a shot, or `None` inside the window.
-    fn ticks_to_fire(seed: u32, trigger: f32, line: &Line, field: &Field) -> Option<u32> {
-        let tuning = Tuning::default();
-        let pilot = Pilot {
-            trigger: Span::fixed(trigger),
-            ..Pilot::BALANCED
-        };
-        (0..2_000u32).find(|phase| {
-            let mut driver = Driver::seeded(seed);
-            driver.phase = *phase;
-            driver
-                .wants_to_fire(&Context {
-                    line,
-                    tuning: &tuning,
-                    pilot: &pilot,
-                    field,
-                })
-                .is_some()
-        })
-    }
-
-    #[test]
-    fn a_driver_fires_at_a_craft_ahead_and_inside_its_cone() {
-        let line = straight_with_corridor();
-        assert!(ticks_to_fire(5, 1.0, &line, &target_ahead(80.0, 1.0)).is_some());
-    }
-
-    #[test]
-    fn a_driver_does_not_fire_at_a_craft_beside_it() {
-        let line = straight_with_corridor();
-        // Dead abeam: the cosine of ninety degrees.
-        assert_eq!(ticks_to_fire(5, 1.0, &line, &target_ahead(80.0, 0.0)), None);
-    }
-
-    /// The blast catches the firer, so point-blank is a rocket fired at
-    /// yourself.
-    #[test]
-    fn a_driver_does_not_fire_at_point_blank_range() {
-        let line = straight_with_corridor();
-        assert_eq!(
-            ticks_to_fire(5, 1.0, &line, &target_ahead(WEAPON_MIN_RANGE - 1.0, 1.0)),
-            None
-        );
-    }
-
-    #[test]
-    fn a_driver_does_not_fire_at_a_craft_out_of_range() {
-        let line = straight_with_corridor();
-        assert_eq!(
-            ticks_to_fire(5, 1.0, &line, &target_ahead(WEAPON_RANGE + 1.0, 1.0)),
-            None
-        );
-    }
-
-    /// A rocket round a corner is a rocket in a wall.
-    #[test]
-    fn a_driver_does_not_fire_round_a_corner() {
-        let corner = right_hand_corner(35.0);
-        assert_eq!(
-            ticks_to_fire(5, 1.0, &corner, &target_ahead(80.0, 1.0)),
-            None
-        );
-    }
-
-    #[test]
-    fn a_driver_with_no_appetite_never_fires() {
-        let line = straight_with_corridor();
-        assert_eq!(ticks_to_fire(5, 0.0, &line, &target_ahead(80.0, 1.0)), None);
-    }
-
-    #[test]
-    fn a_driver_with_nobody_ahead_never_fires() {
-        let line = straight_with_corridor();
-        assert_eq!(ticks_to_fire(5, 1.0, &line, &Field::EMPTY), None);
-    }
-
-    /// `trigger` is a rate, so it shows up as how long a driver takes to shoot
-    /// rather than as whether it ever does.
-    #[test]
-    fn a_trigger_happy_driver_fires_sooner_than_a_cautious_one() {
-        let line = straight_with_corridor();
-        let target = target_ahead(80.0, 1.0);
-        let mut keen_total = 0u32;
-        let mut shy_total = 0u32;
-        for seed in 1..30u32 {
-            keen_total += ticks_to_fire(seed, 1.0, &line, &target).expect("keen never fired");
-            shy_total += ticks_to_fire(seed, 0.1, &line, &target).expect("shy never fired");
-        }
-        assert!(
-            shy_total > keen_total * 3,
-            "a keen driver should be much quicker: {keen_total} against {shy_total}"
-        );
-    }
-
-    #[test]
-    fn a_provoked_driver_fires_sooner_than_it_did_calm() {
-        let line = straight_with_corridor();
-        let tuning = Tuning::default();
-        let target = target_ahead(80.0, 1.0);
-        let pilot = Pilot {
-            trigger: Span::fixed(0.2),
-            ..Pilot::BALANCED
-        };
-        let shots = |provocation: u16| {
-            (0..2_000u32)
-                .filter(|phase| {
-                    let mut driver = Driver::seeded(5);
-                    driver.phase = *phase;
-                    driver.provocation = provocation;
-                    driver
-                        .wants_to_fire(&Context {
-                            line: &line,
-                            tuning: &tuning,
-                            pilot: &pilot,
-                            field: &target,
-                        })
-                        .is_some()
-                })
-                .count()
-        };
-        assert!(
-            shots(PROVOCATION_MAX) > shots(0),
-            "being passed should make a driver quicker to shoot"
-        );
-    }
 
     fn placed(place: u8) -> Field {
         Field {

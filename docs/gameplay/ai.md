@@ -661,6 +661,21 @@ Three axes spend it:
 | `defence` | move **toward** it, covering the line |
 | `caution` | lift off - never brake - for a craft close ahead |
 
+**Two budgets, because the two halves fail differently.** A block is capped
+tightly: provocation can push `defence` to nearly twice the whole aim budget on
+its own, and an uncapped version was reported from play as opponents turning
+almost ninety degrees into the player, hitting them, and then hitting a wall - a
+block that costs the blocker more than the blocked. A yield gets a looser rein,
+because moving *away* from somebody can never swerve into them, but not the whole
+corridor either: a craft that hands over the entire track is not being
+courteous, it reads as having given up. Enough room to be passed in.
+
+That distinction was learned twice. The first version of the close-range gate
+switched off the whole term below fourteen units, and since a packed grid is
+permanently inside fourteen units, craft stopped getting out of each other's way
+at the only range where it matters. They bumped instead, and the field lost
+about an eighth of its pace. Only the **blocking** half stops at close range.
+
 **Courtesy and defence are one signed number, not two terms.** They are opposite
 signs of the same quantity, and as two separately gated terms they fight and the
 craft jitters between them; as `defence - courtesy` a pilot simply sits somewhere
@@ -792,8 +807,44 @@ Measured on `16_Track`, a minute a run, seven craft, mean speed:
 Nothing wrecked at any level. **`elite` and `ace` are within one per cent**,
 which says the ceiling is no longer the tuning: at that point the field is at
 full throttle 84 per cent of the time and what is left on the table is
-elsewhere - it takes only 20-40 per cent of the track's speed pads, which is
-the next thing worth fixing and is [still unbuilt](#what-an-opponent-still-does-not-get).
+elsewhere - the field takes only about 30 per cent of the track's speed
+pads, which looked like the next thing worth fixing. **It was not** - see
+[pads](#pads-built-measured-removed) below.
+
+### Pads: built, measured, removed
+
+The field crosses only about **30 per cent** of a real circuit's speed pads,
+which looked like the largest thing left on the table once the pace tuning was
+at its ceiling. So pad-seeking was built - a channel on the driver's view giving
+the next pad's distance along the line and offset across it, resolved once at
+the start by projecting each pad's centre onto the nearest spline sample - and
+then it was **removed on the measurement**. It is written up here because the
+next person to notice that statistic will have the same idea.
+
+Four measurements, all the same direction. Against a control that does not chase
+at all, on `16_Track`: at a greed of 0.2 the field took 108 pads against the
+control's 105 and completed the same 22 laps; at 0.4, 105 pads and 21 laps; at
+0.8, 101 pads and 19 laps. Chasing pads **earns nothing and then costs laps**.
+Worse, with it on the four difficulty levels came out 94 / 91 / 103 / 114 - both
+slower across the board and *out of order*, so the setting had stopped being
+monotonic.
+
+The reason is visible in the resolved offsets: **the artists put the racing line
+through the pads worth having.** A pad far enough off the line to need a detour
+is one the track is offering as a *choice*, and at these speeds the detour is
+the worse half of it. Nothing about that is specific to this AI - it is a
+property of how the circuits are authored.
+
+Two things worth keeping from the exercise. Pads are authored **in pairs
+straddling the line** (`281@13` beside `281@-1` on `16_Track`), so any future
+"nearest pad" search picking by index alone can send a craft at the far one of a
+pair - a longer trip for the same boost, and it can end up between the two
+having taken neither. And a weapon pad is a different question from a speed pad:
+what it is worth is not lap time but what the driver intends to fire, so if it
+is ever tried again it should ride `trigger` rather than the difficulty. It was
+tried, and a trigger-happy field collected 17 weapons against a timid field's
+19 - noise, and confounded besides, since a pilot that fires more empties its
+slot sooner and can pick up again.
 
 ### Pilots you can author
 
@@ -1125,6 +1176,7 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | Neither yielding nor blocking happens mid-corner, and the gate scales rather than switching | `driver::tests::neither_yielding_nor_blocking_happens_mid_corner` | yes |
 | A rival beyond awareness range, or squarely astern on a straight, is not reacted to | two tests in `driver::tests` | yes |
 | A driver lifts for a craft it is closing on, and one with no caution does not | `driver::tests::a_driver_lifts_for_a_craft_it_is_closing_on` | yes |
+| Each difficulty's **leader** covers more ground than the one below it, on real geometry | `race_ground_truth::every_difficulty_is_quicker_than_the_one_below_it` | **no** - needs a disc image. **Run and passing 2026-08-11**: 6075 / 6911 / 7302 / 7857, nothing wrecked. |
 | **A driver that sees nobody drives exactly the line it did before stage 3** | `driver::tests::a_driver_that_sees_nobody_drives_exactly_the_line_it_did_before`, over all four pilots | yes |
 | Two craft that can see each other do not converge, and a yielding leader gives way where a covering one does not | `closed_loop::two_craft_that_can_see_each_other_do_not_converge`, `a_yielding_leader_gives_way_where_a_covering_one_does_not` | yes |
 | The field a driver sees excludes itself, orders rivals correctly, and is empty on a track with no ring | four tests in `race::tests` | yes |
