@@ -64,7 +64,26 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
     }
     assert!(state.intensity() > 0.0, "the test needs a lit exhaust");
 
-    let vertices = state.vertices(Vec3::ZERO, Vec3::X, Vec3::Y);
+    // The flare is one quad. **It used to be the whole buffer**, and this
+    // assertion read `== MAX_VERTICES` until `exhaust::sprite` gave it company -
+    // see that function and `exhaust::MAX_SPRITES`.
+    let mut vertices = state.vertices(Vec3::ZERO, Vec3::X, Vec3::Y);
+    assert_eq!(vertices.len(), 6, "the flare is one quad");
+
+    // Fill the rest of the budget with caller sprites, so this exercises a
+    // **full** vertex buffer on a real device rather than the six bytes the
+    // flare alone needs. That is the case a too-small budget silently truncates,
+    // and the case a buffer sized for six would fail validation on.
+    while vertices.len() + 6 <= exhaust::MAX_VERTICES {
+        let n = vertices.len() as f32;
+        vertices.extend(exhaust::sprite(
+            Vec3::new(n * 0.01, 0.0, 0.0),
+            Vec3::X,
+            Vec3::Y,
+            0.5,
+            1.0,
+        ));
+    }
     assert_eq!(vertices.len(), exhaust::MAX_VERTICES);
 
     // An identity view-projection: this test is about the pipeline, not framing.

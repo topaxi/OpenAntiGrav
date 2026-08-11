@@ -1266,3 +1266,115 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
         );
     }
 }
+
+/// A rocket fired on a real track flies and detonates on the track's own
+/// geometry.
+///
+/// # What this is for, and what the unit tests cannot do
+///
+/// `oag_gameplay::projectile`'s own tests fly rockets down a synthetic corridor:
+/// one quad, authored by the test, at a distance the test chose. **Every
+/// number in them is invented**, including the geometry. This is the only check
+/// that a rocket at the disc's own authored speed, launched from the disc's own
+/// hull dimensions, meets the disc's own collision soup at all: a launch offset
+/// slightly inside the hull, a class speed read from the wrong attribute, or a
+/// swept step long enough to tunnel through a real wall would all pass every
+/// unit test and fail here.
+///
+/// The craft stands on the first weapon pad the track authors, as
+/// `a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race` does, and the
+/// seed is scanned for a Rocket draw for the reason that test gives at length.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
+    let Some(image) = image() else { return };
+    let Some(scouted) = load() else { return };
+    let pad = *scouted
+        .setup
+        .weapon_pads
+        .first()
+        .expect("16_Track authors weapon pads");
+    let centre = Vec3::from_array(pad.centre());
+
+    let race_at_pad = |seed: u64| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: SpeedClass::Venom,
+            mode: oag_race::Mode::SingleRace,
+            seed: Some(seed),
+            pose: Some(race::PoseRequest::SplineAligned {
+                position: centre,
+                yaw: 0.0,
+            }),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        race::Race::start(loaded.setup)
+    };
+
+    // The class's authored odds decide this, so scan rather than pin - see the
+    // Turbo test's own comment.
+    let rocket_seed = (0..64u64)
+        .find(|&seed| {
+            let mut race = race_at_pad(seed);
+            race.tick(&Default::default());
+            race.ship_pickup() == Some(oag_formats::weapons::Weapon::Rocket)
+        })
+        .expect(
+            "no seed in 0..64 drew a Rocket from this class's authored odds - either the \
+             table weights it at zero or the draw is broken",
+        );
+    println!("seed {rocket_seed} draws a Rocket");
+
+    let mut race = race_at_pad(rocket_seed);
+    let mut buttons = Input::new();
+    let snapshot = |buttons: &mut Input, mask: u32| {
+        buttons.begin_frame(mask);
+        oag_gameplay::InputSnapshot {
+            buttons: *buttons,
+            ..Default::default()
+        }
+    };
+    const SQUARE: u32 = 1 << button::SQUARE;
+
+    race.tick(&snapshot(&mut buttons, 0));
+    assert_eq!(
+        race.ship_pickup(),
+        Some(oag_formats::weapons::Weapon::Rocket)
+    );
+
+    let muzzle = race.ship().physics.body.position;
+    race.tick(&snapshot(&mut buttons, SQUARE));
+    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        race.world.projectiles.live(),
+        1,
+        "firing a rocket on a real track put nothing in the air"
+    );
+
+    // It has to *travel*, which is what says the class speed was read at all,
+    // and it has to stop, which is what says it met the real collision soup
+    // rather than flying through it to the lifetime cap.
+    let mut ticks = 1;
+    let mut furthest = 0.0f32;
+    while race.world.projectiles.live() > 0 {
+        let flying = race.world.projectiles.slots[0].position;
+        furthest = furthest.max((flying - muzzle).length());
+        race.tick(&snapshot(&mut buttons, 0));
+        ticks += 1;
+        assert!(ticks < 1200, "the rocket never stopped");
+    }
+    println!("the rocket flew {furthest:.1} units over {ticks} tick(s)");
+    assert!(
+        furthest > 10.0,
+        "the rocket travelled {furthest:.1} units, which is not flight"
+    );
+    // 10 seconds at any authored class speed is thousands of units, so a rocket
+    // that merely aged out would show a far larger distance than a wall on a
+    // real circuit can be from a weapon pad.
+    let seconds = ticks as f32 * race.dt();
+    assert!(
+        seconds < oag_gameplay::projectile::MAX_FLIGHT_SECONDS,
+        "the rocket aged out after {seconds:.2} s instead of hitting the track"
+    );
+}

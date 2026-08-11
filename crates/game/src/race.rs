@@ -2127,6 +2127,14 @@ pub struct Telemetry {
     /// Height above that sample along its own up axis. Negative is below the
     /// surface line.
     pub height_above_spline: f32,
+    /// What the craft is carrying, if anything.
+    ///
+    /// Here so `--race --screenshot`'s own log answers "did the pad grant
+    /// anything" without a debugger. It is the question every weapon capture
+    /// starts with, and a HUD icon in a screenshot is a poor way to ask it.
+    pub pickup: Option<oag_formats::weapons::Weapon>,
+    /// How many projectiles are in the air.
+    pub projectiles: usize,
 }
 
 /// A race in progress: the world, the track it is on, and the camera behind it.
@@ -3836,6 +3844,8 @@ impl Race {
             tick: self.world.tick,
             position,
             speed: ship.physics.body.linear_velocity.length(),
+            pickup: ship.pickup.weapon,
+            projectiles: self.world.projectiles.live(),
             grounded: ship.physics.grounded,
             spline_distance,
             height_above_spline,
@@ -4459,6 +4469,14 @@ fn key_for_button(index: u8) -> Option<winit::keyboard::Key> {
         button::LEFT => Key::Named(NamedKey::ArrowLeft),
         button::RIGHT => Key::Named(NamedKey::ArrowRight),
         button::CROSS => Key::Character("x".into()),
+        // Fire and absorb, the two buttons a pickup reads. The same keys
+        // `oag_input::keys::map_key` binds them to, so a capture presses what a
+        // player presses. **They were missing until weapons existed**, which
+        // made `--press square` a silent no-op and a weapon capture impossible -
+        // the mask named a button, `key_for_button` returned `None`, and the
+        // skip this function documents swallowed it.
+        button::SQUARE => Key::Character("c".into()),
+        button::CIRCLE => Key::Character("z".into()),
         button::L => Key::Character("q".into()),
         button::R => Key::Character("e".into()),
         _ => return None,
@@ -6234,13 +6252,21 @@ pub fn capture(
 #[must_use]
 pub fn describe(telemetry: &Telemetry) -> String {
     format!(
-        "tick {:>5}  speed {:>8.2}  grounded {:>3.1}  spline {:>8.2}  height {:>8.2}  at {:.1}",
+        "tick {:>5}  speed {:>8.2}  grounded {:>3.1}  spline {:>8.2}  height {:>8.2}  at {:.1}\
+         {}",
         telemetry.tick,
         telemetry.speed,
         telemetry.grounded,
         telemetry.spline_distance,
         telemetry.height_above_spline,
         telemetry.position,
+        match (telemetry.pickup, telemetry.projectiles) {
+            (None, 0) => String::new(),
+            (held, count) => {
+                let held = held.map_or("-", oag_formats::weapons::Weapon::as_type);
+                format!("  holding {held}  in the air {count}")
+            }
+        },
     )
 }
 
@@ -7510,6 +7536,50 @@ mod tests {
             race.ship().physics.shield_pickup_timer,
             0.0,
             "absorbing must not also raise the shield"
+        );
+    }
+
+    /// A rocket in the air is drawn, and the whole worst case fits the buffer it
+    /// is drawn into.
+    ///
+    /// **The second half is the regression.** `oag_render::exhaust::Pipeline::upload`
+    /// clamps with `min`, and `MAX_VERTICES` was six - the flare's one quad -
+    /// so the projectile sprites were dropped on the floor with nothing in the
+    /// logs and nothing on screen. A budget test is the only thing that catches
+    /// a silent truncation, because every other symptom is "it does not appear".
+    #[test]
+    fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+        let right = Vec3::X;
+        let up = Vec3::Y;
+        assert!(
+            race.projectile_sprites(right, up).is_empty(),
+            "an empty sky must draw nothing rather than a quad at the origin"
+        );
+
+        // The worst case: every slot in the air and every flash burning.
+        for slot in 0..oag_gameplay::projectile::MAX_PROJECTILES {
+            race.world.projectiles.spawn(
+                oag_formats::weapons::Weapon::Rocket,
+                Vec3::Z * slot as f32,
+                Vec3::Z,
+                0,
+            );
+            race.blast_flash_left[slot] = BLAST_FLASH_SECONDS;
+        }
+        let vertices = race.projectile_sprites(right, up);
+        assert_eq!(
+            vertices.len(),
+            oag_gameplay::projectile::MAX_PROJECTILES * 2 * 6,
+            "six vertices per rocket and per flash"
+        );
+        assert!(
+            vertices.len() + exhaust::MAX_VERTICES.min(6) <= exhaust::MAX_VERTICES,
+            "the worst case is {} vertices against a buffer of {} - `upload` would \
+             silently drop the overflow",
+            vertices.len() + 6,
+            exhaust::MAX_VERTICES
         );
     }
 

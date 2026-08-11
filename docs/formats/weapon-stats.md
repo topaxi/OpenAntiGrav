@@ -72,7 +72,7 @@ a union:
 | `type` | Parser | `<Stats>` attributes |
 | --- | --- | --- |
 | `Global` | `0x0880dab0` | `slowdown_limit` |
-| `Rocket` | `0x0880c058` | `absorb blastforce blastradius damage slowdown_time venomspeed flashspeed rapierspeed phantomspeed launchSpeed spread` |
+| **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage venomspeed flashspeed rapierspeed phantomspeed launchSpeed`**, plus `slowdown_time spread` |
 | `Missile` | `0x0880c31c` | the rocket's, less `spread`, plus `lock_max_dist lock_min_dist` |
 | `Quake` | `0x0880c60c` | `absorb damage radius slowdown_time` |
 | `Cannon` | `0x0880c774` | `absorb rounds rate damage_per_bullet slowdown_time` |
@@ -85,6 +85,21 @@ a union:
 | `LeachBeam` | `0x0880d328` | `repair absorb damage lock_max_dist lock_min_dist slowShipFactor range active_time energy_multiplier` |
 | `Repulser` | `0x0880d58c` | `blastforce blastradius absorb damage slowdown_time blast_time wave_time` |
 | `Shuriken` | `0x0880d790` | `absorb rhicochetForce blastForce blastradius rhicochetdamage blastdamage slowdown_time <class>speed launchSpeed fuse` |
+
+**Bold rows are decoded by `oag_formats::weapons`**; the rest are named here and
+read no further, because [nothing consumes them](../gameplay/pickups.md) and a
+field decoded with no consumer is a field nobody has checked. The Rocket is
+partly bold for the same reason: `oag_gameplay::projectile` reads nine of its
+eleven attributes, and the two left plain are `slowdown_time` - half of the
+slowdown mechanic, whose other half is `<Global slowdown_limit>` and which has
+no consumer - and `spread`.
+
+**`spread` is worth a second look before anyone implements a rocket volley or
+decides against one.** It is on the Rocket and *not* on the Missile, which is
+the only evidence in the tree about how many projectiles one fire produces: a
+homing weapon has no use for a launch spread and a volley does. This engine
+fires one, as a stated choice rather than a reading - see
+[pickups.md](../gameplay/pickups.md).
 
 **`absorb` is on every one of them**, which is what `Ship_Damage`'s absorb branch
 spends: [`shield.md`](../ghidra/functions/psp-pulse-usa/shield.md) records

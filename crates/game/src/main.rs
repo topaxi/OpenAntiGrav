@@ -1182,7 +1182,7 @@ const RACE_TITLE: &str = "OpenAntiGrav - race";
 /// routes differ in exactly one key, which is why what escape does is spelled
 /// separately rather than assumed.
 const RACE_KEYS: &str = "arrow keys or the left stick steer, X, return or R2 thrusts, \
-     Q and E or the shoulders are the airbrakes, L2 is both";
+     Q and E or the shoulders are the airbrakes, L2 is both, C fires a pickup and Z absorbs it";
 
 /// What escape does from a race the menus started, and from one `--race` did.
 ///

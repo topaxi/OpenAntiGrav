@@ -27,8 +27,10 @@
 //!   differ in exactly that. But no integrator has been read.
 //! - **One rocket per fire.** See [`oag_formats::weapons::RocketStats`], which
 //!   records the `spread` evidence pointing the other way.
-//! - **A sphere for a hull.** The original tests a projectile against something,
-//!   and nothing says what. See [`hull_radius`].
+//! - **A sphere for a hull**, and one that is *wider* than the hull on two of
+//!   its three axes. The original tests a projectile against something and
+//!   nothing says what. See [`hull_radius`], which is exact about which way it
+//!   errs.
 //! - **Full damage everywhere inside `blastradius`,** with no falloff. See
 //!   [`Impact`].
 //! - **The launch offset, the lifetime cap, and the slot count.**
@@ -156,10 +158,16 @@ impl Projectiles {
 
     /// Empties every slot.
     ///
-    /// Called when a race starts or restarts, for the reason
-    /// `oag_physics::damage::reset` clears the shield timer: a rocket left in
-    /// the air from the previous run would arrive at a craft that never fired
-    /// one.
+    /// **Nothing calls this today**, and that is not an oversight to fix by
+    /// finding a caller: `oag_game::race::Race::start` builds a whole new
+    /// `World`, so a race begins with a fresh array and cannot inherit a rocket
+    /// from the previous run. It is here for a caller that *reuses* a `World`
+    /// (a replay scrubbing to a keyframe, or a restart that keeps the
+    /// allocation), because for such a caller the alternative is a rocket
+    /// arriving at a craft that never fired one.
+    ///
+    /// A respawn deliberately does **not** call it: a craft put back on the
+    /// track has not unfired anything it launched.
     pub fn clear(&mut self) {
         *self = Self::new();
     }
@@ -388,12 +396,22 @@ pub fn blast(
 ///
 /// **Ours.** `<Misc>` authors a `length`, a `width` and a `height` and the
 /// physics builds a box from them (`oag_physics::wall::hull_extent`), but
-/// nothing has been read about what a *projectile* is tested against. Half the
-/// largest dimension is the sphere inscribed in the box's longest axis: it is
-/// smaller than the box on two axes and equal on one, so a rocket can miss a
-/// craft it would have clipped rather than hit one it would have missed. The
-/// conservative direction, and the one that cannot produce a hit the player
-/// cannot see coming.
+/// nothing has been read about what a *projectile* is tested against.
+///
+/// Half the largest dimension is the sphere that **circumscribes** the box's
+/// longest axis, and it is worth being exact about which way that errs. A hull
+/// of `length 4, width 2, height 1` has half-extents `(2.0, 1.0, 0.5)` and a
+/// radius of `2.0`, so the sphere matches the box nose-to-tail and **bulges
+/// past it on the other two axes**: a rocket passing 1.8 units to the side hits,
+/// where the box would have missed. So this is the *generous* reading, not the
+/// conservative one - it favours the shooter, and a near miss can register as a
+/// hit.
+///
+/// That is a defensible placeholder rather than the right answer: the smallest
+/// half-extent (`0.5` here) would be conservative and would make most visually
+/// solid hits miss, which reads as a broken weapon. Sizing to the hull's length
+/// keeps a craft-sized target. Whoever recovers what the original tests should
+/// replace the whole function rather than tune this number.
 ///
 /// Reusing the box would mean a segment-vs-oriented-box test for a mechanic
 /// where nothing is known about the original's own shape, which is precision
@@ -887,16 +905,25 @@ mod tests {
     }
 
     /// The radius is half the *largest* dimension, so a long craft is not
-    /// modelled by its narrowest axis.
+    /// modelled by its narrowest axis - **and the sphere is therefore wider
+    /// than the hull**, which is the part [`hull_radius`]' docs are careful
+    /// about and which this pins rather than leaves to the prose.
     #[test]
-    fn the_hull_radius_comes_from_the_longest_axis() {
+    fn the_hull_radius_circumscribes_the_longest_axis_and_bulges_past_the_rest() {
         let dimensions = Dimensions {
             length: 4.0,
             width: 2.0,
             height: 1.0,
             ..Dimensions::default()
         };
-        assert_eq!(hull_radius(&dimensions), 2.0);
+        let radius = hull_radius(&dimensions);
+        assert_eq!(radius, 2.0);
+        // Nose to tail it matches the box exactly...
+        assert_eq!(radius, dimensions.length * 0.5);
+        // ...and on both other axes it reaches further, so a shot that the box
+        // would miss still hits. Generous, not conservative.
+        assert!(radius > dimensions.width * 0.5);
+        assert!(radius > dimensions.height * 0.5);
     }
 
     /// A launch starts outside the hull that fired it and carries the class's
