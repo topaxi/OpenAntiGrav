@@ -124,6 +124,12 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // hash is not worth a second way to feed it.
     hasher.write_u32(u32::from(driver.place));
     hasher.write_u32(u32::from(driver.provocation));
+    // **And which pilot it is flying.** Unlike `handling` above, this can come
+    // out of the player's own config directory and so differs between machines
+    // by design; left out, two machines running "the same race" with different
+    // pilot files would agree on the hash and disagree on the race. See
+    // `oag_ai::Driver::pilot`.
+    hasher.write_u32(driver.pilot);
     write_standing(hasher, standing);
     hasher.write_u8(u8::from(*active));
 }

@@ -438,6 +438,31 @@ pub struct Driver {
     /// [`Personality::provocation_ticks`] - which is the same knob from the
     /// other end.
     pub provocation: u16,
+    /// A fingerprint of the pilot this craft is flying.
+    ///
+    /// **Hashed, unlike `Ship::handling`, and the difference is the whole
+    /// point.** Handling comes off the player's own disc and is the same on
+    /// every machine that has that disc, so hashing it would make the gate
+    /// depend on which ship was picked rather than on what the simulation did.
+    /// A pilot can come out of `<config dir>/oag/pilots/`, which **differs
+    /// between machines by design**. Left out, two machines running "the same
+    /// race" with different `winston.toml` files would produce identical hashes
+    /// for different races - a gate claiming an agreement it does not have,
+    /// which is worse than no gate at all. In it, they visibly disagree.
+    ///
+    /// A digest of the **resolved numbers, not of the name**: two files both
+    /// called `winston` that say different things must not agree, and that is
+    /// exactly the case this exists to catch.
+    ///
+    /// `0` for [`Driver::default`], and no built-in pilot digests to zero, so a
+    /// plain line-follower stays distinguishable from a balanced one.
+    ///
+    /// **It says "these differ", not *which* file differs.** Thirty-two bits
+    /// cannot be inverted, so the composition root logs every roster entry's
+    /// name and digest at startup; without that a divergence is merely
+    /// mysterious instead of silent, which is an improvement but not the whole
+    /// of one.
+    pub pilot: u32,
 }
 
 /// How much of the line either side of the last index a driver looks at.

@@ -710,6 +710,76 @@ score, no spark. Its payoff is purely positional. The natural follow-on is three
 lines: bump the *victim's* provocation off the contact that is already being
 computed, which would make the feature social in both directions.
 
+### Pilots you can author
+
+**Every `.toml` file in `$XDG_CONFIG_HOME/oag/pilots/`** - usually
+`~/.config/oag/pilots/` - is loaded at the start of a race, and **the filename
+becomes the pilot's name**: `winston.toml` is a pilot called `winston`. There is
+no list to register one in and no limit on how many are kept.
+[`assets/ai/example-pilot.toml`](../../assets/ai/example-pilot.toml) is a
+documented one to copy under any name.
+
+A file named after one of the built-ins - `aggressive.toml`, `balanced.toml`,
+`passive.toml`, `shy.toml` - **replaces** it rather than adding another pilot,
+which is how a player retunes one of the four without editing the tree.
+
+Each axis is a `[low, high]` range and each craft draws inside it. One number is
+not offered as shorthand: a pilot whose every axis is fixed is one driver
+wearing eight hulls, and making that the easy thing to write would be odd.
+Anything a file leaves out comes from `balanced`.
+
+`crates/game/src/pilots.rs` owns it, and **`oag-ai` gains nothing** - the loader
+lives in the composition root, which already owns `toml`, `serde` and `dirs` for
+`settings.rs`. `include_str!` plus serde would put a TOML parser inside a
+gameplay crate to save one indirection, which is what rule 1 of the
+[workspace layout](../architecture/workspace-layout.md) exists to prevent. The
+built-in four stay Rust constants.
+
+Two deliberate departures from `settings.toml`: **unknown keys are an error**,
+because a typo'd axis that silently does nothing is the exact frustration this
+removes and there is no migration history to protect; and **nothing is rewritten
+on load**, because these are hand-authored files with the author's own comments
+in them.
+
+**`commitment`'s ceiling is the most important number in the module.** It is the
+only thing between a hand-written file and an opponent that corners faster than
+the physics allows - which is not a faster driver, it is a driver in the wall,
+on someone else's machine, in a race they did not author. Every axis is bounds
+checked, and a reversed range is rejected outright, because a reversed span
+still *draws* and lands outside the range it appears to state with nothing
+complaining.
+
+#### And the determinism problem it creates
+
+A pilot read from the player's config directory makes race behaviour depend on a
+file that **differs between machines by design**, which `Ship::handling` - the
+existing unhashed tunable - does not: that comes off the disc and is the same
+everywhere.
+
+So `Driver` carries a `pilot: u32` digest and **it is hashed**. Left out, two
+machines running "the same race" with different `winston.toml` files would
+produce identical world hashes for different races: a gate claiming an agreement
+it does not have, which is worse than no gate. In it, they visibly disagree.
+
+Three things to accept with that:
+
+- It is a digest of the **resolved numbers, never the name** - two files both
+  called `winston` saying different things must not agree.
+- Thirty-two bits cannot be inverted, so it says *these differ* and not *which
+  file differs*. The composition root prints every roster entry's name and
+  digest at the start of a race, and which pilot each grid slot drew, so a bug
+  report carries it.
+- **Adding a pilot reshuffles which one every slot draws**, because
+  `pilot_for_slot` indexes into the roster. That is a *different* field, not a
+  corrupted one - and the digest is what makes the difference visible instead of
+  silent, which is the whole argument for the field.
+
+The committed determinism constants stay machine-independent only while nothing
+in that scenario flies a pilot. It does not, so the digest is `0` throughout,
+and a tripwire in `the_run_visits_the_paths_it_claims_to_cover` asserts it -
+because if an edit ever gave that scenario an opponent, the constants would
+quietly start depending on `~/.config/oag/pilots/`.
+
 ### Shooting at somebody
 
 **An opponent fires as of 2026-08-11**, and the delete-this-paragraph moment is
@@ -984,6 +1054,11 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | A trigger-happy driver fires sooner than a cautious one, and a provoked one sooner than it did calm | two tests in `driver::tests` | yes |
 | **An opponent's rocket is owned by the slot that fired it** | `race::tests::an_opponents_rocket_is_owned_by_the_slot_that_fired_it` | yes |
 | **The aiming gates actually open on real geometry** | `race_ground_truth::an_opponent_fires_at_a_craft_ahead_on_a_real_circuit` | **no** - needs a disc image. **Run and passing 2026-08-11**: 159 rockets from six of seven opponents in two minutes. |
+| A pilot file round-trips, and one with an impossible commitment, a reversed range, an unknown key or a bad lean is rejected **by name** | six tests in `pilots::tests` | yes |
+| The roster is sorted by name rather than by the filesystem, and a file may replace a built-in | two tests in `pilots::tests` | yes |
+| Two pilots differing in one number digest differently, and no built-in digests to zero | two tests in `pilots::tests` | yes |
+| **The suite never reads the developer's own pilot directory** | structural: every test goes through `parse` or `load_from` with a path it made itself | yes |
+| **The determinism scenario flies no pilot**, so its constants cannot become machine-dependent | tripwire in `determinism::the_run_visits_the_paths_it_claims_to_cover` | yes |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls

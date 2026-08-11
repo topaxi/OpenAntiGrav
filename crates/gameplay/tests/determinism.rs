@@ -182,6 +182,22 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   throughout and what moved is two more words entering the stream, not any
 ///   value in it.
 ///
+/// - **Moved a fifth time 2026-08-11**, when `Driver::pilot` joined the hash.
+///   It is a fingerprint of the pilot a craft is flying, and unlike
+///   `Ship::handling` - which comes off the player's own disc and is the same
+///   everywhere - a pilot can come out of `<config dir>/oag/pilots/` and so
+///   **differs between machines by design**. Left out, two machines running
+///   "the same race" with different pilot files would agree here and disagree
+///   on the race, which is a gate claiming an agreement it does not have.
+///   **Isolated the same way**: with that one `write_u32` removed and nothing
+///   else changed, the previous constants - `0x9c26_b4b5_c0c7_43be` /
+///   `0xc9d7_d405_37ab_9310` at 60 ticks and `0x6c9c_3ab9_8500_0e77` /
+///   `0x5c72_e308_83b1_c29d` at 600 - reproduce bit for bit. The scenario here
+///   still has no AI in it, so the field is `0` throughout and what moved is one
+///   more word entering the stream; `every_driver_in_this_scenario_flies_no_pilot`
+///   pins that, because if it ever stopped being true these constants would
+///   quietly become machine-dependent.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -189,8 +205,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x9c26_b4b5_c0c7_43be, 0xc9d7_d405_37ab_9310),
-    (600, 0x6c9c_3ab9_8500_0e77, 0x5c72_e308_83b1_c29d),
+    (60, 0xeff4_5f7c_6a67_fa0e, 0xd894_4c73_75ed_4c20),
+    (600, 0x7e38_a669_8476_79e7, 0xd7d6_954f_c46d_066d),
 ];
 
 #[test]
@@ -270,6 +286,20 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
         world.ships[1].physics.body.linear_velocity.length() > 0.0,
         "the blast pushed nobody, so the impulse path is not covered"
     );
+
+    // **The committed constants are only machine-independent while this holds.**
+    // `Driver::pilot` is a digest of a pilot that can come out of the player's
+    // own config directory; it is `0` here because this scenario has no AI in
+    // it. An edit that gave it one would make the references above depend on
+    // whatever is in `~/.config/oag/pilots/`, which is precisely the failure
+    // that field was added to make loud rather than silent.
+    for ship in &world.ships {
+        assert_eq!(
+            ship.driver.pilot, 0,
+            "a craft here is flying a pilot, so the committed constants now \
+             depend on the machine's config directory"
+        );
+    }
 }
 
 /// A second run of the same scenario reproduces the first, bit for bit. Catches

@@ -1,0 +1,89 @@
+# An example pilot. Copy this into `$XDG_CONFIG_HOME/oag/pilots/` (usually
+# `~/.config/oag/pilots/`) under whatever name you like and edit it - no
+# rebuild, and the file is small enough to paste into a forum post.
+#
+# EVERY `.toml` FILE IN THAT DIRECTORY IS LOADED, and the filename becomes the
+# pilot's name: `winston.toml` is a pilot called `winston`. There is no list to
+# register it in and no limit on how many you keep.
+#
+# Every axis is a RANGE, `[low, high]`, and each craft flying this pilot draws
+# its own value inside it. That is the point: four craft on one pilot should be
+# four drivers, not one driver four times. Write `[0.4, 0.4]` if you really do
+# want every one of them identical.
+#
+# Anything you leave out comes from `balanced`, so the shortest useful pilot is
+# one line. Anything you misspell is an error naming the key, rather than a
+# setting that silently does nothing.
+#
+# One name is special only in that it collides: a file called `aggressive.toml`,
+# `balanced.toml`, `passive.toml` or `shy.toml` REPLACES the built-in of that
+# name rather than adding another pilot, which is how you retune one of the four
+# without editing the tree.
+#
+# None of these numbers is the game's. They are this project's own - see
+# docs/architecture/adr/0006-no-copyrighted-content.md - and so are the limits
+# each one is checked against.
+
+# --- Where it drives ------------------------------------------------------
+# How far off the racing line it sits, as a fraction of the room the track's own
+# AI corridor gives on that side. The corridor comes off the disc, so this
+# narrows automatically where the artists narrowed it.
+line_bias = [0.35, 0.75]
+
+# Which side that is: "either" (a coin flip per craft), "left" or "right".
+lean = "either"
+
+# How much of that room it spends drifting about its bias, and how many ticks
+# one drift step takes. 60 ticks is a second.
+wander = [0.08, 0.20]
+wander_period = [180.0, 400.0]
+
+# How far toward the inside of the corner ahead it cuts. Unlike `lean` this
+# swaps sides with the corner, which is what a racing line actually does.
+inside = [0.20, 0.45]
+
+# How much of the corridor it is willing to use at all. Below one is a driver
+# that hugs the line.
+width = [0.8, 1.0]
+
+# --- How hard it drives ---------------------------------------------------
+# Multiplier on the grip it assumes through a corner. THE ONE TO BE CAREFUL
+# WITH: above what the hull can hold is not a faster driver, it is a driver in
+# the wall. Capped at 1.05 whatever you write here.
+commitment = [0.98, 1.04]
+
+# Multiplier on how early it starts braking. Below one is a late braker.
+patience = [0.82, 0.98]
+
+# Multiplier on how far down the road it aims. Higher is smoother and cuts more
+# corner; lower chases the line and looks busier doing it.
+look = [0.88, 1.05]
+
+# How readily it rotates the craft on the airbrakes when the steering has run
+# out of lock. This buys yaw with grip - it is not a brake.
+trail = [0.9, 1.3]
+
+# --- How it treats other craft --------------------------------------------
+# Two sides of one number. `courtesy` moves out of the way of a craft behind,
+# `defence` moves to cover it. A pilot with equal measures of both does neither.
+courtesy = [0.05, 0.20]
+defence = [0.45, 0.80]
+
+# How early it lifts off for a craft close ahead. Zero is a pilot that will
+# drive into the back of somebody.
+caution = [0.25, 0.55]
+
+# How readily it throws the craft sideways at a rival level with it. This shoves
+# and nothing else - there is no damage from contact yet.
+ram = [0.35, 0.70]
+
+# --- How it holds a grudge ------------------------------------------------
+# How many ticks being overtaken stings for. While it stings this pilot covers
+# its line harder, rams more readily and shoots sooner. It does NOT drive
+# faster: an angry AI in the scenery is a bug, not a character.
+provocation_ticks = [240.0, 480.0]
+
+# How readily it fires once something is in range and in front. This is a rate,
+# not a probability: at 1.0 it shoots about a fifth of a second after a target
+# lines up, at 0.2 about a second and a half.
+trigger = [0.5, 0.9]

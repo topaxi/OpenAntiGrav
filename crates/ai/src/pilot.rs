@@ -294,6 +294,26 @@ impl Pilot {
     /// corners faster than the physics allows.
     pub const MAX_COMMITMENT: f32 = 1.05;
 
+    /// This pilot, if every span in it is the right way round and no axis asks
+    /// for more grip than the hull has.
+    ///
+    /// The check lives here rather than at the edge that reads files, so a
+    /// pilot built in Rust cannot skip it either.
+    ///
+    /// # Errors
+    ///
+    /// Names the axis that is wrong, because "a pilot is invalid" is not a
+    /// message anyone can act on.
+    pub fn validated(self) -> Result<Self, &'static str> {
+        if !self.is_well_formed() {
+            return Err("a range runs backwards");
+        }
+        if self.commitment.high > Self::MAX_COMMITMENT {
+            return Err("commitment asks for more grip than the hull has");
+        }
+        Ok(self)
+    }
+
     /// Whether every span in this pilot is the right way round.
     ///
     /// A reversed span still draws, and lands *outside* the range it appears to
@@ -630,6 +650,43 @@ mod tests {
         for seed in 0..200u64 {
             assert!(pilot_for_slot(seed, 1, 4) < 4);
         }
+    }
+
+    /// **Each craft picks its own**, so a grid is a mixture rather than seven
+    /// copies of whatever the race drew once. With four pilots and seven slots
+    /// a monoculture is possible by luck; what would be a bug is it being
+    /// *common*.
+    #[test]
+    fn a_grid_draws_a_mixture_of_pilots_rather_than_one_for_everybody() {
+        let mut monocultures = 0;
+        let races = 500u64;
+        for race in 0..races {
+            let drawn: Vec<u32> = (1..8).map(|slot| pilot_for_slot(race, slot, 4)).collect();
+            if drawn.windows(2).all(|pair| pair[0] == pair[1]) {
+                monocultures += 1;
+            }
+        }
+        // Seven independent draws from four all agreeing is 4 * (1/4)^7, about
+        // one race in 4,096. A handful in five hundred would be luck; a tenth
+        // of them would mean the draws are not independent.
+        assert!(
+            monocultures < 5,
+            "{monocultures} of {races} grids fielded a single pilot"
+        );
+    }
+
+    /// And the mixture changes from race to race, or every grid is the same
+    /// grid.
+    #[test]
+    fn a_different_race_fields_a_different_mixture() {
+        let of =
+            |race: u64| -> Vec<u32> { (1..8).map(|slot| pilot_for_slot(race, slot, 4)).collect() };
+        let first = of(1);
+        let differing = (2..40u64).filter(|race| of(*race) != first).count();
+        assert!(
+            differing > 30,
+            "only {differing} of 38 later races fielded a different mixture"
+        );
     }
 
     /// If the pilot a slot draws tracked its personality seed, a field of eight

@@ -50,6 +50,7 @@ pub mod loading;
 pub mod menu;
 pub mod movie;
 pub mod perf;
+pub mod pilots;
 pub mod prefetch;
 pub mod race;
 pub mod render;

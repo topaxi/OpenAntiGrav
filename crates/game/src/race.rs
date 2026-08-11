@@ -2609,6 +2609,17 @@ impl Race {
         // nobody authored and the seven opponents would be a guess wearing the
         // shape of a measurement.
         let mut ai_pilots = [oag_ai::Pilot::BALANCED; oag_gameplay::MAX_SHIPS];
+        let mut pilot_names: [String; oag_gameplay::MAX_SHIPS] = Default::default();
+        // The built-ins, plus whatever the player has authored. A directory
+        // that cannot be read is not a reason to refuse to race: the built-ins
+        // are always there, and the error is reported rather than fatal.
+        let roster = match crate::pilots::load() {
+            Ok(roster) => roster,
+            Err(e) => {
+                eprintln!("pilots: {e:#} - racing with the built-in four");
+                crate::pilots::Roster::built_in()
+            }
+        };
         if pose_override.is_none()
             && start_position.is_some()
             && (mode.has_opponents() || opponents)
@@ -2634,12 +2645,29 @@ impl Race {
                 // seed's would tie a craft's pilot to its personality, so the
                 // aggressive slot would always be the one that also drew a high
                 // commitment - see `oag_ai::pilot_for_slot`.
-                let roster = oag_ai::Pilot::BUILT_IN;
-                let choice = oag_ai::pilot_for_slot(seed, slot, roster.len() as u32);
-                ai_pilots[slot as usize] = roster[choice as usize].1;
+                let choice = oag_ai::pilot_for_slot(seed, slot, roster.len());
+                let entry = &roster.entries()[choice as usize];
+                ai_pilots[slot as usize] = entry.pilot;
+                pilot_names[slot as usize].clone_from(&entry.name);
+                // **The digest, into the world snapshot.** A pilot can come out
+                // of the player's own config directory, so two machines running
+                // "the same race" with different files must not agree on the
+                // hash - see `oag_ai::Driver::pilot`.
+                opponent.driver.pilot = entry.digest;
                 opponent.place_at(*pose);
             }
             world.ship_count = GRID_SLOTS;
+            // **What was loaded, and who is flying what, once per race.** The
+            // digests are the point of the first line: thirty-two bits cannot
+            // be inverted, so when two machines disagree on a world hash this
+            // is the only thing that says *which* pilot file differs. The
+            // second line is for the player, who wants to know the grid they
+            // are about to race. A `*` marks a pilot that came from a file.
+            eprintln!("pilots loaded: {}", roster.summary());
+            let grid: Vec<String> = (1..GRID_SLOTS as usize)
+                .map(|slot| format!("{slot}:{}", pilot_names[slot]))
+                .collect();
+            eprintln!("pilots on the grid: {}", grid.join(" "));
         } else {
             world.ship_count = 1;
         }
