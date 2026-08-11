@@ -61,6 +61,17 @@ pub struct Ship {
     /// so the array is still a `memcpy`. The line it indexes into is *track*
     /// data and is not in the world at all; see [`oag_ai::Line`].
     pub driver: oag_ai::Driver,
+    /// Where this craft is in the race: its lap, its place on the circuit and
+    /// whether it has finished.
+    ///
+    /// **Every craft, the player included.** [`World::race`] is the *player's*
+    /// race - its clock, its Zone counters, its best lap - and stays that; this
+    /// is the smaller thing the whole field needs so that eight of them can be
+    /// ordered against each other. Slot 0's `lap` is assigned from here rather
+    /// than counted twice, so there is one lap rule and not two.
+    ///
+    /// [`World::race`]: World::race
+    pub standing: oag_race::Standing,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -73,6 +84,7 @@ impl Default for Ship {
             segment: 0,
             pickup: crate::pickup::Held::empty(),
             driver: oag_ai::Driver::default(),
+            standing: oag_race::Standing::default(),
             active: false,
         }
     }

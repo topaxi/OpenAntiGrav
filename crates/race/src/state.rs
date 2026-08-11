@@ -16,6 +16,27 @@ use oag_core::math::Vec3;
 /// timing are M5 work and are deliberately not modelled here yet: a `place`
 /// field that always reads 1 is worse than no field, because it looks like an
 /// answer.
+/// Whether a one-tick change in distance-along is a **forward** wrap of the ring.
+///
+/// A lap is a wrap, not a plane crossing. Anything that moves more than half the
+/// circuit in one tick has wrapped rather than travelled: at 60 Hz even a
+/// Phantom-class craft covers a few units per tick against a circuit thousands of
+/// units round.
+///
+/// Shared with [`crate::standing`] so the field and the player count laps by one
+/// rule. Two counters that disagreed would put a craft in a position it is not
+/// in.
+#[must_use]
+pub fn wrapped_forward(delta: f32, half_length: f32) -> bool {
+    delta < -half_length
+}
+
+/// The same test for a craft that has gone backwards over the line.
+#[must_use]
+pub fn wrapped_backward(delta: f32, half_length: f32) -> bool {
+    delta > half_length
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RaceState {
     /// Which mode's rules are running.
@@ -216,7 +237,7 @@ impl RaceState {
         self.lap_gate = self.lap_gate.advanced(located.progress, half);
 
         let delta = located.progress - previous;
-        if delta < -half {
+        if wrapped_forward(delta, half) {
             // A wrap. Whether it is also a *lap* is what the gate decides.
             if self.lap_gate == LapGate::Ready {
                 self.complete_lap(tick, &mut outcome);
@@ -234,7 +255,7 @@ impl RaceState {
                 self.lap_start_tick = tick;
             }
             self.lap_gate = LapGate::NeedsNearHalf;
-        } else if delta > half {
+        } else if wrapped_backward(delta, half) {
             self.uncomplete_lap();
         }
         outcome

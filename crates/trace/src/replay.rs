@@ -374,6 +374,8 @@ pub fn replay<R: Raycaster + ?Sized>(
         // Slot 0 is flown by the script, not by a driver, and a replay has no
         // racing line for one to follow anyway.
         driver: oag_ai::Driver::default(),
+        // A replay has no course either, so nothing ever advances this.
+        standing: oag_race::Standing::default(),
         // A replay has no track and therefore no `Weapon Pad`, so nothing can
         // ever fill this. Named rather than left to `..Default::default()` so
         // that a pickup reaching a replay is a compile error to think about
@@ -565,6 +567,8 @@ where
         // Slot 0 is flown by the script, not by a driver, and a replay has no
         // racing line for one to follow anyway.
         driver: oag_ai::Driver::default(),
+        // A replay has no course either, so nothing ever advances this.
+        standing: oag_race::Standing::default(),
         // A replay has no track and therefore no `Weapon Pad`, so nothing can
         // ever fill this. Named rather than left to `..Default::default()` so
         // that a pickup reaching a replay is a compile error to think about

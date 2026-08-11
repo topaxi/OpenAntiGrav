@@ -31,6 +31,7 @@
 
 pub mod course;
 pub mod mode;
+pub mod standing;
 pub mod state;
 pub mod zone;
 
@@ -39,4 +40,5 @@ pub(crate) mod testing;
 
 pub use course::{Course, Located};
 pub use mode::Mode;
+pub use standing::{Standing, places};
 pub use state::{LapGate, Outcome, RaceState};

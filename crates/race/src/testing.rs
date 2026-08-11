@@ -73,3 +73,10 @@ pub fn square_track(paths: usize) -> AiTrack {
         junctions,
     }
 }
+
+/// A closed course from [`square_track`], for tests that need somewhere to be
+/// placed on rather than a particular geometry.
+#[must_use]
+pub fn ring_course() -> crate::Course {
+    crate::Course::from_track(&square_track(1), None).expect("the square track closes")
+}

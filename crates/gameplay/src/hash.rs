@@ -89,6 +89,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         segment,
         pickup,
         driver,
+        standing,
         active,
     } = ship;
 
@@ -107,7 +108,44 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // diverged - the next steering command will differ and nothing before it
     // will show why. It is `0` for slot 0, which the player flies.
     hasher.write_u32(driver.index);
+    write_standing(hasher, standing);
     hasher.write_u8(u8::from(*active));
+}
+
+/// A craft's place in the race, which decides the finishing order and is
+/// therefore simulation state rather than presentation.
+fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
+    let oag_race::Standing {
+        lap,
+        gate,
+        progress,
+        course_index,
+        finish_tick,
+    } = standing;
+
+    hasher.write_u32(*lap);
+    hasher.write_u8(match gate {
+        LapGate::NeedsNearHalf => 0,
+        LapGate::NeedsFarHalf => 1,
+        LapGate::Ready => 2,
+    });
+    // A discriminant byte first, for the reason `write_race` gives about
+    // `progress`: "not yet located" must not hash the same as "at the line".
+    match progress {
+        None => hasher.write_u8(0),
+        Some(progress) => {
+            hasher.write_u8(1);
+            hasher.write_f32(*progress);
+        }
+    }
+    write_option_u32(hasher, *course_index);
+    match finish_tick {
+        None => hasher.write_u8(0),
+        Some(tick) => {
+            hasher.write_u8(1);
+            hasher.write_u64(*tick);
+        }
+    }
 }
 
 fn write_held(hasher: &mut StateHasher, held: &Held) {

@@ -1378,3 +1378,52 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
         "the rocket aged out after {seconds:.2} s instead of hitting the track"
     );
 }
+
+/// The field is placed, which is what makes it a race rather than a parade.
+///
+/// **The property, not a result.** Nothing here asserts who wins - that is the
+/// AI's speed law and this project's own, so a pinned finishing order would be
+/// pinning our own arithmetic. What is asserted is that the places form a valid
+/// permutation, that the player's place agrees with the table, and that being
+/// further round the circuit is what earns a better one.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_field_is_placed_by_how_far_round_it_is() {
+    let Some(loaded) = load_single_race() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup);
+    for _ in 0..900 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+
+    let places = race.places();
+    let mut seen: Vec<u8> = places.to_vec();
+    seen.sort_unstable();
+    assert_eq!(
+        seen,
+        (1..=8).collect::<Vec<u8>>(),
+        "the places are not a permutation of 1..=8: {places:?}"
+    );
+    assert_eq!(race.player_place(), places[0]);
+
+    // The craft in first is the one furthest round, since nobody has finished a
+    // three-lap race in fifteen seconds.
+    let leader = places
+        .iter()
+        .position(|&place| place == 1)
+        .expect("somebody is first");
+    let course = race.course().expect("16_Track closes");
+    let furthest = (0..8)
+        .max_by(|&a, &b| {
+            race.world.ships[a]
+                .standing
+                .distance(course)
+                .total_cmp(&race.world.ships[b].standing.distance(course))
+        })
+        .expect("eight craft");
+    assert_eq!(
+        leader, furthest,
+        "slot {leader} is placed first but slot {furthest} is further round"
+    );
+}

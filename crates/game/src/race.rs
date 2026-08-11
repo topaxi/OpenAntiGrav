@@ -1915,6 +1915,30 @@ pub fn chase_params(block: handling::ExternalCamera) -> ChaseParams {
 /// as they did.
 pub use oag_gameplay::spawn::{box_inertia, spawn_height};
 
+/// Advances every active craft's standing, and syncs the player's lap from it.
+///
+/// Slot order, and slot order only: this feeds the finishing order, which is
+/// simulation state. See `docs/architecture/determinism.md`.
+///
+/// `laps_target` comes from the player's race because it is the *mode's* number
+/// rather than a craft's - all eight are running the same event.
+fn advance_standings(world: &mut World, course: &Course) {
+    let tick = world.tick;
+    let target = world.race.laps_target;
+    for slot in 0..world.ship_count as usize {
+        let ship = &mut world.ships[slot];
+        if !ship.active {
+            continue;
+        }
+        let position = ship.physics.body.position;
+        ship.standing.update(course, position, tick, target);
+    }
+    // One lap rule, not two: the player's displayed lap is the standing's.
+    // `RaceState` keeps the clock, the best lap, the Zone counters and the finish
+    // condition, all of which are the player's alone.
+    world.race.lap = world.ships[0].standing.lap;
+}
+
 /// The authored racing line, one point per spline sample.
 ///
 /// Three things the disc carries and this reads: the sample position, the
@@ -2808,6 +2832,51 @@ impl Race {
         }
     }
 
+    /// Advances every active craft's [`oag_race::Standing`].
+    ///
+    /// Slot order, and slot order only: this feeds the finishing order, which is
+    /// simulation state. See `docs/architecture/determinism.md`.
+    ///
+    /// **`laps_target` comes from the player's race**, because it is the mode's
+    /// number rather than a craft's - all eight are running the same event.
+    fn update_standings(&mut self) {
+        // A free function so the `course` and `world` borrows stay disjoint -
+        // cloning a `Course` once a tick to satisfy the borrow checker would be
+        // a `Vec` copy per frame for nothing.
+        if let Some(course) = &self.course {
+            advance_standings(&mut self.world, course);
+        }
+    }
+
+    /// Every craft's race position, `1`-based, in slot order.
+    ///
+    /// Inactive slots are placed too - they are at the start line and last,
+    /// which is where a slot with no craft in it belongs. A caller that cares
+    /// reads [`Self::ship_count`] first.
+    #[must_use]
+    pub fn places(&self) -> [u8; MAX_SHIPS] {
+        let Some(course) = &self.course else {
+            // No closed ring, so no positions. Everyone is first, which is the
+            // honest answer for a track that cannot count a lap at all.
+            return [1; MAX_SHIPS];
+        };
+        let standings: [oag_race::Standing; MAX_SHIPS] =
+            std::array::from_fn(|slot| self.world.ships[slot].standing);
+        oag_race::places(&standings, course)
+    }
+
+    /// The lap counter's ring, for a caller that wants to measure against it.
+    #[must_use]
+    pub fn course(&self) -> Option<&Course> {
+        self.course.as_ref()
+    }
+
+    /// The player's own race position, `1`-based.
+    #[must_use]
+    pub fn player_place(&self) -> u8 {
+        self.places()[0]
+    }
+
     /// Craft against craft, every pair, once a tick.
     ///
     /// `oag_physics::pair::resolve` is `Body_ResolveContactPair` (`0x0884ef30`),
@@ -3073,6 +3142,13 @@ impl Race {
                 self.grant_free_turbo();
             }
         }
+
+        // Every craft's standing, the player's included, from the position it
+        // holds now. **After the player's `RaceState`**, so the two see the same
+        // tick, and slot 0's lap is then taken from the standing rather than
+        // counted a second time - see `Ship::standing`. Outside the borrow above
+        // rather than inside it because this walks the whole ship array.
+        self.update_standings();
 
         let target = target_of(&self.world.ships[0]);
         self.camera.advance(target, &self.chase_params, self.dt);

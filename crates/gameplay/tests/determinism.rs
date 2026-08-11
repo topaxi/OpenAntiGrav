@@ -148,6 +148,15 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   bit for bit. So the movement is the new field entering the hash and not a
 ///   change in what the simulation does. The scenario here has no AI in it, so
 ///   every driver in it is at index `0` throughout.
+/// - **Moved again 2026-08-11**, when `Ship::standing` joined the hash. A craft's
+///   lap, place on the circuit and finish tick decide the finishing order, so
+///   they are simulation state. **Isolated the same way**: with
+///   `write_standing`'s call removed and nothing else changed, the previous
+///   constants - `0xe8fa_1f54_0742_7f0e` / `0xf195_097c_9824_11b0` at 60 ticks
+///   and `0x8f0c_b68a_5b98_18df` / `0x2a7b_fddd_ae47_fd8d` at 600 - reproduce bit
+///   for bit. The scenario here has no course in it, so every standing stays at
+///   its default and what moved is the field entering the stream, not any value
+///   in it.
 ///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
@@ -156,8 +165,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xe8fa_1f54_0742_7f0e, 0xf195_097c_9824_11b0),
-    (600, 0x8f0c_b68a_5b98_18df, 0x2a7b_fddd_ae47_fd8d),
+    (60, 0x187f_03ac_8cc2_f9fe, 0xaa73_ebe5_d207_ccd0),
+    (600, 0x8b79_23a3_6397_3ab7, 0x7bb3_4940_5709_0a5d),
 ];
 
 #[test]

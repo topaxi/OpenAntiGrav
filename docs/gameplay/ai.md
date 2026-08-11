@@ -454,12 +454,38 @@ middle of the track.
 An opponent gets the speed pad's *force* but no *plume*: there is one `Exhaust`
 and it belongs to slot 0.
 
+### The field is placed
+
+**Every craft counts its own laps as of 2026-08-11**, and the field can be
+ordered. `oag_race::Standing` is the small per-craft thing - lap, distance round
+the circuit, finish tick - that sits on every `Ship` and therefore inside the
+world snapshot, so a replay reproduces the finishing order. `Race::places()`
+returns all eight positions and `Race::player_place()` the player's.
+
+**The lap rule is not written twice.** A lap is a wrap of the distance-along, and
+the two-half `LapGate` is what stops a craft rocking over the line and scoring
+one; both live in `oag_race::state` and `Standing` reaches them through
+`wrapped_forward` and `LapGate::advanced`. The player's displayed lap is then
+*assigned from* their standing rather than counted a second time. Two lap
+counters that disagreed would put a craft in a position it is not in.
+
+`RaceState` stays what it was: the player's clock, best lap, Zone counters and
+finish condition. Those are the player's alone and are not per craft.
+
+Ordering is finishers first (by when they finished), then racers by distance
+covered, then **by slot index**. The last rule is not cosmetic - eight craft on
+the grid are at exactly the same distance before anyone has a fix, and a
+comparison that left that to chance would feed an arbitrary result into
+simulation state.
+
 ### What an opponent still does not get
 
 Each is separate work, and each is listed so nobody assumes otherwise: an exhaust
-trail of its own, a lap counter of its own (`oag_race::RaceState` is
-single-ship), a respawn when it falls off, anything at all happening when it is
-eliminated, a weapon aimed at anybody, and a livery that is not the player's.
+trail of its own, a lap *time* of its own (the standing counts laps; only the
+player has a clock), a respawn when it falls off, anything at all happening when
+it is eliminated, a weapon aimed at anybody, and a livery that is not the
+player's. Nothing shows a position on screen yet either - the HUD's place widget
+is unbuilt, so `places()` has no reader outside the tests.
 
 **Craft-to-craft collision landed 2026-08-11**, and it was never an AI gap - the
 engine had no two-body path for anybody. `Body_ResolveContactPair`
@@ -516,6 +542,7 @@ config block. Those are the second half.
 | Every opponent is stepped with controls a driver chose | `race::tests::the_opponents_are_driven_rather_than_parked` | yes |
 | A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
 | Two runs of one race stay identical, drivers included | `race_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| The field is placed, and being further round earns a better place | `race_ground_truth::the_field_is_placed_by_how_far_round_it_is` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls
