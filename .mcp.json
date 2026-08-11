@@ -1,8 +1,7 @@
 {
   "mcpServers": {
     "ghidra-mcp": {
-      "command": "/usr/bin/python",
-      "args": ["/opt/ghidra-mcp/bridge_mcp_ghidra.py"]
+      "command": "bridge-mcp-ghidra"
     }
   }
 }
