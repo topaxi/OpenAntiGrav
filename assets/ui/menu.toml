@@ -87,6 +87,17 @@ values = ["venom", "flash", "rapier", "phantom"]
 # Zone forces the shared Zone hull regardless of team (see
 # `oag_game::race::ship_entry_name`), so the row is greyed rather than
 # offered as if it still picked the drawn model.
+# Only a single race fields opponents, so this greys to N/A in the other three
+# modes. `disabled_by` matches positively, so the list is the modes *without* a
+# grid rather than a negation of the one with it - keep it in step with
+# `oag_race::Mode::ALL`.
+[[page.entry]]
+kind = "choice"
+label = "AI DIFFICULTY"
+setting = "ai.difficulty"
+values = ["novice", "skilled", "elite", "ace"]
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
+
 [[page.entry]]
 kind = "choice"
 label = "TEAM"

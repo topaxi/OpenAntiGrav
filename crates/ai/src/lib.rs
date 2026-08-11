@@ -71,12 +71,14 @@
 //! `docs/architecture/determinism.md` forbids. The reasoning is at the top of
 //! `noise.rs`.
 
+mod difficulty;
 mod driver;
 mod field;
 mod line;
 mod noise;
 mod pilot;
 
+pub use difficulty::Difficulty;
 pub use driver::{AWARENESS_RANGE, Context, Driver, Personality, Tuning};
 pub use field::{Field, Rival};
 pub use line::{Aim, Frame, Line};

@@ -167,6 +167,16 @@ pub struct Tuning {
     /// rewritten to remove. Above it the loop has run out of lock and the yaw
     /// the differential adds is authority the loop cannot produce at all.
     pub trail_saturation: f32,
+    /// How often a driver misses a braking point, per tick, while it is at one.
+    ///
+    /// **Zero for a driver that never errs**, which is what the hardest
+    /// difficulty sets it to - see [`Difficulty::mistakes`]. Scaled by the
+    /// difficulty rather than read from it, so the driver never learns that
+    /// difficulties exist: a level is a transformation of the tunables, not a
+    /// parameter the controller branches on.
+    ///
+    /// [`Difficulty::mistakes`]: crate::Difficulty::mistakes
+    pub mistake_rate: f32,
 }
 
 impl Default for Tuning {
@@ -187,6 +197,12 @@ impl Default for Tuning {
             trail_gain: 1.2,
             trail_max: 0.6,
             trail_saturation: 0.85,
+            // **Zero, because this is the competent driver.** Erring is a
+            // degradation, so the rate belongs to `Difficulty` and arrives by
+            // `Difficulty::tune`; a default that errs would make every caller
+            // that has not chosen a difficulty - the closed-loop harness, a
+            // replay - quietly non-deterministic in its driving.
+            mistake_rate: 0.0,
         }
     }
 }
@@ -503,6 +519,20 @@ pub struct Driver {
     /// mysterious instead of silent, which is an improvement but not the whole
     /// of one.
     pub pilot: u32,
+    /// Ticks left of a braking point this driver is in the middle of missing.
+    ///
+    /// **The whole of mistake injection, and the cheap half is the only half
+    /// there is.** `docs/gameplay/ai.md` calls recovery the expensive part of a
+    /// mistake, on the grounds that a driver which runs wide and then carries on
+    /// as though nothing happened is noise rather than an error. That is true of
+    /// a controller that has to be *told* how to recover - and this one does not:
+    /// it follows a line, so the recovery is the thing it was already doing. A
+    /// mistake here is a driver holding the throttle through a corner it should
+    /// have braked for; running wide and scrabbling back is then automatic.
+    ///
+    /// An integer, because this type is `Eq` and lives in the world snapshot,
+    /// for the reason [`Self::provocation`] gives.
+    pub mistake: u16,
 }
 
 /// How much of the line either side of the last index a driver looks at.
@@ -524,6 +554,13 @@ const RAM_STREAM: u32 = 1;
 /// How often a driver at full `ram` will take a shot at a rival alongside, per
 /// tick. About once a second.
 const RAM_RATE: f32 = 1.0 / 60.0;
+
+/// The noise stream mistakes are rolled against.
+const MISTAKE_STREAM: u32 = 3;
+
+/// How long a missed braking point lasts. Half a second, which at racing speed
+/// is comfortably past the point the driver should have lifted.
+const MISTAKE_TICKS: u16 = 30;
 
 /// The noise stream weapon decisions are rolled against.
 const WEAPON_STREAM: u32 = 2;
@@ -647,7 +684,13 @@ impl Driver {
         let window = look * tuning.brake_lookahead * personality.patience;
         let curvature = line.max_curvature(index, window, look * 0.5);
         let target = corner_target(curvature, tuning, &personality);
-        let (thrust, brake) = throttle(speed, target, tuning);
+        self.blunder(tuning, speed, target);
+        let (thrust, brake) = if self.mistake > 0 {
+            // Sailing through it. See [`Self::mistake`].
+            (1.0, 0.0)
+        } else {
+            throttle(speed, target, tuning)
+        };
         let thrust = thrust * self.caution(ctx, &personality);
         let differential = trail(&steer, speed, target, tuning, &personality);
         let (airbrake_left, airbrake_right) = airbrakes(brake, differential, tuning.brake_floor);
@@ -809,6 +852,33 @@ impl Driver {
             return None;
         }
         Some(target.slot)
+    }
+
+    /// Decides whether this driver is about to miss a braking point, and
+    /// counts down one it is already missing.
+    ///
+    /// **Rolled only where it would otherwise brake.** A mistake on a straight
+    /// is not a mistake, it is nothing at all - the throttle was already open -
+    /// so rolling everywhere would spend the whole rate on ticks where it
+    /// cannot show, and the setting would do far less than its number suggests.
+    /// Gating it on the braking point also makes the rate legible: it is per
+    /// tick *of braking*, so roughly once a second spent slowing down.
+    fn blunder(&mut self, tuning: &Tuning, speed: f32, target: f32) {
+        if self.mistake > 0 {
+            self.mistake -= 1;
+            return;
+        }
+        // **Seed zero never errs**, for the same reason it has no personality:
+        // `Driver::default()` is the plain line-follower every exact assertion
+        // in this crate and in `oag-trace`'s replay path is written against,
+        // and a driver that occasionally sails through a corner is not one of
+        // those. See `Personality::from_seed`.
+        if self.seed == 0 || tuning.mistake_rate <= 0.0 || speed <= target {
+            return;
+        }
+        if roll(self.seed, self.phase, MISTAKE_STREAM) < tuning.mistake_rate {
+            self.mistake = MISTAKE_TICKS;
+        }
     }
 
     /// Advances the grudge: notices being overtaken, and lets it cool.
@@ -1212,6 +1282,110 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
 mod tests {
     use super::*;
     use crate::field::Rival;
+
+    fn tuning_that_errs(rate: f32) -> Tuning {
+        Tuning {
+            mistake_rate: rate,
+            ..Tuning::default()
+        }
+    }
+
+    /// A mistake is holding the throttle through a braking point. The recovery
+    /// is not modelled because the controller was already doing it.
+    #[test]
+    fn a_driver_that_blunders_sails_through_a_braking_point() {
+        let tuning = tuning_that_errs(1.0);
+        let mut driver = Driver::seeded(5);
+        // Well over the target, so it would otherwise be braking hard.
+        driver.blunder(&tuning, 200.0, 100.0);
+        assert!(driver.mistake > 0, "a certain mistake did not happen");
+
+        // And it lasts, then clears.
+        let started = driver.mistake;
+        for _ in 0..started {
+            driver.blunder(&tuning, 200.0, 100.0);
+        }
+        assert_eq!(driver.mistake, 0, "the mistake never ended");
+    }
+
+    /// **Rolled only where it would otherwise brake.** A mistake on a straight
+    /// is nothing at all, and rolling everywhere would spend the rate on ticks
+    /// where it cannot show.
+    #[test]
+    fn a_driver_never_blunders_where_it_was_not_going_to_brake() {
+        let tuning = tuning_that_errs(1.0);
+        for phase in 0..600u32 {
+            let mut driver = Driver::seeded(5);
+            driver.phase = phase;
+            driver.blunder(&tuning, 50.0, 100.0);
+            assert_eq!(driver.mistake, 0, "blundered on a straight at {phase}");
+        }
+    }
+
+    #[test]
+    fn a_driver_that_never_errs_never_blunders() {
+        let tuning = tuning_that_errs(0.0);
+        for phase in 0..600u32 {
+            let mut driver = Driver::seeded(5);
+            driver.phase = phase;
+            driver.blunder(&tuning, 200.0, 100.0);
+            assert_eq!(driver.mistake, 0, "blundered at {phase} with the rate off");
+        }
+    }
+
+    /// A higher rate has to mean more mistakes, or the difficulty scale is
+    /// decorative.
+    #[test]
+    fn a_higher_mistake_rate_produces_more_mistakes() {
+        let count = |rate: f32| {
+            (0..4_000u32)
+                .filter(|phase| {
+                    let mut driver = Driver::seeded(5);
+                    driver.phase = *phase;
+                    driver.blunder(&tuning_that_errs(rate), 200.0, 100.0);
+                    driver.mistake > 0
+                })
+                .count()
+        };
+        let rare = count(1.0 / 200.0);
+        let often = count(1.0 / 20.0);
+        assert!(often > rare * 3, "{often} against {rare}");
+    }
+
+    /// The whole point: while blundering, the driver holds the throttle it
+    /// should have lifted.
+    #[test]
+    fn a_blundering_driver_holds_the_throttle_it_should_have_lifted() {
+        let line = Line::new(
+            (0..128)
+                .map(|step| {
+                    let angle = std::f32::consts::TAU * step as f32 / 128.0;
+                    Vec3::new(60.0 * angle.cos(), 0.0, 60.0 * angle.sin())
+                })
+                .collect(),
+        );
+        let state = craft(line.point(0), 300.0);
+
+        let careful = Driver::seeded(5).drive(&state, &Context::new(&line, &Tuning::default()));
+        assert_eq!(careful.thrust, 0.0, "a 60-unit circle at 300 needs braking");
+
+        let mut blundering = Driver::seeded(5);
+        blundering.mistake = 10;
+        let sailing = blundering.drive(&state, &Context::new(&line, &Tuning::default()));
+        assert_eq!(sailing.thrust, 1.0);
+        // **No brake engaged**, rather than no airbrake at all. Both sides
+        // strictly positive is the only thing that slows the craft; a
+        // differential on one side is yaw and not deceleration, and a driver
+        // that has missed its braking point still gets to try to rotate. See
+        // [`trail`].
+        assert!(
+            sailing.airbrake_left == 0.0 || sailing.airbrake_right == 0.0,
+            "the brake engaged during a missed braking point: {} and {}",
+            sailing.airbrake_left,
+            sailing.airbrake_right
+        );
+    }
+
     use crate::pilot::Span;
 
     fn target_ahead(range: f32, cos_bearing: f32) -> Field {

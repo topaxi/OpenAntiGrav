@@ -384,6 +384,11 @@ pub struct Options {
     pub team: String,
     /// Speed class the handling parameters are read for.
     pub class: SpeedClass,
+    /// How good the opponents are.
+    ///
+    /// Applied by degrading the measured tuning rather than by boosting a weak
+    /// one, and it never reads the player - see [`oag_ai::Difficulty`].
+    pub difficulty: oag_ai::Difficulty,
     /// Which mode's rules the race runs under.
     ///
     /// Also selects the HUD layout: a Zone run draws `Zone_HUD.xml`, the other
@@ -493,6 +498,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             source: crate::source::DEFAULT_IMAGE.to_string(),
+            difficulty: oag_ai::Difficulty::default(),
             // Empty rather than the search path: a default that read the
             // filesystem would make two runs of the same test differ by what
             // the developer happens to have downloaded. The composition root
@@ -521,6 +527,8 @@ impl Default for Options {
 pub struct Setup {
     /// Which mode's rules the race runs under.
     pub mode: Mode,
+    /// How good the opponents are. See [`Options::difficulty`].
+    pub difficulty: oag_ai::Difficulty,
     /// The speed class the race is run in.
     ///
     /// Most of what the class decides is already resolved by the time a `Setup`
@@ -1527,6 +1535,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     Ok(Loaded {
         setup: Setup {
             mode: options.mode,
+            difficulty: options.difficulty,
             class: options.class,
             opponents: options.opponents,
             seed: options.seed.unwrap_or(SEED),
@@ -2525,6 +2534,7 @@ impl Race {
     pub fn start(setup: Setup) -> Self {
         let Setup {
             mode,
+            difficulty,
             opponents,
             seed,
             zone,
@@ -2647,7 +2657,10 @@ impl Race {
                 // commitment - see `oag_ai::pilot_for_slot`.
                 let choice = oag_ai::pilot_for_slot(seed, slot, roster.len());
                 let entry = &roster.entries()[choice as usize];
-                ai_pilots[slot as usize] = entry.pilot;
+                // The level scales how a pilot treats other craft and leaves
+                // the line it drives alone, so a shy pilot at novice is still
+                // shy rather than generically slow.
+                ai_pilots[slot as usize] = difficulty.temper(&entry.pilot);
                 pilot_names[slot as usize].clone_from(&entry.name);
                 // **The digest, into the world snapshot.** A pilot can come out
                 // of the player's own config directory, so two machines running
@@ -2664,6 +2677,7 @@ impl Race {
             // second line is for the player, who wants to know the grid they
             // are about to race. A `*` marks a pilot that came from a file.
             eprintln!("pilots loaded: {}", roster.summary());
+            eprintln!("ai difficulty: {}", difficulty.name());
             let grid: Vec<String> = (1..GRID_SLOTS as usize)
                 .map(|slot| format!("{slot}:{}", pilot_names[slot]))
                 .collect();
@@ -2676,7 +2690,10 @@ impl Race {
 
         Self {
             racing_line: racing_line(&spline),
-            ai_tuning: oag_ai::Tuning::default(),
+            // **Degraded from the measured tuning**, never boosted toward it -
+            // see `oag_ai::Difficulty`. At the top level this is the
+            // measurement unchanged.
+            ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
             ai_pilots,
             world,
             collision,
@@ -7171,6 +7188,7 @@ mod tests {
                 down_speed: 30.0,
             },
             mode: Mode::TimeTrial,
+            difficulty: oag_ai::Difficulty::default(),
             class: SpeedClass::Venom,
             opponents: false,
             seed: SEED,

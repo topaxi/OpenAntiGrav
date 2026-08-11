@@ -198,6 +198,15 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   pins that, because if it ever stopped being true these constants would
 ///   quietly become machine-dependent.
 ///
+/// - **Moved a sixth time 2026-08-11**, when `Driver::mistake` joined the hash.
+///   It counts down a braking point the driver is in the middle of missing, and
+///   a craft sailing through one is about to be somewhere a craft that braked is
+///   not; see `oag_ai::Driver::blunder`. **Isolated the same way**: with that
+///   one `write_u32` removed and nothing else changed, the previous constants -
+///   `0xeff4_5f7c_6a67_fa0e` / `0xd894_4c73_75ed_4c20` at 60 ticks and
+///   `0x7e38_a669_8476_79e7` / `0xd7d6_954f_c46d_066d` at 600 - reproduce bit
+///   for bit. The scenario has no AI, so the field is `0` throughout.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -205,8 +214,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xeff4_5f7c_6a67_fa0e, 0xd894_4c73_75ed_4c20),
-    (600, 0x7e38_a669_8476_79e7, 0xd7d6_954f_c46d_066d),
+    (60, 0x2524_032f_46c2_e75e, 0xc9ba_8f3a_d73d_2530),
+    (600, 0x2655_f848_d5d1_9117, 0xd5df_df48_d023_11bd),
 ];
 
 #[test]

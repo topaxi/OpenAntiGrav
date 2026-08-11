@@ -76,6 +76,8 @@ pub struct Settings {
     pub race: Race,
     #[serde(default)]
     pub controls: Controls,
+    #[serde(default)]
+    pub ai: Ai,
     /// The language picked last time, by the XML's own English name
     /// (`English`, `French`).
     ///
@@ -180,6 +182,36 @@ pub struct Controls {
 /// `novice` - `Options_LoadControlMapping`'s fall-through sets the scheme flag
 /// and the built-in mapping blob carries the same value. Confidence 75; the
 /// value a never-configured profile holds was not read.
+/// What the opponents are like.
+///
+/// The section `docs/gameplay/ai.md` specifies. Only `difficulty` is built; the
+/// page's other three keys - `rubberbanding`, `adaptive`, `mistakes` - are
+/// design that has not been written yet, and are deliberately absent rather
+/// than present and ignored.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ai {
+    /// How good the opponents are: `novice`, `skilled`, `elite` or `ace`.
+    ///
+    /// A **token**, not a typed enum, for the reason [`Race::mode`] is: a bad
+    /// value here must not fail the boot, so a profile written by a build with
+    /// a level this one does not have still races. The fallback is reported and
+    /// ignored, in `main.rs`.
+    #[serde(default = "default_difficulty")]
+    pub difficulty: String,
+}
+
+fn default_difficulty() -> String {
+    oag_ai::Difficulty::default().name().to_string()
+}
+
+impl Default for Ai {
+    fn default() -> Self {
+        Self {
+            difficulty: default_difficulty(),
+        }
+    }
+}
+
 fn default_scheme() -> String {
     oag_gameplay::ControlScheme::default().name().to_string()
 }
@@ -800,6 +832,7 @@ pub fn menu_seeds(
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),
         ("race.track", text(&settings.race.track)),
+        ("ai.difficulty", text(&settings.ai.difficulty)),
     ];
     if let Some(language) = &settings.language {
         out.push(("language", text(language)));

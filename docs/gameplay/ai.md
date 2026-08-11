@@ -740,6 +740,61 @@ score, no spark. Its payoff is purely positional. The natural follow-on is three
 lines: bump the *victim's* provocation off the contact that is already being
 computed, which would make the feature social in both directions.
 
+### Difficulty
+
+Four levels - `novice`, `skilled`, `elite`, `ace` - chosen on the pre-race page
+or as `[ai] difficulty` in `settings.toml`. It greys to N/A in the three modes
+that field no opponents.
+
+**A level degrades a competent driver; it never boosts a weak one.** The top
+level is the tuning that was measured against real hulls on a real circuit, and
+each level below takes something away. The other direction is the one that goes
+wrong: a baseline tuned for a novice and multiplied upward has no measurement
+behind its top end, so the hardest setting would be the least tested one.
+
+**And nothing in it reads the player.** The original schedules opponent thrust
+against the player's race position and the gap to them, and this page
+[refuses to port that](#what-we-build-instead). A level decides how good the
+opponents are before the lights, and then they race. An easy field that is easy
+because it waits for you is a rigged one, and it can be felt.
+
+Three things move, and one falls:
+
+| | novice | skilled | elite | ace |
+| --- | --- | --- | --- | --- |
+| grip it believes it has | 0.30 | 0.48 | 0.70 | 1.00 |
+| turn rate it may ask for | 0.60 | 0.80 | 0.95 | 1.00 |
+| appetite for weapons, ramming, blocking | **0.00** | 0.45 | 0.80 | 1.00 |
+| how often it misses a braking point | 1.00 | 0.50 | 0.15 | **0.00** |
+
+The grip scale is **even in corner speed rather than in grip**, because the
+target goes as the square root: those four are 0.55, 0.69, 0.84 and 1.00 of the
+measured corner speed. Novice's 0.30 is not a fraction picked for shape - it is
+about 54, which is what `lateral_accel` was before it was swept, and therefore
+the one point on the scale with a play report behind it.
+
+Aggression is **zero at novice** deliberately. A slow opponent that still shoots
+you in the back is not an easy race, it is an annoying one.
+
+Mistakes are the axis `docs` previously called blocked on the expensive half.
+They are not: a mistake here is holding the throttle through a braking point,
+and the *recovery* needs no code at all, because the controller follows a line
+and getting back to it is the thing it was already doing. `Driver::mistake` is
+an integer countdown, and seed zero never errs so every exact assertion keeps
+measuring the plain line-follower.
+
+Measured on `16_Track`, a minute a run, seven craft, mean speed:
+
+| novice | skilled | elite | ace |
+| --- | --- | --- | --- |
+| 93 | 109 | 119 | 120 |
+
+Nothing wrecked at any level. **`elite` and `ace` are within one per cent**,
+which says the ceiling is no longer the tuning: at that point the field is at
+full throttle 84 per cent of the time and what is left on the table is
+elsewhere - it takes only 20-40 per cent of the track's speed pads, which is
+the next thing worth fixing and is [still unbuilt](#what-an-opponent-still-does-not-get).
+
 ### Pilots you can author
 
 **Every `.toml` file in `$XDG_CONFIG_HOME/oag/pilots/`** - usually

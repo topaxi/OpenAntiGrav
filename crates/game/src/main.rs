@@ -734,6 +734,12 @@ fn main() -> Result<()> {
         ribbon: cli.ribbon,
         collision: cli.collision,
         lod: cli.lod.unwrap_or(settings.graphics.lod),
+        // **From the settings here, not only in the menu path.** `--race`
+        // bypasses the menus entirely, and a difficulty wired only into
+        // `LaunchRace` would be silently ignored by the flag most testing uses.
+        // Same shape as the scheme: an unrecognised token is reported and the
+        // default is used rather than failing the boot.
+        difficulty: resolve_difficulty(&settings),
         opponents: cli.opponents,
         seed: cli.seed,
         pose,
@@ -1086,6 +1092,23 @@ fn run_windowless(
 /// boot. The flag cannot be unrecognised - clap rejects it at parse time
 /// through `ControlScheme`'s `FromStr`, which is why its error message names
 /// the valid values.
+/// How good the opponents are: `[ai] difficulty`, or the default.
+///
+/// An unrecognised token is **reported and ignored** rather than fatal, exactly
+/// as [`resolve_scheme`] handles its own: a profile written by a build with a
+/// level this one does not have should still race.
+fn resolve_difficulty(settings: &settings::Settings) -> oag_ai::Difficulty {
+    let token = &settings.ai.difficulty;
+    oag_ai::Difficulty::from_name(token).unwrap_or_else(|| {
+        let fallback = oag_ai::Difficulty::default();
+        eprintln!(
+            "ignoring [ai] difficulty = {token:?}; using {}",
+            fallback.name()
+        );
+        fallback
+    })
+}
+
 fn resolve_scheme(cli: &Cli, settings: &settings::Settings) -> ControlScheme {
     if let Some(scheme) = cli.scheme {
         return scheme;
@@ -4061,6 +4084,13 @@ impl Session {
                 if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
                     self.race_options.mode = mode;
                 }
+                // Same shape again: an unrecognised level leaves the previous
+                // one in place rather than substituting a default mid-session.
+                if let Some(difficulty) =
+                    oag_ai::Difficulty::from_name(&self.settings.ai.difficulty)
+                {
+                    self.race_options.difficulty = difficulty;
+                }
                 println!("\nloading {}", self.race_options.track);
                 match self.launch_race() {
                     Ok(()) => println!("\n{RACE_KEYS}{ESC_TO_MENU}"),
@@ -4416,6 +4446,7 @@ impl Session {
             "race.class" => self.settings.race.class = text,
             "race.team" => self.settings.race.team = text,
             "race.track" => self.settings.race.track = text,
+            "ai.difficulty" => self.settings.ai.difficulty = text,
             "language" => self.settings.language = Some(text),
             other => {
                 eprintln!("note: nothing applies {other}");

@@ -130,6 +130,10 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // pilot files would agree on the hash and disagree on the race. See
     // `oag_ai::Driver::pilot`.
     hasher.write_u32(driver.pilot);
+    // **And whether it is in the middle of getting one wrong.** A driver
+    // sailing through a braking point it should have taken is about to be
+    // somewhere a driver that braked is not. See `oag_ai::Driver::mistake`.
+    hasher.write_u32(u32::from(driver.mistake));
     write_standing(hasher, standing);
     hasher.write_u8(u8::from(*active));
 }
