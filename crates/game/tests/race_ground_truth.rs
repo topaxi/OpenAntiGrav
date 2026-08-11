@@ -60,7 +60,7 @@ use std::path::{Path, PathBuf};
 
 use oag_core::math::Vec3;
 use oag_game::frontend::states;
-use oag_game::{boot, movie, race};
+use oag_game::{boot, catalogue, movie, race};
 use oag_gameplay::input::{Input, button};
 use oag_physics::{Raycaster, SpeedClass};
 
@@ -1850,4 +1850,226 @@ fn every_difficulty_is_quicker_than_the_one_below_it() {
             easier.1
         );
     }
+}
+
+/// One craft, alone, lapping.
+///
+/// **The benchmark the pace tuning should be judged against**, and the reason
+/// it exists apart from the field tests: with seven craft on the circuit every
+/// number is a mixture of how well a craft drives and how much the traffic cost
+/// it, and the two move in opposite directions when aggression changes. A solo
+/// lap is the driving alone. Tune here first, then check the field.
+///
+/// Returns the best lap the craft managed, in ticks.
+fn solo_lap_ticks(level: oag_ai::Difficulty) -> Option<u64> {
+    solo_lap_on(level, &race::Options::default().track)
+}
+
+/// The same, on a named circuit.
+fn solo_lap_on(level: oag_ai::Difficulty, track: &str) -> Option<u64> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: SpeedClass::Venom,
+        mode: oag_race::Mode::SingleRace,
+        difficulty: level,
+        track: track.to_string(),
+        ..race::Options::default()
+    })
+    .ok()?;
+    let mut race = race::Race::start(loaded.setup);
+    // Everyone but one opponent off the track, so nothing it does is about
+    // anybody else.
+    for slot in 2..8 {
+        race.world.ships[slot].active = false;
+    }
+    race.world.ships[0].active = false;
+
+    let mut best: Option<u64> = None;
+    let mut lap = race.world.ships[1].standing.lap;
+    let mut started = 0u64;
+    for tick in 0..18_000u64 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        let now = race.world.ships[1].standing.lap;
+        if now != lap {
+            if lap > 1 {
+                let taken = tick - started;
+                best = Some(best.map_or(taken, |held: u64| held.min(taken)));
+            }
+            started = tick;
+            lap = now;
+        }
+    }
+    best
+}
+
+/// A solo craft laps, and laps faster at a harder setting.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_solo_craft_laps_faster_at_a_harder_setting() {
+    let Some(novice) = solo_lap_ticks(oag_ai::Difficulty::Novice) else {
+        return;
+    };
+    let ace = solo_lap_ticks(oag_ai::Difficulty::Ace).expect("the image is there");
+    println!(
+        "solo best lap: novice {novice} ticks ({:.1}s), ace {ace} ticks ({:.1}s)",
+        novice as f32 / 60.0,
+        ace as f32 / 60.0
+    );
+    assert!(
+        ace < novice,
+        "an ace should lap quicker alone: {ace} against {novice}"
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn probe_solo() {
+    let t = oag_ai::Tuning::default();
+    let ace = solo_lap_ticks(oag_ai::Difficulty::Ace).unwrap_or(0);
+    panic!(
+        "la={:.0} mtr={:.1} lookmax={:.0} lookspd={:.2} brakeahead={:.1} margin={:.2} -> {ace} ticks ({:.1}s)",
+        t.lateral_accel,
+        t.max_turn_rate,
+        t.look_max,
+        t.look_speed,
+        t.brake_lookahead,
+        t.brake_margin,
+        ace as f32 / 60.0
+    );
+}
+
+/// Every circuit on the disc, one craft, best lap.
+///
+/// **The benchmark that stops a tuning being fitted to one track.** Talon's
+/// Junction is the default and therefore the one every other measurement here
+/// happens to use; a knob that helps there and hurts everywhere else would look
+/// like an improvement right up until someone played a different circuit.
+fn solo_laps_everywhere(level: oag_ai::Difficulty) -> Vec<(String, Option<u64>)> {
+    let Some(image) = image() else {
+        return Vec::new();
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+
+    catalogue::tracks(&definition)
+        .into_iter()
+        .filter(|track| !track.reversed)
+        .map(|track| {
+            let entry = track.entry_name();
+            (track.id.clone(), solo_lap_on(level, &entry))
+        })
+        .collect()
+}
+
+/// Every craft starts on its own racing line, on **every** circuit.
+///
+/// **The test that was missing, and the bug it would have caught was severe.**
+/// `Driver::drive` locates a craft with a 48-sample *window* around its last
+/// index - deliberately, so a circuit that passes over itself cannot make a
+/// craft latch onto a stacked section. `Driver::index` therefore has to start
+/// somewhere near the truth, and it did not: it started at zero, so a grid
+/// sitting at sample 2,500 never found itself and steered at whatever piece of
+/// track it believed it was on.
+///
+/// It went unnoticed because every other test here runs the default circuit,
+/// and the default circuit's start line happens to sit near sample zero. On the
+/// disc's twelve circuits the field began between 280 and 10,862 units from its
+/// own racing line on eight of them, and on six it never got going at all -
+/// 300 units of travel in a minute, and on one the craft ground itself to
+/// destruction.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_craft_starts_on_its_line_on_every_circuit() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+
+    let mut checked = 0;
+    for track in catalogue::tracks(&definition)
+        .into_iter()
+        .filter(|track| !track.reversed)
+    {
+        let Ok(loaded) = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: SpeedClass::Venom,
+            mode: oag_race::Mode::SingleRace,
+            track: track.entry_name(),
+            ..race::Options::default()
+        }) else {
+            continue;
+        };
+        let race = race::Race::start(loaded.setup);
+        checked += 1;
+
+        for slot in 1..race.ship_count() as usize {
+            let ship = &race.world.ships[slot];
+            let sample = race
+                .spline()
+                .sample(ship.driver.index as usize)
+                .expect("the driver stands on a sample");
+            let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
+            let line = Vec3::from_array(sample.pos)
+                - oag_formats::track::HOVER_LIFT * Vec3::from_array(sample.down)
+                + sample.racing_line * lateral;
+            let off = (ship.physics.body.position - line).length();
+            // A grid is staggered across and along the track, so this is
+            // "somewhere on the start line" rather than "on the racing line".
+            assert!(
+                off < 120.0,
+                "{}: slot {slot} starts {off:.0} units from the sample its \
+                 driver thinks it is on",
+                track.id
+            );
+        }
+    }
+    assert!(checked >= 10, "only {checked} circuits were loadable");
+}
+
+/// How many of the disc's circuits a lone craft can actually get round.
+///
+/// **A record of a known-incomplete state, pinned so it cannot quietly get
+/// worse.** As of 2026-08-11 the answer is five of twelve. It was two before
+/// `Driver::index` was seeded from the spawn - see
+/// [`every_craft_starts_on_its_line_on_every_circuit`] - and the seven that
+/// still fail are no longer *stuck*: they cover seven to eleven thousand units
+/// in a minute at racing speed. What they do not do is complete a lap, and on
+/// those circuits the craft sits thousands of units from the sample its driver
+/// believes it is on, which points at the racing line or the lap ring rather
+/// than at the controller. That is the next thing to chase.
+///
+/// The bound is deliberately "no worse than today" rather than a target: a
+/// number that asserted twelve would be a test that fails for a reason already
+/// written down, which is noise rather than signal.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
+    let laps = solo_laps_everywhere(oag_ai::Difficulty::Ace);
+    if laps.is_empty() {
+        return;
+    }
+    let lapped: Vec<&String> = laps
+        .iter()
+        .filter(|(_, ticks)| ticks.is_some())
+        .map(|(id, _)| id)
+        .collect();
+    let missed: Vec<&String> = laps
+        .iter()
+        .filter(|(_, ticks)| ticks.is_none())
+        .map(|(id, _)| id)
+        .collect();
+    println!("lapped: {lapped:?}\nstill cannot: {missed:?}");
+    assert!(
+        lapped.len() >= 5,
+        "only {} of {} circuits were lapped, which is worse than the recorded \
+         five: {missed:?}",
+        lapped.len(),
+        laps.len()
+    );
 }

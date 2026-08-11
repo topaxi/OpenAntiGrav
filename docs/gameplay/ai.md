@@ -755,6 +755,51 @@ score, no spark. Its payoff is purely positional. The natural follow-on is three
 lines: bump the *victim's* provocation off the contact that is already being
 computed, which would make the feature social in both directions.
 
+### The field only got round two circuits in twelve
+
+**Found 2026-08-11, and it had been true the whole time.** `Driver::drive`
+locates a craft with a 48-sample *window* around its last index - deliberately,
+so a circuit that passes over itself cannot make a craft latch onto a stacked
+section - and `Driver::index` started at **zero**. A grid sitting at sample
+2,500 therefore never found itself, and steered at whatever piece of track it
+believed it was on.
+
+It went unnoticed because every test on this page runs the default circuit, and
+the default circuit's start line happens to sit near sample zero. Measured
+across the disc's twelve circuits, one craft alone for a minute each:
+
+| | before | after |
+| --- | --- | --- |
+| circuits where the craft never got going (300-900 units travelled) | **six**, one of them grinding itself to destruction | none |
+| circuits starting more than 280 units off their own racing line | eight | none |
+| circuits where a lone craft completes a lap | two | **five** |
+
+The fix is one line - seed the index with a search over the whole line at spawn,
+where the cost is paid once - and
+`race_ground_truth::every_craft_starts_on_its_line_on_every_circuit` is the test
+that was missing.
+
+**Seven circuits still do not complete a lap**, and they are no longer stuck:
+they cover seven to eleven thousand units a minute at racing speed. On those the
+craft sits thousands of units from the sample its driver thinks it is on, which
+points at the racing line or the lap ring rather than at the controller.
+`a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` pins the five so
+the number cannot quietly fall again.
+
+### A solo lap is the benchmark
+
+Pace should be judged on **one craft, alone**, before it is judged in traffic.
+With seven craft out there every number mixes how well a craft drives with how
+much the traffic cost it, and those move in *opposite* directions when
+aggression changes - which is how a field measurement came to report that
+raising `lateral_accel` past 180 made things worse when a solo lap says it
+keeps helping (42.3s at 180, 40.7s at 220, 40.1s at 260). The field number was
+measuring interference.
+
+`solo_lap_ticks` is that benchmark and `a_solo_craft_laps_faster_at_a_harder_setting`
+is its regression: on Talon's Junction a novice laps in 53.8s and an ace in
+42.3s.
+
 ### Difficulty
 
 Four levels - `novice`, `skilled`, `elite`, `ace` - chosen on the pre-race page

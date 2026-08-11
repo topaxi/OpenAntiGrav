@@ -2619,6 +2619,7 @@ impl Race {
         // nobody authored and the seven opponents would be a guess wearing the
         // shape of a measurement.
         let mut ai_pilots = [oag_ai::Pilot::BALANCED; oag_gameplay::MAX_SHIPS];
+        let line = racing_line(&spline);
         let mut pilot_names: [String; oag_gameplay::MAX_SHIPS] = Default::default();
         // The built-ins, plus whatever the player has authored. A directory
         // that cannot be read is not a reason to refuse to race: the built-ins
@@ -2650,6 +2651,20 @@ impl Race {
                 // world's generator - see `oag_ai::Driver::for_slot`.
                 let slot = index as u32 + 1;
                 opponent.driver = oag_ai::Driver::for_slot(seed, slot);
+                // **Where on the line this craft actually is**, found once with
+                // a search over the whole line rather than left at zero.
+                //
+                // `Driver::drive` searches a 48-sample *window* around the last
+                // index, deliberately, so a track that passes near itself
+                // cannot make a craft latch onto a stacked section. That window
+                // is also why the starting value matters: a driver that begins
+                // at sample zero when the grid is at sample 2,500 never finds
+                // itself, and steers at the piece of circuit it thinks it is
+                // on. Measured before this line existed - on eight of the
+                // disc's twelve circuits the field sat between 280 and 10,862
+                // units from its own racing line, and only the two whose start
+                // line happens to sit near sample zero worked.
+                opponent.driver.index = line.nearest(pose.position, 0, line.len()) as u32;
                 // **And the character it is a variation on**, drawn from the
                 // race seed through a stream of its own. Sharing the driver
                 // seed's would tie a craft's pilot to its personality, so the
@@ -2689,7 +2704,7 @@ impl Race {
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase);
 
         Self {
-            racing_line: racing_line(&spline),
+            racing_line: line,
             // **Degraded from the measured tuning**, never boosted toward it -
             // see `oag_ai::Difficulty`. At the top level this is the
             // measurement unchanged.
