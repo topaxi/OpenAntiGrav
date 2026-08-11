@@ -986,11 +986,27 @@ pub fn trail_glow(intensity: f32, segment: usize) -> f32 {
     intensity * TRAIL_GLOW_GAIN * fall.max(0.0)
 }
 
-/// The maximum vertices [`Pipeline`]'s buffer holds: the flare's one quad.
+/// How many camera-facing quads [`Pipeline`]'s buffer holds.
 ///
-/// One, not one per layer: the three staggered ramps are the ribbon's, and
+/// **The flare itself is one**, and one is what the original writes: not one per
+/// layer, because the three staggered ramps are the ribbon's and
 /// `ExhaustFlare_Draw` writes exactly four vertices sharing one colour.
-pub const MAX_VERTICES: usize = 6;
+///
+/// The rest of the budget is [`sprite`]'s, which is **not** recovered - it is
+/// there so a caller with something else to billboard reuses this pipeline
+/// rather than standing up a second one. Sized for a projectile and a blast
+/// flash per slot of `oag_gameplay::projectile::MAX_PROJECTILES`, with room to
+/// spare; the number is duplicated rather than imported because this crate must
+/// not depend on the simulation.
+///
+/// **A too-small budget here truncates silently** - [`Pipeline::upload`] clamps
+/// with `min` - which is exactly how the projectile sprites first came out
+/// invisible with nothing in the logs. Anything appending to this buffer has to
+/// be counted here.
+pub const MAX_SPRITES: usize = 48;
+
+/// The maximum vertices [`Pipeline`]'s buffer holds, six per [`MAX_SPRITES`].
+pub const MAX_VERTICES: usize = MAX_SPRITES * 6;
 
 /// The ribbon's vertex budget: three layers of `TRAIL_SAMPLES - 1` segments,
 /// each a four-quad diamond tube.
