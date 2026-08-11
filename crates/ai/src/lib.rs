@@ -72,10 +72,12 @@
 //! `noise.rs`.
 
 mod driver;
+mod field;
 mod line;
 mod noise;
 mod pilot;
 
-pub use driver::{Context, Driver, Personality, Tuning};
+pub use driver::{AWARENESS_RANGE, Context, Driver, Personality, Tuning};
+pub use field::{Field, Rival};
 pub use line::{Aim, Frame, Line};
 pub use pilot::{Lean, Pilot, Span, pilot_for_slot};

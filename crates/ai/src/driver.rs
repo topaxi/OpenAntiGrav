@@ -24,6 +24,7 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_physics::{ShipControls, ShipState};
 
+use crate::field::Field;
 use crate::line::{Aim, Line};
 use crate::noise::wobble;
 use crate::pilot::Pilot;
@@ -212,6 +213,12 @@ pub struct Personality {
     /// Unlike the bias, this **swaps sides with the corner**, which is what a
     /// driver taking a racing line does and what a fixed lean cannot express.
     pub inside: f32,
+    /// How readily this driver moves out of the way of a craft behind it.
+    pub courtesy: f32,
+    /// How readily this driver moves to cover one.
+    pub defence: f32,
+    /// How early it lifts off for a craft close ahead.
+    pub caution: f32,
 }
 
 impl Personality {
@@ -231,6 +238,9 @@ impl Personality {
         trail: 1.0,
         width: 1.0,
         inside: 0.0,
+        courtesy: 0.0,
+        defence: 0.0,
+        caution: 0.0,
     };
 
     /// Derives a personality from a seed.
@@ -301,6 +311,9 @@ impl Personality {
         let trail = pilot.trail.draw(rng);
         let width = pilot.width.draw(rng);
         let inside = pilot.inside.draw(rng);
+        let courtesy = pilot.courtesy.draw(rng);
+        let defence = pilot.defence.draw(rng);
+        let caution = pilot.caution.draw(rng);
 
         Self {
             line_bias,
@@ -312,6 +325,9 @@ impl Personality {
             trail,
             width,
             inside,
+            courtesy,
+            defence,
+            caution,
         }
     }
 }
@@ -335,6 +351,8 @@ pub struct Context<'a> {
     pub tuning: &'a Tuning,
     /// The character this craft is drawn from.
     pub pilot: &'a Pilot,
+    /// What this craft can see of the rest of the grid.
+    pub field: &'a Field,
 }
 
 impl<'a> Context<'a> {
@@ -345,6 +363,7 @@ impl<'a> Context<'a> {
             line,
             tuning,
             pilot: &Pilot::BALANCED,
+            field: &Field::EMPTY,
         }
     }
 }
@@ -476,6 +495,7 @@ impl Driver {
         let curvature = line.max_curvature(index, window, look * 0.5);
         let target = corner_target(curvature, tuning, &personality);
         let (thrust, brake) = throttle(speed, target, tuning);
+        let thrust = thrust * self.caution(ctx, &personality);
         let differential = trail(&steer, speed, target, tuning, &personality);
         let (airbrake_left, airbrake_right) = airbrakes(brake, differential, tuning.brake_floor);
 
@@ -583,6 +603,93 @@ impl Driver {
     /// line's own shape and world up is exactly the mistake `docs/formats/track.md`
     /// records: it is wrong the moment the track rolls. A line with no corridor
     /// is a synthetic one, and every craft on it drives it exactly.
+    /// How much of its thrust this driver keeps when it is closing on a craft
+    /// in front, `0.0..=1.0`.
+    ///
+    /// **A lift, never a brake.** Braking hard mid-corner for a craft ahead
+    /// spends the grip that was holding the corner, so the cure would put the
+    /// craft in the scenery rather than into the back of a rival. Lifting off
+    /// is what a driver actually does, and the speed target still owns the
+    /// braking.
+    ///
+    /// This axis exists because [`Self::social`] and
+    /// [`Personality::inside`] both sometimes move craft *toward* each other,
+    /// and nothing else in this controller reacts to a closing gap at all.
+    fn caution(&self, ctx: &Context<'_>, personality: &Personality) -> f32 {
+        if personality.caution <= 0.0 {
+            return 1.0;
+        }
+        let Some(rival) = ctx.field.ahead else {
+            return 1.0;
+        };
+        if rival.gap <= 0.0 || rival.gap >= CAUTION_RANGE || rival.closing <= 0.0 {
+            return 1.0;
+        }
+        let closeness = (CAUTION_RANGE - rival.gap) / CAUTION_RANGE;
+        let closing = (rival.closing / CLOSING_FULL).clamp(0.0, 1.0);
+        (1.0 - personality.caution * closeness * closing).clamp(0.0, 1.0)
+    }
+
+    /// Yielding and blocking, as **one signed lean** toward or away from the
+    /// craft behind, in the same fraction-of-the-room units as everything else
+    /// in [`Self::drift`].
+    ///
+    /// **One term rather than two, and that is the design.** Courtesy moves
+    /// away from the side a rival is on and defence moves toward it; as two
+    /// separately gated terms they fight each other and the craft jitters
+    /// between them. As two signs of one number a pilot simply sits somewhere
+    /// on the axis, and `defence - courtesy` is where.
+    ///
+    /// Continuous in the gap, so it needs no slew limiter and no state on the
+    /// driver: it fades in as a rival closes and fades out as it drops away.
+    ///
+    /// Three things it will not do:
+    ///
+    /// - **Act mid-corner.** Both are straight-line manoeuvres; where the
+    ///   corridor is a couple of metres wide and both craft are at the grip
+    ///   limit, moving sideways on purpose is how two craft end up in the
+    ///   scenery. The gate is the same normalised `bend` the inside line uses.
+    /// - **React equally to a craft holding station and one closing.** Closing
+    ///   earns the rest of the lean on top of [`PRESENCE_SHARE`]; proximity
+    ///   alone is what triggers it, because a craft sitting on another's tail
+    ///   at matched pace is exactly when yielding matters.
+    /// - **Guess a side from noise.** A rival directly astern has an offset of
+    ///   about zero and its *sign* is meaningless, so inside a deadband the
+    ///   side comes from the corner ahead instead - yielding toward its
+    ///   outside, which is where an overtaker does not want to be.
+    fn social(&self, ctx: &Context<'_>, personality: &Personality, bend: f32) -> f32 {
+        let Some(rival) = ctx.field.behind else {
+            return 0.0;
+        };
+        let lean = personality.defence - personality.courtesy;
+        if lean == 0.0 {
+            return 0.0;
+        }
+
+        let gap = rival.gap.abs();
+        if gap >= AWARENESS_RANGE {
+            return 0.0;
+        }
+        let closeness = (AWARENESS_RANGE - gap) / AWARENESS_RANGE;
+        let closing = (rival.closing / CLOSING_FULL).clamp(0.0, 1.0);
+        let pressure = closeness * (PRESENCE_SHARE + (1.0 - PRESENCE_SHARE) * closing);
+        // `bend` is already normalised by `FULL_BEND` and clamped, so this is
+        // one at a corner worth the name and zero on a straight.
+        let corner_gate = 1.0 - bend.abs().min(1.0);
+
+        // A rival dead astern gives a sign that is rounding noise. Fall back to
+        // the corner: its outside is the side an overtaker least wants.
+        let side = if rival.offset.abs() > ASTERN_DEADBAND {
+            rival.offset.signum()
+        } else if bend.abs() > f32::EPSILON {
+            -bend.signum()
+        } else {
+            return 0.0;
+        };
+
+        lean * side * pressure * corner_gate
+    }
+
     fn drift(&self, aim: &Aim, look: f32, ctx: &Context<'_>, personality: &Personality) -> Vec3 {
         let Some(frame) = aim.corridor else {
             return Vec3::ZERO;
@@ -607,7 +714,8 @@ impl Driver {
             / FULL_BEND)
             .clamp(-1.0, 1.0);
         let inside = personality.inside * bend;
-        let wanted = (personality.line_bias + wobbled + inside).clamp(-1.0, 1.0);
+        let social = self.social(ctx, personality, bend);
+        let wanted = (personality.line_bias + wobbled + inside + social).clamp(-1.0, 1.0);
         // Every term above is in the same fraction-of-the-room units and is
         // clamped once here, so no term can fight the corridor: the clamp below
         // is the backstop and not the mechanism.
@@ -615,6 +723,40 @@ impl Driver {
         frame.lateral * frame.clamp(offset)
     }
 }
+
+/// How far a rival has to be behind before it stops being this driver's
+/// problem, in units along the track.
+///
+/// Ours. Wide enough that a craft closing at a real speed difference is seen
+/// before it arrives, narrow enough that a driver is not defending against
+/// somebody a corner away.
+pub const AWARENESS_RANGE: f32 = 120.0;
+
+/// The closing speed, in units a second, at which a rival is taken as closing
+/// as hard as it is going to.
+///
+/// Small on purpose. Two craft racing each other differ by a few units a
+/// second, not by tens, so a threshold set at "obviously catching up" leaves
+/// the term reading as zero for the whole of a real battle.
+const CLOSING_FULL: f32 = 8.0;
+
+/// How much of the social lean a rival gets for merely being close, before any
+/// of it is earned by closing.
+///
+/// **Not zero, and that is the point.** A craft sitting on another's tail at
+/// matched pace is exactly when yielding matters, and a term gated purely on
+/// closing speed would do nothing there - a shy driver would only move over for
+/// someone who was going to get past anyway.
+const PRESENCE_SHARE: f32 = 0.5;
+
+/// How far off-centre a rival has to sit before the *sign* of its offset means
+/// anything. Ours, and about a hull's width.
+const ASTERN_DEADBAND: f32 = 2.0;
+
+/// How close a craft ahead has to be before a driver lifts for it, in units
+/// along the track. Shorter than [`AWARENESS_RANGE`]: a craft two seconds up
+/// the road is not something to lift for.
+const CAUTION_RANGE: f32 = 45.0;
 
 /// The steering command, and the turn-rate error it was computed from.
 ///
@@ -779,7 +921,248 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::field::Rival;
     use crate::line::Frame;
+
+    fn rival_behind(offset: f32, gap: f32, closing: f32) -> Field {
+        Field {
+            behind: Some(Rival {
+                slot: 2,
+                gap: -gap,
+                offset,
+                closing,
+                range: gap,
+                cos_bearing: -1.0,
+            }),
+            ..Field::EMPTY
+        }
+    }
+
+    fn across(personality: &Personality, line: &Line, field: &Field) -> f32 {
+        let tuning = Tuning::default();
+        let aim = line.aim(0, 40.0);
+        let lateral = aim.corridor.expect("fixture has a corridor").lateral;
+        Driver::seeded(11)
+            .drift(
+                &aim,
+                40.0,
+                &Context {
+                    line,
+                    tuning: &tuning,
+                    pilot: &Pilot::BALANCED,
+                    field,
+                },
+                personality,
+            )
+            .dot(lateral)
+    }
+
+    /// Shy yields: it moves to the *other* side from the craft behind it.
+    #[test]
+    fn a_shy_driver_moves_away_from_the_craft_behind_it() {
+        let line = straight_with_corridor();
+        let shy = Personality {
+            courtesy: 0.8,
+            ..Personality::NEUTRAL
+        };
+        // A rival to the right, closing hard and close.
+        let alone = across(&shy, &line, &Field::EMPTY);
+        let pressed = across(&shy, &line, &rival_behind(4.0, 20.0, 20.0));
+        assert!(
+            pressed < alone - 0.5,
+            "a shy driver should move left of a rival on its right: {pressed} against {alone}"
+        );
+    }
+
+    /// Aggressive covers: it moves *onto* the side the craft behind is on.
+    #[test]
+    fn an_aggressive_driver_covers_the_line_of_the_craft_behind_it() {
+        let line = straight_with_corridor();
+        let mean = Personality {
+            defence: 0.8,
+            ..Personality::NEUTRAL
+        };
+        let alone = across(&mean, &line, &Field::EMPTY);
+        let pressed = across(&mean, &line, &rival_behind(4.0, 20.0, 20.0));
+        assert!(
+            pressed > alone + 0.5,
+            "a defending driver should cover a rival on its right: {pressed} against {alone}"
+        );
+    }
+
+    /// The two are one axis, so a pilot with equal measures of both does
+    /// nothing rather than jittering between them.
+    #[test]
+    fn equal_courtesy_and_defence_cancel_instead_of_fighting() {
+        let line = straight_with_corridor();
+        let torn = Personality {
+            courtesy: 0.7,
+            defence: 0.7,
+            ..Personality::NEUTRAL
+        };
+        assert_eq!(
+            across(&torn, &line, &rival_behind(4.0, 20.0, 20.0)),
+            across(&torn, &line, &Field::EMPTY)
+        );
+    }
+
+    #[test]
+    fn a_driver_ignores_a_rival_beyond_its_awareness_range() {
+        let line = straight_with_corridor();
+        let shy = Personality {
+            courtesy: 0.8,
+            ..Personality::NEUTRAL
+        };
+        let far = rival_behind(4.0, AWARENESS_RANGE + 1.0, 20.0);
+        assert_eq!(
+            across(&shy, &line, &far),
+            across(&shy, &line, &Field::EMPTY)
+        );
+    }
+
+    /// A rival sitting on the tail at matched pace still earns a lean - that is
+    /// when yielding matters most - but less than one actually catching up.
+    #[test]
+    fn a_rival_holding_station_earns_less_of_a_lean_than_one_closing() {
+        let line = straight_with_corridor();
+        let shy = Personality {
+            courtesy: 0.8,
+            ..Personality::NEUTRAL
+        };
+        let alone = across(&shy, &line, &Field::EMPTY);
+        let holding = across(&shy, &line, &rival_behind(4.0, 20.0, 0.0));
+        let catching = across(&shy, &line, &rival_behind(4.0, 20.0, 20.0));
+
+        assert!(
+            (holding - alone).abs() > 0.1,
+            "a rival on the tail should still be yielded to: {holding} against {alone}"
+        );
+        assert!(
+            (catching - alone).abs() > (holding - alone).abs(),
+            "and one catching up should earn more: {catching} against {holding}"
+        );
+    }
+
+    /// Blocking where the corridor is narrow and both craft are at the grip
+    /// limit is how two craft end up in the scenery.
+    #[test]
+    fn neither_yielding_nor_blocking_happens_mid_corner() {
+        let mean = Personality {
+            defence: 0.9,
+            ..Personality::NEUTRAL
+        };
+        let pressing = rival_behind(4.0, 20.0, 20.0);
+        let lean =
+            |line: &Line| across(&mean, line, &pressing) - across(&mean, line, &Field::EMPTY);
+
+        // The gate is proportional to the corner, so take both ends of it.
+        let on_a_straight = lean(&straight_with_corridor());
+        assert!(
+            on_a_straight > 0.5,
+            "a defending driver should cover on a straight, got {on_a_straight}"
+        );
+
+        let in_a_corner = lean(&right_hand_corner(35.0));
+        assert!(
+            in_a_corner.abs() < 0.05,
+            "a corner worth the name should hold it off, got {in_a_corner}"
+        );
+
+        // And a gentle bend in between, so this is a gate and not a switch.
+        let on_a_bend = lean(&right_hand_corner(120.0));
+        assert!(
+            on_a_bend.abs() < on_a_straight && on_a_bend.abs() > in_a_corner.abs(),
+            "the gate should scale: straight {on_a_straight}, bend {on_a_bend}, corner {in_a_corner}"
+        );
+    }
+
+    /// A rival dead astern has an offset whose sign is rounding noise, so the
+    /// side has to come from somewhere else.
+    #[test]
+    fn a_rival_squarely_behind_is_yielded_toward_the_outside_of_the_corner() {
+        // A gentle bend, so the corner gate is open but `bend` still has a sign.
+        let line = straight_with_corridor();
+        let shy = Personality {
+            courtesy: 0.8,
+            ..Personality::NEUTRAL
+        };
+        // Dead astern on a straight: no side to pick from either source, so no
+        // lean at all rather than a coin flip.
+        let astern = rival_behind(0.0, 20.0, 20.0);
+        assert_eq!(
+            across(&shy, &line, &astern),
+            across(&shy, &line, &Field::EMPTY)
+        );
+    }
+
+    #[test]
+    fn a_driver_lifts_for_a_craft_it_is_closing_on() {
+        let tuning = Tuning::default();
+        let line = straight_with_corridor();
+        let wary = Personality {
+            caution: 0.8,
+            ..Personality::NEUTRAL
+        };
+        let closing = Field {
+            ahead: Some(Rival {
+                slot: 1,
+                gap: 10.0,
+                offset: 0.0,
+                closing: 20.0,
+                range: 10.0,
+                cos_bearing: 1.0,
+            }),
+            ..Field::EMPTY
+        };
+        let context = |field| Context {
+            line: &line,
+            tuning: &tuning,
+            pilot: &Pilot::BALANCED,
+            field,
+        };
+        let driver = Driver::default();
+        assert_eq!(driver.caution(&context(&Field::EMPTY), &wary), 1.0);
+        let lifted = driver.caution(&context(&closing), &wary);
+        assert!(lifted < 0.5, "a wary driver should lift, got {lifted}");
+        // And a driver with no caution at all keeps its foot in.
+        assert_eq!(
+            driver.caution(&context(&closing), &Personality::NEUTRAL),
+            1.0
+        );
+    }
+
+    /// The whole of stage 3 has to be invisible to a driver that cannot see
+    /// anybody, or every test written before it starts measuring something else.
+    #[test]
+    fn a_driver_that_sees_nobody_drives_exactly_the_line_it_did_before() {
+        let tuning = Tuning::default();
+        let line = straight_with_corridor();
+        let state = craft(Vec3::new(6.0, 0.0, 0.0), 40.0);
+        for (name, pilot) in Pilot::BUILT_IN {
+            let mut with_sight = Driver::seeded(5);
+            let mut blind = Driver::seeded(5);
+            let seen = with_sight.drive(
+                &state,
+                &Context {
+                    line: &line,
+                    tuning: &tuning,
+                    pilot: &pilot,
+                    field: &Field::EMPTY,
+                },
+            );
+            let unseen = blind.drive(
+                &state,
+                &Context {
+                    line: &line,
+                    tuning: &tuning,
+                    pilot: &pilot,
+                    field: &Field::default(),
+                },
+            );
+            assert_eq!(seen, unseen, "{name}");
+        }
+    }
+
     use oag_core::math::{Quat, Vec3};
     use oag_physics::Body;
 
@@ -1157,8 +1540,10 @@ mod tests {
         let corridor = points
             .iter()
             .map(|_| Frame {
-                // The line runs along `-Z`, so the driver's right is `-X`.
-                lateral: Vec3::NEG_X,
+                // The line runs along `-Z` and `Body::right` is `orientation *
+                // X`, so the driver's right is `+X`. The disc's own
+                // `sample.lateral` points the same way.
+                lateral: Vec3::X,
                 left: -8.0,
                 right: 8.0,
             })
@@ -1171,15 +1556,13 @@ mod tests {
     /// Built the same way `tests/closed_loop.rs` builds the oval's: the chord
     /// direction crossed with world up, which is only legitimate because this
     /// fixture is flat.
-    fn right_hand_corner() -> Line {
-        let radius = 120.0f32;
+    fn right_hand_corner(radius: f32) -> Line {
         let points: Vec<Vec3> = (0..96)
             .map(|step| {
                 let angle = step as f32 * 0.02;
-                // Toward `-X`, which is the driver's right on a line running
-                // along `-Z` - the same convention `straight_with_corridor`
-                // states and `Y.cross(along)` produces.
-                Vec3::new(radius * angle.cos() - radius, 0.0, -radius * angle.sin())
+                // Toward `+X`, which is the driver's right on a line running
+                // along `-Z`.
+                Vec3::new(radius - radius * angle.cos(), 0.0, -radius * angle.sin())
             })
             .collect();
         let corridor = points
@@ -1190,7 +1573,7 @@ mod tests {
                 let here = points[at.min(points.len() - 2)];
                 let along = (next - here).normalize_or_zero();
                 Frame {
-                    lateral: Vec3::Y.cross(along).normalize_or_zero(),
+                    lateral: along.cross(Vec3::Y).normalize_or_zero(),
                     left: -8.0,
                     right: 8.0,
                 }
@@ -1215,7 +1598,7 @@ mod tests {
             ..Personality::NEUTRAL
         };
 
-        let corner = right_hand_corner();
+        let corner = right_hand_corner(120.0);
         let aim = corner.aim(0, 40.0);
         let lateral = aim.corridor.expect("the fixture has a corridor").lateral;
         let across = |personality: &Personality| {
@@ -1347,7 +1730,7 @@ mod tests {
                 driver.phase = tick;
                 let across = driver
                     .drift(&aim, 40.0, &Context::new(&line, &tuning), &personality)
-                    .dot(Vec3::NEG_X);
+                    .dot(Vec3::X);
                 assert!(
                     across.abs() <= room + 1e-3,
                     "seed {seed} at tick {tick} aimed {across} across a budget of {room}"
@@ -1390,7 +1773,7 @@ mod tests {
             driver.phase = tick;
             let across = driver
                 .drift(&aim, 40.0, &Context::new(&line, &tuning), &personality)
-                .dot(Vec3::NEG_X);
+                .dot(Vec3::X);
             low = low.min(across);
             high = high.max(across);
         }

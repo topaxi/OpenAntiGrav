@@ -565,10 +565,10 @@ race's seed and the craft's slot - so the same race fields the same eight
 characters on every replay, and drawing a personality from `World::rng` (which
 would move every later pickup roll) was deliberately not done.
 
-**And the field still has no idea another craft exists.** The spread is what
-keeps them apart, not a rule that keeps them apart: there is no avoidance, no
-overtaking line and no defending. Two personalities that happen to pick similar
-lines will run nose to tail, the same way two human drivers would.
+**Until 2026-08-11 the field had no idea another craft existed.** What it has
+now is [a view of its rivals](#what-a-driver-can-see-of-the-grid); what it still
+has not got is an overtaking line, or anything that touches another craft on
+purpose.
 
 ### Pilots, and the personalities drawn inside them
 
@@ -602,8 +602,70 @@ pilot consumes the *same* draws in the same order, so an axis a pilot holds fixe
 still spends its draw (`Span::fixed`, `Lean`) - skipping it would silently
 re-roll every later axis, and only for that pilot.
 
-`shy`'s yielding is not built yet: it needs to know a rival is behind, which is
-the next stage. What the pilot is today is the driving style that goes with it.
+### What a driver can see of the grid
+
+`oag_ai::Field` is three optional rivals - the nearest **ahead**, the nearest
+**behind**, and one **alongside** - plus this craft's own race position.
+`Race::field_for` builds it; the driver is handed it the same way it is handed
+its line, because `oag-ai` depends on `oag-core` and `oag-physics` and on
+nothing that knows what a race is.
+
+Three things about the shape of it:
+
+- **Two geometries, because they disagree.** `gap` and `offset` are measured
+  along the track, out of `oag_race::Standing::distance`, so they count laps and
+  stay meaningful round a bend - that is what a decision about yielding wants.
+  `range` and `cos_bearing` are the straight-line geometry, which is what a
+  projectile flies through. The bearing is a **cosine and never an angle**; the
+  transcendental is forbidden.
+- **`Field::EMPTY` when the track has no closed ring.** A guessed gap would put
+  a craft half a lap away in the mirror and have a driver defend against it.
+- **Alongside is exclusive.** A craft level with this one is not something to
+  defend against or lift for; it is something not to touch.
+
+Three axes spend it:
+
+| Axis | What it does |
+| --- | --- |
+| `courtesy` | move **away** from the side a craft behind is on |
+| `defence` | move **toward** it, covering the line |
+| `caution` | lift off - never brake - for a craft close ahead |
+
+**Courtesy and defence are one signed number, not two terms.** They are opposite
+signs of the same quantity, and as two separately gated terms they fight and the
+craft jitters between them; as `defence - courtesy` a pilot simply sits somewhere
+on the axis. It is continuous in the gap, so it needs no slew limiter and no
+state on the driver - it fades in as a rival closes and out as it drops away.
+
+It will not act mid-corner. Blocking where the corridor is a couple of metres
+wide and both craft are at the grip limit is how two craft end up in the
+scenery, so the same normalised `bend` the inside line uses gates it to zero.
+And a rival dead astern has an offset whose sign is rounding noise, so inside a
+deadband the side comes from the corner instead - yielding toward its outside,
+where an overtaker least wants to be.
+
+`caution` **lifts and never brakes**, because braking hard mid-corner spends the
+grip that was holding the corner: the cure would put the craft in the scenery
+rather than into the back of a rival. It is here rather than in a later stage
+because courtesy and defence both sometimes move craft *toward* each other, and
+nothing else in this controller reacts to a closing gap at all.
+
+**A trap this cost, worth knowing before writing another fixture.**
+`Body::right` is `orientation * X`, and the disc's own `sample.lateral` points
+the same way - but every synthetic corridor in the crate was built as
+`Y.cross(along)`, which is the driver's **left**. With symmetric bounds nothing
+notices, and nothing did, until a term needed the sign of an offset and yielded
+the wrong way. The fixtures now use `along.cross(Y)`.
+
+**And the built-ins have to disagree, not merely declare.** Zeroing `courtesy`,
+`defence` and `caution` on all four pilots was tried and every test in the crate
+still passed, because the unit tests build a `Personality` by hand and never go
+near a pilot. Two tests came out of that: one comparing two variants of one
+pilot that differ *only* in the social pair, and one asserting the shipped table
+actually spreads across it.
+
+`shy`'s yielding is what those axes are for. What is still unbuilt is anything
+that touches another craft on purpose, and any weapon aimed at anybody.
 
 ### Pads, and what an opponent does with a pickup
 
@@ -816,6 +878,15 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | Which pilot a slot draws does not track its personality seed | `pilot::tests::the_pilot_a_slot_draws_does_not_track_its_personality_seed`, over 400 races | yes |
 | All four pilots get round the oval on **both** handling fixtures, and the aggressive one out-runs the shy one from every seed | `closed_loop::every_built_in_pilot_gets_round_the_oval`, `an_aggressive_pilot_gets_further_round_than_a_shy_one` | yes |
 | An inside line leans into a corner and does nothing on a straight | `driver::tests::an_inside_line_leans_into_the_corner_and_not_on_a_straight` | yes |
+| A shy driver moves away from the craft behind it and an aggressive one covers it | two tests in `driver::tests` | yes |
+| Equal courtesy and defence cancel instead of fighting | `driver::tests::equal_courtesy_and_defence_cancel_instead_of_fighting` | yes |
+| Neither yielding nor blocking happens mid-corner, and the gate scales rather than switching | `driver::tests::neither_yielding_nor_blocking_happens_mid_corner` | yes |
+| A rival beyond awareness range, or squarely astern on a straight, is not reacted to | two tests in `driver::tests` | yes |
+| A driver lifts for a craft it is closing on, and one with no caution does not | `driver::tests::a_driver_lifts_for_a_craft_it_is_closing_on` | yes |
+| **A driver that sees nobody drives exactly the line it did before stage 3** | `driver::tests::a_driver_that_sees_nobody_drives_exactly_the_line_it_did_before`, over all four pilots | yes |
+| Two craft that can see each other do not converge, and a yielding leader gives way where a covering one does not | `closed_loop::two_craft_that_can_see_each_other_do_not_converge`, `a_yielding_leader_gives_way_where_a_covering_one_does_not` | yes |
+| The field a driver sees excludes itself, orders rivals correctly, and is empty on a track with no ring | four tests in `race::tests` | yes |
+| The built-in pilots disagree about yielding rather than merely declaring it | `pilot::tests::the_built_in_pilots_disagree_about_yielding` | yes |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls

@@ -51,7 +51,7 @@
 //! disc image. What this says is that the controller is stable against a plant of
 //! the right *shape*, which is the property that was broken.
 
-use oag_ai::{Driver, Frame, Line, Pilot, Tuning};
+use oag_ai::{Driver, Field, Frame, Line, Pilot, Rival, Span, Tuning};
 use oag_core::math::{Quat, Vec3};
 use oag_physics::{
     Body, Environment, Handling, Ray, RaycastHit, Raycaster, ShipState, Surface, params,
@@ -270,7 +270,8 @@ fn cross_track(line: &Line, index: usize, position: Vec3) -> f32 {
     let here = line.point(index);
     let next = line.point(index + 1);
     let along = (next - here).normalize_or_zero();
-    let across = Vec3::Y.cross(along);
+    // The driver's right, matching `Body::right` and the disc - see `oval`.
+    let across = along.cross(Vec3::Y);
     (position - here).dot(across)
 }
 
@@ -366,6 +367,7 @@ fn drive_the_oval_as(
                 line,
                 tuning: &tuning,
                 pilot,
+                field: &oag_ai::Field::EMPTY,
             },
         );
         oag_physics::step(&mut state, &controls, &handling, &env, &Plane, dt);
@@ -882,5 +884,208 @@ fn an_aggressive_pilot_gets_further_round_than_a_shy_one() {
     assert_eq!(
         aggressive_wins, 7,
         "the aggressive pilot should out-run the shy one from every seed"
+    );
+}
+
+/// What two craft driving against each other did.
+///
+/// A struct of its own rather than a pair of [`Run`]s: a `Run` is a lap-counted
+/// solo drive, and reusing it here would mean `progress` silently dropping its
+/// lap term and `peak_error` meaning "on the last tick". Fields that lie are
+/// worse than fields that are missing.
+struct Pair {
+    /// The closest the two ever came after settling, centre to centre.
+    closest: f32,
+    /// The furthest each got from the line, either side, over the whole run.
+    peak_error: [f32; 2],
+    /// The mean signed offset each held, positive to that craft's right.
+    mean_offset: [f32; 2],
+}
+
+/// Two craft on one line, each seeing the other, with the real force law.
+///
+/// **The only test here that closes the social loop.** Every other awareness
+/// test hands a driver a `Field` written by hand and held still; this one
+/// measures each craft from the other's actual state every tick, so a yielding
+/// rule that oscillates, or one that walks two craft into each other, shows up
+/// as a number rather than as an argument.
+///
+/// Craft 0 leads and craft 1 chases from 25 units back and six across, which is
+/// the situation the social rules are about. It is still not the game: a flat
+/// plane, no walls, and the gap measured along the line rather than out of
+/// `oag_race::Standing`.
+fn drive_two_round_the_oval(ticks: usize, pilots: [&Pilot; 2]) -> Pair {
+    let line = oval();
+    let handling = handling_with_airbrakes();
+    let env = Environment::default();
+    let dt = 1.0 / 60.0;
+    let tuning = Tuning::default();
+
+    let heading = (line.point(1) - line.point(0)).normalize_or_zero();
+    let across = heading.cross(Vec3::Y).normalize_or_zero();
+    let start = |sideways: f32, back: f32| {
+        let mut state = ShipState {
+            body: Body {
+                position: line.point(0)
+                    + Vec3::Y * handling.antigrav.ride_height * 0.5
+                    + across * sideways
+                    - heading * back,
+                orientation: Quat::from_rotation_arc(Vec3::NEG_Z, heading),
+                mass: handling.physical.mass,
+                ..Body::default()
+            },
+            ..ShipState::default()
+        };
+        oag_physics::damage::reset(&mut state, &handling.dimensions);
+        state
+    };
+
+    let mut states = [start(3.0, 0.0), start(-3.0, 25.0)];
+    let mut drivers = [Driver::for_slot(0xC0FFEE, 1), Driver::for_slot(0xC0FFEE, 2)];
+    let mut closest = f32::INFINITY;
+    let mut peak_error = [0.0f32; 2];
+    let mut total_offset = [0.0f32; 2];
+    let mut samples = 0usize;
+
+    for tick in 0..ticks {
+        // Each craft's view of the other, measured this tick.
+        let fields: Vec<Field> = (0..2)
+            .map(|me| {
+                let (mine, theirs) = (&states[me], &states[1 - me]);
+                let forward = mine.body.forward();
+                let to_them = theirs.body.position - mine.body.position;
+                let gap = to_them.dot(forward);
+                let range = to_them.length();
+                let approach = theirs.body.linear_velocity.dot(forward)
+                    - mine.body.linear_velocity.dot(forward);
+                let rival = Rival {
+                    slot: (1 - me) as u8,
+                    gap,
+                    offset: to_them.dot(mine.body.right()),
+                    closing: if gap >= 0.0 { -approach } else { approach },
+                    range,
+                    cos_bearing: if range > f32::EPSILON {
+                        to_them.dot(forward) / range
+                    } else {
+                        1.0
+                    },
+                };
+                let mut field = Field {
+                    place: me as u8 + 1,
+                    ..Field::EMPTY
+                };
+                if gap >= 0.0 {
+                    field.ahead = Some(rival);
+                } else {
+                    field.behind = Some(rival);
+                }
+                field
+            })
+            .collect();
+
+        for craft in 0..2 {
+            let controls = drivers[craft].drive(
+                &states[craft],
+                &oag_ai::Context {
+                    line: &line,
+                    tuning: &tuning,
+                    pilot: pilots[craft],
+                    field: &fields[craft],
+                },
+            );
+            oag_physics::step(&mut states[craft], &controls, &handling, &env, &Plane, dt);
+            assert!(
+                states[craft].body.position.is_finite(),
+                "craft {craft} left the world on tick {tick}"
+            );
+        }
+
+        if tick > 60 {
+            closest = closest.min(states[0].body.position.distance(states[1].body.position));
+            for craft in 0..2 {
+                let error = cross_track(
+                    &line,
+                    drivers[craft].index as usize,
+                    states[craft].body.position,
+                );
+                peak_error[craft] = peak_error[craft].max(error.abs());
+                total_offset[craft] += error;
+            }
+            samples += 1;
+        }
+    }
+
+    let divisor = samples.max(1) as f32;
+    Pair {
+        closest,
+        peak_error,
+        mean_offset: [total_offset[0] / divisor, total_offset[1] / divisor],
+    }
+}
+
+/// Two craft that can see each other must not converge on one line - which is
+/// the failure the whole personality system exists to prevent, now that there
+/// are rules deliberately moving craft *toward* each other.
+#[test]
+fn two_craft_that_can_see_each_other_do_not_converge() {
+    for (name, pilot) in Pilot::BUILT_IN {
+        let pair = drive_two_round_the_oval(1800, [&pilot, &Pilot::AGGRESSIVE]);
+        // A hull is 8 long and 4 wide, so this is clear of contact without
+        // asserting they never race each other closely.
+        assert!(
+            pair.closest > 5.0,
+            "{name}: two craft closed to {:.1} units, which is contact",
+            pair.closest
+        );
+        for craft in 0..2 {
+            assert!(
+                pair.peak_error[craft] < 25.0,
+                "{name}: craft {craft} got {:.1} units off its line",
+                pair.peak_error[craft]
+            );
+        }
+    }
+}
+
+/// **The test that proves the social axes are load-bearing rather than
+/// decorative**, and the reason it exists: zeroing `courtesy`, `defence` and
+/// `caution` on all four built-in pilots was tried, and every other test in the
+/// crate still passed. The unit tests build a `Personality` by hand and so
+/// cannot see a pilot that declares nothing.
+///
+/// The chaser sits to the leader's **left** (a negative offset), so a leader
+/// that yields drifts right and one that covers drifts left. `mean_offset` is
+/// positive to the craft's own right, so the yielder must come out above the
+/// coverer.
+///
+/// **Two variants of one pilot rather than two different pilots.** Comparing
+/// `SHY` against `AGGRESSIVE` was tried first and measures the wrong thing:
+/// they differ in `line_bias` and `width` too, and those dominate. These two
+/// declare identical spans on every axis but the social pair, so they draw
+/// identical values for all of them from the same seed, and the only thing that
+/// can move the result is the lean.
+#[test]
+fn a_yielding_leader_gives_way_where_a_covering_one_does_not() {
+    let yielding = Pilot {
+        courtesy: Span::fixed(0.9),
+        defence: Span::fixed(0.0),
+        ..Pilot::BALANCED
+    };
+    let covering = Pilot {
+        courtesy: Span::fixed(0.0),
+        defence: Span::fixed(0.9),
+        ..Pilot::BALANCED
+    };
+    let chaser = Pilot::AGGRESSIVE;
+
+    let gave_way = drive_two_round_the_oval(1800, [&yielding, &chaser]);
+    let covered = drive_two_round_the_oval(1800, [&covering, &chaser]);
+
+    assert!(
+        gave_way.mean_offset[0] > covered.mean_offset[0] + 0.25,
+        "a yielding leader should move away from a chaser on its left, and a \
+         covering one toward it: {:.2} against {:.2}",
+        gave_way.mean_offset[0],
+        covered.mean_offset[0]
     );
 }

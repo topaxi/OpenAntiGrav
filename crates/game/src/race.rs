@@ -285,6 +285,20 @@ pub const BLAST_FLASH_SECONDS: f32 = 0.35;
 /// into a wall. See [`Race::spend_opponent_pickup`].
 const TURBO_SPEED_RATIO: f32 = 2.2;
 
+/// How much clear road a craft wants in front before it spends a Turbo. Ours.
+///
+/// A boost more than doubles the speed, so a craft that fires one at a rival
+/// two hull lengths ahead arrives in its gearbox.
+const TURBO_CLEARANCE: f32 = 60.0;
+
+/// How close along the track two craft have to be to count as alongside rather
+/// than ahead or behind. Ours - about two hull lengths.
+const ALONGSIDE_GAP: f32 = 16.0;
+
+/// And how close across. Ours - about three hull widths, so a craft on the far
+/// side of a wide corridor is not "alongside" in any sense worth acting on.
+const ALONGSIDE_WIDTH: f32 = 12.0;
+
 /// The archive entry name of a team's `.vex` model.
 ///
 /// Assembled the way the loader assembles it, with backslashes, which is what the
@@ -2868,6 +2882,8 @@ impl Race {
     /// pickup it can spend - see [`Self::spend_opponent_pickup`].
     fn step_opponents(&mut self) {
         let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
+        // Once for the whole grid: every craft's view needs the same ordering.
+        let places = self.places();
         for slot in 1..self.world.ship_count as usize {
             if !self.world.ships[slot].active {
                 continue;
@@ -2888,6 +2904,7 @@ impl Race {
             // elimination bookkeeping are all unbuilt. So it coasts, settles and
             // is passed. See `oag_physics::damage::CraftState`.
             let pilot = self.ai_pilots[slot];
+            let field = self.field_for(slot, &places);
             let ship = &mut self.world.ships[slot];
             let handling = ship.handling;
             let position = ship.physics.body.position;
@@ -2898,6 +2915,7 @@ impl Race {
                         line: &self.racing_line,
                         tuning: &self.ai_tuning,
                         pilot: &pilot,
+                        field: &field,
                     },
                 )
             } else {
@@ -2910,7 +2928,7 @@ impl Race {
             let (moved, sweep) = self.pad_sweep(slot, position);
             let pad_hit = self.test_speedup_pads(slot, position, moved, &sweep);
             self.test_weapon_pads(slot, position, moved, &sweep);
-            self.spend_opponent_pickup(slot, &controls);
+            self.spend_opponent_pickup(slot, &controls, &field);
 
             // The driver just located itself, and the line is index-parallel to
             // the sample table, so this costs a lookup rather than a search.
@@ -3013,6 +3031,91 @@ impl Race {
         oag_race::places(&standings, course)
     }
 
+    /// What slot `slot` can see of the rest of the grid.
+    ///
+    /// **`Field::EMPTY` when the track has no closed ring.** `Standing::distance`
+    /// needs a `Course` to mean anything, and a guessed along-track gap is worse
+    /// than none - it would put a craft half a lap away in the mirror and have a
+    /// driver defend against it. The same answer [`Race::places`] gives, for the
+    /// same reason.
+    ///
+    /// Slot order throughout and `total_cmp` for every comparison, so nothing
+    /// here can feed the simulation an order that depends on a hasher.
+    ///
+    /// Takes the places rather than calling [`Race::places`] itself, because the
+    /// caller asks this once per craft and that would sort the standings eight
+    /// times a tick to get the same answer.
+    #[must_use]
+    fn field_for(&self, slot: usize, places: &[u8; MAX_SHIPS]) -> oag_ai::Field {
+        let Some(course) = &self.course else {
+            return oag_ai::Field::EMPTY;
+        };
+        let mine = &self.world.ships[slot];
+        if !mine.active {
+            return oag_ai::Field::EMPTY;
+        }
+        let body = &mine.physics.body;
+        let (forward, right) = (body.forward(), body.right());
+        let my_distance = mine.standing.distance(course);
+        let my_speed = mine.physics.body.linear_velocity.dot(forward);
+
+        let mut field = oag_ai::Field {
+            place: places[slot],
+            ..oag_ai::Field::EMPTY
+        };
+        let (mut best_ahead, mut best_behind, mut best_alongside) =
+            (f32::INFINITY, f32::INFINITY, f32::INFINITY);
+
+        for other in 0..self.world.ship_count as usize {
+            if other == slot || !self.world.ships[other].active {
+                continue;
+            }
+            let them = &self.world.ships[other];
+            let gap = them.standing.distance(course) - my_distance;
+            if gap.abs() >= oag_ai::AWARENESS_RANGE {
+                continue;
+            }
+            let to_them = them.physics.body.position - body.position;
+            let range = to_them.length();
+            // **The rate `|gap|` shrinks**, so it means the same thing for a
+            // craft ahead and one behind - see `oag_ai::Rival::closing`.
+            let their_speed = them.physics.body.linear_velocity.dot(forward);
+            let approach = their_speed - my_speed;
+            let closing = if gap >= 0.0 { -approach } else { approach };
+            let rival = oag_ai::Rival {
+                slot: other as u8,
+                gap,
+                offset: to_them.dot(right),
+                closing,
+                range,
+                cos_bearing: if range > f32::EPSILON {
+                    to_them.dot(forward) / range
+                } else {
+                    1.0
+                },
+            };
+
+            // Alongside first, and exclusively: a craft level with this one is
+            // not something to defend against or lift for, it is something to
+            // avoid touching.
+            if gap.abs() < ALONGSIDE_GAP && rival.offset.abs() < ALONGSIDE_WIDTH {
+                if rival.offset.abs() < best_alongside {
+                    best_alongside = rival.offset.abs();
+                    field.alongside = Some(rival);
+                }
+            } else if gap >= 0.0 {
+                if gap < best_ahead {
+                    best_ahead = gap;
+                    field.ahead = Some(rival);
+                }
+            } else if -gap < best_behind {
+                best_behind = -gap;
+                field.behind = Some(rival);
+            }
+        }
+        field
+    }
+
     /// The lap counter's ring, for a caller that wants to measure against it.
     #[must_use]
     pub fn course(&self) -> Option<&Course> {
@@ -3091,7 +3194,12 @@ impl Race {
     ///
     /// So an opponent never shoots at the player. That is a gap and not a
     /// decision - see `docs/gameplay/ai.md`.
-    fn spend_opponent_pickup(&mut self, slot: usize, controls: &oag_physics::ShipControls) {
+    fn spend_opponent_pickup(
+        &mut self,
+        slot: usize,
+        controls: &oag_physics::ShipControls,
+        field: &oag_ai::Field,
+    ) {
         let Some(weapon) = self.world.ships[slot].pickup.weapon else {
             return;
         };
@@ -3106,7 +3214,14 @@ impl Race {
             // `ShipState::thrust`: that is written by `controls::update` inside
             // the step, which has not run yet, so it still holds last tick's
             // value here.
-            let on_a_straight = controls.thrust >= 1.0;
+            // **`> 0.0`, not `>= 1.0`.** `Driver::caution` scales the throttle
+            // down by an arbitrary fraction when a craft is closing on one
+            // ahead, so an exact comparison against full throttle would have a
+            // craft silently stop using Turbo the moment anybody was within
+            // forty-five units of its nose. What this asks is the question it
+            // always meant: is the speed target letting it accelerate, or is it
+            // lifting for a corner.
+            let on_a_straight = controls.thrust > 0.0;
             let Some(simple) = weapons.simple(weapon) else {
                 return;
             };
@@ -3120,6 +3235,16 @@ impl Race {
             // 160 units ahead. Measured on `16_Track`: one craft in a field of
             // seven did exactly that and left the circuit, and it never touched
             // a wall on the way - see `docs/gameplay/ai.md`.
+            // **And not into the back of somebody.** A separate condition from
+            // the throttle above, deliberately: coupling the two through
+            // `Driver::caution`'s fractional lift would make this depend on how
+            // hard the craft happened to be lifting rather than on whether
+            // there is anyone there.
+            if let Some(ahead) = field.ahead
+                && ahead.gap < TURBO_CLEARANCE
+            {
+                return;
+            }
             let ship = &self.world.ships[slot];
             let speed = ship
                 .physics
@@ -3132,6 +3257,7 @@ impl Race {
                 line: &self.racing_line,
                 tuning: &self.ai_tuning,
                 pilot: &self.ai_pilots[slot],
+                field,
             };
             if !ship
                 .driver
@@ -7418,6 +7544,84 @@ mod tests {
     /// input every step, on the `0..=100` scale
     /// ([`oag_physics::controls::CONTROL_RANGE`]), and it is `0` on a craft that
     /// was spawned and then never stepped - which is what this engine did until
+    /// `Standing::distance` needs a closed ring to mean anything, and a guessed
+    /// gap would put a craft half a lap away in the mirror.
+    #[test]
+    fn a_craft_on_a_track_with_no_ring_sees_an_empty_field() {
+        let mut race = race_with_a_grid();
+        race.course = None;
+        for slot in 0..8 {
+            assert_eq!(
+                race.field_for(slot, &race.places()),
+                oag_ai::Field::EMPTY,
+                "slot {slot}"
+            );
+        }
+    }
+
+    /// A craft cannot be its own rival, and an inactive slot is not on the
+    /// track at all.
+    #[test]
+    fn the_field_a_driver_sees_never_includes_itself() {
+        let race = race_with_a_grid();
+        for slot in 0..8 {
+            let field = race.field_for(slot, &race.places());
+            for rival in [field.ahead, field.behind, field.alongside]
+                .into_iter()
+                .flatten()
+            {
+                assert_ne!(rival.slot as usize, slot, "slot {slot} saw itself");
+                assert!(
+                    race.world.ships[rival.slot as usize].active,
+                    "slot {slot} saw an inactive craft"
+                );
+            }
+        }
+    }
+
+    /// The three channels are exclusive, and each is the nearest of its kind.
+    #[test]
+    fn the_field_a_driver_sees_orders_rivals_by_how_far_round_they_are() {
+        let race = race_with_a_grid();
+        for slot in 0..8 {
+            let field = race.field_for(slot, &race.places());
+            if let Some(ahead) = field.ahead {
+                assert!(ahead.gap >= 0.0, "slot {slot}: an 'ahead' rival is behind");
+            }
+            if let Some(behind) = field.behind {
+                assert!(behind.gap < 0.0, "slot {slot}: a 'behind' rival is ahead");
+            }
+            // A craft counted alongside is in neither of the other two.
+            if let Some(alongside) = field.alongside {
+                for other in [field.ahead, field.behind].into_iter().flatten() {
+                    assert_ne!(other.slot, alongside.slot, "slot {slot}: counted twice");
+                }
+            }
+            // Nothing beyond the horizon.
+            for rival in [field.ahead, field.behind, field.alongside]
+                .into_iter()
+                .flatten()
+            {
+                assert!(rival.gap.abs() < oag_ai::AWARENESS_RANGE, "slot {slot}");
+            }
+        }
+    }
+
+    /// On a grid the whole field is stacked within a couple of hull lengths, so
+    /// every craft has somebody to see - which is what makes the assertions
+    /// above worth making.
+    #[test]
+    fn a_craft_on_the_grid_can_see_somebody() {
+        let race = race_with_a_grid();
+        let seen = (0..8)
+            .filter(|&slot| {
+                let field = race.field_for(slot, &race.places());
+                field.ahead.is_some() || field.behind.is_some() || field.alongside.is_some()
+            })
+            .count();
+        assert_eq!(seen, 8, "only {seen} of eight craft could see a rival");
+    }
+
     /// the AI landed. That the field then goes somewhere is
     /// `race_ground_truth::the_ai_drives_the_field_along_the_track`, on real
     /// geometry, where it can be true.

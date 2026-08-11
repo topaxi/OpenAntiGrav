@@ -149,6 +149,20 @@ pub struct Pilot {
     /// inside line swaps sides with the corner, which is what a racing driver
     /// actually does and what a fixed lean cannot express.
     pub inside: Span,
+    /// How readily this pilot moves **out of the way** of a craft behind it.
+    /// Draw 11.
+    ///
+    /// The opposite sign of [`Pilot::defence`], and the two are resolved as one
+    /// number - see `Driver::social`.
+    pub courtesy: Span,
+    /// How readily this pilot moves **to cover** a craft behind it. Draw 12.
+    pub defence: Span,
+    /// How early this pilot lifts off for a craft close ahead. Draw 13.
+    ///
+    /// **The axis that stops the other two causing pile-ups**: courtesy and
+    /// defence both sometimes move craft toward each other, and nothing else
+    /// here reacts to a closing gap at all.
+    pub caution: Span,
 }
 
 impl Pilot {
@@ -169,6 +183,9 @@ impl Pilot {
         trail: Span::new(0.7, 1.1),
         width: Span::new(0.9, 1.1),
         inside: Span::new(0.0, 0.15),
+        courtesy: Span::new(0.15, 0.40),
+        defence: Span::new(0.15, 0.40),
+        caution: Span::new(0.5, 0.9),
     };
 
     /// Brakes late, commits hard, holds a tight inside line and rotates the
@@ -186,6 +203,9 @@ impl Pilot {
         trail: Span::new(1.0, 1.4),
         width: Span::new(0.7, 0.95),
         inside: Span::new(0.25, 0.55),
+        courtesy: Span::new(0.0, 0.10),
+        defence: Span::new(0.55, 0.95),
+        caution: Span::new(0.15, 0.45),
     };
 
     /// Looks further ahead, brakes earlier, gives up corner speed for a tidy
@@ -201,6 +221,9 @@ impl Pilot {
         trail: Span::new(0.3, 0.7),
         width: Span::new(0.95, 1.15),
         inside: Span::new(0.0, 0.10),
+        courtesy: Span::new(0.35, 0.65),
+        defence: Span::new(0.05, 0.25),
+        caution: Span::new(0.7, 1.0),
     };
 
     /// Runs wide, brakes earliest, and stays out of everyone's way.
@@ -219,6 +242,9 @@ impl Pilot {
         trail: Span::new(0.1, 0.5),
         width: Span::new(1.0, 1.2),
         inside: Span::new(-0.10, 0.05),
+        courtesy: Span::new(0.70, 1.00),
+        defence: Span::new(0.0, 0.08),
+        caution: Span::new(0.8, 1.0),
     };
 
     /// The four, with the names a config file and a menu spell them by.
@@ -251,7 +277,7 @@ impl Pilot {
 
     /// Every span, in draw order. `lean` is not one - it is not a range.
     #[must_use]
-    pub fn spans(&self) -> [Span; 9] {
+    pub fn spans(&self) -> [Span; 12] {
         [
             self.line_bias,
             self.wander,
@@ -262,6 +288,9 @@ impl Pilot {
             self.trail,
             self.width,
             self.inside,
+            self.courtesy,
+            self.defence,
+            self.caution,
         ]
     }
 }
@@ -486,31 +515,67 @@ mod tests {
         }
     }
 
+    /// **Driven off [`Pilot::spans`] rather than a hand-written list**, so it
+    /// cannot go stale when draw fourteen is appended. Writing the axes out by
+    /// hand is how `trail`, `width` and `inside` went uncovered when they
+    /// landed, and then `courtesy`, `defence` and `caution` after them.
     #[test]
     fn every_built_in_pilot_stays_inside_the_ranges_it_declares() {
         for (name, pilot) in Pilot::BUILT_IN {
             for seed in 1..400u32 {
                 let drawn = Personality::from_pilot(&pilot, &mut Rng::new(u64::from(seed)));
-                let within = |value: f32, span: Span| value >= span.low && value <= span.high;
-                assert!(
-                    within(drawn.line_bias.abs(), pilot.line_bias),
-                    "{name} seed {seed}: line_bias {}",
-                    drawn.line_bias
-                );
-                assert!(within(drawn.wander, pilot.wander), "{name} seed {seed}");
-                assert!(within(drawn.look, pilot.look), "{name} seed {seed}");
-                assert!(
-                    within(drawn.commitment, pilot.commitment),
-                    "{name} seed {seed}"
-                );
-                assert!(within(drawn.patience, pilot.patience), "{name} seed {seed}");
-                assert!(within(drawn.trail, pilot.trail), "{name} seed {seed}");
-                assert!(within(drawn.width, pilot.width), "{name} seed {seed}");
-                assert!(within(drawn.inside, pilot.inside), "{name} seed {seed}");
-                // Drawn as a period and stored as its reciprocal.
-                let period = 1.0 / drawn.wander_rate;
-                assert!(within(period, pilot.wander_period), "{name} seed {seed}");
+                // In the same order `spans` returns, which is draw order with
+                // `lean` (not a range) left out. `line_bias` is compared by
+                // magnitude because the lean carries its sign, and
+                // `wander_rate` is the reciprocal of the span it was drawn from.
+                let values = [
+                    drawn.line_bias.abs(),
+                    drawn.wander,
+                    1.0 / drawn.wander_rate,
+                    drawn.look,
+                    drawn.commitment,
+                    drawn.patience,
+                    drawn.trail,
+                    drawn.width,
+                    drawn.inside,
+                    drawn.courtesy,
+                    drawn.defence,
+                    drawn.caution,
+                ];
+                for (axis, (value, span)) in values.iter().zip(pilot.spans()).enumerate() {
+                    assert!(
+                        *value >= span.low && *value <= span.high,
+                        "{name} seed {seed}: axis {axis} drew {value}, outside {span:?}"
+                    );
+                }
             }
+        }
+    }
+
+    /// A built-in table that declared the social axes and gave them all the same
+    /// values would pass every mechanism test above and still field four pilots
+    /// that behave identically when pressed.
+    #[test]
+    fn the_built_in_pilots_disagree_about_yielding() {
+        let lean = |pilot: &Pilot| {
+            let mid = |span: Span| (span.low + span.high) * 0.5;
+            mid(pilot.defence) - mid(pilot.courtesy)
+        };
+        assert!(
+            lean(&Pilot::AGGRESSIVE) > 0.3,
+            "the aggressive pilot should cover: {}",
+            lean(&Pilot::AGGRESSIVE)
+        );
+        assert!(
+            lean(&Pilot::SHY) < -0.3,
+            "the shy pilot should yield: {}",
+            lean(&Pilot::SHY)
+        );
+        assert!(lean(&Pilot::PASSIVE) < 0.0);
+        // And they must actually lift for a craft ahead, or `caution` is a
+        // field nothing reads.
+        for (name, pilot) in Pilot::BUILT_IN {
+            assert!(pilot.caution.high > 0.0, "{name} never lifts for anybody");
         }
     }
 
