@@ -556,7 +556,7 @@ world units per tick, `+0x6c` a flag-gated gravity, `+0x70` a
 playback-rate multiplier on the system's `dt`; severity also multiplies
 each particle's drawn size per tick. The waiting-for-a-unit discipline
 this paragraph recorded paid off exactly as intended - the numbers went
-into `oag_render::sparks::EMITTERS` only after their consumers were read
+into `oag_render::psys` only after their consumers were read
 and the units confirmed, and the file turned out to hold a four-emitter
 tree ([pob.md](../../../formats/pob.md#the-collision-spark-file-is-a-four-emitter-tree))
 of which these six fields describe only the root.

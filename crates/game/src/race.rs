@@ -86,10 +86,11 @@ use oag_render::collision as render_collision;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
 use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::Anisotropy;
+use oag_render::psys;
 use oag_render::pvs::{
     DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
 };
-use oag_render::sparks::{self, Sparks};
+use oag_render::sparks;
 use oag_render::{mesh, mesh_render, track as track_render};
 
 /// The track a race is flown on unless another is named.
@@ -704,6 +705,15 @@ pub struct Setup {
     /// node as it rides the hull. Empty means the model authors none, and
     /// the burst falls back to anchoring at the contact point itself.
     pub collision_fx: Vec<Vec3>,
+    /// The collision-spark effect, parsed from the disc's own
+    /// `WO_SHIP_COLL_SPARK_DAMAGE.POB`.
+    ///
+    /// `None` means the archive set had no such entry or it would not
+    /// parse, and the burst is then **not drawn** rather than approximated:
+    /// every number that shapes it lives in that file (see
+    /// `oag_render::sparks`), so there is nothing left to fall back to.
+    /// Headless tests that build a `Race` by hand leave it `None`.
+    pub spark_effect: Option<std::sync::Arc<psys::Effect>>,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*
@@ -883,6 +893,36 @@ fn collision_fx_locators(ship_blob: &[u8]) -> Vec<Vec3> {
 /// **as text, not as `None`**. A missing entry and a blob that does not parse are
 /// different problems with different fixes (name mining versus the decoder), and a
 /// silent fallback hides which one happened.
+/// Reads one `Data\Psys\<name>.POB` out of the archive set and parses it
+/// into a playable effect.
+///
+/// The note it returns goes in the loader report next to the other assets',
+/// because "the sparks did not appear" and "the file was not found" are
+/// otherwise indistinguishable from a screenshot - the failure mode the
+/// `--give` flag exists to remove for weapons.
+fn particle_effect(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> std::result::Result<(psys::Effect, String), String> {
+    let path = sparks::effect_path(name);
+    let blob = archives
+        .read_name(&path)
+        .map_err(|e| format!("{path}: not in the archive set ({e})"))?;
+    let effect = psys::Effect::parse(&blob)
+        .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
+    let note = format!(
+        "{name}: {} emitter(s) - {}",
+        effect.emitters.len(),
+        effect
+            .emitters
+            .iter()
+            .map(|spec| spec.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    Ok((effect, note))
+}
+
 fn mip_texture(
     archives: &mut oag_assets::Archives,
     name: &str,
@@ -1607,6 +1647,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
         )
     });
 
+    let spark_effect = match particle_effect(&mut archives, sparks::DAMAGE_EFFECT) {
+        Ok((effect, note)) => {
+            report.push(note);
+            Some(std::sync::Arc::new(effect))
+        }
+        Err(why) => {
+            report.push(format!("{why} - collision sparks will not be drawn"));
+            None
+        }
+    };
+
     let noise = match mip_texture(&mut archives, NOISE_TEXTURE) {
         Ok((texture, note)) => {
             report.push(note);
@@ -1694,6 +1745,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             internal,
             nozzle,
             collision_fx,
+            spark_effect,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -2494,8 +2546,18 @@ pub struct Race {
     /// Collision sparks' particle pool, advanced on the simulation tick.
     ///
     /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -
-    /// see `oag_render::sparks`'s module doc comment.
-    sparks: Sparks,
+    /// see `oag_render::psys`'s module doc comment.
+    sparks: psys::System,
+    /// The `.pob` [`Self::sparks`] plays - see [`Setup::spark_effect`].
+    spark_effect: Option<std::sync::Arc<psys::Effect>>,
+    /// How many bursts the *trigger* has fired, whether or not an effect
+    /// was loaded to play them.
+    ///
+    /// Counted here rather than read off the pool because the two answer
+    /// different questions: the pool knows how many times it was ignited,
+    /// this knows how many times the contact rule said to - and only the
+    /// second is [`Race`]'s to get right.
+    sparks_ignitions: u32,
     /// The sparks' generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     sparks_rng: Rng,
@@ -2708,6 +2770,7 @@ impl Race {
             internal,
             nozzle,
             collision_fx,
+            spark_effect,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -2905,7 +2968,9 @@ impl Race {
             exhaust_rng: std::array::from_fn(|slot| Rng::new(exhaust_seed(slot))),
             nozzle,
             collision_fx,
-            sparks: Sparks::new(),
+            sparks: psys::System::new(),
+            spark_effect,
+            sparks_ignitions: 0,
             sparks_rng: Rng::new(SPARKS_SEED),
             // No sync frame to be mid-scrape on, so the first tick's contact -
             // if any - is always read as a fresh impact.
@@ -3826,6 +3891,9 @@ impl Race {
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
         self.sparks_cooldown = (self.sparks_cooldown - self.dt).max(0.0);
+        // The trigger rule runs whether or not the disc's own effect
+        // loaded - see `Setup::spark_effect`. Only the pool needs it.
+        let effect = self.spark_effect.clone();
         let can_fire = evaluated.wall.impact && self.sparks_cooldown <= 0.0;
         let model_matrix = self.ship_model_matrix();
         if can_fire && let Some(contact) = evaluated.wall.resolved {
@@ -3856,7 +3924,14 @@ impl Race {
                 })
                 .unwrap_or_else(|| model_matrix.inverse().transform_point3(surface));
             self.sparks_anchor = Some(anchor_model);
-            self.sparks.ignite(surface, evaluated.wall.impact_speed);
+            if let Some(effect) = effect.as_deref() {
+                self.sparks.ignite(
+                    effect,
+                    surface,
+                    sparks::severity(evaluated.wall.impact_speed),
+                );
+            }
+            self.sparks_ignitions += 1;
             self.sparks_cooldown = sparks::COLLISION_COOLDOWN;
         }
         // Unconditional, like the exhaust: the emitters keep trickling and
@@ -3869,7 +3944,10 @@ impl Race {
             .map_or(self.ship().physics.body.position, |local| {
                 model_matrix.transform_point3(local)
             });
-        self.sparks.advance(self.dt, anchor, &mut self.sparks_rng);
+        if let Some(effect) = effect.as_deref() {
+            self.sparks
+                .advance(effect, self.dt, anchor, &mut self.sparks_rng);
+        }
 
         evaluated
     }
@@ -4159,7 +4237,7 @@ impl Race {
     /// [`TRACK_BLAST_SIZE_RATIO`] larger.
     ///
     /// [`Race::sparks`] is deliberately **not** reused for it, and the reason is
-    /// worth recording: `Sparks::advance` re-anchors the whole system to the
+    /// worth recording: `psys::System::advance` re-anchors the whole system to the
     /// hull on every tick, so a burst ignited at a rocket's impact would emit
     /// its particles from the craft instead of from the impact. It is one
     /// hull-mounted emitter, not a general particle system.
@@ -4944,9 +5022,39 @@ impl Race {
         }
     }
 
+    /// The collision sparks' geometry this frame, split by blend class.
+    ///
+    /// The pool and the effect it plays are handed out together because
+    /// neither means anything alone - a particle carries an index into the
+    /// effect's emitters rather than a copy of their parameters. Empty when
+    /// the disc's own effect did not load.
+    #[must_use]
+    pub fn spark_vertices(
+        &self,
+        right: Vec3,
+        up: Vec3,
+    ) -> (
+        Vec<oag_render::mesh::GpuVertex>,
+        Vec<oag_render::mesh::GpuVertex>,
+    ) {
+        self.spark_effect
+            .as_ref()
+            .map(|effect| self.sparks.vertices(effect, right, up))
+            .unwrap_or_default()
+    }
+
+    /// How many spark bursts the contact rule has triggered.
+    ///
+    /// Independent of whether an effect was loaded to play them - see
+    /// [`Self::sparks_ignitions`].
+    #[must_use]
+    pub fn spark_ignitions(&self) -> u32 {
+        self.sparks_ignitions
+    }
+
     /// The collision sparks' current particle pool.
     #[must_use]
-    pub fn sparks(&self) -> &Sparks {
+    pub fn sparks(&self) -> &psys::System {
         &self.sparks
     }
 
@@ -6630,7 +6738,7 @@ impl Scene {
             &vertices,
             &trail,
         );
-        let (spark_additive, spark_alpha) = race.sparks().vertices(right, up);
+        let (spark_additive, spark_alpha) = race.spark_vertices(right, up);
         self.sparks.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),
@@ -7677,6 +7785,9 @@ mod tests {
             // likewise fall back to anchoring at the contact point.
             nozzle: None,
             collision_fx: Vec::new(),
+            // No disc, so no `.pob`: a headless test that wants sparks
+            // parses one itself and sets this.
+            spark_effect: None,
             // A synthetic track authors no pads, which is also what every Pure
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
@@ -10067,25 +10178,20 @@ mod tests {
             evaluated.wall.impact,
             "the fixture never reaches the wall - not what this test means to check"
         );
-        assert_eq!(
-            race.sparks().ignitions(),
-            1,
-            "the first impact never ignited"
-        );
-        assert!(
-            race.sparks().alive_count() > 0,
-            "the first impact spawned no sparks"
-        );
+        assert_eq!(race.spark_ignitions(), 1, "the first impact never ignited");
 
-        // A live particle count cannot distinguish one burst from many any
-        // more - a single burst trickles new particles for 32 ticks by
-        // design - so the trigger cadence is asserted on the ignition
-        // counter directly.
+        // A live particle count cannot distinguish one burst from many - a
+        // single burst trickles new particles for 32 ticks by design, and
+        // the pool needs the disc's own `.pob`, which a headless fixture
+        // has not got. The trigger cadence is this test's subject and the
+        // counter is the unambiguous signal for it; that a real asset then
+        // fills the pool is checked against the disc in
+        // `crates/render/tests/psys_ground_truth.rs`.
         for tick in 0..10 {
             push_toward_wall(&mut race);
             race.tick(&InputSnapshot::default());
             assert_eq!(
-                race.sparks().ignitions(),
+                race.spark_ignitions(),
                 1,
                 "tick {tick} of the same scrape ignited another burst before the cooldown elapsed"
             );
@@ -10121,7 +10227,7 @@ mod tests {
             evaluated.wall.impact,
             "the fixture never reaches the wall - not what this test means to check"
         );
-        assert_eq!(race.sparks().ignitions(), 1);
+        assert_eq!(race.spark_ignitions(), 1);
 
         // Run past the cooldown: a second burst must have ignited, and only
         // one.
@@ -10131,7 +10237,7 @@ mod tests {
             race.tick(&InputSnapshot::default());
         }
         assert_eq!(
-            race.sparks().ignitions(),
+            race.spark_ignitions(),
             2,
             "no second burst ignited after the cooldown elapsed"
         );

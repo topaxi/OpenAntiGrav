@@ -342,7 +342,7 @@ gravity flag clear. The root's slot table also resolves the emitter's
 texture: slot site `0x4c4` →
 `Z:\WipeoutPSP\X2\Data\Psys\Tex\quakesmoke32x32.tga`, a soft 32x32 puff.
 The per-emitter parameter values themselves are shipped tuning data; the
-table above and `oag_render::sparks::EMITTERS` transcribe the recovered
+table above transcribes the recovered
 *behavioural* constants the same way every other recovered constant in this
 project is recorded, but the 256-entry colour tables stay out per
 [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) - the
@@ -467,7 +467,7 @@ the ejection-speed centre in world units per tick, and the full decode is
 the emitter-record table above - see "The emitter record layout is
 decoded". The caution this paragraph recorded did its job: nothing was
 ported until the consumers were read, and the port
-(`oag_render::sparks::EMITTERS`) now carries recovered units rather than
+(`oag_render::psys`) now carries recovered units rather than
 guessed ones.
 
 This is a genuinely separate structure from the slot table and from the
@@ -586,7 +586,7 @@ cargo nextest run -p oag-assets --run-ignored all --test pob_ground_truth --no-c
   record is `{ NUL-terminated string, small parameter block }`; a
   non-string record is a run of floats. The *emitter-level* layout that
   used to head this list is decoded ("The emitter record layout is
-  decoded" above) and ported to `oag_render::sparks::EMITTERS` with
+  decoded" above) and parsed into `oag_render::psys` with
   confirmed units - what remains undecoded is the slot-table targets'
   own internals (beyond "site `0x4c4` resolves the texture path") and the
   scratch regions the loader bakes into (`+0x9c8`/`+0x9cc` targets).

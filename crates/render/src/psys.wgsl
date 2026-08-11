@@ -1,4 +1,4 @@
-// Draws collision sparks.
+// Draws `.pob` particles - collision sparks and every other authored effect.
 //
 // Structurally a smaller copy of exhaust.wgsl - see that file's own header
 // for why the model matrix in the shared uniform block is unused (the

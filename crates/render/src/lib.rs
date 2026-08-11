@@ -38,6 +38,7 @@ pub mod loading;
 pub mod mesh;
 pub mod mesh_render;
 pub mod post;
+pub mod psys;
 pub mod pvs;
 pub mod sparks;
 pub mod texgen;
