@@ -1137,8 +1137,8 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
 ///
 /// # What this is for, and what the unit tests cannot do
 ///
-/// `oag_gameplay::projectile`'s own tests fly rockets down a synthetic corridor
-/// - one quad, authored by the test, at a distance the test chose. **Every
+/// `oag_gameplay::projectile`'s own tests fly rockets down a synthetic corridor:
+/// one quad, authored by the test, at a distance the test chose. **Every
 /// number in them is invented**, including the geometry. This is the only check
 /// that a rocket at the disc's own authored speed, launched from the disc's own
 /// hull dimensions, meets the disc's own collision soup at all: a launch offset

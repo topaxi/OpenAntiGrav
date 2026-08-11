@@ -1008,6 +1008,14 @@ pub const MAX_SPRITES: usize = 48;
 /// The maximum vertices [`Pipeline`]'s buffer holds, six per [`MAX_SPRITES`].
 pub const MAX_VERTICES: usize = MAX_SPRITES * 6;
 
+/// The flare alone must not fill the budget, or a caller's [`sprite`] is
+/// truncated by [`Pipeline::upload`]'s `min` with nothing to show for it.
+///
+/// A **compile-time** assertion rather than a test, because the failure it
+/// guards against is invisible at runtime: the picture is simply missing the
+/// thing that was appended.
+const _: () = assert!(MAX_SPRITES > 1);
+
 /// The ribbon's vertex budget: three layers of `TRAIL_SAMPLES - 1` segments,
 /// each a four-quad diamond tube.
 pub const MAX_TRAIL_VERTICES: usize = LAYERS * (TRAIL_SAMPLES - 1) * TRAIL_FINS * 6;
@@ -1676,6 +1684,11 @@ mod tests {
     }
 
     /// The flare is one quad, emitted every frame, so the count never changes.
+    ///
+    /// It used to assert `cold == MAX_VERTICES`, which was true only while the
+    /// flare was the buffer's *sole* occupant. [`sprite`] gave it company, so
+    /// the two claims are separated here: one quad is still six vertices, and
+    /// six still fit.
     #[test]
     fn the_vertex_count_is_constant() {
         let mut e = Exhaust::new();
@@ -1684,8 +1697,19 @@ mod tests {
         for _ in 0..300 {
             e.advance(1.0 / 60.0, 100.0, 200.0, &mut r);
         }
-        assert_eq!(cold, MAX_VERTICES);
+        assert_eq!(cold, 6, "the flare is one quad");
+        assert!(cold <= MAX_VERTICES);
         assert_eq!(e.vertices(Vec3::ZERO, Vec3::X, Vec3::Y).len(), cold);
+    }
+
+    /// A caller's sprite is the same one quad, and the budget has room for the
+    /// flare plus a full sky of them - which is the invariant
+    /// `oag_game::race`'s own budget test depends on.
+    #[test]
+    fn a_caller_sprite_is_one_quad_and_the_budget_has_room_for_the_flare_too() {
+        let quad = sprite(Vec3::ZERO, Vec3::X, Vec3::Y, 1.0, 1.0);
+        assert_eq!(quad.len(), 6);
+        assert_eq!(MAX_VERTICES, MAX_SPRITES * 6);
     }
 
     /// The flare quad is square, because the original's is.
