@@ -15,8 +15,8 @@
 //! states, no `wgpu` in it, advanced on the caller's fixed tick. [`Effect`]
 //! is the parsed asset it plays, built once at load. The split matters
 //! because an [`Effect`] is a kilobyte per emitter (the colour tables) and
-//! is shared by every [`System`] playing it, while a [`System`] is plain
-//! `Copy` state a caller can keep one of per ship.
+//! is shared by every [`System`] playing it, while a [`System`] is fixed
+//! arrays a caller can keep one of per ship and reset by assignment.
 //!
 //! Render-only, like [`crate::exhaust`]: none of this enters `World` or a
 //! determinism hash.
@@ -623,7 +623,17 @@ impl System {
     }
 
     /// Runs every active emitter's schedule for one tick.
+    ///
+    /// Child instances a spawn asks for are started **after** the whole
+    /// loop, for the same reason [`System::integrate`] defers its death
+    /// children: starting one mid-loop can claim the very slot being
+    /// updated (`start_at` recycles the active instance nearest its end
+    /// once the pool saturates), and the write-back would then either lose
+    /// the child or run the child's state under the parent's spec. It also
+    /// matches the original, whose freshly attached instance first updates
+    /// on the *next* `ParticleSystem_Update`.
     fn emit(&mut self, effect: &Effect, dt_ticks: f32, moved: Vec3, rng: &mut Rng) {
+        let mut children: Vec<(usize, Vec3, Vec3)> = Vec::new();
         for index in 0..self.emitters.len() {
             if !self.emitters[index].active {
                 continue;
@@ -637,25 +647,38 @@ impl System {
                 state.anchor += moved;
             }
 
-            let mut state = self.emitters[index];
-            let spec = &effect.emitters[usize::from(state.spec)];
-            while state.until_next <= 0.0 && state.ticks_left > 0.0 {
+            // The schedule is advanced in place and only the three values a
+            // spawn needs are copied out, so nothing here can be clobbered
+            // by a spawn.
+            let (spec_index, anchor, inherited) = {
+                let state = &self.emitters[index];
+                (state.spec, state.anchor, state.inherited)
+            };
+            let spec = &effect.emitters[usize::from(spec_index)];
+            loop {
+                let state = &mut self.emitters[index];
+                if state.until_next > 0.0 || state.ticks_left <= 0.0 {
+                    break;
+                }
                 state.until_next += random_range(rng, spec.interval_ticks);
                 let count = random_range(rng, spec.per_emission) as usize;
-                let live = self.live_for(state.spec);
-                if spec.live_cap > 0 && live + count > spec.live_cap {
+                if spec.live_cap > 0 && self.live_for(spec_index) + count > spec.live_cap {
                     continue;
                 }
                 for _ in 0..count {
-                    self.spawn(effect, &state, rng);
+                    children.extend(self.spawn(effect, spec_index, anchor, inherited, rng));
                 }
             }
+            let state = &mut self.emitters[index];
             state.until_next -= dt_ticks;
             state.ticks_left -= dt_ticks;
             if state.ticks_left <= 0.0 {
                 state.active = false;
             }
-            self.emitters[index] = state;
+        }
+
+        for (child, anchor, velocity) in children {
+            self.start_child(effect, child, anchor, velocity, rng);
         }
     }
 
@@ -700,9 +723,19 @@ impl System {
         }
     }
 
-    /// One new particle for `state`'s emitter.
-    fn spawn(&mut self, effect: &Effect, state: &EmitterState, rng: &mut Rng) {
-        let spec = &effect.emitters[usize::from(state.spec)];
+    /// One new particle for emitter `spec_index`, at `anchor`.
+    ///
+    /// Returns the per-particle child the emitter asks for, if any, for the
+    /// caller to start once it is done walking the emitter pool.
+    fn spawn(
+        &mut self,
+        effect: &Effect,
+        spec_index: u16,
+        anchor: Vec3,
+        inherited: Vec3,
+        rng: &mut Rng,
+    ) -> Option<(usize, Vec3, Vec3)> {
+        let spec = &effect.emitters[usize::from(spec_index)];
         let direction = direction_for(spec.direction, rng);
         // `centre + spread * U(-1, 1)`, the original's `Psys_RandSpread`,
         // units per tick converted to per second once.
@@ -714,12 +747,12 @@ impl System {
         let life = life_ticks / TICK_HZ;
 
         let particle = Particle {
-            position: state.anchor,
-            velocity: direction * speed + state.inherited,
-            origin: state.anchor,
+            position: anchor,
+            velocity: direction * speed + inherited,
+            origin: anchor,
             life,
             max_life: life,
-            spec: state.spec,
+            spec: spec_index,
             colour_index: (rng.next_u32() & 0xff) as u8,
             size_sample: rng.next_f32(),
             alpha_sample: rng.next_f32(),
@@ -728,19 +761,17 @@ impl System {
         let slot = expendable_slot(&self.particles);
         self.particles[slot] = particle;
 
-        if let Some(child) = spec.particle_child {
-            let inherit = effect.emitters[child].velocity_inherit;
-            self.start_child(
-                effect,
-                child,
-                particle.position,
-                particle.velocity * inherit,
-                rng,
-            );
-        }
+        spec.particle_child
+            .map(|child| (child, particle.position, particle.velocity))
     }
 
     /// Starts a child instance if its probability says so.
+    ///
+    /// `velocity` is the parent particle's, unscaled: it is what the child
+    /// instance *rides*. The child's own `+0x4d0` scales only what the
+    /// child's particles inherit on top of their own ejection - a
+    /// `SMOKEMUSHROOM` at `0.03` still travels with the debris it is
+    /// attached to, while its smoke barely carries any of that motion.
     fn start_child(
         &mut self,
         effect: &Effect,
@@ -753,7 +784,14 @@ impl System {
         if spec.spawn_probability < 1.0 && rng.next_f32() >= spec.spawn_probability {
             return;
         }
-        self.start_at(child, spec.duration_ticks, anchor, velocity, velocity, true);
+        self.start_at(
+            child,
+            spec.duration_ticks,
+            anchor,
+            velocity,
+            velocity * spec.velocity_inherit,
+            true,
+        );
     }
 
     /// Claims an emitter slot, replacing the one nearest its own end when
@@ -796,6 +834,15 @@ impl System {
     }
 
     /// Live particles authored by one emitter - what its `+0xa0` cap counts.
+    ///
+    /// **Counted across every live instance of that emitter, where the
+    /// original's cap is per instance.** It binds identically for a root,
+    /// which only ever has one instance; it is stricter than the original
+    /// for a per-particle child that runs several at once with a tight cap.
+    /// Making it exact needs a particle to remember which *instance* spawned
+    /// it, and an instance slot is recycled, so that is a generation counter
+    /// rather than a field - not worth it until an effect is seen to need
+    /// it.
     fn live_for(&self, spec: u16) -> usize {
         self.particles
             .iter()

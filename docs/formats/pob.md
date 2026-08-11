@@ -573,12 +573,19 @@ from any of the 35 PSP or 41 PS2 blobs. Per
 [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) only
 hand-authored fixtures - never extracted game bytes - may land in the repo,
 so the unit tests in `pob.rs` build synthetic blobs replaying the confirmed
-fixup and record shapes, and the corpus check runs against the user's own
+fixup and record shapes, and the corpus checks run against the user's own
 disc, `#[ignore]`d and out of CI:
 
 ```sh
+just test-data   # picks up both, along with every other ground-truth test
+# or, on their own:
 cargo nextest run -p oag-assets --run-ignored all --test pob_ground_truth --no-capture
+cargo nextest run -p oag-render --run-ignored all --test psys_ground_truth --no-capture
 ```
+
+`pob_ground_truth` is the structural corpus walk described above;
+`psys_ground_truth` (in `oag-render`) plays the parsed effects, and pins the
+collision-spark values against the hand transcription they replaced.
 
 ## Not determined
 
