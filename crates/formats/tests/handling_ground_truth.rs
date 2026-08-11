@@ -447,6 +447,28 @@ fn the_global_file_carries_a_complete_set_of_speed_pad_tunables() {
             "{image_name}: every class got the same gravity scale, which is what \
              docs/physics/README.md used to claim and this test exists to refute"
         );
+
+        // `<WeaponPad>` is the third element in the same blocks. Unlike the two
+        // above, **every class really is authored the same here**, so there is
+        // no all-same check to make - see `handling::WeaponPad`, which records
+        // that rather than treating it as suspicious.
+        for class in SpeedClass::ALL {
+            let pad = global.weapon_pads(class);
+            assert!(
+                pad.refresh_time > 0.0,
+                "{image_name} {class}: a zero cooldown lets one crossing grant a \
+                 pickup on every tick the hull is inside the volume"
+            );
+            // A relation rather than a value, per ADR-0006. It is the whole of
+            // what having two tables is for: Eliminator re-arms a pad sooner.
+            if let Some(elimination) = pad.elimination_refresh_time {
+                assert!(
+                    elimination > 0.0 && elimination < pad.refresh_time,
+                    "{image_name} {class}: Eliminator's cooldown should be \
+                     positive and shorter than the ordinary one"
+                );
+            }
+        }
         checked += 1;
     }
     println!("{checked} release(s) carry a complete <Global> block");

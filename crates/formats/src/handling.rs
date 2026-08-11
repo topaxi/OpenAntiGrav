@@ -521,6 +521,56 @@ impl SpeedupPads {
     }
 }
 
+/// The weapon-pad re-trigger cooldown, per speed class.
+/// `<WeaponPad refresh_time elimination_refresh_time/>`.
+///
+/// Sits beside [`SpeedupPads`] under `<GlobalClass>`. `Xml_ReadGlobalSettings`
+/// (`0x0883aa14`) stores `refresh_time` into the per-class table at `0x08b34328`
+/// and `elimination_refresh_time` into `0x08b34338`, both indexed by
+/// `g_handling_parse_class` and both verbatim. `WeaponPads_TestCraft`
+/// (`0x0888727c`) stamps the pad it hit with one of the two - the Eliminator
+/// table under mode `8`, otherwise the ordinary one - and
+/// `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) counts it back down at `dt` a
+/// tick. Confidence **90**; see
+/// `docs/ghidra/functions/psp-pulse-usa/pads.md`.
+///
+/// # It is a debounce, not a pickup respawn
+///
+/// Worth saying because the attribute's name suggests otherwise. Both shipped
+/// PSP discs author `refresh_time="0.55"` for every class, and a craft at racing
+/// speed clears a pad about 9.6 units long in well under that - so what the
+/// timer buys is that one crossing is one pickup, not that a collected pad goes
+/// away for a while. `elimination_refresh_time` is `0.05`, an order of magnitude
+/// shorter, which fits Eliminator handing weapons out far more freely.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct WeaponPad {
+    /// Seconds before a pad can be triggered again, in the ordinary modes.
+    pub refresh_time: f32,
+    /// The same, in Eliminator.
+    ///
+    /// An [`Option`] where the rest of this module makes a missing attribute an
+    /// error, because the difference is measured rather than defensive: Pulse
+    /// authors both attributes and **Pure authors only `refresh_time`** - see
+    /// `crates/pure/tests/handling_schema_ground_truth.rs`, which pins exactly
+    /// that difference, and Pure has no Eliminator to configure. Defaulting it
+    /// to zero would be indistinguishable from a disc that authored zero.
+    pub elimination_refresh_time: Option<f32>,
+}
+
+impl WeaponPad {
+    const ELEMENT: &'static str = "WeaponPad";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        Ok(Self {
+            refresh_time: number(node, Self::ELEMENT, "refresh_time")?,
+            elimination_refresh_time: match node.value("elimination_refresh_time") {
+                Some(_) => Some(number(node, Self::ELEMENT, "elimination_refresh_time")?),
+                None => None,
+            },
+        })
+    }
+}
+
 /// The per-speed-class gravity scale. `<GravityMul airborne/>`.
 ///
 /// Sits beside [`SpeedupPads`] under `<GlobalClass>`, and
@@ -610,13 +660,11 @@ impl Special {
 
 /// The engine-wide `<Global>` block, out of [`GLOBAL_ENTRY`].
 ///
-/// Only the parts this project has a consumer for are decoded. `<WeaponPad>`, the
-/// three camera pitch modifiers, `<CameraSideOffset>` and `<StartBoost>` are all
-/// read by the original's `Xml_ReadGlobalSettings` and are deliberately left
-/// alone here; they are named in
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be added when
-/// something needs them. `<WeaponPad>` fills two more per-class tables and has no
-/// consumer, because nothing hands out a weapon yet.
+/// Only the parts this project has a consumer for are decoded. The three camera
+/// pitch modifiers, `<CameraSideOffset>` and `<StartBoost>` are all read by the
+/// original's `Xml_ReadGlobalSettings` and are deliberately left alone here;
+/// they are named in `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be
+/// added when something needs them.
 ///
 /// Of `<Special>`'s five attributes only `speedpad_jump` is read - see
 /// [`Special`].
@@ -630,6 +678,8 @@ pub struct Global {
     pub speedup_pads: [SpeedupPads; 4],
     /// `<GlobalClass><GravityMul/></GlobalClass>`, indexed by [`SpeedClass`].
     pub gravity_mul: [GravityMul; 4],
+    /// `<GlobalClass><WeaponPad/></GlobalClass>`, indexed by [`SpeedClass`].
+    pub weapon_pads: [WeaponPad; 4],
 }
 
 impl Global {
@@ -637,6 +687,12 @@ impl Global {
     #[must_use]
     pub fn speedup_pads(&self, class: SpeedClass) -> SpeedupPads {
         self.speedup_pads[class as usize]
+    }
+
+    /// The weapon-pad cooldown for one class.
+    #[must_use]
+    pub fn weapon_pads(&self, class: SpeedClass) -> WeaponPad {
+        self.weapon_pads[class as usize]
     }
 
     /// The gravity scale for one class.
@@ -1089,12 +1145,13 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
     let Ok(global) = child(handling, "Global") else {
         return Ok(None);
     };
-    let (speedup_pads, gravity_mul) = global_classes(global)?;
+    let (speedup_pads, gravity_mul, weapon_pads) = global_classes(global)?;
     Ok(Some(Global {
         zone: Zone::from_node(child(global, Zone::ELEMENT)?)?,
         special: Special::from_node(child(global, Special::ELEMENT)?)?,
         speedup_pads,
         gravity_mul,
+        weapon_pads,
     }))
 }
 
@@ -1121,9 +1178,9 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
 /// **This holds only while `VECTOR` is first.** Authored last it would corrupt
 /// `PHANTOM` in the original and not here, which is a difference worth knowing
 /// about rather than one worth emulating.
-fn global_classes(global: &Node) -> Result<([SpeedupPads; 4], [GravityMul; 4])> {
+fn global_classes(global: &Node) -> Result<([SpeedupPads; 4], [GravityMul; 4], [WeaponPad; 4])> {
     const ELEMENT: &str = "GlobalClass";
-    let mut found: [Option<(SpeedupPads, GravityMul)>; 4] = [None; 4];
+    let mut found: [Option<(SpeedupPads, GravityMul, WeaponPad)>; 4] = [None; 4];
 
     for node in global.children_named(ELEMENT) {
         let name = node.value("name").ok_or(Error::MissingAttribute {
@@ -1141,6 +1198,7 @@ fn global_classes(global: &Node) -> Result<([SpeedupPads; 4], [GravityMul; 4])> 
         *slot = Some((
             SpeedupPads::from_node(child(node, SpeedupPads::ELEMENT)?)?,
             GravityMul::from_node(child(node, GravityMul::ELEMENT)?)?,
+            WeaponPad::from_node(child(node, WeaponPad::ELEMENT)?)?,
         ));
     }
 
@@ -1151,7 +1209,11 @@ fn global_classes(global: &Node) -> Result<([SpeedupPads; 4], [GravityMul; 4])> 
     }
 
     let found = found.map(|block| block.expect("every slot filled above"));
-    Ok((found.map(|(pads, _)| pads), found.map(|(_, mul)| mul)))
+    Ok((
+        found.map(|(pads, _, _)| pads),
+        found.map(|(_, mul, _)| mul),
+        found.map(|(_, _, weapon)| weapon),
+    ))
 }
 
 /// [`parse_global`] over raw archive bytes, expanding them if they need it.
@@ -1734,7 +1796,12 @@ mod tests {
                 format!(
                     r#"<GlobalClass name="{name}"><SpeedupPads amount="{n}" time="{}"/>"#,
                     n * 10
-                ) + &format!(r#"<GravityMul airborne="{}"/></GlobalClass>"#, n * 100)
+                ) + &format!(r#"<GravityMul airborne="{}"/>"#, n * 100)
+                    + &format!(
+                        r#"<WeaponPad refresh_time="{}" elimination_refresh_time="{}"/></GlobalClass>"#,
+                        n * 1000,
+                        n * 10000
+                    )
             })
             .collect();
         format!(
@@ -1780,7 +1847,43 @@ mod tests {
                     airborne: n * 100.0
                 }
             );
+            assert_eq!(
+                global.weapon_pads(class),
+                WeaponPad {
+                    refresh_time: n * 1000.0,
+                    elimination_refresh_time: Some(n * 10000.0),
+                }
+            );
         }
+    }
+
+    /// Pure authors `<WeaponPad refresh_time>` and no
+    /// `elimination_refresh_time`, having no Eliminator - see
+    /// `crates/pure/tests/handling_schema_ground_truth.rs`. So the second
+    /// attribute is absent rather than zero, and the distinction has to survive
+    /// the parse.
+    #[test]
+    fn a_weapon_pad_without_an_elimination_time_parses_as_absent_not_zero() {
+        let pure_shaped =
+            global_document(&FOUR).replace(r#" elimination_refresh_time="10000""#, "");
+        let global = parse_global(&pure_shaped)
+            .expect("parses")
+            .expect("has a <Global>");
+        assert_eq!(
+            global.weapon_pads(SpeedClass::Venom),
+            WeaponPad {
+                refresh_time: 1000.0,
+                elimination_refresh_time: None,
+            }
+        );
+        // The other three still carry theirs, so this is about the attribute
+        // rather than about the element.
+        assert_eq!(
+            global
+                .weapon_pads(SpeedClass::Flash)
+                .elimination_refresh_time,
+            Some(20000.0)
+        );
     }
 
     /// The finding this reader is shaped around: both shipped discs author a
@@ -1856,6 +1959,17 @@ mod tests {
             parse_global(&no_gravity),
             Err(Error::MissingElement {
                 element: "GravityMul"
+            })
+        );
+
+        let no_weapon_pad = global_document(&FOUR).replace(
+            r#"<WeaponPad refresh_time="1000" elimination_refresh_time="10000"/>"#,
+            "",
+        );
+        assert_eq!(
+            parse_global(&no_weapon_pad),
+            Err(Error::MissingElement {
+                element: "WeaponPad"
             })
         );
     }

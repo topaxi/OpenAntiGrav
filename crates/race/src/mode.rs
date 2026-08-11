@@ -1,8 +1,9 @@
 //! The race modes, and what each one does differently.
 //!
-//! Three single-ship modes. None of them needs opponents, weapons or a grid,
-//! which is why they come first: they are the part of the race layer that can be
-//! finished rather than stubbed.
+//! Three single-ship modes came first, because none of them needs opponents,
+//! weapons or a grid: they are the part of the race layer that can be finished
+//! rather than stubbed. [`Mode::SingleRace`] is the fourth and is the first that
+//! races with weapons - see its own docs for what it still does without.
 //!
 //! # Where the rules come from
 //!
@@ -11,10 +12,9 @@
 //! which is which - see `docs/gameplay/race-modes.md` for the evidence and the
 //! confidence score behind every one.
 
-/// One of the three single-ship race modes.
+/// One of the race modes this crate implements.
 ///
-/// The variants are ordered as the menu offers them, and
-/// [`Mode::TIME_TRIAL_LAPS`] is the only lap count any of them has.
+/// The variants are ordered as the menu offers them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Mode {
     /// A fixed number of laps against the clock. The default, and the mode the
@@ -26,16 +26,38 @@ pub enum Mode {
     /// Escalating auto-speed. Never ends on its own either, for now - see
     /// [`crate::state`].
     Zone,
+    /// A lap race with weapons.
+    ///
+    /// **The mode that makes pickups reachable at all**, and the reason it was
+    /// added: the original clears `g_weapons_enabled` for all three modes above,
+    /// and a weapons-off race in the original does not merely skip the pickup
+    /// logic - it hides every `Weapon Pad` and empties the trigger list. The
+    /// disc corroborates that from the presentation side: `TimeTrial_HUD.xml`
+    /// and `Zone_HUD.xml` carry no pickup widgets at all, while
+    /// `Arcade_HUD.xml` - this mode's layout - carries `PickupBackground` and
+    /// one icon per weapon. See `docs/gameplay/pickups.md`.
+    ///
+    /// **What this build does without, and the original does not.** The disc's
+    /// own description is *"Single Race: take on a full grid of opponents,
+    /// weapons optional"* (`MSC_EVENT_SR`), so the original races this with AI.
+    /// Nothing drives an opponent here yet, which is why [`Self::has_opponents`]
+    /// answers `false` for it - see that method.
+    SingleRace,
 }
 
 impl Mode {
     /// Every mode, as a fixed-size array.
     ///
-    /// Fixed-size so that adding a fourth mode is a compile error at every
-    /// caller that enumerates them, rather than a silently short list. The same
-    /// reason `menu::Action::all` and `perf::FrameLimit::OFFERED` are arrays in
-    /// the composition root.
-    pub const ALL: [Self; 3] = [Self::TimeTrial, Self::SpeedLap, Self::Zone];
+    /// Fixed-size so that adding a mode is a compile error at every caller that
+    /// enumerates them, rather than a silently short list. The same reason
+    /// `menu::Action::all` and `perf::FrameLimit::OFFERED` are arrays in the
+    /// composition root.
+    pub const ALL: [Self; 4] = [
+        Self::TimeTrial,
+        Self::SpeedLap,
+        Self::Zone,
+        Self::SingleRace,
+    ];
 
     /// Laps in a time trial.
     ///
@@ -46,6 +68,17 @@ impl Mode {
     /// the race-setup format string carries `laps="%d"`. Three is what a time
     /// trial was seen configured with, not a limit of the format.
     pub const TIME_TRIAL_LAPS: u32 = 3;
+
+    /// Laps in a single race.
+    ///
+    /// **Ours, and the weakest number in this module.** The setup format's
+    /// `laps="%d"` says the original configures this per event rather than
+    /// fixing it, and no single race has been watched long enough to read what
+    /// a *Custom Race* is configured with. Three is [`Self::TIME_TRIAL_LAPS`]
+    /// carried over because a race has to end somewhere; it is not a
+    /// measurement, and one screenshot of the original's own lap counter on a
+    /// SINGLE RACE would replace it.
+    pub const SINGLE_RACE_LAPS: u32 = 3;
 
     /// The token this mode is stored and configured as.
     ///
@@ -58,6 +91,7 @@ impl Mode {
             Self::TimeTrial => "time_trial",
             Self::SpeedLap => "speed_lap",
             Self::Zone => "zone",
+            Self::SingleRace => "single_race",
         }
     }
 
@@ -76,6 +110,7 @@ impl Mode {
     pub const fn laps_target(self) -> Option<u32> {
         match self {
             Self::TimeTrial => Some(Self::TIME_TRIAL_LAPS),
+            Self::SingleRace => Some(Self::SINGLE_RACE_LAPS),
             Self::SpeedLap | Self::Zone => None,
         }
     }
@@ -99,6 +134,7 @@ impl Mode {
             Self::TimeTrial => "MSC_EVENT_TT",
             Self::SpeedLap => "MSC_EVENT_SL",
             Self::Zone => "MSC_EVENT_ZONE",
+            Self::SingleRace => "MSC_EVENT_SR",
         }
     }
 
@@ -113,6 +149,7 @@ impl Mode {
             Self::TimeTrial => "TIME TRIAL",
             Self::SpeedLap => "SPEED LAP",
             Self::Zone => "ZONE",
+            Self::SingleRace => "SINGLE RACE",
         }
     }
 
@@ -126,15 +163,25 @@ impl Mode {
         matches!(self, Self::Zone)
     }
 
-    /// Whether the original races this mode with other craft on the grid.
+    /// Whether *this build* races this mode with other craft on the grid.
     ///
-    /// **`false` for all three, measured on the running original rather than
-    /// assumed from "single-ship" in this module's own name.** Selecting
+    /// **`false` for every mode, and for two different reasons.**
+    ///
+    /// For the three single-ship modes it is the original's own answer, measured
+    /// on the running game rather than assumed from "single-ship": selecting
     /// TIME TRIAL, SPEED LAP or ZONE on the Custom Race screen greys
     /// `AI DIFFICULTY` to `N/A`, the same tell `race-modes.md` already uses for
-    /// weapons - see [`Self::weapons_enabled`]. `SINGLE RACE`, `HEAD TO HEAD`,
-    /// `TOURNAMENT` and `ELIMINATOR` all leave it selectable; none of those four
-    /// is a mode this crate implements yet.
+    /// weapons - see [`Self::weapons_enabled`].
+    ///
+    /// **For [`Mode::SingleRace`] it is a departure, and the method name flips
+    /// meaning there.** The original's answer is `true` - `AI DIFFICULTY` is
+    /// selectable and `MSC_EVENT_SR` promises "a full grid of opponents" - but
+    /// nothing drives an opponent in this engine yet. Seven parked hulls in the
+    /// player's own livery is a worse race than an empty track and would read as
+    /// a regression rather than as progress, so the field stays empty until the
+    /// AI lands and this returns `true`. `oag_game::race::Options::opponents`
+    /// remains the escape hatch the grid's own ground-truth test uses to place
+    /// all eight without a mode asking for them.
     #[must_use]
     pub const fn has_opponents(self) -> bool {
         false
@@ -142,7 +189,8 @@ impl Mode {
 
     /// Whether the original arms `Weapon Pad`s for this mode.
     ///
-    /// **`false` for all three, measured on the running original.** Selecting
+    /// **`false` for the three single-ship modes, measured on the running
+    /// original; `true` for [`Mode::SingleRace`].** Selecting
     /// each of TIME TRIAL, SPEED LAP and ZONE on the Custom Race screen greys
     /// the `WEAPONS` row to `OFF` and the setting cannot be changed - confirmed
     /// live, 2026-08-10, PPSSPP v1.20.4 under Xvfb, one screenshot per race
@@ -161,9 +209,16 @@ impl Mode {
     /// own count, so a weapons-off race neither draws them nor can trigger
     /// them - not merely "nothing happens if you cross one". See
     /// [`docs/ghidra/functions/psp-pulse-usa/pads.md`](../../../docs/ghidra/functions/psp-pulse-usa/pads.md).
+    ///
+    /// Single race is on the other side of that switch: it is not in
+    /// `Race_ReadSetupOptions`' weapons-off set, its `AI DIFFICULTY` and
+    /// `WEAPONS` rows are both selectable, and `MSC_EVENT_SR` calls weapons
+    /// "optional". **This build takes the default rather than offering the
+    /// choice** - there is no `WEAPONS` row on the race menu, so a single race
+    /// always has them on. That is a missing setting, not a different rule.
     #[must_use]
     pub const fn weapons_enabled(self) -> bool {
-        false
+        matches!(self, Self::SingleRace)
     }
 }
 
@@ -201,8 +256,9 @@ mod tests {
     }
 
     #[test]
-    fn only_the_time_trial_ends_on_laps() {
+    fn only_the_two_unlimited_modes_never_end_on_laps() {
         assert_eq!(Mode::TimeTrial.laps_target(), Some(3));
+        assert_eq!(Mode::SingleRace.laps_target(), Some(3));
         assert_eq!(Mode::SpeedLap.laps_target(), None);
         assert_eq!(Mode::Zone.laps_target(), None);
     }
@@ -212,18 +268,26 @@ mod tests {
         assert!(Mode::Zone.is_auto_throttle());
         assert!(!Mode::TimeTrial.is_auto_throttle());
         assert!(!Mode::SpeedLap.is_auto_throttle());
+        assert!(!Mode::SingleRace.is_auto_throttle());
     }
 
+    /// Including the single race, whose real answer is `true` - see
+    /// [`Mode::has_opponents`], which explains why this build says otherwise and
+    /// what has to land before it stops.
     #[test]
-    fn none_of_the_three_single_ship_modes_have_opponents() {
+    fn no_mode_races_with_opponents_yet() {
         for mode in Mode::ALL {
             assert!(!mode.has_opponents(), "{mode:?} should have no opponents");
         }
     }
 
+    /// The switch the pickup system hangs off. It is the *only* mode-dependent
+    /// thing about a weapon pad in the original: a weapons-off race hides the
+    /// pads and empties the trigger list rather than ignoring a crossing.
     #[test]
-    fn none_of_the_three_single_ship_modes_arm_weapon_pads() {
-        for mode in Mode::ALL {
+    fn the_single_race_is_the_only_mode_that_arms_weapon_pads() {
+        assert!(Mode::SingleRace.weapons_enabled());
+        for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
             assert!(
                 !mode.weapons_enabled(),
                 "{mode:?} should race with weapons off"

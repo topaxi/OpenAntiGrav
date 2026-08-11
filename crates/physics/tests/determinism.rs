@@ -159,24 +159,33 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   hash stream and nothing else. Checked the same way: with the two writes at
 ///   the end of `hash_state` commented out and every other change in place, the
 ///   constants from earlier the same day reproduce bit for bit.
+/// - **Regenerated 2026-08-11, and behaviour did not change either.**
+///   `ShipState` gained `turbo_timer`, the seconds left on a fired Turbo pickup
+///   (`crate::engine::ENGINE_PICKUP_SPEEDUP`). No probe script fires one and
+///   none *can* - a pickup comes from a `Weapon Pad` and there is no track in a
+///   corridor - so the field holds zero on every tick of every run here.
+///   Checked the same way and it is the same result: with
+///   `hasher.write_f32(turbo_timer)` alone removed and every other change in
+///   place, the six constants from 2026-08-10 reproduce bit for bit. The
+///   trajectory is untouched; what moved is the length of the hash stream.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0xad32_1a4c_5459_85a8,
-        0x9220_7924_fa4d_dafb,
+        0xa17d_89dc_a0a4_1428,
+        0x8c58_5f21_8de3_755b,
     ),
     (
         3_600,
         Script::Corridor,
-        0x9eb5_732a_f116_de6c,
-        0x8799_28cb_63d0_6e1a,
+        0x99da_e033_ada7_4b2c,
+        0x5530_888a_d239_8aaa,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x9cb3_8272_be8b_262b,
-        0x7189_75cb_27ce_9bc1,
+        0x9039_6de5_75bf_325b,
+        0x48d7_47cb_7587_ef41,
     ),
 ];
 

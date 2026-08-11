@@ -67,6 +67,12 @@ impl Default for Ship {
 /// is what makes its shield deplete, and what its unimplemented "destroyed"
 /// ending depends on. See `docs/ghidra/functions/psp-pulse-usa/shield.md`.
 ///
+/// A single race is in neither set either, and unlike Zone the front end does
+/// not override it: `MSC_EVENT_SR` calls weapons "optional" and the Custom Race
+/// screen leaves both rows selectable, so both defaults stand. That makes it the
+/// first mode here whose contact damage is *not* halved - see
+/// [`oag_physics::damage::NO_WEAPONS_DAMAGE_SCALE`], which a time trial does get.
+///
 /// **Here rather than on [`oag_race::Mode`]**, because `oag-race` deliberately
 /// does not depend on `oag-physics` (see that crate's `Cargo.toml`) and this
 /// returns a physics type. This crate is the bridge between the two, which is
@@ -78,7 +84,7 @@ pub fn damage_rules(mode: Mode) -> DamageRules {
             weapons: false,
             damage: false,
         },
-        Mode::Zone => DamageRules {
+        Mode::Zone | Mode::SingleRace => DamageRules {
             weapons: true,
             damage: true,
         },

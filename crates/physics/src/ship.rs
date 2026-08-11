@@ -416,6 +416,30 @@ pub struct ShipState {
     /// otherwise, which keeps it out of the way of the determinism hash on every
     /// tick of a race nobody dies in.
     pub state_timer: f32,
+    /// Seconds left on a fired Turbo pickup.
+    ///
+    /// While it is positive the engine multiplies its thrust by
+    /// [`crate::engine::ENGINE_PICKUP_SPEEDUP`]; see that constant for the
+    /// instruction-level reading, and [`crate::engine::engine`] for where the
+    /// multiply lands.
+    ///
+    /// **The timer is ours; what it gates is not.** The original keeps the state
+    /// as a bit of the undecoded flag word at `craft+0x1c0` (`0x0004`), armed
+    /// from the equally-undecoded pickup word one hop out, and neither has a
+    /// reader this project has recovered - so a `f32` of seconds stands in for a
+    /// bit plus a timer nobody has found the writer of. The **duration** is the
+    /// disc's own `<Weapon type="Turbo"><Stats time>` and the **multiplier** is
+    /// the recovered `1.2`, so both numbers are real even though the field
+    /// holding them is not the original's shape. See
+    /// `docs/gameplay/pickups.md`.
+    ///
+    /// **In this crate rather than in `oag-gameplay`, and hashed**, for the same
+    /// reason [`Self::shield`] is: it is written by gameplay and read by the
+    /// force law, and a simulation field the determinism gate cannot see is a
+    /// replay divergence nobody notices. The *inventory* - which pickup is held,
+    /// if any - is not here, because it is an `oag_formats::weapons::Weapon` and
+    /// this crate deliberately depends on nothing but `oag-core`.
+    pub turbo_timer: f32,
 }
 
 impl Default for ShipState {
@@ -451,6 +475,7 @@ impl Default for ShipState {
             shield: 0.0,
             craft_state: crate::damage::CraftState::Racing,
             state_timer: 0.0,
+            turbo_timer: 0.0,
         }
     }
 }

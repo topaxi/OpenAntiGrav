@@ -497,13 +497,28 @@ pub struct Setup {
     pub speedup_pads: Vec<oag_formats::pads::PadVolume>,
     /// The track's weapon pads, as trigger volumes.
     ///
-    /// Everything [`Self::speedup_pads`] says applies, one class over. **Nothing
-    /// consumes these** - a weapon pad has nothing to hand out until weapons
-    /// exist - so they are decoded and carried, which is what lets
+    /// Everything [`Self::speedup_pads`] says applies, one class over. Consumed
+    /// by [`Race::test_weapon_pads`] in the one mode that arms them, and decoded
+    /// on every mode regardless, which is what lets
     /// `the_weapon_pads_are_drawn_where_they_trigger` check the geometry against
     /// them. Two independent decodes of the same nodes agreeing is worth more
     /// than either alone.
     pub weapon_pads: Vec<oag_formats::pads::PadVolume>,
+    /// The weapon table for this race, out of `WeaponStats_Race.xml`.
+    ///
+    /// `None` when the file is absent or unreadable, which means a pad hands
+    /// nothing out rather than handing out an invented weapon - the same choice
+    /// [`Setup::speedup_pads`]' tunables make. See `docs/formats/weapon-stats.md`.
+    pub weapons: Option<oag_formats::weapons::WeaponStats>,
+    /// Seconds a weapon pad is inert for after it is crossed, for this race's
+    /// speed class.
+    ///
+    /// `<WeaponPad refresh_time>` out of the same `<GlobalClass>` block the
+    /// speed-pad tunables come from, stamped onto the pad by the original's
+    /// `WeaponPads_TestCraft` - see [`oag_formats::handling::WeaponPad`], which
+    /// records why it is a debounce rather than a respawn. Zero when the global
+    /// file could not be read.
+    pub weapon_pad_refresh: f32,
     /// Where [`Options::pose`] asked for the craft to start, already resolved
     /// against the spline. `None` uses the ordinary spawn.
     pub pose_override: Option<Pose>,
@@ -880,6 +895,52 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
+    // The weapon-pad debounce, out of the same `<GlobalClass>` block as the two
+    // above and with the same "absent means the feature is off" fallback. Zero
+    // is a real degradation rather than a neutral value - it would let one
+    // crossing grant a pickup on every tick the hull is inside the volume - so
+    // the trigger treats a zero as "grant once and never again on this pad"
+    // rather than trusting it; see `Race::test_weapon_pads`.
+    let weapon_pad_refresh = match global {
+        Some(global) => {
+            global
+                .weapon_pads(to_format_class(options.class))
+                .refresh_time
+        }
+        None => 0.0,
+    };
+    // The weapon table. Read on every mode even though only a single race arms
+    // the pads: which mode is racing is a gameplay question and this is the
+    // asset half, and reading it unconditionally is what makes a broken file a
+    // reported line on every run rather than one nobody sees until they pick
+    // the one mode that needs it.
+    //
+    // Two failures, two lines, for the reason `<Global>` above gives at length.
+    let weapons = match read(&mut archives, oag_formats::weapons::RACE_ENTRY) {
+        Err(e) => {
+            report.push(format!("{}: {e}", oag_formats::weapons::RACE_ENTRY));
+            None
+        }
+        Ok(blob) => match oag_formats::weapons::from_blob(&blob) {
+            Err(e) => {
+                report.push(format!("{}: {e}", oag_formats::weapons::RACE_ENTRY));
+                None
+            }
+            Ok(stats) => {
+                report.push(format!(
+                    "{}: {} weapon(s) with an absorb value, {} pickup table(s)",
+                    oag_formats::weapons::RACE_ENTRY,
+                    stats.absorb.len(),
+                    stats.pickups.len()
+                ));
+                Some(stats)
+            }
+        },
+    };
+    if options.mode.weapons_enabled() && weapons.is_none() {
+        // Only worth saying on a mode that would otherwise hand something out.
+        report.push("weapon pads hand nothing out this run".to_string());
+    }
     let far = stats.external_camera_far;
     let chase = chase_params(far);
     // The other two views the player can cycle to, read from the same document
@@ -1370,6 +1431,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             collision_fx,
             speedup_pads,
             weapon_pads,
+            weapons,
+            weapon_pad_refresh,
             class_gravity_scale,
             pose_override,
             camera_override: options.camera,
@@ -1397,14 +1460,21 @@ pub fn load(options: &Options) -> Result<Loaded> {
 /// is why `docs/ui/hud.md` counts five layouts for six modes and why the disc has
 /// no `SpeedLap_HUD.xml`. Zone has its own.
 ///
-/// The two layouts this does not reach - `Arcade_HUD.xml` and
-/// `Elimination_HUD.xml` - are in [`crate::hud::layouts`] waiting for the modes
-/// that use them.
+/// `Arcade_HUD.xml` is the single race's, and it is the only shipped layout that
+/// carries pickup widgets at all: `PickupBackground`, `SubWeapon` and one
+/// `<Type>Icon` per weapon. `TimeTrial_HUD.xml` and `Zone_HUD.xml` carry none,
+/// which is the disc agreeing from the presentation side with what
+/// [`Mode::weapons_enabled`] reads out of the code. See
+/// `docs/gameplay/pickups.md`.
+///
+/// The one layout this does not reach - `Elimination_HUD.xml` - is in
+/// [`crate::hud::layouts`] waiting for the mode that uses it.
 #[must_use]
 pub const fn hud_layout(mode: Mode) -> &'static str {
     match mode {
         Mode::TimeTrial | Mode::SpeedLap => crate::hud::layouts::TIME_TRIAL,
         Mode::Zone => crate::hud::layouts::ZONE,
+        Mode::SingleRace => crate::hud::layouts::ARCADE,
     }
 }
 
@@ -4245,11 +4315,14 @@ impl Scene {
                 .transpose()
         };
         let pads = pad_drawable(pad_model)?;
-        // The original does not draw these either, in every mode this crate
-        // implements: `World_CollectNodeLists` clears the node's own
-        // visibility bit whenever `g_weapons_enabled` is `0`, which the front
-        // end forces for time trial, speed lap and Zone alike - see
-        // `Mode::weapons_enabled`. The geometry is still decoded and still in
+        // `World_CollectNodeLists` clears the node's own visibility bit
+        // whenever `g_weapons_enabled` is `0`, which the front end forces for
+        // time trial, speed lap and Zone alike - see `Mode::weapons_enabled`.
+        // **The same predicate gates the trigger** (`Race::test_weapon_pads`),
+        // deliberately: in the original both come from that one global, so a
+        // pad that draws is a pad that can be crossed and there is no mode
+        // where one is true and the other is not.
+        // The geometry is still decoded and still in
         // `Loaded` either way (`the_weapon_pads_are_drawn_where_they_trigger`
         // checks the decode, not the mode), so this is the one place that
         // decision turns into "never uploaded to the GPU at all" rather than
@@ -5681,6 +5754,12 @@ mod tests {
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
+            // No disc here, so no weapon table: the same state a race reaches
+            // when `WeaponStats_Race.xml` is unreadable, where a pad hands
+            // nothing out. `race_with_weapon_pads` supplies one where a test
+            // needs a pickup to exist.
+            weapons: None,
+            weapon_pad_refresh: 0.0,
             // These tests run on a synthetic straight and want the ordinary
             // spawn and the ordinary chase camera; `--pose` and its camera are
             // capture aids with nothing to say here.

@@ -372,6 +372,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         shield,
         craft_state,
         state_timer,
+        turbo_timer,
     } = *state;
 
     hash_body(hasher, &body);
@@ -433,6 +434,11 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         crate::damage::CraftState::Eliminated => 2,
     });
     hasher.write_f32(state_timer);
+    // Zero through every probe script for the same reason as the two above: no
+    // probe fires a pickup, and no probe *can* - there is no weapon pad in a
+    // corridor. Another fixed run of bytes, hashed because a turbo the gate
+    // could not see would let a replay of a single race diverge silently.
+    hasher.write_f32(turbo_timer);
 }
 
 /// The ship a run starts with: on the corridor's centre line, resting on the

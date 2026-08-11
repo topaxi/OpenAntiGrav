@@ -321,10 +321,12 @@ struct Cli {
     #[arg(long, default_value = "venom")]
     class: String,
 
-    /// The race mode: time_trial, speed_lap or zone.
+    /// The race mode: time_trial, speed_lap, zone or single_race.
     ///
     /// Needed on the `--race` path in particular, which skips the menus and so
-    /// has no other way to pick one.
+    /// has no other way to pick one. `single_race` is the only one that races
+    /// with weapons, so it is the only one where a `Weapon Pad` draws or hands
+    /// anything out.
     #[arg(long, default_value = "time_trial")]
     mode: String,
 
@@ -648,7 +650,7 @@ fn main() -> Result<()> {
     // line rather than a race that quietly runs under different rules.
     let mode = oag_race::Mode::from_name(&cli.mode).with_context(|| {
         format!(
-            "{:?} is not a race mode; try time_trial, speed_lap or zone",
+            "{:?} is not a race mode; try time_trial, speed_lap, zone or single_race",
             cli.mode
         )
     })?;
