@@ -72,13 +72,28 @@ use oag_physics::{Ray, Raycaster, ShipState};
 
 /// The most projectiles that can be in the air at once.
 ///
-/// **Ours.** A Rocket puts [`ROCKET_SHOTS`] in the air per press, so eight craft
-/// firing at once need 24 - which is why this is sixteen rather than the eight a
-/// one-shot weapon would have wanted, and why it has headroom above 24 for the
-/// weapons still to land. The original's own pool is far larger (`0x2e` live
-/// projectiles at the Rocket's bounds check) and a race that hit this ceiling
-/// would silently drop shots; see [`Projectiles::spawn`].
-pub const MAX_PROJECTILES: usize = 16;
+/// **Ours, and deliberately larger than the original's.**
+///
+/// The original's pool caps at **48** - `Weapon_FireRocket` bounds-checks
+/// `live < 0x2e` before putting three more in the air, against a cap of `0x30`
+/// elsewhere. That is the floor this has to clear, not the target: it is a 2007
+/// handheld's budget, and an Eliminator race in the original genuinely runs out
+/// and drops shots.
+///
+/// **This used to be 16, and 16 was too small to be correct**, not merely tight:
+/// a Rocket puts [`ROCKET_SHOTS`] in the air per press, so one simultaneous
+/// volley from a full grid is 24 and would have silently dropped a third of
+/// itself at [`Projectiles::spawn`]. Surface-following flight made it worse by
+/// keeping projectiles alive far longer than straight flight into the nearest
+/// wall did.
+///
+/// 128 is eight craft with sixteen apiece in the air at once, which no rate of
+/// fire this engine can reach will exhaust. Fixed-size rather than a `Vec`
+/// because [ADR-0003](../../../docs/architecture/adr/0003-no-ecs.md) requires
+/// the world to snapshot in one `memcpy`-shaped operation; at roughly 48 bytes
+/// a slot the whole array is about 6 KiB, which is not a number worth
+/// economising on.
+pub const MAX_PROJECTILES: usize = 128;
 
 /// How long a projectile flies before it gives up, in seconds.
 ///

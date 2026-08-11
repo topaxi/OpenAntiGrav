@@ -153,6 +153,13 @@ record layout at a resolved target is still undecoded
 states a colour, size or lifetime from the file. What the emulator showed is
 below.
 
+**One structural point the name list does settle**, though: the rocket has no
+separate trail effect. The Shuriken authors both `WO_SHURIKEN_HEAD` and
+`WO_SHURIKEN_TRAIL`, and the Missile a `WO_MISSILE_HEAD`; the rocket has only
+`WO_ROCKET_FLARE`. So the one emitter draws both the glow at the nose and the
+streak behind it, and a reimplementation that wants a smoke trail is filling in
+that emitter rather than adding a second effect the original does not have.
+
 ## Flight follows the track
 
 `Rocket_Update` runs two swept queries a tick through

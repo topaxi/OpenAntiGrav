@@ -323,8 +323,55 @@ pub const TRACK_BLAST_SIZE_RATIO: f32 = 1.45;
 /// from the rocket's impact point.
 pub const CRAFT_BLAST_DROP: f32 = 2.5;
 
-/// How long a blast flash is drawn for, in seconds. **Invented.**
-pub const BLAST_FLASH_SECONDS: f32 = 0.35;
+/// How many puffs of smoke a projectile leaves behind it.
+///
+/// **The trail is recovered; its shape is not.** The original attaches
+/// `WO_ROCKET_FLARE` to every rocket at launch and it is the only effect the
+/// rocket carries in flight - there is no separate `WO_ROCKET_TRAIL` on the
+/// disc, unlike the Shuriken, which has both a `_HEAD` and a `_TRAIL`. So one
+/// emitter draws both the glow at the nose and the streak behind it. What that
+/// emitter's particles look like is in the undecoded `.pob` payload
+/// (`docs/formats/pob.md`), so the count, the spacing and the fade here are all
+/// invented.
+///
+/// One puff a tick at 60 Hz, so eight of them is an eighth of a second of
+/// travel - about 35 units at a Venom rocket's speed, or two craft lengths.
+/// Counted in `oag_render::exhaust::MAX_SPRITES`' budget table; **raising it
+/// means raising that too**, or the extra puffs are silently truncated.
+pub const PROJECTILE_TRAIL_PUFFS: usize = 8;
+
+/// Half-width of the youngest smoke puff, in world units. **Invented.**
+pub const TRAIL_PUFF_HALF_SIZE: f32 = 0.7;
+
+/// How much wider the oldest puff is than the youngest.
+///
+/// **Invented**, and the reason the trail reads as smoke rather than as a row of
+/// dots: real exhaust spreads as it is left behind, so the puffs grow while they
+/// fade.
+pub const TRAIL_PUFF_SPREAD: f32 = 2.6;
+
+/// Alpha of the youngest smoke puff.
+///
+/// **Invented, and deliberately low.** These are drawn through the engine
+/// flare's *additive* pipeline, where several overlapping puffs sum: at a high
+/// alpha a trail turns into a solid white bar and swallows the rocket in front
+/// of it. The trail's density comes from the count, not from any one puff.
+pub const TRAIL_PUFF_ALPHA: f32 = 0.32;
+
+/// How long a blast flash is drawn for, in seconds.
+///
+/// **Invented**, and raised from `0.35` once a real volley could be watched: at
+/// a third of a second an impact was over before it registered as anything.
+pub const BLAST_FLASH_SECONDS: f32 = 0.6;
+
+/// How many overlapping puffs one blast is drawn as.
+///
+/// **Invented.** One additive billboard reads as a flat disc whatever its size;
+/// three at different sizes and offsets, expanding at different rates, read as
+/// a fireball. The original draws a whole authored particle system
+/// (`WO_ROCKET_EXPLO`, `WO_ROCKET_EXPLO_TRACK`) whose parameters are undecoded,
+/// so this is a stand-in that is *legible*, not one that is right.
+pub const BLAST_PUFFS: usize = 3;
 
 /// How much faster a craft assumes a Turbo will make it, when deciding whether
 /// it can afford to fire one.
@@ -2547,6 +2594,15 @@ pub struct Race {
     /// See [`TRACK_BLAST_SIZE_RATIO`] and
     /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
     blast_flash_on_track: [bool; oag_gameplay::projectile::MAX_PROJECTILES],
+    /// Where each projectile has been, newest first, for its smoke trail.
+    ///
+    /// **Render-only state**, like the blast flashes beside it: a trail is drawn
+    /// and never read back, so it cannot reach the simulation and is not hashed.
+    /// Indexed by projectile slot, and reset when a slot empties so a new
+    /// projectile never inherits the last one's streak.
+    projectile_trail: [[Vec3; PROJECTILE_TRAIL_PUFFS]; oag_gameplay::projectile::MAX_PROJECTILES],
+    /// How many entries of each [`Self::projectile_trail`] row are real.
+    projectile_trail_len: [usize; oag_gameplay::projectile::MAX_PROJECTILES],
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason
@@ -2876,6 +2932,9 @@ impl Race {
             blast_flash_left: [0.0; oag_gameplay::projectile::MAX_PROJECTILES],
             blast_flash_point: [Vec3::ZERO; oag_gameplay::projectile::MAX_PROJECTILES],
             blast_flash_on_track: [false; oag_gameplay::projectile::MAX_PROJECTILES],
+            projectile_trail: [[Vec3::ZERO; PROJECTILE_TRAIL_PUFFS];
+                oag_gameplay::projectile::MAX_PROJECTILES],
+            projectile_trail_len: [0; oag_gameplay::projectile::MAX_PROJECTILES],
             boost_kick: 0.0,
             boost_fov_kick: crate::display::BoostFovKick::DEFAULT,
             flaps: [0.0, 0.0],
@@ -3610,6 +3669,9 @@ impl Race {
             damage_rules,
         );
         self.advance_blast_flashes();
+        // After `projectile::step`, so a puff is laid where the projectile
+        // actually ended the tick.
+        self.advance_projectile_trails();
         for impact in impacts.iter().flatten() {
             self.ignite_blast_flash(impact.point, impact.struck.map(usize::from));
         }
@@ -4135,6 +4197,30 @@ impl Race {
         }
     }
 
+    /// Lays down one smoke puff behind every projectile still in the air.
+    ///
+    /// Newest first, so the render can fade by index without knowing the tick.
+    /// **Called after the projectiles have flown**, so the head of the trail is
+    /// where the projectile is now rather than a tick behind it.
+    ///
+    /// A slot with nothing in it has its trail dropped rather than left to
+    /// linger. Smoke that outlived its rocket would be the nicer picture, but
+    /// the slot is reused the moment anything else is fired and the streak would
+    /// then belong to two projectiles at once.
+    fn advance_projectile_trails(&mut self) {
+        for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
+            if projectile.kind.is_none() {
+                self.projectile_trail_len[slot] = 0;
+                continue;
+            }
+            let row = &mut self.projectile_trail[slot];
+            let filled = self.projectile_trail_len[slot].min(PROJECTILE_TRAIL_PUFFS - 1);
+            row.copy_within(0..filled, 1);
+            row[0] = projectile.position;
+            self.projectile_trail_len[slot] = (filled + 1).min(PROJECTILE_TRAIL_PUFFS);
+        }
+    }
+
     /// This frame's projectile and blast sprites, in the engine flare's shape.
     ///
     /// `right` and `up` are the camera's, read out of the view matrix the same
@@ -4174,6 +4260,23 @@ impl Race {
             };
             vertices.extend(exhaust::sprite(centre, right, up, half, 1.0));
         }
+        // The smoke behind them. Oldest puffs are widest and faintest, which is
+        // what makes a row of billboards read as a spreading streak rather than
+        // as beads on a string.
+        for (slot, len) in self.projectile_trail_len.iter().enumerate() {
+            for (age, point) in self.projectile_trail[slot][..*len].iter().enumerate() {
+                // `age` 0 is the newest. Fades linearly to nothing at the tail,
+                // so the oldest puff is invisible rather than popping out.
+                let along = age as f32 / PROJECTILE_TRAIL_PUFFS as f32;
+                vertices.extend(exhaust::sprite(
+                    *point,
+                    right,
+                    up,
+                    TRAIL_PUFF_HALF_SIZE * (1.0 + along * TRAIL_PUFF_SPREAD),
+                    TRAIL_PUFF_ALPHA * (1.0 - along),
+                ));
+            }
+        }
         for ((left, point), on_track) in self
             .blast_flash_left
             .iter()
@@ -4191,13 +4294,24 @@ impl Race {
             } else {
                 1.0
             };
-            vertices.extend(exhaust::sprite(
-                *point,
-                right,
-                up,
-                BLAST_FLASH_HALF_SIZE * scale * (0.4 + age),
-                1.0 - age,
-            ));
+            // [`BLAST_PUFFS`] overlapping billboards rather than one. Each is a
+            // different size and expands at a different rate, and they are
+            // spread along the camera's own axes so the group has an outline
+            // instead of being one concentric disc.
+            for puff in 0..BLAST_PUFFS {
+                let bias = puff as f32 / BLAST_PUFFS as f32;
+                let offset = BLAST_FLASH_HALF_SIZE * 0.35 * bias;
+                let centre = *point + right * offset * (1.0 - 2.0 * bias) + up * offset * 0.5;
+                vertices.extend(exhaust::sprite(
+                    centre,
+                    right,
+                    up,
+                    BLAST_FLASH_HALF_SIZE * scale * (0.35 + bias * 0.4) * (0.4 + age * 1.4),
+                    // The core fades fastest, so the blast collapses to its
+                    // outer smoke rather than dimming uniformly.
+                    (1.0 - age).powf(1.0 + bias) * 0.85,
+                ));
+            }
         }
         vertices
     }
@@ -8789,7 +8903,10 @@ mod tests {
             "an empty sky must draw nothing rather than a quad at the origin"
         );
 
-        // The worst case: every slot in the air and every flash burning.
+        // The worst case: every slot in the air with a full-length smoke trail,
+        // and every flash burning. A trail only reaches its full length after
+        // `PROJECTILE_TRAIL_PUFFS` ticks, so it is filled here directly rather
+        // than by flying the array for long enough.
         for slot in 0..oag_gameplay::projectile::MAX_PROJECTILES {
             race.world.projectiles.spawn(
                 oag_formats::weapons::Weapon::Rocket,
@@ -8798,15 +8915,21 @@ mod tests {
                 0,
             );
             race.blast_flash_left[slot] = BLAST_FLASH_SECONDS;
+            race.projectile_trail_len[slot] = PROJECTILE_TRAIL_PUFFS;
         }
         // The billboard fallback, which is the worst case for this buffer: the
         // modelled path emits the same count of (smaller) flare quads, so
         // asserting the fallback bounds both.
         let vertices = race.projectile_sprites(right, up, false);
+        // One head sprite and `PROJECTILE_TRAIL_PUFFS` smoke puffs per
+        // projectile, plus `BLAST_PUFFS` per burning flash. This arithmetic is
+        // `oag_render::exhaust::MAX_SPRITES`' own table, restated as an
+        // assertion so the two cannot drift apart silently.
+        let per_slot = 1 + PROJECTILE_TRAIL_PUFFS + BLAST_PUFFS;
         assert_eq!(
             vertices.len(),
-            oag_gameplay::projectile::MAX_PROJECTILES * 2 * 6,
-            "six vertices per rocket and per flash"
+            oag_gameplay::projectile::MAX_PROJECTILES * per_slot * 6,
+            "six vertices per head, per smoke puff and per blast puff"
         );
         // Every craft's flare shares this buffer with the projectiles, so the
         // worst case is a full grid of flares *plus* a full sky of rockets.

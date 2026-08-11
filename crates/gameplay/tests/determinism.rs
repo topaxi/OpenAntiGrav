@@ -231,6 +231,17 @@ fn run(ticks: u32) -> (u64, u64) {
 ///      contribution; the rest of the distance to the constants below is the
 ///      flight model, which is the point of the change.
 ///
+/// - **Moved an eighth time 2026-08-11**, when `MAX_PROJECTILES` went from 16 to
+///   128. Sixteen could not hold one simultaneous volley from a full grid (24),
+///   let alone an Eliminator race; the original's own pool is 48 and this is
+///   deliberately past it. **Isolated the same way the field additions were**:
+///   with the constant put back to 16 and nothing else changed, the constants
+///   this commit replaces - `0x8a04_20ea_d659_f08e` / `0x3005_5382_1116_2a30`
+///   at 60 and `0xd934_4be0_d70e_dc17` / `0x9ca7_8a00_bbbb_29ad` at 600 -
+///   reproduce bit for bit. Every slot is hashed whether or not it is occupied, so what moved
+///   is 112 more empty slots entering the stream, not anything the simulation
+///   does: this scenario fires one rocket and never fills a second slot.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -238,8 +249,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x8a04_20ea_d659_f08e, 0x3005_5382_1116_2a30),
-    (600, 0xd934_4be0_d70e_dc17, 0x9ca7_8a00_bbbb_29ad),
+    (60, 0xa5da_c62a_2212_9d4e, 0x6bee_c82b_ab07_f1b0),
+    (600, 0x66f0_b689_1a11_14d7, 0x2fce_d7b6_4514_e12d),
 ];
 
 #[test]

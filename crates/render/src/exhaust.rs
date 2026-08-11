@@ -1017,15 +1017,22 @@ pub const MAX_TRAILS: usize = 8;
 /// | source | quads |
 /// | --- | ---: |
 /// | one engine flare per craft ([`MAX_TRAILS`]) | 8 |
-/// | one sprite per projectile in flight | 16 |
-/// | one sprite per blast flash | 16 |
-/// | **total** | **40** |
+/// | one sprite per projectile in flight | 128 |
+/// | a smoke puff per trail sample per projectile (8 x 128) | 1024 |
+/// | three puffs per blast flash (3 x 128) | 384 |
+/// | **total** | **1544** |
+///
+/// `oag_gameplay::projectile::MAX_PROJECTILES` is 128 - sized for an Eliminator
+/// race rather than for the original's 48-slot pool, since the hardware this
+/// runs on is not a 2007 handheld. At six vertices a quad this buffer is about
+/// half a megabyte, allocated once; only the quads actually produced are
+/// uploaded each frame.
 ///
 /// **A too-small budget here truncates silently** - [`Pipeline::upload`] clamps
 /// with `min` - which is exactly how the projectile sprites first came out
 /// invisible with nothing in the logs. Anything appending to this buffer has to
 /// be counted here.
-pub const MAX_SPRITES: usize = 48;
+pub const MAX_SPRITES: usize = 1552;
 
 /// The maximum vertices [`Pipeline`]'s buffer holds, six per [`MAX_SPRITES`].
 pub const MAX_VERTICES: usize = MAX_SPRITES * 6;
@@ -1036,8 +1043,9 @@ pub const MAX_VERTICES: usize = MAX_SPRITES * 6;
 /// A **compile-time** assertion rather than a test, because the failure it
 /// guards against is invisible at runtime: the picture is simply missing the
 /// thing that was appended. The right-hand side is [`MAX_SPRITES`]' own table:
-/// one flare per craft, plus a projectile and a blast flash per projectile slot.
-const _: () = assert!(MAX_SPRITES >= MAX_TRAILS + 2 * 16);
+/// one flare per craft, then per projectile slot a head sprite, eight trail
+/// puffs and three blast puffs.
+const _: () = assert!(MAX_SPRITES >= MAX_TRAILS + (1 + 8 + 3) * 128);
 
 /// One craft's ribbon: three layers of `TRAIL_SAMPLES - 1` segments, each a
 /// four-quad diamond tube.
