@@ -87,6 +87,44 @@ pub struct Tuning {
     /// only knows about the point being aimed at, not about where the craft
     /// ends up while it gets there.
     pub corridor_use: f32,
+    /// The lowest both-sides airbrake command that counts as braking.
+    ///
+    /// **`oag_physics::controls::update` gates the brake on both inputs being
+    /// strictly positive and never reads their level**, so an epsilon command
+    /// on both sides buys the whole of the deceleration at almost no cost in
+    /// grip - `max(L, R)` is what the grip coefficient reads. That is faithful
+    /// for the PSP's digital shoulder buttons and degenerate for the analog
+    /// axis `oag_gameplay`'s input snapshot admits, and this is the floor that
+    /// keeps the driver out of it.
+    pub brake_floor: f32,
+    /// Extra both-sides brake per unit of overspeed, as a fraction of target.
+    ///
+    /// **It buys no extra deceleration.** See [`Tuning::brake_floor`]: the
+    /// brake ramps at one rate whatever the command. What it spends is grip,
+    /// so this is how fast a driver gives up cornering to shed speed it should
+    /// not have had.
+    pub brake_gain: f32,
+    /// Turn-rate error, in radians per second, below which no differential
+    /// airbrake is applied at all.
+    ///
+    /// Keeps the differential out of the small-signal regime entirely, so the
+    /// loop linearised about the line is the one `tests/closed_loop.rs`
+    /// measured, unchanged.
+    pub trail_deadband: f32,
+    /// Differential airbrake per radian per second of turn-rate error past
+    /// [`Tuning::trail_deadband`].
+    pub trail_gain: f32,
+    /// Ceiling on the differential.
+    pub trail_max: f32,
+    /// How saturated the steering command must be, as a fraction of full lock,
+    /// before the differential engages.
+    ///
+    /// **The gate that makes this safe.** Below it the steering loop still has
+    /// authority of its own, and a second path acting in parallel with a loop
+    /// that already has authority is precisely the oscillation this crate was
+    /// rewritten to remove. Above it the loop has run out of lock and the yaw
+    /// the differential adds is authority the loop cannot produce at all.
+    pub trail_saturation: f32,
 }
 
 impl Default for Tuning {
@@ -101,6 +139,12 @@ impl Default for Tuning {
             brake_lookahead: 2.5,
             brake_margin: 0.05,
             corridor_use: 0.6,
+            brake_floor: 0.35,
+            brake_gain: 2.0,
+            trail_deadband: 0.15,
+            trail_gain: 1.2,
+            trail_max: 0.6,
+            trail_saturation: 0.85,
         }
     }
 }
@@ -348,18 +392,16 @@ impl Driver {
         let steer = self.steering(state, line, look, speed, tuning, &personality);
         let window = look * tuning.brake_lookahead * personality.patience;
         let curvature = line.max_curvature(index, window, look * 0.5);
-        let (thrust, brake) = throttle(speed, curvature, tuning, &personality);
+        let target = corner_target(curvature, tuning, &personality);
+        let (thrust, brake) = throttle(speed, target, tuning);
+        let differential = trail(&steer, speed, target, tuning);
+        let (airbrake_left, airbrake_right) = airbrakes(brake, differential, tuning.brake_floor);
 
         ShipControls {
-            steer_x: steer,
+            steer_x: steer.command,
             thrust,
-            // **Both sides, or neither.** A single airbrake yaws the craft toward
-            // the side it is held, so tying one to the steering command closes a
-            // second feedback loop around a plant that already oscillates - which
-            // is exactly what the first version of this crate did. Cornering on
-            // the airbrakes is real and is deferred; see `docs/gameplay/ai.md`.
-            airbrake_left: brake,
-            airbrake_right: brake,
+            airbrake_left,
+            airbrake_right,
             ..ShipControls::default()
         }
     }
@@ -381,11 +423,7 @@ impl Driver {
         }
         let span = (tuning.look_min + tuning.look_speed * speed) * 0.5;
         let curvature = line.max_curvature(self.index as usize, distance, span);
-        if curvature <= f32::EPSILON {
-            return true;
-        }
-        let limit = (tuning.lateral_accel * self.personality().commitment / curvature).sqrt();
-        speed <= limit
+        speed <= corner_target(curvature, tuning, &self.personality())
     }
 
     /// The steering command, as a turn-rate error.
@@ -413,7 +451,7 @@ impl Driver {
         speed: f32,
         tuning: &Tuning,
         personality: &Personality,
-    ) -> f32 {
+    ) -> Steer {
         let body = &state.body;
         let aim = line.aim(self.index as usize, look);
         // **The drift moves the aim point, not the command.** Noise added to the
@@ -426,7 +464,7 @@ impl Driver {
         let to_aim = aim - body.position;
         let distance = to_aim.length();
         if distance <= f32::EPSILON {
-            return 0.0;
+            return Steer::STRAIGHT;
         }
 
         // Positive is to the craft's right.
@@ -442,7 +480,11 @@ impl Driver {
         // track rolls.
         let actual = -body.angular_velocity.dot(body.up());
 
-        (tuning.rate_gain * (wanted - actual)).clamp(-1.0, 1.0)
+        let rate_error = wanted - actual;
+        Steer {
+            command: (tuning.rate_gain * rate_error).clamp(-1.0, 1.0),
+            rate_error,
+        }
     }
 
     /// How far off the authored line this driver is aiming, as a world-space
@@ -473,28 +515,157 @@ impl Driver {
     }
 }
 
-/// Thrust and braking from the speed the corner ahead allows.
+/// The steering command, and the turn-rate error it was computed from.
 ///
-/// `sqrt(lateral_accel / curvature)` is the ordinary cornering limit; a straight
-/// has no limit and gets full throttle. Bang-bang rather than a proportional
-/// controller because the craft's own engine ramp is the smoothing - see
-/// `oag_physics::params::Engine`.
+/// **The error travels with the command because [`trail`] has to be a function
+/// of the same signal the rate loop closed on.** Feeding it `command` instead
+/// would be a path from the loop's own output back into the plant it drives,
+/// which is a second loop around the first - the shape this crate was rewritten
+/// to remove.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Steer {
+    /// The steering input, `-1.0..=1.0`, positive to the right.
+    command: f32,
+    /// Wanted turn rate minus actual, in radians per second, positive to the
+    /// right.
+    rate_error: f32,
+}
+
+impl Steer {
+    /// No command and nothing left to correct.
+    const STRAIGHT: Self = Self {
+        command: 0.0,
+        rate_error: 0.0,
+    };
+}
+
+/// The fastest the corner ahead can be taken, or infinity where there is no
+/// corner.
 ///
+/// `sqrt(lateral_accel / curvature)` is the ordinary cornering limit.
 /// [`Personality::commitment`] scales the grip a driver assumes it has, so the
 /// eight targets are eight different numbers and the field does not lift off
 /// and brake in unison. It is under the square root, so a spread of a few per
 /// cent in commitment is half that in speed.
-fn throttle(speed: f32, curvature: f32, tuning: &Tuning, personality: &Personality) -> (f32, f32) {
+///
+/// Infinity rather than an option, because every caller wants "is this speed
+/// allowed", and `speed <= f32::INFINITY` is the right answer for a straight
+/// without a branch of its own.
+fn corner_target(curvature: f32, tuning: &Tuning, personality: &Personality) -> f32 {
     if curvature <= f32::EPSILON {
+        return f32::INFINITY;
+    }
+    (tuning.lateral_accel * personality.commitment / curvature).sqrt()
+}
+
+/// Thrust, and the brake held on **both** sides, from the speed the corner
+/// ahead allows.
+///
+/// Past [`Tuning::brake_margin`] the command climbs from
+/// [`Tuning::brake_floor`] with the overspeed rather than snapping to one.
+///
+/// **This does not ramp the deceleration.** `oag_physics::controls::update`
+/// gates `ShipState::brake` on both inputs being strictly positive and its ramp
+/// rate never reads their level, so a command of `0.35` and a command of `1.0`
+/// slow the craft at exactly the same rate. What climbs with the command is
+/// `max(L, R)`, which is what the lateral-grip coefficient reads. So this is a
+/// dial on **how much cornering grip the deceleration is bought with**, and a
+/// driver only a little over its target keeps the grip it is about to need.
+fn throttle(speed: f32, target: f32, tuning: &Tuning) -> (f32, f32) {
+    if speed <= target {
         return (1.0, 0.0);
     }
-    let target = (tuning.lateral_accel * personality.commitment / curvature).sqrt();
-    if speed <= target {
-        (1.0, 0.0)
-    } else if speed > target * (1.0 + tuning.brake_margin) {
-        (0.0, 1.0)
+    // Finite, because `speed <= target` already returned for an infinite one.
+    let overspeed = speed / target - 1.0;
+    if overspeed <= tuning.brake_margin {
+        return (0.0, 0.0);
+    }
+    let brake = (tuning.brake_floor + (overspeed - tuning.brake_margin) * tuning.brake_gain)
+        .clamp(tuning.brake_floor, 1.0);
+    (0.0, brake)
+}
+
+/// The differential airbrake: how much harder one side is held than the other,
+/// positive when the extra braking goes on the **right**.
+///
+/// # This is not a brake
+///
+/// Braking one side alone yaws the nose toward that side, pushes the body away
+/// from it, adds a little forward speed, and cuts lateral grip exactly as hard
+/// as holding both sides would - and it engages no deceleration at all, because
+/// that needs both. Three of those four are the wrong sign for what "trail
+/// braking" usually means. What it actually buys is **yaw authority, paid for
+/// in grip**, which is why it is spent only where the steering loop has run out
+/// of authority of its own.
+///
+/// Three gates, each doing a different job:
+///
+/// - **Saturation.** Below [`Tuning::trail_saturation`] of full lock the rate
+///   loop still has authority, and a second path in parallel with it is the
+///   oscillation this crate was rewritten to remove. Above it the loop is
+///   asking for more than the steering input can deliver.
+/// - **Deadband.** Keeps it out of the small-signal regime, so the loop
+///   linearised about the line is provably the one `tests/closed_loop.rs`
+///   measured.
+/// - **Overspeed.** Never below the corner's target speed, which is corner
+///   exit - where the grip is wanted for accelerating and where the forward
+///   slide term is at its largest. On a straight `target` is infinite and this
+///   gate is what keeps the differential off it.
+///
+/// No slew limiting here, and none needed: this is a *target*, and
+/// `oag_physics::controls::update` ramps the airbrake states toward it at
+/// `Airbrake::gain`/`falloff`. The plant is the rate limiter, so the driver
+/// needs no state of its own to remember.
+fn trail(steer: &Steer, speed: f32, target: f32, tuning: &Tuning) -> f32 {
+    if speed < target
+        || steer.command.abs() < tuning.trail_saturation
+        || steer.rate_error.abs() <= tuning.trail_deadband
+    {
+        return 0.0;
+    }
+    let past = steer.rate_error.abs() - tuning.trail_deadband;
+    let magnitude = (past * tuning.trail_gain).min(tuning.trail_max);
+    // Positive `rate_error` is a craft that wants to turn further right, and a
+    // nose-right yaw needs `imbalance = L - R` negative - so the **right** side
+    // is the one braked. Getting this backwards is what `5ad69f3` shipped for
+    // months; `the_differential_brakes_the_side_the_nose_is_turning_toward`
+    // pins it, and `oag_physics::airbrake`'s own header settles the sign.
+    if steer.rate_error >= 0.0 {
+        magnitude
     } else {
-        (0.0, 0.0)
+        -magnitude
+    }
+}
+
+/// The two airbrake commands, from the symmetric brake and the differential.
+///
+/// The two sides are an interval of width `differential` slid to sit as near
+/// the symmetric brake as it will go, rather than the brake plus and minus half
+/// of it. Two reasons, and both are about not losing the yaw where it is most
+/// needed:
+///
+/// - **A craft braking flat out has no headroom above.** Adding to one side
+///   alone would clip against `1.0` and deliver nothing, exactly in the corner
+///   the driver is most in trouble in. Sliding the interval down instead keeps
+///   the imbalance the caller asked for.
+/// - **The low side must stay strictly positive whenever the brake is on**,
+///   because both sides positive is the only thing that engages
+///   `ShipState::brake`. Dropping one to zero mid-corner would silently cancel
+///   the deceleration. `floor` is the limit it may slide to; below it the
+///   differential is what shrinks, never the brake.
+///
+/// With the brake off, `floor` is zero and one side rises from nothing: yaw
+/// authority and no deceleration, which is what a differential airbrake
+/// physically is.
+fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
+    let limit = if brake > 0.0 { floor } else { 0.0 };
+    let width = differential.abs().min(1.0 - limit);
+    let low = brake.clamp(limit, 1.0 - width);
+    let high = low + width;
+    if differential >= 0.0 {
+        (low, high)
+    } else {
+        (high, low)
     }
 }
 
@@ -599,10 +770,11 @@ mod tests {
         );
     }
 
-    /// Braking uses both sides. A single airbrake yaws the craft, which would
-    /// close a second loop around the steering.
+    /// Braking uses both sides while the steering loop still has authority. A
+    /// single airbrake yaws the craft, so tying one to the steering below
+    /// saturation would close a second loop around it - see [`trail`].
     #[test]
-    fn braking_is_symmetric() {
+    fn braking_is_symmetric_until_the_steering_loop_saturates() {
         let tuning = Tuning::default();
         let line = Line::new(
             (0..128)
@@ -612,35 +784,217 @@ mod tests {
                 })
                 .collect(),
         );
-        let mut driver = Driver::default();
-        let controls = driver.drive(&craft(line.point(0), 200.0), &line, &tuning);
-        assert_eq!(controls.airbrake_left, controls.airbrake_right);
+        // Well over the corner's target, so the brakes are on throughout; the
+        // craft's own turn rate is swept to find the one that leaves the
+        // steering loop short of lock. `actual` is `-angular_velocity.y` while
+        // the orientation is the identity, so this is sweeping the rate error
+        // through zero.
+        let mut unsaturated = 0;
+        for step in -200..=200 {
+            let mut state = craft(line.point(0), 200.0);
+            state.body.angular_velocity = Vec3::new(0.0, step as f32 * 0.02, 0.0);
+            let controls = Driver::default().drive(&state, &line, &tuning);
+            if controls.steer_x.abs() >= tuning.trail_saturation {
+                continue;
+            }
+            unsaturated += 1;
+            assert_eq!(
+                controls.airbrake_left, controls.airbrake_right,
+                "unsaturated at steer {}, but the airbrakes differ",
+                controls.steer_x
+            );
+            assert!(
+                controls.airbrake_left > 0.0,
+                "a 60-unit circle at 200 needs brakes"
+            );
+        }
         assert!(
-            controls.airbrake_left > 0.0,
-            "a 60-unit circle at 200 needs brakes"
+            unsaturated > 0,
+            "the sweep never left the loop unsaturated, so this proves nothing"
         );
+    }
+
+    /// The other half of the pair above, and the feature itself: once the loop
+    /// is out of lock and the craft is over the corner's speed, the brakes stop
+    /// being symmetric and the extra goes on the side it is turning toward.
+    #[test]
+    fn a_saturated_driver_over_its_corner_speed_brakes_asymmetrically() {
+        let tuning = Tuning::default();
+        let line = Line::new(
+            (0..128)
+                .map(|step| {
+                    let angle = std::f32::consts::TAU * step as f32 / 128.0;
+                    Vec3::new(60.0 * angle.cos(), 0.0, 60.0 * angle.sin())
+                })
+                .collect(),
+        );
+        let controls = Driver::default().drive(&craft(line.point(0), 200.0), &line, &tuning);
+        assert!(
+            controls.steer_x.abs() >= tuning.trail_saturation,
+            "a 60-unit circle at 200 should have the loop at lock, got {}",
+            controls.steer_x
+        );
+        assert_ne!(controls.airbrake_left, controls.airbrake_right);
+        // Steering left means the nose is going left, so the left side carries
+        // the extra.
+        if controls.steer_x < 0.0 {
+            assert!(controls.airbrake_left > controls.airbrake_right);
+        } else {
+            assert!(controls.airbrake_right > controls.airbrake_left);
+        }
+    }
+
+    /// The sign that `5ad69f3` shipped backwards for months. Positive rate
+    /// error is a craft wanting to turn further right; a nose-right yaw needs
+    /// `imbalance = L - R` negative, so the **right** side is braked.
+    #[test]
+    fn the_differential_brakes_the_side_the_nose_is_turning_toward() {
+        let tuning = Tuning::default();
+        let hard_right = Steer {
+            command: 1.0,
+            rate_error: 1.0,
+        };
+        let hard_left = Steer {
+            command: -1.0,
+            rate_error: -1.0,
+        };
+        // Over the target, so the overspeed gate is open.
+        assert!(trail(&hard_right, 100.0, 50.0, &tuning) > 0.0);
+        assert!(trail(&hard_left, 100.0, 50.0, &tuning) < 0.0);
+
+        let (left, right) = airbrakes(
+            0.0,
+            trail(&hard_right, 100.0, 50.0, &tuning),
+            tuning.brake_floor,
+        );
+        assert!(right > left, "turning right brakes the right side");
+    }
+
+    #[test]
+    fn the_differential_is_dead_inside_its_deadband() {
+        let tuning = Tuning::default();
+        let saturated_but_settled = Steer {
+            command: 1.0,
+            rate_error: tuning.trail_deadband,
+        };
+        assert_eq!(trail(&saturated_but_settled, 100.0, 50.0, &tuning), 0.0);
+    }
+
+    #[test]
+    fn the_differential_waits_for_the_steering_loop_to_run_out_of_lock() {
+        let tuning = Tuning::default();
+        let unsaturated = Steer {
+            command: tuning.trail_saturation - 0.01,
+            rate_error: 1.0,
+        };
+        assert_eq!(trail(&unsaturated, 100.0, 50.0, &tuning), 0.0);
+    }
+
+    /// Below the corner's target speed is corner exit, where the grip is wanted
+    /// for accelerating. A straight has an infinite target, so this is also
+    /// what keeps the differential off one.
+    #[test]
+    fn the_differential_never_acts_on_corner_exit() {
+        let tuning = Tuning::default();
+        let hard = Steer {
+            command: 1.0,
+            rate_error: 1.0,
+        };
+        assert_eq!(trail(&hard, 49.0, 50.0, &tuning), 0.0);
+        assert_eq!(trail(&hard, 300.0, f32::INFINITY, &tuning), 0.0);
+    }
+
+    /// A yaw request must never drop a side to zero while braking: both sides
+    /// strictly positive is the only thing that engages `ShipState::brake`.
+    #[test]
+    fn a_differential_never_cancels_the_brake_it_is_layered_on() {
+        let floor = Tuning::default().brake_floor;
+        for brake in [floor, 0.5, 0.8, 1.0] {
+            for differential in [-1.0f32, -0.6, -0.1, 0.0, 0.1, 0.6, 1.0] {
+                let (left, right) = airbrakes(brake, differential, floor);
+                assert!(
+                    left > 0.0 && right > 0.0,
+                    "brake {brake} with differential {differential} broke the \
+                     both-held gate: {left}, {right}"
+                );
+                assert!((0.0..=1.0).contains(&left) && (0.0..=1.0).contains(&right));
+            }
+        }
+    }
+
+    /// The reason the interval slides rather than being clipped: a craft
+    /// braking flat out has no headroom above, and that is the corner it most
+    /// needs to rotate in.
+    #[test]
+    fn a_differential_survives_a_craft_already_braking_flat_out() {
+        let floor = Tuning::default().brake_floor;
+        let (left, right) = airbrakes(1.0, 0.6, floor);
+        assert!((right - left - 0.6).abs() < 1.0e-6, "got {left}, {right}");
+        assert_eq!(right, 1.0);
+        assert!(left >= floor);
+    }
+
+    /// With the brake off, one side rises from nothing: yaw and no
+    /// deceleration, which is what a differential airbrake physically is.
+    #[test]
+    fn a_differential_with_no_brake_engages_no_brake() {
+        let (left, right) = airbrakes(0.0, 0.4, Tuning::default().brake_floor);
+        assert_eq!(left, 0.0);
+        assert!((right - 0.4).abs() < 1.0e-6);
     }
 
     #[test]
     fn a_straight_has_no_speed_limit() {
-        assert_eq!(
-            throttle(500.0, 0.0, &Tuning::default(), &Personality::NEUTRAL),
-            (1.0, 0.0)
-        );
+        let tuning = Tuning::default();
+        let target = corner_target(0.0, &tuning, &Personality::NEUTRAL);
+        assert_eq!(target, f32::INFINITY);
+        assert_eq!(throttle(500.0, target, &tuning), (1.0, 0.0));
     }
 
     #[test]
     fn a_corner_taken_too_fast_brakes_and_taken_slowly_does_not() {
         let tuning = Tuning::default();
-        let target = (tuning.lateral_accel / 0.01).sqrt();
-        assert_eq!(
-            throttle(target * 0.5, 0.01, &tuning, &Personality::NEUTRAL),
-            (1.0, 0.0)
+        let target = corner_target(0.01, &tuning, &Personality::NEUTRAL);
+        assert_eq!(throttle(target * 0.5, target, &tuning), (1.0, 0.0));
+        assert_eq!(throttle(target * 2.0, target, &tuning), (0.0, 1.0));
+    }
+
+    /// The finding that makes a proportional brake worth having: the command
+    /// level is not a deceleration, it is how much cornering grip the
+    /// deceleration is bought with. See [`Tuning::brake_floor`].
+    #[test]
+    fn a_brake_climbs_with_the_overspeed_and_never_starts_below_the_floor() {
+        let tuning = Tuning::default();
+        let target = 100.0;
+
+        // Inside the margin: lift off, but do not touch the airbrakes.
+        assert_eq!(throttle(target * 1.02, target, &tuning), (0.0, 0.0));
+
+        // Just past it: braking begins at the floor, not at an epsilon.
+        let (_, just_past) = throttle(target * 1.051, target, &tuning);
+        assert!(
+            (just_past - tuning.brake_floor).abs() < 0.01,
+            "braking should start at the floor, got {just_past}"
         );
-        assert_eq!(
-            throttle(target * 2.0, 0.01, &tuning, &Personality::NEUTRAL),
-            (0.0, 1.0)
-        );
+
+        // Further past it: more grip spent, monotonically, up to full.
+        let (_, further) = throttle(target * 1.2, target, &tuning);
+        assert!(further > just_past);
+        assert_eq!(throttle(target * 3.0, target, &tuning).1, 1.0);
+    }
+
+    #[test]
+    fn a_driver_never_brakes_below_the_floor() {
+        let tuning = Tuning::default();
+        let target = 100.0;
+        for step in 0..400 {
+            let speed = target * (1.0 + step as f32 * 0.01);
+            let (_, brake) = throttle(speed, target, &tuning);
+            assert!(
+                brake == 0.0 || brake >= tuning.brake_floor,
+                "speed {speed} gave a brake of {brake}, between zero and the floor"
+            );
+        }
     }
 
     /// The turn rate the geometry asks for is bounded, or a craft thrown clear of
@@ -830,9 +1184,14 @@ mod tests {
             ..Personality::NEUTRAL
         };
         // A speed between the two targets: one lifts, the other does not.
-        let target = (tuning.lateral_accel / 0.01).sqrt();
-        assert_eq!(throttle(target, 0.01, &tuning, &brave), (1.0, 0.0));
-        assert_eq!(throttle(target, 0.01, &tuning, &timid), (0.0, 1.0));
+        let speed = corner_target(0.01, &tuning, &Personality::NEUTRAL);
+        let (brave_thrust, brave_brake) =
+            throttle(speed, corner_target(0.01, &tuning, &brave), &tuning);
+        let (timid_thrust, timid_brake) =
+            throttle(speed, corner_target(0.01, &tuning, &timid), &tuning);
+        assert_eq!((brave_thrust, brave_brake), (1.0, 0.0));
+        assert_eq!(timid_thrust, 0.0, "the timid driver is over its own target");
+        assert!(timid_brake > 0.0, "and far enough over it to brake");
     }
 
     /// The wander argument is the driver's own tick count, so it has to advance

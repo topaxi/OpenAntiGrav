@@ -410,16 +410,69 @@ damping the plant needs. Three things fell out of the same fix:
   sample. A real track's samples are ~2.5 units apart, and a snapped aim point
   steps by that much each time the walk crosses one - a step in the commanded
   turn rate, injected into a high-gain loop.
-- **The airbrakes are symmetric or off.** A single airbrake yaws the craft toward
-  the side it is held, so tying one to the steering command closes a *second*
-  feedback loop around a plant that already oscillates. Cornering on the
-  airbrakes is real and is deferred. The recovered `<Controller>` has no airbrake
-  term either, which is consistent with cornering on steering and a conservative
-  speed target - and is **not** evidence for it.
+- **The airbrakes are symmetric until the steering loop runs out of lock.** A
+  single airbrake yaws the craft toward the side it is held, so tying one to the
+  steering *command* closes a second feedback loop around a plant that already
+  oscillates. What the driver does instead is in
+  [the airbrakes](#airbrakes-and-what-a-differential-one-actually-does) below.
+  The recovered `<Controller>` has no airbrake term at all, which is consistent
+  with cornering on steering and a conservative speed target - and is **not**
+  evidence for it.
 
-Throttle is bang-bang against `sqrt(lateral_accel / curvature)`, the ordinary
-cornering limit, taken over the **sharpest** bend within a braking window rather
-than at one point ahead - a corner has to be seen before it is entered.
+The speed target is `sqrt(lateral_accel / curvature)`, the ordinary cornering
+limit, taken over the **sharpest** bend within a braking window rather than at
+one point ahead - a corner has to be seen before it is entered.
+
+### Airbrakes, and what a differential one actually does
+
+Reading the force law before designing against it changed what the feature is.
+From `oag_physics::airbrake::evaluate`, with `imbalance = L - R` and the left
+side held:
+
+| term | effect |
+| --- | --- |
+| `local_angular.y = speed * turn * imbalance * 0.001` | nose yaws **toward** the braked side |
+| `world += right * speed * amount * imbalance` | body pushed **away** from it |
+| `world += forward * speed * slide * 0.001` | **forward**, so it adds a little speed |
+| grip `max(L, R) * (0.01 - slidegrip) - 1.0` | lateral grip cut as hard as by both sides |
+
+Three of those four are the wrong sign for what "trail braking" usually means,
+and a fifth fact settles it: `ShipState::brake`, which is the only thing that
+actually slows the craft, rises only while **both** inputs are positive. So a
+differential airbrake is **not a brake**. It is yaw authority bought with grip,
+and the driver spends it only where the steering loop has run out of authority
+of its own - `Tuning::trail_saturation`, plus a deadband that keeps it out of
+the small-signal regime and an overspeed gate that keeps it off corner exit,
+where the grip is wanted for accelerating and the forward slide term is largest.
+
+The design deliberately does not lean on the forward term: `params::Airbrake`'s
+own doc records that whether `drag` accelerates or decelerates is unresolved, and
+a feature justified by yaw authority survives that being settled either way.
+
+**A second finding, which made the symmetric brake proportional.**
+`oag_physics::controls::update` gates the brake ramp on a strict boolean over the
+raw command and its rate never reads the level, so commanding `0.3` on both sides
+and commanding `1.0` decelerate *identically*. What the level changes is
+`max(L, R)`, which is what the grip coefficient reads. A proportional brake is
+therefore a dial on **how much cornering grip the deceleration is bought with**,
+not on how hard it stops - which is a better knob than the one that was being
+reached for, and is why a driver only just over its target now keeps the grip it
+is about to need. The `> 0.0` gate is faithful for the PSP's digital shoulder
+buttons and degenerate for the analog axis the input snapshot admits, so
+`Tuning::brake_floor` keeps the driver out of the epsilon-command exploit rather
+than the recovered law being "fixed".
+
+**Measured**, over 1,800 ticks on the closed-loop oval, differential against
+symmetric:
+
+| corners | peak error from the line | ticks at full lock |
+| --- | --- | --- |
+| 120 units - the craft is not grip-limited | 7.5 against 7.4 | 23 against 18 |
+| 60 units - the craft understeers | **19.2 against 21.4** | **739 against 776** |
+
+So it earns its place exactly where the argument says it should and is within
+noise where the craft could already make the corner. That small negative on the
+wide oval is recorded rather than tuned away.
 
 `Race::step_opponents` gives each craft **its own** `Environment`, from the
 sample its own driver is standing on. Sharing the player's would fly seven craft
@@ -698,12 +751,28 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | A seeded driver stays inside the corridor, and the same seed drives the same race | `oag-ai`'s `closed_loop::a_seeded_driver_stays_inside_the_corridor`, `the_same_seed_drives_the_same_race` | yes |
 | The drift is smooth, bounded, and different per seed | `noise::tests`, five of them | yes |
 | The field spreads across the **disc's own** corridor, both sides of the line | `race_ground_truth::the_field_spreads_across_the_ai_corridor` | **no** - needs a disc image. **Run and passing as of 2026-08-11**: seven craft spread **16.6 units** across a corridor with 10.5 to spare either side of the line. |
+| The differential holds a corner the steering alone cannot, and does not ring | `closed_loop::a_differential_holds_a_corner_the_steering_alone_cannot` and `..._does_not_ring`, on a 60-unit oval with the airbrake fixture | yes |
+| And stays out of the way where the craft could already make the corner | `closed_loop::a_differential_barely_touches_a_corner_the_craft_can_already_make` | yes |
+| The differential brakes the side the nose is turning toward, is dead inside its deadband, waits for the loop to run out of lock, and never acts on corner exit | four tests in `driver::tests` | yes |
+| A yaw request never cancels the brake it is layered on, and survives a craft already braking flat out | `driver::tests::a_differential_never_cancels_the_brake_it_is_layered_on` and `..._survives_a_craft_already_braking_flat_out` | yes |
+| Braking starts at the floor rather than an epsilon, and climbs with the overspeed | `driver::tests::a_brake_climbs_with_the_overspeed_and_never_starts_below_the_floor`, `a_driver_never_brakes_below_the_floor` | yes |
+| **The default closed-loop fixture has no airbrakes at all** | `closed_loop::the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it` | yes |
+| And the airbrake fixture is not inert either | `closed_loop::the_airbrake_fixture_actually_slows_and_yaws_a_craft` | yes |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls
 reached the physics. `closed_loop.rs` does run the real force law, but on an
 infinite flat plane with invented handling - it says the controller is stable
 against a plant of the right *shape*, which is the property that was broken.
+
+**And `closed_loop.rs`'s default fixture has no airbrakes**: `handling()` ends
+`..Handling::ZERO` and sets neither `airbrake` nor `brakes`, so the ramped
+airbrake states never leave zero, `ShipState::brake` never rises, and every
+`imbalance` term is zero. Braking there is `thrust = 0` and nothing else, and
+every number that file quotes - the 84.1 against the 7.3 included - was measured
+on a craft whose airbrakes do nothing. Anything about airbrakes needs
+`handling_with_airbrakes()`, which is a second fixture on purpose: extending the
+first would silently re-baseline the regression the file exists for.
 **Whether the field actually drives a circuit is the ground-truth pair, and
 nothing else.**
 
