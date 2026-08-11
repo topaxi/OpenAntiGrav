@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # this script validates that every name here is a real workspace member, so it
 # cannot be listed ahead of time the way oag-audio once was.
 GAMEPLAY_CRATES = {
+    "oag-ai",
     "oag-core",
     "oag-gameplay",
     "oag-physics",

@@ -110,6 +110,7 @@ Existing crates:
 | `oag-tools` | `crates/tools` | CLI: `oag-unpack`, `oag-wad`. |
 | `oag-physics` | `crates/physics` | Ship dynamics and collision queries. Depends on `oag-core` and nothing else, deliberately. |
 | `oag-race` | `crates/race` | Race rules: modes, lap timing, track progress. |
+| `oag-ai` | `crates/ai` | Opponent behaviour: a driver that follows the authored racing line and emits ship controls. Depends on `oag-core` and `oag-physics` only. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct, the `InputSnapshot` type the simulation consumes, spline spawning. |
 | `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track ribbon, cameras. Owns no window. Reads `oag-pulse`'s tables, which runs against the arrows below and is allowed - rule 1 only forbids the other direction. |
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
@@ -117,7 +118,7 @@ Existing crates:
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
 | `oag-game` | `crates/game` | Composition root; boots the front end. A thin `[[bin]]` over `[lib]` so boot logic is testable headlessly. |
 
-Later crates (`oag-weapons`, `oag-ai`, `oag-audio`,
+Later crates (`oag-weapons`, `oag-audio`,
 `oag-ui`, `oag-replay`, `oag-net`) are
 added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the

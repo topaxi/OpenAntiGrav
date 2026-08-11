@@ -1650,6 +1650,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-ai"
+version = "0.1.0"
+dependencies = [
+ "oag-core",
+ "oag-physics",
+]
+
+[[package]]
 name = "oag-assets"
 version = "0.1.0"
 dependencies = [
@@ -1707,6 +1715,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-app",
  "gstreamer-video",
+ "oag-ai",
  "oag-assets",
  "oag-audio",
  "oag-core",
@@ -1734,6 +1743,7 @@ dependencies = [
 name = "oag-gameplay"
 version = "0.1.0"
 dependencies = [
+ "oag-ai",
  "oag-core",
  "oag-formats",
  "oag-physics",
@@ -1820,6 +1830,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "oag-ai",
  "oag-assets",
  "oag-core",
  "oag-formats",

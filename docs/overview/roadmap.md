@@ -563,15 +563,23 @@ seen from the authoring side.
       **coefficient itself**, which measures `0.035000` exactly on 25 of 25
       `Ship_Damage` calls spanning a factor of 225 in magnitude. The one claim
       left unmeasured is `entity + 0x368`, the field gating the damage path.
-- [ ] AI. **The original's own tuning data is now read and written up** - see
-      [ai.md](../gameplay/ai.md). Both games ship their AI as XML: a lookahead
-      PD steering controller per speed class, and a speed *schedule* keyed on
-      the player's race position and the gap to the player. The steering half
-      is close to what `oag-trace plan` already does; the longitudinal half is
-      the work, and this project replaces the schedule with a physics-derived
-      speed profile rather than porting it. What is still missing is the unit
-      semantics of the thrust numbers, which needs one targeted Ghidra session
-      on the consumer of `AIStats` - the same page lists the hooks.
+- [~] AI. **A basic driver runs and a single race fields a grid** (2026-08-11) -
+      see [ai.md](../gameplay/ai.md). `oag-ai` follows the disc's own authored
+      racing line with a lookahead-plus-cross-track controller damped on the
+      craft's own yaw rate, and takes its speed from the curvature ahead rather
+      than from the player: **neither the gap to the player nor the player's
+      race position is an input to anything, and there is nowhere to pass them
+      in.** The original's own tuning data is read and written up on the same
+      page - both games ship their AI as XML, a per-class steering controller
+      and a speed *schedule* keyed on the player - and the parser is named in
+      Ghidra at 88.
+      **What is left**, in the order it is worth doing: the skill vector and
+      mistake injection that make an opponent beatable at a chosen level, a lap
+      counter per craft (`oag_race::RaceState` is single-ship, so only the
+      player's laps are counted and the field cannot be *placed*), pads and
+      weapons for an opponent, and per-craft liveries. Also still unread: the
+      unit semantics of the original's thrust numbers, which needs a live read
+      under PPSSPP rather than more decompilation.
 - [ ] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
       waveforms decode already (M1); what is missing is placing them in the world.

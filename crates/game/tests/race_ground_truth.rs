@@ -103,16 +103,37 @@ fn load() -> Option<race::Loaded> {
     Some(loaded)
 }
 
-/// The grid measurement's own scenario: [`Options::opponents`] forced on, since
-/// none of the three modes this crate implements races with a grid on its own -
-/// see `Mode::has_opponents`. Only [`our_grid_is_the_originals_grid`] wants this;
-/// every other test in this file wants a solo ship, which is what [`load`] gives.
+/// The grid measurement's own scenario: [`Options::opponents`] forced on.
+///
+/// `Mode::SingleRace` now fields a grid on its own, so the override is no longer
+/// the only way to get eight craft - but it is still the right one *here*,
+/// because it puts a full grid on the default mode and so keeps the grid
+/// measurements independent of which mode is being raced. The tests that want
+/// the AI driving use [`load_single_race`] instead. Every other test in this
+/// file wants a solo ship, which is what [`load`] gives.
 fn load_with_opponents() -> Option<race::Loaded> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
         class: SpeedClass::Venom,
         opponents: true,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    for line in &loaded.report {
+        println!("{line}");
+    }
+    Some(loaded)
+}
+
+/// A single race: the one mode that fields a grid because the mode says so,
+/// rather than because a test override forced one.
+fn load_single_race() -> Option<race::Loaded> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: SpeedClass::Venom,
+        mode: oag_race::Mode::SingleRace,
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -786,6 +807,120 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
 /// onto its own footprint and the surface is neither flat nor straight over the
 /// grid's 138 units. A layout that is right in the abstract and buries the front
 /// row is still wrong.
+/// The AI's own composition check: eight craft, driven, on a real circuit.
+///
+/// Everything under this has synthetic tests - `oag-ai`'s controller against a
+/// circle, `race::tests` against a straight - and none of them can see the thing
+/// that actually goes wrong: whether the racing line built from the *disc's* own
+/// `racing_line` offsets runs where the collision geometry is, and whether a
+/// craft flown along it stays on the track rather than understeering into the
+/// first wall.
+///
+/// **Deliberately not a lap-time assertion.** Nothing here claims the field is
+/// fast, or that it is as fast as the original's - there is no measurement of
+/// the original's opponents to compare against, and the speed law is this
+/// project's own rather than a recovery. What is asserted is that they left the
+/// grid, went the right way, made progress and were still on the track after ten
+/// seconds. See `docs/gameplay/ai.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_ai_drives_the_field_along_the_track() {
+    let Some(loaded) = load_single_race() else {
+        return;
+    };
+    let bound = envelope(&loaded);
+    let mut race = race::Race::start(loaded.setup);
+    assert_eq!(
+        race.ship_count(),
+        8,
+        "a single race should field a full grid without an override"
+    );
+
+    let start: Vec<_> = race
+        .world
+        .ships
+        .iter()
+        .map(|ship| ship.physics.body.position)
+        .collect();
+    let heading: Vec<_> = race
+        .world
+        .ships
+        .iter()
+        .map(|ship| ship.physics.body.forward())
+        .collect();
+
+    // Ten seconds, the same window `a_ship_stays_on_the_track_for_ten_seconds`
+    // uses, and with the player released so that what moves is the AI.
+    for _ in 0..600 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+
+    for slot in 1..8 {
+        let ship = &race.world.ships[slot];
+        let moved = ship.physics.body.position - start[slot];
+
+        assert!(
+            moved.length() > 10.0,
+            "opponent {slot} moved {:.2} units in ten seconds, so it is not being driven",
+            moved.length()
+        );
+        assert!(
+            moved.dot(heading[slot]) > 0.0,
+            "opponent {slot} went backwards along the grid's own forward"
+        );
+        assert!(
+            ship.driver.index != 0,
+            "opponent {slot}'s driver never left the line's first point"
+        );
+
+        let distance = race
+            .spline()
+            .distance_to(ship.physics.body.position)
+            .expect("the track has samples");
+        assert!(
+            distance < bound,
+            "opponent {slot} is {distance:.2} from the track, past the {bound:.2} envelope"
+        );
+        assert!(
+            ship.physics.body.position.is_finite(),
+            "opponent {slot} left the world"
+        );
+    }
+}
+
+/// Two runs of one race are one race, opponents included.
+///
+/// The drivers hold their state on the ships and therefore inside the world
+/// snapshot, which is the property that makes this true - see
+/// `oag_gameplay::Ship::driver`. It is asserted on real geometry because that is
+/// where a divergence would come from: the collision query, not the controller.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_driven_field_replays_identically() {
+    let (Some(first), Some(second)) = (load_single_race(), load_single_race()) else {
+        return;
+    };
+    let mut first = race::Race::start(first.setup);
+    let mut second = race::Race::start(second.setup);
+
+    for _ in 0..300 {
+        first.tick(&oag_gameplay::InputSnapshot::default());
+        second.tick(&oag_gameplay::InputSnapshot::default());
+    }
+
+    for slot in 0..8 {
+        assert_eq!(
+            first.world.ships[slot].physics.body.position,
+            second.world.ships[slot].physics.body.position,
+            "slot {slot} diverged between two runs of the same race"
+        );
+        assert_eq!(
+            first.world.ships[slot].driver, second.world.ships[slot].driver,
+            "slot {slot}'s driver diverged between two runs of the same race"
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_whole_grid_lands_on_the_track() {

@@ -1,0 +1,20 @@
+[package]
+name = "oag-ai"
+description = "Opponent behaviour: a line-following driver that produces ship controls"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `oag-formats` is deliberately absent, and so is every renderer, audio and
+# windowing crate. This crate takes a racing line as a list of world-space
+# points the caller built, not as a decoded `.vex` node, so it needs no asset
+# types at all - which is what lets it be tested against a synthetic circle with
+# no disc image anywhere. See `docs/architecture/workspace-layout.md`.
+[dependencies]
+oag-core.workspace = true
+oag-physics.workspace = true
+
+[lints]
+workspace = true

@@ -23,6 +23,7 @@ path = "src/main.rs"
 [dependencies]
 oag-pulse.workspace = true
 oag-assets.workspace = true
+oag-ai.workspace = true
 oag-core.workspace = true
 oag-formats.workspace = true
 oag-gameplay.workspace = true

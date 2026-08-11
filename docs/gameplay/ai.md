@@ -1,8 +1,11 @@
 # Opponent AI
 
-What drives the seven other craft. **Nothing does, yet** - this page is the
-recovery that has to land before the [roadmap](../overview/roadmap.md)'s M5 `AI`
-item can be built, plus the design decision that recovery led to.
+What drives the seven other craft. **A basic driver does, as of 2026-08-11**:
+[`oag-ai`](../../crates/ai/src/lib.rs) follows the authored racing line and takes
+its speed from the corner ahead, and `Mode::SingleRace` fields a grid because the
+mode says so rather than because a test forced one. This page is the recovery
+that made that possible, the design it is the first half of, and what is still
+unbuilt.
 
 The short version: **the original's opponents do not race.** They follow an
 authored line with a damped controller, and their *speed* comes from a schedule
@@ -362,16 +365,78 @@ that a field of optimal drivers has, which is that identical drivers stop
 producing overtakes. It is on the table as an implementation of the mistake
 injection line above, not as a port of Pure's numbers.
 
+## What is built
+
+`oag-ai` is two types and one function. It depends on `oag-core` and
+`oag-physics` and nothing else - no asset types, so the controller is tested
+against a synthetic circle with no disc image anywhere.
+
+| Piece | What it is |
+| --- | --- |
+| `Line` | The line to drive, as world-space points, closed. Built by the caller; on a real track that is `pos - HOVER_LIFT * down + racing_line * lateral` per spline sample, so it is **the disc's own line**, and it is index-parallel to the sample table so a craft locates itself once per tick rather than twice. |
+| `Tuning` | The controller's constants. **Ours** - none of the disc's own per-class values appear in the tree, per [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md). |
+| `Driver` | One `u32`: where the craft last found itself. `Copy`, and it lives on `Ship` inside the world snapshot, so a replay reproduces the drive. |
+
+The law, per tick: locate the craft in a window around its last index; aim a
+speed-scaled lookahead down the line; steer on the sum of the pure-pursuit
+heading error and the cross-track offset, damped by the craft's **own yaw rate**
+about its **own up axis** - not by a finite difference of the error, which would
+divide by `dt` and amplify a one-tick wobble sixtyfold, and not about world up,
+which is wrong the moment the track rolls. Throttle is bang-bang against
+`sqrt(lateral_accel / curvature)`, the ordinary cornering limit, with the craft's
+own engine ramp as the smoothing. The inside airbrake comes on past a steering
+threshold, which is **ours with nothing behind it** - the recovered
+`<Controller>` has no airbrake term at all.
+
+`Race::step_opponents` gives each craft **its own** `Environment`, from the
+sample its own driver is standing on. Sharing the player's would fly seven craft
+against the player's piece of track, which is what the old "they do not move"
+comment in `race.rs` was warning about.
+
+**A wrecked opponent stops driving.** A single race runs with `Damage` on, so an
+opponent grinding a wall empties its pool exactly as the player does. It is then
+stepped with released controls rather than skipped, because the destroyed
+sequence runs inside the step and has to finish. Nothing reads its `Eliminated`
+state afterwards, so it coasts, settles and is passed - the explosion, the
+respawn and the elimination bookkeeping are all unbuilt.
+
+### What an opponent still does not get
+
+Each is separate work, and each is listed so nobody assumes otherwise: speed pads
+and weapon pads (the sweep is built around the player's position), a lap counter
+of its own (`oag_race::RaceState` is single-ship), a respawn when it falls off,
+anything at all happening when it is eliminated, any weapon, and a livery that is
+not the player's. **Nor any of the skill
+work above** - no skill vector, no mistakes, no difficulty selection, no `[ai]`
+config block. Those are the second half.
+
+### What is verified, and where
+
+| Claim | Where | Runs in CI |
+| --- | --- | --- |
+| The controller steers back toward its line, brakes for a corner, damps its own yaw | `oag-ai`'s own tests, against a synthetic circle and straight | yes |
+| Curvature reads `1/radius` on a circle | `line::tests::curvature_approximates_one_over_the_radius` | yes |
+| Every opponent is stepped with controls a driver chose | `race::tests::the_opponents_are_driven_rather_than_parked` | yes |
+| A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image |
+| Two runs of one race stay identical, drivers included | `race_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image |
+
+The synthetic tests cannot assert that anyone *moves*: `race::tests`' craft is
+built on `Handling::ZERO` with an empty collision world, so no force law runs at
+all. They assert that the controls reached the physics. **Whether the field
+actually drives a circuit is the ground-truth pair, and nothing else.**
+
+Nothing anywhere asserts a lap time. There is no measurement of the original's
+opponents to compare against, and the speed law is this project's own.
+
 ## Where this sits
 
-The prerequisites are done: the [racing line and corridor](../formats/track.md),
-the [grid](../ghidra/functions/psp-pulse-usa/grid.md) that seats eight craft
-within 2.4 units of the original's own positions, and the
-[steering controller](../tools/autopilot-planning.md) in `oag-trace`. What is
-missing is the crate: `oag-ai` does not exist yet, and per
-[workspace-layout](../architecture/workspace-layout.md) it is not created until
-its milestone opens.
+The prerequisites were all done before this landed: the
+[racing line and corridor](../formats/track.md), the
+[grid](../ghidra/functions/psp-pulse-usa/grid.md) that seats eight craft within
+2.4 units of the original's own positions, and a controller of the right shape
+already in `oag-trace` (see [autopilot-planning](../tools/autopilot-planning.md);
+it is a planning aid and says of itself that it is no claim about the original).
 
-Until then `race::Options::opponents` seats a full grid of stationary craft so
-the grid ground-truth test can exercise it. See the M5 `AI` item on the
-[roadmap](../overview/roadmap.md).
+`race::Options::opponents` remains, and now means only "field a grid from a mode
+that would not ask for one" - which is what the grid's own ground-truth test
+wants. See the M5 `AI` item on the [roadmap](../overview/roadmap.md).

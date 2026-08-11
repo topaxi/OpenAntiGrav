@@ -46,6 +46,17 @@ pub struct Ship {
     /// `ShipState::turbo_timer` instead, and the inventory itself changes no
     /// force.
     pub pickup: crate::pickup::Held,
+    /// Where this craft's driver last found itself on the racing line.
+    ///
+    /// Only an opponent uses it - slot 0 is flown by the player - and it is the
+    /// seed for the next windowed search rather than a lap-counting index.
+    ///
+    /// **Here rather than beside the world**, because a driver whose state lived
+    /// in the composition root would be invisible to a snapshot, and two replays
+    /// of one race would not be the same race. It is one `u32` and stays `Copy`,
+    /// so the array is still a `memcpy`. The line it indexes into is *track*
+    /// data and is not in the world at all; see [`oag_ai::Line`].
+    pub driver: oag_ai::Driver,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -57,6 +68,7 @@ impl Default for Ship {
             handling: Handling::ZERO,
             segment: 0,
             pickup: crate::pickup::Held::empty(),
+            driver: oag_ai::Driver::default(),
             active: false,
         }
     }

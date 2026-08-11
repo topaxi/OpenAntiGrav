@@ -1866,6 +1866,31 @@ pub fn chase_params(block: handling::ExternalCamera) -> ChaseParams {
 /// as they did.
 pub use oag_gameplay::spawn::{box_inertia, spawn_height};
 
+/// The authored racing line, one point per spline sample.
+///
+/// Three things the disc carries and this reads: the sample position, the
+/// `HOVER_LIFT` the loader applies to it, and `racing_line` - the lateral offset
+/// the artists authored, in the sample's own `lateral` axis. The corridor around
+/// it (`ai_bound_left`, `ai_bound_right`) is *not* used yet; the basic driver
+/// tracks the line itself and the bounds are what a skill vector's line noise
+/// would spend. See `docs/formats/track.md` and `docs/gameplay/ai.md`.
+///
+/// Index-parallel to the sample table on purpose - see [`Race::racing_line`].
+#[must_use]
+fn racing_line(spline: &Spline) -> oag_ai::Line {
+    oag_ai::Line::new(
+        (0..spline.len())
+            .filter_map(|index| spline.sample(index))
+            .map(|sample| {
+                let down = Vec3::from_array(sample.down);
+                let lateral = Vec3::from_array(sample.lateral);
+                Vec3::from_array(sample.pos) - oag_formats::track::HOVER_LIFT * down
+                    + sample.racing_line * lateral
+            })
+            .collect(),
+    )
+}
+
 /// The spline resampled into a flat table, for locating a ship on the track.
 ///
 /// A `Vec` walked in order rather than any kind of spatial index: the nearest-sample
@@ -2062,6 +2087,17 @@ pub struct Race {
     pub world: World,
     collision: CollisionWorld,
     spline: Spline,
+    /// The authored racing line, as the opponents' drivers want it.
+    ///
+    /// Built once from [`Self::spline`] and **index-parallel to it**, so a
+    /// driver's place on the line is also its place in the sample table and no
+    /// craft pays for two searches. Track data rather than world state, which is
+    /// why it is here and the drivers themselves are on the ships. See
+    /// [`racing_line`] and `docs/gameplay/ai.md`.
+    racing_line: oag_ai::Line,
+    /// What the opponents' drivers are flown with. One set for the whole field:
+    /// per-craft variation is the skill work, and this is the basic driver.
+    ai_tuning: oag_ai::Tuning,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
     course: Option<Course>,
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on
@@ -2404,6 +2440,8 @@ impl Race {
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase);
 
         Self {
+            racing_line: racing_line(&spline),
+            ai_tuning: oag_ai::Tuning::default(),
             world,
             collision,
             spline,
@@ -2609,6 +2647,80 @@ impl Race {
         &self.spline
     }
 
+    /// Drives and steps every craft that is not the player's.
+    ///
+    /// Slot order, and only slot order: iteration here feeds simulation state, so
+    /// it must be something that cannot vary between runs. See
+    /// `docs/architecture/determinism.md`.
+    ///
+    /// Each craft gets **its own** `Environment`, built from the sample its own
+    /// driver is standing on. That is what the old "they do not move" comment
+    /// meant by an opponent stepped with the player's environment reading the
+    /// player's track sample: the hover probes and the magstrip hold both take
+    /// their surface from it, so sharing one would fly seven craft against the
+    /// player's piece of track.
+    ///
+    /// **What an opponent does not get yet**, each deliberate and each a
+    /// separate piece of work: speed pads and weapon pads (the sweep is built
+    /// around the player's own position), a lap counter of its own
+    /// ([`oag_race::RaceState`] is single-ship), a respawn when it falls off, and
+    /// any weapon at all.
+    fn step_opponents(&mut self) {
+        let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
+        for slot in 1..self.world.ship_count as usize {
+            let ship = &mut self.world.ships[slot];
+            if !ship.active {
+                continue;
+            }
+
+            // **A wrecked opponent stops driving, and is still stepped.** A single
+            // race runs with `Damage` on - see `oag_gameplay::damage_rules` - so
+            // an opponent grinding a wall empties its pool exactly as the player
+            // does, and `oag_physics::step` will keep integrating whatever it is
+            // handed. Left driving, it would be a wreck holding full throttle
+            // round the circuit, which is worse than the parked hulls this
+            // replaced. Released rather than skipped, because
+            // `damage::advance_state` runs *inside* the step and the destroyed
+            // sequence has to finish.
+            //
+            // What happens next is the gap: nothing reads an opponent's
+            // `Eliminated`, because the explosion, the respawn and the
+            // elimination bookkeeping are all unbuilt. So it coasts, settles and
+            // is passed. See `oag_physics::damage::CraftState`.
+            let controls = if ship.physics.craft_state == oag_physics::CraftState::Racing {
+                ship.driver
+                    .drive(&ship.physics, &self.racing_line, &self.ai_tuning)
+            } else {
+                oag_physics::ShipControls::default()
+            };
+
+            // The driver just located itself, and the line is index-parallel to
+            // the sample table, so this costs a lookup rather than a search.
+            let index = ship.driver.index as usize;
+            let track_sample = self.spline.sample(index).map(Spline::track_sample);
+            let track_sample_next = self
+                .spline
+                .sample(index + 1)
+                .map(Spline::track_sample)
+                .or(track_sample);
+            let env = Environment {
+                track_sample,
+                track_sample_next,
+                class_gravity_scale: self.class_gravity_scale,
+                damage_rules,
+                ..Environment::default()
+            };
+            oag_physics::step(
+                &mut ship.physics,
+                &controls,
+                &ship.handling,
+                &env,
+                &self.collision,
+                self.dt,
+            );
+        }
+    }
+
     /// Advances the simulation one fixed tick, and the camera with it.
     ///
     /// The snapshot is mapped through [`oag_gameplay::ship_controls`], which is the
@@ -2701,6 +2813,8 @@ impl Race {
             // back-to-back respawns was happening is over.
             self.respawns_in_a_row = 0;
         }
+
+        self.step_opponents();
 
         self.world.tick += 1;
 
@@ -6148,6 +6262,117 @@ mod tests {
     /// test is about the trigger rather than about the spawn.
     fn enveloping_pad() -> Vec<oag_formats::pads::PadVolume> {
         vec![pad_at(Vec3::ZERO, 1.0e6)]
+    }
+
+    /// A full grid on the synthetic straight, which needs an authored slot: the
+    /// whole grid layout is offsets from one, and `Race::start` refuses to guess
+    /// at it. Faces along `+x`, which is the direction `straight_track` runs.
+    fn race_with_a_grid() -> Race {
+        let mut setup = setup(hulled_handling());
+        setup.mode = Mode::SingleRace;
+        setup.start_position = Some(oag_formats::track::StartPosition {
+            position: [0.0, 0.0, 0.0],
+            left: [0.0, 0.0, -1.0],
+            up: [0.0, 1.0, 0.0],
+            forward: [1.0, 0.0, 0.0],
+        });
+        Race::start(setup)
+    }
+
+    /// The wiring: every opponent is stepped, with controls a driver chose.
+    ///
+    /// **What this cannot assert, and why.** [`setup`] builds a craft on
+    /// [`Handling::ZERO`] with an empty [`CollisionWorld`] - no engine
+    /// coefficient, no gravity, nothing to hover on - so no force law runs and
+    /// nobody here *moves*, whatever they hold. Inventing an engine to make them
+    /// move would be asserting this project's own arithmetic against itself.
+    ///
+    /// So the claim is the one this level actually owns: the controls a driver
+    /// chose **reached the physics**. `ShipState::thrust` is written from the
+    /// input every step, on the `0..=100` scale
+    /// ([`oag_physics::controls::CONTROL_RANGE`]), and it is `0` on a craft that
+    /// was spawned and then never stepped - which is what this engine did until
+    /// the AI landed. That the field then goes somewhere is
+    /// `race_ground_truth::the_ai_drives_the_field_along_the_track`, on real
+    /// geometry, where it can be true.
+    #[test]
+    fn the_opponents_are_driven_rather_than_parked() {
+        let mut race = race_with_a_grid();
+        assert_eq!(race.ship_count(), 8);
+        for _ in 0..120 {
+            race.tick(&InputSnapshot::default());
+        }
+
+        for slot in 1..8 {
+            let ship = &race.world.ships[slot];
+            assert_eq!(
+                ship.physics.thrust,
+                oag_physics::controls::CONTROL_RANGE,
+                "opponent {slot} is holding no throttle, so it is not being stepped"
+            );
+            assert!(
+                ship.physics.body.position.is_finite(),
+                "opponent {slot} left the world"
+            );
+        }
+    }
+
+    /// A wreck must not go on racing. A single race runs with `Damage` on, so an
+    /// opponent can empty its pool, and `oag_physics::step` integrates whatever
+    /// it is handed - which before this was a destroyed craft at full throttle.
+    #[test]
+    fn a_destroyed_opponent_stops_driving() {
+        let mut race = race_with_a_grid();
+        race.tick(&InputSnapshot::default());
+        assert_eq!(
+            race.world.ships[1].physics.thrust,
+            oag_physics::controls::CONTROL_RANGE
+        );
+
+        race.world.ships[1].physics.craft_state = oag_physics::CraftState::Destroyed;
+        race.tick(&InputSnapshot::default());
+        assert_eq!(
+            race.world.ships[1].physics.thrust, 0.0,
+            "a destroyed opponent is still holding throttle"
+        );
+        // The rest of the field is unaffected: this is per craft, not a mode.
+        assert_eq!(
+            race.world.ships[2].physics.thrust,
+            oag_physics::controls::CONTROL_RANGE
+        );
+    }
+
+    /// A driver has to *find* itself on the line, or the windowed search it seeds
+    /// drifts away from the craft it belongs to.
+    ///
+    /// The grid puts every opponent ahead of the player along the straight, and
+    /// the line is sampled every 2.5 units, so a driver that located itself
+    /// honestly is not still standing on point zero - even with no force law to
+    /// move it there.
+    #[test]
+    fn every_driver_locates_itself_on_the_line() {
+        let mut race = race_with_a_grid();
+        race.tick(&InputSnapshot::default());
+        for slot in 1..8 {
+            assert!(
+                race.world.ships[slot].driver.index > 0,
+                "opponent {slot}'s driver is still on the line's first point"
+            );
+        }
+    }
+
+    /// The player is not driven by the AI, whatever else is on the grid. A
+    /// released snapshot has to stay a released snapshot for slot 0, or the human
+    /// has lost control of their own craft.
+    #[test]
+    fn the_ai_never_touches_the_players_craft() {
+        let mut race = race_with_a_grid();
+        for _ in 0..120 {
+            race.tick(&InputSnapshot::default());
+        }
+        let player = &race.world.ships[0];
+        assert_eq!(player.physics.thrust, 0.0);
+        assert_eq!(player.driver, oag_ai::Driver::default());
     }
 
     #[test]

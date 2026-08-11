@@ -173,18 +173,21 @@ impl Mode {
     /// `AI DIFFICULTY` to `N/A`, the same tell `race-modes.md` already uses for
     /// weapons - see [`Self::weapons_enabled`].
     ///
-    /// **For [`Mode::SingleRace`] it is a departure, and the method name flips
-    /// meaning there.** The original's answer is `true` - `AI DIFFICULTY` is
-    /// selectable and `MSC_EVENT_SR` promises "a full grid of opponents" - but
-    /// nothing drives an opponent in this engine yet. Seven parked hulls in the
-    /// player's own livery is a worse race than an empty track and would read as
-    /// a regression rather than as progress, so the field stays empty until the
-    /// AI lands and this returns `true`. `oag_game::race::Options::opponents`
-    /// remains the escape hatch the grid's own ground-truth test uses to place
-    /// all eight without a mode asking for them.
+    /// **For [`Mode::SingleRace`] it is `true`, and agrees with the original.**
+    /// `AI DIFFICULTY` is selectable there and `MSC_EVENT_SR` promises "a full
+    /// grid of opponents". This method returned `false` until 2026-08-11 for a
+    /// reason that has now gone: nothing drove an opponent, and seven parked
+    /// hulls would have read as a regression rather than as progress. `oag-ai`
+    /// drives them, so the field is real. What it is *not* yet is a field of
+    /// distinguishable craft - they still wear the player's livery, which is the
+    /// separate roadmap item.
+    ///
+    /// `oag_game::race::Options::opponents` remains the escape hatch the grid's
+    /// own ground-truth test uses to place all eight from a mode that does not
+    /// ask for them.
     #[must_use]
     pub const fn has_opponents(self) -> bool {
-        false
+        matches!(self, Self::SingleRace)
     }
 
     /// Whether the original arms `Weapon Pad`s for this mode.
@@ -271,14 +274,14 @@ mod tests {
         assert!(!Mode::SingleRace.is_auto_throttle());
     }
 
-    /// Including the single race, whose real answer is `true` - see
-    /// [`Mode::has_opponents`], which explains why this build says otherwise and
-    /// what has to land before it stops.
+    /// The three single-ship modes are the original's own answer, measured on
+    /// the running game; the single race is the one mode that fields a grid.
     #[test]
-    fn no_mode_races_with_opponents_yet() {
-        for mode in Mode::ALL {
-            assert!(!mode.has_opponents(), "{mode:?} should have no opponents");
-        }
+    fn only_the_single_race_fields_a_grid() {
+        assert!(Mode::SingleRace.has_opponents());
+        assert!(!Mode::TimeTrial.has_opponents());
+        assert!(!Mode::SpeedLap.has_opponents());
+        assert!(!Mode::Zone.has_opponents());
     }
 
     /// The switch the pickup system hangs off. It is the *only* mode-dependent

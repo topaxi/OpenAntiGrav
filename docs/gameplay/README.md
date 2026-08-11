@@ -1,8 +1,8 @@
 # Gameplay
 
-> **Started.** Milestone M5. Four modes run and a `Weapon Pad` hands out a
-> pickup; everything that needs opponents does not - which is now the only
-> thing blocking the milestone.
+> **Started.** Milestone M5. Four modes run, a `Weapon Pad` hands out a pickup,
+> and a single race fields seven opponents that drive. What they still lack is
+> the skill work, laps of their own, weapons and liveries - see [ai](ai.md).
 
 ## Pages
 
@@ -23,8 +23,10 @@
 
 - [x] Laps and finishing conditions, for the single-ship modes
 - [x] Game modes: time trial, Zone, speed lap
-- [ ] Race rules: grid order, positions
-- [~] Game modes: **single race** runs without opponents; tournament and
+- [~] Race rules: grid order is recovered and eight craft are **driven**; race
+      *positions* are not - `oag_race::RaceState` counts the player's laps only,
+      so nobody is placed
+- [~] Game modes: **single race** fields a driven grid; tournament and
       Eliminator do not exist
 - [~] Weapons: a pad hands out a pickup and Turbo has an effect; the other
       twelve do not

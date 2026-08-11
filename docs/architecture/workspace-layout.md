@@ -41,6 +41,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-input` | `crates/input` | Input mapping and the per-tick input snapshot. |
 | `oag-physics` | `crates/physics` | Ship dynamics and collision. |
 | `oag-race` | `crates/race` | Race rules, lap timing, track progress. |
+| `oag-ai` | `crates/ai` | Opponent behaviour: a line-following driver that emits ship controls. Depends on `oag-core` and `oag-physics` only. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct and the input snapshot the simulation consumes. |
 | `oag-audio` | `crates/audio` | The mixer and playback device; see [ADR-0018](adr/0018-audio-mixer-architecture.md). |
 | `oag-title` | `crates/title` | The engine-side *types* a title package fills in. Tables, no data. |
@@ -56,7 +57,6 @@ crate created before its shape is understood tends to get the wrong shape.
 | Crate | Milestone | Purpose |
 | --- | --- | --- |
 | `oag-weapons` | M5 | Pickups, projectiles, damage. |
-| `oag-ai` | M5 | Opponent behaviour. |
 | `oag-ui` | M5 | HUD and menus. |
 | `oag-replay` | M7 | Input recording and playback. |
 | `oag-net` | M8 | Multiplayer. |
@@ -147,6 +147,13 @@ never will: a crate that owns a window cannot be shared with a game that owns it
 own. Its seam is `mesh_render::build(&device, &queue, &model, format)`, the same
 shape `oag-game`'s own front-end renderer already has, so each caller keeps its
 surface to itself.
+
+`oag-ai` opened with M5 (2026-08-11) and is the shape the table predicted, with
+one thing worth stating because it is what keeps rule 1 cheap: **it depends on
+`oag-core` and `oag-physics` and on no asset crate.** A driver takes the line it
+follows as a list of world-space points the caller built, not as a decoded track
+node, so the controller is tested against a synthetic circle with no disc image,
+no `oag-formats` and no GPU. See [ai.md](../gameplay/ai.md).
 
 `oag-assets` and `oag-game` both arrived earlier than the table above expected:
 the front end needed asset access and a binary before any of M4 existed.
