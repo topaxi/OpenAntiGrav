@@ -80,28 +80,70 @@ impl Line {
         best
     }
 
-    /// The point `distance` further along the line, and its index.
+    /// The point `distance` further along the line: its index, itself, and how
+    /// far along the line it actually is.
     ///
-    /// Walks the ring rather than interpolating, so the answer is always a real
-    /// point on the line. Gives up after one full lap so a degenerate line - all
-    /// points coincident - cannot spin forever.
+    /// **Interpolated onto the final segment**, not snapped to the nearest
+    /// control point. A real track's samples are about 2.5 units apart, so a
+    /// snapped aim point jumps by that much each time the walk crosses a sample
+    /// and injects a step into whatever reads it. The steering law reads it, and
+    /// a step in the aim point is a step in the commanded turn rate.
+    ///
+    /// The returned distance is the *travelled* one, which is what a caller
+    /// converting an offset into a curvature has to divide by - the requested
+    /// distance is a request, and on a curve the two differ.
+    ///
+    /// Gives up after one full lap, so a degenerate line whose points coincide
+    /// cannot spin forever.
     #[must_use]
-    pub fn ahead(&self, index: usize, distance: f32) -> (usize, Vec3) {
+    pub fn ahead(&self, index: usize, distance: f32) -> (usize, Vec3, f32) {
         let count = self.points.len();
         if count == 0 {
-            return (0, Vec3::ZERO);
+            return (0, Vec3::ZERO, 0.0);
         }
         let mut at = index % count;
         let mut travelled = 0.0;
         for _ in 0..count {
-            if travelled >= distance {
-                break;
-            }
             let next = (at + 1) % count;
-            travelled += self.points[at].distance(self.points[next]);
+            let step = self.points[at].distance(self.points[next]);
+            if travelled + step >= distance {
+                if step <= f32::EPSILON {
+                    break;
+                }
+                let fraction = ((distance - travelled) / step).clamp(0.0, 1.0);
+                let point = self.points[at] + (self.points[next] - self.points[at]) * fraction;
+                return (at, point, travelled + step * fraction);
+            }
+            travelled += step;
             at = next;
         }
-        (at, self.points[at])
+        (at, self.points[at], travelled)
+    }
+
+    /// The sharpest bend anywhere within `distance` ahead of `index`.
+    ///
+    /// A speed target built on the curvature at *one* point ahead brakes for a
+    /// corner only once the sample it happens to look at is inside it, which on a
+    /// long entry is too late. Taking the worst case over the whole braking
+    /// window means a craft slows for the tightest thing it can see.
+    #[must_use]
+    pub fn max_curvature(&self, index: usize, distance: f32, span: f32) -> f32 {
+        if self.points.len() < 3 || span <= 0.0 {
+            return 0.0;
+        }
+        let mut worst = 0.0f32;
+        let mut at = index;
+        let mut travelled = 0.0;
+        while travelled < distance {
+            worst = worst.max(self.curvature(at, span));
+            let (next, _, stepped) = self.ahead(at, span);
+            if stepped <= f32::EPSILON {
+                break;
+            }
+            travelled += stepped;
+            at = next;
+        }
+        worst
     }
 
     /// How sharply the line bends `span` ahead of `index`, in radians per unit.
@@ -118,9 +160,9 @@ impl Line {
         if self.points.len() < 3 {
             return 0.0;
         }
-        let (first, a) = self.ahead(index, span);
-        let (second, b) = self.ahead(first, span);
-        let (_, c) = self.ahead(second, span);
+        let (first, a, _) = self.ahead(index, span);
+        let (second, b, _) = self.ahead(first, span);
+        let (_, c, _) = self.ahead(second, span);
         let into = b - a;
         let out_of = c - b;
         // **The turn happens over the distance between the two chords' midpoints,
@@ -163,7 +205,7 @@ mod tests {
         assert!(line.is_empty());
         assert_eq!(line.point(7), Vec3::ZERO);
         assert_eq!(line.nearest(Vec3::ONE, 3, 20), 0);
-        assert_eq!(line.ahead(0, 50.0), (0, Vec3::ZERO));
+        assert_eq!(line.ahead(0, 50.0), (0, Vec3::ZERO, 0.0));
         assert_eq!(line.curvature(0, 10.0), 0.0);
     }
 
@@ -199,7 +241,11 @@ mod tests {
             Vec3::new(0.0, 0.0, 20.0),
             Vec3::new(0.0, 0.0, 30.0),
         ]);
-        assert_eq!(line.ahead(0, 15.0).0, 2);
+        // Interpolated: 15 units along is halfway between points 1 and 2.
+        let (index, point, travelled) = line.ahead(0, 15.0);
+        assert_eq!(index, 1);
+        assert!((point.z - 15.0).abs() < 1e-4, "point {point:?}");
+        assert!((travelled - 15.0).abs() < 1e-4, "travelled {travelled}");
         assert_eq!(line.ahead(0, 0.0).0, 0);
     }
 

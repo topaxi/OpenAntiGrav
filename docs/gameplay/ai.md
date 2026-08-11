@@ -377,16 +377,47 @@ against a synthetic circle with no disc image anywhere.
 | `Tuning` | The controller's constants. **Ours** - none of the disc's own per-class values appear in the tree, per [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md). |
 | `Driver` | One `u32`: where the craft last found itself. `Copy`, and it lives on `Ship` inside the world snapshot, so a replay reproduces the drive. |
 
-The law, per tick: locate the craft in a window around its last index; aim a
-speed-scaled lookahead down the line; steer on the sum of the pure-pursuit
-heading error and the cross-track offset, damped by the craft's **own yaw rate**
-about its **own up axis** - not by a finite difference of the error, which would
-divide by `dt` and amplify a one-tick wobble sixtyfold, and not about world up,
-which is wrong the moment the track rolls. Throttle is bang-bang against
-`sqrt(lateral_accel / curvature)`, the ordinary cornering limit, with the craft's
-own engine ramp as the smoothing. The inside airbrake comes on past a steering
-threshold, which is **ours with nothing behind it** - the recovered
-`<Controller>` has no airbrake term at all.
+### The plant decides the controller's shape
+
+`oag_physics::engine::steering` feeds the **torque** accumulator, so the steering
+input commands yaw *acceleration* - not a rate, and not a heading. On top of that
+`controls::ramp_steering` moves the steering state toward its target at a finite
+rate, so the input lags.
+
+A controller that sets steering in proportion to how far off the line it is is
+therefore proportional feedback around a double integrator with a lag. It
+overshoots, corrects, overshoots the other way, and keeps doing it. **The first
+version of this crate did exactly that and drove wall to wall.** No gain fixes
+it; the loop has to be closed one derivative in.
+
+So the law, per tick: locate the craft in a window around its last index; aim a
+speed-scaled lookahead down the line; convert the aim point's offset into the
+**curvature** of the arc that reaches it (`k = 2e/L²`, with `L` the *measured*
+distance to the aim point, not the requested lookahead); multiply by speed to get
+a **target turn rate**; and close the loop on the difference between that and the
+turn rate the craft actually has, about its **own** up axis - world up is wrong
+the moment the track rolls.
+
+Proportional feedback on a rate is derivative feedback on a heading, which is the
+damping the plant needs. Three things fell out of the same fix:
+
+- **No separate cross-track term.** The aim point is on the line and the craft is
+  not, so the vector between them already carries the offset. The first version
+  added a second cross-track term on top, double-counting the same error.
+- **The aim point is interpolated onto its segment**, not snapped to the nearest
+  sample. A real track's samples are ~2.5 units apart, and a snapped aim point
+  steps by that much each time the walk crosses one - a step in the commanded
+  turn rate, injected into a high-gain loop.
+- **The airbrakes are symmetric or off.** A single airbrake yaws the craft toward
+  the side it is held, so tying one to the steering command closes a *second*
+  feedback loop around a plant that already oscillates. Cornering on the
+  airbrakes is real and is deferred. The recovered `<Controller>` has no airbrake
+  term either, which is consistent with cornering on steering and a conservative
+  speed target - and is **not** evidence for it.
+
+Throttle is bang-bang against `sqrt(lateral_accel / curvature)`, the ordinary
+cornering limit, taken over the **sharpest** bend within a braking window rather
+than at one point ahead - a corner has to be seen before it is entered.
 
 `Race::step_opponents` gives each craft **its own** `Environment`, from the
 sample its own driver is standing on. Sharing the player's would fly seven craft
@@ -414,16 +445,25 @@ config block. Those are the second half.
 
 | Claim | Where | Runs in CI |
 | --- | --- | --- |
-| The controller steers back toward its line, brakes for a corner, damps its own yaw | `oag-ai`'s own tests, against a synthetic circle and straight | yes |
+| A craft driven round an oval tracks its line instead of weaving | `oag-ai`'s `tests/closed_loop.rs`, with the **real force law** on a flat plane | yes |
+| The controller steers back toward its line, brakes for a corner, is damped by its own turn rate | `oag-ai`'s own tests, against a synthetic circle and straight | yes |
 | Curvature reads `1/radius` on a circle | `line::tests::curvature_approximates_one_over_the_radius` | yes |
 | Every opponent is stepped with controls a driver chose | `race::tests::the_opponents_are_driven_rather_than_parked` | yes |
 | A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image |
 | Two runs of one race stay identical, drivers included | `race_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image |
 
-The synthetic tests cannot assert that anyone *moves*: `race::tests`' craft is
-built on `Handling::ZERO` with an empty collision world, so no force law runs at
-all. They assert that the controls reached the physics. **Whether the field
-actually drives a circuit is the ground-truth pair, and nothing else.**
+`race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
+so no force law runs there at all and those tests assert only that the controls
+reached the physics. `closed_loop.rs` does run the real force law, but on an
+infinite flat plane with invented handling - it says the controller is stable
+against a plant of the right *shape*, which is the property that was broken.
+**Whether the field actually drives a circuit is the ground-truth pair, and
+nothing else.**
+
+The wall-to-wall weave was reported from the running game, not caught by a test.
+`closed_loop.rs` was then written, watched failing at **84.1 units** of peak
+error from the line, and is at **7.3** after the rewrite. That is evidence the
+structural fix works; it is not a substitute for looking at the screen.
 
 Nothing anywhere asserts a lap time. There is no measurement of the original's
 opponents to compare against, and the speed law is this project's own.

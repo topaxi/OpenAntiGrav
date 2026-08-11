@@ -1,6 +1,25 @@
 //! Turning a craft's state and a line into the controls a craft is flown with.
+//!
+//! # The plant, and why the controller has the shape it has
+//!
+//! `oag_physics::engine::steering` feeds `Accumulators::local_angular`, which is
+//! **torque**. So the steering input commands yaw *acceleration* - not a yaw
+//! rate, and certainly not a heading. `controls::ramp_steering` puts a
+//! first-order lag in front of that, because the steering state moves toward its
+//! target at a finite rate rather than jumping.
+//!
+//! A controller that sets steering in proportion to how far off the line it is
+//! is therefore proportional feedback around a double integrator with a lag. It
+//! overshoots, corrects, overshoots the other way, and keeps doing it. **That is
+//! what the first version of this crate did, and it drove wall to wall.** No
+//! gain fixes it; the loop has to be closed one derivative in.
+//!
+//! So: the geometry produces a **target turn rate**, and the loop is closed on
+//! the turn rate the craft actually has. Proportional feedback on a rate is
+//! derivative feedback on a heading, which is the damping the plant needs.
+//! `tests/closed_loop.rs` is the regression, and it was watched failing before
+//! this was written.
 
-use oag_core::math::Vec3;
 use oag_physics::{ShipControls, ShipState};
 
 use crate::line::Line;
@@ -16,63 +35,58 @@ use crate::line::Line;
 /// format, a tuning table is the content itself. The shipped values are read off
 /// the player's own disc if anything ever wants them.
 ///
-/// The defaults below were tuned against this engine's own physics until eight
-/// craft got round a lap, which is all they claim.
+/// The defaults below were tuned against this engine's own physics, through
+/// `tests/closed_loop.rs`, until a craft got round without weaving.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tuning {
     /// Lookahead distance at a standstill.
     pub look_min: f32,
     /// Extra lookahead per unit of forward speed.
+    ///
+    /// Roughly "how many seconds ahead the craft looks". Longer is calmer and
+    /// cuts corners; shorter tracks the line harder and, past a point, is what
+    /// makes the loop ring.
     pub look_speed: f32,
     /// Lookahead ceiling. Past this a craft stops seeing the corner it is in.
     pub look_max: f32,
-    /// Gain on the combined heading and cross-track error.
-    pub steer_gain: f32,
-    /// Gain on the craft's own yaw rate, opposing it.
+    /// Gain from turn-rate error onto the steering input.
+    pub rate_gain: f32,
+    /// Ceiling on the turn rate the geometry may ask for, in radians per second.
     ///
-    /// The damping term is the *measured rotation*, not the change in error
-    /// between ticks. A finite difference of the error would divide by `dt` and
-    /// so amplify a one-tick wobble sixtyfold; yaw rate is the same quantity
-    /// without the division, and it is a thing the body already knows.
-    pub steer_damping: f32,
-    /// How much of the steering command comes from being *off* the line, as
-    /// opposed to *pointed away* from it.
-    pub xtrack_gain: f32,
-    /// Cross-track error past which the term saturates, so a craft that has been
-    /// knocked far off the line steers hard rather than absurdly.
-    pub xtrack_max: f32,
-    /// Steering magnitude past which the inside airbrake comes on.
-    ///
-    /// **Ours, with nothing behind it.** The recovered `<Controller>` has no
-    /// airbrake term at all, so either the original's opponents corner without
-    /// them or they do it somewhere this project has not read. A craft flown on
-    /// steering alone understeers out of the tighter corners at the higher speed
-    /// classes, so this exists to get a lap finished.
-    pub airbrake_at: f32,
+    /// A craft thrown far off its line computes an enormous required curvature;
+    /// without this it asks for a rate no hull can produce and holds full lock
+    /// all the way through the recovery, which is its own kind of weave.
+    pub max_turn_rate: f32,
     /// The lateral acceleration a craft is assumed to hold through a corner.
     ///
     /// Sets the speed target: on a corner of curvature `k` the target is
     /// `sqrt(lateral_accel / k)`, the standard cornering limit. Raising it makes
     /// a driver commit harder and, past what the hull can hold, into the wall.
+    ///
+    /// **Deliberately conservative**, because cornering here is steering and a
+    /// speed target and nothing else. The original's own `<Controller>` has no
+    /// airbrake term either - see the note on [`Tuning`] - which is consistent
+    /// with that and is *not* evidence for it.
     pub lateral_accel: f32,
-    /// Fraction over target at which the airbrakes are used to slow down, rather
-    /// than merely lifting off.
+    /// How far ahead the speed target looks for the sharpest bend, as a multiple
+    /// of the lookahead. A corner has to be seen before it is entered.
+    pub brake_lookahead: f32,
+    /// Fraction over target at which the airbrakes come on, rather than merely
+    /// lifting off.
     pub brake_margin: f32,
 }
 
 impl Default for Tuning {
     fn default() -> Self {
         Self {
-            look_min: 24.0,
-            look_speed: 0.45,
-            look_max: 120.0,
-            steer_gain: 2.2,
-            steer_damping: 0.35,
-            xtrack_gain: 0.04,
-            xtrack_max: 12.0,
-            airbrake_at: 0.45,
-            lateral_accel: 90.0,
-            brake_margin: 0.08,
+            look_min: 20.0,
+            look_speed: 0.35,
+            look_max: 90.0,
+            rate_gain: 5.0,
+            max_turn_rate: 1.2,
+            lateral_accel: 55.0,
+            brake_lookahead: 2.5,
+            brake_margin: 0.05,
         }
     }
 }
@@ -112,12 +126,9 @@ impl Driver {
         }
 
         let body = &state.body;
-        let position = body.position;
         let forward = body.forward();
-        let right = body.right();
-        let up = body.up();
 
-        let index = line.nearest(position, self.index as usize, SEARCH_WINDOW);
+        let index = line.nearest(body.position, self.index as usize, SEARCH_WINDOW);
         self.index = index as u32;
 
         // Forward speed rather than speed: a craft sliding sideways at 60 is not
@@ -125,68 +136,72 @@ impl Driver {
         // the corner is in time.
         let speed = body.linear_velocity.dot(forward).max(0.0);
         let look = (tuning.look_min + tuning.look_speed * speed).min(tuning.look_max);
-        let (_, aim) = line.ahead(index, look);
 
-        let steer = self.steering(position, aim, right, up, line.point(index), body, tuning);
-        let (thrust, brake) = throttle(speed, line.curvature(index, look * 0.5), tuning);
-
-        // The inside airbrake, on the side being steered toward. Held on top of
-        // whatever braking the speed target asked for, so a craft that is both
-        // too fast and turning hard gets both.
-        let inside = ((steer.abs() - tuning.airbrake_at) / (1.0 - tuning.airbrake_at))
-            .clamp(0.0, 1.0)
-            .max(brake);
-        let (left, right_brake) = if steer < 0.0 {
-            (inside, brake)
-        } else {
-            (brake, inside)
-        };
+        let steer = self.steering(state, line, look, speed, tuning);
+        let curvature = line.max_curvature(index, look * tuning.brake_lookahead, look * 0.5);
+        let (thrust, brake) = throttle(speed, curvature, tuning);
 
         ShipControls {
             steer_x: steer,
             thrust,
-            airbrake_left: left,
-            airbrake_right: right_brake,
+            // **Both sides, or neither.** A single airbrake yaws the craft toward
+            // the side it is held, so tying one to the steering command closes a
+            // second feedback loop around a plant that already oscillates - which
+            // is exactly what the first version of this crate did. Cornering on
+            // the airbrakes is real and is deferred; see `docs/gameplay/ai.md`.
+            airbrake_left: brake,
+            airbrake_right: brake,
             ..ShipControls::default()
         }
     }
 
-    /// The steering command: where the craft is pointed, where it is, and how
-    /// fast it is already turning.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "a controller reads what it reads; bundling these into a struct \
-                  would name the same seven values twice"
-    )]
+    /// The steering command, as a turn-rate error.
+    ///
+    /// Pure pursuit gives the curvature of the arc from the craft to a point on
+    /// the line: `k = 2 * e / L^2`, where `e` is how far off the craft's nose the
+    /// aim point sits and `L` is the distance to it. That curvature times the
+    /// craft's speed is the yaw rate needed to get there, and the loop is closed
+    /// on the difference between that and the rate the craft has.
+    ///
+    /// **`L` is the measured distance to the aim point, not the requested
+    /// lookahead.** They differ on a curve, and `k` divides by its square, so
+    /// using the request scales the whole command wrong exactly where the corner
+    /// is.
+    ///
+    /// Cross-track error needs no term of its own: the aim point is on the line
+    /// and the craft is not, so the vector between them already carries it. The
+    /// first version added a second, separate cross-track term on top, which
+    /// double-counted the same error.
     fn steering(
         &self,
-        position: Vec3,
-        aim: Vec3,
-        right: Vec3,
-        up: Vec3,
-        on_line: Vec3,
-        body: &oag_physics::Body,
+        state: &ShipState,
+        line: &Line,
+        look: f32,
+        speed: f32,
         tuning: &Tuning,
     ) -> f32 {
-        // Pure pursuit: how far off the craft's nose the aim point sits, as a
-        // fraction of the distance to it. Unit-free, so it does not change
-        // meaning with the lookahead.
-        let to_aim = (aim - position).normalize_or_zero();
-        let heading = to_aim.dot(right);
+        let body = &state.body;
+        let (_, aim, _) = line.ahead(self.index as usize, look);
+        let to_aim = aim - body.position;
+        let distance = to_aim.length();
+        if distance <= f32::EPSILON {
+            return 0.0;
+        }
 
-        // Cross-track: which side of the line the craft is on, and by how much.
-        // Clamped, so a craft thrown clear of the track by a collision asks for
-        // full lock and not for more.
-        let offset = (position - on_line).dot(right);
-        let cross = (offset / tuning.xtrack_max).clamp(-1.0, 1.0) * tuning.xtrack_max;
+        // Positive is to the craft's right.
+        let offset = to_aim.dot(body.right());
+        let curvature = 2.0 * offset / (distance * distance);
+        let wanted =
+            (curvature * speed.max(1.0)).clamp(-tuning.max_turn_rate, tuning.max_turn_rate);
 
-        // Yaw about the craft's own up axis, which is the axis it steers about -
-        // world up would be wrong the moment the track rolls or inverts.
-        let yaw = body.angular_velocity.dot(up);
+        // Positive yaw about the craft's own up axis turns it **left** - the
+        // right-hand rule, with forward on `-Z`. Working in "rate of turning to
+        // the right" keeps every sign here the same as the steering input's.
+        // The craft's own up, never world up, or this is wrong the moment the
+        // track rolls.
+        let actual = -body.angular_velocity.dot(body.up());
 
-        let command =
-            tuning.steer_gain * heading - tuning.xtrack_gain * cross - tuning.steer_damping * yaw;
-        command.clamp(-1.0, 1.0)
+        (tuning.rate_gain * (wanted - actual)).clamp(-1.0, 1.0)
     }
 }
 
@@ -213,7 +228,7 @@ fn throttle(speed: f32, curvature: f32, tuning: &Tuning) -> (f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oag_core::math::Quat;
+    use oag_core::math::{Quat, Vec3};
     use oag_physics::Body;
 
     fn straight() -> Line {
@@ -264,9 +279,9 @@ mod tests {
     /// already sprung once. See `docs/ghidra/functions/psp-pulse-usa/grid.md`.
     #[test]
     fn a_craft_beside_the_line_steers_back_toward_it() {
-        let mut driver = Driver::default();
         let tuning = Tuning::default();
 
+        let mut driver = Driver::default();
         let right_of_line =
             driver.drive(&craft(Vec3::new(6.0, 0.0, 0.0), 40.0), &straight(), &tuning);
         assert!(
@@ -288,19 +303,49 @@ mod tests {
         );
     }
 
+    /// The damping, and the reason the rewrite happened: a craft already turning
+    /// the way the geometry wants must be asked for *less* lock, not the same.
     #[test]
-    fn steering_hard_holds_the_inside_airbrake() {
-        let mut driver = Driver::default();
+    fn a_craft_already_turning_is_asked_for_less_lock() {
         let tuning = Tuning::default();
-        // Far enough off the line that the command saturates.
-        let controls = driver.drive(
-            &craft(Vec3::new(60.0, 0.0, 0.0), 40.0),
-            &straight(),
-            &tuning,
+        let mut state = craft(Vec3::new(6.0, 0.0, 0.0), 40.0);
+
+        let mut driver = Driver::default();
+        let still = driver.drive(&state, &straight(), &tuning);
+
+        // Yawing left, which is positive about the craft's own up axis, and is
+        // the direction the controller wants to go.
+        state.body.angular_velocity = Vec3::new(0.0, 0.3, 0.0);
+        let mut driver = Driver::default();
+        let turning = driver.drive(&state, &straight(), &tuning);
+        assert!(
+            turning.steer_x > still.steer_x,
+            "already turning: {} should be less left lock than {}",
+            turning.steer_x,
+            still.steer_x
         );
-        assert!(controls.steer_x < -tuning.airbrake_at);
-        assert!(controls.airbrake_left > 0.0);
-        assert_eq!(controls.airbrake_right, 0.0);
+    }
+
+    /// Braking uses both sides. A single airbrake yaws the craft, which would
+    /// close a second loop around the steering.
+    #[test]
+    fn braking_is_symmetric() {
+        let tuning = Tuning::default();
+        let line = Line::new(
+            (0..128)
+                .map(|step| {
+                    let angle = std::f32::consts::TAU * step as f32 / 128.0;
+                    Vec3::new(60.0 * angle.cos(), 0.0, 60.0 * angle.sin())
+                })
+                .collect(),
+        );
+        let mut driver = Driver::default();
+        let controls = driver.drive(&craft(line.point(0), 200.0), &line, &tuning);
+        assert_eq!(controls.airbrake_left, controls.airbrake_right);
+        assert!(
+            controls.airbrake_left > 0.0,
+            "a 60-unit circle at 200 needs brakes"
+        );
     }
 
     #[test]
@@ -311,31 +356,32 @@ mod tests {
     #[test]
     fn a_corner_taken_too_fast_brakes_and_taken_slowly_does_not() {
         let tuning = Tuning::default();
-        // Curvature 0.01 is a 100-unit radius, so the target is sqrt(90/0.01).
         let target = (tuning.lateral_accel / 0.01).sqrt();
         assert_eq!(throttle(target * 0.5, 0.01, &tuning), (1.0, 0.0));
         assert_eq!(throttle(target * 2.0, 0.01, &tuning), (0.0, 1.0));
     }
 
-    /// The damping term opposes the turn the craft is already making, or it is
-    /// not damping.
+    /// The turn rate the geometry asks for is bounded, or a craft thrown clear of
+    /// the track holds full lock through the whole recovery.
     #[test]
-    fn yaw_opposes_the_steering_command() {
+    fn the_requested_turn_rate_is_clamped() {
+        let tuning = Tuning {
+            rate_gain: 1.0,
+            ..Tuning::default()
+        };
         let mut driver = Driver::default();
-        let tuning = Tuning::default();
-        let mut state = craft(Vec3::new(6.0, 0.0, 0.0), 40.0);
-        let undamped = driver.drive(&state, &straight(), &tuning);
-
-        // Already yawing the way the controller wants to go.
-        state.body.angular_velocity = Vec3::new(0.0, -1.0, 0.0);
-        let mut driver = Driver::default();
-        let damped = driver.drive(&state, &straight(), &tuning);
-        assert!(
-            damped.steer_x > undamped.steer_x,
-            "damped {} should ask for less left lock than {}",
-            damped.steer_x,
-            undamped.steer_x
+        // Absurdly far off the line, at speed: the raw curvature is enormous.
+        let controls = driver.drive(
+            &craft(Vec3::new(500.0, 0.0, 0.0), 150.0),
+            &straight(),
+            &tuning,
         );
+        assert!(
+            controls.steer_x >= -1.0,
+            "steer {} left the input range",
+            controls.steer_x
+        );
+        assert!(controls.steer_x.abs() <= tuning.max_turn_rate * tuning.rate_gain + 1e-3);
     }
 
     /// The index is the search seed, so it has to survive the call.
