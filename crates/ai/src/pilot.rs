@@ -173,6 +173,13 @@ pub struct Pilot {
     /// what it carries is an integer countdown; a per-pilot decay rate would be
     /// an `f32` on that type. This is the same knob from the other end.
     pub provocation_ticks: Span,
+    /// How readily this pilot puts a weapon in the air once it has a target.
+    /// Draw 16.
+    ///
+    /// Rolled once a tick against [`Personality::trigger`], so it sets the
+    /// *expected delay* to fire after a target enters the cone rather than a
+    /// probability of firing at all - see `Driver::wants_to_fire`.
+    pub trigger: Span,
 }
 
 impl Pilot {
@@ -198,6 +205,7 @@ impl Pilot {
         caution: Span::new(0.5, 0.9),
         ram: Span::new(0.05, 0.20),
         provocation_ticks: Span::new(120.0, 300.0),
+        trigger: Span::new(0.4, 0.8),
     };
 
     /// Brakes late, commits hard, holds a tight inside line and rotates the
@@ -220,6 +228,7 @@ impl Pilot {
         caution: Span::new(0.15, 0.45),
         ram: Span::new(0.55, 0.95),
         provocation_ticks: Span::new(300.0, 600.0),
+        trigger: Span::new(0.8, 1.0),
     };
 
     /// Looks further ahead, brakes earlier, gives up corner speed for a tidy
@@ -240,6 +249,7 @@ impl Pilot {
         caution: Span::new(0.7, 1.0),
         ram: Span::new(0.0, 0.05),
         provocation_ticks: Span::new(60.0, 180.0),
+        trigger: Span::new(0.2, 0.5),
     };
 
     /// Runs wide, brakes earliest, and stays out of everyone's way.
@@ -263,6 +273,7 @@ impl Pilot {
         caution: Span::new(0.8, 1.0),
         ram: Span::new(0.0, 0.0),
         provocation_ticks: Span::new(30.0, 120.0),
+        trigger: Span::new(0.05, 0.3),
     };
 
     /// The four, with the names a config file and a menu spell them by.
@@ -295,7 +306,7 @@ impl Pilot {
 
     /// Every span, in draw order. `lean` is not one - it is not a range.
     #[must_use]
-    pub fn spans(&self) -> [Span; 14] {
+    pub fn spans(&self) -> [Span; 15] {
         [
             self.line_bias,
             self.wander,
@@ -311,6 +322,7 @@ impl Pilot {
             self.caution,
             self.ram,
             self.provocation_ticks,
+            self.trigger,
         ]
     }
 }

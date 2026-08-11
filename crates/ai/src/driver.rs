@@ -223,6 +223,8 @@ pub struct Personality {
     pub ram: f32,
     /// How many ticks of provocation being overtaken is worth.
     pub provocation_ticks: f32,
+    /// How readily it puts a weapon in the air once it has a target.
+    pub trigger: f32,
 }
 
 impl Personality {
@@ -247,6 +249,7 @@ impl Personality {
         caution: 0.0,
         ram: 0.0,
         provocation_ticks: 0.0,
+        trigger: 0.0,
     };
 
     /// Derives a personality from a seed.
@@ -322,6 +325,7 @@ impl Personality {
         let caution = pilot.caution.draw(rng);
         let ram = pilot.ram.draw(rng);
         let provocation_ticks = pilot.provocation_ticks.draw(rng);
+        let trigger = pilot.trigger.draw(rng);
 
         Self {
             line_bias,
@@ -338,6 +342,7 @@ impl Personality {
             caution,
             ram,
             provocation_ticks,
+            trigger,
         }
     }
 }
@@ -454,6 +459,40 @@ const RAM_STREAM: u32 = 1;
 /// How often a driver at full `ram` will take a shot at a rival alongside, per
 /// tick. About once a second.
 const RAM_RATE: f32 = 1.0 / 60.0;
+
+/// The noise stream weapon decisions are rolled against.
+const WEAPON_STREAM: u32 = 2;
+
+/// How often a driver at full `trigger` will fire once it has a target, per
+/// tick.
+///
+/// **This is a rate, not a probability.** Rolled every tick, so at `1.0` the
+/// median wait once a target is in the cone is about thirteen ticks - a fifth
+/// of a second - and at `0.2` about a second and a half. Read as "a five per
+/// cent chance" it looks far too small; read as a delay it is what a driver
+/// taking a moment to line up looks like.
+const TRIGGER_RATE: f32 = 0.05;
+
+/// How far a forward weapon is worth firing, in units.
+const WEAPON_RANGE: f32 = 200.0;
+
+/// And how close is too close.
+///
+/// `oag_gameplay::projectile::blast` damages **every** craft in radius,
+/// including the one that fired, so a rocket let go at point-blank is a rocket
+/// fired at yourself.
+const WEAPON_MIN_RANGE: f32 = 20.0;
+
+/// How far off the nose a target may sit, as a cosine.
+///
+/// A cosine and never an angle: `docs/architecture/determinism.md` forbids the
+/// transcendental, and `Rival::cos_bearing` is a dot product the caller already
+/// had. About twenty degrees.
+const WEAPON_CONE: f32 = 0.94;
+
+/// How bent the road between here and the target may be before a shot is not
+/// worth taking.
+const WEAPON_CURVATURE: f32 = 1.0 / 400.0;
 
 /// How much corridor room a driver wants on the side it is shifting toward.
 ///
@@ -653,6 +692,60 @@ impl Driver {
     /// line's own shape and world up is exactly the mistake `docs/formats/track.md`
     /// records: it is wrong the moment the track rolls. A line with no corridor
     /// is a synthetic one, and every craft on it drives it exactly.
+    /// Whether this driver would put a forward weapon in the air this tick, and
+    /// at whom.
+    ///
+    /// The target slot comes back even though a Rocket is unguided and will not
+    /// use it, because the *decision* is the part worth testing and a guided
+    /// weapon will want it. A caller that only needs "yes" reads `is_some`.
+    ///
+    /// Five gates:
+    ///
+    /// 1. There is a craft ahead at all.
+    /// 2. It is inside [`WEAPON_RANGE`] and outside [`WEAPON_MIN_RANGE`] - the
+    ///    near bound matters, because the blast catches the firer too.
+    /// 3. It is inside the cone, by [`Rival::cos_bearing`].
+    /// 4. **The road between here and there is straight enough**, by the same
+    ///    `max_curvature` the Turbo gate uses. A rocket round a corner is a
+    ///    rocket in a wall, and using the same notion of "is this a straight"
+    ///    keeps the two decisions consistent rather than inventing a second.
+    /// 5. The trigger roll - see [`TRIGGER_RATE`], which is a rate and not a
+    ///    probability.
+    ///
+    /// **The roll does not touch the world's generator.** It is
+    /// `noise::roll(seed, phase, WEAPON_STREAM)`, a pure function of this
+    /// driver's own seed and tick count, for the reason
+    /// `Personality::from_pilot` gives: a draw from that stream would move every
+    /// later pickup roll and make *which craft shoots* depend on how many
+    /// pickups had been handed out.
+    #[must_use]
+    pub fn wants_to_fire(&self, ctx: &Context<'_>) -> Option<u8> {
+        let personality = self.personality(ctx.pilot);
+        if personality.trigger <= 0.0 {
+            return None;
+        }
+        let target = ctx.field.ahead?;
+        if target.range <= WEAPON_MIN_RANGE || target.range > WEAPON_RANGE {
+            return None;
+        }
+        if target.cos_bearing < WEAPON_CONE {
+            return None;
+        }
+        let span = (ctx.tuning.look_min + ctx.tuning.look_speed * target.range) * 0.5;
+        if ctx
+            .line
+            .max_curvature(self.index as usize, target.range, span)
+            > WEAPON_CURVATURE
+        {
+            return None;
+        }
+        let appetite = personality.trigger * (1.0 + self.provoked());
+        if roll(self.seed, self.phase, WEAPON_STREAM) >= appetite * TRIGGER_RATE {
+            return None;
+        }
+        Some(target.slot)
+    }
+
     /// Advances the grudge: notices being overtaken, and lets it cool.
     ///
     /// **A place that got worse is a craft that was just passed**, which is the
@@ -1054,6 +1147,147 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
 mod tests {
     use super::*;
     use crate::field::Rival;
+    use crate::pilot::Span;
+
+    fn target_ahead(range: f32, cos_bearing: f32) -> Field {
+        Field {
+            ahead: Some(Rival {
+                slot: 4,
+                gap: range,
+                offset: 0.0,
+                closing: 0.0,
+                range,
+                cos_bearing,
+            }),
+            ..Field::EMPTY
+        }
+    }
+
+    /// Ticks until this driver takes a shot, or `None` inside the window.
+    fn ticks_to_fire(seed: u32, trigger: f32, line: &Line, field: &Field) -> Option<u32> {
+        let tuning = Tuning::default();
+        let pilot = Pilot {
+            trigger: Span::fixed(trigger),
+            ..Pilot::BALANCED
+        };
+        (0..2_000u32).find(|phase| {
+            let mut driver = Driver::seeded(seed);
+            driver.phase = *phase;
+            driver
+                .wants_to_fire(&Context {
+                    line,
+                    tuning: &tuning,
+                    pilot: &pilot,
+                    field,
+                })
+                .is_some()
+        })
+    }
+
+    #[test]
+    fn a_driver_fires_at_a_craft_ahead_and_inside_its_cone() {
+        let line = straight_with_corridor();
+        assert!(ticks_to_fire(5, 1.0, &line, &target_ahead(80.0, 1.0)).is_some());
+    }
+
+    #[test]
+    fn a_driver_does_not_fire_at_a_craft_beside_it() {
+        let line = straight_with_corridor();
+        // Dead abeam: the cosine of ninety degrees.
+        assert_eq!(ticks_to_fire(5, 1.0, &line, &target_ahead(80.0, 0.0)), None);
+    }
+
+    /// The blast catches the firer, so point-blank is a rocket fired at
+    /// yourself.
+    #[test]
+    fn a_driver_does_not_fire_at_point_blank_range() {
+        let line = straight_with_corridor();
+        assert_eq!(
+            ticks_to_fire(5, 1.0, &line, &target_ahead(WEAPON_MIN_RANGE - 1.0, 1.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_driver_does_not_fire_at_a_craft_out_of_range() {
+        let line = straight_with_corridor();
+        assert_eq!(
+            ticks_to_fire(5, 1.0, &line, &target_ahead(WEAPON_RANGE + 1.0, 1.0)),
+            None
+        );
+    }
+
+    /// A rocket round a corner is a rocket in a wall.
+    #[test]
+    fn a_driver_does_not_fire_round_a_corner() {
+        let corner = right_hand_corner(35.0);
+        assert_eq!(
+            ticks_to_fire(5, 1.0, &corner, &target_ahead(80.0, 1.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_driver_with_no_appetite_never_fires() {
+        let line = straight_with_corridor();
+        assert_eq!(ticks_to_fire(5, 0.0, &line, &target_ahead(80.0, 1.0)), None);
+    }
+
+    #[test]
+    fn a_driver_with_nobody_ahead_never_fires() {
+        let line = straight_with_corridor();
+        assert_eq!(ticks_to_fire(5, 1.0, &line, &Field::EMPTY), None);
+    }
+
+    /// `trigger` is a rate, so it shows up as how long a driver takes to shoot
+    /// rather than as whether it ever does.
+    #[test]
+    fn a_trigger_happy_driver_fires_sooner_than_a_cautious_one() {
+        let line = straight_with_corridor();
+        let target = target_ahead(80.0, 1.0);
+        let mut keen_total = 0u32;
+        let mut shy_total = 0u32;
+        for seed in 1..30u32 {
+            keen_total += ticks_to_fire(seed, 1.0, &line, &target).expect("keen never fired");
+            shy_total += ticks_to_fire(seed, 0.1, &line, &target).expect("shy never fired");
+        }
+        assert!(
+            shy_total > keen_total * 3,
+            "a keen driver should be much quicker: {keen_total} against {shy_total}"
+        );
+    }
+
+    #[test]
+    fn a_provoked_driver_fires_sooner_than_it_did_calm() {
+        let line = straight_with_corridor();
+        let tuning = Tuning::default();
+        let target = target_ahead(80.0, 1.0);
+        let pilot = Pilot {
+            trigger: Span::fixed(0.2),
+            ..Pilot::BALANCED
+        };
+        let shots = |provocation: u16| {
+            (0..2_000u32)
+                .filter(|phase| {
+                    let mut driver = Driver::seeded(5);
+                    driver.phase = *phase;
+                    driver.provocation = provocation;
+                    driver
+                        .wants_to_fire(&Context {
+                            line: &line,
+                            tuning: &tuning,
+                            pilot: &pilot,
+                            field: &target,
+                        })
+                        .is_some()
+                })
+                .count()
+        };
+        assert!(
+            shots(PROVOCATION_MAX) > shots(0),
+            "being passed should make a driver quicker to shoot"
+        );
+    }
 
     fn placed(place: u8) -> Field {
         Field {

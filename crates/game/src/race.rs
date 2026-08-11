@@ -3170,6 +3170,59 @@ impl Race {
         }
     }
 
+    /// Fires an opponent's Rocket at the craft ahead, if its driver wants to.
+    ///
+    /// Returns whether anything left the rails, so the caller knows whether to
+    /// spend the pickup.
+    ///
+    /// **The owner is the firing slot, and that is the line to get right.** The
+    /// player's path passes `0` because the player *is* slot 0; an opponent
+    /// passing `0` would put rockets in the air owned by the player, which
+    /// `projectile::step` would then fly straight through the player and
+    /// detonate on whoever actually fired them.
+    /// `an_opponents_rocket_is_owned_by_the_slot_that_fired_it` pins it.
+    fn fire_opponent_rocket(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+        let context = oag_ai::Context {
+            line: &self.racing_line,
+            tuning: &self.ai_tuning,
+            pilot: &self.ai_pilots[slot],
+            field,
+        };
+        if self.world.ships[slot]
+            .driver
+            .wants_to_fire(&context)
+            .is_none()
+        {
+            return false;
+        }
+        let Some(stats) = self
+            .weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::rocket)
+        else {
+            return false;
+        };
+        let ship = &self.world.ships[slot];
+        let shots = oag_gameplay::projectile::launch(
+            &ship.physics,
+            &ship.handling.dimensions,
+            &stats,
+            to_format_class(self.class),
+        );
+        let mut fired = 0;
+        for (position, velocity) in shots {
+            if self.world.projectiles.spawn(
+                oag_formats::weapons::Weapon::Rocket,
+                position,
+                velocity,
+                slot as u8,
+            ) {
+                fired += 1;
+            }
+        }
+        fired > 0
+    }
+
     /// What an opponent does with a pickup it is holding.
     ///
     /// # This is a policy, and it is the crudest one that is not "nothing"
@@ -3186,14 +3239,14 @@ impl Race {
     ///   braking for. A turbo spent into a corner is a turbo spent into a wall.
     ///   It arms that craft's own boost plume, the same reuse the player's Turbo
     ///   makes of the speed pad's visual.
+    /// - **A Rocket is aimed**, as of 2026-08-11, at whatever
+    ///   `oag_ai::Driver::wants_to_fire` picks - a craft ahead, in range, inside
+    ///   a cone, with straight enough road between. It is kept rather than spent
+    ///   when there is no target, no authored rocket or no free slot.
     /// - **Everything else is absorbed**, which pays energy into the pool and is
     ///   a real effect rather than a discard. It is also what a cautious human
-    ///   does with a weapon they cannot aim, and an opponent cannot aim: nothing
-    ///   picks a target, so a fired Rocket would be a rocket down the middle of
-    ///   the track.
-    ///
-    /// So an opponent never shoots at the player. That is a gap and not a
-    /// decision - see `docs/gameplay/ai.md`.
+    ///   does with a weapon they cannot aim, and the remaining nine cannot be
+    ///   aimed: they need a lock, a beam or a mechanic nothing has read.
     fn spend_opponent_pickup(
         &mut self,
         slot: usize,
@@ -3203,7 +3256,14 @@ impl Race {
         let Some(weapon) = self.world.ships[slot].pickup.weapon else {
             return;
         };
-        let Some(weapons) = self.weapons.as_ref() else {
+        // Looked up and copied out before the branches, so the borrow of
+        // `self.weapons` ends here: the Rocket arm needs `&mut self` to put
+        // anything in the air, and every one of these returns an owned value.
+        let Some((simple, absorb)) = self
+            .weapons
+            .as_ref()
+            .map(|weapons| (weapons.simple(weapon), weapons.absorb(weapon)))
+        else {
             return;
         };
 
@@ -3222,7 +3282,7 @@ impl Race {
             // always meant: is the speed target letting it accelerate, or is it
             // lifting for a corner.
             let on_a_straight = controls.thrust > 0.0;
-            let Some(simple) = weapons.simple(weapon) else {
+            let Some(simple) = simple else {
                 return;
             };
             if !on_a_straight {
@@ -3270,8 +3330,14 @@ impl Race {
             // an opponent's boost has to be visible from behind, or the field
             // gains speed with nothing on screen saying why.
             self.exhaust[slot].boost(exhaust::BOOST_SECONDS);
+        } else if weapon == oag_formats::weapons::Weapon::Rocket
+            && self.fire_opponent_rocket(slot, field)
+        {
+            // Fired. `fire_opponent_rocket` reports false when there was no
+            // target, no authored rocket or no free slot, and then the pickup is
+            // kept rather than spent - the same rule the player's path follows.
         } else {
-            let Some(amount) = weapons.absorb(weapon) else {
+            let Some(amount) = absorb else {
                 return;
             };
             let dimensions = self.world.ships[slot].handling.dimensions;
@@ -7544,6 +7610,73 @@ mod tests {
     /// input every step, on the `0..=100` scale
     /// ([`oag_physics::controls::CONTROL_RANGE`]), and it is `0` on a craft that
     /// was spawned and then never stepped - which is what this engine did until
+    /// **The line that would silently make opponents shoot themselves.** The
+    /// player's firing path passes owner `0` because the player is slot 0; an
+    /// opponent doing the same puts rockets in the air owned by the player,
+    /// which `projectile::step` flies through the player and detonates on
+    /// whoever actually fired them.
+    #[test]
+    fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
+        let mut race = race_with_a_grid();
+        race.weapons = Some(one_rocket_table());
+        // **A straight to shoot down.** The synthetic test track is a loop of
+        // about seven units' radius, so `wants_to_fire`'s "is the road between
+        // here and there straight enough" gate refuses every shot on it - which
+        // is the gate working, not a bug, but it makes this fixture useless for
+        // asking who owns the rocket.
+        race.racing_line = oag_ai::Line::new(
+            (0..64)
+                .map(|step| Vec3::new(0.0, 0.0, -10.0 * step as f32))
+                .collect(),
+        );
+        // A driver that will take any shot it is offered, and a target dead
+        // ahead and in range.
+        let firing = 3usize;
+        race.ai_pilots[firing] = oag_ai::Pilot {
+            trigger: oag_ai::Span::fixed(1.0),
+            ..oag_ai::Pilot::BALANCED
+        };
+        let field = oag_ai::Field {
+            ahead: Some(oag_ai::Rival {
+                slot: 2,
+                gap: 80.0,
+                offset: 0.0,
+                closing: 0.0,
+                range: 80.0,
+                cos_bearing: 1.0,
+            }),
+            ..oag_ai::Field::EMPTY
+        };
+
+        // Sweep the phase so the trigger roll lands, then check who owns what.
+        let mut fired = false;
+        for phase in 0..2_000u32 {
+            race.world.ships[firing].driver.phase = phase;
+            race.world.projectiles = oag_gameplay::projectile::Projectiles::default();
+            if race.fire_opponent_rocket(firing, &field) {
+                fired = true;
+                break;
+            }
+        }
+        assert!(fired, "the driver never took a shot to check the owner of");
+
+        let owners: Vec<u8> = race
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .filter(|p| p.kind.is_some())
+            .map(|p| p.owner)
+            .collect();
+        assert!(!owners.is_empty(), "nothing was put in the air");
+        for owner in owners {
+            assert_eq!(
+                owner as usize, firing,
+                "a rocket fired by slot {firing} is owned by slot {owner}"
+            );
+        }
+    }
+
     /// `Standing::distance` needs a closed ring to mean anything, and a guessed
     /// gap would put a craft half a lap away in the mirror.
     #[test]

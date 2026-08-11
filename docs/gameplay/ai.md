@@ -710,7 +710,49 @@ score, no spark. Its payoff is purely positional. The natural follow-on is three
 lines: bump the *victim's* provocation off the contact that is already being
 computed, which would make the feature social in both directions.
 
-What is still unbuilt is any weapon aimed at anybody.
+### Shooting at somebody
+
+**An opponent fires as of 2026-08-11**, and the delete-this-paragraph moment is
+worth marking: the firing *mechanism* was complete long before - rockets fly and
+collide with craft - and what was missing was only ever a driver willing to pick
+a target. So this stage is a policy, not a system.
+
+`Driver::wants_to_fire` returns the slot it would shoot at, and five gates stand
+in front of it:
+
+1. There is a craft ahead at all.
+2. It is inside `WEAPON_RANGE` **and outside `WEAPON_MIN_RANGE`**. The near
+   bound is the one that is easy to miss: `projectile::blast` damages every
+   craft in radius *including the firer*, so point-blank is a rocket fired at
+   yourself.
+3. It is inside a cone, as a **cosine and never an angle** - the transcendental
+   is forbidden, and the caller measured the dot product already.
+4. **The road between here and there is straight enough**, by the same
+   `max_curvature` the Turbo gate uses. A rocket round a corner is a rocket in a
+   wall, and reusing that notion of "is this a straight" keeps the two decisions
+   consistent instead of inventing a second one.
+5. The trigger roll.
+
+**`trigger` is a rate, not a probability**, and the arithmetic is worth stating
+because the shape invites the wrong reading. It is rolled every tick, so what it
+sets is the *expected delay* between a target entering the cone and a rocket
+leaving: at full trigger about a fifth of a second, at a fifth of it about a
+second and a half. Read as "a five per cent chance" it looks far too small; read
+as a delay it is a driver taking a moment to line up.
+
+The target slot comes back even though a Rocket is unguided and never uses it,
+because the decision is the part worth testing and a guided weapon will want it.
+
+**Two things that would have been silent bugs.** The player's firing path passes
+owner `0` because the player *is* slot 0; an opponent doing the same would put
+rockets in the air owned by the player, which `projectile::step` flies straight
+through the player before detonating them on whoever actually fired. And the
+curvature gate cannot be validated synthetically at all - a straight fixture
+always passes it, so a threshold set too tight would kill the feature on real
+geometry and no test in CI would notice. That one is answered by a disc-backed
+count instead: **159 rockets from six of the seven opponents over two minutes of
+a real race.** The seventh is whoever is leading, which has nobody ahead to shoot
+at.
 
 ### Pads, and what an opponent does with a pickup
 
@@ -727,10 +769,10 @@ recovered.** The original decides this in `Data\XML\WeaponAIstats.xml`, a sixth
 AI file that `AiStats_LoadAll` does not even load - so it has its own loader,
 which has not been looked for. Until that is read, this is invention, and it is
 kept small enough to be obviously provisional: **Turbo is fired at once but only
-where the driver is not braking and the line stays clear for as far as the boost
-carries**, and **everything else is absorbed**, which pays energy into the pool.
-So an opponent never shoots at anybody. That is a gap, not a decision - nothing
-picks a target, so a fired Rocket would go down the middle of the track.
+where the driver is not braking, the line stays clear for as far as the boost
+carries, and there is nobody close enough ahead to arrive in the back of**; a
+**Rocket is aimed** - see [shooting at somebody](#shooting-at-somebody); and
+**everything else is absorbed**, which pays energy into the pool.
 
 **The second half of that Turbo rule was added 2026-08-11, and the measurement is
 worth keeping.** "Not braking" is the driver's own braking horizon, and that
@@ -938,6 +980,10 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | A ram goes toward the craft alongside, waits for the physics' own lockout, and never goes toward a corridor edge it has no room for | five tests in `driver::tests` | yes |
 | `Driver` stays `Copy + Eq`, which is what keeps it in the world snapshot | `driver::tests::a_driver_stays_copy_and_eq`, a compile-time guard | yes |
 | A roll is uniform, per-tick independent, and its streams disagree | five tests in `noise::tests` | yes |
+| A driver fires at a craft ahead and inside its cone, and not at one beside it, out of range, at point-blank, or round a corner | six tests in `driver::tests` | yes |
+| A trigger-happy driver fires sooner than a cautious one, and a provoked one sooner than it did calm | two tests in `driver::tests` | yes |
+| **An opponent's rocket is owned by the slot that fired it** | `race::tests::an_opponents_rocket_is_owned_by_the_slot_that_fired_it` | yes |
+| **The aiming gates actually open on real geometry** | `race_ground_truth::an_opponent_fires_at_a_craft_ahead_on_a_real_circuit` | **no** - needs a disc image. **Run and passing 2026-08-11**: 159 rockets from six of seven opponents in two minutes. |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls

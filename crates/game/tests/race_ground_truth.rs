@@ -1705,3 +1705,72 @@ fn the_players_place_reaches_the_hud() {
         "the separator is not on screen: {drawn:?}"
     );
 }
+
+/// An opponent actually fires, on a real circuit.
+///
+/// **The gate this is really about is the curvature one.** `wants_to_fire`
+/// refuses a shot where the road between the firer and its target bends more
+/// than `WEAPON_CURVATURE`, and a threshold set too tight would be invisible in
+/// every synthetic test - a straight fixture always passes it - while making
+/// the whole feature dead on real geometry. Only a real track can say whether
+/// the number is a filter or a wall. The synthetic half is `oag-ai`'s
+/// `a_driver_fires_at_a_craft_ahead_and_inside_its_cone`.
+///
+/// It hands the field the trigger rather than waiting for the pickup draw,
+/// because what is being measured is whether the *aiming* gates ever open, not
+/// how often a rocket comes out of a pad.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
+    let Some(loaded) = load_single_race() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup);
+    assert_eq!(race.ship_count(), 8);
+
+    let mut fired = 0usize;
+    let mut owners = std::collections::BTreeSet::new();
+    // Two minutes, and a rocket handed back every tick a craft is empty, so the
+    // question is only ever whether the driver wants to use it.
+    for _ in 0..7_200 {
+        for slot in 1..8 {
+            if race.world.ships[slot].pickup.weapon.is_none() {
+                race.world.ships[slot].pickup.weapon = Some(oag_formats::weapons::Weapon::Rocket);
+            }
+        }
+        let before = race
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .filter(|p| p.kind.is_some())
+            .count();
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        for projectile in race.world.projectiles.slots.iter() {
+            if projectile.kind.is_some() && projectile.owner != 0 {
+                owners.insert(projectile.owner);
+            }
+        }
+        let after = race
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .filter(|p| p.kind.is_some())
+            .count();
+        if after > before {
+            fired += after - before;
+        }
+    }
+
+    assert!(
+        fired > 0,
+        "no opponent fired a rocket in two minutes of a real race, so the \
+         aiming gates never open on real geometry"
+    );
+    assert!(
+        !owners.is_empty(),
+        "rockets were fired but none was owned by an opponent"
+    );
+    println!("opponents fired {fired} rockets; owners: {owners:?}");
+}
