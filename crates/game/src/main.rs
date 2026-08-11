@@ -370,6 +370,30 @@ struct Cli {
     #[arg(long, default_value_t = 60)]
     log_every: u32,
 
+    /// Keep handing the player this weapon whenever their pickup slot is empty.
+    ///
+    /// **A debug affordance, and worth saying why it exists.** A weapon can only
+    /// be *seen* once something fires it, and `--race` holds the throttle
+    /// without steering, so it never crosses a `Weapon Pad` and never receives a
+    /// pickup. That made every visual change to a projectile unverifiable except
+    /// by playing the game by hand - and two rocket changes shipped blind before
+    /// this existed, one of them wrong (three pieces of track scenery read as a
+    /// volley; see `oag_game::race::Race::rocket_model_matrices`).
+    ///
+    /// Spelled as the `type` attribute the weapon table uses - `Rocket`,
+    /// `Missile`, `Cannon` - and matched case-insensitively.
+    ///
+    /// It writes the player's pickup slot from **outside** the simulation, in
+    /// the frame loop rather than in `Race::tick`, so nothing here can reach a
+    /// determinism hash. Combine with `--press square` to fire repeatedly:
+    ///
+    /// ```sh
+    /// cargo run -p oag-game -- --race --mode single_race --give rocket \
+    ///     --hold cross --press square --ticks 900 --screenshot /tmp/shot.png
+    /// ```
+    #[arg(long, value_name = "WEAPON")]
+    give: Option<String>,
+
     /// Anisotropic filtering level for track and ship textures: off, 2x, 4x,
     /// 8x or 16x.
     ///
@@ -905,6 +929,7 @@ fn main() -> Result<()> {
         media: Some(media),
         boot_overlay: cli.overlay,
         pick_language: cli.pick_language,
+        give: give_weapon(cli.give.as_deref())?,
         race: None,
         race_options,
         trace: cli.trace,
@@ -1032,6 +1057,7 @@ fn run_windowless(
             loaded,
             video_format,
             &capture::Options {
+                give: give_weapon(cli.give.as_deref())?,
                 path,
                 until: cli.until.clone(),
                 ticks: cli.ticks,
@@ -1204,6 +1230,32 @@ const RACE_TITLE: &str = "OpenAntiGrav - race";
 /// Printed whenever a race takes the window, by either route - and the two
 /// routes differ in exactly one key, which is why what escape does is spelled
 /// separately rather than assumed.
+/// Resolves `--give`'s spelling to a weapon, case-insensitively.
+///
+/// Rejects an unknown name rather than ignoring it: a silent no-op here looks
+/// exactly like the flag working and the weapon never being drawn, which is the
+/// failure mode the flag exists to remove. The error lists what the weapon table
+/// actually holds, so a typo is one read away from fixed.
+fn give_weapon(name: Option<&str>) -> Result<Option<oag_formats::weapons::Weapon>> {
+    let Some(name) = name else { return Ok(None) };
+    let found = oag_formats::weapons::Weapon::ALL
+        .into_iter()
+        .find(|weapon| weapon.as_type().eq_ignore_ascii_case(name));
+    match found {
+        Some(weapon) => Ok(Some(weapon)),
+        None => {
+            let known: Vec<&str> = oag_formats::weapons::Weapon::ALL
+                .iter()
+                .map(|weapon| weapon.as_type())
+                .collect();
+            anyhow::bail!(
+                "--give {name:?} is not a weapon; the table holds {}",
+                known.join(", ")
+            )
+        }
+    }
+}
+
 const RACE_KEYS: &str = "arrow keys or the left stick steer, X, return or R2 thrusts, \
      Q and E or the shoulders are the airbrakes, L2 is both, C fires a pickup and Z absorbs it";
 
@@ -1384,6 +1436,7 @@ fn run_race(
         race::capture(
             loaded,
             &race::CaptureOptions {
+                give: give_weapon(cli.give.as_deref())?,
                 path,
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
@@ -1433,6 +1486,8 @@ fn run_race(
 
     println!("\n{RACE_KEYS}{ESC_QUITS}");
 
+    let give = give_weapon(cli.give.as_deref())?;
+
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the simulation runs whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
@@ -1441,6 +1496,7 @@ fn run_race(
         media: None,
         boot_overlay: false,
         pick_language: false,
+        give,
         race: Some(loaded),
         race_options: options,
         trace: cli.trace,
@@ -1485,6 +1541,8 @@ struct App {
     boot_overlay: bool,
     /// `--pick-language`: show the picker even when the settings name one.
     pick_language: bool,
+    /// `--give`, resolved to a weapon at startup. See the CLI field.
+    give: Option<oag_formats::weapons::Weapon>,
     /// A race loaded before the window opened, which is what `--race` does.
     race: Option<race::Loaded>,
     /// What a race started from `Launch Game` is flown on.
@@ -1660,6 +1718,7 @@ impl App {
             next_frame: std::time::Instant::now(),
             race_options: self.race_options.clone(),
             log_every: self.log_every,
+            give: self.give,
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,
@@ -3079,6 +3138,8 @@ struct Session {
     /// before anyone knows whether a race will be asked for.
     race_options: race::Options,
     log_every: u32,
+    /// `--give`, carried into the race loop. See the CLI field.
+    give: Option<oag_formats::weapons::Weapon>,
     anisotropy: Anisotropy,
     /// The control scheme every race this session starts is driven with.
     ///
@@ -3666,6 +3727,15 @@ impl Session {
                     }
                 }
                 Stage::Race(stage) => {
+                    // Outside `Race::tick`, so this cannot reach the hash: it
+                    // tops the slot up the way a pad grant would, and only when
+                    // the slot is already empty, so firing still spends it.
+                    if let Some(weapon) = self.give {
+                        let ship = &mut stage.race.world.ships[0];
+                        if ship.pickup.weapon.is_none() {
+                            ship.pickup.weapon = Some(weapon);
+                        }
+                    }
                     stage.race.tick(&snapshot);
                     if self.log_every > 0 && stage.race.world.tick % u64::from(self.log_every) == 0
                     {

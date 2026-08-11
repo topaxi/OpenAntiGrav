@@ -6860,6 +6860,20 @@ pub struct CaptureOptions {
     pub size: (u32, u32),
     /// Print a telemetry line every this many ticks. Zero prints none.
     pub log_every: u32,
+    /// Keep the player's pickup slot topped up with this weapon.
+    ///
+    /// **A debug affordance for captures, and the reason it exists is worth
+    /// keeping.** A weapon is only visible once something fires it, and a
+    /// capture holds the throttle without steering, so it never crosses a
+    /// `Weapon Pad` and never receives a pickup. Every visual change to a
+    /// projectile was therefore unverifiable from a screenshot - two rocket
+    /// changes shipped blind before this existed, and one was wrong: three
+    /// pieces of track scenery were read as a fanned volley. See
+    /// [`Race::rocket_model_matrices`].
+    ///
+    /// Written **outside** [`Race::tick`], only when the slot is already empty,
+    /// so firing still spends it and nothing here reaches a determinism hash.
+    pub give: Option<oag_formats::weapons::Weapon>,
     /// The shape to draw at inside the frame, leaving bars.
     ///
     /// A capture is a picture of a window, so it letterboxes the way a window
@@ -7029,6 +7043,12 @@ pub fn capture(
             held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
         }
         let snapshot = held.snapshot();
+        // Before the tick, so `spend_pickup` can fire it on this tick's edge.
+        if let Some(weapon) = options.give
+            && race.world.ships[0].pickup.weapon.is_none()
+        {
+            race.world.ships[0].pickup.weapon = Some(weapon);
+        }
         race.tick(&snapshot);
         // Inside the tick loop and not beside it, for the reason the exhaust
         // and the chase camera are advanced from inside `Race::tick`: what a

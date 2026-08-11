@@ -54,6 +54,9 @@ pub struct Options {
     pub race: Option<race::Options>,
     /// With that handoff, print a telemetry line every this many ticks.
     pub log_every: u32,
+    /// `--give`: keep the player's pickup slot topped up. See
+    /// `race::CaptureOptions::give`.
+    pub give: Option<oag_formats::weapons::Weapon>,
     /// Image size.
     pub size: (u32, u32),
     /// Render one named screen straight out of the XML and stop.
@@ -457,6 +460,7 @@ pub fn run(
                 scheme: options.scheme,
                 size: (width, height),
                 log_every: options.log_every,
+                give: options.give,
                 anisotropy: options.anisotropy,
                 renderer: options.settings.graphics.renderer.clone(),
                 fov: options.settings.graphics.fov,
