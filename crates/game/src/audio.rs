@@ -88,12 +88,19 @@ pub const DUMP_SAMPLE_RATE: u32 = ps2_music::SAMPLE_RATE;
 /// `docs/ps2/pulse-disc-layout.md`.
 const PS2_MUSIC_PATH: &str = "54748/PS2MUSIC.WAD";
 
-/// Which track is played, by index into the booted release's own soundtrack.
+/// Which track the menu plays, by index into the booted release's own
+/// soundtrack.
 ///
 /// The first, because nothing yet maps a circuit or a menu to a track: the
 /// entries are addressed by name hash on both discs and no name for any of them
 /// has been recovered. Playing a fixed one proves the path end to end without
 /// claiming a mapping that has not been established.
+///
+/// **Not the only index in play any more.** [`Audio::race_index`] addresses
+/// the same booted-disc order for the race playlist below, starting one past
+/// this one - see [`Audio::initial_race_index`]. Both are read and decoded
+/// through the same [`fetch`](Audio::fetch)/[`locate`](Audio::locate), now
+/// parameterised on an index rather than closing over this constant.
 const MUSIC_TRACK: usize = 0;
 
 /// Which release's encode of the soundtrack is played.
@@ -425,6 +432,10 @@ pub struct Audio {
     /// twice, once in [`Audio::locate`] and once in [`load_track`]. A row a
     /// player cycles through three values would otherwise stall every time
     /// round.
+    ///
+    /// **Safe to leave unbounded only because the menu path never asks for
+    /// more than one index** ([`MUSIC_TRACK`], always). [`Self::race_cache`]
+    /// is the counterpart for a consumer that does not have that guarantee.
     held: Vec<(Platform, Arc<Sound>)>,
     /// The movie's own sound, while a movie is playing one.
     ///
@@ -433,6 +444,55 @@ pub struct Audio {
     /// the music runs for the whole session and this lasts one movie. See
     /// [`Audio::start_movie`].
     movie: Option<VoiceId>,
+    /// The voice playing under a race, distinct from [`Self::music`] (the
+    /// menu's) although both live on [`Bus::Music`] and never sound together -
+    /// [`Audio::start_race_music`] stops one before starting the other. `None`
+    /// outside a race, or inside one whose source carries no decodable music.
+    ///
+    /// **Authored, not recovered.** Nothing in the reverse-engineering record
+    /// says the original cycles a race playlist - the circuit-to-track mapping
+    /// is still unestablished (`docs/formats/ps2-audio.md`). This is a
+    /// deliberate choice for this reimplementation, the same way
+    /// `[graphics] boost_fov_kick` and `animated_textures` are: no confidence
+    /// score, no `names.tsv` row.
+    race_voice: Option<VoiceId>,
+    /// Which release the race voice came off, mirroring [`Self::music_from`].
+    race_from: Option<Platform>,
+    /// Which track of the **booted** disc's own soundtrack order the race
+    /// playlist is on. `None` until the first race of the process starts one -
+    /// see [`Audio::initial_race_index`]. Never reset by a visit to the menus:
+    /// that persistence, for the life of the process and no further, is the
+    /// whole of what the feature asks for.
+    race_index: Option<usize>,
+    /// Where the race playlist's current track was cut off, in the track's
+    /// own seconds - [`oag_audio::Mixer::seek`]'s unit, for the same reason
+    /// [`Self::set_music_source`] carries a playhead in seconds rather than
+    /// frames - so the next race resumes rather than restarts. Zero until
+    /// something has actually been paused.
+    race_position: f64,
+    /// The one race track presently decoded.
+    ///
+    /// Replaced, never accumulated, the moment the playlist advances or
+    /// [`MusicSource`] moves it while a race is live. Unlike [`Self::held`],
+    /// which exists to make the settings row cheap to nudge back and forth
+    /// across a *fixed* index, this exists only to make one pause/resume
+    /// cycle on the *same* track free - a single slot bounds it at one
+    /// track's worth of PCM (33-36 MiB) rather than growing with however many
+    /// of the sixteen tracks a long session has cycled through.
+    race_cache: Option<(Platform, usize, Arc<Sound>)>,
+    /// The menu/front-end voice's own decoded sound, kept so leaving a race
+    /// can resume it without re-reading the disc or re-running `ffmpeg`. Set
+    /// whenever [`Audio::start_music`] or [`Audio::set_music_source`]
+    /// successfully loads one; `None` when this source carries no decodable
+    /// menu music at all.
+    menu_sound: Option<Arc<Sound>>,
+    /// What [`Audio::start_race_music`] was last called with, kept so the
+    /// advance-on-finish check in [`Audio::tick`] can fetch the next track on
+    /// its own - `tick` runs every simulation tick from several call sites,
+    /// and threading `discs`/`choice`/`cache_dir` through every one of them
+    /// for the sake of one internal fetch would be a wider signature change
+    /// than the feature needs. `None` outside a race.
+    race_context: Option<(MusicDiscs, MusicSource, PathBuf)>,
 }
 
 /// A music track that has been read and decoded, before a voice is started on
@@ -490,6 +550,13 @@ impl std::fmt::Debug for Audio {
             .field("music_from", &self.music_from)
             .field("held", &self.held.len())
             .field("movie", &self.movie)
+            .field("race_voice", &self.race_voice)
+            .field("race_from", &self.race_from)
+            .field("race_index", &self.race_index)
+            .field("race_position", &self.race_position)
+            .field("race_cache", &self.race_cache.is_some())
+            .field("menu_sound", &self.menu_sound.is_some())
+            .field("race_context", &self.race_context.is_some())
             .finish()
     }
 }
@@ -524,6 +591,13 @@ impl Audio {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         audio.apply(settings);
         audio
@@ -603,6 +677,9 @@ impl Audio {
         match loaded {
             Ok(Some(loaded)) => {
                 let seconds = loaded.sound.seconds();
+                // Kept so a later `pause_race_music` can restart this exact
+                // decode without touching the disc or `ffmpeg` again.
+                self.menu_sound = Some(Arc::clone(&loaded.sound));
                 self.music = self
                     .output
                     .with_mixer(|mixer| mixer.play(Play::looping(loaded.sound, Bus::Music)));
@@ -612,6 +689,176 @@ impl Audio {
             Ok(None) => println!("audio: this source carries no music this can play"),
             Err(error) => println!("audio: no music ({error:#})"),
         }
+    }
+
+    /// Starts (or resumes) the race playlist, stopping the menu voice first.
+    ///
+    /// **Authored, not recovered** - see [`Self::race_voice`]'s doc comment.
+    /// Cycles through the booted disc's own soundtrack order, one race track
+    /// at a time, in place of the fixed [`MUSIC_TRACK`] the menu always plays.
+    ///
+    /// The first call in the process picks a starting index through
+    /// [`Self::initial_race_index`] and every later one continues from
+    /// wherever [`Self::pause_race_music`] left off - [`Self::race_index`] and
+    /// [`Self::race_position`] are never reset by this method, which is the
+    /// whole of "the track list persists across races".
+    ///
+    /// **Never fatal**, the same as [`Self::start_music`]: a source with no
+    /// decodable race music says so and plays nothing.
+    pub fn start_race_music(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
+        if let Some(id) = self.music.take() {
+            self.output.with_mixer(|mixer| mixer.stop(id));
+        }
+        // Defensive rather than load-bearing: nothing in `main.rs` calls this
+        // while a race voice is already sounding, `Stage::Race` being the only
+        // state a race launch is reachable from is what would have to change
+        // first. Guards against exactly that assumption quietly breaking.
+        if let Some(id) = self.race_voice.take() {
+            self.output.with_mixer(|mixer| mixer.stop(id));
+        }
+
+        if self.race_index.is_none() {
+            self.race_index = Some(Self::initial_race_index(&self.music_from, discs));
+        }
+        let index = self.race_index.expect("set immediately above");
+        let seek = (self.race_position > 0.0).then_some(self.race_position);
+        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
+        self.play_race_track(discs, choice, cache_dir, index, seek);
+        // Only consumed once actually applied to a sounding voice - a failed
+        // attempt (no `ffmpeg` this one time, a disc that briefly would not
+        // open) must leave the saved position for a later, successful call
+        // rather than silently discarding it.
+        if self.race_voice.is_some() {
+            self.race_position = 0.0;
+        }
+    }
+
+    /// Where the race playlist should start the first time it is asked for.
+    ///
+    /// One past the menu's own track when the menu is playing one of the
+    /// sixteen (a PS2 boot, whose front end plays [`MUSIC_TRACK`] itself) -
+    /// so the very first race never restarts the recording the menu was just
+    /// playing from 0:00. Otherwise (a PSP boot, whose front-end music is not
+    /// one of the sixteen at all, or `--race` with no menu voice to speak of)
+    /// simply [`MUSIC_TRACK`] itself.
+    ///
+    /// **Not silent when the "one past" half fails.** `menu_from.is_some()`
+    /// means the disc's own soundtrack was already read once successfully -
+    /// by [`Audio::start_music`], to load the menu's own track - so a second
+    /// read failing here (a transient open failure; an `image:path` spec that
+    /// stopped resolving) is a real anomaly, not the ordinary "this source has
+    /// none" case [`Self::booted_soundtrack_len`] also returns `0` for.
+    /// Falling back to [`MUSIC_TRACK`] without saying so would restart the
+    /// menu's own recording exactly as the un-chosen option would have,
+    /// indistinguishable in the load report from the intended behaviour.
+    fn initial_race_index(menu_from: &Option<Platform>, discs: &MusicDiscs) -> usize {
+        if menu_from.is_none() {
+            return MUSIC_TRACK;
+        }
+        match Self::booted_soundtrack_len(discs) {
+            0 => {
+                println!(
+                    "audio: could not re-read the booted disc's own soundtrack length, so the \
+                     race playlist starts at track {MUSIC_TRACK} rather than one past the menu's"
+                );
+                MUSIC_TRACK
+            }
+            len => next_race_index(MUSIC_TRACK, len),
+        }
+    }
+
+    /// How many tracks the **booted** disc's own soundtrack lists, or `0` when
+    /// it cannot be read at all (a PSP boot, or a source with no soundtrack).
+    /// The modulus the race playlist wraps at, and the same order
+    /// [`Self::race_index`] and [`Self::initial_race_index`] both address.
+    fn booted_soundtrack_len(discs: &MusicDiscs) -> usize {
+        let Some((source, platform)) = discs.pick(MusicSource::Auto) else {
+            return 0;
+        };
+        Soundtrack::read(source, platform)
+            .ok()
+            .flatten()
+            .map_or(0, |soundtrack| soundtrack.tracks.len())
+    }
+
+    /// Loads and plays one race-playlist track, reporting what happened.
+    ///
+    /// Shared by [`Self::start_race_music`] and the advance-on-finish check in
+    /// [`Self::tick`], which is the only other place `race_index` moves.
+    /// `seek` is `Some` for a resume and `None` for a fresh start (index 0 of
+    /// the track, which is also where a freshly-advanced track begins).
+    fn play_race_track(
+        &mut self,
+        discs: &MusicDiscs,
+        choice: MusicSource,
+        cache_dir: &Path,
+        index: usize,
+        seek: Option<f64>,
+    ) {
+        match self.fetch_indexed(discs, choice, cache_dir, index) {
+            Ok(Some(loaded)) => {
+                let seconds = loaded.sound.seconds();
+                self.race_cache = loaded
+                    .from
+                    .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
+                self.race_voice = self.output.with_mixer(|mixer| {
+                    let id = mixer.play(Play::once(loaded.sound, Bus::Music))?;
+                    if let Some(seek) = seek {
+                        mixer.seek(id, seek);
+                    }
+                    Some(id)
+                });
+                self.race_from = self.race_voice.and(loaded.from);
+                match seek {
+                    Some(seek) => println!(
+                        "audio: race music {}, {seconds:.1} s, resuming from {seek:.1} s",
+                        loaded.what
+                    ),
+                    None => println!("audio: race music {}, {seconds:.1} s", loaded.what),
+                }
+            }
+            Ok(None) => println!("audio: this source carries no race music this can play"),
+            Err(error) => println!("audio: no race music ({error:#})"),
+        }
+    }
+
+    /// Stops the race playlist where it stands and resumes the menu voice.
+    ///
+    /// The race voice's own position is saved to [`Self::race_position`], in
+    /// the track's own seconds, so the next [`Self::start_race_music`] picks
+    /// up close to here rather than restarting the track - the "pause" half
+    /// of the feature. [`Self::race_index`] is untouched: which track this
+    /// was is exactly the state that persists.
+    ///
+    /// The menu voice restarts from [`Self::menu_sound`] rather than through
+    /// [`Self::start_music`], which is idempotent by design and would do
+    /// nothing the second time it is asked - see that method's own doc
+    /// comment. Silent, not an error, when there is no menu sound to resume
+    /// (nothing ever loaded one, e.g. no `ffmpeg` on a PSP source).
+    pub fn pause_race_music(&mut self) {
+        if let Some(id) = self.race_voice.take() {
+            self.race_position = self
+                .output
+                .with_mixer(|mixer| mixer.position(id))
+                .unwrap_or(0.0);
+            self.output.with_mixer(|mixer| mixer.stop(id));
+        }
+        self.race_from = None;
+        self.race_context = None;
+
+        if let Some(sound) = &self.menu_sound {
+            self.music = self
+                .output
+                .with_mixer(|mixer| mixer.play(Play::looping(Arc::clone(sound), Bus::Music)));
+        }
+    }
+
+    /// How far into its own track the race playlist has got, in seconds - the
+    /// race counterpart of [`Self::playhead`].
+    #[must_use]
+    pub fn playhead_race(&self) -> Option<f64> {
+        self.output
+            .with_mixer(|mixer| mixer.position(self.race_voice?))
     }
 
     /// Moves the playing **soundtrack track** onto the release `choice` names,
@@ -638,7 +885,25 @@ impl Audio {
     ///
     /// **Never fatal**, for the same reason [`Self::start_music`] is not: a
     /// release that will not load leaves the music where it was and says so.
+    ///
+    /// **Moves whichever voice is actually live.** While a race is playing its
+    /// own track from [`Self::race_index`], that is the voice this row means -
+    /// otherwise it is the menu's, exactly as before this method learned about
+    /// races at all. Reaching for the *menu's* stamped `music_from` while a
+    /// race track from a different release is sounding would let the two
+    /// desync: the row would claim a platform the audible voice was not on, and
+    /// the next [`Self::pause_race_music`] would resume the wrong recording.
+    /// See [`Self::set_race_music_source`].
     pub fn set_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
+        if self.race_voice.is_some() {
+            self.set_race_music_source(discs, choice, cache_dir);
+        } else {
+            self.set_menu_music_source(discs, choice, cache_dir);
+        }
+    }
+
+    /// [`Self::set_music_source`]'s menu case, exactly as it always worked.
+    fn set_menu_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
         let Some((_, wanted)) = discs.pick(choice) else {
             return;
         };
@@ -654,6 +919,7 @@ impl Audio {
         let at = self.playhead().unwrap_or(0.0);
         match self.fetch(discs, choice, cache_dir) {
             Ok(Some(loaded)) => {
+                self.menu_sound = Some(Arc::clone(&loaded.sound));
                 self.output.with_mixer(|mixer| {
                     mixer.stop(playing);
                     let started = mixer.play(Play::looping(loaded.sound, Bus::Music));
@@ -669,6 +935,52 @@ impl Audio {
                 println!("audio: no soundtrack on the {wanted} release, so nothing changed")
             }
             Err(error) => println!("audio: the music stays where it is ({error:#})"),
+        }
+    }
+
+    /// [`Self::set_music_source`]'s race case: the same seek-preserving swap,
+    /// against [`Self::race_voice`]/[`Self::race_index`] instead of the menu's
+    /// fields, and through [`Self::fetch_indexed`] rather than [`Self::fetch`]
+    /// so the decode lands in the bounded [`Self::race_cache`], not [`Self::held`].
+    fn set_race_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
+        let Some((_, wanted)) = discs.pick(choice) else {
+            return;
+        };
+        let (Some(playing), Some(from), Some(index)) =
+            (self.race_voice, self.race_from, self.race_index)
+        else {
+            return;
+        };
+        if from == wanted {
+            return;
+        }
+
+        let at = self.playhead_race().unwrap_or(0.0);
+        match self.fetch_indexed(discs, choice, cache_dir, index) {
+            Ok(Some(loaded)) => {
+                self.output.with_mixer(|mixer| {
+                    mixer.stop(playing);
+                    let started = mixer.play(Play::once(Arc::clone(&loaded.sound), Bus::Music));
+                    if let Some(id) = started {
+                        mixer.seek(id, at);
+                    }
+                    self.race_voice = started;
+                });
+                self.race_from = self.race_voice.and(loaded.from);
+                self.race_cache = loaded.from.map(|platform| (platform, index, loaded.sound));
+                // So a later advance-on-finish (`Self::tick`) fetches the next
+                // track from the release the row now names, not the one it
+                // used to.
+                if let Some((cached_discs, cached_choice, _)) = &mut self.race_context {
+                    *cached_discs = discs.clone();
+                    *cached_choice = choice;
+                }
+                println!("audio: race music {}, from {at:.1} s", loaded.what);
+            }
+            Ok(None) => {
+                println!("audio: no soundtrack on the {wanted} release, so nothing changed")
+            }
+            Err(error) => println!("audio: the race music stays where it is ({error:#})"),
         }
     }
 
@@ -717,7 +1029,7 @@ impl Audio {
         // carry no pairable soundtrack. It would be a *different recording*,
         // and the row's whole claim is that its three values are one recording
         // encoded twice - see [`MusicSource`]. The caller reports the absence.
-        let Some(track) = self.locate(discs, platform, source)? else {
+        let Some(track) = self.locate(discs, platform, source, MUSIC_TRACK)? else {
             return Ok(None);
         };
 
@@ -733,41 +1045,92 @@ impl Audio {
         }))
     }
 
-    /// Which track of `platform`'s soundtrack [`MUSIC_TRACK`] means.
+    /// [`Self::fetch`]'s race counterpart: any track of the booted disc's
+    /// order, cached in the single-slot [`Self::race_cache`] rather than the
+    /// unbounded [`Self::held`].
     ///
-    /// On the booted release that is simply its own entry [`MUSIC_TRACK`]. On
-    /// the other one it is whichever track is the same length, which is what
+    /// `held` is safe to leave unbounded because the menu path only ever asks
+    /// for [`MUSIC_TRACK`] - at most one entry per platform, ever. The race
+    /// playlist asks for a different index every time it advances, and
+    /// caching those the same way would grow without limit over a long
+    /// session; a single replaced slot is what [`Self::race_cache`]'s own doc
+    /// comment costs instead.
+    fn fetch_indexed(
+        &mut self,
+        discs: &MusicDiscs,
+        choice: MusicSource,
+        cache_dir: &Path,
+        index: usize,
+    ) -> Result<Option<Loaded>> {
+        let Some((source, platform)) = discs.pick(choice) else {
+            return Ok(None);
+        };
+        if let Some((cached_platform, cached_index, sound)) = &self.race_cache
+            && *cached_platform == platform
+            && *cached_index == index
+        {
+            return Ok(Some(Loaded {
+                from: Some(platform),
+                sound: Arc::clone(sound),
+                what: format!("{platform} soundtrack track {index}, already read"),
+            }));
+        }
+
+        let Some(track) = self.locate(discs, platform, source, index)? else {
+            return Ok(None);
+        };
+
+        let sound = Arc::new(load_track(source, platform, track, cache_dir)?);
+        Ok(Some(Loaded {
+            from: Some(platform),
+            sound,
+            what: format!(
+                "{platform} soundtrack track {index}, {:.1} s as its own disc lists it",
+                track.seconds
+            ),
+        }))
+    }
+
+    /// Which track of `platform`'s soundtrack `index` means, `index` being an
+    /// entry in the **booted** disc's own order.
+    ///
+    /// On the booted release that is simply its own entry `index`. On the
+    /// other one it is whichever track is the same length, which is what
     /// makes the two selections the same recording rather than two unrelated
     /// pieces of music.
     ///
     /// **The index is not stable across boots**, and it is worth being plain
-    /// about that: [`MUSIC_TRACK`] means "entry 0 of whichever disc booted",
-    /// and the two archives are not in the same order. Entry 0 happens to name
-    /// the same recording on both - the PS2's first track is also the first of
+    /// about that: an index means "entry N of whichever disc booted", and the
+    /// two archives are not in the same order. Entry 0 happens to name the
+    /// same recording on both - the PS2's first track is also the first of
     /// the PSP's sixteen in `Data.wad` order - but that is coincidence, and at
-    /// index 1 the two boots would start on different music. Nothing depends on
-    /// it today because the index is a constant; a future circuit-to-track map
-    /// has to be built on one disc's order, not on "index N".
+    /// index 1 the two boots start on different music. [`MUSIC_TRACK`] gets
+    /// away with never noticing because it is a constant; [`Self::race_index`]
+    /// is not, and this is exactly why it is kept and read in the booted
+    /// disc's own order rather than in whichever platform happens to be
+    /// playing at the time - a future circuit-to-track map has to be built the
+    /// same way.
     fn locate(
         &self,
         discs: &MusicDiscs,
         platform: Platform,
         source: &str,
+        index: usize,
     ) -> Result<Option<Track>> {
         let Some(soundtrack) = Soundtrack::read(source, platform)? else {
             return Ok(None);
         };
         if discs.booted() == Some(platform) {
-            return Ok(soundtrack.tracks.get(MUSIC_TRACK).copied());
+            return Ok(soundtrack.tracks.get(index).copied());
         }
 
         let Some((booted_source, booted_platform)) = discs.pick(MusicSource::Auto) else {
-            return Ok(soundtrack.tracks.get(MUSIC_TRACK).copied());
+            return Ok(soundtrack.tracks.get(index).copied());
         };
         let Some(booted) = Soundtrack::read(booted_source, booted_platform)? else {
-            return Ok(soundtrack.tracks.get(MUSIC_TRACK).copied());
+            return Ok(soundtrack.tracks.get(index).copied());
         };
-        let Some(wanted) = booted.tracks.get(MUSIC_TRACK) else {
+        let Some(wanted) = booted.tracks.get(index) else {
             return Ok(None);
         };
         Ok(soundtrack.nearest(wanted.seconds))
@@ -880,9 +1243,40 @@ impl Audio {
     /// mixer at the hardware's own pace, and pulling here would take samples
     /// out of its mouth.
     pub fn tick(&mut self) {
+        if let Some(id) = self.race_voice
+            && !self.output.with_mixer(|mixer| mixer.is_playing(id))
+        {
+            self.advance_race_track();
+        }
         if let Some(dump) = &mut self.dump {
             self.output.render_tick(TICK_HZ, &mut dump.samples);
         }
+    }
+
+    /// Moves the race playlist on to the next track once the current one has
+    /// finished naturally - race tracks play [`Play::once`], never looping,
+    /// which is what makes "no longer playing" mean "reached its end" rather
+    /// than "was stopped".
+    ///
+    /// **The fetch this can trigger is a disc read and, on the PSP, a
+    /// possible `ffmpeg` decode - 0.4-2.0 s by [`Self::held`]'s own
+    /// measurement - paid inside the fixed-timestep loop.** Accepted for this
+    /// pass: a race is minutes long and a track boundary is comparatively
+    /// rare, so the hitch is occasional rather than routine. Threaded
+    /// prefetch - starting the next track's decode a few seconds before the
+    /// current one ends - is the natural follow-up if the hitch turns out to
+    /// be noticeable, and is not built here.
+    fn advance_race_track(&mut self) {
+        let Some((discs, choice, cache_dir)) = self.race_context.clone() else {
+            return;
+        };
+        let Some(index) = self.race_index else {
+            return;
+        };
+        self.race_voice = None;
+        let next = next_race_index(index, Self::booted_soundtrack_len(&discs));
+        self.race_index = Some(next);
+        self.play_race_track(&discs, choice, &cache_dir, next, None);
     }
 
     /// Writes the dump, if there is one.
@@ -914,6 +1308,18 @@ impl Audio {
 /// function of the tick count alone: `oag_core::TickRate` is what the loop uses
 /// and it is fixed at 60.
 const TICK_HZ: u32 = 60;
+
+/// The index one past `index` in a soundtrack of `len` tracks, wrapping.
+///
+/// A free function, deliberately: [`Audio::booted_soundtrack_len`] is the
+/// part that needs a real disc and cannot be exercised without one, but the
+/// arithmetic the playlist wraps by needs none of that and is worth pinning
+/// on its own. `len == 0` (the soundtrack could not be read at all) leaves
+/// `index` where it was rather than dividing by zero - there is nothing to
+/// advance *to*.
+fn next_race_index(index: usize, len: usize) -> usize {
+    if len == 0 { index } else { (index + 1) % len }
+}
 
 /// Reads one entry of `PS2MUSIC.WAD` off `source` and turns it into a sound.
 ///
@@ -1662,6 +2068,13 @@ mod tests {
                 (Platform::Ps2, Arc::clone(&ps2)),
             ],
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
         assert_eq!(
@@ -1741,6 +2154,13 @@ mod tests {
             music_from: None,
             held: vec![(Platform::Ps2, Arc::clone(&ps2))],
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
 
         audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -1780,6 +2200,13 @@ mod tests {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         audio.start_music(&nothing, MusicSource::Auto, Path::new("unused"));
         assert!(audio.music.is_none(), "there was nothing to play");
@@ -1837,6 +2264,13 @@ mod tests {
             // this cannot pass by the swap merely failing to find anything.
             held: vec![(Platform::Ps2, Arc::clone(&ps2))],
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         audio.music = audio
             .output
@@ -1885,6 +2319,13 @@ mod tests {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         for _ in 0..120 {
             audio.tick();
@@ -1928,6 +2369,13 @@ mod tests {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         assert!(audio.start_movie(sound), "a free voice");
 
@@ -1970,6 +2418,13 @@ mod tests {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         let sound = Sound::new(vec![0i16; 44_100 * 2], 2, 44_100).expect("a sound");
         assert!(audio.start_movie(sound), "a free voice");
@@ -1996,6 +2451,13 @@ mod tests {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         assert_eq!(audio.movie_playhead(), None, "nothing started");
 
@@ -2019,10 +2481,268 @@ mod tests {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: None,
+            menu_sound: None,
+            race_context: None,
         };
         for _ in 0..120 {
             audio.tick();
         }
         assert!(audio.dump.is_none());
+    }
+
+    /// `next_race_index` in isolation, since the playlist's real length can
+    /// only come from a disc [`Audio::booted_soundtrack_len`] cannot fabricate
+    /// in a unit test - this is the arithmetic side of "advances and wraps",
+    /// pinned without one.
+    #[test]
+    fn the_race_index_wraps_at_the_soundtracks_length() {
+        assert_eq!(next_race_index(0, 16), 1);
+        assert_eq!(next_race_index(15, 16), 0, "wraps back to the first track");
+        assert_eq!(
+            next_race_index(5, 0),
+            5,
+            "an unreadable soundtrack leaves the index where it was"
+        );
+    }
+
+    /// Silence at `seconds` long, for tests that only care where the playhead
+    /// gets to, not what it sounds like.
+    fn silence(seconds: f64, channels: u16, rate: u32) -> Arc<Sound> {
+        let frames = (seconds * f64::from(rate)) as usize;
+        Arc::new(
+            Sound::new(vec![0i16; frames * channels as usize], channels, rate).expect("a sound"),
+        )
+    }
+
+    /// A PSP-boot-shaped fixture: the menu plays its own 28-second loop, which
+    /// is not one of the sixteen soundtrack tracks (`music_from: None`), and a
+    /// race track is already decoded and cached - so [`Audio::start_race_music`]
+    /// never has to touch a disc, the same technique
+    /// [`changing_the_music_source_seeks_rather_than_restarting`] uses for the
+    /// menu path.
+    fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
+        let menu_sound = silence(28.0, 2, 44_100);
+        let race_sound = silence(180.0, 2, 44_100);
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: Some(Dump {
+                path: PathBuf::from("unused"),
+                samples: Vec::new(),
+            }),
+            music: None,
+            music_attempted: true,
+            music_from: None,
+            held: Vec::new(),
+            movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            race_cache: Some((Platform::Psp, MUSIC_TRACK, Arc::clone(&race_sound))),
+            menu_sound: Some(Arc::clone(&menu_sound)),
+            race_context: None,
+        };
+        audio.music = audio
+            .output
+            .with_mixer(|mixer| mixer.play(Play::looping(Arc::clone(&menu_sound), Bus::Music)));
+        (audio, menu_sound, race_sound)
+    }
+
+    /// Starting a race stops the menu voice - not just the field, the actual
+    /// sounding one - and starts a race voice on the playlist instead.
+    #[test]
+    fn starting_a_race_stops_the_menu_voice_and_starts_a_race_voice() {
+        let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
+        let discs = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Psp),
+        };
+        let menu_voice = audio.music.expect("the fixture starts the menu playing");
+
+        audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
+
+        assert!(
+            !audio
+                .output
+                .with_mixer(|mixer| mixer.is_playing(menu_voice)),
+            "the menu voice must actually stop, not just the field clear"
+        );
+        assert!(audio.music.is_none());
+        assert!(audio.race_voice.is_some(), "a race track should be playing");
+        assert_eq!(audio.race_from, Some(Platform::Psp));
+        assert_eq!(
+            audio.playhead_race(),
+            Some(0.0),
+            "a fresh start, not a seek"
+        );
+    }
+
+    /// Ending a race saves the exact position it was cut off at, and the menu
+    /// voice sounds again - a *new* voice, silent until this moment, not one
+    /// that kept advancing somewhere unheard.
+    #[test]
+    fn ending_a_race_saves_the_position_and_the_menu_voice_sounds_again() {
+        let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
+        let discs = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Psp),
+        };
+        audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
+
+        for _ in 0..(60 * 45) {
+            audio.tick();
+        }
+        let at = audio.playhead_race().expect("the race track is playing");
+        assert!((at - 45.0).abs() < 0.01, "expected 45 s in, got {at}");
+
+        audio.pause_race_music();
+
+        assert!(audio.race_voice.is_none());
+        assert!(
+            (audio.race_position - 45.0).abs() < 0.01,
+            "expected the cut-off saved at 45 s, got {}",
+            audio.race_position
+        );
+        assert_eq!(
+            audio.playhead(),
+            Some(0.0),
+            "the menu voice is a fresh start, not the paused race's position"
+        );
+    }
+
+    /// The direct analogue of
+    /// [`changing_the_music_source_seeks_rather_than_restarting`], for the
+    /// race path: leaving and re-entering a race resumes the same track close
+    /// to where it was cut off, not from the start.
+    #[test]
+    fn a_second_race_resumes_within_a_sixtieth_of_a_second_of_the_saved_position() {
+        let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
+        let discs = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Psp),
+        };
+        audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
+        for _ in 0..(60 * 90) {
+            audio.tick();
+        }
+        audio.pause_race_music();
+        let saved = audio.race_position;
+
+        audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
+        let resumed = audio.playhead_race().expect("the race track is playing");
+
+        assert!(
+            (resumed - saved).abs() < 1.0 / 60.0,
+            "expected to resume at {saved} s, landed at {resumed} s"
+        );
+    }
+
+    /// `MUSIC SOURCE` moved while a race is live has to move the *race*
+    /// voice, seek-preserving - not no-op (both its guard fields would still
+    /// name the menu) and not silently desync `race_from` from what is
+    /// actually sounding.
+    #[test]
+    fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
+        let discs = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: Some("ps2.chd".into()),
+            booted: Some(Platform::Ps2),
+        };
+        let psp_track = silence(180.0, 2, 44_100);
+        let ps2_track = silence(180.0, 2, 48_000);
+
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: Some(Dump {
+                path: PathBuf::from("unused"),
+                samples: Vec::new(),
+            }),
+            music: None,
+            music_attempted: true,
+            music_from: None,
+            held: Vec::new(),
+            movie: None,
+            race_voice: None,
+            race_from: Some(Platform::Ps2),
+            race_index: Some(0),
+            race_position: 0.0,
+            // The *target* platform is already decoded - the same technique
+            // `held` uses for the menu row, avoiding a disc read this test
+            // has no fixture for. See `psp_boot_fixture`.
+            race_cache: Some((Platform::Psp, 0, Arc::clone(&psp_track))),
+            menu_sound: None,
+            race_context: None,
+        };
+        audio.race_voice = audio
+            .output
+            .with_mixer(|mixer| mixer.play(Play::once(Arc::clone(&ps2_track), Bus::Music)));
+
+        for _ in 0..(60 * 20) {
+            audio.tick();
+        }
+        let before = audio.playhead_race().expect("the race track is playing");
+        assert!((before - 20.0).abs() < 0.01);
+
+        audio.set_music_source(&discs, MusicSource::Psp, Path::new("unused"));
+
+        assert_eq!(audio.race_from, Some(Platform::Psp), "the row moved it");
+        let after = audio.playhead_race().expect("still playing");
+        assert!(
+            (after - before).abs() < 1.0 / 60.0,
+            "the row must seek the race voice, not restart it: {before} s became {after} s"
+        );
+    }
+
+    /// A source with no decodable race music still resumes the menu cleanly
+    /// on pause - degrading the same way [`Audio::start_music`] does rather
+    /// than leaving a dangling voice or panicking on a `None` where the race
+    /// never actually started.
+    #[test]
+    fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
+        let discs = MusicDiscs {
+            psp: Some("psp.chd".into()),
+            ps2: None,
+            booted: Some(Platform::Psp),
+        };
+        let menu_sound = silence(28.0, 2, 44_100);
+        let mut audio = Audio {
+            output: Output::null(DUMP_SAMPLE_RATE),
+            dump: Some(Dump {
+                path: PathBuf::from("unused"),
+                samples: Vec::new(),
+            }),
+            music: None,
+            music_attempted: true,
+            music_from: None,
+            held: Vec::new(),
+            movie: None,
+            race_voice: None,
+            race_from: None,
+            race_index: None,
+            race_position: 0.0,
+            // Nothing cached and the fake PSP path carries no soundtrack, so
+            // `start_race_music` cannot decode anything - the source has no
+            // race music, only the menu's own loop.
+            race_cache: None,
+            menu_sound: Some(Arc::clone(&menu_sound)),
+            race_context: None,
+        };
+
+        audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
+        assert!(audio.race_voice.is_none(), "nothing to decode");
+
+        // Never started, so nothing to pause - but it must still be safe to
+        // call, and the menu must still come back.
+        audio.pause_race_music();
+        assert!(audio.music.is_some(), "the menu voice resumed");
+        assert_eq!(audio.playhead(), Some(0.0));
     }
 }

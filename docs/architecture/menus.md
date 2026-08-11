@@ -274,6 +274,15 @@ dropped and re-entering loads a fresh race. A player who backs out expects to
 lose the race; one who backs out and finds a *stale* one would not, so a
 half-built pause would be worse than none.
 
+**One exception, and it is not the `World`.** The race's own music - a
+playlist through the sixteen soundtrack tracks, distinct from the menu's loop -
+does pause and resume, its position kept in `Audio` for the process's lifetime
+rather than reset on every race. This does not contradict the rule above: it
+is audio state outside the simulation, the same way `docs/architecture/determinism.md`
+already puts every other sound outside it, not a piece of race state being
+quietly kept alive. See `crates/game/src/audio.rs`'s `start_race_music` and
+`pause_race_music`.
+
 ## The background the menus sit on
 
 The rows are drawn over **the disc's own looping menu backdrop**, and that is a

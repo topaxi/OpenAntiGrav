@@ -363,5 +363,10 @@ The engine reads the same populations at run time rather than from a table:
   data.
 - **Which circuit or menu plays which track.** The pairing above says which two
   entries are one recording; nothing says which recording belongs where.
-  `oag-game` plays index 0 of whichever disc booted for exactly that reason -
-  see `crates/game/src/audio.rs`.
+  `oag-game`'s menu plays index 0 of whichever disc booted for exactly that
+  reason - see `crates/game/src/audio.rs`. **A race plays a cycling playlist
+  through all sixteen, in the booted disc's own order, starting one past the
+  menu's own track** - this is an authored choice for this reimplementation,
+  not a recovered mapping, and does not narrow the open question above: it is
+  still unknown which recording, if any, the original intends for a given
+  circuit.

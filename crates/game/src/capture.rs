@@ -437,6 +437,14 @@ pub fn run(
         for line in &loaded.report {
             println!("{line}");
         }
+        // The same handoff `App::launch_race` makes: the menu voice this loop
+        // started above stops, and the race playlist takes over - one music
+        // rule for every way a race is reached, screenshot captures included.
+        audio.start_race_music(
+            &options.music_discs,
+            options.settings.audio.music_source,
+            &crate::boot::default_audio_cache_dir(),
+        );
         return race::capture(
             loaded,
             &race::CaptureOptions {

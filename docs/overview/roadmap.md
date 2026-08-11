@@ -547,6 +547,11 @@ seen from the authoring side.
 - [ ] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
       waveforms decode already (M1); what is missing is placing them in the world.
+      **Music switching is in**: a race plays a cycling playlist through the
+      sixteen soundtrack tracks in place of the menu's loop, its position kept
+      in memory across races so leaving and re-entering one resumes rather than
+      restarts. Authored, not recovered - see [ps2-audio](../formats/ps2-audio.md)'s
+      "Not determined" section, which this does not close.
 - [ ] **The visuals these systems own.** Effects that cannot be built before the
       thing they belong to, so they sit here rather than with the rendering work
       in M6. Each is a `.vex` class the loader already enumerates - see the

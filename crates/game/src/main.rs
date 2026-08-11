@@ -1338,8 +1338,11 @@ fn run_race(
     if let Some(path) = cli.screenshot.clone() {
         // Same reasoning as the front end's own capture branch: no window to
         // stay in step with, but the music has to be running before
-        // `race::capture`'s first tick.
-        audio.start_music(
+        // `race::capture`'s first tick. The race playlist rather than
+        // `start_music`, so `--race` plays the same music a race launched from
+        // the menus does - there is no menu voice here to switch away from,
+        // so this simply starts the list at its first (or resumed) track.
+        audio.start_race_music(
             &music_discs,
             settings.audio.music_source,
             &boot::default_audio_cache_dir(),
@@ -1552,7 +1555,12 @@ impl App {
             // than back in `main` before the load, which used to run seconds of
             // parsing and transcoding with the music already looping and no
             // window yet on screen to account for it.
-            audio.start_music(
+            //
+            // The race playlist, not `start_music`: `--race` has no menu to
+            // play under a race, and no shell to return to (`escape` quits
+            // outright on this leg), so there is nothing to pause and resume -
+            // just the same list a menu-launched race plays, started fresh.
+            audio.start_race_music(
                 &self.music_discs,
                 self.settings.audio.music_source,
                 &boot::default_audio_cache_dir(),
@@ -4088,6 +4096,10 @@ impl Session {
 
         if matches!(self.stage, Stage::Race(_)) && self.shell.is_some() {
             println!("\nleaving the race");
+            // Before `open_menus`, not after: the menu voice this resumes has
+            // to be sounding by the time the menus themselves draw. See
+            // `Audio::pause_race_music`.
+            self.audio.pause_race_music();
             match self.open_menus() {
                 Ok(()) => println!("\n{SHELL_KEYS}"),
                 // Reported rather than fatal, and then it quits: a race whose
@@ -4452,6 +4464,14 @@ impl Session {
             &self.settings,
             self.scheme,
         )?;
+        // After the stage swap succeeds, not before: both loads above can fail
+        // with `?`, and a failed launch must leave the menu music playing
+        // rather than having already silenced it. See `Audio::start_race_music`.
+        self.audio.start_race_music(
+            &self.music_discs,
+            self.settings.audio.music_source,
+            &boot::default_audio_cache_dir(),
+        );
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())
     }
