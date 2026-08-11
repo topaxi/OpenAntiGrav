@@ -1866,7 +1866,7 @@ fn solo_lap_ticks(level: oag_ai::Difficulty) -> Option<u64> {
 }
 
 /// What a lone craft managed on one circuit.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 struct Solo {
     /// The quickest **clean** lap, in ticks.
     ///
@@ -1881,10 +1881,19 @@ struct Solo {
     respawns: u32,
     /// How far round it got, in laps.
     laps: u32,
+    /// The driver index the craft was on when each rescue fired, and the line's
+    /// length, so a reader can tell whether the losses cluster anywhere.
+    lost_at: Vec<u32>,
+    line_len: u32,
 }
 
 /// The same, on a named circuit.
 fn solo_lap_on(level: oag_ai::Difficulty, track: &str) -> Solo {
+    solo_lap_tuned(level, track, None)
+}
+
+/// The same, with the drivers' tuning overridden - what a sweep calls.
+fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai::Tuning>) -> Solo {
     let Some(image) = image() else {
         return Solo::default();
     };
@@ -1899,6 +1908,9 @@ fn solo_lap_on(level: oag_ai::Difficulty, track: &str) -> Solo {
         return Solo::default();
     };
     let mut race = race::Race::start(loaded.setup);
+    if let Some(tuning) = tuning {
+        race.set_ai_tuning(tuning);
+    }
     // Everyone but one opponent off the track, so nothing it does is about
     // anybody else.
     for slot in 2..8 {
@@ -1910,10 +1922,15 @@ fn solo_lap_on(level: oag_ai::Difficulty, track: &str) -> Solo {
     let mut lap = race.world.ships[1].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
+    let mut lost_at = Vec::new();
     for tick in 0..18_000u64 {
         let before = race.respawns_of(1);
+        let was_at = race.world.ships[1].driver.index;
         race.tick(&oag_gameplay::InputSnapshot::default());
-        recovered_this_lap |= race.respawns_of(1) != before;
+        if race.respawns_of(1) != before {
+            recovered_this_lap = true;
+            lost_at.push(was_at);
+        }
         let now = race.world.ships[1].standing.lap;
         if now != lap {
             // The first lap is the standing start, and a lap the craft had to
@@ -1931,6 +1948,8 @@ fn solo_lap_on(level: oag_ai::Difficulty, track: &str) -> Solo {
         best,
         respawns: race.respawns_of(1),
         laps: lap,
+        lost_at,
+        line_len: race.racing_line().len() as u32,
     }
 }
 
@@ -1960,6 +1979,14 @@ fn a_solo_craft_laps_faster_at_a_harder_setting() {
 /// happens to use; a knob that helps there and hurts everywhere else would look
 /// like an improvement right up until someone played a different circuit.
 fn solo_laps_everywhere(level: oag_ai::Difficulty) -> Vec<(String, Solo)> {
+    solo_laps_tuned(level, None)
+}
+
+/// The same, with the drivers' tuning overridden.
+fn solo_laps_tuned(
+    level: oag_ai::Difficulty,
+    tuning: Option<oag_ai::Tuning>,
+) -> Vec<(String, Solo)> {
     let Some(image) = image() else {
         return Vec::new();
     };
@@ -1974,9 +2001,60 @@ fn solo_laps_everywhere(level: oag_ai::Difficulty) -> Vec<(String, Solo)> {
         .filter(|track| !track.reversed)
         .map(|track| {
             let entry = track.entry_name();
-            (track.id.clone(), solo_lap_on(level, &entry))
+            (track.id.clone(), solo_lap_tuned(level, &entry, tuning))
         })
         .collect()
+}
+
+/// What a grip figure is worth across the whole disc rather than on one
+/// circuit.
+///
+/// A scratch sweep, kept `#[ignore]`d and printing rather than asserting: the
+/// number it produces goes into `Tuning::lateral_accel` by hand, with the table
+/// written into `docs/gameplay/ai.md` so the choice has its measurement next to
+/// it. It exists because a solo lap on Talon's Junction said 260 was quicker
+/// than 180, and Talon's Junction is one of the five circuits a craft gets
+/// round cleanly - exactly the subset that cannot see the failure.
+/// Twelve circuits times five grip figures times five minutes of simulation is
+/// minutes of wall clock in a debug build, so it is off unless asked for:
+///
+/// ```sh
+/// OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 \
+///   cargo nextest run --release -p oag-game --run-ignored all sweep_grip --no-capture
+/// ```
+///
+/// `#[ignore]` alone would not do it - `just test-data` runs ignored tests, and
+/// a five-minute entry in that suite is how a suite stops being run.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table, choose"]
+fn sweep_grip() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let mut report = String::from("\ngrip   clean  round  respawns  mean clean lap\n");
+    for grip in [120.0f32, 150.0, 180.0, 220.0, 260.0] {
+        let tuning = oag_ai::Tuning {
+            lateral_accel: grip,
+            ..oag_ai::Tuning::default()
+        };
+        let laps = solo_laps_tuned(oag_ai::Difficulty::Ace, Some(tuning));
+        if laps.is_empty() {
+            return;
+        }
+        let clean: Vec<u64> = laps.iter().filter_map(|(_, solo)| solo.best).collect();
+        let mean = if clean.is_empty() {
+            f32::NAN
+        } else {
+            clean.iter().sum::<u64>() as f32 / clean.len() as f32 / 60.0
+        };
+        report.push_str(&format!(
+            "{grip:<6} {:<6} {:<6} {:<9} {mean:.1}s\n",
+            clean.len(),
+            laps.iter().filter(|(_, solo)| solo.laps >= 2).count(),
+            laps.iter().map(|(_, solo)| solo.respawns).sum::<u32>(),
+        ));
+    }
+    println!("{report}");
 }
 
 /// Every craft starts on its own racing line, on **every** circuit.
@@ -2102,13 +2180,15 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
         .collect();
     for (id, solo) in &laps {
         println!(
-            "{id:<12} clean lap {:>6}  laps {:<3} respawns {}",
+            "{id:<12} clean lap {:>6}  laps {:<3} respawns {:<3} of {} lost at {:?}",
             solo.best.map_or("none".to_string(), |ticks| format!(
                 "{:.1}s",
                 ticks as f32 / 60.0
             )),
             solo.laps,
-            solo.respawns
+            solo.respawns,
+            solo.line_len,
+            solo.lost_at
         );
     }
     println!("clean laps: {lapped:?}\nno clean lap: {missed:?}");

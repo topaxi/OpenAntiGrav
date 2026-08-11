@@ -827,13 +827,59 @@ scenery.
 Three circuits - 05, 14 and 07 - still never register a second lap, and 07 does
 it *without being rescued once*: it is on the track, going round, and not being
 counted. All three are the circuits whose spline carries three paths rather than
-two, which points at the lap ring. That is the next thing to chase, and it is a
-different bug from the four above it.
+two, which points at the lap ring. That is a different bug from the four above
+it, and the next section is where the four went.
 
 `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` carries both
 ratchets so neither number can quietly fall, and
 `an_opponent_that_flies_off_the_circuit_is_put_back_on_it` pins the rescue
 without needing the disc.
+
+### Where a craft comes off: the seam between two paths
+
+**Open as of 2026-08-12.** Recording each rescue against the driver's index
+turned a vague "it comes off sometimes" into one number per circuit: the losses
+cluster inside a handful of samples, every lap, at one place.
+
+| circuit | rescues | driver index at each |
+| --- | --- | --- |
+| 06 | 6 | 1521, 1521, 1522, 1520, 1521, 1521 |
+| 09 | 6 | 1298, 1293, 1304, 1305, 1274, 1291 |
+| 01 | 8 | 846, 254, 262, 262, 262, 261, 262, 261 |
+| 02 | 7 | 1528, 1455, 1452, 1541, 1547, 1458, 1456 |
+
+The rescue fires about 325 samples after the craft actually leaves, because it
+waits out `RESCUE_TICKS` while the craft flies. Subtracting that offset puts
+every cluster on the circuit's **path boundary** - 06 loses it at 1195 against a
+boundary at 1196, and a tick-by-tick trace confirms it: grounded 1 → 0.5 → 0 at
+index 1195, height +16.6 and then falling for the next four hundred units.
+
+`Spline::from_track` samples `0..points.len()` segments of each path and
+concatenates the paths in **file order**. Two things fall out of that, and only
+the second is fatal:
+
+- **Every path ends in a cluster of near-coincident samples.** The steps into a
+  boundary run 0.6, 0.3, 0.1 against a 1.50-unit median, on every circuit
+  including the four that lap cleanly. Ugly, and on its own harmless.
+- **The step across the seam can change direction.** On the circuits that lap
+  cleanly it does not - 04 goes `0.31,-0.02,0.95` to `0.30,-0.01,0.95`, 13 and
+  01 likewise hold their heading. On 06 it goes `-0.19,-0.34,0.92` to
+  `-0.21,-0.84,0.51`: the line **dives twelve units downward in a single
+  14.8-unit step**, and a driver that aims at it drives off the track.
+
+So the seam is not universally harmful; it is harmful where the two paths do not
+join smoothly, which is an ordering-or-data question rather than a sampling one.
+Whether the answer is to follow the lap ring's path order instead of file order,
+or to drop the degenerate tail samples, is **not yet settled** - the two readings
+have not been separated and neither should be built on until they are.
+
+**Grip stays at 180 until this is fixed.** A sweep across all twelve circuits
+says 220 and 260 are quicker (38.6s and 38.4s mean clean lap against 39.8s) and
+reach six clean circuits rather than five - but it was measured with craft
+falling off a seam on seven of them, and the respawn count barely moves across
+the whole range (29 at grip 120, 35 at 180, 33 at 260). A number that does not
+respond to grip is not a grip problem, and fitting grip against it would be
+fitting to the artefact. `sweep_grip` is the harness; re-run it after the seam.
 
 ### A solo lap is the benchmark
 

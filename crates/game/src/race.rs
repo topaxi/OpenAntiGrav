@@ -3151,6 +3151,21 @@ impl Race {
         &self.spline
     }
 
+    /// Replaces what the opponents are flown with, mid-race.
+    ///
+    /// **For measurement, and it is the only way to sweep a knob across a
+    /// circuit.** The tuning is otherwise decided once at
+    /// [`Self::start`] from the difficulty, which is right for a race and
+    /// useless for finding out what a number is worth: a sweep that had to
+    /// recompile between points could not be a test, and a tuning fitted on the
+    /// one circuit that happens to be the default is how this page got a grip
+    /// figure that was wrong on the other eleven.
+    ///
+    /// It is not a difficulty setting and nothing in the game calls it.
+    pub fn set_ai_tuning(&mut self, tuning: oag_ai::Tuning) {
+        self.ai_tuning = tuning;
+    }
+
     /// The line the opponents' drivers follow, index-parallel to
     /// [`Self::spline`].
     ///
