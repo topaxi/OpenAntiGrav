@@ -257,27 +257,29 @@ pub const ENGINE_OUTPUT_SCALE: f32 = 1.0;
 /// straight out of the instruction stream, and what is weaker is calling the `0x800`
 /// pickup-flag bit "speed-up" specifically.
 ///
-/// # Applied since 2026-08-11, gated on [`ShipState::turbo_timer`]
+/// # Still not applied, and 2026-08-11 established what it is *not*
 ///
-/// The gate is the one part of this that is not recovered. The original's is a bit
-/// of `craft+0x1c0`, armed from the pickup word by the same function that forces the
-/// HUD icon and reads the pickup's own `+0x148` timer - so the shape is "a held
-/// pickup, for as long as it lasts", and a `f32` of seconds is that shape without
-/// the two undecoded words. What is recovered is the **multiply and its constant**,
-/// and where in `Ship_UpdateEngine` they land, which is what this is.
+/// This was briefly wired up as the Turbo pickup's effect and that was **wrong**,
+/// by two orders of magnitude. Kept in full because the mistake is an easy one and
+/// the evidence against it is worth having written down:
 ///
-/// Two things support reading the `0x800` pickup as the **Turbo** weapon rather than
-/// something else, neither conclusive on its own: the same branch forces HUD icon
-/// id `6`, and `Arcade_HUD.xml` names its icons after the weapons in the class-name
-/// pool's order; and the disc's own manual text says a time trial "will be given a
-/// free turbo pickup once per lap", so a Turbo pickup exists and does something to
-/// the engine. Confidence **80** on the identification, against 85 on the arithmetic.
-/// See `docs/gameplay/pickups.md`.
+/// - A `1.2` multiplier on a thrust the line above has just clamped to
+///   `0.5 * speed + accelcap` is a few units of force. `Engine.turbo`, added
+///   *uncapped* on the very next branch, is authored an order of magnitude above
+///   `accelcap` on every shipped class. One of those is a turbo and the other is
+///   not, and it is measurable from the disc without running anything.
+/// - The branch that arms this is in the **HUD update** (`0x0883b3b8`), not the
+///   craft update, and it also sets HUD icon id `6` and drives a bar from the
+///   pickup's own `+0x148` timer. Whatever `0x800` is, it is a timed effect the
+///   HUD draws a fill for.
 ///
-/// **Not to be confused with `Engine.turbo`**, which is a flat *additive* thrust
-/// under flag bits `0x200`/`0x400` and a mode enum. `0x400`'s only known writer is
-/// the barrel roll (`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`), so
-/// that term belongs to a different mechanic and stays unimplemented here.
+/// So this is a *second*, much smaller speed-up, and **which pickup arms it is
+/// unidentified**: id `6` lands on `Shield` or `Autopilot` depending on where the
+/// class-name pool starts counting, and neither of those is obviously a speed
+/// effect. It stays unapplied until something identifies bit `0x800`.
+///
+/// See [`ShipState::turbo_timer`] for the term that *is* the turbo, and
+/// `docs/gameplay/pickups.md` for the whole account.
 pub const ENGINE_PICKUP_SPEEDUP: f32 = 1.2;
 
 /// The fixed doubling on the engine's output, from the same expression.
@@ -412,12 +414,11 @@ pub fn engine(
     }
     thrust = thrust.min(cap);
 
-    // `if (flags & 0x0004) T *= craft+0x2a0`, between the cap and the doubling,
-    // which is where the original puts it - see `ENGINE_PICKUP_SPEEDUP`. It is
-    // **after** the `min`, so a fired Turbo pushes the craft past the cap rather
-    // than being clipped by it, which is what makes it worth firing at speed.
+    // The turbo add, `T += Engine.turbo`, between the cap and the doubling -
+    // which is where the original puts it, so it is **uncapped**: that is what
+    // makes it a turbo rather than a nudge. See `ShipState::turbo_timer`.
     if state.turbo_timer > 0.0 {
-        thrust *= ENGINE_PICKUP_SPEEDUP;
+        thrust += handling.engine.turbo;
     }
 
     thrust = thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE;

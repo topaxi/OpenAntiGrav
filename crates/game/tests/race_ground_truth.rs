@@ -1038,6 +1038,57 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     );
     println!("granted {granted:?} off the disc's own odds");
 
+    // **And firing it visibly accelerates the craft, on the disc's own
+    // numbers.** This is the assertion the first version of this feature
+    // needed and did not have: it wired the neighbouring `1.2` multiplier
+    // instead of the turbo add, every unit test passed because a ratio is a
+    // ratio, and the effect was imperceptible in a real race because `1.2`
+    // applied to a thrust already clamped to `0.5 * speed + accelcap` is a few
+    // units of force. Comparing *speed after a second* against a control makes
+    // the magnitude the thing under test rather than the ratio.
+    let mut control = race_at_pad(oag_race::Mode::SingleRace);
+    let mut fired = race_at_pad(oag_race::Mode::SingleRace);
+    let mut control_buttons = Input::new();
+    let mut fired_buttons = Input::new();
+    const CROSS: u32 = 1 << button::CROSS;
+    const SQUARE: u32 = 1 << button::SQUARE;
+
+    let snapshot = |buttons: &mut Input, mask: u32| {
+        buttons.begin_frame(mask);
+        oag_gameplay::InputSnapshot {
+            buttons: *buttons,
+            ..Default::default()
+        }
+    };
+
+    // Both hold thrust; one of them also presses fire on the tick after the
+    // pickup lands.
+    control.tick(&snapshot(&mut control_buttons, CROSS));
+    fired.tick(&snapshot(&mut fired_buttons, CROSS));
+    control.tick(&snapshot(&mut control_buttons, CROSS));
+    fired.tick(&snapshot(&mut fired_buttons, CROSS | SQUARE));
+    assert_eq!(fired.ship_pickup(), None, "firing must spend the pickup");
+    assert!(
+        fired.ship().physics.turbo_timer > 0.0,
+        "firing must arm the turbo"
+    );
+
+    for _ in 0..60 {
+        control.tick(&snapshot(&mut control_buttons, CROSS));
+        fired.tick(&snapshot(&mut fired_buttons, CROSS));
+    }
+    let speed = |race: &race::Race| race.ship().physics.body.linear_velocity.length();
+    let (boosted, plain) = (speed(&fired), speed(&control));
+    println!("after one second: {boosted:.1} boosted against {plain:.1} plain");
+    // Twice the control's speed. A deliberately coarse bar: what it is there to
+    // reject is a boost that is technically applied and imperceptible, so it
+    // has to be far above measurement noise rather than just above zero.
+    assert!(
+        boosted > plain * 2.0,
+        "a fired turbo left the craft at {boosted:.1} against {plain:.1} - that \
+         is not a turbo"
+    );
+
     // And the three weapons-off modes hand out nothing from the same spot, for
     // any number of ticks. Zone is the one with no free turbo either, so it is
     // the clean negative; a time trial and a speed lap are checked for the

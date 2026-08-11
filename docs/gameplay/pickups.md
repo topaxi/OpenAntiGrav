@@ -20,8 +20,8 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | `<Pickupodds>`: weights per class, per `ai`/`human`/`front`/`back` | **recovered** | 92 |
 | `<WeaponPad refresh_time elimination_refresh_time>` | **recovered** | 90 |
 | `SQUARE` fires, `CIRCLE` absorbs | **recovered** | 90 |
-| The `1.2` thrust multiplier and where it lands in `Ship_UpdateEngine` | **recovered** | 85 |
-| That the `1.2` pickup is the **Turbo** weapon | inferred | 80 |
+| `T += Engine.turbo`, uncapped, and where it lands in `Ship_UpdateEngine` | **recovered** | 84 |
+| That flag bit `0x200` is the Turbo pickup's half of that gate | inferred from the pair with the barrel roll's `0x400` | 75 |
 | `Ship_SetShield`'s clamp, which absorb pays through | **recovered** | 84 |
 | Weapons off hides the pads and empties the trigger list | **recovered** | 88 |
 | The free Turbo once a lap in a time trial and a speed lap | **recovered**, from two shipped records | 85 |
@@ -152,9 +152,12 @@ layout really defines `HudBGColour`, without which the substitution would
 silently not happen and the icon would go back to being invisible.
 
 **A reference frame of the original's own pickup box would settle it** and has
-not been taken. It is the cheapest open thing on this page. That constant is, separately, a
-reason to read the `1.2` pickup as the Turbo: `6` lands on `Turbo` if the ids
-index the class-name pool from one.
+not been taken. It is the cheapest open thing on this page.
+
+The forced id `6` was briefly read as evidence that the `1.2` pickup is the
+Turbo. **It is not**: `6` lands on `Shield` or `Autopilot` depending on where
+the class-name pool starts counting, and the turbo turned out to be a different
+term entirely - see below.
 
 ## Only what has an effect is handed out
 
@@ -178,25 +181,67 @@ nothing as weapons land - adding a variant to `IMPLEMENTED` is the whole change
 
 ## What a fired Turbo does
 
-`if (flags & 0x0004) T *= craft+0x2a0`, in `Ship_UpdateEngine` (`0x0884c5c8`),
-with `craft+0x2a0` written as `1.2` by `0x0883b3b8` on the branch that also sets
-the gating flag and forces the HUD icon. The multiply sits **after** the
-`0.5 * speed + accelcap` clamp and before the fixed doubling, so a turbo pushes
-the craft past the cap rather than being clipped by it. Confidence 85 on the
-arithmetic, 80 on it being the Turbo weapon.
+**`T += Engine.turbo`, uncapped.** From `Ship_UpdateEngine` (`0x0884c5c8`), read
+out of the decompiler on 2026-08-11:
 
-`oag_physics::engine::ENGINE_PICKUP_SPEEDUP` is the constant and
-`ShipState::turbo_timer` is the gate. **The timer is ours** - the original keeps
-a bit in `craft+0x1c0` armed from an equally undecoded pickup word - but its
-duration is the file's own `<Weapon type="Turbo"><Stats time>`. The field is
-hashed by the determinism gate, which is why it lives on `ShipState` rather than
-beside the inventory.
+```c
+if ((flags & 0x200) || (flags & 0x400)) {
+    if (craft+0x2a4 == 1) {
+        T += Engine.turbo;                        // after the cap, before the * 2.0
+        if (controls.buttons & 1)  lift = g_boost_lift * T;
+    }
+}
+```
 
-**Not to be confused with `Engine.turbo`**, which is a flat *additive* thrust
-under flag bits `0x200`/`0x400` and a mode enum. `0x400`'s only known writer is
-the barrel roll, so that term belongs to a different mechanic and is still
-unimplemented. Reading `<Engine turbo>` as the Turbo pickup's effect is the
-obvious-looking mistake here.
+The add sits **after** the `0.5 * speed + accelcap` clamp and before the fixed
+doubling, so it is not clipped by the acceleration cap - which is what makes a
+turbo a turbo rather than a nudge. `ShipState::turbo_timer` is the gate and
+`oag_physics::engine::engine` is the port.
+
+**Two bits turn one term on, and that is the evidence for reading `0x200` as the
+pickup.** `0x400` is held while the barrel roll's timer runs
+([input-bindings](../ghidra/functions/psp-pulse-usa/input-bindings.md),
+confidence 80), and `<Special>` authors `roll_turbotime` beside it - so a roll
+grants a *turbo*, and the term has two sources. `0x200` is the other one.
+**Its writer has not been found**, so this is an inference from the pair rather
+than a traced path: confidence **75**.
+
+Not reproduced, both stated where they live: the `craft+0x2a4 == 1` gate, whose
+enum nothing decodes, and the **boost lift** along body up under the thrust
+button, whose `g_boost_lift` global was never read.
+
+### The `1.2` multiplier is a different pickup, and wiring it here was wrong
+
+Worth keeping because it is an easy mistake and it shipped for a few hours.
+`craft+0x2a0 = 1.2` under flag `0x0004` is real and recovered
+(`oag_physics::engine::ENGINE_PICKUP_SPEEDUP`), and it is **not** the turbo:
+
+- It multiplies a thrust that has *already been clamped*. On Venom the cap is
+  `0.5 * speed + accelcap` with `accelcap` in the tens, so `1.2` buys a few
+  units of force; `<Engine turbo>` is authored an order of magnitude above the
+  same class's `accelcap`. Measured end to end on the disc's own tunables, a
+  fired turbo leaves the craft at **222 units/s against a control's 52** after
+  one second - the multiplier version was imperceptible, which is exactly how
+  it was reported.
+- The branch that arms it lives in the **HUD update** (`0x0883b3b8`), not the
+  craft update, and it also forces HUD icon id `6` and drives a fill from the
+  pickup's own `+0x148` timer. So `0x800` is some timed effect the HUD draws a
+  bar for; **which pickup it is remains unidentified**, since id `6` lands on
+  `Shield` or `Autopilot` depending on where the class-name pool starts
+  counting, and neither is obviously a speed effect.
+
+**The lesson for the tests**, written down because the unit tests all passed:
+asserting the *ratio* between a boosted and an unboosted tick cannot tell a
+turbo from a nudge, because a ratio is a ratio. `a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race`
+now compares speed after a second against a control on the shipped numbers,
+which is a magnitude and would have caught it.
+
+**The timer itself is ours.** The original holds a bit; this holds seconds,
+because neither `craft+0x1c0`'s writer nor the pickup word behind it has been
+read. Its duration is the file's own `<Weapon type="Turbo"><Stats time>` and its
+magnitude the class's own `<Engine turbo>`, so both numbers are real. The field
+is hashed by the determinism gate, which is why it lives on `ShipState` rather
+than beside the inventory.
 
 ## Absorbing
 

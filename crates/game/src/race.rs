@@ -6397,6 +6397,12 @@ mod tests {
         // *difference* in. Invented numbers, large enough to read cleanly.
         handling.engine.amount = 20.0;
         handling.engine.accelcap = 1000.0;
+        // The turbo add. Deliberately **larger than the whole capped thrust
+        // above**, which is the shipped relationship rather than an arbitrary
+        // one: every class on the disc authors `<Engine turbo>` an order of
+        // magnitude above its own `accelcap`. A fixture where the turbo were a
+        // small fraction would pass a test that had wired the wrong term.
+        handling.engine.turbo = 500.0;
         handling.dimensions.shield = 100.0;
         let mut setup = setup(handling);
         setup.mode = mode;
@@ -6527,9 +6533,17 @@ mod tests {
     }
 
     /// Firing a Turbo sets the timer from the file's own `<Turbo time>` and the
-    /// engine multiplies its thrust while it runs - the recovered `1.2`. Read as
-    /// a *difference* against an identical race that never fired, because the
+    /// engine adds the class's own `<Engine turbo>` while it runs. Read as a
+    /// *difference* against an identical race that never fired, because the
     /// absolute thrust depends on the whole force law.
+    ///
+    /// **The add is uncapped, and that is the point.** An earlier version of
+    /// this wired the `1.2` multiplier from the neighbouring branch instead and
+    /// asserted exactly that ratio - which passed, because a ratio is a ratio.
+    /// What it could not catch is that `1.2` applied to a thrust already clamped
+    /// to `0.5 * speed + accelcap` is a few units of force and is imperceptible
+    /// in a race. Asserting the *magnitude* against the authored tunable is what
+    /// makes this test able to tell a turbo from a nudge.
     #[test]
     fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
         let mut fired = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
@@ -6559,15 +6573,19 @@ mod tests {
             boosted.engine.thrust,
             ordinary.engine.thrust
         );
-        // The recovered multiplier, exactly - the two races differ in nothing
-        // else on this tick.
+        // Exactly the authored `<Engine turbo>`, doubled by the engine's own
+        // fixed `* 2.0` - the two races differ in nothing else on this tick, so
+        // the whole difference is the add.
+        let turbo = fired.ship().handling.engine.turbo;
+        assert!(turbo > 0.0, "the fixture must author a turbo to add");
         assert!(
             (boosted.engine.thrust
-                - ordinary.engine.thrust * oag_physics::engine::ENGINE_PICKUP_SPEEDUP)
+                - (ordinary.engine.thrust + turbo * oag_physics::engine::ENGINE_OUTPUT_DOUBLE))
                 .abs()
                 < 1e-3,
-            "expected exactly {}x",
-            oag_physics::engine::ENGINE_PICKUP_SPEEDUP
+            "expected the authored turbo added uncapped: {} against {}",
+            boosted.engine.thrust,
+            ordinary.engine.thrust
         );
 
         // And it expires on the file's own duration rather than running forever.

@@ -418,20 +418,39 @@ pub struct ShipState {
     pub state_timer: f32,
     /// Seconds left on a fired Turbo pickup.
     ///
-    /// While it is positive the engine multiplies its thrust by
-    /// [`crate::engine::ENGINE_PICKUP_SPEEDUP`]; see that constant for the
-    /// instruction-level reading, and [`crate::engine::engine`] for where the
-    /// multiply lands.
+    /// While it is positive the engine **adds `Engine.turbo` to thrust**, after
+    /// the acceleration cap and before the fixed doubling - so the add is
+    /// uncapped, which is what makes a turbo a turbo. See
+    /// [`crate::engine::engine`].
     ///
-    /// **The timer is ours; what it gates is not.** The original keeps the state
-    /// as a bit of the undecoded flag word at `craft+0x1c0` (`0x0004`), armed
-    /// from the equally-undecoded pickup word one hop out, and neither has a
-    /// reader this project has recovered - so a `f32` of seconds stands in for a
-    /// bit plus a timer nobody has found the writer of. The **duration** is the
-    /// disc's own `<Weapon type="Turbo"><Stats time>` and the **multiplier** is
-    /// the recovered `1.2`, so both numbers are real even though the field
-    /// holding them is not the original's shape. See
-    /// `docs/gameplay/pickups.md`.
+    /// # What the original gates that add on, and why this is a timer instead
+    ///
+    /// `Ship_UpdateEngine` (`0x0884c5c8`) runs the add under
+    /// `((flags & 0x200) || (flags & 0x400)) && craft+0x2a4 == 1`, read from the
+    /// decompiler 2026-08-11. **Two bits, either of which turns the same term
+    /// on**, which is the shape of one effect with two sources - and the second
+    /// source is known: `0x400` is held while the barrel roll's timer runs
+    /// (`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`, confidence 80),
+    /// and `<Special>` authors `roll_turbotime` beside it, so a roll grants a
+    /// *turbo*. That leaves `0x200` as the other way to be turboing, which is
+    /// what a Turbo pickup is for. **The writer of `0x200` has not been found**,
+    /// so this is an inference from the pair rather than a traced path -
+    /// confidence 75.
+    ///
+    /// **The timer itself is ours.** The original holds a bit and this holds
+    /// seconds, because neither `craft+0x1c0`'s writer nor the pickup word
+    /// behind it has been read. The **duration** is the disc's own
+    /// `<Weapon type="Turbo"><Stats time>` and the **magnitude** is its own
+    /// `<Engine turbo>`, so both numbers are real even though the field holding
+    /// them is not the original's shape.
+    ///
+    /// **The `craft+0x2a4 == 1` gate is not reproduced**: nothing decodes that
+    /// enum. Treating it as satisfied means a craft here can turbo in a state
+    /// where the original might not.
+    ///
+    /// **The boost lift is not implemented.** The same branch adds
+    /// `g_boost_lift * T` along body up while the thrust button is held, and
+    /// that global was never read. See `docs/gameplay/pickups.md`.
     ///
     /// **In this crate rather than in `oag-gameplay`, and hashed**, for the same
     /// reason [`Self::shield`] is: it is written by gameplay and read by the
